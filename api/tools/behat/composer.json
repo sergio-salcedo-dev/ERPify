@@ -1,0 +1,26 @@
+{
+    "name": "erpify/behat-tools",
+    "description": "Isolated Behat + Mink stack (Behat 3 targets Symfony 7 components; app remains Symfony 8)",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.2",
+        "behat/behat": "^3.27",
+        "behat/mink": "^1.13",
+        "behat/mink-browserkit-driver": "^2.3",
+        "friends-of-behat/mink-extension": "^2.7",
+        "symfony/browser-kit": "^7.0",
+        "symfony/http-client": "^7.0",
+        "symfony/css-selector": "^7.0",
+        "symfony/dom-crawler": "^7.0",
+        "symfony/dotenv": "^7.0"
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\Features\\Behat\\": "../../features/behat/contexts/"
+        }
+    }
+}

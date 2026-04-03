@@ -1,0 +1,16 @@
+# Paths in this file are relative to api/tools/behat/ (cwd when bin/behat runs).
+#
+# Override base URL: export MINK_BASE_URL=... or set in api/.env (Makefile uses http://php in Docker).
+default:
+    suites:
+        default:
+            paths:
+                - '%paths.base%/../../features/behat'
+            contexts:
+                - App\Features\Behat\FeatureContext
+    extensions:
+        Behat\MinkExtension\ServiceContainer\MinkExtension:
+            base_url: '%env(MINK_BASE_URL)%'
+            sessions:
+                default:
+                    browserkit_http: ~

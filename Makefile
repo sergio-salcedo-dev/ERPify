@@ -5,6 +5,8 @@
 API_DIR := api
 # Override if Compose publishes HTTPS on a non-default port, e.g. HEALTH_URL=https://localhost:4443/health
 HEALTH_URL ?= https://localhost/health
+# Behat Mink base URL inside the php container (Caddy serves the app as http://php per SERVER_NAME)
+MINK_BASE_URL ?= http://php
 # Persisted in api/.env; Compose passes it to the container (compose.override.yaml).
 XDEBUG_MODE_OFF := off
 XDEBUG_MODE_DEBUG := develop,debug
@@ -18,6 +20,7 @@ DC := @$(DOCKER_COMP)
 # Docker containers
 PHP_CONT = $(DOCKER_COMP) exec php
 PHP_TEST = $(DOCKER_COMP) exec -e APP_ENV=test php
+PHP_TEST_BEHAT = $(DOCKER_COMP) exec -e APP_ENV=test -e MINK_BASE_URL=$(MINK_BASE_URL) php
 
 # Executables
 PHP      = $(PHP_CONT) php
@@ -26,7 +29,7 @@ SYMFONY  = $(PHP) bin/console
 
 # Misc
 .DEFAULT_GOAL = help
-.PHONY        : help build up start down logs sh bash composer vendor sf cc php.unit php.unit.install up-wait restart ps health clean xdebug.enable xdebug.disable xdebug-verify xdebug-check
+.PHONY        : help build up start down logs sh bash composer vendor sf cc php.unit php.unit.install php.behat php.behat.install up-wait restart ps health clean xdebug.enable xdebug.disable xdebug-verify xdebug-check
 
 ## —— 🎵 🐳 The Symfony Docker Makefile 🐳 🎵 ——————————————————————————————————
 help: ## Outputs this help screen
@@ -59,6 +62,13 @@ php.unit: ## Run PHPUnit in the php container (api/tools/phpunit); pass c= for C
 
 php.unit.install: ## Install PHPUnit under api/tools/phpunit (composer phpunit-tools-install)
 	@$(COMPOSER) phpunit-tools-install
+
+php.behat: ## Run Behat in the php container (api/tools/behat); pass c= for CLI options; MINK_BASE_URL defaults to http://php
+	@$(eval c ?=)
+	@$(PHP_TEST_BEHAT) php bin/behat --format=pretty $(c)
+
+php.behat.install: ## Install Behat dependencies under api/tools/behat (composer behat-tools-install)
+	@$(COMPOSER) behat-tools-install
 
 ## —— Composer 🧙 ——————————————————————————————————————————————————————————————
 composer: ## Run composer, pass the parameter "c=" to run a given command, example: make composer c='req symfony/orm-pack'

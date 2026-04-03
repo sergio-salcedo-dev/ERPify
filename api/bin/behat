@@ -1,0 +1,36 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+$root = dirname(__DIR__);
+$toolRoot = $root.'/tools/behat';
+$behatBin = $toolRoot.'/vendor/behat/behat/bin/behat';
+
+if (!is_file($behatBin)) {
+    fwrite(
+        STDERR,
+        "Behat is not installed. From the api/ directory run: composer behat-tools-install\n"
+    );
+    exit(1);
+}
+
+require $toolRoot.'/bootstrap.php';
+
+chdir($toolRoot);
+
+$argv = &$_SERVER['argv'];
+$hasConfig = false;
+
+foreach ($argv as $arg) {
+    if ($arg === '-c' || $arg === '--config' || str_starts_with($arg, '--config=')) {
+        $hasConfig = true;
+        break;
+    }
+}
+
+if (!$hasConfig) {
+    array_splice($argv, 1, 0, ['--config', 'behat.yml.dist']);
+}
+
+require $behatBin;
