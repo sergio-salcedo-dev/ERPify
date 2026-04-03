@@ -26,7 +26,7 @@ SYMFONY  = $(PHP) bin/console
 
 # Misc
 .DEFAULT_GOAL = help
-.PHONY        : help build up start down logs sh bash composer vendor sf cc test up-wait restart ps health clean xdebug.enable xdebug.disable xdebug-verify xdebug-check
+.PHONY        : help build up start down logs sh bash composer vendor sf cc php.unit php.unit.install up-wait restart ps health clean xdebug.enable xdebug.disable xdebug-verify xdebug-check
 
 ## —— 🎵 🐳 The Symfony Docker Makefile 🐳 🎵 ——————————————————————————————————
 help: ## Outputs this help screen
@@ -53,10 +53,12 @@ sh: ## Connect to the FrankenPHP container
 bash: ## Connect to the FrankenPHP container via bash so up and down arrows go to previous commands
 	@$(PHP_CONT) bash
 
-test: ## Start tests with phpunit, pass the parameter "c=" to add options to phpunit, example: make test c="--group e2e --stop-on-failure"
+php.unit: ## Run PHPUnit in the php container (api/tools/phpunit); pass c= for CLI options, e.g. make test c="--filter Foo"
 	@$(eval c ?=)
 	@$(PHP_TEST) bin/phpunit $(c)
 
+php.unit.install: ## Install PHPUnit under api/tools/phpunit (composer phpunit-tools-install)
+	@$(COMPOSER) phpunit-tools-install
 
 ## —— Composer 🧙 ——————————————————————————————————————————————————————————————
 composer: ## Run composer, pass the parameter "c=" to run a given command, example: make composer c='req symfony/orm-pack'

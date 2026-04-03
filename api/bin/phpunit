@@ -1,0 +1,33 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+$root = dirname(__DIR__);
+$phpunit = $root.'/vendor/phpunit/phpunit/phpunit';
+$config = $root.'/tools/phpunit/phpunit.dist.xml';
+
+if (!is_file($phpunit)) {
+    fwrite(
+        STDERR,
+        "PHPUnit is not installed. From the api/ directory run: composer install\n"
+    );
+    exit(1);
+}
+
+$argv = &$_SERVER['argv'];
+
+$hasConfig = false;
+
+foreach ($argv as $arg) {
+    if ($arg === '-c' || $arg === '--configuration' || str_starts_with($arg, '--configuration=')) {
+        $hasConfig = true;
+        break;
+    }
+}
+
+if (!$hasConfig) {
+    array_splice($argv, 1, 0, ['-c', $config]);
+}
+
+require $phpunit;

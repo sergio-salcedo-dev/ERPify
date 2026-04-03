@@ -1,6 +1,8 @@
 <?php
 
-namespace App\Controller;
+declare(strict_types=1);
+
+namespace App\Backoffice\Health\Infrastructure\Controller;
 
 use DateTimeImmutable;
 use DateTimeInterface;
