@@ -1,64 +1,79 @@
-# ERPify — Docker & Symfony commands for ./api (symfony-docker)
+# ERPify — Makefile aligned with symfony-docker docs/makefile.md
+# https://github.com/dunglas/symfony-docker/blob/main/docs/makefile.md
+# Compose project lives in ./api (monorepo); upstream assumes project root.
 
 API_DIR := api
-DOCKER  := cd $(API_DIR) && docker compose
 
-.DEFAULT_GOAL := help
-.PHONY: help build up up-wait start down restart logs ps sh bash composer vendor sf cc test clean
+# Executables (local) — same as template, prefixed to run compose from $(API_DIR)
+DOCKER_COMP = cd $(API_DIR) && docker compose
 
-## —— Help —————————————————————————————————————————————————————————————————————
-help: ## Show available commands
-	@grep -E '^[a-zA-Z0-9_.-]+:.*?##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
+# Docker containers
+PHP_CONT = $(DOCKER_COMP) exec php
 
-## —— Docker (API) —————————————————————————————————————————————————————————————
-build: ## Build images (--pull --no-cache)
-	@$(DOCKER) build --pull --no-cache
+# Executables
+PHP      = $(PHP_CONT) php
+COMPOSER = $(PHP_CONT) composer
+SYMFONY  = $(PHP) bin/console
 
-up: ## Start stack in the background
-	@$(DOCKER) up --detach
+# Misc
+.DEFAULT_GOAL = help
+.PHONY        : help build up start down logs sh bash composer vendor sf cc test up-wait restart ps clean
 
-up-wait: ## Start stack and wait until healthy (handy for first Symfony bootstrap)
-	@$(DOCKER) up --wait --detach
+## —— 🎵 🐳 The Symfony Docker Makefile 🐳 🎵 ——————————————————————————————————
+help: ## Outputs this help screen
+	@grep -E '(^[a-zA-Z0-9\./_-]+:.*?##.*$$)|(^##)' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}{printf "\033[32m%-30s\033[0m %s\n", $$1, $$2}' | sed -e 's/\[32m##/[33m/'
 
-start: build up ## Build then start in the background
+## —— Docker 🐳 ————————————————————————————————————————————————————————————————
+build: ## Builds the Docker images
+	@$(DOCKER_COMP) build --pull --no-cache
 
-down: ## Stop stack and remove orphans
-	@$(DOCKER) down --remove-orphans
+up: ## Start the docker hub in detached mode (no logs)
+	@$(DOCKER_COMP) up --detach
 
-restart: down up ## Restart the stack
+start: build up ## Build and start the containers
 
-logs: ## Follow container logs (last 50 lines, then stream)
-	@$(DOCKER) logs --tail=50 --follow
+down: ## Stop the docker hub
+	@$(DOCKER_COMP) down --remove-orphans
 
-ps: ## List API containers
-	@$(DOCKER) ps
+logs: ## Show live logs
+	@$(DOCKER_COMP) logs --tail=0 --follow
 
-sh: ## Open sh in the php (FrankenPHP) container
-	@$(DOCKER) exec php sh
+sh: ## Connect to the FrankenPHP container
+	@$(PHP_CONT) sh
 
-bash: ## Open bash in the php container
-	@$(DOCKER) exec php bash
+bash: ## Connect to the FrankenPHP container via bash so up and down arrows go to previous commands
+	@$(PHP_CONT) bash
 
-clean: ## Stop stack and remove volumes (wipes DB & Caddy persistent data)
-	@$(DOCKER) down --remove-orphans --volumes
-
-## —— Composer ———————————————————————————————————————————————————————————————
-composer: ## Run composer in php; pass c="..." e.g. make composer c="req symfony/orm-pack"
+test: ## Start tests with phpunit, pass the parameter "c=" to add options to phpunit, example: make test c="--group e2e --stop-on-failure"
 	@$(eval c ?=)
-	@$(DOCKER) exec php composer $(c)
+	@$(DOCKER_COMP) exec -e APP_ENV=test php bin/phpunit $(c)
 
+
+## —— Composer 🧙 ——————————————————————————————————————————————————————————————
+composer: ## Run composer, pass the parameter "c=" to run a given command, example: make composer c='req symfony/orm-pack'
+	@$(eval c ?=)
+	@$(COMPOSER) $(c)
+
+vendor: ## Install vendors according to the current composer.lock file
 vendor: c=install --prefer-dist --no-dev --no-progress --no-scripts --no-interaction
-vendor: composer ## Install vendors from composer.lock (no dev)
+vendor: composer
 
-## —— Symfony ——————————————————————————————————————————————————————————————————
-sf: ## Run bin/console; pass c="about" or c="debug:router"
+## —— Symfony 🎵 ———————————————————————————————————————————————————————————————
+sf: ## List all Symfony commands or pass the parameter "c=" to run a given command, example: make sf c=about
 	@$(eval c ?=)
-	@$(DOCKER) exec php php bin/console $(c)
+	@$(SYMFONY) $(c)
 
-cc: c=cache:clear
-cc: sf ## Clear Symfony cache
+cc: c=c:c ## Clear the cache
+cc: sf
 
-## —— Tests ————————————————————————————————————————————————————————————————————
-test: ## Run PHPUnit in php; pass c="..." e.g. make test c="--stop-on-failure"
-	@$(eval c ?=)
-	@$(DOCKER) exec -e APP_ENV=test php bin/phpunit $(c)
+## —— ERPify (monorepo extras) ————————————————————————————————————————————————
+up-wait: ## Start stack with --wait (e.g. first Symfony bootstrap); runs from ./api
+	@$(DOCKER_COMP) up --wait --detach
+
+restart: down up ## Stop then start the docker hub
+
+ps: ## docker compose ps for ./api
+	@$(DOCKER_COMP) ps
+
+clean: ## Stop stack and remove volumes (destructive)
+	@$(DOCKER_COMP) down --remove-orphans --volumes

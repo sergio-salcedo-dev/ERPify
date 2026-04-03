@@ -1,0 +1,5 @@
+# ERPify root — applies to files here (e.g. Makefile). api/ has its own .editorconfig.
+root = true
+
+[Makefile]
+indent_style = tab
