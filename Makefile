@@ -3,6 +3,8 @@
 # Compose project lives in ./api (monorepo); upstream assumes project root.
 
 API_DIR := api
+# Override if Compose publishes HTTPS on a non-default port, e.g. HEALTH_URL=https://localhost:4443/health
+HEALTH_URL ?= https://localhost/health
 # Persisted in api/.env; Compose passes it to the container (compose.override.yaml).
 XDEBUG_MODE_OFF := off
 XDEBUG_MODE_DEBUG := develop,debug
@@ -24,7 +26,7 @@ SYMFONY  = $(PHP) bin/console
 
 # Misc
 .DEFAULT_GOAL = help
-.PHONY        : help build up start down logs sh bash composer vendor sf cc test up-wait restart ps clean xdebug.enable xdebug.disable xdebug-verify xdebug-check
+.PHONY        : help build up start down logs sh bash composer vendor sf cc test up-wait restart ps health clean xdebug.enable xdebug.disable xdebug-verify xdebug-check
 
 ## —— 🎵 🐳 The Symfony Docker Makefile 🐳 🎵 ——————————————————————————————————
 help: ## Outputs this help screen
@@ -81,6 +83,20 @@ restart: down up ## Stop then start the docker hub
 
 ps: ## docker compose ps for ./api
 	$(DC) ps
+
+health: ## GET HEALTH_URL (default https://localhost/health); fail on non-200 or status != ok
+	@tmp=$$(mktemp); \
+	trap 'rm -f $$tmp' EXIT; \
+	printf 'GET %s\n' '$(HEALTH_URL)'; \
+	code=$$(curl -skS --connect-timeout 3 --max-time 10 -o $$tmp -w '%{http_code}' '$(HEALTH_URL)'); \
+	if command -v jq >/dev/null 2>&1; then jq . <"$$tmp"; else cat "$$tmp"; printf '\n'; fi; \
+	if [ "$$code" != "200" ]; then printf '\033[31mFAIL\033[0m HTTP %s\n' "$$code" >&2; exit 1; fi; \
+	if command -v jq >/dev/null 2>&1; then \
+		jq -e '.status == "ok"' "$$tmp" >/dev/null || { printf '\033[31mFAIL\033[0m JSON .status is not "ok"\n' >&2; exit 1; }; \
+	else \
+		grep -qE '"status"[[:space:]]*:[[:space:]]*"ok"' "$$tmp" || { printf '\033[31mFAIL\033[0m body has no "status":"ok"\n' >&2; exit 1; }; \
+	fi; \
+	printf '\033[32mOK\033[0m HTTP %s\n' "$$code"
 
 clean: ## Stop stack and remove volumes (destructive)
 	$(DC) down --remove-orphans --volumes

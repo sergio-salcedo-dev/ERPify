@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Run Symfony console on the host (if php is installed) or inside the Docker Compose php service.
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+if command -v php >/dev/null 2>&1; then
+	exec php bin/console "$@"
+fi
+
+if ! command -v docker >/dev/null 2>&1; then
+	echo "Neither php nor docker is available. Install PHP, or run from api/ with Docker: docker compose exec php bin/console" >&2
+	exit 127
+fi
+
+if [ -n "$(docker compose ps -q php 2>/dev/null || true)" ]; then
+	exec docker compose exec php bin/console "$@"
+fi
+
+exec docker compose run --rm php bin/console "$@"
