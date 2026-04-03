@@ -1,5 +1,6 @@
 ---
 # Development environment override
+# XDEBUG_MODE: from shell or api/.env (Compose interpolation); default off. See Makefile xdebug-* / docs/xdebug.md
 services:
   php:
     image: ${IMAGES_PREFIX:-}app-php-dev
@@ -17,8 +18,9 @@ services:
       FRANKENPHP_WORKER_CONFIG: watch
       FRANKENPHP_SITE_CONFIG: hot_reload
       MERCURE_EXTRA_DIRECTIVES: demo
-      # See https://xdebug.org/docs/all_settings#mode
-      XDEBUG_MODE: "${XDEBUG_MODE:-develop}"
+      XDEBUG_MODE: "${XDEBUG_MODE:-off}"
+      # JetBrains / PhpStorm: server name must match Settings | PHP | Servers (${PHP_IDE_SERVER_NAME:-dev}).
+      PHP_IDE_CONFIG: "serverName=${PHP_IDE_SERVER_NAME:-dev}"
       APP_ENV: "${APP_ENV:-dev}"
     extra_hosts:
       # Ensure that host.docker.internal is correctly defined on Linux

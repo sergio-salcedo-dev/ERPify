@@ -3,24 +3,31 @@
 The default development image is shipped with [Xdebug](https://xdebug.org/),
 a popular debugger and profiler for PHP.
 
-When using [Dev Containers](https://containers.dev/), Xdebug is pre-configured and works out of the box.
-Open the **Run and Debug** panel in Visual Studio Code and start the **Debug PHP** launch configuration, then set your breakpoints and load a page.
+## Defaults in ERPify (Docker Compose)
 
-For other setups, because it has a significant performance overhead, the step-by-step debugger
-is disabled by default.
-It can be enabled by including `debug` in the values of the `XDEBUG_MODE` environment variable.
+The documented default IDE for step debugging is **PhpStorm**. Compose sets **`PHP_IDE_CONFIG=serverName=<name>`** on the `php` service, where **`<name>`** defaults to **`dev`** and can be overridden with **`PHP_IDE_SERVER_NAME`** in **`api/.env`** (same mechanism as **`XDEBUG_MODE`**). That name must match the server entry under **Settings | PHP | Servers** in PhpStorm (see below). Other editors (for example VS Code or Cursor) are unaffected; they use their own launch configuration instead.
 
-On Linux and Mac:
+Step debugging is **off by default**. The `php` service gets **`XDEBUG_MODE`** from Docker Compose interpolation: **`${XDEBUG_MODE:-off}`** in `compose.override.yaml`. Values are read from your **shell environment** and from **`api/.env`** (Compose always loads `.env` next to the compose files for that substitution).
 
-```console
-XDEBUG_MODE=develop,debug docker compose up --wait
-```
+From the **monorepo root** (parent of `api/`):
 
-On Windows:
+| Command | Effect |
+|--------|--------|
+| **`make xdebug-enable`** | Ensures a `XDEBUG_MODE=` line exists in `api/.env`, sets it to **`develop,debug`**, recreates the `php` container (IDE on port **9003**). |
+| **`make xdebug-disable`** | Sets **`XDEBUG_MODE=off`** in `api/.env` when that line exists, then recreates `php`. If there is no line, Compose still defaults to **`off`**. |
+| **`make xdebug-verify`** | Prints PHP / Xdebug versions and effective `XDEBUG_MODE` (stack must be running: `make up`). |
 
-```console
-set XDEBUG_MODE=develop,debug&& docker compose up --wait&set XDEBUG_MODE=
-```
+You can set **`XDEBUG_MODE`** yourself in **`api/.env`** (start from [`api/.env.example`](../.env.example): `cp api/.env.example api/.env` from the monorepo root, or `cp .env.example .env` inside `api/`) or export it when running Compose, e.g. `XDEBUG_MODE=develop,debug docker compose up` from `api/`.
+
+If you previously used **`api/.env.xdebug`**, remove that file; it is no longer used.
+
+### Dev Containers
+
+When using [Dev Containers](https://containers.dev/), the devcontainer Compose file may set `XDEBUG_MODE` for the in-container IDE (see `.devcontainer/compose.devcontainer.yaml`). That is separate from the `docker compose` workflow above.
+
+### Path mappings (monorepo)
+
+The app is mounted at **`/app`** in the container and lives under **`./api`** on the host. In **PhpStorm**, map **`/app`** → your **`api`** directory (see the PhpStorm section below). If you use **VS Code or Cursor** instead, use the repo root [`.vscode/launch.json`](../../../.vscode/launch.json) (`${workspaceFolder}/api`).
 
 ## Debugging with Xdebug and PhpStorm
 
@@ -28,14 +35,15 @@ First, [create a PHP debug remote server configuration](https://www.jetbrains.co
 
 1. In the `Settings/Preferences` dialog, go to `PHP | Servers`
 2. Create a new server:
-   - Name: `symfony` (or whatever you want to use for the variable `PHP_IDE_CONFIG`)
+   - Name: same string as **`PHP_IDE_SERVER_NAME`** (default **`dev`**), so it matches **`PHP_IDE_CONFIG`** inside the container
    - Host: `localhost` (or the one defined using the `SERVER_NAME` environment variable)
    - Port: `443`
    - Debugger: `Xdebug`
    - Check `Use path mappings`
    - Absolute path on the server: `/app`
+   - Absolute path on the host: path to your **`api`** directory in the monorepo
 
-You can now use the debugger!
+You can now use the debugger after **`make xdebug-enable`** (or equivalent **`XDEBUG_MODE`**):
 
 1. In PhpStorm, open the `Run` menu and click on `Start Listening for PHP Debug Connections`
 2. Add the `XDEBUG_SESSION=PHPSTORM` query parameter to the URL of
@@ -44,51 +52,27 @@ You can now use the debugger!
    Alternatively, you can use [the **Xdebug extension**](https://xdebug.org/docs/step_debug#browser-extensions)
    for your preferred web browser.
 
-3. On the command line, we might need to tell PhpStorm which
-   [path mapping configuration](https://www.jetbrains.com/help/phpstorm/zero-configuration-debugging-cli.html#configure-path-mappings)
-   should be used, set the value of the PHP_IDE_CONFIG environment variable to
-   `serverName=symfony`, where `symfony` is the name of the debug server configured
-   above.
-
-   Example:
+3. For **CLI** scripts, **`PHP_IDE_CONFIG`** (including your **`PHP_IDE_SERVER_NAME`**) is already set in the **`php`** container by Compose. From the host, pass it only if you run PHP outside that environment:
 
    ```console
-   XDEBUG_SESSION=1 PHP_IDE_CONFIG="serverName=symfony" php bin/console ...
+   XDEBUG_SESSION=1 PHP_IDE_CONFIG="serverName=YOUR_SERVER_NAME" php bin/console ...
    ```
 
-## Debugging with Xdebug and Visual Studio Code
+   Use the same **`YOUR_SERVER_NAME`** as in PhpStorm **PHP | Servers**. See [path mappings for CLI](https://www.jetbrains.com/help/phpstorm/zero-configuration-debugging-cli.html#configure-path-mappings) in the PhpStorm docs.
 
-1. Install necessary [PHP extension for Visual Studio Code](https://marketplace.visualstudio.com/items?itemName=DEVSENSE.phptools-vscode).
-2. Add [debug configuration](https://code.visualstudio.com/docs/debugtest/debugging-configuration#_launch-configurations)
-   into your `.vscode\launch.json` file.
+## Alternative: Visual Studio Code or Cursor
 
-   Example:
-
-   ```json
-   {
-     "version": "0.2.0",
-     "configurations": [
-       {
-         "name": "Debug PHP",
-         "type": "php",
-         "request": "launch",
-         "pathMappings": {
-           "/app": "${workspaceFolder}"
-         }
-       }
-     ]
-   }
-   ```
-
-3. Use [Run and Debug](https://code.visualstudio.com/docs/debugtest/debugging#_start-a-debugging-session)
-   options and run `Debug PHP` to listen for upcoming connections
-   with [the **Xdebug extension**](https://xdebug.org/docs/step_debug#browser-extensions)
-   installed and active.
+1. Install the [PHP Debug](https://marketplace.visualstudio.com/items?itemName=xdebug.php-debug) extension (`xdebug.php-debug`).
+2. Use the repo root `.vscode/launch.json` configuration **Listen for Xdebug (API)** (port **9003**, path mapping `/app` → `api`).
+3. Run **Listen for Xdebug (API)** and trigger a request (browser extension or `XDEBUG_SESSION`), with step debugging enabled (`make xdebug-enable` or `XDEBUG_MODE` including `debug`).
 
 ## Troubleshooting
 
-Inspect the installation with the following command.
-The Xdebug version should be displayed.
+From the **ERPify** repository root, run `make xdebug-verify` (alias: `make xdebug-check`) to print `php -v`, PHP and Xdebug versions, `XDEBUG_MODE`, and `PHP_IDE_CONFIG`. The stack must be running (`make up`).
+
+The extension can still appear in `php -v` while step debugging is disabled; ensure **`XDEBUG_MODE`** includes **`debug`** when the IDE does not connect.
+
+You can also inspect from `api/`:
 
 ```console
 $ docker compose exec php php --version
