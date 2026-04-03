@@ -50,8 +50,8 @@ In `api/composer.json`, add the context namespace to `autoload-dev`:
 ```json
 "autoload-dev": {
     "psr-4": {
-        "App\\Tests\\": "tests/",
-        "App\\Features\\Behat\\": "features/behat/contexts/"
+        "Erpify\\Tests\\": "tests/",
+        "Erpify\\Features\\Behat\\": "features/behat/contexts/"
     }
 }
 ```
@@ -75,7 +75,7 @@ default:
             paths:
                 - '%paths.base%/features/behat'
             contexts:
-                - App\Features\Behat\FeatureContext
+                - Erpify\Features\Behat\FeatureContext
     extensions:
         Behat\MinkExtension\ServiceContainer\MinkExtension:
             base_url: '%env(MINK_BASE_URL)%'

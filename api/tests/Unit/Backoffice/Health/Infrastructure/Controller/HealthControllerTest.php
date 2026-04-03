@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace App\tests\Unit\Backoffice\Health\Infrastructure\Controller;
+namespace Erpify\tests\Unit\Backoffice\Health\Infrastructure\Controller;
 
-use App\Backoffice\Health\Infrastructure\Controller\HealthController;
+use Erpify\Backoffice\Health\Infrastructure\Controller\HealthController;
 use DateTimeImmutable;
 use DateTimeInterface;
 use PHPUnit\Framework\TestCase;
