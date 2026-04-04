@@ -29,7 +29,12 @@ SYMFONY  = $(PHP) bin/console
 
 # Misc
 .DEFAULT_GOAL = help
-.PHONY        : help build up start down logs sh bash composer vendor sf cc php.unit php.unit.install php.behat php.behat.install up-wait restart ps health clean xdebug.enable xdebug.disable xdebug-verify xdebug-check
+.PHONY        : help build up start down logs sh bash composer vendor sf cc \
+                php.unit php.unit.install php.behat php.behat.install \
+                up-wait restart reset ps health clean \
+                xdebug.enable xdebug.disable xdebug.status \
+                db.migrate db.diff db.status db.fixtures db.alice db.reset db.shell db.validate \
+                routes test
 
 ## —— 🎵 🐳 The Symfony Docker Makefile 🐳 🎵 ——————————————————————————————————
 help: ## Outputs this help screen
@@ -133,6 +138,43 @@ xdebug.disable: ## Set XDEBUG_MODE=$(XDEBUG_MODE_OFF) in api/.env (if present) a
 	@echo "Recreating php…"
 	$(DC) up --detach --force-recreate --no-deps php
 
+## —— Database 🗄️  ————————————————————————————————————————————————————————————
+db.migrate: ## Run all pending Doctrine migrations (--all-or-nothing)
+	@$(SYMFONY) doctrine:migrations:migrate --no-interaction --all-or-nothing
+
+db.diff: ## Generate a new migration by diffing current entities against the DB schema
+	@$(SYMFONY) doctrine:migrations:diff
+
+db.status: ## Show which migrations are pending vs executed
+	@$(SYMFONY) doctrine:migrations:status
+
+db.validate: ## Validate the Doctrine ORM mapping against the live DB schema
+	@$(SYMFONY) doctrine:schema:validate
+
+db.fixtures: ## Load PHP DoctrineFixtures — purges DB first (dev/test only)
+	@$(SYMFONY) doctrine:fixtures:load --no-interaction --purge-with-truncate
+
+db.alice: ## Load Alice YAML fixtures (fixtures/ + tests/Behat/Fixtures/) — purges DB first
+	@$(SYMFONY) hautelook:fixtures:load --no-interaction
+
+db.reset: ## Full DB reset: drop schema → migrate → reload DoctrineFixtures
+	@$(SYMFONY) doctrine:schema:drop --force --full-database --no-interaction
+	@$(SYMFONY) doctrine:migrations:migrate --no-interaction --all-or-nothing
+	@$(SYMFONY) doctrine:fixtures:load --no-interaction --purge-with-truncate
+
+db.shell: ## Open an interactive psql shell inside the database container
+	$(DOCKER_COMP) exec database \
+		psql --username=$${POSTGRES_USER:-erpify_user} $${POSTGRES_DB:-erpify_db}
+
+## —— Tests 🧪  ————————————————————————————————————————————————————————————————
+test: php.behat ## Run the full test suite
+
+## —— Symfony extras 🎵  ———————————————————————————————————————————————————————
+routes: ## List all registered routes (pass f= to filter, e.g. make routes f=bank)
+	@$(eval f ?=)
+	@$(SYMFONY) debug:router $(if $(f),--show-controllers | grep $(f),)
+
+## —— Xdebug 🐛  ———————————————————————————————————————————————————————————————
 xdebug.status: ## Verify Xdebug in php container; print PHP & Xdebug versions (start stack: make up)
 	@echo "=== php -v ==="
 	@$(PHP_CONT) php -v

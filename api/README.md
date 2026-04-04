@@ -41,7 +41,7 @@ mode inside a sandboxed environment.
 1. [Options available](docs/options.md)
 2. [Using Symfony Docker with an existing project](docs/existing-project.md)
 3. [Support for extra services](docs/extra-services.md)
-4. [Deploying in production](docs/production.md)
+4. [Deploying in production](docs/production-ready/production.md)
 5. [Debugging with Xdebug](docs/xdebug.md)
 6. [TLS Certificates](docs/tls.md)
 7. [Using MySQL instead of PostgreSQL](docs/mysql.md)

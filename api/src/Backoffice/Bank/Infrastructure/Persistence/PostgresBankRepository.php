@@ -1,0 +1,44 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Erpify\Backoffice\Bank\Infrastructure\Persistence;
+
+use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\Persistence\ManagerRegistry;
+use Erpify\Backoffice\Bank\Domain\Entity\Bank;
+use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
+use Symfony\Component\DependencyInjection\Attribute\AsAlias;
+use Symfony\Component\Uid\Uuid;
+
+#[AsAlias(BankRepository::class)]
+final class PostgresBankRepository extends ServiceEntityRepository implements BankRepository
+{
+    public function __construct(ManagerRegistry $registry)
+    {
+        parent::__construct($registry, Bank::class);
+    }
+
+    public function save(Bank $bank): void
+    {
+        $this->getEntityManager()->persist($bank);
+        $this->getEntityManager()->flush();
+    }
+
+    public function remove(Bank $bank): void
+    {
+        $this->getEntityManager()->remove($bank);
+        $this->getEntityManager()->flush();
+    }
+
+    public function findById(Uuid $id): ?Bank
+    {
+        return $this->find($id);
+    }
+
+    /** @return Bank[] */
+    public function search(): array
+    {
+        return $this->findAll();
+    }
+}

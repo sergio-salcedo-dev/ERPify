@@ -17,4 +17,6 @@ services:
     # Recursive load so bounded-context paths (e.g. Backoffice/Health/Infrastructure/...) are registered.
     Erpify\:
         resource: '../src/'
-        exclude: '../src/{DependencyInjection,Entity,Migrations,Tests,Kernel.php}'
+        exclude:
+            - '../src/{DependencyInjection,Migrations,Tests,Kernel.php}'
+            - '../src/**/Domain/Entity/'

@@ -1,0 +1,5 @@
+Erpify\Backoffice\Bank\Domain\Entity\Bank:
+    ing:
+        __construct:
+            name: 'ING'
+            shortName: 'ING'

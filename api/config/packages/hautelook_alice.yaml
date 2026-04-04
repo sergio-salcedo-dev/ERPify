@@ -1,0 +1,6 @@
+when@dev: &dev
+    hautelook_alice:
+        fixtures_path:
+            - tests/Behat/Fixtures
+
+when@test: *dev
