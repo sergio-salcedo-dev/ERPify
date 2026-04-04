@@ -1,0 +1,6 @@
+{
+  "name": "Erpify",
+  "version": "1.0.0",
+  "description": "Construction SaaS ERP/CRM",
+  "standards": ["DDD", "SOLID", "Clean Architecture", "Mobile First"]
+}

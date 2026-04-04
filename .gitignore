@@ -19,12 +19,12 @@ api/.php-cs-fixer.cache
 api/public/bundles/
 
 # PWA — Node
-pwa/node_modules/
-pwa/dist/
-pwa/build/
-pwa/.next/
-pwa/.nuxt/
-pwa/coverage/
+pwa2/node_modules/
+pwa2/dist/
+pwa2/build/
+pwa2/.next/
+pwa2/.nuxt/
+pwa2/coverage/
 
 # E2E — Node / Playwright (common defaults)
 e2e/node_modules/

@@ -1,0 +1,5 @@
+{
+  "name": "Erpify",
+  "description": "A specialized ERP and CRM SaaS for the construction industry, built with DDD and Clean Architecture.",
+  "requestFramePermissions": []
+}

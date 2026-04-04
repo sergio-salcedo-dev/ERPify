@@ -5,7 +5,7 @@ This repository is a **monorepo**: one Git project holds the backend API, a plan
 | Area | Role | Details |
 |------|------|---------|
 | [`api/`](api/) | Symfony HTTP API | FrankenPHP / Caddy via Docker Compose. See [api/README.md](api/README.md). |
-| [`pwa/`](pwa/) | Next.js web app | Planned UI that talks to the API. See [pwa/README.md](pwa/README.md). |
+| [`pwa/`](pwa2/) | Next.js web app | Planned UI that talks to the API. See [pwa/README.md](pwa2/README.md). |
 | [`docs/`](docs/) | Repo-wide docs | e.g. [docs/project-requirements.md](docs/project-requirements.md) (host prerequisites). |
 
 Root [`Makefile`](Makefile) and [`.env.example`](api/.env.example) target the API: run Docker Compose from the repo root without `cd api` for most workflows.
@@ -31,6 +31,6 @@ Run `make` or `make help` for the full list.
 
 ## Documentation
 
-- **Next.js app (planned)**: [pwa/README.md](pwa/README.md)
+- **Next.js app (planned)**: [pwa/README.md](pwa2/README.md)
 - **Symfony Docker template** (TLS, production, Xdebug, etc.): [api/README.md](api/README.md) and [api/docs/](api/docs/)
 - **Host tooling**: [docs/project-requirements.md](docs/project-requirements.md)
