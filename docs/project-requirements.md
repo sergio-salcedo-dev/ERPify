@@ -15,7 +15,7 @@ Install **[jq](https://jqlang.org/)** (a command-line JSON processor).
 
 ### Why it matters here
 
-The root `make health` target calls `curl` against `https://localhost/health` and checks that the response is HTTP 200 and that the JSON body reports a healthy status (`"status": "ok"`).
+The root `make health` target calls `curl` against `https://localhost/api/v1/health` and checks that the response is HTTP 200 and that the JSON body reports a healthy status (`"status": "ok"`).
 
 - **With `jq` installed:** the Makefile pretty-prints the response (`jq .`) and validates the payload with `jq -e '.status == "ok"'`. That checks real JSON structure, not just a text pattern.
 - **Without `jq`:** the same target still works: it prints the raw body and uses `grep` to look for `"status":"ok"`. That is slightly more brittle (e.g. unusual spacing or unexpected extra fields are handled less cleanly than with `jq`).

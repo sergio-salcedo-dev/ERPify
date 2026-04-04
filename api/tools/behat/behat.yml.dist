@@ -5,9 +5,10 @@ default:
     suites:
         default:
             paths:
-                - '%paths.base%/../../features/behat'
+                - '%paths.base%/../../features/backoffice'
+                - '%paths.base%/../../features/frontoffice'
             contexts:
-                - Erpify\Features\Behat\FeatureContext
+                - Erpify\Tests\Behat\Context\FeatureContext
     extensions:
         Behat\MinkExtension\ServiceContainer\MinkExtension:
             base_url: '%env(MINK_BASE_URL)%'

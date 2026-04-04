@@ -3,8 +3,8 @@
 # Compose project lives in ./api (monorepo); upstream assumes project root.
 
 API_DIR := api
-# Override if Compose publishes HTTPS on a non-default port, e.g. HEALTH_URL=https://localhost:4443/health
-HEALTH_URL ?= https://localhost/health
+# Override if Compose publishes HTTPS on a non-default port, e.g. HEALTH_URL=https://localhost:4443/api/v1/health
+HEALTH_URL ?= https://localhost/api/v1/health
 # Behat Mink base URL inside the php container (Caddy serves the app as http://php per SERVER_NAME)
 MINK_BASE_URL ?= http://php
 # Persisted in api/.env; Compose passes it to the container (compose.override.yaml).
@@ -93,10 +93,12 @@ up-wait: ## Start stack with --wait (e.g. first Symfony bootstrap); runs from ./
 
 restart: down up ## Stop then start the docker hub
 
+reset: down up-wait ## Stop then start
+
 ps: ## docker compose ps for ./api
 	$(DC) ps
 
-health: ## GET HEALTH_URL (default https://localhost/health); fail on non-200 or status != ok
+health: ## GET HEALTH_URL (default https://localhost/api/v1/health); fail on non-200 or status != ok
 	@tmp=$$(mktemp); \
 	trap 'rm -f $$tmp' EXIT; \
 	printf 'GET %s\n' '$(HEALTH_URL)'; \

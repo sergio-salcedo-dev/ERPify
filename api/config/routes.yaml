@@ -1,11 +1,15 @@
-# yaml-language-server: $schema=../vendor/symfony/routing/Loader/schema/routing.schema.json
+# API v1 — attribute routes from every bounded context under src/ (e.g. Backoffice/*/Infrastructure/Controller/).
+# Classes with #[Route] receive controller.service_arguments via FrameworkBundle autoconfiguration.
+api_v1_back_office:
+    resource: ../src/Backoffice/
+    type: attribute
+    prefix: /api/v1/backoffice
+    defaults:
+        _format: json
 
-# This file is the entry point to configure the routes of your app.
-# Methods with the #[Route] attribute are automatically imported.
-# See also https://symfony.com/doc/current/routing.html
-
-# To list all registered routes, run the following command:
-#   bin/console debug:router
-
-controllers:
-    resource: routing.controllers
+api_v1_front_office:
+    resource: ../src/Frontoffice/
+    type: attribute
+    prefix: /api/v1
+    defaults:
+        _format: json

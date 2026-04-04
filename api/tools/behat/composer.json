@@ -20,7 +20,7 @@
     },
     "autoload": {
         "psr-4": {
-            "Erpify\\Features\\Behat\\": "../../features/behat/contexts/"
+            "Erpify\\Tests\\Behat\\": "../../tests/Behat/"
         }
     }
 }

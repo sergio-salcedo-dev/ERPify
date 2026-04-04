@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Features\Behat;
+namespace Erpify\Tests\Behat\Context;
 
 use Behat\MinkExtension\Context\MinkContext;
 

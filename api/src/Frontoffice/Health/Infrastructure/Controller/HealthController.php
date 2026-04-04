@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Backoffice\Health\Infrastructure\Controller;
+namespace Erpify\Frontoffice\Health\Infrastructure\Controller;
 
 use DateTimeImmutable;
 use DateTimeInterface;
@@ -11,12 +11,12 @@ use Symfony\Component\Routing\Attribute\Route;
 
 final class HealthController
 {
-    #[Route('/health', name: 'backoffice_health', methods: ['GET'])]
+    #[Route('/health', name: 'frontoffice_health', methods: ['GET'])]
     public function __invoke(): JsonResponse
     {
         return new JsonResponse([
             'status' => 'ok',
-            'service' => 'Back office',
+            'service' => 'Front office',
             'datetime' => new DateTimeImmutable()->format(DateTimeInterface::ATOM),
         ]);
     }

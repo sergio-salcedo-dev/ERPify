@@ -45,21 +45,23 @@ composer require --dev \
 
 ## Step 2 — Add the Behat context autoload namespace
 
-In `api/composer.json`, add the context namespace to `autoload-dev`:
+Contexts live under `api/tests/Behat/` with namespace `Erpify\Tests\Behat\`.
+PHPUnit loads them via `api/composer.json` `autoload-dev` (`Erpify\Tests\` → `tests/`).
+
+Behat uses the **isolated** `api/tools/behat/composer.json` (see `bootstrap.php`), so that file must also map the same classes:
 
 ```json
-"autoload-dev": {
+"autoload": {
     "psr-4": {
-        "Erpify\\Tests\\": "tests/",
-        "Erpify\\Features\\Behat\\": "features/behat/contexts/"
+        "Erpify\\Tests\\Behat\\": "../../tests/Behat/"
     }
 }
 ```
 
-Then regenerate the autoloader:
+Then regenerate the Behat tools autoloader:
 
 ```bash
-composer dump-autoload
+composer dump-autoload --working-dir=tools/behat
 ```
 
 ## Step 3 — Move `behat.yml.dist` to `api/`
@@ -68,14 +70,15 @@ Copy the config to the application root and update the paths (they were
 relative to `api/tools/behat/`; now they are relative to `api/`):
 
 ```yaml
-# api/behat.yml.dist
+# api/tools/behat/behat.yml.dist (paths relative to api/tools/behat/)
 default:
     suites:
         default:
             paths:
-                - '%paths.base%/features/behat'
+                - '%paths.base%/../../features/backoffice'
+                - '%paths.base%/../../features/frontoffice'
             contexts:
-                - Erpify\Features\Behat\FeatureContext
+                - Erpify\Tests\Behat\Context\FeatureContext
     extensions:
         Behat\MinkExtension\ServiceContainer\MinkExtension:
             base_url: '%env(MINK_BASE_URL)%'
