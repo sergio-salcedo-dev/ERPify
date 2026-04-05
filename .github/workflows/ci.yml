@@ -38,6 +38,7 @@ jobs:
               - 'api/**'
               - 'compose.yaml'
               - 'compose.override.yaml'
+              - 'compose.ci.yaml'
               - 'compose.pwa-dev.yaml'
               - 'compose.prod.yaml'
               - 'Makefile'
@@ -52,6 +53,7 @@ jobs:
               - 'pwa/**'
               - 'compose.yaml'
               - 'compose.override.yaml'
+              - 'compose.ci.yaml'
               - 'compose.pwa-dev.yaml'
               - 'compose.prod.yaml'
               - 'Makefile'
@@ -102,7 +104,7 @@ jobs:
             pwa.cache-from=type=gha,scope=pwa-refs/heads/main
             pwa.cache-to=type=gha,scope=pwa-${{github.ref}},mode=max
       - name: Start services
-        run: docker compose -f compose.yaml -f compose.override.yaml up --wait --no-build
+        run: docker compose -f compose.yaml -f compose.override.yaml -f compose.ci.yaml up --wait --no-build
       - name: Check HTTP reachability (Next via FrankenPHP)
         run: curl -v --fail-with-body http://localhost
       - name: Check API reachability (HTTPS)
@@ -114,12 +116,12 @@ jobs:
         run: |
           curl -vkI --fail-with-body "https://localhost/.well-known/mercure?topic=test"
       - name: PHPUnit (API)
-        run: docker compose -f compose.yaml -f compose.override.yaml exec -T -e APP_ENV=test php bin/phpunit
+        run: docker compose -f compose.yaml -f compose.override.yaml -f compose.ci.yaml exec -T -e APP_ENV=test php bin/phpunit
       - name: Debug services
         if: failure()
         run: |
-          docker compose -f compose.yaml -f compose.override.yaml ps
-          docker compose -f compose.yaml -f compose.override.yaml logs
+          docker compose -f compose.yaml -f compose.override.yaml -f compose.ci.yaml ps
+          docker compose -f compose.yaml -f compose.override.yaml -f compose.ci.yaml logs
 
   # super-linter:
   #   name: Lint (super-linter)
@@ -198,7 +200,7 @@ jobs:
       - name: Start full stack (FrankenPHP + PWA + Postgres)
         env:
           COMPOSE_PROJECT_NAME: erpify-e2e
-        run: docker compose -f compose.yaml -f compose.override.yaml up --wait --no-build
+        run: docker compose -f compose.yaml -f compose.override.yaml -f compose.ci.yaml up --wait --no-build
       - name: Wait for API health (HTTPS)
         run: |
           for i in $(seq 1 60); do
@@ -240,8 +242,8 @@ jobs:
         env:
           COMPOSE_PROJECT_NAME: erpify-e2e
         run: |
-          docker compose -f compose.yaml -f compose.override.yaml ps
-          docker compose -f compose.yaml -f compose.override.yaml logs
+          docker compose -f compose.yaml -f compose.override.yaml -f compose.ci.yaml ps
+          docker compose -f compose.yaml -f compose.override.yaml -f compose.ci.yaml logs
 
   ci-success:
     name: All required jobs OK
