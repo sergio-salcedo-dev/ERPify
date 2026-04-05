@@ -38,6 +38,7 @@ jobs:
               - 'api/**'
               - 'compose.yaml'
               - 'compose.override.yaml'
+              - 'compose.pwa-dev.yaml'
               - 'compose.prod.yaml'
               - 'Makefile'
               - '.devcontainer/**'
@@ -51,6 +52,7 @@ jobs:
               - 'pwa/**'
               - 'compose.yaml'
               - 'compose.override.yaml'
+              - 'compose.pwa-dev.yaml'
               - 'compose.prod.yaml'
               - 'Makefile'
       - id: pick

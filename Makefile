@@ -1,5 +1,5 @@
 # ERPify — monorepo tasks (repo root).
-# Compose files: compose.yaml + compose.override.yaml (dev) or + compose.prod.yaml (prod).
+# Compose files: compose.yaml + compose.override.yaml + compose.pwa-dev.yaml (dev) or + compose.prod.yaml (prod).
 # Inspired by https://github.com/dunglas/symfony-docker/blob/main/docs/makefile.md
 #
 # Common commands:
@@ -17,7 +17,7 @@ ROOT_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 STACK_PROJECT ?= erpify
 export COMPOSE_PROJECT_NAME := $(STACK_PROJECT)
 
-COMPOSE_DEV = -f compose.yaml -f compose.override.yaml
+COMPOSE_DEV = -f compose.yaml -f compose.override.yaml -f compose.pwa-dev.yaml
 COMPOSE_PROD = -f compose.yaml -f compose.prod.yaml
 
 DOCKER_COMP = cd $(ROOT_DIR) && docker compose $(COMPOSE_DEV)
