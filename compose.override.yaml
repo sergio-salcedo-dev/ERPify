@@ -22,6 +22,10 @@ services:
       - host.docker.internal:host-gateway
     tty: true
 
+  pwa:
+    # Stable tag for bake + `compose up --no-build` (avoids default erpify-pwa:latest mismatch).
+    image: ${IMAGES_PREFIX:-}app-pwa-dev
+
   database:
     ports:
       - "5432"
