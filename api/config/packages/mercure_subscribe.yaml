@@ -1,0 +1,6 @@
+# Merges with mercure.yaml — subscriber JWT claims for Authorization::setCookie (symfony/mercure-bundle).
+mercure:
+    hubs:
+        default:
+            jwt:
+                subscribe: '*'

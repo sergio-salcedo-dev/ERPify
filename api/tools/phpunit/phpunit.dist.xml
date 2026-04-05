@@ -17,6 +17,9 @@
         <ini name="error_reporting" value="-1" />
         <server name="APP_ENV" value="test" force="true" />
         <server name="SHELL_VERBOSITY" value="-1" />
+        <server name="MERCURE_URL" value="http://127.0.0.1/.well-known/mercure" force="true" />
+        <server name="MERCURE_PUBLIC_URL" value="https://localhost/.well-known/mercure" force="true" />
+        <server name="MERCURE_JWT_SECRET" value="!ChangeThisMercureHubJWTSecretKey!" force="true" />
     </php>
 
     <testsuites>

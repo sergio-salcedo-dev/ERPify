@@ -109,6 +109,9 @@ jobs:
         run: curl -v --fail-with-body http://localhost
       - name: Check API reachability (HTTPS)
         run: curl -vk --fail-with-body https://localhost/api/v1/health
+      - name: Check Mercure bootstrap API (HTTPS)
+        run: |
+          curl -vk --fail-with-body https://localhost/api/v1/mercure/bootstrap | grep -q 'urn:erpify:mercure:demo'
       - name: Check PWA reachability (HTML)
         run: |
           curl -vk --fail-with-body -H 'Accept: text/html' https://localhost/

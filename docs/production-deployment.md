@@ -38,7 +38,7 @@ docker compose -f compose.yaml -f compose.prod.yaml up --wait --build --detach
    Align with your canonical **HTTPS** origin (e.g. `https://app.example.com`) so generated URLs and redirects are correct.
 
 4. **Mercure**  
-   **`MERCURE_PUBLIC_URL`** must be a URL **browsers** can reach (typically `https://app.example.com/.well-known/mercure` when TLS terminates on the same host). Keep **`CADDY_MERCURE_JWT_SECRET`** (or equivalent publisher/subscriber keys) in sync with Caddy/Symfony config. See [secrets.md](../api/docs/production-ready/secrets.md).
+   **`MERCURE_PUBLIC_URL`** must be a URL **browsers** can reach (typically `https://app.example.com/.well-known/mercure` when TLS terminates on the same host). Keep **`CADDY_MERCURE_JWT_SECRET`** (or equivalent publisher/subscriber keys) in sync with Caddy/Symfony config. See [secrets.md](../api/docs/production-ready/secrets.md). Step-by-step: [mercure-production-deployment.md](mercure-production-deployment.md); architecture: [mercure.md](mercure.md).
 
 5. **PWA ↔ API (same site)**  
    When the browser talks to the same host for pages and `/api`, set **`NEXT_PUBLIC_SYMFONY_API_BASE_URL`** at **image build time** to that public origin (e.g. `https://app.example.com`). See [pwa/docs/production-deployment.md](../pwa/docs/production-deployment.md).
