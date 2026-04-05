@@ -8,6 +8,7 @@ use Behat\Behat\Hook\Scope\BeforeScenarioScope;
 use Behat\Gherkin\Node\PyStringNode;
 use Behat\Mink\Driver\BrowserKitDriver;
 use Behat\MinkExtension\Context\MinkContext;
+use JsonException;
 use PDO;
 use RuntimeException;
 
@@ -118,6 +119,23 @@ final class FeatureContext extends MinkContext
             strtoupper($method),
             $this->locatePath($url),
         );
+    }
+
+    /**
+     * @Then the response should be JSON
+     */
+    public function theResponseShouldBeJson(): void
+    {
+        $content = $this->getSession()->getPage()->getContent();
+        try {
+            json_decode($content, true, 512, JSON_THROW_ON_ERROR);
+        } catch (JsonException $e) {
+            throw new RuntimeException(
+                sprintf('Response is not valid JSON: %s', $e->getMessage()),
+                0,
+                $e,
+            );
+        }
     }
 
     /**
