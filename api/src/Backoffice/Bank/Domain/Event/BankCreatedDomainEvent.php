@@ -15,6 +15,8 @@ final class BankCreatedDomainEvent extends DomainEvent
         private readonly string $shortName,
         private readonly string $createdAt,
         private readonly string $updatedAt,
+        private readonly ?string $logoMediaId = null,
+        private readonly ?string $logoContentHash = null,
         ?string $eventId = null,
         ?DateTimeImmutable $occurredOn = null,
     ) {
@@ -38,6 +40,8 @@ final class BankCreatedDomainEvent extends DomainEvent
             'short_name' => $this->shortName,
             'created_at' => $this->createdAt,
             'updated_at' => $this->updatedAt,
+            'logo_media_id' => $this->logoMediaId,
+            'logo_content_hash' => $this->logoContentHash,
         ];
     }
 }

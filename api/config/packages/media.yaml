@@ -1,0 +1,6 @@
+parameters:
+    env(MEDIA_PUBLIC_BASE_URL): ''
+    erpify.media.max_dimension: 512
+    erpify.media.max_upload_bytes: '2M'
+    erpify.media.jpeg_quality: 85
+    erpify.media.webp_quality: 85

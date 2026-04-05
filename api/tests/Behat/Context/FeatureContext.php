@@ -15,9 +15,6 @@ final class FeatureContext extends MinkContext
 {
     use MessengerBehatTrait;
 
-    /** @var array<string, string> */
-    private array $rememberedValues = [];
-
     /**
      * Reset and re-seed the database before every scenario so each test
      * starts from the same known state.
@@ -26,6 +23,8 @@ final class FeatureContext extends MinkContext
      */
     public function resetDatabase(BeforeScenarioScope $scope): void
     {
+        ScenarioRememberedValues::reset();
+
         $console = $this->messengerBinConsole();
 
         exec(
@@ -49,7 +48,7 @@ final class FeatureContext extends MinkContext
      */
     public function assertDomainEventRecordedForAggregate(string $eventName, string $alias): void
     {
-        $aggregateId = $this->resolvedRememberedAlias($alias);
+        $aggregateId = ScenarioRememberedValues::require($alias);
         $this->assertValidUuid($aggregateId, $alias);
         $this->assertDomainEventNameFormat($eventName);
 
@@ -83,7 +82,7 @@ final class FeatureContext extends MinkContext
      */
     public function iSendARequestToWithBody(string $method, string $url, PyStringNode $body): void
     {
-        $url = $this->interpolatePlaceholders($url);
+        $url = ScenarioRememberedValues::interpolate($url);
 
         $driver = $this->getSession()->getDriver();
         assert($driver instanceof BrowserKitDriver);
@@ -107,7 +106,7 @@ final class FeatureContext extends MinkContext
      */
     public function iSendARequestTo(string $method, string $url): void
     {
-        $url = $this->interpolatePlaceholders($url);
+        $url = ScenarioRememberedValues::interpolate($url);
 
         $driver = $this->getSession()->getDriver();
 
@@ -136,7 +135,7 @@ final class FeatureContext extends MinkContext
         /** @var array<string, mixed> $data */
         $data = json_decode($content, true) ?? [];
 
-        $this->rememberedValues[$alias] = (string) ($data[$field] ?? '');
+        ScenarioRememberedValues::set($alias, (string) ($data[$field] ?? ''));
     }
 
     /**
@@ -147,28 +146,7 @@ final class FeatureContext extends MinkContext
      */
     public function locatePath($path): string
     {
-        return parent::locatePath($this->interpolatePlaceholders((string) $path));
-    }
-
-    /**
-     * Replace {alias} placeholders in a URL with previously remembered values.
-     */
-    private function interpolatePlaceholders(string $url): string
-    {
-        foreach ($this->rememberedValues as $key => $value) {
-            $url = str_replace('{' . $key . '}', $value, $url);
-        }
-
-        return $url;
-    }
-
-    private function resolvedRememberedAlias(string $alias): string
-    {
-        if ($alias === '' || !isset($this->rememberedValues[$alias]) || $this->rememberedValues[$alias] === '') {
-            throw new RuntimeException(sprintf('Unknown or empty remembered value for alias %s', $alias));
-        }
-
-        return $this->rememberedValues[$alias];
+        return parent::locatePath(ScenarioRememberedValues::interpolate((string) $path));
     }
 
     private function assertValidUuid(string $value, string $forAlias): void

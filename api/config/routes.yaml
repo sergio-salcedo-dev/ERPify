@@ -13,3 +13,8 @@ api_v1_front_office:
     prefix: /api/v1
     defaults:
         _format: json
+
+api_v1_shared_media:
+    resource: ../src/Shared/Media/Infrastructure/Controller/
+    type: attribute
+    prefix: /api/v1
