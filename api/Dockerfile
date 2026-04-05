@@ -1,12 +1,14 @@
 #syntax=docker/dockerfile:1
-
-# Versions
-FROM dunglas/frankenphp:1-php8.5 AS frankenphp_upstream
-
+#
+# Adapted from https://github.com/dunglas/symfony-docker — stage names and healthcheck pattern
+# aligned with https://github.com/api-platform/api-platform/blob/main/api/Dockerfile
+# (PHP 8.5 + ERPify prod slim stage retained).
+#
 # The different stages of this Dockerfile are meant to be built into separate images
 # https://docs.docker.com/build/building/multi-stage/#stop-at-a-specific-build-stage
 # https://docs.docker.com/reference/compose-file/build/#target
 
+FROM dunglas/frankenphp:1-php8.5 AS frankenphp_upstream
 
 # Base FrankenPHP image
 FROM frankenphp_upstream AS frankenphp_base
@@ -22,6 +24,7 @@ VOLUME /app/var/
 RUN <<-EOF
 	apt-get update
 	apt-get install -y --no-install-recommends \
+		curl \
 		file \
 		git
 	install-php-extensions \
@@ -47,11 +50,11 @@ RUN install-php-extensions pdo_pgsql
 
 COPY --link frankenphp/conf.d/10-app.ini $PHP_INI_DIR/app.conf.d/
 COPY --link --chmod=755 frankenphp/docker-entrypoint.sh /usr/local/bin/docker-entrypoint
-COPY --link frankenphp/Caddyfile /etc/frankenphp/Caddyfile
+COPY --link frankenphp/Caddyfile frankenphp/worker.Caddyfile /etc/frankenphp/
 
 ENTRYPOINT ["docker-entrypoint"]
 
-HEALTHCHECK --start-period=60s CMD php -r 'exit(false === @file_get_contents("http://localhost:2019/metrics", context: stream_context_create(["http" => ["timeout" => 5]])) ? 1 : 0);'
+HEALTHCHECK --start-period=60s CMD curl -f http://localhost:2019/metrics || exit 1
 CMD [ "frankenphp", "run", "--config", "/etc/frankenphp/Caddyfile" ]
 
 # Dev FrankenPHP image
@@ -150,6 +153,7 @@ COPY --from=frankenphp_prod_builder /usr/local/etc/php/php.ini /usr/local/etc/ph
 COPY --from=frankenphp_prod_builder /usr/local/etc/php/app.conf.d /usr/local/etc/php/app.conf.d
 
 COPY --from=frankenphp_prod_builder /etc/frankenphp/Caddyfile /etc/frankenphp/Caddyfile
+COPY --from=frankenphp_prod_builder /etc/frankenphp/worker.Caddyfile /etc/frankenphp/worker.Caddyfile
 
 # CA certificates for TLS, file/libmagic for Symfony MIME type detection
 COPY --from=frankenphp_prod_builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
@@ -159,6 +163,9 @@ COPY --from=frankenphp_prod_builder /usr/lib/file/magic.mgc /usr/lib/file/magic.
 ENV XDG_CONFIG_HOME=/config XDG_DATA_HOME=/data
 
 RUN <<-EOF
+	apt-get update
+	apt-get install -y --no-install-recommends curl
+	rm -rf /var/lib/apt/lists/*
 	mkdir -p /data/caddy /config/caddy
 	chown -R www-data:www-data /data /config
 	# Remove setuid/setgid bits
@@ -178,5 +185,5 @@ WORKDIR /app
 
 ENTRYPOINT ["docker-entrypoint"]
 
-HEALTHCHECK --start-period=60s CMD php -r 'exit(false === @file_get_contents("http://localhost:2019/metrics", context: stream_context_create(["http" => ["timeout" => 5]])) ? 1 : 0);'
+HEALTHCHECK --start-period=60s CMD curl -f http://localhost:2019/metrics || exit 1
 CMD [ "frankenphp", "run", "--config", "/etc/frankenphp/Caddyfile" ]

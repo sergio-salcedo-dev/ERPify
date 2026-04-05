@@ -26,7 +26,7 @@ override is provided:
 
 These values appear in:
 - `api/.env` → `DATABASE_URL` used by Symfony
-- `api/compose.yaml` → `POSTGRES_*` env on the `database` service and the `DATABASE_URL`
+- Root `compose.yaml` → `POSTGRES_*` env on the `database` service and the `DATABASE_URL`
   env on the `php` service
 
 The database is exposed on host port **15432** so you can connect from a local

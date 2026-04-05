@@ -1,0 +1,10 @@
+# https://github.com/api-platform/api-platform/blob/main/api/frankenphp/worker.Caddyfile
+#
+# Upstream uses env APP_RUNTIME Runtime\FrankenPhpSymfony\Runtime (see runtime/frankenphp-symfony).
+# Symfony 8 ships FrankenPhpWorkerRunner in symfony/runtime; default APP_RUNTIME is SymfonyRuntime.
+worker {
+	file ./public/index.php
+	env APP_RUNTIME Symfony\Component\Runtime\SymfonyRuntime
+
+	{$FRANKENPHP_WORKER_CONFIG}
+}

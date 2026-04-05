@@ -1,109 +1,164 @@
-# ERPify — Makefile aligned with symfony-docker docs/makefile.md
-# https://github.com/dunglas/symfony-docker/blob/main/docs/makefile.md
-# Compose project lives in ./api (monorepo); upstream assumes project root.
+# ERPify — monorepo tasks (repo root).
+# Compose files: compose.yaml + compose.override.yaml (dev) or + compose.prod.yaml (prod).
+# Inspired by https://github.com/dunglas/symfony-docker/blob/main/docs/makefile.md
+#
+# Common commands:
+#   make dev-up    — full dev stack, rebuild images, open browser
+#   make up-wait   — stack up with health checks (no rebuild)
+#   make down      — stop
+#   make help      — all targets by section
 
+# —— Paths & project ——————————————————————————————————————————————————————————
 API_DIR := api
-# Override if Compose publishes HTTPS on a non-default port, e.g. HEALTH_URL=https://localhost:4443/api/v1/health
+PWA_DIR := pwa
+ROOT_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+
+# —— Docker Compose ———————————————————————————————————————————————————————————
+STACK_PROJECT ?= erpify
+export COMPOSE_PROJECT_NAME := $(STACK_PROJECT)
+
+COMPOSE_DEV = -f compose.yaml -f compose.override.yaml
+COMPOSE_PROD = -f compose.yaml -f compose.prod.yaml
+
+DOCKER_COMP = cd $(ROOT_DIR) && docker compose $(COMPOSE_DEV)
+DOCKER_COMP_PROD = cd $(ROOT_DIR) && docker compose $(COMPOSE_PROD)
+DC := @$(DOCKER_COMP)
+DCP := @$(DOCKER_COMP_PROD)
+
+# —— Optional overrides (environment / make CLI) ———————————————————————————————
 HEALTH_URL ?= https://localhost/api/v1/health
-# Behat Mink base URL inside the php container (Caddy serves the app as http://php per SERVER_NAME)
 MINK_BASE_URL ?= http://php
-# Persisted in api/.env; Compose passes it to the container (compose.override.yaml).
+OPEN_BROWSER ?= 1
 XDEBUG_MODE_OFF := off
 XDEBUG_MODE_DEBUG := develop,debug
 
-# Executables (local) — same as template, prefixed to run compose from $(API_DIR)
-DOCKER_COMP = cd $(API_DIR) && docker compose
-
-# Silent `docker compose` for recipes (same as @$(DOCKER_COMP))
-DC := @$(DOCKER_COMP)
-
-# Docker containers
+# —— Container helpers ————————————————————————————————————————————————————————
 PHP_CONT = $(DOCKER_COMP) exec php
 PHP_TEST = $(DOCKER_COMP) exec -e APP_ENV=test php
 PHP_TEST_BEHAT = $(DOCKER_COMP) exec -e APP_ENV=test -e MINK_BASE_URL=$(MINK_BASE_URL) php
-
-# Executables
-PHP      = $(PHP_CONT) php
+PHP = $(PHP_CONT) php
 COMPOSER = $(PHP_CONT) composer
-SYMFONY  = $(PHP) bin/console
+SYMFONY = $(PHP) bin/console
 
-# Misc
-.DEFAULT_GOAL = help
-.PHONY        : help build up start down logs sh bash composer vendor sf cc \
-                php.unit php.unit.install php.behat php.behat.install \
-                up-wait restart reset ps health clean \
-                xdebug.enable xdebug.disable xdebug.status \
-                db.migrate db.diff db.status db.fixtures db.alice db.reset db.shell db.validate \
-                routes test
+# PWA npm from Make: IDEs often run sh with a minimal PATH (no npm). Login zsh/bash loads nvm/fnm/Homebrew; else PATH + nvm.sh.
+define pwa_cmd
+	_pwa_l="$$(command -v zsh 2>/dev/null || command -v bash 2>/dev/null)"; \
+	if [ -n "$$_pwa_l" ]; then \
+		exec "$$_pwa_l" -lc "cd \"$(ROOT_DIR)/$(PWA_DIR)\" && $(strip $(1))"; \
+	fi; \
+	export PATH="$$PATH:/usr/local/bin:/opt/homebrew/bin:$$HOME/.local/bin:$$HOME/.fnm/shims:$$HOME/.local/share/fnm"; \
+	[ -s "$$HOME/.nvm/nvm.sh" ] && . "$$HOME/.nvm/nvm.sh" 2>/dev/null || true; \
+	cd "$(ROOT_DIR)/$(PWA_DIR)" && exec $(strip $(1))
+endef
 
-## —— 🎵 🐳 The Symfony Docker Makefile 🐳 🎵 ——————————————————————————————————
-help: ## Outputs this help screen
-	@grep -E '(^[a-zA-Z0-9\./_-]+:.*?##.*$$)|(^##)' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}{printf "\033[32m%-30s\033[0m %s\n", $$1, $$2}' | sed -e 's/\[32m##/[33m/'
+.DEFAULT_GOAL := help
 
-## —— Docker 🐳 ————————————————————————————————————————————————————————————————
-build: ## Builds the Docker images
-	$(DC) build --pull --no-cache
+.PHONY: help help-targets \
+	build up down logs sh bash \
+	up-wait stack-up stack-down stack-fresh stack-logs \
+	dev-up prod-up open-local \
+	restart reset ps health clean \
+	api-up-http dev-local \
+	composer vendor sf cc routes \
+	db.migrate db.diff db.status db.validate db.fixtures db.alice db.reset db.shell \
+	php.unit php.unit.install php.behat php.behat.install test \
+	pwa.install pwa.dev pwa.build pwa.test pwa.e2e pwa.lint pwa.lint.fix pwa.format \
+	xdebug.enable xdebug.disable xdebug.status \
+	ci start
 
-up: ## Start the docker hub in detached mode (no logs)
-	$(DC) up --detach
+# =============================================================================
+# Help
+# =============================================================================
 
-start: build up ## Build and start the containers
+help: ## Show quick start, then all targets grouped by section
+	@printf '\n\033[1mERPify\033[0m  %s\n' '$(ROOT_DIR)'
+	@printf '\n\033[1mTypical commands\033[0m\n'
+	@printf '  %-18s  %s\n' 'make dev-up' 'Dev stack: compose up --wait --build, open browser'
+	@printf '  %-18s  %s\n' 'make up-wait' 'Stack up with health checks (no image rebuild)'
+	@printf '  %-18s  %s\n' 'make prod-up' 'Prod overlay: needs APP_SECRET, CADDY_MERCURE_JWT_SECRET, POSTGRES_PASSWORD'
+	@printf '  %-18s  %s\n' 'make down' 'Stop stack'
+	@printf '  %-18s  %s\n' 'make health' 'GET $(HEALTH_URL)'
+	@printf '  %-18s  %s\n' 'make dev-local' 'API+DB on :8000 + Next dev on host'
+	@printf '\n  %-18s  %s\n' 'OPEN_BROWSER=0' 'Skip xdg-open / open with dev-up, prod-up, open-local'
+	@printf '  %-18s  %s\n' 'STACK_PROJECT=name' 'Docker Compose project name (default erpify)'
+	@$(MAKE) --no-print-directory help-targets
 
-down: ## Stop the docker hub
-	$(DC) down --remove-orphans
+# Section headers use: ## —— Title ——
+help-targets:
+	@awk ' \
+	/^## ——/ { \
+		line = $$0; \
+		sub(/^## ——[[:space:]]*/, "", line); \
+		sub(/[[:space:]]—+.*$$/, "", line); \
+		printf "\n\033[33m%s\033[0m\n", line; \
+		next \
+	} \
+	/^help:/ || /^help-targets:/ { next } \
+	/^\.PHONY:/ { next } \
+	$$0 ~ /^[[:alpha:]][^#]*:.*##/ { \
+		n = index($$0, "##"); \
+		if (n == 0) next; \
+		left = substr($$0, 1, n - 1); \
+		desc = substr($$0, n + 2); \
+		gsub(/^[[:space:]]+|[[:space:]]+$$/, "", desc); \
+		c = index(left, ":"); \
+		if (c == 0) next; \
+		targets = substr(left, 1, c - 1); \
+		gsub(/^[[:space:]]+|[[:space:]]+$$/, "", targets); \
+		if (targets == "") next; \
+		printf "  \033[32m%-26s\033[0m %s\n", targets, desc; \
+		next \
+	} \
+	' $(MAKEFILE_LIST)
 
-logs: ## Show live logs
-	$(DC) logs --tail=0 --follow
+# =============================================================================
+# Stack — FrankenPHP + Postgres + PWA (repo root Compose)
+# =============================================================================
 
-sh: ## Connect to the FrankenPHP container
-	@$(PHP_CONT) sh
+## —— Stack ——
 
-bash: ## Connect to the FrankenPHP container via bash so up and down arrows go to previous commands
-	@$(PHP_CONT) bash
+dev-up: ## Dev: up --wait --build -d, then open http(s)://localhost (OPEN_BROWSER=0 to skip)
+	$(DC) up --wait --build --detach
+	@$(MAKE) open-local
 
-php.unit: ## Run PHPUnit in the php container (api/tools/phpunit); pass c= for CLI options, e.g. make test c="--filter Foo"
-	@$(eval c ?=)
-	@$(PHP_TEST) bin/phpunit $(c)
+prod-up: ## Prod: compose.yaml + compose.prod.yaml, up --wait --build -d, open browser (set secrets in env)
+	$(DCP) up --wait --build --detach
+	@$(MAKE) open-local
 
-php.unit.install: ## Install PHPUnit under api/tools/phpunit (composer phpunit-tools-install)
-	@$(COMPOSER) phpunit-tools-install
-
-php.behat: ## Run Behat in the php container (api/tools/behat); pass c= for CLI options; MINK_BASE_URL defaults to http://php
-	@$(eval c ?=)
-	@$(PHP_TEST_BEHAT) php bin/behat --format=pretty $(c)
-
-php.behat.install: ## Install Behat dependencies under api/tools/behat (composer behat-tools-install)
-	@$(COMPOSER) behat-tools-install
-
-## —— Composer 🧙 ——————————————————————————————————————————————————————————————
-composer: ## Run composer, pass the parameter "c=" to run a given command, example: make composer c='req symfony/orm-pack'
-	@$(eval c ?=)
-	@$(COMPOSER) $(c)
-
-vendor: ## Install vendors according to the current composer.lock file
-vendor: c=install --prefer-dist --no-dev --no-progress --no-scripts --no-interaction
-vendor: composer
-
-## —— Symfony 🎵 ———————————————————————————————————————————————————————————————
-sf: ## List all Symfony commands or pass the parameter "c=" to run a given command, example: make sf c=about
-	@$(eval c ?=)
-	@$(SYMFONY) $(c)
-
-cc: c=c:c ## Clear the cache
-cc: sf
-
-## —— ERPify (monorepo extras) ————————————————————————————————————————————————
-up-wait: ## Start stack with --wait (e.g. first Symfony bootstrap); runs from ./api
+# Same recipe: historical name up-wait (symfony-docker) + stack-up alias
+up-wait stack-up: ## Full stack up with --wait (no rebuild; use dev-up for --build)
 	$(DC) up --wait --detach
 
-restart: down up ## Stop then start the docker hub
+stack-down down: ## Stop stack (stack-down and down are the same)
+	$(DC) down --remove-orphans
 
-reset: down up-wait ## Stop then start
+stack-fresh: ## down then up-wait (no --build)
+	$(DC) down --remove-orphans
+	$(DC) up --wait --detach
 
-ps: ## docker compose ps for ./api
+stack-logs logs: ## Follow Compose logs (php, pwa, database, …)
+	$(DC) logs --tail=0 --follow
+
+open-local: ## Open http://localhost and https://localhost (OPEN_BROWSER=0 to skip)
+	@if [ "$(OPEN_BROWSER)" = "0" ]; then echo "OPEN_BROWSER=0, skipping browser"; exit 0; fi
+	@for url in http://localhost https://localhost; do \
+		if command -v xdg-open >/dev/null 2>&1; then \
+			xdg-open "$$url" 2>/dev/null || true; \
+		elif command -v open >/dev/null 2>&1; then \
+			open "$$url" 2>/dev/null || true; \
+		else \
+			echo "Open manually: $$url"; \
+		fi; \
+	done
+
+restart: down up ## Stop, then start (no --wait)
+
+reset: down up-wait ## Stop, then up with --wait
+
+ps: ## docker compose ps
 	$(DC) ps
 
-health: ## GET HEALTH_URL (default https://localhost/api/v1/health); fail on non-200 or status != ok
+health: ## GET HEALTH_URL; require HTTP 200 and JSON status ok
 	@tmp=$$(mktemp); \
 	trap 'rm -f $$tmp' EXIT; \
 	printf 'GET %s\n' '$(HEALTH_URL)'; \
@@ -120,7 +175,153 @@ health: ## GET HEALTH_URL (default https://localhost/api/v1/health); fail on non
 clean: ## Stop stack and remove volumes (destructive)
 	$(DC) down --remove-orphans --volumes
 
-xdebug.enable: ## Set XDEBUG_MODE=$(XDEBUG_MODE_DEBUG) in api/.env and recreate php
+api-up-http: ## API + database only, HTTP on host :8000 (no PWA container)
+	cd $(ROOT_DIR) && \
+	HTTP_PORT=8000 SERVER_NAME=http://localhost:8000 \
+	DEFAULT_URI=http://localhost:8000 CADDY_MERCURE_PUBLIC_URL=http://localhost:8000/.well-known/mercure \
+	docker compose $(COMPOSE_DEV) up --wait --detach php database
+
+dev-local: api-up-http ## api-up-http then Next dev (Turbopack); use pwa/.env.local for API URL :8000
+	$(call pwa_cmd,npm run dev -- --turbo)
+
+# =============================================================================
+# Docker images & shells
+# =============================================================================
+
+## —— Docker build & shells ——
+
+build: ## Build images (--pull --no-cache)
+	$(DC) build --pull --no-cache
+
+up: ## Start stack in detached mode (no --wait)
+	$(DC) up --detach
+
+start: build up ## Build then up (no --wait)
+
+sh: ## Shell in php container (sh)
+	@$(PHP_CONT) sh
+
+bash: ## Shell in php container (bash)
+	@$(PHP_CONT) bash
+
+# =============================================================================
+# Composer & Symfony (inside php container)
+# =============================================================================
+
+## —— Composer & Symfony ——
+
+composer: ## Run composer; pass c='…', e.g. make composer c='req vendor/pkg'
+	@$(eval c ?=)
+	@$(COMPOSER) $(c)
+
+vendor: ## composer install (prod-ish flags)
+vendor: c=install --prefer-dist --no-dev --no-progress --no-scripts --no-interaction
+vendor: composer
+
+sf: ## Symfony console; pass c=…, e.g. make sf c=about
+	@$(eval c ?=)
+	@$(SYMFONY) $(c)
+
+cc: c=c:c ## cache:clear
+cc: sf
+
+routes: ## debug:router (pass f= to filter, e.g. make routes f=api)
+	@$(eval f ?=)
+	@$(SYMFONY) debug:router $(if $(f),--show-controllers | grep $(f),)
+
+# =============================================================================
+# Database
+# =============================================================================
+
+## —— Database ——
+
+db.migrate: ## Run pending Doctrine migrations
+	@$(SYMFONY) doctrine:migrations:migrate --no-interaction --all-or-nothing
+
+db.diff: ## Generate migration from entity/schema diff
+	@$(SYMFONY) doctrine:migrations:diff
+
+db.status: ## Migration status
+	@$(SYMFONY) doctrine:migrations:status
+
+db.validate: ## Validate ORM mapping vs database
+	@$(SYMFONY) doctrine:schema:validate
+
+db.fixtures: ## Load Doctrine fixtures (purge first)
+	@$(SYMFONY) doctrine:fixtures:load --no-interaction --purge-with-truncate
+
+db.alice: ## Load Hautelook Alice fixtures
+	@$(SYMFONY) hautelook:fixtures:load --no-interaction
+
+db.reset: ## Drop DB → migrate → fixtures
+	@$(SYMFONY) doctrine:schema:drop --force --full-database --no-interaction
+	@$(SYMFONY) doctrine:migrations:migrate --no-interaction --all-or-nothing
+	@$(SYMFONY) doctrine:fixtures:load --no-interaction --purge-with-truncate
+
+db.shell: ## Interactive psql in database container
+	$(DOCKER_COMP) exec database \
+		psql --username=$${POSTGRES_USER:-erpify_user} $${POSTGRES_DB:-erpify_db}
+
+# =============================================================================
+# Tests (API)
+# =============================================================================
+
+## —— Tests (API) ——
+
+php.unit: ## PHPUnit in container; pass c= for extra args
+	@$(eval c ?=)
+	@$(PHP_TEST) bin/phpunit $(c)
+
+php.unit.install: ## Install PHPUnit tooling (api/tools/phpunit)
+	@$(COMPOSER) phpunit-tools-install
+
+php.behat: ## Behat in container; pass c= for extra args
+	@$(eval c ?=)
+	@$(PHP_TEST_BEHAT) php bin/behat --format=pretty $(c)
+
+php.behat.install: ## Install Behat tooling (api/tools/behat)
+	@$(COMPOSER) behat-tools-install
+
+test: php.behat ## Default “full” API test suite (Behat)
+
+# =============================================================================
+# PWA (Next.js)
+# =============================================================================
+
+## —— PWA ——
+
+pwa.install: ## npm ci in $(PWA_DIR)
+	$(call pwa_cmd,npm ci)
+
+pwa.dev: ## Next dev (Turbopack)
+	$(call pwa_cmd,npm run dev -- --turbo)
+
+pwa.build: ## next build
+	$(call pwa_cmd,npm run build)
+
+pwa.test: ## Vitest; pass c= for extra args
+	@$(eval c ?=)
+	$(call pwa_cmd,npm test -- $(c))
+
+pwa.e2e: ## Playwright
+	$(call pwa_cmd,npm run e2e)
+
+pwa.lint: ## ESLint + next lint
+	$(call pwa_cmd,npm run lint)
+
+pwa.lint.fix: ## ESLint --fix
+	$(call pwa_cmd,npm run lint:fix)
+
+pwa.format: ## Prettier
+	$(call pwa_cmd,npm run format)
+
+# =============================================================================
+# Xdebug
+# =============================================================================
+
+## —— Xdebug ——
+
+xdebug.enable: ## XDEBUG_MODE=develop,debug in api/.env and recreate php
 	@if ! grep -q '^XDEBUG_MODE=' "$(API_DIR)/.env" 2>/dev/null; then \
 		printf '\n###> docker/xdebug ###\nXDEBUG_MODE=$(XDEBUG_MODE_OFF)\n###< docker/xdebug ###\n' >> "$(API_DIR)/.env"; \
 	fi
@@ -128,54 +329,17 @@ xdebug.enable: ## Set XDEBUG_MODE=$(XDEBUG_MODE_DEBUG) in api/.env and recreate 
 	@echo "Set XDEBUG_MODE=$(XDEBUG_MODE_DEBUG) in $(API_DIR)/.env. Recreating php…"
 	$(DC) up --detach --force-recreate --no-deps php
 
-xdebug.disable: ## Set XDEBUG_MODE=$(XDEBUG_MODE_OFF) in api/.env (if present) and recreate php
+xdebug.disable: ## XDEBUG_MODE=off in api/.env (if present) and recreate php
 	@if grep -q '^XDEBUG_MODE=' "$(API_DIR)/.env" 2>/dev/null; then \
 		sed -i 's/^XDEBUG_MODE=.*/XDEBUG_MODE=$(XDEBUG_MODE_OFF)/' "$(API_DIR)/.env"; \
 		echo "Set XDEBUG_MODE=$(XDEBUG_MODE_OFF) in $(API_DIR)/.env."; \
 	else \
-		echo "No XDEBUG_MODE= line in $(API_DIR)/.env (Compose default remains $(XDEBUG_MODE_OFF))."; \
+		echo "No XDEBUG_MODE= line in $(API_DIR)/.env."; \
 	fi
 	@echo "Recreating php…"
 	$(DC) up --detach --force-recreate --no-deps php
 
-## —— Database 🗄️  ————————————————————————————————————————————————————————————
-db.migrate: ## Run all pending Doctrine migrations (--all-or-nothing)
-	@$(SYMFONY) doctrine:migrations:migrate --no-interaction --all-or-nothing
-
-db.diff: ## Generate a new migration by diffing current entities against the DB schema
-	@$(SYMFONY) doctrine:migrations:diff
-
-db.status: ## Show which migrations are pending vs executed
-	@$(SYMFONY) doctrine:migrations:status
-
-db.validate: ## Validate the Doctrine ORM mapping against the live DB schema
-	@$(SYMFONY) doctrine:schema:validate
-
-db.fixtures: ## Load PHP DoctrineFixtures — purges DB first (dev/test only)
-	@$(SYMFONY) doctrine:fixtures:load --no-interaction --purge-with-truncate
-
-db.alice: ## Load Alice YAML fixtures (fixtures/ + tests/Behat/Fixtures/) — purges DB first
-	@$(SYMFONY) hautelook:fixtures:load --no-interaction
-
-db.reset: ## Full DB reset: drop schema → migrate → reload DoctrineFixtures
-	@$(SYMFONY) doctrine:schema:drop --force --full-database --no-interaction
-	@$(SYMFONY) doctrine:migrations:migrate --no-interaction --all-or-nothing
-	@$(SYMFONY) doctrine:fixtures:load --no-interaction --purge-with-truncate
-
-db.shell: ## Open an interactive psql shell inside the database container
-	$(DOCKER_COMP) exec database \
-		psql --username=$${POSTGRES_USER:-erpify_user} $${POSTGRES_DB:-erpify_db}
-
-## —— Tests 🧪  ————————————————————————————————————————————————————————————————
-test: php.behat ## Run the full test suite
-
-## —— Symfony extras 🎵  ———————————————————————————————————————————————————————
-routes: ## List all registered routes (pass f= to filter, e.g. make routes f=bank)
-	@$(eval f ?=)
-	@$(SYMFONY) debug:router $(if $(f),--show-controllers | grep $(f),)
-
-## —— Xdebug 🐛  ———————————————————————————————————————————————————————————————
-xdebug.status: ## Verify Xdebug in php container; print PHP & Xdebug versions (start stack: make up)
+xdebug.status: ## Show PHP / Xdebug versions and XDEBUG_MODE in php container
 	@echo "=== php -v ==="
 	@$(PHP_CONT) php -v
 	@echo ""
@@ -186,3 +350,11 @@ xdebug.status: ## Verify Xdebug in php container; print PHP & Xdebug versions (s
 	@$(PHP_CONT) php -r "echo 'PHP_IDE_CONFIG:  ', (getenv('PHP_IDE_CONFIG') !== false ? getenv('PHP_IDE_CONFIG') : '(unset)'), PHP_EOL;"
 	@echo ""
 	@$(PHP_CONT) php -r '$$m = getenv("XDEBUG_MODE") ?: ""; echo str_contains($$m, "debug") ? "OK: Step debugging is ON (IDE listens on host port 9003)." : "OK: Step debugging is OFF (default). Run make xdebug.enable to debug.", PHP_EOL;'
+
+# =============================================================================
+# CI helper
+# =============================================================================
+
+## —— CI ——
+
+ci: pwa.lint pwa.test pwa.build ## PWA lint + unit tests + build (no E2E)

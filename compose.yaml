@@ -1,4 +1,12 @@
----
+# ERPify — Docker Compose (monorepo root). FrankenPHP (Symfony) + Postgres + Next.js PWA.
+# Browser → php:80/443 → Next (pwa:3000) for HTML / _next; /api* and Mercure stay in Symfony.
+# API image build context: ./api (Dockerfile lives in api/).
+#
+#   docker compose up --wait -d
+# Or: make up-wait
+#
+name: erpify
+
 services:
   php:
     restart: unless-stopped
@@ -6,15 +14,16 @@ services:
       database:
         condition: service_healthy
     environment:
+      PWA_UPSTREAM: ${PWA_UPSTREAM:-pwa:3000}
       SERVER_NAME: ${SERVER_NAME:-localhost}, php:80
-      DEFAULT_URI: https://${SERVER_NAME:-localhost}:${HTTPS_PORT:-443}
+      DEFAULT_URI: ${DEFAULT_URI:-https://${SERVER_NAME:-localhost}:${HTTPS_PORT:-443}}
       MERCURE_PUBLISHER_JWT_KEY: ${CADDY_MERCURE_JWT_SECRET:-!ChangeThisMercureHubJWTSecretKey!}
       MERCURE_SUBSCRIBER_JWT_KEY: ${CADDY_MERCURE_JWT_SECRET:-!ChangeThisMercureHubJWTSecretKey!}
       DATABASE_URL: postgresql://${POSTGRES_USER:-erpify_user}:${POSTGRES_PASSWORD:-erpify_password}@database:5432/${POSTGRES_DB:-erpify_db}?serverVersion=${POSTGRES_VERSION:-18}&charset=${POSTGRES_CHARSET:-utf8}
-      # Run "composer require symfony/mercure-bundle" to install and configure the Mercure integration
       MERCURE_URL: ${CADDY_MERCURE_URL:-http://php/.well-known/mercure}
       MERCURE_PUBLIC_URL: ${CADDY_MERCURE_PUBLIC_URL:-https://${SERVER_NAME:-localhost}:${HTTPS_PORT:-443}/.well-known/mercure}
       MERCURE_JWT_SECRET: ${CADDY_MERCURE_JWT_SECRET:-!ChangeThisMercureHubJWTSecretKey!}
+      SYMFONY_TRUSTED_PROXIES: "${SYMFONY_TRUSTED_PROXIES:-127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}"
     volumes:
       - caddy_data:/data
       - caddy_config:/config
@@ -31,8 +40,14 @@ services:
         target: 443
         published: ${HTTP3_PORT:-443}
         protocol: udp
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:2019/metrics"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      # Entrypoint: composer (cold), DB wait, migrations, then FrankenPHP — allow slow first boot
+      start_period: 120s
 
-###> doctrine/doctrine-bundle ###
   database:
     image: postgres:${POSTGRES_VERSION:-18}-alpine
     environment:
@@ -48,17 +63,31 @@ services:
       - "${POSTGRES_PORT:-15432}:5432"
     volumes:
       - database_data:/var/lib/postgresql/data:rw
-###< doctrine/doctrine-bundle ###
 
-# Mercure is installed as a Caddy module, prevent the Flex recipe from installing another service
-###> symfony/mercure-bundle ###
-###< symfony/mercure-bundle ###
+  pwa:
+    build:
+      context: ./pwa
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_SYMFONY_API_BASE_URL: ${NEXT_PUBLIC_SYMFONY_API_BASE_URL:-https://localhost}
+    environment:
+      SYMFONY_INTERNAL_URL: http://php:80
+    depends_on:
+      php:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
 
 volumes:
   caddy_data:
   caddy_config:
-###> doctrine/doctrine-bundle ###
   database_data:
-###< doctrine/doctrine-bundle ###
-###> symfony/mercure-bundle ###
-###< symfony/mercure-bundle ###

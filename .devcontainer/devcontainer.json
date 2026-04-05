@@ -1,12 +1,12 @@
 {
-    "name": "Symfony Docker",
+    "name": "ERPify",
     "dockerComposeFile": [
         "../compose.yaml",
         "../compose.override.yaml",
         "compose.devcontainer.yaml"
     ],
     "service": "php",
-    "workspaceFolder": "/app",
+    "workspaceFolder": "/workspace",
     "features": {
         "ghcr.io/devcontainers/features/node:1": {},
         "ghcr.io/devcontainers-extra/features/claude-code:1": {}

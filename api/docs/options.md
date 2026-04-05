@@ -35,7 +35,7 @@ set SYMFONY_VERSION=6.4.* && docker compose up --wait&set SYMFONY_VERSION=
 > composer require runtime/frankenphp-symfony
 > ```
 >
-> Add `env APP_RUNTIME Runtime\FrankenPhpSymfony\Runtime` in the `frankenphp/Caddyfile` in the `worker` section.
+> Add `env APP_RUNTIME Runtime\FrankenPhpSymfony\Runtime` in **`frankenphp/worker.Caddyfile`** (inside the `worker` block). Symfony **8** uses **`Symfony\Component\Runtime\SymfonyRuntime`** with built-in **`FrankenPhpWorkerRunner`** — the repo’s **`worker.Caddyfile`** already sets that; older Symfony can use **`runtime/frankenphp-symfony`** and the upstream runtime class instead.
 >
 > ```diff
 >  worker {
@@ -78,6 +78,8 @@ HTTP_PORT=8000 HTTPS_PORT=4443 HTTP3_PORT=4443 docker compose up --wait
 ```
 
 to access your application on [https://localhost:4443](https://localhost:4443).
+
+The monorepo default stack (FrankenPHP + PWA) uses **80** / **443** on the host; **`HTTP_PORT=8000`** is mainly for **API-only** runs (e.g. **`make api-up-http`**) when Next runs on the host.
 
 > [!NOTE]
 >

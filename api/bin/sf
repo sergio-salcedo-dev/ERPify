@@ -1,20 +1,23 @@
 #!/usr/bin/env bash
 # Run Symfony console on the host (if php is installed) or inside the Docker Compose php service.
+# Compose files live at the monorepo root (not under api/).
 set -euo pipefail
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$ROOT"
+API_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$API_DIR/.." && pwd)"
+COMPOSE=(docker compose -f "$REPO_ROOT/compose.yaml" -f "$REPO_ROOT/compose.override.yaml")
 
 if command -v php >/dev/null 2>&1; then
+	cd "$API_DIR"
 	exec php bin/console "$@"
 fi
 
 if ! command -v docker >/dev/null 2>&1; then
-	echo "Neither php nor docker is available. Install PHP, or run from api/ with Docker: docker compose exec php bin/console" >&2
+	echo "Neither php nor docker is available. Install PHP, or from the repo root run: docker compose -f compose.yaml -f compose.override.yaml exec php bin/console" >&2
 	exit 127
 fi
 
-if [ -n "$(docker compose ps -q php 2>/dev/null || true)" ]; then
-	exec docker compose exec php bin/console "$@"
+if [ -n "$("${COMPOSE[@]}" ps -q php 2>/dev/null || true)" ]; then
+	exec "${COMPOSE[@]}" exec php bin/console "$@"
 fi
 
-exec docker compose run --rm php bin/console "$@"
+exec "${COMPOSE[@]}" run --rm php bin/console "$@"

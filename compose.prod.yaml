@@ -1,0 +1,24 @@
+---
+# Production overrides (monorepo root). Build context: ./api and ./pwa
+services:
+  php:
+    image: ${IMAGES_PREFIX:-}app-php-prod
+    build:
+      context: ./api
+      target: frankenphp_prod
+    environment:
+      APP_SECRET: ${APP_SECRET}
+      MERCURE_PUBLISHER_JWT_KEY: ${CADDY_MERCURE_JWT_SECRET}
+      MERCURE_SUBSCRIBER_JWT_KEY: ${CADDY_MERCURE_JWT_SECRET}
+
+  pwa:
+    image: ${IMAGES_PREFIX:-}app-pwa-prod
+    build:
+      context: ./pwa
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_SYMFONY_API_BASE_URL: ${NEXT_PUBLIC_SYMFONY_API_BASE_URL:-https://localhost}
+
+  database:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}

@@ -18,7 +18,7 @@ while ensuring they cannot reach arbitrary internet hosts.
 
 ## Quick Start
 
-1. Open the project in Visual Studio Code.
+1. Open the **repository root** (monorepo folder, not only `api/`) in Visual Studio Code.
 2. When prompted "Reopen in Container", click **Reopen in Container**.
    Alternatively, open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) and run
    **Dev Containers: Reopen in Container**.

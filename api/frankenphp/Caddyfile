@@ -1,3 +1,7 @@
+# Aligned with https://github.com/api-platform/api-platform/blob/main/api/frankenphp/Caddyfile
+# Worker snippet: frankenphp/worker.Caddyfile (same layout as API Platform).
+# @pwa also excludes /api* and /.well-known/mercure* for this monorepo.
+
 {
 	skip_install_trust
 
@@ -5,6 +9,8 @@
 
 	frankenphp {
 		{$FRANKENPHP_CONFIG}
+
+		import worker.Caddyfile
 	}
 }
 
@@ -25,6 +31,10 @@
 	encode zstd br gzip
 
 	mercure {
+		# Transport to use (default to Bolt)
+		transport bolt {
+			path /data/mercure.db
+		}
 		# Publisher JWT key
 		publisher_jwt {env.MERCURE_PUBLISHER_JWT_KEY} {env.MERCURE_PUBLISHER_JWT_ALG}
 		# Subscriber JWT key
@@ -41,26 +51,42 @@
 
 	{$CADDY_SERVER_EXTRA_DIRECTIVES}
 
+	# Add links to the API docs and to the Mercure Hub if not set explicitly (e.g. the PWA)
+	header ?Link `</docs.jsonld>; rel="http://www.w3.org/ns/hydra/core#apiDocumentation", </.well-known/mercure>; rel="mercure"`
 	# Disable Topics tracking if not enabled explicitly: https://github.com/jkarlin/topics
 	header ?Permissions-Policy "browsing-topics=()"
 
-	@phpRoute {
-		not path /.well-known/mercure*
-		not file {path}
-	}
-	rewrite @phpRoute index.php
+	route {
+		# Matches requests for HTML documents, for static files and for Next.js files,
+		# except for known API paths and paths with extensions handled by the API / Symfony
+		@pwa expression `(
+				header({'Accept': '*text/html*'})
+				&& !path(
+					'/api*', '/.well-known/mercure*',
+					'/docs*', '/graphql*', '/bundles*', '/contexts*', '/_profiler*', '/_wdt*',
+					'*.json*', '*.html', '*.csv', '*.yml', '*.yaml', '*.xml'
+				)
+			)
+			|| path('/favicon.ico', '/manifest.json', '/robots.txt', '/sitemap*', '/_next*', '/__next*')
+			|| query({'_rsc': '*'})`
 
-	@frontController path index.php
-	php @frontController {
-		{$FRANKENPHP_SITE_CONFIG}
+		# Comment the following line if you don't want Next.js to catch requests for HTML documents.
+		# In this case, they will be handled by the PHP app.
+		reverse_proxy @pwa http://{$PWA_UPSTREAM}
 
-		worker {
-			file ./public/index.php
-			{$FRANKENPHP_WORKER_CONFIG}
+		@phpRoute {
+			not path /.well-known/mercure*
+			not file {path}
 		}
-	}
+		rewrite @phpRoute index.php
 
-	file_server {
-		hide *.php
+		@frontController path index.php
+		php @frontController {
+			{$FRANKENPHP_SITE_CONFIG}
+		}
+
+		file_server {
+			hide *.php
+		}
 	}
 }

@@ -1,0 +1,266 @@
+# Monorepo CI: API (Docker), PWA (Node + Playwright E2E), super-linter.
+# On pull requests, jobs are skipped unless touched paths match (see `changes` job).
+# Pushes to main and workflow_dispatch run the full pipeline.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Path filter
+    runs-on: ubuntu-latest
+    outputs:
+      stack: ${{ steps.pick.outputs.stack }}
+      pwa: ${{ steps.pick.outputs.pwa }}
+      lint: ${{ steps.pick.outputs.lint }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Paths (pull requests only)
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            stack:
+              - 'api/**'
+              - 'compose.yaml'
+              - 'compose.override.yaml'
+              - 'compose.prod.yaml'
+              - 'Makefile'
+              - '.devcontainer/**'
+              - '.github/workflows/ci.yml'
+            pwa:
+              - 'pwa/**'
+            lint:
+              - '.github/**'
+              - '.devcontainer/**'
+              - 'api/**'
+              - 'pwa/**'
+              - 'compose.yaml'
+              - 'compose.override.yaml'
+              - 'compose.prod.yaml'
+              - 'Makefile'
+      - id: pick
+        env:
+          EVENT: ${{ github.event_name }}
+          F_STACK: ${{ steps.filter.outputs.stack }}
+          F_PWA: ${{ steps.filter.outputs.pwa }}
+          F_LINT: ${{ steps.filter.outputs.lint }}
+        run: |
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "stack=true" >> "$GITHUB_OUTPUT"
+            echo "pwa=true" >> "$GITHUB_OUTPUT"
+            echo "lint=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "stack=${F_STACK:-false}" >> "$GITHUB_OUTPUT"
+          echo "pwa=${F_PWA:-false}" >> "$GITHUB_OUTPUT"
+          echo "lint=${F_LINT:-false}" >> "$GITHUB_OUTPUT"
+
+  api-docker:
+    name: API (Docker)
+    needs: changes
+    if: needs.changes.outputs.stack == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+      - name: Build Docker images
+        uses: docker/bake-action@v7
+        with:
+          pull: true
+          load: true
+          source: .
+          files: |
+            compose.yaml
+            compose.override.yaml
+          set: |
+            php.cache-from=type=gha,scope=php-${{github.ref}}
+            php.cache-from=type=gha,scope=php-refs/heads/main
+            php.cache-to=type=gha,scope=php-${{github.ref}},mode=max
+            pwa.cache-from=type=gha,scope=pwa-${{github.ref}}
+            pwa.cache-from=type=gha,scope=pwa-refs/heads/main
+            pwa.cache-to=type=gha,scope=pwa-${{github.ref}},mode=max
+      - name: Start services
+        run: docker compose -f compose.yaml -f compose.override.yaml up --wait --no-build
+      - name: Check HTTP reachability (Next via FrankenPHP)
+        run: curl -v --fail-with-body http://localhost
+      - name: Check API reachability (HTTPS)
+        run: curl -vk --fail-with-body https://localhost/api/v1/health
+      - name: Check PWA reachability (HTML)
+        run: |
+          curl -vk --fail-with-body -H 'Accept: text/html' https://localhost/
+      - name: Check Mercure reachability
+        run: |
+          curl -vkI --fail-with-body "https://localhost/.well-known/mercure?topic=test"
+      - name: PHPUnit (API)
+        run: docker compose -f compose.yaml -f compose.override.yaml exec -T -e APP_ENV=test php bin/phpunit
+      - name: Debug services
+        if: failure()
+        run: |
+          docker compose -f compose.yaml -f compose.override.yaml ps
+          docker compose -f compose.yaml -f compose.override.yaml logs
+
+  # super-linter:
+  #   name: Lint (super-linter)
+  #   needs: changes
+  #   if: needs.changes.outputs.lint == 'true'
+  #   runs-on: ubuntu-latest
+  #   permissions:
+  #     contents: read
+  #     packages: read
+  #     statuses: write
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         fetch-depth: 0
+  #         persist-credentials: false
+  #     - name: Lint code base
+  #       uses: super-linter/super-linter/slim@v8
+  #       env:
+  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #         VALIDATE_CHECKOV: false
+  #         VALIDATE_TRIVY: false
+  #         VALIDATE_BIOME_FORMAT: false
+  #         VALIDATE_BIOME_LINT: false
+
+  pwa-node:
+    name: PWA (Node)
+    needs: changes
+    if: needs.changes.outputs.pwa == 'true' || needs.changes.outputs.stack == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: pwa/package-lock.json
+      - name: Install dependencies
+        run: make pwa.install
+      - name: Lint
+        run: make pwa.lint
+      - name: Unit tests
+        run: make pwa.test
+      - name: Build
+        run: make pwa.build
+
+  pwa-e2e:
+    name: PWA (E2E)
+    needs: [changes, pwa-node]
+    if: |
+      always() &&
+      needs.pwa-node.result == 'success' &&
+      (needs.changes.outputs.pwa == 'true' || needs.changes.outputs.stack == 'true' || github.event_name != 'pull_request')
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+      - name: Build stack images
+        uses: docker/bake-action@v7
+        with:
+          pull: true
+          load: true
+          source: .
+          files: |
+            compose.yaml
+            compose.override.yaml
+          set: |
+            php.cache-from=type=gha,scope=e2e-php-${{github.ref}}
+            php.cache-from=type=gha,scope=e2e-php-refs/heads/main
+            php.cache-to=type=gha,scope=e2e-php-${{github.ref}},mode=max
+            pwa.cache-from=type=gha,scope=e2e-pwa-${{github.ref}}
+            pwa.cache-from=type=gha,scope=e2e-pwa-refs/heads/main
+            pwa.cache-to=type=gha,scope=e2e-pwa-${{github.ref}},mode=max
+      - name: Start full stack (FrankenPHP + PWA + Postgres)
+        env:
+          COMPOSE_PROJECT_NAME: erpify-e2e
+        run: docker compose -f compose.yaml -f compose.override.yaml up --wait --no-build
+      - name: Wait for API health (HTTPS)
+        run: |
+          for i in $(seq 1 60); do
+            if curl -skSfS "https://localhost/api/v1/health" | grep -q status; then
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: pwa/package-lock.json
+      - name: Install dependencies
+        run: make pwa.install
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pwa/package-lock.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+      - name: Install Playwright Chromium (with OS deps)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: cd pwa && npx playwright install chromium --with-deps
+      - name: Install Playwright Chromium (from cache)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: cd pwa && npx playwright install chromium
+      - name: E2E tests (against Docker stack)
+        env:
+          CI: true
+          PLAYWRIGHT_BASE_URL: https://localhost
+        run: make pwa.e2e
+      - name: Debug services
+        if: failure()
+        env:
+          COMPOSE_PROJECT_NAME: erpify-e2e
+        run: |
+          docker compose -f compose.yaml -f compose.override.yaml ps
+          docker compose -f compose.yaml -f compose.override.yaml logs
+
+  ci-success:
+    name: All required jobs OK
+    # needs: [changes, api-docker, super-linter, pwa-node, pwa-e2e]
+    needs: [changes, api-docker, pwa-node, pwa-e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          R_API: ${{ needs.api-docker.result }}
+          # R_LINT: ${{ needs.super-linter.result }}
+          R_NODE: ${{ needs.pwa-node.result }}
+          R_E2E: ${{ needs.pwa-e2e.result }}
+          # for r in "$R_API" "$R_LINT" "$R_NODE" "$R_E2E"; do
+        run: |
+          for r in "$R_API" "$R_NODE" "$R_E2E"; do
+            case "$r" in
+              failure|cancelled)
+                echo "A required job failed or was cancelled (result=$r)."
+                exit 1
+                ;;
+            esac
+          done
+          echo "OK (each job succeeded or was skipped)."

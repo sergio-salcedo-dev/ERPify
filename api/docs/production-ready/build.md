@@ -8,7 +8,7 @@ no Xdebug, and no dev Composer dependencies.
 
 ## Build Command
 
-Run from `api/` (where `compose.yaml` lives):
+Run from the **monorepo root** (where `compose.yaml` and `compose.prod.yaml` live):
 
 ```console
 docker compose \

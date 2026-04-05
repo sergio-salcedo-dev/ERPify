@@ -125,6 +125,9 @@ iptables -A OUTPUT -d "$HOST_IP" -j ACCEPT
 iptables -A INPUT -p tcp --dport 80 -j ACCEPT
 iptables -A INPUT -p tcp --dport 443 -j ACCEPT
 iptables -A INPUT -p udp --dport 443 -j ACCEPT
+# Direct API (FrankenPHP) when published on host :8000 (e.g. make api-up-http / dev-local)
+iptables -A INPUT -p tcp --dport 8000 -j ACCEPT
+iptables -A INPUT -p tcp --dport 8443 -j ACCEPT
 
 # Default DROP policies
 iptables -P INPUT DROP

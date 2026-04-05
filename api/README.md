@@ -1,11 +1,11 @@
 # Symfony Docker
 
+> **ERPify monorepo:** service definitions (`php`, `database`, `pwa`) live in the **repository root** [`compose.yaml`](../compose.yaml). FrankenPHP in **`php`** reverse-proxies the Next app (`pwa:3000`) for HTML; there is no separate edge Caddy service. Run **`docker compose`** from the **repo root**. When syncing upstream **symfony-docker**, merge changes into **root** `compose.yaml` / `compose.override.yaml` / `compose.prod.yaml`.
+
 A [Docker](https://www.docker.com/)-based installer and runtime for the [Symfony](https://symfony.com) web framework,
 with [FrankenPHP](https://frankenphp.dev) and [Caddy](https://caddyserver.com/) inside!
 
-Specially tailored for coding agents: ships with a [Dev Container](https://containers.dev/) configuration
-that lets [Claude Code](https://claude.ai/claude-code) (and other AI coding assistants) run in fully autonomous
-mode inside a sandboxed environment.
+Specially tailored for coding agents: the monorepo [Dev Container](https://containers.dev/) lives at [`.devcontainer/`](../.devcontainer/) (repo root) so you work in **`/workspace`** with **`api/`**, **`pwa/`**, and Compose together. It lets [Claude Code](https://claude.ai/claude-code) (and other assistants) run in autonomous mode inside a sandboxed environment.
 
 ![CI](https://github.com/dunglas/symfony-docker/workflows/CI/badge.svg)
 

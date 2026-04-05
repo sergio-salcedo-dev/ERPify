@@ -13,6 +13,7 @@
         "doctrine/doctrine-bundle": "^3.2.2",
         "doctrine/doctrine-migrations-bundle": "^4.0.0",
         "doctrine/orm": "^3.6.3",
+        "nelmio/cors-bundle": "^2.6",
         "symfony/console": "^8.0.8",
         "symfony/dotenv": "^8.0.8",
         "symfony/flex": "^2.10.0",
@@ -79,7 +80,7 @@
     },
     "extra": {
         "symfony": {
-            "allow-contrib": false,
+            "allow-contrib": true,
             "require": "8.0.*",
             "docker": true
         }
