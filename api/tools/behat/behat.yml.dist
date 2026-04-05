@@ -10,6 +10,7 @@ default:
             contexts:
                 - Erpify\Tests\Behat\Context\FeatureContext
                 - Erpify\Tests\Behat\Context\MediaApiContext
+                - Erpify\Tests\Behat\Context\StoredObjectApiContext
                 - Erpify\Tests\Behat\Context\MessengerContext
     extensions:
         Behat\MinkExtension\ServiceContainer\MinkExtension:

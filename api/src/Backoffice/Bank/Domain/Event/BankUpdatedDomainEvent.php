@@ -17,6 +17,8 @@ final class BankUpdatedDomainEvent extends DomainEvent
         private readonly string $updatedAt,
         private readonly ?string $logoMediaId = null,
         private readonly ?string $logoContentHash = null,
+        private readonly ?string $storedObjectContentHash = null,
+        private readonly ?string $storedObjectMimeType = null,
         ?string $eventId = null,
         ?DateTimeImmutable $occurredOn = null,
     ) {
@@ -42,6 +44,8 @@ final class BankUpdatedDomainEvent extends DomainEvent
             'updated_at' => $this->updatedAt,
             'logo_media_id' => $this->logoMediaId,
             'logo_content_hash' => $this->logoContentHash,
+            'stored_object_content_hash' => $this->storedObjectContentHash,
+            'stored_object_mime_type' => $this->storedObjectMimeType,
         ];
     }
 }

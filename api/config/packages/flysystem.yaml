@@ -1,7 +1,11 @@
 # Read the documentation at https://github.com/thephpleague/flysystem-bundle/blob/master/docs/1-getting-started.md
+# See docs/object-storage.md for production volume and env guidance.
+parameters:
+    env(OBJECT_STORAGE_LOCAL_PATH): "%kernel.project_dir%/var/storage/objects"
+
 flysystem:
     storages:
-        default.storage:
-            adapter: 'local'
+        erpify.object_storage.storage:
+            adapter: "local"
             options:
-                directory: '%kernel.project_dir%/var/storage/default'
+                directory: "%env(OBJECT_STORAGE_LOCAL_PATH)%"

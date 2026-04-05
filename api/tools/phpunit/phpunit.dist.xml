@@ -20,6 +20,7 @@
         <server name="MERCURE_URL" value="http://127.0.0.1/.well-known/mercure" force="true" />
         <server name="MERCURE_PUBLIC_URL" value="https://localhost/.well-known/mercure" force="true" />
         <server name="MERCURE_JWT_SECRET" value="!ChangeThisMercureHubJWTSecretKey!" force="true" />
+        <server name="OBJECT_STORAGE_LOCAL_PATH" value="/tmp/erpify-object-storage-test" force="true" />
     </php>
 
     <testsuites>

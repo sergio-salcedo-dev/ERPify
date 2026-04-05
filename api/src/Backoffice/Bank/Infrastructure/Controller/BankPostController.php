@@ -78,8 +78,13 @@ final class BankPostController
 
         /** @var UploadedFile|null $image */
         $image = $request->files->get('image');
-        if ($image !== null) {
-            $fileViolations = $this->validator->validate($image, [
+        /** @var UploadedFile|null $storedObject */
+        $storedObject = $request->files->get('stored_object');
+        foreach (['image' => $image, 'stored_object' => $storedObject] as $field => $file) {
+            if ($file === null) {
+                continue;
+            }
+            $fileViolations = $this->validator->validate($file, [
                 new File(
                     maxSize: $this->maxUploadSize,
                     mimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
@@ -92,10 +97,10 @@ final class BankPostController
         }
 
         try {
-            $bank = $this->creator->create($input->name, $input->shortName, $image);
+            $bank = $this->creator->create($input->name, $input->shortName, $image, $storedObject);
         } catch (InvalidImageException $e) {
             return new JsonResponse(
-                ['errors' => [['field' => 'image', 'message' => $e->getMessage()]]],
+                ['errors' => [['field' => $e->formField(), 'message' => $e->getMessage()]]],
                 422,
             );
         }

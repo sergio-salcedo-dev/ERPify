@@ -6,6 +6,7 @@ namespace Erpify\Backoffice\Bank\Infrastructure\Serializer;
 
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Shared\Media\Application\Port\MediaPublicUrlGenerator;
+use Erpify\Shared\Storage\Application\Port\StoredObjectPublicUrlGenerator;
 use Symfony\Component\DependencyInjection\Attribute\AutoconfigureTag;
 use Symfony\Component\Serializer\Normalizer\NormalizerAwareInterface;
 use Symfony\Component\Serializer\Normalizer\NormalizerAwareTrait;
@@ -19,7 +20,8 @@ final class BankLogoUrlNormalizer implements NormalizerInterface, NormalizerAwar
     private const MARK = 'bank_logo_url_normalizer';
 
     public function __construct(
-        private readonly MediaPublicUrlGenerator $urls,
+        private readonly MediaPublicUrlGenerator $mediaUrls,
+        private readonly StoredObjectPublicUrlGenerator $storedObjectUrls,
     ) {
     }
 
@@ -31,7 +33,11 @@ final class BankLogoUrlNormalizer implements NormalizerInterface, NormalizerAwar
 
         if ($object instanceof Bank && \in_array('bank:read', $context['groups'] ?? [], true)) {
             $logo = $object->getLogo();
-            $data['logoUrl'] = $logo !== null ? $this->urls->urlForContentHash($logo->getContentHash()) : null;
+            $data['logoUrl'] = $logo !== null ? $this->mediaUrls->urlForContentHash($logo->getContentHash()) : null;
+            $storedHash = $object->getStoredObjectContentHash();
+            $data['storedObjectUrl'] = $storedHash !== null
+                ? $this->storedObjectUrls->urlForContentHash($storedHash)
+                : null;
         }
 
         return $data;

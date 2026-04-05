@@ -18,3 +18,8 @@ api_v1_shared_media:
     resource: ../src/Shared/Media/Infrastructure/Controller/
     type: attribute
     prefix: /api/v1
+
+api_v1_shared_storage:
+    resource: ../src/Shared/Storage/Infrastructure/Controller/
+    type: attribute
+    prefix: /api/v1

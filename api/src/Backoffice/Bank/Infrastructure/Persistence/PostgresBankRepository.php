@@ -41,4 +41,26 @@ final class PostgresBankRepository extends ServiceEntityRepository implements Ba
     {
         return $this->findAll();
     }
+
+    public function countBanksWithStoredObjectContentHash(string $contentHash): int
+    {
+        return (int) $this->createQueryBuilder('b')
+            ->select('COUNT(b.id)')
+            ->where('b.storedObjectContentHash = :h')
+            ->setParameter('h', $contentHash)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    public function findStoredObjectMimeTypeByContentHash(string $contentHash): ?string
+    {
+        $bank = $this->createQueryBuilder('b')
+            ->where('b.storedObjectContentHash = :h')
+            ->setParameter('h', $contentHash)
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+
+        return $bank?->getStoredObjectMimeType();
+    }
 }

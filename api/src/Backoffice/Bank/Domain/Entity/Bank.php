@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\Bank\Domain\Entity;
 
 use DateTimeImmutable;
+use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
@@ -48,17 +49,44 @@ class Bank extends AggregateRoot
     #[ORM\JoinColumn(name: 'logo_media_id', referencedColumnName: 'id', nullable: true)]
     private ?Media $logo = null;
 
+    /**
+     * {@see \Erpify\Shared\Storage\Domain\ContentAddressableObjectKey} path (distinct from BYTEA {@see $logo}).
+     */
+    #[ORM\Column(name: 'stored_object_key', length: 512, nullable: true)]
+    private ?string $storedObjectKey = null;
+
+    #[ORM\Column(name: 'stored_object_mime_type', length: 64, nullable: true)]
+    private ?string $storedObjectMimeType = null;
+
+    #[ORM\Column(name: 'stored_object_byte_size', type: Types::INTEGER, nullable: true)]
+    private ?int $storedObjectByteSize = null;
+
+    #[ORM\Column(name: 'stored_object_content_hash', length: 64, nullable: true)]
+    private ?string $storedObjectContentHash = null;
+
     private function __construct()
     {
     }
 
-    public static function create(Uuid $id, string $name, string $shortName, ?Media $logo = null): self
-    {
+    public static function create(
+        Uuid $id,
+        string $name,
+        string $shortName,
+        ?Media $logo = null,
+        ?string $storedObjectKey = null,
+        ?string $storedObjectMimeType = null,
+        ?int $storedObjectByteSize = null,
+        ?string $storedObjectContentHash = null,
+    ): self {
         $bank = new self();
         $bank->id = $id;
         $bank->name = $name;
         $bank->shortName = $shortName;
         $bank->logo = $logo;
+        $bank->storedObjectKey = $storedObjectKey;
+        $bank->storedObjectMimeType = $storedObjectMimeType;
+        $bank->storedObjectByteSize = $storedObjectByteSize;
+        $bank->storedObjectContentHash = $storedObjectContentHash;
         $now = new DateTimeImmutable();
         $bank->createdAt = $now;
         $bank->updatedAt = $now;
@@ -73,6 +101,8 @@ class Bank extends AggregateRoot
             $createdAt,
             $logo?->getId()->toRfc4122(),
             $logo?->getContentHash(),
+            $storedObjectContentHash,
+            $storedObjectMimeType,
         ));
 
         return $bank;
@@ -108,6 +138,26 @@ class Bank extends AggregateRoot
         return $this->logo;
     }
 
+    public function getStoredObjectKey(): ?string
+    {
+        return $this->storedObjectKey;
+    }
+
+    public function getStoredObjectMimeType(): ?string
+    {
+        return $this->storedObjectMimeType;
+    }
+
+    public function getStoredObjectByteSize(): ?int
+    {
+        return $this->storedObjectByteSize;
+    }
+
+    public function getStoredObjectContentHash(): ?string
+    {
+        return $this->storedObjectContentHash;
+    }
+
     public function rename(string $name, string $shortName): void
     {
         $this->name = $name;
@@ -123,6 +173,8 @@ class Bank extends AggregateRoot
             $now->format(\DateTimeInterface::ATOM),
             $this->logo?->getId()->toRfc4122(),
             $this->logo?->getContentHash(),
+            $this->storedObjectContentHash,
+            $this->storedObjectMimeType,
         ));
     }
 }

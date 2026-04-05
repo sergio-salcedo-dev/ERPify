@@ -17,4 +17,8 @@ interface BankRepository
 
     /** @return Bank[] */
     public function search(): array;
+
+    public function countBanksWithStoredObjectContentHash(string $contentHash): int;
+
+    public function findStoredObjectMimeTypeByContentHash(string $contentHash): ?string;
 }

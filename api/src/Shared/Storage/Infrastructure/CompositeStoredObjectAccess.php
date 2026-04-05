@@ -1,0 +1,46 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Erpify\Shared\Storage\Infrastructure;
+
+use Erpify\Shared\Storage\Application\Port\StoredObjectAccessPort;
+use Erpify\Shared\Storage\Application\Port\StoredObjectReferenceInspector;
+use Symfony\Component\DependencyInjection\Attribute\AsAlias;
+use Symfony\Component\DependencyInjection\Attribute\AutowireIterator;
+
+#[AsAlias(StoredObjectAccessPort::class)]
+final class CompositeStoredObjectAccess implements StoredObjectAccessPort
+{
+    /**
+     * @param iterable<StoredObjectReferenceInspector> $inspectors
+     */
+    public function __construct(
+        #[AutowireIterator('stored_object.reference_inspector')]
+        private readonly iterable $inspectors,
+    ) {
+    }
+
+    public function existsAnyWithContentHash(string $contentHash): bool
+    {
+        foreach ($this->inspectors as $inspector) {
+            if ($inspector->countReferencesToContentHash($contentHash) > 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function getMimeTypeForContentHash(string $contentHash): ?string
+    {
+        foreach ($this->inspectors as $inspector) {
+            $mime = $inspector->findMimeTypeForContentHash($contentHash);
+            if ($mime !== null && $mime !== '') {
+                return $mime;
+            }
+        }
+
+        return null;
+    }
+}

@@ -1,5 +1,7 @@
 # Media uploads (BYTEA) and bank logos
 
+> **Flysystem / disk storage** for separate bank attachments (`storedObjectUrl`, `GET /api/v1/stored-objects/{hash}`) is documented in **[object-storage.md](object-storage.md)** (configuration, production volumes, deployment checklist).
+
 ## Overview
 
 Raster images are normalized server-side (decode, scale down, re-encode, EXIF stripped), fingerprinted with **SHA-256 of the normalized bytes**, and stored in PostgreSQL **BYTEA**. The same bytes always yield the same hash, which enables **deduplication** and **immutable HTTP caching** for delivery.
