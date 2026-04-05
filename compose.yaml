@@ -4,6 +4,7 @@
 #
 #   docker compose up --wait -d
 # Or: make up-wait
+# Async Messenger consumer: service `messenger_worker` (see bottom of this file; dev image/volumes in compose.override.yaml).
 #
 name: erpify
 
@@ -24,6 +25,10 @@ services:
       MERCURE_PUBLIC_URL: ${CADDY_MERCURE_PUBLIC_URL:-https://${SERVER_NAME:-localhost}:${HTTPS_PORT:-443}/.well-known/mercure}
       MERCURE_JWT_SECRET: ${CADDY_MERCURE_JWT_SECRET:-!ChangeThisMercureHubJWTSecretKey!}
       SYMFONY_TRUSTED_PROXIES: "${SYMFONY_TRUSTED_PROXIES:-127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}"
+      MESSENGER_TRANSPORT_DSN: ${MESSENGER_TRANSPORT_DSN:-doctrine://default?auto_setup=0}
+      MAILER_DSN: ${MAILER_DSN:-null://null}
+      MAILER_FROM: ${MAILER_FROM:-noreply@erpify.local}
+      BANK_NOTIFICATION_EMAIL: ${BANK_NOTIFICATION_EMAIL:-sergio.salcedo.dev@gmail.com}
     volumes:
       - caddy_data:/data
       - caddy_config:/config
@@ -86,6 +91,33 @@ services:
       timeout: 5s
       retries: 5
       start_period: 120s
+
+  # Messenger async consumer (Doctrine queue `async`). Requires image/build from compose.override.yaml or compose.prod.yaml.
+  messenger_worker:
+    restart: unless-stopped
+    depends_on:
+      database:
+        condition: service_healthy
+      php:
+        condition: service_healthy
+    # Overrides the image HEALTHCHECK (Caddy :2019), which fails here because this service does not
+    # run FrankenPHP. `docker compose up --wait` requires a healthcheck on waited services; `disable: true`
+    # leaves none and Compose errors. This probe only checks that PID 1 (the consume process) is alive.
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    working_dir: /app
+    environment:
+      APP_ENV: ${APP_ENV:-dev}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-erpify_user}:${POSTGRES_PASSWORD:-erpify_password}@database:5432/${POSTGRES_DB:-erpify_db}?serverVersion=${POSTGRES_VERSION:-18}&charset=${POSTGRES_CHARSET:-utf8}
+      MESSENGER_TRANSPORT_DSN: ${MESSENGER_TRANSPORT_DSN:-doctrine://default?auto_setup=0}
+      MAILER_DSN: ${MAILER_DSN:-null://null}
+      MAILER_FROM: ${MAILER_FROM:-noreply@erpify.local}
+      BANK_NOTIFICATION_EMAIL: ${BANK_NOTIFICATION_EMAIL:-sergio.salcedo.dev@gmail.com}
+    command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600"]
 
 volumes:
   caddy_data:

@@ -9,6 +9,12 @@ Feature: Create a bank
       {"name": "Test Bank", "short_name": "TB"}
       """
     Then the response status code should be 201
+    And I remember the JSON field "id" as "bankId"
+    And a domain event named "erpify.backoffice.bank.created" should be recorded for aggregate {bankId}
+    When I process pending async messenger messages
+    Then the async messenger transport should be empty
+    And the messenger failed transport should be empty
+    And the last bank created notification email should mention event "erpify.backoffice.bank.created"
     And the response should contain "Test Bank"
     And the response should contain "TB"
 

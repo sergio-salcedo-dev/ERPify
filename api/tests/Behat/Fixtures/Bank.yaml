@@ -1,5 +1,10 @@
 Erpify\Backoffice\Bank\Domain\Entity\Bank:
     ing:
-        __construct:
-            name: 'ING'
-            shortName: 'ING'
+        __factory:
+            Erpify\Backoffice\Bank\Domain\Entity\Bank::create:
+                - '<(Symfony\Component\Uid\Uuid::v4())>'
+                - 'ING'
+                - 'ING'
+        # __construct:
+        #     name: 'ING'
+        #     shortName: 'ING'

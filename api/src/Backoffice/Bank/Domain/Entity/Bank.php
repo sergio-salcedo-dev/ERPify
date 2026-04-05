@@ -6,23 +6,22 @@ namespace Erpify\Backoffice\Bank\Domain\Entity;
 
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
+use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
+use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
+use Erpify\Shared\Domain\Aggregate\AggregateRoot;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
-use Symfony\Component\Serializer\Attribute\SerializedName;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'bank')]
-#[ORM\HasLifecycleCallbacks]
-class Bank
+class Bank extends AggregateRoot
 {
     #[ORM\Id]
     #[ORM\Column(type: UuidType::NAME, unique: true)]
-    #[ORM\GeneratedValue(strategy: 'CUSTOM')]
-    #[ORM\CustomIdGenerator('doctrine.uuid_generator')]
     #[Groups(['bank:read'])]
-    private ?Uuid $id = null;
+    private Uuid $id;
 
     #[ORM\Column(length: 255)]
     #[Assert\NotBlank]
@@ -44,15 +43,34 @@ class Bank
     #[Groups(['bank:read'])]
     private DateTimeImmutable $updatedAt;
 
-    public function __construct(string $name, string $shortName)
+    private function __construct()
     {
-        $this->name = $name;
-        $this->shortName = $shortName;
-        $this->createdAt = new DateTimeImmutable();
-        $this->updatedAt = new DateTimeImmutable();
     }
 
-    public function getId(): ?Uuid
+    public static function create(Uuid $id, string $name, string $shortName): self
+    {
+        $bank = new self();
+        $bank->id = $id;
+        $bank->name = $name;
+        $bank->shortName = $shortName;
+        $now = new DateTimeImmutable();
+        $bank->createdAt = $now;
+        $bank->updatedAt = $now;
+
+        $createdAt = $now->format(\DateTimeInterface::ATOM);
+
+        $bank->record(new BankCreatedDomainEvent(
+            $id->toRfc4122(),
+            $name,
+            $shortName,
+            $createdAt,
+            $createdAt,
+        ));
+
+        return $bank;
+    }
+
+    public function getId(): Uuid
     {
         return $this->id;
     }
@@ -77,15 +95,19 @@ class Bank
         return $this->updatedAt;
     }
 
-    public function update(string $name, string $shortName): void
+    public function rename(string $name, string $shortName): void
     {
         $this->name = $name;
         $this->shortName = $shortName;
-    }
+        $now = new DateTimeImmutable();
+        $this->updatedAt = $now;
 
-    #[ORM\PreUpdate]
-    public function onPreUpdate(): void
-    {
-        $this->updatedAt = new DateTimeImmutable();
+        $this->record(new BankUpdatedDomainEvent(
+            $this->id->toRfc4122(),
+            $name,
+            $shortName,
+            $this->createdAt->format(\DateTimeInterface::ATOM),
+            $now->format(\DateTimeInterface::ATOM),
+        ));
     }
 }

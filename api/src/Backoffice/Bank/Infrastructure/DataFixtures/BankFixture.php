@@ -7,6 +7,7 @@ namespace Erpify\Backoffice\Bank\Infrastructure\DataFixtures;
 use Doctrine\Bundle\FixturesBundle\Fixture;
 use Doctrine\Persistence\ObjectManager;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
+use Symfony\Component\Uid\Uuid;
 
 final class BankFixture extends Fixture
 {
@@ -19,7 +20,7 @@ final class BankFixture extends Fixture
         ];
 
         foreach ($banks as [$name, $shortName]) {
-            $manager->persist(new Bank($name, $shortName));
+            $manager->persist(Bank::create(Uuid::v4(), $name, $shortName));
         }
 
         $manager->flush();

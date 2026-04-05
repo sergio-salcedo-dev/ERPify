@@ -8,12 +8,12 @@
 | A domain name with an `A` record pointing to the server IP | Required for automatic Let's Encrypt TLS |
 | Git (or another way to copy the repo to the server) | |
 
-Clone the repository on the server and enter the `api/` directory where all
-Docker Compose files live:
+Clone the repository on the server and **`cd` to the repository root** (Compose
+files [`compose.yaml`](../../../compose.yaml) and [`compose.prod.yaml`](../../../compose.prod.yaml) live there):
 
 ```console
 git clone git@github.com:<your-org>/ERPify.git
-cd ERPify/api
+cd ERPify
 ```
 
 ---
@@ -43,6 +43,8 @@ target.
 
 ### Option A — inline environment variables
 
+Run from the **repo root** (paths are relative to `ERPify/`):
+
 ```console
 SERVER_NAME=api.your-domain.com \
 APP_SECRET=<32-char-hex> \
@@ -50,11 +52,16 @@ POSTGRES_USER=erpify_prod \
 POSTGRES_PASSWORD=<strong-random-password> \
 POSTGRES_DB=erpify_prod \
 CADDY_MERCURE_JWT_SECRET=<32-char-hex> \
+MAILER_DSN=<your-mailer-dsn> \
 docker compose \
   -f compose.yaml \
   -f compose.prod.yaml \
   up --wait --detach
 ```
+
+The **`messenger_worker`** service starts with the same Compose project and must
+have a valid **`MAILER_DSN`** if you rely on async email (see
+[docs/production-deployment.md](../../../docs/production-deployment.md)).
 
 ### Option B — `.env.prod.local` file (recommended)
 

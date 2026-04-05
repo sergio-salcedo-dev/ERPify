@@ -98,6 +98,17 @@ interpolation.
 | `HTTP3_PORT` | Caddy | No | `443` | |
 | `IMAGES_PREFIX` | Compose | No | *(empty)* | Prefix for built image names |
 
+### Async email & Symfony Messenger (production)
+
+| Variable | Used by | Notes |
+|---|---|---|
+| `MESSENGER_TRANSPORT_DSN` | `php`, `messenger_worker` | Usually `doctrine://default?auto_setup=0`; queue name `async` is in `api/config/packages/messenger.yaml`. |
+| `MAILER_DSN` | `php`, `messenger_worker` | Real SMTP/API DSN in production (not `null://null`). Set in env for both services. |
+| `MAILER_FROM` | Symfony Mailer | Must be authorised by your mail provider. |
+| `BANK_NOTIFICATION_EMAIL` | Bank notification handler | Recipient for bank create/update emails. |
+
+Overview: [docs/production-deployment.md](../../../docs/production-deployment.md) and [domain-events-and-messenger.md](../../../docs/domain-events-and-messenger.md).
+
 ---
 
 ## Secret Rotation

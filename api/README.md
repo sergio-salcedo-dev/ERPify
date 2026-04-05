@@ -1,6 +1,6 @@
 # Symfony Docker
 
-> **ERPify monorepo:** service definitions (`php`, `database`, `pwa`) live in the **repository root** [`compose.yaml`](../compose.yaml). FrankenPHP in **`php`** reverse-proxies the Next app (`pwa:3000`) for HTML; there is no separate edge Caddy service. Run **`docker compose`** from the **repo root**. When syncing upstream **symfony-docker**, merge changes into **root** `compose.yaml` / `compose.override.yaml` / `compose.prod.yaml`.
+> **ERPify monorepo:** service definitions (`php`, `database`, `pwa`) live in the **repository root** [`compose.yaml`](../compose.yaml). FrankenPHP in **`php`** reverse-proxies the Next app (`pwa:3000`) for HTML; there is no separate edge Caddy service. Run **`docker compose`** from the **repo root**. When syncing upstream **symfony-docker**, merge changes into **root** `compose.yaml` / `compose.override.yaml` / `compose.prod.yaml`. Domain events, Messenger (`messenger_worker`), and bank notification email: [`docs/domain-events-and-messenger.md`](../docs/domain-events-and-messenger.md).
 
 A [Docker](https://www.docker.com/)-based installer and runtime for the [Symfony](https://symfony.com) web framework,
 with [FrankenPHP](https://frankenphp.dev) and [Caddy](https://caddyserver.com/) inside!
@@ -42,14 +42,15 @@ Specially tailored for coding agents: the monorepo [Dev Container](https://conta
 2. [Using Symfony Docker with an existing project](docs/existing-project.md)
 3. [Support for extra services](docs/extra-services.md)
 4. [Deploying in production](docs/production-ready/production.md)
-5. [Debugging with Xdebug](docs/xdebug.md)
-6. [TLS Certificates](docs/tls.md)
-7. [Using MySQL instead of PostgreSQL](docs/mysql.md)
-8. [Using Alpine Linux instead of Debian](docs/alpine.md)
-9. [Using a Makefile](docs/makefile.md)
-10. [Updating the template](docs/updating.md)
-11. [Troubleshooting](docs/troubleshooting.md)
-12. [Using AI Coding Agents](docs/agents.md)
+5. [Monorepo production (Messenger, mailer, DNS)](../docs/production-deployment.md) (repo root `docs/`)
+6. [Debugging with Xdebug](docs/xdebug.md)
+7. [TLS Certificates](docs/tls.md)
+8. [Using MySQL instead of PostgreSQL](docs/mysql.md)
+9. [Using Alpine Linux instead of Debian](docs/alpine.md)
+10. [Using a Makefile](docs/makefile.md)
+11. [Updating the template](docs/updating.md)
+12. [Troubleshooting](docs/troubleshooting.md)
+13. [Using AI Coding Agents](docs/agents.md)
 
 ## License
 

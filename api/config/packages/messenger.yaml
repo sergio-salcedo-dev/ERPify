@@ -1,0 +1,35 @@
+framework:
+    messenger:
+        failure_transport: failed
+
+        transports:
+            async:
+                dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
+                options:
+                    queue_name: async
+                    auto_setup: false
+            failed:
+                dsn: 'doctrine://default?queue_name=failed'
+                options:
+                    auto_setup: false
+            sync: 'sync://'
+
+        routing:
+            Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent: async
+            Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent: async
+
+        buses:
+            messenger.bus.default:
+                middleware:
+                    - Erpify\Shared\Infrastructure\Messenger\PersistDomainEventMiddleware
+
+# Test env: in-memory queues. serialize=true runs messages through the Messenger serializer
+# (encode/decode) like Doctrine/AMQP would, so tests can catch non-serializable payloads or
+# serializer misconfiguration; without it, the transport keeps PHP object references only.
+when@test:
+    framework:
+        messenger:
+            transports:
+                async: 'in-memory://?serialize=true'
+                failed: 'in-memory://?serialize=true'
+                sync: 'sync://'

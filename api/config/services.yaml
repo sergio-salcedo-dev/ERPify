@@ -8,6 +8,8 @@
 # https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
 parameters:
     service: erpify
+    bank_notification_email_default: 'sergio.salcedo.dev@gmail.com'
+    mailer_from_default: 'noreply@erpify.local'
 
 services:
     _defaults:

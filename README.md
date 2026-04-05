@@ -6,7 +6,7 @@ This repository is a **monorepo**: one Git project holds the backend API, the Ne
 |------|------|---------|
 | [`api/`](api/) | Symfony HTTP API | FrankenPHP (Caddy inside `php`) + Docker Compose. See [api/README.md](api/README.md). |
 | [`pwa/`](pwa/) | Next.js web app | Served on **:3000** inside Docker; the browser uses **http(s)://localhost** (FrankenPHP reverse-proxies HTML to Next, `/api*` stays in Symfony). See [pwa/README.md](pwa/README.md). |
-| [`docs/`](docs/) | Repo-wide docs | [docs/project-requirements.md](docs/project-requirements.md), [docs/local-fullstack-traffic.md](docs/local-fullstack-traffic.md). |
+| [`docs/`](docs/) | Repo-wide docs | [docs/production-deployment.md](docs/production-deployment.md) (prod: Messenger, mailer, DNS), [docs/domain-events-and-messenger.md](docs/domain-events-and-messenger.md), [docs/local-fullstack-traffic.md](docs/local-fullstack-traffic.md), [docs/project-requirements.md](docs/project-requirements.md). |
 
 Canonical Compose files: **[`compose.yaml`](compose.yaml)** and **[`compose.override.yaml`](compose.override.yaml)** at the repo root (`php` build **`context: ./api`**, `pwa` build **`context: ./pwa`**). The root [`Makefile`](Makefile) also merges **[`compose.pwa-dev.yaml`](compose.pwa-dev.yaml)** so the PWA runs **`next dev`** with a bind mount (hot reload). **`docker compose -f compose.yaml -f compose.override.yaml`** without that file (e.g. CI) keeps the production-style PWA image. Run Compose from the **repository root** and use [`api/.env.example`](api/.env.example) for local env.
 
@@ -58,7 +58,9 @@ Run **`make`** or **`make help`** for a short quick start plus all targets by se
 
 ## Documentation
 
+- **Production deployment** (DNS, TLS, Compose, `messenger_worker`, mailer, CORS, Mercure, smoke tests): [docs/production-deployment.md](docs/production-deployment.md)
 - **Traffic flow** (FrankenPHP, Next, Symfony): [docs/local-fullstack-traffic.md](docs/local-fullstack-traffic.md)
+- **Domain events & Messenger** (async email, audit table, worker behaviour): [docs/domain-events-and-messenger.md](docs/domain-events-and-messenger.md)
 - **Next.js app**: [pwa/README.md](pwa/README.md)
 - **Symfony / Docker / TLS**: [api/README.md](api/README.md) and [api/docs/](api/docs/)
 - **Host tooling**: [docs/project-requirements.md](docs/project-requirements.md)

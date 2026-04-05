@@ -179,7 +179,7 @@ api-up-http: ## API + database only, HTTP on host :8000 (no PWA container)
 	cd $(ROOT_DIR) && \
 	HTTP_PORT=8000 SERVER_NAME=http://localhost:8000 \
 	DEFAULT_URI=http://localhost:8000 CADDY_MERCURE_PUBLIC_URL=http://localhost:8000/.well-known/mercure \
-	docker compose $(COMPOSE_DEV) up --wait --detach php database
+	docker compose $(COMPOSE_DEV) up --wait --detach php database messenger_worker
 
 dev-local: api-up-http ## api-up-http then Next dev (Turbopack); use pwa/.env.local for API URL :8000
 	$(call pwa_cmd,npm run dev -- --turbo)
