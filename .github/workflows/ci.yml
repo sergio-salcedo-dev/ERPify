@@ -27,7 +27,7 @@ jobs:
       pwa: ${{ steps.pick.outputs.pwa }}
       lint: ${{ steps.pick.outputs.lint }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Paths (pull requests only)
         if: github.event_name == 'pull_request'
         uses: dorny/paths-filter@v4
@@ -82,7 +82,7 @@ jobs:
     timeout-minutes: 12
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
       - name: Set up Docker Buildx
@@ -136,7 +136,7 @@ jobs:
   #     packages: read
   #     statuses: write
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v6
   #       with:
   #         fetch-depth: 0
   #         persist-credentials: false
@@ -155,7 +155,7 @@ jobs:
     if: needs.changes.outputs.pwa == 'true' || needs.changes.outputs.stack == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -181,7 +181,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 18
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
       - name: Build stack images
