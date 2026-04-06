@@ -79,7 +79,11 @@ Full variable tables: [api/docs/production-ready/secrets.md](../api/docs/product
 - **Run at least one consumer** for the **`async`** transport (`messenger_worker` in Compose). Without it, HTTP requests still succeed and **domain events are still audited**, but **async handlers** (e.g. emails) remain in **`messenger_messages`**.
 
 - **Deploys / new code**  
-  After shipping new code, restart workers or run **`php bin/console messenger:stop-workers`** so processes reload. If you use multiple nodes, use a **shared** cache for stop signals (see [Symfony: Deploying Messenger](https://symfony.com/doc/current/messenger.html#deploying-to-production)).
+  After shipping new code, follow this sequence:
+  1. **Warm cache** (ensure new code is cached): `make cache.warmup` or `php bin/console cache:warmup`
+  2. **Stop workers** (reload code): `make messenger.stop-workers` or `php bin/console messenger:stop-workers`
+  
+  This ensures service definitions and message handlers match the newly deployed code before workers restart. If you use multiple nodes, use a **shared** cache for stop signals (see [Symfony: Deploying Messenger](https://symfony.com/doc/current/messenger.html#deploying-to-production)).
 
 - **Failures**  
   Failed messages go to the **`failed`** transport (Doctrine). Inspect with **`messenger:failed:show`**, retry with **`messenger:failed:retry`**.
@@ -104,6 +108,31 @@ More detail: [domain-events-and-messenger.md](domain-events-and-messenger.md).
 ## Database migrations
 
 Migrations run from the **`php`** container entrypoint after the database is healthy. **`MESSENGER_TRANSPORT_DSN`** uses **`auto_setup=0`**, so **`messenger_messages`** and **`domain_event`** (and related indexes) must come from **Doctrine migrations**, not auto DDL. Confirm pending migrations are applied after each release (`doctrine:migrations:status`).
+
+---
+
+## Deployment scripts
+
+ERPify includes deployment automation scripts in **`scripts/deploy/`**:
+
+### Quick Deploy
+```bash
+./scripts/deploy/deploy.sh --simple
+```
+Runs migrations → warms cache → stops workers (3 simple steps).
+
+### Advanced Deploy
+```bash
+./scripts/deploy/deploy.sh --advanced
+```
+Full deployment with pre-flight checks, health validation, and logging.
+
+**Options:**
+- `--dry-run` — Test without changes
+- `--skip-migrations` — Skip DB step
+- `--check-only` — Validate environment only
+
+See **[`scripts/deploy/README.md`](../scripts/deploy/README.md)** for full details and examples.
 
 ---
 

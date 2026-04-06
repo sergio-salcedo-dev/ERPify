@@ -59,8 +59,9 @@ endef
 	dev-up prod-up open-local \
 	restart reset ps health clean \
 	api-up-http dev-local \
-	composer vendor sf cc routes \
+	composer vendor sf cc cache.warmup routes \
 	db.migrate db.diff db.status db.validate db.fixtures db.alice db.reset db.shell \
+	messenger.stop-workers \
 	php.unit php.unit.install php.behat php.behat.install test \
 	pwa.install pwa.dev pwa.build pwa.test pwa.e2e pwa.lint pwa.lint.fix pwa.format \
 	xdebug.enable xdebug.disable xdebug.status \
@@ -114,8 +115,6 @@ help-targets:
 # =============================================================================
 # Stack — FrankenPHP + Postgres + PWA (repo root Compose)
 # =============================================================================
-
-## —— Stack ——
 
 dev-up: ## Dev: up --wait --build -d, then open http(s)://localhost (OPEN_BROWSER=0 to skip)
 	$(DC) up --wait --build --detach
@@ -185,10 +184,8 @@ dev-local: api-up-http ## api-up-http then Next dev (Turbopack); use pwa/.env.lo
 	$(call pwa_cmd,npm run dev -- --turbo)
 
 # =============================================================================
-# Docker images & shells
+# Docker & shells
 # =============================================================================
-
-## —— Docker build & shells ——
 
 build: ## Build images (--pull --no-cache)
 	$(DC) build --pull --no-cache
@@ -208,8 +205,6 @@ bash: ## Shell in php container (bash)
 # Composer & Symfony (inside php container)
 # =============================================================================
 
-## —— Composer & Symfony ——
-
 composer: ## Run composer; pass c='…', e.g. make composer c='req vendor/pkg'
 	@$(eval c ?=)
 	@$(COMPOSER) $(c)
@@ -225,6 +220,9 @@ sf: ## Symfony console; pass c=…, e.g. make sf c=about
 cc: c=c:c ## cache:clear
 cc: sf
 
+cache.warmup: ## Warm up cache (use after deploy)
+	@$(SYMFONY) cache:warmup
+
 routes: ## debug:router (pass f= to filter, e.g. make routes f=api)
 	@$(eval f ?=)
 	@$(SYMFONY) debug:router $(if $(f),--show-controllers | grep $(f),)
@@ -232,8 +230,6 @@ routes: ## debug:router (pass f= to filter, e.g. make routes f=api)
 # =============================================================================
 # Database
 # =============================================================================
-
-## —— Database ——
 
 db.migrate: ## Run pending Doctrine migrations
 	@$(SYMFONY) doctrine:migrations:migrate --no-interaction --all-or-nothing
@@ -263,10 +259,15 @@ db.shell: ## Interactive psql in database container
 		psql --username=$${POSTGRES_USER:-erpify_user} $${POSTGRES_DB:-erpify_db}
 
 # =============================================================================
-# Tests (API)
+# Messenger
 # =============================================================================
 
-## —— Tests (API) ——
+messenger.stop-workers: ## Stop all messenger workers (use after deploy to reload code)
+	@$(SYMFONY) messenger:stop-workers
+
+# =============================================================================
+# Tests (API)
+# =============================================================================
 
 php.unit: ## PHPUnit in container; pass c= for extra args
 	@$(eval c ?=)
@@ -287,8 +288,6 @@ test: php.behat ## Default “full” API test suite (Behat)
 # =============================================================================
 # PWA (Next.js)
 # =============================================================================
-
-## —— PWA ——
 
 pwa.install: ## npm ci in $(PWA_DIR)
 	$(call pwa_cmd,npm ci)
@@ -318,8 +317,6 @@ pwa.format: ## Prettier
 # =============================================================================
 # Xdebug
 # =============================================================================
-
-## —— Xdebug ——
 
 xdebug.enable: ## XDEBUG_MODE=develop,debug in api/.env and recreate php
 	@if ! grep -q '^XDEBUG_MODE=' "$(API_DIR)/.env" 2>/dev/null; then \
@@ -354,7 +351,5 @@ xdebug.status: ## Show PHP / Xdebug versions and XDEBUG_MODE in php container
 # =============================================================================
 # CI helper
 # =============================================================================
-
-## —— CI ——
 
 ci: pwa.lint pwa.test pwa.build ## PWA lint + unit tests + build (no E2E)

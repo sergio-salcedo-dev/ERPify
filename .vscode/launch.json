@@ -1,5 +1,4 @@
 {
-  // Primary Xdebug workflow: PhpStorm (see api/docs/xdebug.md). This config is for VS Code / Cursor.
   "version": "0.2.0",
   "configurations": [
     {

@@ -32,4 +32,4 @@ services:
       APP_ENV: prod
       APP_SECRET: ${APP_SECRET}
       MAILER_DSN: ${MAILER_DSN}
-    command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600", "--memory-limit=256M"]
+    command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600", "--limit=10000", "--memory-limit=256M"]
