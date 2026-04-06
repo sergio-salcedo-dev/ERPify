@@ -120,6 +120,8 @@ jobs:
           curl -vkI --fail-with-body "https://localhost/.well-known/mercure?topic=test"
       - name: PHPUnit (API)
         run: docker compose -f compose.yaml -f compose.override.yaml -f compose.ci.yaml exec -T -e APP_ENV=test php bin/phpunit
+      - name: Behat (API)
+        run: docker compose -f compose.yaml -f compose.override.yaml -f compose.ci.yaml exec -T -e APP_ENV=test php bin/behat --format=pretty
       - name: Debug services
         if: failure()
         run: |
