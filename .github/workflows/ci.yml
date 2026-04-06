@@ -134,8 +134,9 @@ jobs:
       - name: Install Behat tools (api/tools/behat)
         if: steps.behat-tools-vendor.outputs.cache-hit != 'true'
         run: docker compose -f compose.yaml -f compose.override.yaml -f compose.ci.yaml exec -T php composer behat-tools-install --no-interaction
+      # Matches Makefile PHP_TEST_BEHAT for in-container Mink (no api/.env on CI).
       - name: Behat (API)
-        run: docker compose -f compose.yaml -f compose.override.yaml -f compose.ci.yaml exec -T -e APP_ENV=test php bin/behat --format=pretty
+        run: docker compose -f compose.yaml -f compose.override.yaml -f compose.ci.yaml exec -T -e APP_ENV=test -e MINK_BASE_URL=http://php php bin/behat --format=pretty
       - name: Debug services
         if: failure()
         run: |
