@@ -32,7 +32,7 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-CMD ["sh", "-c", "npm install && npm exec next dev --turbo -H 0.0.0.0 -p 3000"]
+CMD ["sh", "-c", "npm install && npx next dev --turbo -H 0.0.0.0 -p 3000"]
 
 FROM base AS builder
 

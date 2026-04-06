@@ -19,12 +19,12 @@ Next.js **App Router** app. In the **default Docker stack**, the browser uses **
 
 ## Scripts
 
-| Script        | Description                |
-| ------------- | -------------------------- |
-| `npm run dev` | Next dev (Turbopack, :80) |
-| `npm run build` / `start` | Production build / start |
-| `npm run test` | Vitest                     |
-| `npm run e2e`  | Playwright (see below)     |
+| Script                    | Description               |
+| ------------------------- | ------------------------- |
+| `npm run dev`             | Next dev (Turbopack, :80) |
+| `npm run build` / `start` | Production build / start  |
+| `npm run test`            | Vitest                    |
+| `npm run e2e`             | Playwright (see below)    |
 
 ## E2E (Playwright)
 

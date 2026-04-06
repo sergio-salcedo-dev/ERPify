@@ -43,10 +43,10 @@ Step-by-step guidance for deploying the monorepo safely. For a shorter checklist
 
 ## Ports (host)
 
-| Service        | Default host ports | Override via                          |
-| -------------- | ------------------ | ------------------------------------- |
-| FrankenPHP     | **80**, **443**, UDP **443** | **`HTTP_PORT`**, **`HTTPS_PORT`**, **`HTTP3_PORT`** |
-| Postgres       | **15432** → 5432   | **`POSTGRES_PORT`**                   |
+| Service    | Default host ports           | Override via                                        |
+| ---------- | ---------------------------- | --------------------------------------------------- |
+| FrankenPHP | **80**, **443**, UDP **443** | **`HTTP_PORT`**, **`HTTPS_PORT`**, **`HTTP3_PORT`** |
+| Postgres   | **15432** → 5432             | **`POSTGRES_PORT`**                                 |
 
 ## Monorepo commands (reference)
 
