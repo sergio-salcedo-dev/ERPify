@@ -1,0 +1,100 @@
+---
+description: Commit message conventions and pre-commit hooks configuration
+alwaysApply: false
+---
+
+# Commit Messages
+
+Commit messages must follow the Conventional Commits specification.
+
+The format is:
+```
+<type>[optional scope]: <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+Types include:
+- `feat`: A new feature
+- `fix`: A bug fix
+- `docs`: Documentation only changes
+- `style`: Changes that do not affect the meaning of the code (white-space, formatting, missing semi-colons, etc)
+- `refactor`: A code change that neither fixes a bug nor adds a feature
+- `perf`: A code change that improves performance
+- `test`: Adding missing tests or correcting existing tests
+- `build`: Changes that affect the build system or external dependencies
+- `ci`: Changes to CI configuration files and scripts
+- `chore`: Other changes that don't modify src or test files
+- `revert`: Reverts a previous commit
+
+Example:
+```
+feat(auth): add user login functionality
+
+Implement JWT-based authentication with refresh tokens.
+Add login endpoint at /api/auth/login.
+
+Closes #123
+```
+
+## Commit Validation
+I must validate the commit message before any commit to ensure it follows the Conventional Commits specification.
+I must always ask the user for approval before committing to confirm they are fine with the commit message.
+Before committing, I MUST perform all pre-commit security checks (see security.mdc) and verify that `PRODUCTION_SECURITY_CHECKLIST.md` is up-to-date if security-related files were changed.
+
+## Pre-Commit Hooks
+
+The project uses pre-commit hooks to ensure code quality and security before commits.
+
+### Setup
+1. Install pre-commit: `pip install pre-commit` or `pip3 install pre-commit`
+2. Install hooks: `pre-commit install`
+3. Install commit-msg hook: `pre-commit install --hook-type commit-msg`
+4. Initialize secrets baseline (if not exists): `detect-secrets scan > .secrets.baseline`
+5. (Optional) Run on all files: `pre-commit run --all-files`
+
+### Pre-Commit Checks
+The following checks run automatically before each commit:
+
+#### General File Checks
+- Trailing whitespace removal
+- End of file fixer
+- YAML/JSON/TOML validation
+- Large file detection (max 1MB)
+- Merge conflict detection
+- Case conflict detection
+- Mixed line ending detection (enforces LF)
+- Private key detection
+- AWS credentials detection
+- Secret detection
+
+#### Commit Message Validation
+- Validates commit messages follow Conventional Commits specification
+- Checks commit type (feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert)
+- Validates subject case (lower-case)
+- Allows any scope
+
+#### PHP Code Checks
+- PHP syntax validation on all PHP files
+- Runs via Docker container to ensure consistency
+
+#### Security Checks
+- Detects `.env` files being committed
+- Detects debug code (var_dump, print_r, dd, dump, console.log)
+- Detects potential hardcoded secrets (passwords, API keys, tokens)
+- Uses detect-secrets tool for comprehensive secret scanning
+
+### Manual Execution
+- Run on staged files: `pre-commit run`
+- Run on all files: `pre-commit run --all-files`
+- Run specific hook: `pre-commit run <hook-id>`
+- Skip hooks (not recommended): `git commit --no-verify`
+
+### Bypassing Pre-Commit Hooks
+Pre-commit hooks should NOT be bypassed unless absolutely necessary. If bypassing is required:
+- Use `git commit --no-verify` sparingly
+- Document the reason for bypassing
+- Ensure security checks are performed manually
+- Fix issues before pushing to remote

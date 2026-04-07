@@ -1,0 +1,33 @@
+---
+description: Database best practices and PostgreSQL-specific guidelines
+alwaysApply: false
+---
+
+# Database Best Practices
+
+## General Practices
+- Use parameterized queries/prepared statements to prevent SQL injection
+- Use transactions for operations that must succeed or fail together
+- Index frequently queried columns
+- Normalize database structure appropriately
+- Use meaningful table and column names
+
+## PostgreSQL Specific
+- Use PostgreSQL-specific features when beneficial (JSONB, arrays, etc.)
+- Use appropriate data types (avoid TEXT for everything)
+- Use constraints (NOT NULL, UNIQUE, FOREIGN KEY) appropriately
+- Use migrations for schema changes
+- Never modify production database directly
+
+## Query Optimization
+- Avoid N+1 query problems
+- Use JOINs instead of multiple queries when possible
+- Use EXPLAIN ANALYZE to understand query performance
+- Index foreign keys and frequently filtered columns
+- Avoid SELECT * - specify needed columns
+
+## Data Integrity
+- Use database constraints to enforce data integrity
+- Validate data at both application and database level
+- Handle database errors gracefully
+- Use appropriate isolation levels for transactions

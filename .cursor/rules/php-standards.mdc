@@ -1,0 +1,39 @@
+---
+description: PHP coding standards and best practices
+globs:
+  - "**/*.php"
+alwaysApply: false
+---
+
+# PHP Coding Standards
+
+- Follow PSR-12 Extended Coding Style Guide
+- Use type declarations for all function parameters and return types
+- Prefer strict types: `declare(strict_types=1);` at the top of PHP files
+- Use namespaces for all classes
+- Use autoloading via Composer
+
+# PHP Best Practices
+
+- Use dependency injection instead of global state
+- Avoid deep nesting (max 3-4 levels)
+- Keep functions small and focused (single responsibility)
+- Use meaningful variable and function names
+- Prefer composition over inheritance
+- Use exceptions for error handling, not return codes
+- Always validate and sanitize user input
+- Use prepared statements for database queries
+- Avoid SQL injection by using parameterized queries
+- Target PHP 8.3+ features
+- Use modern PHP features: typed properties, match expressions, nullsafe operator, etc.
+- Avoid deprecated functions and features
+- Use early returns to avoid ELSE statements and reduce nesting
+
+# PHP Security
+
+- Never commit sensitive data (passwords, API keys, tokens)
+- Use environment variables for configuration
+- Validate and sanitize all user inputs
+- Use HTTPS in production
+- Implement proper authentication and authorization
+- Use CSRF protection for forms

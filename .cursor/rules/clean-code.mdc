@@ -1,0 +1,72 @@
+---
+description: Clean Code principles and best practices
+alwaysApply: false
+---
+
+# Clean Code Principles
+
+## Core Principles
+- Follow Tell don't ask - prefer telling objects what to do rather than asking for data and making decisions outside
+- Follow Demeter's Law - avoid exposing internal details of objects and prefer high-level interactions
+- Follow DRY (Don't Repeat Yourself) - avoid code duplication
+- Follow KISS (Keep It Simple, Stupid) - prefer simple solutions over complex ones
+- Follow YAGNI (You Aren't Gonna Need It) - don't add functionality until it's needed
+- Write code that is easy to read and understand
+- Code should be self-documenting through clear naming
+- Functions should do one thing and do it well
+- Avoid magic numbers and strings - use named constants
+- Keep functions small (ideally under 40 lines)
+- Reduce complexity and cognitive load
+- Use early returns to avoid ELSE statements and reduce nesting
+
+## Code Quality
+- Write self-documenting code with clear naming
+- Keep functions and methods small and focused
+- Minimize cyclomatic complexity
+- Avoid deep nesting (max 3-4 levels)
+- Use early returns to reduce nesting
+- Remove dead code and commented-out code
+
+## Naming Conventions
+- Use descriptive names that reveal intent
+- Avoid abbreviations unless they're widely understood
+- Use verbs for functions/methods, nouns for classes/variables
+- Boolean variables should be questions: `isValid`, `hasPermission`
+- Collections should be plural: `users`, `items`
+
+## Organization
+- Group related functionality together
+- Separate concerns (business logic, data access, presentation)
+- Use appropriate design patterns when they add clarity
+- Research about design patterns in https://refactoring.guru/design-patterns/php
+- Avoid premature optimization
+- Refactor when code smells appear
+
+## Comments
+- Code should be self-explanatory; comments should explain "why", not "what"
+- Remove commented-out code before committing
+- Use comments for complex business logic or non-obvious decisions
+- Keep comments up-to-date with code changes
+
+## Error Handling
+- Handle errors explicitly
+- Use appropriate error types
+- Provide meaningful error messages
+- Fail fast and fail clearly
+- Log errors appropriately
+
+## Design Patterns
+- Use design patterns when they add clarity and solve real problems
+- Don't over-engineer; apply patterns judiciously
+- Prefer composition over inheritance
+- Use dependency injection for loose coupling
+- Apply factory pattern for object creation when appropriate
+- Use repository pattern for data access abstraction
+
+## Performance
+- Profile before optimizing; measure, don't guess
+- Avoid premature optimization
+- Use appropriate data structures and algorithms
+- Cache expensive operations when appropriate
+- Optimize database queries (avoid N+1 problems)
+- Use lazy loading where appropriate

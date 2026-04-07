@@ -1,0 +1,51 @@
+---
+description: Clean Architecture principles and architectural goals
+alwaysApply: false
+---
+
+# Architecture
+
+## Clean Architecture Principles
+- Must follow Clean Architecture principles
+- Separate application into layers: Domain, Application, Infrastructure
+- Dependencies should point inward (Domain has no dependencies)
+- Use dependency inversion principle
+- Keep business logic independent of frameworks and external concerns
+
+## Architectural Goals
+- Scalable architecture
+- Testable code
+- Maintainable structure
+- Clear separation of concerns
+- Easy to add new features
+- Framework-independent business logic
+- PSR standards compliance
+- Security
+- Avoid leaks and attacks
+
+## Layer Structure
+The application follows Clean Architecture with these layers:
+
+### Domain Layer
+- Contains business logic and entities
+- No dependencies on other layers
+- Pure business rules and value objects
+
+### Application Layer
+- Contains use cases and application services
+- Depends only on Domain layer
+- Orchestrates business logic
+
+### Infrastructure Layer
+- Contains implementations of interfaces defined in Application/Domain
+- Database access, external APIs, file system
+- Depends on Application and Domain layers
+
+### Shared Kernel
+- Common utilities, base classes, and shared value objects.
+
+### Dependency Inversion
+- High-level modules should not depend on low-level modules. Both should depend on abstractions.
+
+### Encapsulation
+- Keep logic internal to the context.

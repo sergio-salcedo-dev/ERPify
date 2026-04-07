@@ -1,0 +1,30 @@
+---
+description: Testing strategies and best practices
+alwaysApply: false
+---
+
+# Testing
+
+- Add tests whenever relevant and appropriate
+- Use PHPUnit for unit tests and integration tests in PHP
+- Use Behat for behavior-driven development (BDD) and acceptance tests
+- Use Jest for JavaScript/TypeScript testing
+- Write tests before or alongside code (TDD/BDD when applicable)
+- Maintain high test coverage for critical business logic
+- Tests should be fast, independent, and repeatable
+
+## Testing Best Practices
+- Write tests for critical business logic
+- Aim for high test coverage on important code paths
+- Write unit tests that are fast and isolated
+- Use integration tests for testing component interactions
+- Write tests that are easy to understand and maintain
+- Follow AAA pattern (Arrange, Act, Assert)
+- Use test doubles (mocks, stubs, fakes) appropriately
+
+## Error Handling in Tests
+- Use exceptions for error handling, not return codes
+- Create specific exception types for different error scenarios
+- Fail fast and fail clearly with meaningful error messages
+- Log errors appropriately with context
+- Never expose internal implementation details in error messages

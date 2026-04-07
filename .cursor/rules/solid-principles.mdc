@@ -1,0 +1,38 @@
+---
+description: SOLID principles application guidelines for object-oriented design
+alwaysApply: false
+---
+
+# SOLID Principles
+
+Apply SOLID principles rigorously in all code:
+
+## Single Responsibility Principle (SRP)
+- Each class should have only one reason to change
+- A class should have only one job or responsibility
+- If a class does multiple things, split it into multiple classes
+- Example: Separate data access logic from business logic
+
+## Open/Closed Principle (OCP)
+- Software entities should be open for extension but closed for modification
+- Use interfaces and abstract classes to allow extension without modifying existing code
+- Prefer composition and polymorphism over direct modification
+- Example: Use strategy pattern instead of if/else chains
+
+## Liskov Substitution Principle (LSP)
+- Derived classes must be substitutable for their base classes
+- Subtypes must be able to replace their base types without breaking the application
+- Don't override methods in ways that violate the base class contract
+- Example: If a method expects a base class, any subclass should work correctly
+
+## Interface Segregation Principle (ISP)
+- Clients should not be forced to depend on interfaces they don't use
+- Create specific interfaces instead of one general-purpose interface
+- Split large interfaces into smaller, more focused ones
+- Example: Separate read and write interfaces instead of one CRUD interface
+
+## Dependency Inversion Principle (DIP)
+- High-level modules should not depend on low-level modules; both should depend on abstractions
+- Depend on abstractions (interfaces) rather than concrete implementations
+- Use dependency injection to provide dependencies
+- Example: Inject repository interfaces instead of concrete database classes
