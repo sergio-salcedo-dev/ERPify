@@ -124,9 +124,11 @@ jobs:
       - name: Check FrankenPHP hot-reload bootstrap API (HTTPS)
         run: |
           body=$(curl -sk --fail-with-body https://localhost/api/v1/dev/frankenphp-hot-reload)
-          echo "$body" | grep -qE '"enabled"\s*:\s*(true|false)'
-          if echo "$body" | grep -q '"enabled":true'; then
-            echo "$body" | grep -q '.well-known/mercure'
+          # POSIX ERE: use [[:space:]] (GNU grep -E does not treat \s as whitespace).
+          echo "$body" | grep -qE '"enabled"[[:space:]]*:[[:space:]]*(true|false)'
+          if echo "$body" | grep -qE '"enabled"[[:space:]]*:[[:space:]]*true'; then
+            # JsonResponse json_encode escapes slashes as \/ in subscribePath.
+            echo "$body" | grep -qE '\.well-known.*mercure'
           fi
       - name: Check PWA reachability (HTML)
         run: |
