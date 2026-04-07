@@ -1,4 +1,4 @@
-# Domain events, Messenger, and bank notifications
+# Domain events, Messenger, and notifications
 
 This document describes how ERPify records **domain events** in PostgreSQL and processes **bank created/updated** notifications asynchronously with **Symfony Messenger** and the **Doctrine transport**. It complements the official [Messenger](https://symfony.com/doc/current/messenger.html) documentation and the event style used in [CodelyTV/php-ddd-example](https://github.com/CodelyTV/php-ddd-example) (immutable events, `eventName()`, `toPrimitives()`).
 
@@ -73,7 +73,7 @@ sequenceDiagram
 | `MESSENGER_TRANSPORT_DSN` | Doctrine DB transport; use `doctrine://default?auto_setup=0` with migrations creating `messenger_messages`. Queue name `async` is set in `api/config/packages/messenger.yaml` (`options.queue_name`). |
 | `MAILER_DSN` | Mailer transport (e.g. `null://null` locally, real SMTP/API in production). |
 | `MAILER_FROM` | `From` address for notification emails (default `noreply@erpify.local` via `services.yaml` default parameter). |
-| `BANK_NOTIFICATION_EMAIL` | Recipient for bank notifications (default `sergio.salcedo.dev@gmail.com` via parameter default). |
+| `DEFAULT_NOTIFICATION_EMAIL` | Recipient for notifications (default `sergio.salcedo.dev@gmail.com` via parameter default). |
 
 Test environment (`APP_ENV=test`): `async` and `failed` use **`in-memory://?serialize=true`** so PHPUnit does not need a worker, while messages still pass through the Messenger serializer (like a real queue). Use `null://null` for mailer in tests if you extend integration coverage.
 
@@ -118,7 +118,7 @@ Messenger-specific reminders:
 
 - Add new event classes extending `Erpify\Shared\Domain\Event\DomainEvent`. They are **automatically audited** when dispatched (middleware).  
 - To add **async** side effects, register handlers and add **`routing`** entries in `api/config/packages/messenger.yaml` for the new message class.
-- For **email notifications**, add a dedicated **`AsMessageHandler`** class under the relevant bounded context (like `BankChangedNotifyEmailHandler`). Inject **`NotificationMailer`**; add a new implementation (e.g. Twig-based) and **`#[AsAlias(NotificationMailer::class)]`** (or a container alias) if you outgrow plain text. Wire **`Autowire` env** for per-topic recipients (e.g. `BANK_NOTIFICATION_EMAIL`, `ORDER_OPS_EMAIL`).
+- For **email notifications**, add a dedicated **`AsMessageHandler`** class under the relevant bounded context (like `BankChangedNotifyEmailHandler`). Inject **`NotificationMailer`**; add a new implementation (e.g. Twig-based) and **`#[AsAlias(NotificationMailer::class)]`** (or a container alias) if you outgrow plain text. Wire **`Autowire` env** for per-topic recipients (e.g. `DEFAULT_NOTIFICATION_EMAIL`, `ORDER_OPS_EMAIL`).
 
 ## Code map
 

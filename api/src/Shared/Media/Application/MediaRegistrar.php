@@ -35,7 +35,7 @@ final class MediaRegistrar
             $normalized->bytes,
         );
 
-        $this->repository->persist($media);
+        $this->repository->save($media);
 
         return $media;
     }

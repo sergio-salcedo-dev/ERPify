@@ -32,6 +32,8 @@ relevant section of the production documentation for context.
   A restore drill has been completed. See [database.md](database.md#backups).
 - [ ] `doctrine:fixtures:load` is confirmed unavailable in prod — running
   `bin/console doctrine:fixtures:load` must output "command not found", not
+- [ ] `hautelook:fixtures:load` is confirmed unavailable in prod — running
+  `bin/console hautelook:fixtures:load` must output "command not found", not
   execute.
 - [ ] Schema is in sync with entities:
   `bin/console doctrine:migrations:status` shows no pending migrations after

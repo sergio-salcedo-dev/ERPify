@@ -215,3 +215,7 @@ command simply does not exist. Do not change this registration to `all`.
 > Never run `doctrine:fixtures:load` against the production database under any
 > circumstances. Fixtures are seeding tools for development and testing only;
 > loading them in production will wipe or pollute real data.
+>
+> Never run `hautelook:fixtures:load` against the production database under any
+> circumstances. Fixtures are seeding tools for development and testing only;
+> loading them in production will wipe or pollute real data.

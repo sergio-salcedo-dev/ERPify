@@ -29,14 +29,14 @@ final class FeatureContext extends MinkContext
         $console = $this->messengerBinConsole();
 
         exec(
-            sprintf('php %s doctrine:fixtures:load --no-interaction --env=dev --purge-with-truncate 2>&1', escapeshellarg($console)),
+            sprintf('php %s hautelook:fixtures:load --no-interaction --env=dev --purge-with-truncate 2>&1', escapeshellarg($console)),
             $output,
             $exitCode,
         );
 
         if ($exitCode !== 0) {
             throw new RuntimeException(
-                sprintf("doctrine:fixtures:load failed (exit %d):\n%s", $exitCode, implode("\n", $output)),
+                sprintf("hautelook:fixtures:load failed (exit %d):\n%s", $exitCode, implode("\n", $output)),
             );
         }
 

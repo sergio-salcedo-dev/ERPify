@@ -8,7 +8,7 @@ use Erpify\Shared\Media\Domain\Entity\Media;
 
 interface MediaRepository
 {
-    public function persist(Media $media): void;
+    public function save(Media $media): void;
 
     public function findActiveByContentHash(string $contentHash): ?Media;
 

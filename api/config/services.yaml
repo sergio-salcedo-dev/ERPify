@@ -7,16 +7,13 @@
 # Put parameters here that do not need to change on each machine where the app is deployed
 # https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
 parameters:
-    service: erpify
-    bank_notification_email_default: 'sergio.salcedo.dev@gmail.com'
-    mailer_from_default: 'noreply@erpify.local'
+    api.name: erpify
 
 services:
     _defaults:
         autowire: true
         autoconfigure: true
 
-    # Recursive load so bounded-context paths (e.g. Backoffice/Health/Infrastructure/...) are registered.
     Erpify\:
         resource: '../src/'
         exclude:

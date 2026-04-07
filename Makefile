@@ -60,7 +60,7 @@ endef
 	restart reset ps health clean \
 	api-up-http dev-local \
 	composer vendor sf cc cache.warmup routes \
-	db.migrate db.diff db.status db.validate db.fixtures db.alice db.reset db.shell \
+	db.migrate db.diff db.status db.validate db.load.fixtures db.reset db.shell \
 	messenger.stop-workers \
 	php.unit php.unit.install php.behat php.behat.install test \
 	pwa.install pwa.dev pwa.build pwa.test pwa.e2e pwa.lint pwa.lint.fix pwa.format \
@@ -243,16 +243,13 @@ db.status: ## Migration status
 db.validate: ## Validate ORM mapping vs database
 	@$(SYMFONY) doctrine:schema:validate
 
-db.fixtures: ## Load Doctrine fixtures (purge first)
-	@$(SYMFONY) doctrine:fixtures:load --no-interaction --purge-with-truncate
-
-db.alice: ## Load Hautelook Alice fixtures
-	@$(SYMFONY) hautelook:fixtures:load --no-interaction
+db.load.fixtures: ## Load Hautelook Alice fixtures (purge first)
+	@$(SYMFONY) hautelook:fixtures:load --no-interaction --purge-with-truncate
 
 db.reset: ## Drop DB → migrate → fixtures
 	@$(SYMFONY) doctrine:schema:drop --force --full-database --no-interaction
 	@$(SYMFONY) doctrine:migrations:migrate --no-interaction --all-or-nothing
-	@$(SYMFONY) doctrine:fixtures:load --no-interaction --purge-with-truncate
+	@$(SYMFONY) hautelook:fixtures:load --no-interaction --purge-with-truncate
 
 db.shell: ## Interactive psql in database container
 	$(DOCKER_COMP) exec database \

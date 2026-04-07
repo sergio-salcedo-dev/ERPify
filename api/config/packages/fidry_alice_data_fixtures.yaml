@@ -1,0 +1,5 @@
+when@dev: &dev
+    fidry_alice_data_fixtures:
+        default_purge_mode: 'truncate' # faster DB clearing between loads
+
+when@test: *dev

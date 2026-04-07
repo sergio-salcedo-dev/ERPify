@@ -9,6 +9,7 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
+use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Shared\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Media\Domain\Entity\Media;
 use Symfony\Bridge\Doctrine\Types\UuidType;
@@ -16,7 +17,7 @@ use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Validator\Constraints as Assert;
 
-#[ORM\Entity]
+#[ORM\Entity(repositoryClass: BankRepository::class)]
 #[ORM\Table(name: 'bank')]
 class Bank extends AggregateRoot
 {

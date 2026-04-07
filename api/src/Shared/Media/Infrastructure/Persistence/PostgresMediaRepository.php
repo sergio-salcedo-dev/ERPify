@@ -18,9 +18,10 @@ final class PostgresMediaRepository extends ServiceEntityRepository implements M
         parent::__construct($registry, Media::class);
     }
 
-    public function persist(Media $media): void
+    public function save(Media $media): void
     {
         $this->getEntityManager()->persist($media);
+        $this->getEntityManager()->flush();
     }
 
     public function findActiveByContentHash(string $contentHash): ?Media

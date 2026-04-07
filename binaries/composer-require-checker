@@ -1,0 +1,17 @@
+#!/bin/bash
+set -euo pipefail
+
+# Move to the project root (ERPify/)
+cd "$(dirname "$0")/.." || exit 1
+
+# 1. Check if installed
+if ! docker compose exec -T php sh -c 'composer global exec composer-require-checker -- --version >/dev/null 2>&1'; then
+    echo "composer-require-checker is not installed globally in the php container." >&2
+    echo "Install it with: docker compose exec php composer require maglnet/composer-require-checker" >&2
+    exit 1
+fi
+
+#docker compose exec -T php sh -c 'XDEBUG_MODE=off composer global exec composer-require-checker -- "$@"' sh "$@"
+docker compose exec -T php sh -c 'XDEBUG_MODE=off composer global exec composer-require-checker -- check \
+  --config-file=/app/tools/composer-require-checker/composer-require-checker.json \
+  /app/composer.json'

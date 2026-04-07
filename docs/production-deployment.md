@@ -15,7 +15,7 @@ For deeper topics, use the linked guides in [`api/docs/production-ready/`](../ap
 | **`php`** | FrankenPHP + Caddy: public **80/443**, reverse-proxies HTML/`_next` to the PWA, serves **`/api/*`** and **Mercure** (`/.well-known/mercure`). Runs migrations on startup. |
 | **`pwa`** | Next.js on **:3000** (internal only); not exposed directly in the default layout. |
 | **`database`** | PostgreSQL. In production, **do not publish** the host port to the internet. |
-| **`messenger_worker`** | Long-lived **`messenger:consume async`** process. **Required** if you use async routing (e.g. bank notification emails). Uses the same **`DATABASE_URL`** and **`MESSENGER_TRANSPORT_DSN`** as the API. |
+| **`messenger_worker`** | Long-lived **`messenger:consume async`** process. **Required** if you use async routing (e.g. notification emails). Uses the same **`DATABASE_URL`** and **`MESSENGER_TRANSPORT_DSN`** as the API. |
 
 Commands and env substitution use **`api/.env`** (and optionally a host-level **`.env`** next to Compose, depending on your setup). Run Compose from the **repo root**:
 
@@ -64,11 +64,11 @@ Never commit real secrets. Minimum production set:
 | **`MESSENGER_TRANSPORT_DSN`** | Typically `doctrine://default?auto_setup=0`; **`messenger_messages`** table must exist via migrations. |
 | **`MAILER_DSN`** | Real transport in production (SMTP, API bridge, etc.). **`null://null`** only for labs. |
 | **`MAILER_FROM`** | Must be a domain/address your provider allows (SPF/DKIM/DMARC on that domain). |
-| **`BANK_NOTIFICATION_EMAIL`** | Operational inbox for bank create/update notifications (async handler). |
+| **`DEFAULT_NOTIFICATION_EMAIL`** | Operational inbox for bank create/update notifications (async handler). |
 | **`OBJECT_STORAGE_LOCAL_PATH`** | **Production:** absolute path to the Flysystem local root for content-addressable files (`objects/{hash}`). Must be on a **persistent volume** (see [object-storage.md](object-storage.md)). Optional in dev (defaults under `var/storage/objects`). |
 | **`MEDIA_PUBLIC_BASE_URL`** | Optional. If set, **`logoUrl`** and **`storedObjectUrl`** in JSON use this origin; needed when clients require stable absolute asset URLs. |
 
-`compose.prod.yaml` passes **`APP_SECRET`** and **`MAILER_DSN`** into **`messenger_worker`**; other worker variables come from the base **`compose.yaml`** merge (e.g. **`DATABASE_URL`**, **`MESSENGER_TRANSPORT_DSN`**, **`BANK_NOTIFICATION_EMAIL`**). If you add env-only overrides in production, ensure **both** **`php`** and **`messenger_worker`** stay aligned on DB and Messenger DSN.
+`compose.prod.yaml` passes **`APP_SECRET`** and **`MAILER_DSN`** into **`messenger_worker`**; other worker variables come from the base **`compose.yaml`** merge (e.g. **`DATABASE_URL`**, **`MESSENGER_TRANSPORT_DSN`**, **`DEFAULT_NOTIFICATION_EMAIL`**). If you add env-only overrides in production, ensure **both** **`php`** and **`messenger_worker`** stay aligned on DB and Messenger DSN.
 
 Full variable tables: [api/docs/production-ready/secrets.md](../api/docs/production-ready/secrets.md).
 
@@ -99,7 +99,7 @@ More detail: [domain-events-and-messenger.md](domain-events-and-messenger.md).
 
 - Set **`MAILER_DSN`** to your provider (examples: **`smtp://user:pass@host:465`** with appropriate scheme/options, or a Symfony Mailer bridge package). Notification code uses the **`NotificationMailer`** port (default **`PlainTextNotificationMailer`**), which uses Symfony **`MailerInterface`**.
 
-- **`MAILER_FROM`** and **`BANK_NOTIFICATION_EMAIL`** are configured via env (see `api/config/services.yaml` defaults). Use addresses you control; configure **SPF**, **DKIM**, and **DMARC** for the From domain to improve deliverability.
+- **`MAILER_FROM`** and **`DEFAULT_NOTIFICATION_EMAIL`** are configured via env (see `api/config/services.yaml` defaults). Use addresses you control; configure **SPF**, **DKIM**, and **DMARC** for the From domain to improve deliverability.
 
 - **Dev-only Mailpit** (`compose.override.yaml`) is **not** merged in **`compose.prod.yaml`**; production mail must use a real DSN.
 

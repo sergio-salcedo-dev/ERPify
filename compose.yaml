@@ -28,7 +28,7 @@ services:
       MESSENGER_TRANSPORT_DSN: ${MESSENGER_TRANSPORT_DSN:-doctrine://default?auto_setup=0}
       MAILER_DSN: ${MAILER_DSN:-null://null}
       MAILER_FROM: ${MAILER_FROM:-noreply@erpify.local}
-      BANK_NOTIFICATION_EMAIL: ${BANK_NOTIFICATION_EMAIL:-sergio.salcedo.dev@gmail.com}
+      DEFAULT_NOTIFICATION_EMAIL: ${DEFAULT_NOTIFICATION_EMAIL:-sergio.salcedo.dev@gmail.com}
     volumes:
       - caddy_data:/data
       - caddy_config:/config
@@ -116,7 +116,7 @@ services:
       MESSENGER_TRANSPORT_DSN: ${MESSENGER_TRANSPORT_DSN:-doctrine://default?auto_setup=0}
       MAILER_DSN: ${MAILER_DSN:-null://null}
       MAILER_FROM: ${MAILER_FROM:-noreply@erpify.local}
-      BANK_NOTIFICATION_EMAIL: ${BANK_NOTIFICATION_EMAIL:-sergio.salcedo.dev@gmail.com}
+      DEFAULT_NOTIFICATION_EMAIL: ${DEFAULT_NOTIFICATION_EMAIL:-sergio.salcedo.dev@gmail.com}
     command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600"]
 
 volumes:

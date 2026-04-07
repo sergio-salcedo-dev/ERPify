@@ -17,7 +17,7 @@ final class BankChangedNotifyEmailHandler
 {
     public function __construct(
         private readonly NotificationMailer $notificationMailer,
-        #[Autowire('%env(default:bank_notification_email_default:BANK_NOTIFICATION_EMAIL)%')]
+        #[Autowire('%env(DEFAULT_NOTIFICATION_EMAIL)%')]
         private readonly string $notifyTo,
     ) {
     }

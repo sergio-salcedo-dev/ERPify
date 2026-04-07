@@ -7,10 +7,11 @@ namespace Erpify\Shared\Media\Domain\Entity;
 use DateTimeImmutable;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use Erpify\Shared\Media\Domain\Repository\MediaRepository;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Uid\Uuid;
 
-#[ORM\Entity]
+#[ORM\Entity(repositoryClass: MediaRepository::class)]
 #[ORM\Table(name: 'media')]
 class Media
 {

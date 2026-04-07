@@ -18,7 +18,7 @@ final class PlainTextNotificationMailer implements NotificationMailer
 {
     public function __construct(
         private readonly MailerInterface $mailer,
-        #[Autowire('%env(default:mailer_from_default:MAILER_FROM)%')]
+        #[Autowire('%env(MAILER_FROM)%')]
         private readonly string $mailFrom,
     ) {
     }

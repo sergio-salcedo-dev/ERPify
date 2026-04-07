@@ -46,4 +46,5 @@ If you are deploying for the first time, follow these steps in order:
 > - **Never** run `docker compose down --volumes` on production — it destroys
 >   the database volume permanently.
 > - **Never** run `doctrine:fixtures:load` against the production database.
+> - **Never** run `hautelook:fixtures:load` against the production database.
 > - **Never** set `APP_DEBUG=1` or `APP_ENV=dev` in production.
