@@ -149,6 +149,10 @@ jobs:
         run: |
           docker compose -f compose.yaml -f compose.override.yaml -f compose.ci.yaml ps
           docker compose -f compose.yaml -f compose.override.yaml -f compose.ci.yaml logs
+      - name: Security checker (API)
+        uses: symfonycorp/security-checker-action@v5
+        with:
+          lock: ./api/composer.lock
 
   # super-linter:
   #   name: Lint (super-linter)

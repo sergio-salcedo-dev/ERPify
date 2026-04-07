@@ -1,8 +1,14 @@
 {
     "name": "erpify/api",
     "type": "project",
-    "license": "MIT",
+    "license": "proprietary",
     "description": "ERPify HTTP API — Symfony, FrankenPHP, DDD-style backoffice modules, Messenger, and PostgreSQL",
+    "authors": [
+        {
+            "name": "Sergio Salcedo",
+            "email": "sergio.sacedo.dev@gmail.com"
+        }
+    ],
     "minimum-stability": "stable",
     "prefer-stable": true,
     "require": {
