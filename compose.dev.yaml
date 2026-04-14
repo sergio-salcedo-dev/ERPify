@@ -33,10 +33,37 @@ services:
     extra_hosts:
       - host.docker.internal:host-gateway
     tty: true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:2019/metrics"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 180s
 
   pwa:
     # Stable tag for bake + `compose up --no-build` (avoids default erpify-pwa:latest mismatch).
     image: ${IMAGES_PREFIX:-}app-pwa-dev
+    build:
+      context: ./pwa
+      dockerfile: Dockerfile
+      target: dev
+      args:
+        NEXT_PUBLIC_SYMFONY_API_BASE_URL: ${NEXT_PUBLIC_SYMFONY_API_BASE_URL:-https://localhost}
+    volumes:
+      - ./pwa:/srv/app
+      - pwa_node_modules:/srv/app/node_modules
+    environment:
+      NODE_ENV: development
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 180s
 
   database:
     ports:
@@ -56,3 +83,6 @@ services:
     volumes:
       - ./api:/app
       - ./api/frankenphp/conf.d/20-app.dev.ini:/usr/local/etc/php/app.conf.d/20-app.dev.ini:ro
+
+volumes:
+  pwa_node_modules:

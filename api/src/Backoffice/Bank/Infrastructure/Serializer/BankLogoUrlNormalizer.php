@@ -17,11 +17,11 @@ final class BankLogoUrlNormalizer implements NormalizerInterface, NormalizerAwar
 {
     use NormalizerAwareTrait;
 
-    private const MARK = 'bank_logo_url_normalizer';
+    private const string MARK = 'bank_logo_url_normalizer';
 
     public function __construct(
-        private readonly MediaPublicUrlGenerator $mediaUrls,
-        private readonly StoredObjectPublicUrlGenerator $storedObjectUrls,
+        private readonly MediaPublicUrlGenerator $mediaPublicUrlGenerator,
+        private readonly StoredObjectPublicUrlGenerator $storedObjectPublicUrlGenerator,
     ) {
     }
 
@@ -33,10 +33,10 @@ final class BankLogoUrlNormalizer implements NormalizerInterface, NormalizerAwar
 
         if ($object instanceof Bank && \in_array('bank:read', $context['groups'] ?? [], true)) {
             $logo = $object->getLogo();
-            $data['logoUrl'] = $logo !== null ? $this->mediaUrls->urlForContentHash($logo->getContentHash()) : null;
+            $data['logoUrl'] = $logo instanceof \Erpify\Shared\Media\Domain\Entity\Media ? $this->mediaPublicUrlGenerator->urlForContentHash($logo->getContentHash()) : null;
             $storedHash = $object->getStoredObjectContentHash();
             $data['storedObjectUrl'] = $storedHash !== null
-                ? $this->storedObjectUrls->urlForContentHash($storedHash)
+                ? $this->storedObjectPublicUrlGenerator->urlForContentHash($storedHash)
                 : null;
         }
 
@@ -50,6 +50,9 @@ final class BankLogoUrlNormalizer implements NormalizerInterface, NormalizerAwar
             && !isset($context[self::MARK]);
     }
 
+    /**
+     * @return array<string, bool>
+     */
     public function getSupportedTypes(?string $format): array
     {
         return [

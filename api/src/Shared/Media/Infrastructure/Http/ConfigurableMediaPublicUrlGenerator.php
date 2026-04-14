@@ -11,13 +11,13 @@ use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 #[AsAlias(MediaPublicUrlGenerator::class)]
-final class ConfigurableMediaPublicUrlGenerator implements MediaPublicUrlGenerator
+final readonly class ConfigurableMediaPublicUrlGenerator implements MediaPublicUrlGenerator
 {
     public function __construct(
-        private readonly UrlGeneratorInterface $router,
-        private readonly RequestStack $requestStack,
+        private UrlGeneratorInterface $urlGenerator,
+        private RequestStack $requestStack,
         #[Autowire('%env(MEDIA_PUBLIC_BASE_URL)%')]
-        private readonly string $mediaPublicBaseUrl,
+        private string $mediaPublicBaseUrl,
     ) {
     }
 
@@ -28,8 +28,8 @@ final class ConfigurableMediaPublicUrlGenerator implements MediaPublicUrlGenerat
             return rtrim($base, '/').'/api/v1/media/'.$contentHash;
         }
 
-        if ($this->requestStack->getCurrentRequest() !== null) {
-            return $this->router->generate(
+        if ($this->requestStack->getCurrentRequest() instanceof \Symfony\Component\HttpFoundation\Request) {
+            return $this->urlGenerator->generate(
                 'shared_media_get',
                 ['hash' => $contentHash],
                 UrlGeneratorInterface::ABSOLUTE_URL,

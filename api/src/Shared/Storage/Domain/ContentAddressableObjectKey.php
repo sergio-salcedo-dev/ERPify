@@ -10,7 +10,7 @@ namespace Erpify\Shared\Storage\Domain;
  */
 final class ContentAddressableObjectKey
 {
-    private const PREFIX = 'objects';
+    private const string PREFIX = 'objects';
 
     public static function fromContentHash(string $contentHash): string
     {

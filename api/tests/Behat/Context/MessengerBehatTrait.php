@@ -25,13 +25,13 @@ trait MessengerBehatTrait
     {
         $console = $this->messengerBinConsole();
         $escaped = array_map(
-            static fn (string $a): string => escapeshellarg($a),
+            escapeshellarg(...),
             $args,
         );
 
         $cmd = sprintf(
             'php %s %s --env=dev --no-ansi 2>&1',
-            escapeshellarg($console),
+            escapeshellarg((string) $console),
             implode(' ', $escaped),
         );
 
@@ -86,7 +86,7 @@ trait MessengerBehatTrait
         $console = $this->messengerBinConsole();
         $cmd = sprintf(
             'php %s messenger:stats %s --format=json --env=dev --no-ansi 2>&1',
-            escapeshellarg($console),
+            escapeshellarg((string) $console),
             escapeshellarg($transport),
         );
 
@@ -128,7 +128,7 @@ trait MessengerBehatTrait
         curl_setopt($ch, CURLOPT_TIMEOUT, 5);
         $body = curl_exec($ch);
         $errno = curl_errno($ch);
-        $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
         if ($errno !== 0 || !is_string($body)) {
             throw new RuntimeException(sprintf('HTTP GET failed for %s (curl errno %s)', $url, (string) $errno));

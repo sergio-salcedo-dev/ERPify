@@ -79,20 +79,20 @@ Test environment (`APP_ENV=test`): `async` and `failed` use **`in-memory://?seri
 
 ## Local development
 
-The async consumer is a **Compose service** named **`messenger_worker`**: it is declared in **[`compose.yaml`](../compose.yaml)** (command, env, `depends_on` database + **`php`** so migrations run first) and gets **dev image + `./api` bind mount** from **[`compose.override.yaml`](../compose.override.yaml)**. Production fills **image/build** via **[`compose.prod.yaml`](../compose.prod.yaml)**.
+The async consumer is a **Compose service** named **`messenger_worker`**: it is declared in **[`compose.yaml`](../compose.yaml)** (command, env, `depends_on` database + **`php`** so migrations run first) and gets **dev image + `./api` bind mount** from **[`compose.dev.yaml`](../compose.dev.yaml)**. Production fills **image/build** via **[`compose.prod.yaml`](../compose.prod.yaml)**.
 
 1. Copy [`api/.env.example`](../api/.env.example) to `api/.env` and set variables as needed.
 2. Run migrations (Docker entrypoint on **`php`** usually runs `doctrine:migrations:migrate` before FrankenPHP listens; the worker waits for **`php`** to be healthy).
 3. Start the stack from the repo root so the daemon is included (same files as `make dev-up` / `make up-wait` when using dev overrides):
-   - `docker compose -f compose.yaml -f compose.override.yaml up --wait -d`
-4. Tail the consumer: `docker compose -f compose.yaml -f compose.override.yaml logs -f messenger_worker`.
+   - `docker compose -f compose.yaml -f compose.dev.yaml up --wait -d`
+4. Tail the consumer: `docker compose -f compose.yaml -f compose.dev.yaml logs -f messenger_worker`.
 
 **API + DB only** (`make api-up-http`) also starts **`messenger_worker`** so queued bank emails are still processed.
 
 Optional one-off consume in the **`php`** container (same codebase as the worker):
 
 ```bash
-docker compose -f compose.yaml -f compose.override.yaml exec php php bin/console messenger:consume async -vv
+docker compose -f compose.yaml -f compose.dev.yaml exec php php bin/console messenger:consume async -vv
 ```
 
 Useful debugging:

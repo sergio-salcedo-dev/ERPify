@@ -9,17 +9,17 @@ use Symfony\Component\Validator\ConstraintViolationListInterface;
 
 trait ValidationTrait
 {
-    private function validationErrorResponse(ConstraintViolationListInterface $violations): JsonResponse
+    private function validationErrorResponse(ConstraintViolationListInterface $constraintViolationList): JsonResponse
     {
         $errors = [];
-        foreach ($violations as $violation) {
+        foreach ($constraintViolationList as $violation) {
             $errors[] = [
                 'field' => $this->toSnakeCase($violation->getPropertyPath()),
                 'message' => $violation->getMessage(),
             ];
         }
 
-        return new JsonResponse(['errors' => $errors], 422);
+        return new JsonResponse(['errors' => $errors], \Symfony\Component\HttpFoundation\Response::HTTP_UNPROCESSABLE_ENTITY);
     }
 
     private function toSnakeCase(string $propertyPath): string

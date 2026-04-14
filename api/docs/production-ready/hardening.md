@@ -76,7 +76,7 @@ relevant section of the production documentation for context.
 - [ ] Xdebug is **not** present in the production image — it is only installed
   in the `frankenphp_dev` Dockerfile stage.
 - [ ] No bind-mount of the source code exists in `compose.prod.yaml` (unlike
-  `compose.override.yaml` which mounts `./:/app` for hot-reload in dev).
+  `compose.dev.yaml` which mounts `./:/app` for hot-reload in dev).
 
 ---
 

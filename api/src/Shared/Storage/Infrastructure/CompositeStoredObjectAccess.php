@@ -10,14 +10,14 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\DependencyInjection\Attribute\AutowireIterator;
 
 #[AsAlias(StoredObjectAccessPort::class)]
-final class CompositeStoredObjectAccess implements StoredObjectAccessPort
+final readonly class CompositeStoredObjectAccess implements StoredObjectAccessPort
 {
     /**
      * @param iterable<StoredObjectReferenceInspector> $inspectors
      */
     public function __construct(
         #[AutowireIterator('stored_object.reference_inspector')]
-        private readonly iterable $inspectors,
+        private iterable $inspectors,
     ) {
     }
 

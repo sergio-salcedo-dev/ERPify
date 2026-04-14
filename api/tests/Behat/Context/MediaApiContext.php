@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Behat\Context;
 
-use Behat\Behat\Context\Context;
 use Behat\Gherkin\Node\TableNode;
-use Behat\Mink\Driver\BrowserKitDriver;
 use Behat\MinkExtension\Context\RawMinkContext;
 use RuntimeException;
 use Symfony\Component\BrowserKit\Response as BrowserKitResponse;
@@ -15,41 +13,44 @@ use Symfony\Component\HttpFoundation\Response as HttpFoundationResponse;
 /**
  * HTTP steps for multipart uploads, public media GET, and response header / JSON field checks.
  */
-final class MediaApiContext extends RawMinkContext implements Context
+final class MediaApiContext extends RawMinkContext
 {
     /**
      * Multipart POST. Use @relative/path under features/fixtures/ for file fields (e.g. @minimal-logo.png).
      *
      * @When /^I send a POST multipart request to "(?P<url>[^"]+)" with fields:$/
      */
-    public function iSendPostMultipartRequestToWithFields(string $url, TableNode $table): void
+    public function iSendPostMultipartRequestToWithFields(string $url, TableNode $tableNode): void
     {
         $url = ScenarioRememberedValues::interpolate($url);
         $fixturesDir = dirname(__DIR__, 3).'/features/fixtures';
         $parameters = [];
         $files = [];
 
-        foreach ($table->getHash() as $row) {
+        foreach ($tableNode->getHash() as $row) {
             $field = trim((string) ($row['field'] ?? ''));
             $value = ScenarioRememberedValues::interpolate(trim((string) ($row['value'] ?? '')));
             if ($field === '') {
                 continue;
             }
+
             if (str_starts_with($value, '@')) {
                 $relative = substr($value, 1);
                 $path = $fixturesDir.'/'.$relative;
                 if (!is_file($path)) {
                     throw new RuntimeException(sprintf('Multipart fixture not found: %s', $path));
                 }
+
                 $mime = mime_content_type($path);
                 if ($mime === false) {
-                    $mime = match (strtolower((string) pathinfo($path, PATHINFO_EXTENSION))) {
+                    $mime = match (strtolower(pathinfo($path, PATHINFO_EXTENSION))) {
                         'png' => 'image/png',
                         'jpg', 'jpeg' => 'image/jpeg',
                         'webp' => 'image/webp',
                         default => 'application/octet-stream',
                     };
                 }
+
                 // HttpBrowser (Mink browserkit_http) only builds multipart from PHP $_FILES-shaped arrays;
                 // passing UploadedFile makes getUploadedFiles() bail out and omit files.
                 $files[$field] = [
@@ -65,7 +66,7 @@ final class MediaApiContext extends RawMinkContext implements Context
         }
 
         $driver = $this->getSession()->getDriver();
-        assert($driver instanceof BrowserKitDriver);
+
         $driver->getClient()->request(
             'POST',
             $this->locatePath($url),
@@ -85,10 +86,10 @@ final class MediaApiContext extends RawMinkContext implements Context
     /**
      * @When I send a GET request to the URL stored as :alias with headers:
      */
-    public function iSendGetRequestToUrlStoredAsWithHeaders(string $alias, TableNode $table): void
+    public function iSendGetRequestToUrlStoredAsWithHeaders(string $alias, TableNode $tableNode): void
     {
         $server = [];
-        foreach ($table->getRowsHash() as $name => $value) {
+        foreach ($tableNode->getRowsHash() as $name => $value) {
             $server[$this->httpHeaderToServerKey(trim((string) $name))] = ScenarioRememberedValues::interpolate(trim((string) $value));
         }
 
@@ -154,7 +155,7 @@ final class MediaApiContext extends RawMinkContext implements Context
     {
         $content = $this->getSession()->getPage()->getContent();
         /** @var array<string, mixed> $data */
-        $data = json_decode($content, true) ?? [];
+        $data = json_decode((string) $content, true) ?? [];
         $value = (string) ($data[$field] ?? '');
         if (!preg_match($pattern, $value)) {
             throw new RuntimeException(sprintf('Field %s value %s does not match %s', $field, $value, $pattern));
@@ -178,7 +179,7 @@ final class MediaApiContext extends RawMinkContext implements Context
         $path = $this->requestPathFromPossibleAbsoluteUrl($raw);
 
         $driver = $this->getSession()->getDriver();
-        assert($driver instanceof BrowserKitDriver);
+
         $driver->getClient()->request('GET', $this->locatePath($path), [], [], $server);
     }
 
@@ -201,7 +202,7 @@ final class MediaApiContext extends RawMinkContext implements Context
     private function getLastResponseHeader(string $headerName): ?string
     {
         $driver = $this->getSession()->getDriver();
-        assert($driver instanceof BrowserKitDriver);
+
         $response = $driver->getClient()->getResponse();
         if ($response === null) {
             return null;

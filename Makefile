@@ -1,5 +1,5 @@
 # ERPify — monorepo tasks (repo root).
-# Compose files: compose.yaml + compose.override.yaml + compose.pwa-dev.yaml (dev) or + compose.prod.yaml (prod).
+# Compose files: compose.yaml + compose.dev.yaml (dev) or + compose.prod.yaml (prod).
 # Inspired by https://github.com/dunglas/symfony-docker/blob/main/docs/makefile.md
 #
 # Common commands:
@@ -17,7 +17,7 @@ ROOT_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 STACK_PROJECT ?= erpify
 export COMPOSE_PROJECT_NAME := $(STACK_PROJECT)
 
-COMPOSE_DEV = -f compose.yaml -f compose.override.yaml -f compose.pwa-dev.yaml
+COMPOSE_DEV = -f compose.yaml -f compose.dev.yaml
 COMPOSE_PROD = -f compose.yaml -f compose.prod.yaml
 
 DOCKER_COMP = cd $(ROOT_DIR) && docker compose $(COMPOSE_DEV)
@@ -283,7 +283,9 @@ php.behat: ## Behat in container; pass c= for extra args
 php.behat.install: ## Install Behat tooling (api/tools/behat)
 	@$(COMPOSER) behat-tools-install
 
-test: php.behat ## Default “full” API test suite (Behat)
+php.tests: php.unit php.behat ## API test suite (PHPUnit + Behat)
+
+# php.quality: php.stan ## PHP code quality suite (phpStan + Prettier)
 
 # =============================================================================
 # PWA (Next.js)
@@ -298,12 +300,14 @@ pwa.dev: ## Next dev (Turbopack)
 pwa.build: ## next build
 	$(call pwa_cmd,npm run build)
 
-pwa.test: ## Vitest; pass c= for extra args
+pwa.test.unit: ## Vitest; pass c= for extra args
 	@$(eval c ?=)
 	$(call pwa_cmd,npm test -- $(c))
 
-pwa.e2e: ## Playwright
+pwa.test.e2e: ## Playwright
 	$(call pwa_cmd,npm run e2e)
+
+pwa.tests: pwa.test.unit pwa.test.e2e ## PWA test suite (Vitest + Playwright)
 
 pwa.lint: ## ESLint + next lint
 	$(call pwa_cmd,npm run lint)
@@ -313,6 +317,8 @@ pwa.lint.fix: ## ESLint --fix
 
 pwa.format: ## Prettier
 	$(call pwa_cmd,npm run format)
+
+pwa.quality: pwa.lint.fix pwa.format ## PWA code quality suite (ESLint + Prettier)
 
 # =============================================================================
 # Xdebug

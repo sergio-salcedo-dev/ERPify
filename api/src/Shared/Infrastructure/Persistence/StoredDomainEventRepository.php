@@ -14,5 +14,5 @@ use Erpify\Shared\Infrastructure\Persistence\Entity\StoredDomainEvent;
  */
 interface StoredDomainEventRepository
 {
-    public function save(StoredDomainEvent $stored): void;
+    public function save(StoredDomainEvent $storedDomainEvent): void;
 }
