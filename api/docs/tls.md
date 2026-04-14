@@ -55,7 +55,7 @@ do as follows:
 
    <!-- markdownlint-enable MD013 -->
 
-4. Add these lines to the `./compose.override.yaml` file about `CADDY_SERVER_EXTRA_DIRECTIVES`
+4. Add these lines to the `./compose.dev.yaml` file about `CADDY_SERVER_EXTRA_DIRECTIVES`
    environment and volume for the `php` service:
 
    ```diff
