@@ -84,7 +84,7 @@
         "symfony/polyfill-php83": "*",
         "symfony/polyfill-php84": "*"
     },
-    "scripts": {
+        "scripts": {
         "auto-scripts": {
             "cache:clear": "symfony-cmd",
             "assets:install %PUBLIC_DIR%": "symfony-cmd"
@@ -115,6 +115,8 @@
     "require-dev": {
         "doctrine/doctrine-fixtures-bundle": "^4.3.1",
         "hautelook/alice-bundle": "^2.17.3",
+        "phpstan/phpstan": "^2.1",
+        "phpstan/phpstan-symfony": "^2.0",
         "phpunit/phpunit": "^13.1.0",
         "roave/security-advisories": "dev-latest",
         "symfony/browser-kit": "^8.0.8"
