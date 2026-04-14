@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<ruleset name="ERPify"
+         xmlns="http://pmd.sf.net/ruleset/1.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://pmd.sf.net/ruleset/1.0.0 http://pmd.sf.net/ruleset_xml_schema.xsd"
+         xsi:noNamespaceSchemaLocation="http://pmd.sf.net/ruleset_xml_schema.xsd">
+
+    <description>ERPify PHP Mess Detector ruleset</description>
+
+    <!-- Clean Code -->
+    <rule ref="rulesets/cleancode.xml">
+        <!-- Allow static access in factories / mappers -->
+        <exclude name="StaticAccess" />
+    </rule>
+
+    <!-- Code Size -->
+    <rule ref="rulesets/codesize.xml">
+        <exclude name="ExcessiveClassComplexity" />
+    </rule>
+
+    <!-- Controversial -->
+    <rule ref="rulesets/controversial.xml" />
+
+    <!-- Design -->
+    <rule ref="rulesets/design.xml">
+        <exclude name="CouplingBetweenObjects" />
+    </rule>
+
+    <!-- Naming -->
+    <rule ref="rulesets/naming.xml" />
+
+    <!-- Unused Code -->
+    <rule ref="rulesets/unusedcode.xml" />
+
+</ruleset>
