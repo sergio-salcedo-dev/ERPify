@@ -7,7 +7,7 @@ This document describes HTTP traffic when you run the **default Docker stack** f
 | Environment | Public entry | Notes |
 |-------------|--------------|--------|
 | **Docker default** | **`php`** on host **80** / **443** | No separate edge Caddy container. Next is internal on **3000**. |
-| **Local dev (Make)** | Same public entry | Root **`Makefile`** merges **[`compose.pwa-dev.yaml`](../compose.pwa-dev.yaml)** so **`pwa`** runs **`next dev`** with a bind mount (hot reload). CI uses **`compose.yaml`** + **`compose.override.yaml`** only (production-style Next). |
+| **Local dev (Make)** | Same public entry | Root **`Makefile`** uses **[`compose.dev.yaml`](../compose.dev.yaml)** so **`pwa`** runs **`next dev`** with a bind mount (hot reload). CI uses **`compose.yaml`** + **`compose.dev.yaml`** only (production-style Next). |
 | **Production Compose** | Same idea: **`compose.yaml`** + **`compose.prod.yaml`** build **`php`** and **`pwa`**. | Set **`SERVER_NAME`**, secrets, and **`NEXT_PUBLIC_SYMFONY_API_BASE_URL`** for your real host. |
 
 ## High-level flow

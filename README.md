@@ -8,7 +8,7 @@ This repository is a **monorepo**: one Git project holds the backend API, the Ne
 | [`pwa/`](pwa/) | Next.js web app | Served on **:3000** inside Docker; the browser uses **http(s)://localhost** (FrankenPHP reverse-proxies HTML to Next, `/api*` stays in Symfony). See [pwa/README.md](pwa/README.md). |
 | [`docs/`](docs/) | Repo-wide docs | [docs/production-deployment.md](docs/production-deployment.md) (prod: Messenger, mailer, DNS), [docs/domain-events-and-messenger.md](docs/domain-events-and-messenger.md), [docs/local-fullstack-traffic.md](docs/local-fullstack-traffic.md), [docs/project-requirements.md](docs/project-requirements.md). |
 
-Canonical Compose files: **[`compose.yaml`](compose.yaml)** and **[`compose.override.yaml`](compose.override.yaml)** at the repo root (`php` build **`context: ./api`**, `pwa` build **`context: ./pwa`**). The root [`Makefile`](Makefile) also merges **[`compose.pwa-dev.yaml`](compose.pwa-dev.yaml)** so the PWA runs **`next dev`** with a bind mount (hot reload). **`docker compose -f compose.yaml -f compose.override.yaml`** without that file (e.g. CI) keeps the production-style PWA image. Run Compose from the **repository root** and use [`api/.env.example`](api/.env.example) for local env.
+Canonical Compose files: **[`compose.yaml`](compose.yaml)** and **[`compose.dev.yaml`](compose.dev.yaml)** at the repo root (`php` build **`context: ./api`**, `pwa` build **`context: ./pwa`**). The root [`Makefile`](Makefile) configures the PWA to run **`next dev`** with a bind mount (hot reload) in **`compose.dev.yaml`**. Run Compose from the **repository root** and use [`api/.env.example`](api/.env.example) for local env.
 
 ## Prerequisites
 
@@ -21,7 +21,7 @@ See [docs/project-requirements.md](docs/project-requirements.md).
 ## Quick start (full stack: API + PWA + Postgres)
 
 1. `cp api/.env.example api/.env` and edit `api/.env` as needed.
-2. **`make dev-up`** — **`docker compose`** with **`compose.yaml`**, **`compose.override.yaml`**, and **`compose.pwa-dev.yaml`**, **`up --wait --build --detach`**, then opens **http://localhost** and **https://localhost** in your browser (`OPEN_BROWSER=0` to skip). For a quicker start without rebuilding images, use **`make up-wait`** or **`make stack-up`** and open the URLs yourself; **`make start`** runs **`build`** then **`up`**.
+2. **`make dev-up`** — **`docker compose`** with **`compose.yaml`** and **`compose.dev.yaml`**, **`up --wait --build --detach`**, then opens **http://localhost** and **https://localhost** in your browser (`OPEN_BROWSER=0` to skip). For a quicker start without rebuilding images, use **`make up-wait`** or **`make stack-up`** and open the URLs yourself; **`make start`** runs **`build`** then **`up`**.
 3. Accept the dev certificate for HTTPS if prompted. The UI is Next.js; **`/api/...`** and **`/.well-known/mercure`** are handled by Symfony on the same host.
 4. `make down` to stop.
 

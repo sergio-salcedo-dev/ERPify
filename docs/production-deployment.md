@@ -101,7 +101,7 @@ More detail: [domain-events-and-messenger.md](domain-events-and-messenger.md).
 
 - **`MAILER_FROM`** and **`DEFAULT_NOTIFICATION_EMAIL`** are configured via env (see `api/config/services.yaml` defaults). Use addresses you control; configure **SPF**, **DKIM**, and **DMARC** for the From domain to improve deliverability.
 
-- **Dev-only Mailpit** (`compose.override.yaml`) is **not** merged in **`compose.prod.yaml`**; production mail must use a real DSN.
+- **Dev-only Mailpit** (`compose.dev.yaml`) is **not** merged in **`compose.prod.yaml`**; production mail must use a real DSN.
 
 ---
 
