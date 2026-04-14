@@ -47,6 +47,6 @@ abstract class DomainEvent
 
     protected static function now(): DateTimeImmutable
     {
-        return new DateTimeImmutable();
+        return new DateTimeImmutable;
     }
 }

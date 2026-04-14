@@ -1,35 +1,78 @@
 <?xml version="1.0"?>
-<ruleset name="ERPify"
+<ruleset name="PHPMD Ruleset"
          xmlns="http://pmd.sf.net/ruleset/1.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://pmd.sf.net/ruleset/1.0.0 http://pmd.sf.net/ruleset_xml_schema.xsd"
-         xsi:noNamespaceSchemaLocation="http://pmd.sf.net/ruleset_xml_schema.xsd">
+         xsi:schemaLocation="http://pmd.sf.net/ruleset/1.0.0 http://pmd.sf.net/ruleset_xml_schema.xsd">
 
-    <description>ERPify PHP Mess Detector ruleset</description>
+    <description>PHP Mess Detector ruleset</description>
 
     <!-- Clean Code -->
     <rule ref="rulesets/cleancode.xml">
-        <!-- Allow static access in factories / mappers -->
+        <!-- Exclude StaticAccess: Static factory methods / mappers are a valid and common pattern -->
         <exclude name="StaticAccess" />
     </rule>
 
     <!-- Code Size -->
     <rule ref="rulesets/codesize.xml">
-        <exclude name="ExcessiveClassComplexity" />
+
+        <!-- Cyclomatic Complexity: Maximum allowed complexity (default is 10) -->
+        <rule ref="rulesets/codesize.xml/CyclomaticComplexity">
+            <properties>
+                <property name="reportLevel" value="10" />
+            </properties>
+        </rule>
+
+        <!-- NPath Complexity: Maximum NPath complexity (default is 200) -->
+        <rule ref="rulesets/codesize.xml/NPathComplexity">
+            <properties>
+                <property name="reportLevel" value="200" />
+            </properties>
+        </rule>
+
+        <!-- ExcessiveClassLength: Maximum class length in lines (default is 1000) -->
+        <rule ref="rulesets/codesize.xml/ExcessiveClassLength">
+            <properties>
+                <property name="minimum" value="400"/>
+            </properties>
+        </rule>
+
+        <!-- ExcessiveMethodLength: Maximum method length in lines (default is 100) -->
+        <rule ref="rulesets/codesize.xml/ExcessiveMethodLength">
+            <properties>
+                <property name="minimum" value="70" />
+            </properties>
+        </rule>
     </rule>
 
-    <!-- Controversial -->
-    <rule ref="rulesets/controversial.xml" />
+    <!-- Controversial rules -->
+    <rule ref="rulesets/controversial.xml">
+        <!-- CamelCaseClassName: Enforce camelCase for class names -->
+        <!-- CamelCaseMethodName: Enforce camelCase for method names -->
+        <!-- CamelCasePropertyName: Enforce camelCase for property names -->
+        <!-- CamelCaseVariableName: Enforce camelCase for variable names -->
+    </rule>
 
     <!-- Design -->
     <rule ref="rulesets/design.xml">
-        <exclude name="CouplingBetweenObjects" />
+<!--        <rule ref="rulesets/design.xml/CouplingBetweenObjects">-->
+<!--            <properties>-->
+<!--                <property name="minimum" value="15" />-->
+<!--            </properties>-->
+<!--        </rule>-->
     </rule>
 
-    <!-- Naming -->
-    <rule ref="rulesets/naming.xml" />
+    <!-- LongVariable: Maximum variable name length (default is 20) -->
+    <!-- Setting maximum to 30 allows descriptive variable names following Clean Architecture -->
+    <rule ref="rulesets/naming.xml/LongVariable">
+        <properties>
+            <property name="maximum" value="30"/>
+        </properties>
+    </rule>
 
     <!-- Unused Code -->
     <rule ref="rulesets/unusedcode.xml" />
 
+    <!-- Exclude paths -->
+    <exclude-pattern>*/vendor/*</exclude-pattern>
+    <exclude-pattern>*/var/*</exclude-pattern>
 </ruleset>

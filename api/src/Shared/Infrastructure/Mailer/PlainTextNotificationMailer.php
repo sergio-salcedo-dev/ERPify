@@ -25,6 +25,7 @@ final readonly class PlainTextNotificationMailer implements NotificationMailer
     public function send(string $to, string $subject, array $fields, ?string $correlationLabel = null): void
     {
         $lines = [];
+
         if (null !== $correlationLabel && '' !== $correlationLabel) {
             $lines[] = 'Event: ' . $correlationLabel;
             $lines[] = '';
@@ -36,7 +37,7 @@ final readonly class PlainTextNotificationMailer implements NotificationMailer
 
         $body = \implode("\n", $lines);
 
-        $email = new Email()
+        $email = (new Email)
             ->from($this->mailFrom)
             ->to($to)
             ->subject($subject)

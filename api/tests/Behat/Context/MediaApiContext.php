@@ -8,6 +8,7 @@ use Behat\Gherkin\Node\TableNode;
 use Behat\MinkExtension\Context\RawMinkContext;
 use Behat\Step\Then;
 use Behat\Step\When;
+use JsonException;
 use Override;
 use RuntimeException;
 use Symfony\Component\BrowserKit\Response as BrowserKitResponse;
@@ -32,44 +33,34 @@ final class MediaApiContext extends RawMinkContext
         foreach ($tableNode->getHash() as $row) {
             $field = \trim((string) ($row['field'] ?? ''));
             $value = ScenarioRememberedValues::interpolate(\trim((string) ($row['value'] ?? '')));
+
             if ('' === $field) {
                 continue;
             }
 
-            if (\str_starts_with($value, '@')) {
-                $relative = \substr($value, 1);
-                $path = $fixturesDir . '/' . $relative;
-                if (!\is_file($path)) {
-                    throw new RuntimeException(\sprintf('Multipart fixture not found: %s', $path));
-                }
-
-                $mime = \mime_content_type($path);
-                if (false === $mime) {
-                    $mime = match (\strtolower(\pathinfo($path, PATHINFO_EXTENSION))) {
-                        'png' => 'image/png',
-                        'jpg', 'jpeg' => 'image/jpeg',
-                        'webp' => 'image/webp',
-                        default => 'application/octet-stream',
-                    };
-                }
-
-                // HttpBrowser (Mink browserkit_http) only builds multipart from PHP $_FILES-shaped arrays;
-                // passing UploadedFile makes getUploadedFiles() bail out and omit files.
-                $files[$field] = [
-                    'name' => \basename($path),
-                    'type' => $mime,
-                    'tmp_name' => $path,
-                    'error' => UPLOAD_ERR_OK,
-                    'size' => \filesize($path) ?: 0,
-                ];
-            } else {
+            if (!\str_starts_with($value, '@')) {
                 $parameters[$field] = $value;
+
+                continue;
             }
+
+            // File processing
+            $path = $fixturesDir . '/' . \substr($value, 1);
+
+            if (!\is_file($path)) {
+                throw new RuntimeException(\sprintf('Multipart fixture not found: %s', $path));
+            }
+
+            $files[$field] = [
+                'name' => \basename($path),
+                'type' => $this->guessMimeType($path),
+                'tmp_name' => $path,
+                'error' => UPLOAD_ERR_OK,
+                'size' => \filesize($path) ?: 0,
+            ];
         }
 
-        $driver = $this->getSession()->getDriver();
-
-        $driver->getClient()->request(
+        $this->getSession()->getDriver()->getClient()->request(
             'POST',
             $this->locatePath($url),
             $parameters,
@@ -87,6 +78,7 @@ final class MediaApiContext extends RawMinkContext
     public function iSendGetRequestToUrlStoredAsWithHeaders(string $alias, TableNode $tableNode): void
     {
         $server = [];
+
         foreach ($tableNode->getRowsHash() as $name => $value) {
             $server[$this->httpHeaderToServerKey(\trim((string) $name))] = ScenarioRememberedValues::interpolate(\trim((string) $value));
         }
@@ -98,6 +90,7 @@ final class MediaApiContext extends RawMinkContext
     public function iRememberResponseHeaderAs(string $headerName, string $alias): void
     {
         $value = $this->getLastResponseHeader($headerName);
+
         if (null === $value) {
             throw new RuntimeException(\sprintf('Response has no header %s', $headerName));
         }
@@ -109,6 +102,7 @@ final class MediaApiContext extends RawMinkContext
     public function theResponseHeaderShouldBe(string $headerName, string $expected): void
     {
         $actual = $this->getLastResponseHeader($headerName);
+
         if ($actual !== $expected) {
             throw new RuntimeException(\sprintf('Expected header %s=%s, got %s', $headerName, $expected, (string) $actual));
         }
@@ -118,6 +112,7 @@ final class MediaApiContext extends RawMinkContext
     public function theResponseHeaderShouldContain(string $headerName, string $substring): void
     {
         $actual = (string) $this->getLastResponseHeader($headerName);
+
         if (!\str_contains($actual, $substring)) {
             throw new RuntimeException(\sprintf('Expected header %s to contain %s, was %s', $headerName, $substring, $actual));
         }
@@ -129,6 +124,7 @@ final class MediaApiContext extends RawMinkContext
         $headerValue = $this->getLastResponseHeader($headerName);
         $actual = \trim((string) $headerValue, '"');
         $matched = \preg_match($pattern, $actual);
+
         if (false === $matched) {
             throw new RuntimeException(\sprintf('Invalid regex pattern: %s', $pattern));
         }
@@ -138,14 +134,18 @@ final class MediaApiContext extends RawMinkContext
         }
     }
 
+    /**
+     * @throws JsonException
+     */
     #[Then('the JSON field :field in the last response should match :pattern')]
     public function theJsonFieldShouldMatch(string $field, string $pattern): void
     {
         $content = $this->getSession()->getPage()->getContent();
 
         /** @var array<string, mixed> $data */
-        $data = \json_decode((string) $content, true) ?? [];
+        $data = \json_decode($content, true, 512, JSON_THROW_ON_ERROR) ?? [];
         $value = (string) ($data[$field] ?? '');
+
         if (!\preg_match($pattern, $value)) {
             throw new RuntimeException(\sprintf('Field %s value %s does not match %s', $field, $value, $pattern));
         }
@@ -155,6 +155,16 @@ final class MediaApiContext extends RawMinkContext
     public function locatePath($path): string
     {
         return parent::locatePath(ScenarioRememberedValues::interpolate((string) $path));
+    }
+
+    private function guessMimeType(string $path): string
+    {
+        return \mime_content_type($path) ?: match (\strtolower(\pathinfo($path, PATHINFO_EXTENSION))) {
+            'png' => 'image/png',
+            'jpg', 'jpeg' => 'image/jpeg',
+            'webp' => 'image/webp',
+            default => 'application/octet-stream',
+        };
     }
 
     /**
@@ -191,9 +201,6 @@ final class MediaApiContext extends RawMinkContext
         $driver = $this->getSession()->getDriver();
 
         $response = $driver->getClient()->getResponse();
-        if (null === $response) {
-            return null;
-        }
 
         if ($response instanceof BrowserKitResponse) {
             $value = $response->getHeader($headerName);

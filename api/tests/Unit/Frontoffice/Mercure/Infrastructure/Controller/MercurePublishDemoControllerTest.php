@@ -6,6 +6,7 @@ namespace Erpify\Tests\Unit\Frontoffice\Mercure\Infrastructure\Controller;
 
 use Erpify\Frontoffice\Mercure\Domain\MercureDemoTopic;
 use Erpify\Frontoffice\Mercure\Infrastructure\Controller\MercurePublishDemoController;
+use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -15,7 +16,7 @@ use Symfony\Component\Mercure\Update;
 /**
  * @internal
  */
-#[\PHPUnit\Framework\Attributes\CoversNothing]
+#[CoversNothing]
 final class MercurePublishDemoControllerTest extends TestCase
 {
     public function testInvokePublishesInDev(): void

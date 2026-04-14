@@ -28,7 +28,7 @@ final readonly class StoredObjectGetController
         }
 
         if ($this->ifNoneMatchEqualsHash($request, $hash)) {
-            $response = new Response();
+            $response = new Response;
             $response->setStatusCode(Response::HTTP_NOT_MODIFIED);
             $this->applyCacheAndSecurityHeaders($response, $hash);
 
@@ -36,6 +36,7 @@ final readonly class StoredObjectGetController
         }
 
         $key = ContentAddressableObjectKey::fromContentHash($hash);
+
         if (!$this->objectStoragePort->exists($key)) {
             return new Response('Not Found', Response::HTTP_NOT_FOUND);
         }
@@ -62,14 +63,13 @@ final readonly class StoredObjectGetController
     private function ifNoneMatchEqualsHash(Request $request, string $hash): bool
     {
         $header = $request->headers->get('If-None-Match');
+
         if (null === $header || '' === $header) {
             return false;
         }
 
-        foreach ($request->getETags() as $tag) {
-            if ($tag === $hash) {
-                return true;
-            }
+        if (\array_any($request->getETags(), static fn ($tag): bool => $tag === $hash)) {
+            return true;
         }
 
         return \str_contains($header, $hash);

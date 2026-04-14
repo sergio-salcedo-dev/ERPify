@@ -7,6 +7,7 @@ namespace Erpify\Frontoffice\Mercure\Infrastructure\Controller;
 use DateTimeImmutable;
 use DateTimeInterface;
 use Erpify\Frontoffice\Mercure\Domain\MercureDemoTopic;
+use JsonException;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -23,15 +24,18 @@ final readonly class MercurePublishDemoController
         private string $environment,
     ) {}
 
+    /**
+     * @throws JsonException
+     */
     public function __invoke(): JsonResponse
     {
         if ('dev' !== $this->environment) {
-            throw new NotFoundHttpException();
+            throw new NotFoundHttpException;
         }
 
         $payload = [
             'message' => 'Mercure demo publish',
-            'at' => new DateTimeImmutable()->format(DateTimeInterface::ATOM),
+            'at' => (new DateTimeImmutable)->format(DateTimeInterface::ATOM),
         ];
 
         $this->hub->publish(new Update(

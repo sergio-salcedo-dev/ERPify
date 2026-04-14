@@ -36,17 +36,19 @@ final readonly class InterventionImageNormalizer implements ImageNormalizer
         #[Autowire('%erpify.media.webp_quality%')]
         private int $webpQuality,
     ) {
-        $this->imageManager = new ImageManager(new Driver());
+        $this->imageManager = new ImageManager(new Driver);
     }
 
     public function normalize(UploadedFile $uploadedFile): NormalizedImage
     {
         $mime = $uploadedFile->getMimeType() ?? '';
+
         if (!isset(self::ALLOWED_MIMES[$mime])) {
             throw new InvalidImageException(\sprintf('Unsupported image MIME type: %s', $mime));
         }
 
         $binary = (string) \file_get_contents($uploadedFile->getPathname());
+
         if ('' === $binary) {
             throw new InvalidImageException('Empty upload.');
         }
@@ -61,7 +63,7 @@ final readonly class InterventionImageNormalizer implements ImageNormalizer
 
         $encoded = match ($mime) {
             'image/jpeg' => $image->encode(new JpegEncoder(quality: $this->jpegQuality)),
-            'image/png' => $image->encode(new PngEncoder()),
+            'image/png' => $image->encode(new PngEncoder),
             'image/webp' => $image->encode(new WebpEncoder(quality: $this->webpQuality)),
             default => throw new InvalidImageException(\sprintf('Unsupported image MIME type: %s', $mime)),
         };

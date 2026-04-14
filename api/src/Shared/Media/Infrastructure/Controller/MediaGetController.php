@@ -21,7 +21,7 @@ final readonly class MediaGetController
     public function __invoke(Request $request, string $hash): Response
     {
         if ($this->ifNoneMatchEqualsHash($request, $hash) && $this->mediaRepository->existsActiveByContentHash($hash)) {
-            $response = new Response();
+            $response = new Response;
             $response->setStatusCode(Response::HTTP_NOT_MODIFIED);
             $this->applyCacheAndSecurityHeaders($response, $hash);
 
@@ -29,6 +29,7 @@ final readonly class MediaGetController
         }
 
         $media = $this->mediaRepository->findActiveByContentHash($hash);
+
         if (!$media instanceof \Erpify\Shared\Media\Domain\Entity\Media) {
             return new Response('Not Found', Response::HTTP_NOT_FOUND);
         }
@@ -52,14 +53,13 @@ final readonly class MediaGetController
     private function ifNoneMatchEqualsHash(Request $request, string $hash): bool
     {
         $header = $request->headers->get('If-None-Match');
+
         if (null === $header || '' === $header) {
             return false;
         }
 
-        foreach ($request->getETags() as $tag) {
-            if ($tag === $hash) {
-                return true;
-            }
+        if (\array_any($request->getETags(), static fn ($tag): bool => $tag === $hash)) {
+            return true;
         }
 
         return \str_contains($header, $hash);

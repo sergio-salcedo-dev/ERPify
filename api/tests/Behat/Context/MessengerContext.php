@@ -49,17 +49,20 @@ final class MessengerContext implements Context
 
         $list = $this->httpGetJson($base . '/api/v1/messages?limit=1');
         $messages = $list['messages'] ?? null;
+
         if (!\is_array($messages) || [] === $messages) {
             throw new RuntimeException('Mailpit has no messages (is MAILER_DSN pointing at Mailpit and was the async consumer run?).');
         }
 
         $id = $messages[0]['ID'] ?? $messages[0]['Id'] ?? null;
+
         if (!\is_string($id) || '' === $id) {
             throw new RuntimeException(\sprintf('Unexpected Mailpit messages list payload: %s', \json_encode($list, JSON_THROW_ON_ERROR)));
         }
 
         $detail = $this->httpGetJson($base . '/api/v1/message/' . \rawurlencode($id));
         $text = $detail['Text'] ?? null;
+
         if (!\is_string($text)) {
             throw new RuntimeException('Mailpit message detail has no Text body.');
         }

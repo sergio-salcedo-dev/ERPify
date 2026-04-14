@@ -12,6 +12,9 @@ use Symfony\Component\Serializer\Normalizer\NormalizerAwareInterface;
 use Symfony\Component\Serializer\Normalizer\NormalizerAwareTrait;
 use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 
+/**
+ * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+ */
 #[AutoconfigureTag('serializer.normalizer', ['priority' => 100])]
 final class BankLogoUrlNormalizer implements NormalizerInterface, NormalizerAwareInterface
 {

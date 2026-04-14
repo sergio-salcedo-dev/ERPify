@@ -20,6 +20,7 @@ final class StoredObjectApiContext extends RawMinkContext
     public function theJsonFieldInTheLastResponseShouldBeAStoredObjectUrl(string $field): void
     {
         $value = $this->jsonFieldFromLastResponse($field);
+
         if (!\preg_match(self::STORED_OBJECT_URL_PATTERN, $value)) {
             throw new RuntimeException(\sprintf(
                 'Field %s value %s does not look like a stored object URL (expected pattern %s)',
@@ -59,6 +60,7 @@ final class StoredObjectApiContext extends RawMinkContext
         }
 
         $value = $data[$field];
+
         if (!\is_string($value) || '' === $value) {
             throw new RuntimeException(\sprintf('JSON field %s must be a non-empty string', $field));
         }

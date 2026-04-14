@@ -24,6 +24,7 @@ final readonly class ConfigurableStoredObjectPublicUrlGenerator implements Store
     public function urlForContentHash(string $contentHash): string
     {
         $base = \trim($this->mediaPublicBaseUrl);
+
         if ('' !== $base) {
             return \rtrim($base, '/') . '/api/v1/stored-objects/' . $contentHash;
         }
