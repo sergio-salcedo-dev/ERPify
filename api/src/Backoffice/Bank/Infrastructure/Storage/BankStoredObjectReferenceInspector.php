@@ -13,8 +13,7 @@ final readonly class BankStoredObjectReferenceInspector implements StoredObjectR
 {
     public function __construct(
         private BankRepository $bankRepository,
-    ) {
-    }
+    ) {}
 
     public function countReferencesToContentHash(string $contentHash): int
     {

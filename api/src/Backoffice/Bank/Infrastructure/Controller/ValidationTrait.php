@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\Bank\Infrastructure\Controller;
 
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Validator\ConstraintViolationListInterface;
 
 trait ValidationTrait
@@ -19,11 +20,11 @@ trait ValidationTrait
             ];
         }
 
-        return new JsonResponse(['errors' => $errors], \Symfony\Component\HttpFoundation\Response::HTTP_UNPROCESSABLE_ENTITY);
+        return new JsonResponse(['errors' => $errors], Response::HTTP_UNPROCESSABLE_ENTITY);
     }
 
     private function toSnakeCase(string $propertyPath): string
     {
-        return strtolower((string) preg_replace('/[A-Z]/', '_$0', lcfirst($propertyPath)));
+        return \strtolower((string) \preg_replace('/[A-Z]/', '_$0', \lcfirst($propertyPath)));
     }
 }

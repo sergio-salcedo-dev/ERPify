@@ -7,7 +7,12 @@ namespace Erpify\Tests\Unit\Frontoffice\Dev\Infrastructure\Controller;
 use Erpify\Frontoffice\Dev\Infrastructure\Controller\FrankenPhpHotReloadController;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * @internal
+ */
+#[\PHPUnit\Framework\Attributes\CoversNothing]
 final class FrankenPhpHotReloadControllerTest extends TestCase
 {
     protected function tearDown(): void
@@ -23,8 +28,8 @@ final class FrankenPhpHotReloadControllerTest extends TestCase
         $response = (new FrankenPhpHotReloadController())();
 
         $this->assertInstanceOf(JsonResponse::class, $response);
-        $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_OK, $response->getStatusCode(), (string) $response->getContent());
-        $data = json_decode($response->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame(Response::HTTP_OK, $response->getStatusCode(), (string) $response->getContent());
+        $data = \json_decode($response->getContent(), true, 512, JSON_THROW_ON_ERROR);
         $this->assertFalse($data['enabled']);
         $this->assertArrayNotHasKey('subscribePath', $data);
     }
@@ -35,8 +40,8 @@ final class FrankenPhpHotReloadControllerTest extends TestCase
 
         $response = (new FrankenPhpHotReloadController())();
 
-        $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_OK, $response->getStatusCode(), (string) $response->getContent());
-        $data = json_decode($response->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame(Response::HTTP_OK, $response->getStatusCode(), (string) $response->getContent());
+        $data = \json_decode($response->getContent(), true, 512, JSON_THROW_ON_ERROR);
         $this->assertTrue($data['enabled']);
         $this->assertSame($_SERVER['FRANKENPHP_HOT_RELOAD'], $data['subscribePath']);
         $this->assertStringContainsString('.well-known/mercure', $data['subscribePath']);

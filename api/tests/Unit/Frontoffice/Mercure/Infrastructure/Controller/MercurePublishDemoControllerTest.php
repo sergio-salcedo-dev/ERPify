@@ -7,10 +7,15 @@ namespace Erpify\Tests\Unit\Frontoffice\Mercure\Infrastructure\Controller;
 use Erpify\Frontoffice\Mercure\Domain\MercureDemoTopic;
 use Erpify\Frontoffice\Mercure\Infrastructure\Controller\MercurePublishDemoController;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Mercure\HubInterface;
 use Symfony\Component\Mercure\Update;
 
+/**
+ * @internal
+ */
+#[\PHPUnit\Framework\Attributes\CoversNothing]
 final class MercurePublishDemoControllerTest extends TestCase
 {
     public function testInvokePublishesInDev(): void
@@ -18,14 +23,15 @@ final class MercurePublishDemoControllerTest extends TestCase
         $hub = $this->createMock(HubInterface::class);
         $hub->expects($this->once())
             ->method('publish')
-            ->with(self::callback(static fn(Update $update): bool => [MercureDemoTopic::URI] === $update->getTopics()
-                && str_contains($update->getData(), 'Mercure demo publish')
-                && false === $update->isPrivate()));
+            ->with($this->callback(static fn (Update $update): bool => [MercureDemoTopic::URI] === $update->getTopics()
+                && \str_contains($update->getData(), 'Mercure demo publish')
+                && false === $update->isPrivate()))
+        ;
 
         $mercurePublishDemoController = new MercurePublishDemoController($hub, 'dev');
         $jsonResponse = $mercurePublishDemoController();
 
-        $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_OK, $jsonResponse->getStatusCode(), (string) $jsonResponse->getContent());
+        $this->assertSame(Response::HTTP_OK, $jsonResponse->getStatusCode(), (string) $jsonResponse->getContent());
         $this->assertSame('{"published":true}', $jsonResponse->getContent());
     }
 

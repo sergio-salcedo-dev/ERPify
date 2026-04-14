@@ -52,7 +52,8 @@ final class PostgresBankRepository extends ServiceEntityRepository implements Ba
             ->where('b.storedObjectContentHash = :h')
             ->setParameter('h', $contentHash)
             ->getQuery()
-            ->getSingleScalarResult();
+            ->getSingleScalarResult()
+        ;
     }
 
     public function findStoredObjectMimeTypeByContentHash(string $contentHash): ?string
@@ -62,7 +63,8 @@ final class PostgresBankRepository extends ServiceEntityRepository implements Ba
             ->setParameter('h', $contentHash)
             ->setMaxResults(1)
             ->getQuery()
-            ->getOneOrNullResult();
+            ->getOneOrNullResult()
+        ;
 
         return $bank?->getStoredObjectMimeType();
     }

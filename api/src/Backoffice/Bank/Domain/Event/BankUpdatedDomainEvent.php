@@ -35,7 +35,7 @@ final class BankUpdatedDomainEvent extends DomainEvent
     }
 
     /**
-     * @return array<string, string|null>
+     * @return array<string, null|string>
      */
     public function toPrimitives(): array
     {

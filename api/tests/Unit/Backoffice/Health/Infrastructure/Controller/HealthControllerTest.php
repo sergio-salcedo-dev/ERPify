@@ -4,12 +4,17 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Backoffice\Health\Infrastructure\Controller;
 
-use Erpify\Backoffice\Health\Infrastructure\Controller\HealthController;
 use DateTimeImmutable;
 use DateTimeInterface;
+use Erpify\Backoffice\Health\Infrastructure\Controller\HealthController;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * @internal
+ */
+#[\PHPUnit\Framework\Attributes\CoversNothing]
 final class HealthControllerTest extends TestCase
 {
     public function testInvokeReturnsOkJsonWithAtomDatetime(): void
@@ -18,10 +23,10 @@ final class HealthControllerTest extends TestCase
         $jsonResponse = $healthController();
 
         $this->assertInstanceOf(JsonResponse::class, $jsonResponse);
-        $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_OK, $jsonResponse->getStatusCode(), (string) $jsonResponse->getContent());
+        $this->assertSame(Response::HTTP_OK, $jsonResponse->getStatusCode(), (string) $jsonResponse->getContent());
         $this->assertStringContainsString('application/json', (string) $jsonResponse->headers->get('Content-Type'));
 
-        $data = json_decode($jsonResponse->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        $data = \json_decode($jsonResponse->getContent(), true, 512, JSON_THROW_ON_ERROR);
         $this->assertSame('ok', $data['status']);
         $this->assertArrayHasKey('datetime', $data);
         $this->assertIsString($data['datetime']);

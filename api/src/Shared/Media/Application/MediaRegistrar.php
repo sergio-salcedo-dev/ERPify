@@ -15,15 +15,14 @@ final readonly class MediaRegistrar
     public function __construct(
         private ImageNormalizer $imageNormalizer,
         private MediaRepository $mediaRepository,
-    ) {
-    }
+    ) {}
 
     public function registerFromUploadedFile(UploadedFile $uploadedFile): Media
     {
         $normalizedImage = $this->imageNormalizer->normalize($uploadedFile);
 
         $existing = $this->mediaRepository->findActiveByContentHash($normalizedImage->contentHash);
-        if ($existing instanceof \Erpify\Shared\Media\Domain\Entity\Media) {
+        if ($existing instanceof Media) {
             return $existing;
         }
 

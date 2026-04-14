@@ -21,12 +21,11 @@ final readonly class StoredObjectOrphanCleaner
         private ObjectStoragePort $objectStoragePort,
         #[AutowireIterator('stored_object.reference_inspector')]
         private iterable $inspectors,
-    ) {
-    }
+    ) {}
 
     public function cleanupAfterRemoval(?string $contentHash): void
     {
-        if ($contentHash === null || $contentHash === '') {
+        if (null === $contentHash || '' === $contentHash) {
             return;
         }
 

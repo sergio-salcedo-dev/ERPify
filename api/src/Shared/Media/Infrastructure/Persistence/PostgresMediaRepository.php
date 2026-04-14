@@ -34,7 +34,8 @@ final class PostgresMediaRepository extends ServiceEntityRepository implements M
             ->andWhere('m.deletedAt IS NULL')
             ->setParameter('h', $contentHash)
             ->getQuery()
-            ->getOneOrNullResult();
+            ->getOneOrNullResult()
+        ;
     }
 
     public function existsActiveByContentHash(string $contentHash): bool
@@ -46,8 +47,9 @@ final class PostgresMediaRepository extends ServiceEntityRepository implements M
             ->setParameter('h', $contentHash)
             ->setMaxResults(1)
             ->getQuery()
-            ->getOneOrNullResult();
+            ->getOneOrNullResult()
+        ;
 
-        return $row !== null;
+        return null !== $row;
     }
 }

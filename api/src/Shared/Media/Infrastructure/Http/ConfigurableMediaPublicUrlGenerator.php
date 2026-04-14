@@ -7,6 +7,7 @@ namespace Erpify\Shared\Media\Infrastructure\Http;
 use Erpify\Shared\Media\Application\Port\MediaPublicUrlGenerator;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
@@ -18,17 +19,16 @@ final readonly class ConfigurableMediaPublicUrlGenerator implements MediaPublicU
         private RequestStack $requestStack,
         #[Autowire('%env(MEDIA_PUBLIC_BASE_URL)%')]
         private string $mediaPublicBaseUrl,
-    ) {
-    }
+    ) {}
 
     public function urlForContentHash(string $contentHash): string
     {
-        $base = trim($this->mediaPublicBaseUrl);
-        if ($base !== '') {
-            return rtrim($base, '/').'/api/v1/media/'.$contentHash;
+        $base = \trim($this->mediaPublicBaseUrl);
+        if ('' !== $base) {
+            return \rtrim($base, '/') . '/api/v1/media/' . $contentHash;
         }
 
-        if ($this->requestStack->getCurrentRequest() instanceof \Symfony\Component\HttpFoundation\Request) {
+        if ($this->requestStack->getCurrentRequest() instanceof Request) {
             return $this->urlGenerator->generate(
                 'shared_media_get',
                 ['hash' => $contentHash],
@@ -36,6 +36,6 @@ final readonly class ConfigurableMediaPublicUrlGenerator implements MediaPublicU
             );
         }
 
-        return '/api/v1/media/'.$contentHash;
+        return '/api/v1/media/' . $contentHash;
     }
 }

@@ -29,8 +29,8 @@ final class ScenarioRememberedValues
      */
     public static function require(string $alias): string
     {
-        if ($alias === '' || !isset(self::$values[$alias]) || self::$values[$alias] === '') {
-            throw new RuntimeException(sprintf('Unknown or empty remembered value for alias %s', $alias));
+        if ('' === $alias || !isset(self::$values[$alias]) || '' === self::$values[$alias]) {
+            throw new RuntimeException(\sprintf('Unknown or empty remembered value for alias %s', $alias));
         }
 
         return self::$values[$alias];
@@ -39,7 +39,7 @@ final class ScenarioRememberedValues
     public static function interpolate(string $text): string
     {
         foreach (self::$values as $key => $value) {
-            $text = str_replace('{' . $key . '}', $value, $text);
+            $text = \str_replace('{' . $key . '}', $value, $text);
         }
 
         return $text;

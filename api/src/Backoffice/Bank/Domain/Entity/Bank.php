@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\Bank\Domain\Entity;
 
 use DateTimeImmutable;
+use DateTimeInterface;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
@@ -22,7 +23,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 class Bank extends AggregateRoot
 {
     #[ORM\Id]
-    #[ORM\Column(name:'id', type: UuidType::NAME, unique: true)]
+    #[ORM\Column(name: 'id', type: UuidType::NAME, unique: true)]
     #[Groups(['bank:read'])]
     private Uuid $uuid;
 
@@ -65,9 +66,7 @@ class Bank extends AggregateRoot
     #[ORM\Column(name: 'stored_object_content_hash', length: 64, nullable: true)]
     private ?string $storedObjectContentHash = null;
 
-    private function __construct()
-    {
-    }
+    private function __construct() {}
 
     public static function create(
         Uuid $uuid,
@@ -93,7 +92,7 @@ class Bank extends AggregateRoot
         $bank->createdAt = $now;
         $bank->updatedAt = $now;
 
-        $createdAt = $now->format(\DateTimeInterface::ATOM);
+        $createdAt = $now->format(DateTimeInterface::ATOM);
 
         $bank->record(new BankCreatedDomainEvent(
             $uuid->toRfc4122(),
@@ -171,8 +170,8 @@ class Bank extends AggregateRoot
             $this->uuid->toRfc4122(),
             $name,
             $shortName,
-            $this->createdAt->format(\DateTimeInterface::ATOM),
-            $now->format(\DateTimeInterface::ATOM),
+            $this->createdAt->format(DateTimeInterface::ATOM),
+            $now->format(DateTimeInterface::ATOM),
             $this->media?->getId()->toRfc4122(),
             $this->media?->getContentHash(),
             $this->storedObjectContentHash,

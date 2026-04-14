@@ -23,27 +23,27 @@ final class MediaApiContext extends RawMinkContext
     public function iSendPostMultipartRequestToWithFields(string $url, TableNode $tableNode): void
     {
         $url = ScenarioRememberedValues::interpolate($url);
-        $fixturesDir = dirname(__DIR__, 3).'/features/fixtures';
+        $fixturesDir = \dirname(__DIR__, 3) . '/features/fixtures';
         $parameters = [];
         $files = [];
 
         foreach ($tableNode->getHash() as $row) {
-            $field = trim((string) ($row['field'] ?? ''));
-            $value = ScenarioRememberedValues::interpolate(trim((string) ($row['value'] ?? '')));
-            if ($field === '') {
+            $field = \trim((string) ($row['field'] ?? ''));
+            $value = ScenarioRememberedValues::interpolate(\trim((string) ($row['value'] ?? '')));
+            if ('' === $field) {
                 continue;
             }
 
-            if (str_starts_with($value, '@')) {
-                $relative = substr($value, 1);
-                $path = $fixturesDir.'/'.$relative;
-                if (!is_file($path)) {
-                    throw new RuntimeException(sprintf('Multipart fixture not found: %s', $path));
+            if (\str_starts_with($value, '@')) {
+                $relative = \substr($value, 1);
+                $path = $fixturesDir . '/' . $relative;
+                if (!\is_file($path)) {
+                    throw new RuntimeException(\sprintf('Multipart fixture not found: %s', $path));
                 }
 
-                $mime = mime_content_type($path);
-                if ($mime === false) {
-                    $mime = match (strtolower(pathinfo($path, PATHINFO_EXTENSION))) {
+                $mime = \mime_content_type($path);
+                if (false === $mime) {
+                    $mime = match (\strtolower(\pathinfo($path, PATHINFO_EXTENSION))) {
                         'png' => 'image/png',
                         'jpg', 'jpeg' => 'image/jpeg',
                         'webp' => 'image/webp',
@@ -54,11 +54,11 @@ final class MediaApiContext extends RawMinkContext
                 // HttpBrowser (Mink browserkit_http) only builds multipart from PHP $_FILES-shaped arrays;
                 // passing UploadedFile makes getUploadedFiles() bail out and omit files.
                 $files[$field] = [
-                    'name' => basename($path),
+                    'name' => \basename($path),
                     'type' => $mime,
                     'tmp_name' => $path,
-                    'error' => \UPLOAD_ERR_OK,
-                    'size' => filesize($path) ?: 0,
+                    'error' => UPLOAD_ERR_OK,
+                    'size' => \filesize($path) ?: 0,
                 ];
             } else {
                 $parameters[$field] = $value;
@@ -90,7 +90,7 @@ final class MediaApiContext extends RawMinkContext
     {
         $server = [];
         foreach ($tableNode->getRowsHash() as $name => $value) {
-            $server[$this->httpHeaderToServerKey(trim((string) $name))] = ScenarioRememberedValues::interpolate(trim((string) $value));
+            $server[$this->httpHeaderToServerKey(\trim((string) $name))] = ScenarioRememberedValues::interpolate(\trim((string) $value));
         }
 
         $this->sendGetRequestToUrlStoredAsWithServer($alias, $server);
@@ -102,8 +102,8 @@ final class MediaApiContext extends RawMinkContext
     public function iRememberResponseHeaderAs(string $headerName, string $alias): void
     {
         $value = $this->getLastResponseHeader($headerName);
-        if ($value === null) {
-            throw new RuntimeException(sprintf('Response has no header %s', $headerName));
+        if (null === $value) {
+            throw new RuntimeException(\sprintf('Response has no header %s', $headerName));
         }
 
         ScenarioRememberedValues::set($alias, $value);
@@ -116,7 +116,7 @@ final class MediaApiContext extends RawMinkContext
     {
         $actual = $this->getLastResponseHeader($headerName);
         if ($actual !== $expected) {
-            throw new RuntimeException(sprintf('Expected header %s=%s, got %s', $headerName, $expected, (string) $actual));
+            throw new RuntimeException(\sprintf('Expected header %s=%s, got %s', $headerName, $expected, (string) $actual));
         }
     }
 
@@ -126,8 +126,8 @@ final class MediaApiContext extends RawMinkContext
     public function theResponseHeaderShouldContain(string $headerName, string $substring): void
     {
         $actual = (string) $this->getLastResponseHeader($headerName);
-        if (!str_contains($actual, $substring)) {
-            throw new RuntimeException(sprintf('Expected header %s to contain %s, was %s', $headerName, $substring, $actual));
+        if (!\str_contains($actual, $substring)) {
+            throw new RuntimeException(\sprintf('Expected header %s to contain %s, was %s', $headerName, $substring, $actual));
         }
     }
 
@@ -137,14 +137,14 @@ final class MediaApiContext extends RawMinkContext
     public function theResponseHeaderShouldMatch(string $headerName, string $pattern): void
     {
         $headerValue = $this->getLastResponseHeader($headerName);
-        $actual = trim((string) $headerValue, '"');
-        $matched = preg_match($pattern, $actual);
-        if ($matched === false) {
-            throw new RuntimeException(sprintf('Invalid regex pattern: %s', $pattern));
+        $actual = \trim((string) $headerValue, '"');
+        $matched = \preg_match($pattern, $actual);
+        if (false === $matched) {
+            throw new RuntimeException(\sprintf('Invalid regex pattern: %s', $pattern));
         }
 
-        if ($matched !== 1) {
-            throw new RuntimeException(sprintf('Header %s value %s does not match %s', $headerName, $actual, $pattern));
+        if (1 !== $matched) {
+            throw new RuntimeException(\sprintf('Header %s value %s does not match %s', $headerName, $actual, $pattern));
         }
     }
 
@@ -154,17 +154,15 @@ final class MediaApiContext extends RawMinkContext
     public function theJsonFieldShouldMatch(string $field, string $pattern): void
     {
         $content = $this->getSession()->getPage()->getContent();
+
         /** @var array<string, mixed> $data */
-        $data = json_decode((string) $content, true) ?? [];
+        $data = \json_decode((string) $content, true) ?? [];
         $value = (string) ($data[$field] ?? '');
-        if (!preg_match($pattern, $value)) {
-            throw new RuntimeException(sprintf('Field %s value %s does not match %s', $field, $value, $pattern));
+        if (!\preg_match($pattern, $value)) {
+            throw new RuntimeException(\sprintf('Field %s value %s does not match %s', $field, $value, $pattern));
         }
     }
 
-    /**
-     * @param mixed $path
-     */
     public function locatePath($path): string
     {
         return parent::locatePath(ScenarioRememberedValues::interpolate((string) $path));
@@ -185,8 +183,8 @@ final class MediaApiContext extends RawMinkContext
 
     private function requestPathFromPossibleAbsoluteUrl(string $url): string
     {
-        if (preg_match('~^https?://[^/]+(/[^?#]*)(\?[^#]*)?~', $url, $m)) {
-            return $m[1].($m[2] ?? '');
+        if (\preg_match('~^https?://[^/]+(/[^?#]*)(\?[^#]*)?~', $url, $m)) {
+            return $m[1] . ($m[2] ?? '');
         }
 
         return $url;
@@ -194,9 +192,9 @@ final class MediaApiContext extends RawMinkContext
 
     private function httpHeaderToServerKey(string $name): string
     {
-        $normalized = strtoupper(str_replace('-', '_', $name));
+        $normalized = \strtoupper(\str_replace('-', '_', $name));
 
-        return str_starts_with($normalized, 'HTTP_') ? $normalized : 'HTTP_'.$normalized;
+        return \str_starts_with($normalized, 'HTTP_') ? $normalized : 'HTTP_' . $normalized;
     }
 
     private function getLastResponseHeader(string $headerName): ?string
@@ -204,7 +202,7 @@ final class MediaApiContext extends RawMinkContext
         $driver = $this->getSession()->getDriver();
 
         $response = $driver->getClient()->getResponse();
-        if ($response === null) {
+        if (null === $response) {
             return null;
         }
 

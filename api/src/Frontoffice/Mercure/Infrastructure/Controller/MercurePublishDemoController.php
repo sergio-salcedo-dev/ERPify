@@ -21,8 +21,7 @@ final readonly class MercurePublishDemoController
         private HubInterface $hub,
         #[Autowire('%kernel.environment%')]
         private string $environment,
-    ) {
-    }
+    ) {}
 
     public function __invoke(): JsonResponse
     {
@@ -37,7 +36,7 @@ final readonly class MercurePublishDemoController
 
         $this->hub->publish(new Update(
             MercureDemoTopic::URI,
-            json_encode($payload, JSON_THROW_ON_ERROR),
+            \json_encode($payload, JSON_THROW_ON_ERROR),
             false,
         ));
 

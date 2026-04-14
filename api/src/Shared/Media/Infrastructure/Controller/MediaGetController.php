@@ -16,8 +16,7 @@ final readonly class MediaGetController
 
     public function __construct(
         private MediaRepository $mediaRepository,
-    ) {
-    }
+    ) {}
 
     public function __invoke(Request $request, string $hash): Response
     {
@@ -53,7 +52,7 @@ final readonly class MediaGetController
     private function ifNoneMatchEqualsHash(Request $request, string $hash): bool
     {
         $header = $request->headers->get('If-None-Match');
-        if ($header === null || $header === '') {
+        if (null === $header || '' === $header) {
             return false;
         }
 
@@ -63,6 +62,6 @@ final readonly class MediaGetController
             }
         }
 
-        return str_contains($header, $hash);
+        return \str_contains($header, $hash);
     }
 }

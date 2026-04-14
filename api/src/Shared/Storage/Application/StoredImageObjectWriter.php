@@ -20,8 +20,7 @@ final readonly class StoredImageObjectWriter
     public function __construct(
         private ImageNormalizer $imageNormalizer,
         private ObjectStoragePort $objectStoragePort,
-    ) {
-    }
+    ) {}
 
     public function storeFromUploadedFile(UploadedFile $uploadedFile, string $invalidImageFormField = 'stored_object'): StoredObjectWriteResult
     {

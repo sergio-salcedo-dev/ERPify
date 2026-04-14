@@ -19,8 +19,7 @@ final readonly class BankCreator
         private MessageBusInterface $messageBus,
         private MediaRegistrar $mediaRegistrar,
         private StoredImageObjectWriter $storedImageObjectWriter,
-    ) {
-    }
+    ) {}
 
     public function create(
         string $name,
@@ -28,11 +27,11 @@ final readonly class BankCreator
         ?UploadedFile $logoFile = null,
         ?UploadedFile $storedObjectFile = null,
     ): Bank {
-        $stored = $storedObjectFile instanceof \Symfony\Component\HttpFoundation\File\UploadedFile
+        $stored = $storedObjectFile instanceof UploadedFile
             ? $this->storedImageObjectWriter->storeFromUploadedFile($storedObjectFile, 'stored_object')
             : null;
 
-        $logo = $logoFile instanceof \Symfony\Component\HttpFoundation\File\UploadedFile ? $this->mediaRegistrar->registerFromUploadedFile($logoFile) : null;
+        $logo = $logoFile instanceof UploadedFile ? $this->mediaRegistrar->registerFromUploadedFile($logoFile) : null;
 
         $bank = Bank::create(
             Uuid::v4(),

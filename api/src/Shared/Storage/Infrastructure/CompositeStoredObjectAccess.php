@@ -18,8 +18,7 @@ final readonly class CompositeStoredObjectAccess implements StoredObjectAccessPo
     public function __construct(
         #[AutowireIterator('stored_object.reference_inspector')]
         private iterable $inspectors,
-    ) {
-    }
+    ) {}
 
     public function existsAnyWithContentHash(string $contentHash): bool
     {
@@ -36,7 +35,7 @@ final readonly class CompositeStoredObjectAccess implements StoredObjectAccessPo
     {
         foreach ($this->inspectors as $inspector) {
             $mime = $inspector->findMimeTypeForContentHash($contentHash);
-            if ($mime !== null && $mime !== '') {
+            if (null !== $mime && '' !== $mime) {
                 return $mime;
             }
         }

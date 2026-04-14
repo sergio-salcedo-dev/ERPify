@@ -22,8 +22,7 @@ final class BankLogoUrlNormalizer implements NormalizerInterface, NormalizerAwar
     public function __construct(
         private readonly MediaPublicUrlGenerator $mediaPublicUrlGenerator,
         private readonly StoredObjectPublicUrlGenerator $storedObjectPublicUrlGenerator,
-    ) {
-    }
+    ) {}
 
     public function normalize(mixed $object, ?string $format = null, array $context = []): array
     {
@@ -35,7 +34,7 @@ final class BankLogoUrlNormalizer implements NormalizerInterface, NormalizerAwar
             $logo = $object->getLogo();
             $data['logoUrl'] = $logo instanceof \Erpify\Shared\Media\Domain\Entity\Media ? $this->mediaPublicUrlGenerator->urlForContentHash($logo->getContentHash()) : null;
             $storedHash = $object->getStoredObjectContentHash();
-            $data['storedObjectUrl'] = $storedHash !== null
+            $data['storedObjectUrl'] = null !== $storedHash
                 ? $this->storedObjectPublicUrlGenerator->urlForContentHash($storedHash)
                 : null;
         }

@@ -14,16 +14,14 @@ use Symfony\Component\Uid\Uuid;
 #[Route('/banks/{id}', name: 'backoffice_bank_delete', methods: ['DELETE'])]
 final readonly class BankDeleteController
 {
-    public function __construct(private BankDeleter $bankDeleter)
-    {
-    }
+    public function __construct(private BankDeleter $bankDeleter) {}
 
     public function __invoke(Uuid $uuid): JsonResponse
     {
         try {
             $this->bankDeleter->delete($uuid);
         } catch (BankNotFoundException $bankNotFoundException) {
-            return new JsonResponse(['error' => $bankNotFoundException->getMessage()], \Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND);
+            return new JsonResponse(['error' => $bankNotFoundException->getMessage()], Response::HTTP_NOT_FOUND);
         }
 
         return new JsonResponse(null, Response::HTTP_NO_CONTENT);

@@ -27,10 +27,10 @@ php.rector.apply: ## Rector apply fixes
 
 php.csfixer.dry-run: ## PHP CS Fixer — check for violations (dry run)
 	@$(eval c ?=--dry-run --diff)
-	$(PHP) vendor/bin/php-cs-fixer fix --config=api/tools/ecs/.php-cs-fixer.dist.php $(c)
+	$(PHP) vendor/bin/php-cs-fixer fix --config=tools/ecs/.php-cs-fixer.dist.php $(c)
 
 php.csfixer.apply: ## PHP CS Fixer — apply fixes
-	$(PHP) vendor/bin/php-cs-fixer fix --config=api/tools/ecs/.php-cs-fixer.dist.php --diff
+	$(PHP) vendor/bin/php-cs-fixer fix --config=tools/ecs/.php-cs-fixer.dist.php --diff
 
 ## —— Lint suite ——
 
