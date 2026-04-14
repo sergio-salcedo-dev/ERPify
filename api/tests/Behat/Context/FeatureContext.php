@@ -6,7 +6,6 @@ namespace Erpify\Tests\Behat\Context;
 
 use Behat\Behat\Hook\Scope\BeforeScenarioScope;
 use Behat\Gherkin\Node\PyStringNode;
-use Behat\Mink\Driver\BrowserKitDriver;
 use Behat\MinkExtension\Context\MinkContext;
 use JsonException;
 use PDO;
@@ -22,7 +21,7 @@ final class FeatureContext extends MinkContext
      *
      * @BeforeScenario
      */
-    public function resetDatabase(BeforeScenarioScope $scope): void
+    public function resetDatabase(BeforeScenarioScope $beforeScenarioScope): void
     {
         ScenarioRememberedValues::reset();
 
@@ -56,6 +55,7 @@ final class FeatureContext extends MinkContext
         $pdo = $this->pdoFromDatabaseUrl();
         $stmt = $pdo->prepare('SELECT COUNT(*) FROM domain_event WHERE name = :name AND aggregate_id = :aggregate_id');
         $stmt->execute(['name' => $eventName, 'aggregate_id' => $aggregateId]);
+
         $count = (int) $stmt->fetchColumn();
 
         if ($count < 1) {
@@ -81,19 +81,19 @@ final class FeatureContext extends MinkContext
      *
      * @When I send a :method request to :url with body:
      */
-    public function iSendARequestToWithBody(string $method, string $url, PyStringNode $body): void
+    public function iSendARequestToWithBody(string $method, string $url, PyStringNode $pyStringNode): void
     {
         $url = ScenarioRememberedValues::interpolate($url);
 
         $driver = $this->getSession()->getDriver();
-        assert($driver instanceof BrowserKitDriver);
+
         $driver->getClient()->request(
             strtoupper($method),
             $this->locatePath($url),
             [],
             [],
             ['CONTENT_TYPE' => 'application/json'],
-            $body->getRaw(),
+            $pyStringNode->getRaw(),
         );
     }
 
@@ -111,8 +111,6 @@ final class FeatureContext extends MinkContext
 
         $driver = $this->getSession()->getDriver();
 
-        assert($driver instanceof BrowserKitDriver);
-
         $driver
         ->getClient()
         ->request(
@@ -128,12 +126,12 @@ final class FeatureContext extends MinkContext
     {
         $content = $this->getSession()->getPage()->getContent();
         try {
-            json_decode($content, true, 512, JSON_THROW_ON_ERROR);
-        } catch (JsonException $e) {
+            json_decode((string) $content, true, 512, JSON_THROW_ON_ERROR);
+        } catch (JsonException $jsonException) {
             throw new RuntimeException(
-                sprintf('Response is not valid JSON: %s', $e->getMessage()),
+                sprintf('Response is not valid JSON: %s', $jsonException->getMessage()),
                 0,
-                $e,
+                $jsonException,
             );
         }
     }
@@ -151,7 +149,7 @@ final class FeatureContext extends MinkContext
         $content = $this->getSession()->getPage()->getContent();
 
         /** @var array<string, mixed> $data */
-        $data = json_decode($content, true) ?? [];
+        $data = json_decode((string) $content, true) ?? [];
 
         ScenarioRememberedValues::set($alias, (string) ($data[$field] ?? ''));
     }
@@ -186,15 +184,15 @@ final class FeatureContext extends MinkContext
             throw new RuntimeException('DATABASE_URL could not be parsed for Behat DB assertions.');
         }
 
-        $scheme = strtolower((string) $parts['scheme']);
+        $scheme = strtolower($parts['scheme']);
         if (!in_array($scheme, ['postgresql', 'postgres'], true)) {
             throw new RuntimeException('DATABASE_URL must be a PostgreSQL DSN for Behat DB assertions.');
         }
 
-        $dbName = ltrim((string) $parts['path'], '/');
-        $port = isset($parts['port']) ? (int) $parts['port'] : 5432;
-        $user = isset($parts['user']) ? rawurldecode((string) $parts['user']) : '';
-        $pass = isset($parts['pass']) ? rawurldecode((string) $parts['pass']) : '';
+        $dbName = ltrim($parts['path'], '/');
+        $port = $parts['port'] ?? 5432;
+        $user = isset($parts['user']) ? rawurldecode($parts['user']) : '';
+        $pass = isset($parts['pass']) ? rawurldecode($parts['pass']) : '';
 
         $dsn = sprintf('pgsql:host=%s;port=%d;dbname=%s', $parts['host'], $port, $dbName);
 

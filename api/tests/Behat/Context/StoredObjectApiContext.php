@@ -4,17 +4,15 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Behat\Context;
 
-use Behat\Behat\Context\Context;
-use Behat\Mink\Driver\BrowserKitDriver;
 use Behat\MinkExtension\Context\RawMinkContext;
 use RuntimeException;
 
 /**
  * Steps for Flysystem-backed content-addressable objects ({@code GET /api/v1/stored-objects/{hash}}).
  */
-final class StoredObjectApiContext extends RawMinkContext implements Context
+final class StoredObjectApiContext extends RawMinkContext
 {
-    private const STORED_OBJECT_URL_PATTERN = '#api/v1/stored-objects/[a-f0-9]{64}#';
+    private const string STORED_OBJECT_URL_PATTERN = '#api/v1/stored-objects/[a-f0-9]{64}#';
 
     /**
      * @Then the JSON field :field in the last response should be a stored object URL
@@ -41,7 +39,7 @@ final class StoredObjectApiContext extends RawMinkContext implements Context
         $path = $this->requestPathFromPossibleAbsoluteUrl($raw);
 
         $driver = $this->getSession()->getDriver();
-        assert($driver instanceof BrowserKitDriver);
+
         $driver->getClient()->request('GET', $this->locatePath($path));
     }
 
@@ -57,7 +55,7 @@ final class StoredObjectApiContext extends RawMinkContext implements Context
     {
         $content = $this->getSession()->getPage()->getContent();
         /** @var array<string, mixed> $data */
-        $data = json_decode($content, true) ?? [];
+        $data = json_decode((string) $content, true) ?? [];
 
         if (!\array_key_exists($field, $data)) {
             throw new RuntimeException(sprintf('JSON has no field %s', $field));

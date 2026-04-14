@@ -12,25 +12,25 @@ use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Uid\Uuid;
 
 #[Route('/banks/{id}', name: 'backoffice_bank_get', methods: ['GET'])]
-final class BankGetController
+final readonly class BankGetController
 {
     public function __construct(
-        private readonly BankFinder $finder,
-        private readonly SerializerInterface $serializer,
+        private BankFinder $bankFinder,
+        private SerializerInterface $serializer,
     ) {
     }
 
-    public function __invoke(Uuid $id): JsonResponse
+    public function __invoke(Uuid $uuid): JsonResponse
     {
         try {
-            $bank = $this->finder->find($id);
-        } catch (BankNotFoundException $e) {
-            return new JsonResponse(['error' => $e->getMessage()], 404);
+            $bank = $this->bankFinder->find($uuid);
+        } catch (BankNotFoundException $bankNotFoundException) {
+            return new JsonResponse(['error' => $bankNotFoundException->getMessage()], \Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND);
         }
 
         return new JsonResponse(
             $this->serializer->serialize($bank, 'json', ['groups' => ['bank:read']]),
-            200,
+            \Symfony\Component\HttpFoundation\Response::HTTP_OK,
             [],
             true,
         );

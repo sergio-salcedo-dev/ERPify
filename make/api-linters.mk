@@ -14,6 +14,15 @@ php.stan: ## PHPStan static analysis; pass c= for extra args
 php.stan.baseline: ## Generate PHPStan baseline
 	$(PHP_TEST) vendor/bin/phpstan analyse --configuration tools/phpstan/phpstan.neon --generate-baseline tools/phpstan/phpstan-baseline.neon
 
+## —— Rector ——
+
+php.rector.dry-run: ## Rector dry run; pass c= for extra args
+	@$(eval c ?=)
+	$(PHP) vendor/bin/rector process --config=tools/rector/rector.php --dry-run $(c)
+
+php.rector.apply: ## Rector apply fixes
+	$(PHP) vendor/bin/rector process --config=tools/rector/rector.php
+
 ## —— Lint suite ——
 
-lint: php.stan ## Run all linters
+lint: php.stan php.rector.apply ## Run all linters

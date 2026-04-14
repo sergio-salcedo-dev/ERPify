@@ -10,6 +10,9 @@ use Erpify\Shared\Media\Domain\Entity\Media;
 use Erpify\Shared\Media\Domain\Repository\MediaRepository;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
+/**
+ * @extends \Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository<\Erpify\Shared\Media\Domain\Entity\Media>
+ */
 #[AsAlias(MediaRepository::class)]
 final class PostgresMediaRepository extends ServiceEntityRepository implements MediaRepository
 {

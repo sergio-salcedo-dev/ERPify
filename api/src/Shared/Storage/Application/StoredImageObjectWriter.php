@@ -15,26 +15,26 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
  * Writes normalized raster bytes to the object store under {@see ContentAddressableObjectKey}.
  * Use from any module that stores Flysystem-backed images (Bank, Product, …).
  */
-final class StoredImageObjectWriter
+final readonly class StoredImageObjectWriter
 {
     public function __construct(
-        private readonly ImageNormalizer $normalizer,
-        private readonly ObjectStoragePort $objectStorage,
+        private ImageNormalizer $imageNormalizer,
+        private ObjectStoragePort $objectStoragePort,
     ) {
     }
 
-    public function storeFromUploadedFile(UploadedFile $file, string $invalidImageFormField = 'stored_object'): StoredObjectWriteResult
+    public function storeFromUploadedFile(UploadedFile $uploadedFile, string $invalidImageFormField = 'stored_object'): StoredObjectWriteResult
     {
         try {
-            $normalized = $this->normalizer->normalize($file);
-        } catch (InvalidImageException $e) {
-            throw new InvalidImageException($e->getMessage(), $invalidImageFormField);
+            $normalized = $this->imageNormalizer->normalize($uploadedFile);
+        } catch (InvalidImageException $invalidImageException) {
+            throw new InvalidImageException($invalidImageException->getMessage(), $invalidImageFormField);
         }
 
         $key = ContentAddressableObjectKey::fromContentHash($normalized->contentHash);
 
-        if (!$this->objectStorage->exists($key)) {
-            $this->objectStorage->write($key, $normalized->bytes);
+        if (!$this->objectStoragePort->exists($key)) {
+            $this->objectStoragePort->write($key, $normalized->bytes);
         }
 
         return new StoredObjectWriteResult(

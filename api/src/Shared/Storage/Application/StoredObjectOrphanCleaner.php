@@ -12,15 +12,15 @@ use Symfony\Component\DependencyInjection\Attribute\AutowireIterator;
 /**
  * After removing an entity that referenced a content hash, delete the blob if nothing else references it.
  */
-final class StoredObjectOrphanCleaner
+final readonly class StoredObjectOrphanCleaner
 {
     /**
      * @param iterable<StoredObjectReferenceInspector> $inspectors
      */
     public function __construct(
-        private readonly ObjectStoragePort $objectStorage,
+        private ObjectStoragePort $objectStoragePort,
         #[AutowireIterator('stored_object.reference_inspector')]
-        private readonly iterable $inspectors,
+        private iterable $inspectors,
     ) {
     }
 
@@ -36,6 +36,6 @@ final class StoredObjectOrphanCleaner
             }
         }
 
-        $this->objectStorage->delete(ContentAddressableObjectKey::fromContentHash($contentHash));
+        $this->objectStoragePort->delete(ContentAddressableObjectKey::fromContentHash($contentHash));
     }
 }
