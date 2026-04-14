@@ -17,8 +17,7 @@ final readonly class BankStoredObjectRemoveListener
 {
     public function __construct(
         private StoredObjectOrphanCleaner $storedObjectOrphanCleaner,
-    ) {
-    }
+    ) {}
 
     public function removeStoredObjectIfOrphaned(Bank $bank): void
     {

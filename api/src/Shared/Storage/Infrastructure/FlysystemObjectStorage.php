@@ -7,6 +7,7 @@ namespace Erpify\Shared\Storage\Infrastructure;
 use Erpify\Shared\Storage\Application\Port\ObjectStoragePort;
 use League\Flysystem\FilesystemOperator;
 use League\Flysystem\UnableToReadFile;
+use RuntimeException;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\DependencyInjection\Attribute\Target;
 
@@ -16,8 +17,7 @@ final readonly class FlysystemObjectStorage implements ObjectStoragePort
     public function __construct(
         #[Target('erpify.object_storage.storage')]
         private FilesystemOperator $filesystemOperator,
-    ) {
-    }
+    ) {}
 
     public function write(string $key, string $contents): void
     {
@@ -29,7 +29,7 @@ final readonly class FlysystemObjectStorage implements ObjectStoragePort
         try {
             return $this->filesystemOperator->read($key);
         } catch (UnableToReadFile $unableToReadFile) {
-            throw new \RuntimeException(sprintf('Cannot read object storage key "%s".', $key), 0, $unableToReadFile);
+            throw new RuntimeException(\sprintf('Cannot read object storage key "%s".', $key), 0, $unableToReadFile);
         }
     }
 

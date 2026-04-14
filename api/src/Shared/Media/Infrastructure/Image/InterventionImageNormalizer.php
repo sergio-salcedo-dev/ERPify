@@ -15,6 +15,7 @@ use Intervention\Image\ImageManager;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
+use Throwable;
 
 #[AsAlias(ImageNormalizer::class)]
 final readonly class InterventionImageNormalizer implements ImageNormalizer
@@ -42,17 +43,17 @@ final readonly class InterventionImageNormalizer implements ImageNormalizer
     {
         $mime = $uploadedFile->getMimeType() ?? '';
         if (!isset(self::ALLOWED_MIMES[$mime])) {
-            throw new InvalidImageException(sprintf('Unsupported image MIME type: %s', $mime));
+            throw new InvalidImageException(\sprintf('Unsupported image MIME type: %s', $mime));
         }
 
-        $binary = (string) file_get_contents($uploadedFile->getPathname());
-        if ($binary === '') {
+        $binary = (string) \file_get_contents($uploadedFile->getPathname());
+        if ('' === $binary) {
             throw new InvalidImageException('Empty upload.');
         }
 
         try {
             $image = $this->imageManager->read($binary);
-        } catch (\Throwable) {
+        } catch (Throwable) {
             throw new InvalidImageException('Could not decode image.');
         }
 
@@ -62,11 +63,11 @@ final readonly class InterventionImageNormalizer implements ImageNormalizer
             'image/jpeg' => $image->encode(new JpegEncoder(quality: $this->jpegQuality)),
             'image/png' => $image->encode(new PngEncoder()),
             'image/webp' => $image->encode(new WebpEncoder(quality: $this->webpQuality)),
-            default => throw new InvalidImageException(sprintf('Unsupported image MIME type: %s', $mime)),
+            default => throw new InvalidImageException(\sprintf('Unsupported image MIME type: %s', $mime)),
         };
 
         $bytes = (string) $encoded;
-        $hash = hash('sha256', $bytes);
+        $hash = \hash('sha256', $bytes);
 
         return new NormalizedImage($bytes, $mime, $hash);
     }

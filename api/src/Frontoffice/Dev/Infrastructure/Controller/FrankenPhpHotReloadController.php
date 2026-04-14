@@ -18,7 +18,7 @@ final class FrankenPhpHotReloadController
     public function __invoke(): JsonResponse
     {
         $subscribePath = $_SERVER['FRANKENPHP_HOT_RELOAD'] ?? '';
-        if (!\is_string($subscribePath) || $subscribePath === '') {
+        if (!\is_string($subscribePath) || '' === $subscribePath) {
             return new JsonResponse(['enabled' => false]);
         }
 

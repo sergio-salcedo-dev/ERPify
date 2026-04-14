@@ -11,6 +11,7 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Serializer\Exception\NotEncodableValueException;
 use Symfony\Component\Serializer\SerializerInterface;
@@ -28,13 +29,12 @@ final readonly class BankPostController
         private ValidatorInterface $validator,
         #[Autowire('%erpify.media.max_upload_bytes%')]
         private string $maxUploadSize,
-    ) {
-    }
+    ) {}
 
     public function __invoke(Request $request): JsonResponse
     {
         $contentType = (string) $request->headers->get('Content-Type', '');
-        if ($request->files->count() > 0 || str_contains($contentType, 'multipart/form-data')) {
+        if ($request->files->count() > 0 || \str_contains($contentType, 'multipart/form-data')) {
             return $this->fromMultipart($request);
         }
 
@@ -47,11 +47,11 @@ final readonly class BankPostController
             /** @var BankInput $input */
             $input = $this->serializer->deserialize($request->getContent(), BankInput::class, 'json');
         } catch (NotEncodableValueException) {
-            return new JsonResponse(['errors' => [['field' => '', 'message' => 'Invalid JSON body.']]], \Symfony\Component\HttpFoundation\Response::HTTP_UNPROCESSABLE_ENTITY);
+            return new JsonResponse(['errors' => [['field' => '', 'message' => 'Invalid JSON body.']]], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
         $constraintViolationList = $this->validator->validate($input);
-        if (count($constraintViolationList) > 0) {
+        if (\count($constraintViolationList) > 0) {
             return $this->validationErrorResponse($constraintViolationList);
         }
 
@@ -59,7 +59,7 @@ final readonly class BankPostController
 
         return new JsonResponse(
             $this->serializer->serialize($bank, 'json', ['groups' => ['bank:read']]),
-            \Symfony\Component\HttpFoundation\Response::HTTP_CREATED,
+            Response::HTTP_CREATED,
             [],
             true,
         );
@@ -76,12 +76,13 @@ final readonly class BankPostController
             return $this->validationErrorResponse($constraintViolationList);
         }
 
-        /** @var UploadedFile|null $image */
+        /** @var null|UploadedFile $image */
         $image = $request->files->get('image');
-        /** @var UploadedFile|null $storedObject */
+
+        /** @var null|UploadedFile $storedObject */
         $storedObject = $request->files->get('stored_object');
         foreach (['image' => $image, 'stored_object' => $storedObject] as $file) {
-            if ($file === null) {
+            if (null === $file) {
                 continue;
             }
 
@@ -102,13 +103,13 @@ final readonly class BankPostController
         } catch (InvalidImageException $invalidImageException) {
             return new JsonResponse(
                 ['errors' => [['field' => $invalidImageException->formField(), 'message' => $invalidImageException->getMessage()]]],
-                \Symfony\Component\HttpFoundation\Response::HTTP_UNPROCESSABLE_ENTITY,
+                Response::HTTP_UNPROCESSABLE_ENTITY,
             );
         }
 
         return new JsonResponse(
             $this->serializer->serialize($bank, 'json', ['groups' => ['bank:read']]),
-            \Symfony\Component\HttpFoundation\Response::HTTP_CREATED,
+            Response::HTTP_CREATED,
             [],
             true,
         );

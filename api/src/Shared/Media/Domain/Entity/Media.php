@@ -16,7 +16,7 @@ use Symfony\Component\Uid\Uuid;
 class Media
 {
     #[ORM\Id]
-    #[ORM\Column(name:'id', type: UuidType::NAME, unique: true)]
+    #[ORM\Column(name: 'id', type: UuidType::NAME, unique: true)]
     private Uuid $uuid;
 
     #[ORM\Column(name: 'content_hash', length: 64)]
@@ -28,7 +28,7 @@ class Media
     #[ORM\Column(name: 'byte_size', type: Types::INTEGER)]
     private int $byteSize;
 
-    /** @var string|resource */
+    /** @var resource|string */
     #[ORM\Column(name: 'raw_bytes', type: Types::BLOB)]
     private mixed $rawBytes;
 
@@ -41,9 +41,7 @@ class Media
     #[ORM\Column]
     private DateTimeImmutable $updatedAt;
 
-    private function __construct()
-    {
-    }
+    private function __construct() {}
 
     public static function create(
         Uuid $uuid,
@@ -89,8 +87,8 @@ class Media
     public function getRawBytes(): string
     {
         if (\is_resource($this->rawBytes)) {
-            $contents = stream_get_contents($this->rawBytes);
-            $this->rawBytes = $contents !== false ? $contents : '';
+            $contents = \stream_get_contents($this->rawBytes);
+            $this->rawBytes = false !== $contents ? $contents : '';
         }
 
         return (string) $this->rawBytes;

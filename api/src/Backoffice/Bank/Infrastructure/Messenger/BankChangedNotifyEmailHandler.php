@@ -19,8 +19,7 @@ final readonly class BankChangedNotifyEmailHandler
         private NotificationMailer $notificationMailer,
         #[Autowire('%env(DEFAULT_NOTIFICATION_EMAIL)%')]
         private string $notifyTo,
-    ) {
-    }
+    ) {}
 
     #[AsMessageHandler]
     public function onBankCreated(BankCreatedDomainEvent $bankCreatedDomainEvent): void

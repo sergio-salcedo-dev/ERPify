@@ -11,7 +11,5 @@ final class MercureDemoTopic
 {
     public const string URI = 'urn:erpify:mercure:demo';
 
-    private function __construct()
-    {
-    }
+    private function __construct() {}
 }

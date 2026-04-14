@@ -27,15 +27,15 @@ final class FeatureContext extends MinkContext
 
         $console = $this->messengerBinConsole();
 
-        exec(
-            sprintf('php %s hautelook:fixtures:load --no-interaction --env=dev --purge-with-truncate 2>&1', escapeshellarg($console)),
+        \exec(
+            \sprintf('php %s hautelook:fixtures:load --no-interaction --env=dev --purge-with-truncate 2>&1', \escapeshellarg($console)),
             $output,
             $exitCode,
         );
 
-        if ($exitCode !== 0) {
+        if (0 !== $exitCode) {
             throw new RuntimeException(
-                sprintf("hautelook:fixtures:load failed (exit %d):\n%s", $exitCode, implode("\n", $output)),
+                \sprintf("hautelook:fixtures:load failed (exit %d):\n%s", $exitCode, \implode("\n", $output)),
             );
         }
 
@@ -60,7 +60,7 @@ final class FeatureContext extends MinkContext
 
         if ($count < 1) {
             throw new RuntimeException(
-                sprintf(
+                \sprintf(
                     'Expected domain_event row for name %s and aggregate_id %s, found %d.',
                     $eventName,
                     $aggregateId,
@@ -88,7 +88,7 @@ final class FeatureContext extends MinkContext
         $driver = $this->getSession()->getDriver();
 
         $driver->getClient()->request(
-            strtoupper($method),
+            \strtoupper($method),
             $this->locatePath($url),
             [],
             [],
@@ -112,11 +112,12 @@ final class FeatureContext extends MinkContext
         $driver = $this->getSession()->getDriver();
 
         $driver
-        ->getClient()
-        ->request(
-            strtoupper($method),
-            $this->locatePath($url),
-        );
+            ->getClient()
+            ->request(
+                \strtoupper($method),
+                $this->locatePath($url),
+            )
+        ;
     }
 
     /**
@@ -125,11 +126,12 @@ final class FeatureContext extends MinkContext
     public function theResponseShouldBeJson(): void
     {
         $content = $this->getSession()->getPage()->getContent();
+
         try {
-            json_decode((string) $content, true, 512, JSON_THROW_ON_ERROR);
+            \json_decode((string) $content, true, 512, JSON_THROW_ON_ERROR);
         } catch (JsonException $jsonException) {
             throw new RuntimeException(
-                sprintf('Response is not valid JSON: %s', $jsonException->getMessage()),
+                \sprintf('Response is not valid JSON: %s', $jsonException->getMessage()),
                 0,
                 $jsonException,
             );
@@ -149,7 +151,7 @@ final class FeatureContext extends MinkContext
         $content = $this->getSession()->getPage()->getContent();
 
         /** @var array<string, mixed> $data */
-        $data = json_decode((string) $content, true) ?? [];
+        $data = \json_decode((string) $content, true) ?? [];
 
         ScenarioRememberedValues::set($alias, (string) ($data[$field] ?? ''));
     }
@@ -157,8 +159,6 @@ final class FeatureContext extends MinkContext
     /**
      * Override locatePath so that ALL Mink path-based steps (including "I go to")
      * support {alias} placeholder interpolation automatically.
-     *
-     * @param mixed $path
      */
     public function locatePath($path): string
     {
@@ -167,34 +167,34 @@ final class FeatureContext extends MinkContext
 
     private function assertValidUuid(string $value, string $forAlias): void
     {
-        if (!preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/Di', $value)) {
-            throw new RuntimeException(sprintf('Value for {%s} is not a UUID: %s', $forAlias, $value));
+        if (!\preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/Di', $value)) {
+            throw new RuntimeException(\sprintf('Value for {%s} is not a UUID: %s', $forAlias, $value));
         }
     }
 
     private function pdoFromDatabaseUrl(): PDO
     {
-        $url = getenv('DATABASE_URL');
-        if ($url === false || $url === '') {
+        $url = \getenv('DATABASE_URL');
+        if (false === $url || '' === $url) {
             throw new RuntimeException('DATABASE_URL is not set; cannot query domain_event from Behat.');
         }
 
-        $parts = parse_url($url);
-        if ($parts === false || !isset($parts['scheme'], $parts['host'], $parts['path'])) {
+        $parts = \parse_url($url);
+        if (false === $parts || !isset($parts['scheme'], $parts['host'], $parts['path'])) {
             throw new RuntimeException('DATABASE_URL could not be parsed for Behat DB assertions.');
         }
 
-        $scheme = strtolower($parts['scheme']);
-        if (!in_array($scheme, ['postgresql', 'postgres'], true)) {
+        $scheme = \strtolower($parts['scheme']);
+        if (!\in_array($scheme, ['postgresql', 'postgres'], true)) {
             throw new RuntimeException('DATABASE_URL must be a PostgreSQL DSN for Behat DB assertions.');
         }
 
-        $dbName = ltrim($parts['path'], '/');
+        $dbName = \ltrim($parts['path'], '/');
         $port = $parts['port'] ?? 5432;
-        $user = isset($parts['user']) ? rawurldecode($parts['user']) : '';
-        $pass = isset($parts['pass']) ? rawurldecode($parts['pass']) : '';
+        $user = isset($parts['user']) ? \rawurldecode($parts['user']) : '';
+        $pass = isset($parts['pass']) ? \rawurldecode($parts['pass']) : '';
 
-        $dsn = sprintf('pgsql:host=%s;port=%d;dbname=%s', $parts['host'], $port, $dbName);
+        $dsn = \sprintf('pgsql:host=%s;port=%d;dbname=%s', $parts['host'], $port, $dbName);
 
         return new PDO($dsn, $user, $pass, [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,

@@ -11,6 +11,6 @@ final class BankNotFoundException extends DomainException
 {
     public static function withId(Uuid $uuid): self
     {
-        return new self(sprintf('Bank with id <%s> not found.', (string) $uuid));
+        return new self(\sprintf('Bank with id <%s> not found.', (string) $uuid));
     }
 }

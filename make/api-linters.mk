@@ -23,6 +23,15 @@ php.rector.dry-run: ## Rector dry run; pass c= for extra args
 php.rector.apply: ## Rector apply fixes
 	$(PHP) vendor/bin/rector process --config=tools/rector/rector.php
 
+## —— PHP CS Fixer ——
+
+php.csfixer.dry-run: ## PHP CS Fixer — check for violations (dry run)
+	@$(eval c ?=--dry-run --diff)
+	$(PHP) vendor/bin/php-cs-fixer fix --config=tools/ecs/.php-cs-fixer.dist.php $(c)
+
+php.csfixer.apply: ## PHP CS Fixer — apply fixes
+	$(PHP) vendor/bin/php-cs-fixer fix --config=tools/ecs/.php-cs-fixer.dist.php --diff
+
 ## —— Lint suite ——
 
-lint: php.stan php.rector.apply ## Run all linters
+lint: php.stan php.rector.apply php.csfixer.apply ## Run all linters

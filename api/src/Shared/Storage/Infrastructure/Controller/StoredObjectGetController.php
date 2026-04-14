@@ -19,8 +19,7 @@ final readonly class StoredObjectGetController
     public function __construct(
         private ObjectStoragePort $objectStoragePort,
         private StoredObjectAccessPort $storedObjectAccessPort,
-    ) {
-    }
+    ) {}
 
     public function __invoke(Request $request, string $hash): Response
     {
@@ -63,7 +62,7 @@ final readonly class StoredObjectGetController
     private function ifNoneMatchEqualsHash(Request $request, string $hash): bool
     {
         $header = $request->headers->get('If-None-Match');
-        if ($header === null || $header === '') {
+        if (null === $header || '' === $header) {
             return false;
         }
 
@@ -73,6 +72,6 @@ final readonly class StoredObjectGetController
             }
         }
 
-        return str_contains($header, $hash);
+        return \str_contains($header, $hash);
     }
 }
