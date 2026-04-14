@@ -9,7 +9,7 @@ to set yourself as owner of the project files that were created by the Docker co
 From the **monorepo root** (where `compose.yaml` lives):
 
 ```console
-docker compose -f compose.yaml -f compose.override.yaml run --rm php chown -R $(id -u):$(id -g) /app
+docker compose -f compose.yaml -f compose.dev.yaml run --rm php chown -R $(id -u):$(id -g) /app
 ```
 
 ## TLS/HTTPS Issues
@@ -21,7 +21,7 @@ See the [TLS section](tls.md) for more details.
 ### How To Properly Build Fresh Images for Production Use
 
 Remember that, by default, if you run `docker compose up --wait` from the **repo root**,
-only the files `compose.yaml` and `compose.override.yaml` will be used.
+only the files `compose.yaml` and `compose.dev.yaml` will be used.
 See ["How Compose works"](https://docs.docker.com/compose/intro/compose-application-model)
 and ["Merge Compose files"](https://docs.docker.com/compose/how-tos/multiple-compose-files/merge).
 
@@ -41,7 +41,7 @@ so they won't conflict with each other.
 To build and start the dev image (from **repo root**):
 
 ```console
-docker compose -f compose.yaml -f compose.override.yaml up --wait
+docker compose -f compose.yaml -f compose.dev.yaml up --wait
 ```
 
 To build and start the prod image:
