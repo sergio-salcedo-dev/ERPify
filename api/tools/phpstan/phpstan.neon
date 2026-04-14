@@ -1,0 +1,37 @@
+parameters:
+    level: max
+    paths:
+        - ../../src
+        - ../../tests
+
+    # Temporary directory for PHPStan cache (speeds up subsequent runs)
+    resultCachePath: ../../var/cache/phpstan
+
+    inferPrivatePropertyTypeFromConstructor: true
+
+    # Extra strict rules
+    # These rules are not part of any rule level but provide additional safety checks
+    # See: https://phpstan.org/user-guide/rule-levels
+
+    # Report typed properties that are not initialized in the constructor
+    # Ensures all typed properties are properly initialized before use
+    checkUninitializedProperties: true
+
+    # Report wrong usage of unknown array keys and other types in union types
+    # Prevents accessing array keys that might not exist in benevolent union types
+    checkBenevolentUnionTypes: true
+
+    # Do not remember return values of functions that are not marked as pure
+    # Pure functions always return the same value for the same input and have no side effects
+    # Setting this to false prevents PHPStan from caching return values of impure functions
+    rememberPossiblyImpureFunctionValues: false
+
+    # Ensure array offset exists before accessing it on a general array
+    # Reports errors when accessing array offsets that might not exist
+    # Example: $array[$key] when $key might not exist in $array
+    reportPossiblyNonexistentGeneralArrayOffset: true
+
+    # Ensure array offset exists before accessing it on an array shape
+    # Similar to above but for arrays with known shapes/types
+    # Example: Accessing ['key' => 'value']['unknown'] when 'unknown' key doesn't exist
+    reportPossiblyNonexistentConstantArrayOffset: true

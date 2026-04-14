@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(git mv *)",
-      "Bash(git rm *)"
+      "Bash(git rm *)",
+      "Bash(tee *)"
     ]
   },
   "$version": 3
