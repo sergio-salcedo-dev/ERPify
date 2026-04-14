@@ -7,15 +7,13 @@ namespace Erpify\Backoffice\Bank\Application;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 
-final class BankSearcher
+final readonly class BankSearcher
 {
-    public function __construct(private readonly BankRepository $repository)
-    {
-    }
+    public function __construct(private BankRepository $bankRepository) {}
 
     /** @return Bank[] */
     public function search(): array
     {
-        return $this->repository->search();
+        return $this->bankRepository->search();
     }
 }

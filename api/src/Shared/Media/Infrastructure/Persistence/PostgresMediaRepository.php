@@ -10,6 +10,9 @@ use Erpify\Shared\Media\Domain\Entity\Media;
 use Erpify\Shared\Media\Domain\Repository\MediaRepository;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
+/**
+ * @extends \Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository<\Erpify\Shared\Media\Domain\Entity\Media>
+ */
 #[AsAlias(MediaRepository::class)]
 final class PostgresMediaRepository extends ServiceEntityRepository implements MediaRepository
 {
@@ -31,7 +34,8 @@ final class PostgresMediaRepository extends ServiceEntityRepository implements M
             ->andWhere('m.deletedAt IS NULL')
             ->setParameter('h', $contentHash)
             ->getQuery()
-            ->getOneOrNullResult();
+            ->getOneOrNullResult()
+        ;
     }
 
     public function existsActiveByContentHash(string $contentHash): bool
@@ -43,8 +47,9 @@ final class PostgresMediaRepository extends ServiceEntityRepository implements M
             ->setParameter('h', $contentHash)
             ->setMaxResults(1)
             ->getQuery()
-            ->getOneOrNullResult();
+            ->getOneOrNullResult()
+        ;
 
-        return $row !== null;
+        return null !== $row;
     }
 }

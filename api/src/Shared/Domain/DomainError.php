@@ -7,7 +7,7 @@ namespace Erpify\Shared\Domain;
 use DomainException;
 
 /**
- * Base for domain-level failures
+ * Base for domain-level failures.
  */
 abstract class DomainError extends DomainException
 {

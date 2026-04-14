@@ -12,15 +12,14 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Uid\Uuid;
 
-final class BankCreator
+final readonly class BankCreator
 {
     public function __construct(
-        private readonly BankRepository $repository,
-        private readonly MessageBusInterface $bus,
-        private readonly MediaRegistrar $mediaRegistrar,
-        private readonly StoredImageObjectWriter $storedImageObjectWriter,
-    ) {
-    }
+        private BankRepository $bankRepository,
+        private MessageBusInterface $messageBus,
+        private MediaRegistrar $mediaRegistrar,
+        private StoredImageObjectWriter $storedImageObjectWriter,
+    ) {}
 
     public function create(
         string $name,
@@ -28,11 +27,11 @@ final class BankCreator
         ?UploadedFile $logoFile = null,
         ?UploadedFile $storedObjectFile = null,
     ): Bank {
-        $stored = $storedObjectFile !== null
+        $stored = $storedObjectFile instanceof UploadedFile
             ? $this->storedImageObjectWriter->storeFromUploadedFile($storedObjectFile, 'stored_object')
             : null;
 
-        $logo = $logoFile !== null ? $this->mediaRegistrar->registerFromUploadedFile($logoFile) : null;
+        $logo = $logoFile instanceof UploadedFile ? $this->mediaRegistrar->registerFromUploadedFile($logoFile) : null;
 
         $bank = Bank::create(
             Uuid::v4(),
@@ -45,10 +44,10 @@ final class BankCreator
             $stored?->contentHash,
         );
 
-        $this->repository->save($bank);
+        $this->bankRepository->save($bank);
 
-        foreach ($bank->pullDomainEvents() as $event) {
-            $this->bus->dispatch($event);
+        foreach ($bank->pullDomainEvents() as $domainEvent) {
+            $this->messageBus->dispatch($domainEvent);
         }
 
         return $bank;

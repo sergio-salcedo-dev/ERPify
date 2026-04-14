@@ -11,6 +11,7 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Serializer\Exception\NotEncodableValueException;
 use Symfony\Component\Serializer\SerializerInterface;
@@ -18,23 +19,22 @@ use Symfony\Component\Validator\Constraints\File;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 #[Route('/banks', name: 'backoffice_bank_post', methods: ['POST'])]
-final class BankPostController
+final readonly class BankPostController
 {
     use ValidationTrait;
 
     public function __construct(
-        private readonly BankCreator $creator,
-        private readonly SerializerInterface $serializer,
-        private readonly ValidatorInterface $validator,
+        private BankCreator $bankCreator,
+        private SerializerInterface $serializer,
+        private ValidatorInterface $validator,
         #[Autowire('%erpify.media.max_upload_bytes%')]
-        private readonly string $maxUploadSize,
-    ) {
-    }
+        private string $maxUploadSize,
+    ) {}
 
     public function __invoke(Request $request): JsonResponse
     {
         $contentType = (string) $request->headers->get('Content-Type', '');
-        if ($request->files->count() > 0 || str_contains($contentType, 'multipart/form-data')) {
+        if ($request->files->count() > 0 || \str_contains($contentType, 'multipart/form-data')) {
             return $this->fromMultipart($request);
         }
 
@@ -47,19 +47,19 @@ final class BankPostController
             /** @var BankInput $input */
             $input = $this->serializer->deserialize($request->getContent(), BankInput::class, 'json');
         } catch (NotEncodableValueException) {
-            return new JsonResponse(['errors' => [['field' => '', 'message' => 'Invalid JSON body.']]], 422);
+            return new JsonResponse(['errors' => [['field' => '', 'message' => 'Invalid JSON body.']]], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
-        $violations = $this->validator->validate($input);
-        if (count($violations) > 0) {
-            return $this->validationErrorResponse($violations);
+        $constraintViolationList = $this->validator->validate($input);
+        if (\count($constraintViolationList) > 0) {
+            return $this->validationErrorResponse($constraintViolationList);
         }
 
-        $bank = $this->creator->create($input->name, $input->shortName);
+        $bank = $this->bankCreator->create($input->name, $input->shortName);
 
         return new JsonResponse(
             $this->serializer->serialize($bank, 'json', ['groups' => ['bank:read']]),
-            201,
+            Response::HTTP_CREATED,
             [],
             true,
         );
@@ -67,23 +67,25 @@ final class BankPostController
 
     private function fromMultipart(Request $request): JsonResponse
     {
-        $input = new BankInput();
-        $input->name = (string) $request->request->get('name', '');
-        $input->shortName = (string) ($request->request->get('short_name') ?? $request->request->get('shortName', ''));
+        $bankInput = new BankInput();
+        $bankInput->name = (string) $request->request->get('name', '');
+        $bankInput->shortName = (string) ($request->request->get('short_name') ?? $request->request->get('shortName', ''));
 
-        $violations = $this->validator->validate($input);
-        if (\count($violations) > 0) {
-            return $this->validationErrorResponse($violations);
+        $constraintViolationList = $this->validator->validate($bankInput);
+        if (\count($constraintViolationList) > 0) {
+            return $this->validationErrorResponse($constraintViolationList);
         }
 
-        /** @var UploadedFile|null $image */
+        /** @var null|UploadedFile $image */
         $image = $request->files->get('image');
-        /** @var UploadedFile|null $storedObject */
+
+        /** @var null|UploadedFile $storedObject */
         $storedObject = $request->files->get('stored_object');
-        foreach (['image' => $image, 'stored_object' => $storedObject] as $field => $file) {
-            if ($file === null) {
+        foreach (['image' => $image, 'stored_object' => $storedObject] as $file) {
+            if (null === $file) {
                 continue;
             }
+
             $fileViolations = $this->validator->validate($file, [
                 new File(
                     maxSize: $this->maxUploadSize,
@@ -97,17 +99,17 @@ final class BankPostController
         }
 
         try {
-            $bank = $this->creator->create($input->name, $input->shortName, $image, $storedObject);
-        } catch (InvalidImageException $e) {
+            $bank = $this->bankCreator->create($bankInput->name, $bankInput->shortName, $image, $storedObject);
+        } catch (InvalidImageException $invalidImageException) {
             return new JsonResponse(
-                ['errors' => [['field' => $e->formField(), 'message' => $e->getMessage()]]],
-                422,
+                ['errors' => [['field' => $invalidImageException->formField(), 'message' => $invalidImageException->getMessage()]]],
+                Response::HTTP_UNPROCESSABLE_ENTITY,
             );
         }
 
         return new JsonResponse(
             $this->serializer->serialize($bank, 'json', ['groups' => ['bank:read']]),
-            201,
+            Response::HTTP_CREATED,
             [],
             true,
         );

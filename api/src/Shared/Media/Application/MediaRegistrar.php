@@ -10,32 +10,31 @@ use Erpify\Shared\Media\Domain\Repository\MediaRepository;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\Uid\Uuid;
 
-final class MediaRegistrar
+final readonly class MediaRegistrar
 {
     public function __construct(
-        private readonly ImageNormalizer $normalizer,
-        private readonly MediaRepository $repository,
-    ) {
-    }
+        private ImageNormalizer $imageNormalizer,
+        private MediaRepository $mediaRepository,
+    ) {}
 
-    public function registerFromUploadedFile(UploadedFile $file): Media
+    public function registerFromUploadedFile(UploadedFile $uploadedFile): Media
     {
-        $normalized = $this->normalizer->normalize($file);
+        $normalizedImage = $this->imageNormalizer->normalize($uploadedFile);
 
-        $existing = $this->repository->findActiveByContentHash($normalized->contentHash);
-        if ($existing !== null) {
+        $existing = $this->mediaRepository->findActiveByContentHash($normalizedImage->contentHash);
+        if ($existing instanceof Media) {
             return $existing;
         }
 
         $media = Media::create(
             Uuid::v4(),
-            $normalized->contentHash,
-            $normalized->mimeType,
-            \strlen($normalized->bytes),
-            $normalized->bytes,
+            $normalizedImage->contentHash,
+            $normalizedImage->mimeType,
+            \strlen($normalizedImage->bytes),
+            $normalizedImage->bytes,
         );
 
-        $this->repository->save($media);
+        $this->mediaRepository->save($media);
 
         return $media;
     }

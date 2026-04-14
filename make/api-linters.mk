@@ -1,27 +1,43 @@
 # =============================================================================
 # API Linters & static analysis
 # =============================================================================
-
-# —— Container helpers ————————————————————————————————————————————————————————
-PHP_TEST = cd $(ROOT_DIR) && docker compose $(COMPOSE_DEV) exec -e APP_ENV=test php
-PHP = cd $(ROOT_DIR) && docker compose $(COMPOSE_DEV) exec php
-COMPOSER = $(PHP) composer
+# NOTE: This file is included from the root Makefile and relies on its variables:
+#   ROOT_DIR, COMPOSE_DEV, PHP_TEST, PHP, COMPOSER
+# Do not call this file directly with -f; use: make php.stan
 
 ## —— PHPStan ——
 
-php.phpstan: ## PHPStan static analysis; pass c= for extra args
+php.stan: ## PHPStan static analysis; pass c= for extra args
 	@$(eval c ?=)
-	$(PHP_TEST) vendor/bin/phpstan analyse --configuration api/tools/phpstan/phpstan.neon $(c)
+	$(PHP_TEST) vendor/bin/phpstan analyse --configuration tools/phpstan/phpstan.neon --memory-limit 512M $(c)
 
-php.phpstan.baseline: ## Generate PHPStan baseline
-	$(PHP_TEST) vendor/bin/phpstan analyse --configuration api/tools/phpstan/phpstan.neon --generate-baseline api/tools/phpstan/phpstan-baseline.neon
+php.stan.baseline: ## Generate PHPStan baseline
+	$(PHP_TEST) vendor/bin/phpstan analyse --configuration tools/phpstan/phpstan.neon --generate-baseline tools/phpstan/phpstan-baseline.neon
+
+## —— Rector ——
+
+php.rector.dry-run: ## Rector dry run; pass c= for extra args
+	@$(eval c ?=)
+	$(PHP) vendor/bin/rector process --config=tools/rector/rector.php --dry-run $(c)
+
+php.rector.apply: ## Rector apply fixes
+	$(PHP) vendor/bin/rector process --config=tools/rector/rector.php
+
+## —— PHP CS Fixer ——
+
+php.csfixer.dry-run: ## PHP CS Fixer — check for violations (dry run)
+	@$(eval c ?=--dry-run --diff)
+	$(PHP) vendor/bin/php-cs-fixer fix --config=tools/ecs/.php-cs-fixer.dist.php $(c)
+
+php.csfixer.apply: ## PHP CS Fixer — apply fixes
+	$(PHP) vendor/bin/php-cs-fixer fix --config=tools/ecs/.php-cs-fixer.dist.php --diff
 
 ## —— PHP Mess Detector ——
 
-php.phpmd: ## PHPMD code smell check; pass c= for extra args (e.g. make php.phpmd c='src/ xml cleancode,codesize,unusedcode')
+php.md: ## PHPMD code smell check; pass c= for extra args (e.g. make php.phpmd c='src/ xml cleancode,codesize,unusedcode')
 	@$(eval c ?=)
 	$(PHP_TEST) vendor/bin/phpmd api/src text api/tools/phpmd/phpmd.xml $(c)
 
 ## —— Lint suite ——
 
-lint: php.phpstan php.phpmd ## Run all linters
+lint: php.stan php.rector.apply php.csfixer.apply php.md ## Run all linters

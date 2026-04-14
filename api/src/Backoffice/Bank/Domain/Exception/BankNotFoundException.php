@@ -9,8 +9,8 @@ use Symfony\Component\Uid\Uuid;
 
 final class BankNotFoundException extends DomainException
 {
-    public static function withId(Uuid $id): self
+    public static function withId(Uuid $uuid): self
     {
-        return new self(sprintf('Bank with id <%s> not found.', (string) $id));
+        return new self(\sprintf('Bank with id <%s> not found.', (string) $uuid));
     }
 }

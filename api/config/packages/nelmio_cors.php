@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 $corsOriginsRaw = $_ENV['CORS_ALLOW_ORIGINS'] ?? 'http://localhost,http://127.0.0.1,http://localhost:3000,http://127.0.0.1:3000,https://localhost,https://127.0.0.1';
 $corsOrigins = array_values(
-    array_filter(array_map('trim', explode(',', $corsOriginsRaw))),
+    array_filter(array_map(trim(...), explode(',', (string) $corsOriginsRaw))),
 );
 
 return [

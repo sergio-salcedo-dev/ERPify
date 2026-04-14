@@ -14,11 +14,9 @@ use Symfony\Component\Messenger\Middleware\StackInterface;
  * Runs before {@see \Symfony\Component\Messenger\Middleware\SendMessageMiddleware} so audit rows
  * exist even if enqueue fails.
  */
-final class PersistDomainEventMiddleware implements MiddlewareInterface
+final readonly class PersistDomainEventMiddleware implements MiddlewareInterface
 {
-    public function __construct(private readonly DomainEventStore $domainEventStore)
-    {
-    }
+    public function __construct(private DomainEventStore $domainEventStore) {}
 
     public function handle(Envelope $envelope, StackInterface $stack): Envelope
     {

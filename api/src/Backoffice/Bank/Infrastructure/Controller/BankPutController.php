@@ -9,6 +9,7 @@ use Erpify\Backoffice\Bank\Domain\Exception\BankNotFoundException;
 use Erpify\Backoffice\Bank\Infrastructure\Request\BankInput;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Serializer\Exception\NotEncodableValueException;
 use Symfony\Component\Serializer\SerializerInterface;
@@ -16,41 +17,40 @@ use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 #[Route('/banks/{id}', name: 'backoffice_bank_put', methods: ['PUT'])]
-final class BankPutController
+final readonly class BankPutController
 {
     use ValidationTrait;
 
     public function __construct(
-        private readonly BankUpdater $updater,
-        private readonly SerializerInterface $serializer,
-        private readonly ValidatorInterface $validator,
-    ) {
-    }
+        private BankUpdater $bankUpdater,
+        private SerializerInterface $serializer,
+        private ValidatorInterface $validator,
+    ) {}
 
-    public function __invoke(Uuid $id, Request $request): JsonResponse
+    public function __invoke(Uuid $uuid, Request $request): JsonResponse
     {
         try {
             /** @var BankInput $input */
             $input = $this->serializer->deserialize($request->getContent(), BankInput::class, 'json');
         } catch (NotEncodableValueException) {
-            return new JsonResponse(['errors' => [['field' => '', 'message' => 'Invalid JSON body.']]], 422);
+            return new JsonResponse(['errors' => [['field' => '', 'message' => 'Invalid JSON body.']]], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
-        $violations = $this->validator->validate($input);
+        $constraintViolationList = $this->validator->validate($input);
 
-        if (count($violations) > 0) {
-            return $this->validationErrorResponse($violations);
+        if (\count($constraintViolationList) > 0) {
+            return $this->validationErrorResponse($constraintViolationList);
         }
 
         try {
-            $bank = $this->updater->update($id, $input->name, $input->shortName);
-        } catch (BankNotFoundException $e) {
-            return new JsonResponse(['error' => $e->getMessage()], 404);
+            $bank = $this->bankUpdater->update($uuid, $input->name, $input->shortName);
+        } catch (BankNotFoundException $bankNotFoundException) {
+            return new JsonResponse(['error' => $bankNotFoundException->getMessage()], Response::HTTP_NOT_FOUND);
         }
 
         return new JsonResponse(
             $this->serializer->serialize($bank, 'json', ['groups' => ['bank:read']]),
-            200,
+            Response::HTTP_OK,
             [],
             true,
         );

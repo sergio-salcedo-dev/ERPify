@@ -7,18 +7,17 @@ namespace Erpify\Backoffice\Bank\Application;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Symfony\Component\Uid\Uuid;
 
-final class BankDeleter
+final readonly class BankDeleter
 {
     public function __construct(
-        private readonly BankRepository $repository,
-        private readonly BankFinder $finder,
-    ) {
-    }
+        private BankRepository $bankRepository,
+        private BankFinder $bankFinder,
+    ) {}
 
-    public function delete(Uuid $id): void
+    public function delete(Uuid $uuid): void
     {
-        $bank = $this->finder->find($id);
+        $bank = $this->bankFinder->find($uuid);
 
-        $this->repository->remove($bank);
+        $this->bankRepository->remove($bank);
     }
 }

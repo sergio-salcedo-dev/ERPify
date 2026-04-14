@@ -7,7 +7,7 @@ a popular debugger and profiler for PHP.
 
 The documented default IDE for step debugging is **PhpStorm**. Compose sets **`PHP_IDE_CONFIG=serverName=<name>`** on the `php` service, where **`<name>`** defaults to **`dev`** and can be overridden with **`PHP_IDE_SERVER_NAME`** in **`api/.env`** (same mechanism as **`XDEBUG_MODE`**). That name must match the server entry under **Settings | PHP | Servers** in PhpStorm (see below). Other editors (for example VS Code or Cursor) are unaffected; they use their own launch configuration instead.
 
-Step debugging is **off by default**. The `php` service gets **`XDEBUG_MODE`** from Docker Compose interpolation: **`${XDEBUG_MODE:-off}`** in `compose.override.yaml`. Values are read from your **shell environment** and from a **`.env` file in the Compose project directory** (the repo root, next to `compose.yaml`, if present). **`api/.env`** is what Symfony uses; `make xdebug-enable` / `make xdebug-disable` edit **`api/.env`** — export those variables in the shell before `docker compose up`, or mirror `XDEBUG_MODE` in a **root** `.env` if you rely on Compose file substitution without exporting.
+Step debugging is **off by default**. The `php` service gets **`XDEBUG_MODE`** from Docker Compose interpolation: **`${XDEBUG_MODE:-off}`** in `compose.dev.yaml`. Values are read from your **shell environment** and from a **`.env` file in the Compose project directory** (the repo root, next to `compose.yaml`, if present). **`api/.env`** is what Symfony uses; `make xdebug-enable` / `make xdebug-disable` edit **`api/.env`** — export those variables in the shell before `docker compose up`, or mirror `XDEBUG_MODE` in a **root** `.env` if you rely on Compose file substitution without exporting.
 
 From the **monorepo root** (parent of `api/`):
 
@@ -17,7 +17,7 @@ From the **monorepo root** (parent of `api/`):
 | **`make xdebug-disable`** | Sets **`XDEBUG_MODE=off`** in `api/.env` when that line exists, then recreates `php`. If there is no line, Compose still defaults to **`off`**. |
 | **`make xdebug-verify`** | Prints PHP / Xdebug versions and effective `XDEBUG_MODE` (stack must be running: `make up`). |
 
-You can set **`XDEBUG_MODE`** in **`api/.env`** (start from [`api/.env.example`](../.env.example)) and export it before Compose, use **`make xdebug-enable`**, or run from the **repo root**, e.g. `XDEBUG_MODE=develop,debug docker compose -f compose.yaml -f compose.override.yaml up`.
+You can set **`XDEBUG_MODE`** in **`api/.env`** (start from [`api/.env.example`](../.env.example)) and export it before Compose, use **`make xdebug-enable`**, or run from the **repo root**, e.g. `XDEBUG_MODE=develop,debug docker compose -f compose.yaml -f compose.dev.yaml up`.
 
 If you previously used **`api/.env.xdebug`**, remove that file; it is no longer used.
 
@@ -75,7 +75,7 @@ The extension can still appear in `php -v` while step debugging is disabled; ens
 You can also inspect from the **repo root**:
 
 ```console
-$ docker compose -f compose.yaml -f compose.override.yaml exec php php --version
+$ docker compose -f compose.yaml -f compose.dev.yaml exec php php --version
 
 PHP ...
     with Xdebug v3.x.x ...

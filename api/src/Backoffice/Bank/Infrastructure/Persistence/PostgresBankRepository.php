@@ -11,6 +11,9 @@ use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\Uid\Uuid;
 
+/**
+ * @extends \Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository<\Erpify\Backoffice\Bank\Domain\Entity\Bank>
+ */
 #[AsAlias(BankRepository::class)]
 final class PostgresBankRepository extends ServiceEntityRepository implements BankRepository
 {
@@ -31,9 +34,9 @@ final class PostgresBankRepository extends ServiceEntityRepository implements Ba
         $this->getEntityManager()->flush();
     }
 
-    public function findById(Uuid $id): ?Bank
+    public function findById(Uuid $uuid): ?Bank
     {
-        return $this->find($id);
+        return $this->find($uuid);
     }
 
     /** @return Bank[] */
@@ -49,7 +52,8 @@ final class PostgresBankRepository extends ServiceEntityRepository implements Ba
             ->where('b.storedObjectContentHash = :h')
             ->setParameter('h', $contentHash)
             ->getQuery()
-            ->getSingleScalarResult();
+            ->getSingleScalarResult()
+        ;
     }
 
     public function findStoredObjectMimeTypeByContentHash(string $contentHash): ?string
@@ -59,7 +63,8 @@ final class PostgresBankRepository extends ServiceEntityRepository implements Ba
             ->setParameter('h', $contentHash)
             ->setMaxResults(1)
             ->getQuery()
-            ->getOneOrNullResult();
+            ->getOneOrNullResult()
+        ;
 
         return $bank?->getStoredObjectMimeType();
     }

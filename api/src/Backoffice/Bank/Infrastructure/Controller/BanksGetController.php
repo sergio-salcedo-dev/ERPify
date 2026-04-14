@@ -6,23 +6,23 @@ namespace Erpify\Backoffice\Bank\Infrastructure\Controller;
 
 use Erpify\Backoffice\Bank\Application\BankSearcher;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Serializer\SerializerInterface;
 
 #[Route('/banks', name: 'backoffice_banks_get', methods: ['GET'])]
-final class BanksGetController
+final readonly class BanksGetController
 {
     public function __construct(
-        private readonly BankSearcher $searcher,
-        private readonly SerializerInterface $serializer,
-    ) {
-    }
+        private BankSearcher $bankSearcher,
+        private SerializerInterface $serializer,
+    ) {}
 
     public function __invoke(): JsonResponse
     {
         return new JsonResponse(
-            $this->serializer->serialize($this->searcher->search(), 'json', ['groups' => ['bank:read']]),
-            200,
+            $this->serializer->serialize($this->bankSearcher->search(), 'json', ['groups' => ['bank:read']]),
+            Response::HTTP_OK,
             [],
             true,
         );

@@ -7,7 +7,7 @@ Tools you need on your **host** machine to work with this repository (the API it
 - **Docker** and **Docker Compose** (v2) — to build and run the Symfony stack (image **`context: ./api`**, Compose files at the repo root). See [api/README.md](../api/README.md) and the root [README](../README.md).
 - **GNU Make** — optional but expected if you use the root [`Makefile`](../Makefile) targets (`make up`, `make health`, etc.).
 
-You do **not** need PHP on the host to run the app if you use Docker; use [`api/bin/sf`](../api/bin/sf) or, from the **repository root**, `docker compose -f compose.yaml -f compose.override.yaml exec php bin/console` when `php` is not on your `PATH`.
+You do **not** need PHP on the host to run the app if you use Docker; use [`api/bin/sf`](../api/bin/sf) or, from the **repository root**, `docker compose -f compose.yaml -f compose.dev.yaml exec php bin/console` when `php` is not on your `PATH`.
 
 ## Recommended: `jq`
 

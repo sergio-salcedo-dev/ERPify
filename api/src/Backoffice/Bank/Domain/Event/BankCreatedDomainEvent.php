@@ -34,6 +34,9 @@ final class BankCreatedDomainEvent extends DomainEvent
         return 'erpify.backoffice.bank.created';
     }
 
+    /**
+     * @return array<string, null|string>
+     */
     public function toPrimitives(): array
     {
         return [

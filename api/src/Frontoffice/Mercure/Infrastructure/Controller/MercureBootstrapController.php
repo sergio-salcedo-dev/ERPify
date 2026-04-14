@@ -26,7 +26,7 @@ final class MercureBootstrapController
         $authorization->setCookie($request, [MercureDemoTopic::URI]);
 
         return new JsonResponse([
-            'hubUrl' => rtrim($mercurePublicUrl, '/'),
+            'hubUrl' => \rtrim($mercurePublicUrl, '/'),
             'topic' => MercureDemoTopic::URI,
         ]);
     }
