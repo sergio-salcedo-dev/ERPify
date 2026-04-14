@@ -51,6 +51,9 @@ define pwa_cmd
 	cd "$(ROOT_DIR)/$(PWA_DIR)" && exec $(strip $(1))
 endef
 
+# —— Include modular makefiles ———————————————————————————————————————————————
+-include $(ROOT_DIR)/make/api-linters.mk
+
 .DEFAULT_GOAL := help
 
 .PHONY: help help-targets \
