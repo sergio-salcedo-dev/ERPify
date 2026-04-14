@@ -30,6 +30,11 @@ return (new Config())
        '@PhpCsFixer' => true,
        '@PhpCsFixer:risky' => true,
 
+       'new_with_parentheses' => [
+           'named_class' => false,
+           'anonymous_class' => false, // false to keep them
+       ],
+
        // Strict typing and modernization
        'declare_strict_types' => true,
        'void_return' => true,

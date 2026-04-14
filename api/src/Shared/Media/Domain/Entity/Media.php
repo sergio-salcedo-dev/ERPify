@@ -109,4 +109,9 @@ class Media
         $this->deletedAt = new DateTimeImmutable();
         $this->updatedAt = $this->deletedAt;
     }
+
+    public function getCreatedAt(): DateTimeImmutable
+    {
+        return $this->createdAt;
+    }
 }

@@ -17,7 +17,7 @@ final class HealthController
         return new JsonResponse([
             'status' => 'ok',
             'service' => 'Front office',
-            'datetime' => new DateTimeImmutable()->format(DateTimeInterface::ATOM),
+            'datetime' => (new DateTimeImmutable())->format(DateTimeInterface::ATOM),
         ]);
     }
 }

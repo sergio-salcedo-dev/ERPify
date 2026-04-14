@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Backoffice;
 
+use JsonException;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\Request;
@@ -16,6 +17,9 @@ final class BankStoredObjectMultipartFunctionalTest extends WebTestCase
 {
     private const string MIN_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
 
+    /**
+     * @throws JsonException
+     */
     public function testPostMultipartBankWithStoredObjectReturnsUrlAndServesImage(): void
     {
         $kernelBrowser = self::createClient();
@@ -40,7 +44,7 @@ final class BankStoredObjectMultipartFunctionalTest extends WebTestCase
         $this->assertSame('Stored Object Bank', $payload['name']);
         $this->assertNull($payload['logoUrl'] ?? null);
         $this->assertIsString($payload['storedObjectUrl']);
-        $this->assertSame(1, \preg_match('#/api/v1/stored-objects/([a-f0-9]{64})(?:\?.*)?$#', $payload['storedObjectUrl'], $m), $payload['storedObjectUrl']);
+        $this->assertMatchesRegularExpression('#/api/v1/stored-objects/([a-f0-9]{64})(?:\?.*)?$#', $payload['storedObjectUrl'], $payload['storedObjectUrl']);
         $path = \parse_url($payload['storedObjectUrl'], PHP_URL_PATH);
         $this->assertIsString($path);
 

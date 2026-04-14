@@ -36,7 +36,7 @@ final readonly class PlainTextNotificationMailer implements NotificationMailer
 
         $body = \implode("\n", $lines);
 
-        $email = new Email()
+        $email = (new Email())
             ->from($this->mailFrom)
             ->to($to)
             ->subject($subject)

@@ -7,6 +7,9 @@ namespace Erpify\Backoffice\Bank\Domain\Event;
 use DateTimeImmutable;
 use Erpify\Shared\Domain\Event\DomainEvent;
 
+/**
+ * @SuppressWarnings(PHPMD.ExcessiveParameterList)
+ */
 final class BankUpdatedDomainEvent extends DomainEvent
 {
     public function __construct(

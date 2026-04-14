@@ -5,45 +5,50 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Frontoffice\Dev\Infrastructure\Controller;
 
 use Erpify\Frontoffice\Dev\Infrastructure\Controller\FrankenPhpHotReloadController;
+use JsonException;
+use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
  * @internal
  */
-#[\PHPUnit\Framework\Attributes\CoversNothing]
+#[CoversNothing]
 final class FrankenPhpHotReloadControllerTest extends TestCase
 {
-    protected function tearDown(): void
-    {
-        unset($_SERVER['FRANKENPHP_HOT_RELOAD']);
-        parent::tearDown();
-    }
-
+    /**
+     * @throws JsonException
+     */
     public function testInvokeReturnsDisabledWhenServerVarMissing(): void
     {
-        unset($_SERVER['FRANKENPHP_HOT_RELOAD']);
+        // Create an empty request (no FRANKENPHP_HOT_RELOAD)
+        $request = new Request();
+        $response = (new FrankenPhpHotReloadController())($request);
 
-        $response = (new FrankenPhpHotReloadController())();
+        $this->assertSame(Response::HTTP_OK, $response->getStatusCode());
 
-        $this->assertInstanceOf(JsonResponse::class, $response);
-        $this->assertSame(Response::HTTP_OK, $response->getStatusCode(), (string) $response->getContent());
-        $data = \json_decode($response->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        $data = \json_decode((string) $response->getContent(), true, 512, JSON_THROW_ON_ERROR);
         $this->assertFalse($data['enabled']);
         $this->assertArrayNotHasKey('subscribePath', $data);
     }
 
+    /**
+     * @throws JsonException
+     */
     public function testInvokeReturnsPathWhenServerVarSet(): void
     {
-        $_SERVER['FRANKENPHP_HOT_RELOAD'] = '/.well-known/mercure?topic=https%3A%2F%2Ffrankenphp.dev%2Fhot-reload%2Fabc';
+        $path = '/.well-known/mercure?topic=https%3A%2F%2Ffrankenphp.dev%2Fhot-reload%2Fabc';
 
-        $response = (new FrankenPhpHotReloadController())();
+        // Inject the server variable directly into the Request object
+        $request = new Request(server: ['FRANKENPHP_HOT_RELOAD' => $path]);
 
-        $this->assertSame(Response::HTTP_OK, $response->getStatusCode(), (string) $response->getContent());
-        $data = \json_decode($response->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        $response = (new FrankenPhpHotReloadController())($request);
+
+        $this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+
+        $data = \json_decode((string) $response->getContent(), true, 512, JSON_THROW_ON_ERROR);
         $this->assertTrue($data['enabled']);
-        $this->assertSame($_SERVER['FRANKENPHP_HOT_RELOAD'], $data['subscribePath']);
-        $this->assertStringContainsString('.well-known/mercure', $data['subscribePath']);
+        $this->assertSame($path, $data['subscribePath']);
     }
 }

@@ -36,7 +36,11 @@ php.csfixer.apply: ## PHP CS Fixer — apply fixes
 
 php.md: ## PHPMD code smell check; pass c= for extra args (e.g. make php.phpmd c='src/ xml cleancode,codesize,unusedcode')
 	@$(eval c ?=)
-	$(PHP_TEST) vendor/bin/phpmd api/src text api/tools/phpmd/phpmd.xml $(c)
+#	$(PHP_TEST) php -d error_reporting='E_ALL & ~E_DEPRECATED' vendor/bin/phpmd api/bin,api/config,api/src,api/tests,api/tools,api/public text tools/phpmd/phpmd.xml $(c)
+	$(PHP_TEST) php -d error_reporting='E_ALL & ~E_DEPRECATED' \
+		tools/phpmd/phpmd.phar \
+		bin,config,src,tests,tools,public \
+		text tools/phpmd/phpmd.xml $(c)
 
 ## —— Lint suite ——
 

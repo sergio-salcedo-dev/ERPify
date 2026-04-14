@@ -15,6 +15,9 @@ use Override;
 use PDO;
 use RuntimeException;
 
+/**
+ * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+ */
 final class FeatureContext extends MinkContext
 {
     use MessengerBehatTrait;
