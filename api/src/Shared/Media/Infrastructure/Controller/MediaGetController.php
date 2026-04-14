@@ -9,13 +9,13 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
-#[Route('/media/{hash}', name: 'shared_media_get', methods: ['GET'], requirements: ['hash' => '[a-f0-9]{64}'])]
-final class MediaGetController
+#[Route('/media/{hash}', name: 'shared_media_get', requirements: ['hash' => '[a-f0-9]{64}'], methods: ['GET'])]
+final readonly class MediaGetController
 {
-    private const CACHE_CONTROL = 'public, max-age=31536000, immutable';
+    private const string CACHE_CONTROL = 'public, max-age=31536000, immutable';
 
     public function __construct(
-        private readonly MediaRepository $mediaRepository,
+        private MediaRepository $mediaRepository,
     ) {
     }
 
@@ -30,7 +30,7 @@ final class MediaGetController
         }
 
         $media = $this->mediaRepository->findActiveByContentHash($hash);
-        if ($media === null) {
+        if (!$media instanceof \Erpify\Shared\Media\Domain\Entity\Media) {
             return new Response('Not Found', Response::HTTP_NOT_FOUND);
         }
 

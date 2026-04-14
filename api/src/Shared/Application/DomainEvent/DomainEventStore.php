@@ -14,5 +14,5 @@ use Erpify\Shared\Domain\Event\DomainEvent;
  */
 interface DomainEventStore
 {
-    public function append(DomainEvent $event): void;
+    public function append(DomainEvent $domainEvent): void;
 }

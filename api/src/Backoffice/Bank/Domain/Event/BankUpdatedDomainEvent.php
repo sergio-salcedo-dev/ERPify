@@ -34,6 +34,9 @@ final class BankUpdatedDomainEvent extends DomainEvent
         return 'erpify.backoffice.bank.updated';
     }
 
+    /**
+     * @return array<string, string|null>
+     */
     public function toPrimitives(): array
     {
         return [

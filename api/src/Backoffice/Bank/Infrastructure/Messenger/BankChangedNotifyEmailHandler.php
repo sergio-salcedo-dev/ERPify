@@ -13,34 +13,34 @@ use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 /**
  * Bank-specific routing: recipient and subjects. Formatting is delegated to {@see NotificationMailer}.
  */
-final class BankChangedNotifyEmailHandler
+final readonly class BankChangedNotifyEmailHandler
 {
     public function __construct(
-        private readonly NotificationMailer $notificationMailer,
+        private NotificationMailer $notificationMailer,
         #[Autowire('%env(DEFAULT_NOTIFICATION_EMAIL)%')]
-        private readonly string $notifyTo,
+        private string $notifyTo,
     ) {
     }
 
     #[AsMessageHandler]
-    public function onBankCreated(BankCreatedDomainEvent $event): void
+    public function onBankCreated(BankCreatedDomainEvent $bankCreatedDomainEvent): void
     {
         $this->notificationMailer->send(
             $this->notifyTo,
             '[ERPify] Bank created',
-            $event->toPrimitives(),
-            $event::eventName(),
+            $bankCreatedDomainEvent->toPrimitives(),
+            $bankCreatedDomainEvent::eventName(),
         );
     }
 
     #[AsMessageHandler]
-    public function onBankUpdated(BankUpdatedDomainEvent $event): void
+    public function onBankUpdated(BankUpdatedDomainEvent $bankUpdatedDomainEvent): void
     {
         $this->notificationMailer->send(
             $this->notifyTo,
             '[ERPify] Bank updated',
-            $event->toPrimitives(),
-            $event::eventName(),
+            $bankUpdatedDomainEvent->toPrimitives(),
+            $bankUpdatedDomainEvent::eventName(),
         );
     }
 }

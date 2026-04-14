@@ -15,12 +15,12 @@ use Symfony\Component\Mercure\Update;
 use Symfony\Component\Routing\Attribute\Route;
 
 #[Route('/mercure/publish-demo', name: 'frontoffice_mercure_publish_demo', methods: ['POST'])]
-final class MercurePublishDemoController
+final readonly class MercurePublishDemoController
 {
     public function __construct(
-        private readonly HubInterface $hub,
+        private HubInterface $hub,
         #[Autowire('%kernel.environment%')]
-        private readonly string $environment,
+        private string $environment,
     ) {
     }
 
@@ -32,7 +32,7 @@ final class MercurePublishDemoController
 
         $payload = [
             'message' => 'Mercure demo publish',
-            'at' => (new DateTimeImmutable())->format(DateTimeInterface::ATOM),
+            'at' => new DateTimeImmutable()->format(DateTimeInterface::ATOM),
         ];
 
         $this->hub->publish(new Update(

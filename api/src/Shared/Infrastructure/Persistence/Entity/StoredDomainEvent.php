@@ -15,44 +15,24 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Index(name: 'domain_event_name_idx', fields: ['name'])]
 class StoredDomainEvent
 {
-    #[ORM\Id]
-    #[ORM\Column(type: UuidType::NAME)]
-    private Uuid $id;
-
-    #[ORM\Column(length: 190)]
-    private string $name;
-
-    #[ORM\Column(length: 36)]
-    private string $aggregateId;
-
-    #[ORM\Column(length: 36)]
-    private string $eventId;
-
-    #[ORM\Column]
-    private DateTimeImmutable $occurredOn;
-
-    /**
-     * @var array<string, mixed>
-     */
-    #[ORM\Column(type: 'json')]
-    private array $body;
-
     /**
      * @param array<string, mixed> $body
      */
     public function __construct(
-        Uuid $id,
-        string $name,
-        string $aggregateId,
-        string $eventId,
-        DateTimeImmutable $occurredOn,
-        array $body,
-    ) {
-        $this->id = $id;
-        $this->name = $name;
-        $this->aggregateId = $aggregateId;
-        $this->eventId = $eventId;
-        $this->occurredOn = $occurredOn;
-        $this->body = $body;
+        #[ORM\Id]
+        #[ORM\Column(type: UuidType::NAME)]
+        private Uuid $uuid,
+        #[ORM\Column(length: 190)]
+        private string $name,
+        #[ORM\Column(length: 36)]
+        private string $aggregateId,
+        #[ORM\Column(length: 36)]
+        private string $eventId,
+        #[ORM\Column]
+        private DateTimeImmutable $occurredOn,
+        #[ORM\Column(type: \Doctrine\DBAL\Types\Types::JSON)]
+        private array $body
+    )
+    {
     }
 }

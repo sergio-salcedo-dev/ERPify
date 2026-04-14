@@ -16,14 +16,13 @@ php.stan.baseline: ## Generate PHPStan baseline
 
 ## —— Rector ——
 
-php.rector: ## Rector dry run; pass c= for extra args
+php.rector.dry-run: ## Rector dry run; pass c= for extra args
 	@$(eval c ?=)
-	$(PHP) vendor/bin/rector process --config=api/tools/rector/rector.php --dry-run --diff $(c)
+	$(PHP) vendor/bin/rector process --config=tools/rector/rector.php --dry-run $(c)
 
 php.rector.apply: ## Rector apply fixes
-	$(PHP) vendor/bin/rector process --config=api/tools/rector/rector.php --diff
+	$(PHP) vendor/bin/rector process --config=tools/rector/rector.php
 
 ## —— Lint suite ——
 
-lint: php.phpstan php.phpmd php.cs.fix ## Run all linters
-
+lint: php.stan php.rector.apply ## Run all linters

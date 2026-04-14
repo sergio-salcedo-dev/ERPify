@@ -9,5 +9,5 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 interface ImageNormalizer
 {
-    public function normalize(UploadedFile $file): NormalizedImage;
+    public function normalize(UploadedFile $uploadedFile): NormalizedImage;
 }

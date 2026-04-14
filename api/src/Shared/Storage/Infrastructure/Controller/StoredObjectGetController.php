@@ -11,20 +11,20 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
-#[Route('/stored-objects/{hash}', name: 'shared_stored_object_get', methods: ['GET'], requirements: ['hash' => '[a-f0-9]{64}'])]
-final class StoredObjectGetController
+#[Route('/stored-objects/{hash}', name: 'shared_stored_object_get', requirements: ['hash' => '[a-f0-9]{64}'], methods: ['GET'])]
+final readonly class StoredObjectGetController
 {
-    private const CACHE_CONTROL = 'public, max-age=31536000, immutable';
+    private const string CACHE_CONTROL = 'public, max-age=31536000, immutable';
 
     public function __construct(
-        private readonly ObjectStoragePort $objectStorage,
-        private readonly StoredObjectAccessPort $storedObjectAccess,
+        private ObjectStoragePort $objectStoragePort,
+        private StoredObjectAccessPort $storedObjectAccessPort,
     ) {
     }
 
     public function __invoke(Request $request, string $hash): Response
     {
-        if (!$this->storedObjectAccess->existsAnyWithContentHash($hash)) {
+        if (!$this->storedObjectAccessPort->existsAnyWithContentHash($hash)) {
             return new Response('Not Found', Response::HTTP_NOT_FOUND);
         }
 
@@ -37,12 +37,12 @@ final class StoredObjectGetController
         }
 
         $key = ContentAddressableObjectKey::fromContentHash($hash);
-        if (!$this->objectStorage->exists($key)) {
+        if (!$this->objectStoragePort->exists($key)) {
             return new Response('Not Found', Response::HTTP_NOT_FOUND);
         }
 
-        $bytes = $this->objectStorage->read($key);
-        $mime = $this->storedObjectAccess->getMimeTypeForContentHash($hash) ?? 'application/octet-stream';
+        $bytes = $this->objectStoragePort->read($key);
+        $mime = $this->storedObjectAccessPort->getMimeTypeForContentHash($hash) ?? 'application/octet-stream';
 
         $response = new Response($bytes);
         $response->headers->set('Content-Type', $mime);

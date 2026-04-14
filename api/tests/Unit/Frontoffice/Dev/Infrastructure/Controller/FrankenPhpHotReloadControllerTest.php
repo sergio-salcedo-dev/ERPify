@@ -22,11 +22,11 @@ final class FrankenPhpHotReloadControllerTest extends TestCase
 
         $response = (new FrankenPhpHotReloadController())();
 
-        self::assertInstanceOf(JsonResponse::class, $response);
-        self::assertSame(200, $response->getStatusCode());
+        $this->assertInstanceOf(JsonResponse::class, $response);
+        $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_OK, $response->getStatusCode(), (string) $response->getContent());
         $data = json_decode($response->getContent(), true, 512, JSON_THROW_ON_ERROR);
-        self::assertFalse($data['enabled']);
-        self::assertArrayNotHasKey('subscribePath', $data);
+        $this->assertFalse($data['enabled']);
+        $this->assertArrayNotHasKey('subscribePath', $data);
     }
 
     public function testInvokeReturnsPathWhenServerVarSet(): void
@@ -35,10 +35,10 @@ final class FrankenPhpHotReloadControllerTest extends TestCase
 
         $response = (new FrankenPhpHotReloadController())();
 
-        self::assertSame(200, $response->getStatusCode());
+        $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_OK, $response->getStatusCode(), (string) $response->getContent());
         $data = json_decode($response->getContent(), true, 512, JSON_THROW_ON_ERROR);
-        self::assertTrue($data['enabled']);
-        self::assertSame($_SERVER['FRANKENPHP_HOT_RELOAD'], $data['subscribePath']);
-        self::assertStringContainsString('.well-known/mercure', $data['subscribePath']);
+        $this->assertTrue($data['enabled']);
+        $this->assertSame($_SERVER['FRANKENPHP_HOT_RELOAD'], $data['subscribePath']);
+        $this->assertStringContainsString('.well-known/mercure', $data['subscribePath']);
     }
 }

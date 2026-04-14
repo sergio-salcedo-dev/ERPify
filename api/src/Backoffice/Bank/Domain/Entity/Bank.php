@@ -22,9 +22,9 @@ use Symfony\Component\Validator\Constraints as Assert;
 class Bank extends AggregateRoot
 {
     #[ORM\Id]
-    #[ORM\Column(type: UuidType::NAME, unique: true)]
+    #[ORM\Column(name:'id', type: UuidType::NAME, unique: true)]
     #[Groups(['bank:read'])]
-    private Uuid $id;
+    private Uuid $uuid;
 
     #[ORM\Column(length: 255)]
     #[Assert\NotBlank]
@@ -48,7 +48,7 @@ class Bank extends AggregateRoot
 
     #[ORM\ManyToOne(targetEntity: Media::class, cascade: ['persist'])]
     #[ORM\JoinColumn(name: 'logo_media_id', referencedColumnName: 'id', nullable: true)]
-    private ?Media $logo = null;
+    private ?Media $media = null;
 
     /**
      * {@see \Erpify\Shared\Storage\Domain\ContentAddressableObjectKey} path (distinct from BYTEA {@see $logo}).
@@ -70,24 +70,25 @@ class Bank extends AggregateRoot
     }
 
     public static function create(
-        Uuid $id,
+        Uuid $uuid,
         string $name,
         string $shortName,
-        ?Media $logo = null,
+        ?Media $media = null,
         ?string $storedObjectKey = null,
         ?string $storedObjectMimeType = null,
         ?int $storedObjectByteSize = null,
         ?string $storedObjectContentHash = null,
     ): self {
         $bank = new self();
-        $bank->id = $id;
+        $bank->uuid = $uuid;
         $bank->name = $name;
         $bank->shortName = $shortName;
-        $bank->logo = $logo;
+        $bank->media = $media;
         $bank->storedObjectKey = $storedObjectKey;
         $bank->storedObjectMimeType = $storedObjectMimeType;
         $bank->storedObjectByteSize = $storedObjectByteSize;
         $bank->storedObjectContentHash = $storedObjectContentHash;
+
         $now = new DateTimeImmutable();
         $bank->createdAt = $now;
         $bank->updatedAt = $now;
@@ -95,13 +96,13 @@ class Bank extends AggregateRoot
         $createdAt = $now->format(\DateTimeInterface::ATOM);
 
         $bank->record(new BankCreatedDomainEvent(
-            $id->toRfc4122(),
+            $uuid->toRfc4122(),
             $name,
             $shortName,
             $createdAt,
             $createdAt,
-            $logo?->getId()->toRfc4122(),
-            $logo?->getContentHash(),
+            $media?->getId()->toRfc4122(),
+            $media?->getContentHash(),
             $storedObjectContentHash,
             $storedObjectMimeType,
         ));
@@ -111,7 +112,7 @@ class Bank extends AggregateRoot
 
     public function getId(): Uuid
     {
-        return $this->id;
+        return $this->uuid;
     }
 
     public function getName(): string
@@ -136,7 +137,7 @@ class Bank extends AggregateRoot
 
     public function getLogo(): ?Media
     {
-        return $this->logo;
+        return $this->media;
     }
 
     public function getStoredObjectKey(): ?string
@@ -167,13 +168,13 @@ class Bank extends AggregateRoot
         $this->updatedAt = $now;
 
         $this->record(new BankUpdatedDomainEvent(
-            $this->id->toRfc4122(),
+            $this->uuid->toRfc4122(),
             $name,
             $shortName,
             $this->createdAt->format(\DateTimeInterface::ATOM),
             $now->format(\DateTimeInterface::ATOM),
-            $this->logo?->getId()->toRfc4122(),
-            $this->logo?->getContentHash(),
+            $this->media?->getId()->toRfc4122(),
+            $this->media?->getContentHash(),
             $this->storedObjectContentHash,
             $this->storedObjectMimeType,
         ));

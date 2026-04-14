@@ -14,19 +14,19 @@ final class HealthControllerTest extends TestCase
 {
     public function testInvokeReturnsOkJsonWithAtomDatetime(): void
     {
-        $controller = new HealthController();
-        $response = $controller();
+        $healthController = new HealthController();
+        $jsonResponse = $healthController();
 
-        self::assertInstanceOf(JsonResponse::class, $response);
-        self::assertSame(200, $response->getStatusCode());
-        self::assertStringContainsString('application/json', (string) $response->headers->get('Content-Type'));
+        $this->assertInstanceOf(JsonResponse::class, $jsonResponse);
+        $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_OK, $jsonResponse->getStatusCode(), (string) $jsonResponse->getContent());
+        $this->assertStringContainsString('application/json', (string) $jsonResponse->headers->get('Content-Type'));
 
-        $data = json_decode($response->getContent(), true, 512, JSON_THROW_ON_ERROR);
-        self::assertSame('ok', $data['status']);
-        self::assertArrayHasKey('datetime', $data);
-        self::assertIsString($data['datetime']);
+        $data = json_decode($jsonResponse->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame('ok', $data['status']);
+        $this->assertArrayHasKey('datetime', $data);
+        $this->assertIsString($data['datetime']);
 
         $parsed = DateTimeImmutable::createFromFormat(DateTimeInterface::ATOM, $data['datetime']);
-        self::assertInstanceOf(DateTimeImmutable::class, $parsed, 'datetime must be ISO-8601 (ATOM)');
+        $this->assertInstanceOf(DateTimeImmutable::class, $parsed, 'datetime must be ISO-8601 (ATOM)');
     }
 }
