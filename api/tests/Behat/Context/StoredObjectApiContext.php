@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Erpify\Tests\Behat\Context;
 
 use Behat\MinkExtension\Context\RawMinkContext;
+use Behat\Step\Then;
+use Override;
 use RuntimeException;
 
 /**
@@ -14,9 +16,7 @@ final class StoredObjectApiContext extends RawMinkContext
 {
     private const string STORED_OBJECT_URL_PATTERN = '#api/v1/stored-objects/[a-f0-9]{64}#';
 
-    /**
-     * @Then the JSON field :field in the last response should be a stored object URL
-     */
+    #[Then('the JSON field :field in the last response should be a stored object URL')]
     public function theJsonFieldInTheLastResponseShouldBeAStoredObjectUrl(string $field): void
     {
         $value = $this->jsonFieldFromLastResponse($field);
@@ -30,9 +30,7 @@ final class StoredObjectApiContext extends RawMinkContext
         }
     }
 
-    /**
-     * @When I GET the URL from the JSON field :field in the last response
-     */
+    #[\Behat\Step\When('I GET the URL from the JSON field :field in the last response')]
     public function iGetTheUrlFromTheJsonFieldInTheLastResponse(string $field): void
     {
         $raw = $this->jsonFieldFromLastResponse($field);
@@ -43,6 +41,7 @@ final class StoredObjectApiContext extends RawMinkContext
         $driver->getClient()->request('GET', $this->locatePath($path));
     }
 
+    #[Override]
     public function locatePath($path): string
     {
         return parent::locatePath(ScenarioRememberedValues::interpolate((string) $path));

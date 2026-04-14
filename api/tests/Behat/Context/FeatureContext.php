@@ -6,8 +6,12 @@ namespace Erpify\Tests\Behat\Context;
 
 use Behat\Behat\Hook\Scope\BeforeScenarioScope;
 use Behat\Gherkin\Node\PyStringNode;
+use Behat\Hook\BeforeScenario;
 use Behat\MinkExtension\Context\MinkContext;
+use Behat\Step\Then;
+use Behat\Step\When;
 use JsonException;
+use Override;
 use PDO;
 use RuntimeException;
 
@@ -18,9 +22,8 @@ final class FeatureContext extends MinkContext
     /**
      * Reset and re-seed the database before every scenario so each test
      * starts from the same known state.
-     *
-     * @BeforeScenario
      */
+    #[BeforeScenario]
     public function resetDatabase(BeforeScenarioScope $beforeScenarioScope): void
     {
         ScenarioRememberedValues::reset();
@@ -43,9 +46,7 @@ final class FeatureContext extends MinkContext
         $this->clearMailpitInbox();
     }
 
-    /**
-     * @Then /^a domain event named "(?P<eventName>[^"]+)" should be recorded for aggregate \{(?P<alias>[^}]+)\}$/
-     */
+    #[Then('/^a domain event named "(?P<eventName>[^"]+)" should be recorded for aggregate \{(?P<alias>[^}]+)\}$/')]
     public function assertDomainEventRecordedForAggregate(string $eventName, string $alias): void
     {
         $aggregateId = ScenarioRememberedValues::require($alias);
@@ -78,9 +79,8 @@ final class FeatureContext extends MinkContext
      *     """
      *     {"name": "Test", "short_name": "TST"}
      *     """
-     *
-     * @When I send a :method request to :url with body:
      */
+    #[When('I send a :method request to :url with body:')]
     public function iSendARequestToWithBody(string $method, string $url, PyStringNode $pyStringNode): void
     {
         $url = ScenarioRememberedValues::interpolate($url);
@@ -102,9 +102,8 @@ final class FeatureContext extends MinkContext
      *
      * Example:
      *   When I send a DELETE request to "/api/v1/backoffice/banks/{bankId}"
-     *
-     * @When I send a :method request to :url
      */
+    #[When('I send a :method request to :url')]
     public function iSendARequestTo(string $method, string $url): void
     {
         $url = ScenarioRememberedValues::interpolate($url);
@@ -120,9 +119,7 @@ final class FeatureContext extends MinkContext
         ;
     }
 
-    /**
-     * @Then the response should be JSON
-     */
+    #[Then('the response should be JSON')]
     public function theResponseShouldBeJson(): void
     {
         $content = $this->getSession()->getPage()->getContent();
@@ -144,14 +141,15 @@ final class FeatureContext extends MinkContext
      * Example:
      *   And I remember the JSON field "id" as "bankId"
      *
-     * @Then I remember the JSON field :field as :alias
+     * @throws JsonException
      */
+    #[Then('I remember the JSON field :field as :alias')]
     public function iRememberJsonFieldAs(string $field, string $alias): void
     {
         $content = $this->getSession()->getPage()->getContent();
 
         /** @var array<string, mixed> $data */
-        $data = \json_decode((string) $content, true) ?? [];
+        $data = \json_decode($content, true, 512, JSON_THROW_ON_ERROR) ?? [];
 
         ScenarioRememberedValues::set($alias, (string) ($data[$field] ?? ''));
     }
@@ -160,6 +158,7 @@ final class FeatureContext extends MinkContext
      * Override locatePath so that ALL Mink path-based steps (including "I go to")
      * support {alias} placeholder interpolation automatically.
      */
+    #[Override]
     public function locatePath($path): string
     {
         return parent::locatePath(ScenarioRememberedValues::interpolate((string) $path));

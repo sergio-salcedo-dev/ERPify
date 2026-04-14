@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Erpify\Tests\Behat\Context;
 
 use Behat\Behat\Context\Context;
+use Behat\Step\Then;
+use Behat\Step\When;
+use JsonException;
 use RuntimeException;
 
 /**
@@ -14,33 +17,31 @@ final class MessengerContext implements Context
 {
     use MessengerBehatTrait;
 
-    /**
-     * @When I process pending async messenger messages
-     */
+    #[When('I process pending async messenger messages')]
     public function processPendingAsyncMessengerMessages(): void
     {
         $this->consumePendingAsyncMessengerMessages();
     }
 
     /**
-     * @Then the async messenger transport should be empty
+     * @throws JsonException
      */
+    #[Then('the async messenger transport should be empty')]
     public function assertAsyncMessengerTransportEmpty(): void
     {
         $this->assertMessengerTransportCount('async', 0);
     }
 
     /**
-     * @Then the messenger failed transport should be empty
+     * @throws JsonException
      */
+    #[Then('the messenger failed transport should be empty')]
     public function assertMessengerFailedTransportEmpty(): void
     {
         $this->assertMessengerTransportCount('failed', 0);
     }
 
-    /**
-     * @Then the last bank created notification email should mention event :eventName
-     */
+    #[Then('the last bank created notification email should mention event :eventName')]
     public function assertLastNotificationEmailMentionsEvent(string $eventName): void
     {
         $this->assertDomainEventNameFormat($eventName);

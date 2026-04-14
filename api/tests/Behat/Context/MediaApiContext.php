@@ -6,6 +6,9 @@ namespace Erpify\Tests\Behat\Context;
 
 use Behat\Gherkin\Node\TableNode;
 use Behat\MinkExtension\Context\RawMinkContext;
+use Behat\Step\Then;
+use Behat\Step\When;
+use Override;
 use RuntimeException;
 use Symfony\Component\BrowserKit\Response as BrowserKitResponse;
 use Symfony\Component\HttpFoundation\Response as HttpFoundationResponse;
@@ -17,9 +20,8 @@ final class MediaApiContext extends RawMinkContext
 {
     /**
      * Multipart POST. Use @relative/path under features/fixtures/ for file fields (e.g. @minimal-logo.png).
-     *
-     * @When /^I send a POST multipart request to "(?P<url>[^"]+)" with fields:$/
      */
+    #[When('/^I send a POST multipart request to "(?P<url>[^"]+)" with fields:$/')]
     public function iSendPostMultipartRequestToWithFields(string $url, TableNode $tableNode): void
     {
         $url = ScenarioRememberedValues::interpolate($url);
@@ -75,17 +77,13 @@ final class MediaApiContext extends RawMinkContext
         );
     }
 
-    /**
-     * @When I send a GET request to the URL stored as :alias
-     */
+    #[When('I send a GET request to the URL stored as :alias')]
     public function iSendGetRequestToUrlStoredAs(string $alias): void
     {
         $this->sendGetRequestToUrlStoredAsWithServer($alias, []);
     }
 
-    /**
-     * @When I send a GET request to the URL stored as :alias with headers:
-     */
+    #[When('I send a GET request to the URL stored as :alias with headers:')]
     public function iSendGetRequestToUrlStoredAsWithHeaders(string $alias, TableNode $tableNode): void
     {
         $server = [];
@@ -96,9 +94,7 @@ final class MediaApiContext extends RawMinkContext
         $this->sendGetRequestToUrlStoredAsWithServer($alias, $server);
     }
 
-    /**
-     * @Then I remember the response header :headerName as :alias
-     */
+    #[Then('I remember the response header :headerName as :alias')]
     public function iRememberResponseHeaderAs(string $headerName, string $alias): void
     {
         $value = $this->getLastResponseHeader($headerName);
@@ -109,9 +105,7 @@ final class MediaApiContext extends RawMinkContext
         ScenarioRememberedValues::set($alias, $value);
     }
 
-    /**
-     * @Then the response header :headerName should be :expected
-     */
+    #[Then('the response header :headerName should be :expected')]
     public function theResponseHeaderShouldBe(string $headerName, string $expected): void
     {
         $actual = $this->getLastResponseHeader($headerName);
@@ -120,9 +114,7 @@ final class MediaApiContext extends RawMinkContext
         }
     }
 
-    /**
-     * @Then the response header :headerName should contain :substring
-     */
+    #[Then('the response header :headerName should contain :substring')]
     public function theResponseHeaderShouldContain(string $headerName, string $substring): void
     {
         $actual = (string) $this->getLastResponseHeader($headerName);
@@ -131,9 +123,7 @@ final class MediaApiContext extends RawMinkContext
         }
     }
 
-    /**
-     * @Then the response header :headerName should match :pattern
-     */
+    #[Then('the response header :headerName should match :pattern')]
     public function theResponseHeaderShouldMatch(string $headerName, string $pattern): void
     {
         $headerValue = $this->getLastResponseHeader($headerName);
@@ -148,9 +138,7 @@ final class MediaApiContext extends RawMinkContext
         }
     }
 
-    /**
-     * @Then the JSON field :field in the last response should match :pattern
-     */
+    #[Then('the JSON field :field in the last response should match :pattern')]
     public function theJsonFieldShouldMatch(string $field, string $pattern): void
     {
         $content = $this->getSession()->getPage()->getContent();
@@ -163,6 +151,7 @@ final class MediaApiContext extends RawMinkContext
         }
     }
 
+    #[Override]
     public function locatePath($path): string
     {
         return parent::locatePath(ScenarioRememberedValues::interpolate((string) $path));

@@ -11,6 +11,8 @@ return RectorConfig::configure()
         __DIR__ . '/../../features',
         __DIR__ . '/../../src',
         __DIR__ . '/../../tests',
+        __DIR__ . '/../../tools',
+        __DIR__ . '/../../public',
     ])
     ->withPreparedSets(
         deadCode: true,
@@ -43,38 +45,9 @@ return RectorConfig::configure()
         phpunit: true,
         symfony: true,
     )
-    ->withSets([
-        //        LevelSetList::UP_TO_PHP_85,
-        //        SetList::PHP_85,
-
-        // Core code quality sets
-        //        SetList::DEAD_CODE,
-        //        SetList::CODE_QUALITY,
-        //        SetList::CODING_STYLE,
-
-        // Type improvements
-        //        SetList::TYPE_DECLARATION,
-        //        SetList::TYPE_DECLARATION_DOCBLOCKS,
-
-        // Code structure improvements
-        //        SetList::EARLY_RETURN,
-        //        SetList::PRIVATIZATION,
-        //        SetList::INSTANCEOF,
-
-        // Naming conventions
-        //        SetList::NAMING,
-
-        // Behat annotations to attributes (project uses Behat)
-        //        SetList::BEHAT_ANNOTATIONS_TO_ATTRIBUTES,
-
-        // PHPUnit-specific rules
-        //        PHPUnitSetList::PHPUNIT_120,
-        //        PHPUnitSetList::PHPUNIT_CODE_QUALITY,
-        //        PHPUnitSetList::ANNOTATIONS_TO_ATTRIBUTES,
-    ])
     ->withSkip([
-        // Generated / compiled files
-        // '*/migrations/*',
         '*/var/*',
+        '*/vendor/*',
+        '**/config/reference.php',
     ])
 ;
