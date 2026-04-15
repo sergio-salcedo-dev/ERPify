@@ -94,6 +94,8 @@ services:
 
   # Messenger async consumer (Doctrine queue `async`). Requires image/build from compose.override.yaml or compose.prod.yaml.
   messenger_worker:
+    # Default dev image; override via compose.prod.yaml for production builds
+    image: ${IMAGES_PREFIX:-}app-php-dev
     restart: unless-stopped
     depends_on:
       database:
