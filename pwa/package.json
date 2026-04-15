@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
+    "e2e:reports": "playwright show-report reports",
     "clean": "next clean"
   },
   "dependencies": {

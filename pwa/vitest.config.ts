@@ -9,6 +9,7 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./tests/setup.ts"],
     exclude: ["**/node_modules/**", "**/dist/**", "**/tests/e2e/**"],
+    reporters: ["default", ["junit", { outputFile: "reports/vitest/junit.xml" }]],
   },
   resolve: {
     alias: {
