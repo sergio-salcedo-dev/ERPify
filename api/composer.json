@@ -119,6 +119,7 @@
         "doctrine/doctrine-fixtures-bundle": "^4.3.1",
         "friendsofphp/php-cs-fixer": "^3.95.1",
         "hautelook/alice-bundle": "^2.17.3",
+        "icanhazstring/composer-unused": "^0.9.6",
         "maglnet/composer-require-checker": "^4.24.0",
         "phpstan/phpstan": "^2.1.48",
         "phpstan/phpstan-symfony": "^2.0.15",
