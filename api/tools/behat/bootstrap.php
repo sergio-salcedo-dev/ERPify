@@ -13,11 +13,12 @@ require $toolRoot . '/vendor/autoload.php';
 // Symfony 7 components and breaks interface compatibility (e.g. CompilerPassInterface).
 
 if (is_file($apiRoot . '/.env') && class_exists(Dotenv::class) && method_exists(Dotenv::class, 'bootEnv')) {
-    new Dotenv()->bootEnv($apiRoot . '/.env');
+    (new Dotenv)->bootEnv($apiRoot . '/.env');
 }
 
 if (false === getenv('MINK_BASE_URL') || '' === getenv('MINK_BASE_URL')) {
     $fromEnv = $_SERVER['MINK_BASE_URL'] ?? $_ENV['MINK_BASE_URL'] ?? null;
+
     if (is_string($fromEnv) && '' !== $fromEnv) {
         putenv('MINK_BASE_URL=' . $fromEnv);
     } else {

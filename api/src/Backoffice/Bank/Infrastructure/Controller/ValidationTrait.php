@@ -13,6 +13,7 @@ trait ValidationTrait
     private function validationErrorResponse(ConstraintViolationListInterface $constraintViolationList): JsonResponse
     {
         $errors = [];
+
         foreach ($constraintViolationList as $violation) {
             $errors[] = [
                 'field' => $this->toSnakeCase($violation->getPropertyPath()),

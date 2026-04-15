@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Frontoffice;
 
+use PHPUnit\Framework\Attributes\CoversNothing;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
  * @internal
  */
-#[\PHPUnit\Framework\Attributes\CoversNothing]
+#[CoversNothing]
 final class MercureBootstrapFunctionalTest extends WebTestCase
 {
     public function testBootstrapReturnsTopicHubLinkAndMercureCookie(): void

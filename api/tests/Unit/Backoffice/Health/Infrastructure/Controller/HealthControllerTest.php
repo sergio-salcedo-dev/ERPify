@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Backoffice\Health\Infrastructure\Controller;
 use DateTimeImmutable;
 use DateTimeInterface;
 use Erpify\Backoffice\Health\Infrastructure\Controller\HealthController;
+use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -14,12 +15,12 @@ use Symfony\Component\HttpFoundation\Response;
 /**
  * @internal
  */
-#[\PHPUnit\Framework\Attributes\CoversNothing]
+#[CoversNothing]
 final class HealthControllerTest extends TestCase
 {
     public function testInvokeReturnsOkJsonWithAtomDatetime(): void
     {
-        $healthController = new HealthController();
+        $healthController = new HealthController;
         $jsonResponse = $healthController();
 
         $this->assertInstanceOf(JsonResponse::class, $jsonResponse);

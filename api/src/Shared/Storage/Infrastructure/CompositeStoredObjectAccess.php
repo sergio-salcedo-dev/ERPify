@@ -35,6 +35,7 @@ final readonly class CompositeStoredObjectAccess implements StoredObjectAccessPo
     {
         foreach ($this->inspectors as $inspector) {
             $mime = $inspector->findMimeTypeForContentHash($contentHash);
+
             if (null !== $mime && '' !== $mime) {
                 return $mime;
             }

@@ -78,7 +78,7 @@ class Bank extends AggregateRoot
         ?int $storedObjectByteSize = null,
         ?string $storedObjectContentHash = null,
     ): self {
-        $bank = new self();
+        $bank = new self;
         $bank->uuid = $uuid;
         $bank->name = $name;
         $bank->shortName = $shortName;
@@ -88,7 +88,7 @@ class Bank extends AggregateRoot
         $bank->storedObjectByteSize = $storedObjectByteSize;
         $bank->storedObjectContentHash = $storedObjectContentHash;
 
-        $now = new DateTimeImmutable();
+        $now = new DateTimeImmutable;
         $bank->createdAt = $now;
         $bank->updatedAt = $now;
 
@@ -163,7 +163,7 @@ class Bank extends AggregateRoot
     {
         $this->name = $name;
         $this->shortName = $shortName;
-        $now = new DateTimeImmutable();
+        $now = new DateTimeImmutable;
         $this->updatedAt = $now;
 
         $this->record(new BankUpdatedDomainEvent(

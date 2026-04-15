@@ -50,14 +50,14 @@ class Media
         int $byteSize,
         string $rawBytes,
     ): self {
-        $media = new self();
+        $media = new self;
         $media->uuid = $uuid;
         $media->contentHash = $contentHash;
         $media->mimeType = $mimeType;
         $media->byteSize = $byteSize;
         $media->rawBytes = $rawBytes;
 
-        $now = new DateTimeImmutable();
+        $now = new DateTimeImmutable;
         $media->createdAt = $now;
         $media->updatedAt = $now;
 
@@ -106,7 +106,12 @@ class Media
 
     public function softDelete(): void
     {
-        $this->deletedAt = new DateTimeImmutable();
+        $this->deletedAt = new DateTimeImmutable;
         $this->updatedAt = $this->deletedAt;
+    }
+
+    public function getCreatedAt(): DateTimeImmutable
+    {
+        return $this->createdAt;
     }
 }

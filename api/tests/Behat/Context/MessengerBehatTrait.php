@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Behat\Context;
 
+use JsonException;
 use RuntimeException;
 
 /**
@@ -53,6 +54,7 @@ trait MessengerBehatTrait
     {
         $base = \rtrim(\getenv('MAILPIT_API_BASE_URL') ?: 'http://mailpit:8025', '/');
         $ch = \curl_init($base . '/api/v1/messages');
+
         if (false === $ch) {
             return;
         }
@@ -81,6 +83,9 @@ trait MessengerBehatTrait
         }
     }
 
+    /**
+     * @throws JsonException
+     */
     private function assertMessengerTransportCount(string $transport, int $expected): void
     {
         $console = $this->messengerBinConsole();
@@ -99,7 +104,8 @@ trait MessengerBehatTrait
         }
 
         $raw = \implode("\n", $output);
-        if (!\preg_match('/\{[\s\S]*\}/', $raw, $m)) {
+
+        if (!\preg_match('/\{[\s\S]*}/', $raw, $m)) {
             throw new RuntimeException(\sprintf('Could not parse JSON from messenger:stats: %s', $raw));
         }
 
@@ -115,11 +121,14 @@ trait MessengerBehatTrait
     }
 
     /**
+     * @throws JsonException
+     *
      * @return array<string, mixed>
      */
     private function httpGetJson(string $url): array
     {
         $ch = \curl_init($url);
+
         if (false === $ch) {
             throw new RuntimeException('curl_init failed');
         }

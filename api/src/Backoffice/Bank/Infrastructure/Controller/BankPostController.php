@@ -34,6 +34,7 @@ final readonly class BankPostController
     public function __invoke(Request $request): JsonResponse
     {
         $contentType = (string) $request->headers->get('Content-Type', '');
+
         if ($request->files->count() > 0 || \str_contains($contentType, 'multipart/form-data')) {
             return $this->fromMultipart($request);
         }
@@ -51,6 +52,7 @@ final readonly class BankPostController
         }
 
         $constraintViolationList = $this->validator->validate($input);
+
         if (\count($constraintViolationList) > 0) {
             return $this->validationErrorResponse($constraintViolationList);
         }
@@ -67,20 +69,22 @@ final readonly class BankPostController
 
     private function fromMultipart(Request $request): JsonResponse
     {
-        $bankInput = new BankInput();
+        $bankInput = new BankInput;
         $bankInput->name = (string) $request->request->get('name', '');
         $bankInput->shortName = (string) ($request->request->get('short_name') ?? $request->request->get('shortName', ''));
 
         $constraintViolationList = $this->validator->validate($bankInput);
+
         if (\count($constraintViolationList) > 0) {
             return $this->validationErrorResponse($constraintViolationList);
         }
 
-        /** @var null|UploadedFile $image */
+        /** @var UploadedFile|null $image */
         $image = $request->files->get('image');
 
-        /** @var null|UploadedFile $storedObject */
+        /** @var UploadedFile|null $storedObject */
         $storedObject = $request->files->get('stored_object');
+
         foreach (['image' => $image, 'stored_object' => $storedObject] as $file) {
             if (null === $file) {
                 continue;
@@ -93,6 +97,7 @@ final readonly class BankPostController
                     mimeTypesMessage: 'Upload a JPEG, PNG, or WebP image.',
                 ),
             ]);
+
             if (\count($fileViolations) > 0) {
                 return $this->validationErrorResponse($fileViolations);
             }

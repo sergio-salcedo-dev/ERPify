@@ -25,13 +25,23 @@ php.rector.apply: ## Rector apply fixes
 
 ## —— PHP CS Fixer ——
 
-php.csfixer.dry-run: ## PHP CS Fixer — check for violations (dry run)
+php.cs-fixer.dry-run: ## PHP CS Fixer — check for violations (dry run)
 	@$(eval c ?=--dry-run --diff)
 	$(PHP) vendor/bin/php-cs-fixer fix --config=tools/ecs/.php-cs-fixer.dist.php $(c)
 
-php.csfixer.apply: ## PHP CS Fixer — apply fixes
+php.cs-fixer.apply: ## PHP CS Fixer — apply fixes
 	$(PHP) vendor/bin/php-cs-fixer fix --config=tools/ecs/.php-cs-fixer.dist.php --diff
+
+## —— PHP Mess Detector ——
+
+php.md: ## PHPMD code smell check; pass c= for extra args (e.g. make php.phpmd c='src/ xml cleancode,codesize,unusedcode')
+	@$(eval c ?=)
+#	$(PHP_TEST) php -d error_reporting='E_ALL & ~E_DEPRECATED' vendor/bin/phpmd api/bin,api/config,api/src,api/tests,api/tools,api/public text tools/phpmd/phpmd.xml $(c)
+	$(PHP_TEST) php -d error_reporting='E_ALL & ~E_DEPRECATED' \
+		tools/phpmd/phpmd.phar \
+		bin,config,src,tests,tools,public \
+		text tools/phpmd/phpmd.xml $(c)
 
 ## —— Lint suite ——
 
-lint: php.stan php.rector.apply php.csfixer.apply ## Run all linters
+php.lint: php.stan php.rector.apply php.cs-fixer.apply php.md ## Run all linters

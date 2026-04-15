@@ -7,6 +7,9 @@ namespace Erpify\Backoffice\Bank\Domain\Event;
 use DateTimeImmutable;
 use Erpify\Shared\Domain\Event\DomainEvent;
 
+/**
+ * @SuppressWarnings(PHPMD.ExcessiveParameterList)
+ */
 final class BankCreatedDomainEvent extends DomainEvent
 {
     public function __construct(
@@ -35,7 +38,7 @@ final class BankCreatedDomainEvent extends DomainEvent
     }
 
     /**
-     * @return array<string, null|string>
+     * @return array<string, string|null>
      */
     public function toPrimitives(): array
     {

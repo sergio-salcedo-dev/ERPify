@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Rector\Config\RectorConfig;
+use Rector\Php84\Rector\MethodCall\NewMethodCallWithoutParenthesesRector;
 
 return RectorConfig::configure()
     ->withPaths([
@@ -49,5 +50,7 @@ return RectorConfig::configure()
         '*/var/*',
         '*/vendor/*',
         '**/config/reference.php',
+        // Do not simplify (new Class())->method()
+        NewMethodCallWithoutParenthesesRector::class,
     ])
 ;

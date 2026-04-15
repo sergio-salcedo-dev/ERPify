@@ -14,7 +14,7 @@ interface NotificationMailer
 {
     /**
      * @param array<string, mixed> $fields           key/value lines (typically from `DomainEvent::toPrimitives()`)
-     * @param null|string          $correlationLabel When set (e.g. event name), implementations may show an "Event: …" line.
+     * @param string|null          $correlationLabel When set (e.g. event name), implementations may show an "Event: …" line.
      */
     public function send(string $to, string $subject, array $fields, ?string $correlationLabel = null): void;
 }

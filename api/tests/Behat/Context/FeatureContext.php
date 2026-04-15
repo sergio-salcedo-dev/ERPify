@@ -15,6 +15,9 @@ use Override;
 use PDO;
 use RuntimeException;
 
+/**
+ * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+ */
 final class FeatureContext extends MinkContext
 {
     use MessengerBehatTrait;
@@ -174,16 +177,19 @@ final class FeatureContext extends MinkContext
     private function pdoFromDatabaseUrl(): PDO
     {
         $url = \getenv('DATABASE_URL');
+
         if (false === $url || '' === $url) {
             throw new RuntimeException('DATABASE_URL is not set; cannot query domain_event from Behat.');
         }
 
         $parts = \parse_url($url);
+
         if (false === $parts || !isset($parts['scheme'], $parts['host'], $parts['path'])) {
             throw new RuntimeException('DATABASE_URL could not be parsed for Behat DB assertions.');
         }
 
         $scheme = \strtolower($parts['scheme']);
+
         if (!\in_array($scheme, ['postgresql', 'postgres'], true)) {
             throw new RuntimeException('DATABASE_URL must be a PostgreSQL DSN for Behat DB assertions.');
         }

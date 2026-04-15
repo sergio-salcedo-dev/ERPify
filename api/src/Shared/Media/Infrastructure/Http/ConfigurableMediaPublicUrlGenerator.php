@@ -24,6 +24,7 @@ final readonly class ConfigurableMediaPublicUrlGenerator implements MediaPublicU
     public function urlForContentHash(string $contentHash): string
     {
         $base = \trim($this->mediaPublicBaseUrl);
+
         if ('' !== $base) {
             return \rtrim($base, '/') . '/api/v1/media/' . $contentHash;
         }
