@@ -23,8 +23,8 @@ final class FrankenPhpHotReloadControllerTest extends TestCase
     public function testInvokeReturnsDisabledWhenServerVarMissing(): void
     {
         // Create an empty request (no FRANKENPHP_HOT_RELOAD)
-        $request = new Request;
-        $response = (new FrankenPhpHotReloadController)($request);
+        $request = new Request();
+        $response = (new FrankenPhpHotReloadController())($request);
 
         $this->assertSame(Response::HTTP_OK, $response->getStatusCode(), (string) $response->getContent());
 
@@ -43,7 +43,7 @@ final class FrankenPhpHotReloadControllerTest extends TestCase
         // Inject the server variable directly into the Request object
         $request = new Request(server: ['FRANKENPHP_HOT_RELOAD' => $path]);
 
-        $response = (new FrankenPhpHotReloadController)($request);
+        $response = (new FrankenPhpHotReloadController())($request);
 
         $this->assertSame(Response::HTTP_OK, $response->getStatusCode(), (string) $response->getContent());
 

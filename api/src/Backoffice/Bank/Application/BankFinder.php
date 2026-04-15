@@ -11,7 +11,9 @@ use Symfony\Component\Uid\Uuid;
 
 final readonly class BankFinder
 {
-    public function __construct(private BankRepository $bankRepository) {}
+    public function __construct(private BankRepository $bankRepository)
+    {
+    }
 
     public function find(Uuid $uuid): Bank
     {

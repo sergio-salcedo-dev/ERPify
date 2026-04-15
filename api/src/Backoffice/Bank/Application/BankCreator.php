@@ -19,7 +19,8 @@ final readonly class BankCreator
         private MessageBusInterface $messageBus,
         private MediaRegistrar $mediaRegistrar,
         private StoredImageObjectWriter $storedImageObjectWriter,
-    ) {}
+    ) {
+    }
 
     public function create(
         string $name,

@@ -12,7 +12,8 @@ final readonly class BankDeleter
     public function __construct(
         private BankRepository $bankRepository,
         private BankFinder $bankFinder,
-    ) {}
+    ) {
+    }
 
     public function delete(Uuid $uuid): void
     {

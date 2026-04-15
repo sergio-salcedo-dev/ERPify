@@ -17,7 +17,8 @@ final readonly class FlysystemObjectStorage implements ObjectStoragePort
     public function __construct(
         #[Target('erpify.object_storage.storage')]
         private FilesystemOperator $filesystemOperator,
-    ) {}
+    ) {
+    }
 
     public function write(string $key, string $contents): void
     {

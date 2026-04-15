@@ -15,7 +15,8 @@ final readonly class MediaRegistrar
     public function __construct(
         private ImageNormalizer $imageNormalizer,
         private MediaRepository $mediaRepository,
-    ) {}
+    ) {
+    }
 
     public function registerFromUploadedFile(UploadedFile $uploadedFile): Media
     {

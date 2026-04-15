@@ -23,7 +23,7 @@ final class HealthControllerTest extends TestCase
      */
     public function testInvokeReturnsOkJsonWithAtomDatetime(): void
     {
-        $healthController = new HealthController;
+        $healthController = new HealthController();
         $jsonResponse = $healthController();
 
         $this->assertSame(Response::HTTP_OK, $jsonResponse->getStatusCode(), (string) $jsonResponse->getContent());

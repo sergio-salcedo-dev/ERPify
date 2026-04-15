@@ -18,7 +18,8 @@ final readonly class BankGetController
     public function __construct(
         private BankFinder $bankFinder,
         private SerializerInterface $serializer,
-    ) {}
+    ) {
+    }
 
     public function __invoke(Uuid $uuid): JsonResponse
     {

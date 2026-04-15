@@ -19,7 +19,8 @@ final readonly class StoredObjectGetController
     public function __construct(
         private ObjectStoragePort $objectStoragePort,
         private StoredObjectAccessPort $storedObjectAccessPort,
-    ) {}
+    ) {
+    }
 
     public function __invoke(Request $request, string $hash): Response
     {
@@ -28,7 +29,7 @@ final readonly class StoredObjectGetController
         }
 
         if ($this->ifNoneMatchEqualsHash($request, $hash)) {
-            $response = new Response;
+            $response = new Response();
             $response->setStatusCode(Response::HTTP_NOT_MODIFIED);
             $this->applyCacheAndSecurityHeaders($response, $hash);
 

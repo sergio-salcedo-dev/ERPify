@@ -16,12 +16,13 @@ final readonly class MediaGetController
 
     public function __construct(
         private MediaRepository $mediaRepository,
-    ) {}
+    ) {
+    }
 
     public function __invoke(Request $request, string $hash): Response
     {
         if ($this->ifNoneMatchEqualsHash($request, $hash) && $this->mediaRepository->existsActiveByContentHash($hash)) {
-            $response = new Response;
+            $response = new Response();
             $response->setStatusCode(Response::HTTP_NOT_MODIFIED);
             $this->applyCacheAndSecurityHeaders($response, $hash);
 

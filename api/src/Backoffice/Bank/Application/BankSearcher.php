@@ -9,7 +9,9 @@ use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 
 final readonly class BankSearcher
 {
-    public function __construct(private BankRepository $bankRepository) {}
+    public function __construct(private BankRepository $bankRepository)
+    {
+    }
 
     /** @return Bank[] */
     public function search(): array

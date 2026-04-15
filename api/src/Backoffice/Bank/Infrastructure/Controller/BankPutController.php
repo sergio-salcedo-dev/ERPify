@@ -25,7 +25,8 @@ final readonly class BankPutController
         private BankUpdater $bankUpdater,
         private SerializerInterface $serializer,
         private ValidatorInterface $validator,
-    ) {}
+    ) {
+    }
 
     public function __invoke(Uuid $uuid, Request $request): JsonResponse
     {

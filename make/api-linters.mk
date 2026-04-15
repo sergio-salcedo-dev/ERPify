@@ -20,16 +20,16 @@ php.rector.dry-run: ## Rector dry run; pass c= for extra args
 	@$(eval c ?=)
 	$(PHP) vendor/bin/rector process --config=tools/rector/rector.php --dry-run $(c)
 
-php.rector.apply: ## Rector apply fixes
+php.rector: ## Rector apply fixes
 	$(PHP) vendor/bin/rector process --config=tools/rector/rector.php
 
 ## —— PHP CS Fixer ——
 
 php.cs-fixer.dry-run: ## PHP CS Fixer — check for violations (dry run)
-	@$(eval c ?=--dry-run --diff)
-	$(PHP) vendor/bin/php-cs-fixer fix --config=tools/ecs/.php-cs-fixer.dist.php $(c)
+	@$(eval c ?=)
+	$(PHP) vendor/bin/php-cs-fixer fix --config=tools/ecs/.php-cs-fixer.dist.php --dry-run --diff $(c)
 
-php.cs-fixer.apply: ## PHP CS Fixer — apply fixes
+php.cs-fixer: ## PHP CS Fixer — apply fixes
 	$(PHP) vendor/bin/php-cs-fixer fix --config=tools/ecs/.php-cs-fixer.dist.php --diff
 
 ## —— PHP Mess Detector ——
@@ -42,6 +42,16 @@ php.md: ## PHPMD code smell check; pass c= for extra args (e.g. make php.phpmd c
 		bin,config,src,tests,tools,public \
 		text tools/phpmd/phpmd.xml $(c)
 
+## —— PHP Code Sniffer ——
+
+php.cs.dry-run: ## PHPCS coding standard check; pass c= for extra args
+	@$(eval c ?=)
+	$(PHP_TEST) vendor/bin/phpcs --standard=tools/phpcs/phpcs.xml $(c)
+
+php.cs: ## PHPCBF automatic coding standard fix; pass c= for extra args
+	@$(eval c ?=)
+	$(PHP_TEST) vendor/bin/phpcbf --standard=tools/phpcs/phpcs.xml $(c)
+
 ## —— Lint suite ——
 
-php.lint: php.stan php.rector.apply php.cs-fixer.apply php.md ## Run all linters
+php.lint: php.stan php.rector php.cs-fixer php.md php.cs ## Run all linters

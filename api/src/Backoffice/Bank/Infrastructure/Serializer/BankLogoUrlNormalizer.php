@@ -25,7 +25,8 @@ final class BankLogoUrlNormalizer implements NormalizerInterface, NormalizerAwar
     public function __construct(
         private readonly MediaPublicUrlGenerator $mediaPublicUrlGenerator,
         private readonly StoredObjectPublicUrlGenerator $storedObjectPublicUrlGenerator,
-    ) {}
+    ) {
+    }
 
     public function normalize(mixed $object, ?string $format = null, array $context = []): array
     {

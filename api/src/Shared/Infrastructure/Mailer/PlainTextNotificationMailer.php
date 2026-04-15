@@ -20,7 +20,8 @@ final readonly class PlainTextNotificationMailer implements NotificationMailer
         private MailerInterface $mailer,
         #[Autowire('%env(MAILER_FROM)%')]
         private string $mailFrom,
-    ) {}
+    ) {
+    }
 
     public function send(string $to, string $subject, array $fields, ?string $correlationLabel = null): void
     {
@@ -37,7 +38,7 @@ final readonly class PlainTextNotificationMailer implements NotificationMailer
 
         $body = \implode("\n", $lines);
 
-        $email = (new Email)
+        $email = (new Email())
             ->from($this->mailFrom)
             ->to($to)
             ->subject($subject)

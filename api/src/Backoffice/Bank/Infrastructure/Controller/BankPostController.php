@@ -29,7 +29,8 @@ final readonly class BankPostController
         private ValidatorInterface $validator,
         #[Autowire('%erpify.media.max_upload_bytes%')]
         private string $maxUploadSize,
-    ) {}
+    ) {
+    }
 
     public function __invoke(Request $request): JsonResponse
     {
@@ -69,7 +70,7 @@ final readonly class BankPostController
 
     private function fromMultipart(Request $request): JsonResponse
     {
-        $bankInput = new BankInput;
+        $bankInput = new BankInput();
         $bankInput->name = (string) $request->request->get('name', '');
         $bankInput->shortName = (string) ($request->request->get('short_name') ?? $request->request->get('shortName', ''));
 

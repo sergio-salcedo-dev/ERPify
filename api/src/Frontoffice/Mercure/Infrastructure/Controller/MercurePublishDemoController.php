@@ -22,7 +22,8 @@ final readonly class MercurePublishDemoController
         private HubInterface $hub,
         #[Autowire('%kernel.environment%')]
         private string $environment,
-    ) {}
+    ) {
+    }
 
     /**
      * @throws JsonException
@@ -30,12 +31,12 @@ final readonly class MercurePublishDemoController
     public function __invoke(): JsonResponse
     {
         if ('dev' !== $this->environment) {
-            throw new NotFoundHttpException;
+            throw new NotFoundHttpException();
         }
 
         $payload = [
             'message' => 'Mercure demo publish',
-            'at' => (new DateTimeImmutable)->format(DateTimeInterface::ATOM),
+            'at' => (new DateTimeImmutable())->format(DateTimeInterface::ATOM),
         ];
 
         $this->hub->publish(new Update(

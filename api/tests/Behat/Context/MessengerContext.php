@@ -41,6 +41,9 @@ final class MessengerContext implements Context
         $this->assertMessengerTransportCount('failed', 0);
     }
 
+    /**
+     * @throws JsonException
+     */
     #[Then('the last bank created notification email should mention event :eventName')]
     public function assertLastNotificationEmailMentionsEvent(string $eventName): void
     {

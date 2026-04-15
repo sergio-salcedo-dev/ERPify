@@ -18,7 +18,8 @@ final readonly class CompositeStoredObjectAccess implements StoredObjectAccessPo
     public function __construct(
         #[AutowireIterator('stored_object.reference_inspector')]
         private iterable $inspectors,
-    ) {}
+    ) {
+    }
 
     public function existsAnyWithContentHash(string $contentHash): bool
     {

@@ -18,7 +18,9 @@ use Symfony\Component\Uid\Uuid;
 #[AsAlias(DomainEventStore::class)]
 final readonly class DoctrineDomainEventStore implements DomainEventStore
 {
-    public function __construct(private StoredDomainEventRepository $storedDomainEventRepository) {}
+    public function __construct(private StoredDomainEventRepository $storedDomainEventRepository)
+    {
+    }
 
     public function append(DomainEvent $domainEvent): void
     {

@@ -19,7 +19,8 @@ final readonly class ConfigurableStoredObjectPublicUrlGenerator implements Store
         private RequestStack $requestStack,
         #[Autowire('%env(MEDIA_PUBLIC_BASE_URL)%')]
         private string $mediaPublicBaseUrl,
-    ) {}
+    ) {
+    }
 
     public function urlForContentHash(string $contentHash): string
     {

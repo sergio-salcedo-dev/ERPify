@@ -32,5 +32,6 @@ class StoredDomainEvent
         private DateTimeImmutable $occurredOn,
         #[ORM\Column(type: \Doctrine\DBAL\Types\Types::JSON)]
         private array $body,
-    ) {}
+    ) {
+    }
 }

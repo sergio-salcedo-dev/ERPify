@@ -15,7 +15,8 @@ final readonly class BankUpdater
         private BankRepository $bankRepository,
         private BankFinder $bankFinder,
         private MessageBusInterface $messageBus,
-    ) {}
+    ) {
+    }
 
     public function update(Uuid $uuid, string $name, string $shortName): Bank
     {

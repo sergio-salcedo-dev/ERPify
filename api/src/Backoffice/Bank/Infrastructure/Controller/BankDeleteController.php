@@ -14,7 +14,9 @@ use Symfony\Component\Uid\Uuid;
 #[Route('/banks/{id}', name: 'backoffice_bank_delete', methods: ['DELETE'])]
 final readonly class BankDeleteController
 {
-    public function __construct(private BankDeleter $bankDeleter) {}
+    public function __construct(private BankDeleter $bankDeleter)
+    {
+    }
 
     public function __invoke(Uuid $uuid): JsonResponse
     {

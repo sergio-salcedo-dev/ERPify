@@ -66,7 +66,9 @@ class Bank extends AggregateRoot
     #[ORM\Column(name: 'stored_object_content_hash', length: 64, nullable: true)]
     private ?string $storedObjectContentHash = null;
 
-    private function __construct() {}
+    private function __construct()
+    {
+    }
 
     public static function create(
         Uuid $uuid,
@@ -78,7 +80,7 @@ class Bank extends AggregateRoot
         ?int $storedObjectByteSize = null,
         ?string $storedObjectContentHash = null,
     ): self {
-        $bank = new self;
+        $bank = new self();
         $bank->uuid = $uuid;
         $bank->name = $name;
         $bank->shortName = $shortName;
@@ -88,7 +90,7 @@ class Bank extends AggregateRoot
         $bank->storedObjectByteSize = $storedObjectByteSize;
         $bank->storedObjectContentHash = $storedObjectContentHash;
 
-        $now = new DateTimeImmutable;
+        $now = new DateTimeImmutable();
         $bank->createdAt = $now;
         $bank->updatedAt = $now;
 
@@ -163,7 +165,7 @@ class Bank extends AggregateRoot
     {
         $this->name = $name;
         $this->shortName = $shortName;
-        $now = new DateTimeImmutable;
+        $now = new DateTimeImmutable();
         $this->updatedAt = $now;
 
         $this->record(new BankUpdatedDomainEvent(

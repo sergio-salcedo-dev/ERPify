@@ -16,7 +16,8 @@ abstract class DomainEvent
         private readonly string $aggregateId,
         private readonly string $eventId,
         private readonly DateTimeImmutable $occurredOn,
-    ) {}
+    ) {
+    }
 
     abstract public static function eventName(): string;
 
@@ -47,6 +48,6 @@ abstract class DomainEvent
 
     protected static function now(): DateTimeImmutable
     {
-        return new DateTimeImmutable;
+        return new DateTimeImmutable();
     }
 }

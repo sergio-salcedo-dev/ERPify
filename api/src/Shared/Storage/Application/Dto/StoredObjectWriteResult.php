@@ -11,5 +11,6 @@ final readonly class StoredObjectWriteResult
         public string $mimeType,
         public int $byteSize,
         public string $contentHash,
-    ) {}
+    ) {
+    }
 }

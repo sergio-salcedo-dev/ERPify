@@ -16,7 +16,8 @@ final readonly class BanksGetController
     public function __construct(
         private BankSearcher $bankSearcher,
         private SerializerInterface $serializer,
-    ) {}
+    ) {
+    }
 
     public function __invoke(): JsonResponse
     {

@@ -10,5 +10,6 @@ final readonly class NormalizedImage
         public string $bytes,
         public string $mimeType,
         public string $contentHash,
-    ) {}
+    ) {
+    }
 }

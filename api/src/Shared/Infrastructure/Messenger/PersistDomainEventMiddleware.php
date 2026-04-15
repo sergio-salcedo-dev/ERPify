@@ -16,7 +16,9 @@ use Symfony\Component\Messenger\Middleware\StackInterface;
  */
 final readonly class PersistDomainEventMiddleware implements MiddlewareInterface
 {
-    public function __construct(private DomainEventStore $domainEventStore) {}
+    public function __construct(private DomainEventStore $domainEventStore)
+    {
+    }
 
     public function handle(Envelope $envelope, StackInterface $stack): Envelope
     {
