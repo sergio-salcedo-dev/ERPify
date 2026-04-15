@@ -12,7 +12,8 @@
     "minimum-stability":"stable",
     "prefer-stable":true,
     "require":{
-        "php": "^8.5.4",
+        "php": "^8.5.5",
+        "ext-bcmath": "*",
         "ext-ctype": "*",
         "ext-curl": "*",
         "ext-fileinfo": "*",
@@ -118,6 +119,7 @@
         "doctrine/doctrine-fixtures-bundle": "^4.3.1",
         "friendsofphp/php-cs-fixer": "^3.95.1",
         "hautelook/alice-bundle": "^2.17.3",
+        "maglnet/composer-require-checker": "^4.24.0",
         "phpstan/phpstan": "^2.1.48",
         "phpstan/phpstan-symfony": "^2.0.15",
         "phpunit/phpunit": "^13.1.4",

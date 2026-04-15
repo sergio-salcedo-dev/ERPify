@@ -53,6 +53,7 @@ endef
 
 # —— Include modular makefiles ———————————————————————————————————————————————
 -include $(ROOT_DIR)/make/api-linters.mk
+-include $(ROOT_DIR)/make/php-composer.mk
 
 .DEFAULT_GOAL := help
 
