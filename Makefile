@@ -68,7 +68,9 @@ endef
 	php.unit php.unit.install php.behat php.behat.install test \
 	pwa.install pwa.dev pwa.build pwa.test pwa.e2e pwa.lint pwa.lint.fix pwa.format \
 	xdebug.enable xdebug.disable xdebug.status \
-	ci start
+	ci start \
+	php.psalm php.psalm.baseline php.composer-unused lint \
+	superlint superlint-quick superlint-pull
 
 # =============================================================================
 # Help
@@ -353,3 +355,50 @@ xdebug.status: ## Show PHP / Xdebug versions and XDEBUG_MODE in php container
 # =============================================================================
 
 ci: pwa.lint pwa.test pwa.build ## PWA lint + unit tests + build (no E2E)
+
+# =============================================================================
+# SuperLinter (Docker)
+# =============================================================================
+
+SUPERLINTER_IMAGE ?= super-linter/super-linter:latest
+SUPERLINTER_VALIDATE_ALL_CODEBASE ?= true
+SUPERLINTER_FILTER_REGEX_EXCLUDE ?= (vendor/|node_modules/|\.git/)
+GITHUB_TOKEN ?=
+
+superlint: ## Run SuperLinter on entire codebase via Docker (all linters enabled). Pass GITHUB_TOKEN=xxx
+	docker run --rm \
+		-e RUN_LOCAL=true \
+		-e VALIDATE_ALL_CODEBASE=$(SUPERLINTER_VALIDATE_ALL_CODEBASE) \
+		-e FILTER_REGEX_EXCLUDE=$(SUPERLINTER_FILTER_REGEX_EXCLUDE) \
+		$(if $(GITHUB_TOKEN),-e GITHUB_TOKEN=$(GITHUB_TOKEN)) \
+		-e VALIDATE_BASH=true \
+		-e VALIDATE_BASH_EXEC=true \
+		-e VALIDATE_CSS=true \
+		-e VALIDATE_DOCKERFILE_HADOLINT=true \
+		-e VALIDATE_EDITORCONFIG=true \
+		-e VALIDATE_ENV=true \
+		-e VALIDATE_GITHUB_ACTIONS=true \
+		-e VALIDATE_HTML=true \
+		-e VALIDATE_JAVASCRIPT_ES=true \
+		-e VALIDATE_JSON=true \
+		-e VALIDATE_KUBERNETES_KUBECONFORM=true \
+		-e VALIDATE_MARKDOWN=true \
+		-e VALIDATE_NATURAL_LANGUAGE=true \
+		-e VALIDATE_PHP=true \
+		-e VALIDATE_PHP_PHPCS=true \
+		-e VALIDATE_PHP_PHPSTAN=true \
+		-e VALIDATE_PHP_PSALM=true \
+		-e VALIDATE_PYTHON=true \
+		-e VALIDATE_SHELL_SHFMT=true \
+		-e VALIDATE_SQL=true \
+		-e VALIDATE_TYPESCRIPT_ES=true \
+		-e VALIDATE_XML=true \
+		-e VALIDATE_YAML=true \
+		-v $(ROOT_DIR):/tmp/lint \
+		$(SUPERLINTER_IMAGE)
+
+superlint-quick: ## Run SuperLinter on changed files only (faster)
+	$(MAKE) superlint SUPERLINTER_VALIDATE_ALL_CODEBASE=false
+
+superlint-pull: ## Pull latest SuperLinter image
+	docker pull $(SUPERLINTER_IMAGE)

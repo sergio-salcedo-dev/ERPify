@@ -18,4 +18,19 @@ php.phpstan.baseline: ## Generate PHPStan baseline
 
 ## —— Lint suite ——
 
-lint: php.phpstan ## Run all linters
+lint: php.phpstan php.psalm ## Run all linters
+
+## —— Psalm ——
+
+php.psalm: ## Psalm static analysis; pass c= for extra args
+	@$(eval c ?=)
+	$(PHP_TEST) vendor/bin/psalm --config=api/tools/psalm/psalm.xml $(c)
+
+php.psalm.baseline: ## Generate Psalm baseline
+	$(PHP_TEST) vendor/bin/psalm --config=api/tools/psalm/psalm.xml --set-baseline=api/tools/psalm/psalm-baseline.xml
+
+## —— composer-unused ——
+
+php.composer-unused: ## Check for unused Composer packages; pass c= for extra args
+	@$(eval c ?=)
+	$(PHP) vendor/bin/composer-unused $(c)
