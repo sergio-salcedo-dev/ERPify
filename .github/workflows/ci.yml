@@ -142,6 +142,14 @@ jobs:
     timeout-minutes: 18
     steps:
       - uses: actions/checkout@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: pwa/package-lock.json
+      - name: Install dependencies
+        run: make pwa.install
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
       - name: Build stack images
@@ -173,14 +181,6 @@ jobs:
             sleep 2
           done
           exit 1
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: pwa/package-lock.json
-      - name: Install dependencies
-        run: make pwa.install
       - name: Cache Playwright browsers
         uses: actions/cache@v5
         id: playwright-cache

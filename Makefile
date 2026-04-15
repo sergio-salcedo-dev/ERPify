@@ -302,6 +302,8 @@ pwa.dev: ## Next dev (Turbopack)
 pwa.build: ## next build
 	$(call pwa_cmd,npm run build)
 
+pwa.test: pwa.test.unit ## Alias for pwa.test.unit
+
 pwa.test.unit: ## Vitest; pass c= for extra args
 	@$(eval c ?=)
 	$(call pwa_cmd,npm test -- $(c))
@@ -310,6 +312,8 @@ pwa.test.e2e: ## Playwright
 	$(call pwa_cmd,npm run e2e)
 
 pwa.tests: pwa.test.unit pwa.test.e2e ## PWA test suite (Vitest + Playwright)
+
+test: php.tests pwa.tests ## Run all tests (API + PWA)
 
 pwa.lint: ## ESLint + next lint
 	$(call pwa_cmd,npm run lint)
