@@ -52,8 +52,9 @@ define pwa_cmd
 endef
 
 # —— Include modular makefiles ———————————————————————————————————————————————
--include $(ROOT_DIR)/make/api-linters.mk
--include $(ROOT_DIR)/make/php-composer.mk
+-include $(ROOT_DIR)/make/php-linters.mk
+-include $(ROOT_DIR)/make/composer.mk
+-include $(ROOT_DIR)/make/php.mk
 
 .DEFAULT_GOAL := help
 
