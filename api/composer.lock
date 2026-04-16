@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "e3c1f14bf51c7dd93a5103de8ecf8048",
+    "content-hash": "34b14609b52e6a53946ed8abe803b45b",
     "packages": [
         {
             "name": "doctrine/collections",
@@ -11992,7 +11992,7 @@
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
-        "php": "^8.5.5",
+        "php": ">=8.4.1",
         "ext-bcmath": "*",
         "ext-ctype": "*",
         "ext-curl": "*",
@@ -12001,9 +12001,24 @@
         "ext-iconv": "*",
         "ext-json": "*",
         "ext-pdo": "*",
+        "ext-sodium": "*",
         "ext-xml": "*",
         "ext-zend-opcache": "*"
     },
     "platform-dev": {},
+    "platform-overrides": {
+        "php": "8.5.5",
+        "ext-bcmath": "1",
+        "ext-ctype": "1",
+        "ext-curl": "1",
+        "ext-fileinfo": "1",
+        "ext-gd": "1",
+        "ext-iconv": "1",
+        "ext-json": "1",
+        "ext-pdo": "1",
+        "ext-sodium": "1",
+        "ext-xml": "1",
+        "ext-zend-opcache": "1"
+    },
     "plugin-api-version": "2.9.0"
 }

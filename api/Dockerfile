@@ -40,7 +40,8 @@ RUN <<-EOF
 		curl \
 		fileinfo \
 		iconv \
-		xml
+		xml \
+		sodium
 	rm -rf /var/lib/apt/lists/*
 EOF
 

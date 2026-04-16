@@ -12,7 +12,7 @@
     "minimum-stability":"stable",
     "prefer-stable":true,
     "require":{
-        "php": "^8.5.5",
+        "php": ">=8.4.1",
         "ext-bcmath": "*",
         "ext-ctype": "*",
         "ext-curl": "*",
@@ -21,6 +21,7 @@
         "ext-iconv": "*",
         "ext-json": "*",
         "ext-pdo": "*",
+        "ext-sodium": "*",
         "ext-xml": "*",
         "ext-zend-opcache": "*",
         "doctrine/dbal": "^4.4.3",
@@ -63,7 +64,21 @@
             "symfony/runtime":true
         },
         "bump-after-update":true,
-        "sort-packages":true
+        "sort-packages":true,
+        "platform": {
+            "php": "8.5.5",
+            "ext-bcmath": "1",
+            "ext-ctype": "1",
+            "ext-curl": "1",
+            "ext-fileinfo": "1",
+            "ext-gd": "1",
+            "ext-iconv": "1",
+            "ext-json": "1",
+            "ext-pdo": "1",
+            "ext-sodium": "1",
+            "ext-xml": "1",
+            "ext-zend-opcache": "1"
+        }
     },
     "autoload":{
         "psr-4":{
