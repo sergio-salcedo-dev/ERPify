@@ -113,6 +113,9 @@ jobs:
           VALIDATE_TRIVY: false
           VALIDATE_BIOME_FORMAT: false
           VALIDATE_BIOME_LINT: false
+          # Prevent Super-Linter from failing during composer install by ignoring platform requirements and disabling scripts
+          COMPOSER_IGNORE_PLATFORM_REQS: 1
+          COMPOSER_NO_SCRIPTS: 1
 
   pwa-node:
     name: PWA (Node)
