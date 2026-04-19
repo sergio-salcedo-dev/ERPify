@@ -30,7 +30,7 @@
         "doctrine/persistence": "^4.1.1",
         "intervention/image": "^3.11.7",
         "league/flysystem": "^3.33.0",
-        "league/flysystem-bundle": "^3.6.2",
+        "league/flysystem-bundle": "^3.7.0",
         "nelmio/cors-bundle": "^2.6.1",
         "symfony/config": "8.0.8",
         "symfony/console": "^8.0.8",
