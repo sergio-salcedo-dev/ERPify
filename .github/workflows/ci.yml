@@ -167,6 +167,9 @@ jobs:
 
       - uses: ./.github/actions/full-setup/
 
+      - name: Install PWA dependencies (host)
+        run: make pwa.install
+
       - name: Start full stack
         env:
           COMPOSE_PROJECT_NAME: erpify-e2e

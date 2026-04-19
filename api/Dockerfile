@@ -35,6 +35,7 @@ RUN <<-EOF
 		intl \
 		opcache \
 		pdo_pgsql \
+		sodium \
 		zip \
 		ctype \
 		curl \
