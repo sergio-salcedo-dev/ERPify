@@ -22,6 +22,7 @@ final readonly class DoctrineDomainEventStore implements DomainEventStore
     {
     }
 
+    #[\Override]
     public function append(DomainEvent $domainEvent): void
     {
         $storedDomainEvent = new StoredDomainEvent(

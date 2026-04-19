@@ -20,6 +20,7 @@ final class DoctrineStoredDomainEventRepository extends ServiceEntityRepository 
         parent::__construct($registry, StoredDomainEvent::class);
     }
 
+    #[\Override]
     public function save(StoredDomainEvent $storedDomainEvent): void
     {
         $this->getEntityManager()->persist($storedDomainEvent);

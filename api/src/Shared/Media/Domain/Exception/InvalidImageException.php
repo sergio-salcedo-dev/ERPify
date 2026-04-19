@@ -15,6 +15,7 @@ final class InvalidImageException extends DomainError
         parent::__construct();
     }
 
+    #[\Override]
     public function errorCode(): string
     {
         return 'erpify.media.invalid_image';
@@ -25,6 +26,7 @@ final class InvalidImageException extends DomainError
         return $this->formField;
     }
 
+    #[\Override]
     protected function errorMessage(): string
     {
         return $this->detail;

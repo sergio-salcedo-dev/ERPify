@@ -93,7 +93,7 @@ class Media
             $this->rawBytes = false !== $contents ? $contents : '';
         }
 
-        return (string) $this->rawBytes;
+        return $this->rawBytes;
     }
 
     public function getDeletedAt(): ?DateTimeImmutable

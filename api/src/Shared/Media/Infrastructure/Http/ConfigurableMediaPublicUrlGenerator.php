@@ -22,6 +22,7 @@ final readonly class ConfigurableMediaPublicUrlGenerator implements MediaPublicU
     ) {
     }
 
+    #[\Override]
     public function urlForContentHash(string $contentHash): string
     {
         $base = \trim($this->mediaPublicBaseUrl);

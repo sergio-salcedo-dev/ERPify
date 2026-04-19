@@ -39,6 +39,7 @@ final readonly class InterventionImageNormalizer implements ImageNormalizer
         $this->imageManager = new ImageManager(new Driver());
     }
 
+    #[\Override]
     public function normalize(UploadedFile $uploadedFile): NormalizedImage
     {
         $mime = $uploadedFile->getMimeType() ?? '';

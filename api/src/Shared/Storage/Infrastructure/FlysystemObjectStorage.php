@@ -20,11 +20,13 @@ final readonly class FlysystemObjectStorage implements ObjectStoragePort
     ) {
     }
 
+    #[\Override]
     public function write(string $key, string $contents): void
     {
         $this->filesystemOperator->write($key, $contents);
     }
 
+    #[\Override]
     public function read(string $key): string
     {
         try {
@@ -34,6 +36,7 @@ final readonly class FlysystemObjectStorage implements ObjectStoragePort
         }
     }
 
+    #[\Override]
     public function delete(string $key): void
     {
         if (!$this->filesystemOperator->fileExists($key)) {
@@ -43,6 +46,7 @@ final readonly class FlysystemObjectStorage implements ObjectStoragePort
         $this->filesystemOperator->delete($key);
     }
 
+    #[\Override]
     public function exists(string $key): bool
     {
         return $this->filesystemOperator->fileExists($key);

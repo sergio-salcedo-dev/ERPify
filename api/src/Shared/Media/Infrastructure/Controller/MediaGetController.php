@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Media\Infrastructure\Controller;
 
+use Erpify\Shared\Media\Domain\Entity\Media;
 use Erpify\Shared\Media\Domain\Repository\MediaRepository;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -31,7 +32,7 @@ final readonly class MediaGetController
 
         $media = $this->mediaRepository->findActiveByContentHash($hash);
 
-        if (!$media instanceof \Erpify\Shared\Media\Domain\Entity\Media) {
+        if (!$media instanceof Media) {
             return new Response('Not Found', Response::HTTP_NOT_FOUND);
         }
 

@@ -34,7 +34,7 @@ final readonly class BankPostController
 
     public function __invoke(Request $request): JsonResponse
     {
-        $contentType = (string) $request->headers->get('Content-Type', '');
+        $contentType = $request->headers->get('Content-Type', '');
 
         if ($request->files->count() > 0 || \str_contains($contentType, 'multipart/form-data')) {
             return $this->fromMultipart($request);

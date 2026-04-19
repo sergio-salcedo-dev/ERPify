@@ -23,6 +23,7 @@ final readonly class PlainTextNotificationMailer implements NotificationMailer
     ) {
     }
 
+    #[\Override]
     public function send(string $to, string $subject, array $fields, ?string $correlationLabel = null): void
     {
         $lines = [];

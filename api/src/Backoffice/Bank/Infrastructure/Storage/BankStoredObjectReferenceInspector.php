@@ -16,11 +16,13 @@ final readonly class BankStoredObjectReferenceInspector implements StoredObjectR
     ) {
     }
 
+    #[\Override]
     public function countReferencesToContentHash(string $contentHash): int
     {
         return $this->bankRepository->countBanksWithStoredObjectContentHash($contentHash);
     }
 
+    #[\Override]
     public function findMimeTypeForContentHash(string $contentHash): ?string
     {
         return $this->bankRepository->findStoredObjectMimeTypeByContentHash($contentHash);

@@ -32,6 +32,7 @@ final class BankCreatedDomainEvent extends DomainEvent
         );
     }
 
+    #[\Override]
     public static function eventName(): string
     {
         return 'erpify.backoffice.bank.created';
@@ -40,6 +41,7 @@ final class BankCreatedDomainEvent extends DomainEvent
     /**
      * @return array<string, string|null>
      */
+    #[\Override]
     public function toPrimitives(): array
     {
         return [

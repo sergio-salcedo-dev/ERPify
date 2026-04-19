@@ -6,6 +6,7 @@ namespace Erpify\Backoffice\Bank\Infrastructure\Serializer;
 
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Shared\Media\Application\Port\MediaPublicUrlGenerator;
+use Erpify\Shared\Media\Domain\Entity\Media;
 use Erpify\Shared\Storage\Application\Port\StoredObjectPublicUrlGenerator;
 use Symfony\Component\DependencyInjection\Attribute\AutoconfigureTag;
 use Symfony\Component\Serializer\Normalizer\NormalizerAwareInterface;
@@ -28,6 +29,7 @@ final class BankLogoUrlNormalizer implements NormalizerInterface, NormalizerAwar
     ) {
     }
 
+    #[\Override]
     public function normalize(mixed $object, ?string $format = null, array $context = []): array
     {
         $context[self::MARK] = true;
@@ -36,7 +38,7 @@ final class BankLogoUrlNormalizer implements NormalizerInterface, NormalizerAwar
 
         if ($object instanceof Bank && \in_array('bank:read', $context['groups'] ?? [], true)) {
             $logo = $object->getLogo();
-            $data['logoUrl'] = $logo instanceof \Erpify\Shared\Media\Domain\Entity\Media ? $this->mediaPublicUrlGenerator->urlForContentHash($logo->getContentHash()) : null;
+            $data['logoUrl'] = $logo instanceof Media ? $this->mediaPublicUrlGenerator->urlForContentHash($logo->getContentHash()) : null;
             $storedHash = $object->getStoredObjectContentHash();
             $data['storedObjectUrl'] = null !== $storedHash
                 ? $this->storedObjectPublicUrlGenerator->urlForContentHash($storedHash)
@@ -46,6 +48,7 @@ final class BankLogoUrlNormalizer implements NormalizerInterface, NormalizerAwar
         return $data;
     }
 
+    #[\Override]
     public function supportsNormalization(mixed $data, ?string $format = null, array $context = []): bool
     {
         return $data instanceof Bank
@@ -56,6 +59,7 @@ final class BankLogoUrlNormalizer implements NormalizerInterface, NormalizerAwar
     /**
      * @return array<string, bool>
      */
+    #[\Override]
     public function getSupportedTypes(?string $format): array
     {
         return [

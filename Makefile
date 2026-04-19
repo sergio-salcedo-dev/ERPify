@@ -75,7 +75,9 @@ endef
 	php.unit php.unit.install php.behat php.behat.install test \
 	pwa.install pwa.dev pwa.build pwa.test pwa.e2e pwa.lint pwa.lint.fix pwa.format \
 	xdebug.enable xdebug.disable xdebug.status \
-	ci start
+	ci start \
+	php.psalm php.psalm.baseline php.composer-unused \
+	lint.super.run lint.super.run.fast lint.super.pull
 
 # =============================================================================
 # Help

@@ -21,12 +21,14 @@ final class PostgresMediaRepository extends ServiceEntityRepository implements M
         parent::__construct($registry, Media::class);
     }
 
+    #[\Override]
     public function save(Media $media): void
     {
         $this->getEntityManager()->persist($media);
         $this->getEntityManager()->flush();
     }
 
+    #[\Override]
     public function findActiveByContentHash(string $contentHash): ?Media
     {
         return $this->createQueryBuilder('m')
@@ -38,6 +40,7 @@ final class PostgresMediaRepository extends ServiceEntityRepository implements M
         ;
     }
 
+    #[\Override]
     public function existsActiveByContentHash(string $contentHash): bool
     {
         $row = $this->createQueryBuilder('m')

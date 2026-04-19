@@ -52,6 +52,31 @@ php.cs: ## PHPCBF automatic coding standard fix; pass c= for extra args
 	@$(eval c ?=)
 	$(PHP_TEST) vendor/bin/phpcbf --standard=tools/phpcs/phpcs.xml $(c)
 
+## —— Psalm ——
+
+PSALM_CONFIG = tools/psalm/psalm.xml
+PSALM_BIN = vendor/bin/psalm
+
+# Cleanup issues compatible with --alter
+CLEANUP_ISSUES = MissingOverrideAttribute,RedundantCast,RedundantCastGivenDocblockType,UnusedMethod,UnusedVariable
+# Typing issues compatible with --alter (Psalm will inject types based on its inference)
+TYPE_ISSUES = MissingParamType,MissingPropertyType,MissingReturnType,MissingClosureReturnType,InvalidReturnType,InvalidNullableReturnType,InvalidFalsableReturnType,MismatchingDocblockParamType
+
+php.psalm: ## Run standard static analysis
+	$(PHP_TEST) $(PSALM_BIN) --config=$(PSALM_CONFIG)
+
+php.psalm.fix.cleanup: ## Fix safe redundancies and dead code
+	$(PHP_TEST) $(PSALM_BIN) --config=$(PSALM_CONFIG) --alter --issues=$(CLEANUP_ISSUES) --no-cache
+
+php.psalm.fix.types: ## Infer and inject missing types (Review changes carefully!)
+	$(PHP_TEST) $(PSALM_BIN) --config=$(PSALM_CONFIG) --alter --issues=$(TYPE_ISSUES) --no-cache
+
+php.psalm.fix.all: ## Run all supported auto-fixes
+	$(PHP_TEST) $(PSALM_BIN) --config=$(PSALM_CONFIG) --alter --issues=$(CLEANUP_ISSUES),$(TYPE_ISSUES) --no-cache
+
+php.psalm.baseline: ## Generate or update the error baseline
+	$(PHP_TEST) $(PSALM_BIN) --config=$(PSALM_CONFIG) --set-baseline=api/tools/psalm/psalm-baseline.xml
+
 ## —— Lint suite ——
 
-php.lint: php.stan php.rector php.cs-fixer php.md php.cs ## Run all linters
+php.lint: php.stan php.rector php.cs-fixer php.md php.cs php.psalm.fix.all ## Run all linters

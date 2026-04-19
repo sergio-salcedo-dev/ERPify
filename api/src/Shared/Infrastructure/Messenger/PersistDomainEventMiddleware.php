@@ -20,6 +20,7 @@ final readonly class PersistDomainEventMiddleware implements MiddlewareInterface
     {
     }
 
+    #[\Override]
     public function handle(Envelope $envelope, StackInterface $stack): Envelope
     {
         $message = $envelope->getMessage();

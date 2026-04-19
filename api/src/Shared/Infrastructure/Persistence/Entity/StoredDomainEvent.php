@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Shared\Infrastructure\Persistence\Entity;
 
 use DateTimeImmutable;
+use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Uid\Uuid;
@@ -30,7 +31,7 @@ class StoredDomainEvent
         private string $eventId,
         #[ORM\Column]
         private DateTimeImmutable $occurredOn,
-        #[ORM\Column(type: \Doctrine\DBAL\Types\Types::JSON)]
+        #[ORM\Column(type: Types::JSON)]
         private array $body,
     ) {
     }

@@ -22,6 +22,7 @@ final readonly class ConfigurableStoredObjectPublicUrlGenerator implements Store
     ) {
     }
 
+    #[\Override]
     public function urlForContentHash(string $contentHash): string
     {
         $base = \trim($this->mediaPublicBaseUrl);

@@ -21,6 +21,7 @@ final readonly class CompositeStoredObjectAccess implements StoredObjectAccessPo
     ) {
     }
 
+    #[\Override]
     public function existsAnyWithContentHash(string $contentHash): bool
     {
         foreach ($this->inspectors as $inspector) {
@@ -32,6 +33,7 @@ final readonly class CompositeStoredObjectAccess implements StoredObjectAccessPo
         return false;
     }
 
+    #[\Override]
     public function getMimeTypeForContentHash(string $contentHash): ?string
     {
         foreach ($this->inspectors as $inspector) {

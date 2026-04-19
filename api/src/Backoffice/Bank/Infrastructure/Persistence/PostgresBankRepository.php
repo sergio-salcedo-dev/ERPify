@@ -22,29 +22,34 @@ final class PostgresBankRepository extends ServiceEntityRepository implements Ba
         parent::__construct($registry, Bank::class);
     }
 
+    #[\Override]
     public function save(Bank $bank): void
     {
         $this->getEntityManager()->persist($bank);
         $this->getEntityManager()->flush();
     }
 
+    #[\Override]
     public function remove(Bank $bank): void
     {
         $this->getEntityManager()->remove($bank);
         $this->getEntityManager()->flush();
     }
 
+    #[\Override]
     public function findById(Uuid $uuid): ?Bank
     {
         return $this->find($uuid);
     }
 
     /** @return Bank[] */
+    #[\Override]
     public function search(): array
     {
         return $this->findAll();
     }
 
+    #[\Override]
     public function countBanksWithStoredObjectContentHash(string $contentHash): int
     {
         return (int) $this->createQueryBuilder('b')
@@ -56,6 +61,7 @@ final class PostgresBankRepository extends ServiceEntityRepository implements Ba
         ;
     }
 
+    #[\Override]
     public function findStoredObjectMimeTypeByContentHash(string $contentHash): ?string
     {
         $bank = $this->createQueryBuilder('b')
