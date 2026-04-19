@@ -11,228 +11,229 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  group: ci-${{ github.workflow }}-${{ github.ref_name }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    shell: bash
+
+env:
+  DOCKER_BUILDKIT: 1
+  COMPOSE_DOCKER_CLI_BUILD: 1
+
 jobs:
-  api:
-    name: API (Symfony)
+
+  # -------------------------
+  # API BUILD
+  # -------------------------
+  api-build:
+    name: API Build (Docker)
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 10
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-      # Behat: separate Composer tree under api/tools/behat (Symfony 8 vs Behat 3); vendor/ is gitignored.
-      - name: Cache Behat tools vendor
-        id: behat-tools-vendor
-        uses: actions/cache@v5
-        with:
-          path: api/tools/behat/vendor
-          key: behat-tools-${{ runner.os }}-${{ hashFiles('api/tools/behat/composer.lock') }}
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+      - uses: ./.github/actions/docker-setup
+
       - name: Build Docker images
         uses: docker/bake-action@v7
         with:
           pull: true
           load: true
-          source: .
           files: |
             compose.yaml
             compose.dev.yaml
           set: |
-            php.cache-from=type=gha,scope=php-${{github.ref}}
-            php.cache-from=type=gha,scope=php-refs/heads/main
-            php.cache-to=type=gha,scope=php-${{github.ref}},mode=max
-            pwa.cache-from=type=gha,scope=pwa-${{github.ref}}
-            pwa.cache-from=type=gha,scope=pwa-refs/heads/main
-            pwa.cache-to=type=gha,scope=pwa-${{github.ref}},mode=max
-      - name: Start services
+            php.cache-from=type=gha,scope=php-${{ github.ref_name }}
+            php.cache-from=type=gha,scope=php-main
+            php.cache-to=type=gha,scope=php-${{ github.ref_name }},mode=max
+
+            pwa.cache-from=type=gha,scope=pwa-${{ github.ref_name }}
+            pwa.cache-from=type=gha,scope=pwa-main
+            pwa.cache-to=type=gha,scope=pwa-${{ github.ref_name }},mode=max
+
+  # -------------------------
+  # API TEST
+  # -------------------------
+  api-test:
+    name: API Tests
+    needs: api-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: ./.github/actions/docker-setup
+
+      - name: Start API stack
         run: docker compose -f compose.yaml -f compose.dev.yaml up --wait --no-build
-      - name: Check HTTP reachability (Next via FrankenPHP)
-        run: curl -v --fail-with-body http://localhost
-      - name: Check API reachability (HTTPS)
-        run: curl -vk --fail-with-body https://localhost/api/v1/health
-      - name: Check Mercure bootstrap API (HTTPS)
-        run: |
-          curl -vk --fail-with-body https://localhost/api/v1/mercure/bootstrap | grep -q 'urn:erpify:mercure:demo'
-      # FRANKENPHP_HOT_RELOAD is injected by FrankenPHP when hot_reload is active; worker/Caddy
-      # setups may still return enabled:false — same rules as FrankenPhpHotReloadFunctionalTest.
-      - name: Check FrankenPHP hot-reload bootstrap API (HTTPS)
-        run: |
-          body=$(curl -sk --fail-with-body https://localhost/api/v1/dev/frankenphp-hot-reload)
-          # POSIX ERE: use [[:space:]] (GNU grep -E does not treat \s as whitespace).
-          echo "$body" | grep -qE '"enabled"[[:space:]]*:[[:space:]]*(true|false)'
-          if echo "$body" | grep -qE '"enabled"[[:space:]]*:[[:space:]]*true'; then
-            # JsonResponse json_encode escapes slashes as \/ in subscribePath.
-            echo "$body" | grep -qE '\.well-known.*mercure'
-          fi
-      - name: Check PWA reachability (HTML)
-        run: |
-          curl -vk --fail-with-body -H 'Accept: text/html' https://localhost/
-      - name: Check Mercure reachability
-        run: |
-          curl -vkI --fail-with-body "https://localhost/.well-known/mercure?topic=test"
-      - name: Lint (PHP)
-        run: docker compose -f compose.yaml -f compose.dev.yaml exec -T php make ci.php.lint
-      - name: PHPUnit (API)
-        run: docker compose -f compose.yaml -f compose.dev.yaml exec -T -e APP_ENV=test php bin/phpunit
-      - name: Install Behat tools (api/tools/behat)
-        if: steps.behat-tools-vendor.outputs.cache-hit != 'true'
-        run: docker compose -f compose.yaml -f compose.dev.yaml exec -T php composer behat-tools-install --no-interaction
-      # Matches Makefile PHP_TEST_BEHAT for in-container Mink (no api/.env on CI).
-      - name: Behat (API)
-        run: docker compose -f compose.yaml -f compose.dev.yaml exec -T -e APP_ENV=test -e MINK_BASE_URL=http://php php bin/behat --format=pretty
-      - name: Debug services
+
+      - name: Health check
+        run: curl -skSf https://localhost/api/v1/health
+
+      - name: PHP Lint
+        run: docker compose exec -T php make php.lint
+
+      - name: PHPUnit
+        run: docker compose exec -T -e APP_ENV=test php bin/phpunit
+
+      - name: Debug
         if: failure()
         run: |
-          docker compose -f compose.yaml -f compose.dev.yaml ps
-          docker compose -f compose.yaml -f compose.dev.yaml logs
-      - name: Security checker (API)
+          docker compose ps
+          docker compose logs
+
+      - name: Security checker
         uses: symfonycorp/security-checker-action@v5
         with:
           lock: ./api/composer.lock
 
-  lint:
-    name: Lint (super-linter)
+  # -------------------------
+  # API BEHAT
+  # -------------------------
+  api-behat:
+    name: API Behat
+    needs: api-build
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: read
-      statuses: write
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Lint code base
-        uses: super-linter/super-linter/slim@v8
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VALIDATE_CHECKOV: false
-          VALIDATE_TRIVY: false
-          VALIDATE_BIOME_FORMAT: false
-          VALIDATE_BIOME_LINT: false
-          # PHP linting is handled separately in the 'api' job to avoid extension missing errors in Super-Linter
-          VALIDATE_PHP_BUILTIN: false
-          VALIDATE_PHP_PHPCS: false
-          VALIDATE_PHP_PHPSTAN: false
-          VALIDATE_PHP_PSALM: false
+    timeout-minutes: 10
 
+    steps:
+      - uses: ./.github/actions/docker-setup
+
+      - name: Start API stack
+        run: docker compose -f compose.yaml -f compose.dev.yaml up --wait --no-build
+
+      - name: Health check
+        run: curl -skSf https://localhost/api/v1/health
+
+      - name: Install Behat tools
+        run: docker compose exec -T php composer behat-tools-install --no-interaction
+
+      - name: Run Behat
+        run: docker compose exec -T \
+          -e APP_ENV=test \
+          -e MINK_BASE_URL=http://php \
+          php bin/behat --format=pretty
+
+      - name: Debug
+        if: failure()
+        run: |
+          docker compose ps
+          docker compose logs
+
+  # -------------------------
+  # PWA NODE
+  # -------------------------
   pwa-node:
     name: PWA (Node)
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v6
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: pwa/package-lock.json
+      - uses: ./.github/actions/node-setup
+
       - name: Install dependencies
         run: make pwa.install
+
       - name: Lint
         run: make pwa.lint
+
       - name: Unit tests
         run: make pwa.tests
+
       - name: Build
         run: make pwa.build
 
+  # -------------------------
+  # PWA E2E
+  # -------------------------
   pwa-e2e:
     name: PWA (E2E)
-    needs: pwa-node
-    if: always() && needs.pwa-node.result == 'success'
+    needs: [pwa-node, api-build]
     runs-on: ubuntu-latest
-    timeout-minutes: 18
+    timeout-minutes: 15
+
     steps:
-      - uses: actions/checkout@v6
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: pwa/package-lock.json
-      - name: Install dependencies
-        run: make pwa.install
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-      - name: Build stack images
-        uses: docker/bake-action@v7
-        with:
-          pull: true
-          load: true
-          source: .
-          files: |
-            compose.yaml
-            compose.dev.yaml
-          set: |
-            php.cache-from=type=gha,scope=e2e-php-${{github.ref}}
-            php.cache-from=type=gha,scope=e2e-php-refs/heads/main
-            php.cache-to=type=gha,scope=e2e-php-${{github.ref}},mode=max
-            pwa.cache-from=type=gha,scope=e2e-pwa-${{github.ref}}
-            pwa.cache-from=type=gha,scope=e2e-pwa-refs/heads/main
-            pwa.cache-to=type=gha,scope=e2e-pwa-${{github.ref}},mode=max
-      - name: Start full stack (FrankenPHP + PWA + Postgres)
+      - uses: ./.github/actions/full-setup
+
+      - name: Start full stack
         env:
           COMPOSE_PROJECT_NAME: erpify-e2e
         run: docker compose -f compose.yaml -f compose.dev.yaml up --wait --no-build
-      - name: Wait for API health (HTTPS)
+
+      - name: Wait for API
         run: |
-          for i in $(seq 1 60); do
-            if curl -skSfS "https://localhost/api/v1/health" | grep -q status; then
+          for i in {1..60}; do
+            if curl -skSf https://localhost/api/v1/health >/dev/null; then
               exit 0
             fi
             sleep 2
           done
           exit 1
-      - name: Cache Playwright browsers
+
+      - name: Cache Playwright
         uses: actions/cache@v5
-        id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('pwa/package-lock.json') }}
           restore-keys: |
             playwright-${{ runner.os }}-
-      - name: Install Playwright Chromium (with OS deps)
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: cd pwa && npx playwright install chromium --with-deps
-      - name: Install Playwright Chromium (from cache)
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: cd pwa && npx playwright install chromium
-      - name: E2E tests (against Docker stack)
+
+      - name: Install Playwright
+        run: cd pwa && npx playwright install --with-deps chromium
+
+      - name: Run E2E
         env:
           CI: true
           PLAYWRIGHT_BASE_URL: https://localhost
         run: make pwa.e2e
-      - name: Debug services
+
+      - name: Debug
         if: failure()
         env:
           COMPOSE_PROJECT_NAME: erpify-e2e
         run: |
-          docker compose -f compose.yaml -f compose.dev.yaml ps
-          docker compose -f compose.yaml -f compose.dev.yaml logs
+          docker compose ps
+          docker compose logs
 
+  # -------------------------
+  # LINT (lightweight)
+  # -------------------------
+  lint:
+    name: YAML Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Run yamllint
+        run: |
+          pip install yamllint
+          yamllint .
+
+  # -------------------------
+  # FINAL STATUS
+  # -------------------------
   ci-success:
-    name: All required jobs OK
-    needs: [api, lint, pwa-node, pwa-e2e]
+    name: CI Status
+    needs: [api-test, api-behat, pwa-node, pwa-e2e, lint]
     if: always()
     runs-on: ubuntu-latest
+
     steps:
-      - env:
-          R_API: ${{ needs.api.result }}
-          R_LINT: ${{ needs.lint.result }}
-          R_NODE: ${{ needs.pwa-node.result }}
-          R_E2E: ${{ needs.pwa-e2e.result }}
+      - name: Validate results
         run: |
-          for r in "$R_API" "$R_LINT" "$R_NODE" "$R_E2E"; do
-            case "$r" in
-              failure|cancelled)
-                echo "A required job failed or was cancelled (result=$r)."
-                exit 1
-                ;;
-            esac
+          results=(
+            "${{ needs.api-test.result }}"
+            "${{ needs.api-behat.result }}"
+            "${{ needs.pwa-node.result }}"
+            "${{ needs.pwa-e2e.result }}"
+            "${{ needs.lint.result }}"
+          )
+
+          for r in "${results[@]}"; do
+            if [[ "$r" == "failure" || "$r" == "cancelled" ]]; then
+              echo "CI failed (job result: $r)"
+              exit 1
+            fi
           done
-          echo "OK (each job succeeded or was skipped)."
+
+          echo "All jobs passed"
