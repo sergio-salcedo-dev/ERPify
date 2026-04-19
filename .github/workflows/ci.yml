@@ -148,7 +148,7 @@ jobs:
 
       - run: make pwa.install
       - run: make pwa.lint
-      - run: make pwa.tests
+      - run: make pwa.test.unit
       - run: make pwa.build
 
   # -------------------------
@@ -172,23 +172,19 @@ jobs:
           COMPOSE_PROJECT_NAME: erpify-e2e
         run: docker compose -f compose.yaml -f compose.dev.yaml up --wait --no-build
 
-      - name: Wait for API
-        run: |
-          for i in {1..60}; do
-            curl -skSf https://localhost/api/v1/health && exit 0
-            sleep 2
-          done
-          exit 1
+      - name: Get Playwright version
+        id: playwright-version
+        run: echo "version=$(node -p "require('./pwa/package-lock.json').packages['pwa/node_modules/@playwright/test'].version")" >> $GITHUB_OUTPUT
 
-      - name: Cache Playwright
+      - name: Cache Playwright Browsers
         uses: actions/cache@v5
+        id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('pwa/package-lock.json') }}
-          restore-keys: |
-            playwright-${{ runner.os }}-
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
 
-      - name: Install Playwright
+      - name: Install Playwright Browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: cd pwa && npx playwright install --with-deps chromium
 
       - name: Run E2E
