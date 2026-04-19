@@ -87,7 +87,7 @@ volumes:
   erpify_object_storage:
 ```
 
-For **production** merges, you can add this under `compose.override.yaml` locally or a dedicated `compose.object-storage.yaml` merged with `-f`. The repo root [`compose.yaml`](../compose.yaml) does not mount object storage by default so development can use the default under the project tree.
+For **production** merges, you can add this under `compose.dev.yaml` locally or a dedicated `compose.object-storage.yaml` merged with `-f`. The repo root [`compose.yaml`](../compose.yaml) does not mount object storage by default so development can use the default under the project tree.
 
 ---
 

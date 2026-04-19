@@ -4,27 +4,33 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Frontoffice;
 
+use PHPUnit\Framework\Attributes\CoversNothing;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use Symfony\Component\HttpFoundation\Request;
 
+/**
+ * @internal
+ */
+#[CoversNothing]
 final class MercureBootstrapFunctionalTest extends WebTestCase
 {
     public function testBootstrapReturnsTopicHubLinkAndMercureCookie(): void
     {
-        $client = static::createClient();
-        $client->request('GET', '/api/v1/mercure/bootstrap');
+        $kernelBrowser = self::createClient();
+        $kernelBrowser->request(Request::METHOD_GET, '/api/v1/mercure/bootstrap');
 
         self::assertResponseIsSuccessful();
-        $payload = json_decode($client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
-        self::assertSame('urn:erpify:mercure:demo', $payload['topic']);
-        self::assertIsString($payload['hubUrl']);
-        self::assertStringContainsString('.well-known/mercure', $payload['hubUrl']);
+        $payload = \json_decode($kernelBrowser->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame('urn:erpify:mercure:demo', $payload['topic']);
+        $this->assertIsString($payload['hubUrl']);
+        $this->assertStringContainsString('.well-known/mercure', $payload['hubUrl']);
 
-        $link = $client->getResponse()->headers->get('Link');
-        self::assertNotNull($link);
-        self::assertStringContainsString('rel="mercure"', $link);
+        $link = $kernelBrowser->getResponse()->headers->get('Link');
+        $this->assertNotNull($link);
+        $this->assertStringContainsString('rel="mercure"', $link);
 
-        $setCookie = $client->getResponse()->headers->get('set-cookie');
-        self::assertNotNull($setCookie);
-        self::assertStringContainsString('mercureAuthorization', $setCookie);
+        $setCookie = $kernelBrowser->getResponse()->headers->get('set-cookie');
+        $this->assertNotNull($setCookie);
+        $this->assertStringContainsString('mercureAuthorization', $setCookie);
     }
 }

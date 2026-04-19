@@ -8,8 +8,12 @@ use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 use Erpify\Shared\Media\Domain\Entity\Media;
 use Erpify\Shared\Media\Domain\Repository\MediaRepository;
+use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
+/**
+ * @extends \Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository<\Erpify\Shared\Media\Domain\Entity\Media>
+ */
 #[AsAlias(MediaRepository::class)]
 final class PostgresMediaRepository extends ServiceEntityRepository implements MediaRepository
 {
@@ -18,12 +22,14 @@ final class PostgresMediaRepository extends ServiceEntityRepository implements M
         parent::__construct($registry, Media::class);
     }
 
+    #[Override]
     public function save(Media $media): void
     {
         $this->getEntityManager()->persist($media);
         $this->getEntityManager()->flush();
     }
 
+    #[Override]
     public function findActiveByContentHash(string $contentHash): ?Media
     {
         return $this->createQueryBuilder('m')
@@ -31,9 +37,11 @@ final class PostgresMediaRepository extends ServiceEntityRepository implements M
             ->andWhere('m.deletedAt IS NULL')
             ->setParameter('h', $contentHash)
             ->getQuery()
-            ->getOneOrNullResult();
+            ->getOneOrNullResult()
+        ;
     }
 
+    #[Override]
     public function existsActiveByContentHash(string $contentHash): bool
     {
         $row = $this->createQueryBuilder('m')
@@ -43,8 +51,9 @@ final class PostgresMediaRepository extends ServiceEntityRepository implements M
             ->setParameter('h', $contentHash)
             ->setMaxResults(1)
             ->getQuery()
-            ->getOneOrNullResult();
+            ->getOneOrNullResult()
+        ;
 
-        return $row !== null;
+        return null !== $row;
     }
 }

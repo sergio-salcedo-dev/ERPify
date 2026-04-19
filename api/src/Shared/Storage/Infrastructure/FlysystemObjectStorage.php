@@ -7,43 +7,49 @@ namespace Erpify\Shared\Storage\Infrastructure;
 use Erpify\Shared\Storage\Application\Port\ObjectStoragePort;
 use League\Flysystem\FilesystemOperator;
 use League\Flysystem\UnableToReadFile;
+use Override;
+use RuntimeException;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\DependencyInjection\Attribute\Target;
 
 #[AsAlias(ObjectStoragePort::class)]
-final class FlysystemObjectStorage implements ObjectStoragePort
+final readonly class FlysystemObjectStorage implements ObjectStoragePort
 {
     public function __construct(
         #[Target('erpify.object_storage.storage')]
-        private readonly FilesystemOperator $filesystem,
+        private FilesystemOperator $filesystemOperator,
     ) {
     }
 
+    #[Override]
     public function write(string $key, string $contents): void
     {
-        $this->filesystem->write($key, $contents);
+        $this->filesystemOperator->write($key, $contents);
     }
 
+    #[Override]
     public function read(string $key): string
     {
         try {
-            return $this->filesystem->read($key);
-        } catch (UnableToReadFile $e) {
-            throw new \RuntimeException(sprintf('Cannot read object storage key "%s".', $key), 0, $e);
+            return $this->filesystemOperator->read($key);
+        } catch (UnableToReadFile $unableToReadFile) {
+            throw new RuntimeException(\sprintf('Cannot read object storage key "%s".', $key), 0, $unableToReadFile);
         }
     }
 
+    #[Override]
     public function delete(string $key): void
     {
-        if (!$this->filesystem->fileExists($key)) {
+        if (!$this->filesystemOperator->fileExists($key)) {
             return;
         }
 
-        $this->filesystem->delete($key);
+        $this->filesystemOperator->delete($key);
     }
 
+    #[Override]
     public function exists(string $key): bool
     {
-        return $this->filesystem->fileExists($key);
+        return $this->filesystemOperator->fileExists($key);
     }
 }

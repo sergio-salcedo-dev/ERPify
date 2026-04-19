@@ -12,47 +12,52 @@ use Intervention\Image\Encoders\JpegEncoder;
 use Intervention\Image\Encoders\PngEncoder;
 use Intervention\Image\Encoders\WebpEncoder;
 use Intervention\Image\ImageManager;
+use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
+use Throwable;
 
 #[AsAlias(ImageNormalizer::class)]
-final class InterventionImageNormalizer implements ImageNormalizer
+final readonly class InterventionImageNormalizer implements ImageNormalizer
 {
-    private const ALLOWED_MIMES = [
+    private const array ALLOWED_MIMES = [
         'image/jpeg' => true,
         'image/png' => true,
         'image/webp' => true,
     ];
 
-    private ImageManager $manager;
+    private ImageManager $imageManager;
 
     public function __construct(
         #[Autowire('%erpify.media.max_dimension%')]
-        private readonly int $maxDimension,
+        private int $maxDimension,
         #[Autowire('%erpify.media.jpeg_quality%')]
-        private readonly int $jpegQuality,
+        private int $jpegQuality,
         #[Autowire('%erpify.media.webp_quality%')]
-        private readonly int $webpQuality,
+        private int $webpQuality,
     ) {
-        $this->manager = new ImageManager(new Driver());
+        $this->imageManager = new ImageManager(new Driver());
     }
 
-    public function normalize(UploadedFile $file): NormalizedImage
+    #[Override]
+    public function normalize(UploadedFile $uploadedFile): NormalizedImage
     {
-        $mime = $file->getMimeType() ?? '';
+        $mime = $uploadedFile->getMimeType() ?? '';
+
         if (!isset(self::ALLOWED_MIMES[$mime])) {
-            throw new InvalidImageException(sprintf('Unsupported image MIME type: %s', $mime));
+            throw new InvalidImageException(\sprintf('Unsupported image MIME type: %s', $mime));
         }
 
-        $binary = (string) file_get_contents($file->getPathname());
-        if ($binary === '') {
+        $binary = (string) \file_get_contents($uploadedFile->getPathname());
+
+        if ('' === $binary) {
             throw new InvalidImageException('Empty upload.');
         }
 
         try {
-            $image = $this->manager->read($binary);
-        } catch (\Throwable) {
+            $image = $this->imageManager->read($binary);
+        } catch (Throwable) {
             throw new InvalidImageException('Could not decode image.');
         }
 
@@ -62,11 +67,11 @@ final class InterventionImageNormalizer implements ImageNormalizer
             'image/jpeg' => $image->encode(new JpegEncoder(quality: $this->jpegQuality)),
             'image/png' => $image->encode(new PngEncoder()),
             'image/webp' => $image->encode(new WebpEncoder(quality: $this->webpQuality)),
-            default => throw new InvalidImageException(sprintf('Unsupported image MIME type: %s', $mime)),
+            default => throw new InvalidImageException(\sprintf('Unsupported image MIME type: %s', $mime)),
         };
 
         $bytes = (string) $encoded;
-        $hash = hash('sha256', $bytes);
+        $hash = \hash('sha256', $bytes);
 
         return new NormalizedImage($bytes, $mime, $hash);
     }

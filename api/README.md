@@ -1,6 +1,6 @@
 # Symfony Docker
 
-> **ERPify monorepo:** service definitions (`php`, `database`, `pwa`) live in the **repository root** [`compose.yaml`](../compose.yaml). FrankenPHP in **`php`** reverse-proxies the Next app (`pwa:3000`) for HTML; there is no separate edge Caddy service. Run **`docker compose`** from the **repo root**. When syncing upstream **symfony-docker**, merge changes into **root** `compose.yaml` / `compose.override.yaml` / `compose.prod.yaml`. Domain events, Messenger (`messenger_worker`), and notification email: [`docs/domain-events-and-messenger.md`](../docs/domain-events-and-messenger.md).
+> **ERPify monorepo:** service definitions (`php`, `database`, `pwa`) live in the **repository root** [`compose.yaml`](../compose.yaml). FrankenPHP in **`php`** reverse-proxies the Next app (`pwa:3000`) for HTML; there is no separate edge Caddy service. Run **`docker compose`** from the **repo root**. When syncing upstream **symfony-docker**, merge changes into **root** `compose.yaml` / `compose.dev.yaml` / `compose.prod.yaml`. Domain events, Messenger (`messenger_worker`), and notification email: [`docs/domain-events-and-messenger.md`](../docs/domain-events-and-messenger.md).
 
 A [Docker](https://www.docker.com/)-based installer and runtime for the [Symfony](https://symfony.com) web framework,
 with [FrankenPHP](https://frankenphp.dev) and [Caddy](https://caddyserver.com/) inside!

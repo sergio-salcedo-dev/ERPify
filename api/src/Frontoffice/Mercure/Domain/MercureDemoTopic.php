@@ -9,9 +9,5 @@ namespace Erpify\Frontoffice\Mercure\Domain;
  */
 final class MercureDemoTopic
 {
-    public const URI = 'urn:erpify:mercure:demo';
-
-    private function __construct()
-    {
-    }
+    public const string URI = 'urn:erpify:mercure:demo';
 }

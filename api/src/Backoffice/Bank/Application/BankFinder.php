@@ -9,18 +9,18 @@ use Erpify\Backoffice\Bank\Domain\Exception\BankNotFoundException;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Symfony\Component\Uid\Uuid;
 
-final class BankFinder
+final readonly class BankFinder
 {
-    public function __construct(private readonly BankRepository $repository)
+    public function __construct(private BankRepository $bankRepository)
     {
     }
 
-    public function find(Uuid $id): Bank
+    public function find(Uuid $uuid): Bank
     {
-        $bank = $this->repository->findById($id);
+        $bank = $this->bankRepository->findById($uuid);
 
         if (!$bank instanceof Bank) {
-            throw BankNotFoundException::withId($id);
+            throw BankNotFoundException::withId($uuid);
         }
 
         return $bank;

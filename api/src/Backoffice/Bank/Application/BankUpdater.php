@@ -9,25 +9,25 @@ use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Uid\Uuid;
 
-final class BankUpdater
+final readonly class BankUpdater
 {
     public function __construct(
-        private readonly BankRepository $repository,
-        private readonly BankFinder $finder,
-        private readonly MessageBusInterface $bus,
+        private BankRepository $bankRepository,
+        private BankFinder $bankFinder,
+        private MessageBusInterface $messageBus,
     ) {
     }
 
-    public function update(Uuid $id, string $name, string $shortName): Bank
+    public function update(Uuid $uuid, string $name, string $shortName): Bank
     {
-        $bank = $this->finder->find($id);
+        $bank = $this->bankFinder->find($uuid);
 
         $bank->rename($name, $shortName);
 
-        $this->repository->save($bank);
+        $this->bankRepository->save($bank);
 
-        foreach ($bank->pullDomainEvents() as $event) {
-            $this->bus->dispatch($event);
+        foreach ($bank->pullDomainEvents() as $domainEvent) {
+            $this->messageBus->dispatch($domainEvent);
         }
 
         return $bank;

@@ -1,15 +1,6 @@
-# ERPify — Docker Compose (monorepo root). FrankenPHP (Symfony) + Postgres + Next.js PWA.
-# Browser → php:80/443 → Next (pwa:3000) for HTML / _next; /api* and Mercure stay in Symfony.
-# API image build context: ./api (Dockerfile lives in api/).
-#
-#   docker compose up --wait -d
-# Or: make up-wait
-# Async Messenger consumer: service `messenger_worker` (see bottom of this file; dev image/volumes in compose.override.yaml).
-#
-name: erpify
-
 services:
   php:
+    image: ${IMAGES_PREFIX:-}app-php-dev
     restart: unless-stopped
     depends_on:
       database:
@@ -70,6 +61,7 @@ services:
       - database_data:/var/lib/postgresql/data:rw
 
   pwa:
+    image: ${IMAGES_PREFIX:-}app-pwa-dev
     build:
       context: ./pwa
       dockerfile: Dockerfile
@@ -92,9 +84,8 @@ services:
       retries: 5
       start_period: 120s
 
-  # Messenger async consumer (Doctrine queue `async`). Requires image/build from compose.override.yaml or compose.prod.yaml.
+  # Requires image/build from compose.dev.yaml or compose.prod.yaml.
   messenger_worker:
-    # Default dev image; override via compose.prod.yaml for production builds
     image: ${IMAGES_PREFIX:-}app-php-dev
     restart: unless-stopped
     depends_on:

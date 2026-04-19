@@ -6,39 +6,44 @@ namespace Erpify\Tests\Unit\Frontoffice\Mercure\Infrastructure\Controller;
 
 use Erpify\Frontoffice\Mercure\Domain\MercureDemoTopic;
 use Erpify\Frontoffice\Mercure\Infrastructure\Controller\MercurePublishDemoController;
+use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Mercure\HubInterface;
 use Symfony\Component\Mercure\Update;
 
+/**
+ * @internal
+ */
+#[CoversNothing]
 final class MercurePublishDemoControllerTest extends TestCase
 {
     public function testInvokePublishesInDev(): void
     {
         $hub = $this->createMock(HubInterface::class);
-        $hub->expects(self::once())
+        $hub->expects($this->once())
             ->method('publish')
-            ->with(self::callback(static function (Update $update): bool {
-                return [MercureDemoTopic::URI] === $update->getTopics()
-                    && str_contains($update->getData(), 'Mercure demo publish')
-                    && false === $update->isPrivate();
-            }));
+            ->with($this->callback(static fn (Update $update): bool => [MercureDemoTopic::URI] === $update->getTopics()
+                && \str_contains($update->getData(), 'Mercure demo publish')
+                && false === $update->isPrivate()))
+        ;
 
-        $controller = new MercurePublishDemoController($hub, 'dev');
-        $response = $controller();
+        $mercurePublishDemoController = new MercurePublishDemoController($hub, 'dev');
+        $jsonResponse = $mercurePublishDemoController();
 
-        self::assertSame(200, $response->getStatusCode());
-        self::assertSame('{"published":true}', $response->getContent());
+        $this->assertSame(Response::HTTP_OK, $jsonResponse->getStatusCode(), (string) $jsonResponse->getContent());
+        $this->assertSame('{"published":true}', $jsonResponse->getContent());
     }
 
     public function testInvokeNotFoundInProd(): void
     {
         $hub = $this->createMock(HubInterface::class);
-        $hub->expects(self::never())->method('publish');
+        $hub->expects($this->never())->method('publish');
 
-        $controller = new MercurePublishDemoController($hub, 'prod');
+        $mercurePublishDemoController = new MercurePublishDemoController($hub, 'prod');
 
         $this->expectException(NotFoundHttpException::class);
-        $controller();
+        $mercurePublishDemoController();
     }
 }

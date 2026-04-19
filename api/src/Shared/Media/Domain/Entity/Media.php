@@ -16,8 +16,8 @@ use Symfony\Component\Uid\Uuid;
 class Media
 {
     #[ORM\Id]
-    #[ORM\Column(type: UuidType::NAME, unique: true)]
-    private Uuid $id;
+    #[ORM\Column(name: 'id', type: UuidType::NAME, unique: true)]
+    private Uuid $uuid;
 
     #[ORM\Column(name: 'content_hash', length: 64)]
     private string $contentHash;
@@ -28,7 +28,7 @@ class Media
     #[ORM\Column(name: 'byte_size', type: Types::INTEGER)]
     private int $byteSize;
 
-    /** @var string|resource */
+    /** @var resource|string */
     #[ORM\Column(name: 'raw_bytes', type: Types::BLOB)]
     private mixed $rawBytes;
 
@@ -46,18 +46,19 @@ class Media
     }
 
     public static function create(
-        Uuid $id,
+        Uuid $uuid,
         string $contentHash,
         string $mimeType,
         int $byteSize,
         string $rawBytes,
     ): self {
         $media = new self();
-        $media->id = $id;
+        $media->uuid = $uuid;
         $media->contentHash = $contentHash;
         $media->mimeType = $mimeType;
         $media->byteSize = $byteSize;
         $media->rawBytes = $rawBytes;
+
         $now = new DateTimeImmutable();
         $media->createdAt = $now;
         $media->updatedAt = $now;
@@ -67,7 +68,7 @@ class Media
 
     public function getId(): Uuid
     {
-        return $this->id;
+        return $this->uuid;
     }
 
     public function getContentHash(): string
@@ -88,11 +89,11 @@ class Media
     public function getRawBytes(): string
     {
         if (\is_resource($this->rawBytes)) {
-            $contents = stream_get_contents($this->rawBytes);
-            $this->rawBytes = $contents !== false ? $contents : '';
+            $contents = \stream_get_contents($this->rawBytes);
+            $this->rawBytes = false !== $contents ? $contents : '';
         }
 
-        return (string) $this->rawBytes;
+        return $this->rawBytes;
     }
 
     public function getDeletedAt(): ?DateTimeImmutable
@@ -102,12 +103,17 @@ class Media
 
     public function isActive(): bool
     {
-        return $this->deletedAt === null;
+        return !$this->deletedAt instanceof DateTimeImmutable;
     }
 
     public function softDelete(): void
     {
         $this->deletedAt = new DateTimeImmutable();
         $this->updatedAt = $this->deletedAt;
+    }
+
+    public function getCreatedAt(): DateTimeImmutable
+    {
+        return $this->createdAt;
     }
 }

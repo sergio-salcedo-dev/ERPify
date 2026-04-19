@@ -4,29 +4,35 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Backoffice\Health\Infrastructure\Controller;
 
-use Erpify\Backoffice\Health\Infrastructure\Controller\HealthController;
 use DateTimeImmutable;
 use DateTimeInterface;
+use Erpify\Backoffice\Health\Infrastructure\Controller\HealthController;
+use JsonException;
+use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * @internal
+ */
+#[CoversNothing]
 final class HealthControllerTest extends TestCase
 {
+    /** @throws JsonException */
     public function testInvokeReturnsOkJsonWithAtomDatetime(): void
     {
-        $controller = new HealthController();
-        $response = $controller();
+        $healthController = new HealthController();
+        $jsonResponse = $healthController();
 
-        self::assertInstanceOf(JsonResponse::class, $response);
-        self::assertSame(200, $response->getStatusCode());
-        self::assertStringContainsString('application/json', (string) $response->headers->get('Content-Type'));
+        $this->assertSame(Response::HTTP_OK, $jsonResponse->getStatusCode(), (string) $jsonResponse->getContent());
+        $this->assertStringContainsString('application/json', (string) $jsonResponse->headers->get('Content-Type'));
 
-        $data = json_decode($response->getContent(), true, 512, JSON_THROW_ON_ERROR);
-        self::assertSame('ok', $data['status']);
-        self::assertArrayHasKey('datetime', $data);
-        self::assertIsString($data['datetime']);
+        $data = \json_decode($jsonResponse->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame('ok', $data['status']);
+        $this->assertArrayHasKey('datetime', $data);
+        $this->assertIsString($data['datetime']);
 
         $parsed = DateTimeImmutable::createFromFormat(DateTimeInterface::ATOM, $data['datetime']);
-        self::assertInstanceOf(DateTimeImmutable::class, $parsed, 'datetime must be ISO-8601 (ATOM)');
+        $this->assertInstanceOf(DateTimeImmutable::class, $parsed, 'datetime must be ISO-8601 (ATOM)');
     }
 }

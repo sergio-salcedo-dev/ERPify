@@ -4,7 +4,7 @@
 set -euo pipefail
 API_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="$(cd "$API_DIR/.." && pwd)"
-COMPOSE=(docker compose -f "$REPO_ROOT/compose.yaml" -f "$REPO_ROOT/compose.override.yaml")
+COMPOSE=(docker compose -f "$REPO_ROOT/compose.yaml" -f "$REPO_ROOT/compose.dev.yaml")
 
 if command -v php >/dev/null 2>&1; then
 	cd "$API_DIR"
@@ -12,7 +12,7 @@ if command -v php >/dev/null 2>&1; then
 fi
 
 if ! command -v docker >/dev/null 2>&1; then
-	echo "Neither php nor docker is available. Install PHP, or from the repo root run: docker compose -f compose.yaml -f compose.override.yaml exec php bin/console" >&2
+	echo "Neither php nor docker is available. Install PHP, or from the repo root run: docker compose -f compose.yaml -f compose.dev.yaml exec php bin/console" >&2
 	exit 127
 fi
 

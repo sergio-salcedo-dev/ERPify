@@ -83,11 +83,12 @@ function playwrightWorkers(): number | undefined {
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  outputDir: "reports/playwright/test-results",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: playwrightWorkers(),
-  reporter: "html",
+  reporter: [["html", { outputFolder: "reports/playwright/html-report" }]],
   use: {
     baseURL: playwrightBaseURL,
     trace: "on-first-retry",

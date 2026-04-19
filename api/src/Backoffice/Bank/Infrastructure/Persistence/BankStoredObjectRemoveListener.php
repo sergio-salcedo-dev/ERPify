@@ -12,16 +12,16 @@ use Erpify\Shared\Storage\Application\StoredObjectOrphanCleaner;
 /**
  * After a bank is removed, drop the Flysystem blob only if no other aggregate still references the hash.
  */
-#[AsEntityListener(entity: Bank::class, event: Events::postRemove, method: 'removeStoredObjectIfOrphaned')]
-final class BankStoredObjectRemoveListener
+#[AsEntityListener(event: Events::postRemove, method: 'removeStoredObjectIfOrphaned', entity: Bank::class)]
+final readonly class BankStoredObjectRemoveListener
 {
     public function __construct(
-        private readonly StoredObjectOrphanCleaner $orphanCleaner,
+        private StoredObjectOrphanCleaner $storedObjectOrphanCleaner,
     ) {
     }
 
     public function removeStoredObjectIfOrphaned(Bank $bank): void
     {
-        $this->orphanCleaner->cleanupAfterRemoval($bank->getStoredObjectContentHash());
+        $this->storedObjectOrphanCleaner->cleanupAfterRemoval($bank->getStoredObjectContentHash());
     }
 }

@@ -54,7 +54,7 @@ modify the environment in the same file at `services.php.environment.DATABASE_UR
 DATABASE_URL: mysql://${MYSQL_USER:-app}:${MYSQL_PASSWORD:-!ChangeMe!}@database:3306/${MYSQL_DATABASE:-app}?serverVersion=${MYSQL_VERSION:-8.0.32}&charset=${MYSQL_CHARSET:-utf8mb4}
 ```
 
-Since we changed the port, we also have to define this in the `compose.override.yaml`:
+Since we changed the port, we also have to define this in the `compose.dev.yaml`:
 
 ```diff
  ###> doctrine/doctrine-bundle ###

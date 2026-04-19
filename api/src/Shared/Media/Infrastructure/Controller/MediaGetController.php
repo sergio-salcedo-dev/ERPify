@@ -4,18 +4,19 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Media\Infrastructure\Controller;
 
+use Erpify\Shared\Media\Domain\Entity\Media;
 use Erpify\Shared\Media\Domain\Repository\MediaRepository;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
-#[Route('/media/{hash}', name: 'shared_media_get', methods: ['GET'], requirements: ['hash' => '[a-f0-9]{64}'])]
-final class MediaGetController
+#[Route('/media/{hash}', name: 'shared_media_get', requirements: ['hash' => '[a-f0-9]{64}'], methods: ['GET'])]
+final readonly class MediaGetController
 {
-    private const CACHE_CONTROL = 'public, max-age=31536000, immutable';
+    private const string CACHE_CONTROL = 'public, max-age=31536000, immutable';
 
     public function __construct(
-        private readonly MediaRepository $mediaRepository,
+        private MediaRepository $mediaRepository,
     ) {
     }
 
@@ -30,7 +31,8 @@ final class MediaGetController
         }
 
         $media = $this->mediaRepository->findActiveByContentHash($hash);
-        if ($media === null) {
+
+        if (!$media instanceof Media) {
             return new Response('Not Found', Response::HTTP_NOT_FOUND);
         }
 
@@ -53,16 +55,15 @@ final class MediaGetController
     private function ifNoneMatchEqualsHash(Request $request, string $hash): bool
     {
         $header = $request->headers->get('If-None-Match');
-        if ($header === null || $header === '') {
+
+        if (null === $header || '' === $header) {
             return false;
         }
 
-        foreach ($request->getETags() as $tag) {
-            if ($tag === $hash) {
-                return true;
-            }
+        if (\array_any($request->getETags(), static fn ($tag): bool => $tag === $hash)) {
+            return true;
         }
 
-        return str_contains($header, $hash);
+        return \str_contains($header, $hash);
     }
 }

@@ -6,6 +6,7 @@ namespace Erpify\Shared\Infrastructure\Messenger;
 
 use Erpify\Shared\Application\DomainEvent\DomainEventStore;
 use Erpify\Shared\Domain\Event\DomainEvent;
+use Override;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Middleware\MiddlewareInterface;
 use Symfony\Component\Messenger\Middleware\StackInterface;
@@ -14,12 +15,13 @@ use Symfony\Component\Messenger\Middleware\StackInterface;
  * Runs before {@see \Symfony\Component\Messenger\Middleware\SendMessageMiddleware} so audit rows
  * exist even if enqueue fails.
  */
-final class PersistDomainEventMiddleware implements MiddlewareInterface
+final readonly class PersistDomainEventMiddleware implements MiddlewareInterface
 {
-    public function __construct(private readonly DomainEventStore $domainEventStore)
+    public function __construct(private DomainEventStore $domainEventStore)
     {
     }
 
+    #[Override]
     public function handle(Envelope $envelope, StackInterface $stack): Envelope
     {
         $message = $envelope->getMessage();

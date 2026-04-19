@@ -7,6 +7,7 @@ namespace Erpify\Frontoffice\Mercure\Infrastructure\Controller;
 use DateTimeImmutable;
 use DateTimeInterface;
 use Erpify\Frontoffice\Mercure\Domain\MercureDemoTopic;
+use JsonException;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -15,15 +16,18 @@ use Symfony\Component\Mercure\Update;
 use Symfony\Component\Routing\Attribute\Route;
 
 #[Route('/mercure/publish-demo', name: 'frontoffice_mercure_publish_demo', methods: ['POST'])]
-final class MercurePublishDemoController
+final readonly class MercurePublishDemoController
 {
     public function __construct(
-        private readonly HubInterface $hub,
+        private HubInterface $hub,
         #[Autowire('%kernel.environment%')]
-        private readonly string $environment,
+        private string $environment,
     ) {
     }
 
+    /**
+     * @throws JsonException
+     */
     public function __invoke(): JsonResponse
     {
         if ('dev' !== $this->environment) {
@@ -37,7 +41,7 @@ final class MercurePublishDemoController
 
         $this->hub->publish(new Update(
             MercureDemoTopic::URI,
-            json_encode($payload, JSON_THROW_ON_ERROR),
+            \json_encode($payload, JSON_THROW_ON_ERROR),
             false,
         ));
 

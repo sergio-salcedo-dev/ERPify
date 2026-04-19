@@ -13,7 +13,7 @@ interface BankRepository
 
     public function remove(Bank $bank): void;
 
-    public function findById(Uuid $id): ?Bank;
+    public function findById(Uuid $uuid): ?Bank;
 
     /** @return Bank[] */
     public function search(): array;
