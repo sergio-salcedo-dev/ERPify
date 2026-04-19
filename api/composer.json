@@ -2,7 +2,7 @@
     "name":"erpify/api",
     "type":"project",
     "license":"proprietary",
-    "description":"HTTP API ? Symfony, FrankenPHP, PostgreSQL",
+    "description":"HTTP API, Symfony, FrankenPHP, PostgreSQL",
     "authors":[
         {
             "name":"Sergio Salcedo",
