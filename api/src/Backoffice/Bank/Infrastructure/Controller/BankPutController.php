@@ -28,7 +28,7 @@ final readonly class BankPutController
     ) {
     }
 
-    public function __invoke(Uuid $uuid, Request $request): JsonResponse
+    public function __invoke(Uuid $id, Request $request): JsonResponse
     {
         try {
             /** @var BankInput $input */
@@ -44,7 +44,7 @@ final readonly class BankPutController
         }
 
         try {
-            $bank = $this->bankUpdater->update($uuid, $input->name, $input->shortName);
+            $bank = $this->bankUpdater->update($id, $input->name, $input->shortName);
         } catch (BankNotFoundException $bankNotFoundException) {
             return new JsonResponse(['error' => $bankNotFoundException->getMessage()], Response::HTTP_NOT_FOUND);
         }
