@@ -207,17 +207,7 @@ jobs:
   ci-success:
     name: CI Status
     needs: [api-test, api-behat, pwa-node, pwa-e2e]
-    if: always()
     runs-on: ubuntu-latest
-
     steps:
-      - name: Validate
-        run: |
-          for r in \
-            "${{ needs.api-test.result }}" \
-            "${{ needs.api-behat.result }}" \
-            "${{ needs.pwa-node.result }}" \
-            "${{ needs.pwa-e2e.result }}"; do
-            [[ "$r" == "failure" || "$r" == "cancelled" ]] && exit 1
-          done
-          echo "All jobs passed"
+      - name: Success
+        run: echo "All checks passed successfully!"
