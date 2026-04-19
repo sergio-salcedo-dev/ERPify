@@ -25,7 +25,7 @@ env:
 jobs:
 
   # -------------------------
-  # API BUILD
+  # API BUILD (single source of truth)
   # -------------------------
   api-build:
     name: API Build (Docker)
@@ -33,9 +33,13 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: ./.github/actions/docker-setup
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
-      - name: Build Docker images
+      - uses: ./.github/actions/docker-setup/action.yaml
+
+      - name: Build images
         uses: docker/bake-action@v7
         with:
           pull: true
@@ -53,16 +57,20 @@ jobs:
             pwa.cache-to=type=gha,scope=pwa-${{ github.ref_name }},mode=max
 
   # -------------------------
-  # API TEST
+  # API TEST (fast feedback)
   # -------------------------
   api-test:
-    name: API Tests
+    name: API Tests (PHPUnit + Lint)
     needs: api-build
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
-      - uses: ./.github/actions/docker-setup
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/docker-setup/action.yaml
 
       - name: Start API stack
         run: docker compose -f compose.yaml -f compose.dev.yaml up --wait --no-build
@@ -70,7 +78,7 @@ jobs:
       - name: Health check
         run: curl -skSf https://localhost/api/v1/health
 
-      - name: PHP Lint
+      - name: PHP lint
         run: docker compose exec -T php make php.lint
 
       - name: PHPUnit
@@ -82,13 +90,13 @@ jobs:
           docker compose ps
           docker compose logs
 
-      - name: Security checker
+      - name: Security check
         uses: symfonycorp/security-checker-action@v5
         with:
           lock: ./api/composer.lock
 
   # -------------------------
-  # API BEHAT
+  # API BEHAT (parallel)
   # -------------------------
   api-behat:
     name: API Behat
@@ -97,7 +105,11 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: ./.github/actions/docker-setup
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/docker-setup/action.yaml
 
       - name: Start API stack
         run: docker compose -f compose.yaml -f compose.dev.yaml up --wait --no-build
@@ -121,29 +133,26 @@ jobs:
           docker compose logs
 
   # -------------------------
-  # PWA NODE
+  # PWA NODE (isolated, fast)
   # -------------------------
   pwa-node:
     name: PWA (Node)
     runs-on: ubuntu-latest
 
     steps:
-      - uses: ./.github/actions/node-setup
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
-      - name: Install dependencies
-        run: make pwa.install
+      - uses: ./.github/actions/node-setup/action.yaml
 
-      - name: Lint
-        run: make pwa.lint
-
-      - name: Unit tests
-        run: make pwa.tests
-
-      - name: Build
-        run: make pwa.build
+      - run: make pwa.install
+      - run: make pwa.lint
+      - run: make pwa.tests
+      - run: make pwa.build
 
   # -------------------------
-  # PWA E2E
+  # PWA E2E (depends on build)
   # -------------------------
   pwa-e2e:
     name: PWA (E2E)
@@ -152,7 +161,11 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - uses: ./.github/actions/full-setup
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/full-setup/action.yaml
 
       - name: Start full stack
         env:
@@ -162,9 +175,7 @@ jobs:
       - name: Wait for API
         run: |
           for i in {1..60}; do
-            if curl -skSf https://localhost/api/v1/health >/dev/null; then
-              exit 0
-            fi
+            curl -skSf https://localhost/api/v1/health && exit 0
             sleep 2
           done
           exit 1
@@ -195,45 +206,22 @@ jobs:
           docker compose logs
 
   # -------------------------
-  # LINT (lightweight)
-  # -------------------------
-  lint:
-    name: YAML Lint
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Run yamllint
-        run: |
-          pip install yamllint
-          yamllint .
-
-  # -------------------------
-  # FINAL STATUS
+  # FINAL STATUS (strict gate)
   # -------------------------
   ci-success:
     name: CI Status
-    needs: [api-test, api-behat, pwa-node, pwa-e2e, lint]
+    needs: [api-test, api-behat, pwa-node, pwa-e2e]
     if: always()
     runs-on: ubuntu-latest
 
     steps:
-      - name: Validate results
+      - name: Validate
         run: |
-          results=(
-            "${{ needs.api-test.result }}"
-            "${{ needs.api-behat.result }}"
-            "${{ needs.pwa-node.result }}"
-            "${{ needs.pwa-e2e.result }}"
-            "${{ needs.lint.result }}"
-          )
-
-          for r in "${results[@]}"; do
-            if [[ "$r" == "failure" || "$r" == "cancelled" ]]; then
-              echo "CI failed (job result: $r)"
-              exit 1
-            fi
+          for r in \
+            "${{ needs.api-test.result }}" \
+            "${{ needs.api-behat.result }}" \
+            "${{ needs.pwa-node.result }}" \
+            "${{ needs.pwa-e2e.result }}"; do
+            [[ "$r" == "failure" || "$r" == "cancelled" ]] && exit 1
           done
-
           echo "All jobs passed"

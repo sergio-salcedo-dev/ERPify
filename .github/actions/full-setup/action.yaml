@@ -1,12 +1,8 @@
 name: Full setup
-description: Checkout + Node + Docker
+description: Node + Docker
 runs:
   using: "composite"
   steps:
-    - uses: actions/checkout@v6
-      with:
-        persist-credentials: false
-
     - uses: actions/setup-node@v6
       with:
         node-version: "20"
