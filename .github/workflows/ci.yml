@@ -21,6 +21,8 @@ defaults:
 env:
   DOCKER_BUILDKIT: 1
   COMPOSE_DOCKER_CLI_BUILD: 1
+  FRANKENPHP_WORKER_CONFIG: ""
+  FRANKENPHP_SITE_CONFIG: ""
 
 jobs:
 
@@ -63,7 +65,7 @@ jobs:
     name: API Tests (PHPUnit + Lint)
     needs: api-build
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v6
@@ -93,10 +95,10 @@ jobs:
         run: curl -skSf https://localhost/api/v1/health
 
       - name: PHP lint
-        run: docker compose exec -T php make php.lint
+        run: make php.lint
 
       - name: PHPUnit
-        run: docker compose exec -T -e APP_ENV=test php bin/phpunit
+        run: make php.unit
 
       - name: Debug
         if: failure()
@@ -116,7 +118,7 @@ jobs:
     name: API Behat
     needs: api-build
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v6
@@ -146,13 +148,10 @@ jobs:
         run: curl -skSf https://localhost/api/v1/health
 
       - name: Install Behat tools
-        run: docker compose exec -T php composer behat-tools-install --no-interaction
+        run: make php.behat.install
 
       - name: Run Behat
-        run: docker compose exec -T \
-          -e APP_ENV=test \
-          -e MINK_BASE_URL=http://php \
-          php bin/behat --format=pretty
+        run: make php.behat
 
       - name: Debug
         if: failure()
