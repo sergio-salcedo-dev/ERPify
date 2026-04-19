@@ -1488,16 +1488,16 @@
         },
         {
             "name": "league/flysystem-bundle",
-            "version": "3.6.2",
+            "version": "3.7.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/thephpleague/flysystem-bundle.git",
-                "reference": "123ab96910177751faf3b6cc85eecc360ec12a1f"
+                "reference": "5eb41be38fc3759f74c9e458a6a5f0ef5f49284a"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/thephpleague/flysystem-bundle/zipball/123ab96910177751faf3b6cc85eecc360ec12a1f",
-                "reference": "123ab96910177751faf3b6cc85eecc360ec12a1f",
+                "url": "https://api.github.com/repos/thephpleague/flysystem-bundle/zipball/5eb41be38fc3759f74c9e458a6a5f0ef5f49284a",
+                "reference": "5eb41be38fc3759f74c9e458a6a5f0ef5f49284a",
                 "shasum": ""
             },
             "require": {
@@ -1552,9 +1552,9 @@
             ],
             "support": {
                 "issues": "https://github.com/thephpleague/flysystem-bundle/issues",
-                "source": "https://github.com/thephpleague/flysystem-bundle/tree/3.6.2"
+                "source": "https://github.com/thephpleague/flysystem-bundle/tree/3.7.0"
             },
-            "time": "2026-02-05T15:26:57+00:00"
+            "time": "2026-03-28T22:14:56+00:00"
         },
         {
             "name": "league/flysystem-local",
@@ -8038,11 +8038,11 @@
         },
         {
             "name": "phpstan/phpstan",
-            "version": "2.1.48",
+            "version": "2.1.50",
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/phpstan/phpstan/zipball/231397213efb7c0a066ee024b5c3c87f2d3adfa0",
-                "reference": "231397213efb7c0a066ee024b5c3c87f2d3adfa0",
+                "url": "https://api.github.com/repos/phpstan/phpstan/zipball/d452086fb4cf648c6b2d8cf3b639351f79e4f3e2",
+                "reference": "d452086fb4cf648c6b2d8cf3b639351f79e4f3e2",
                 "shasum": ""
             },
             "require": {
@@ -8087,7 +8087,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2026-04-15T20:24:19+00:00"
+            "time": "2026-04-17T13:10:32+00:00"
         },
         {
             "name": "phpstan/phpstan-symfony",
@@ -8165,16 +8165,16 @@
         },
         {
             "name": "phpunit/php-code-coverage",
-            "version": "14.1.2",
+            "version": "14.1.3",
             "source": {
                 "type": "git",
                 "url": "https://github.com/sebastianbergmann/php-code-coverage.git",
-                "reference": "c9023486f88a48dd870361591bd7caef6d2406c3"
+                "reference": "24dc6fcf9f2a983de5b3f1199fb01e88d68e7474"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sebastianbergmann/php-code-coverage/zipball/c9023486f88a48dd870361591bd7caef6d2406c3",
-                "reference": "c9023486f88a48dd870361591bd7caef6d2406c3",
+                "url": "https://api.github.com/repos/sebastianbergmann/php-code-coverage/zipball/24dc6fcf9f2a983de5b3f1199fb01e88d68e7474",
+                "reference": "24dc6fcf9f2a983de5b3f1199fb01e88d68e7474",
                 "shasum": ""
             },
             "require": {
@@ -8230,7 +8230,7 @@
             "support": {
                 "issues": "https://github.com/sebastianbergmann/php-code-coverage/issues",
                 "security": "https://github.com/sebastianbergmann/php-code-coverage/security/policy",
-                "source": "https://github.com/sebastianbergmann/php-code-coverage/tree/14.1.2"
+                "source": "https://github.com/sebastianbergmann/php-code-coverage/tree/14.1.3"
             },
             "funding": [
                 {
@@ -8250,7 +8250,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-04-15T08:27:13+00:00"
+            "time": "2026-04-18T05:41:54+00:00"
         },
         {
             "name": "phpunit/php-file-iterator",
@@ -8547,16 +8547,16 @@
         },
         {
             "name": "phpunit/phpunit",
-            "version": "13.1.4",
+            "version": "13.1.7",
             "source": {
                 "type": "git",
                 "url": "https://github.com/sebastianbergmann/phpunit.git",
-                "reference": "f51a678e41401c9b3eb3d3e506c054fee215dd93"
+                "reference": "ddd6401641861cdef94b922ef10d484f436e8dcd"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sebastianbergmann/phpunit/zipball/f51a678e41401c9b3eb3d3e506c054fee215dd93",
-                "reference": "f51a678e41401c9b3eb3d3e506c054fee215dd93",
+                "url": "https://api.github.com/repos/sebastianbergmann/phpunit/zipball/ddd6401641861cdef94b922ef10d484f436e8dcd",
+                "reference": "ddd6401641861cdef94b922ef10d484f436e8dcd",
                 "shasum": ""
             },
             "require": {
@@ -8570,7 +8570,7 @@
                 "phar-io/manifest": "^2.0.4",
                 "phar-io/version": "^3.2.1",
                 "php": ">=8.4.1",
-                "phpunit/php-code-coverage": "^14.1.1",
+                "phpunit/php-code-coverage": "^14.1.3",
                 "phpunit/php-file-iterator": "^7.0.0",
                 "phpunit/php-invoker": "^7.0.0",
                 "phpunit/php-text-template": "^6.0.0",
@@ -8578,8 +8578,8 @@
                 "sebastian/cli-parser": "^5.0.0",
                 "sebastian/comparator": "^8.1.2",
                 "sebastian/diff": "^8.1.0",
-                "sebastian/environment": "^9.2.0",
-                "sebastian/exporter": "^8.0.1",
+                "sebastian/environment": "^9.3.0",
+                "sebastian/exporter": "^8.0.2",
                 "sebastian/git-state": "^1.0",
                 "sebastian/global-state": "^9.0.0",
                 "sebastian/object-enumerator": "^8.0.0",
@@ -8626,7 +8626,7 @@
             "support": {
                 "issues": "https://github.com/sebastianbergmann/phpunit/issues",
                 "security": "https://github.com/sebastianbergmann/phpunit/security/policy",
-                "source": "https://github.com/sebastianbergmann/phpunit/tree/13.1.4"
+                "source": "https://github.com/sebastianbergmann/phpunit/tree/13.1.7"
             },
             "funding": [
                 {
@@ -8634,7 +8634,7 @@
                     "type": "other"
                 }
             ],
-            "time": "2026-04-15T05:07:43+00:00"
+            "time": "2026-04-18T06:14:52+00:00"
         },
         {
             "name": "react/cache",
@@ -9164,21 +9164,21 @@
         },
         {
             "name": "rector/rector",
-            "version": "2.4.1",
+            "version": "2.4.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/rectorphp/rector.git",
-                "reference": "000b7050b9e4fe98db2192971e56eb0b302b3feb"
+                "reference": "e645b6463c6a88ea5b44b17d3387d35a912c7946"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/rectorphp/rector/zipball/000b7050b9e4fe98db2192971e56eb0b302b3feb",
-                "reference": "000b7050b9e4fe98db2192971e56eb0b302b3feb",
+                "url": "https://api.github.com/repos/rectorphp/rector/zipball/e645b6463c6a88ea5b44b17d3387d35a912c7946",
+                "reference": "e645b6463c6a88ea5b44b17d3387d35a912c7946",
                 "shasum": ""
             },
             "require": {
                 "php": "^7.4|^8.0",
-                "phpstan/phpstan": "^2.1.41"
+                "phpstan/phpstan": "^2.1.48"
             },
             "conflict": {
                 "rector/rector-doctrine": "*",
@@ -9212,7 +9212,7 @@
             ],
             "support": {
                 "issues": "https://github.com/rectorphp/rector/issues",
-                "source": "https://github.com/rectorphp/rector/tree/2.4.1"
+                "source": "https://github.com/rectorphp/rector/tree/2.4.2"
             },
             "funding": [
                 {
@@ -9220,7 +9220,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2026-04-08T08:43:56+00:00"
+            "time": "2026-04-16T13:07:34+00:00"
         },
         {
             "name": "revolt/event-loop",
@@ -9300,12 +9300,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/Roave/SecurityAdvisories.git",
-                "reference": "bb550b5adb0d4d74c4f6857c6b3b3638c022e90b"
+                "reference": "7d0034bc560ba3be5d93736256a9a500c907c37a"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/Roave/SecurityAdvisories/zipball/bb550b5adb0d4d74c4f6857c6b3b3638c022e90b",
-                "reference": "bb550b5adb0d4d74c4f6857c6b3b3638c022e90b",
+                "url": "https://api.github.com/repos/Roave/SecurityAdvisories/zipball/7d0034bc560ba3be5d93736256a9a500c907c37a",
+                "reference": "7d0034bc560ba3be5d93736256a9a500c907c37a",
                 "shasum": ""
             },
             "conflict": {
@@ -9614,7 +9614,7 @@
                 "friendsoftypo3/openid": ">=4.5,<4.5.31|>=4.7,<4.7.16|>=6,<6.0.11|>=6.1,<6.1.6",
                 "froala/wysiwyg-editor": "<=4.3",
                 "frosh/adminer-platform": "<2.2.1",
-                "froxlor/froxlor": "<=2.3.4",
+                "froxlor/froxlor": "<2.3.6",
                 "frozennode/administrator": "<=5.0.12",
                 "fuel/core": "<1.8.1",
                 "funadmin/funadmin": "<=7.1.0.0-RC4",
@@ -9633,6 +9633,7 @@
                 "globalpayments/php-sdk": "<2",
                 "goalgorilla/open_social": "<12.3.11|>=12.4,<12.4.10|>=13.0.0.0-alpha1,<13.0.0.0-alpha11",
                 "gogentooss/samlbase": "<1.2.7",
+                "goodoneuz/pay-uz": "<=2.2.24",
                 "google/protobuf": "<4.33.6",
                 "gos/web-socket-bundle": "<1.10.4|>=2,<2.6.1|>=3,<3.3",
                 "gp247/core": "<1.1.24",
@@ -9695,6 +9696,7 @@
                 "jasig/phpcas": "<1.3.3",
                 "jbartels/wec-map": "<3.0.3",
                 "jcbrand/converse.js": "<3.3.3",
+                "joedolson/my-calendar": "<3.7.7",
                 "joelbutcher/socialstream": "<5.6|>=6,<6.2",
                 "johnbillion/query-monitor": "<3.20.4",
                 "johnbillion/wp-crontrol": "<1.16.2|>=1.17,<1.19.2",
@@ -9719,8 +9721,8 @@
                 "kelvinmo/simplejwt": "<=1.1",
                 "kelvinmo/simplexrd": "<3.1.1",
                 "kevinpapst/kimai2": "<1.16.7",
-                "khodakhah/nodcms": "<=3",
-                "kimai/kimai": "<2.53",
+                "khodakhah/nodcms": "<=3.4.1",
+                "kimai/kimai": "<=2.53",
                 "kitodo/presentation": "<3.2.3|>=3.3,<3.3.4",
                 "klaviyo/magento2-extension": ">=1,<3",
                 "knplabs/knp-snappy": "<=1.4.2",
@@ -9780,6 +9782,7 @@
                 "manogi/nova-tiptap": "<=3.2.6",
                 "mantisbt/mantisbt": "<2.28.1",
                 "marcwillmann/turn": "<0.3.3",
+                "markhuot/craftql": "<=1.3.7",
                 "marshmallow/nova-tiptap": "<5.7",
                 "matomo/matomo": "<1.11",
                 "matyhtf/framework": "<3.0.6",
@@ -9922,7 +9925,7 @@
                 "phpseclib/phpseclib": "<2.0.53|>=3,<3.0.51",
                 "phpservermon/phpservermon": "<3.6",
                 "phpsysinfo/phpsysinfo": "<3.4.3",
-                "phpunit/phpunit": "<8.5.52|>=9,<9.6.33|>=10,<10.5.62|>=11,<11.5.50|>=12,<12.5.8",
+                "phpunit/phpunit": "<12.5.22|>=13,<13.1.6",
                 "phpwhois/phpwhois": "<=4.2.5",
                 "phpxmlrpc/extras": "<0.6.1",
                 "phpxmlrpc/phpxmlrpc": "<4.9.2",
@@ -9957,7 +9960,7 @@
                 "prestashop/ps_facetedsearch": "<3.4.1",
                 "prestashop/ps_linklist": "<3.1",
                 "privatebin/privatebin": "<1.4|>=1.5,<1.7.4|>=1.7.7,<2.0.3",
-                "processwire/processwire": "<=3.0.246",
+                "processwire/processwire": "<=3.0.255",
                 "propel/propel": ">=2.0.0.0-alpha1,<=2.0.0.0-alpha7",
                 "propel/propel1": ">=1,<=1.7.1",
                 "psy/psysh": "<=0.11.22|>=0.12,<=0.12.18",
@@ -10016,7 +10019,7 @@
                 "shuchkin/simplexlsx": ">=1.0.12,<1.1.13",
                 "silverstripe-australia/advancedreports": ">=1,<=2",
                 "silverstripe/admin": "<1.13.19|>=2,<2.1.8",
-                "silverstripe/assets": ">=1,<1.11.1",
+                "silverstripe/assets": "<2.4.5|>=3,<3.1.3",
                 "silverstripe/cms": "<4.11.3",
                 "silverstripe/comments": ">=1.3,<3.1.1",
                 "silverstripe/forum": "<=0.6.1|>=0.7,<=0.7.3",
@@ -10069,9 +10072,9 @@
                 "starcitizentools/short-description": ">=4,<4.0.1",
                 "starcitizentools/tabber-neue": ">=1.9.1,<2.7.2|>=3,<3.1.1",
                 "starcitizenwiki/embedvideo": "<=4",
-                "statamic/cms": "<5.73.16|>=6,<6.7.2",
+                "statamic/cms": "<5.73.20|>=6,<6.13",
                 "stormpath/sdk": "<9.9.99",
-                "studio-42/elfinder": "<=2.1.64",
+                "studio-42/elfinder": "<2.1.67",
                 "studiomitte/friendlycaptcha": "<0.1.4",
                 "subhh/libconnect": "<7.0.8|>=8,<8.1",
                 "sukohi/surpass": "<1",
@@ -10250,7 +10253,7 @@
                 "xpressengine/xpressengine": "<3.0.15",
                 "yab/quarx": "<2.4.5",
                 "yansongda/pay": "<=3.7.19",
-                "yeswiki/yeswiki": "<4.6",
+                "yeswiki/yeswiki": "<=4.6",
                 "yetiforce/yetiforce-crm": "<6.5",
                 "yidashi/yii2cmf": "<=2",
                 "yii2mod/yii2-cms": "<1.9.2",
@@ -10345,7 +10348,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-04-15T20:21:07+00:00"
+            "time": "2026-04-18T09:19:46+00:00"
         },
         {
             "name": "sebastian/cli-parser",

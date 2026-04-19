@@ -59,6 +59,7 @@ endef
 -include $(ROOT_DIR)/make/composer.mk
 -include $(ROOT_DIR)/make/php.mk
 -include $(ROOT_DIR)/make/npm.mk
+-include $(ROOT_DIR)/make/super-linter.mk
 
 .DEFAULT_GOAL := help
 
