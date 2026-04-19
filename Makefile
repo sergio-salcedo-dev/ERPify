@@ -39,6 +39,9 @@ PHP_TEST_BEHAT = $(DOCKER_COMP) exec -e APP_ENV=test -e MINK_BASE_URL=$(MINK_BAS
 PHP = $(PHP_CONT) php
 COMPOSER = $(PHP_CONT) composer
 SYMFONY = $(PHP) bin/console
+NPM = npm
+NCU = npx npm-check-updates
+PWA_DIR = pwa
 
 # PWA npm from Make: IDEs often run sh with a minimal PATH (no npm). Login zsh/bash loads nvm/fnm/Homebrew; else PATH + nvm.sh.
 define pwa_cmd
@@ -55,6 +58,7 @@ endef
 -include $(ROOT_DIR)/make/php-linters.mk
 -include $(ROOT_DIR)/make/composer.mk
 -include $(ROOT_DIR)/make/php.mk
+-include $(ROOT_DIR)/make/npm.mk
 
 .DEFAULT_GOAL := help
 
