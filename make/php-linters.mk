@@ -80,3 +80,5 @@ php.psalm.baseline: ## Generate or update the error baseline
 ## —— Lint suite ——
 
 php.lint: php.stan php.rector php.cs-fixer php.md php.cs php.psalm.fix.all ## Run all linters
+
+ci.php.lint: php.rector php.cs-fixer php.md php.cs php.psalm.fix.all ## Run all linters

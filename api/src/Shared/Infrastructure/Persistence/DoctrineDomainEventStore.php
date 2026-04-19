@@ -7,6 +7,7 @@ namespace Erpify\Shared\Infrastructure\Persistence;
 use Erpify\Shared\Application\DomainEvent\DomainEventStore;
 use Erpify\Shared\Domain\Event\DomainEvent;
 use Erpify\Shared\Infrastructure\Persistence\Entity\StoredDomainEvent;
+use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\Uid\Uuid;
 
@@ -22,7 +23,7 @@ final readonly class DoctrineDomainEventStore implements DomainEventStore
     {
     }
 
-    #[\Override]
+    #[Override]
     public function append(DomainEvent $domainEvent): void
     {
         $storedDomainEvent = new StoredDomainEvent(

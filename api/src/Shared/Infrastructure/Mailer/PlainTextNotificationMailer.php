@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Shared\Infrastructure\Mailer;
 
 use Erpify\Shared\Application\Mailer\NotificationMailer;
+use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Mailer\MailerInterface;
@@ -23,7 +24,7 @@ final readonly class PlainTextNotificationMailer implements NotificationMailer
     ) {
     }
 
-    #[\Override]
+    #[Override]
     public function send(string $to, string $subject, array $fields, ?string $correlationLabel = null): void
     {
         $lines = [];

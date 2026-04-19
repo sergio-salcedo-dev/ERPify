@@ -75,6 +75,8 @@ jobs:
       - name: Check Mercure reachability
         run: |
           curl -vkI --fail-with-body "https://localhost/.well-known/mercure?topic=test"
+      - name: Lint (PHP)
+        run: docker compose -f compose.yaml -f compose.dev.yaml exec -T php make ci.php.lint
       - name: PHPUnit (API)
         run: docker compose -f compose.yaml -f compose.dev.yaml exec -T -e APP_ENV=test php bin/phpunit
       - name: Install Behat tools (api/tools/behat)
@@ -113,6 +115,11 @@ jobs:
           VALIDATE_TRIVY: false
           VALIDATE_BIOME_FORMAT: false
           VALIDATE_BIOME_LINT: false
+          # PHP linting is handled separately in the 'api' job to avoid extension missing errors in Super-Linter
+          VALIDATE_PHP_BUILTIN: false
+          VALIDATE_PHP_PHPCS: false
+          VALIDATE_PHP_PHPSTAN: false
+          VALIDATE_PHP_PSALM: false
 
   pwa-node:
     name: PWA (Node)

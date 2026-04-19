@@ -8,6 +8,7 @@ use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
+use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\Uid\Uuid;
 
@@ -22,34 +23,34 @@ final class PostgresBankRepository extends ServiceEntityRepository implements Ba
         parent::__construct($registry, Bank::class);
     }
 
-    #[\Override]
+    #[Override]
     public function save(Bank $bank): void
     {
         $this->getEntityManager()->persist($bank);
         $this->getEntityManager()->flush();
     }
 
-    #[\Override]
+    #[Override]
     public function remove(Bank $bank): void
     {
         $this->getEntityManager()->remove($bank);
         $this->getEntityManager()->flush();
     }
 
-    #[\Override]
+    #[Override]
     public function findById(Uuid $uuid): ?Bank
     {
         return $this->find($uuid);
     }
 
     /** @return Bank[] */
-    #[\Override]
+    #[Override]
     public function search(): array
     {
         return $this->findAll();
     }
 
-    #[\Override]
+    #[Override]
     public function countBanksWithStoredObjectContentHash(string $contentHash): int
     {
         return (int) $this->createQueryBuilder('b')
@@ -61,7 +62,7 @@ final class PostgresBankRepository extends ServiceEntityRepository implements Ba
         ;
     }
 
-    #[\Override]
+    #[Override]
     public function findStoredObjectMimeTypeByContentHash(string $contentHash): ?string
     {
         $bank = $this->createQueryBuilder('b')

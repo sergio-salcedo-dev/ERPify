@@ -7,6 +7,7 @@ namespace Erpify\Shared\Storage\Infrastructure;
 use Erpify\Shared\Storage\Application\Port\ObjectStoragePort;
 use League\Flysystem\FilesystemOperator;
 use League\Flysystem\UnableToReadFile;
+use Override;
 use RuntimeException;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\DependencyInjection\Attribute\Target;
@@ -20,13 +21,13 @@ final readonly class FlysystemObjectStorage implements ObjectStoragePort
     ) {
     }
 
-    #[\Override]
+    #[Override]
     public function write(string $key, string $contents): void
     {
         $this->filesystemOperator->write($key, $contents);
     }
 
-    #[\Override]
+    #[Override]
     public function read(string $key): string
     {
         try {
@@ -36,7 +37,7 @@ final readonly class FlysystemObjectStorage implements ObjectStoragePort
         }
     }
 
-    #[\Override]
+    #[Override]
     public function delete(string $key): void
     {
         if (!$this->filesystemOperator->fileExists($key)) {
@@ -46,7 +47,7 @@ final readonly class FlysystemObjectStorage implements ObjectStoragePort
         $this->filesystemOperator->delete($key);
     }
 
-    #[\Override]
+    #[Override]
     public function exists(string $key): bool
     {
         return $this->filesystemOperator->fileExists($key);

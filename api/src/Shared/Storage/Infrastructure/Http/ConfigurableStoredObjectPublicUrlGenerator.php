@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Shared\Storage\Infrastructure\Http;
 
 use Erpify\Shared\Storage\Application\Port\StoredObjectPublicUrlGenerator;
+use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\Request;
@@ -22,7 +23,7 @@ final readonly class ConfigurableStoredObjectPublicUrlGenerator implements Store
     ) {
     }
 
-    #[\Override]
+    #[Override]
     public function urlForContentHash(string $contentHash): string
     {
         $base = \trim($this->mediaPublicBaseUrl);

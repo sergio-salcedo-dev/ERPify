@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Shared\Media\Infrastructure\Http;
 
 use Erpify\Shared\Media\Application\Port\MediaPublicUrlGenerator;
+use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\Request;
@@ -22,7 +23,7 @@ final readonly class ConfigurableMediaPublicUrlGenerator implements MediaPublicU
     ) {
     }
 
-    #[\Override]
+    #[Override]
     public function urlForContentHash(string $contentHash): string
     {
         $base = \trim($this->mediaPublicBaseUrl);

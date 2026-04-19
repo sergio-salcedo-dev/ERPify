@@ -6,6 +6,7 @@ namespace Erpify\Shared\Infrastructure\Messenger;
 
 use Erpify\Shared\Application\DomainEvent\DomainEventStore;
 use Erpify\Shared\Domain\Event\DomainEvent;
+use Override;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Middleware\MiddlewareInterface;
 use Symfony\Component\Messenger\Middleware\StackInterface;
@@ -20,7 +21,7 @@ final readonly class PersistDomainEventMiddleware implements MiddlewareInterface
     {
     }
 
-    #[\Override]
+    #[Override]
     public function handle(Envelope $envelope, StackInterface $stack): Envelope
     {
         $message = $envelope->getMessage();

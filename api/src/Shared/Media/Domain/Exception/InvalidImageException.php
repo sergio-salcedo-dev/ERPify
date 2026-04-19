@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Shared\Media\Domain\Exception;
 
 use Erpify\Shared\Domain\DomainError;
+use Override;
 
 final class InvalidImageException extends DomainError
 {
@@ -15,7 +16,7 @@ final class InvalidImageException extends DomainError
         parent::__construct();
     }
 
-    #[\Override]
+    #[Override]
     public function errorCode(): string
     {
         return 'erpify.media.invalid_image';
@@ -26,7 +27,7 @@ final class InvalidImageException extends DomainError
         return $this->formField;
     }
 
-    #[\Override]
+    #[Override]
     protected function errorMessage(): string
     {
         return $this->detail;

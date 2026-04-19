@@ -8,6 +8,7 @@ use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Shared\Media\Application\Port\MediaPublicUrlGenerator;
 use Erpify\Shared\Media\Domain\Entity\Media;
 use Erpify\Shared\Storage\Application\Port\StoredObjectPublicUrlGenerator;
+use Override;
 use Symfony\Component\DependencyInjection\Attribute\AutoconfigureTag;
 use Symfony\Component\Serializer\Normalizer\NormalizerAwareInterface;
 use Symfony\Component\Serializer\Normalizer\NormalizerAwareTrait;
@@ -29,26 +30,26 @@ final class BankLogoUrlNormalizer implements NormalizerInterface, NormalizerAwar
     ) {
     }
 
-    #[\Override]
-    public function normalize(mixed $object, ?string $format = null, array $context = []): array
+    #[Override]
+    public function normalize(mixed $data, ?string $format = null, array $context = []): array
     {
         $context[self::MARK] = true;
-        $data = $this->normalizer->normalize($object, $format, $context);
-        \assert(\is_array($data));
+        $normalizedData = $this->normalizer->normalize($data, $format, $context);
+        \assert(\is_array($normalizedData));
 
-        if ($object instanceof Bank && \in_array('bank:read', $context['groups'] ?? [], true)) {
-            $logo = $object->getLogo();
-            $data['logoUrl'] = $logo instanceof Media ? $this->mediaPublicUrlGenerator->urlForContentHash($logo->getContentHash()) : null;
-            $storedHash = $object->getStoredObjectContentHash();
-            $data['storedObjectUrl'] = null !== $storedHash
+        if ($data instanceof Bank && \in_array('bank:read', $context['groups'] ?? [], true)) {
+            $logo = $data->getLogo();
+            $normalizedData['logoUrl'] = $logo instanceof Media ? $this->mediaPublicUrlGenerator->urlForContentHash($logo->getContentHash()) : null;
+            $storedHash = $data->getStoredObjectContentHash();
+            $normalizedData['storedObjectUrl'] = null !== $storedHash
                 ? $this->storedObjectPublicUrlGenerator->urlForContentHash($storedHash)
                 : null;
         }
 
-        return $data;
+        return $normalizedData;
     }
 
-    #[\Override]
+    #[Override]
     public function supportsNormalization(mixed $data, ?string $format = null, array $context = []): bool
     {
         return $data instanceof Bank
@@ -59,7 +60,7 @@ final class BankLogoUrlNormalizer implements NormalizerInterface, NormalizerAwar
     /**
      * @return array<string, bool>
      */
-    #[\Override]
+    #[Override]
     public function getSupportedTypes(?string $format): array
     {
         return [

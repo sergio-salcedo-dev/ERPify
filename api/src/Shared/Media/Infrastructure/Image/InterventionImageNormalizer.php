@@ -12,6 +12,7 @@ use Intervention\Image\Encoders\JpegEncoder;
 use Intervention\Image\Encoders\PngEncoder;
 use Intervention\Image\Encoders\WebpEncoder;
 use Intervention\Image\ImageManager;
+use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
@@ -39,7 +40,7 @@ final readonly class InterventionImageNormalizer implements ImageNormalizer
         $this->imageManager = new ImageManager(new Driver());
     }
 
-    #[\Override]
+    #[Override]
     public function normalize(UploadedFile $uploadedFile): NormalizedImage
     {
         $mime = $uploadedFile->getMimeType() ?? '';

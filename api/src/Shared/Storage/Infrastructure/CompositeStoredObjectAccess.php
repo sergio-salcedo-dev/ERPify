@@ -6,6 +6,7 @@ namespace Erpify\Shared\Storage\Infrastructure;
 
 use Erpify\Shared\Storage\Application\Port\StoredObjectAccessPort;
 use Erpify\Shared\Storage\Application\Port\StoredObjectReferenceInspector;
+use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\DependencyInjection\Attribute\AutowireIterator;
 
@@ -21,7 +22,7 @@ final readonly class CompositeStoredObjectAccess implements StoredObjectAccessPo
     ) {
     }
 
-    #[\Override]
+    #[Override]
     public function existsAnyWithContentHash(string $contentHash): bool
     {
         foreach ($this->inspectors as $inspector) {
@@ -33,7 +34,7 @@ final readonly class CompositeStoredObjectAccess implements StoredObjectAccessPo
         return false;
     }
 
-    #[\Override]
+    #[Override]
     public function getMimeTypeForContentHash(string $contentHash): ?string
     {
         foreach ($this->inspectors as $inspector) {

@@ -8,6 +8,7 @@ use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 use Erpify\Shared\Media\Domain\Entity\Media;
 use Erpify\Shared\Media\Domain\Repository\MediaRepository;
+use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
 /**
@@ -21,14 +22,14 @@ final class PostgresMediaRepository extends ServiceEntityRepository implements M
         parent::__construct($registry, Media::class);
     }
 
-    #[\Override]
+    #[Override]
     public function save(Media $media): void
     {
         $this->getEntityManager()->persist($media);
         $this->getEntityManager()->flush();
     }
 
-    #[\Override]
+    #[Override]
     public function findActiveByContentHash(string $contentHash): ?Media
     {
         return $this->createQueryBuilder('m')
@@ -40,7 +41,7 @@ final class PostgresMediaRepository extends ServiceEntityRepository implements M
         ;
     }
 
-    #[\Override]
+    #[Override]
     public function existsActiveByContentHash(string $contentHash): bool
     {
         $row = $this->createQueryBuilder('m')

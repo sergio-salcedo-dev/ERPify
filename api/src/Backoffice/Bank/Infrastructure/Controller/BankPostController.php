@@ -36,7 +36,7 @@ final readonly class BankPostController
     {
         $contentType = $request->headers->get('Content-Type', '');
 
-        if ($request->files->count() > 0 || \str_contains($contentType, 'multipart/form-data')) {
+        if ($request->files->count() > 0 || \str_contains((string) $contentType, 'multipart/form-data')) {
             return $this->fromMultipart($request);
         }
 

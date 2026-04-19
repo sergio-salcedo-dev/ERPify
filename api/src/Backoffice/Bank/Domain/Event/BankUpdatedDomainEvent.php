@@ -6,6 +6,7 @@ namespace Erpify\Backoffice\Bank\Domain\Event;
 
 use DateTimeImmutable;
 use Erpify\Shared\Domain\Event\DomainEvent;
+use Override;
 
 /**
  * @SuppressWarnings(PHPMD.ExcessiveParameterList)
@@ -32,7 +33,7 @@ final class BankUpdatedDomainEvent extends DomainEvent
         );
     }
 
-    #[\Override]
+    #[Override]
     public static function eventName(): string
     {
         return 'erpify.backoffice.bank.updated';
@@ -41,7 +42,7 @@ final class BankUpdatedDomainEvent extends DomainEvent
     /**
      * @return array<string, string|null>
      */
-    #[\Override]
+    #[Override]
     public function toPrimitives(): array
     {
         return [
