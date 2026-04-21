@@ -73,7 +73,7 @@ endef
 	db.migrate db.diff db.status db.validate db.load.fixtures db.reset db.shell \
 	messenger.stop-workers \
 	php.unit php.unit.install php.behat php.behat.install test \
-	pwa.install pwa.dev pwa.build pwa.test pwa.e2e pwa.lint pwa.lint.fix pwa.format \
+	pwa.install pwa.dev pwa.build pwa.tests pwa.test.unit pwa.test.e2e pwa.lint pwa.lint.fix pwa.format \
 	xdebug.enable xdebug.disable xdebug.status \
 	ci start \
 	php.psalm php.psalm.baseline php.composer-unused \
