@@ -152,7 +152,7 @@ final class FeatureContext extends MinkContext
         $content = $this->getSession()->getPage()->getContent();
 
         /** @var array<string, mixed> $data */
-        $data = \json_decode($content, true, 512, JSON_THROW_ON_ERROR) ?? [];
+        $data = \json_decode((string) $content, true, 512, JSON_THROW_ON_ERROR) ?? [];
 
         ScenarioRememberedValues::set($alias, (string) ($data[$field] ?? ''));
     }

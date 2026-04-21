@@ -17,9 +17,11 @@
             <directory name="../../vendor" />
         </ignoreFiles>
     </projectFiles>
+
     <plugins>
         <pluginClass class="Psalm\SymfonyPsalmPlugin\Plugin" />
     </plugins>
+
     <issueHandlers>
         <UnusedClass>
             <errorLevel type="suppress">
