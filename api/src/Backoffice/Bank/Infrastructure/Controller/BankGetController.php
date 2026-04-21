@@ -21,10 +21,10 @@ final readonly class BankGetController
     ) {
     }
 
-    public function __invoke(Uuid $id): JsonResponse
+    public function __invoke(Uuid $uuid): JsonResponse
     {
         try {
-            $bank = $this->bankFinder->find($id);
+            $bank = $this->bankFinder->find($uuid);
         } catch (BankNotFoundException $bankNotFoundException) {
             return new JsonResponse(['error' => $bankNotFoundException->getMessage()], Response::HTTP_NOT_FOUND);
         }

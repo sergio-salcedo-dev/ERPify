@@ -18,10 +18,10 @@ final readonly class BankDeleteController
     {
     }
 
-    public function __invoke(Uuid $id): JsonResponse
+    public function __invoke(Uuid $uuid): JsonResponse
     {
         try {
-            $this->bankDeleter->delete($id);
+            $this->bankDeleter->delete($uuid);
         } catch (BankNotFoundException $bankNotFoundException) {
             return new JsonResponse(['error' => $bankNotFoundException->getMessage()], Response::HTTP_NOT_FOUND);
         }
