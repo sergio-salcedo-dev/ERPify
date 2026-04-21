@@ -21,7 +21,7 @@ class StoredDomainEvent
      */
     public function __construct(
         #[ORM\Id]
-        #[ORM\Column(type: UuidType::NAME)]
+        #[ORM\Column(name: 'id', type: UuidType::NAME)]
         private Uuid $uuid,
         #[ORM\Column(length: 190)]
         private string $name,
