@@ -313,8 +313,12 @@ pwa.test.unit: ## Vitest; pass c= for extra args
 	@$(eval c ?=)
 	$(call pwa_cmd,npm test -- $(c))
 
-pwa.test.e2e: ## Playwright
-	$(call pwa_cmd,npm run e2e)
+# Playwright sharding (both vars required together; unset = single-process run):
+#   CI_SHARD        this runner's shard index (1-based)
+#   CI_TOTAL_SHARDS total number of shards in the matrix
+# Example: CI_SHARD=2 CI_TOTAL_SHARDS=3 → runs tests 2/3 of the partitioned set.
+pwa.test.e2e: ## Playwright; pass CI_SHARD=N CI_TOTAL_SHARDS=M for sharded runs
+	$(call pwa_cmd,npm run e2e -- $(if $(CI_TOTAL_SHARDS),--shard=$(CI_SHARD)/$(CI_TOTAL_SHARDS),))
 
 pwa.tests: pwa.test.unit pwa.test.e2e ## PWA test suite (Vitest + Playwright)
 

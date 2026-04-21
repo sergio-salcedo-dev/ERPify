@@ -183,10 +183,14 @@ jobs:
   # PWA E2E (depends on build)
   # -------------------------
   pwa-e2e:
-    name: PWA (E2E)
+    name: PWA (E2E) [shard ${{ matrix.shard }}/3]
     needs: [pwa-node, api-build]
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
 
     steps:
       - uses: actions/checkout@v6
@@ -227,6 +231,8 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
 
       - name: Install Playwright Browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
@@ -236,7 +242,15 @@ jobs:
         env:
           CI: true
           PLAYWRIGHT_BASE_URL: https://localhost
-        run: make pwa.e2e
+        run: make pwa.test.e2e CI_SHARD=${{ matrix.shard }} CI_TOTAL_SHARDS=3
+
+      - name: Upload blob report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blob-report-${{ matrix.shard }}
+          path: pwa/blob-report/
+          retention-days: 1
 
       - name: Debug
         if: failure()
@@ -245,6 +259,43 @@ jobs:
         run: |
           docker compose ps
           docker compose logs
+
+  # -------------------------
+  # PWA E2E REPORT (merge blob reports on failure)
+  # -------------------------
+  pwa-e2e-report:
+    name: PWA (E2E) Report
+    if: failure()
+    needs: [pwa-e2e]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/node-setup
+
+      - name: Install PWA dependencies
+        run: make pwa.install
+
+      - name: Download blob reports
+        uses: actions/download-artifact@v4
+        with:
+          path: pwa/all-blob-reports
+          pattern: blob-report-*
+          merge-multiple: true
+
+      - name: Merge into HTML report
+        run: cd pwa && npx playwright merge-reports --reporter html ./all-blob-reports
+
+      - name: Upload merged HTML report
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report--attempt-${{ github.run_attempt }}
+          path: pwa/playwright-report/
+          retention-days: 7
 
   # -------------------------
   # FINAL STATUS (strict gate)
