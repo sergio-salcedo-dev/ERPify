@@ -1,28 +1,24 @@
-# =============================================================================
-# PHP — Tests
-# =============================================================================
+# make/php-test.mk — PHP test suites (PHPUnit + Behat).
+#
+# Target names match CI (.github/workflows/ci.yml):
+#   php.unit / php.unit.install / php.behat / php.behat.install / php.test
 
-## —— PHPUnit ——
+## —— PHP tests ——
 
-php.test.unit: ## Run PHPUnit; pass c= for extra args
+php.unit: ## PHPUnit; pass c='…' for extra args (e.g. c='--filter SomeTest')
 	@$(eval c ?=)
-	$(DOCKER_EXEC_PHP_TEST) bin/phpunit $(c)
+	@$(PHP_TEST) bin/phpunit $(c)
 
-php.test.unit.install: ## Install PHPUnit tooling
-	$(DOCKER_EXEC_PHP) composer phpunit-tools-install
+php.unit.install: ## Install PHPUnit tooling (api/tools/phpunit)
+	@$(COMPOSER) phpunit-tools-install
 
-## —— Behat (E2E / acceptance) ——
-
-php.test.e2e: ## Run Behat; pass c= for extra args
+php.behat: ## Behat; pass c='…' for extra args
 	@$(eval c ?=)
-	$(DOCKER_COMPOSE) $(DOCKER_COMPOSE_ENV) exec -e APP_ENV=test -e MINK_BASE_URL=$(MINK_BASE_URL) $(PHP_SERVICE) \
-		php bin/behat --format=pretty $(c)
+	@$(PHP_BEHAT) php bin/behat --format=pretty $(c)
 
-php.test.e2e.install: ## Install Behat tooling
-	$(DOCKER_EXEC_PHP) composer behat-tools-install
+php.behat.install: ## Install Behat tooling (api/tools/behat)
+	@$(COMPOSER) behat-tools-install
 
-## —— Aggregate ——
+php.test: php.unit php.behat ## Full PHP test suite (PHPUnit + Behat)
 
-php.test: php.test.unit php.test.e2e ## Run all PHP tests
-
-.PHONY: php.test.unit php.test.unit.install php.test.e2e php.test.e2e.install php.test
+.PHONY: php.unit php.unit.install php.behat php.behat.install php.test

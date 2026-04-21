@@ -1,6 +1,10 @@
-# IDE
+# IDE / editors
 .idea/
+.vscode/
 *.iml
+*.swp
+*.swo
+*~
 
 # OS
 .DS_Store
@@ -14,30 +18,48 @@ Thumbs.db
 # API — PHP / Composer / Symfony
 api/vendor/
 api/var/
-api/.phpunit.result.cache
-api/.php-cs-fixer.cache
 api/public/bundles/
+api/.phpunit.result.cache
+api/.phpunit.cache/
+api/.php-cs-fixer.cache
+api/.phpstan.cache/
+api/.psalm.cache/
+api/.rector.cache/
 
-# PWA — Node
+# PWA — Node / Next
 pwa/node_modules/
-pwa/dist/
-pwa/build/
 pwa/.next/
 pwa/.nuxt/
+pwa/dist/
+pwa/build/
+pwa/out/
 pwa/coverage/
+pwa/.turbo/
+pwa/.vercel/
+pwa/next-env.d.ts
 
-# E2E — Node / Playwright (common defaults)
+# E2E — Playwright (root-level convenience paths)
 e2e/node_modules/
 e2e/test-results/
 e2e/playwright-report/
 e2e/blob-report/
 e2e/playwright/.cache/
+pwa/test-results/
+pwa/playwright-report/
+pwa/blob-report/
+pwa/playwright/.cache/
 
 # Logs & temp
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-*~
-*.swp
-*.swo
+pnpm-debug.log*
+*.orig
+*.bak
+
+# BMad generated artifacts
+/_bmad-output/
+/_bmad/
+/.claude/skills/bmad-*/
+/.claude/commands/bmad-*.md

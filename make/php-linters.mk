@@ -1,5 +1,6 @@
 # =============================================================================
 # API Linters & static analysis
+# DEPRECATED
 # =============================================================================
 # NOTE: This file is included from the root Makefile and relies on its variables:
 #   ROOT_DIR, COMPOSE_DEV, PHP_TEST, PHP, COMPOSER

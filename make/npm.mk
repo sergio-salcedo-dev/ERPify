@@ -1,5 +1,6 @@
 # =============================================================================
 # NPM dependencies management for the PWA directory
+# DEPRECATED
 # =============================================================================
 
 .PHONY: npm.install npm.update npm.upgrade npm.clean npm.dev npm.dev.e2e npm.build npm.start npm.next.clean npm.lint npm.lint.fix npm.format npm.test npm.test.watch npm.e2e npm.e2e.reports

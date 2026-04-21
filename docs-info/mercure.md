@@ -2,7 +2,7 @@
 
 This monorepo uses the [Mercure protocol](https://mercure.rocks/) with [Symfony Mercure](https://symfony.com/doc/current/mercure.html): Symfony publishes updates to a **hub** embedded in **FrankenPHP/Caddy**; browsers subscribe with **Server-Sent Events** (`EventSource`).
 
-For HTTP routing (single public entry, `/api` vs `/.well-known/mercure`), see [local-fullstack-traffic.md](./local-fullstack-traffic.md).
+For HTTP routing (single public entry, `/api` vs `/.well-known/mercure`), see [local-fullstack-traffic.md](local-fullstack-traffic.md).
 
 ## Glossary
 
@@ -20,7 +20,7 @@ For HTTP routing (single public entry, `/api` vs `/.well-known/mercure`), see [l
 |----------|------|
 | `MERCURE_URL` | URL Symfony uses **internally** to publish (often `http://php/.well-known/mercure` in Compose). |
 | `MERCURE_PUBLIC_URL` | URL **browsers** use to open `EventSource` (e.g. `https://localhost/.well-known/mercure` on the default stack). |
-| `MERCURE_JWT_SECRET` | Shared HMAC key for JWTs Symfony ↔ hub; must match Caddy/Compose `CADDY_MERCURE_JWT_SECRET`. **Generate per env** (`openssl rand -hex 32`); never commit prod values — [mercure-production-deployment.md](./mercure-production-deployment.md). |
+| `MERCURE_JWT_SECRET` | Shared HMAC key for JWTs Symfony ↔ hub; must match Caddy/Compose `CADDY_MERCURE_JWT_SECRET`. **Generate per env** (`openssl rand -hex 32`); never commit prod values — [mercure-production-deployment.md](mercure-production-deployment.md). |
 
 Defaults for local files live in [`api/.env`](../api/.env) and [`api/.env.example`](../api/.env.example). Docker Compose overrides these on the `php` service.
 
@@ -90,7 +90,7 @@ sequenceDiagram
 
 ## Production
 
-[mercure-production-deployment.md](./mercure-production-deployment.md) covers **generating** `MERCURE_JWT_SECRET`, **leak prevention**, hub hardening, and a **pre-production checklist**.
+[mercure-production-deployment.md](mercure-production-deployment.md) covers **generating** `MERCURE_JWT_SECRET`, **leak prevention**, hub hardening, and a **pre-production checklist**.
 
 ## Security note
 

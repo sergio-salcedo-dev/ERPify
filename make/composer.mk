@@ -1,5 +1,6 @@
 # =============================================================================
 # PHP Composer
+# DEPRECATED
 # =============================================================================
 
 .PHONY: composer.check.deps composer.check.platform-reqs composer.unused composer.checks
