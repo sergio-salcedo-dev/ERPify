@@ -116,7 +116,7 @@
             "docker":true
         }
     },
-    "require-dev":{
+    "require-dev": {
         "doctrine/doctrine-fixtures-bundle": "^4.3.1",
         "friendsofphp/php-cs-fixer": "^3.95.1",
         "hautelook/alice-bundle": "^2.17.3",

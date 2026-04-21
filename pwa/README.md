@@ -9,22 +9,27 @@ Next.js **App Router** app. In the **default Docker stack**, the browser uses **
 
 ## Quick start
 
-1. **`npm ci`**
+1. **`make pwa.install`** (or **`npm ci`** from `pwa/`).
 2. Copy [`.env.example`](.env.example) to **`.env.local`** when you need overrides.
 3. **Against Docker (full stack on host 80/443)**  
-   From repo root: **`make up-wait`**.  
+   From repo root: **`make docker.up.wait`** (or **`make dev`** for a build + browser open).  
    Use **`NEXT_PUBLIC_SYMFONY_API_BASE_URL=https://localhost`** (or **`http://localhost`**) so the browser matches the page origin. **`SYMFONY_INTERNAL_URL=http://php:80`** is set in Compose for the **pwa** container.
 4. **Local dev with API on :8000**  
-   **`make api-up-http`** from repo root, then **`npm run dev`** (port **80** — see `package.json`). In **`.env.local`**: **`NEXT_PUBLIC_SYMFONY_API_BASE_URL=http://localhost:8000`**, **`SYMFONY_INTERNAL_URL=http://localhost:8000`**.
+   From repo root: **`make dev.local`** (runs **`api-up-http`** + **`make pwa.dev`** on host **:80**). In **`.env.local`**: **`NEXT_PUBLIC_SYMFONY_API_BASE_URL=http://localhost:8000`**, **`SYMFONY_INTERNAL_URL=http://localhost:8000`**.
 
 ## Scripts
 
-| Script                    | Description               |
-| ------------------------- | ------------------------- |
-| `npm run dev`             | Next dev (Turbopack, :80) |
-| `npm run build` / `start` | Production build / start  |
-| `npm run test`            | Vitest                    |
-| `npm run e2e`             | Playwright (see below)    |
+Prefer the root **`make`** targets — they are the canonical interface and wrap these npm scripts:
+
+| Make target          | npm script               | Description                    |
+| -------------------- | ------------------------ | ------------------------------ |
+| `make pwa.dev`       | `npm run dev`            | Next dev (Turbopack, :80)      |
+| `make pwa.build`     | `npm run build`          | Production build               |
+| `make pwa.test.unit` | `npm run test`           | Vitest (single run)            |
+| `make pwa.test.e2e`  | `npm run e2e`            | Playwright (see below)         |
+| `make pwa.lint`      | `npm run lint` + Prettier | ESLint + Prettier check        |
+
+Pass extra args with **`c='…'`**, e.g. `make pwa.test.unit c='path/to/file.test.ts'`.
 
 ## E2E (Playwright)
 

@@ -37,8 +37,6 @@ jobs:
         include:
           - language: javascript-typescript
             source-root: pwa
-          - language: php
-            source-root: api
 
     steps:
       - uses: actions/checkout@v6
@@ -46,7 +44,7 @@ jobs:
           persist-credentials: false
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           source-root: ${{ matrix.source-root }}
@@ -54,22 +52,12 @@ jobs:
           config: |
             paths-ignore:
               - '**/node_modules'
-              - '**/vendor'
-              - '**/var'
               - '**/.next'
               - '**/dist'
               - '**/build'
-              - '**/public/build'
               - '**/tests'
-              - '**/features'
-              - '**/tools'
-
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
-        with:
-          working-directory: ${{ matrix.source-root }}
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: "/language:${{ matrix.language }}"

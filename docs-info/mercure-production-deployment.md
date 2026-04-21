@@ -1,6 +1,6 @@
 # Mercure — production deployment (step by step)
 
-Use this guide **after** the general monorepo flow: [pwa/docs/production-deployment.md](../pwa/docs/production-deployment.md) (images, TLS, CORS, PWA build args). Process overview: [mercure.md](./mercure.md).
+Use this guide **after** the general monorepo flow: [pwa/docs/production-deployment.md](../pwa/docs/production-deployment.md) (images, TLS, CORS, PWA build args). Process overview: [mercure.md](mercure.md).
 
 ---
 
@@ -102,4 +102,4 @@ See [Symfony Mercure configuration](https://symfony.com/doc/current/mercure.html
 
 ## Further reading
 
-- [mercure.md](./mercure.md) · [Symfony Mercure](https://symfony.com/doc/current/mercure.html) · [secrets.md](../api/docs/production-ready/secrets.md)
+- [mercure.md](mercure.md) · [Symfony Mercure](https://symfony.com/doc/current/mercure.html) · [secrets.md](../api/docs/production-ready/secrets.md)
