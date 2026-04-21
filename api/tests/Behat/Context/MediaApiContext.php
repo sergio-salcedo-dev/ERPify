@@ -143,7 +143,7 @@ final class MediaApiContext extends RawMinkContext
         $content = $this->getSession()->getPage()->getContent();
 
         /** @var array<string, mixed> $data */
-        $data = \json_decode($content, true, 512, JSON_THROW_ON_ERROR) ?? [];
+        $data = \json_decode((string) $content, true, 512, JSON_THROW_ON_ERROR) ?? [];
         $value = (string) ($data[$field] ?? '');
 
         if (!\preg_match($pattern, $value)) {

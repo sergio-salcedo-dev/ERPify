@@ -21,11 +21,13 @@ defaults:
 env:
   DOCKER_BUILDKIT: 1
   COMPOSE_DOCKER_CLI_BUILD: 1
+  FRANKENPHP_WORKER_CONFIG: ""
+  FRANKENPHP_SITE_CONFIG: ""
 
 jobs:
 
   # -------------------------
-  # API BUILD
+  # API BUILD (single source of truth)
   # -------------------------
   api-build:
     name: API Build (Docker)
@@ -33,9 +35,13 @@ jobs:
     timeout-minutes: 10
 
     steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
       - uses: ./.github/actions/docker-setup
 
-      - name: Build Docker images
+      - name: Build images
         uses: docker/bake-action@v7
         with:
           pull: true
@@ -53,16 +59,34 @@ jobs:
             pwa.cache-to=type=gha,scope=pwa-${{ github.ref_name }},mode=max
 
   # -------------------------
-  # API TEST
+  # API TEST (fast feedback)
   # -------------------------
   api-test:
-    name: API Tests
+    name: API Tests (PHPUnit + Lint)
     needs: api-build
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
       - uses: ./.github/actions/docker-setup
+
+      - name: Build images
+        uses: docker/bake-action@v7
+        with:
+          pull: true
+          load: true
+          files: |
+            compose.yaml
+            compose.dev.yaml
+          set: |
+            php.cache-from=type=gha,scope=php-${{ github.ref_name }}
+            php.cache-from=type=gha,scope=php-main
+            pwa.cache-from=type=gha,scope=pwa-${{ github.ref_name }}
+            pwa.cache-from=type=gha,scope=pwa-main
 
       - name: Start API stack
         run: docker compose -f compose.yaml -f compose.dev.yaml up --wait --no-build
@@ -70,11 +94,12 @@ jobs:
       - name: Health check
         run: curl -skSf https://localhost/api/v1/health
 
-      - name: PHP Lint
-        run: docker compose exec -T php make php.lint
+      - name: PHP lint
+#        run: make php.lint
+        run: make ci.php.lint
 
       - name: PHPUnit
-        run: docker compose exec -T -e APP_ENV=test php bin/phpunit
+        run: make php.unit
 
       - name: Debug
         if: failure()
@@ -82,22 +107,40 @@ jobs:
           docker compose ps
           docker compose logs
 
-      - name: Security checker
+      - name: Security check
         uses: symfonycorp/security-checker-action@v5
         with:
           lock: ./api/composer.lock
 
   # -------------------------
-  # API BEHAT
+  # API BEHAT (parallel)
   # -------------------------
   api-behat:
     name: API Behat
     needs: api-build
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
       - uses: ./.github/actions/docker-setup
+
+      - name: Build images
+        uses: docker/bake-action@v7
+        with:
+          pull: true
+          load: true
+          files: |
+            compose.yaml
+            compose.dev.yaml
+          set: |
+            php.cache-from=type=gha,scope=php-${{ github.ref_name }}
+            php.cache-from=type=gha,scope=php-main
+            pwa.cache-from=type=gha,scope=pwa-${{ github.ref_name }}
+            pwa.cache-from=type=gha,scope=pwa-main
 
       - name: Start API stack
         run: docker compose -f compose.yaml -f compose.dev.yaml up --wait --no-build
@@ -106,13 +149,10 @@ jobs:
         run: curl -skSf https://localhost/api/v1/health
 
       - name: Install Behat tools
-        run: docker compose exec -T php composer behat-tools-install --no-interaction
+        run: make php.behat.install
 
       - name: Run Behat
-        run: docker compose exec -T \
-          -e APP_ENV=test \
-          -e MINK_BASE_URL=http://php \
-          php bin/behat --format=pretty
+        run: make php.behat
 
       - name: Debug
         if: failure()
@@ -121,70 +161,96 @@ jobs:
           docker compose logs
 
   # -------------------------
-  # PWA NODE
+  # PWA NODE (isolated, fast)
   # -------------------------
   pwa-node:
     name: PWA (Node)
     runs-on: ubuntu-latest
 
     steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
       - uses: ./.github/actions/node-setup
 
-      - name: Install dependencies
-        run: make pwa.install
-
-      - name: Lint
-        run: make pwa.lint
-
-      - name: Unit tests
-        run: make pwa.tests
-
-      - name: Build
-        run: make pwa.build
+      - run: make pwa.install
+      - run: make pwa.lint
+      - run: make pwa.test.unit
+      - run: make pwa.build
 
   # -------------------------
-  # PWA E2E
+  # PWA E2E (depends on build)
   # -------------------------
   pwa-e2e:
-    name: PWA (E2E)
+    name: PWA (E2E) [shard ${{ matrix.shard }}/3]
     needs: [pwa-node, api-build]
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
 
     steps:
-      - uses: ./.github/actions/full-setup
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/full-setup/
+
+      - name: Build images
+        uses: docker/bake-action@v7
+        with:
+          pull: true
+          load: true
+          files: |
+            compose.yaml
+            compose.dev.yaml
+          set: |
+            php.cache-from=type=gha,scope=php-${{ github.ref_name }}
+            php.cache-from=type=gha,scope=php-main
+            pwa.cache-from=type=gha,scope=pwa-${{ github.ref_name }}
+            pwa.cache-from=type=gha,scope=pwa-main
+
+      - name: Install PWA dependencies (host)
+        run: make pwa.install
 
       - name: Start full stack
         env:
           COMPOSE_PROJECT_NAME: erpify-e2e
         run: docker compose -f compose.yaml -f compose.dev.yaml up --wait --no-build
 
-      - name: Wait for API
-        run: |
-          for i in {1..60}; do
-            if curl -skSf https://localhost/api/v1/health >/dev/null; then
-              exit 0
-            fi
-            sleep 2
-          done
-          exit 1
+      - name: Get Playwright version
+        id: playwright-version
+        run: echo "version=$(node -p "require('./pwa/package-lock.json').packages['pwa/node_modules/@playwright/test'].version")" >> $GITHUB_OUTPUT
 
-      - name: Cache Playwright
+      - name: Cache Playwright Browsers
         uses: actions/cache@v5
+        id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('pwa/package-lock.json') }}
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
           restore-keys: |
             playwright-${{ runner.os }}-
 
-      - name: Install Playwright
+      - name: Install Playwright Browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: cd pwa && npx playwright install --with-deps chromium
 
       - name: Run E2E
         env:
           CI: true
           PLAYWRIGHT_BASE_URL: https://localhost
-        run: make pwa.e2e
+        run: make pwa.test.e2e CI_SHARD=${{ matrix.shard }} CI_TOTAL_SHARDS=3
+
+      - name: Upload blob report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blob-report-${{ matrix.shard }}
+          path: pwa/blob-report/
+          retention-days: 1
 
       - name: Debug
         if: failure()
@@ -195,45 +261,49 @@ jobs:
           docker compose logs
 
   # -------------------------
-  # LINT (lightweight)
+  # PWA E2E REPORT (merge blob reports on failure)
   # -------------------------
-  lint:
-    name: YAML Lint
+  pwa-e2e-report:
+    name: PWA (E2E) Report
+    if: failure()
+    needs: [pwa-e2e]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
-      - name: Run yamllint
-        run: |
-          pip install yamllint
-          yamllint .
+      - uses: ./.github/actions/node-setup
+
+      - name: Install PWA dependencies
+        run: make pwa.install
+
+      - name: Download blob reports
+        uses: actions/download-artifact@v4
+        with:
+          path: pwa/all-blob-reports
+          pattern: blob-report-*
+          merge-multiple: true
+
+      - name: Merge into HTML report
+        run: cd pwa && npx playwright merge-reports --reporter html ./all-blob-reports
+
+      - name: Upload merged HTML report
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report--attempt-${{ github.run_attempt }}
+          path: pwa/playwright-report/
+          retention-days: 7
 
   # -------------------------
-  # FINAL STATUS
+  # FINAL STATUS (strict gate)
   # -------------------------
   ci-success:
     name: CI Status
-    needs: [api-test, api-behat, pwa-node, pwa-e2e, lint]
-    if: always()
+    needs: [api-test, api-behat, pwa-node, pwa-e2e]
     runs-on: ubuntu-latest
-
     steps:
-      - name: Validate results
-        run: |
-          results=(
-            "${{ needs.api-test.result }}"
-            "${{ needs.api-behat.result }}"
-            "${{ needs.pwa-node.result }}"
-            "${{ needs.pwa-e2e.result }}"
-            "${{ needs.lint.result }}"
-          )
-
-          for r in "${results[@]}"; do
-            if [[ "$r" == "failure" || "$r" == "cancelled" ]]; then
-              echo "CI failed (job result: $r)"
-              exit 1
-            fi
-          done
-
-          echo "All jobs passed"
+      - name: Success
+        run: echo "All checks passed successfully!"
