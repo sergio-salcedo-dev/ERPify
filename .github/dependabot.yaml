@@ -1,7 +1,9 @@
 version: 2
 updates:
   - package-ecosystem: docker
-    directory: /
+    directories:
+      - /api
+      - /pwa
     schedule:
       interval: weekly
     commit-message:
