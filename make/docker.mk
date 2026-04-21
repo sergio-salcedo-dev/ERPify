@@ -8,8 +8,8 @@
 docker.up: ## Start stack detached, rebuild images (ENV-aware)
 	$(DC) up --build --detach
 
-docker.up.wait: ## Start stack detached with --wait health gate
-	$(DC) up --wait --build --detach
+docker.up.wait: ## Start stack detached with --wait health gate (no --build)
+	$(DC) up --wait --detach
 
 docker.down: ## Stop stack and remove orphans
 	$(DC) down --remove-orphans
