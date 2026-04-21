@@ -7,7 +7,7 @@
 # Browser traffic: FrankenPHP on php:80/443 reverse_proxies to pwa:3000.
 # https://nextjs.org/docs/app/building-your-application/deploying#docker-image
 
-FROM node:20-alpine AS node_upstream
+FROM node:24-alpine AS node_upstream
 
 # Shared dependencies (dev + build)
 FROM node_upstream AS base
