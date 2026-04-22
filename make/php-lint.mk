@@ -67,6 +67,10 @@ php.gherkin: ## Gherkinlint
 php.gherkin.rules: ## Gherkinlint rules
 	@$(PHP_TEST) sh -c "$(GHERKINLINT) rules"
 
+## —— yaml-lint ——————————————————————————————————————————————————————————
+php.lint.yaml: ## yaml-lint
+	@$(PHP_TEST) bin/console lint:yaml config
+
 ## —— Aggregates ——————————————————————————————————————————————————————————
 php.lint: php.stan php.rector php.cs-fixer php.md php.cs php.psalm.fix.all php.gherkin ## Full PHP lint sweep
 
