@@ -19,24 +19,25 @@ ENV          ?= dev
 IN_CONTAINER ?= true
 
 # Module order matters: config first (vars), help last (lists them).
-include make/config.mk
-include make/docker.mk
-include make/dev.mk
-include make/api.mk
-include make/db.mk
-include make/php-test.mk
-include make/php-lint.mk
-include make/pwa.mk
-include make/ci.mk
-include make/super-lint.mk
-include make/help.mk
+#include make/config.mk
+#include make/docker.mk
+#include make/dev.mk
+#include make/api.mk
+#include make/db.mk
+#include make/php-test.mk
+#include make/php-lint.mk
+#include make/pwa.mk
+#include make/ci.mk
+#include make/super-lint.mk
+#include make/help.mk
+include make/*.mk
 
 .DEFAULT_GOAL := help
 
 ## —— Aggregates ——
 
-lint: php.lint pwa.lint ## Run all linters (PHP + PWA)
+app.lint: php.lint pwa.lint ## Run all linters (PHP + PWA)
 
-test: php.test pwa.test ## Run all tests (PHP + PWA)
+app.test: php.test pwa.test ## Run all tests (PHP + PWA)
 
-.PHONY: lint test
+.PHONY: app.lint app.test
