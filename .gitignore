@@ -37,6 +37,7 @@ pwa/coverage/
 pwa/.turbo/
 pwa/.vercel/
 pwa/next-env.d.ts
+pwa/reports/
 
 # E2E — Playwright (root-level convenience paths)
 e2e/node_modules/

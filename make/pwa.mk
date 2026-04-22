@@ -59,6 +59,11 @@ pwa.test.e2e: ## Playwright E2E; CI_SHARD=N CI_TOTAL_SHARDS=M for sharded runs; 
 pwa.test.e2e.reports: ## Open the Playwright HTML report
 	@$(call pwa_cmd,npm run e2e:reports)
 
+## —— PWA utilities ——
+
+pwa.util.extract.testids: ## Extract data-testid attributes
+	@./scripts/extract-testids.sh pwa/reports/data-testid/testids.txt pwa/src
+
 ## —— PWA clean ——
 
 pwa.clean: ## Remove node_modules, package-lock.json, .next (destructive)
@@ -67,4 +72,4 @@ pwa.clean: ## Remove node_modules, package-lock.json, .next (destructive)
 .PHONY: pwa.install pwa.dev pwa.build \
         pwa.lint pwa.lint.eslint pwa.lint.eslint.fix pwa.lint.prettier pwa.format.prettier.fix \
         pwa.test pwa.test.unit pwa.test.unit.watch pwa.test.e2e pwa.test.e2e.reports \
-        pwa.clean
+        pwa.util.extract.testids pwa.clean

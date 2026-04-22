@@ -1,0 +1,2 @@
+pwa/src/app/backoffice/health/page.tsx:67:data-testid="backoffice-health-status"
+pwa/src/app/page.tsx:92:data-testid="frontoffice-health-status"
