@@ -55,6 +55,10 @@ docker.exec: ## Run arbitrary cmd in php container; pass cmd='...'
 docker.clean: ## Stop stack and REMOVE volumes (destructive)
 	$(DC) down --remove-orphans --volumes
 
+## —— Ownership ——
+docker.fix.ownership: ## Chown container files to host user (Linux only; fixes CI ACL issues)
+	$(DC) exec -T $(PHP_SERVICE) chown -R $$(id -u):$$(id -g) .
+
 .PHONY: docker.up docker.up.wait docker.down docker.build docker.restart \
         docker.logs docker.ps docker.health docker.sh docker.bash \
-        docker.exec docker.clean
+        docker.exec docker.clean docker.fix-ownership
