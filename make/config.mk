@@ -79,3 +79,14 @@ define pwa_cmd
 	[ -s "$$HOME/.nvm/nvm.sh" ] && . "$$HOME/.nvm/nvm.sh" 2>/dev/null || true; \
 	cd "$(PWA_ROOT)" && exec $(strip $(1))
 endef
+
+# —— Guards ————————————————————————————————————————————————————————————————
+# Refuse to run destructive var/ operations outside dev/test. Usage:
+#   @$(call guard_var_writable,target.name)
+# Prints an error and exits non-zero when ENV is prod or staging.
+define guard_var_writable
+	@if [ "$(ENV)" = "prod" ] || [ "$(ENV)" = "staging" ]; then \
+		echo "✗ refusing to run '$(1)' with ENV=$(ENV). Dev/test only."; \
+		exit 1; \
+	fi
+endef

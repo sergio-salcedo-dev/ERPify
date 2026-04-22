@@ -19,6 +19,7 @@ services:
         condition: service_started
     volumes:
       - ./api:/app
+      - ./api/var:/app/var
       - ./api/frankenphp/Caddyfile:/etc/frankenphp/Caddyfile:ro
       - ./api/frankenphp/worker.Caddyfile:/etc/frankenphp/worker.Caddyfile:ro
       - ./api/frankenphp/conf.d/20-app.dev.ini:/usr/local/etc/php/app.conf.d/20-app.dev.ini:ro
@@ -82,6 +83,7 @@ services:
       MAILER_DSN: "${MAILER_DSN:-smtp://mailpit:1025}"
     volumes:
       - ./api:/app
+      - ./api/var:/app/var
       - ./api/frankenphp/conf.d/20-app.dev.ini:/usr/local/etc/php/app.conf.d/20-app.dev.ini:ro
 
 volumes:

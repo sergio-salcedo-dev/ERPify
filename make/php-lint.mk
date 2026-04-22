@@ -7,51 +7,54 @@
 
 ## —— PHPStan ——————————————————————————————————————————————————————————————
 php.stan: ## PHPStan analyse
-	@$(PHP_TEST) tools/phpstan/vendor/bin/phpstan analyse --configuration=tools/phpstan/phpstan.neon
+	@$(PHP_TEST) vendor/bin/phpstan analyse --configuration=tools/phpstan/phpstan.neon
 
 php.stan.baseline: ## Regenerate PHPStan baseline
-	@$(PHP_TEST) tools/phpstan/vendor/bin/phpstan analyse --configuration=tools/phpstan/phpstan.neon --generate-baseline
+	@$(PHP_TEST) vendor/bin/phpstan analyse --configuration=tools/phpstan/phpstan.neon --generate-baseline
 
 ## —— Rector ———————————————————————————————————————————————————————————————
 php.rector: ## Rector apply
-	@$(PHP) tools/rector/vendor/bin/rector process
+	@$(PHP) vendor/bin/rector process --config=tools/rector/rector.php
 
 php.rector.dry-run: ## Rector dry-run
-	@$(PHP) tools/rector/vendor/bin/rector process --dry-run
+	@$(PHP) vendor/bin/rector process --config=tools/rector/rector.php --dry-run
 
 ## —— PHP-CS-Fixer —————————————————————————————————————————————————————————
 php.cs-fixer: ## PHP-CS-Fixer apply
-	@$(PHP) tools/php-cs-fixer/vendor/bin/php-cs-fixer fix --config=tools/php-cs-fixer/.php-cs-fixer.dist.php
+	@$(PHP) vendor/bin/php-cs-fixer fix --config=tools/ecs/.php-cs-fixer.dist.php
 
 php.cs-fixer.dry-run: ## PHP-CS-Fixer check only
-	@$(PHP) tools/php-cs-fixer/vendor/bin/php-cs-fixer fix --config=tools/php-cs-fixer/.php-cs-fixer.dist.php --dry-run --diff
+	@$(PHP) vendor/bin/php-cs-fixer fix --config=tools/ecs/.php-cs-fixer.dist.php --dry-run --diff
 
 ## —— PHPMD ————————————————————————————————————————————————————————————————
-php.md: ## PHPMD
-	@$(PHP_TEST) tools/phpmd/phpmd.phar src ansi tools/phpmd/phpmd.xml
+php.md: ## PHPMD code smell check
+	$(PHP_TEST) php -d error_reporting='E_ALL & ~E_DEPRECATED' \
+		tools/phpmd/phpmd.phar \
+		bin,config,src,tests,tools,public \
+		ansi tools/phpmd/phpmd.xml
 
 ## —— PHPCS / PHPCBF ——————————————————————————————————————————————————————
 php.cs: ## PHPCBF (apply fixes)
-	@$(PHP_TEST) tools/phpcs/vendor/bin/phpcbf --standard=tools/phpcs/phpcs.xml src tests
+	@$(PHP_TEST) vendor/bin/phpcbf --standard=tools/phpcs/phpcs.xml src tests
 
 php.cs.dry-run: ## PHPCS (check only)
-	@$(PHP_TEST) tools/phpcs/vendor/bin/phpcs --standard=tools/phpcs/phpcs.xml src tests
+	@$(PHP_TEST) vendor/bin/phpcs --standard=tools/phpcs/phpcs.xml src tests
 
 ## —— Psalm ————————————————————————————————————————————————————————————————
 php.psalm: ## Psalm
-	@$(PHP_TEST) tools/psalm/vendor/bin/psalm --config=tools/psalm/psalm.xml
+	@$(PHP_TEST) vendor/bin/psalm --config=tools/psalm/psalm.xml
 
 php.psalm.baseline: ## Regenerate Psalm baseline
-	@$(PHP_TEST) tools/psalm/vendor/bin/psalm --config=tools/psalm/psalm.xml --set-baseline=tools/psalm/psalm-baseline.xml
+	@$(PHP_TEST) vendor/bin/psalm --config=tools/psalm/psalm.xml --set-baseline=tools/psalm/psalm-baseline.xml
 
 php.psalm.taint: ## Psalm taint analysis (SARIF)
-	@$(PHP_TEST) tools/psalm/vendor/bin/psalm --config=tools/psalm/psalm.xml --taint-analysis --report=psalm-taint.sarif
+	@$(PHP_TEST) vendor/bin/psalm --config=tools/psalm/psalm.xml --taint-analysis --report=psalm-taint.sarif
 
 php.psalm.fix.cleanup: ## Psalm --alter: cleanup (unused, redundant)
-	@$(PHP_TEST) tools/psalm/vendor/bin/psalm --config=tools/psalm/psalm.xml --alter --issues=UnusedVariable,UnusedMethod,PossiblyUnusedProperty,UnnecessaryVarAnnotation
+	@$(PHP_TEST) vendor/bin/psalm --config=tools/psalm/psalm.xml --alter --issues=UnusedVariable,UnusedMethod,PossiblyUnusedProperty,UnnecessaryVarAnnotation
 
 php.psalm.fix.types: ## Psalm --alter: add missing types
-	@$(PHP_TEST) tools/psalm/vendor/bin/psalm --config=tools/psalm/psalm.xml --alter --issues=MissingReturnType,MissingParamType,MissingPropertyType
+	@$(PHP_TEST) vendor/bin/psalm --config=tools/psalm/psalm.xml --alter --issues=MissingReturnType,MissingParamType,MissingPropertyType
 
 php.psalm.fix.all: php.psalm.fix.cleanup php.psalm.fix.types ## Psalm --alter: cleanup + types
 

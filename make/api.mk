@@ -60,7 +60,28 @@ php.modules: ## php -m (list extensions)
 messenger.stop-workers: ## Stop all messenger workers (use after deploy)
 	@$(SYMFONY) messenger:stop-workers
 
+## —— api/var maintenance (dev/test only) ——————————————————————————————————
+# Container runs as root, so files it writes to bind-mounted api/var are
+# root-owned on the host. These targets delegate deletion to the container
+# (no sudo needed), or offer a one-shot host-side chown as an escape hatch.
+
+var.clear: ## Remove api/var/{cache,log} contents (container-side, no sudo)
+	$(call guard_var_writable,var.clear)
+	@$(PHP_CONT) sh -c 'rm -rf var/cache/* var/log/*'
+	@echo "✓ api/var/{cache,log} cleared"
+
+var.clear.log: ## Remove only api/var/log contents (container-side, no sudo)
+	$(call guard_var_writable,var.clear.log)
+	@$(PHP_CONT) sh -c 'rm -f var/log/*.log'
+	@echo "✓ api/var/log cleared"
+
+var.chown: ## Reclaim ownership of api/var on the host (requires sudo)
+	$(call guard_var_writable,var.chown)
+	@sudo chown -R $(shell id -u):$(shell id -g) $(API_ROOT)/var
+	@echo "✓ api/var now owned by $(shell id -un)"
+
 .PHONY: composer composer.install composer.update composer.checks \
         composer.check.platform-reqs composer.check.deps composer.check.unused \
         sf cc cache.warmup routes symfony.about php.modules \
-        messenger.stop-workers
+        messenger.stop-workers \
+        var.clear var.clear.log var.chown

@@ -8,7 +8,7 @@ All commands below are run from the **repo root** via the root `Makefile`. The M
 - GNU Make
 - Optional: `jq`, `pre-commit` (for local hook install)
 
-See [`project-requirements.md`](./project-requirements.md) for the full list.
+See [`project-requirements.md`](./docs-info/project-requirements.md) for the full list.
 
 ## First-time setup
 
@@ -27,17 +27,39 @@ make composer c='behat-tools-install'
 
 ## Run / stop / inspect
 
-| Task | Command |
-|---|---|
-| Start dev stack | `make docker.up` |
-| Stop stack | `make docker.down` |
-| Tail logs | `make docker.logs` |
-| List services | `make docker.ps` |
-| Health check | `make docker.health` |
-| Shell into `php` container | `make docker.bash` |
-| **Destructive** — drop volumes | `make docker.clean` |
+| Task                           | Command              |
+|--------------------------------|----------------------|
+| Start dev stack                | `make docker.up`     |
+| Stop stack                     | `make docker.down`   |
+| Tail logs                      | `make docker.logs`   |
+| List services                  | `make docker.ps`     |
+| Health check                   | `make docker.health` |
+| Shell into `php` container     | `make docker.bash`   |
+| **Destructive** — drop volumes | `make docker.clean`  |
 
 Switch overlay: `make docker.up ENV=ci|staging|prod` (default `dev`).
+
+## Logs
+
+| Env                       | Destination                                              | Format |
+|---------------------------|----------------------------------------------------------|--------|
+| `dev`                     | `api/var/log/dev.log` **and** container stderr           | line   |
+| `test`                    | `api/var/log/test.log` (fingers_crossed on `error`)      | line   |
+| `prod` / `staging` / `ci` | container stderr only (JSON), fingers_crossed on `error` | JSON   |
+
+Dev file logs are visible on the host because `compose.dev.yaml` bind-mounts `./api/var:/app/var`. Files are root-owned — use `sudo rm -rf api/var/log/*` to clean.
+
+```bash
+# Dev — pick whichever is convenient:
+tail -f api/var/log/dev.log           # host, IDE-friendly
+make docker.logs                       # follow every service (stderr)
+docker compose logs -f php             # follow API only (stderr)
+
+# Prod / staging — stderr is the only source:
+docker compose logs -f php | jq .      # JSON → jq
+```
+
+Log levels: `debug` in `dev`/`test`, `fingers_crossed` (action level `error`) with a 50-message context buffer in `prod`. Custom channels: `messenger`, `mercure`, `audit`, `media`, `deprecation`. See `api/config/packages/monolog.yaml`.
 
 ## Composer
 
@@ -53,15 +75,15 @@ make composer.checks                  # composer-unused + composer-require-check
 
 ## Database
 
-| Task | Command | Notes |
-|---|---|---|
-| Apply migrations | `make db.migrate` | |
-| Generate diff migration | `make db.diff` | From Doctrine schema changes |
-| Migration status | `make db.status` | |
-| Validate schema | `make db.validate` | |
-| Load fixtures | `make db.load.fixtures` | Hautelook Alice |
-| **Destructive** — full reset | `make db.reset` | Drop → migrate → fixtures. Dev/CI only. |
-| psql shell | `make db.shell` | |
+| Task                         | Command                 | Notes                                   |
+|------------------------------|-------------------------|-----------------------------------------|
+| Apply migrations             | `make db.migrate`       |                                         |
+| Generate diff migration      | `make db.diff`          | From Doctrine schema changes            |
+| Migration status             | `make db.status`        |                                         |
+| Validate schema              | `make db.validate`      |                                         |
+| Load fixtures                | `make db.load.fixtures` | Hautelook Alice                         |
+| **Destructive** — full reset | `make db.reset`         | Drop → migrate → fixtures. Dev/CI only. |
+| psql shell                   | `make db.shell`         |                                         |
 
 Migrations live in `api/migrations/2026/Version<timestamp>.php` (organised by year).
 
