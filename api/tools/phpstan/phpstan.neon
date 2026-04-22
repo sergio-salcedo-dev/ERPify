@@ -3,6 +3,10 @@ parameters:
     paths:
         - ../../src
         - ../../tests
+    scanDirectories:
+        - ../behat/vendor
+    bootstrapFiles:
+        - ../behat/vendor/autoload.php
 
     # Temporary directory for PHPStan cache (speeds up subsequent runs)
     resultCachePath: ../../var/cache/phpstan
@@ -35,3 +39,37 @@ parameters:
     # Similar to above but for arrays with known shapes/types
     # Example: Accessing ['key' => 'value']['unknown'] when 'unknown' key doesn't exist
     reportPossiblyNonexistentConstantArrayOffset: true
+
+    ignoreErrors:
+        # Trait is part of a reusable domain abstraction — will be consumed by enums implementing HumanReadableIntEnumInterface.
+        - identifier: trait.unused
+          path: ../../src/Shared/Domain/Enum/Abstraction/HumanReadableIntEnumTrait.php
+
+        # Behat JSON/HTTP assertion helpers operate on decoded JSON and Mink responses — values are inherently `mixed`.
+        - identifier: missingType.iterableValue
+          paths:
+              - ../../tests/Behat/Assertion/Json/*.php
+              - ../../tests/Behat/Context/HttpRequestContext.php
+        - identifier: missingType.parameter
+          path: ../../tests/Behat/Assertion/Json/*.php
+        - identifier: cast.string
+          paths:
+              - ../../tests/Behat/Assertion/Json/*.php
+              - ../../tests/Behat/Support/PostProcess/JsonToolTrait.php
+        - identifier: argument.type
+          paths:
+              - ../../tests/Behat/Assertion/Json/*.php
+              - ../../tests/Behat/Context/HttpRequestContext.php
+              - ../../tests/Behat/Support/PostProcess/JsonToolTrait.php
+        - identifier: return.type
+          path: ../../tests/Behat/Assertion/Json/Json.php
+        - identifier: offsetAccess.notFound
+          path: ../../tests/Behat/Context/HttpRequestContext.php
+        - identifier: offsetAccess.nonOffsetAccessible
+          paths:
+              - ../../tests/Behat/Assertion/Json/JsonSchema.php
+              - ../../tests/Behat/Context/HttpRequestContext.php
+        - identifier: binaryOp.invalid
+          path: ../../tests/Behat/Context/HttpRequestContext.php
+        - identifier: assign.propertyType
+          path: ../../tests/Behat/Assertion/Json/JsonSchema.php

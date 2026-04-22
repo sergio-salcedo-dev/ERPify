@@ -1,168 +1,90 @@
-# Migrating Behat into the main Composer project
+# Merging the Behat stack into the main Composer project
 
-Behat 3 and its Mink ecosystem depend on Symfony 7 components, which conflict
-with the Symfony 8 packages used by the application.  To work around this the
-Behat stack lives in an **isolated Composer project** at `api/tools/behat/` with
-its own `composer.json`, `composer.lock`, and `vendor/` directory.
+The Behat stack lives in an isolated Composer project at `api/tools/behat/`
+with its own `composer.json`, `composer.lock`, and `vendor/`. The reason is
+upstream: Behat 3.x pins `symfony/config`, `symfony/dependency-injection`, and
+`symfony/http-kernel` to `^7` (`^5.4 || ^6.4 || ^7.0`), and the app is on
+Symfony 8. `friends-of-behat/symfony-extension` (which we use to boot the
+kernel and inject services into contexts) has the same constraint on DI.
 
-Once Behat (or a successor such as Behat 4) officially supports Symfony 8, the
-isolated project can be removed and Behat can move into `api/composer.json` as a
-regular dev dependency.
+Until upstream publishes Symfony-8-compatible releases, the two trees must
+stay separate. `api/tools/behat/run.php` reconciles them at runtime by loading
+the app autoload **before** the tools-vendor autoload, so Sf8 classes win for
+any FQCN present in both.
 
-## Prerequisites
+## When can we merge?
 
-Before starting, confirm compatibility:
+Do not start this migration until **all** of the following resolve cleanly
+against `symfony/*:8.0.*`:
 
-1. Check the Behat changelog / release notes for Symfony 8 support.
-2. Verify that **all** of these packages resolve cleanly against `symfony/*:8.0.*`:
-   - `behat/behat`
-   - `behat/mink`
-   - `behat/mink-browserkit-driver`
-   - `friends-of-behat/mink-extension`
+- `behat/behat` (likely `>= 3.32` or a `4.x` release)
+- `friends-of-behat/symfony-extension` (likely a `>= 2.7` release supporting
+  both Sf8 DI and the chosen Behat major)
 
-A quick smoke test from `api/`:
+Smoke test from `api/`:
 
 ```bash
-composer require --dry-run --dev \
+composer require --dev --dry-run \
   behat/behat \
-  behat/mink \
-  behat/mink-browserkit-driver \
-  friends-of-behat/mink-extension
+  friends-of-behat/symfony-extension
 ```
 
-If Composer resolves without conflicts, proceed with the migration.
+If Composer resolves without conflicts, proceed.
 
-## Step 1 — Add Behat packages to `api/composer.json`
+## Migration checklist
 
-```bash
-cd api
-composer require --dev \
-  behat/behat \
-  behat/mink \
-  behat/mink-browserkit-driver \
-  friends-of-behat/mink-extension
-```
+1. **Move the deps into `api/composer.json`**
 
-## Step 2 — Add the Behat context autoload namespace
+   ```bash
+   cd api
+   composer require --dev behat/behat friends-of-behat/symfony-extension
+   ```
 
-Contexts live under `api/tests/Behat/` with namespace `Erpify\Tests\Behat\`.
-PHPUnit loads them via `api/composer.json` `autoload-dev` (`Erpify\Tests\` → `tests/`).
+2. **Drop the autoload duplication.** `tests/Behat/` is already covered by
+   the `Erpify\Tests\` → `tests/` mapping in `autoload-dev`, so no extra
+   PSR-4 entry is needed. Delete `tools/behat/composer.json` and the
+   `Erpify\Tests\Behat\` PSR-4 block it defined.
 
-Behat uses the **isolated** `api/tools/behat/composer.json` (see `bootstrap.php`), so that file must also map the same classes:
+3. **Move `behat.yml.dist` to `api/`** and update the path prefix from
+   `%paths.base%/../../features/...` to `%paths.base%/features/...`. The
+   `FriendsOfBehatSymfonyExtension` `bootstrap` key can be removed entirely
+   once the app autoload is the only autoload in play.
 
-```json
-"autoload": {
-    "psr-4": {
-        "Erpify\\Tests\\Behat\\": "../../tests/Behat/"
-    }
-}
-```
+4. **Retire `tools/behat/run.php`** — with a single vendor tree, the wrapper
+   is no longer needed. `vendor/bin/behat -c behat.yml.dist` runs directly.
 
-Then regenerate the Behat tools autoloader:
+5. **Unconditional bundle registration.** In `api/config/bundles.php`, drop
+   the `class_exists(...)` guard around
+   `FriendsOfBehatSymfonyExtensionBundle` and register it normally for the
+   `test` environment:
 
-```bash
-composer dump-autoload --working-dir=tools/behat
-```
+   ```php
+   FriendsOfBehat\SymfonyExtension\Bundle\FriendsOfBehatSymfonyExtensionBundle::class => ['test' => true],
+   ```
 
-## Step 3 — Move `behat.yml.dist` to `api/`
+6. **Update the Makefile.** In `make/php-test.mk`:
 
-Copy the config to the application root and update the paths (they were
-relative to `api/tools/behat/`; now they are relative to `api/`):
+   - `php.behat` becomes `$(PHP_BEHAT) php vendor/bin/behat -c behat.yml.dist --format=pretty $(c)`.
+   - `php.behat.install` can fold into the main `composer install` (or be
+     removed if `composer.install` covers dev deps).
 
-```yaml
-# api/tools/behat/behat.yml.dist (paths relative to api/tools/behat/)
-default:
-    suites:
-        default:
-            paths:
-                - '%paths.base%/../../features/backoffice'
-                - '%paths.base%/../../features/frontoffice'
-            contexts:
-                - Erpify\Tests\Behat\Context\FeatureContext
-    extensions:
-        Behat\MinkExtension\ServiceContainer\MinkExtension:
-            base_url: '%env(MINK_BASE_URL)%'
-            sessions:
-                default:
-                    browserkit_http: ~
-```
+7. **Clean up `api/composer.json` scripts.** Delete the
+   `behat-tools-install` entry from `scripts` and its description.
 
-## Step 4 — Simplify `api/bin/behat`
+8. **Delete the isolated tree.**
 
-Replace the wrapper so it uses the main vendor binary and the new config
-location:
+   ```bash
+   rm -rf api/tools/behat/
+   ```
 
-```php
-#!/usr/bin/env php
-<?php
+   Then `grep -R tools/behat api/` to confirm nothing else references it —
+   CI configs, scripts, docs, etc.
 
-declare(strict_types=1);
+9. **Run the suite.**
 
-$root = dirname(__DIR__);
+   ```bash
+   make php.behat
+   ```
 
-require $root.'/vendor/autoload.php';
-
-// Boot .env so MINK_BASE_URL is available
-if (is_file($root.'/.env')) {
-    (new \Symfony\Component\Dotenv\Dotenv())->bootEnv($root.'/.env');
-}
-
-$_SERVER['argv'] ??= [];
-$hasConfig = false;
-foreach ($_SERVER['argv'] as $arg) {
-    if ($arg === '-c' || $arg === '--config' || str_starts_with($arg, '--config=')) {
-        $hasConfig = true;
-        break;
-    }
-}
-if (!$hasConfig) {
-    array_splice($_SERVER['argv'], 1, 0, ['--config', $root.'/behat.yml.dist']);
-}
-
-require $root.'/vendor/behat/behat/bin/behat';
-```
-
-## Step 5 — Update the Makefile
-
-In the root `Makefile`, the `php.behat` target no longer needs a separate
-install step.  Remove or update these targets:
-
-- **Remove** `php.behat.install` (no separate vendor to install).
-- **Simplify** `php.behat` — the `bin/behat` wrapper now uses the main vendor.
-
-## Step 6 — Clean up `api/composer.json` scripts
-
-Remove the `behat-tools-install` script and its description:
-
-```json
-"scripts": {
-    ...
-    // DELETE these two entries:
-    // "behat-tools-install": ["@composer install --working-dir=tools/behat --no-interaction"]
-},
-"scripts-descriptions": {
-    // DELETE:
-    // "behat-tools-install": "Install Behat and Mink into ..."
-}
-```
-
-## Step 7 — Delete the isolated Behat project
-
-```bash
-rm -rf api/tools/behat/
-```
-
-Verify nothing else references `tools/behat` (grep the codebase).
-
-## Step 8 — Run the tests
-
-```bash
-make php.behat
-```
-
-All existing `.feature` files should pass without changes — the contexts,
-features, and Mink configuration are identical; only the autoloading source
-changed.
-
-## Step 9  — check if extension is needed
-friends-of-behat/symfony-extension -- This extension boots your Symfony kernel inside Behat so you can inject services directly into step definitions. It currently supports Symfony 6/7 only -- Symfony 8 support is in-progress (open PRs from late 2025) but not merged yet. More importantly, your health test doesn't need it: it sends plain HTTP requests via Mink's BrowserKit driver, which is the right approach for endpoint-level acceptance tests.
+All existing `.feature` files should pass unchanged — the contexts and
+assertions are identical; only the autoload source moves.

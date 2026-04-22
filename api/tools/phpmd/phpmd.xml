@@ -14,34 +14,47 @@
 
     <!-- Code Size -->
     <rule ref="rulesets/codesize.xml">
+        <!-- Excluded so we can re-include below with custom properties -->
+        <exclude name="CyclomaticComplexity" />
+        <exclude name="NPathComplexity" />
+        <exclude name="ExcessiveClassLength" />
+        <exclude name="ExcessiveMethodLength" />
+        <exclude name="ExcessiveParameterList" />
+    </rule>
 
-        <!-- Cyclomatic Complexity: Maximum allowed complexity (default is 10) -->
-        <rule ref="rulesets/codesize.xml/CyclomaticComplexity">
-            <properties>
-                <property name="reportLevel" value="10" />
-            </properties>
-        </rule>
+    <!-- Cyclomatic Complexity: Maximum allowed complexity (default is 10) -->
+    <rule ref="rulesets/codesize.xml/CyclomaticComplexity">
+        <properties>
+            <property name="reportLevel" value="10" />
+        </properties>
+    </rule>
 
-        <!-- NPath Complexity: Maximum NPath complexity (default is 200) -->
-        <rule ref="rulesets/codesize.xml/NPathComplexity">
-            <properties>
-                <property name="reportLevel" value="200" />
-            </properties>
-        </rule>
+    <!-- NPath Complexity: Maximum NPath complexity (default is 200) -->
+    <rule ref="rulesets/codesize.xml/NPathComplexity">
+        <properties>
+            <property name="reportLevel" value="200" />
+        </properties>
+    </rule>
 
-        <!-- ExcessiveClassLength: Maximum class length in lines (default is 1000) -->
-        <rule ref="rulesets/codesize.xml/ExcessiveClassLength">
-            <properties>
-                <property name="minimum" value="400"/>
-            </properties>
-        </rule>
+    <!-- ExcessiveClassLength: Maximum class length in lines (default is 1000) -->
+    <rule ref="rulesets/codesize.xml/ExcessiveClassLength">
+        <properties>
+            <property name="minimum" value="400"/>
+        </properties>
+    </rule>
 
-        <!-- ExcessiveMethodLength: Maximum method length in lines (default is 100) -->
-        <rule ref="rulesets/codesize.xml/ExcessiveMethodLength">
-            <properties>
-                <property name="minimum" value="70" />
-            </properties>
-        </rule>
+    <!-- ExcessiveMethodLength: Maximum method length in lines (default is 100) -->
+    <rule ref="rulesets/codesize.xml/ExcessiveMethodLength">
+        <properties>
+            <property name="minimum" value="70" />
+        </properties>
+    </rule>
+
+    <!-- ExcessiveParameterList: Maximum number of parameters (default is 10) -->
+    <rule ref="rulesets/codesize.xml/ExcessiveParameterList">
+        <properties>
+            <property name="minimum" value="12" />
+        </properties>
     </rule>
 
     <!-- Controversial rules -->

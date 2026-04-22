@@ -46,7 +46,6 @@ final readonly class BankPostController
     private function fromJson(Request $request): JsonResponse
     {
         try {
-            /** @var BankInput $input */
             $input = $this->serializer->deserialize($request->getContent(), BankInput::class, 'json');
         } catch (NotEncodableValueException) {
             return new JsonResponse(['errors' => [['field' => '', 'message' => 'Invalid JSON body.']]], Response::HTTP_UNPROCESSABLE_ENTITY);

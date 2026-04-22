@@ -15,7 +15,7 @@ use Symfony\Component\Serializer\Normalizer\NormalizerAwareTrait;
 use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 
 /**
- * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+ * @SuppressWarnings("PHPMD.UnusedFormalParameter")
  */
 #[AutoconfigureTag('serializer.normalizer', ['priority' => 100])]
 final class BankLogoUrlNormalizer implements NormalizerInterface, NormalizerAwareInterface
@@ -37,9 +37,13 @@ final class BankLogoUrlNormalizer implements NormalizerInterface, NormalizerAwar
         $normalizedData = $this->normalizer->normalize($data, $format, $context);
         \assert(\is_array($normalizedData));
 
-        if ($data instanceof Bank && \in_array('bank:read', $context['groups'] ?? [], true)) {
+        $groups = \is_array($context['groups'] ?? null) ? $context['groups'] : [];
+
+        if ($data instanceof Bank && \in_array('bank:read', $groups, true)) {
             $logo = $data->getLogo();
-            $normalizedData['logoUrl'] = $logo instanceof Media ? $this->mediaPublicUrlGenerator->urlForContentHash($logo->getContentHash()) : null;
+            $normalizedData['logoUrl'] = $logo instanceof Media
+                ? $this->mediaPublicUrlGenerator->urlForContentHash($logo->getContentHash())
+                : null;
             $storedHash = $data->getStoredObjectContentHash();
             $normalizedData['storedObjectUrl'] = null !== $storedHash
                 ? $this->storedObjectPublicUrlGenerator->urlForContentHash($storedHash)
@@ -52,8 +56,10 @@ final class BankLogoUrlNormalizer implements NormalizerInterface, NormalizerAwar
     #[Override]
     public function supportsNormalization(mixed $data, ?string $format = null, array $context = []): bool
     {
+        $groups = \is_array($context['groups'] ?? null) ? $context['groups'] : [];
+
         return $data instanceof Bank
-            && \in_array('bank:read', $context['groups'] ?? [], true)
+            && \in_array('bank:read', $groups, true)
             && !isset($context[self::MARK]);
     }
 

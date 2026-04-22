@@ -7,10 +7,10 @@
 
 ## —— PHPStan ——————————————————————————————————————————————————————————————
 php.stan: ## PHPStan analyse
-	@$(PHP_TEST) vendor/bin/phpstan analyse --configuration=tools/phpstan/phpstan.neon
+	@$(PHP_TEST) vendor/bin/phpstan analyse --configuration=tools/phpstan/phpstan.neon --memory-limit=1G
 
 php.stan.baseline: ## Regenerate PHPStan baseline
-	@$(PHP_TEST) vendor/bin/phpstan analyse --configuration=tools/phpstan/phpstan.neon --generate-baseline
+	@$(PHP_TEST) vendor/bin/phpstan analyse --configuration=tools/phpstan/phpstan.neon --generate-baseline --memory-limit=1G
 
 ## —— Rector ———————————————————————————————————————————————————————————————
 php.rector: ## Rector apply
@@ -21,10 +21,10 @@ php.rector.dry-run: ## Rector dry-run
 
 ## —— PHP-CS-Fixer —————————————————————————————————————————————————————————
 php.cs-fixer: ## PHP-CS-Fixer apply
-	@$(PHP) vendor/bin/php-cs-fixer fix --config=tools/ecs/.php-cs-fixer.dist.php
+	@$(PHP) vendor/bin/php-cs-fixer fix --config=tools/ecs/.php-cs-fixer.dist.php --cache-file=var/cache/php-cs-fixer/.php-cs-fixer.cache
 
 php.cs-fixer.dry-run: ## PHP-CS-Fixer check only
-	@$(PHP) vendor/bin/php-cs-fixer fix --config=tools/ecs/.php-cs-fixer.dist.php --dry-run --diff
+	@$(PHP) vendor/bin/php-cs-fixer fix --config=tools/ecs/.php-cs-fixer.dist.php --cache-file=var/cache/php-cs-fixer/.php-cs-fixer.cache --dry-run --diff
 
 ## —— PHPMD ————————————————————————————————————————————————————————————————
 php.md: ## PHPMD code smell check
@@ -35,7 +35,7 @@ php.md: ## PHPMD code smell check
 
 ## —— PHPCS / PHPCBF ——————————————————————————————————————————————————————
 php.cs: ## PHPCBF (apply fixes)
-	@$(PHP_TEST) vendor/bin/phpcbf --standard=tools/phpcs/phpcs.xml src tests
+	@$(PHP_TEST) sh -c 'vendor/bin/phpcbf --standard=tools/phpcs/phpcs.xml src tests; s=$$?; [ $$s -le 2 ]'
 
 php.cs.dry-run: ## PHPCS (check only)
 	@$(PHP_TEST) vendor/bin/phpcs --standard=tools/phpcs/phpcs.xml src tests
@@ -54,7 +54,7 @@ php.psalm.fix.cleanup: ## Psalm --alter: cleanup (unused, redundant)
 	@$(PHP_TEST) vendor/bin/psalm --config=tools/psalm/psalm.xml --alter --issues=UnusedVariable,UnusedMethod,PossiblyUnusedProperty,UnnecessaryVarAnnotation
 
 php.psalm.fix.types: ## Psalm --alter: add missing types
-	@$(PHP_TEST) vendor/bin/psalm --config=tools/psalm/psalm.xml --alter --issues=MissingReturnType,MissingParamType,MissingPropertyType
+	@$(PHP_TEST) vendor/bin/psalm --config=tools/psalm/psalm.xml --alter --issues=MissingReturnType,MissingPropertyType
 
 php.psalm.fix.all: php.psalm.fix.cleanup php.psalm.fix.types ## Psalm --alter: cleanup + types
 

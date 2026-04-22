@@ -1,20 +1,24 @@
 # Paths in this file are relative to api/tools/behat/ (cwd when bin/behat runs).
-#
-# Override base URL: export MINK_BASE_URL=... or set in api/.env (Makefile uses http://php in Docker).
+# Contexts are resolved from the Symfony test container (services_test.yaml).
 default:
+    # @wip scenarios are skipped by default (legacy Mink-era steps pending
+    # migration to SymfonyExtension/KernelBrowser). Override with --tags=@wip
+    # at invocation to run them.
+    gherkin:
+        filters:
+            tags: '~@wip'
     suites:
         default:
             paths:
                 - '%paths.base%/../../features/backoffice'
                 - '%paths.base%/../../features/frontoffice'
             contexts:
-                - Erpify\Tests\Behat\Context\FeatureContext
-                - Erpify\Tests\Behat\Context\MediaApiContext
-                - Erpify\Tests\Behat\Context\StoredObjectApiContext
-                - Erpify\Tests\Behat\Context\MessengerContext
+                - Erpify\Tests\Behat\Context\HttpRequestContext
+                - Erpify\Tests\Behat\Context\JsonContext
     extensions:
-        Behat\MinkExtension\ServiceContainer\MinkExtension:
-            base_url: '%env(MINK_BASE_URL)%'
-            sessions:
-                default:
-                    browserkit_http: ~
+        FriendsOfBehat\SymfonyExtension:
+            kernel:
+                class: Erpify\Kernel
+                environment: test
+                debug: true
+            bootstrap: '%paths.base%/bootstrap.php'

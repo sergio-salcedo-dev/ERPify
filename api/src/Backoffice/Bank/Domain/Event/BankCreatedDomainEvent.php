@@ -8,9 +8,6 @@ use DateTimeImmutable;
 use Erpify\Shared\Domain\Event\DomainEvent;
 use Override;
 
-/**
- * @SuppressWarnings(PHPMD.ExcessiveParameterList)
- */
 final class BankCreatedDomainEvent extends DomainEvent
 {
     public function __construct(

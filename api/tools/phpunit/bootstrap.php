@@ -8,7 +8,7 @@ $apiRoot = dirname(__DIR__, 2);
 
 require $apiRoot . '/vendor/autoload.php';
 
-if (method_exists(Dotenv::class, 'bootEnv')) {
+if (class_exists(Dotenv::class) && is_file($apiRoot . '/.env')) {
     (new Dotenv())->bootEnv($apiRoot . '/.env');
 }
 

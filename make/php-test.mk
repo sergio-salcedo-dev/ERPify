@@ -14,7 +14,7 @@ php.unit.install: ## Install PHPUnit tooling (api/tools/phpunit)
 
 php.behat: ## Behat; pass c='…' for extra args
 	@$(eval c ?=)
-	@$(PHP_BEHAT) php bin/behat --format=pretty $(c)
+	@$(PHP_BEHAT) php tools/behat/run.php -c tools/behat/behat.yml.dist --format=pretty $(c)
 
 php.behat.install: ## Install Behat tooling (api/tools/behat)
 	@$(COMPOSER) behat-tools-install

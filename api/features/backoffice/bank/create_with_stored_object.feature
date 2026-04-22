@@ -1,3 +1,4 @@
+@wip
 Feature: Create a bank with an optional Flysystem stored image (multipart)
 
   As an API client
@@ -5,7 +6,7 @@ Feature: Create a bank with an optional Flysystem stored image (multipart)
   So that large or separately managed assets use object storage instead of BYTEA media
 
   Scenario: Successfully create a bank with stored_object and serve bytes
-    When I send a POST multipart request to "/api/v1/backoffice/banks" with fields:
+    When I send a POST multipart request to "/backoffice/banks" with fields:
       | field          | value              |
       | name           | Behat Stored Bank  |
       | short_name     | BSB                |

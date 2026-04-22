@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Rector\Config\RectorConfig;
+use Rector\Naming\Rector\ClassMethod\RenameParamToMatchTypeRector;
 use Rector\Php84\Rector\MethodCall\NewMethodCallWithoutParenthesesRector;
 
 return RectorConfig::configure()
@@ -52,5 +53,6 @@ return RectorConfig::configure()
         '**/config/reference.php',
         // Do not simplify (new Class())->method()
         NewMethodCallWithoutParenthesesRector::class,
+        RenameParamToMatchTypeRector::class,
     ])
 ;

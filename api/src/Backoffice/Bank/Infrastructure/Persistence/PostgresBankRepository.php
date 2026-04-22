@@ -65,6 +65,7 @@ final class PostgresBankRepository extends ServiceEntityRepository implements Ba
     #[Override]
     public function findStoredObjectMimeTypeByContentHash(string $contentHash): ?string
     {
+        /** @var Bank|null $bank */
         $bank = $this->createQueryBuilder('b')
             ->where('b.storedObjectContentHash = :h')
             ->setParameter('h', $contentHash)

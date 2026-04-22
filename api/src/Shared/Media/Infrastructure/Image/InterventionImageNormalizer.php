@@ -56,7 +56,7 @@ final readonly class InterventionImageNormalizer implements ImageNormalizer
         }
 
         try {
-            $image = $this->imageManager->read($binary);
+            $image = $this->imageManager->decodeBinary($binary);
         } catch (Throwable) {
             throw new InvalidImageException('Could not decode image.');
         }
@@ -66,11 +66,10 @@ final readonly class InterventionImageNormalizer implements ImageNormalizer
         $encoded = match ($mime) {
             'image/jpeg' => $image->encode(new JpegEncoder(quality: $this->jpegQuality)),
             'image/png' => $image->encode(new PngEncoder()),
-            'image/webp' => $image->encode(new WebpEncoder(quality: $this->webpQuality)),
-            default => throw new InvalidImageException(\sprintf('Unsupported image MIME type: %s', $mime)),
+            default => $image->encode(new WebpEncoder(quality: $this->webpQuality)),
         };
 
-        $bytes = (string) $encoded;
+        $bytes = $encoded->toString();
         $hash = \hash('sha256', $bytes);
 
         return new NormalizedImage($bytes, $mime, $hash);

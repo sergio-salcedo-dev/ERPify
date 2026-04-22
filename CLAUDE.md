@@ -46,6 +46,8 @@ Aggregates: `make lint`, `make test`, `make ci` (`ci.lint` + `ci.test`), `make c
 
 Both sides follow **DDD + Hexagonal / Clean Architecture**, with dependencies pointing inward toward the domain. This is load-bearing — do not add framework imports (Symfony, Next, Inversify, HTTP clients, ORM) inside `Domain/`; put adapters in `Infrastructure/` and orchestration in `Application/`. The full rule set lives in `.cursor/rules/*.mdc` (architecture, clean-code, database, frontend, php-standards, security, solid-principles, testing) and `pwa/AGENTS.md` — consult them before non-trivial changes.
 
+**Required checks after editing PHP:** run `make php.stan` on every PHP file you changed before declaring the task done. Fix any reported issues. At the end of the task, also run `make ci.php.lint` and fix anything it reports.
+
 ## Docs to consult
 
 -   [`docs/index.md`](docs/index.md) — generated documentation index.
@@ -55,4 +57,4 @@ Both sides follow **DDD + Hexagonal / Clean Architecture**, with dependencies po
 -   [`docs/deployment-guide.md`](docs/deployment-guide.md) and [`pwa/docs/production-deployment.md`](pwa/docs/production-deployment.md) — prod Compose, mailer, DNS, CORS, Mercure, smoke tests.
 -   [`docs/development-guide-api.md`](docs/development-guide-api.md), [`docs/development-guide-pwa.md`](docs/development-guide-pwa.md) — day-to-day workflows.
 -   [`docs/contribution-guide.md`](docs/contribution-guide.md), [`docs/source-tree-analysis.md`](docs/source-tree-analysis.md).
--   [`api/README.md`](api/README.md), [`api/docs/`](api/docs/), [`pwa/README.md`](pwa/README.md) — deployable-specific details.
+-   [`api/README.md`](api/README.md), [`api/docs/`](api/docs/), [`pwa/README.md`](pwa/README.md), [`pwa/docs/`](pwa/docs/) — deployable-specific details.

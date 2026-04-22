@@ -32,13 +32,16 @@ final class PostgresMediaRepository extends ServiceEntityRepository implements M
     #[Override]
     public function findActiveByContentHash(string $contentHash): ?Media
     {
-        return $this->createQueryBuilder('m')
+        /** @var Media|null $result */
+        $result = $this->createQueryBuilder('m')
             ->where('m.contentHash = :h')
             ->andWhere('m.deletedAt IS NULL')
             ->setParameter('h', $contentHash)
             ->getQuery()
             ->getOneOrNullResult()
         ;
+
+        return $result;
     }
 
     #[Override]

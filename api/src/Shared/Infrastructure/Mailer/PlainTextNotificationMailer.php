@@ -24,6 +24,9 @@ final readonly class PlainTextNotificationMailer implements NotificationMailer
     ) {
     }
 
+    /**
+     * @param array<string, mixed> $fields
+     */
     #[Override]
     public function send(string $to, string $subject, array $fields, ?string $correlationLabel = null): void
     {
@@ -35,7 +38,7 @@ final readonly class PlainTextNotificationMailer implements NotificationMailer
         }
 
         foreach ($fields as $key => $value) {
-            $lines[] = \sprintf('%s: %s', $key, $value);
+            $lines[] = \sprintf('%s: %s', $key, \is_scalar($value) ? $value : \json_encode($value));
         }
 
         $body = \implode("\n", $lines);

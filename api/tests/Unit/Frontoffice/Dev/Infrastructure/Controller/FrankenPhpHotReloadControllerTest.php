@@ -29,6 +29,8 @@ final class FrankenPhpHotReloadControllerTest extends TestCase
         $this->assertSame(Response::HTTP_OK, $response->getStatusCode(), (string) $response->getContent());
 
         $data = \json_decode((string) $response->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertIsArray($data);
+        $this->assertArrayHasKey('enabled', $data);
         $this->assertFalse($data['enabled']);
         $this->assertArrayNotHasKey('subscribePath', $data);
     }
@@ -48,6 +50,9 @@ final class FrankenPhpHotReloadControllerTest extends TestCase
         $this->assertSame(Response::HTTP_OK, $response->getStatusCode(), (string) $response->getContent());
 
         $data = \json_decode((string) $response->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertIsArray($data);
+        $this->assertArrayHasKey('enabled', $data);
+        $this->assertArrayHasKey('subscribePath', $data);
         $this->assertTrue($data['enabled']);
         $this->assertSame($path, $data['subscribePath']);
     }

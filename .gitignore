@@ -60,7 +60,6 @@ pnpm-debug.log*
 *.bak
 
 # BMad generated artifacts
-/_bmad-output/
 /_bmad/
+/.agents/skills/bmad-*/
 /.claude/skills/bmad-*/
-/.claude/commands/bmad-*.md

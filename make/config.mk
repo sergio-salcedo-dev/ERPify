@@ -67,7 +67,7 @@ SUPERLINTER_VALIDATE_ALL_CODEBASE ?= true
 SUPERLINTER_EXCLUDES              ?= (^|/)(vendor|node_modules|var|public/bundles|\.next)/
 
 # —— PWA host exec wrapper ————————————————————————————————————————————————
-# IDEs (PHPStorm External Tools) launch sh with a minimal PATH. Prefer a
+# IDEs (PHPStorm External Tool) launch sh with a minimal PATH. Prefer a
 # login shell so nvm/fnm/brew/npm are visible; fall back to an inline
 # PATH + nvm sourcing.
 define pwa_cmd
