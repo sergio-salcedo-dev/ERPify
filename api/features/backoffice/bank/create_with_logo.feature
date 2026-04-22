@@ -14,12 +14,14 @@ Feature: Create a bank with an optional logo (multipart)
     And I remember the JSON field "id" as "bankId"
     And I remember the JSON field "logoUrl" as "logoUrl"
     And a domain event named "erpify.backoffice.bank.created" should be recorded for aggregate {bankId}
-    When I process pending async messenger messages
-    Then the async messenger transport should be empty
+
+    And I process pending async messenger messages
+    And the async messenger transport should be empty
     And the messenger failed transport should be empty
     And the last bank created notification email should mention event "erpify.backoffice.bank.created"
-    When I send a GET request to the URL stored as "logoUrl"
-    Then the response status code should be 200
+
+    And I send a GET request to the URL stored as "logoUrl"
+    And the response status code should be 200
     And the response header "Content-Type" should be "image/png"
     And the response header "Cache-Control" should contain "immutable"
     And the response header "ETag" should match "#^[a-f0-9]{64}$#"
@@ -32,9 +34,10 @@ Feature: Create a bank with an optional logo (multipart)
       | image      | @minimal-logo.png  |
     Then the response status code should be 201
     And I remember the JSON field "logoUrl" as "logoUrl"
-    When I send a GET request to the URL stored as "logoUrl"
-    Then the response status code should be 200
+
+    And I send a GET request to the URL stored as "logoUrl"
+    And the response status code should be 200
     And I remember the response header "ETag" as "logoEtag"
-    When I send a GET request to the URL stored as "logoUrl" with headers:
+    And I send a GET request to the URL stored as "logoUrl" with headers:
       | If-None-Match | {logoEtag} |
-    Then the response status code should be 304
+    And the response status code should be 304

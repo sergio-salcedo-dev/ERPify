@@ -5,14 +5,14 @@ Feature: Create a bank
 
   Scenario: Successfully create a bank
     When I send a POST request to "/api/v1/backoffice/banks" with body:
-      """
-      {"name": "Test Bank", "short_name": "TB"}
-      """
+    """
+    {"name": "Test Bank", "short_name": "TB"}
+    """
     Then the response status code should be 201
     And I remember the JSON field "id" as "bankId"
     And a domain event named "erpify.backoffice.bank.created" should be recorded for aggregate {bankId}
-    When I process pending async messenger messages
-    Then the async messenger transport should be empty
+    And I process pending async messenger messages
+    And the async messenger transport should be empty
     And the messenger failed transport should be empty
     And the last bank created notification email should mention event "erpify.backoffice.bank.created"
     And the response should contain "Test Bank"
@@ -20,7 +20,7 @@ Feature: Create a bank
 
   Scenario: Fail to create a bank with missing fields
     When I send a POST request to "/api/v1/backoffice/banks" with body:
-      """
-      {"name": "Incomplete Bank"}
-      """
+    """
+    {"name": "Incomplete Bank"}
+    """
     Then the response status code should be 422

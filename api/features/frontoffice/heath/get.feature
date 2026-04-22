@@ -1,4 +1,4 @@
-Feature: Application health
+Feature: Frontoffice application health
     As an API consumer
     In order to know the API is up
     I need a health check endpoint to hit

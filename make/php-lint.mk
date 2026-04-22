@@ -58,10 +58,19 @@ php.psalm.fix.types: ## Psalm --alter: add missing types
 
 php.psalm.fix.all: php.psalm.fix.cleanup php.psalm.fix.types ## Psalm --alter: cleanup + types
 
-## —— Aggregates ——————————————————————————————————————————————————————————
-php.lint: php.stan php.rector php.cs-fixer php.md php.cs php.psalm.fix.all ## Full PHP lint sweep
+## —— Gherkinlint ——————————————————————————————————————————————————————————
+GHERKINLINT := cd tools/gherkinlint && php -d error_reporting='E_ALL & ~E_DEPRECATED' ../../vendor/bin/gherkinlint
 
-ci.php.lint: php.rector php.cs-fixer php.md php.cs php.psalm.fix.all ## CI-fast lint (skips PHPStan)
+php.gherkin: ## Gherkinlint
+	@$(PHP_TEST) sh -c "$(GHERKINLINT) --ansi lint ../../features/"
+
+php.gherkin.rules: ## Gherkinlint rules
+	@$(PHP_TEST) sh -c "$(GHERKINLINT) rules"
+
+## —— Aggregates ——————————————————————————————————————————————————————————
+php.lint: php.stan php.rector php.cs-fixer php.md php.cs php.psalm.fix.all php.gherkin ## Full PHP lint sweep
+
+ci.php.lint: php.rector php.cs-fixer php.md php.cs php.psalm.fix.all php.gherkin ## CI-fast lint (skips PHPStan)
 
 .PHONY: php.stan php.stan.baseline \
         php.rector php.rector.dry-run \
@@ -69,4 +78,5 @@ ci.php.lint: php.rector php.cs-fixer php.md php.cs php.psalm.fix.all ## CI-fast 
         php.md php.cs php.cs.dry-run \
         php.psalm php.psalm.baseline php.psalm.taint \
         php.psalm.fix.cleanup php.psalm.fix.types php.psalm.fix.all \
+        php.gherkin \
         php.lint ci.php.lint
