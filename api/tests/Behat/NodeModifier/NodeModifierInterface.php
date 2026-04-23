@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Tests\Behat\Assertion\NodeModifier;
+namespace Erpify\Tests\Behat\NodeModifier;
 
 use Symfony\Component\DependencyInjection\Attribute\AutoconfigureTag;
 

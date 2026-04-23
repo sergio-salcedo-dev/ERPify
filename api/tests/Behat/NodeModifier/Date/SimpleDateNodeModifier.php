@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Tests\Behat\Assertion\NodeModifier\Implementation;
+namespace Erpify\Tests\Behat\NodeModifier\Date;
 
 use DateTimeInterface;
-use Erpify\Tests\Behat\Assertion\NodeModifier\AbstractNodeModifier;
+use Erpify\Tests\Behat\NodeModifier\AbstractNodeModifier;
 use Override;
 
 /**

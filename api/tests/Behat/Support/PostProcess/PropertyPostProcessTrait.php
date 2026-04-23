@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Behat\Support\PostProcess;
 
-use Erpify\Tests\Behat\Assertion\NodeModifier\NodeModifierInterface;
-use Erpify\Tests\Behat\Assertion\NodeModifier\NodeModifierLocator;
+use Erpify\Tests\Behat\NodeModifier\NodeModifierInterface;
+use Erpify\Tests\Behat\NodeModifier\NodeModifierLocator;
 use Symfony\Contracts\Service\Attribute\Required;
 
 trait PropertyPostProcessTrait

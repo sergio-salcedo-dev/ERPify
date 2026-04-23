@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Tests\Behat\Transport;
+namespace Erpify\Tests\Behat\Support\Transport;
 
-use Erpify\Tests\Behat\Assertion\Json\Json;
+use Erpify\Tests\Behat\Support\Json\Json;
 use GuzzleHttp\Psr7\Response as GuzzleResponse;
 use JsonException;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;

@@ -1,4 +1,5 @@
-#Feature: Create a bank with an optional Flysystem stored image (multipart)
+# @gherkinlint-disable-rule no-empty-file
+# Feature: Create a bank with an optional Flysystem stored image (multipart)
 #
 #  As an API client
 #  I need to upload a bank stored_object alongside optional logo

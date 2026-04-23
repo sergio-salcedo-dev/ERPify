@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Tests\Behat\Transport;
+namespace Erpify\Tests\Behat\State;
+
+use Erpify\Tests\Behat\Support\Transport\HttpResponse;
 
 class HttpResponseContainer
 {

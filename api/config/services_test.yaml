@@ -7,19 +7,17 @@ services:
     Erpify\Tests\DataFixtures\:
         resource: '../tests/DataFixtures/*'
 
-    Erpify\Tests\Behat\:
-        resource: '../tests/Behat/*'
-        exclude:
-            - '../tests/Behat/Assertion/Json/*'
-            - '../tests/Behat/Transport/HttpResponse.php'
-            - '../tests/Behat/Support/PostProcess/*'
-            - '../tests/Behat/Support/Tool/*'
-            - '../tests/Behat/Context/Abstraction/*'
-            - '../tests/Behat/Assertion/NodeModifier/NodeModifierInterface.php'
-            - '../tests/Behat/Assertion/NodeModifier/AbstractNodeModifier.php'
+    # Behat
+    Erpify\Tests\Behat\Context\:
+        resource: '../tests/Behat/Context/*'
 
-    Erpify\Tests\Behat\Transport\HttpResponseContainer: ~
+    Erpify\Tests\Behat\NodeModifier\:
+        resource: '../tests/Behat/NodeModifier/*'
+
+    Erpify\Tests\Behat\State\:
+        resource: '../tests/Behat/State/*'
 
     Erpify\Tests\Behat\Context\HttpRequestContext:
-        $baseUrl: '/api/v1'
-        $serverPort: 80
+        arguments:
+            $baseUrl: '/api/v1'
+            $serverPort: 80

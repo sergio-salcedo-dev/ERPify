@@ -1,3 +1,4 @@
+# @gherkinlint-disable-rule no-empty-file
 #Feature: Create a bank with an optional logo (multipart)
 #  As an API consumer
 #  I need to upload a bank logo with multipart/form-data

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Tests\Behat\Assertion\Json;
+namespace Erpify\Tests\Behat\Support\Json;
 
 use JsonException;
 use JsonSchema\SchemaStorage;

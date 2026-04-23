@@ -6,6 +6,5 @@ parameters:
 flysystem:
     storages:
         erpify.object_storage.storage:
-            adapter: "local"
-            options:
+            local:
                 directory: "%env(OBJECT_STORAGE_LOCAL_PATH)%"
