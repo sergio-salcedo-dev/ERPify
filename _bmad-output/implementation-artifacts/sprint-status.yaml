@@ -1,0 +1,80 @@
+# generated: 2026-04-23
+# last_updated: 2026-04-23
+# project: ERPify
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-04-23
+last_updated: 2026-04-23
+# epic-1 moved to in-progress when first story was created
+project: ERPify
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+
+development_status:
+  epic-1: in-progress
+  1-1-declare-the-domain-exception-taxonomy: ready-for-dev
+  1-2-introduce-the-problemdetails-value-object: backlog
+  1-3-build-the-problemdetailsfactory-with-the-marker-to-http-status-mapping: backlog
+  1-4-wire-the-exceptionresponder-listener-and-problemdetailsresponder: backlog
+  1-5-bridge-symfony-framework-exceptions: backlog
+  1-6-map-validationfailedexception-to-a-structured-violations-extension: backlog
+  epic-1-retrospective: optional
+
+  epic-2: backlog
+  2-1-mint-propagate-correlation-id-per-request: backlog
+  2-2-echo-x-correlation-id-on-every-response: backlog
+  2-3-mint-per-error-instance-uuidv7-and-attach-to-body: backlog
+  2-4-emit-exactly-one-structured-log-line-per-error-with-tiered-levels: backlog
+  epic-2-retrospective: optional
+
+  epic-3: backlog
+  3-1-environment-aware-debug-extension: backlog
+  3-2-redaction-denylist-for-body-and-log-fields: backlog
+  3-3-unserializable-sentinel-and-default-deny-on-unknown-exceptions: backlog
+  3-4-last-resort-static-body-on-listener-self-failure: backlog
+  3-5-worker-mode-safety-no-database-access-kernel-reset-test: backlog
+  3-6-16-kib-body-cap-with-truncation-marker: backlog
+  3-7-constant-time-branching-on-auth-forbidden-paths: backlog
+  3-8-performance-budgets-documented-and-measured: backlog
+  epic-3-retrospective: optional
+
+  epic-4: backlog
+  4-1-pin-listener-priority-and-regression-test-against-nelmio-cors: backlog
+  4-2-per-marker-unit-test-suite-for-the-status-map: backlog
+  4-3-api-integration-sweep-with-rfc-9457-schema-validation: backlog
+  4-4-ship-docs-api-error-contract-md-one-pager: backlog
+  4-5-ci-grep-gate-against-catch-to-jsonresponse-drift: backlog
+  4-6-migrate-health-endpoints-under-the-contract-defensively: backlog
+  epic-4-retrospective: optional
