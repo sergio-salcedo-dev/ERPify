@@ -1171,7 +1171,7 @@ class JsonContext extends AbstractContext
                 continue;
             }
 
-            $errorTitle = \str_replace([(string)$key, "\u{202f}"], [(string)$value, ' '], $errorTitle);
+            $errorTitle = \str_replace([(string) $key, "\u{202f}"], [(string) $value, ' '], $errorTitle);
         }
 
         return $errorTitle;
