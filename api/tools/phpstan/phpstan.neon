@@ -48,28 +48,62 @@ parameters:
         # Behat JSON/HTTP assertion helpers operate on decoded JSON and Mink responses — values are inherently `mixed`.
         - identifier: missingType.iterableValue
           paths:
-              - ../../tests/Behat/Assertion/Json/*.php
+              - ../../tests/Behat/Support/Json/*.php
               - ../../tests/Behat/Context/HttpRequestContext.php
         - identifier: missingType.parameter
-          path: ../../tests/Behat/Assertion/Json/*.php
+          path: ../../tests/Behat/Support/Json/*.php
         - identifier: cast.string
           paths:
-              - ../../tests/Behat/Assertion/Json/*.php
+              - ../../tests/Behat/Support/Json/*.php
               - ../../tests/Behat/Support/PostProcess/JsonToolTrait.php
         - identifier: argument.type
           paths:
-              - ../../tests/Behat/Assertion/Json/*.php
+              - ../../tests/Behat/Support/Json/*.php
               - ../../tests/Behat/Context/HttpRequestContext.php
               - ../../tests/Behat/Support/PostProcess/JsonToolTrait.php
         - identifier: return.type
-          path: ../../tests/Behat/Assertion/Json/Json.php
+          path: ../../tests/Behat/Support/Json/Json.php
         - identifier: offsetAccess.notFound
           path: ../../tests/Behat/Context/HttpRequestContext.php
         - identifier: offsetAccess.nonOffsetAccessible
           paths:
-              - ../../tests/Behat/Assertion/Json/JsonSchema.php
+              - ../../tests/Behat/Support/Json/JsonSchema.php
               - ../../tests/Behat/Context/HttpRequestContext.php
         - identifier: binaryOp.invalid
           path: ../../tests/Behat/Context/HttpRequestContext.php
         - identifier: assign.propertyType
-          path: ../../tests/Behat/Assertion/Json/JsonSchema.php
+          path: ../../tests/Behat/Support/Json/JsonSchema.php
+
+        # Doctrine entities: typed properties are populated by the ORM hydrator (or the static factory)
+        # rather than the constructor, so PHPStan's checkUninitializedProperties can't see them.
+        - identifier: property.uninitialized
+          paths:
+              - ../../src/Backoffice/Bank/Domain/Entity/Bank.php
+              - ../../src/Shared/Media/Domain/Entity/Media.php
+
+        # Repository attribute points to a domain interface; the concrete Doctrine implementation
+        # is wired via DI. Doctrine accepts this at runtime but PHPStan's stubs require a concrete
+        # EntityRepository<T> class-string.
+        - identifier: argument.type
+          paths:
+              - ../../src/Backoffice/Bank/Domain/Entity/Bank.php
+              - ../../src/Shared/Media/Domain/Entity/Media.php
+
+        # Audit/event-store entity: rows are written by the dispatcher and read via DBAL queries,
+        # never through the entity's properties.
+        - identifier: property.onlyWritten
+          paths:
+              - ../../src/Shared/Infrastructure/Persistence/Entity/StoredDomainEvent.php
+              - ../../src/Shared/Media/Domain/Entity/Media.php
+
+        # Doctrine BLOB columns hydrate to either string or stream resource depending on driver/platform;
+        # the runtime narrowing in getRawBytes() is intentional.
+        - identifier: property.unusedType
+          path: ../../src/Shared/Media/Domain/Entity/Media.php
+        - identifier: return.type
+          path: ../../src/Shared/Media/Domain/Entity/Media.php
+
+        # MicroKernelTrait invokes configureContainer() via reflection when the trait's
+        # registerContainerConfiguration() runs — PHPStan can't see that call site through the trait alias.
+        - identifier: method.unused
+          path: ../../src/Kernel.php

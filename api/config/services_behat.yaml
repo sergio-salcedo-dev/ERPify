@@ -1,0 +1,27 @@
+# Loaded only when Behat is running (Kernel::configureContainer checks
+# $_ENV['BEHAT_RUNNING'], set by api/tools/behat/bootstrap.php). Keeps
+# PHPUnit from autoloading AbstractContext, whose Behat\Behat\Context\Context
+# parent interface lives only in the isolated tools/behat/vendor.
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+        public: true
+
+    Erpify\Tests\Behat\Context\:
+        resource: '../tests/Behat/Context/*'
+        exclude: '../tests/Behat/Context/Abstraction/*'
+
+    Erpify\Tests\Behat\NodeModifier\:
+        resource: '../tests/Behat/NodeModifier/*'
+        exclude:
+            - '../tests/Behat/NodeModifier/AbstractNodeModifier.php'
+            - '../tests/Behat/NodeModifier/NodeModifierInterface.php'
+
+    Erpify\Tests\Behat\State\:
+        resource: '../tests/Behat/State/*'
+
+    Erpify\Tests\Behat\Context\HttpRequestContext:
+        arguments:
+            $baseUrl: '/api/v1'
+            $serverPort: 80

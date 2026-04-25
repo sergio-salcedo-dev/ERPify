@@ -46,14 +46,14 @@ class Media
     }
 
     public static function create(
-        Uuid $uuid,
+        Uuid $id,
         string $contentHash,
         string $mimeType,
         int $byteSize,
         string $rawBytes,
     ): self {
         $media = new self();
-        $media->uuid = $uuid;
+        $media->uuid = $id;
         $media->contentHash = $contentHash;
         $media->mimeType = $mimeType;
         $media->byteSize = $byteSize;

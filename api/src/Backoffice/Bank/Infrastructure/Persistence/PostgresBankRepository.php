@@ -54,7 +54,7 @@ final class PostgresBankRepository extends ServiceEntityRepository implements Ba
     public function countBanksWithStoredObjectContentHash(string $contentHash): int
     {
         return (int) $this->createQueryBuilder('b')
-            ->select('COUNT(b.id)')
+            ->select('COUNT(b.uuid)')
             ->where('b.storedObjectContentHash = :h')
             ->setParameter('h', $contentHash)
             ->getQuery()

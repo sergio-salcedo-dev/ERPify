@@ -8,6 +8,12 @@ use Symfony\Component\Dotenv\Dotenv;
 
 $apiRoot = dirname(__DIR__, 2);
 
+// Signals Erpify\Kernel to import config/services_behat.yaml. Must be set
+// before the kernel boots so the container compile sees it.
+$_ENV['BEHAT_RUNNING'] = '1';
+$_SERVER['BEHAT_RUNNING'] = '1';
+putenv('BEHAT_RUNNING=1');
+
 require $apiRoot . '/vendor/autoload.php';
 
 if (class_exists(Dotenv::class) && is_file($apiRoot . '/.env')) {

@@ -6,18 +6,3 @@ services:
 
     Erpify\Tests\DataFixtures\:
         resource: '../tests/DataFixtures/*'
-
-    # Behat
-    Erpify\Tests\Behat\Context\:
-        resource: '../tests/Behat/Context/*'
-
-    Erpify\Tests\Behat\NodeModifier\:
-        resource: '../tests/Behat/NodeModifier/*'
-
-    Erpify\Tests\Behat\State\:
-        resource: '../tests/Behat/State/*'
-
-    Erpify\Tests\Behat\Context\HttpRequestContext:
-        arguments:
-            $baseUrl: '/api/v1'
-            $serverPort: 80

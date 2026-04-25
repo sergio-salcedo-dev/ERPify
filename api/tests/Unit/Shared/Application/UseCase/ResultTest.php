@@ -45,7 +45,8 @@ final class ResultTest extends TestCase
         $this->assertResultMatches(Result::noContent(), null, Result::STATUS_NO_CONTENT);
     }
 
-    private function assertResultMatches(Result $result, mixed $expectedData, int $expectedStatus): void
+    /** @param array<string, mixed>|null $expectedData */
+    private function assertResultMatches(Result $result, ?array $expectedData, int $expectedStatus): void
     {
         $this->assertSame($expectedData, $result->data);
         $this->assertSame($expectedStatus, $result->status);

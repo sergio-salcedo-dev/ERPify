@@ -1,5 +1,8 @@
 # Paths in this file are relative to api/tools/behat/ (cwd when bin/behat runs).
-# Contexts are resolved from the Symfony test container (services_test.yaml).
+# Contexts are registered here (not in services_test.yaml) so PHPUnit never
+# autoloads classes that depend on Behat\Behat\Context\Context (which lives
+# only in tools/behat/vendor). FoB's SymfonyExtension turns these into
+# autowired services in the Symfony test container.
 default:
     # @wip scenarios are skipped by default (legacy Mink-era steps pending
     # migration to SymfonyExtension/KernelBrowser). Override with --tags=@wip
@@ -13,7 +16,9 @@ default:
                 - '%paths.base%/../../features/backoffice'
                 - '%paths.base%/../../features/frontoffice'
             contexts:
-                - Erpify\Tests\Behat\Context\HttpRequestContext
+                - Erpify\Tests\Behat\Context\HttpRequestContext:
+                      baseUrl: '/api/v1'
+                      serverPort: 80
                 - Erpify\Tests\Behat\Context\JsonContext
     extensions:
         FriendsOfBehat\SymfonyExtension:

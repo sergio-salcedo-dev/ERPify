@@ -95,8 +95,7 @@ jobs:
         run: curl -skSf https://localhost/api/v1/health
 
       - name: PHP lint
-#        run: make php.lint
-        run: make ci.php.lint
+        run: make php.lint
 
       - name: PHPUnit
         run: make php.unit

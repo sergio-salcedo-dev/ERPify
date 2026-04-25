@@ -71,7 +71,7 @@ class Bank extends AggregateRoot
     }
 
     public static function create(
-        Uuid $uuid,
+        Uuid $id,
         string $name,
         string $shortName,
         ?Media $media = null,
@@ -81,7 +81,7 @@ class Bank extends AggregateRoot
         ?string $storedObjectContentHash = null,
     ): self {
         $bank = new self();
-        $bank->uuid = $uuid;
+        $bank->uuid = $id;
         $bank->name = $name;
         $bank->shortName = $shortName;
         $bank->media = $media;
@@ -97,7 +97,7 @@ class Bank extends AggregateRoot
         $createdAt = $now->format(DateTimeInterface::ATOM);
 
         $bank->record(new BankCreatedDomainEvent(
-            $uuid->toRfc4122(),
+            $id->toRfc4122(),
             $name,
             $shortName,
             $createdAt,

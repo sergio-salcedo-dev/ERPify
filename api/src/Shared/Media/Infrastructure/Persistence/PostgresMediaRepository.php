@@ -48,7 +48,7 @@ final class PostgresMediaRepository extends ServiceEntityRepository implements M
     public function existsActiveByContentHash(string $contentHash): bool
     {
         $row = $this->createQueryBuilder('m')
-            ->select('m.id')
+            ->select('m.uuid')
             ->where('m.contentHash = :h')
             ->andWhere('m.deletedAt IS NULL')
             ->setParameter('h', $contentHash)
