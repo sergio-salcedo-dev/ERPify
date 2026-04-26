@@ -143,7 +143,7 @@ RUN <<-'EOF'
 EOF
 
 # Prod FrankenPHP image
-FROM debian:13-slim@sha256:4ffb3a1511099754cddc70eb1b12e50ffdb67619aa0ab6c13fcd800a78ef7c7a AS frankenphp_prod
+FROM debian:13-slim@sha256:cedb1ef40439206b673ee8b33a46a03a0c9fa90bf3732f54704f99cb061d2c5a AS frankenphp_prod
 
 SHELL ["/bin/bash", "-euxo", "pipefail", "-c"]
 
