@@ -14,10 +14,24 @@ $_ENV['BEHAT_RUNNING'] = '1';
 $_SERVER['BEHAT_RUNNING'] = '1';
 putenv('BEHAT_RUNNING=1');
 
+// Force APP_ENV=test before Dotenv::bootEnv so .env.test (which points
+// DATABASE_URL at the dedicated test DB) is resolved instead of dev's.
+$_ENV['APP_ENV'] = 'test';
+$_SERVER['APP_ENV'] = 'test';
+putenv('APP_ENV=test');
+
 require $apiRoot . '/vendor/autoload.php';
 
 if (class_exists(Dotenv::class) && is_file($apiRoot . '/.env')) {
-    (new Dotenv())->bootEnv($apiRoot . '/.env');
+    $dotenv = new Dotenv();
+    $dotenv->bootEnv($apiRoot . '/.env');
+
+    // bootEnv populates immutably, so values already set by .env (like
+    // DATABASE_URL) won't be overridden by .env.test. Re-load .env.test
+    // with override semantics so behat always points at the test DB.
+    if (is_file($apiRoot . '/.env.test')) {
+        $dotenv->overload($apiRoot . '/.env.test');
+    }
 }
 
 // PHPUnit's Util\Exporter lazily calls TextUI\Configuration\Registry::get(),
