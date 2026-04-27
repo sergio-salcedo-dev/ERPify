@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\Bank\Application;
 
-use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
+use Erpify\Shared\Infrastructure\Persistence\Paginator;
 
 final readonly class BankSearcher
 {
@@ -13,9 +13,9 @@ final readonly class BankSearcher
     {
     }
 
-    /** @return Bank[] */
-    public function search(): array
+    /** @param array<string, mixed> $queryParams */
+    public function search(array $queryParams): Paginator
     {
-        return $this->bankRepository->search();
+        return $this->bankRepository->search($queryParams);
     }
 }

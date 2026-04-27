@@ -3,24 +3,25 @@ Feature: Get banks
   In order to manage banks
   I need to be able to retrieve banks
 
-  Scenario: List all banks returns 200
-    When I send a "GET" request to "/backoffice/banks"
+  Scenario: Get a single bank by id
+    When I send a "GET" request to "/backoffice/banks/11111111-1111-7000-8000-000000000001"
     Then the response status code should be 200
+    And the JSON node "data" should have 7 elements
+    And the JSON node "data.name" should be equal to "ING"
+    And the JSON node "data.shortName" should be equal to "ING"
+    And the JSON node "data.createdAt" should not be null
+    And the JSON node "data.updatedAt" should not be null
 
-#  Scenario: Get a single bank by id
-#    Given I send a POST request to "/backoffice/banks" with body:
-#    """
-#    {"name": "Get Test Bank", "short_name": "GTB"}
-#    """
-#    And the response status code should be 201
-#    When I send a "GET" request to "/backoffice/{bankId}"
-#    And the response status code should be 200
-#    And the response should contain "Get Test Bank"
-
-  Scenario: Get a bank that does not exist returns 400
-    When I send a "GET" request to "/backoffice/invalidUuid"
-    Then the response status code should be 404
+  Scenario Outline: Get a bank that does not exist returns 400
+    When I send a "GET" request to "/backoffice/banks/<bankId>"
+    Then the response status code should be 400
+    And the validation error on "id" should be "<errorMessage>"
+    Examples:
+      | bankId      | errorMessage                    |
+      | null        | This value should not be blank. |
+      | invalidUuid | This value is not a valid UUID. |
 
   Scenario: Get a bank that does not exist returns 404
-    When I send a "GET" request to "/backoffice/00000000-0000-7000-8000-000000000000"
+    When I send a "GET" request to "/backoffice/banks/2e6d865c-17b0-476a-85f2-037bf6d3b3dc"
     Then the response status code should be 404
+    And the validation error on "uuid" should be "Bank with id <2e6d865c-17b0-476a-85f2-037bf6d3b3dc> not found."

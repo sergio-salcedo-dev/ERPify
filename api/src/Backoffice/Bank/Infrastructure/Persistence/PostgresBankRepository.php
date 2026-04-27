@@ -4,25 +4,22 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\Bank\Infrastructure\Persistence;
 
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
+use Erpify\Shared\Infrastructure\Persistence\AbstractSearchRepository;
+use Erpify\Shared\Infrastructure\Persistence\Paginator;
+use Erpify\Shared\Infrastructure\Persistence\QueryBuilderWithOptions;
+use Erpify\Shared\Infrastructure\Persistence\QueryParam;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\Uid\Uuid;
 
 /**
- * @extends \Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository<\Erpify\Backoffice\Bank\Domain\Entity\Bank>
+ * @extends AbstractSearchRepository<Bank>
  */
 #[AsAlias(BankRepository::class)]
-final class PostgresBankRepository extends ServiceEntityRepository implements BankRepository
+final class PostgresBankRepository extends AbstractSearchRepository implements BankRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
-        parent::__construct($registry, Bank::class);
-    }
-
     #[Override]
     public function save(Bank $bank): void
     {
@@ -43,11 +40,29 @@ final class PostgresBankRepository extends ServiceEntityRepository implements Ba
         return $this->find($uuid);
     }
 
-    /** @return Bank[] */
     #[Override]
-    public function search(): array
+    public function search(array $queryParams): Paginator
     {
-        return $this->findAll();
+        return $this->getPaginatedResults($queryParams);
+    }
+
+    #[Override]
+    public function getSearchQueryBuilder(array $queryParams): QueryBuilderWithOptions
+    {
+        $queryBuilderWithOptions = $this->createQueryBuilder('b');
+
+        $id = $queryParams[QueryParam::ID->value] ?? null;
+
+        if (\is_string($id) && '' !== $id && Uuid::isValid($id)) {
+            $queryBuilderWithOptions
+                ->andWhere('b.uuid = :id')
+                ->setParameter('id', Uuid::fromString($id), 'uuid')
+            ;
+        }
+
+        $this->addOrderByFromQueryParams($queryBuilderWithOptions, alias: 'b');
+
+        return $queryBuilderWithOptions;
     }
 
     #[Override]
@@ -75,5 +90,11 @@ final class PostgresBankRepository extends ServiceEntityRepository implements Ba
         ;
 
         return $bank?->getStoredObjectMimeType();
+    }
+
+    #[Override]
+    protected static function getEntityClassName(): string
+    {
+        return Bank::class;
     }
 }

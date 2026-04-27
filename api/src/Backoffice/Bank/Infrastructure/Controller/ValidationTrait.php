@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\Bank\Infrastructure\Controller;
 
+use Erpify\Shared\Infrastructure\Http\JsonApiErrorBuilder;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Validator\ConstraintViolationListInterface;
@@ -12,20 +13,9 @@ trait ValidationTrait
 {
     private function validationErrorResponse(ConstraintViolationListInterface $constraintViolationList): JsonResponse
     {
-        $errors = [];
-
-        foreach ($constraintViolationList as $violation) {
-            $errors[] = [
-                'field' => $this->toSnakeCase($violation->getPropertyPath()),
-                'message' => $violation->getMessage(),
-            ];
-        }
-
-        return new JsonResponse(['errors' => $errors], Response::HTTP_UNPROCESSABLE_ENTITY);
-    }
-
-    private function toSnakeCase(string $propertyPath): string
-    {
-        return \strtolower((string) \preg_replace('/[A-Z]/', '_$0', \lcfirst($propertyPath)));
+        return new JsonResponse(
+            JsonApiErrorBuilder::fromViolations($constraintViolationList),
+            Response::HTTP_UNPROCESSABLE_ENTITY,
+        );
     }
 }

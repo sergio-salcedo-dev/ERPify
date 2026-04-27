@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\Bank\Domain\Repository;
 
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
+use Erpify\Shared\Infrastructure\Persistence\Paginator;
 use Symfony\Component\Uid\Uuid;
 
 interface BankRepository
@@ -15,8 +16,8 @@ interface BankRepository
 
     public function findById(Uuid $uuid): ?Bank;
 
-    /** @return Bank[] */
-    public function search(): array;
+    /** @param array<string, mixed> $queryParams */
+    public function search(array $queryParams): Paginator;
 
     public function countBanksWithStoredObjectContentHash(string $contentHash): int;
 

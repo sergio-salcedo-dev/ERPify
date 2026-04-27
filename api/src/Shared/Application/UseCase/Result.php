@@ -24,13 +24,13 @@ final readonly class Result
     ) {
     }
 
-    /** @param array<string, mixed> $data */
+    /** @param array<int|string, mixed> $data */
     public static function ok(array $data): self
     {
         return new self($data, self::STATUS_OK);
     }
 
-    /** @param array<string, mixed> $data */
+    /** @param array<int|string, mixed> $data */
     public static function created(array $data): self
     {
         return new self($data, self::STATUS_CREATED);

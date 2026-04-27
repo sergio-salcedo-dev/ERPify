@@ -41,7 +41,10 @@ final class BankStoredObjectMultipartFunctionalTest extends WebTestCase
         );
 
         self::assertResponseStatusCodeSame(201);
-        $payload = \json_decode((string) $kernelBrowser->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        $body = \json_decode((string) $kernelBrowser->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertIsArray($body);
+        $this->assertArrayHasKey('data', $body);
+        $payload = $body['data'];
         $this->assertIsArray($payload);
         $this->assertArrayHasKey('name', $payload);
         $this->assertArrayHasKey('storedObjectUrl', $payload);

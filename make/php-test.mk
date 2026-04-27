@@ -12,7 +12,7 @@ php.unit: ## PHPUnit; pass c='…' for extra args (e.g. c='--filter SomeTest')
 php.unit.install: ## Install PHPUnit tooling (api/tools/phpunit)
 	@$(COMPOSER) phpunit-tools-install
 
-php.behat: ## Behat; pass c='…' for extra args
+php.behat: ## Behat; pass c='…' for extra args, example: php.behat c='features/backoffice/bank/get.feature'
 	@$(eval c ?=)
 	@$(PHP_BEHAT) php tools/behat/run.php -c tools/behat/behat.yml.dist --format=pretty $(c)
 

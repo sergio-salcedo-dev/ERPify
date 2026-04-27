@@ -37,7 +37,10 @@ final class BankLogoMultipartFunctionalTest extends WebTestCase
         );
 
         self::assertResponseStatusCodeSame(201);
-        $payload = \json_decode((string) $kernelBrowser->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        $body = \json_decode((string) $kernelBrowser->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertIsArray($body);
+        $this->assertArrayHasKey('data', $body);
+        $payload = $body['data'];
         $this->assertIsArray($payload);
         $this->assertArrayHasKey('name', $payload);
         $this->assertArrayHasKey('logoUrl', $payload);
@@ -73,7 +76,10 @@ final class BankLogoMultipartFunctionalTest extends WebTestCase
             ['name' => 'Etag Bank', 'short_name' => 'ETB'],
             ['image' => $uploadedFile],
         );
-        $payload = \json_decode((string) $kernelBrowser->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        $body = \json_decode((string) $kernelBrowser->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertIsArray($body);
+        $this->assertArrayHasKey('data', $body);
+        $payload = $body['data'];
         $this->assertIsArray($payload);
         $this->assertArrayHasKey('logoUrl', $payload);
         $logoUrl = $payload['logoUrl'];

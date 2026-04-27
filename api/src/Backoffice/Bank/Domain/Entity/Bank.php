@@ -30,21 +30,21 @@ class Bank extends AggregateRoot
     #[ORM\Column(length: 255)]
     #[Assert\NotBlank]
     #[Assert\Length(max: 255)]
-    #[Groups(['bank:read'])]
+    #[Groups(['bank:read', 'bank:search'])]
     private string $name;
 
     #[ORM\Column(length: 50)]
     #[Assert\NotBlank]
     #[Assert\Length(max: 50)]
-    #[Groups(['bank:read'])]
+    #[Groups(['bank:read', 'bank:search'])]
     private string $shortName;
 
     #[ORM\Column]
-    #[Groups(['bank:read'])]
+    #[Groups(['bank:read', 'bank:search'])]
     private DateTimeImmutable $createdAt;
 
     #[ORM\Column]
-    #[Groups(['bank:read'])]
+    #[Groups(['bank:read', 'bank:search'])]
     private DateTimeImmutable $updatedAt;
 
     #[ORM\ManyToOne(targetEntity: Media::class, cascade: ['persist'])]
@@ -111,6 +111,7 @@ class Bank extends AggregateRoot
         return $bank;
     }
 
+    #[Groups(['bank:read'])]
     public function getId(): Uuid
     {
         return $this->uuid;
