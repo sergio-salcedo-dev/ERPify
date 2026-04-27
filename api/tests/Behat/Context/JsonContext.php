@@ -1110,9 +1110,7 @@ class JsonContext extends AbstractContext
     #[Then('print last JSON response')]
     public function printLastJsonResponse(): void
     {
-        echo $this->getJson()
-            ->encode()
-        ;
+        echo $this->getJson()->encode();
     }
 
     /** @throws JsonException */

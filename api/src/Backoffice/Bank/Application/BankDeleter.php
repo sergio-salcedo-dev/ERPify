@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\Bank\Application;
 
-use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
+use Erpify\Backoffice\Bank\Infrastructure\Persistence\PostgresBankRepository;
 use Symfony\Component\Uid\Uuid;
 
 final readonly class BankDeleter
 {
     public function __construct(
-        private BankRepository $bankRepository,
+        private PostgresBankRepository $postgresBankRepository,
         private BankFinder $bankFinder,
     ) {
     }
@@ -19,6 +19,6 @@ final readonly class BankDeleter
     {
         $bank = $this->bankFinder->find($uuid);
 
-        $this->bankRepository->remove($bank);
+        $this->postgresBankRepository->remove($bank);
     }
 }

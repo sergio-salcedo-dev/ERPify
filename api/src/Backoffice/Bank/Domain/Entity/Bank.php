@@ -13,7 +13,6 @@ use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Shared\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Media\Domain\Entity\Media;
-use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Validator\Constraints as Assert;
@@ -22,30 +21,17 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\Table(name: 'bank')]
 class Bank extends AggregateRoot
 {
-    #[ORM\Id]
-    #[ORM\Column(name: 'id', type: UuidType::NAME, unique: true)]
-    #[Groups(['bank:read'])]
-    private Uuid $uuid;
-
     #[ORM\Column(length: 255)]
     #[Assert\NotBlank]
     #[Assert\Length(max: 255)]
-    #[Groups(['bank:read'])]
+    #[Groups(['bank:get', 'bank:search'])]
     private string $name;
 
     #[ORM\Column(length: 50)]
     #[Assert\NotBlank]
     #[Assert\Length(max: 50)]
-    #[Groups(['bank:read'])]
+    #[Groups(['bank:get', 'bank:search'])]
     private string $shortName;
-
-    #[ORM\Column]
-    #[Groups(['bank:read'])]
-    private DateTimeImmutable $createdAt;
-
-    #[ORM\Column]
-    #[Groups(['bank:read'])]
-    private DateTimeImmutable $updatedAt;
 
     #[ORM\ManyToOne(targetEntity: Media::class, cascade: ['persist'])]
     #[ORM\JoinColumn(name: 'logo_media_id', referencedColumnName: 'id', nullable: true)]
@@ -66,10 +52,6 @@ class Bank extends AggregateRoot
     #[ORM\Column(name: 'stored_object_content_hash', length: 64, nullable: true)]
     private ?string $storedObjectContentHash = null;
 
-    private function __construct()
-    {
-    }
-
     public static function create(
         Uuid $id,
         string $name,
@@ -81,7 +63,7 @@ class Bank extends AggregateRoot
         ?string $storedObjectContentHash = null,
     ): self {
         $bank = new self();
-        $bank->uuid = $id;
+        $bank->id = $id->toRfc4122();
         $bank->name = $name;
         $bank->shortName = $shortName;
         $bank->media = $media;
@@ -90,11 +72,7 @@ class Bank extends AggregateRoot
         $bank->storedObjectByteSize = $storedObjectByteSize;
         $bank->storedObjectContentHash = $storedObjectContentHash;
 
-        $now = new DateTimeImmutable();
-        $bank->createdAt = $now;
-        $bank->updatedAt = $now;
-
-        $createdAt = $now->format(DateTimeInterface::ATOM);
+        $createdAt = $bank->createdAt->format(DateTimeInterface::ATOM);
 
         $bank->record(new BankCreatedDomainEvent(
             $id->toRfc4122(),
@@ -109,11 +87,6 @@ class Bank extends AggregateRoot
         ));
 
         return $bank;
-    }
-
-    public function getId(): Uuid
-    {
-        return $this->uuid;
     }
 
     public function getName(): string
@@ -169,7 +142,7 @@ class Bank extends AggregateRoot
         $this->updatedAt = $now;
 
         $this->record(new BankUpdatedDomainEvent(
-            $this->uuid->toRfc4122(),
+            $this->id,
             $name,
             $shortName,
             $this->createdAt->format(DateTimeInterface::ATOM),

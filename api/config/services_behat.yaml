@@ -21,6 +21,9 @@ services:
     Erpify\Tests\Behat\State\:
         resource: '../tests/Behat/State/*'
 
+    Erpify\Tests\Behat\Doctrine\:
+        resource: '../tests/Behat/Doctrine/*'
+
     Erpify\Tests\Behat\Context\HttpRequestContext:
         arguments:
             $baseUrl: '/api/v1'

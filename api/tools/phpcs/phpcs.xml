@@ -37,6 +37,11 @@
     <rule ref="Generic.Arrays.DisallowLongArraySyntax"/>
 
     <!-- Sniff Exclusions -->
+    <!-- Allow newline immediately after `(` in multi-line control-structure conditions -->
+    <rule ref="PEAR.ControlStructures.MultiLineCondition">
+        <exclude name="PEAR.ControlStructures.MultiLineCondition.SpacingAfterOpenBrace"/>
+        <exclude name="PEAR.ControlStructures.MultiLineCondition.StartWithBoolean"/>
+    </rule>
 
     <!-- Report Configuration -->
     <!-- Show colors in output -->
