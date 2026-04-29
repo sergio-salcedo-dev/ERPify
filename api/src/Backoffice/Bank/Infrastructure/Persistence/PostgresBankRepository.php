@@ -6,11 +6,11 @@ namespace Erpify\Backoffice\Bank\Infrastructure\Persistence;
 
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
+use Erpify\Backoffice\Bank\Domain\Search\BankSearchCriteria;
+use Erpify\Shared\Domain\Search\PaginatedResult;
+use Erpify\Shared\Domain\Search\SearchCriteria;
 use Erpify\Shared\Infrastructure\Persistence\AbstractSearchRepository;
-use Erpify\Shared\Infrastructure\Persistence\Paginator;
 use Erpify\Shared\Infrastructure\Persistence\QueryBuilderWithOptions;
-use Erpify\Shared\Infrastructure\Persistence\QueryParam;
-use Erpify\Shared\Infrastructure\Persistence\SortDirection;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\Uid\Uuid;
@@ -40,28 +40,30 @@ final class PostgresBankRepository extends AbstractSearchRepository implements B
     }
 
     #[Override]
-    public function search(array $queryParams): Paginator
+    public function search(SearchCriteria $criteria): PaginatedResult
     {
-        return $this->getPaginatedResults($queryParams);
+        return $this->getPaginatedResults($criteria);
     }
 
     #[Override]
-    public function getSearchQueryBuilder(array $queryParams): QueryBuilderWithOptions
+    public function getSearchQueryBuilder(SearchCriteria $criteria): QueryBuilderWithOptions
     {
+        \assert($criteria instanceof BankSearchCriteria);
+
         $qb = $this->createQueryBuilder('b');
 
-        $this->addWhereIdsIn($qb, alias: 'b', ids: $queryParams[QueryParam::IDS->value] ?? []);
+        $this->addWhereIdsIn($qb, alias: 'b', ids: $criteria->ids ?? []);
 
-        $this->addWhereIn($qb, alias: 'b', field: 'name', values: $queryParams['names'] ?? []);
+        $this->addWhereIn($qb, alias: 'b', field: 'name', values: $criteria->names ?? []);
 
         $this->addOrderByFromQueryParams(
             $qb,
             alias: 'b',
-            orderByField:$queryParams[QueryParam::SORT->value] ?? null,
-            direction: SortDirection::tryFrom($queryParams[QueryParam::DIRECTION->value]),
+            orderByField: null,
+            direction: null,
         );
 
-        $this->addLimit($qb, $queryParams[QueryParam::LIMIT->value]);
+        $this->addLimit($qb, $criteria->limit);
 
         return $qb;
     }

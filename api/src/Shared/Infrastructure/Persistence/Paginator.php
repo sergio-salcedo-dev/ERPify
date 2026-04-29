@@ -12,10 +12,11 @@ use Doctrine\ORM\Query;
 use Doctrine\ORM\Query\Expr\OrderBy;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\ORM\Tools\Pagination\Paginator as DoctrinePaginator;
+use Erpify\Shared\Domain\Search\PaginatedResult;
 use Erpify\Shared\Domain\Search\PaginationMode;
 use InvalidArgumentException;
 use Iterator;
-use IteratorAggregate;
+use Override;
 use Symfony\Component\PropertyAccess\PropertyAccess;
 use Traversable;
 
@@ -26,9 +27,11 @@ use Traversable;
  * @SuppressWarnings("PHPMD.NPathComplexity")
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  *
- * @implements IteratorAggregate<int, mixed>
+ * @template T of object
+ *
+ * @implements PaginatedResult<T>
  */
-final class Paginator implements IteratorAggregate
+final class Paginator implements PaginatedResult
 {
     /**
      * Allow-list pattern for order-by identifiers safely interpolated into DQL.
@@ -36,6 +39,7 @@ final class Paginator implements IteratorAggregate
      */
     private const string ORDER_BY_IDENTIFIER_PATTERN = '/^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*$/';
 
+    /** @var Iterator<int, T>|null */
     private ?Iterator $iterator = null;
 
     private bool $hasMorePages = false;
@@ -54,6 +58,10 @@ final class Paginator implements IteratorAggregate
     ) {
     }
 
+    /**
+     * @return Traversable<int, T>
+     */
+    #[Override]
     public function getIterator(): Traversable
     {
         if ($this->iterator instanceof Iterator) {
@@ -101,7 +109,10 @@ final class Paginator implements IteratorAggregate
 
         $this->paginatorCursor->setCurrentPage($this->currentPage);
 
-        return $this->iterator = new ArrayIterator($results);
+        /** @var ArrayIterator<int, T> $iterator */
+        $iterator = new ArrayIterator($results);
+
+        return $this->iterator = $iterator;
     }
 
     /** @param array<int, mixed> $results */
@@ -119,6 +130,7 @@ final class Paginator implements IteratorAggregate
         );
     }
 
+    #[Override]
     public function hasMorePages(): bool
     {
         return $this->hasMorePages;
@@ -129,11 +141,13 @@ final class Paginator implements IteratorAggregate
         return PaginationMode::DETAILED->value === ($this->options[PaginatorOption::PAGINATION_MODE->value] ?? null);
     }
 
+    #[Override]
     public function getCurrentPage(): int
     {
         return $this->currentPage;
     }
 
+    #[Override]
     public function getPageCount(): ?int
     {
         $count = $this->paginatorCursor->getCount();
@@ -145,6 +159,7 @@ final class Paginator implements IteratorAggregate
         return (int) \ceil($count / $this->maxPerPage);
     }
 
+    #[Override]
     public function getCursor(): PaginatorCursorInterface
     {
         return $this->paginatorCursor;

@@ -8,7 +8,7 @@ use Doctrine\ORM\Query\Expr\Select;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 use Erpify\Shared\Domain\Search\PaginationMode;
-use InvalidArgumentException;
+use Erpify\Shared\Domain\Search\SearchCriteria;
 use LogicException;
 
 /**
@@ -31,52 +31,29 @@ abstract class AbstractSearchRepository extends AbstractRepository
         parent::__construct($registry);
     }
 
-    /** @param array<string, mixed> $queryParams */
-    public function getPaginatedResults(array $queryParams): Paginator
+    /**
+     * @return Paginator<T>
+     */
+    public function getPaginatedResults(SearchCriteria $criteria): Paginator
     {
-        $queryBuilder = $this->getSearchQueryBuilder($queryParams);
+        $queryBuilder = $this->getSearchQueryBuilder($criteria);
 
-        $cursor = $queryParams[QueryParam::CURSOR->value] ?? null;
-        \assert(null === $cursor || \is_string($cursor));
+        $page = \max(1, \min(self::MAX_PAGE, $criteria->page));
+        $limit = \max(1, \min(self::MAX_LIMIT, $criteria->limit ?? self::MAX_LIMIT));
 
-        $paginationMode = $queryParams[QueryParam::PAGINATION_MODE->value] ?? null;
-        \assert(null === $paginationMode || $paginationMode instanceof PaginationMode);
-
-        $page = $queryParams[QueryParam::PAGE->value] ?? 1;
-
-        $pageInt = match (true) {
-            \is_int($page) => $page,
-            \is_string($page) && \ctype_digit($page) => (int) $page,
-            default => throw new InvalidArgumentException(\sprintf(
-                'Page must be a positive integer, got "%s".',
-                \is_scalar($page) ? (string) $page : \get_debug_type($page),
-            )),
-        };
-
-        $pageInt = \max(1, \min(self::MAX_PAGE, $pageInt));
-
-        $limit = $queryParams[QueryParam::LIMIT->value] ?? self::MAX_LIMIT;
-        $limitInt = match (true) {
-            \is_int($limit) => $limit,
-            \is_string($limit) && \ctype_digit($limit) => (int) $limit,
-            default => throw new InvalidArgumentException(\sprintf(
-                'Limit must be a positive integer, got "%s".',
-                \is_scalar($limit) ? (string) $limit : \get_debug_type($limit),
-            )),
-        };
-
-        $limitInt = \max(1, \min(self::MAX_LIMIT, $limitInt));
-
-        $this->addLimit($queryBuilder, $limitInt);
+        $this->addLimit($queryBuilder, $limit);
 
         return $this->getQueryBuilderPaginatedResults(
             $queryBuilder,
-            $this->paginatorCursorFactory->createFromString($cursor),
-            $pageInt,
-            $paginationMode,
+            $this->paginatorCursorFactory->createFromString($criteria->cursor),
+            $page,
+            $criteria->paginationMode,
         );
     }
 
+    /**
+     * @return Paginator<T>
+     */
     public function getQueryBuilderPaginatedResults(
         QueryBuilder $queryBuilder,
         PaginatorCursorInterface $cursor,
@@ -112,7 +89,8 @@ abstract class AbstractSearchRepository extends AbstractRepository
             $options[PaginatorOption::FETCH_JOIN_COLLECTION->value] = false;
         }
 
-        return new Paginator(
+        /** @var Paginator<T> $paginator */
+        $paginator = new Paginator(
             $queryBuilder,
             $cursor,
             $idFieldNames,
@@ -120,6 +98,8 @@ abstract class AbstractSearchRepository extends AbstractRepository
             $page,
             $queryBuilder->getMaxResults() ?? 500,
         );
+
+        return $paginator;
     }
 
     protected function addOrderByFromQueryParams(
@@ -137,8 +117,7 @@ abstract class AbstractSearchRepository extends AbstractRepository
         );
     }
 
-    /** @param array<string, mixed> $queryParams */
-    abstract public function getSearchQueryBuilder(array $queryParams): QueryBuilder;
+    abstract public function getSearchQueryBuilder(SearchCriteria $criteria): QueryBuilder;
 
     private function hasNonRootSelect(QueryBuilder $queryBuilder, string $rootAlias): bool
     {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Infrastructure\Persistence;
 
+use Erpify\Shared\Domain\Search\SearchCursor;
 use InvalidArgumentException;
 use JsonException;
 use RuntimeException;
@@ -93,7 +94,7 @@ class PaginatorCursorFactory
         );
     }
 
-    public function toString(PaginatorCursorInterface $cursor): string
+    public function toString(SearchCursor $cursor): string
     {
         $payload = \json_encode(
             [
