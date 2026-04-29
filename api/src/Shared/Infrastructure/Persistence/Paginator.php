@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace Erpify\Shared\Infrastructure\Persistence;
 
 use ArrayIterator;
+use DateTimeImmutable;
 use DateTimeInterface;
+use DateTimeZone;
 use Doctrine\ORM\Query;
 use Doctrine\ORM\Query\Expr\OrderBy;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\ORM\Tools\Pagination\Paginator as DoctrinePaginator;
+use Erpify\Shared\Domain\Search\PaginationMode;
+use InvalidArgumentException;
 use Iterator;
 use IteratorAggregate;
 use Symfony\Component\PropertyAccess\PropertyAccess;
@@ -20,11 +24,18 @@ use Traversable;
  *
  * @SuppressWarnings("PHPMD.ExcessiveClassComplexity")
  * @SuppressWarnings("PHPMD.NPathComplexity")
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  *
  * @implements IteratorAggregate<int, mixed>
  */
-class Paginator implements IteratorAggregate
+final class Paginator implements IteratorAggregate
 {
+    /**
+     * Allow-list pattern for order-by identifiers safely interpolated into DQL.
+     * Matches `alias.field`, `field`, with optional underscore-prefixed segments.
+     */
+    private const string ORDER_BY_IDENTIFIER_PATTERN = '/^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*$/';
+
     private ?Iterator $iterator = null;
 
     private bool $hasMorePages = false;
@@ -49,7 +60,9 @@ class Paginator implements IteratorAggregate
             return $this->iterator;
         }
 
-        $queryBuilder = $this->alterQueryBuilder(clone $this->queryBuilder);
+        $queryBuilder = clone $this->queryBuilder;
+        $countBaseline = clone $queryBuilder;
+        $queryBuilder = $this->alterQueryBuilder($queryBuilder);
         $this->resetCursor($queryBuilder);
 
         $columns = \array_keys($this->getOrderByColumns($queryBuilder));
@@ -79,10 +92,13 @@ class Paginator implements IteratorAggregate
         }
 
         if ($this->shouldCalculateNumberOfRecords()) {
-            $this->setCursorCount($queryBuilder, $results);
+            $this->setCursorCount($countBaseline, $results);
         }
 
-        $this->paginatorCursor->setLastItem($this->extractFields($columns, $lastItem));
+        if (null !== $lastItem) {
+            $this->paginatorCursor->setLastItem($this->extractFields($columns, $lastItem));
+        }
+
         $this->paginatorCursor->setCurrentPage($this->currentPage);
 
         return $this->iterator = new ArrayIterator($results);
@@ -118,9 +134,13 @@ class Paginator implements IteratorAggregate
         return $this->currentPage;
     }
 
-    public function getPageCount(): int
+    public function getPageCount(): ?int
     {
-        $count = (int) $this->paginatorCursor->getCount();
+        $count = $this->paginatorCursor->getCount();
+
+        if (null === $count || $this->maxPerPage <= 0) {
+            return null;
+        }
 
         return (int) \ceil($count / $this->maxPerPage);
     }
@@ -133,10 +153,7 @@ class Paginator implements IteratorAggregate
     private function getQuery(QueryBuilder $queryBuilder): Query
     {
         $query = $queryBuilder->getQuery();
-
-        if (!$this->shouldCalculateNumberOfRecords()) {
-            $query->setMaxResults(((int) $query->getMaxResults()) + 1);
-        }
+        $query->setMaxResults(((int) $query->getMaxResults()) + 1);
 
         return $query;
     }
@@ -188,7 +205,7 @@ class Paginator implements IteratorAggregate
                 return false;
             }
 
-            $parameter = ':pagination_' . \str_replace('.', '_', $orderBy);
+            $parameter = ':pagination_' . \substr(\hash('xxh128', $orderBy), 0, 16);
             $parameters[] = ['parameter' => $parameter, 'orderBy' => $fields[$orderBy]];
 
             $newStrictCondition = \sprintf(
@@ -303,10 +320,18 @@ class Paginator implements IteratorAggregate
 
             foreach ($order->getParts() as $part) {
                 $matches = [];
-                \preg_match('{^(?P<clause>.*?)( ?(?P<dir>asc|desc))?$}i', $part, $matches);
+                \preg_match('{^(?P<clause>.+?)(?:\s+(?P<dir>asc|desc))?$}i', $part, $matches);
 
                 if (\array_key_exists('clause', $matches)) {
-                    $columns[\trim($matches['clause'])] = \strtolower($matches['dir'] ?? 'asc');
+                    $clause = \trim($matches['clause']);
+
+                    if (1 !== \preg_match(self::ORDER_BY_IDENTIFIER_PATTERN, $clause)) {
+                        throw new InvalidArgumentException(
+                            \sprintf('Unsafe order-by identifier "%s" rejected by paginator allow-list.', $clause),
+                        );
+                    }
+
+                    $columns[$clause] = \strtolower($matches['dir'] ?? 'asc');
                 }
             }
         }
@@ -343,7 +368,10 @@ class Paginator implements IteratorAggregate
             $value = $propertyAccessor->getValue($item, $path);
 
             if ($value instanceof DateTimeInterface) {
-                $value = $value->format(DateTimeInterface::ATOM);
+                $value = DateTimeImmutable::createFromInterface($value)
+                    ->setTimezone(new DateTimeZone('UTC'))
+                    ->format('Y-m-d\TH:i:s.uP')
+                ;
             }
 
             $fieldsValue[$column] = $value;

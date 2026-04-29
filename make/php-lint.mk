@@ -3,7 +3,6 @@
 # Per-tool targets are flat: php.<tool>[.<mode>].
 # Aggregates:
 #   php.lint      — full sweep (PHPStan + Rector + CS-Fixer + PHPMD + PHPCS + Psalm fixes)
-#   ci.php.lint   — CI fast path (skip PHPStan for speed; CI runs it separately if desired)
 
 ## —— PHPStan ——————————————————————————————————————————————————————————————
 php.stan: ## PHPStan analyse
@@ -75,8 +74,6 @@ php.lint.yaml: ## yaml-lint
 #php.lint: php.stan php.rector php.cs-fixer php.md php.cs php.psalm.fix.all php.gherkin ## Full PHP lint sweep
 php.lint: php.stan php.rector php.cs-fixer php.cs php.psalm.fix.all php.gherkin ## Full PHP lint sweep
 
-ci.php.lint: php.rector php.cs-fixer php.md php.cs php.psalm.fix.all php.gherkin ## CI-fast lint (skips PHPStan)
-
 .PHONY: php.stan php.stan.baseline \
         php.rector php.rector.dry-run \
         php.cs-fixer php.cs-fixer.dry-run \
@@ -84,4 +81,4 @@ ci.php.lint: php.rector php.cs-fixer php.md php.cs php.psalm.fix.all php.gherkin
         php.psalm php.psalm.baseline php.psalm.taint \
         php.psalm.fix.cleanup php.psalm.fix.types php.psalm.fix.all \
         php.gherkin \
-        php.lint ci.php.lint
+        php.lint

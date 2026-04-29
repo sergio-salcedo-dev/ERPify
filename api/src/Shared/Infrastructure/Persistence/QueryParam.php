@@ -6,7 +6,7 @@ namespace Erpify\Shared\Infrastructure\Persistence;
 
 enum QueryParam: string
 {
-    case ID = 'id';
+    case IDS = 'ids';
     case CREATED_AT = 'createdAt';
     case UPDATED_AT = 'updatedAt';
     case PAGE = 'page';
@@ -15,4 +15,6 @@ enum QueryParam: string
     case SORT = 'sort';
     case DIRECTION = 'direction';
     case LIMIT = 'limit';
+    case FROM = 'from';
+    case TO = 'to';
 }

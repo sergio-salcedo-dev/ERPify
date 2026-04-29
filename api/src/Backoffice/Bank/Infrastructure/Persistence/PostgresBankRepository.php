@@ -10,6 +10,7 @@ use Erpify\Shared\Infrastructure\Persistence\AbstractSearchRepository;
 use Erpify\Shared\Infrastructure\Persistence\Paginator;
 use Erpify\Shared\Infrastructure\Persistence\QueryBuilderWithOptions;
 use Erpify\Shared\Infrastructure\Persistence\QueryParam;
+use Erpify\Shared\Infrastructure\Persistence\SortDirection;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\Uid\Uuid;
@@ -23,21 +24,19 @@ final class PostgresBankRepository extends AbstractSearchRepository implements B
     #[Override]
     public function save(Bank $bank): void
     {
-        $this->getEntityManager()->persist($bank);
-        $this->getEntityManager()->flush();
+        $this->persistAndFlush($bank);
     }
 
     #[Override]
     public function remove(Bank $bank): void
     {
-        $this->getEntityManager()->remove($bank);
-        $this->getEntityManager()->flush();
+        $this->removeAndFlush($bank);
     }
 
     #[Override]
     public function findById(Uuid $uuid): ?Bank
     {
-        return $this->find($uuid);
+        return $this->find($uuid->toRfc4122());
     }
 
     #[Override]
@@ -49,27 +48,29 @@ final class PostgresBankRepository extends AbstractSearchRepository implements B
     #[Override]
     public function getSearchQueryBuilder(array $queryParams): QueryBuilderWithOptions
     {
-        $queryBuilderWithOptions = $this->createQueryBuilder('b');
+        $qb = $this->createQueryBuilder('b');
 
-        $id = $queryParams[QueryParam::ID->value] ?? null;
+        $this->addWhereIdsIn($qb, alias: 'b', ids: $queryParams[QueryParam::IDS->value] ?? []);
 
-        if (\is_string($id) && '' !== $id && Uuid::isValid($id)) {
-            $queryBuilderWithOptions
-                ->andWhere('b.uuid = :id')
-                ->setParameter('id', Uuid::fromString($id), 'uuid')
-            ;
-        }
+        $this->addWhereIn($qb, alias: 'b', field: 'name', values: $queryParams['names'] ?? []);
 
-        $this->addOrderByFromQueryParams($queryBuilderWithOptions, alias: 'b');
+        $this->addOrderByFromQueryParams(
+            $qb,
+            alias: 'b',
+            orderByField:$queryParams[QueryParam::SORT->value] ?? null,
+            direction: SortDirection::tryFrom($queryParams[QueryParam::DIRECTION->value]),
+        );
 
-        return $queryBuilderWithOptions;
+        $this->addLimit($qb, $queryParams[QueryParam::LIMIT->value]);
+
+        return $qb;
     }
 
     #[Override]
     public function countBanksWithStoredObjectContentHash(string $contentHash): int
     {
         return (int) $this->createQueryBuilder('b')
-            ->select('COUNT(b.uuid)')
+            ->select('COUNT(b.id)')
             ->where('b.storedObjectContentHash = :h')
             ->setParameter('h', $contentHash)
             ->getQuery()

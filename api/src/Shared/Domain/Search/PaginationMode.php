@@ -2,14 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Shared\Infrastructure\Persistence;
+namespace Erpify\Shared\Domain\Search;
 
 /**
  * Controls how paginated queries compute result metadata.
  *
- * Example: `GET /banks?paginationMode=light` skips the COUNT(*) and returns only
- * a "has more pages" hint, while `paginationMode=detailed` (default) returns
- * total record and page counts.
+ * Example: `mode=light` skips the COUNT(*) and returns only a "has more
+ * pages" hint, while `mode=detailed` returns total record and page counts.
  */
 enum PaginationMode: string
 {

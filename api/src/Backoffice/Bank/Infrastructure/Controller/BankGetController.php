@@ -53,7 +53,7 @@ final readonly class BankGetController
 
         /** @var array<string, mixed> $data */
         $data = \json_decode(
-            $this->serializer->serialize($bank, 'json', ['groups' => ['bank:read', 'bank:read:urls']]),
+            $this->serializer->serialize($bank, 'json', ['groups' => ['aggregate:default', 'bank:get', 'bank:read:urls']]),
             true,
             512,
             JSON_THROW_ON_ERROR,

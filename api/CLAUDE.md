@@ -58,7 +58,6 @@ Lint / static analysis:
 
 -   `make php.lint` — full sweep (PHPStan, Rector, PHP-CS-Fixer, PHPMD, PHPCS, Psalm auto-fixes).
 -   Individual: `php.stan[.baseline]`, `php.rector[.dry-run]`, `php.cs-fixer[.dry-run]`, `php.md`, `php.cs[.dry-run]`, `php.psalm`, `php.psalm.taint` (SARIF), `php.psalm.baseline`, `php.psalm.fix.{cleanup,types,all}`.
--   CI-fast variant: `ci.php.lint` (skips PHPStan).
 
 Database (Doctrine):
 
