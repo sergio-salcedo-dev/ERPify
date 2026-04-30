@@ -11,8 +11,20 @@
 
 ## —— PWA install / dev / build ——
 
-pwa.install: ## npm ci in pwa/
+pwa.install: ## npm ci in pwa/ (auto-cleans empty root-owned node_modules left by the dev compose volume)
+	@if [ -d $(PWA_ROOT)/node_modules ] && [ ! -w $(PWA_ROOT)/node_modules ] && [ -z "$$(ls -A $(PWA_ROOT)/node_modules 2>/dev/null)" ]; then \
+		echo "Removing empty root-owned pwa/node_modules (Docker mount artifact)…"; \
+		$(DC) stop $(PWA_SERVICE) 2>/dev/null || true; \
+		docker run --rm -v "$(PWA_ROOT):/work" -w /work alpine rmdir node_modules || true; \
+	fi
 	@$(call pwa_cmd,npm ci)
+
+pwa.install.if-missing: ## Run pwa.install only if pwa/node_modules is missing or unhealthy
+	@if [ -d $(PWA_ROOT)/node_modules ] && [ -w $(PWA_ROOT)/node_modules ] && [ -n "$$(ls -A $(PWA_ROOT)/node_modules 2>/dev/null)" ]; then \
+		: ; \
+	else \
+		$(MAKE) --no-print-directory pwa.install; \
+	fi
 
 pwa.dev: ## Next dev server (Turbopack) on host :80 (needs pwa/.env.local)
 	@$(call pwa_cmd,npm run dev)
@@ -69,7 +81,7 @@ pwa.util.extract.testids: ## Extract data-testid attributes
 pwa.clean: ## Remove node_modules, package-lock.json, .next (destructive)
 	@$(call pwa_cmd,rm -rf node_modules package-lock.json .next)
 
-.PHONY: pwa.install pwa.dev pwa.build \
+.PHONY: pwa.install pwa.install.if-missing pwa.dev pwa.build \
         pwa.lint pwa.lint.eslint pwa.lint.eslint.fix pwa.lint.prettier pwa.format.prettier.fix \
         pwa.test pwa.test.unit pwa.test.unit.watch pwa.test.e2e pwa.test.e2e.reports \
         pwa.util.extract.testids pwa.clean

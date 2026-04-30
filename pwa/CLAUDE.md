@@ -22,7 +22,8 @@ PWA-scoped guidance. Root [`../CLAUDE.md`](../CLAUDE.md) is authoritative for mo
 
 ## Make targets (run from repo root)
 
--   `make pwa.install` — `npm ci`.
+-   `make pwa.install` — `npm ci`. Auto-cleans the empty root-owned `pwa/node_modules/` that the dev compose volume leaves on the host.
+-   `make pwa.install.if-missing` — guard used as a prerequisite of `make dev` / `make dev.local`; runs `pwa.install` only when `pwa/node_modules/` is missing or unhealthy.
 -   `make pwa.dev` — Next dev (Turbopack, host :80). Pair with `make api-up-http` or use `make dev.local` (runs both).
 -   `make pwa.build` — production build.
 -   `make pwa.test` = `pwa.test.unit` (Vitest) + `pwa.test.e2e` (Playwright).

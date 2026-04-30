@@ -18,7 +18,7 @@ The root `Makefile` is the canonical interface — it includes the modules in `m
 
 Stack:
 
--   `make dev` — full dev stack (`--wait --build -d`) + browser open. `OPEN_BROWSER=0` to skip.
+-   `make dev` — full dev stack (`--wait --build -d`) + browser open. `OPEN_BROWSER=0` to skip. Auto-runs `pwa.install` on a fresh checkout via `pwa.install.if-missing`.
 -   `make docker.up` / `docker.up.wait` — start stack detached (with/without `--build`). Pass `ENV=staging|prod` to switch overlays.
 -   `make docker.down`, `docker.logs`, `docker.ps`, `docker.health`, `docker.bash`, `docker.clean` (destructive: drops volumes).
 -   `make dev.local` — API + DB on :8000 + `next dev` on host :80.
