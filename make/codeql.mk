@@ -33,10 +33,10 @@ else
   CODEQL_BUNDLE_URL    := https://github.com/github/codeql-action/releases/download/$(CODEQL_BUNDLE_TAG)/$(CODEQL_BUNDLE_FILE)
 endif
 
-CODEQL_HOME            := $(CODEQL_DIR)/codeql
-CODEQL                 := $(CODEQL_HOME)/codeql
-CODEQL_DB              := $(CODEQL_DIR)/db-pwa
-CODEQL_SARIF           := $(CODEQL_DIR)/results.sarif
+CODEQL_HOME             = $(CODEQL_DIR)/codeql
+CODEQL                  = $(CODEQL_HOME)/codeql
+CODEQL_DB               = $(CODEQL_DIR)/db-pwa
+CODEQL_SARIF            = $(CODEQL_DIR)/results.sarif
 # Mirrors the workflow we deleted: JS/TS, security-extended suite.
 CODEQL_QUERIES         ?= javascript-security-extended.qls
 CODEQL_SOURCE_ROOT     ?= $(PWA_ROOT)
