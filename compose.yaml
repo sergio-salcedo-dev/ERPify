@@ -45,9 +45,6 @@ services:
       start_period: 120s
 
   database:
-    # Pinned to a known-good digest (postgres:18-alpine, 2026-04-22) so CI and local
-    # pull bit-for-bit identical bytes. Bump alongside POSTGRES_VERSION; Dependabot
-    # tracks digest updates per the project convention (CLAUDE.md).
     image: postgres:${POSTGRES_VERSION:-18}-alpine@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-erpify_db}
