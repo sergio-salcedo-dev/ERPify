@@ -1,13 +1,19 @@
 import "reflect-metadata";
 import type { Metadata } from "next";
 import "./globals.css";
-import { Geist } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import { fetchFrankenPhpHotReloadSubscribeUrl } from "@/lib/frankenphp-hot-reload";
 import { cn } from "@/lib/utils";
 
-const geist = Geist({
+const geistSans = Geist({
   subsets: ["latin"],
   variable: "--font-sans",
+  preload: false,
+});
+
+const geistMono = Geist_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
   preload: false,
 });
 
@@ -23,7 +29,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const frankenHotReloadUrl = await fetchFrankenPhpHotReloadSubscribeUrl();
 
   return (
-    <html lang="en" className={cn("font-sans", geist.variable)}>
+    <html lang="en" className={cn("font-sans", geistSans.variable, geistMono.variable)}>
       <head>
         {frankenHotReloadUrl ? (
           <>

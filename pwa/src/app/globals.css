@@ -4,9 +4,59 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * ERPify Design Tokens — v1 (light-mode canonical, Linear-similar dark mode).
+ * Canonical reference: pwa/DESIGN.md
+ * Full spec: _bmad-output/planning-artifacts/ux-design-specification.md
+ *
+ * Architecture:
+ *   - Ramps and semantic aliases live in :root (light, canonical) and .dark.
+ *   - Components consume semantic aliases (--color-bg, --color-text, …).
+ *   - Shadcn-named tokens (--background, --primary, …) are mapped to ERPify
+ *     aliases so existing primitives keep working unchanged.
+ *   - @theme inline exposes everything as Tailwind utilities.
+ *   - Linear-derived hex values authored directly. Tailwind 4 accepts them.
+ *   - Geist + Geist Mono via next/font/google (wired in layout.tsx).
+ */
+
 @theme inline {
+  /* Fonts */
   --font-heading: var(--font-sans);
   --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  /* ERPify semantic color aliases */
+  --color-bg: var(--erpify-bg);
+  --color-bg-muted: var(--erpify-bg-muted);
+  --color-bg-subtle: var(--erpify-bg-subtle);
+  --color-bg-elevated: var(--erpify-bg-elevated);
+
+  --color-text: var(--erpify-text);
+  --color-text-muted: var(--erpify-text-muted);
+  --color-text-subtle: var(--erpify-text-subtle);
+  --color-text-faint: var(--erpify-text-faint);
+  --color-text-on-accent: var(--erpify-text-on-accent);
+
+  --color-border-default: var(--erpify-border);
+  --color-border-subtle: var(--erpify-border-subtle);
+  --color-border-strong: var(--erpify-border-strong);
+  --color-line-tint: var(--erpify-line-tint);
+  --color-focus-ring: var(--erpify-focus-ring);
+
+  --color-brand: var(--erpify-brand);
+  --color-accent-default: var(--erpify-accent);
+  --color-accent-hover: var(--erpify-accent-hover);
+  --color-accent-active: var(--erpify-accent-active);
+  --color-security: var(--erpify-security);
+
+  --color-success: var(--erpify-success);
+  --color-success-strong: var(--erpify-success-strong);
+  --color-warning: var(--erpify-warning);
+  --color-danger: var(--erpify-danger);
+
+  --color-overlay: var(--erpify-overlay);
+
+  /* Shadcn-named tokens — preserved so primitives work unchanged */
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -38,82 +88,227 @@
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* Type scale (Linear-derived sizing; Geist 400 / 500 / 600 weights) */
+  --text-2xs: 0.6875rem; /* 11px */
+  --text-xs: 0.75rem; /* 12px */
+  --text-sm: 0.8125rem; /* 13px */
+  --text-base: 0.875rem; /* 14px — compact-default body */
+  --text-md: 1rem; /* 16px — comfortable opt-in body */
+  --text-lg: 1.125rem; /* 18px */
+  --text-xl: 1.25rem; /* 20px */
+  --text-2xl: 1.5rem; /* 24px */
+  --text-3xl: 1.875rem; /* 30px */
+  --text-4xl: 3rem; /* 48px — display */
+  --text-5xl: 4rem; /* 64px — display large */
+  --text-6xl: 4.5rem; /* 72px — display XL */
+
+  /* Radii */
+  --radius-micro: 0.125rem; /* 2px */
+  --radius-sm: 0.25rem; /* 4px */
+  --radius-md: 0.375rem; /* 6px — default control radius */
+  --radius-lg: 0.5rem; /* 8px */
+  --radius-xl: 0.75rem; /* 12px */
+  --radius-2xl: 1.375rem; /* 22px */
+  --radius-3xl: 1.5rem; /* 24px */
+
+  /* Elevation (shadow scale) — values flip per mode below */
+  --shadow-elevation-0: none;
+  --shadow-elevation-1: var(--erpify-shadow-1);
+  --shadow-elevation-2: var(--erpify-shadow-2);
+  --shadow-elevation-3: var(--erpify-shadow-3);
+  --shadow-elevation-4: var(--erpify-shadow-4);
+  --shadow-elevation-5: var(--erpify-shadow-5);
+  --shadow-elevation-inset: var(--erpify-shadow-inset);
 }
 
+/* ============================================================
+ * Light mode — canonical
+ * ============================================================ */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* Surface ramp */
+  --erpify-bg: #f7f8f8;
+  --erpify-bg-muted: #f3f4f5;
+  --erpify-bg-subtle: #e9eaec;
+  --erpify-bg-elevated: #ffffff;
+
+  /* Text ramp */
+  --erpify-text: #08090a;
+  --erpify-text-muted: #62666d;
+  --erpify-text-subtle: #8a8f98;
+  --erpify-text-faint: #9ea2a8;
+  --erpify-text-on-accent: #ffffff;
+
+  /* Borders */
+  --erpify-border-subtle: #eef0f2;
+  --erpify-border: #dcdfe3;
+  --erpify-border-strong: #bfc3ca;
+  --erpify-line-tint: #f3f4f5;
+
+  /* Brand and accent (same in both modes; adjusted-state shifts slightly) */
+  --erpify-brand: #5e6ad2;
+  --erpify-accent: #7170ff;
+  --erpify-accent-hover: #828fff;
+  --erpify-accent-active: #5052c4;
+  --erpify-security: #7a7fad;
+  --erpify-focus-ring: #7170ff;
+
+  /* Semantic signals */
+  --erpify-success: #10b981;
+  --erpify-success-strong: #27a644;
+  --erpify-warning: #d97706;
+  --erpify-danger: #dc2626;
+
+  /* Overlay */
+  --erpify-overlay: rgba(8, 9, 10, 0.45);
+
+  /* Elevation — light mode uses sRGB neutrals + faint drop shadows */
+  --erpify-shadow-1: 0 1px 2px rgba(8, 9, 10, 0.06);
+  --erpify-shadow-2: 0 2px 4px -1px rgba(8, 9, 10, 0.08);
+  --erpify-shadow-3: 0 4px 8px -2px rgba(8, 9, 10, 0.08);
+  --erpify-shadow-4: 0 8px 16px -4px rgba(8, 9, 10, 0.1);
+  --erpify-shadow-5: 0 16px 32px -8px rgba(8, 9, 10, 0.12);
+  --erpify-shadow-inset: inset 0 1px 2px rgba(8, 9, 10, 0.04);
+
+  /* Shadcn-named aliases mapped to ERPify tokens — light */
+  --background: var(--erpify-bg);
+  --foreground: var(--erpify-text);
+  --card: var(--erpify-bg-elevated);
+  --card-foreground: var(--erpify-text);
+  --popover: var(--erpify-bg-elevated);
+  --popover-foreground: var(--erpify-text);
+  --primary: var(--erpify-brand);
+  --primary-foreground: var(--erpify-text-on-accent);
+  --secondary: var(--erpify-bg-muted);
+  --secondary-foreground: var(--erpify-text);
+  --muted: var(--erpify-bg-muted);
+  --muted-foreground: var(--erpify-text-muted);
+  --accent: var(--erpify-bg-subtle);
+  --accent-foreground: var(--erpify-text);
+  --destructive: var(--erpify-danger);
+  --border: var(--erpify-border);
+  --input: var(--erpify-border);
+  --ring: var(--erpify-focus-ring);
+
+  /*
+   * Chart palette: deferred. v1 keeps a neutral ramp consistent with
+   * "one-accent" restraint. Categorical chart polish is not in v1 scope
+   * — see DESIGN.md "Out of scope (v1)".
+   */
+  --chart-1: #bfc3ca;
+  --chart-2: #8a8f98;
+  --chart-3: #5e6ad2;
+  --chart-4: #62666d;
+  --chart-5: #28282c;
+
+  --radius: 0.375rem;
+
+  --sidebar: var(--erpify-bg-muted);
+  --sidebar-foreground: var(--erpify-text);
+  --sidebar-primary: var(--erpify-brand);
+  --sidebar-primary-foreground: var(--erpify-text-on-accent);
+  --sidebar-accent: var(--erpify-bg-subtle);
+  --sidebar-accent-foreground: var(--erpify-text);
+  --sidebar-border: var(--erpify-border);
+  --sidebar-ring: var(--erpify-focus-ring);
 }
 
+/* ============================================================
+ * Dark mode — Linear-similar
+ * ============================================================ */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /* Surface ramp — Linear hex values */
+  --erpify-bg: #08090a; /* Marketing Black */
+  --erpify-bg-muted: #0f1011; /* Panel Dark */
+  --erpify-bg-subtle: #191a1b; /* Level 3 Surface */
+  --erpify-bg-elevated: #28282c; /* Secondary Surface */
+
+  /* Text ramp */
+  --erpify-text: #f7f8f8;
+  --erpify-text-muted: #d0d6e0;
+  --erpify-text-subtle: #8a8f98;
+  --erpify-text-faint: #62666d;
+  --erpify-text-on-accent: #ffffff;
+
+  /* Borders — semi-transparent white per Linear treatment */
+  --erpify-border-subtle: rgba(255, 255, 255, 0.05);
+  --erpify-border: rgba(255, 255, 255, 0.08);
+  --erpify-border-strong: #23252a;
+  --erpify-line-tint: #141516;
+
+  /* Brand / accent — same as light, with hover/active inverted for dark */
+  --erpify-brand: #5e6ad2;
+  --erpify-accent: #7170ff;
+  --erpify-accent-hover: #828fff;
+  --erpify-accent-active: #5052c4;
+  --erpify-security: #7a7fad;
+  --erpify-focus-ring: #7170ff;
+
+  /* Semantic signals — slightly brighter danger for dark legibility */
+  --erpify-success: #10b981;
+  --erpify-success-strong: #27a644;
+  --erpify-warning: #f59e0b;
+  --erpify-danger: #e5484d;
+
+  /* Overlay */
+  --erpify-overlay: rgba(0, 0, 0, 0.85);
+
+  /* Elevation — dark mode uses luminance stepping; shadows reserved for floating */
+  --erpify-shadow-1: 0 1px 0 rgba(0, 0, 0, 0.03);
+  --erpify-shadow-2: 0 0 0 1px rgba(0, 0, 0, 0.2);
+  --erpify-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.4);
+  --erpify-shadow-4:
+    0 8px 2px rgba(0, 0, 0, 0), 0 5px 2px rgba(0, 0, 0, 0.01), 0 3px 2px rgba(0, 0, 0, 0.04),
+    0 1px 1px rgba(0, 0, 0, 0.07), 0 0 1px rgba(0, 0, 0, 0.08);
+  --erpify-shadow-5: 0 0 0 1px rgba(0, 0, 0, 0.2), 0 16px 32px -8px rgba(0, 0, 0, 0.55);
+  --erpify-shadow-inset: inset 0 0 12px 0 rgba(0, 0, 0, 0.2);
+
+  /* Shadcn-named aliases — dark */
+  --background: var(--erpify-bg);
+  --foreground: var(--erpify-text);
+  --card: var(--erpify-bg-elevated);
+  --card-foreground: var(--erpify-text);
+  --popover: var(--erpify-bg-elevated);
+  --popover-foreground: var(--erpify-text);
+  --primary: var(--erpify-brand);
+  --primary-foreground: var(--erpify-text-on-accent);
+  --secondary: var(--erpify-bg-muted);
+  --secondary-foreground: var(--erpify-text);
+  --muted: var(--erpify-bg-muted);
+  --muted-foreground: var(--erpify-text-muted);
+  --accent: var(--erpify-bg-subtle);
+  --accent-foreground: var(--erpify-text);
+  --destructive: var(--erpify-danger);
+  --border: var(--erpify-border);
+  --input: var(--erpify-border);
+  --ring: var(--erpify-focus-ring);
+
+  --chart-1: #23252a;
+  --chart-2: #62666d;
+  --chart-3: #7170ff;
+  --chart-4: #d0d6e0;
+  --chart-5: #f7f8f8;
+
+  --sidebar: var(--erpify-bg-muted);
+  --sidebar-foreground: var(--erpify-text);
+  --sidebar-primary: var(--erpify-brand);
+  --sidebar-primary-foreground: var(--erpify-text-on-accent);
+  --sidebar-accent: var(--erpify-bg-subtle);
+  --sidebar-accent-foreground: var(--erpify-text);
+  --sidebar-border: var(--erpify-border);
+  --sidebar-ring: var(--erpify-focus-ring);
+}
+
+/* prefers-reduced-motion: collapse motion at the root */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 @layer base {
@@ -122,8 +317,22 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-size: var(--text-base);
+    line-height: 1.4;
   }
   html {
     @apply font-sans;
+  }
+  /* Tabular numerics on table cells (ERPify density principle) */
+  td,
+  th {
+    font-variant-numeric: tabular-nums;
+  }
+  /* Mono fallback wiring */
+  code,
+  kbd,
+  pre,
+  samp {
+    font-family: var(--font-mono);
   }
 }

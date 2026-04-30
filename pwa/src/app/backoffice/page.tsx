@@ -10,34 +10,40 @@ export default function BackOfficeDashboard() {
       name: "Active Projects",
       value: "24",
       icon: Building2,
-      color: "text-blue-600",
-      bg: "bg-blue-50",
+      color: "text-primary",
+      bg: "bg-primary/10",
     },
     {
       name: "Total Workforce",
       value: "156",
       icon: Users,
-      color: "text-emerald-600",
-      bg: "bg-emerald-50",
+      color: "text-success",
+      bg: "bg-success/10",
     },
     {
       name: "Revenue Growth",
       value: "+12.5%",
       icon: TrendingUp,
-      color: "text-amber-600",
-      bg: "bg-amber-50",
+      color: "text-warning",
+      bg: "bg-warning/10",
     },
-    { name: "Pending Tasks", value: "48", icon: Clock, color: "text-rose-600", bg: "bg-rose-50" },
+    {
+      name: "Pending Tasks",
+      value: "48",
+      icon: Clock,
+      color: "text-destructive",
+      bg: "bg-destructive/10",
+    },
   ];
 
   return (
     <div className="dashboard space-y-10">
       <header className="dashboard__header flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="dashboard__header-info">
-          <h1 className="dashboard__title text-3xl font-extrabold text-slate-900 tracking-tight">
+          <h1 className="dashboard__title text-foreground text-2xl font-semibold tracking-tight">
             Dashboard
           </h1>
-          <p className="dashboard__subtitle text-slate-500 font-medium mt-1">
+          <p className="dashboard__subtitle text-muted-foreground mt-1 text-sm">
             Welcome back, Admin. Here&apos;s what&apos;s happening today.
           </p>
         </div>

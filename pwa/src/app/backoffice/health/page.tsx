@@ -1,84 +1,93 @@
 "use client";
 
 import { useState } from "react";
+import { Activity, ShieldCheck } from "lucide-react";
 import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
 import { CheckHealth } from "@/context/backoffice/health/application/CheckHealth";
-import { motion } from "motion/react";
-import { Activity, ShieldCheck } from "lucide-react";
-import { Button } from "@/context/shared/infrastructure/ui/components/atoms/Button";
+import type { HealthCheck } from "@/context/backoffice/health/domain/HealthCheck";
+import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
+import { AsyncBoundary } from "@/components/erpify";
+import { Button } from "@/components/ui/button";
+
+type AsyncState = "idle" | "loading" | "ready" | "error";
 
 export default function HealthPage() {
-  const [healthStatus, setHealthStatus] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [state, setState] = useState<AsyncState>("idle");
+  const [data, setData] = useState<HealthCheck | null>(null);
+  const [problem, setProblem] = useState<ProblemDetails | null>(null);
 
-  const checkHealth = async () => {
-    setLoading(true);
+  async function runCheck(): Promise<void> {
+    setState("loading");
+    setProblem(null);
     try {
       const useCase = container.get<CheckHealth>("BackOfficeCheckHealth");
       const result = await useCase.run();
-      setHealthStatus(
-        `Status: ${result.status} | Service: ${result.service} | Date: ${new Date(result.datetime).toLocaleString()}`,
-      );
-    } catch (_error) {
-      setHealthStatus("Error checking health");
-    } finally {
-      setLoading(false);
+      setData(result);
+      setState("ready");
+    } catch (err) {
+      // TODO: When the BackOffice CheckHealth adapter starts returning RFC 9457
+      // envelopes (per the API error-contract PRD), pass the real envelope here
+      // instead of synthesizing one. The synthesized fallback is a temporary
+      // bridge — not a parallel UI error shape.
+      setProblem({
+        type: "health-check-failed",
+        title: "Health check failed",
+        status: 0,
+        detail: err instanceof Error ? err.message : "Unknown error",
+        instance: crypto.randomUUID(),
+        "correlation-id": crypto.randomUUID(),
+      });
+      setState("error");
     }
-  };
+  }
 
   return (
-    <div className="health-page space-y-10">
-      <header className="health-page__header flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="health-page__header-info">
-          <h1 className="health-page__title text-3xl font-extrabold text-slate-900 tracking-tight">
-            System Health
-          </h1>
-          <p className="health-page__subtitle text-slate-500 font-medium mt-1">
+    <div className="health-page space-y-8">
+      <header className="health-page__header flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-foreground text-2xl font-semibold tracking-tight">System Health</h1>
+          <p className="text-muted-foreground mt-1 text-sm">
             Monitor and verify the status of your BackOffice API services.
           </p>
         </div>
       </header>
 
-      <div className="health-page__content bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-8">
-        <div className="health-page__status-card flex flex-col items-center justify-center text-center p-12 bg-slate-50 rounded-2xl border border-slate-100">
-          <div className="bg-blue-100 p-4 rounded-full mb-6">
-            <ShieldCheck className="w-10 h-10 text-blue-600" />
+      <section className="bg-card border-border space-y-6 rounded-lg border p-6">
+        <div className="flex flex-col items-center justify-center gap-4 py-8 text-center">
+          <div className="bg-primary/10 rounded-full p-3">
+            <ShieldCheck className="text-primary size-8" aria-hidden="true" />
           </div>
-          <h2 className="text-xl font-bold text-slate-900 mb-2">API Connectivity</h2>
-          <p className="text-slate-500 max-w-md mb-8">
+          <h2 className="text-foreground text-base font-semibold">API Connectivity</h2>
+          <p className="text-muted-foreground max-w-md text-sm">
             Perform a real-time health check to ensure all backend services are responding
             correctly.
           </p>
-
-          <Button
-            variant="primary"
-            size="lg"
-            onClick={checkHealth}
-            loading={loading}
-            className="health-page__button shadow-lg shadow-blue-200 px-8"
-          >
-            <Activity className={`w-5 h-5 mr-2 ${loading ? "animate-pulse" : ""}`} />
-            {loading ? "Checking API..." : "Run Health Check"}
+          <Button onClick={runCheck} disabled={state === "loading"} size="lg">
+            <Activity
+              className={`size-4 ${state === "loading" ? "animate-pulse" : ""}`}
+              aria-hidden="true"
+            />
+            {state === "loading" ? "Checking API..." : "Run Health Check"}
           </Button>
         </div>
 
-        {healthStatus && (
-          <motion.div
-            data-testid="backoffice-health-status"
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="health-page__result p-6 bg-emerald-50 border border-emerald-100 rounded-2xl text-sm font-mono text-emerald-700 flex items-center gap-4"
-          >
-            <div className="w-3 h-3 bg-emerald-500 rounded-full animate-ping shrink-0" />
-            <div className="flex flex-col gap-1">
-              <span className="font-bold uppercase text-[10px] tracking-widest text-emerald-600">
-                Response Received
-              </span>
-              {healthStatus}
-            </div>
-          </motion.div>
-        )}
-      </div>
+        {state !== "idle" ? (
+          <AsyncBoundary state={state} data={data ?? undefined} error={problem ?? undefined}>
+            {(result) => (
+              <div
+                data-testid="backoffice-health-status"
+                className="bg-success/10 border-success/30 text-foreground flex items-center gap-3 rounded-md border p-4 font-mono text-xs"
+              >
+                <span className="bg-success size-2 shrink-0 rounded-full" aria-hidden="true" />
+                <span>
+                  Status: {result.status} | Service: {result.service} | Date:{" "}
+                  {new Date(result.datetime).toLocaleString()}
+                </span>
+              </div>
+            )}
+          </AsyncBoundary>
+        ) : null}
+      </section>
     </div>
   );
 }
