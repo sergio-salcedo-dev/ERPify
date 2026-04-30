@@ -59,6 +59,9 @@ pnpm-debug.log*
 *.orig
 *.bak
 
+# CodeQL local CLI bundle, database, and SARIF
+.codeql/
+
 # BMad generated artifacts
 /_bmad/
 /.agents/skills/bmad-*/

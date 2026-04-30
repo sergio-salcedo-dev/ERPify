@@ -97,8 +97,7 @@ ERPify/
 │   └── project-requirements.md
 │
 ├── .github/workflows/
-│   ├── ci.yml                      # Lint + test pipeline
-│   └── codeql.yml                  # Static security analysis
+│   └── ci.yml                      # Lint + test pipeline (CodeQL runs locally via `make codeql.run`)
 │
 ├── .cursor/rules/                  # Authoritative coding rules (architecture, security, testing, …)
 ├── _bmad/ _bmad-output/            # BMad module config, outputs
