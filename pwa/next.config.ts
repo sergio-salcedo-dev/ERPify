@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Isolate the e2e webServer's build dir from the dev container's `.next/` (shared via bind mount).
+  ...(process.env.NEXT_DIST_DIR ? { distDir: process.env.NEXT_DIST_DIR } : {}),
   typescript: {
     ignoreBuildErrors: false,
   },

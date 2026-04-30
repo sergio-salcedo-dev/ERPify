@@ -50,7 +50,7 @@ function applyPlaywrightDotenvFiles(): void {
 
 applyPlaywrightDotenvFiles();
 
-/** Port for Playwright-spawned Next dev (unprivileged; `npm run dev` uses :80 for Docker/host parity). */
+/** Port for Playwright-spawned Next dev. Pinned to 3000 to match the API's CORS allowlist. */
 const localWebServerPort = 3000;
 
 /** Docker / CI: https://localhost. Local + webServer: http://127.0.0.1:3000 (see dev:e2e). */
@@ -134,6 +134,9 @@ export default defineConfig({
               process.env.PLAYWRIGHT_SYMFONY_INTERNAL_URL ?? "https://localhost",
             NEXT_PUBLIC_SYMFONY_API_BASE_URL:
               process.env.PLAYWRIGHT_SYMFONY_API_BASE_URL ?? "https://localhost",
+            // Isolate from the Docker pwa container's `.next/` (shared via the bind mount), whose
+            // `.next/dev/lock` would otherwise collide with this host-spawned `next dev`.
+            NEXT_DIST_DIR: process.env.NEXT_DIST_DIR ?? ".next-e2e",
           },
         },
       }
