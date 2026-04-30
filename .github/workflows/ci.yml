@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    # Weekly burn-in for flaky detection — Sundays 02:00 UTC
+    - cron: "0 2 * * 0"
   workflow_dispatch:
 
 permissions:
@@ -105,8 +108,12 @@ jobs:
       - name: Debug
         if: failure()
         run: |
-          docker compose ps
-          docker compose logs
+          echo "=== ps ==="; docker compose ps
+          echo "=== database (last 200 lines) ==="; docker compose logs --tail=200 database || true
+          echo "=== php (last 200 lines) ==="; docker compose logs --tail=200 php || true
+          echo "=== messenger_worker (last 100 lines) ==="; docker compose logs --tail=100 messenger_worker || true
+          echo "=== mailpit (last 50 lines) ==="; docker compose logs --tail=50 mailpit || true
+          echo "=== inspect database ==="; docker inspect "$(docker compose ps -q database)" --format '{{json .State}}' || true
 
       - name: Security check
         uses: symfonycorp/security-checker-action@v5
@@ -159,8 +166,12 @@ jobs:
       - name: Debug
         if: failure()
         run: |
-          docker compose ps
-          docker compose logs
+          echo "=== ps ==="; docker compose ps
+          echo "=== database (last 200 lines) ==="; docker compose logs --tail=200 database || true
+          echo "=== php (last 200 lines) ==="; docker compose logs --tail=200 php || true
+          echo "=== messenger_worker (last 100 lines) ==="; docker compose logs --tail=100 messenger_worker || true
+          echo "=== mailpit (last 50 lines) ==="; docker compose logs --tail=50 mailpit || true
+          echo "=== inspect database ==="; docker inspect "$(docker compose ps -q database)" --format '{{json .State}}' || true
 
   # -------------------------
   # PWA NODE (isolated, fast)
@@ -182,7 +193,7 @@ jobs:
       - run: make pwa.build
 
   # -------------------------
-  # PWA E2E (depends on build)
+  # PWA E2E (sharded — depends on build)
   # -------------------------
   pwa-e2e:
     name: PWA (E2E) [shard ${{ matrix.shard }}/3]
@@ -254,21 +265,27 @@ jobs:
           name: blob-report-${{ matrix.shard }}
           path: pwa/blob-report/
           retention-days: 1
+          if-no-files-found: error
 
       - name: Debug
         if: failure()
         env:
           COMPOSE_PROJECT_NAME: erpify-e2e
         run: |
-          docker compose ps
-          docker compose logs
+          echo "=== ps ==="; docker compose ps
+          echo "=== database (last 200 lines) ==="; docker compose logs --tail=200 database || true
+          echo "=== php (last 200 lines) ==="; docker compose logs --tail=200 php || true
+          echo "=== pwa (last 100 lines) ==="; docker compose logs --tail=100 pwa || true
+          echo "=== messenger_worker (last 100 lines) ==="; docker compose logs --tail=100 messenger_worker || true
+          echo "=== mailpit (last 50 lines) ==="; docker compose logs --tail=50 mailpit || true
+          echo "=== inspect database ==="; docker inspect "$(docker compose ps -q database)" --format '{{json .State}}' || true
 
   # -------------------------
-  # PWA E2E REPORT (merge blob reports on failure)
+  # PWA E2E REPORT (merge blob reports — always)
   # -------------------------
   pwa-e2e-report:
     name: PWA (E2E) Report
-    if: failure()
+    if: always() && needs.pwa-e2e.result != 'skipped'
     needs: [pwa-e2e]
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -291,7 +308,13 @@ jobs:
           merge-multiple: true
 
       - name: Merge into HTML report
-        run: cd pwa && npx playwright merge-reports --reporter html ./all-blob-reports
+        run: |
+          mkdir -p pwa/all-blob-reports
+          if [ -z "$(ls -A pwa/all-blob-reports 2>/dev/null)" ]; then
+            echo "::warning::No blob reports found — upstream E2E shards produced none. Skipping merge."
+            exit 0
+          fi
+          cd pwa && npx playwright merge-reports --reporter html ./all-blob-reports
 
       - name: Upload merged HTML report
         uses: actions/upload-artifact@v7
@@ -301,7 +324,143 @@ jobs:
           retention-days: 7
 
   # -------------------------
-  # FINAL STATUS (strict gate)
+  # PWA BURN-IN (flaky detection — PRs and weekly schedule)
+  # -------------------------
+  pwa-burn-in:
+    name: PWA Burn-In (Flaky Detection)
+    if: github.event_name == 'pull_request' || github.event_name == 'schedule'
+    needs: [pwa-node, api-build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/full-setup/
+
+      - name: Build images
+        uses: docker/bake-action@v7
+        with:
+          source: "."
+          pull: true
+          load: true
+          files: |
+            compose.yaml
+            compose.dev.yaml
+          set: |
+            php.cache-from=type=gha,scope=php-${{ github.ref_name }}
+            php.cache-from=type=gha,scope=php-main
+            pwa.cache-from=type=gha,scope=pwa-${{ github.ref_name }}
+            pwa.cache-from=type=gha,scope=pwa-main
+
+      - name: Install PWA dependencies (host)
+        run: make pwa.install
+
+      - name: Start full stack
+        env:
+          COMPOSE_PROJECT_NAME: erpify-burnin
+        run: docker compose -f compose.yaml -f compose.dev.yaml up --wait --no-build
+
+      - name: Get Playwright version
+        id: playwright-version
+        run: echo "version=$(node -p "require('./pwa/package-lock.json').packages['pwa/node_modules/@playwright/test'].version")" >> $GITHUB_OUTPUT
+
+      - name: Cache Playwright Browsers
+        uses: actions/cache@v5
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
+      - name: Install Playwright Browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: cd pwa && npx playwright install --with-deps chromium
+
+      # Use Playwright's --repeat-each to detect flakiness in a single run
+      # (avoids per-iteration stack-bring-up cost). Tune REPEATS to balance
+      # signal vs. CI minutes — schedule run uses a higher value.
+      - name: Burn-in (PR — repeat-each=3)
+        if: github.event_name == 'pull_request'
+        env:
+          CI: true
+          PLAYWRIGHT_BASE_URL: https://localhost
+        run: make pwa.test.e2e c='--repeat-each=3'
+
+      - name: Burn-in (schedule — repeat-each=10)
+        if: github.event_name == 'schedule'
+        env:
+          CI: true
+          PLAYWRIGHT_BASE_URL: https://localhost
+        run: make pwa.test.e2e c='--repeat-each=10'
+
+      - name: Upload burn-in artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: burn-in-report--attempt-${{ github.run_attempt }}
+          path: |
+            pwa/blob-report/
+            pwa/playwright-report/
+            pwa/test-results/
+          retention-days: 7
+
+      - name: Debug
+        if: failure()
+        env:
+          COMPOSE_PROJECT_NAME: erpify-burnin
+        run: |
+          echo "=== ps ==="; docker compose ps
+          echo "=== database (last 200 lines) ==="; docker compose logs --tail=200 database || true
+          echo "=== php (last 200 lines) ==="; docker compose logs --tail=200 php || true
+          echo "=== pwa (last 100 lines) ==="; docker compose logs --tail=100 pwa || true
+          echo "=== messenger_worker (last 100 lines) ==="; docker compose logs --tail=100 messenger_worker || true
+          echo "=== mailpit (last 50 lines) ==="; docker compose logs --tail=50 mailpit || true
+          echo "=== inspect database ==="; docker inspect "$(docker compose ps -q database)" --format '{{json .State}}' || true
+
+  # -------------------------
+  # CI SUMMARY (aggregate — always renders)
+  # -------------------------
+  ci-summary:
+    name: CI Summary
+    if: always()
+    needs: [api-build, api-test, api-behat, pwa-node, pwa-e2e, pwa-burn-in]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - name: Render summary
+        env:
+          R_API_BUILD: ${{ needs.api-build.result }}
+          R_API_TEST: ${{ needs.api-test.result }}
+          R_API_BEHAT: ${{ needs.api-behat.result }}
+          R_PWA_NODE: ${{ needs.pwa-node.result }}
+          R_PWA_E2E: ${{ needs.pwa-e2e.result }}
+          R_PWA_BURNIN: ${{ needs.pwa-burn-in.result }}
+        run: |
+          {
+            echo "## CI Execution Summary"
+            echo ""
+            echo "| Job | Result |"
+            echo "|---|---|"
+            echo "| API Build       | $R_API_BUILD |"
+            echo "| API Tests       | $R_API_TEST |"
+            echo "| API Behat       | $R_API_BEHAT |"
+            echo "| PWA (Node)      | $R_PWA_NODE |"
+            echo "| PWA (E2E)       | $R_PWA_E2E |"
+            echo "| PWA (Burn-In)   | $R_PWA_BURNIN |"
+            echo ""
+            if [ "$R_PWA_BURNIN" = "failure" ]; then
+              echo "> ⚠️ **Flaky tests detected** — review the burn-in artifact."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # -------------------------
+  # FINAL STATUS (strict gate — burn-in deliberately excluded)
   # -------------------------
   ci-success:
     name: CI Status
