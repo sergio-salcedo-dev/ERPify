@@ -58,7 +58,7 @@ Plus SMTP credentials and any `NEXT_PUBLIC_SYMFONY_API_BASE_URL` override needed
 
 - GitHub Actions workflows under `.github/workflows/`:
   - `ci.yml` — lint + test pipeline (runs `make ci.lint` + `make ci.test`).
-  - `codeql.yml` — static security analysis.
+- Static security analysis (CodeQL): run locally with `make codeql.run` — the GitHub workflow was removed because Code Scanning on private repos requires GitHub Advanced Security.
 - SuperLinter (container-based): `make ci.superlint` (requires `GITHUB_TOKEN`).
 - Dependabot tracks Docker digests at `/api` and `/pwa` and composer/npm dependency updates.
 
