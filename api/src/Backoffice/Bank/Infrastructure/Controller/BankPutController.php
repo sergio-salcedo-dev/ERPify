@@ -33,18 +33,8 @@ final readonly class BankPutController
     ) {
     }
 
-    public function __invoke(string $id, Request $request): Response
+    public function __invoke(Uuid $id, Request $request): Response
     {
-        $value = 'null' === $id ? '' : $id;
-        $idViolations = $this->validator->validate($value, [new Assert\NotBlank(), new Assert\Uuid()]);
-
-        if (\count($idViolations) > 0) {
-            return new JsonResponse(
-                JsonApiErrorBuilder::fromViolations($idViolations, 'uuid'),
-                Response::HTTP_BAD_REQUEST,
-            );
-        }
-
         try {
             $input = $this->serializer->deserialize($request->getContent(), BankInput::class, 'json');
         } catch (NotEncodableValueException) {
@@ -63,7 +53,7 @@ final readonly class BankPutController
         }
 
         try {
-            $bank = $this->bankUpdater->update(Uuid::fromString($id), $input->name, $input->shortName);
+            $bank = $this->bankUpdater->update($id, $input->name, $input->shortName);
         } catch (BankNotFoundException $bankNotFoundException) {
             return new JsonResponse(
                 JsonApiErrorBuilder::envelope([

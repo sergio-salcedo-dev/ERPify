@@ -38,14 +38,14 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
 
       - uses: ./.github/actions/docker-setup
 
       - name: Build images
-        uses: docker/bake-action@v7
+        uses: docker/bake-action@v6
         with:
           source: "."
           pull: true
@@ -72,14 +72,14 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
 
       - uses: ./.github/actions/docker-setup
 
       - name: Build images
-        uses: docker/bake-action@v7
+        uses: docker/bake-action@v6
         with:
           source: "."
           pull: true
@@ -92,9 +92,6 @@ jobs:
             php.cache-from=type=gha,scope=php-main
             pwa.cache-from=type=gha,scope=pwa-${{ github.ref_name }}
             pwa.cache-from=type=gha,scope=pwa-main
-
-      - name: Install PWA dependencies (host)
-        run: make pwa.install
 
       - name: Start API stack
         run: docker compose -f compose.yaml -f compose.dev.yaml up --wait --no-build
@@ -133,14 +130,14 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
 
       - uses: ./.github/actions/docker-setup
 
       - name: Build images
-        uses: docker/bake-action@v7
+        uses: docker/bake-action@v6
         with:
           source: "."
           pull: true
@@ -153,9 +150,6 @@ jobs:
             php.cache-from=type=gha,scope=php-main
             pwa.cache-from=type=gha,scope=pwa-${{ github.ref_name }}
             pwa.cache-from=type=gha,scope=pwa-main
-
-      - name: Install PWA dependencies (host)
-        run: make pwa.install
 
       - name: Start API stack
         run: docker compose -f compose.yaml -f compose.dev.yaml up --wait --no-build
@@ -187,7 +181,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
 
@@ -212,14 +206,14 @@ jobs:
         shard: [1, 2, 3]
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
 
       - uses: ./.github/actions/full-setup/
 
       - name: Build images
-        uses: docker/bake-action@v7
+        uses: docker/bake-action@v6
         with:
           source: "."
           pull: true
@@ -246,7 +240,7 @@ jobs:
         run: echo "version=$(node -p "require('./pwa/package-lock.json').packages['pwa/node_modules/@playwright/test'].version")" >> $GITHUB_OUTPUT
 
       - name: Cache Playwright Browsers
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
@@ -266,7 +260,7 @@ jobs:
 
       - name: Upload blob report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: blob-report-${{ matrix.shard }}
           path: pwa/blob-report/
@@ -297,7 +291,7 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
 
@@ -307,7 +301,7 @@ jobs:
         run: make pwa.install
 
       - name: Download blob reports
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           path: pwa/all-blob-reports
           pattern: blob-report-*
@@ -323,7 +317,7 @@ jobs:
           cd pwa && npx playwright merge-reports --reporter html ./all-blob-reports
 
       - name: Upload merged HTML report
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: playwright-report--attempt-${{ github.run_attempt }}
           path: pwa/playwright-report/
@@ -341,14 +335,14 @@ jobs:
     continue-on-error: true
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
 
       - uses: ./.github/actions/full-setup/
 
       - name: Build images
-        uses: docker/bake-action@v7
+        uses: docker/bake-action@v6
         with:
           source: "."
           pull: true
@@ -375,7 +369,7 @@ jobs:
         run: echo "version=$(node -p "require('./pwa/package-lock.json').packages['pwa/node_modules/@playwright/test'].version")" >> $GITHUB_OUTPUT
 
       - name: Cache Playwright Browsers
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
@@ -406,7 +400,7 @@ jobs:
 
       - name: Upload burn-in artifacts
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: burn-in-report--attempt-${{ github.run_attempt }}
           path: |
