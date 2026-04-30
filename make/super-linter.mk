@@ -12,7 +12,7 @@ SUPERLINTER_SLIM_IMAGE ?= ghcr.io/super-linter/super-linter:slim-latest
 
 SUPERLINTER_IMAGE ?= ghcr.io/super-linter/super-linter:latest
 SUPERLINTER_VALIDATE_ALL_CODEBASE ?= true
-SUPERLINTER_EXCLUDES := .*vendor/.*|.*node_modules/.*|.*\.next/.*|.*out/.*|\.git/.*|.*dist/.*|.*build/.*
+SUPERLINTER_EXCLUDES := .*vendor/.*|.*node_modules/.*|.*\.next/.*|.*out/.*|\.git/.*|.*dist/.*|.*build/.*|.*_bmad-output/.*
 
 lint.super.run: ## Run SuperLinter on entire codebase via Docker (all linters enabled). Pass GITHUB_TOKEN=xxx
 	docker run --rm \
