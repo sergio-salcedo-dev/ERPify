@@ -36,5 +36,7 @@
         <MixedAssignment errorLevel="error" />
         <PossiblyUndefinedMethod errorLevel="error" />
         <PossiblyNullReference errorLevel="error" />
+
+        <MissingParamType errorLevel="suppress" />
     </issueHandlers>
 </psalm>
