@@ -176,7 +176,6 @@ Reserved for CI-tuned variants of domain targets:
 - `ci` — full pipeline (`ci.lint` + `ci.test`)
 - `ci.lint`, `ci.test` — aggregate linters / tests
 - `ci.api`, `ci.pwa` — side-specific aggregates
-- `ci.php.lint` — CI-fast PHP lint (skips PHPStan)
 
 Targets in this namespace do not have dev-facing variants. If devs want CI behavior, they run `ci.*` directly.
 

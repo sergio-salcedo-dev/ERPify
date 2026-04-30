@@ -2,9 +2,30 @@ Erpify\Backoffice\Bank\Domain\Entity\Bank:
     ing:
         __factory:
             Erpify\Backoffice\Bank\Domain\Entity\Bank::create:
-                - '<(Symfony\Component\Uid\Uuid::v4())>'
+                - '<(new \Symfony\Component\Uid\Uuid("11111111-1111-7000-8000-000000000001"))>'
                 - 'ING'
                 - 'ING'
-        # __construct:
-        #     name: 'ING'
-        #     shortName: 'ING'
+    santander:
+        __factory:
+            Erpify\Backoffice\Bank\Domain\Entity\Bank::create:
+                - '<(new \Symfony\Component\Uid\Uuid("11111111-1111-7000-8000-000000000002"))>'
+                - 'Santander'
+                - 'SAN'
+    bbva:
+        __factory:
+            Erpify\Backoffice\Bank\Domain\Entity\Bank::create:
+                - '<(new \Symfony\Component\Uid\Uuid("11111111-1111-7000-8000-000000000003"))>'
+                - 'BBVA'
+                - 'BBVA'
+    caixa:
+        __factory:
+            Erpify\Backoffice\Bank\Domain\Entity\Bank::create:
+                - '<(new \Symfony\Component\Uid\Uuid("11111111-1111-7000-8000-000000000004"))>'
+                - 'CaixaBank'
+                - 'CXB'
+    sabadell:
+        __factory:
+            Erpify\Backoffice\Bank\Domain\Entity\Bank::create:
+                - '<(new \Symfony\Component\Uid\Uuid("11111111-1111-7000-8000-000000000005"))>'
+                - 'Banco Sabadell'
+                - 'SAB'

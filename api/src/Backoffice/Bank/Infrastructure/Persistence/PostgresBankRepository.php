@@ -4,59 +4,77 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\Bank\Infrastructure\Persistence;
 
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
+use Erpify\Backoffice\Bank\Domain\Search\BankSearchCriteria;
+use Erpify\Shared\Domain\Search\PaginatedResult;
+use Erpify\Shared\Domain\Search\SearchCriteria;
+use Erpify\Shared\Infrastructure\Persistence\AbstractSearchRepository;
+use Erpify\Shared\Infrastructure\Persistence\QueryBuilderWithOptions;
+use InvalidArgumentException;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\Uid\Uuid;
 
 /**
- * @extends \Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository<\Erpify\Backoffice\Bank\Domain\Entity\Bank>
+ * @extends AbstractSearchRepository<Bank>
  */
 #[AsAlias(BankRepository::class)]
-final class PostgresBankRepository extends ServiceEntityRepository implements BankRepository
+final class PostgresBankRepository extends AbstractSearchRepository implements BankRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
-        parent::__construct($registry, Bank::class);
-    }
-
-    #[Override]
     public function save(Bank $bank): void
     {
-        $this->getEntityManager()->persist($bank);
-        $this->getEntityManager()->flush();
+        $this->persistAndFlush($bank);
     }
 
-    #[Override]
     public function remove(Bank $bank): void
     {
-        $this->getEntityManager()->remove($bank);
-        $this->getEntityManager()->flush();
+        $this->removeAndFlush($bank);
     }
 
-    #[Override]
     public function findById(Uuid $uuid): ?Bank
     {
-        return $this->find($uuid);
+        return $this->find($uuid->toRfc4122());
     }
 
-    /** @return Bank[] */
     #[Override]
-    public function search(): array
+    public function search(SearchCriteria $criteria): PaginatedResult
     {
-        return $this->findAll();
+        return $this->getPaginatedResults($criteria);
+    }
+
+    #[Override]
+    public function getSearchQueryBuilder(SearchCriteria $criteria): QueryBuilderWithOptions
+    {
+        if (!$criteria instanceof BankSearchCriteria) {
+            throw new InvalidArgumentException('Invalid criteria type. Expected BankSearchCriteria, got ' . $criteria::class . ' instead.');
+        }
+
+        $queryBuilderWithOptions = $this->createQueryBuilder('b');
+
+        $this->addWhereIdsIn($queryBuilderWithOptions, alias: 'b', ids: $criteria->ids ?? []);
+
+        $this->addWhereInCaseInsensitive($queryBuilderWithOptions, alias: 'b', field: 'name', values: $criteria->names ?? []);
+
+        $this->addOrderByFromQueryParams(
+            $queryBuilderWithOptions,
+            alias: 'b',
+            orderByField: null,
+            direction: null,
+        );
+
+        $this->addLimit($queryBuilderWithOptions, $criteria->limit);
+
+        return $queryBuilderWithOptions;
     }
 
     #[Override]
     public function countBanksWithStoredObjectContentHash(string $contentHash): int
     {
         return (int) $this->createQueryBuilder('b')
-            ->select('COUNT(b.uuid)')
-            ->where('b.storedObjectContentHash = :h')
-            ->setParameter('h', $contentHash)
+            ->select('COUNT(b.id)')
+            ->where('b.storedObjectContentHash = :contentHash')
+            ->setParameter('contentHash', $contentHash)
             ->getQuery()
             ->getSingleScalarResult()
         ;
@@ -75,5 +93,11 @@ final class PostgresBankRepository extends ServiceEntityRepository implements Ba
         ;
 
         return $bank?->getStoredObjectMimeType();
+    }
+
+    #[Override]
+    protected static function getEntityClassName(): string
+    {
+        return Bank::class;
     }
 }

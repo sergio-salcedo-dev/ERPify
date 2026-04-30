@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\Bank\Application;
 
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
-use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
+use Erpify\Backoffice\Bank\Infrastructure\Persistence\PostgresBankRepository;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Uid\Uuid;
 
 final readonly class BankUpdater
 {
     public function __construct(
-        private BankRepository $bankRepository,
+        private PostgresBankRepository $postgresBankRepository,
         private BankFinder $bankFinder,
         private MessageBusInterface $messageBus,
     ) {
@@ -24,7 +24,7 @@ final readonly class BankUpdater
 
         $bank->rename($name, $shortName);
 
-        $this->bankRepository->save($bank);
+        $this->postgresBankRepository->save($bank);
 
         foreach ($bank->pullDomainEvents() as $domainEvent) {
             $this->messageBus->dispatch($domainEvent);
