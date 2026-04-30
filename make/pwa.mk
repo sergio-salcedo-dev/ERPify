@@ -36,6 +36,8 @@ pwa.build: ## Next production build
 
 pwa.lint: pwa.lint.eslint pwa.lint.prettier ## Full PWA lint (ESLint + Prettier check)
 
+pwa.lint.fix: pwa.lint.eslint.fix pwa.format.prettier.fix ## Full PWA lint (ESLint + Prettier check)
+
 pwa.lint.eslint: ## ESLint (check only); pass c='…' for extra args
 	@$(eval c ?=)
 	@$(call pwa_cmd,npm run lint -- $(c))
@@ -60,7 +62,7 @@ pwa.test.unit: ## Vitest (run once); pass c='…' for extra args (e.g. c='path/t
 pwa.test.unit.watch: ## Vitest watch mode
 	@$(call pwa_cmd,npm run test:watch)
 
-pwa.test.e2e: ## Playwright E2E; CI_SHARD=N CI_TOTAL_SHARDS=M for sharded runs; pass c='…' for extra args
+pwa.test.e2e: pwa.install.if-missing ## Playwright E2E; CI_SHARD=N CI_TOTAL_SHARDS=M for sharded runs; pass c='…' for extra args
 	@$(eval c ?=)
 	@if [ -n "$(CI_SHARD)" ] && [ -n "$(CI_TOTAL_SHARDS)" ]; then \
 		$(call pwa_cmd,npm run e2e -- --shard=$(CI_SHARD)/$(CI_TOTAL_SHARDS) $(c)); \
@@ -78,8 +80,8 @@ pwa.util.extract.testids: ## Extract data-testid attributes
 
 ## —— PWA clean ——
 
-pwa.clean: ## Remove node_modules, package-lock.json, .next (destructive)
-	@$(call pwa_cmd,rm -rf node_modules package-lock.json .next)
+pwa.clean: ## Remove node_modules, package-lock.json, .next, .next-e2e (destructive)
+	@$(call pwa_cmd,rm -rf node_modules package-lock.json .next .next-e2e)
 
 .PHONY: pwa.install pwa.install.if-missing pwa.dev pwa.build \
         pwa.lint pwa.lint.eslint pwa.lint.eslint.fix pwa.lint.prettier pwa.format.prettier.fix \

@@ -5,7 +5,14 @@ import tsPlugin from "@typescript-eslint/eslint-plugin";
 
 const eslintConfig = [
   {
-    ignores: [".next/**", "node_modules/**", "dist/**", "build/**", "next-env.d.ts"],
+    ignores: [
+      ".next/**",
+      ".next-e2e/**",
+      "node_modules/**",
+      "dist/**",
+      "build/**",
+      "next-env.d.ts",
+    ],
   },
   {
     files: ["**/*.ts", "**/*.tsx"],

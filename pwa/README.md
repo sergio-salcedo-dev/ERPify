@@ -21,13 +21,13 @@ Next.js **App Router** app. In the **default Docker stack**, the browser uses **
 
 Prefer the root **`make`** targets — they are the canonical interface and wrap these npm scripts:
 
-| Make target          | npm script               | Description                    |
-| -------------------- | ------------------------ | ------------------------------ |
-| `make pwa.dev`       | `npm run dev`            | Next dev (Turbopack, :80)      |
-| `make pwa.build`     | `npm run build`          | Production build               |
-| `make pwa.test.unit` | `npm run test`           | Vitest (single run)            |
-| `make pwa.test.e2e`  | `npm run e2e`            | Playwright (see below)         |
-| `make pwa.lint`      | `npm run lint` + Prettier | ESLint + Prettier check        |
+| Make target          | npm script                | Description               |
+| -------------------- | ------------------------- | ------------------------- |
+| `make pwa.dev`       | `npm run dev`             | Next dev (Turbopack, :80) |
+| `make pwa.build`     | `npm run build`           | Production build          |
+| `make pwa.test.unit` | `npm run test`            | Vitest (single run)       |
+| `make pwa.test.e2e`  | `npm run e2e`             | Playwright (see below)    |
+| `make pwa.lint`      | `npm run lint` + Prettier | ESLint + Prettier check   |
 
 Pass extra args with **`c='…'`**, e.g. `make pwa.test.unit c='path/to/file.test.ts'`.
 
