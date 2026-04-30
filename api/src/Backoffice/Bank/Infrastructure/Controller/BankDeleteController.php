@@ -26,10 +26,20 @@ final readonly class BankDeleteController
     ) {
     }
 
-    public function __invoke(Uuid $id): Response
+    public function __invoke(string $id): Response
     {
+        $value = 'null' === $id ? '' : $id;
+        $constraintViolationList = $this->validator->validate($value, [new Assert\NotBlank(), new Assert\Uuid()]);
+
+        if (\count($constraintViolationList) > 0) {
+            return new JsonResponse(
+                JsonApiErrorBuilder::fromViolations($constraintViolationList, 'uuid'),
+                Response::HTTP_BAD_REQUEST,
+            );
+        }
+
         try {
-            $this->bankDeleter->delete($id);
+            $this->bankDeleter->delete(Uuid::fromString($id));
         } catch (BankNotFoundException $bankNotFoundException) {
             return new JsonResponse(
                 JsonApiErrorBuilder::envelope([

@@ -26,6 +26,7 @@ env:
   COMPOSE_DOCKER_CLI_BUILD: 1
   FRANKENPHP_WORKER_CONFIG: ""
   FRANKENPHP_SITE_CONFIG: ""
+  COMPOSE_FILE: compose.yaml:compose.dev.yaml
 
 jobs:
 
@@ -94,7 +95,7 @@ jobs:
             pwa.cache-from=type=gha,scope=pwa-main
 
       - name: Start API stack
-        run: docker compose -f compose.yaml -f compose.dev.yaml up --wait --no-build
+        run: docker compose up --wait --no-build
 
       - name: Health check
         run: curl -skSf https://localhost/api/v1/health
@@ -152,7 +153,7 @@ jobs:
             pwa.cache-from=type=gha,scope=pwa-main
 
       - name: Start API stack
-        run: docker compose -f compose.yaml -f compose.dev.yaml up --wait --no-build
+        run: docker compose up --wait --no-build
 
       - name: Health check
         run: curl -skSf https://localhost/api/v1/health
@@ -233,7 +234,7 @@ jobs:
       - name: Start full stack
         env:
           COMPOSE_PROJECT_NAME: erpify-e2e
-        run: docker compose -f compose.yaml -f compose.dev.yaml up --wait --no-build
+        run: docker compose up --wait --no-build
 
       - name: Get Playwright version
         id: playwright-version
@@ -362,7 +363,7 @@ jobs:
       - name: Start full stack
         env:
           COMPOSE_PROJECT_NAME: erpify-burnin
-        run: docker compose -f compose.yaml -f compose.dev.yaml up --wait --no-build
+        run: docker compose up --wait --no-build
 
       - name: Get Playwright version
         id: playwright-version

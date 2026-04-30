@@ -28,10 +28,20 @@ final readonly class BankGetController
     ) {
     }
 
-    public function __invoke(Uuid $id): Response
+    public function __invoke(string $id): Response
     {
+        $value = 'null' === $id ? '' : $id;
+        $constraintViolationList = $this->validator->validate($value, [new Assert\NotBlank(), new Assert\Uuid()]);
+
+        if (\count($constraintViolationList) > 0) {
+            return new JsonResponse(
+                JsonApiErrorBuilder::fromViolations($constraintViolationList, 'id'),
+                Response::HTTP_BAD_REQUEST,
+            );
+        }
+
         try {
-            $bank = $this->bankFinder->find($id);
+            $bank = $this->bankFinder->find(Uuid::fromString($id));
         } catch (BankNotFoundException $bankNotFoundException) {
             return new JsonResponse(
                 JsonApiErrorBuilder::envelope([
