@@ -93,6 +93,9 @@ jobs:
             pwa.cache-from=type=gha,scope=pwa-${{ github.ref_name }}
             pwa.cache-from=type=gha,scope=pwa-main
 
+      - name: Install PWA dependencies (host)
+        run: make pwa.install
+
       - name: Start API stack
         run: docker compose -f compose.yaml -f compose.dev.yaml up --wait --no-build
 
@@ -150,6 +153,9 @@ jobs:
             php.cache-from=type=gha,scope=php-main
             pwa.cache-from=type=gha,scope=pwa-${{ github.ref_name }}
             pwa.cache-from=type=gha,scope=pwa-main
+
+      - name: Install PWA dependencies (host)
+        run: make pwa.install
 
       - name: Start API stack
         run: docker compose -f compose.yaml -f compose.dev.yaml up --wait --no-build
