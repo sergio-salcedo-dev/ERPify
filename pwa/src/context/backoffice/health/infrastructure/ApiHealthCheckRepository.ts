@@ -9,7 +9,9 @@ export class ApiHealthCheckRepository implements HealthCheckRepository {
   constructor(@inject("HttpClient") private readonly httpClient: HttpClient) {}
 
   async check(): Promise<HealthCheck> {
-    const response = await this.httpClient.get<HealthCheckData>(ApiRoutes.v1.backoffice.health);
-    return HealthCheck.fromPrimitives(response);
+    const response = await this.httpClient.get<{ data: HealthCheckData }>(
+      ApiRoutes.v1.backoffice.health,
+    );
+    return HealthCheck.fromPrimitives(response.data);
   }
 }

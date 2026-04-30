@@ -1,0 +1,28 @@
+import { describe, expect, it } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { StatusBadge } from "@/components/erpify/StatusBadge";
+
+describe("StatusBadge", () => {
+  it("renders with role=status and the supplied label", () => {
+    render(<StatusBadge variant="success" label="Active" />);
+    const badge = screen.getByRole("status");
+    expect(badge).toHaveTextContent("Active");
+  });
+
+  it("renders an aria-hidden icon alongside the label", () => {
+    const { container } = render(<StatusBadge variant="warning" label="Pending" />);
+    const svg = container.querySelector("svg");
+    expect(svg).toBeTruthy();
+    expect(svg).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("never relies on color alone — the label is always rendered", () => {
+    render(<StatusBadge variant="danger" label="Failed" />);
+    expect(screen.getByText("Failed")).toBeInTheDocument();
+  });
+
+  it("supports neutral variant for non-semantic statuses", () => {
+    render(<StatusBadge variant="neutral" label="Draft" />);
+    expect(screen.getByRole("status")).toHaveTextContent("Draft");
+  });
+});

@@ -91,34 +91,34 @@ export default function BackOfficeLayoutClient({ children }: { children: React.R
   };
 
   return (
-    <div className="bo-layout min-h-screen bg-slate-50 flex font-sans">
+    <div className="bo-layout min-h-screen bg-background flex font-sans">
       {/* Sidebar Desktop */}
       <aside
-        className={`bo-layout__sidebar hidden md:flex flex-col bg-white border-r border-slate-200 sticky top-0 h-screen shadow-sm transition-all duration-300 ${
+        className={`bo-layout__sidebar hidden md:flex flex-col bg-card border-r border-border sticky top-0 h-screen shadow-sm transition-all duration-300 ${
           isCompact ? "w-20" : "w-64"
         }`}
       >
-        <div className="bo-layout__sidebar-header flex items-center justify-between border-b border-slate-100 h-16 px-4">
+        <div className="bo-layout__sidebar-header flex items-center justify-between border-b border-border h-16 px-4">
           {!isCompact && (
             <Logo
               href="/backoffice"
               className="bo-layout__logo flex items-center gap-2 hover:opacity-80 transition-opacity"
-              iconClassName="bo-layout__logo-icon text-white w-5 h-5"
-              textClassName="bo-layout__logo-text text-lg font-bold text-slate-900 tracking-tight"
+              iconClassName="bo-layout__logo-icon text-primary-foreground w-5 h-5"
+              textClassName="bo-layout__logo-text text-lg font-bold text-foreground tracking-tight"
             >
-              <div className="bg-blue-600 p-1.5 rounded-lg">
-                <ShieldCheck className="text-white w-4 h-4" />
+              <div className="bg-primary p-1.5 rounded-lg">
+                <ShieldCheck className="text-primary-foreground w-4 h-4" />
               </div>
             </Logo>
           )}
           {isCompact && (
-            <div className="bg-blue-600 p-2 rounded-lg mx-auto">
-              <ShieldCheck className="text-white w-5 h-5" />
+            <div className="bg-primary p-2 rounded-lg mx-auto">
+              <ShieldCheck className="text-primary-foreground w-5 h-5" />
             </div>
           )}
           <button
             onClick={() => setIsCompact(!isCompact)}
-            className={`bo-layout__compact-toggle p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 transition-colors ${
+            className={`bo-layout__compact-toggle p-1.5 rounded-lg hover:bg-accent text-muted-foreground transition-colors ${
               isCompact ? "hidden" : ""
             }`}
           >
@@ -129,7 +129,7 @@ export default function BackOfficeLayoutClient({ children }: { children: React.R
         {isCompact && (
           <button
             onClick={() => setIsCompact(false)}
-            className="bo-layout__expand-toggle mx-auto mt-4 p-2 rounded-lg hover:bg-slate-100 text-slate-400"
+            className="bo-layout__expand-toggle mx-auto mt-4 p-2 rounded-lg hover:bg-accent text-muted-foreground"
           >
             <ChevronRight className="w-5 h-5" />
           </button>
@@ -139,7 +139,7 @@ export default function BackOfficeLayoutClient({ children }: { children: React.R
           {menuGroups.map((group) => (
             <div key={group.label} className="bo-layout__nav-group space-y-1">
               {!isCompact && (
-                <p className="bo-layout__nav-label text-[10px] font-bold text-slate-400 uppercase tracking-widest px-3 mb-2">
+                <p className="bo-layout__nav-label text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-3 mb-2">
                   {group.label}
                 </p>
               )}
@@ -157,9 +157,9 @@ export default function BackOfficeLayoutClient({ children }: { children: React.R
         </nav>
 
         {/* User Profile at bottom */}
-        <div className="bo-layout__footer p-3 border-t border-slate-100">
+        <div className="bo-layout__footer p-3 border-t border-border">
           {!isCompact && (
-            <p className="bo-layout__nav-label text-[10px] font-bold text-slate-400 uppercase tracking-widest px-3 mb-2">
+            <p className="bo-layout__nav-label text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-3 mb-2">
               Account
             </p>
           )}
@@ -173,12 +173,12 @@ export default function BackOfficeLayoutClient({ children }: { children: React.R
       </aside>
 
       {/* Mobile Header */}
-      <div className="bo-layout__header-mobile md:hidden fixed top-0 left-0 right-0 bg-white border-b border-slate-200 h-14 flex items-center justify-between px-4 z-50">
+      <div className="bo-layout__header-mobile md:hidden fixed top-0 left-0 right-0 bg-card border-b border-border h-14 flex items-center justify-between px-4 z-50">
         <Logo
           href="/backoffice"
           className="bo-layout__logo-mobile flex items-center gap-2 hover:opacity-80 transition-opacity"
-          iconClassName="text-blue-600 w-5 h-5"
-          textClassName="text-lg font-bold text-slate-900"
+          iconClassName="text-primary w-5 h-5"
+          textClassName="text-lg font-bold text-foreground"
         />
         <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
           <SheetTrigger
@@ -186,26 +186,26 @@ export default function BackOfficeLayoutClient({ children }: { children: React.R
               <button
                 type="button"
                 aria-label="Open navigation menu"
-                className="bo-layout__toggle-mobile p-2 text-slate-600"
+                className="bo-layout__toggle-mobile p-2 text-foreground"
               >
                 <Menu className="w-6 h-6" aria-hidden />
               </button>
             }
           />
           <SheetContent side="left" className="bo-layout__sidebar-mobile p-0 w-72">
-            <SheetHeader className="bo-layout__sidebar-mobile-header p-4 flex flex-row items-center justify-between border-b border-slate-100">
+            <SheetHeader className="bo-layout__sidebar-mobile-header p-4 flex flex-row items-center justify-between border-b border-border">
               <SheetTitle className="hidden">Navigation Menu</SheetTitle>
               <Logo
                 href="/backoffice"
                 className="bo-layout__logo-mobile flex items-center gap-2 hover:opacity-80 transition-opacity"
-                iconClassName="text-blue-600 w-5 h-5"
-                textClassName="text-lg font-bold text-slate-900"
+                iconClassName="text-primary w-5 h-5"
+                textClassName="text-lg font-bold text-foreground"
               />
             </SheetHeader>
             <nav className="bo-layout__sidebar-mobile-nav p-4 space-y-6 overflow-y-auto h-[calc(100vh-64px)]">
               {menuGroups.map((group) => (
                 <div key={group.label} className="bo-layout__mobile-group space-y-1">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4 mb-2">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-4 mb-2">
                     {group.label}
                   </p>
                   {group.items.map((item) => (
@@ -215,8 +215,8 @@ export default function BackOfficeLayoutClient({ children }: { children: React.R
                         title={item.name}
                         className={`bo-layout__sidebar-mobile-link w-full flex items-center gap-3 p-3 rounded-xl font-bold transition-all ${
                           pathname === item.path
-                            ? "bg-blue-50 text-blue-600"
-                            : "text-slate-500 hover:bg-slate-50"
+                            ? "bg-primary/15 text-primary"
+                            : "text-muted-foreground hover:bg-accent"
                         }`}
                       >
                         <item.icon className="w-5 h-5" />
@@ -231,8 +231,8 @@ export default function BackOfficeLayoutClient({ children }: { children: React.R
                               title={subItem.name}
                               className={`w-full flex items-center gap-2.5 p-2 rounded-lg text-xs font-bold transition-all ${
                                 pathname === subItem.path
-                                  ? "text-blue-600 bg-blue-50/50"
-                                  : "text-slate-500 hover:bg-slate-50"
+                                  ? "text-primary bg-primary/10"
+                                  : "text-muted-foreground hover:bg-accent"
                               }`}
                             >
                               {subItem.icon && <subItem.icon className="w-3.5 h-3.5" />}
@@ -246,8 +246,8 @@ export default function BackOfficeLayoutClient({ children }: { children: React.R
                 </div>
               ))}
 
-              <div className="bo-layout__mobile-group space-y-1 pt-4 border-t border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4 mb-2">
+              <div className="bo-layout__mobile-group space-y-1 pt-4 border-t border-border">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-4 mb-2">
                   Account
                 </p>
                 <div className="bo-layout__sidebar-mobile-item-wrapper">
@@ -256,8 +256,8 @@ export default function BackOfficeLayoutClient({ children }: { children: React.R
                     title={userProfileItem.name}
                     className={`bo-layout__sidebar-mobile-link w-full flex items-center gap-3 p-3 rounded-xl font-bold transition-all ${
                       pathname === userProfileItem.path
-                        ? "bg-blue-50 text-blue-600"
-                        : "text-slate-500 hover:bg-slate-50"
+                        ? "bg-primary/15 text-primary"
+                        : "text-muted-foreground hover:bg-accent"
                     }`}
                   >
                     <userProfileItem.icon className="w-5 h-5" />
@@ -271,8 +271,8 @@ export default function BackOfficeLayoutClient({ children }: { children: React.R
                         title={subItem.name}
                         className={`w-full flex items-center gap-2.5 p-2 rounded-lg text-xs font-bold transition-all ${
                           pathname === subItem.path
-                            ? "text-blue-600 bg-blue-50/50"
-                            : "text-slate-500 hover:bg-slate-50"
+                            ? "text-primary bg-primary/10"
+                            : "text-muted-foreground hover:bg-accent"
                         }`}
                       >
                         {subItem.icon && <subItem.icon className="w-3.5 h-3.5" />}

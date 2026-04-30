@@ -29,18 +29,24 @@ export class MockHttpClient implements HttpClient {
       setTimeout(() => {
         if (url.includes(ApiRoutes.v1.frontoffice.health)) {
           resolve({
-            status: "ok",
-            service: "Front office",
-            datetime: new Date().toISOString(),
+            data: {
+              status: "ok",
+              service: "Front office",
+              datetime: new Date().toISOString(),
+            },
           } as T);
         } else if (url.includes(ApiRoutes.v1.backoffice.health)) {
           resolve({
-            status: "ok",
-            service: "Back office",
-            datetime: new Date().toISOString(),
+            data: {
+              status: "ok",
+              service: "Back office",
+              datetime: new Date().toISOString(),
+            },
           } as T);
         } else {
-          resolve({ status: "ok", service: "Unknown", datetime: new Date().toISOString() } as T);
+          resolve({
+            data: { status: "ok", service: "Unknown", datetime: new Date().toISOString() },
+          } as T);
         }
       }, 500);
     });

@@ -12,8 +12,8 @@ interface LogoProps {
 export const Logo: React.FC<LogoProps & { children?: React.ReactNode }> = ({
   href = "/",
   className = "logo flex items-center gap-2 hover:opacity-80 transition-opacity",
-  iconClassName = "logo__icon text-blue-600 w-6 h-6",
-  textClassName = "logo__text text-xl font-bold text-slate-900",
+  iconClassName = "logo__icon text-primary w-6 h-6",
+  textClassName = "logo__text text-xl font-bold text-foreground",
   children,
 }) => {
   return (

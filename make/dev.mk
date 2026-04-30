@@ -2,9 +2,9 @@
 
 ## —— Dev & prod shortcuts —————————————————————————————————————————————————
 
-dev: docker.up.wait open-local ## Full dev stack with --wait, then open browser
+dev: pwa.install.if-missing docker.up.wait open-local ## Full dev stack with --wait, then open browser
 
-dev.local: api-up-http ## API + DB on :8000 + Next dev on host (needs pwa/.env.local)
+dev.local: pwa.install.if-missing api-up-http ## API + DB on :8000 + Next dev on host (needs pwa/.env.local)
 	$(call pwa_cmd,npm run dev -- --turbo)
 
 api-up-http: ## Bring up API + DB only, HTTP on host :8000 (no PWA container)

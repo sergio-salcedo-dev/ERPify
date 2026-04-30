@@ -1,4 +1,7 @@
+"use client";
+
 import React, { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { LucideIcon, ChevronRight, ChevronDown } from "lucide-react";
 
 interface SubItem {
@@ -27,6 +30,7 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
   isCompact = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const pathname = usePathname();
 
   const hasSubItems = subItems && subItems.length > 0;
 
@@ -57,8 +61,8 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
         title={name}
         className={`sidebar-item w-full flex items-center justify-between p-2.5 rounded-xl font-semibold transition-all group ${
           isActive
-            ? "sidebar-item--active bg-blue-50 text-blue-600 shadow-sm"
-            : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+            ? "sidebar-item--active bg-primary/15 text-primary shadow-sm"
+            : "text-muted-foreground hover:bg-accent hover:text-foreground"
         } ${isCompact ? "justify-center" : ""}`}
       >
         <div
@@ -85,7 +89,7 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
       {hasSubItems && isOpen && !isCompact && (
         <div className="sidebar-item__sub-items ml-9 mt-1 space-y-1">
           {subItems.map((subItem) => {
-            const isSubActive = window.location.pathname === subItem.path;
+            const isSubActive = pathname === subItem.path;
             const SubIcon = subItem.icon;
             return (
               <button
@@ -94,8 +98,8 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
                 title={subItem.name}
                 className={`sidebar-item__sub-item w-full flex items-center gap-2.5 p-2 rounded-lg text-xs font-medium transition-all ${
                   isSubActive
-                    ? "text-blue-600 bg-blue-50/50"
-                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                    ? "text-primary bg-primary/10"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
                 }`}
               >
                 {SubIcon && <SubIcon className="w-3.5 h-3.5 shrink-0" />}
