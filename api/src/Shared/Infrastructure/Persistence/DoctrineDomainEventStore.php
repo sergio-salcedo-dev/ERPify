@@ -9,7 +9,6 @@ use Erpify\Shared\Domain\Event\DomainEvent;
 use Erpify\Shared\Infrastructure\Persistence\Entity\StoredDomainEvent;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
-use Symfony\Component\Uid\Uuid;
 
 /**
  * {@link DomainEventStore} backed by the {@see StoredDomainEvent} ORM entity (PostgreSQL).
@@ -27,7 +26,6 @@ final readonly class DoctrineDomainEventStore implements DomainEventStore
     public function append(DomainEvent $domainEvent): void
     {
         $storedDomainEvent = new StoredDomainEvent(
-            Uuid::v4(),
             $domainEvent::eventName(),
             $domainEvent->aggregateId(),
             $domainEvent->eventId(),

@@ -7,8 +7,7 @@ namespace Erpify\Shared\Infrastructure\Persistence\Entity;
 use DateTimeImmutable;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
-use Symfony\Bridge\Doctrine\Types\UuidType;
-use Symfony\Component\Uid\Uuid;
+use Erpify\Shared\Domain\Entity\Identifiable;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'domain_event')]
@@ -16,13 +15,12 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Index(name: 'domain_event_name_idx', fields: ['name'])]
 class StoredDomainEvent
 {
+    use Identifiable;
+
     /**
      * @param array<string, mixed> $body
      */
     public function __construct(
-        #[ORM\Id]
-        #[ORM\Column(name: 'id', type: UuidType::NAME)]
-        private Uuid $id,
         #[ORM\Column(length: 190)]
         private string $name,
         #[ORM\Column(length: 36)]

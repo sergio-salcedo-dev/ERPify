@@ -31,7 +31,7 @@ final class <Entity>SearchController extends AbstractSearchController
 
     public function __invoke(#[MapQueryString] <Entity>SearchQuery $query = new <Entity>SearchQuery()): Response
     {
-        return $this->buildResponse($this->searcher->search($query), ['aggregate:default', '<entity>:search']);
+        return $this->buildResponse($this->searcher->search($query), ['identifiable', 'timestamped', '<entity>:search']);
     }
 }
 ```
