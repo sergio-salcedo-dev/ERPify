@@ -6,8 +6,6 @@ namespace Erpify;
 
 use Override;
 use Symfony\Bundle\FrameworkBundle\Kernel\MicroKernelTrait;
-use Symfony\Component\Config\Loader\LoaderInterface;
-use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\HttpKernel\Kernel as BaseKernel;
 
@@ -34,9 +32,9 @@ class Kernel extends BaseKernel
     /**
      * @SuppressWarnings("PHPMD.UnusedPrivateMethod")
      */
-    private function configureContainer(ContainerConfigurator $container, LoaderInterface $loader, ContainerBuilder $builder): void
+    private function configureContainer(ContainerConfigurator $container): void
     {
-        $this->defaultConfigureContainer($container, $loader, $builder);
+        $this->defaultConfigureContainer($container);
 
         // Behat-only service definitions (kept out of services_test.yaml so
         // PHPUnit never autoloads classes whose parents live in the isolated
