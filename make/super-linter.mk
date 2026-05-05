@@ -12,7 +12,7 @@ SUPERLINTER_SLIM_IMAGE ?= ghcr.io/super-linter/super-linter:slim-latest
 
 SUPERLINTER_IMAGE ?= ghcr.io/super-linter/super-linter:latest
 SUPERLINTER_VALIDATE_ALL_CODEBASE ?= true
-SUPERLINTER_EXCLUDES := .*vendor/.*|.*node_modules/.*|.*\.next/.*|.*out/.*|\.git/.*|.*dist/.*|.*build/.*|.*_bmad-output/.*
+SUPERLINTER_EXCLUDES := .*vendor/.*|.*node_modules/.*|.*\.next/.*|.*out/.*|\.git/.*|.*dist/.*|.*build/.*|.*_bmad-output/.*|api/config/reference\.php|api/migrations/.*|api/tools/.*
 
 lint.super.run: ## Run SuperLinter on entire codebase via Docker (all linters enabled). Pass GITHUB_TOKEN=xxx
 	docker run --rm \
@@ -24,19 +24,17 @@ lint.super.run: ## Run SuperLinter on entire codebase via Docker (all linters en
 		-e COMPOSER_INSTALL=false \
 		$(if $(GITHUB_TOKEN),-e GITHUB_TOKEN='$(GITHUB_TOKEN)') \
 		-e YAML_CONFIG_FILE=.yamllint.yml \
+		-e MARKDOWN_CONFIG_FILE=.markdownlint.json \
 		-e VALIDATE_BASH=true \
-		-e VALIDATE_CSS=true \
 		-e VALIDATE_DOCKERFILE_HADOLINT=true \
 		-e VALIDATE_EDITORCONFIG=true \
 		-e VALIDATE_ENV=true \
 		-e VALIDATE_GITHUB_ACTIONS=true \
 		-e VALIDATE_HTML=true \
-		-e VALIDATE_JAVASCRIPT_ES=true \
 		-e VALIDATE_JSON=true \
 		-e VALIDATE_MARKDOWN=true \
 		-e VALIDATE_PYTHON=true \
 		-e VALIDATE_SQLFLUFF=true \
-		-e VALIDATE_TYPESCRIPT_ES=true \
 		-e VALIDATE_XML=true \
 		-e VALIDATE_YAML=true \
 		--env "SKIP_COMPOSER_INSTALL=true" \

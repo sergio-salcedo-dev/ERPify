@@ -56,7 +56,7 @@ ESLint 10 + `eslint-config-next` + Prettier are **authoritative** — do not han
 
 ## Directory discipline
 
-```
+```text
 pwa/src/
 ├── app/                    # Next.js App Router — routes & UI shells only (no business logic)
 ├── components/ui/          # Shadcn primitives + shared UI

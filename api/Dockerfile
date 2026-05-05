@@ -20,7 +20,6 @@ WORKDIR /app
 VOLUME /app/var/
 
 # persistent deps
-# hadolint ignore=DL3008
 RUN <<-EOF
 	apt-get update
 	apt-get install -y --no-install-recommends \
@@ -73,7 +72,6 @@ ENV XDEBUG_MODE=off
 ENV FRANKENPHP_WORKER_CONFIG=watch
 
 # dev dependencies
-# hadolint ignore=DL3008
 RUN <<-EOF
 	mv "$PHP_INI_DIR/php.ini-development" "$PHP_INI_DIR/php.ini"
 	apt-get update
@@ -126,7 +124,7 @@ RUN <<-EOF
 EOF
 
 # Collect shared libraries needed by FrankenPHP and PHP extensions
-# hadolint ignore=DL3008,SC3054,DL4006
+# hadolint ignore=SC3054,DL4006
 RUN <<-'EOF'
 	apt-get update
 	apt-get install -y --no-install-recommends libtree

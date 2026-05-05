@@ -105,7 +105,7 @@ Same in both modes. Adjusted-state values shift slightly for legibility.
 
 ### Typography
 
-```
+```text
 --font-sans: <Geist>, -apple-system, system-ui, "Segoe UI", Roboto, "Helvetica Neue", sans-serif
 --font-mono: <Geist Mono>, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace
 ```
@@ -159,7 +159,7 @@ const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono", prel
 
 Base unit 8 px with optical micro-adjustments at 1, 4, 7, 11. Standard rhythm: 8, 16, 24, 32 px.
 
-```
+```text
 --space-px: 1px      --space-1: 4px      --space-1.5: 7px
 --space-2: 8px       --space-2.5: 11px   --space-3: 12px
 --space-4: 16px      --space-5: 19px     --space-6: 24px
@@ -169,7 +169,7 @@ Base unit 8 px with optical micro-adjustments at 1, 4, 7, 11. Standard rhythm: 8
 
 ### Radii
 
-```
+```text
 --radius-micro:  2px    inline badges, toolbar buttons
 --radius-sm:     4px    small containers, list items
 --radius-md:     6px    buttons, inputs, functional elements (default)
@@ -224,7 +224,7 @@ On dark surfaces, traditional shadows (dark-on-dark) read as nothing. Linear con
 
 ### Motion
 
-```
+```text
 --duration-instant  0ms      operator-initiated state change
 --duration-fast     120ms    hover, micro-feedback
 --duration-base     180ms    modal, drawer, popover enter/exit

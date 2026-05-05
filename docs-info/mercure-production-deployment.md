@@ -8,12 +8,12 @@ Use this guide **after** the general monorepo flow: [pwa/docs/production-deploym
 
 `MERCURE_JWT_SECRET` in [`api/.env`](../api/.env) is **not** a file to generate: it is a **single shared symmetric key** (HMAC) used to sign JWTs that Symfony sends to the Mercure hub (publish) and, when you use subscriber cookies, to authorize browsers. The Caddy hub must verify tokens with the **identical** secret.
 
-**Requirements**
+### Requirements
 
 - **Cryptographically random**, at least **32 bytes** of entropy (longer is fine). The placeholder `!ChangeThisMercureHubJWTSecretKey!` is only for local/dev templates.
 - **One distinct value per environment** (dev, staging, prod). Never copy production into git or into `NEXT_PUBLIC_*` variables.
 
-**How to generate (pick one)**
+### How to generate (pick one)
 
 ```bash
 openssl rand -hex 32
@@ -27,7 +27,7 @@ openssl rand -base64 48
 python3 -c "import secrets; print(secrets.token_hex(32))"
 ```
 
-**Where to set it**
+### Where to set it
 
 1. **Symfony:** `MERCURE_JWT_SECRET` (runtime env or secret store → container env).
 2. **Same value** for the hub in this repo’s Compose layout: **`CADDY_MERCURE_JWT_SECRET`**, which feeds Caddy `MERCURE_PUBLISHER_JWT_KEY` / `MERCURE_SUBSCRIBER_JWT_KEY` (see root [`compose.yaml`](../compose.yaml)).

@@ -28,7 +28,7 @@ See [`project-context.md`](./project-context.md) for the constraint table includ
 
 **DDD + Hexagonal + Clean Architecture.** Dependencies point inward to `domain/`.
 
-```
+```text
 pwa/src/
 ├── app/                         # Next.js App Router — routes & UI shells only
 │   ├── layout.tsx

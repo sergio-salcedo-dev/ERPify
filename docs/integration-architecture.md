@@ -14,7 +14,7 @@ How the `api/` and `pwa/` parts communicate, and the traffic topology that makes
 
 ## Traffic topology (default: Docker dev)
 
-```
+```text
                        ┌─────────────────────────────┐
 browser → localhost ──▶│     FrankenPHP (Caddy)      │
                        │   TLS + same-origin mux     │
@@ -57,7 +57,7 @@ browser → localhost ──▶│     FrankenPHP (Caddy)      │
 
 ## Alternative flow: `dev-local` (host Next, containerised API)
 
-```
+```text
 browser → localhost:80  ─▶  Next.js  (on host, next dev)
                                   │
                                   └─▶  localhost:8000  ─▶  Symfony API (container)

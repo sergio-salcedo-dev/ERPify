@@ -25,6 +25,7 @@ override is provided:
 | `POSTGRES_PORT` | `15432` (host-side only) |
 
 These values appear in:
+
 - `api/.env` → `DATABASE_URL` used by Symfony
 - Root `compose.yaml` → `POSTGRES_*` env on the `database` service and the `DATABASE_URL`
   env on the `php` service
@@ -58,7 +59,7 @@ POSTGRES_VERSION=18
 `compose.yaml` will automatically assemble `DATABASE_URL` inside the `php`
 container from these values:
 
-```
+```text
 postgresql://erpify_prod:<password>@database:5432/erpify_prod?serverVersion=18&charset=utf8
 ```
 
@@ -69,12 +70,10 @@ openssl rand -base64 24 | tr -d '+/='
 ```
 
 > [!CAUTION]
->
 > Do not use special characters (`@`, `#`, `/`, `?`) in `POSTGRES_PASSWORD`.
 > They would break URL parsing in `DATABASE_URL`.
 
 > [!IMPORTANT]
->
 > Do **not** publish port `15432` (or any database port) in production.
 > The `ports:` block for `database` lives in `compose.dev.yaml` only — the
 > base `compose.yaml` and `compose.prod.yaml` deliberately publish nothing,

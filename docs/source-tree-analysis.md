@@ -2,7 +2,7 @@
 
 Annotated layout of the ERPify monorepo. Only critical directories are shown; generated output (`node_modules`, `vendor`, `var`, `.next`) is omitted.
 
-```
+```text
 ERPify/
 ├── api/                            # Symfony API (Part: api)
 │   ├── src/

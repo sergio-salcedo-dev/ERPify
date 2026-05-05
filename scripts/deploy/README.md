@@ -5,16 +5,19 @@ Automated deployment for ERPify with validation and health checks.
 ## Quick Commands
 
 **Simple Deployment** (migrations → cache → workers)
+
 ```bash
 ./scripts/deploy/deploy.sh --simple
 ```
 
 **Advanced** (with health checks)
+
 ```bash
 ./scripts/deploy/deploy.sh --advanced
 ```
 
 **Options:**
+
 - `--dry-run` — Test without making changes
 - `--check-only` — Validate environment only
 - `--skip-migrations` — Skip DB migrations
@@ -45,6 +48,7 @@ docker compose logs -f php messenger_worker
 ## Manual Commands
 
 If scripts fail, run directly from repository root:
+
 ```bash
 make db.migrate                # Run migrations
 make cache.warmup             # Warm cache
@@ -78,6 +82,7 @@ Use `--ci` flag for GitHub Actions, GitLab CI, Jenkins:
 ```
 
 **GitHub Actions:**
+
 ```yaml
 - name: Deploy
   env:
@@ -88,6 +93,7 @@ Use `--ci` flag for GitHub Actions, GitLab CI, Jenkins:
 ```
 
 **GitLab CI:**
+
 ```yaml
 deploy:
   stage: deploy

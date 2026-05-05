@@ -33,7 +33,7 @@ See [`project-context.md`](./project-context.md#technology-stack--versions) for 
 
 ### Bounded contexts
 
-```
+```text
 api/src/
 ├── Backoffice/
 │   ├── Bank/       { Domain, Application, Infrastructure }
