@@ -11,6 +11,9 @@ docker.up: ## Start stack detached, rebuild images (ENV-aware)
 docker.up.wait: ## Start stack detached with --wait health gate
 	$(DC) up --wait --build --detach
 
+docker.up.wait.no-build: ## Start stack detached with --wait, skip rebuild (CI: images already loaded)
+	$(DC) up --wait --no-build --detach
+
 docker.down: ## Stop stack and remove orphans
 	$(DC) down --remove-orphans
 
@@ -59,6 +62,6 @@ docker.clean: ## Stop stack and REMOVE volumes (destructive)
 docker.fix.ownership: ## Chown container files to host user (Linux only; fixes CI ACL issues)
 	$(DC) exec -T $(PHP_SERVICE) chown -R $$(id -u):$$(id -g) .
 
-.PHONY: docker.up docker.up.wait docker.down docker.build docker.restart \
+.PHONY: docker.up docker.up.wait docker.up.wait.no-build docker.down docker.build docker.restart \
         docker.logs docker.ps docker.health docker.sh docker.bash \
         docker.exec docker.clean docker.fix-ownership
