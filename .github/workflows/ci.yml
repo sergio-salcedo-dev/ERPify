@@ -38,14 +38,14 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
       - uses: ./.github/actions/docker-setup
 
       - name: Build images
-        uses: docker/bake-action@v6
+        uses: docker/bake-action@v7
         with:
           source: "."
           pull: true
@@ -72,14 +72,14 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
       - uses: ./.github/actions/docker-setup
 
       - name: Build images
-        uses: docker/bake-action@v6
+        uses: docker/bake-action@v7
         with:
           source: "."
           pull: true
@@ -133,14 +133,14 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
       - uses: ./.github/actions/docker-setup
 
       - name: Build images
-        uses: docker/bake-action@v6
+        uses: docker/bake-action@v7
         with:
           source: "."
           pull: true
@@ -184,7 +184,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -209,14 +209,14 @@ jobs:
         shard: [1, 2, 3]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
       - uses: ./.github/actions/full-setup/
 
       - name: Build images
-        uses: docker/bake-action@v6
+        uses: docker/bake-action@v7
         with:
           source: "."
           pull: true
@@ -243,7 +243,7 @@ jobs:
         run: echo "version=$(node -p "require('./pwa/package-lock.json').packages['pwa/node_modules/@playwright/test'].version")" >> $GITHUB_OUTPUT
 
       - name: Cache Playwright Browsers
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
@@ -263,7 +263,7 @@ jobs:
 
       - name: Upload blob report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: blob-report-${{ matrix.shard }}
           path: pwa/blob-report/
@@ -294,7 +294,7 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -304,7 +304,7 @@ jobs:
         run: make pwa.install
 
       - name: Download blob reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: pwa/all-blob-reports
           pattern: blob-report-*
@@ -320,7 +320,7 @@ jobs:
           cd pwa && npx playwright merge-reports --reporter html ./all-blob-reports
 
       - name: Upload merged HTML report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report--attempt-${{ github.run_attempt }}
           path: pwa/playwright-report/
@@ -338,14 +338,14 @@ jobs:
     continue-on-error: true
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
       - uses: ./.github/actions/full-setup/
 
       - name: Build images
-        uses: docker/bake-action@v6
+        uses: docker/bake-action@v7
         with:
           source: "."
           pull: true
@@ -372,7 +372,7 @@ jobs:
         run: echo "version=$(node -p "require('./pwa/package-lock.json').packages['pwa/node_modules/@playwright/test'].version")" >> $GITHUB_OUTPUT
 
       - name: Cache Playwright Browsers
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
@@ -403,7 +403,7 @@ jobs:
 
       - name: Upload burn-in artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: burn-in-report--attempt-${{ github.run_attempt }}
           path: |

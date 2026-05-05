@@ -3,10 +3,10 @@ description: Node + Docker
 runs:
   using: "composite"
   steps:
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v6
       with:
         node-version: "22"
         cache: npm
         cache-dependency-path: pwa/package-lock.json
 
-    - uses: docker/setup-buildx-action@v3
+    - uses: docker/setup-buildx-action@v4
