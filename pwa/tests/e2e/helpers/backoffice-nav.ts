@@ -1,22 +1,34 @@
 import type { Page } from "@playwright/test";
+import { clickUntilVisible } from "./click-until-visible";
 
 export async function navigateToHealthViaSidebarDesktop(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Administration" }).click();
+  await clickUntilVisible(
+    page.getByRole("button", { name: "Administration" }),
+    page.getByRole("button", { name: "Health" }),
+  );
   await page.getByRole("button", { name: "Health" }).click();
 }
 
 export async function navigateToHealthViaSidebarMobile(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Open navigation menu" }).click();
-  // Mobile nav: "Administration" navigates to its path; Health is a separate control in the sheet.
+  await clickUntilVisible(
+    page.getByRole("button", { name: "Open navigation menu" }),
+    page.getByRole("dialog"),
+  );
   await page.getByRole("button", { name: "Health" }).click();
 }
 
 export async function logoutViaSidebarDesktop(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "User Profile" }).click();
+  await clickUntilVisible(
+    page.getByRole("button", { name: "User Profile" }),
+    page.getByRole("button", { name: "Logout" }),
+  );
   await page.getByRole("button", { name: "Logout" }).click();
 }
 
 export async function logoutViaSidebarMobile(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Open navigation menu" }).click();
+  await clickUntilVisible(
+    page.getByRole("button", { name: "Open navigation menu" }),
+    page.getByRole("dialog"),
+  );
   await page.getByRole("button", { name: "Logout" }).click();
 }

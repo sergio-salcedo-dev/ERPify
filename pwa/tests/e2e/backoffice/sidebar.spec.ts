@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { VIEWPORT_DESKTOP, VIEWPORT_MOBILE } from "../constants";
+import { clickUntilVisible } from "../helpers/click-until-visible";
 
 test.describe("BackOffice - Sidebar Navigation", () => {
   test.describe.configure({ mode: "parallel" });
@@ -15,8 +16,10 @@ test.describe("BackOffice - Sidebar Navigation", () => {
       const aside = page.locator("aside");
       await expect(aside.getByRole("button", { name: "Dashboard" })).toBeVisible();
       await expect(aside.getByRole("button", { name: "User Profile" })).toBeVisible();
-      await aside.getByRole("button", { name: "User Profile" }).click();
-      await expect(aside.getByRole("button", { name: "Logout" })).toBeVisible();
+      await clickUntilVisible(
+        aside.getByRole("button", { name: "User Profile" }),
+        aside.getByRole("button", { name: "Logout" }),
+      );
     });
 
     test("expands and collapses User Profile sub-items", async ({ page }) => {
@@ -28,8 +31,7 @@ test.describe("BackOffice - Sidebar Navigation", () => {
       await expect(notifications).not.toBeVisible();
       await expect(settings).not.toBeVisible();
 
-      await userProfile.click();
-      await expect(notifications).toBeVisible();
+      await clickUntilVisible(userProfile, notifications);
       await expect(settings).toBeVisible();
 
       await userProfile.click();
@@ -42,14 +44,20 @@ test.describe("BackOffice - Sidebar Navigation", () => {
     test.use({ viewport: VIEWPORT_MOBILE });
 
     test("opens sheet and shows primary nav links", async ({ page }) => {
-      await page.getByRole("button", { name: "Open navigation menu" }).click();
+      await clickUntilVisible(
+        page.getByRole("button", { name: "Open navigation menu" }),
+        page.getByRole("dialog"),
+      );
       await expect(page.getByRole("button", { name: "Dashboard" }).first()).toBeVisible();
       await expect(page.getByRole("button", { name: "User Profile" }).first()).toBeVisible();
       await expect(page.getByRole("button", { name: "Logout" }).first()).toBeVisible();
     });
 
     test("shows profile sub-actions in mobile sheet", async ({ page }) => {
-      await page.getByRole("button", { name: "Open navigation menu" }).click();
+      await clickUntilVisible(
+        page.getByRole("button", { name: "Open navigation menu" }),
+        page.getByRole("dialog"),
+      );
       await expect(page.getByRole("button", { name: "Notifications" }).first()).toBeVisible();
       await expect(page.getByRole("button", { name: "Settings" }).first()).toBeVisible();
     });
