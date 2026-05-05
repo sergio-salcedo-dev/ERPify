@@ -90,7 +90,7 @@ interpolation.
 | `POSTGRES_PASSWORD` | DB + php | Yes | `erpify_password` | Strong random password — see [database.md](database.md) |
 | `POSTGRES_DB` | DB + php | Yes | `erpify_db` | Change to a dedicated prod database name |
 | `POSTGRES_VERSION` | DB + php | No | `18` | Must match the PostgreSQL image tag |
-| `POSTGRES_PORT` | host only | No | `15432` | Omit/remove in production — never expose DB port |
+| `POSTGRES_PORT` | host only | No | `15432` | Dev overlay only; not published by `compose.yaml` or `compose.prod.yaml` |
 | `POSTGRES_CHARSET` | php | No | `utf8` | |
 | `CADDY_MERCURE_JWT_SECRET` | Caddy/Mercure | Yes | `!ChangeThisMercureHubJWTSecretKey!` | Random string ≥ 32 chars |
 | `HTTP_PORT` | Caddy | No | `80` | |

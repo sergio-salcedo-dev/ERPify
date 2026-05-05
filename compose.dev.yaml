@@ -68,7 +68,7 @@ services:
 
   database:
     ports:
-      - "5432"
+      - "${POSTGRES_PORT:-15432}:5432"
 
   # Dev image + bind mount for messenger_worker (service definition continues in compose.yaml).
   messenger_worker:

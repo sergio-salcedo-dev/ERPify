@@ -46,7 +46,11 @@ Step-by-step guidance for deploying the monorepo safely. For a shorter checklist
 | Service    | Default host ports           | Override via                                        |
 | ---------- | ---------------------------- | --------------------------------------------------- |
 | FrankenPHP | **80**, **443**, UDP **443** | **`HTTP_PORT`**, **`HTTPS_PORT`**, **`HTTP3_PORT`** |
-| Postgres   | **15432** → 5432             | **`POSTGRES_PORT`**                                 |
+| Postgres   | **15432** → 5432 (dev only)  | **`POSTGRES_PORT`**                                 |
+
+> Postgres is published to the host only via `compose.dev.yaml`. The base
+> `compose.yaml` and `compose.prod.yaml` do not publish the database port,
+> so it is reachable only on the internal Compose network in production.
 
 ## Monorepo commands (reference)
 

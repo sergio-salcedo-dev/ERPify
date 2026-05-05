@@ -99,16 +99,6 @@ class Bank extends AggregateRoot
         return $this->shortName;
     }
 
-    public function getCreatedAt(): DateTimeImmutable
-    {
-        return $this->createdAt;
-    }
-
-    public function getUpdatedAt(): DateTimeImmutable
-    {
-        return $this->updatedAt;
-    }
-
     public function getLogo(): ?Media
     {
         return $this->media;

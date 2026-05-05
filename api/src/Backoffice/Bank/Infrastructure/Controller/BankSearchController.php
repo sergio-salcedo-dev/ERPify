@@ -39,7 +39,8 @@ final readonly class BankSearchController extends AbstractSearchController
         return $this->buildResponse(
             paginatedResult: $this->bankSearcher->search($query),
             serializerGroups: [
-                'aggregate:default',
+                'identifiable',
+                'timestamped',
                 'bank:search',
             ],
         );
