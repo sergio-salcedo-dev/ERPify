@@ -76,8 +76,11 @@ openssl rand -base64 24 | tr -d '+/='
 > [!IMPORTANT]
 >
 > Do **not** publish port `15432` (or any database port) in production.
-> Remove or omit the `ports:` block under `database` in `compose.prod.yaml`.
-> PostgreSQL must only be reachable from within the Docker internal network.
+> The `ports:` block for `database` lives in `compose.dev.yaml` only — the
+> base `compose.yaml` and `compose.prod.yaml` deliberately publish nothing,
+> so PostgreSQL is reachable only from within the Docker internal network
+> when the prod overlay is in use. Do not add a `ports:` entry to
+> `compose.prod.yaml`.
 
 ---
 
