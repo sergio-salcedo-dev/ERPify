@@ -68,22 +68,6 @@
             "symfony/runtime":true
         },
         "bump-after-update":true,
-        "platform":{
-            "php":"8.5.0",
-            "ext-bcmath":"8.5",
-            "ext-ctype":"8.5",
-            "ext-curl":"8.5",
-            "ext-fileinfo":"8.5",
-            "ext-gd":"8.5",
-            "ext-iconv":"8.5",
-            "ext-intl":"8.5",
-            "ext-json":"8.5",
-            "ext-pdo":"8.5",
-            "ext-pdo_pgsql":"8.5",
-            "ext-sodium":"8.5",
-            "ext-xml":"8.5",
-            "ext-zip":"8.5"
-        },
         "sort-packages":true
     },
     "autoload":{
