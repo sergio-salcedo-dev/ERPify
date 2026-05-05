@@ -44,13 +44,17 @@ Plus SMTP credentials and any `NEXT_PUBLIC_SYMFONY_API_BASE_URL` override needed
 
 1. Build/push images (base images are **digest-pinned**: `dunglas/frankenphp:1-php8.5`, `debian:13-slim`, `node:24-alpine`; do not unpin).
 2. On the host, pull images and run:
+
    ```bash
    ENV=prod make docker.up
    ```
+
 3. Apply DB migrations:
+
    ```bash
    ENV=prod make db.migrate
    ```
+
 4. Watch `messenger_worker` logs: `ENV=prod make docker.logs` (filter by service).
 5. Run smoke tests per [`production-deployment.md`](./production-deployment.md).
 

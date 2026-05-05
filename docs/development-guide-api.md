@@ -123,7 +123,7 @@ Tool configs live at `api/.php-cs-fixer.php`, `api/phpstan.neon`, `api/psalm.xml
 
 New work goes under an existing bounded context (`Backoffice/*`, `Frontoffice/*`, or `Shared/*`), with the three-layer structure created if missing:
 
-```
+```text
 api/src/<Context>/<Module>/
 ├── Domain/           # Entities, value objects, ports, domain events (framework-free)
 ├── Application/      # Use cases, DTOs, command/query handlers

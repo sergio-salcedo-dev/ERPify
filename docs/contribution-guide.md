@@ -18,7 +18,7 @@ _For detailed rules, cross-reference [`project-context.md`](./project-context.md
 
 ## Commits (Conventional Commits, enforced)
 
-```
+```text
 <type>(<scope>): <subject>
 
 <optional body: explain WHY, not what>

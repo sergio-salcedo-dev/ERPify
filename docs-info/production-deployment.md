@@ -30,22 +30,22 @@ docker compose -f compose.yaml -f compose.prod.yaml up --wait --build --detach
 
 ## DNS and public URLs
 
-1. **A (or AAAA) record**  
+1. **A (or AAAA) record**
    Point your **public hostname** (e.g. `app.example.com`) at the server’s public IP **before** first TLS issuance. Let’s Encrypt needs a resolvable name (not a bare IP for HTTP-01).
 
-2. **`SERVER_NAME` (Caddy / FrankenPHP)**  
+2. **`SERVER_NAME` (Caddy / FrankenPHP)**
    Set to the hostnames Caddy should serve and request certificates for, e.g. `app.example.com`. The default in `compose.yaml` is `localhost`; production **must** override this. See [api/docs/production-ready/server-setup.md](../api/docs/production-ready/server-setup.md) and [tls.md](../api/docs/production-ready/tls.md).
 
-3. **`DEFAULT_URI` / Symfony URL generation**  
+3. **`DEFAULT_URI` / Symfony URL generation**
    Align with your canonical **HTTPS** origin (e.g. `https://app.example.com`) so generated URLs and redirects are correct.
 
-4. **Mercure**  
+4. **Mercure**
    **`MERCURE_PUBLIC_URL`** must be a URL **browsers** can reach (typically `https://app.example.com/.well-known/mercure` when TLS terminates on the same host). Keep **`CADDY_MERCURE_JWT_SECRET`** (or equivalent publisher/subscriber keys) in sync with Caddy/Symfony config. See [secrets.md](../api/docs/production-ready/secrets.md). Step-by-step: [mercure-production-deployment.md](mercure-production-deployment.md); architecture: [mercure.md](mercure.md).
 
-5. **PWA ↔ API (same site)**  
+5. **PWA ↔ API (same site)**
    When the browser talks to the same host for pages and `/api`, set **`NEXT_PUBLIC_SYMFONY_API_BASE_URL`** at **image build time** to that public origin (e.g. `https://app.example.com`). See [pwa/docs/production-deployment.md](../pwa/docs/production-deployment.md).
 
-6. **`CORS_ALLOW_ORIGINS`**  
+6. **`CORS_ALLOW_ORIGINS`**
    In `api/.env`, list **exact** allowed origins (comma-separated, no `*`). If the PWA is served from the same origin as the API (default Compose layout), include that origin. See `api/.env.example`.
 
 ---
@@ -78,17 +78,17 @@ Full variable tables: [api/docs/production-ready/secrets.md](../api/docs/product
 
 - **Run at least one consumer** for the **`async`** transport (`messenger_worker` in Compose). Without it, HTTP requests still succeed and **domain events are still audited**, but **async handlers** (e.g. emails) remain in **`messenger_messages`**.
 
-- **Deploys / new code**  
+- **Deploys / new code**
   After shipping new code, follow this sequence:
   1. **Warm cache** (ensure new code is cached): `make cache.warmup` or `php bin/console cache:warmup`
   2. **Stop workers** (reload code): `make messenger.stop-workers` or `php bin/console messenger:stop-workers`
-  
+
   This ensures service definitions and message handlers match the newly deployed code before workers restart. If you use multiple nodes, use a **shared** cache for stop signals (see [Symfony: Deploying Messenger](https://symfony.com/doc/current/messenger.html#deploying-to-production)).
 
-- **Failures**  
+- **Failures**
   Failed messages go to the **`failed`** transport (Doctrine). Inspect with **`messenger:failed:show`**, retry with **`messenger:failed:retry`**.
 
-- **Scaling**  
+- **Scaling**
   You may run **multiple** worker replicas **if** they all consume the same Doctrine queue (competing consumers). Monitor DB load and processing lag.
 
 More detail: [domain-events-and-messenger.md](domain-events-and-messenger.md).
@@ -116,18 +116,23 @@ Migrations run from the **`php`** container entrypoint after the database is hea
 ERPify includes deployment automation scripts in **`scripts/deploy/`**:
 
 ### Quick Deploy
+
 ```bash
 ./scripts/deploy/deploy.sh --simple
 ```
+
 Runs migrations → warms cache → stops workers (3 simple steps).
 
 ### Advanced Deploy
+
 ```bash
 ./scripts/deploy/deploy.sh --advanced
 ```
+
 Full deployment with pre-flight checks, health validation, and logging.
 
 **Options:**
+
 - `--dry-run` — Test without changes
 - `--skip-migrations` — Skip DB step
 - `--check-only` — Validate environment only
@@ -138,10 +143,10 @@ See **[`scripts/deploy/README.md`](../scripts/deploy/README.md)** for full detai
 
 ## Smoke tests after go-live
 
-1. **`GET /api/v1/health`** (and backoffice health if you use it) over HTTPS.  
-2. Load the PWA from the public URL; confirm **`NEXT_PUBLIC_SYMFONY_API_BASE_URL`** matches reality (no mixed content).  
-3. Create or update a bank via the API; confirm a row in **`domain_event`** with name **`erpify.backoffice.bank.created`** or **`erpify.backoffice.bank.updated`**, and that the worker delivers mail (inbox or provider logs).  
-4. **`docker compose … logs messenger_worker`** — no repeating fatal errors.  
+1. **`GET /api/v1/health`** (and backoffice health if you use it) over HTTPS.
+2. Load the PWA from the public URL; confirm **`NEXT_PUBLIC_SYMFONY_API_BASE_URL`** matches reality (no mixed content).
+3. Create or update a bank via the API; confirm a row in **`domain_event`** with name **`erpify.backoffice.bank.created`** or **`erpify.backoffice.bank.updated`**, and that the worker delivers mail (inbox or provider logs).
+4. **`docker compose … logs messenger_worker`** — no repeating fatal errors.
 5. **Object storage (if you use bank `stored_object` or similar):** confirm **`OBJECT_STORAGE_LOCAL_PATH`** is mounted and writable; upload once and **`GET /api/v1/stored-objects/{hash}`** returns **200** (see [object-storage.md](object-storage.md)).
 
 ---

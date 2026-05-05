@@ -46,8 +46,8 @@ Aggregates: `make lint`, `make test`, `make ci` (`ci.lint` + `ci.test`), `make c
 
 Both sides follow **DDD + Hexagonal / Clean Architecture**, with dependencies pointing inward toward the domain. This is load-bearing — do not add framework imports (Symfony, Next, Inversify, HTTP clients, ORM) inside `Domain/`; put adapters in `Infrastructure/` and orchestration in `Application/`. The full rule set lives in `.cursor/rules/*.mdc` (architecture, clean-code, database, frontend, php-standards, security, solid-principles, testing) and `pwa/AGENTS.md` — consult them before non-trivial changes.
 
-**Required checks after editing PHP:** run `make php.stan` on every PHP file you changed before declaring the task 
-done. Fix any reported issues. At the end of the task, also run `make php.lint` and fix anything it reports but no 
+**Required checks after editing PHP:** run `make php.stan` on every PHP file you changed before declaring the task
+done. Fix any reported issues. At the end of the task, also run `make php.lint` and fix anything it reports but no
 phpstan errors.
 
 ## Docs to consult

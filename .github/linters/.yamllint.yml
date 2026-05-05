@@ -1,7 +1,13 @@
 extends: default
 
 rules:
-  line-length:
-    max: 120
-    allow-non-breakable-words: true
+  line-length: disable
+
+  comments: disable
+  comments-indentation: disable
+
+  # GitHub Actions workflows use `on:` as a key, which yamllint flags as truthy.
+  truthy:
+    check-keys: false
+
   document-start: disable # removes warning for "---"

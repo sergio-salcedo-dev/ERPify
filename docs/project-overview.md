@@ -28,10 +28,12 @@ Construction-industry SaaS ERP/CRM (per `pwa/CLAUDE.md`). The repository holds t
 ## Traffic model (dev, default)
 
 Browser → `http(s)://localhost` → **FrankenPHP**:
+
 - `/` HTML → reverse-proxied to Next.js on `:3000` (inside the `pwa` container).
 - `/api/*` and `/.well-known/mercure` → handled by Symfony on the same origin.
 
 Alternative flows:
+
 - `make api-up-http` — API on host `:8000`, run `next dev` on host `:80` (set `NEXT_PUBLIC_SYMFONY_API_BASE_URL=http://localhost:8000` and `SYMFONY_INTERNAL_URL=http://localhost:8000` in `pwa/.env.local`).
 - `make dev.local` — same as above but starts Next via make.
 

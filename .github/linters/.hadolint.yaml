@@ -1,0 +1,5 @@
+ignored:
+  # DL3008: pin versions in apt-get install. We rely on Debian's stable security
+  # updates inside sha256-pinned base images instead — pinning per-package
+  # versions breaks the build whenever Debian publishes a security bump.
+  - DL3008

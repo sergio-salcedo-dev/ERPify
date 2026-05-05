@@ -10,7 +10,7 @@ The root `Makefile` and `make/*.mk` modules are ERPify's canonical task interfac
 
 Target names follow `<domain>.<noun>[.<variant>]` with dots as separators.
 
-```
+```text
 docker.up               # domain.noun
 docker.up.wait          # domain.noun.variant
 php.cs-fixer.dry-run    # domain.noun.variant
