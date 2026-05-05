@@ -47,17 +47,17 @@ help-targets:
 
 ## —— Open Browser ——
 
-open-local: ## Open http://localhost and https://localhost (OPEN_BROWSER=0 to skip)
-	@if [ "$(OPEN_BROWSER)" = "0" ]; then echo "OPEN_BROWSER=0, skipping browser"; exit 0; fi
-	@for url in http://localhost https://localhost; do \
-		if command -v xdg-open >/dev/null 2>&1; then \
-			xdg-open "$$url" 2>/dev/null || true; \
-		elif command -v open >/dev/null 2>&1; then \
-			open "$$url" 2>/dev/null || true; \
-		else \
-			echo "Open manually: $$url"; \
-		fi; \
-	done
+#open-local: ## Open http://localhost and https://localhost (OPEN_BROWSER=0 to skip)
+#	@if [ "$(OPEN_BROWSER)" = "0" ]; then echo "OPEN_BROWSER=0, skipping browser"; exit 0; fi
+#	@for url in http://localhost https://localhost; do \
+#		if command -v xdg-open >/dev/null 2>&1; then \
+#			xdg-open "$$url" 2>/dev/null || true; \
+#		elif command -v open >/dev/null 2>&1; then \
+#			open "$$url" 2>/dev/null || true; \
+#		else \
+#			echo "Open manually: $$url"; \
+#		fi; \
+#	done
 
 ## —— Dev helpers ——
 
@@ -65,15 +65,15 @@ dev-up: ## Dev stack up with --wait --build, then open browser
 	$(MAKE) docker.up.wait
 	@$(MAKE) open-local
 
-dev-local: ## API + DB on :8000 + Next dev on host
-	cd $(PROJECT_ROOT) && \
-	HTTP_PORT=8000 SERVER_NAME=http://localhost:8000 \
-	DEFAULT_URI=http://localhost:8000 CADDY_MERCURE_PUBLIC_URL=http://localhost:8000/.well-known/mercure \
-	docker compose $(COMPOSE_FILES) up --wait --detach php database messenger_worker
-	$(call pwa_cmd,npm run dev -- --turbo)
+#dev-local: ## API + DB on :8000 + Next dev on host
+#	cd $(PROJECT_ROOT) && \
+#	HTTP_PORT=8000 SERVER_NAME=http://localhost:8000 \
+#	DEFAULT_URI=http://localhost:8000 CADDY_MERCURE_PUBLIC_URL=http://localhost:8000/.well-known/mercure \
+#	docker compose $(COMPOSE_FILES) up --wait --detach php database messenger_worker
+#	$(call pwa_cmd,npm run dev -- --turbo)
 
-prod-up: ## Prod: up --wait --build with prod compose files
-	cd $(PROJECT_ROOT) && docker compose -f compose.yaml -f compose.prod.yaml up --wait --build --detach
-	@$(MAKE) open-local
+#prod-up: ## Prod: up --wait --build with prod compose files (requires secrets)
+#	cd $(PROJECT_ROOT) && docker compose -f compose.yaml -f compose.prod.yaml up --wait --build --detach
+#	@$(MAKE) open-local
 
 .PHONY: help help-targets open-local dev-up dev-local prod-up

@@ -71,8 +71,8 @@ php.lint.yaml: ## yaml-lint
 	@$(PHP_TEST) bin/console lint:yaml config
 
 ## —— Aggregates ——————————————————————————————————————————————————————————
-#php.lint: php.stan php.rector php.cs-fixer php.md php.cs php.psalm.fix.all ## Full PHP lint sweep
-php.lint: php.stan php.rector php.cs-fixer php.cs php.psalm.fix.all ## Full PHP lint sweep
+#php.lint: php.stan php.rector php.cs-fixer php.md php.cs php.psalm.fix.all php.gherkin ## Full PHP lint sweep
+php.lint: php.stan php.rector php.cs-fixer php.cs php.psalm.fix.all php.gherkin ## Full PHP lint sweep
 
 .PHONY: php.stan php.stan.baseline \
         php.rector php.rector.dry-run \
