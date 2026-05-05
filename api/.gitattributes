@@ -1,5 +1,7 @@
+# Default: normalize text to LF to avoid cross-OS newline issues
 * text=auto eol=lf
 
+# Common text files forced to LF
 *.conf text eol=lf
 *.html text eol=lf
 *.ini text eol=lf
@@ -10,9 +12,12 @@
 *.sh text eol=lf
 *.yaml text eol=lf
 *.yml text eol=lf
+
+# Keep console script and lockfile consistent; favor ours on merge conflicts
 bin/console text eol=lf
 bin/sf text eol=lf
 composer.lock text eol=lf merge=ours
 
+# Binary assets: no newline normalization or diffs
 *.ico binary
 *.png binary
