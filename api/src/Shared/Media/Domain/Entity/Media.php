@@ -7,18 +7,13 @@ namespace Erpify\Shared\Media\Domain\Entity;
 use DateTimeImmutable;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use Erpify\Shared\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Media\Domain\Repository\MediaRepository;
-use Symfony\Bridge\Doctrine\Types\UuidType;
-use Symfony\Component\Uid\Uuid;
 
 #[ORM\Entity(repositoryClass: MediaRepository::class)]
 #[ORM\Table(name: 'media')]
-class Media
+class Media extends AggregateRoot
 {
-    #[ORM\Id]
-    #[ORM\Column(name: 'id', type: UuidType::NAME, unique: true)]
-    private Uuid $uuid;
-
     #[ORM\Column(name: 'content_hash', length: 64)]
     private string $contentHash;
 
@@ -35,40 +30,21 @@ class Media
     #[ORM\Column(name: 'deleted_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
     private ?DateTimeImmutable $deletedAt = null;
 
-    #[ORM\Column]
-    private DateTimeImmutable $createdAt;
-
-    #[ORM\Column]
-    private DateTimeImmutable $updatedAt;
-
-    private function __construct()
-    {
-    }
-
     public static function create(
-        Uuid $id,
+        string $id,
         string $contentHash,
         string $mimeType,
         int $byteSize,
         string $rawBytes,
     ): self {
         $media = new self();
-        $media->uuid = $id;
+        $media->id = $id;
         $media->contentHash = $contentHash;
         $media->mimeType = $mimeType;
         $media->byteSize = $byteSize;
         $media->rawBytes = $rawBytes;
 
-        $now = new DateTimeImmutable();
-        $media->createdAt = $now;
-        $media->updatedAt = $now;
-
         return $media;
-    }
-
-    public function getId(): Uuid
-    {
-        return $this->uuid;
     }
 
     public function getContentHash(): string
@@ -110,10 +86,5 @@ class Media
     {
         $this->deletedAt = new DateTimeImmutable();
         $this->updatedAt = $this->deletedAt;
-    }
-
-    public function getCreatedAt(): DateTimeImmutable
-    {
-        return $this->createdAt;
     }
 }

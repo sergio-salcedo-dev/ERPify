@@ -14,7 +14,6 @@ use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Shared\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Media\Domain\Entity\Media;
 use Symfony\Component\Serializer\Attribute\Groups;
-use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity(repositoryClass: BankRepository::class)]
@@ -53,7 +52,7 @@ class Bank extends AggregateRoot
     private ?string $storedObjectContentHash = null;
 
     public static function create(
-        Uuid $id,
+        string $id,
         string $name,
         string $shortName,
         ?Media $media = null,
@@ -63,7 +62,7 @@ class Bank extends AggregateRoot
         ?string $storedObjectContentHash = null,
     ): self {
         $bank = new self();
-        $bank->id = $id->toRfc4122();
+        $bank->id = $id;
         $bank->name = $name;
         $bank->shortName = $shortName;
         $bank->media = $media;
@@ -75,12 +74,12 @@ class Bank extends AggregateRoot
         $createdAt = $bank->createdAt->format(DateTimeInterface::ATOM);
 
         $bank->record(new BankCreatedDomainEvent(
-            $id->toRfc4122(),
+            $id,
             $name,
             $shortName,
             $createdAt,
             $createdAt,
-            $media?->getId()->toRfc4122(),
+            $media?->getId(),
             $media?->getContentHash(),
             $storedObjectContentHash,
             $storedObjectMimeType,
@@ -137,7 +136,7 @@ class Bank extends AggregateRoot
             $shortName,
             $this->createdAt->format(DateTimeInterface::ATOM),
             $now->format(DateTimeInterface::ATOM),
-            $this->media?->getId()->toRfc4122(),
+            $this->media?->getId(),
             $this->media?->getContentHash(),
             $this->storedObjectContentHash,
             $this->storedObjectMimeType,

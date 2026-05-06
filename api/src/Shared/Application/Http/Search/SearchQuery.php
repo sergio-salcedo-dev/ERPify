@@ -37,7 +37,7 @@ readonly class SearchQuery
         #[Assert\LessThanOrEqual(self::MAX_LIMIT)]
         public ?int $limit = self::MAX_LIMIT,
         public PaginationMode $paginationMode = PaginationMode::LIGHT,
-        #[Assert\All([new Assert\Uuid()])]
+        #[Assert\All([new Assert\Uuid(strict: true)])]
         public ?array $ids = null,
     ) {
     }

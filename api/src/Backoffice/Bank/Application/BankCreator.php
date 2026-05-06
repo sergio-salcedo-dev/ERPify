@@ -32,10 +32,12 @@ final readonly class BankCreator
             ? $this->storedImageObjectWriter->storeFromUploadedFile($storedObjectFile, 'storedObject')
             : null;
 
-        $logo = $logoFile instanceof UploadedFile ? $this->mediaRegistrar->registerFromUploadedFile($logoFile) : null;
+        $logo = $logoFile instanceof UploadedFile
+            ? $this->mediaRegistrar->registerFromUploadedFile($logoFile)
+            : null;
 
         $bank = Bank::create(
-            Uuid::v4(),
+            Uuid::v4()->toRfc4122(),
             $name,
             $shortName,
             $logo,

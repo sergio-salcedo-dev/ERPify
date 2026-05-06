@@ -49,7 +49,7 @@ final readonly class BankPostController
             $bank = $this->bankCreator->create($input->name, $input->shortName, $image, $storedObject);
         } catch (InvalidImageException $invalidImageException) {
             return new JsonResponse(
-                JsonApiErrorBuilder::envelope([
+                JsonApiErrorBuilder::fromErrors([
                     JsonApiErrorBuilder::error(
                         $invalidImageException->formField(),
                         $invalidImageException->getMessage(),

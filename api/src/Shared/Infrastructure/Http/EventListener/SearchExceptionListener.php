@@ -18,7 +18,7 @@ use Throwable;
 
 /**
  * Normalizes failures from search endpoints and request-payload mapping
- * into the `JsonApiErrorBuilder` envelope:
+ * into the `JsonApiErrorBuilder` document:
  *
  * - `NotEncodableValueException` (e.g. `#[MapRequestPayload]` receiving
  *   malformed JSON) → 422 with `"Invalid JSON body."`.
@@ -41,7 +41,7 @@ final readonly class SearchExceptionListener
 
         if ($this->findInChain($throwable, NotEncodableValueException::class) instanceof NotEncodableValueException) {
             $event->setResponse(new JsonResponse(
-                JsonApiErrorBuilder::envelope([
+                JsonApiErrorBuilder::fromErrors([
                     JsonApiErrorBuilder::error('', 'Invalid JSON body.'),
                 ]),
                 Response::HTTP_UNPROCESSABLE_ENTITY,
@@ -63,7 +63,7 @@ final readonly class SearchExceptionListener
 
         if ($throwable instanceof InvalidArgumentException && $this->isSearchRoute($request)) {
             $event->setResponse(new JsonResponse(
-                JsonApiErrorBuilder::envelope([
+                JsonApiErrorBuilder::fromErrors([
                     JsonApiErrorBuilder::error('', $throwable->getMessage()),
                 ]),
                 Response::HTTP_BAD_REQUEST,

@@ -34,7 +34,7 @@ final readonly class BankDeleteController
             );
         } catch (BankNotFoundException $bankNotFoundException) {
             return new JsonResponse(
-                JsonApiErrorBuilder::envelope([
+                JsonApiErrorBuilder::fromErrors([
                     JsonApiErrorBuilder::error('uuid', $bankNotFoundException->getMessage()),
                 ]),
                 Response::HTTP_NOT_FOUND,

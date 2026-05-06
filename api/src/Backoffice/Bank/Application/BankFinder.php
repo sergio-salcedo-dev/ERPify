@@ -25,7 +25,7 @@ final readonly class BankFinder
      */
     public function find(string $id): Bank
     {
-        $this->validator->ensure($id, [new Assert\NotBlank(), new Assert\Uuid()]);
+        $this->validator->ensure($id, [new Assert\NotBlank(), new Assert\Uuid(strict: true)]);
 
         $bank = $this->bankRepository->findById($id);
 
