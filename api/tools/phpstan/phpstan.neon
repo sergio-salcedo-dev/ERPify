@@ -94,7 +94,6 @@ parameters:
         - identifier: property.onlyWritten
           paths:
               - ../../src/Shared/Infrastructure/Persistence/Entity/StoredDomainEvent.php
-              - ../../src/Shared/Media/Domain/Entity/Media.php
 
         # Doctrine BLOB columns hydrate to either string or stream resource depending on driver/platform;
         # the runtime narrowing in getRawBytes() is intentional.

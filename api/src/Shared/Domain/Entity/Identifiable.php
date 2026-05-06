@@ -16,7 +16,7 @@ trait Identifiable
     #[ORM\Column(type: Types::GUID, unique: true)]
     #[ORM\GeneratedValue(strategy: 'CUSTOM')]
     #[ORM\CustomIdGenerator(class: UuidGenerator::class)]
-    #[Assert\Uuid]
+    #[Assert\Uuid(strict: true)]
     #[Serializer\Groups(['identifiable'])]
     protected ?string $id = null;
 

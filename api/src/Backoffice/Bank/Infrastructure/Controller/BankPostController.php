@@ -7,6 +7,7 @@ namespace Erpify\Backoffice\Bank\Infrastructure\Controller;
 use Erpify\Backoffice\Bank\Application\BankCreator;
 use Erpify\Backoffice\Bank\Infrastructure\Request\BankPostPayload;
 use Erpify\Shared\Application\UseCase\Result;
+use Erpify\Shared\Application\Validation\Validator;
 use Erpify\Shared\Infrastructure\Http\JsonApiErrorBuilder;
 use Erpify\Shared\Infrastructure\Http\Responder\ResponderInterface;
 use Erpify\Shared\Infrastructure\Serializer\ResourceNormalizer;
@@ -19,8 +20,6 @@ use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\HttpKernel\Attribute\MapUploadedFile;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Validator\Constraints\File;
-use Symfony\Component\Validator\Exception\ValidationFailedException;
-use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 #[Route('/banks', name: 'backoffice_bank_post', methods: ['POST'])]
 final readonly class BankPostController
@@ -28,7 +27,7 @@ final readonly class BankPostController
     public function __construct(
         private BankCreator $bankCreator,
         private ResourceNormalizer $resourceNormalizer,
-        private ValidatorInterface $validator,
+        private Validator $validator,
         private ResponderInterface $responder,
         #[Autowire('%erpify.media.max_upload_bytes%')]
         private string $maxUploadSize,
@@ -50,7 +49,7 @@ final readonly class BankPostController
             $bank = $this->bankCreator->create($input->name, $input->shortName, $image, $storedObject);
         } catch (InvalidImageException $invalidImageException) {
             return new JsonResponse(
-                JsonApiErrorBuilder::envelope([
+                JsonApiErrorBuilder::fromErrors([
                     JsonApiErrorBuilder::error(
                         $invalidImageException->formField(),
                         $invalidImageException->getMessage(),
@@ -74,16 +73,12 @@ final readonly class BankPostController
             return;
         }
 
-        $constraintViolationList = $this->validator->validate($file, [
+        $this->validator->ensure($file, [
             new File(
                 maxSize: $this->maxUploadSize,
                 mimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
                 mimeTypesMessage: 'Upload a JPEG, PNG, or WebP image.',
             ),
         ]);
-
-        if (\count($constraintViolationList) > 0) {
-            throw new ValidationFailedException($file, $constraintViolationList);
-        }
     }
 }

@@ -14,7 +14,6 @@ use Erpify\Shared\Infrastructure\Persistence\QueryBuilderWithOptions;
 use InvalidArgumentException;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
-use Symfony\Component\Uid\Uuid;
 
 /**
  * @extends AbstractSearchRepository<Bank>
@@ -34,7 +33,7 @@ final class PostgresBankRepository extends AbstractSearchRepository implements B
 
     public function findById(string $id): ?Bank
     {
-        return $this->find(Uuid::fromString($id)->toRfc4122());
+        return $this->find($id);
     }
 
     #[Override]

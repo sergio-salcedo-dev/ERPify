@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Infrastructure\Http;
 
+use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Validator\ConstraintViolationListInterface;
 
 final class JsonApiErrorBuilder
@@ -13,11 +14,11 @@ final class JsonApiErrorBuilder
      *
      * @return array{errors: list<array<string, mixed>>, meta: array{requestId: string}}
      */
-    public static function envelope(array $errors): array
+    public static function fromErrors(array $errors): array
     {
         return [
             'errors' => $errors,
-            'meta' => ['requestId' => \bin2hex(\random_bytes(8))],
+            'meta' => ['requestId' => Uuid::v4()->toRfc4122()],
         ];
     }
 
@@ -44,7 +45,7 @@ final class JsonApiErrorBuilder
             $errors[] = self::error($parameter, (string) $violation->getMessage());
         }
 
-        return self::envelope($errors);
+        return self::fromErrors($errors);
     }
 
     private static function toSnakeCase(string $propertyPath): string

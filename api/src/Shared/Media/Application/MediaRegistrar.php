@@ -29,7 +29,7 @@ final readonly class MediaRegistrar
         }
 
         $media = Media::create(
-            Uuid::v4(),
+            Uuid::v4()->toRfc4122(),
             $normalizedImage->contentHash,
             $normalizedImage->mimeType,
             \strlen($normalizedImage->bytes),
