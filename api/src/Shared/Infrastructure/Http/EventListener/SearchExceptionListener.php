@@ -12,16 +12,19 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
+use Symfony\Component\Serializer\Exception\NotEncodableValueException;
 use Symfony\Component\Validator\Exception\ValidationFailedException;
 use Throwable;
 
 /**
- * Normalizes failures from search endpoints into the
- * `JsonApiErrorBuilder` envelope:
+ * Normalizes failures from search endpoints and request-payload mapping
+ * into the `JsonApiErrorBuilder` envelope:
  *
+ * - `NotEncodableValueException` (e.g. `#[MapRequestPayload]` receiving
+ *   malformed JSON) → 422 with `"Invalid JSON body."`.
  * - `ValidationFailedException` (incl. when wrapped by Symfony's
- *   `#[MapQueryString]` resolver into an `HttpException(422)`) →
- *   422 with field-level violations.
+ *   `#[MapRequestPayload]` / `#[MapQueryString]` resolvers into an
+ *   `HttpException(422)`) → 422 with field-level violations.
  * - `InvalidArgumentException` raised under any route whose name ends
  *   with `_search` (e.g. an HMAC-valid but corrupted cursor reaching
  *   `PaginatorCursorFactory::createFromString`) → 400.
@@ -36,7 +39,18 @@ final readonly class SearchExceptionListener
         $throwable = $event->getThrowable();
         $request = $event->getRequest();
 
-        $validationException = $this->findValidationFailedException($throwable);
+        if ($this->findInChain($throwable, NotEncodableValueException::class) instanceof NotEncodableValueException) {
+            $event->setResponse(new JsonResponse(
+                JsonApiErrorBuilder::envelope([
+                    JsonApiErrorBuilder::error('', 'Invalid JSON body.'),
+                ]),
+                Response::HTTP_UNPROCESSABLE_ENTITY,
+            ));
+
+            return;
+        }
+
+        $validationException = $this->findInChain($throwable, ValidationFailedException::class);
 
         if ($validationException instanceof ValidationFailedException) {
             $event->setResponse(new JsonResponse(
@@ -57,10 +71,17 @@ final readonly class SearchExceptionListener
         }
     }
 
-    private function findValidationFailedException(?Throwable $throwable): ?ValidationFailedException
+    /**
+     * @template T of Throwable
+     *
+     * @param class-string<T> $class
+     *
+     * @return T|null
+     */
+    private function findInChain(?Throwable $throwable, string $class): ?Throwable
     {
         for ($current = $throwable; $current instanceof Throwable; $current = $current->getPrevious()) {
-            if ($current instanceof ValidationFailedException) {
+            if ($current instanceof $class) {
                 return $current;
             }
         }

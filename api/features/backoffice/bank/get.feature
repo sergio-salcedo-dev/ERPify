@@ -18,7 +18,7 @@ Feature: Get banks
     And the validation error on "id" should be "<errorMessage>"
     Examples:
       | bankId      | errorMessage                    |
-      | null        | This value should not be blank. |
+      | null        | This value is not a valid UUID. |
       | invalidUuid | This value is not a valid UUID. |
 
   Scenario: Get a bank that does not exist returns 404

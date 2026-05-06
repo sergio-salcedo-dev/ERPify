@@ -35,9 +35,9 @@ final class BankStoredObjectMultipartFunctionalTest extends WebTestCase
             '/api/v1/backoffice/banks',
             [
                 'name' => 'Stored Object Bank',
-                'short_name' => 'SOB',
+                'shortName' => 'SOB',
             ],
-            ['stored_object' => $uploadedFile],
+            ['storedObject' => $uploadedFile],
         );
 
         self::assertResponseStatusCodeSame(201);

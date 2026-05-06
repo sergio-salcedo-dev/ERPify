@@ -4,16 +4,18 @@ Feature: Update a bank
   I need to be able to update a bank
 
   Scenario: Successfully update a bank
-    When I send a POST request to "/backoffice/banks" with body:
+    Given I add "Content-Type" header equal to "application/json"
+    And I add "Accept" header equal to "application/json"
+    And I send a POST request to "/backoffice/banks" with body:
     """
-    {"name": "Original Bank", "short_name": "OB"}
+    {"name": "Original Bank", "shortName": "OB"}
     """
     Then the response status code should be 201
 #    And I remember the JSON field "id" as "bankId"
 #
 #    And I send a PUT request to "/backoffice/banks/{bankId}" with body:
 #    """
-#    {"name": "Updated Bank", "short_name": "UB"}
+#    {"name": "Updated Bank", "shortName": "UB"}
 #    """
 #    And the response status code should be 200
 #    And the response should contain "Updated Bank"
@@ -21,6 +23,6 @@ Feature: Update a bank
 #  Scenario: Update a bank that does not exist returns 404
 #    When I send a PUT request to "/backoffice/banks/00000000-0000-7000-8000-000000000000" with body:
 #    """
-#    {"name": "Updated Bank", "short_name": "UB"}
+#    {"name": "Updated Bank", "shortName": "UB"}
 #    """
 #    Then the response status code should be 404

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\Bank\Application;
 
 use Erpify\Backoffice\Bank\Infrastructure\Persistence\PostgresBankRepository;
-use Symfony\Component\Uid\Uuid;
 
 final readonly class BankDeleter
 {
@@ -15,9 +14,9 @@ final readonly class BankDeleter
     ) {
     }
 
-    public function delete(Uuid $uuid): void
+    public function delete(string $id): void
     {
-        $bank = $this->bankFinder->find($uuid);
+        $bank = $this->bankFinder->find($id);
 
         $this->postgresBankRepository->remove($bank);
     }
