@@ -53,6 +53,7 @@ class Bank extends AggregateRoot
 
     public static function create(
         string $id,
+        string $createEventId,
         string $name,
         string $shortName,
         ?Media $media = null,
@@ -75,6 +76,7 @@ class Bank extends AggregateRoot
 
         $bank->record(new BankCreatedDomainEvent(
             $id,
+            $createEventId,
             $name,
             $shortName,
             $createdAt,
@@ -123,7 +125,7 @@ class Bank extends AggregateRoot
         return $this->storedObjectContentHash;
     }
 
-    public function rename(string $name, string $shortName): void
+    public function rename(string $updateEventId, string $name, string $shortName): void
     {
         $this->name = $name;
         $this->shortName = $shortName;
@@ -132,6 +134,7 @@ class Bank extends AggregateRoot
 
         $this->record(new BankUpdatedDomainEvent(
             $this->id,
+            $updateEventId,
             $name,
             $shortName,
             $this->createdAt->format(DateTimeInterface::ATOM),

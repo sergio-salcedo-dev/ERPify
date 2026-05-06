@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Media\Application;
 
+use Erpify\Shared\Infrastructure\Uuid\SymfonyUuidGenerator;
 use Erpify\Shared\Media\Application\Port\ImageNormalizer;
 use Erpify\Shared\Media\Domain\Entity\Media;
 use Erpify\Shared\Media\Domain\Repository\MediaRepository;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
-use Symfony\Component\Uid\Uuid;
 
 final readonly class MediaRegistrar
 {
@@ -29,7 +29,7 @@ final readonly class MediaRegistrar
         }
 
         $media = Media::create(
-            Uuid::v4()->toRfc4122(),
+            SymfonyUuidGenerator::generate(),
             $normalizedImage->contentHash,
             $normalizedImage->mimeType,
             \strlen($normalizedImage->bytes),
