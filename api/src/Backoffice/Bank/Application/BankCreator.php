@@ -6,11 +6,11 @@ namespace Erpify\Backoffice\Bank\Application;
 
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Infrastructure\Persistence\PostgresBankRepository;
+use Erpify\Shared\Infrastructure\Uuid\SymfonyUuidGenerator;
 use Erpify\Shared\Media\Application\MediaRegistrar;
 use Erpify\Shared\Storage\Application\StoredImageObjectWriter;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\Messenger\MessageBusInterface;
-use Symfony\Component\Uid\Uuid;
 
 final readonly class BankCreator
 {
@@ -37,7 +37,8 @@ final readonly class BankCreator
             : null;
 
         $bank = Bank::create(
-            Uuid::v4()->toRfc4122(),
+            SymfonyUuidGenerator::generate(),
+            SymfonyUuidGenerator::generate(),
             $name,
             $shortName,
             $logo,
