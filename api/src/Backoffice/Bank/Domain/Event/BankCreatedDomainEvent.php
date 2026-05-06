@@ -43,15 +43,15 @@ final class BankCreatedDomainEvent extends DomainEvent
     public function toPrimitives(): array
     {
         return [
-            'bank_id' => $this->aggregateId(),
+            'bankId' => $this->aggregateId(),
             'name' => $this->name,
-            'short_name' => $this->shortName,
-            'created_at' => $this->createdAt,
-            'updated_at' => $this->updatedAt,
-            'logo_media_id' => $this->logoMediaId,
-            'logo_content_hash' => $this->logoContentHash,
-            'stored_object_content_hash' => $this->storedObjectContentHash,
-            'stored_object_mime_type' => $this->storedObjectMimeType,
+            'shortName' => $this->shortName,
+            'createdAt' => $this->createdAt,
+            'updatedAt' => $this->updatedAt,
+            'logoMediaId' => $this->logoMediaId,
+            'logoContentHash' => $this->logoContentHash,
+            'storedObjectContentHash' => $this->storedObjectContentHash,
+            'storedObjectMimeType' => $this->storedObjectMimeType,
         ];
     }
 }

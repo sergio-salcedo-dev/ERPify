@@ -8,7 +8,7 @@
 #    When I send a POST multipart request to "/backoffice/banks" with fields:
 #      | field      | value              |
 #      | name       | Behat Logo Bank    |
-#      | short_name | BLB                |
+#      | shortName  | BLB                |
 #      | image      | @minimal-logo.png  |
 #    Then the response status code should be 201
 #    And the JSON field "logoUrl" in the last response should match "#api/v1/media/[a-f0-9]{64}#"
@@ -31,7 +31,7 @@
 #    When I send a POST multipart request to "/backoffice/banks" with fields:
 #      | field      | value              |
 #      | name       | Behat Etag Bank    |
-#      | short_name | BEB                |
+#      | shortName  | BEB                |
 #      | image      | @minimal-logo.png  |
 #    Then the response status code should be 201
 #    And I remember the JSON field "logoUrl" as "logoUrl"

@@ -4,9 +4,11 @@ Feature: Delete a bank
   I need to be able to delete a bank
 
   Scenario: Successfully delete a bank
-    Given I send a POST request to "/backoffice/banks" with body:
+    Given I add "Content-Type" header equal to "application/json"
+    And I add "Accept" header equal to "application/json"
+    And I send a POST request to "/backoffice/banks" with body:
     """
-    {"name": "Bank To Delete", "short_name": "BTD"}
+    {"name": "Bank To Delete", "shortName": "BTD"}
     """
     And the response status code should be 201
 #    When I send a DELETE request to "/backoffice/banks/{bankId}"

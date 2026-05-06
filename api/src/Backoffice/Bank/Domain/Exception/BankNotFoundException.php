@@ -5,12 +5,11 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\Bank\Domain\Exception;
 
 use DomainException;
-use Symfony\Component\Uid\Uuid;
 
 final class BankNotFoundException extends DomainException
 {
-    public static function withId(Uuid $uuid): self
+    public static function withId(string $id): self
     {
-        return new self(\sprintf('Bank with id <%s> not found.', (string) $uuid));
+        return new self(\sprintf('Bank with id <%s> not found.', $id));
     }
 }

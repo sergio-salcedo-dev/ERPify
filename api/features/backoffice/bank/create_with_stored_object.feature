@@ -9,8 +9,8 @@
 #    When I send a POST multipart request to "/backoffice/banks" with fields:
 #      | field          | value              |
 #      | name           | Behat Stored Bank  |
-#      | short_name     | BSB                |
-#      | stored_object  | @minimal-logo.png  |
+#      | shortName      | BSB                |
+#      | storedObject   | @minimal-logo.png  |
 #    Then the response status code should be 201
 #    And the response should be JSON
 #    And the JSON field "storedObjectUrl" in the last response should be a stored object URL

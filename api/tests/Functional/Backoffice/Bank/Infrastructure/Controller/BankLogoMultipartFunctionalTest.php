@@ -31,7 +31,7 @@ final class BankLogoMultipartFunctionalTest extends WebTestCase
             '/api/v1/backoffice/banks',
             [
                 'name' => 'Logo Bank Multipart',
-                'short_name' => 'LBM',
+                'shortName' => 'LBM',
             ],
             ['image' => $uploadedFile],
         );
@@ -73,7 +73,7 @@ final class BankLogoMultipartFunctionalTest extends WebTestCase
         $kernelBrowser->request(
             Request::METHOD_POST,
             '/api/v1/backoffice/banks',
-            ['name' => 'Etag Bank', 'short_name' => 'ETB'],
+            ['name' => 'Etag Bank', 'shortName' => 'ETB'],
             ['image' => $uploadedFile],
         );
         $body = \json_decode((string) $kernelBrowser->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);

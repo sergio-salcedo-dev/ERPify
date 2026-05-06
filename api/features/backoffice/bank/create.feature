@@ -3,10 +3,14 @@ Feature: Create a bank
   In order to manage banks
   I need to be able to create a bank
 
+  Background:
+    Given I add "Content-Type" header equal to "application/json"
+    And I add "Accept" header equal to "application/json"
+
   Scenario: Successfully create a bank
     When I send a POST request to "/backoffice/banks" with body:
     """
-    {"name": "Test Bank", "short_name": "TB"}
+    {"name": "Test Bank", "shortName": "TB"}
     """
     Then the response status code should be 201
 #    And I remember the JSON field "id" as "bankId"

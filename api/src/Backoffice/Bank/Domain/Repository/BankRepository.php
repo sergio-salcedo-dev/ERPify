@@ -7,11 +7,10 @@ namespace Erpify\Backoffice\Bank\Domain\Repository;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Shared\Domain\Search\PaginatedResult;
 use Erpify\Shared\Domain\Search\SearchCriteria;
-use Symfony\Component\Uid\Uuid;
 
 interface BankRepository
 {
-    public function findById(Uuid $uuid): ?Bank;
+    public function findById(string $id): ?Bank;
 
     /** @return PaginatedResult<Bank> */
     public function search(SearchCriteria $criteria): PaginatedResult;

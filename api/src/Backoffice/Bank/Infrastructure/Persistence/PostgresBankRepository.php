@@ -32,9 +32,9 @@ final class PostgresBankRepository extends AbstractSearchRepository implements B
         $this->removeAndFlush($bank);
     }
 
-    public function findById(Uuid $uuid): ?Bank
+    public function findById(string $id): ?Bank
     {
-        return $this->find($uuid->toRfc4122());
+        return $this->find(Uuid::fromString($id)->toRfc4122());
     }
 
     #[Override]

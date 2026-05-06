@@ -29,7 +29,7 @@ final readonly class BankCreator
         ?UploadedFile $storedObjectFile = null,
     ): Bank {
         $stored = $storedObjectFile instanceof UploadedFile
-            ? $this->storedImageObjectWriter->storeFromUploadedFile($storedObjectFile, 'stored_object')
+            ? $this->storedImageObjectWriter->storeFromUploadedFile($storedObjectFile, 'storedObject')
             : null;
 
         $logo = $logoFile instanceof UploadedFile ? $this->mediaRegistrar->registerFromUploadedFile($logoFile) : null;
