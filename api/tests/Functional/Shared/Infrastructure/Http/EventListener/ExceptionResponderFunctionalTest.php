@@ -430,31 +430,27 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
     {
         $kernelBrowser = self::createClient();
         $kernelBrowser->catchExceptions(true);
+        // Use a port-divergent allowed origin so Nelmio's `skip_same_as_origin` (default `true`)
+        // does NOT short-circuit. The KernelBrowser's request scheme+host is `http://localhost`,
+        // so `http://localhost:3000` is recognised as cross-origin yet still in the allowlist
+        // configured by `CORS_ALLOW_ORIGINS` (see `api/config/packages/nelmio_cors.php`).
         $kernelBrowser->request(
             Request::METHOD_GET,
             '/api/test/_throw-not-found',
             server: [
-                'HTTP_ORIGIN' => 'http://localhost',
+                'HTTP_ORIGIN' => 'http://localhost:3000',
             ],
         );
 
         $response = $kernelBrowser->getResponse();
         $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND, $response->getStatusCode(), (string) $response->getContent());
 
-        // Light-touch sanity: with an allowed Origin set, Nelmio's response listener still fires
-        // on the error response. Story 4.1 owns the priority pin and a stricter regression test;
-        // this assertion just guarantees our exception listener does not break the CORS path.
-        $allowOrigin = $response->headers->get('Access-Control-Allow-Origin');
-
-        if (null === $allowOrigin) {
-            $this->markTestSkipped(
-                'Nelmio CORS response listener did not attach Access-Control-Allow-Origin to the error '
-                . 'response in this environment. Defer to Story 4.1 (FR42, FR43) for the strict pin. '
-                . 'See `_bmad-output/implementation-artifacts/deferred-work.md`.',
-            );
-        }
-
-        $this->assertSame('http://localhost', $allowOrigin);
+        // Light-touch sanity: with an allowed cross-origin set, Nelmio's response listener still
+        // fires on the error response. Story 4.1's
+        // `ExceptionResponderListenerPriorityTest::testCrossOriginGetWithOriginHeaderReturnsBothCorsAndProblemDetails`
+        // owns the strict regression pin; this assertion just guarantees the exception listener
+        // does not break the CORS path on the long-standing fixture.
+        $this->assertSame('http://localhost:3000', $response->headers->get('Access-Control-Allow-Origin'));
     }
 
     /**

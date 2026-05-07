@@ -589,9 +589,17 @@ final class ExceptionResponderTest extends TestCase
 
         $this->assertCount(1, $attributes, 'ExceptionResponder must declare exactly one #[AsEventListener] attribute.');
 
-        $arguments = $attributes[0]->getArguments();
-        $this->assertSame('kernel.exception', $arguments['event'] ?? $arguments[0] ?? null);
-        $this->assertArrayNotHasKey('priority', $arguments, 'Story 4.1 (FR42, FR43) owns the priority constant — Story 1.4 must not declare one.');
+        // Instantiate the attribute so the `self::PRIORITY` reference resolves to its int value
+        // (raw `getArguments()` returns the un-evaluated AST node otherwise).
+        $asEventListener = $attributes[0]->newInstance();
+        $this->assertSame('kernel.exception', $asEventListener->event);
+        $this->assertSame(
+            ExceptionResponder::PRIORITY,
+            $asEventListener->priority,
+            'Story 4.1 (FR42, FR43) — the `#[AsEventListener]` attribute must read its priority '
+            . 'from `self::PRIORITY` so the constant is the single source of truth. '
+            . 'See ExceptionResponderListenerPriorityTest for the kernel-bootstrapped pin.',
+        );
     }
 
     public function testSourceFileContainsNoBannedImports(): void

@@ -41,7 +41,18 @@ use Throwable;
  * {@see SearchExceptionListener} at priority 32): if a higher-priority listener has already
  * set a response, this listener leaves it alone and does NOT log.
  *
- * Priority pinned by Story 4.1 (FR42, FR43).
+ * Priority pinned by Story 4.1 (FR42, FR43) at {@see PRIORITY} = 16. Rationale: the value
+ * must sit BELOW {@see SearchExceptionListener} (priority 32) so the search-route carve-out
+ * keeps its first-shot at `ValidationFailedException` / `NotEncodableValueException`, AND
+ * ABOVE Symfony's HttpKernel `ExceptionListener` (default -128) so this listener owns the
+ * RFC 9457 envelope before the framework's generic exception path runs. The CORS interaction
+ * is decoupled by event channel: NelmioCorsBundle's `CorsListener` runs on `kernel.request`
+ * (priority 250) and `kernel.response` (priority 0); the Problem Details response is set on
+ * `kernel.exception` and then flows into the `kernel.response` cycle where Nelmio attaches
+ * `Access-Control-Allow-Origin` to the already-built error body (NFR21). A regression test
+ * (`ExceptionResponderListenerPriorityTest`) pins both this constant and Nelmio's response
+ * priority so a bundle upgrade that drifts those values fails with a clear diagnostic
+ * pointing back to {@see PRIORITY}.
  *
  * Story 3.4 (FR39) — last-resort static body on listener self-failure. The body of `__invoke`
  * after the early returns is wrapped in a top-level `try { ... } catch (\Throwable) { ... }`
@@ -59,9 +70,21 @@ use Throwable;
  * {@see CorrelationIdListener::UUIDV7_PATTERN} (still private there) — duplication is
  * preferred to widening that constant's visibility for a single cross-class consumer.
  */
-#[AsEventListener(event: KernelEvents::EXCEPTION)]
+#[AsEventListener(event: KernelEvents::EXCEPTION, priority: self::PRIORITY)]
 final readonly class ExceptionResponder
 {
+    /**
+     * Story 4.1 (FR42, FR43) — `kernel.exception` listener priority. Sits below
+     * {@see SearchExceptionListener} (priority 32) so the search-route carve-out runs first,
+     * and well above Symfony's HttpKernel `ExceptionListener` (default -128) so this listener
+     * owns the Problem Details envelope. Read by the `AsEventListener` attribute above and by
+     * `ExceptionResponderListenerPriorityTest` (kernel-bootstrapped regression that asserts
+     * the dispatcher reports this exact value AND that NelmioCorsBundle's `kernel.response`
+     * listener priority remains at its expected baseline so CORS headers attach AFTER this
+     * listener has already set the error response).
+     */
+    public const int PRIORITY = 16;
+
     private const string UUIDV7_PATTERN = '/\A[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/';
 
     private const string LOG_MESSAGE = 'API error response built';
