@@ -13,6 +13,7 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\Uid\Uuid;
@@ -40,8 +41,16 @@ use Throwable;
  * {@see SearchExceptionListener} at priority 32): if a higher-priority listener has already
  * set a response, this listener leaves it alone and does NOT log.
  *
- * Priority pinned by Story 4.1 (FR42, FR43). The top-level try/catch fallback is added by
- * Story 3.4 (FR39).
+ * Priority pinned by Story 4.1 (FR42, FR43).
+ *
+ * Story 3.4 (FR39) — last-resort static body on listener self-failure. The body of `__invoke`
+ * after the early returns is wrapped in a top-level `try { ... } catch (\Throwable) { ... }`
+ * so a throw from the factory, the responder, the logger, or any helper still produces a
+ * well-formed `application/problem+json` 500. The fallback emits the byte-for-byte literal
+ * {@see LAST_RESORT_BODY} (no `instance`, no `correlation-id` — intentionally self-sufficient
+ * if those mints fail), with `Cache-Control: no-store`, and emits one CRITICAL PSR-3 log line
+ * carrying the self-failure exception class + message. The CRITICAL emission is wrapped in
+ * its own inner `try/catch` (NFR15) so a broken logger CANNOT block the response.
  *
  * `instance` and `correlation-id` are different concerns: per-error vs per-request. The
  * body's `correlation-id`, the response header `X-Correlation-Id`, and the log's
@@ -56,6 +65,24 @@ final readonly class ExceptionResponder
     private const string UUIDV7_PATTERN = '/\A[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/';
 
     private const string LOG_MESSAGE = 'API error response built';
+
+    /**
+     * Story 3.4 (FR39) — byte-for-byte literal fallback body emitted when the listener's
+     * primary path throws. Intentionally omits `instance` and `correlation-id`: the fallback
+     * must remain self-sufficient even when {@see Uuid::v7} or the responder fail. Held as a
+     * compile-time string constant rather than `\json_encode([...])` so the encode itself
+     * cannot throw on the error path.
+     */
+    private const string LAST_RESORT_BODY = '{"type":"internal-error","title":"Internal server error","status":500}';
+
+    /**
+     * Story 3.4 (FR39) — single, narrow log message for the self-failure path. Operators grep
+     * by this string to surface every listener self-failure across the fleet; the CRITICAL
+     * level + the `self_failure_class` / `self_failure_message` context fields carry the
+     * diagnostic detail. Kept distinct from {@see LOG_MESSAGE} so it never collides with the
+     * primary "API error response built" stream in log filters.
+     */
+    private const string LAST_RESORT_LOG_MESSAGE = 'ExceptionResponder self-failure: emitting last-resort static body.';
 
     public function __construct(
         private ProblemDetailsFactory $problemDetailsFactory,
@@ -76,28 +103,68 @@ final readonly class ExceptionResponder
             return;
         }
 
-        $stored = $request->attributes->get(CorrelationIdListener::ATTRIBUTE_KEY);
+        // Story 3.4 (FR39) — wrap the entire downstream path so a throw from the factory,
+        // the responder, the logger, or any helper still produces a well-formed RFC 9457
+        // 500 response. The early returns above are deliberately OUTSIDE this try: they are
+        // side-effect-free pre-conditions and must never be short-circuited into a fallback.
+        try {
+            $stored = $request->attributes->get(CorrelationIdListener::ATTRIBUTE_KEY);
 
-        $correlationId = (\is_string($stored) && 1 === \preg_match(self::UUIDV7_PATTERN, $stored))
-            ? $stored
-            : Uuid::v7()->toRfc4122();
+            $correlationId = (\is_string($stored) && 1 === \preg_match(self::UUIDV7_PATTERN, $stored))
+                ? $stored
+                : Uuid::v7()->toRfc4122();
 
-        $instance = Uuid::v7()->toRfc4122();
-        $throwable = $event->getThrowable();
+            $instance = Uuid::v7()->toRfc4122();
+            $throwable = $event->getThrowable();
 
-        $problemDetails = $this->problemDetailsFactory->fromThrowable(
-            $throwable,
-            $correlationId,
-            $instance,
-        );
+            $problemDetails = $this->problemDetailsFactory->fromThrowable(
+                $throwable,
+                $correlationId,
+                $instance,
+            );
 
-        $this->logger->log(
-            $this->resolveLogLevel($problemDetails),
-            self::LOG_MESSAGE,
-            $this->buildLogContext($problemDetails, $throwable, $request),
-        );
+            $this->logger->log(
+                $this->resolveLogLevel($problemDetails),
+                self::LOG_MESSAGE,
+                $this->buildLogContext($problemDetails, $throwable, $request),
+            );
 
-        $event->setResponse($this->problemDetailsResponder->respond($problemDetails));
+            $event->setResponse($this->problemDetailsResponder->respond($problemDetails));
+        } catch (Throwable $throwable) {
+            $this->emitLastResort($event, $throwable);
+        }
+    }
+
+    /**
+     * Story 3.4 (FR39) — last-resort emission. Sets a 500 response carrying the byte-for-byte
+     * {@see LAST_RESORT_BODY} with `Content-Type: application/problem+json` and
+     * `Cache-Control: no-store`, then emits a CRITICAL log line WITH the self-failure's class
+     * and message. The log call is wrapped in its own `try { ... } catch (\Throwable) {}`
+     * (NFR15) so a broken logger cannot prevent the response from being produced.
+     *
+     * No `\json_encode` on this path — the body is a string literal so no exception can
+     * escape from the fallback emission itself. Order is load-bearing: the response is set
+     * BEFORE the log call so a logger throw still leaves the response in place.
+     */
+    private function emitLastResort(ExceptionEvent $event, Throwable $selfFailure): void
+    {
+        $event->setResponse(new Response(
+            self::LAST_RESORT_BODY,
+            Response::HTTP_INTERNAL_SERVER_ERROR,
+            [
+                'Content-Type' => 'application/problem+json',
+                'Cache-Control' => 'no-store',
+            ],
+        ));
+
+        try {
+            $this->logger->log(LogLevel::CRITICAL, self::LAST_RESORT_LOG_MESSAGE, [
+                'self_failure_class' => $selfFailure::class,
+                'self_failure_message' => $selfFailure->getMessage(),
+            ]);
+        } catch (Throwable) {
+            // NFR15 — a broken primary logger MUST NOT prevent the response. Swallow.
+        }
     }
 
     private function resolveLogLevel(ProblemDetails $problemDetails): string

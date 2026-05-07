@@ -18,6 +18,7 @@ use Psr\Log\LogLevel;
 use Psr\Log\NullLogger;
 use ReflectionClass;
 use RuntimeException;
+use Stringable;
 use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -652,14 +653,244 @@ final class ExceptionResponderTest extends TestCase
         );
     }
 
-    private function makeListener(?LoggerInterface $logger = null): ExceptionResponder
+    /**
+     * Story 3.4 (FR39) — last-resort static body when the factory throws.
+     *
+     * We force the throw via the factory's PSR-3 sink: a `DomainException` with a
+     * non-whitelisted top-level context value triggers `applyUnserializableSentinel()`
+     * which calls `$logger->log(LogLevel::NOTICE, ...)`. Injecting a throwing logger
+     * into the factory propagates a `RuntimeException` out of `fromThrowable()` — the
+     * exact "factory raises mid-flight" condition the AC pins.
+     */
+    public function testLastResortStaticBodyEmittedWhenFactoryThrows(): void
     {
+        $exceptionResponder = $this->makeListener(
+            logger: new NullLogger(),
+            factoryLogger: $this->throwingLogger('factory boom'),
+        );
+        $exception = new class ('', 'x', ['proxy' => static fn (): int => 1]) extends DomainException implements NotFound {
+        };
+        $exceptionEvent = $this->makeEvent('/api/v1/anything', $exception);
+
+        $exceptionResponder($exceptionEvent);
+
+        $response = $exceptionEvent->getResponse();
+        $this->assertInstanceOf(Response::class, $response);
+        $this->assertSame(Response::HTTP_INTERNAL_SERVER_ERROR, $response->getStatusCode(), (string) $response->getContent());
+
+        // Byte-for-byte equality — the body must be the literal constant, NOT
+        // re-encoded JSON, so we are immune to key-order or whitespace drift.
+        $this->assertSame(
+            '{"type":"internal-error","title":"Internal server error","status":500}',
+            $response->getContent(),
+        );
+
+        $this->assertSame('application/problem+json', $response->headers->get('Content-Type'));
+        $cacheControl = $response->headers->get('Cache-Control');
+        $this->assertNotNull($cacheControl);
+        $this->assertStringContainsString('no-store', $cacheControl);
+    }
+
+    public function testLastResortLogIsCriticalWithSelfFailureClassAndMessage(): void
+    {
+        $bufferingLogger = new BufferingLogger();
+        $exceptionResponder = $this->makeListener(
+            logger: $bufferingLogger,
+            factoryLogger: $this->throwingLogger('factory boom'),
+        );
+        $exception = new class ('', 'x', ['proxy' => static fn (): int => 1]) extends DomainException implements NotFound {
+        };
+        $exceptionEvent = $this->makeEvent('/api/v1/anything', $exception);
+
+        $exceptionResponder($exceptionEvent);
+
+        $logs = \array_values($bufferingLogger->cleanLogs());
+        $this->assertCount(1, $logs, 'Self-failure path must emit exactly one CRITICAL log line.');
+
+        /** @var array{0: string, 1: string, 2: array<string, mixed>} $first */
+        $first = $logs[0];
+        [$level, $message, $context] = $first;
+
+        $this->assertSame(LogLevel::CRITICAL, $level);
+        $this->assertStringContainsString('self-failure', $message);
+        $this->assertArrayHasKey('self_failure_class', $context);
+        $this->assertArrayHasKey('self_failure_message', $context);
+        $this->assertSame(RuntimeException::class, $context['self_failure_class']);
+        $this->assertSame('factory boom', $context['self_failure_message']);
+    }
+
+    public function testLastResortPathSurvivesBrokenLogger(): void
+    {
+        // Both logger sinks throw: the factory's (forces fromThrowable to throw) AND the
+        // listener's (would normally log the self-failure). The fallback response MUST still
+        // appear (NFR15 — broken logger never blocks the response).
+        $exceptionResponder = $this->makeListener(
+            logger: $this->throwingLogger('listener logger boom'),
+            factoryLogger: $this->throwingLogger('factory boom'),
+        );
+        $exception = new class ('', 'x', ['proxy' => static fn (): int => 1]) extends DomainException implements NotFound {
+        };
+        $exceptionEvent = $this->makeEvent('/api/v1/anything', $exception);
+
+        $exceptionResponder($exceptionEvent);
+
+        $response = $exceptionEvent->getResponse();
+        $this->assertInstanceOf(Response::class, $response);
+        $this->assertSame(Response::HTTP_INTERNAL_SERVER_ERROR, $response->getStatusCode(), (string) $response->getContent());
+        $this->assertSame(
+            '{"type":"internal-error","title":"Internal server error","status":500}',
+            $response->getContent(),
+        );
+        $this->assertSame('application/problem+json', $response->headers->get('Content-Type'));
+        $cacheControl = $response->headers->get('Cache-Control');
+        $this->assertNotNull($cacheControl);
+        $this->assertStringContainsString('no-store', $cacheControl);
+    }
+
+    /**
+     * Sanity test: a normal `DomainException` thrown event still produces the canonical
+     * `WARNING` log with `API error response built` and NOT the last-resort body. Pins that
+     * Story 3.4's wrap did not regress the happy path.
+     */
+    public function testHappyPathStillCallsPrimaryLoggerNotLastResort(): void
+    {
+        $bufferingLogger = new BufferingLogger();
+        $exceptionResponder = $this->makeListener($bufferingLogger);
+        $exception = new class ('', 'Bank not found') extends DomainException implements NotFound {
+        };
+        $exceptionEvent = $this->makeEvent('/api/v1/anything', $exception);
+
+        $exceptionResponder($exceptionEvent);
+
+        $logRecord = $this->singleLogRecord($bufferingLogger);
+        $this->assertSame(LogLevel::WARNING, $logRecord['level']);
+        $this->assertSame('API error response built', $logRecord['message']);
+
+        $response = $exceptionEvent->getResponse();
+        $this->assertInstanceOf(Response::class, $response);
+        $this->assertSame(Response::HTTP_NOT_FOUND, $response->getStatusCode(), (string) $response->getContent());
+        $body = (string) $response->getContent();
+        $this->assertNotSame(
+            '{"type":"internal-error","title":"Internal server error","status":500}',
+            $body,
+            'Happy path must not emit the last-resort body.',
+        );
+        $this->assertStringContainsString('"type":"not-found"', $body);
+    }
+
+    /**
+     * NFR6 — the fallback path must complete in ≤ 1ms. AC says "documented, not CI-gated";
+     * we run a generous-threshold synthetic loop here so the contract is exercised but
+     * remains stable on shared CI hardware. The mean must beat 5ms; the per-iteration
+     * budget is a softer 1ms target documented in the epic.
+     */
+    public function testLastResortPathCompletesUnderOneMillisecondBenchmark(): void
+    {
+        $exceptionResponder = $this->makeListener(
+            logger: new NullLogger(),
+            factoryLogger: $this->throwingLogger('factory boom'),
+        );
+        $exception = new class ('', 'x', ['proxy' => static fn (): int => 1]) extends DomainException implements NotFound {
+        };
+
+        $iterations = 1000;
+        $start = \hrtime(true);
+
+        for ($i = 0; $i < $iterations; ++$i) {
+            $exceptionEvent = $this->makeEvent('/api/v1/anything', $exception);
+            $exceptionResponder($exceptionEvent);
+        }
+
+        $elapsedNs = \hrtime(true) - $start;
+        $meanMs = ($elapsedNs / $iterations) / 1_000_000;
+
+        // Generous CI-stable threshold (5ms). The 1ms NFR6 target is documented in the
+        // epic and is the goal under typical hardware; this assertion is a regression
+        // guard, not a strict perf gate.
+        $this->assertLessThan(
+            5.0,
+            $meanMs,
+            \sprintf('Fallback path mean wall-clock %.4fms exceeded 5ms regression guard.', $meanMs),
+        );
+    }
+
+    /**
+     * Build a PSR-3 logger whose every method throws a `RuntimeException`. Used by the
+     * Story 3.4 self-failure tests to make either the factory's PSR-3 sink (forces
+     * `fromThrowable` to throw) or the listener's PSR-3 sink (NFR15 logger-resilience)
+     * fail loudly. Anonymous class — kept inline so the production listener never sees
+     * a leaked test-double symbol.
+     */
+    private function throwingLogger(string $message): LoggerInterface
+    {
+        return new readonly class ($message) implements LoggerInterface {
+            public function __construct(private string $message)
+            {
+            }
+
+            public function emergency(string|Stringable $message, array $context = []): void
+            {
+                throw new RuntimeException($this->message);
+            }
+
+            public function alert(string|Stringable $message, array $context = []): void
+            {
+                throw new RuntimeException($this->message);
+            }
+
+            public function critical(string|Stringable $message, array $context = []): void
+            {
+                throw new RuntimeException($this->message);
+            }
+
+            public function error(string|Stringable $message, array $context = []): void
+            {
+                throw new RuntimeException($this->message);
+            }
+
+            public function warning(string|Stringable $message, array $context = []): void
+            {
+                throw new RuntimeException($this->message);
+            }
+
+            public function notice(string|Stringable $message, array $context = []): void
+            {
+                throw new RuntimeException($this->message);
+            }
+
+            public function info(string|Stringable $message, array $context = []): void
+            {
+                throw new RuntimeException($this->message);
+            }
+
+            public function debug(string|Stringable $message, array $context = []): void
+            {
+                throw new RuntimeException($this->message);
+            }
+
+            public function log($level, string|Stringable $message, array $context = []): void
+            {
+                throw new RuntimeException($this->message);
+            }
+        };
+    }
+
+    private function makeListener(
+        ?LoggerInterface $logger = null,
+        ?LoggerInterface $factoryLogger = null,
+    ): ExceptionResponder {
         // The listener owns the BufferingLogger under test; the factory's PSR-3 sink is wired
         // separately to a NullLogger so any Story 3.3 sentinel emissions from `applyUnserializableSentinel`
         // never pollute the listener's `singleLogRecord` assertions (factory and listener emit on
         // independent channels at runtime).
+        //
+        // Story 3.4 (FR39) — `$factoryLogger` lets a self-failure test inject a logger whose
+        // `log()` throws into the factory; the factory's `applyUnserializableSentinel()` will
+        // re-raise that throw out of `fromThrowable()`, exercising the listener's outer
+        // try/catch on a real code path (no PHPUnit mock needed — `ProblemDetailsFactory` is
+        // `final readonly` and excluded from MockObject's doubler).
         return new ExceptionResponder(
-            new ProblemDetailsFactory('test', new NullLogger()),
+            new ProblemDetailsFactory('test', $factoryLogger ?? new NullLogger()),
             new ProblemDetailsResponder(),
             $logger ?? new BufferingLogger(),
         );
