@@ -1,5 +1,15 @@
 # Deferred Work
 
+## Deferred from: follow-up code review of `spec-pwa-bank-crud` (2026-05-08)
+
+- **No `AbortSignal` on detail/edit page fetches.** The `cancelled` flag prevents state writes after unmount, but the underlying fetch keeps running and burns network/backend cycles. Adding an `AbortController` and threading the signal through the use case + repository would also abort the request itself.
+- **Inversify container in client bundle.** Pages converted to `"use client"` import the container module; all DI bindings (FetchHttpClient, MockHttpClient, every adapter, every use case) are now shipped to the browser. The existing health page already does this; resolve project-wide rather than per-feature.
+- **`crypto.randomUUID()` has no fallback for non-secure contexts.** Older Safari and http intranets throw on the call. Synthesized ProblemDetails (`genericProblem`) and the legacy-envelope translator both rely on it. Consider a small uuid polyfill or a `crypto.randomUUID?.() ?? Math.random().toString(36)` guard.
+- **`genericProblem.status: 0`.** Some strict RFC 9457 validators reject `status` outside 100..599. A small sentinel (e.g. `status: 500`) or omitting the field would be safer.
+- **`genericProblem` mints distinct UUIDs for `instance` and `correlation-id`.** They should be the same value (or `instance` should be a urn derived from `correlation-id`) so logs can be tied together.
+- **`genericProblem(err.message)` swallows `Error.cause` and stack.** Non-HttpError failures (Inversify resolution, DNS, AbortError) reduce to a one-line `detail`. Either log to `console.error` or expand the synthesized PD with a `cause` extension member.
+- **`Link className={buttonVariants(...)}` exposes `role="link"`, not `role="button"`.** Screen readers announce "Edit, link" rather than "Edit, button". Add `role="button"` (with care: the keyboard interaction model for links uses Enter, button uses Enter+Space) or accept the link semantics for navigation.
+
 ## Deferred from: code review of `spec-pwa-bank-crud` (2026-05-08)
 
 - **Container singleton scope vs request isolation.** `Container.ts` binds `BackOfficeBankRepository` `inSingletonScope`, with a module-level container shared across all server requests. Once auth/session land, this leaks cookies/headers between users. Pre-existing pattern across the kernel; address as part of auth integration.

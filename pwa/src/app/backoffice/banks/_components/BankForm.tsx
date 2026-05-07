@@ -107,7 +107,18 @@ export function BankForm({ mode, initial }: BankFormProps) {
       </FormField>
 
       <footer className="bank-form__footer flex items-center justify-end gap-2 pt-2">
-        <Link href={cancelHref} className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}>
+        <Link
+          href={cancelHref}
+          aria-disabled={submitting || undefined}
+          tabIndex={submitting ? -1 : undefined}
+          onClick={(event) => {
+            if (submitting) event.preventDefault();
+          }}
+          className={cn(
+            buttonVariants({ variant: "ghost", size: "sm" }),
+            submitting && "pointer-events-none opacity-50",
+          )}
+        >
           Cancel
         </Link>
         <Button type="submit" size="sm" disabled={submitting} data-testid="bank-form__submit">

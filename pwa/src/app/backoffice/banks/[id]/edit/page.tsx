@@ -37,6 +37,9 @@ export default function EditBankPage() {
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
+    setState("loading");
+    setBank(null);
+    setProblem(null);
     (async () => {
       try {
         const useCase = container.get<FindBank>("BackOfficeFindBank");
@@ -96,6 +99,7 @@ export default function EditBankPage() {
           </header>
 
           <BankForm
+            key={bank.id}
             mode="edit"
             initial={{ id: bank.id, name: bank.name, shortName: bank.shortName }}
           />

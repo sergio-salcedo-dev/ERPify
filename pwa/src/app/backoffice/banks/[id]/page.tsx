@@ -37,6 +37,9 @@ export default function BankDetailPage() {
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
+    setState("loading");
+    setBank(null);
+    setProblem(null);
     (async () => {
       try {
         const useCase = container.get<FindBank>("BackOfficeFindBank");

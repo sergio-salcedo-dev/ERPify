@@ -114,6 +114,20 @@ context:
 - [x] [Review][Defer] No "navigate away with unsaved changes" warning on dirty forms [pwa/src/app/backoffice/banks/_components/BankForm.tsx] — deferred, UX hardening
 - [x] [Review][Defer] Date columns use `new Date(...).toLocaleString()` server-side — defensive guards for null/missing/invalid ISO not added [pwa/src/app/backoffice/banks/page.tsx:18, [id]/page.tsx:84-85] — deferred, defensive coding
 
+### Review Findings (2026-05-08, follow-up review of `7f39c33..c88d48d`)
+
+- [x] [Review][Patch] Reset detail/edit page state at the top of `useEffect` so navigating from `/banks/A` to `/banks/B` does not flash A's data while B's fetch is in flight [pwa/src/app/backoffice/banks/[id]/page.tsx:36, [id]/edit/page.tsx:39]
+- [x] [Review][Patch] Add `key={bank.id}` to `<BankForm mode="edit">` so a different `initial` prop fully remounts the form (avoids `useState(initial?.name)` capturing the prior bank's draft) [pwa/src/app/backoffice/banks/[id]/edit/page.tsx:97]
+- [x] [Review][Patch] Cancel link in BankForm must not navigate while submitting — block via `aria-disabled` + `onClick` preventDefault [pwa/src/app/backoffice/banks/_components/BankForm.tsx:110]
+- [x] [Review][Defer] No `AbortSignal` on detail/edit fetches — cancelled flag suppresses state writes but request keeps running [pwa/src/app/backoffice/banks/[id]/page.tsx:36, [id]/edit/page.tsx:39] — deferred, lifecycle hardening
+- [x] [Review][Defer] Inversify container imported into `"use client"` pages bundles all bindings into the browser; pre-existing pattern from health page [pwa/src/app/backoffice/banks/page.tsx, [id]/page.tsx, [id]/edit/page.tsx] — deferred, project-wide architectural concern
+- [x] [Review][Defer] `crypto.randomUUID()` lacks fallback for non-secure contexts (older Safari / http intranets) [pwa/src/app/backoffice/banks/page.tsx:23, [id]/page.tsx:18, [id]/edit/page.tsx:21] — deferred, browser compatibility
+- [x] [Review][Defer] `genericProblem.status: 0` may fail strict ProblemDetails validators; consider a non-zero sentinel [pwa/src/app/backoffice/banks/page.tsx:21] — deferred, cosmetic
+- [x] [Review][Defer] `genericProblem` mints separate UUIDs for `instance` and `correlation-id`; should reuse one [pwa/src/app/backoffice/banks/page.tsx:25] — deferred, low-priority observability
+- [x] [Review][Defer] Closing the delete dialog while the DELETE is in flight (Esc / overlay / DialogClose Cancel) loses the error display [pwa/src/app/backoffice/banks/_components/DeleteBankButton.tsx:36] — already deferred from prior review
+- [x] [Review][Defer] `genericProblem(err.message)` discards `Error.cause` and stack — non-HttpError diagnostics are minimal [pwa/src/app/backoffice/banks/page.tsx:25] — deferred, observability
+- [x] [Review][Defer] `Link` styled with `buttonVariants` exposes `role="link"`, not `role="button"` — screen readers announce "link" for actions like "Edit" or "Create your first bank" [pwa/src/app/backoffice/banks/page.tsx:69, [id]/page.tsx:74-78] — deferred, a11y polish
+
 **Acceptance Criteria:**
 - Given the API returns rows on `/banks`, when the user visits `/backoffice/banks`, then the DataTable shows shortName/name/updatedAt and a `[+ New bank]` link, and clicking a row navigates to `/backoffice/banks/<id>`.
 - Given the user submits create with `name=""`, when the API returns the legacy 422 envelope with `errors[].source.parameter="name"`, then the `<FormField name="name">` shows the API message and the form retains user input; `<ProblemDisplay>` is **not** shown for the same 422.
