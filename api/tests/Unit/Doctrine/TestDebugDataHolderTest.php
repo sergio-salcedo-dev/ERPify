@@ -5,9 +5,19 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Doctrine;
 
 use Erpify\Tests\Doctrine\TestDebugDataHolder;
+use Erpify\Tests\Unit\Doctrine\Stubs\Controller\FakeAction;
+use Erpify\Tests\Unit\Doctrine\Stubs\FakeCommand;
+use Erpify\Tests\Unit\Doctrine\Stubs\FakeController;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bridge\Doctrine\Middleware\Debug\Query;
 
+/**
+ * Branch coverage notes: shouldLog()'s EXCLUDED_CLASSES and INCLUDED_CLASSES paths
+ * cannot be exercised here without declaring stubs inside the
+ * DAMA\DoctrineTestBundle and Symfony\Component namespaces, which would be
+ * invasive. Those branches stay uncovered at the unit level and are left to
+ * integration coverage.
+ */
 final class TestDebugDataHolderTest extends TestCase
 {
     private TestDebugDataHolder $holder;
@@ -47,27 +57,43 @@ final class TestDebugDataHolderTest extends TestCase
         $other = new TestDebugDataHolder();
 
         self::assertArrayHasKey('default', $other->getData());
-    }
 
-    public function testQueryFromBehatContextIsSkipped(): void
-    {
-        // shouldLog() inspects debug_backtrace(); calling addQuery from a method
-        // whose declaring class starts with "Behat" must be filtered out.
-        $skipper = new class($this->holder) {
-            public function __construct(private readonly TestDebugDataHolder $holder) {}
-
-            public function record(Query $query): void
-            {
-                $this->holder->addQuery('default', $query);
-            }
-        };
-
-        // Anonymous class declared in this test file -> class string contains "@anonymous";
-        // its parent in the trace will be Behat-prefixed only if invoked via Behat's runner.
-        // Use force=false; the trace is dominated by PHPUnit\Framework, which is skipped.
-        $skipper->record($this->makeQuery('SELECT skipped'));
+        $other->reset();
 
         self::assertSame([], $this->holder->getData());
+    }
+
+    public function testQueryFromPhpUnitFrameIsSkipped(): void
+    {
+        // shouldLog() inspects debug_backtrace(); when invoked from a PHPUnit
+        // test method the trace is dominated by PHPUnit\Framework\* frames.
+        // isSkippedClass() matches the "PHPUnit" prefix (and "Symfony"/"Behat"
+        // prefixes in adjacent runner frames), so every frame is `continue`d
+        // and shouldLog() falls through to `return false`.
+        $this->holder->addQuery('default', $this->makeQuery('SELECT skipped'));
+
+        self::assertSame([], $this->holder->getData());
+    }
+
+    public function testQueryFromControllerSuffixIsLogged(): void
+    {
+        (new FakeController())->record($this->holder, $this->makeQuery('SELECT controller'));
+
+        self::assertCount(1, $this->holder->getData()['default'] ?? []);
+    }
+
+    public function testQueryFromCommandSuffixIsLogged(): void
+    {
+        (new FakeCommand())->record($this->holder, $this->makeQuery('SELECT command'));
+
+        self::assertCount(1, $this->holder->getData()['default'] ?? []);
+    }
+
+    public function testQueryFromControllerNamespaceIsLogged(): void
+    {
+        (new FakeAction())->record($this->holder, $this->makeQuery('SELECT namespace'));
+
+        self::assertCount(1, $this->holder->getData()['default'] ?? []);
     }
 
     private function makeQuery(string $sql): Query

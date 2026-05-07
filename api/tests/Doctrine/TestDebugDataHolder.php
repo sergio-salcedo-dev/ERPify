@@ -13,8 +13,6 @@ use Symfony\Bridge\Doctrine\Middleware\Debug\Query;
  * SymfonyExtension boots a separate test container, and queries executed
  * inside the request kernel must remain visible to the assertion-side
  * container.
- *
- * @SuppressWarnings("PHPMD.CyclomaticComplexity")
  */
 class TestDebugDataHolder extends DebugDataHolder
 {
@@ -105,6 +103,8 @@ class TestDebugDataHolder extends DebugDataHolder
 
     /**
      * @param array<int, array<string, mixed>> $backtraces
+     *
+     * @SuppressWarnings("PHPMD.CyclomaticComplexity")
      */
     private function shouldLog(array $backtraces): bool
     {
