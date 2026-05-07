@@ -145,7 +145,7 @@ final readonly class ProblemDetailsFactory
         429 => 'rate-limited',
     ];
 
-    private const array RESERVED_KEYS = ['type', 'title', 'status', 'detail', 'instance', 'correlation-id', 'violations', 'debug'];
+    private const array RESERVED_KEYS = ['type', 'title', 'status', 'detail', 'instance', 'correlation-id', 'violations', 'debug', 'truncated'];
 
     private const string DEBUG_MODE_FULL = 'full';
 
@@ -225,7 +225,7 @@ final readonly class ProblemDetailsFactory
 
         $validationException = $this->findInChain($e, ValidationFailedException::class);
 
-        if ($validationException instanceof Throwable) {
+        if ($validationException instanceof ValidationFailedException) {
             return $this->applyBodyCap($this->withDebug(new ProblemDetails(
                 type: 'validation-failed',
                 title: 'Validation failed.',
@@ -279,6 +279,7 @@ final readonly class ProblemDetailsFactory
             detail: null,
             instance: $instance,
             correlationId: $correlationId,
+            extensions: [],
         ), $debug));
     }
 
@@ -325,6 +326,10 @@ final readonly class ProblemDetailsFactory
      * also unwraps Symfony's `RequestPayloadValueResolver` HttpException(422) wrapper
      * (used by `#[MapRequestPayload]` / `#[MapQueryString]` on non-search routes).
      *
+     * Cycle-safe via the same `\spl_object_id` seen-set guard {@see walkPreviousChain} uses
+     * — a malformed chain (or a buggy rewrap that reuses a previous instance) MUST NOT
+     * deadlock the listener and stall the FrankenPHP worker.
+     *
      * @template T of Throwable
      *
      * @param class-string<T> $class
@@ -333,7 +338,17 @@ final readonly class ProblemDetailsFactory
      */
     private function findInChain(?Throwable $throwable, string $class): ?Throwable
     {
+        $seen = [];
+
         for ($current = $throwable; $current instanceof Throwable; $current = $current->getPrevious()) {
+            $id = \spl_object_id($current);
+
+            if (isset($seen[$id])) {
+                return null;
+            }
+
+            $seen[$id] = true;
+
             if ($current instanceof $class) {
                 return $current;
             }

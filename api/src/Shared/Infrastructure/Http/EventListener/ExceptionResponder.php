@@ -91,6 +91,14 @@ final readonly class ExceptionResponder
 
     private const string UUIDV7_PATTERN = '/\A[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/';
 
+    /**
+     * Length of an RFC 4122 UUIDv7 string — short-circuit the regex on values that cannot
+     * possibly match (Edge #10: `_correlation_id` request attribute set by a custom upstream
+     * listener could in principle be megabytes long; pre-check makes the validator scan zero
+     * bytes for any non-36-char input).
+     */
+    private const int UUIDV7_LENGTH = 36;
+
     private const string LOG_MESSAGE = 'API error response built';
 
     /**
@@ -130,20 +138,26 @@ final readonly class ExceptionResponder
             return;
         }
 
-        // Story 3.4 (FR39) — wrap the entire downstream path so a throw from the factory,
+        // Hoisted out of the inner try so the last-resort log can still report the
+        // correlation pair when the factory / responder / logger throws (Edge #4 —
+        // observability hole on self-failure: without these locals, an operator
+        // grepping by `correlation_id` cannot reach the failed request from the
+        // CRITICAL line). Mint defensively: a corrupted attribute or a fresh request.
+        $stored = $request->attributes->get(CorrelationIdListener::ATTRIBUTE_KEY);
+
+        $correlationId = (\is_string($stored) && self::UUIDV7_LENGTH === \strlen($stored)
+            && 1 === \preg_match(self::UUIDV7_PATTERN, $stored))
+            ? $stored
+            : Uuid::v7()->toRfc4122();
+
+        $instance = Uuid::v7()->toRfc4122();
+        $throwable = $event->getThrowable();
+
+        // Story 3.4 (FR39) — wrap the downstream path so a throw from the factory,
         // the responder, the logger, or any helper still produces a well-formed RFC 9457
         // 500 response. The early returns above are deliberately OUTSIDE this try: they are
         // side-effect-free pre-conditions and must never be short-circuited into a fallback.
         try {
-            $stored = $request->attributes->get(CorrelationIdListener::ATTRIBUTE_KEY);
-
-            $correlationId = (\is_string($stored) && 1 === \preg_match(self::UUIDV7_PATTERN, $stored))
-                ? $stored
-                : Uuid::v7()->toRfc4122();
-
-            $instance = Uuid::v7()->toRfc4122();
-            $throwable = $event->getThrowable();
-
             $problemDetails = $this->problemDetailsFactory->fromThrowable(
                 $throwable,
                 $correlationId,
@@ -157,8 +171,8 @@ final readonly class ExceptionResponder
             );
 
             $event->setResponse($this->problemDetailsResponder->respond($problemDetails));
-        } catch (Throwable $throwable) {
-            $this->emitLastResort($event, $throwable);
+        } catch (Throwable $selfFailure) {
+            $this->emitLastResort($event, $selfFailure, $throwable, $correlationId, $instance, $request);
         }
     }
 
@@ -166,15 +180,23 @@ final readonly class ExceptionResponder
      * Story 3.4 (FR39) — last-resort emission. Sets a 500 response carrying the byte-for-byte
      * {@see LAST_RESORT_BODY} with `Content-Type: application/problem+json` and
      * `Cache-Control: no-store`, then emits a CRITICAL log line WITH the self-failure's class
-     * and message. The log call is wrapped in its own `try { ... } catch (\Throwable) {}`
+     * and message PLUS the request's `correlation_id` / `instance` and the original throwable
+     * (Edge #4 — without these, an operator cannot grep the failed request trail from the
+     * CRITICAL fallback line). The log call is wrapped in its own `try { ... } catch (\Throwable) {}`
      * (NFR15) so a broken logger cannot prevent the response from being produced.
      *
      * No `\json_encode` on this path — the body is a string literal so no exception can
      * escape from the fallback emission itself. Order is load-bearing: the response is set
      * BEFORE the log call so a logger throw still leaves the response in place.
      */
-    private function emitLastResort(ExceptionEvent $event, Throwable $selfFailure): void
-    {
+    private function emitLastResort(
+        ExceptionEvent $event,
+        Throwable $selfFailure,
+        Throwable $originalThrowable,
+        string $correlationId,
+        string $instance,
+        Request $request,
+    ): void {
         $event->setResponse(new Response(
             self::LAST_RESORT_BODY,
             Response::HTTP_INTERNAL_SERVER_ERROR,
@@ -188,6 +210,12 @@ final readonly class ExceptionResponder
             $this->logger->log(LogLevel::CRITICAL, self::LAST_RESORT_LOG_MESSAGE, [
                 'self_failure_class' => $selfFailure::class,
                 'self_failure_message' => $selfFailure->getMessage(),
+                'original_exception_class' => $originalThrowable::class,
+                'original_exception_message' => $originalThrowable->getMessage(),
+                'correlation_id' => $correlationId,
+                'instance' => $instance,
+                'request_uri' => $request->getRequestUri(),
+                'request_method' => $request->getMethod(),
             ]);
         } catch (Throwable) {
             // NFR15 — a broken primary logger MUST NOT prevent the response. Swallow.
