@@ -6,3 +6,12 @@ services:
 
     Erpify\Tests\DataFixtures\:
         resource: '../tests/DataFixtures/*'
+
+    Erpify\Tests\Doctrine\TestDebugDataHolder: ~
+
+    # Override the DebugMiddleware's DebugDataHolder. If the actual service ID
+    # used by doctrine-bundle differs (verify via debug:container), update the
+    # alias target below.
+    Symfony\Bridge\Doctrine\Middleware\Debug\DebugDataHolder:
+        alias: Erpify\Tests\Doctrine\TestDebugDataHolder
+        public: true
