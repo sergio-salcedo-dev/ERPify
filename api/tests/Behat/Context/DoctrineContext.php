@@ -161,7 +161,10 @@ class DoctrineContext extends AbstractContext
     }
 
     #[Then('the request number :number argument :argumentName is equal to :expectedValue')]
-    #[Then('the request number :number argument :argumentName is equal to :expectedValue for doctrine connection :connectionName')]
+    #[Then(
+        'the request number :number argument :argumentName is equal to :expectedValue '
+        . 'for doctrine connection :connectionName',
+    )]
     public function requestArgumentIsEqualTo(
         int $number,
         string $argumentName,
