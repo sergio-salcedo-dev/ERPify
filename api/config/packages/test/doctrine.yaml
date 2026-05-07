@@ -1,0 +1,7 @@
+doctrine:
+    dbal:
+        # Enables Symfony's DebugMiddleware which records queries via DebugDataHolder.
+        # We override the default holder in services_test.yaml to capture them
+        # for Behat's DoctrineContext.
+        profiling: true
+        profiling_collect_backtrace: true
