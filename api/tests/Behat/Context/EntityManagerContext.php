@@ -86,10 +86,15 @@ class EntityManagerContext extends AbstractContext
      * which Behat reuses across scenarios — without this reset, assertions read stale values.
      */
     #[BeforeScenario]
-    public function resetSqlState(): void
+    final public function resetSqlState(): void
     {
         $this->result = null;
         $this->lastSqlError = null;
+
+        foreach ($this->connections as $connection) {
+            $connection->close();
+        }
+
         $this->connections = [];
     }
 
@@ -620,7 +625,7 @@ class EntityManagerContext extends AbstractContext
     private function countEntitiesWithRelationQuery(string $entityClass, string $findByQueryString): int
     {
         return (int) $this->buildQueryBuilderWithRelations($entityClass, $findByQueryString)
-            ->select('COUNT(e)')
+            ->select('COUNT(DISTINCT e)')
             ->getQuery()
             ->getSingleScalarResult()
         ;
@@ -675,6 +680,9 @@ class EntityManagerContext extends AbstractContext
         );
     }
 
+    /**
+     * @SuppressWarnings("PHPMD.CyclomaticComplexity")
+     */
     private function autoDetectType(object $entity, string $path, mixed $value): mixed
     {
         try {
@@ -690,7 +698,8 @@ class EntityManagerContext extends AbstractContext
         }
 
         $reflectionType = $reflectionProperty?->getType();
-        $typeName = $reflectionType instanceof ReflectionNamedType ? $reflectionType->getName() : null;
+        $isClassType = $reflectionType instanceof ReflectionNamedType && !$reflectionType->isBuiltin();
+        $typeName = $isClassType ? $reflectionType->getName() : null;
 
         $isDateTime = $propertyValue instanceof DateTimeInterface
             || (null !== $typeName && \is_a($typeName, DateTimeInterface::class, true));
