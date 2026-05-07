@@ -10,7 +10,8 @@ import type { Bank } from "@/context/backoffice/bank/domain/Bank";
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { CorrelationIdChip, EmptyState, ProblemDisplay } from "@/components/erpify";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { DeleteBankButton } from "../_components/DeleteBankButton";
 
 type State = "loading" | "ready" | "not-found" | "error";
@@ -77,7 +78,9 @@ export default function BankDetailPage() {
           action={
             <div className="flex flex-col items-center gap-2">
               <CorrelationIdChip id={problem["correlation-id"]} label="Error ID:" />
-              <Button render={<Link href="/backoffice/banks">Back to banks</Link>} />
+              <Link href="/backoffice/banks" className={cn(buttonVariants())}>
+                Back to banks
+              </Link>
             </div>
           }
         />
@@ -98,20 +101,15 @@ export default function BankDetailPage() {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
+              <Link
+                href={`/backoffice/banks/${encodeURIComponent(bank.id)}/edit`}
+                className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
                 data-icon="inline-start"
-                render={
-                  <Link
-                    href={`/backoffice/banks/${encodeURIComponent(bank.id)}/edit`}
-                    data-testid="banks-detail__edit-button"
-                  >
-                    <Pencil className="size-3.5" aria-hidden="true" />
-                    Edit
-                  </Link>
-                }
-              />
+                data-testid="banks-detail__edit-button"
+              >
+                <Pencil className="size-3.5" aria-hidden="true" />
+                Edit
+              </Link>
               <DeleteBankButton id={bank.id} name={bank.name} />
             </div>
           </header>

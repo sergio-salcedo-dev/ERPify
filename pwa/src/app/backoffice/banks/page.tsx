@@ -9,7 +9,8 @@ import type { Bank } from "@/context/backoffice/bank/domain/Bank";
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { AsyncBoundary } from "@/components/erpify";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { BanksTable } from "./_components/BanksTable";
 
 type State = "loading" | "empty" | "error" | "ready";
@@ -65,16 +66,15 @@ export default function BanksListPage() {
             Manage the banks available in the back office.
           </p>
         </div>
-        <Button
-          size="sm"
+        <Link
+          href="/backoffice/banks/new"
+          className={cn(buttonVariants({ size: "sm" }))}
           data-icon="inline-start"
-          render={
-            <Link href="/backoffice/banks/new" data-testid="banks-list__new-button">
-              <Plus className="size-3.5" aria-hidden="true" />
-              New bank
-            </Link>
-          }
-        />
+          data-testid="banks-list__new-button"
+        >
+          <Plus className="size-3.5" aria-hidden="true" />
+          New bank
+        </Link>
       </header>
 
       <AsyncBoundary
@@ -85,7 +85,9 @@ export default function BanksListPage() {
         emptyHeading="No banks yet"
         emptyDescription="Create the first bank to get started."
         emptyAction={
-          <Button render={<Link href="/backoffice/banks/new">Create your first bank</Link>} />
+          <Link href="/backoffice/banks/new" className={cn(buttonVariants())}>
+            Create your first bank
+          </Link>
         }
       >
         {(rows) => (

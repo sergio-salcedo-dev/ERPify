@@ -10,7 +10,8 @@ import type { Bank } from "@/context/backoffice/bank/domain/Bank";
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { CorrelationIdChip, EmptyState, ProblemDisplay } from "@/components/erpify";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { BankForm } from "../../_components/BankForm";
 
 type State = "loading" | "ready" | "not-found" | "error";
@@ -77,7 +78,9 @@ export default function EditBankPage() {
           action={
             <div className="flex flex-col items-center gap-2">
               <CorrelationIdChip id={problem["correlation-id"]} label="Error ID:" />
-              <Button render={<Link href="/backoffice/banks">Back to banks</Link>} />
+              <Link href="/backoffice/banks" className={cn(buttonVariants())}>
+                Back to banks
+              </Link>
             </div>
           }
         />

@@ -9,8 +9,9 @@ import { UpdateBank } from "@/context/backoffice/bank/application/UpdateBank";
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
 import type { ProblemDetails, ProblemViolation } from "@/context/shared/domain/ProblemDetails";
 import { FormField, ProblemDisplay } from "@/components/erpify";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 type Mode = "create" | "edit";
 
@@ -106,7 +107,9 @@ export function BankForm({ mode, initial }: BankFormProps) {
       </FormField>
 
       <footer className="bank-form__footer flex items-center justify-end gap-2 pt-2">
-        <Button variant="ghost" size="sm" render={<Link href={cancelHref}>Cancel</Link>} />
+        <Link href={cancelHref} className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}>
+          Cancel
+        </Link>
         <Button type="submit" size="sm" disabled={submitting} data-testid="bank-form__submit">
           {submitting ? "Saving…" : mode === "create" ? "Create bank" : "Save changes"}
         </Button>
