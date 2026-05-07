@@ -1,8 +1,13 @@
 import { injectable } from "inversify";
 import { ApiRoutes } from "../ApiRoutes";
+import { HttpError } from "./HttpError";
+import { toProblemDetails } from "./legacyEnvelope";
 
 export interface HttpClient {
   get<T>(url: string): Promise<T>;
+  post<TBody, T>(url: string, body: TBody): Promise<T>;
+  put<TBody, T>(url: string, body: TBody): Promise<T>;
+  delete(url: string): Promise<void>;
 }
 
 function trimBase(url: string): string {
@@ -51,6 +56,18 @@ export class MockHttpClient implements HttpClient {
       }, 500);
     });
   }
+
+  async post<TBody, T>(_url: string, _body: TBody): Promise<T> {
+    return {} as T;
+  }
+
+  async put<TBody, T>(_url: string, _body: TBody): Promise<T> {
+    return {} as T;
+  }
+
+  async delete(_url: string): Promise<void> {
+    return;
+  }
 }
 
 @injectable()
@@ -62,17 +79,79 @@ export class FetchHttpClient implements HttpClient {
   }
 
   async get<T>(url: string): Promise<T> {
-    const path = url.startsWith("/") ? url : `/${url}`;
-    const fullUrl = `${this.baseUrl}${path}`;
-    const res = await fetch(fullUrl, {
+    const res = await fetch(this.resolveUrl(url), {
       headers: { Accept: "application/json" },
       cache: "no-store",
     });
 
     if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
+      throw await this.toHttpError(res);
+    }
+
+    if (res.status === 204) {
+      return undefined as T;
     }
 
     return (await res.json()) as T;
+  }
+
+  async post<TBody, T>(url: string, body: TBody): Promise<T> {
+    return this.sendWithBody<TBody, T>("POST", url, body);
+  }
+
+  async put<TBody, T>(url: string, body: TBody): Promise<T> {
+    return this.sendWithBody<TBody, T>("PUT", url, body);
+  }
+
+  async delete(url: string): Promise<void> {
+    const res = await fetch(this.resolveUrl(url), {
+      method: "DELETE",
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+
+    if (!res.ok) {
+      throw await this.toHttpError(res);
+    }
+  }
+
+  private async sendWithBody<TBody, T>(
+    method: "POST" | "PUT",
+    url: string,
+    body: TBody,
+  ): Promise<T> {
+    const res = await fetch(this.resolveUrl(url), {
+      method,
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      throw await this.toHttpError(res);
+    }
+
+    if (res.status === 204) {
+      return undefined as T;
+    }
+
+    return (await res.json()) as T;
+  }
+
+  private resolveUrl(url: string): string {
+    const path = url.startsWith("/") ? url : `/${url}`;
+    return `${this.baseUrl}${path}`;
+  }
+
+  private async toHttpError(res: Response): Promise<HttpError> {
+    const parsed = await res.json().catch(() => null);
+    const problem = toProblemDetails(parsed, res.status, {
+      type: "about:blank",
+      title: `HTTP ${res.status}`,
+    });
+    return new HttpError(problem);
   }
 }

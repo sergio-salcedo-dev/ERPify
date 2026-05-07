@@ -1,5 +1,26 @@
 # Deferred Work
 
+## Deferred from: review of `spec-pwa-http-client-writes` (2026-05-08)
+
+- **`FetchHttpClient.toHttpError` discards non-JSON error bodies.** Servers/proxies sometimes emit `text/plain` or HTML on 5xx (gateway timeout, WAF block). The current `await res.json().catch(() => null)` reduces them to `null` and the synthesized ProblemDetails carries only the status code. Consider reading via `res.text()` first and stashing the raw text under `problem.detail` (truncated) when JSON parse fails, so operators retain the diagnostic.
+- **No timeout / abort signal on `FetchHttpClient`.** Every method is a bare `fetch` with no `AbortSignal`, no timeout, no idempotent retry. A hung backend will hang the React tree. Adding an optional `signal` and a default timeout (e.g. 30s) is reasonable shared-infra hardening.
+- **Health page should consume `err.problem` directly.** `pwa/src/app/backoffice/health/page.tsx` already has a TODO ("When the BackOffice CheckHealth adapter starts returning RFC 9457 envelopes…"). With `HttpError` now carrying real `ProblemDetails`, the page can drop its synthesized stand-in: `if (err instanceof HttpError) setProblem(err.problem)`.
+- **Translator coverage gap: status mismatch on pass-through.** When `isProblemDetails(body) === true` but `body.status !== HTTP status`, the translator trusts the body. Add a test (or normalize to the wire status) once a real consumer surfaces the divergence.
+
+## Deferred from: spec split of `spec-pwa-bank-crud` (2026-05-08)
+
+Original intent was a single PWA Backoffice Bank CRUD frontend spec. After the spec exceeded the 1600-token soft target, the user chose to split. The shared HttpClient extension + ProblemDetails translator ships first (now `spec-pwa-http-client-writes.md`); the rest is deferred:
+
+- **PWA Backoffice Bank context + pages + nav + E2E** — once `HttpClient.{post,put,delete}`, `HttpError`, and `legacyEnvelope.toProblemDetails` are merged, write a follow-up spec covering:
+  - `pwa/src/context/backoffice/bank/{domain,application,infrastructure}/*` — `Bank`, `BankRepository` (search/find/create/update/delete), `BankNotFoundError`, 5 `@injectable` use cases, `ApiBankRepository`.
+  - `pwa/src/context/shared/infrastructure/ApiRoutes.ts` — add `backoffice.banks { list, byId(id) }`.
+  - `pwa/src/context/shared/infrastructure/DependencyInjection/Container.ts` — bind `BackOfficeBankRepository` + 5 use cases (`BackOffice<UseCase>` symbol pattern).
+  - `pwa/src/app/backoffice/banks/{page,new/page,[id]/page,[id]/edit/page}.tsx` — dedicated routes (list / new / detail / edit).
+  - `pwa/src/app/backoffice/banks/_components/{BankForm,DeleteBankDialog}.tsx` — shared form (`name` ≤255, `shortName` ≤50) and AlertDialog confirm.
+  - `pwa/src/app/backoffice/BackOfficeLayoutClient.tsx` — add `Catalogs > Banks` (lucide `Building2`) above the existing `System` group.
+  - `pwa/tests/e2e/backoffice/banks.spec.ts` + `pwa/tests/e2e/fixtures/banks-api.ts` — Playwright happy paths and error states (422 with legacy envelope, 404, etc.).
+  - Excluded: image / Media / StoredObject upload (PWA sends JSON `{name, shortName}` only).
+
 ## Deferred from: code review of 2026-05-07-port-behat-doctrine-context (2026-05-07)
 
 - **Empty-backtrace early return is dead code in practice** — `TestDebugDataHolder::shouldLog()` returns `true` on `[] === $backtraces`. PHP's `debug_backtrace()` always includes at least the calling frame, so this branch is unreachable. Faithful port from chiliz/test-bundle.
