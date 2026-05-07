@@ -51,6 +51,7 @@ New bounded contexts/modules follow the same three-layer split. Cross-context ca
 -   Adding endpoints (search, …): [`docs/adding-endpoints.md`](docs/adding-endpoints.md).
 -   Make targets (run from repo root): [`docs/make-targets.md`](docs/make-targets.md).
 -   Architecture: [`../docs/architecture-api.md`](../docs/architecture-api.md), [`../docs/integration-architecture.md`](../docs/integration-architecture.md).
+-   Error contract one-pager (RFC 9457 Problem Details — marker→status map, env-aware `debug`, redaction, observability): [`../docs/api-error-contract.md`](../docs/api-error-contract.md). **Adding a marker interface or changing its mapping requires updating that page** (NFR26).
 -   Dev workflow: [`../docs/development-guide-api.md`](../docs/development-guide-api.md).
 -   Deployment: [`../docs/deployment-guide.md`](../docs/deployment-guide.md).
 -   Upstream symfony-docker references: [`docs/options.md`](docs/options.md), [`docs/tls.md`](docs/tls.md), [`docs/xdebug.md`](docs/xdebug.md), [`docs/troubleshooting.md`](docs/troubleshooting.md), [`docs/updating.md`](docs/updating.md).
