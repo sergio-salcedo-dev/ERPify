@@ -20,11 +20,15 @@ use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
+use Psr\Log\LogLevel;
+use Psr\Log\NullLogger;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionNamedType;
 use RuntimeException;
 use stdClass;
+use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 use Symfony\Component\Security\Core\Exception\AuthenticationException;
@@ -47,10 +51,14 @@ final class ProblemDetailsFactoryTest extends TestCase
      * Story 3.1 — env-aware factory helper. Defaults to 'prod' so existing tests' byte-for-byte
      * `extensions` assertions stay green (prod omits the `debug` extension entirely). New
      * Story 3.1 tests pass `'dev'` / `'test'` / `'staging'` / `'prod'` explicitly.
+     *
+     * Story 3.3 — accepts an optional `LoggerInterface` so tests that assert on the per-replacement
+     * sentinel log record can pass a `BufferingLogger`. Defaults to `NullLogger` so existing tests'
+     * behaviour is unchanged byte-for-byte.
      */
-    private function factoryFor(string $environment = 'prod'): ProblemDetailsFactory
+    private function factoryFor(string $environment = 'prod', ?LoggerInterface $logger = null): ProblemDetailsFactory
     {
-        return new ProblemDetailsFactory($environment);
+        return new ProblemDetailsFactory($environment, $logger ?? new NullLogger());
     }
 
     #[DataProvider('provideMarkers')]
@@ -264,7 +272,12 @@ final class ProblemDetailsFactoryTest extends TestCase
         $this->assertSame($context, $problemDetails->extensions);
     }
 
-    public function testContextNonWhitelistedValuesAreSilentlyDropped(): void
+    /**
+     * Story 3.3 — non-whitelisted top-level context values are SUBSTITUTED with the literal
+     * `'[unserializable]'` sentinel (FR38) instead of being silently dropped (the previous
+     * Story 1.3 behaviour). Body-side: every original key survives with the sentinel value.
+     */
+    public function testContextNonWhitelistedValuesAreSubstitutedWithSentinel(): void
     {
         $resource = \fopen('php://memory', 'r');
         $this->assertNotFalse($resource);
@@ -286,13 +299,168 @@ final class ProblemDetailsFactoryTest extends TestCase
 
             $result = $this->factoryFor()->fromThrowable($exception, self::CID, self::INSTANCE);
 
-            $this->assertSame(['safe' => 1], $result->extensions);
-            $this->assertArrayNotHasKey('closure', $result->extensions);
-            $this->assertArrayNotHasKey('resource', $result->extensions);
-            $this->assertArrayNotHasKey('object', $result->extensions);
+            $this->assertSame(
+                [
+                    'closure' => '[unserializable]',
+                    'resource' => '[unserializable]',
+                    'object' => '[unserializable]',
+                    'safe' => 1,
+                ],
+                $result->extensions,
+                'Non-whitelisted values must be replaced (not dropped) with the literal sentinel; whitelisted values pass through unchanged.',
+            );
         } finally {
             \fclose($resource);
         }
+    }
+
+    /**
+     * Story 3.3 — every substitution emits exactly one PSR-3 `notice` log record with the
+     * four-field context shape `{instance, correlation_id, context_key, original_type}`.
+     * `original_type` is the {@see ProblemDetailsFactory::sanitiseExceptionClass}-cleaned
+     * FQCN for objects (no NUL byte, no `__FILE__`-shaped path leak from anonymous-class FQCNs).
+     */
+    public function testFactoryEmitsOnePsr3NoticePerSentinelSubstitutionWithFourFieldContext(): void
+    {
+        $bufferingLogger = new BufferingLogger();
+        $closure = static fn (): int => 1;
+        $stdObject = new stdClass();
+
+        $context = [
+            'cb' => $closure,
+            'o' => $stdObject,
+            'safe' => 1,
+        ];
+
+        $exception = new class ('', 'x', $context) extends DomainException implements NotFound {
+        };
+
+        $this->factoryFor('prod', $bufferingLogger)->fromThrowable($exception, self::CID, self::INSTANCE);
+
+        $logs = $bufferingLogger->cleanLogs();
+        $this->assertCount(2, $logs, 'Exactly one notice per non-whitelisted top-level value (closure + stdClass = 2 records).');
+
+        $byKey = [];
+
+        foreach ($logs as $log) {
+            $logContext = $this->assertSentinelLogShape($log);
+            $byKey[$logContext['context_key']] = $logContext['original_type'];
+        }
+
+        $this->assertArrayHasKey('cb', $byKey);
+        $this->assertArrayHasKey('o', $byKey);
+        $this->assertSame('Closure', $byKey['cb']);
+        $this->assertSame(stdClass::class, $byKey['o']);
+    }
+
+    /**
+     * Story 3.3 — anonymous-class context value (e.g. a Doctrine proxy stand-in carrying
+     * `__get` / `__call`) substitutes to the body sentinel, and the log's `original_type`
+     * reuses {@see ProblemDetailsFactory::sanitiseExceptionClass}: no `\0`, no path leak from
+     * the `\0/path:line$N` anonymous-class suffix PHP appends to the FQCN.
+     */
+    public function testFactoryDoctrineProxyStandInLogsSanitisedOriginalTypeWithoutNulOrPathLeak(): void
+    {
+        $bufferingLogger = new BufferingLogger();
+        $proxy = new class {
+            public function __get(string $name): mixed
+            {
+                return null;
+            }
+
+            /**
+             * @param list<mixed> $arguments
+             */
+            public function __call(string $name, array $arguments): mixed
+            {
+                return null;
+            }
+        };
+
+        $exception = new class ('', 'x', ['proxy' => $proxy]) extends DomainException implements NotFound {
+        };
+
+        $problemDetails = $this->factoryFor('prod', $bufferingLogger)->fromThrowable($exception, self::CID, self::INSTANCE);
+
+        $this->assertArrayHasKey('proxy', $problemDetails->extensions);
+        $this->assertSame('[unserializable]', $problemDetails->extensions['proxy']);
+
+        $encoded = \json_encode($problemDetails->toArray(), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        $this->assertStringNotContainsString("\0", $encoded, 'Wire body must not carry the anonymous-class NUL-byte FQCN.');
+        $this->assertStringNotContainsString(__FILE__, $encoded, 'Wire body must not leak the throw-site file path.');
+
+        $logs = \array_values($bufferingLogger->cleanLogs());
+        $this->assertCount(1, $logs);
+        $logContext = $this->assertSentinelLogShape($logs[0]);
+        $this->assertSame('proxy', $logContext['context_key']);
+        $originalType = $logContext['original_type'];
+        $this->assertStringNotContainsString("\0", $originalType, 'Sanitised original_type must not contain a NUL byte.');
+        $this->assertStringNotContainsString(__FILE__, $originalType, 'Sanitised original_type must not leak the file path.');
+        $this->assertStringContainsString('@anonymous', $originalType, 'Anonymous-class FQCN convention preserved up to the @anonymous marker.');
+    }
+
+    /**
+     * Story 3.3 — substitution is single-level. A non-whitelisted value LIVING INSIDE a
+     * top-level array survives unchanged: the top-level value is `array` (whitelisted) so the
+     * factory does not descend, and no sentinel log is emitted. Documents the deliberate
+     * scope limit (matches Story 3.2's single-level redaction).
+     */
+    public function testFactorySentinelDoesNotApplyToNestedObjectsInsideWhitelistedArray(): void
+    {
+        $bufferingLogger = new BufferingLogger();
+        $stdObject = new stdClass();
+        $stdObject->field = 'nested-value';
+
+        $exception = new class ('', 'x', ['user' => ['o' => $stdObject]]) extends DomainException implements NotFound {
+        };
+
+        $problemDetails = $this->factoryFor('prod', $bufferingLogger)->fromThrowable($exception, self::CID, self::INSTANCE);
+
+        $this->assertArrayHasKey('user', $problemDetails->extensions);
+        $this->assertSame(['o' => $stdObject], $problemDetails->extensions['user']);
+        $this->assertCount(0, $bufferingLogger->cleanLogs(), 'Single-level scope: nested values must not trigger sentinel emission.');
+    }
+
+    /**
+     * Story 3.3 — denylist still wins (Story 3.2 contract preserved). A denylisted key carrying
+     * a non-whitelisted value is REMOVED from extensions — the substitution branch never sees
+     * it, so no sentinel log is emitted either.
+     */
+    public function testFactoryDenylistedKeyWithNonWhitelistedValueIsRemovedAndNoSentinelLogIsEmitted(): void
+    {
+        $bufferingLogger = new BufferingLogger();
+        $closure = static fn (): int => 1;
+
+        $exception = new class ('', 'x', ['password' => $closure, 'safe' => 'kept']) extends DomainException implements NotFound {
+        };
+
+        $problemDetails = $this->factoryFor('prod', $bufferingLogger)->fromThrowable($exception, self::CID, self::INSTANCE);
+
+        $this->assertArrayNotHasKey('password', $problemDetails->extensions);
+        $this->assertSame(['safe' => 'kept'], $problemDetails->extensions);
+        $this->assertCount(0, $bufferingLogger->cleanLogs(), 'Denylist strip happens before the substitution branch — no sentinel log.');
+    }
+
+    /**
+     * Story 3.3 — default-deny on unknown exception types (NFR13). A throwable that is neither
+     * a DomainException, nor a ValidationFailedException in the chain, nor a Symfony bridge
+     * case, lands on `type='unhandled-exception'` / `status=500` / `extensions=[]`, and in
+     * `'prod'` env carries the safe literal title with NO `debug` extension. The factory emits
+     * no sentinel log on this path (the listener emits its own `critical` line independently).
+     */
+    public function testFactoryDefaultDenyTerminalBranchInProdEnvHasSafeLiteralTitleNoDebugAndEmptyExtensions(): void
+    {
+        $bufferingLogger = new BufferingLogger();
+        $runtimeException = new RuntimeException('boom');
+
+        $problemDetails = $this->factoryFor('prod', $bufferingLogger)->fromThrowable($runtimeException, self::CID, self::INSTANCE);
+
+        $this->assertSame('unhandled-exception', $problemDetails->type);
+        $this->assertSame(500, $problemDetails->status);
+        $this->assertSame('An unexpected error occurred.', $problemDetails->title);
+        $this->assertSame([], $problemDetails->extensions, 'Default-deny: extensions must be empty (no debug, no leaked context).');
+        $this->assertArrayNotHasKey('debug', $problemDetails->extensions);
+        $this->assertCount(0, $bufferingLogger->cleanLogs(), 'Default-deny path must not emit a factory-side sentinel log.');
     }
 
     public function testReservedKeysAreFilteredFromExtensions(): void
@@ -411,16 +579,16 @@ final class ProblemDetailsFactoryTest extends TestCase
 
         $this->assertTrue($reflectionClass->isFinal(), 'ProblemDetailsFactory must be final.');
 
-        // Story 3.1 — the factory now has a single-argument constructor accepting
-        // `string $environment` autowired from `%kernel.environment%`.
+        // Story 3.1 — `string $environment` autowired from `%kernel.environment%`.
+        // Story 3.3 — `LoggerInterface $logger` (PSR-3) for the per-replacement sentinel notice.
         $constructor = $reflectionClass->getConstructor();
         $this->assertInstanceOf(
             ReflectionMethod::class,
             $constructor,
             'ProblemDetailsFactory must declare a constructor for the Story 3.1 environment injection.',
         );
-        $this->assertSame(1, $constructor->getNumberOfParameters());
-        $this->assertSame(1, $constructor->getNumberOfRequiredParameters());
+        $this->assertSame(2, $constructor->getNumberOfParameters());
+        $this->assertSame(2, $constructor->getNumberOfRequiredParameters());
 
         $parameters = $constructor->getParameters();
         $this->assertArrayHasKey(0, $parameters);
@@ -435,10 +603,21 @@ final class ProblemDetailsFactoryTest extends TestCase
             'Constructor argument must be a promoted readonly property to keep the factory stateless beyond the env value.',
         );
 
-        // Seam methods exist with their no-op shape so Stories 3.2/3.3 can fill them. Visibility
-        // is private because the class is final (Rector privatizes protected methods on final
-        // classes); Stories 3.2/3.3 will switch to composition or relax `final` if extension is
-        // needed at that point.
+        $this->assertArrayHasKey(1, $parameters);
+        $loggerParameter = $parameters[1];
+        $this->assertSame('logger', $loggerParameter->getName());
+        $loggerType = $loggerParameter->getType();
+        $this->assertInstanceOf(ReflectionNamedType::class, $loggerType);
+        $this->assertSame(LoggerInterface::class, $loggerType->getName());
+        $this->assertFalse($loggerType->allowsNull());
+        $this->assertTrue(
+            $loggerParameter->isPromoted(),
+            'Logger argument must be a promoted readonly property — Story 3.3 keeps the factory stateless.',
+        );
+
+        // Seam methods exist; Story 3.3 has now filled `applyUnserializableSentinel`.
+        // Visibility is private because the class is final (Rector privatizes protected methods on
+        // final classes — see memory `feedback_api_lint_privatize_final.md`).
         $this->assertTrue($reflectionClass->hasMethod('redactKeys'));
         $this->assertTrue($reflectionClass->getMethod('redactKeys')->isPrivate());
         $this->assertTrue($reflectionClass->hasMethod('applyUnserializableSentinel'));
@@ -1656,6 +1835,58 @@ final class ProblemDetailsFactoryTest extends TestCase
 
         $encoded = \json_encode($problemDetails->toArray(), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
         $this->assertStringNotContainsString('sensitive', $encoded);
+    }
+
+    /**
+     * Story 3.3 — narrows a single `BufferingLogger::cleanLogs()` row to the four-key sentinel
+     * context shape so individual tests can read fields without `offsetAccess.notFound` noise.
+     *
+     * @return array{instance: string, correlation_id: string, context_key: string, original_type: string}
+     */
+    private function assertSentinelLogShape(mixed $logEntry): array
+    {
+        $this->assertIsArray($logEntry);
+        $this->assertArrayHasKey(0, $logEntry);
+        $this->assertArrayHasKey(1, $logEntry);
+        $this->assertArrayHasKey(2, $logEntry);
+
+        $level = $logEntry[0];
+        $message = $logEntry[1];
+        $context = $logEntry[2];
+
+        $this->assertSame(LogLevel::NOTICE, $level);
+        $this->assertIsString($message);
+        $this->assertIsArray($context);
+
+        $this->assertSame(
+            ['instance', 'correlation_id', 'context_key', 'original_type'],
+            \array_keys($context),
+            'Sentinel log context must declare exactly four keys in canonical order.',
+        );
+
+        $this->assertArrayHasKey('instance', $context);
+        $this->assertArrayHasKey('correlation_id', $context);
+        $this->assertArrayHasKey('context_key', $context);
+        $this->assertArrayHasKey('original_type', $context);
+
+        $instance = $context['instance'];
+        $correlationId = $context['correlation_id'];
+        $contextKey = $context['context_key'];
+        $originalType = $context['original_type'];
+
+        $this->assertIsString($instance);
+        $this->assertIsString($correlationId);
+        $this->assertIsString($contextKey);
+        $this->assertIsString($originalType);
+        $this->assertSame(self::INSTANCE, $instance);
+        $this->assertSame(self::CID, $correlationId);
+
+        return [
+            'instance' => $instance,
+            'correlation_id' => $correlationId,
+            'context_key' => $contextKey,
+            'original_type' => $originalType,
+        ];
     }
 
     /**

@@ -15,6 +15,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
+use Psr\Log\NullLogger;
 use ReflectionClass;
 use RuntimeException;
 use Symfony\Component\ErrorHandler\BufferingLogger;
@@ -653,8 +654,12 @@ final class ExceptionResponderTest extends TestCase
 
     private function makeListener(?LoggerInterface $logger = null): ExceptionResponder
     {
+        // The listener owns the BufferingLogger under test; the factory's PSR-3 sink is wired
+        // separately to a NullLogger so any Story 3.3 sentinel emissions from `applyUnserializableSentinel`
+        // never pollute the listener's `singleLogRecord` assertions (factory and listener emit on
+        // independent channels at runtime).
         return new ExceptionResponder(
-            new ProblemDetailsFactory('test'),
+            new ProblemDetailsFactory('test', new NullLogger()),
             new ProblemDetailsResponder(),
             $logger ?? new BufferingLogger(),
         );

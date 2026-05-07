@@ -68,3 +68,11 @@ when@test:
         path: /api/test/_throw-denylisted-context
         controller: Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\ThrowDenylistedContextController
         methods: [GET]
+
+    # Story 3.3 — non-whitelisted context values (closure, stdClass, …) must be substituted
+    # with the literal `'[unserializable]'` sentinel; the body must carry no class name and
+    # no NUL byte from anonymous-class FQCNs.
+    test_throw_unserializable_context:
+        path: /api/test/_throw-unserializable-context
+        controller: Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\ThrowUnserializableContextController
+        methods: [GET]

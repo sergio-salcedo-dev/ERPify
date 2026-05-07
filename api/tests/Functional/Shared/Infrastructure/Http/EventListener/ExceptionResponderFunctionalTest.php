@@ -483,4 +483,35 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         $rawBody = (string) $response->getContent();
         $this->assertStringNotContainsString('sensitive', $rawBody, 'denylisted values must not appear anywhere in the encoded body.');
     }
+
+    /**
+     * Story 3.3 — wire-level pin: the `_throw-unserializable-context` fixture's `cb` (closure)
+     * and `proxy` (stdClass) keys must be substituted with the literal `'[unserializable]'`
+     * sentinel; `safe_field` survives. The body must contain no class name and no NUL byte
+     * even when the context carries an anonymous-class object.
+     */
+    public function testWireResponseSubstitutesUnserializableValuesWithSentinel(): void
+    {
+        $kernelBrowser = self::createClient();
+        $kernelBrowser->catchExceptions(true);
+        $kernelBrowser->request(Request::METHOD_GET, '/api/test/_throw-unserializable-context');
+
+        $response = $kernelBrowser->getResponse();
+
+        $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND, $response->getStatusCode(), (string) $response->getContent());
+        $this->assertSame('application/problem+json', $response->headers->get('Content-Type'));
+
+        $body = $this->decodeBody($response->getContent());
+
+        $this->assertArrayHasKey('cb', $body);
+        $this->assertArrayHasKey('proxy', $body);
+        $this->assertSame('[unserializable]', $body['cb'], 'Closure context value must be substituted with the literal sentinel.');
+        $this->assertSame('[unserializable]', $body['proxy'], 'stdClass context value must be substituted with the literal sentinel.');
+        $this->assertArrayHasKey('safe_field', $body);
+        $this->assertSame('kept', $body['safe_field'], 'Whitelisted scalar context values pass through unchanged.');
+
+        $rawBody = (string) $response->getContent();
+        $this->assertStringNotContainsString('stdClass', $rawBody, 'Wire body must not leak the original PHP class name (class names live in logs only).');
+        $this->assertStringNotContainsString("\0", $rawBody, 'Wire body must not contain a NUL byte from anonymous-class FQCNs.');
+    }
 }
