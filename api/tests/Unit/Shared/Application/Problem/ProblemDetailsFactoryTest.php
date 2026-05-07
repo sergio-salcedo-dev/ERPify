@@ -285,6 +285,7 @@ final class ProblemDetailsFactoryTest extends TestCase
             'detail' => 'w',
             'instance' => 'v',
             'correlation-id' => 'u',
+            'violations' => 'must-not-leak',
             'safe_key' => 'ok',
         ];
 
@@ -789,6 +790,34 @@ final class ProblemDetailsFactoryTest extends TestCase
         $this->assertNotNull($violations[0]['code']);
     }
 
+    public function testValidationFailedExceptionViolationCodePassesThroughEmptyStringWithoutCoalescing(): void
+    {
+        $constraintViolationList = new ConstraintViolationList([
+            new ConstraintViolation(
+                message: 'm',
+                messageTemplate: null,
+                parameters: [],
+                root: null,
+                propertyPath: 'p',
+                invalidValue: null,
+                plural: null,
+                code: '',
+            ),
+        ]);
+
+        $validationFailedException = new ValidationFailedException(value: null, violations: $constraintViolationList);
+        $problemDetails = (new ProblemDetailsFactory())->fromThrowable($validationFailedException, self::CID, self::INSTANCE);
+
+        $this->assertArrayHasKey('violations', $problemDetails->extensions);
+        $violations = $problemDetails->extensions['violations'];
+        $this->assertIsArray($violations);
+        $this->assertArrayHasKey(0, $violations);
+        $this->assertIsArray($violations[0]);
+        $this->assertArrayHasKey('code', $violations[0]);
+        $this->assertSame('', $violations[0]['code']);
+        $this->assertNotNull($violations[0]['code']);
+    }
+
     public function testValidationFailedExceptionViolationPropertyPathPassesThroughEvenWhenEmpty(): void
     {
         $constraintViolationList = new ConstraintViolationList([
@@ -981,6 +1010,103 @@ final class ProblemDetailsFactoryTest extends TestCase
         $this->assertNull($problemDetails->detail);
         $this->assertSame(self::CID, $problemDetails->correlationId);
         $this->assertSame(self::INSTANCE, $problemDetails->instance);
+    }
+
+    public function testValidationFailedExceptionViolationPropertyPathPassesThroughVerbatimForNestedPaths(): void
+    {
+        $constraintViolationList = new ConstraintViolationList([
+            new ConstraintViolation('m', null, [], null, 'addresses[0].street', null, null, 'C'),
+            new ConstraintViolation('m', null, [], null, 'tags[2]', null, null, 'C'),
+            new ConstraintViolation('m', null, [], null, 'children.firstName', null, null, 'C'),
+        ]);
+
+        $validationFailedException = new ValidationFailedException(value: null, violations: $constraintViolationList);
+        $problemDetails = (new ProblemDetailsFactory())->fromThrowable($validationFailedException, self::CID, self::INSTANCE);
+
+        $this->assertArrayHasKey('violations', $problemDetails->extensions);
+        $violations = $problemDetails->extensions['violations'];
+        $this->assertIsArray($violations);
+        $this->assertCount(3, $violations);
+        $this->assertExpectedViolationEntry($violations, 0, 'addresses[0].street', 'm', 'C');
+        $this->assertExpectedViolationEntry($violations, 1, 'tags[2]', 'm', 'C');
+        $this->assertExpectedViolationEntry($violations, 2, 'children.firstName', 'm', 'C');
+    }
+
+    public function testWrappedValidationFailedExceptionFromHttpExceptionIsUnwrappedAndProducesViolations(): void
+    {
+        $constraintViolationList = new ConstraintViolationList([
+            new ConstraintViolation('This value should not be blank.', null, [], null, 'name', null, null, 'c1051bb4-d103-4f74-8988-acbcafc7fdc3'),
+            new ConstraintViolation('This value is not a valid email address.', null, [], null, 'email', null, null, 'bd79c0ab-ddba-46cc-a703-a7a4b08de310'),
+        ]);
+
+        $validationFailedException = new ValidationFailedException(value: null, violations: $constraintViolationList);
+        $httpException = new HttpException(422, 'leaked-message-from-wrapper', $validationFailedException);
+
+        $problemDetails = (new ProblemDetailsFactory())->fromThrowable($httpException, self::CID, self::INSTANCE);
+
+        $this->assertSame('validation-failed', $problemDetails->type);
+        $this->assertSame(422, $problemDetails->status);
+        $this->assertSame('Validation failed.', $problemDetails->title);
+        $this->assertNull($problemDetails->detail);
+        $this->assertArrayHasKey('violations', $problemDetails->extensions);
+        $violations = $problemDetails->extensions['violations'];
+        $this->assertIsArray($violations);
+        $this->assertCount(2, $violations);
+        $this->assertExpectedViolationEntry($violations, 0, 'name', 'This value should not be blank.', 'c1051bb4-d103-4f74-8988-acbcafc7fdc3');
+        $this->assertExpectedViolationEntry($violations, 1, 'email', 'This value is not a valid email address.', 'bd79c0ab-ddba-46cc-a703-a7a4b08de310');
+    }
+
+    public function testWrappedValidationFailedExceptionTitleIsLiteralNotLeakedFromWrapper(): void
+    {
+        $constraintViolationList = new ConstraintViolationList([
+            new ConstraintViolation('This value should not be blank.', null, [], null, 'name', null, null, 'c1051bb4-d103-4f74-8988-acbcafc7fdc3'),
+        ]);
+
+        $validationFailedException = new ValidationFailedException(value: null, violations: $constraintViolationList);
+        $httpException = new HttpException(422, (string) $validationFailedException, $validationFailedException);
+
+        $problemDetails = (new ProblemDetailsFactory())->fromThrowable($httpException, self::CID, self::INSTANCE);
+
+        $this->assertSame('Validation failed.', $problemDetails->title);
+        $this->assertStringNotContainsString('name', $problemDetails->title);
+        $this->assertStringNotContainsString('This value should not be blank.', $problemDetails->title);
+    }
+
+    public function testDomainExceptionWithValidationFailedExceptionAsPreviousIsRoutedThroughDomainExceptionBranch(): void
+    {
+        $constraintViolationList = new ConstraintViolationList([
+            new ConstraintViolation('m', null, [], null, 'p', null, null, 'C'),
+        ]);
+
+        $validationFailedException = new ValidationFailedException(value: null, violations: $constraintViolationList);
+
+        $domainException = new class ('', 'Domain wins', [], $validationFailedException) extends DomainException implements InvariantViolation {
+        };
+
+        $problemDetails = (new ProblemDetailsFactory())->fromThrowable($domainException, self::CID, self::INSTANCE);
+
+        $this->assertSame('invariant-violation', $problemDetails->type);
+        $this->assertSame(422, $problemDetails->status);
+        $this->assertSame('Domain wins', $problemDetails->title);
+        $this->assertSame([], $problemDetails->extensions);
+    }
+
+    public function testValidationFailedExceptionPreservesDuplicateViolationsOnSameField(): void
+    {
+        $constraintViolationList = new ConstraintViolationList([
+            new ConstraintViolation('This value should not be blank.', null, [], null, 'name', null, null, 'c1051bb4-d103-4f74-8988-acbcafc7fdc3'),
+            new ConstraintViolation('This value is too short.', null, [], null, 'name', null, null, '9ff3fdc4-b214-49db-8718-39c315e33d45'),
+        ]);
+
+        $validationFailedException = new ValidationFailedException(value: null, violations: $constraintViolationList);
+        $problemDetails = (new ProblemDetailsFactory())->fromThrowable($validationFailedException, self::CID, self::INSTANCE);
+
+        $this->assertArrayHasKey('violations', $problemDetails->extensions);
+        $violations = $problemDetails->extensions['violations'];
+        $this->assertIsArray($violations);
+        $this->assertCount(2, $violations, 'Two violations on the same field must both surface — no silent dedup.');
+        $this->assertExpectedViolationEntry($violations, 0, 'name', 'This value should not be blank.', 'c1051bb4-d103-4f74-8988-acbcafc7fdc3');
+        $this->assertExpectedViolationEntry($violations, 1, 'name', 'This value is too short.', '9ff3fdc4-b214-49db-8718-39c315e33d45');
     }
 
     /**

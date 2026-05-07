@@ -69,7 +69,7 @@ final class ProblemDetailsFactory
         429 => 'rate-limited',
     ];
 
-    private const array RESERVED_KEYS = ['type', 'title', 'status', 'detail', 'instance', 'correlation-id'];
+    private const array RESERVED_KEYS = ['type', 'title', 'status', 'detail', 'instance', 'correlation-id', 'violations'];
 
     public function fromThrowable(Throwable $e, string $correlationId, string $instance): ProblemDetails
     {
@@ -99,7 +99,9 @@ final class ProblemDetailsFactory
             );
         }
 
-        if ($e instanceof ValidationFailedException) {
+        $validationException = $this->findInChain($e, ValidationFailedException::class);
+
+        if ($validationException instanceof Throwable) {
             return new ProblemDetails(
                 type: 'validation-failed',
                 title: 'Validation failed.',
@@ -107,7 +109,7 @@ final class ProblemDetailsFactory
                 detail: null,
                 instance: $instance,
                 correlationId: $correlationId,
-                extensions: ['violations' => $this->buildViolations($e->getViolations())],
+                extensions: ['violations' => $this->buildViolations($validationException->getViolations())],
             );
         }
 
@@ -192,6 +194,29 @@ final class ProblemDetailsFactory
             instance: $instance,
             correlationId: $correlationId,
         );
+    }
+
+    /**
+     * Walks `$throwable->getPrevious()` looking for an instance of `$class`. Mirrors
+     * `SearchExceptionListener::findInChain` so the new ValidationFailedException branch
+     * also unwraps Symfony's `RequestPayloadValueResolver` HttpException(422) wrapper
+     * (used by `#[MapRequestPayload]` / `#[MapQueryString]` on non-search routes).
+     *
+     * @template T of Throwable
+     *
+     * @param class-string<T> $class
+     *
+     * @return T|null
+     */
+    private function findInChain(?Throwable $throwable, string $class): ?Throwable
+    {
+        for ($current = $throwable; $current instanceof Throwable; $current = $current->getPrevious()) {
+            if ($current instanceof $class) {
+                return $current;
+            }
+        }
+
+        return null;
     }
 
     /**

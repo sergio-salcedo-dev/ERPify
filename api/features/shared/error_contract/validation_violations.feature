@@ -39,11 +39,16 @@ Feature: ValidationFailedException surfaces as a 422 Problem Details with a stru
     When I send a "GET" request to "http://localhost/api/test/_throw-validation-empty"
     Then the response status code should be 422
     And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
     And the response should be in JSON
     And the JSON node "type" should be equal to "validation-failed"
     And the JSON node "status" should be equal to the number 422
     And the JSON node "title" should be equal to "Validation failed."
     And the JSON node "violations" should have 0 elements
+    # Note: JSON-array-vs-object form for empty violations is pinned at the unit-test layer
+    # (testValidationFailedExceptionWithEmptyListProducesEmptyViolationsArray) — Behat 3.31
+    # cannot embed double-quotes in step args, so a raw `"violations":[]` substring assertion
+    # is not expressible here. The unit test layer covers the JSON-array shape end-to-end.
     And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
     And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
 
@@ -57,6 +62,11 @@ Feature: ValidationFailedException surfaces as a 422 Problem Details with a stru
     And the JSON node "violations[0].message" should be equal to "This value should not be blank."
     And the response should not contain "super-secret-payload"
     And the response should not contain "leaked-secret"
+    And the response should not contain "invalidValue"
+    And the response should not contain "messageTemplate"
+    And the response should not contain "parameters"
+    And the response should not contain "cause"
+    And the response should not contain "constraint"
 
   Scenario: ValidationFailedException violation entries serialize message verbatim, never the template form
     When I send a "GET" request to "http://localhost/api/test/_throw-validation-template"
@@ -86,4 +96,4 @@ Feature: ValidationFailedException surfaces as a 422 Problem Details with a stru
     And the JSON node "type" should be equal to "invariant-violation"
     And the JSON node "status" should be equal to the number 422
     And the JSON node "title" should be equal to "Account already settled"
-    And the response should not contain "violations"
+    And the JSON node "violations" should not exist
