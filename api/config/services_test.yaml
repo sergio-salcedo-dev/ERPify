@@ -12,3 +12,15 @@ services:
     Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\:
         resource: '../tests/Functional/Shared/Infrastructure/Http/EventListener/Fixtures/'
         tags: ['controller.service_arguments']
+
+    # Story 2.4 — BufferingLogger captures structured log records emitted by ExceptionResponder
+    # in the test environment. Public so functional tests can pull it from the container via
+    # `self::getContainer()->get(BufferingLogger::class)` and assert on `cleanLogs()`.
+    Symfony\Component\ErrorHandler\BufferingLogger:
+        public: true
+
+    # Story 2.4 — override autowiring of LoggerInterface for ExceptionResponder ONLY (do NOT
+    # alias LoggerInterface globally — that would silence Symfony framework logs in tests).
+    Erpify\Shared\Infrastructure\Http\EventListener\ExceptionResponder:
+        arguments:
+            $logger: '@Symfony\Component\ErrorHandler\BufferingLogger'

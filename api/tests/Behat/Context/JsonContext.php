@@ -20,6 +20,7 @@ use Exception;
 use Flow\JSONPath\JSONPathException;
 use JsonException;
 use RuntimeException;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 use const DIRECTORY_SEPARATOR;
 
@@ -102,6 +103,39 @@ class JsonContext extends AbstractContext
     public function theJsonNodeShouldNotBeEqualTo(string $node, string $text): void
     {
         $this->jsonPropertyShouldNotBeEqualTo($this->getJson(), $node, $text);
+    }
+
+    /**
+     * Validate the JSON property at `node` is equal to the value of response header `header`.
+     *
+     * @throws JsonException
+     */
+    #[Then('the JSON node :node should be equal to the response header :header')]
+    public function theJsonNodeShouldBeEqualToTheResponseHeader(string $node, string $header): void
+    {
+        $value = $this->getJsonInspector()->evaluate($this->getJson(), $node);
+        self::assertEquals(
+            $this->getResponseHeaderValue($header),
+            $value,
+            \sprintf('JSON node "%s" is not equal to response header "%s".', $node, $header),
+        );
+    }
+
+    /**
+     * Validate the JSON property at `nodeA` is not equal to the JSON property at `nodeB`.
+     *
+     * @throws JsonException
+     */
+    #[Then('the JSON node :nodeA should not be equal to the JSON node :nodeB')]
+    public function theJsonNodeShouldNotBeEqualToTheJsonNode(string $nodeA, string $nodeB): void
+    {
+        $valueA = $this->getJsonInspector()->evaluate($this->getJson(), $nodeA);
+        $valueB = $this->getJsonInspector()->evaluate($this->getJson(), $nodeB);
+        self::assertNotSame(
+            $valueA,
+            $valueB,
+            \sprintf('JSON nodes "%s" and "%s" are equal but should not be.', $nodeA, $nodeB),
+        );
     }
 
     /**
@@ -1121,6 +1155,20 @@ class JsonContext extends AbstractContext
         }
 
         return \json_encode($value, JSON_THROW_ON_ERROR) ?: '';
+    }
+
+    private function getResponseHeaderValue(string $name): string
+    {
+        $lastResult = $this->httpResponseContainer->getResult();
+        self::assertNotNull($lastResult, 'No HTTP Call made');
+
+        $response = $lastResult->getValue();
+        self::assertInstanceOf(SymfonyResponse::class, $response, 'Response header lookup requires a Symfony Response.');
+
+        $value = $response->headers->get($name);
+        self::assertNotNull($value, \sprintf('Response header "%s" is not set.', $name));
+
+        return $value;
     }
 
     public function checkSchemaFile(string $filename): void

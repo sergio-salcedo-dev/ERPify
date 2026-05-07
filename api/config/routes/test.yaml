@@ -62,3 +62,9 @@ when@test:
         path: /api/test/_throw-invariant-violation
         controller: Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\ThrowInvariantViolationDomainExceptionController
         methods: [GET]
+
+    # Story 3.2 — denylisted context keys (password, token) must be stripped from the body.
+    test_throw_denylisted_context:
+        path: /api/test/_throw-denylisted-context
+        controller: Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\ThrowDenylistedContextController
+        methods: [GET]

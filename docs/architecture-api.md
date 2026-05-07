@@ -11,19 +11,23 @@ The `api/` deployable is a Symfony 8 HTTP API running on **FrankenPHP** (Caddy e
 | Runtime         | PHP                                            | **8.5**                                       |
 | Framework       | Symfony (components)                           | **8.0.x**                                     |
 | HTTP server     | FrankenPHP (Caddy)                             | `dunglas/frankenphp:1-php8.5` (digest-pinned) |
-| ORM / DBAL      | Doctrine ORM / DBAL / Migrations / Persistence | 3.6 / 4.4 / 4.0 / 4.1                         |
-| Database        | PostgreSQL                                     | via Compose service                           |
-| Async           | Symfony Messenger + Doctrine transport         | 8.0.8                                         |
+| ORM / DBAL      | Doctrine ORM / DBAL / Migrations / Persistence | 3.6 / 4.4 / 4.0 / 4.2                         |
+| Database        | PostgreSQL                                     | 18 (Compose)                                  |
+| Async           | Symfony Messenger + Doctrine transport         | 8.0.x                                         |
 | Realtime        | Symfony Mercure (+ Hub)                        | 0.7 / bundle 0.4                              |
-| Mail            | symfony/mailer                                 | 8.0.8                                         |
+| Mail            | symfony/mailer                                 | 8.0.x                                         |
 | Storage         | league/flysystem (+ bundle)                    | 3.33 / 3.7                                    |
 | Media           | Intervention Image                             | 4.0                                           |
 | CORS            | nelmio/cors-bundle                             | 2.6                                           |
+| Logging         | symfony/monolog-bundle                         | 4.0                                           |
+| UID             | symfony/uid (UUIDv7)                           | 8.0.x                                         |
+| Validation      | symfony/validator                              | 8.0.x                                         |
+| Security        | symfony/security-core                          | 8.0.x                                         |
 | Unit tests      | PHPUnit                                        | 13                                            |
 | E2E tests       | Behat (isolated tree)                          | `api/tools/behat/`                            |
-| Static analysis | PHPStan / Psalm / Rector                       | 2 / 6.16 / 2                                  |
-| Style / quality | PHP-CS-Fixer / PHPCS / PHPMD                   | 3.95 / 4 / —                                  |
-| Fixtures        | Hautelook Alice                                | 2.17                                          |
+| Static analysis | PHPStan / Psalm / Rector                       | 2 / 6.x / 2                                   |
+| Style / quality | PHP-CS-Fixer / PHPCS / PHPMD                   | 3.x / 4 / —                                   |
+| Fixtures        | Hautelook Alice                                | 2.x                                           |
 
 See [`project-context.md`](./project-context.md#technology-stack--versions) for the full constraint table (version gotchas, Doctrine 3 API deltas, polyfill `replace` block, Behat isolation rationale).
 
@@ -36,18 +40,19 @@ See [`project-context.md`](./project-context.md#technology-stack--versions) for 
 ```text
 api/src/
 ├── Backoffice/
-│   ├── Bank/       { Domain, Application, Infrastructure }
-│   └── Health/
+│   ├── Bank/       { Application, Domain, Infrastructure }
+│   └── Health/     { Infrastructure/Controller }
 ├── Frontoffice/
-│   ├── Dev/
-│   ├── Health/
-│   └── Mercure/
+│   ├── Dev/        { Infrastructure/Controller }
+│   ├── Health/     { Infrastructure/Controller }
+│   └── Mercure/    { Domain, Infrastructure/Controller }
 └── Shared/
-    ├── Application/
-    ├── Domain/
-    ├── Infrastructure/
-    ├── Media/      { Domain, Application, Infrastructure }
-    └── Storage/    { Domain, Application, Infrastructure }
+    ├── Application/    { DomainEvent, Http/Search, Mailer, Problem, UseCase, Validation }
+    ├── Domain/         { Aggregate, Entity, Enum, Event, Exception, Search, Uuid }
+    ├── Guzzle/         { Enum }
+    ├── Infrastructure/ { Http, Mailer, Messenger, Persistence, Serializer, Uuid }
+    ├── Media/          { Application, Domain, Infrastructure }
+    └── Storage/        { (Flysystem adapters) }
 ```
 
 Cross-context calls go through **published Application services** or **domain events**; one context never reaches into another's `Domain/` or `Infrastructure/`.
@@ -62,35 +67,51 @@ Cross-context calls go through **published Application services** or **domain ev
 
 ## Data architecture
 
-- **Primary store**: PostgreSQL via Doctrine ORM.
-- **Migrations**: `api/migrations/2026/Version<timestamp>.php` (organised by year).
-- **Fixtures**: Hautelook Alice — `make db.load.fixtures`; destructive reset via `make db.reset`.
-- **Mapping**: Doctrine mapping lives in `Infrastructure/` (not `Domain/`); domain objects are POPOs.
+- **Primary store**: PostgreSQL 18 via Doctrine ORM.
+- **Migrations**: `api/migrations/2026/Version<timestamp>.php` (organised by year). Generate via `make db.diff`; never hand-edit applied migrations.
+- **Fixtures**: Hautelook Alice — `make db.load.fixtures`; destructive reset via `make db.reset` (drop → migrate → fixtures).
+- **Mapping**: Doctrine mapping lives in `Infrastructure/Persistence/` (not `Domain/`); domain objects are POPOs.
 - **Doctrine 3 / DBAL 4 API caveats**: see [`project-context.md` → Runtime gotchas](./project-context.md).
 
 ## API design
 
-- Attribute-only routing (`#[Route]`) on controllers placed under each bounded context's `Infrastructure/`.
+- Attribute-only routing (`#[Route]`) on controllers placed under each bounded context's `Infrastructure/Controller/`.
 - Controllers are thin — delegate to Application-layer use cases and return via `AbstractController::json()` so Serializer groups apply.
-- CORS configured in `api/config/packages/nelmio_cors.php`; no wildcard `*` for credentialed origins.
+- CORS configured in `api/config/packages/nelmio_cors.php` (PHP, not YAML); no wildcard `*` for credentialed origins.
 - Public health endpoints exposed from `Frontoffice/Health/` and `Backoffice/Health/`.
+- Search endpoints share plumbing in `Shared/Application/Http/Search/` and `Shared/Infrastructure/Http/Controller/AbstractSearchController.php`.
+
+## Error contract (RFC 9457 Problem Details)
+
+Every non-2xx response from `/api/*` carries a uniform [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) Problem Details body (`Content-Type: application/problem+json`, `Cache-Control: no-store`) with deterministic key order: `type, title, status, detail?, instance, correlation-id, <extensions>`. Domain exceptions tag themselves with marker interfaces (`NotFound`, `Conflict`, `Forbidden`, `Unauthenticated`, `InvariantViolation`, `InvalidInput`, `RateLimited`) and a single mapping site resolves each to its HTTP status — no controller-level catch blocks, no per-route error wiring.
+
+Pipeline:
+
+1. `Shared/Infrastructure/Http/CorrelationIdListener` (request priority `1024` / response priority `-1024`) mints or propagates a per-request UUIDv7 `correlation-id` and writes `X-Correlation-Id` on **every** main response.
+2. `Shared/Infrastructure/Http/EventListener/ExceptionResponder` (path-scoped to `/api/*`) mints a per-error UUIDv7 `instance`, delegates marker→status resolution to `Shared/Application/Problem/ProblemDetailsFactory`, and emits exactly one tiered PSR-3 log line (`critical` for unhandled, `error` for ≥500, `warning` for 4xx).
+3. `Shared/Infrastructure/Http/ProblemDetailsResponder` adapts the `ProblemDetails` value object to a Symfony `Response`.
+
+Symfony framework exceptions are bridged: `ValidationFailedException` → 422 with structured `violations[]` (unwrapped from `getPrevious()` when wrapped by `RequestPayloadValueResolver`); `AccessDeniedException` → 403 / `forbidden`; `AuthenticationException` → 401 / `unauthenticated`; `HttpExceptionInterface` honoured; anything else → 500 / `unhandled-exception`.
+
+Full reference (mapping table, header rules, observability, code map, test surface): [`api-error-contract.md`](./api-error-contract.md).
 
 ## Async & messaging
 
-- **Symfony Messenger** with a **separate `messenger_worker` Compose service** in `ci` / `prod`. Handlers must be idempotent and tolerate at-least-once delivery.
+- **Symfony Messenger** with a **separate `messenger_worker` Compose service** (`compose.yaml`) running `php bin/console messenger:consume async --time-limit=3600`. Handlers must be idempotent and tolerate at-least-once delivery.
+- Default transport: Doctrine (`MESSENGER_TRANSPORT_DSN=doctrine://default?auto_setup=0`).
 - **Mercure Hub**: publish via `Frontoffice/Mercure/` publishers at `/.well-known/mercure`; JWT required (`CADDY_MERCURE_JWT_SECRET` in prod).
-- Mail is dispatched asynchronously via Messenger — see [`domain-events-and-messenger.md`](./domain-events-and-messenger.md).
-- Audit-table semantics and transport details: same doc.
+- Mail is dispatched asynchronously via Messenger.
 
 ## Storage & media
 
 - `Shared/Storage/` wraps Flysystem adapters. Never hit the local FS directly for user-facing content.
-- `Shared/Media/` uses Intervention Image for processing. Upload flow: see [`media-upload.md`](./media-upload.md) and [`object-storage.md`](./object-storage.md).
+- `Shared/Media/` uses Intervention Image for processing and follows full DDD layering (`Application/Dto`, `Application/Port`, `Domain/{Entity, Exception, Repository}`, `Infrastructure/{Controller, Http, Image, Persistence}`).
 
 ## Configuration
 
-- Bundle configuration under `api/config/packages/`: Doctrine, Doctrine migrations, Messenger, Mercure (publish + subscribe), Mailer, Flysystem, Media, Nelmio CORS, Validator, Property Info, Cache, Framework, Routing, Fixtures.
+- Bundle configuration under `api/config/packages/`: Doctrine, Doctrine migrations, Messenger, Mercure (publish + subscribe), Mailer, Flysystem, Media, Nelmio CORS (PHP), Validator, Property Info, Cache, Framework, Routing, Monolog, Hautelook Alice / Nelmio Alice fixtures.
 - `api/config/services.yaml` — autoconfigure defaults; explicit definitions are the exception.
+- `api/config/services_test.yaml` — test-only service overrides (YAML, never PHP).
 - `api/config/routes.yaml` + routes in `api/config/routes/` — attribute-first.
 - Environment via `api/.env` / `api/.env.example`; secrets via Symfony Secrets vault in prod.
 
@@ -99,13 +120,14 @@ Cross-context calls go through **published Application services** or **domain ev
 | Layer | Tool | Entry |
 |---|---|---|
 | Unit | **PHPUnit 13** | `api/phpunit.xml.dist`, run via `make php.unit` |
-| E2E / BDD | **Behat 3** (isolated Composer tree) | `api/tools/behat/`, run via `make php.behat` |
+| Functional | PHPUnit (kernel/HTTP) | `api/tests/Functional/`, run via `make php.unit` |
+| E2E / BDD | **Behat 3** (isolated Composer tree) | `api/tools/behat/`, features in `api/features/`, run via `make php.behat` |
 | Fixtures | Hautelook Alice | `make db.load.fixtures` |
 | Static analysis | PHPStan, Psalm, Rector | `make php.stan`, `php.psalm`, `php.rector[.dry-run]` |
 | Style / quality | PHP-CS-Fixer, PHPCS, PHPMD | `make php.lint` (aggregate) |
 | Composer hygiene | composer-unused, composer-require-checker | `make composer.checks` |
 
-Integration tests that hit Doctrine use a **real Postgres** (Compose), not SQLite. No network in unit tests — mock at the transport level.
+Integration tests that hit Doctrine use a **real Postgres** (Compose), not SQLite or mocks. No network in unit tests — mock at the transport level.
 
 Detailed rules: [`project-context.md` → Testing Rules](./project-context.md).
 
@@ -116,4 +138,4 @@ See [`source-tree-analysis.md`](./source-tree-analysis.md) for the full annotate
 ## Development & deployment
 
 - Dev setup, commands, and DB tasks: [`development-guide-api.md`](./development-guide-api.md).
-- Production deploy, env vars, worker lifecycle: [`deployment-guide.md`](./deployment-guide.md) and [`production-deployment.md`](../docs-info/production-deployment.md).
+- Production deploy, env vars, worker lifecycle: [`deployment-guide.md`](./deployment-guide.md).

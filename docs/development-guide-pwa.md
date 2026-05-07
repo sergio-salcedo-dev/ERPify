@@ -29,7 +29,7 @@ make dev.local                 # next dev on host :80 against API :8000
 
 Do not mix flows in one session; switch by clearing `pwa/.env.local` and rebuilding.
 
-Details: [`local-fullstack-traffic.md`](./local-fullstack-traffic.md).
+Details: [`integration-architecture.md`](./integration-architecture.md#alternative-flow-dev-local-host-next-containerised-api).
 
 ## Run / build / tests
 
@@ -118,3 +118,4 @@ Load [`project-context.md`](./project-context.md) before generating code. Key ca
 - Turbopack is the dev bundler; Webpack-specific `next.config.*` entries silently no-op.
 - `reflect-metadata` imported once; don't re-import per module.
 - Mercure client must subscribe via same-origin `/.well-known/mercure`.
+- API errors are RFC 9457 Problem Details ([`api-error-contract.md`](./api-error-contract.md)) — switch UI logic on the body's `type` (opaque, stable), not on status code or message text. Capture `correlation-id` (body or `X-Correlation-Id` header) for support tickets.

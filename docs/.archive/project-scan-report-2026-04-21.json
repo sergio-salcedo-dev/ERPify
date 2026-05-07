@@ -1,0 +1,51 @@
+{
+  "workflow_version": "1.2.0",
+  "timestamps": {
+    "started": "2026-04-21",
+    "last_updated": "2026-04-21",
+    "completed": "2026-04-21"
+  },
+  "mode": "initial_scan",
+  "scan_level": "quick",
+  "project_root": "/home/sergiosalcedo/Projects/ERPify",
+  "project_knowledge": "/home/sergiosalcedo/Projects/ERPify/docs",
+  "repository_type": "monorepo",
+  "project_parts": [
+    {
+      "part_id": "api",
+      "display_name": "Symfony API",
+      "root_path": "api/",
+      "project_type_id": "backend",
+      "primary_language": "PHP 8.5",
+      "framework": "Symfony 8.0.x",
+      "bounded_contexts": ["Backoffice/Bank", "Backoffice/Health", "Frontoffice/Dev", "Frontoffice/Health", "Frontoffice/Mercure", "Shared/Media", "Shared/Storage"]
+    },
+    {
+      "part_id": "pwa",
+      "display_name": "Next.js PWA",
+      "root_path": "pwa/",
+      "project_type_id": "web",
+      "primary_language": "TypeScript 6",
+      "framework": "Next.js 16.2.4 (App Router)",
+      "bounded_contexts": ["backoffice/health", "frontoffice/health", "shared"]
+    }
+  ],
+  "integration_points": [
+    {"from": "pwa", "to": "api", "type": "REST", "details": "Same-origin via FrankenPHP reverse-proxy; /api/* in dev/prod"},
+    {"from": "api", "to": "pwa", "type": "SSE", "details": "Mercure Hub at /.well-known/mercure (JWT)"}
+  ],
+  "status": "complete",
+  "outputs_generated": [
+    "project-scan-report.json",
+    "project-overview.md",
+    "source-tree-analysis.md",
+    "architecture-api.md",
+    "architecture-pwa.md",
+    "integration-architecture.md",
+    "development-guide-api.md",
+    "development-guide-pwa.md",
+    "deployment-guide.md",
+    "contribution-guide.md",
+    "index.md"
+  ]
+}

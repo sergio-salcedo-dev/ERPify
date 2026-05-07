@@ -13,6 +13,7 @@ use Erpify\Shared\Domain\Exception\NotFound;
 use Erpify\Shared\Domain\Exception\RateLimited;
 use Erpify\Shared\Domain\Exception\Unauthenticated;
 use JsonSerializable;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 use Symfony\Component\Security\Core\Exception\AuthenticationException;
@@ -27,10 +28,33 @@ use Throwable;
  * `testMarkerOrderingFollowsImplementsClause`; the constant `MARKER_STATUS_MAP` is the
  * sole source of truth for the marker→HTTP-status mapping (NFR25).
  *
- * Marked `final` (not `final readonly`) so Stories 3.2 / 3.3 can override the
- * `redactKeys` / `applyUnserializableSentinel` seams.
+ * Marked `final readonly` (Rector canonicalisation since Story 3.1 introduced an immutable
+ * `$environment` constructor argument). Stories 3.2 / 3.3 fill the `redactKeys` /
+ * `applyUnserializableSentinel` seams via in-class edits, not subclass overrides — the
+ * helpers are private to begin with, so `final` was always the right modifier.
+ *
+ * Story 3.1 — environment-aware `debug` extension:
+ *   - `dev` / `test`: every body carries a `debug` extension with `exception_class`,
+ *     `message`, `file`, `line`, `previous_chain` (cycle-safe walk of `getPrevious()`).
+ *   - `staging`: minimal `debug` extension carrying only `exception_class` + `message`.
+ *   - `prod` (and any unrecognised `$environment`): no `debug` extension AT ALL, and the
+ *     terminal `unhandled-exception` branch's `title` is replaced by the safe literal
+ *     `'An unexpected error occurred.'` regardless of `$throwable->getMessage()` (NFR7
+ *     prod no-leak guarantee — closes the message-leak path; the absent debug closes the
+ *     stack-trace-leak path; the existing extensions whitelist closes the context-leak
+ *     path). `$environment` flows in via `#[Autowire('%kernel.environment%')]` (the
+ *     Symfony 8 idiom — never read `$_ENV` / `getenv()`).
+ *   - `'debug'` is part of `RESERVED_KEYS` so domain code cannot inject a fake debug
+ *     extension via {@see DomainException::context()}.
+ *
+ * Story 3.2 — redaction denylist (FR34, NFR12): the `redactKeys()` seam delegates to
+ * {@see RedactionDenylist::filter}, stripping case-insensitive exact-match keys
+ * (`password`, `token`, `secret`, `authorization`, `cookie`, `ssn`, `iban`) from the
+ * `DomainException::context()` before extensions promotion. The strip runs AFTER the
+ * {@see RESERVED_KEYS} `unset()` layer and BEFORE the whitelist branch so a denylisted
+ * `JsonSerializable` value cannot survive via the whitelist.
  */
-final class ProblemDetailsFactory
+final readonly class ProblemDetailsFactory
 {
     private const array MARKER_STATUS_MAP = [
         NotFound::class => 404,
@@ -69,10 +93,26 @@ final class ProblemDetailsFactory
         429 => 'rate-limited',
     ];
 
-    private const array RESERVED_KEYS = ['type', 'title', 'status', 'detail', 'instance', 'correlation-id', 'violations'];
+    private const array RESERVED_KEYS = ['type', 'title', 'status', 'detail', 'instance', 'correlation-id', 'violations', 'debug'];
+
+    private const string DEBUG_MODE_FULL = 'full';
+
+    private const string DEBUG_MODE_MINIMAL = 'minimal';
+
+    private const string DEBUG_MODE_OMIT = 'omit';
+
+    private const string UNHANDLED_TITLE_FALLBACK = 'An unexpected error occurred.';
+
+    public function __construct(
+        #[Autowire('%kernel.environment%')]
+        private string $environment,
+    ) {
+    }
 
     public function fromThrowable(Throwable $e, string $correlationId, string $instance): ProblemDetails
     {
+        $debug = $this->buildDebugExtension($e);
+
         if ($e instanceof DomainException) {
             $firstMarker = $this->firstMatchingMarker($e);
 
@@ -88,7 +128,7 @@ final class ProblemDetailsFactory
                 $type = 'domain-error';
             }
 
-            return new ProblemDetails(
+            return $this->withDebug(new ProblemDetails(
                 type: $type,
                 title: $e->title(),
                 status: $status,
@@ -96,13 +136,13 @@ final class ProblemDetailsFactory
                 instance: $instance,
                 correlationId: $correlationId,
                 extensions: $this->buildExtensions($e),
-            );
+            ), $debug);
         }
 
         $validationException = $this->findInChain($e, ValidationFailedException::class);
 
         if ($validationException instanceof Throwable) {
-            return new ProblemDetails(
+            return $this->withDebug(new ProblemDetails(
                 type: 'validation-failed',
                 title: 'Validation failed.',
                 status: 422,
@@ -110,53 +150,52 @@ final class ProblemDetailsFactory
                 instance: $instance,
                 correlationId: $correlationId,
                 extensions: ['violations' => $this->buildViolations($validationException->getViolations())],
-            );
+            ), $debug);
         }
 
         if ($e instanceof AccessDeniedException) {
-            return $this->buildBridgeResponse(
+            return $this->withDebug($this->buildBridgeResponse(
                 type: 'forbidden',
                 status: 403,
                 title: '' !== $e->getMessage() ? $e->getMessage() : 'Access denied.',
                 correlationId: $correlationId,
                 instance: $instance,
-            );
+            ), $debug);
         }
 
         if ($e instanceof AuthenticationException) {
-            return $this->buildBridgeResponse(
+            return $this->withDebug($this->buildBridgeResponse(
                 type: 'unauthenticated',
                 status: 401,
                 title: '' !== $e->getMessage() ? $e->getMessage() : 'Authentication required.',
                 correlationId: $correlationId,
                 instance: $instance,
-            );
+            ), $debug);
         }
 
         if ($e instanceof HttpExceptionInterface) {
             $status = $e->getStatusCode();
             $type = self::HTTP_STATUS_TYPE_MAP[$status] ?? 'http-error';
 
-            return $this->buildBridgeResponse(
+            return $this->withDebug($this->buildBridgeResponse(
                 type: $type,
                 status: $status,
                 title: '' !== $e->getMessage() ? $e->getMessage() : 'An HTTP error occurred.',
                 correlationId: $correlationId,
                 instance: $instance,
-            );
+            ), $debug);
         }
 
-        $message = $e->getMessage();
-        $title = '' !== $message ? $message : 'An unexpected error occurred.';
+        $title = $this->resolveUnhandledTitle($e);
 
-        return new ProblemDetails(
+        return $this->withDebug(new ProblemDetails(
             type: 'unhandled-exception',
             title: $title,
             status: 500,
             detail: null,
             instance: $instance,
             correlationId: $correlationId,
-        );
+        ), $debug);
     }
 
     /**
@@ -280,7 +319,12 @@ final class ProblemDetailsFactory
     }
 
     /**
-     * Seam: filled by Story 3.2 (redaction denylist for `password`, `token`, etc.).
+     * Story 3.2 — exact-key case-insensitive denylist strip via {@see RedactionDenylist::filter}.
+     *
+     * Order is load-bearing: this runs AFTER the {@see RESERVED_KEYS} `unset()` strip and
+     * BEFORE the {@see isWhitelistedValue} loop, so a denylisted `JsonSerializable` value
+     * cannot survive via the whitelist branch. Pinned by
+     * `testFactoryStripsDenylistedKeyEvenWhenValueIsJsonSerializable`.
      *
      * @param array<string, mixed> $context
      *
@@ -288,7 +332,10 @@ final class ProblemDetailsFactory
      */
     private function redactKeys(array $context): array
     {
-        return $context;
+        /** @var array<string, mixed> $filtered */
+        $filtered = RedactionDenylist::filter($context);
+
+        return $filtered;
     }
 
     /**
@@ -297,5 +344,144 @@ final class ProblemDetailsFactory
     private function applyUnserializableSentinel(mixed $value): mixed
     {
         return $value;
+    }
+
+    /**
+     * Story 3.1 — environment-aware decision (FR35 / FR36 / FR37, NFR13 default-deny):
+     * exact-string match on `'dev'` / `'test'` / `'staging'`; anything else (including
+     * uppercase, the empty string, `'ci'`, `'production'`) falls through to omit-debug.
+     */
+    private function resolveDebugMode(): string
+    {
+        return match ($this->environment) {
+            'dev', 'test' => self::DEBUG_MODE_FULL,
+            'staging' => self::DEBUG_MODE_MINIMAL,
+            default => self::DEBUG_MODE_OMIT,
+        };
+    }
+
+    /**
+     * Story 3.1 — builds the `debug` extension shape per environment, or `null` to omit.
+     *
+     * Dev/test: 5-key map with `previous_chain` (cycle-safe flat walk of `getPrevious()`).
+     * Staging: 2-key map (`exception_class`, `message`) only — NO `file`, NO `line`, NO chain.
+     * Prod (or unrecognised env): `null` — caller MUST NOT add a `debug` extension.
+     *
+     * @return array{exception_class: string, message: string, file: string, line: int, previous_chain: list<array{exception_class: string, message: string, file: string, line: int}>}|array{exception_class: string, message: string}|null
+     */
+    private function buildDebugExtension(Throwable $e): ?array
+    {
+        $mode = $this->resolveDebugMode();
+
+        if (self::DEBUG_MODE_OMIT === $mode) {
+            return null;
+        }
+
+        if (self::DEBUG_MODE_MINIMAL === $mode) {
+            return [
+                'exception_class' => $this->sanitiseExceptionClass($e::class),
+                'message' => $e->getMessage(),
+            ];
+        }
+
+        return [
+            'exception_class' => $this->sanitiseExceptionClass($e::class),
+            'message' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'previous_chain' => $this->walkPreviousChain($e),
+        ];
+    }
+
+    /**
+     * Cycle-safe flat walk of `$top->getPrevious()`. Each entry mirrors the four scalar
+     * fields of the top-level debug map (no recursion — the chain itself IS the unfolded tree).
+     *
+     * @return list<array{exception_class: string, message: string, file: string, line: int}>
+     */
+    private function walkPreviousChain(Throwable $top): array
+    {
+        $chain = [];
+        $seen = [];
+
+        for ($current = $top->getPrevious(); $current instanceof Throwable; $current = $current->getPrevious()) {
+            $id = \spl_object_id($current);
+
+            if (isset($seen[$id])) {
+                break;
+            }
+
+            $seen[$id] = true;
+            $chain[] = [
+                'exception_class' => $this->sanitiseExceptionClass($current::class),
+                'message' => $current->getMessage(),
+                'file' => $current->getFile(),
+                'line' => $current->getLine(),
+            ];
+        }
+
+        return $chain;
+    }
+
+    /**
+     * Strips the `\0/path:line$N` suffix PHP appends to anonymous-class FQCNs (e.g.
+     * `RuntimeException@anonymous\0/srv/app/src/Foo.php:42$0` → `RuntimeException@anonymous`).
+     * Closes the staging-mode path-leak surface: AC #4 forbids `file`/`line` in the staging
+     * `debug` shape, but the embedded NUL byte in `$throwable::class` would smuggle the file
+     * path through `exception_class` when `json_encode` emits `  ` followed by the path
+     * verbatim. Sanitisation is uniform across all environments — the path embedded in the
+     * FQCN is rarely actionable for debugging because the dev/test full shape already exposes
+     * the throw-site `file`/`line` separately.
+     */
+    private function sanitiseExceptionClass(string $class): string
+    {
+        $nul = \strpos($class, "\0");
+
+        return false === $nul ? $class : \substr($class, 0, $nul);
+    }
+
+    /**
+     * Story 3.1 — post-processing wrap that appends the `debug` extension LAST when present.
+     *
+     * The spread `[...$base->extensions, 'debug' => $debug]` preserves declaration order so
+     * `debug` always slots after `violations` and any domain-emitted extensions. When `$debug`
+     * is `null` (prod / unrecognised env), the base `ProblemDetails` is returned unchanged so
+     * production bodies never carry a `debug` key (FR35, NFR7).
+     *
+     * @param array{exception_class: string, message: string, file: string, line: int, previous_chain: list<array{exception_class: string, message: string, file: string, line: int}>}|array{exception_class: string, message: string}|null $debug
+     */
+    private function withDebug(ProblemDetails $base, ?array $debug): ProblemDetails
+    {
+        if (null === $debug) {
+            return $base;
+        }
+
+        return new ProblemDetails(
+            type: $base->type,
+            title: $base->title,
+            status: $base->status,
+            detail: $base->detail,
+            instance: $base->instance,
+            correlationId: $base->correlationId,
+            extensions: [...$base->extensions, 'debug' => $debug],
+        );
+    }
+
+    /**
+     * Story 3.1 — prod-safe title swap on the terminal `unhandled-exception` branch (FR35,
+     * NFR7). In prod (or any unrecognised env that falls through to `DEBUG_MODE_OMIT`), the
+     * title is the static safe literal regardless of `$throwable->getMessage()`. In dev /
+     * test / staging, the existing Story 1.5 behaviour is preserved (message → title with a
+     * safe fallback when empty), and the message also surfaces in `debug.message`.
+     */
+    private function resolveUnhandledTitle(Throwable $e): string
+    {
+        if (self::DEBUG_MODE_OMIT === $this->resolveDebugMode()) {
+            return self::UNHANDLED_TITLE_FALLBACK;
+        }
+
+        $message = $e->getMessage();
+
+        return '' !== $message ? $message : self::UNHANDLED_TITLE_FALLBACK;
     }
 }
