@@ -6,3 +6,9 @@ services:
 
     Erpify\Tests\DataFixtures\:
         resource: '../tests/DataFixtures/*'
+
+    # Story 1.4 — test-only controllers that exercise the ExceptionResponder listener through a real
+    # kernel via WebTestCase. Loaded only when APP_ENV=test.
+    Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\:
+        resource: '../tests/Functional/Shared/Infrastructure/Http/EventListener/Fixtures/'
+        tags: ['controller.service_arguments']

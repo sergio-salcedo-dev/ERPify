@@ -22,9 +22,13 @@ use Throwable;
  *
  * - `NotEncodableValueException` (e.g. `#[MapRequestPayload]` receiving
  *   malformed JSON) → 422 with `"Invalid JSON body."`.
- * - `ValidationFailedException` (incl. when wrapped by Symfony's
- *   `#[MapRequestPayload]` / `#[MapQueryString]` resolvers into an
- *   `HttpException(422)`) → 422 with field-level violations.
+ * - `ValidationFailedException` raised under any route whose name ends
+ *   with `_search` (incl. when wrapped by Symfony's `#[MapRequestPayload]` /
+ *   `#[MapQueryString]` resolvers into an `HttpException(422)`) → 422 with
+ *   field-level violations. Non-search routes flow through
+ *   {@see ExceptionResponder}
+ *   instead, producing the unified RFC 9457 Problem Details body with the
+ *   `violations` extension (Story 1.6).
  * - `InvalidArgumentException` raised under any route whose name ends
  *   with `_search` (e.g. an HMAC-valid but corrupted cursor reaching
  *   `PaginatorCursorFactory::createFromString`) → 400.
@@ -52,7 +56,7 @@ final readonly class SearchExceptionListener
 
         $validationException = $this->findInChain($throwable, ValidationFailedException::class);
 
-        if ($validationException instanceof ValidationFailedException) {
+        if ($validationException instanceof ValidationFailedException && $this->isSearchRoute($request)) {
             $event->setResponse(new JsonResponse(
                 JsonApiErrorBuilder::fromViolations($validationException->getViolations()),
                 Response::HTTP_UNPROCESSABLE_ENTITY,

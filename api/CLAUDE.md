@@ -9,7 +9,7 @@ API-scoped guidance. Root [`../CLAUDE.md`](../CLAUDE.md) is authoritative for mo
 -   **Doctrine ORM** + **PostgreSQL**. Migrations in `migrations/`, fixtures via **Hautelook Alice**.
 -   **Symfony Messenger** with a dedicated `messenger_worker` service (async email + audit table).
 -   **Mercure** hub (built into FrankenPHP) for real-time.
--   **PHPUnit** + **Behat** for tests.
+-   **PHPUnit** + **Behat** for tests. (Behat preferred)
 -   Repo root `symfony-docker` scaffold is the upstream — when syncing, merge into the **root** Compose files, not into `api/`.
 
 ## Folder structure

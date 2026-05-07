@@ -55,6 +55,7 @@
         "symfony/property-info": "^8.0.8",
         "symfony/routing": "^8.0.9",
         "symfony/runtime": "^8.0.8",
+        "symfony/security-core": "8.0.*",
         "symfony/serializer": "^8.0.8",
         "symfony/uid": "^8.0.9",
         "symfony/validator": "^8.0.9",

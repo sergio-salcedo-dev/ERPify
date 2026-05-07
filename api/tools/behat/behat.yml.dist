@@ -15,6 +15,7 @@ default:
             paths:
                 - '%paths.base%/../../features/backoffice'
                 - '%paths.base%/../../features/frontoffice'
+                - '%paths.base%/../../features/shared'
             contexts:
                 - Erpify\Tests\Behat\Context\HttpRequestContext:
                       baseUrl: '/api/v1'

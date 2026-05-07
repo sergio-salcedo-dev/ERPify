@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:ietf:rfc:9457",
+  "title": "RFC 9457 Problem Details for HTTP APIs",
+  "description": "JSON Schema for HTTP Problem Details responses (RFC 9457 §A.2). Extension members are permitted at the top level via additionalProperties.",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "format": "uri-reference",
+      "default": "about:blank"
+    },
+    "title": {
+      "type": "string"
+    },
+    "status": {
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 599
+    },
+    "detail": {
+      "type": "string"
+    },
+    "instance": {
+      "type": "string",
+      "format": "uri-reference"
+    }
+  },
+  "required": ["type", "title", "status"],
+  "additionalProperties": true
+}
