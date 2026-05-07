@@ -69,7 +69,7 @@ final class ExceptionResponderTest extends TestCase
     public function testDomainExceptionMappedToProblemDetailsResponse(): void
     {
         $exceptionResponder = $this->makeListener();
-        $exception = new class ('', 'Bank not found', ['bank_id' => '01JABC']) extends DomainException implements NotFound {
+        $exception = new class ('', 'Bank not found', ['bankId' => '01JABC']) extends DomainException implements NotFound {
         };
         $exceptionEvent = $this->makeEvent('/api/v1/anything', $exception);
 
@@ -88,7 +88,7 @@ final class ExceptionResponderTest extends TestCase
         $this->assertBodyEquals('not-found', $body, 'type');
         $this->assertBodyEquals('Bank not found', $body, 'title');
         $this->assertBodyEquals(404, $body, 'status');
-        $this->assertBodyEquals('01JABC', $body, 'bank_id');
+        $this->assertBodyEquals('01JABC', $body, 'bankId');
         $this->assertBodyMatchesRegex(self::UUID_V7_REGEX, $body, 'correlation-id');
         $this->assertBodyMatchesRegex(self::UUID_V7_REGEX, $body, 'instance');
     }

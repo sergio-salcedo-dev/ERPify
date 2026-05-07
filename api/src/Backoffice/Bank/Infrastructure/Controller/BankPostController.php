@@ -8,13 +8,10 @@ use Erpify\Backoffice\Bank\Application\BankCreator;
 use Erpify\Backoffice\Bank\Infrastructure\Request\BankPostPayload;
 use Erpify\Shared\Application\UseCase\Result;
 use Erpify\Shared\Application\Validation\Validator;
-use Erpify\Shared\Infrastructure\Http\JsonApiErrorBuilder;
 use Erpify\Shared\Infrastructure\Http\Responder\ResponderInterface;
 use Erpify\Shared\Infrastructure\Serializer\ResourceNormalizer;
-use Erpify\Shared\Media\Domain\Exception\InvalidImageException;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
-use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\HttpKernel\Attribute\MapUploadedFile;
@@ -45,19 +42,7 @@ final readonly class BankPostController
         $this->assertValidUpload($image);
         $this->assertValidUpload($storedObject);
 
-        try {
-            $bank = $this->bankCreator->create($input->name, $input->shortName, $image, $storedObject);
-        } catch (InvalidImageException $invalidImageException) {
-            return new JsonResponse(
-                JsonApiErrorBuilder::fromErrors([
-                    JsonApiErrorBuilder::error(
-                        $invalidImageException->formField(),
-                        $invalidImageException->getMessage(),
-                    ),
-                ]),
-                Response::HTTP_UNPROCESSABLE_ENTITY,
-            );
-        }
+        $bank = $this->bankCreator->create($input->name, $input->shortName, $image, $storedObject);
 
         $data = $this->resourceNormalizer->toArray(
             $bank,

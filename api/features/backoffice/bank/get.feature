@@ -12,16 +12,32 @@ Feature: Get banks
     And the JSON node "data.createdAt" should not be null
     And the JSON node "data.updatedAt" should not be null
 
-  Scenario Outline: Get a bank that does not exist returns 400
+  Scenario Outline: Get a bank with an invalid id returns a 422 validation-failed Problem Details body
     When I send a "GET" request to "/backoffice/banks/<bankId>"
-    Then the response status code should be 400
-    And the validation error on "id" should be "<errorMessage>"
+    Then the response status code should be 422
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
+    And the response should be in JSON
+    And the JSON node "type" should be equal to "validation-failed"
+    And the JSON node "status" should be equal to the number 422
+    And the JSON node "title" should be equal to "Validation failed."
+    And the JSON node "violations[0].message" should be equal to "<errorMessage>"
+    And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
+    And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
     Examples:
       | bankId      | errorMessage                    |
       | null        | This value is not a valid UUID. |
       | invalidUuid | This value is not a valid UUID. |
 
-  Scenario: Get a bank that does not exist returns 404
+  Scenario: Get a bank that does not exist returns a 404 bank-not-found Problem Details body
     When I send a "GET" request to "/backoffice/banks/2e6d865c-17b0-476a-85f2-037bf6d3b3dc"
     Then the response status code should be 404
-    And the validation error on "uuid" should be "Bank with id <2e6d865c-17b0-476a-85f2-037bf6d3b3dc> not found."
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
+    And the response should be in JSON
+    And the JSON node "type" should be equal to "bank-not-found"
+    And the JSON node "status" should be equal to the number 404
+    And the JSON node "title" should be equal to "Bank with id <2e6d865c-17b0-476a-85f2-037bf6d3b3dc> not found."
+    And the JSON node "bankId" should be equal to "2e6d865c-17b0-476a-85f2-037bf6d3b3dc"
+    And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
+    And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"

@@ -30,7 +30,7 @@ final class DomainExceptionTest extends TestCase
 
     public function testContextIsExposedThroughAccessor(): void
     {
-        $context = ['bank_id' => '01JABC', 'attempt' => 3];
+        $context = ['bankId' => '01JABC', 'attempt' => 3];
         $type = 'bank-not-found';
         $title = 'Bank not found';
         $exception = new class ($type, $title, $context) extends DomainException implements NotFound {

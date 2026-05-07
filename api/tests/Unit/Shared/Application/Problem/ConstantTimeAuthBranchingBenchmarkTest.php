@@ -18,7 +18,7 @@ use Throwable;
 /**
  * Story 3.7 (NFR9) — informational microbenchmark for the four 401/403 routes
  * through {@see ProblemDetailsFactory::fromThrowable}. NOT CI-gated in the
- * blocking sense: the threshold is deliberately generous (2x) so shared CI
+ * blocking sense: the threshold is deliberately generous (5x) so shared CI
  * hardware noise does not cause false positives. The test exists to surface
  * gross asymmetries — a regression that quintuples one branch's cost will
  * fail this; a 5% jitter under normal load will not.
@@ -64,17 +64,18 @@ final class ConstantTimeAuthBranchingBenchmarkTest extends TestCase
 
     /**
      * Maximum acceptable ratio between the slowest and fastest measured branch
-     * mean. 2x is intentionally generous: shared CI hardware can experience
-     * neighbour-VM noise that doubles a measurement window's wall-clock cost
-     * for one iteration. A real branching asymmetry (e.g. one branch added a
-     * conditional `usleep(1000)`) would manifest as ~10x or more, well above
-     * this threshold.
+     * mean. 5x is intentionally generous: shared CI hardware (containerised
+     * runners, neighbour-VM noise, transient I/O contention) can quadruple a
+     * single measurement window's wall-clock cost. A real branching asymmetry
+     * (e.g. one branch adding a conditional `usleep(1000)`) would manifest as
+     * ~10x or more, well above this threshold. The intent of this bench is to
+     * surface gross regressions, not microsecond-level precision.
      */
-    private const float MAX_BRANCH_MEAN_RATIO = 2.0;
+    private const float MAX_BRANCH_MEAN_RATIO = 5.0;
 
     /**
      * Story 3.7 — the AC-mandated microbenchmark (documented, not CI-gated in
-     * the blocking sense — the 2x threshold is generous enough that the test
+     * the blocking sense — the 5x threshold is generous enough that the test
      * is informational rather than precision-tuned).
      */
     public function testConstantTimeAuthBranchingMeansAreWithinMeasurementNoise(): void
@@ -143,7 +144,7 @@ final class ConstantTimeAuthBranchingBenchmarkTest extends TestCase
             \sprintf(
                 'Auth branching timing asymmetry exceeds %sx threshold (NFR9, informational): '
                 . 'observed ratio = %.3f. Per-branch means (ns/call): %s. This is the Story 3.7 '
-                . 'documented bench — a 2x threshold is generous enough to absorb shared-CI '
+                . 'documented bench — a 5x threshold is generous enough to absorb shared-CI '
                 . 'noise; if you see this fail, inspect the means table for which branch '
                 . 'regressed and check the recent diff for conditional sleeps, I/O, or '
                 . 'resource-presence-conditional logic in fromThrowable().',

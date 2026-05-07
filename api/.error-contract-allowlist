@@ -15,12 +15,3 @@
 #       (e.g. ExceptionResponder, ProblemDetailsResponder), OR
 #   (b) the file is legacy controller code whose migration to the new
 #       error contract is tracked by a follow-up story.
-#
-# Story 4.5 ships with (b)-only entries — the Bank controllers predate the
-# error-contract migration and are scheduled to move off catch-and-respond
-# in a follow-up. Once migrated, remove the corresponding line.
-
-src/Backoffice/Bank/Infrastructure/Controller/BankDeleteController.php
-src/Backoffice/Bank/Infrastructure/Controller/BankGetController.php
-src/Backoffice/Bank/Infrastructure/Controller/BankPutController.php
-src/Backoffice/Bank/Infrastructure/Controller/BankPostController.php

@@ -42,7 +42,7 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         $body = $this->decodeBody($response->getContent());
 
         $this->assertSame(
-            ['type', 'title', 'status', 'instance', 'correlation-id', 'bank_id', 'debug'],
+            ['type', 'title', 'status', 'instance', 'correlation-id', 'bankId', 'debug'],
             \array_keys($body),
             'Body key order must match Story 1.2 (`type, title, status, [detail], instance, correlation-id, <extensions>`); '
             . 'Story 3.1 appends `debug` LAST in `<extensions>` for the `test` env.',
@@ -50,7 +50,7 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         $this->assertBodyEquals('not-found', $body, 'type');
         $this->assertBodyEquals('Bank not found', $body, 'title');
         $this->assertBodyEquals(404, $body, 'status');
-        $this->assertBodyEquals('01JABC', $body, 'bank_id');
+        $this->assertBodyEquals('01JABC', $body, 'bankId');
         $this->assertBodyMatchesRegex(self::UUID_V7_REGEX, $body, 'correlation-id');
         $this->assertBodyMatchesRegex(self::UUID_V7_REGEX, $body, 'instance');
     }
@@ -577,11 +577,11 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         );
 
         // Identical-shape fields — `type`, `title`, `status` and any domain-emitted
-        // extension (here `bank_id`) survive the reset unchanged.
+        // extension (here `bankId`) survive the reset unchanged.
         $this->assertSame($bodyA['type'] ?? null, $bodyB['type'] ?? null);
         $this->assertSame($bodyA['title'] ?? null, $bodyB['title'] ?? null);
         $this->assertSame($bodyA['status'] ?? null, $bodyB['status'] ?? null);
-        $this->assertSame($bodyA['bank_id'] ?? null, $bodyB['bank_id'] ?? null);
+        $this->assertSame($bodyA['bankId'] ?? null, $bodyB['bankId'] ?? null);
 
         // Exclusivity — `instance` and `correlation-id` are the ONLY fields that may differ
         // (per-error and per-request mints respectively); compare every other key for

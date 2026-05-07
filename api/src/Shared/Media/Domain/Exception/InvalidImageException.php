@@ -4,32 +4,26 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Media\Domain\Exception;
 
-use Erpify\Shared\Domain\DomainError;
-use Override;
+use Erpify\Shared\Domain\Exception\DomainException;
+use Erpify\Shared\Domain\Exception\InvariantViolation;
 
-final class InvalidImageException extends DomainError
+final class InvalidImageException extends DomainException implements InvariantViolation
 {
-    public function __construct(
-        private readonly string $detail,
-        private readonly string $formField = 'image',
-    ) {
-        parent::__construct();
-    }
+    private const string DEFAULT_FORM_FIELD = 'image';
 
-    #[Override]
-    public function errorCode(): string
+    public function __construct(string $detail, string $formField = self::DEFAULT_FORM_FIELD)
     {
-        return 'erpify.media.invalid_image';
+        parent::__construct(
+            type: 'invalid-image',
+            title: $detail,
+            context: ['formField' => $formField],
+        );
     }
 
     public function formField(): string
     {
-        return $this->formField;
-    }
+        $context = $this->context();
 
-    #[Override]
-    protected function errorMessage(): string
-    {
-        return $this->detail;
+        return \is_string($context['formField'] ?? null) ? $context['formField'] : self::DEFAULT_FORM_FIELD;
     }
 }

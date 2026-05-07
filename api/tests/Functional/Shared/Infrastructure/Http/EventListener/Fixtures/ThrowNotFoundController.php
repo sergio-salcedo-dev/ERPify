@@ -19,7 +19,7 @@ final class ThrowNotFoundController
 {
     public function __invoke(): Response
     {
-        throw new class ('', 'Bank not found', ['bank_id' => '01JABC']) extends DomainException implements NotFound {
+        throw new class ('', 'Bank not found', ['bankId' => '01JABC']) extends DomainException implements NotFound {
         };
     }
 }
