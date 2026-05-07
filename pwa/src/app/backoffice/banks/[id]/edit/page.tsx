@@ -1,4 +1,8 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
 import { FindBank } from "@/context/backoffice/bank/application/FindBank";
@@ -9,71 +13,91 @@ import { CorrelationIdChip, EmptyState, ProblemDisplay } from "@/components/erpi
 import { Button } from "@/components/ui/button";
 import { BankForm } from "../../_components/BankForm";
 
-export const dynamic = "force-dynamic";
+type State = "loading" | "ready" | "not-found" | "error";
 
-interface EditBankPageProps {
-  params: Promise<{ id: string }>;
+function genericProblem(detail: string): ProblemDetails {
+  return {
+    type: "about:blank",
+    title: "Unexpected error",
+    status: 0,
+    detail,
+    instance: crypto.randomUUID(),
+    "correlation-id": crypto.randomUUID(),
+  };
 }
 
-async function loadBank(
-  id: string,
-): Promise<{ kind: "ok"; bank: Bank } | { kind: "error"; problem: ProblemDetails }> {
-  try {
-    const useCase = container.get<FindBank>("BackOfficeFindBank");
-    const bank = await useCase.run(id);
-    return { kind: "ok", bank };
-  } catch (err) {
-    if (err instanceof HttpError) {
-      return { kind: "error", problem: err.problem };
-    }
-    throw err;
-  }
-}
+export default function EditBankPage() {
+  const params = useParams<{ id: string }>();
+  const id = params?.id ?? "";
+  const [state, setState] = useState<State>("loading");
+  const [bank, setBank] = useState<Bank | null>(null);
+  const [problem, setProblem] = useState<ProblemDetails | null>(null);
 
-export default async function EditBankPage({ params }: EditBankPageProps) {
-  const { id } = await params;
-  const result = await loadBank(id);
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const useCase = container.get<FindBank>("BackOfficeFindBank");
+        const result = await useCase.run(id);
+        if (cancelled) return;
+        setBank(result);
+        setState("ready");
+      } catch (err) {
+        if (cancelled) return;
+        if (err instanceof HttpError) {
+          setProblem(err.problem);
+          setState(err.problem.status === 404 ? "not-found" : "error");
+          return;
+        }
+        setProblem(genericProblem(err instanceof Error ? err.message : "Unknown error"));
+        setState("error");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
 
-  if (result.kind === "error" && result.problem.status === 404) {
-    return (
-      <div className="banks-edit space-y-6">
-        <BackLink id={id} />
+  return (
+    <div className="banks-edit space-y-6">
+      <BackLink id={id} />
+
+      {state === "loading" ? (
+        <p className="text-muted-foreground text-sm" role="status" aria-live="polite">
+          Loading bank…
+        </p>
+      ) : null}
+
+      {state === "not-found" && problem ? (
         <EmptyState
           variant="first-run"
           heading="Bank not found"
           description="We could not find a bank with that id. It may have been deleted."
           action={
             <div className="flex flex-col items-center gap-2">
-              <CorrelationIdChip id={result.problem["correlation-id"]} label="Error ID:" />
+              <CorrelationIdChip id={problem["correlation-id"]} label="Error ID:" />
               <Button render={<Link href="/backoffice/banks">Back to banks</Link>} />
             </div>
           }
         />
-      </div>
-    );
-  }
+      ) : null}
 
-  if (result.kind === "error") {
-    return (
-      <div className="banks-edit space-y-6">
-        <BackLink id={id} />
-        <ProblemDisplay problem={result.problem} variant="panel" />
-      </div>
-    );
-  }
+      {state === "error" && problem ? <ProblemDisplay problem={problem} variant="panel" /> : null}
 
-  const { bank } = result;
+      {state === "ready" && bank ? (
+        <>
+          <header className="banks-edit__header space-y-1">
+            <h1 className="text-foreground text-2xl font-semibold tracking-tight">Edit bank</h1>
+            <p className="text-muted-foreground text-sm">Update {bank.name}.</p>
+          </header>
 
-  return (
-    <div className="banks-edit space-y-6">
-      <BackLink id={id} />
-
-      <header className="banks-edit__header space-y-1">
-        <h1 className="text-foreground text-2xl font-semibold tracking-tight">Edit bank</h1>
-        <p className="text-muted-foreground text-sm">Update {bank.name}.</p>
-      </header>
-
-      <BankForm mode="edit" initial={{ id: bank.id, name: bank.name, shortName: bank.shortName }} />
+          <BankForm
+            mode="edit"
+            initial={{ id: bank.id, name: bank.name, shortName: bank.shortName }}
+          />
+        </>
+      ) : null}
     </div>
   );
 }
@@ -81,7 +105,7 @@ export default async function EditBankPage({ params }: EditBankPageProps) {
 function BackLink({ id }: { id: string }) {
   return (
     <Link
-      href={`/backoffice/banks/${id}`}
+      href={id ? `/backoffice/banks/${encodeURIComponent(id)}` : "/backoffice/banks"}
       className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs"
     >
       <ChevronLeft className="size-3" aria-hidden="true" />

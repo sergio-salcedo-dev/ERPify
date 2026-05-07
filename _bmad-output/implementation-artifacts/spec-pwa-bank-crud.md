@@ -95,6 +95,25 @@ context:
 - [x] `tests/e2e/fixtures/banks-api.ts` — `mockBanksApi(page, scenario)` registering routes via `page.route(predicate, …)` for both list and item paths with success/error fixtures (legacy envelope on errors).
 - [x] `tests/e2e/backoffice/banks.spec.ts` — specs written: list happy, list empty, view happy, view 404 (EmptyState + CorrelationIdChip), create happy, create 422, edit happy, edit 422, delete happy, delete 404 (ProblemDisplay), nav. **Won't run green as-is — see Spec Change Log.**
 
+### Review Findings (2026-05-08, code review of `spec-pwa-bank-crud`)
+
+- [x] [Review][Patch] Add double-submit guard in `BankForm.handleSubmit` and `DeleteBankButton.handleConfirm` — disabled-prop alone leaves a small race window for Enter-key + rapid-click duplicate POST/PUT/DELETE [pwa/src/app/backoffice/banks/_components/BankForm.tsx:42, DeleteBankButton.tsx:31]
+- [x] [Review][Patch] Restrict `autoFocus` to create mode — editing stomps the loaded name on next keystroke [pwa/src/app/backoffice/banks/_components/BankForm.tsx:97]
+- [x] [Review][Patch] Convert `import { Bank }` to `import type { Bank }` — Bank is used only as a type [pwa/src/context/backoffice/bank/domain/BankRepository.ts:1]
+- [x] [Review][Patch] Clear `problem` state when the delete dialog opens — reopening after a 404 shows stale error [pwa/src/app/backoffice/banks/_components/DeleteBankButton.tsx:55]
+- [x] [Review][Patch] Replace Cancel `onClick={setOpen(false)}` with `<DialogClose>` — preserves base-ui focus management [pwa/src/app/backoffice/banks/_components/DeleteBankButton.tsx:78]
+- [x] [Review][Patch] `encodeURIComponent` the id in `ApiRoutes.v1.backoffice.banks.byId` — URL-reserved chars and path traversal [pwa/src/context/shared/infrastructure/ApiRoutes.ts:14]
+- [x] [Review][Patch] Make DataTable rows clickable — spec AC says "clicking a row navigates"; only the View link does today [pwa/src/app/backoffice/banks/page.tsx:42]
+- [x] [Review][Defer] Container singleton scope leaks request state once auth lands — current pattern matches health context [pwa/src/context/shared/infrastructure/DependencyInjection/Container.ts] — deferred, pre-existing pattern
+- [x] [Review][Defer] Non-HttpError exceptions in pages produce Next.js 500 instead of `<ProblemDisplay>` fallback [pwa/src/app/backoffice/banks/page.tsx:42, [id]/page.tsx:24, [id]/edit/page.tsx:23] — deferred, spec doesn't mandate
+- [x] [Review][Defer] No validation of API response shape; `Bank.fromPrimitives` accepts whatever it gets — risk of `Invalid Date` display [pwa/src/context/backoffice/bank/domain/Bank.ts:11, ApiBankRepository.ts] — deferred, defensive coding
+- [x] [Review][Defer] No `AbortSignal` / unmount cleanup in client components [pwa/src/app/backoffice/banks/_components/BankForm.tsx, DeleteBankButton.tsx] — deferred, lifecycle hardening
+- [x] [Review][Defer] Closing the delete dialog mid-request drops the error display silently [pwa/src/app/backoffice/banks/_components/DeleteBankButton.tsx] — deferred, UX trade-off
+- [x] [Review][Defer] Long bank names overflow the delete dialog description (no truncation) [pwa/src/app/backoffice/banks/_components/DeleteBankButton.tsx:81] — deferred, cosmetic
+- [x] [Review][Defer] DI uses string tokens, not Symbols — collision risk; pre-existing pattern [pwa/src/context/shared/infrastructure/DependencyInjection/Container.ts] — deferred, kernel-wide concern
+- [x] [Review][Defer] No "navigate away with unsaved changes" warning on dirty forms [pwa/src/app/backoffice/banks/_components/BankForm.tsx] — deferred, UX hardening
+- [x] [Review][Defer] Date columns use `new Date(...).toLocaleString()` server-side — defensive guards for null/missing/invalid ISO not added [pwa/src/app/backoffice/banks/page.tsx:18, [id]/page.tsx:84-85] — deferred, defensive coding
+
 **Acceptance Criteria:**
 - Given the API returns rows on `/banks`, when the user visits `/backoffice/banks`, then the DataTable shows shortName/name/updatedAt and a `[+ New bank]` link, and clicking a row navigates to `/backoffice/banks/<id>`.
 - Given the user submits create with `name=""`, when the API returns the legacy 422 envelope with `errors[].source.parameter="name"`, then the `<FormField name="name">` shows the API message and the form retains user input; `<ProblemDisplay>` is **not** shown for the same 422.

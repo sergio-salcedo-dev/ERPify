@@ -13,7 +13,7 @@ export const ApiRoutes = {
       health: `${API_PREFIX_V1}/backoffice/health`,
       banks: {
         list: `${API_PREFIX_V1}/backoffice/banks`,
-        byId: (id: string): string => `${API_PREFIX_V1}/backoffice/banks/${id}`,
+        byId: (id: string): string => `${API_PREFIX_V1}/backoffice/banks/${encodeURIComponent(id)}`,
       },
     },
   },

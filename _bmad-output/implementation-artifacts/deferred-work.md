@@ -1,5 +1,17 @@
 # Deferred Work
 
+## Deferred from: code review of `spec-pwa-bank-crud` (2026-05-08)
+
+- **Container singleton scope vs request isolation.** `Container.ts` binds `BackOfficeBankRepository` `inSingletonScope`, with a module-level container shared across all server requests. Once auth/session land, this leaks cookies/headers between users. Pre-existing pattern across the kernel; address as part of auth integration.
+- **Non-HttpError handling in pages.** List/detail/edit pages catch `HttpError` and rethrow everything else, which surfaces as a Next.js 500 page instead of a `<ProblemDisplay>` fallback. Spec did not mandate the fallback path; consider mirroring the existing health-page synthesised-PD pattern.
+- **API response shape validation.** `ApiBankRepository` and `Bank.fromPrimitives` trust the server's payload. Defensive guards (e.g. `if (!Array.isArray(response.data)) throw …`) would surface malformed responses as proper ProblemDetails instead of generic crashes.
+- **Abort / unmount cleanup.** No `AbortSignal` plumbing on `FetchHttpClient` or its consumers; React 19 strict-mode and rapid navigation can call `setState` after unmount in `BankForm` / `DeleteBankButton`.
+- **Delete dialog error visibility.** Closing the dialog mid-DELETE drops the error display. Either keep the dialog open until the request resolves or surface the error via a toast.
+- **Long-name overflow in delete dialog.** `<DialogDescription>` renders the bank name inline without `truncate` / `break-all`; very long names break layout.
+- **Date validation across the bank pages.** `new Date(updatedAt).toLocaleString()` in the list and detail renders without guards — null/missing/invalid ISO strings surface as `Invalid Date`.
+- **DI string tokens vs Symbols.** Container uses string literals (`"BackOfficeBankRepository"`, etc.); a Symbol-based identifier would catch collisions at type level. Project-wide concern, not bank-specific.
+- **Unsaved-changes guard on `BankForm`.** No `beforeunload` / router-event prompt when the form is dirty; closing the tab silently discards user input.
+
 ## Deferred from: review of `spec-pwa-http-client-writes` (2026-05-08)
 
 - **`FetchHttpClient.toHttpError` discards non-JSON error bodies.** Servers/proxies sometimes emit `text/plain` or HTML on 5xx (gateway timeout, WAF block). The current `await res.json().catch(() => null)` reduces them to `null` and the synthesized ProblemDetails carries only the status code. Consider reading via `res.text()` first and stashing the raw text under `problem.detail` (truncated) when JSON parse fails, so operators retain the diagnostic.

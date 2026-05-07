@@ -12,9 +12,9 @@ test.describe("BackOffice - Banks CRUD", () => {
 
       await expect(page.getByRole("heading", { name: "Banks", level: 1 })).toBeVisible();
       await expect(page.getByRole("link", { name: /New bank/i })).toBeVisible();
-      await expect(page.getByText("ACME")).toBeVisible();
-      await expect(page.getByText("Acme Savings")).toBeVisible();
-      await expect(page.getByText("BRT")).toBeVisible();
+      await expect(page.getByRole("cell", { name: "ACME", exact: true })).toBeVisible();
+      await expect(page.getByRole("cell", { name: "Acme Savings", exact: true })).toBeVisible();
+      await expect(page.getByRole("cell", { name: "BRT", exact: true })).toBeVisible();
     });
 
     test("shows the empty state when there are no banks", async ({ page }) => {
@@ -123,7 +123,9 @@ test.describe("BackOffice - Banks CRUD", () => {
 
       // User stays on the detail page (URL unchanged).
       await expect(page).toHaveURL(`/backoffice/banks/${SAMPLE_BANK_A.id}`);
-      await expect(page.getByRole("alert").getByText("Bank not found.")).toBeVisible();
+      await expect(
+        page.getByRole("alert").getByRole("heading", { name: "Bank not found." }),
+      ).toBeVisible();
     });
   });
 

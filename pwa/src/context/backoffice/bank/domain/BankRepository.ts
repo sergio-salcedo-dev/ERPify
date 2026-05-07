@@ -1,4 +1,4 @@
-import { Bank } from "./Bank";
+import type { Bank } from "./Bank";
 
 export interface BankInput {
   name: string;

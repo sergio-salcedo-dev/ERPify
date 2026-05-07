@@ -35,6 +35,7 @@ export function BankForm({ mode, initial }: BankFormProps) {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
+    if (submitting) return;
     setViolations([]);
     setProblem(null);
     setSubmitting(true);
@@ -89,7 +90,7 @@ export function BankForm({ mode, initial }: BankFormProps) {
           onChange={(event) => setName(event.currentTarget.value)}
           maxLength={255}
           autoComplete="off"
-          autoFocus
+          autoFocus={mode === "create"}
           data-testid="bank-form__name"
         />
       </FormField>

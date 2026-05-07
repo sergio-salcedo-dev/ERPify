@@ -11,6 +11,7 @@ import { ProblemDisplay } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -30,7 +31,15 @@ export function DeleteBankButton({ id, name }: DeleteBankButtonProps) {
   const [submitting, setSubmitting] = useState(false);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
 
+  function handleOpenChange(next: boolean): void {
+    if (next) {
+      setProblem(null);
+    }
+    setOpen(next);
+  }
+
   async function handleConfirm(): Promise<void> {
+    if (submitting) return;
     setSubmitting(true);
     setProblem(null);
     try {
@@ -51,7 +60,7 @@ export function DeleteBankButton({ id, name }: DeleteBankButtonProps) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger
         render={
           <Button
@@ -77,9 +86,13 @@ export function DeleteBankButton({ id, name }: DeleteBankButtonProps) {
         {problem ? <ProblemDisplay problem={problem} variant="inline" /> : null}
 
         <DialogFooter>
-          <Button variant="ghost" size="sm" disabled={submitting} onClick={() => setOpen(false)}>
-            Cancel
-          </Button>
+          <DialogClose
+            render={
+              <Button variant="ghost" size="sm" disabled={submitting}>
+                Cancel
+              </Button>
+            }
+          />
           <Button
             variant="destructive"
             size="sm"
