@@ -16,6 +16,8 @@ use Erpify\Tests\Doctrine\TestDebugDataHolder;
  * TestDebugDataHolder, which captures queries while filtering out
  * Behat/PHPUnit/Symfony-internal frames.
  *
+ * @phpstan-import-type ResolvedQueryRecord from TestDebugDataHolder
+ *
  * @SuppressWarnings("PHPMD.TooManyPublicMethods")
  * @SuppressWarnings("PHPMD.ExcessiveClassComplexity")
  */
@@ -56,12 +58,14 @@ class DoctrineContext extends AbstractContext
         self::assertEquals($count, $this->getQueriesCountForConnectionName($connectionName));
 
         $errorMessages = [];
+
         foreach ($this->getUsedConnectionNames() as $name) {
             if ($connectionName === $name) {
                 continue;
             }
 
             $queriesCount = $this->getQueriesCountForConnectionName($name);
+
             if (0 === $queriesCount) {
                 continue;
             }
@@ -71,7 +75,7 @@ class DoctrineContext extends AbstractContext
 
         self::assertEmpty(
             $errorMessages,
-            \sprintf('Other doctrine connections had requests executed: %s', implode(', ', $errorMessages)),
+            \sprintf('Other doctrine connections had requests executed: %s', \implode(', ', $errorMessages)),
         );
     }
 
@@ -85,7 +89,7 @@ class DoctrineContext extends AbstractContext
             }
 
             foreach ($queries as $query) {
-                if (str_contains($query['sql'], $needle)) {
+                if (\str_contains($query['sql'], $needle)) {
                     return;
                 }
             }
@@ -98,8 +102,9 @@ class DoctrineContext extends AbstractContext
     public function queriesWereExecutedOnlyOnConnection(string $connectionName): void
     {
         $existingConnectionNames = $this->getUsedConnectionNames();
-        self::assertTrue(
-            \in_array($connectionName, $existingConnectionNames, true),
+        self::assertContains(
+            $connectionName,
+            $existingConnectionNames,
             'connection not found in used connection list',
         );
 
@@ -136,7 +141,8 @@ class DoctrineContext extends AbstractContext
 
         foreach ($this->getFilteredConnectionsQueries($connectionName) as $queries) {
             $query = $queries[$number] ?? null;
-            if (null !== $query && str_contains($query['sql'], $needle)) {
+
+            if (null !== $query && \str_contains($query['sql'], $needle)) {
                 return;
             }
         }
@@ -152,7 +158,8 @@ class DoctrineContext extends AbstractContext
 
         foreach ($this->getFilteredConnectionsQueries($connectionName) as $queries) {
             $query = $queries[$number] ?? null;
-            if (null !== $query && !str_contains($query['sql'], $needle)) {
+
+            if (null !== $query && !\str_contains($query['sql'], $needle)) {
                 return;
             }
         }
@@ -173,8 +180,9 @@ class DoctrineContext extends AbstractContext
     ): void {
         foreach ($this->getFilteredConnectionsQueries($connectionName) as $queries) {
             $queryParams = $queries[$number]['params'] ?? [];
+
             foreach ($queryParams as $key => $param) {
-                $compareKey = (\is_int($key) && ctype_digit($argumentName)) ? (int) $argumentName : $argumentName;
+                $compareKey = (\is_int($key) && \ctype_digit($argumentName)) ? (int) $argumentName : $argumentName;
 
                 if ($key === $compareKey) {
                     self::assertEquals($expectedValue, $param);
@@ -197,12 +205,13 @@ class DoctrineContext extends AbstractContext
         }
 
         $typesCount = [];
+
         foreach ($connectionsQueries[$connectionName] as $query) {
-            $queryType = explode(' ', $query['sql'])[0];
+            $queryType = \explode(' ', $query['sql'])[0];
             $typesCount[$queryType] = ($typesCount[$queryType] ?? 0) + 1;
         }
 
-        self::assertEquals($count, $typesCount[strtoupper($type)] ?? 0);
+        self::assertEquals($count, $typesCount[\strtoupper($type)] ?? 0);
     }
 
     #[Then('I dump the number of executed queries for each doctrine connection')]
@@ -217,7 +226,7 @@ class DoctrineContext extends AbstractContext
         $messages[] = \sprintf('Total number of queries: %s', $this->getQueriesCountForAllConnections());
 
         foreach ($messages as $message) {
-            print_r($message . PHP_EOL);
+            \print_r($message . PHP_EOL);
         }
     }
 
@@ -228,16 +237,17 @@ class DoctrineContext extends AbstractContext
         $connectionsQueries = $this->getFilteredConnectionsQueries($connectionName);
 
         if ([] === $connectionsQueries) {
-            print_r('No connection used!');
+            \print_r('No connection used!');
         }
 
         foreach ($connectionsQueries as $name => $queries) {
-            print_r(\sprintf('Queries for connection "%s":%s', $name, PHP_EOL));
+            \print_r(\sprintf('Queries for connection "%s":%s', $name, PHP_EOL));
+
             foreach ($queries as $key => $query) {
-                print_r(\sprintf('(%s) - %s%s', $key, $query['sql'], PHP_EOL));
+                \print_r(\sprintf('(%s) - %s%s', $key, $query['sql'], PHP_EOL));
             }
 
-            print_r('--------------------------------------------' . PHP_EOL);
+            \print_r('--------------------------------------------' . PHP_EOL);
         }
     }
 
@@ -249,14 +259,15 @@ class DoctrineContext extends AbstractContext
     #[Given('I clear the entity managers')]
     public function iClearTheEntityManagers(): void
     {
-        foreach ($this->registry->getManagers() as $manager) {
-            $manager->clear();
+        foreach ($this->registry->getManagers() as $objectManager) {
+            $objectManager->clear();
         }
     }
 
     public function getQueriesCountForAllConnections(): int
     {
         $count = 0;
+
         foreach ($this->getUsedConnectionNames() as $connectionName) {
             $count += $this->getQueriesCountForConnectionName($connectionName);
         }
@@ -274,15 +285,16 @@ class DoctrineContext extends AbstractContext
      */
     public function getUsedConnectionNames(): array
     {
-        return array_keys($this->debugDataHolder->getData());
+        return \array_keys($this->debugDataHolder->getData());
     }
 
     /**
-     * @return array<string, array<int, array<string, mixed>>>
+     * @return array<string, array<int, ResolvedQueryRecord>>
      */
     public function getFilteredConnectionsQueries(?string $optionalConnectionNameFilter): array
     {
         $data = $this->debugDataHolder->getData();
+
         if (null === $optionalConnectionNameFilter) {
             return $data;
         }

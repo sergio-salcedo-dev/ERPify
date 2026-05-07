@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Doctrine;
 
+use Override;
 use Symfony\Bridge\Doctrine\Middleware\Debug\DebugDataHolder;
 use Symfony\Bridge\Doctrine\Middleware\Debug\Query;
 
@@ -13,24 +14,39 @@ use Symfony\Bridge\Doctrine\Middleware\Debug\Query;
  * SymfonyExtension boots a separate test container, and queries executed
  * inside the request kernel must remain visible to the assertion-side
  * container.
+ *
+ * @phpstan-type StoredQueryRecord array{
+ *     sql: string,
+ *     params: array<int|string, mixed>,
+ *     types: array<int|string, mixed>,
+ *     executionMS: float|null|(callable(): (float|null)),
+ * }
+ * @phpstan-type ResolvedQueryRecord array{
+ *     sql: string,
+ *     params: array<int|string, mixed>,
+ *     types: array<int|string, mixed>,
+ *     executionMS: float|null,
+ *     backtrace?: array<int, array<string, mixed>>,
+ * }
  */
 class TestDebugDataHolder extends DebugDataHolder
 {
     private const array INCLUDED_CLASSES = [
-        'Symfony\Component\EventDispatcher\EventDispatcher',
-        'Symfony\Component\Messenger\Command\ConsumeMessagesCommand',
+        \Symfony\Component\EventDispatcher\EventDispatcher::class,
+        \Symfony\Component\Messenger\Command\ConsumeMessagesCommand::class,
     ];
 
     private const array EXCLUDED_CLASSES = [
         'DAMA\DoctrineTestBundle\Doctrine\DBAL\PostConnectEventListener',
     ];
 
-    /** @var array<string, array<int, array{sql: string, params: array<int|string, mixed>, types: array<int|string, mixed>, executionMS: float|callable}>> */
+    /** @var array<string, array<int, StoredQueryRecord>> */
     private static array $data = [];
 
     /** @var array<string, array<int, array<int, array<string, mixed>>>> */
     private static array $backtraces = [];
 
+    #[Override]
     public function reset(): void
     {
         self::$data = [];
@@ -40,9 +56,10 @@ class TestDebugDataHolder extends DebugDataHolder
     /**
      * @SuppressWarnings("PHPMD.BooleanArgumentFlag")
      */
+    #[Override]
     public function addQuery(string $connectionName, Query $query, bool $force = false): void
     {
-        $backtraces = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
+        $backtraces = \debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
 
         if (!$force && !$this->shouldLog($backtraces)) {
             return;
@@ -62,43 +79,39 @@ class TestDebugDataHolder extends DebugDataHolder
     }
 
     /**
-     * @return array<string, array<int, array<string, mixed>>>
+     * @return array<string, array<int, ResolvedQueryRecord>>
      */
+    #[Override]
     public function getData(): array
     {
+        $resolved = [];
+
         foreach (self::$data as $connectionName => $dataForConn) {
+            $resolved[$connectionName] = [];
+
             foreach ($dataForConn as $idx => $record) {
-                if (\is_callable($record['executionMS'])) {
-                    self::$data[$connectionName][$idx]['executionMS'] = ($record['executionMS'])();
+                $executionMS = $record['executionMS'];
+
+                if (\is_callable($executionMS)) {
+                    $executionMS = $executionMS();
                 }
+
+                $resolvedRecord = [
+                    'sql' => $record['sql'],
+                    'params' => $record['params'],
+                    'types' => $record['types'],
+                    'executionMS' => $executionMS,
+                ];
+
+                if (isset(self::$backtraces[$connectionName][$idx])) {
+                    $resolvedRecord['backtrace'] = self::$backtraces[$connectionName][$idx];
+                }
+
+                $resolved[$connectionName][] = $resolvedRecord;
             }
         }
 
-        $dataWithBacktraces = [];
-        foreach (self::$data as $connectionName => $dataForConn) {
-            $dataWithBacktraces[$connectionName] = $this->withBacktraces($connectionName, $dataForConn);
-        }
-
-        return $dataWithBacktraces;
-    }
-
-    /**
-     * @param array<int, array<string, mixed>> $dataForConn
-     *
-     * @return array<int, array<string, mixed>>
-     */
-    private function withBacktraces(string $connectionName, array $dataForConn): array
-    {
-        $records = [];
-        foreach ($dataForConn as $idx => $record) {
-            if (isset(self::$backtraces[$connectionName][$idx])) {
-                $record['backtrace'] = self::$backtraces[$connectionName][$idx];
-            }
-
-            $records[] = $record;
-        }
-
-        return $records;
+        return $resolved;
     }
 
     /**
@@ -112,8 +125,19 @@ class TestDebugDataHolder extends DebugDataHolder
             return true;
         }
 
-        $classes = array_unique(array_map(static fn (array $frame) => $frame['class'] ?? null, $backtraces));
-        foreach ($classes as $class) {
+        // Frames without a 'class' (top-level functions) are silently dropped here;
+        // they cannot match any of the include/exclude/suffix predicates anyway.
+        $seen = [];
+
+        foreach ($backtraces as $backtrace) {
+            $class = $backtrace['class'] ?? null;
+
+            if (\is_string($class)) {
+                $seen[$class] = true;
+            }
+        }
+
+        foreach (\array_keys($seen) as $class) {
             if (\in_array($class, self::EXCLUDED_CLASSES, true)) {
                 return false;
             }
@@ -134,25 +158,24 @@ class TestDebugDataHolder extends DebugDataHolder
         return false;
     }
 
-    private function isSkippedClass(?string $class): bool
+    private function isSkippedClass(string $class): bool
     {
-        return null === $class
-            || str_starts_with($class, 'Behat')
-            || str_starts_with($class, 'PHPUnit')
-            || str_starts_with($class, 'Symfony')
-            || str_contains($class, 'OptimizedLoadingFixturesContext');
+        return \str_starts_with($class, 'Behat')
+            || \str_starts_with($class, 'PHPUnit')
+            || \str_starts_with($class, 'Symfony')
+            || \str_contains($class, 'OptimizedLoadingFixturesContext');
     }
 
     private function hasAppSuffix(string $class): bool
     {
-        return str_ends_with($class, 'Controller')
-            || str_ends_with($class, 'ParamConverter')
-            || str_ends_with($class, 'Command')
-            || str_ends_with($class, 'Resolver');
+        return \str_ends_with($class, 'Controller')
+            || \str_ends_with($class, 'ParamConverter')
+            || \str_ends_with($class, 'Command')
+            || \str_ends_with($class, 'Resolver');
     }
 
     private function isInControllerNamespace(string $class): bool
     {
-        return str_contains($class, '\\Controller\\');
+        return \str_contains($class, '\Controller\\');
     }
 }

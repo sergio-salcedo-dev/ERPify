@@ -8,6 +8,10 @@ use Erpify\Tests\Doctrine\TestDebugDataHolder;
 use Symfony\Bridge\Doctrine\Middleware\Debug\DebugDataHolder;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
+/**
+ * @internal
+ */
+#[\PHPUnit\Framework\Attributes\CoversNothing]
 final class TestDebugDataHolderWiringTest extends KernelTestCase
 {
     public function testServicesTestYamlAliasesDefaultHolderToOurs(): void
@@ -17,6 +21,6 @@ final class TestDebugDataHolderWiringTest extends KernelTestCase
 
         $resolved = $container->get(DebugDataHolder::class);
 
-        self::assertInstanceOf(TestDebugDataHolder::class, $resolved);
+        $this->assertInstanceOf(TestDebugDataHolder::class, $resolved);
     }
 }

@@ -17,50 +17,54 @@ use Symfony\Bridge\Doctrine\Middleware\Debug\Query;
  * DAMA\DoctrineTestBundle and Symfony\Component namespaces, which would be
  * invasive. Those branches stay uncovered at the unit level and are left to
  * integration coverage.
+ *
+ * @internal
  */
+#[\PHPUnit\Framework\Attributes\CoversNothing]
 final class TestDebugDataHolderTest extends TestCase
 {
-    private TestDebugDataHolder $holder;
+    private TestDebugDataHolder $testDebugDataHolder;
 
     protected function setUp(): void
     {
-        $this->holder = new TestDebugDataHolder();
-        $this->holder->reset();
+        $this->testDebugDataHolder = new TestDebugDataHolder();
+        $this->testDebugDataHolder->reset();
     }
 
     public function testForceFlagBypassesFilter(): void
     {
         $query = $this->makeQuery('SELECT 1');
 
-        $this->holder->addQuery('default', $query, true);
+        $this->testDebugDataHolder->addQuery('default', $query, true);
 
-        $data = $this->holder->getData();
-        self::assertArrayHasKey('default', $data);
-        self::assertCount(1, $data['default']);
-        self::assertSame('SELECT 1', $data['default'][0]['sql']);
+        $data = $this->testDebugDataHolder->getData();
+        $this->assertArrayHasKey('default', $data);
+        $this->assertCount(1, $data['default']);
+        $this->assertArrayHasKey(0, $data['default']);
+        $this->assertSame('SELECT 1', $data['default'][0]['sql']);
     }
 
     public function testResetClearsBothDataAndBacktraces(): void
     {
-        $this->holder->addQuery('default', $this->makeQuery('SELECT 1'), true);
-        self::assertNotEmpty($this->holder->getData());
+        $this->testDebugDataHolder->addQuery('default', $this->makeQuery('SELECT 1'), true);
+        $this->assertNotEmpty($this->testDebugDataHolder->getData());
 
-        $this->holder->reset();
+        $this->testDebugDataHolder->reset();
 
-        self::assertSame([], $this->holder->getData());
+        $this->assertSame([], $this->testDebugDataHolder->getData());
     }
 
     public function testStaticStatePersistsAcrossInstances(): void
     {
-        $this->holder->addQuery('default', $this->makeQuery('SELECT 1'), true);
+        $this->testDebugDataHolder->addQuery('default', $this->makeQuery('SELECT 1'), true);
 
-        $other = new TestDebugDataHolder();
+        $testDebugDataHolder = new TestDebugDataHolder();
 
-        self::assertArrayHasKey('default', $other->getData());
+        $this->assertArrayHasKey('default', $testDebugDataHolder->getData());
 
-        $other->reset();
+        $testDebugDataHolder->reset();
 
-        self::assertSame([], $this->holder->getData());
+        $this->assertSame([], $this->testDebugDataHolder->getData());
     }
 
     public function testQueryFromPhpUnitFrameIsSkipped(): void
@@ -70,30 +74,30 @@ final class TestDebugDataHolderTest extends TestCase
         // isSkippedClass() matches the "PHPUnit" prefix (and "Symfony"/"Behat"
         // prefixes in adjacent runner frames), so every frame is `continue`d
         // and shouldLog() falls through to `return false`.
-        $this->holder->addQuery('default', $this->makeQuery('SELECT skipped'));
+        $this->testDebugDataHolder->addQuery('default', $this->makeQuery('SELECT skipped'));
 
-        self::assertSame([], $this->holder->getData());
+        $this->assertSame([], $this->testDebugDataHolder->getData());
     }
 
     public function testQueryFromControllerSuffixIsLogged(): void
     {
-        (new FakeController())->record($this->holder, $this->makeQuery('SELECT controller'));
+        (new FakeController())->record($this->testDebugDataHolder, $this->makeQuery('SELECT controller'));
 
-        self::assertCount(1, $this->holder->getData()['default'] ?? []);
+        $this->assertCount(1, $this->testDebugDataHolder->getData()['default'] ?? []);
     }
 
     public function testQueryFromCommandSuffixIsLogged(): void
     {
-        (new FakeCommand())->record($this->holder, $this->makeQuery('SELECT command'));
+        (new FakeCommand())->record($this->testDebugDataHolder, $this->makeQuery('SELECT command'));
 
-        self::assertCount(1, $this->holder->getData()['default'] ?? []);
+        $this->assertCount(1, $this->testDebugDataHolder->getData()['default'] ?? []);
     }
 
     public function testQueryFromControllerNamespaceIsLogged(): void
     {
-        (new FakeAction())->record($this->holder, $this->makeQuery('SELECT namespace'));
+        (new FakeAction())->record($this->testDebugDataHolder, $this->makeQuery('SELECT namespace'));
 
-        self::assertCount(1, $this->holder->getData()['default'] ?? []);
+        $this->assertCount(1, $this->testDebugDataHolder->getData()['default'] ?? []);
     }
 
     private function makeQuery(string $sql): Query
