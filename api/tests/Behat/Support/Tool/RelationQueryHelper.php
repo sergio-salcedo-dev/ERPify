@@ -44,7 +44,10 @@ final class RelationQueryHelper
 
     public static function hasRelationshipQuery(string $queryString): bool
     {
-        return \str_contains($queryString, '.');
+        return \array_any(
+            \array_keys(self::parseQueryStringPreservingDots($queryString)),
+            static fn (string $key): bool => \str_contains($key, '.'),
+        );
     }
 
     /**
@@ -57,17 +60,19 @@ final class RelationQueryHelper
         $queryBuilder = $repository->createQueryBuilder('e');
         $criteria = self::parseQueryStringPreservingDots($findByQueryString);
 
+        $paramIndex = 0;
         $joinCounter = 0;
 
         foreach ($criteria as $field => $value) {
             if (\str_contains($field, '.')) {
-                self::addRelationshipCondition($queryBuilder, $field, $value, $joinCounter);
+                self::addRelationshipCondition($queryBuilder, $field, $value, $joinCounter, $paramIndex);
 
                 continue;
             }
 
-            $queryBuilder->andWhere(\sprintf('e.%s = :%s', $field, $field))
-                ->setParameter($field, $value)
+            $param = self::nextParam($paramIndex);
+            $queryBuilder->andWhere(\sprintf('e.%s = :%s', $field, $param))
+                ->setParameter($param, $value)
             ;
         }
 
@@ -79,6 +84,7 @@ final class RelationQueryHelper
         string $field,
         string $value,
         int &$joinCounter,
+        int &$paramIndex,
     ): void {
         $parts = \explode('.', $field);
 
@@ -90,10 +96,16 @@ final class RelationQueryHelper
 
         [$relationName, $relationField] = $parts;
         $joinAlias = 'join_' . $joinCounter++;
+        $param = self::nextParam($paramIndex);
 
         $qb->innerJoin('e.' . $relationName, $joinAlias)
-            ->andWhere(\sprintf('%s.%s = :%s', $joinAlias, $relationField, $relationField))
-            ->setParameter($relationField, $value)
+            ->andWhere(\sprintf('%s.%s = :%s', $joinAlias, $relationField, $param))
+            ->setParameter($param, $value)
         ;
+    }
+
+    private static function nextParam(int &$paramIndex): string
+    {
+        return 'p_' . $paramIndex++;
     }
 }

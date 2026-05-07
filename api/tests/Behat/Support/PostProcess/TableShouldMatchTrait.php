@@ -26,7 +26,7 @@ trait TableShouldMatchTrait
     {
         foreach ($table->getRowsHash() as $path => $expected) {
             if (\is_array($expected)) {
-                $expected = \implode(',', \array_map(static fn (mixed $value): string => $value, $expected));
+                $expected = \implode(',', \array_map(static fn (string $value): string => $value, $expected));
             }
 
             $this->treatRow($path, $expected, $entity);

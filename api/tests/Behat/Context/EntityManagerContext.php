@@ -6,6 +6,7 @@ namespace Erpify\Tests\Behat\Context;
 
 use Behat\Gherkin\Node\PyStringNode;
 use Behat\Gherkin\Node\TableNode;
+use Behat\Hook\BeforeScenario;
 use Behat\Hook\BeforeStep;
 use Behat\Step\Given;
 use Behat\Step\Then;
@@ -49,6 +50,8 @@ class EntityManagerContext extends AbstractContext
 {
     use TableShouldMatchTrait;
 
+    private const string NOW_PARAM = '__em_context_now';
+
     /** @var array<string, Connection> */
     public array $connections = [];
 
@@ -76,6 +79,18 @@ class EntityManagerContext extends AbstractContext
     public function clearEntityManagerBeforeStep(): void
     {
         $this->entityManager->clear();
+    }
+
+    /**
+     * SQL state ($result, $lastSqlError, named connections) lives on the context instance,
+     * which Behat reuses across scenarios — without this reset, assertions read stale values.
+     */
+    #[BeforeScenario]
+    public function resetSqlState(): void
+    {
+        $this->result = null;
+        $this->lastSqlError = null;
+        $this->connections = [];
     }
 
     #[Given('/^(?:a|the) "([^"]*)" (?:entity|entities) found by "([^"]*)" (?:is|are) updated with:$/')]
@@ -289,6 +304,7 @@ class EntityManagerContext extends AbstractContext
             $this->result = $this->connections[$name]->executeQuery($query);
             $this->lastSqlError = null;
         } catch (Exception $exception) {
+            $this->result = null;
             $this->lastSqlError = $exception->getMessage();
         }
     }
@@ -300,6 +316,7 @@ class EntityManagerContext extends AbstractContext
             $this->result = $this->entityManager->getConnection()->executeQuery($query);
             $this->lastSqlError = null;
         } catch (Exception $exception) {
+            $this->result = null;
             $this->lastSqlError = $exception->getMessage();
         }
     }
@@ -488,9 +505,9 @@ class EntityManagerContext extends AbstractContext
         $this->assertUsesTimestamped($this->buildEntityClass($entityClass));
 
         $result = $this->getRepository($entityClass)->createQueryBuilder('e')
-            ->where(\sprintf('e.%s <= :now', $attribute))
+            ->where(\sprintf('e.%s <= :%s', $attribute, self::NOW_PARAM))
             ->orderBy(\sprintf('e.%s', $attribute), 'DESC')
-            ->setParameter('now', new DateTime())
+            ->setParameter(self::NOW_PARAM, new DateTime())
             ->setMaxResults(1)
             ->getQuery()
             ->getOneOrNullResult()
@@ -512,9 +529,9 @@ class EntityManagerContext extends AbstractContext
         $this->applyCriteriaToQueryBuilder($queryBuilder, $findByCriteria);
 
         $result = $queryBuilder
-            ->andWhere(\sprintf('e.%s <= :now', $attribute))
+            ->andWhere(\sprintf('e.%s <= :%s', $attribute, self::NOW_PARAM))
             ->orderBy(\sprintf('e.%s', $attribute), 'DESC')
-            ->setParameter('now', new DateTime())
+            ->setParameter(self::NOW_PARAM, new DateTime())
             ->setMaxResults(1)
             ->getQuery()
             ->getOneOrNullResult()
@@ -603,7 +620,7 @@ class EntityManagerContext extends AbstractContext
     private function countEntitiesWithRelationQuery(string $entityClass, string $findByQueryString): int
     {
         return (int) $this->buildQueryBuilderWithRelations($entityClass, $findByQueryString)
-            ->select('COUNT(e.id)')
+            ->select('COUNT(e)')
             ->getQuery()
             ->getSingleScalarResult()
         ;
@@ -669,13 +686,16 @@ class EntityManagerContext extends AbstractContext
         try {
             $propertyValue = $this->propertyAccessor->getValue($entity, $path);
         } catch (TypeError) {
-            return $value;
+            $propertyValue = null;
         }
 
         $reflectionType = $reflectionProperty?->getType();
         $typeName = $reflectionType instanceof ReflectionNamedType ? $reflectionType->getName() : null;
 
-        if ($propertyValue instanceof DateTimeInterface || DateTimeInterface::class === $typeName) {
+        $isDateTime = $propertyValue instanceof DateTimeInterface
+            || (null !== $typeName && \is_a($typeName, DateTimeInterface::class, true));
+
+        if ($isDateTime) {
             if (!\is_scalar($value)) {
                 return $value;
             }
