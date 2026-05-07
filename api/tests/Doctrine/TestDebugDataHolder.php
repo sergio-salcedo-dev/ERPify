@@ -25,7 +25,7 @@ class TestDebugDataHolder extends DebugDataHolder
         'DAMA\DoctrineTestBundle\Doctrine\DBAL\PostConnectEventListener',
     ];
 
-    /** @var array<string, array<int, array{sql: string, params: array<string, mixed>, types: array<string, mixed>, executionMS: float|callable}>> */
+    /** @var array<string, array<int, array{sql: string, params: array<int|string, mixed>, types: array<int|string, mixed>, executionMS: float|callable}>> */
     private static array $data = [];
 
     /** @var array<string, array<int, array<int, array<string, mixed>>>> */

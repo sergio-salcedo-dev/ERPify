@@ -111,7 +111,7 @@ class DoctrineContext extends AbstractContext
                     0,
                     $requestCount,
                     \sprintf(
-                        'Queries count for connection %s should be null. %s found.',
+                        'Queries count for connection %s should be 0. %s found.',
                         $existingConnectionName,
                         $requestCount,
                     ),
