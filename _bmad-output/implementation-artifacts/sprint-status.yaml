@@ -104,5 +104,5 @@ development_status:
   4-3-api-integration-sweep-with-rfc-9457-schema-validation: backlog
   4-4-ship-docs-api-error-contract-md-one-pager: backlog
   4-5-ci-grep-gate-against-catch-to-jsonresponse-drift: backlog
-  4-6-migrate-health-endpoints-under-the-contract-defensively: backlog
+  4-6-migrate-health-endpoints-under-the-contract-defensively: ready-for-review
   epic-4-retrospective: optional
