@@ -19,9 +19,11 @@ default:
                 - Erpify\Tests\Behat\Context\HttpRequestContext:
                       baseUrl: '/api/v1'
                       serverPort: 80
-                - Erpify\Tests\Behat\Context\JsonContext
-                - Erpify\Tests\Behat\Context\FixturesContext
                 - Erpify\Tests\Behat\Context\DoctrineContext
+                - Erpify\Tests\Behat\Context\EntityManagerContext
+                - Erpify\Tests\Behat\Context\FixturesContext
+                - Erpify\Tests\Behat\Context\JsonContext
+                
     extensions:
         FriendsOfBehat\SymfonyExtension:
             kernel:
