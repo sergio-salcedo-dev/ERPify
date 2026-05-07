@@ -12,6 +12,7 @@ import {
   Settings as SettingsIcon,
   Bell,
   Activity,
+  Building2,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -47,6 +48,10 @@ export default function BackOfficeLayoutClient({ children }: { children: React.R
     {
       label: "General",
       items: [{ name: "Dashboard", icon: LayoutDashboard, path: "/backoffice" }],
+    },
+    {
+      label: "Catalogs",
+      items: [{ name: "Banks", icon: Building2, path: "/backoffice/banks" }],
     },
     {
       label: "System",
