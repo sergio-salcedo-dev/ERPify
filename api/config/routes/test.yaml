@@ -76,3 +76,12 @@ when@test:
         path: /api/test/_throw-unserializable-context
         controller: Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\ThrowUnserializableContextController
         methods: [GET]
+
+    # Story 3.5 (NFR17) — a `Doctrine\DBAL\Exception\ConnectionLost` thrown mid-controller must
+    # still produce a conforming Problem Details 500 (`type='unhandled-exception'`). The error
+    # path holds zero database dependency by construction, so a connection-side failure cannot
+    # cascade through the listener.
+    test_throw_doctrine_connection_lost:
+        path: /api/test/_throw-doctrine-connection-lost
+        controller: Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\ThrowDoctrineConnectionLostController
+        methods: [GET]

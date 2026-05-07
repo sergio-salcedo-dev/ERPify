@@ -514,4 +514,145 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         $this->assertStringNotContainsString('stdClass', $rawBody, 'Wire body must not leak the original PHP class name (class names live in logs only).');
         $this->assertStringNotContainsString("\0", $rawBody, 'Wire body must not contain a NUL byte from anonymous-class FQCNs.');
     }
+
+    /**
+     * Story 3.5 (NFR16) — kernel.reset safety: two sequential requests against the SAME kernel
+     * instance, with an explicit `$container->reset()` (the same machinery `kernel.reset`
+     * triggers in FrankenPHP worker mode) between them, MUST produce structurally identical
+     * Problem Details responses. The body shape (key set, `type`, `title`, `status`) and the
+     * static response headers (`Content-Type`, `Cache-Control`) must be byte-for-byte equal;
+     * only the per-error `instance` and `correlation-id` may differ.
+     *
+     * `disableReboot()` keeps the kernel container alive across the two `request()` calls so
+     * the test can prove that the listener and factory hold no per-request state poisoning
+     * the second response. The intermediate `Container::reset()` call exercises every
+     * `ResetInterface`-tagged service (the `services_resetter` machinery) — exactly what
+     * Symfony invokes between worker iterations.
+     */
+    public function testKernelResetBetweenSequentialRequestsProducesIdenticallyShapedProblemDetails(): void
+    {
+        $kernelBrowser = self::createClient();
+        $kernelBrowser->disableReboot();
+        $kernelBrowser->catchExceptions(true);
+
+        // Request 1 — capture the canonical body shape.
+        $kernelBrowser->request(Request::METHOD_GET, '/api/test/_throw-not-found');
+
+        $responseA = $kernelBrowser->getResponse();
+        $this->assertSame(
+            \Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND,
+            $responseA->getStatusCode(),
+            (string) $responseA->getContent(),
+        );
+        $bodyA = $this->decodeBody($responseA->getContent());
+
+        // Capture static response-header invariants for the cross-request comparison. The
+        // `Cache-Control` header carries Symfony's default flag set in addition to `no-store`;
+        // the equality check below pins the full header string against drift.
+        $contentTypeA = $responseA->headers->get('Content-Type');
+        $cacheControlA = $responseA->headers->get('Cache-Control');
+
+        // Mid-flight kernel.reset — exercises the ResetInterface chain that FrankenPHP
+        // worker mode runs between requests. The container is fetched lazily so the second
+        // request below picks up the post-reset state.
+        $container = self::getContainer();
+        $container->reset();
+
+        // Request 2 — same route, same kernel.
+        $kernelBrowser->request(Request::METHOD_GET, '/api/test/_throw-not-found');
+        $responseB = $kernelBrowser->getResponse();
+        $this->assertSame(
+            \Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND,
+            $responseB->getStatusCode(),
+            (string) $responseB->getContent(),
+        );
+        $bodyB = $this->decodeBody($responseB->getContent());
+
+        // Header parity — the response shell is identical between the two requests.
+        $this->assertSame($contentTypeA, $responseB->headers->get('Content-Type'));
+        $this->assertSame($cacheControlA, $responseB->headers->get('Cache-Control'));
+
+        // Body-key parity — same set of keys in the same order. Sequence drift here would
+        // signal a stateful listener / factory leaking ordering across requests.
+        $this->assertSame(
+            \array_keys($bodyA),
+            \array_keys($bodyB),
+            'Body key set + order must be stable across kernel.reset (NFR16).',
+        );
+
+        // Identical-shape fields — `type`, `title`, `status` and any domain-emitted
+        // extension (here `bank_id`) survive the reset unchanged.
+        $this->assertSame($bodyA['type'] ?? null, $bodyB['type'] ?? null);
+        $this->assertSame($bodyA['title'] ?? null, $bodyB['title'] ?? null);
+        $this->assertSame($bodyA['status'] ?? null, $bodyB['status'] ?? null);
+        $this->assertSame($bodyA['bank_id'] ?? null, $bodyB['bank_id'] ?? null);
+
+        // Exclusivity — `instance` and `correlation-id` are the ONLY fields that may differ
+        // (per-error and per-request mints respectively); compare every other key for
+        // byte-for-byte equality so a future drift would surface here.
+        foreach ($bodyA as $key => $valueA) {
+            if ('instance' === $key) {
+                continue;
+            }
+
+            if ('correlation-id' === $key) {
+                continue;
+            }
+
+            $this->assertSame(
+                $valueA,
+                $bodyB[$key] ?? null,
+                \sprintf('Body key "%s" must be identical across kernel.reset (NFR16).', $key),
+            );
+        }
+
+        // Distinctness — the per-error `instance` UUIDv7 mint MUST be fresh on each
+        // invocation. Without this, two error occurrences would share an `instance` value,
+        // breaking the per-error log-pivot contract (FR48).
+        $this->assertArrayHasKey('instance', $bodyA);
+        $this->assertArrayHasKey('instance', $bodyB);
+        $this->assertNotSame($bodyA['instance'], $bodyB['instance']);
+        $this->assertBodyMatchesRegex(self::UUID_V7_REGEX, $bodyA, 'instance');
+        $this->assertBodyMatchesRegex(self::UUID_V7_REGEX, $bodyB, 'instance');
+    }
+
+    /**
+     * Story 3.5 (NFR17) — a `Doctrine\DBAL\Exception\ConnectionLost` thrown mid-controller
+     * MUST still produce a conforming Problem Details 500. The error-path holds zero
+     * dependency on `Connection` / `EntityManagerInterface` (pinned by reflection in
+     * `NoDatabaseDependenciesContractTest`); the wire-level pin here proves no cascading
+     * failure escapes the listener even when the underlying driver has dropped.
+     */
+    public function testDoctrineConnectionLostMidControllerProducesConformingProblemDetailsResponse(): void
+    {
+        $kernelBrowser = self::createClient();
+        $kernelBrowser->catchExceptions(true);
+        $kernelBrowser->request(Request::METHOD_GET, '/api/test/_throw-doctrine-connection-lost');
+
+        $response = $kernelBrowser->getResponse();
+
+        $this->assertSame(
+            \Symfony\Component\HttpFoundation\Response::HTTP_INTERNAL_SERVER_ERROR,
+            $response->getStatusCode(),
+            (string) $response->getContent(),
+        );
+        $this->assertSame('application/problem+json', $response->headers->get('Content-Type'));
+
+        $cacheControl = $response->headers->get('Cache-Control');
+        $this->assertNotNull($cacheControl);
+        $this->assertStringContainsString('no-store', $cacheControl);
+
+        $body = $this->decodeBody($response->getContent());
+
+        // Default-deny on unknown exception — `ConnectionLost` is neither a DomainException
+        // nor a Symfony bridge case, so the factory's terminal branch lands on
+        // `unhandled-exception` / 500.
+        $this->assertBodyEquals('unhandled-exception', $body, 'type');
+        $this->assertBodyEquals(500, $body, 'status');
+
+        // The instance + correlation-id mints succeeded — proves the listener completed its
+        // primary path (no last-resort static body, which would lack both fields).
+        $this->assertBodyMatchesRegex(self::UUID_V7_REGEX, $body, 'instance');
+        $this->assertBodyMatchesRegex(self::UUID_V7_REGEX, $body, 'correlation-id');
+    }
 }
