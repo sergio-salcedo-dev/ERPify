@@ -86,6 +86,25 @@ use Throwable;
  *      escalates to the static last-resort body.
  * The cap operates on serialised byte length using `\json_encode` with `JSON_UNESCAPED_UNICODE
  * | JSON_THROW_ON_ERROR` (mirrors {@see \Erpify\Shared\Infrastructure\Http\ProblemDetailsResponder}).
+ *
+ * Story 3.7 — constant-time branching for 401/403 paths (NFR9). The four error routes that
+ * yield 401/403 (`Unauthenticated` / `Forbidden` markers on a `DomainException` plus the
+ * Symfony `AuthenticationException` / `AccessDeniedException` bridges) all flow through the
+ * same construction shape — either `withDebug(new ProblemDetails(...))` for the marker path
+ * or `withDebug($this->buildBridgeResponse(...))` for the bridge path — with no resource-
+ * presence-conditional logic and no conditional I/O on the listener / factory path. The
+ * factory holds no database, request, or filesystem dependency and never branches on whether
+ * a controller-side resource exists or not — `fromThrowable` keys solely on exception type.
+ *
+ * Out of scope (explicit): application-level timing — database lookup latency, controller-
+ * side resource resolution, repository / API client round trips — is the controller's
+ * concern, not the listener's. NFR9 only covers the listener / factory's own contribution
+ * to response time, which this contract pins via two source-text reflection tests
+ * ({@see \Erpify\Tests\Unit\Shared\Application\Problem\ConstantTimeAuthBranchingContractTest})
+ * and one informational microbenchmark
+ * ({@see \Erpify\Tests\Unit\Shared\Application\Problem\ConstantTimeAuthBranchingBenchmarkTest})
+ * with a generous 2x asymmetry threshold so it stays informative on shared CI hardware
+ * without false-positive flakiness.
  */
 final readonly class ProblemDetailsFactory
 {
