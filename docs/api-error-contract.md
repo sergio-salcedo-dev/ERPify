@@ -170,5 +170,38 @@ The PWA determines the semantic category from `type` alone (FR44). Status code i
 | Unit                | `api/tests/Unit/Shared/Application/Problem/`, `…/Infrastructure/Http/EventListener/` |
 | Functional          | `api/tests/Functional/Shared/Infrastructure/Http/`                              |
 | Behat (E2E contract)| `api/features/shared/error_contract/`                                           |
+| Benchmark (opt-in)  | `api/tests/Bench/Shared/Infrastructure/Http/EventListener/`                     |
 
 Behat features pin the wire contract end-to-end (correlation-id propagation, instance UUIDv7, violations extension). Unit tests pin marker resolution order and the status map.
+
+## Performance Budgets
+
+Story 3.8 (NFR2 / NFR4 / NFR5) — pinned listener performance budgets. The benchmark harness lives at `api/tests/Bench/Shared/Infrastructure/Http/EventListener/ExceptionResponderBenchmarkTest.php` and runs through a real Symfony kernel via `WebTestCase`, so the measurement window captures the full listener path (factory mapping → body cap → `\json_encode` → `Response` write → PSR-3 log emission), exactly as it runs in production.
+
+| Path | Budget | Route | Status |
+|------|--------|-------|--------|
+| 4xx  | p99 ≤ **5 ms** (CI hardware baseline) | `/api/test/_throw-not-found` | 404 |
+| 5xx  | p99 ≤ **20 ms** (CI hardware baseline) | `/api/test/_throw-runtime`   | 500 |
+
+Each path runs 100 warm-up iterations to seed opcache / classloader, then 1000 measured iterations whose per-iteration `\hrtime(true)` deltas are sorted to derive the p99. The runtime check applies a +50% shared-CI headroom (7.5 ms / 30 ms) over the raw NFR2 numbers so a real listener regression (a conditional sleep, a sync I/O, a serializer pipeline introduction) trips the gate while sub-percent jitter under shared CPU contention does not.
+
+### Hard contractual invariants
+
+These are pinned by always-on PHPUnit contract tests under `api/tests/Unit/Shared/Application/Problem/` (NOT the opt-in benchmark group):
+
+- **NFR4 — body serialisation:** native `\json_encode` with `JSON_THROW_ON_ERROR` only. No Symfony Serializer component, no normalizer, no reflection-based encoder anywhere under `Shared/Application/Problem/` or `Shared/Infrastructure/Http/`. Pinned by `NativeJsonEncodeContractTest::testNoSerializerImports` and `NativeJsonEncodeContractTest::testEveryJsonEncodeUsesJsonThrowOnError`.
+- **NFR5 — log write path:** the injected `Psr\Log\LoggerInterface` is the only logger contract on the error path. No Symfony Messenger dispatch, no `react/async`, no `amphp`, no `spatie/async`, no Swoole — synchronous PSR-3 writes (Monolog default stderr) are the contract. Pinned by `LoggerInterfaceContractTest::testListenerLoggerDepIsPsr3Only` (reflection on the constructor) and `LoggerInterfaceContractTest::testNoCustomAsyncInfrastructureInListenerOrFactory` (source-text grep).
+
+### Running the benchmark
+
+```bash
+make php.bench           # opt-in; default `make php.unit` skips this group
+```
+
+Equivalent direct invocation (inside the `php` container):
+
+```bash
+RUN_BENCHMARKS=1 vendor/bin/phpunit --group benchmark
+```
+
+The bench is **not** CI-blocking. The contract tests above are CI-blocking (NFR4 / NFR5); the budget numbers themselves (NFR2) are documented and measurable on demand, but absorbing shared-CI noise into the assertion would either make it flaky or set the threshold so high it stops catching real regressions. The right cadence is "run the bench when the listener changes; treat a regression as an investigation, not a merge block."

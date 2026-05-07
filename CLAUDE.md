@@ -30,6 +30,7 @@ API / PHP:
 -   `make composer c='…'` — run composer inside the container (e.g. `c='req vendor/pkg'`).
 -   `make sf c='…'` — Symfony console; `make cc` for cache:clear, `make routes` for debug:router.
 -   `make php.test` = `php.unit` (PHPUnit) + `php.behat` (Behat). Pass extra args with `c=`, e.g. `make php.unit c='--filter SomeTest'`.
+-   `make php.bench` — opt-in `ExceptionResponder` performance-budget harness (NFR2). Sets `RUN_BENCHMARKS=1` and runs the `--group benchmark` PHPUnit tests; default `make php.unit` skips them so shared CI hardware noise cannot turn the budget into a flaky red. Budget literals live in [`docs/api-error-contract.md`](docs/api-error-contract.md) → "Performance Budgets".
 -   `make php.lint` = full sweep (PHPStan, Rector, PHP-CS-Fixer, PHPMD, PHPCS, Psalm auto-fixes). Individual: `php.stan`, `php.rector[.dry-run]`, `php.cs-fixer[.dry-run]`, `php.md`, `php.cs[.dry-run]`, `php.psalm`, `php.psalm.taint`, `php.psalm.baseline`, `composer.checks`.
 -   DB (Doctrine): `db.migrate`, `db.diff`, `db.status`, `db.validate`, `db.load.fixtures` (Hautelook Alice), `db.reset` (destructive: drop → migrate → fixtures), `db.shell` (psql).
 -   Xdebug: `xdebug.enable`, `xdebug.disable`, `xdebug.status`.
