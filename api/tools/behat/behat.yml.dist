@@ -21,6 +21,7 @@ default:
                       serverPort: 80
                 - Erpify\Tests\Behat\Context\JsonContext
                 - Erpify\Tests\Behat\Context\FixturesContext
+                - Erpify\Tests\Behat\Context\EntityManagerContext
     extensions:
         FriendsOfBehat\SymfonyExtension:
             kernel:
