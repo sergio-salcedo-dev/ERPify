@@ -37,15 +37,17 @@ use Throwable;
  * `correlation_id` for the full request trail (FR48). Logger channel is the default `app`
  * channel (autowired `Psr\Log\LoggerInterface`); rationale in Story 2.4's PR description.
  *
- * Path-scoped to `/api/*`. Coexists with earlier exception listeners (e.g.
- * {@see SearchExceptionListener} at priority 32): if a higher-priority listener has already
- * set a response, this listener leaves it alone and does NOT log.
+ * Path-scoped to `/api/*`. Coexists with any earlier exception listener: if a higher-priority
+ * listener has already set a response, this listener leaves it alone and does NOT log.
  *
  * Priority pinned by Story 4.1 (FR42, FR43) at {@see PRIORITY} = 16. Rationale: the value
- * must sit BELOW {@see SearchExceptionListener} (priority 32) so the search-route carve-out
- * keeps its first-shot at `ValidationFailedException` / `NotEncodableValueException`, AND
- * ABOVE Symfony's HttpKernel `ExceptionListener` (default -128) so this listener owns the
- * RFC 9457 envelope before the framework's generic exception path runs. The CORS interaction
+ * must sit ABOVE Symfony's HttpKernel `ExceptionListener` (default -128) so this listener
+ * owns the RFC 9457 envelope before the framework's generic exception path runs, while
+ * leaving headroom (any positive priority less than ours fires first) for future per-context
+ * carve-out listeners that need to short-circuit the unified contract for a narrow path.
+ * Story 4.6 retired the legacy `SearchExceptionListener` (priority 32) once
+ * {@see ProblemDetailsFactory} subsumed its `ValidationFailedException` /
+ * `NotEncodableValueException` mapping natively. The CORS interaction
  * is decoupled by event channel: NelmioCorsBundle's `CorsListener` runs on `kernel.request`
  * (priority 250) and `kernel.response` (priority 0); the Problem Details response is set on
  * `kernel.exception` and then flows into the `kernel.response` cycle where Nelmio attaches
@@ -74,10 +76,12 @@ use Throwable;
 final readonly class ExceptionResponder
 {
     /**
-     * Story 4.1 (FR42, FR43) — `kernel.exception` listener priority. Sits below
-     * {@see SearchExceptionListener} (priority 32) so the search-route carve-out runs first,
-     * and well above Symfony's HttpKernel `ExceptionListener` (default -128) so this listener
-     * owns the Problem Details envelope. Read by the `AsEventListener` attribute above and by
+     * Story 4.1 (FR42, FR43) — `kernel.exception` listener priority. Sits well above Symfony's
+     * HttpKernel `ExceptionListener` (default -128) so this listener owns the Problem Details
+     * envelope, and leaves headroom for any future per-context carve-out listener that needs
+     * to short-circuit the unified contract on a narrow path (a higher positive priority would
+     * fire first; if none is registered the value is the de-facto top of the chain on
+     * `/api/*`). Read by the `AsEventListener` attribute above and by
      * `ExceptionResponderListenerPriorityTest` (kernel-bootstrapped regression that asserts
      * the dispatcher reports this exact value AND that NelmioCorsBundle's `kernel.response`
      * listener priority remains at its expected baseline so CORS headers attach AFTER this

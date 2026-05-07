@@ -31,10 +31,16 @@ Feature: Search banks
     And the JSON node "data.items" should have 1 elements
     And the JSON node "data.pagination" should exist
 
-  Scenario: Search a bank by an invalid id returns 422
+  Scenario: Search a bank by an invalid id returns a 422 validation-failed Problem Details body
     When I send a "GET" request to "/backoffice/banks?ids[]=invalid"
     Then the response status code should be 422
-    And the validation error on "ids[0]" should contain "valid"
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the response should be in JSON
+    And the JSON node "type" should be equal to "validation-failed"
+    And the JSON node "status" should be equal to the number 422
+    And the JSON node "title" should be equal to "Validation failed."
+    And the JSON node "violations[0].field" should be equal to "ids[0]"
+    And the JSON node "violations[0].message" should contain "valid"
 
   Scenario: Unknown pagination mode returns 422
     When I send a "GET" request to "/backoffice/banks?paginationMode=unknownPaginationMode"

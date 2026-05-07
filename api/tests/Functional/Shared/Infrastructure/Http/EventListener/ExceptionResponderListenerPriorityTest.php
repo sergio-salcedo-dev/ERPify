@@ -72,7 +72,8 @@ final class ExceptionResponderListenerPriorityTest extends WebTestCase
             $reflectionClass->getConstant('PRIORITY'),
             'ExceptionResponder::PRIORITY must remain 16 — Story 4.1 (FR43). Bumping requires '
             . 'updating both the constant and this test, plus re-checking that the value sits '
-            . 'BELOW SearchExceptionListener (32) and ABOVE Symfony HttpKernel ExceptionListener (-128).',
+            . 'ABOVE Symfony HttpKernel ExceptionListener (-128) while leaving headroom for any '
+            . 'future per-context carve-out listener at a higher positive priority.',
         );
     }
 
@@ -139,34 +140,6 @@ final class ExceptionResponderListenerPriorityTest extends WebTestCase
             . 'Update ExceptionResponder::PRIORITY relative to the new value — the invariant is '
             . 'that the Problem Details body is built on `kernel.exception` BEFORE the CORS '
             . 'response listener attaches `Access-Control-Allow-Origin`.',
-        );
-    }
-
-    public function testExceptionResponderRunsBelowSearchExceptionListenerOnTheSameEvent(): void
-    {
-        self::bootKernel();
-        $dispatcher = self::getContainer()->get('event_dispatcher');
-        $this->assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
-
-        $exceptionResponderPriority = $this->priorityOf(
-            $dispatcher,
-            KernelEvents::EXCEPTION,
-            ExceptionResponder::class,
-        );
-        $searchListenerPriority = $this->priorityOf(
-            $dispatcher,
-            KernelEvents::EXCEPTION,
-            \Erpify\Shared\Infrastructure\Http\EventListener\SearchExceptionListener::class,
-        );
-
-        $this->assertNotNull($exceptionResponderPriority);
-        $this->assertNotNull($searchListenerPriority);
-        $this->assertGreaterThan(
-            $exceptionResponderPriority,
-            $searchListenerPriority,
-            'SearchExceptionListener must run BEFORE ExceptionResponder so the search-route '
-            . 'carve-out keeps its first-shot at ValidationFailedException / NotEncodableValueException. '
-            . 'See ExceptionResponder::PRIORITY docblock.',
         );
     }
 

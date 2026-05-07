@@ -30,10 +30,12 @@ use SplFileInfo;
  *
  * Curated grep — narrowest possible scope, mirrors the pattern from Story 3.5's
  * {@see BannedDoctrineApisTest}. The walk targets only the explicitly-listed
- * files / directories so legacy search-path classes
- * (`AbstractSearchController`, `SearchExceptionListener`) — which are NOT part
- * of the Problem Details error contract — keep their existing Symfony
- * Serializer dependencies without tripping this gate.
+ * files / directories so the legacy search-path class
+ * `AbstractSearchController` — which is NOT part of the Problem Details error
+ * contract — keeps its existing Symfony Serializer dependency without tripping
+ * this gate. (Story 4.6 retired `SearchExceptionListener` and its
+ * `JsonApiErrorBuilder` envelope once {@see ProblemDetailsFactory} subsumed
+ * their mappings natively.)
  *
  * Comments and docblocks are stripped before scanning so a docblock that names
  * `\json_encode([...])` to document an intentional NON-encode (e.g. the
@@ -174,10 +176,12 @@ final class NativeJsonEncodeContractTest extends TestCase
     /**
      * Yields the explicit Problem Details error-contract files / directory: the entire
      * `Shared/Application/Problem/` subtree (factory + value objects + denylist) plus
-     * the responder and listener that emit the wire body. Legacy search-path classes
-     * (`AbstractSearchController`, `SearchExceptionListener`) are intentionally
-     * excluded — they predate the error contract and live in `Shared/Infrastructure/Http/`
-     * but are not part of the listener / factory / responder triple under NFR4.
+     * the responder and listener that emit the wire body. The legacy search-path class
+     * `AbstractSearchController` is intentionally excluded — it predates the error
+     * contract and lives in `Shared/Infrastructure/Http/` but is not part of the
+     * listener / factory / responder triple under NFR4. (Story 4.6 retired
+     * `SearchExceptionListener` and its `JsonApiErrorBuilder` envelope once the
+     * factory subsumed their mappings natively.).
      *
      * @return iterable<SplFileInfo>
      */
