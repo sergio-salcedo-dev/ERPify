@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Application\Problem;
 
+use Erpify\Shared\Application\Problem\ProblemBodyTooLargeException;
+use Erpify\Shared\Application\Problem\ProblemDetails;
 use Erpify\Shared\Application\Problem\ProblemDetailsFactory;
 use Erpify\Shared\Application\Problem\RedactionDenylist;
 use Erpify\Shared\Domain\Exception\Conflict;
@@ -1837,6 +1839,312 @@ final class ProblemDetailsFactoryTest extends TestCase
         $this->assertStringNotContainsString('sensitive', $encoded);
     }
 
+    // -----------------------------------------------------------------------------------------
+    // Story 3.6 — 16 KiB body cap with truncation marker (NFR10)
+    // -----------------------------------------------------------------------------------------
+
+    /**
+     * Story 3.6 — pins the cap constant so a regression that loosens it (e.g. to 32 KiB)
+     * fails CI loudly. The number is load-bearing across docs / proxies / observability
+     * tooling — it is not a free knob.
+     */
+    public function testBodyByteCapConstantIsExactly16384(): void
+    {
+        $reflectionClass = new ReflectionClass(ProblemDetailsFactory::class);
+        $constant = $reflectionClass->getReflectionConstant('BODY_BYTE_CAP');
+
+        $this->assertNotFalse($constant, 'BODY_BYTE_CAP constant must exist on ProblemDetailsFactory.');
+        $this->assertSame(16384, $constant->getValue());
+    }
+
+    /**
+     * Story 3.6 (AC) — synthetic ValidationFailedException with 500 violations. The encoded
+     * body must come in at or under 16384 bytes, carry `truncated: true` as the LAST
+     * extension member, and leave the required core fields (`type, title, status, instance,
+     * correlation-id`) intact and unmodified.
+     */
+    public function testBodyCapTruncatesViolationsExtensionWhenSerializedExceeds16KiB(): void
+    {
+        $violations = [];
+
+        for ($i = 0; $i < 500; ++$i) {
+            $violations[] = new ConstraintViolation(
+                message: \sprintf('This value should be greater than or equal to %d.', $i),
+                messageTemplate: null,
+                parameters: [],
+                root: null,
+                propertyPath: \sprintf('items[%d].value', $i),
+                invalidValue: null,
+                plural: null,
+                code: \sprintf('aaaaaaaa-bbbb-cccc-dddd-eeeeeeee%04d', $i),
+            );
+        }
+
+        $validationFailedException = new ValidationFailedException(
+            value: null,
+            violations: new ConstraintViolationList($violations),
+        );
+
+        $problemDetails = $this->factoryFor()->fromThrowable($validationFailedException, self::CID, self::INSTANCE);
+
+        $encoded = \json_encode($problemDetails->toArray(), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        $this->assertLessThanOrEqual(16384, \strlen($encoded), 'encoded body MUST fit within the 16 KiB cap.');
+
+        $this->assertArrayHasKey('truncated', $problemDetails->extensions);
+        $this->assertTrue($problemDetails->extensions['truncated']);
+        $this->assertSame('truncated', \array_key_last($problemDetails->extensions), 'truncated marker MUST be the LAST extension member.');
+
+        // Core fields preserved verbatim — the cap MUST NOT touch type / title / status /
+        // instance / correlation-id.
+        $this->assertSame('validation-failed', $problemDetails->type);
+        $this->assertSame('Validation failed.', $problemDetails->title);
+        $this->assertSame(422, $problemDetails->status);
+        $this->assertNull($problemDetails->detail);
+        $this->assertSame(self::INSTANCE, $problemDetails->instance);
+        $this->assertSame(self::CID, $problemDetails->correlationId);
+
+        // At least some violations survived AND fewer than 500 (otherwise we would not have
+        // tripped the cap). Documents that the cap drops the TAIL — the head remains.
+        $this->assertArrayHasKey('violations', $problemDetails->extensions);
+        $survived = $problemDetails->extensions['violations'];
+        $this->assertIsArray($survived);
+        $this->assertGreaterThan(0, \count($survived), 'at least one head violation must survive truncation.');
+        $this->assertLessThan(500, \count($survived), 'cap must drop at least one tail violation given 500 entries.');
+    }
+
+    /**
+     * Story 3.6 — truncation is deterministic. Building the same body twice from the same
+     * input must yield byte-identical encoded output (no random pop, no hash-order
+     * dependency). Pinned by encoding twice and asserting equality.
+     */
+    public function testBodyCapTruncationIsDeterministic(): void
+    {
+        $violations = [];
+
+        for ($i = 0; $i < 500; ++$i) {
+            $violations[] = new ConstraintViolation(
+                message: \sprintf('Message %d for a deterministic-output assertion.', $i),
+                messageTemplate: null,
+                parameters: [],
+                root: null,
+                propertyPath: \sprintf('field_%04d', $i),
+                invalidValue: null,
+                plural: null,
+                code: \sprintf('determ-%04d', $i),
+            );
+        }
+
+        $problemDetails = $this->factoryFor()->fromThrowable(
+            new ValidationFailedException(value: null, violations: new ConstraintViolationList($violations)),
+            self::CID,
+            self::INSTANCE,
+        );
+        $second = $this->factoryFor()->fromThrowable(
+            new ValidationFailedException(value: null, violations: new ConstraintViolationList($violations)),
+            self::CID,
+            self::INSTANCE,
+        );
+
+        $encodedFirst = \json_encode($problemDetails->toArray(), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        $encodedSecond = \json_encode($second->toArray(), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+
+        $this->assertSame($encodedFirst, $encodedSecond, 'Cap truncation must be byte-deterministic across runs.');
+    }
+
+    /**
+     * Story 3.6 — happy path: a body that is already under the cap is returned unmodified
+     * and carries NO `truncated` marker. Documents that the cap is silent on small bodies.
+     */
+    public function testBodyCapNoOpWhenBodyAlreadyUnderCap(): void
+    {
+        $constraintViolationList = new ConstraintViolationList([
+            new ConstraintViolation('m', null, [], null, 'p', null, null, 'C'),
+        ]);
+
+        $problemDetails = $this->factoryFor()->fromThrowable(
+            new ValidationFailedException(value: null, violations: $constraintViolationList),
+            self::CID,
+            self::INSTANCE,
+        );
+
+        $this->assertArrayNotHasKey('truncated', $problemDetails->extensions);
+        $this->assertArrayHasKey('violations', $problemDetails->extensions);
+        $survived = $problemDetails->extensions['violations'];
+        $this->assertIsArray($survived);
+        $this->assertCount(1, $survived);
+
+        $encoded = \json_encode($problemDetails->toArray(), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        $this->assertLessThanOrEqual(16384, \strlen($encoded));
+    }
+
+    /**
+     * Story 3.6 — non-violations extensions are dropped in REVERSE declaration order. Build
+     * a DomainException with several extensions where the LAST-declared one (`large_b`) is
+     * a multi-KB string; the cap must drop `large_b` first while `large_a` (declared
+     * earlier, also large) survives. Documents the deterministic reverse-order rule for
+     * the non-violations branch.
+     */
+    public function testBodyCapTruncatesNonViolationsExtensionsInReverseDeclarationOrder(): void
+    {
+        // Each ~6 KiB; together ~12 KiB plus envelope overshoots 16 KiB.
+        $payloadA = \str_repeat('a', 6000);
+        $payloadB = \str_repeat('b', 6000);
+        $payloadC = \str_repeat('c', 6000);
+
+        $exception = new class ('', 'x', ['large_a' => $payloadA, 'large_b' => $payloadB, 'large_c' => $payloadC]) extends DomainException implements NotFound {
+        };
+
+        $problemDetails = $this->factoryFor()->fromThrowable($exception, self::CID, self::INSTANCE);
+
+        $encoded = \json_encode($problemDetails->toArray(), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        $this->assertLessThanOrEqual(16384, \strlen($encoded));
+        $this->assertArrayHasKey('truncated', $problemDetails->extensions);
+        $this->assertTrue($problemDetails->extensions['truncated']);
+
+        // large_c (declared last) must be dropped first; large_a (declared first) must
+        // survive at minimum. large_b's fate depends on whether dropping large_c alone
+        // brings the body under the cap; with 6 KiB each plus envelope, dropping large_c
+        // leaves ~12 KiB which fits.
+        $this->assertArrayNotHasKey('large_c', $problemDetails->extensions, 'last-declared extension must be dropped first.');
+        $this->assertArrayHasKey('large_a', $problemDetails->extensions, 'first-declared extension must survive while later ones are dropped.');
+        $this->assertSame('truncated', \array_key_last($problemDetails->extensions));
+    }
+
+    /**
+     * Story 3.6 — when a body exceeds the cap and BOTH violations and other extensions
+     * exist, violations entries are popped FIRST. After violations is empty, only THEN are
+     * other extensions dropped in reverse declaration order. Pinned by composing a
+     * DomainException carrying a list-shaped extension AFTER a bulky non-list extension —
+     * the cap pops list entries from the tail before considering the earlier-declared
+     * bulky extension key.
+     *
+     * NOTE — the AC's "violations first" priority is keyed on the LITERAL extension key
+     * `'violations'`, which {@see ProblemDetails::__construct} only emits via the
+     * validation-failed branch. {@see DomainException::context()} cannot inject a key
+     * named `violations` because `RESERVED_KEYS` strips it (pinned by
+     * {@see testReservedKeysAreFilteredFromExtensions}). The validation-failed branch
+     * therefore exercises this priority directly via
+     * {@see testBodyCapTruncatesViolationsExtensionWhenSerializedExceeds16KiB}; this test
+     * documents the broader rule's edge: when the LAST extension is a non-empty list and
+     * the body overshoots, the algorithm must still pop list entries from the tail before
+     * dropping any extension key. The list here is `entries` (not `violations`), so the
+     * cap falls through to step 2b (drop last key) — pinning the negative path:
+     * non-violations LIST extensions are NOT specially preserved.
+     */
+    public function testBodyCapDropsNonViolationsListExtensionsAsAWholeNotEntryByEntry(): void
+    {
+        // A list-shaped non-violations extension `entries` is the LAST declared key. The
+        // cap must drop it WHOLESALE (no entry-level pop) — only `violations` gets the
+        // entry-by-entry pop treatment, per the AC's literal "violations first" wording.
+        $entries = [];
+
+        for ($i = 0; $i < 500; ++$i) {
+            $entries[] = ['index' => $i, 'message' => \sprintf('entry %d for cap probe.', $i)];
+        }
+
+        $exception = new class ('', 'x', ['head' => 'kept', 'entries' => $entries]) extends DomainException implements NotFound {
+        };
+
+        $problemDetails = $this->factoryFor()->fromThrowable($exception, self::CID, self::INSTANCE);
+
+        $encoded = \json_encode($problemDetails->toArray(), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        $this->assertLessThanOrEqual(16384, \strlen($encoded));
+
+        // `entries` (the LAST-declared, large list extension) was dropped wholesale —
+        // no partial list survives under a non-`violations` key.
+        $this->assertArrayNotHasKey('entries', $problemDetails->extensions, 'non-violations list extensions are dropped as a whole, not entry-by-entry.');
+        $this->assertArrayHasKey('head', $problemDetails->extensions);
+        $this->assertSame('kept', $problemDetails->extensions['head']);
+        $this->assertArrayHasKey('truncated', $problemDetails->extensions);
+        $this->assertSame('truncated', \array_key_last($problemDetails->extensions));
+    }
+
+    /**
+     * Story 3.6 — escalation path: if the required core fields PLUS the lone `truncated`
+     * marker still exceed 16 KiB, the factory throws {@see ProblemBodyTooLargeException}.
+     * The listener's outer try/catch (Story 3.4) then escalates to the static last-resort
+     * body. Synthesised by a domain exception whose `title()` returns a 17 KiB string —
+     * exotic but the contract MUST be a strict invariant, not a best-effort guideline.
+     */
+    public function testBodyCapEscalatesViaThrowWhenCoreFieldsAloneExceedCap(): void
+    {
+        $oversizedTitle = \str_repeat('T', 17000);
+
+        $exception = new class ('', $oversizedTitle) extends DomainException implements NotFound {
+        };
+
+        $this->expectException(ProblemBodyTooLargeException::class);
+        $this->expectExceptionMessage('Problem Details body exceeds 16384-byte cap on the required core fields alone.');
+
+        $this->factoryFor()->fromThrowable($exception, self::CID, self::INSTANCE);
+    }
+
+    /**
+     * Story 3.6 — the survivor extensions and the appended `truncated` marker compose a
+     * stable, key-ordered map: head violations (in declaration order from the source list)
+     * first, then `truncated` last. Pinned via direct key inspection so a regression that
+     * inserts `truncated` mid-extensions or that reorders surviving violations is caught.
+     */
+    public function testBodyCapPreservesSurvivorOrderAndAppendsTruncatedLast(): void
+    {
+        $violations = [];
+
+        for ($i = 0; $i < 500; ++$i) {
+            $violations[] = new ConstraintViolation(
+                message: \sprintf('Order-pin message %d.', $i),
+                messageTemplate: null,
+                parameters: [],
+                root: null,
+                propertyPath: \sprintf('field_%04d', $i),
+                invalidValue: null,
+                plural: null,
+                code: 'O',
+            );
+        }
+
+        $problemDetails = $this->factoryFor()->fromThrowable(
+            new ValidationFailedException(value: null, violations: new ConstraintViolationList($violations)),
+            self::CID,
+            self::INSTANCE,
+        );
+
+        $keys = \array_keys($problemDetails->extensions);
+        $this->assertSame(
+            ['violations', 'truncated'],
+            $keys,
+            'extensions must declare violations first, truncated last — no other keys.',
+        );
+
+        $this->assertArrayHasKey('violations', $problemDetails->extensions);
+        $survived = $problemDetails->extensions['violations'];
+        $this->assertIsArray($survived);
+
+        // Every surviving violation must come from the HEAD of the source list — i.e. their
+        // `field` values must be the lowest indices, in order. A regression that pops from
+        // the head instead of the tail would surface as out-of-order or high-index entries.
+        foreach ($survived as $index => $entry) {
+            $this->assertIsArray($entry);
+            $this->assertArrayHasKey('field', $entry);
+            $this->assertSame(\sprintf('field_%04d', $index), $entry['field']);
+        }
+    }
+
+    /**
+     * Story 3.6 — `applyBodyCap` is a private helper on the final factory class. Pinned via
+     * reflection so a regression that promotes it to public / protected (and breaks the
+     * single-source-of-truth contract) is caught.
+     */
+    public function testApplyBodyCapHelperIsPrivate(): void
+    {
+        $reflectionClass = new ReflectionClass(ProblemDetailsFactory::class);
+        $this->assertTrue($reflectionClass->hasMethod('applyBodyCap'));
+        $this->assertTrue($reflectionClass->getMethod('applyBodyCap')->isPrivate());
+
+        $returnType = $reflectionClass->getMethod('applyBodyCap')->getReturnType();
+        $this->assertInstanceOf(ReflectionNamedType::class, $returnType);
+        $this->assertSame(ProblemDetails::class, $returnType->getName());
+    }
+
     /**
      * Story 3.3 — narrows a single `BufferingLogger::cleanLogs()` row to the four-key sentinel
      * context shape so individual tests can read fields without `offsetAccess.notFound` noise.
@@ -1912,7 +2220,7 @@ final class ProblemDetailsFactoryTest extends TestCase
      *
      * @return array{exception_class: string, message: string, file: string, line: int, previous_chain: list<array{exception_class: string, message: string, file: string, line: int}>}
      */
-    private function assertFullDebugExtension(\Erpify\Shared\Application\Problem\ProblemDetails $problemDetails): array
+    private function assertFullDebugExtension(ProblemDetails $problemDetails): array
     {
         $this->assertArrayHasKey('debug', $problemDetails->extensions);
         $debug = $problemDetails->extensions['debug'];
@@ -1942,7 +2250,7 @@ final class ProblemDetailsFactoryTest extends TestCase
      *
      * @return array{exception_class: string, message: string}
      */
-    private function assertMinimalDebugExtension(\Erpify\Shared\Application\Problem\ProblemDetails $problemDetails): array
+    private function assertMinimalDebugExtension(ProblemDetails $problemDetails): array
     {
         $this->assertArrayHasKey('debug', $problemDetails->extensions);
         $debug = $problemDetails->extensions['debug'];

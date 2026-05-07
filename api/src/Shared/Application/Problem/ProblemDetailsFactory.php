@@ -70,6 +70,22 @@ use Throwable;
  * `ValidationFailedException` in the chain, not `AccessDeniedException` /
  * `AuthenticationException` / `HttpExceptionInterface`') lands on `type='unhandled-exception'`,
  * `status=500`, `extensions=[]`, and (in prod / unrecognised env) the safe literal title.
+ *
+ * Story 3.6 — 16 KiB body cap with truncation marker (NFR10). Every {@see ProblemDetails}
+ * returned from {@see fromThrowable} flows through {@see applyBodyCap}: if the JSON-encoded
+ * body exceeds {@see BODY_BYTE_CAP}, extensions are truncated in a deterministic order and
+ * `'truncated' => true` is appended as the LAST extension member. Truncation order:
+ *   1. Pop one entry from the END of `extensions['violations']` if present and non-empty
+ *      (violations is a list — popping the tail discards the most recent diagnostic, keeping
+ *      the head intact for the client).
+ *   2. Once `violations` is empty, drop the LAST extension key (reverse declaration order —
+ *      `debug` first, then user-declared keys, finally `violations: []` when empty).
+ *   3. If only the required core fields remain (`type, title, status, instance,
+ *      correlation-id`) and the body STILL exceeds the cap, throw
+ *      {@see ProblemBodyTooLargeException} so the listener's outer try/catch (Story 3.4)
+ *      escalates to the static last-resort body.
+ * The cap operates on serialised byte length using `\json_encode` with `JSON_UNESCAPED_UNICODE
+ * | JSON_THROW_ON_ERROR` (mirrors {@see \Erpify\Shared\Infrastructure\Http\ProblemDetailsResponder}).
  */
 final readonly class ProblemDetailsFactory
 {
@@ -135,6 +151,22 @@ final readonly class ProblemDetailsFactory
      */
     private const string SENTINEL_LOG_MESSAGE = 'DomainException context value substituted with unserializable sentinel.';
 
+    /**
+     * Story 3.6 — hard upper bound on the JSON-encoded Problem Details body, in bytes (NFR10).
+     * 16 KiB matches the typical proxy / CDN small-buffer cutoff above which downstream
+     * intermediaries start fragmenting or buffering responses; bodies above this size also
+     * exceed common observability-pipeline log-line limits (Datadog 1 MiB, but most grep tools
+     * truncate at 8–16 KiB). Pinned by `testBodyByteCapConstantIsExactly16384`.
+     */
+    private const int BODY_BYTE_CAP = 16384;
+
+    /**
+     * Story 3.6 — appended as the LAST extension member when {@see applyBodyCap} drops at
+     * least one extension entry. The literal `true` boolean signals truncation occurred to
+     * downstream consumers without leaking which keys were dropped.
+     */
+    private const string TRUNCATED_MARKER_KEY = 'truncated';
+
     public function __construct(
         #[Autowire('%kernel.environment%')]
         private string $environment,
@@ -161,7 +193,7 @@ final readonly class ProblemDetailsFactory
                 $type = 'domain-error';
             }
 
-            return $this->withDebug(new ProblemDetails(
+            return $this->applyBodyCap($this->withDebug(new ProblemDetails(
                 type: $type,
                 title: $e->title(),
                 status: $status,
@@ -169,13 +201,13 @@ final readonly class ProblemDetailsFactory
                 instance: $instance,
                 correlationId: $correlationId,
                 extensions: $this->buildExtensions($e, $correlationId, $instance),
-            ), $debug);
+            ), $debug));
         }
 
         $validationException = $this->findInChain($e, ValidationFailedException::class);
 
         if ($validationException instanceof Throwable) {
-            return $this->withDebug(new ProblemDetails(
+            return $this->applyBodyCap($this->withDebug(new ProblemDetails(
                 type: 'validation-failed',
                 title: 'Validation failed.',
                 status: 422,
@@ -183,52 +215,52 @@ final readonly class ProblemDetailsFactory
                 instance: $instance,
                 correlationId: $correlationId,
                 extensions: ['violations' => $this->buildViolations($validationException->getViolations())],
-            ), $debug);
+            ), $debug));
         }
 
         if ($e instanceof AccessDeniedException) {
-            return $this->withDebug($this->buildBridgeResponse(
+            return $this->applyBodyCap($this->withDebug($this->buildBridgeResponse(
                 type: 'forbidden',
                 status: 403,
                 title: '' !== $e->getMessage() ? $e->getMessage() : 'Access denied.',
                 correlationId: $correlationId,
                 instance: $instance,
-            ), $debug);
+            ), $debug));
         }
 
         if ($e instanceof AuthenticationException) {
-            return $this->withDebug($this->buildBridgeResponse(
+            return $this->applyBodyCap($this->withDebug($this->buildBridgeResponse(
                 type: 'unauthenticated',
                 status: 401,
                 title: '' !== $e->getMessage() ? $e->getMessage() : 'Authentication required.',
                 correlationId: $correlationId,
                 instance: $instance,
-            ), $debug);
+            ), $debug));
         }
 
         if ($e instanceof HttpExceptionInterface) {
             $status = $e->getStatusCode();
             $type = self::HTTP_STATUS_TYPE_MAP[$status] ?? 'http-error';
 
-            return $this->withDebug($this->buildBridgeResponse(
+            return $this->applyBodyCap($this->withDebug($this->buildBridgeResponse(
                 type: $type,
                 status: $status,
                 title: '' !== $e->getMessage() ? $e->getMessage() : 'An HTTP error occurred.',
                 correlationId: $correlationId,
                 instance: $instance,
-            ), $debug);
+            ), $debug));
         }
 
         $title = $this->resolveUnhandledTitle($e);
 
-        return $this->withDebug(new ProblemDetails(
+        return $this->applyBodyCap($this->withDebug(new ProblemDetails(
             type: 'unhandled-exception',
             title: $title,
             status: 500,
             detail: null,
             instance: $instance,
             correlationId: $correlationId,
-        ), $debug);
+        ), $debug));
     }
 
     /**
@@ -542,5 +574,105 @@ final readonly class ProblemDetailsFactory
         $message = $e->getMessage();
 
         return '' !== $message ? $message : self::UNHANDLED_TITLE_FALLBACK;
+    }
+
+    /**
+     * Story 3.6 — enforces the {@see BODY_BYTE_CAP} hard upper bound on the JSON-encoded
+     * Problem Details body (NFR10). Returns the input unchanged when the encoded body fits;
+     * otherwise truncates extensions deterministically and appends `'truncated' => true` as
+     * the LAST extension member.
+     *
+     * Truncation algorithm — deterministic so repeated runs over the same input produce
+     * byte-identical output:
+     *   1. Compute the candidate body size with `'truncated' => true` PROVISIONALLY
+     *      appended (so the marker's own ~18 bytes are accounted for from the first iteration
+     *      onward — avoids the off-by-one where we trim, then re-add the marker, then exceed
+     *      again).
+     *   2. While the candidate exceeds {@see BODY_BYTE_CAP}:
+     *      a. If `extensions['violations']` exists and is a non-empty list, pop one entry
+     *         from its END (preserves deterministic order: the LAST violation is dropped
+     *         first, the head violations are kept). When the list reaches `[]`, the empty
+     *         array stays in place — only step (b) drops the key itself.
+     *      b. Else, drop the LAST extension key (reverse declaration order — `debug` first
+     *         since {@see withDebug} appends it last; then user-declared extensions; finally
+     *         a now-empty `violations: []` left over from step 2a).
+     *      c. Recompute the candidate.
+     *   3. If extensions becomes empty AND the core fields PLUS `'truncated' => true` STILL
+     *      exceed the cap, throw {@see ProblemBodyTooLargeException}. The listener's outer
+     *      try/catch (Story 3.4) then escalates to the static last-resort body. This is the
+     *      only path where the cap can fail to produce a conforming body — by design,
+     *      because the alternative is leaking partial / truncated core fields.
+     *
+     * The encoder flags MUST mirror {@see ProblemDetailsResponder::respond} so the cap and
+     * the wire emission compute the same byte length. `JSON_THROW_ON_ERROR` keeps the helper
+     * type-safe (encoder failures bubble out — they are listener self-failures and Story 3.4
+     * handles them via the same outer try/catch).
+     */
+    private function applyBodyCap(ProblemDetails $problemDetails): ProblemDetails
+    {
+        if (\strlen($this->encodeBody($problemDetails->toArray())) <= self::BODY_BYTE_CAP) {
+            return $problemDetails;
+        }
+
+        $core = [
+            'type' => $problemDetails->type,
+            'title' => $problemDetails->title,
+            'status' => $problemDetails->status,
+        ];
+
+        if (null !== $problemDetails->detail) {
+            $core['detail'] = $problemDetails->detail;
+        }
+
+        $core['instance'] = $problemDetails->instance;
+        $core['correlation-id'] = $problemDetails->correlationId;
+
+        $extensions = $problemDetails->extensions;
+
+        while (\strlen($this->encodeBody($core + $extensions + [self::TRUNCATED_MARKER_KEY => true])) > self::BODY_BYTE_CAP) {
+            if ([] === $extensions) {
+                throw new ProblemBodyTooLargeException(\sprintf(
+                    'Problem Details body exceeds %d-byte cap on the required core fields alone.',
+                    self::BODY_BYTE_CAP,
+                ));
+            }
+
+            if (
+                \array_key_exists('violations', $extensions)
+                && \is_array($extensions['violations'])
+                && [] !== $extensions['violations']
+            ) {
+                \array_pop($extensions['violations']);
+
+                continue;
+            }
+
+            $lastKey = \array_key_last($extensions);
+            unset($extensions[$lastKey]);
+        }
+
+        $extensions[self::TRUNCATED_MARKER_KEY] = true;
+
+        return new ProblemDetails(
+            type: $problemDetails->type,
+            title: $problemDetails->title,
+            status: $problemDetails->status,
+            detail: $problemDetails->detail,
+            instance: $problemDetails->instance,
+            correlationId: $problemDetails->correlationId,
+            extensions: $extensions,
+        );
+    }
+
+    /**
+     * Story 3.6 — single encode site shared by {@see applyBodyCap}'s size probe and the cap
+     * loop. Flags mirror {@see ProblemDetailsResponder::respond} byte-for-byte so the cap
+     * and the wire emission agree on length.
+     *
+     * @param array<string, mixed> $body
+     */
+    private function encodeBody(array $body): string
+    {
+        return \json_encode($body, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
     }
 }
