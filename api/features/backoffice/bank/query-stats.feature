@@ -9,34 +9,34 @@ Feature: Doctrine query stats on bank CRUD
     When I send a "GET" request to "/backoffice/banks/11111111-1111-7000-8000-000000000001"
     Then the response status code should be 200
     And a request contains "SELECT" for doctrine connection "default"
-    And the request(s) got executed only on doctrine connection "default"
+    And the requests got executed only on doctrine connection "default"
 
   Scenario: Listing banks issues a SELECT on the default connection
     Given I reset the stats for all doctrine connections
     When I send a "GET" request to "/backoffice/banks"
     Then the response status code should be 200
     And a request contains "FROM bank" across all doctrine connections
-    And the request(s) got executed only on doctrine connection "default"
+    And the requests got executed only on doctrine connection "default"
 
   Scenario: Listing banks with a name filter still hits a single connection
     Given I reset the stats for all doctrine connections
     When I send a "GET" request to "/backoffice/banks?names[]=santander"
     Then the response status code should be 200
     And a request contains "SELECT" for doctrine connection "default"
-    And the request(s) got executed only on doctrine connection "default"
+    And the requests got executed only on doctrine connection "default"
 
   Scenario: GET for an unknown id still queries only the default connection
     Given I reset the stats for all doctrine connections
     When I send a "GET" request to "/backoffice/banks/2e6d865c-17b0-476a-85f2-037bf6d3b3dc"
     Then the response status code should be 404
     And a request contains "SELECT" across all doctrine connections
-    And the request(s) got executed only on doctrine connection "default"
+    And the requests got executed only on doctrine connection "default"
 
   Scenario: Validation rejection emits no Doctrine queries
     Given I reset the stats for all doctrine connections
     When I send a "GET" request to "/backoffice/banks/invalidUuid"
     Then the response status code should be 400
-    And 0 request(s) got executed across all doctrine connections
+    And 0 requests got executed across all doctrine connections
 
   Scenario: POST a new bank emits an INSERT on the default connection
     Given I add "Content-Type" header equal to "application/json"
@@ -48,4 +48,4 @@ Feature: Doctrine query stats on bank CRUD
     """
     Then the response status code should be 201
     And a request contains "INSERT" for doctrine connection "default"
-    And the request(s) got executed only on doctrine connection "default"
+    And the requests got executed only on doctrine connection "default"

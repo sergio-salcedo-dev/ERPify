@@ -9,7 +9,14 @@ services:
 
     Erpify\Tests\Doctrine\TestDebugDataHolder: ~
 
-    # Make DebugMiddleware capture queries via our subclass.
+    # Override the service the doctrine-bundle DebugMiddleware actually consumes
+    # so DoctrineContext can read every query through our static-state subclass.
+    doctrine.debug_data_holder:
+        alias: Erpify\Tests\Doctrine\TestDebugDataHolder
+        public: true
+
+    # Keep the parent-class-FQCN alias public too: TestDebugDataHolderWiringTest
+    # asserts that resolving DebugDataHolder::class returns our subclass.
     Symfony\Bridge\Doctrine\Middleware\Debug\DebugDataHolder:
         alias: Erpify\Tests\Doctrine\TestDebugDataHolder
         public: true
