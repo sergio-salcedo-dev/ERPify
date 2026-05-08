@@ -28,6 +28,7 @@
 ### AI agent context (load first)
 
 - **[project-context.md](./project-context.md)** — Authoritative constraints for AI code generation
+- **[claude-code-quickref.md](./claude-code-quickref.md)** — Full command catalog, repo layout tables, "adding new code" recipes, gotchas (companion to root `CLAUDE.md`)
 - **[project-scan-report.json](./project-scan-report.json)** — Scan metadata from initial doc generation
 
 ### Project overview
