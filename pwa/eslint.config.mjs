@@ -2,6 +2,10 @@ import prettier from "eslint-plugin-prettier";
 import prettierConfig from "eslint-config-prettier";
 import tsParser from "@typescript-eslint/parser";
 import tsPlugin from "@typescript-eslint/eslint-plugin";
+import { fixupPluginRules } from "@eslint/compat";
+import reactPlugin from "eslint-plugin-react";
+import hooksPlugin from "eslint-plugin-react-hooks";
+import nextPlugin from "@next/eslint-plugin-next";
 
 const eslintConfig = [
   {
@@ -15,7 +19,7 @@ const eslintConfig = [
     ],
   },
   {
-    files: ["**/*.ts", "**/*.tsx"],
+    files: ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
@@ -29,9 +33,16 @@ const eslintConfig = [
     plugins: {
       prettier,
       "@typescript-eslint": tsPlugin,
+      react: fixupPluginRules(reactPlugin),
+      "react-hooks": fixupPluginRules(hooksPlugin),
+      "@next/next": fixupPluginRules(nextPlugin),
     },
     rules: {
       ...tsPlugin.configs.recommended.rules,
+      ...reactPlugin.configs.recommended.rules,
+      ...hooksPlugin.configs.recommended.rules,
+      ...nextPlugin.configs.recommended.rules,
+      ...nextPlugin.configs["core-web-vitals"].rules,
       "prettier/prettier": "error",
       "@typescript-eslint/no-unused-vars": [
         "error",
@@ -39,6 +50,13 @@ const eslintConfig = [
       ],
       "@typescript-eslint/no-explicit-any": "error",
       "no-console": ["warn", { allow: ["warn", "error"] }],
+      "react/react-in-jsx-scope": "off", // Next.js doesn't need it
+      "react/prop-types": "off", // Using TS
+    },
+    settings: {
+      react: {
+        version: "detect",
+      },
     },
   },
   prettierConfig,
