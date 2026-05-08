@@ -2,11 +2,32 @@
   "workflow_version": "1.2.0",
   "timestamps": {
     "started": "2026-05-07T17:51:00Z",
-    "last_updated": "2026-05-07T17:55:00Z",
+    "last_updated": "2026-05-08T12:00:00Z",
     "completed": "2026-05-07T17:55:00Z"
   },
   "mode": "full_rescan",
   "scan_level": "deep",
+  "deep_dive_targets": [
+    {
+      "target_name": "PWA shared/infrastructure",
+      "target_path": "pwa/src/context/shared/infrastructure",
+      "target_type": "folder",
+      "files_analyzed": 11,
+      "loc_analyzed": 640,
+      "output_file": "deep-dive-pwa-shared-infrastructure.md",
+      "timestamp": "2026-05-08T00:00:00Z"
+    },
+    {
+      "target_name": "API Shared Foundation",
+      "target_path": "api/src/Shared",
+      "target_type": "folder",
+      "files_analyzed": 80,
+      "loc_analyzed": 4517,
+      "subtrees_covered": ["Application", "Domain", "Infrastructure", "Media", "Storage", "Guzzle"],
+      "output_file": "deep-dive-api-shared-foundation.md",
+      "timestamp": "2026-05-08T00:00:00Z"
+    }
+  ],
   "project_root": "/home/sergiosalcedo/Projects/ERPify",
   "project_knowledge": "/home/sergiosalcedo/Projects/ERPify/docs",
   "repository_type": "monorepo",
@@ -81,7 +102,9 @@
     "development-guide-pwa.md (patched)",
     "deployment-guide.md (patched)",
     "contribution-guide.md (patched)",
-    "index.md (patched)"
+    "index.md (patched)",
+    "deep-dive-pwa-shared-infrastructure.md",
+    "deep-dive-api-shared-foundation.md"
   ],
   "preserved_files": [
     "project-context.md",
