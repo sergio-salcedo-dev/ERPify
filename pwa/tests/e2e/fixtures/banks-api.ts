@@ -40,6 +40,30 @@ export const SAMPLE_BANK_D: BankFixture = {
   updatedAt: "2026-04-25T09:00:00Z",
 };
 
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Generate `count` deterministic bank fixtures named `Bank 001`…, with
+ * `createdAt` walking forward one day from 2026-01-01 UTC. Useful for
+ * pagination/large-list E2E coverage.
+ */
+export function makeBanks(count: number): BankFixture[] {
+  const start = Date.parse("2026-01-01T00:00:00Z");
+  return Array.from({ length: count }, (_, i): BankFixture => {
+    const idx = i + 1;
+    const padded = idx.toString().padStart(3, "0");
+    const idTail = idx.toString().padStart(12, "0");
+    const created = new Date(start + i * ONE_DAY_MS).toISOString();
+    return {
+      id: `aaaaaaaa-aaaa-4aaa-8aaa-${idTail}`,
+      name: `Bank ${padded}`,
+      shortName: `BNK${padded}`,
+      createdAt: created,
+      updatedAt: created,
+    };
+  });
+}
+
 export type ListScenario = "happy" | "empty" | "server-error";
 export type GetScenario = "happy" | "not-found" | "server-error";
 export type CreateScenario = "happy" | "validation-error";

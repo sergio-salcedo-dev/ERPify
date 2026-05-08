@@ -13,6 +13,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { BanksTable } from "./_components/BanksTable";
 import { BanksFilters } from "./_components/BanksFilters";
+import { BanksPagination } from "./_components/BanksPagination";
 import {
   EMPTY_FILTER,
   applyFilters,
@@ -21,6 +22,7 @@ import {
   type BanksFilter,
   type BanksSort,
 } from "./_lib/banksFilterSort";
+import { BANKS_PAGE_SIZE, paginate } from "./_lib/paginate";
 
 type State = "loading" | "empty" | "error" | "ready";
 
@@ -42,6 +44,7 @@ export default function BanksListPage() {
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
   const [filter, setFilter] = useState<BanksFilter>(EMPTY_FILTER);
   const [sort, setSort] = useState<BanksSort>(null);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,6 +75,12 @@ export default function BanksListPage() {
     () => applySort(applyFilters(banks, filter), sort),
     [banks, filter, sort],
   );
+
+  useEffect(() => {
+    setPage(1);
+  }, [filter, sort]);
+
+  const paged = useMemo(() => paginate(visibleBanks, page, BANKS_PAGE_SIZE), [visibleBanks, page]);
 
   const resetFilters = (): void => {
     setFilter(EMPTY_FILTER);
@@ -143,10 +152,17 @@ export default function BanksListPage() {
             </section>
           ) : (
             <>
-              <BanksTable banks={visibleBanks} sort={sort} onSortChange={setSort} />
+              <BanksTable banks={paged.rows} sort={sort} onSortChange={setSort} />
+              {paged.totalPages > 1 ? (
+                <BanksPagination
+                  page={paged.page}
+                  totalPages={paged.totalPages}
+                  onPageChange={setPage}
+                />
+              ) : null}
               {nextCursor ? (
                 <p className="text-muted-foreground text-xs">
-                  More banks available. Filters and sort apply only to this page.
+                  More banks available. Filters, sort, and pagination apply only to this page.
                 </p>
               ) : null}
             </>

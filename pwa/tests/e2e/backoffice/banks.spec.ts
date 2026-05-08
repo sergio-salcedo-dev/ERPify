@@ -5,6 +5,7 @@ import {
   SAMPLE_BANK_B,
   SAMPLE_BANK_C,
   SAMPLE_BANK_D,
+  makeBanks,
   mockBanksApi,
 } from "../fixtures/banks-api";
 
@@ -275,7 +276,160 @@ test.describe("BackOffice - Banks CRUD", () => {
       await page.goto("/backoffice/banks");
 
       await expect(
-        page.getByText("More banks available. Filters and sort apply only to this page."),
+        page.getByText(
+          "More banks available. Filters, sort, and pagination apply only to this page.",
+        ),
+      ).toBeVisible();
+    });
+  });
+
+  test.describe("pagination", () => {
+    const fiftyBanks = makeBanks(50);
+
+    test("renders 10 rows on page 1 with Prev disabled and 'Page 1 of 5'", async ({ page }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: fiftyBanks });
+      await page.goto("/backoffice/banks");
+
+      await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 1 of 5");
+      await expect(page.getByTestId("banks-pagination__prev")).toBeDisabled();
+      await expect(page.getByTestId("banks-pagination__next")).toBeEnabled();
+      await expect(page.getByRole("cell", { name: "Bank 001", exact: true })).toBeVisible();
+      await expect(page.getByRole("cell", { name: "Bank 010", exact: true })).toBeVisible();
+      await expect(page.getByRole("cell", { name: "Bank 011", exact: true })).toBeHidden();
+      // Body has exactly 10 data rows.
+      await expect(page.locator("tbody tr")).toHaveCount(10);
+    });
+
+    test("Next advances to page 2 with a fresh row set", async ({ page }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: fiftyBanks });
+      await page.goto("/backoffice/banks");
+
+      await page.getByTestId("banks-pagination__next").click();
+
+      await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 2 of 5");
+      await expect(page.getByTestId("banks-pagination__prev")).toBeEnabled();
+      await expect(page.getByRole("cell", { name: "Bank 011", exact: true })).toBeVisible();
+      await expect(page.getByRole("cell", { name: "Bank 020", exact: true })).toBeVisible();
+      await expect(page.getByRole("cell", { name: "Bank 010", exact: true })).toBeHidden();
+    });
+
+    test("walks to the last page and disables Next; Prev returns to page 4", async ({ page }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: fiftyBanks });
+      await page.goto("/backoffice/banks");
+
+      const nextBtn = page.getByTestId("banks-pagination__next");
+      for (let i = 0; i < 4; i++) {
+        await nextBtn.click();
+      }
+
+      await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 5 of 5");
+      await expect(nextBtn).toBeDisabled();
+      await expect(page.getByRole("cell", { name: "Bank 050", exact: true })).toBeVisible();
+
+      await page.getByTestId("banks-pagination__prev").click();
+      await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 4 of 5");
+      await expect(page.getByRole("cell", { name: "Bank 040", exact: true })).toBeVisible();
+    });
+
+    test("typing a filter that narrows below the page size hides the pagination block", async ({
+      page,
+    }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: fiftyBanks });
+      await page.goto("/backoffice/banks");
+
+      // Move off page 1 first to prove the filter resets it.
+      await page.getByTestId("banks-pagination__next").click();
+      await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 2 of 5");
+
+      // "Bank 005" is unique → 1 match → pagination block hides entirely.
+      await page.getByTestId("banks-filters__name").fill("Bank 005");
+
+      await expect(page.getByTestId("banks-pagination__indicator")).toBeHidden();
+      await expect(page.getByRole("cell", { name: "Bank 005", exact: true })).toBeVisible();
+      await expect(page.getByRole("cell", { name: "Bank 015", exact: true })).toBeHidden();
+    });
+
+    test("a filter narrowing to >10 still paginates and resets to page 1", async ({ page }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: fiftyBanks });
+      await page.goto("/backoffice/banks");
+
+      // Move off page 1 first.
+      await page.getByTestId("banks-pagination__next").click();
+      await page.getByTestId("banks-pagination__next").click();
+      await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 3 of 5");
+
+      // makeBanks walks createdAt forward one UTC day from 2026-01-01, so Bank 040 = 2026-02-09.
+      // createdFrom = 2026-02-09 keeps Bank 040..050 = 11 rows → 2 pages of 10 + 1.
+      await page.getByTestId("banks-filters__created-from").fill("2026-02-09");
+
+      await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 1 of 2");
+      await expect(page.getByTestId("banks-pagination__prev")).toBeDisabled();
+    });
+
+    test("AC: navigates to page 4, then filters to 8 matches → block hides, 8 rows render", async ({
+      page,
+    }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: fiftyBanks });
+      await page.goto("/backoffice/banks");
+
+      const nextBtn = page.getByTestId("banks-pagination__next");
+      for (let i = 0; i < 3; i++) {
+        await nextBtn.click();
+      }
+      await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 4 of 5");
+
+      // shortName "BNK04" matches BNK040..BNK049 → 10 matches; need 8.
+      // shortName "BNK04" then exclude two via createdFrom 2026-02-11 (Bank 042 onward) → 8 matches.
+      await page.getByTestId("banks-filters__short-name").fill("BNK04");
+      await page.getByTestId("banks-filters__created-from").fill("2026-02-11");
+
+      await expect(page.getByTestId("banks-pagination__indicator")).toBeHidden();
+      await expect(page.locator("tbody tr")).toHaveCount(8);
+      await expect(page.getByRole("cell", { name: "Bank 042", exact: true })).toBeVisible();
+      await expect(page.getByRole("cell", { name: "Bank 049", exact: true })).toBeVisible();
+      await expect(page.getByRole("cell", { name: "Bank 041", exact: true })).toBeHidden();
+    });
+
+    test("sorting resets the indicator to page 1", async ({ page }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: fiftyBanks });
+      await page.goto("/backoffice/banks");
+
+      await page.getByTestId("banks-pagination__next").click();
+      await page.getByTestId("banks-pagination__next").click();
+      await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 3 of 5");
+
+      await page
+        .getByRole("columnheader", { name: "Name", exact: true })
+        .getByRole("button")
+        .click();
+
+      await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 1 of 5");
+    });
+
+    test("does not render the pagination block when the source list fits on one page", async ({
+      page,
+    }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: makeBanks(5) });
+      await page.goto("/backoffice/banks");
+
+      await expect(page.getByRole("cell", { name: "Bank 005", exact: true })).toBeVisible();
+      await expect(page.getByTestId("banks-pagination__indicator")).toBeHidden();
+      await expect(page.getByTestId("banks-pagination__prev")).toBeHidden();
+      await expect(page.getByTestId("banks-pagination__next")).toBeHidden();
+    });
+
+    test("nextCursor notice text mentions pagination too", async ({ page }) => {
+      await mockBanksApi(page, {
+        list: "happy",
+        list_banks: makeBanks(50),
+        list_next_cursor: "next-page-cursor",
+      });
+      await page.goto("/backoffice/banks");
+
+      await expect(
+        page.getByText(
+          "More banks available. Filters, sort, and pagination apply only to this page.",
+        ),
       ).toBeVisible();
     });
   });

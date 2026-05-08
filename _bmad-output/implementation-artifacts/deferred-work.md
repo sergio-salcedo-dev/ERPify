@@ -1,5 +1,11 @@
 # Deferred Work
 
+## Deferred from: review of `spec-pwa-bank-list-pagination` (2026-05-08)
+
+- **Focus loss when active Prev/Next button becomes disabled.** On the last click that disables Next (reaching the last page) or Prev (returning to page 1), browser focus drops to `<body>` because the focused element is no longer focusable. Keyboard users have to tab back in. Move focus to the still-enabled sibling (or to the indicator) when a button transitions to `disabled`. [`pwa/src/app/backoffice/banks/_components/BanksPagination.tsx`]
+- **`aria-live="polite"` indicator re-announces on every filter keystroke that changes `totalPages`.** Each character typed in the name filter recomputes `visibleBanks`, the page-reset effect fires `setPage(1)`, and the indicator's text changes ("Page 1 of 5", "Page 1 of 4", …) producing a flood of screen-reader announcements. Either drop the live region (page changes are user-driven button clicks anyway, where focus + label suffice), debounce filter recompute, or split the live region so only Prev/Next clicks trigger announcements. [`pwa/src/app/backoffice/banks/_components/BanksPagination.tsx:35`]
+- **Pagination buttons lack `aria-controls` referencing the data table.** Assistive tech cannot tell users which region Prev/Next mutate; pair the buttons with the table's id via `aria-controls`. [`pwa/src/app/backoffice/banks/_components/BanksPagination.tsx`]
+
 ## Deferred from: review of `spec-pwa-bank-list-filters-sort` (2026-05-08)
 
 - **Timezone semantics: client-local vs row UTC.** `applyFilters` interprets `<input type="date">` bounds as start-of-day / end-of-day **local** time (matches the spec's Always rule), but `bank.createdAt` arrives as UTC ISO with `Z`. In a non-UTC runner the day-aligned local-bound vs UTC instant comparison can include or exclude rows near the midnight boundary unexpectedly. The current unit + E2E suite happens to run in UTC so the case never trips. Options: normalize both sides to UTC (changes the spec's "local" rule) or document the dependency and pin Playwright TZ. [`pwa/src/app/backoffice/banks/_lib/banksFilterSort.ts:31-41`]
