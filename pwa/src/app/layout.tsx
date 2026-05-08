@@ -4,6 +4,7 @@ import "./globals.css";
 import { Geist, Geist_Mono } from "next/font/google";
 import { fetchFrankenPhpHotReloadSubscribeUrl } from "@/lib/frankenphp-hot-reload";
 import { cn } from "@/lib/utils";
+import Script from "next/script";
 
 const geistSans = Geist({
   subsets: ["latin"],
@@ -34,8 +35,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {frankenHotReloadUrl ? (
           <>
             <meta name="frankenphp-hot-reload:url" content={frankenHotReloadUrl} />
-            <script src="https://cdn.jsdelivr.net/npm/idiomorph" />
-            <script type="module" src="https://cdn.jsdelivr.net/npm/frankenphp-hot-reload/+esm" />
+            <Script src="https://cdn.jsdelivr.net/npm/idiomorph" strategy="afterInteractive" />
+            <Script
+              type="module"
+              src="https://cdn.jsdelivr.net/npm/frankenphp-hot-reload/+esm"
+              strategy="afterInteractive"
+            />
           </>
         ) : null}
       </head>
