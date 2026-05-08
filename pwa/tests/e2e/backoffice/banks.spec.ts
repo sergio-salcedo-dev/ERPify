@@ -1,6 +1,12 @@
 import { test, expect } from "@playwright/test";
 import { VIEWPORT_DESKTOP } from "../constants";
-import { SAMPLE_BANK_A, mockBanksApi } from "../fixtures/banks-api";
+import {
+  SAMPLE_BANK_A,
+  SAMPLE_BANK_B,
+  SAMPLE_BANK_C,
+  SAMPLE_BANK_D,
+  mockBanksApi,
+} from "../fixtures/banks-api";
 
 test.describe("BackOffice - Banks CRUD", () => {
   test.use({ viewport: VIEWPORT_DESKTOP });
@@ -125,6 +131,151 @@ test.describe("BackOffice - Banks CRUD", () => {
       await expect(page).toHaveURL(`/backoffice/banks/${SAMPLE_BANK_A.id}`);
       await expect(
         page.getByRole("alert").getByRole("heading", { name: "Bank not found." }),
+      ).toBeVisible();
+    });
+  });
+
+  test.describe("filters and sort", () => {
+    const allBanks = [SAMPLE_BANK_A, SAMPLE_BANK_B, SAMPLE_BANK_C, SAMPLE_BANK_D];
+
+    test("filters by name case-insensitively, leaves the URL unchanged, and resets via the button", async ({
+      page,
+    }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: allBanks });
+      await page.goto("/backoffice/banks");
+
+      await expect(page.getByRole("cell", { name: "Acme Savings" })).toBeVisible();
+      await expect(page.getByRole("cell", { name: "Cosmos Bank" })).toBeVisible();
+
+      await page.getByTestId("banks-filters__name").fill("cosmos");
+      await expect(page.getByRole("cell", { name: "Cosmos Bank" })).toBeVisible();
+      await expect(page.getByRole("cell", { name: "Acme Savings" })).toBeHidden();
+      await expect(page.getByRole("cell", { name: "Brookline Trust" })).toBeHidden();
+      // AC: filter input does not change the URL.
+      await expect(page).toHaveURL(/\/backoffice\/banks$/);
+
+      await page.getByTestId("banks-filters__reset").click();
+      await expect(page.getByTestId("banks-filters__name")).toHaveValue("");
+      await expect(page.getByRole("cell", { name: "Acme Savings" })).toBeVisible();
+      await expect(page.getByRole("cell", { name: "Brookline Trust" })).toBeVisible();
+    });
+
+    test("AND-combines name and shortName filters", async ({ page }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: allBanks });
+      await page.goto("/backoffice/banks");
+
+      await page.getByTestId("banks-filters__name").fill("bank");
+      await page.getByTestId("banks-filters__short-name").fill("cos");
+
+      await expect(page.getByRole("cell", { name: "Cosmos Bank" })).toBeVisible();
+      await expect(page.getByRole("cell", { name: "Acme Savings" })).toBeHidden();
+      await expect(page.getByRole("cell", { name: "Brookline Trust" })).toBeHidden();
+    });
+
+    test("filters by createdAt range (inclusive bounds)", async ({ page }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: allBanks });
+      await page.goto("/backoffice/banks");
+
+      await page.getByTestId("banks-filters__created-from").fill("2026-02-01");
+      await page.getByTestId("banks-filters__created-to").fill("2026-03-31");
+
+      await expect(page.getByRole("cell", { name: "Brookline Trust" })).toBeVisible();
+      await expect(page.getByRole("cell", { name: "Cosmos Bank" })).toBeVisible();
+      await expect(page.getByRole("cell", { name: "Acme Savings" })).toBeHidden();
+      await expect(page.getByRole("cell", { name: "Delta Credit Union" })).toBeHidden();
+    });
+
+    test("shows the no-matches panel when filters narrow to zero", async ({ page }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: allBanks });
+      await page.goto("/backoffice/banks");
+
+      await page.getByTestId("banks-filters__name").fill("zzz-does-not-match");
+
+      const panel = page.getByTestId("banks-list__empty-filtered");
+      await expect(panel).toBeVisible();
+      await expect(
+        panel.getByRole("heading", { name: "No banks match your filters" }),
+      ).toBeVisible();
+
+      await page.getByTestId("banks-list__reset-filters").click();
+      await expect(panel).toBeHidden();
+      await expect(page.getByTestId("banks-filters__name")).toHaveValue("");
+      await expect(page.getByRole("cell", { name: "Acme Savings" })).toBeVisible();
+    });
+
+    test("sorts by name with the asc → desc → unsorted cycle", async ({ page }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: allBanks });
+      await page.goto("/backoffice/banks");
+
+      const nameHeader = page
+        .getByRole("columnheader", { name: "Name", exact: true })
+        .getByRole("button");
+      // Resilient to column reorder: assert the first body row contains the expected name cell.
+      const firstRow = page.getByRole("row").nth(1); // row 0 is the header
+      const expectFirstRowToContain = (name: string) =>
+        expect(firstRow.getByRole("cell", { name, exact: true })).toBeVisible();
+
+      await nameHeader.click();
+      await expectFirstRowToContain("Acme Savings");
+      await expect(page.getByRole("columnheader", { name: "Name", exact: true })).toHaveAttribute(
+        "aria-sort",
+        "ascending",
+      );
+
+      await nameHeader.click();
+      await expectFirstRowToContain("Delta Credit Union");
+      await expect(page.getByRole("columnheader", { name: "Name", exact: true })).toHaveAttribute(
+        "aria-sort",
+        "descending",
+      );
+
+      await nameHeader.click();
+      await expectFirstRowToContain(SAMPLE_BANK_A.name);
+      await expect(page.getByRole("columnheader", { name: "Name", exact: true })).toHaveAttribute(
+        "aria-sort",
+        "none",
+      );
+    });
+
+    test("combines name + createdFrom + sort by createdAt desc simultaneously", async ({
+      page,
+    }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: allBanks });
+      await page.goto("/backoffice/banks");
+
+      // Filter to anything containing "bank" in the name with createdAt >= 2026-03-01.
+      // Of the four fixtures, only Cosmos Bank (name="Cosmos Bank", createdAt 2026-03-20) matches.
+      // Adding sort by createdAt desc must not change correctness — just confirm the row remains.
+      await page.getByTestId("banks-filters__name").fill("bank");
+      await page.getByTestId("banks-filters__created-from").fill("2026-03-01");
+
+      const createdHeader = page
+        .getByRole("columnheader", { name: "Created", exact: true })
+        .getByRole("button");
+      await createdHeader.click(); // asc
+      await createdHeader.click(); // desc
+
+      await expect(page.getByRole("cell", { name: "Cosmos Bank" })).toBeVisible();
+      await expect(page.getByRole("cell", { name: "Acme Savings" })).toBeHidden();
+      await expect(page.getByRole("cell", { name: "Brookline Trust" })).toBeHidden();
+      await expect(page.getByRole("cell", { name: "Delta Credit Union" })).toBeHidden();
+      await expect(
+        page.getByRole("columnheader", { name: "Created", exact: true }),
+      ).toHaveAttribute("aria-sort", "descending");
+    });
+
+    test("notice copy when meta.nextCursor is present calls out the page-only scope", async ({
+      page,
+    }) => {
+      await mockBanksApi(page, {
+        list: "happy",
+        list_banks: allBanks,
+        list_next_cursor: "next-page-cursor",
+      });
+      await page.goto("/backoffice/banks");
+
+      await expect(
+        page.getByText("More banks available. Filters and sort apply only to this page."),
       ).toBeVisible();
     });
   });

@@ -24,6 +24,22 @@ export const SAMPLE_BANK_B: BankFixture = {
   updatedAt: "2026-04-20T16:00:00Z",
 };
 
+export const SAMPLE_BANK_C: BankFixture = {
+  id: "33333333-3333-4333-8333-333333333333",
+  name: "Cosmos Bank",
+  shortName: "COSM",
+  createdAt: "2026-03-20T08:00:00Z",
+  updatedAt: "2026-04-22T12:00:00Z",
+};
+
+export const SAMPLE_BANK_D: BankFixture = {
+  id: "44444444-4444-4444-8444-444444444444",
+  name: "Delta Credit Union",
+  shortName: "DCU",
+  createdAt: "2026-04-05T11:30:00Z",
+  updatedAt: "2026-04-25T09:00:00Z",
+};
+
 export type ListScenario = "happy" | "empty" | "server-error";
 export type GetScenario = "happy" | "not-found" | "server-error";
 export type CreateScenario = "happy" | "validation-error";
@@ -40,6 +56,8 @@ export interface BanksApiScenario {
   bank?: BankFixture;
   /** Banks returned by the list endpoint when scenario.list === "happy". */
   list_banks?: BankFixture[];
+  /** When set, the happy list response carries `meta.nextCursor`. */
+  list_next_cursor?: string;
 }
 
 const LIST_PATH = /\/api\/v1\/backoffice\/banks(\?.*)?$/;
@@ -83,7 +101,13 @@ export async function mockBanksApi(page: Page, scenario: BanksApiScenario): Prom
             return;
           case "happy":
           default:
-            await fulfillJson(route, 200, { data: listBanks });
+            await fulfillJson(
+              route,
+              200,
+              scenario.list_next_cursor
+                ? { data: listBanks, meta: { nextCursor: scenario.list_next_cursor } }
+                : { data: listBanks },
+            );
             return;
         }
       }
