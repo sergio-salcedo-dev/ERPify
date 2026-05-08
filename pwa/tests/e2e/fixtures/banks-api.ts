@@ -112,9 +112,22 @@ export async function mockBanksApi(page: Page, scenario: BanksApiScenario): Prom
       const method = route.request().method();
 
       if (method === "GET") {
+        const pagination = {
+          currentPage: 1,
+          pageCount: 1,
+          count: listBanks.length,
+          hasMorePages: !!scenario.list_next_cursor,
+          cursor: scenario.list_next_cursor ?? "empty-cursor-hmac",
+        };
+
         switch (scenario.list) {
           case "empty":
-            await fulfillJson(route, 200, { data: [] });
+            await fulfillJson(route, 200, {
+              data: {
+                items: [],
+                pagination: { ...pagination, count: 0, hasMorePages: false },
+              },
+            });
             return;
           case "server-error":
             await fulfillJson(
@@ -125,13 +138,12 @@ export async function mockBanksApi(page: Page, scenario: BanksApiScenario): Prom
             return;
           case "happy":
           default:
-            await fulfillJson(
-              route,
-              200,
-              scenario.list_next_cursor
-                ? { data: listBanks, meta: { nextCursor: scenario.list_next_cursor } }
-                : { data: listBanks },
-            );
+            await fulfillJson(route, 200, {
+              data: {
+                items: listBanks,
+                pagination,
+              },
+            });
             return;
         }
       }
