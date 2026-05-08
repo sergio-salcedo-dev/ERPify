@@ -1,6 +1,6 @@
 # Deep-Dive: PWA `shared/infrastructure`
 
-> Generated 2026-05-08 by `/bmad-document-project`. Exhaustive analysis of every file under [`pwa/src/context/shared/infrastructure/`](../pwa/src/context/shared/infrastructure/). Pair with [`architecture-pwa.md`](./architecture-pwa.md) (high-level layering) and [`api-error-contract.md`](./api-error-contract.md) (the wire format this code consumes).
+> Generated 2026-05-08 by `/bmad-document-project`. Exhaustive analysis of every file under `pwa/src/context/shared/infrastructure/`. Pair with [`architecture-pwa.md`](./architecture-pwa.md) (high-level layering) and [`api-error-contract.md`](./api-error-contract.md) (the wire format this code consumes).
 
 ## 1. Scope and intent
 

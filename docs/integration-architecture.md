@@ -89,7 +89,7 @@ _(Quick scan — not read from source. Cross-check against `api/src/**` controll
 4. Handler orchestrates a mailer action (and/or publishes a Mercure update).
 5. Audit entry written per `docs/domain-events-and-messenger.md`.
 
-See [`api/docs/domain-events-and-messenger/`](../api/docs/domain-events-and-messenger/) for the full contract.
+See `api/docs/domain-events-and-messenger/` for the full contract.
 
 ## Shared dependencies
 

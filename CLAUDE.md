@@ -60,7 +60,7 @@ phpstan errors.
 -   [`docs/deployment-guide.md`](docs/deployment-guide.md) and [`pwa/docs/production-deployment.md`](pwa/docs/production-deployment.md) — prod Compose, mailer, DNS, CORS, Mercure, smoke tests.
 -   [`docs/development-guide-api.md`](docs/development-guide-api.md), [`docs/development-guide-pwa.md`](docs/development-guide-pwa.md) — day-to-day workflows.
 -   [`docs/contribution-guide.md`](docs/contribution-guide.md), [`docs/source-tree-analysis.md`](docs/source-tree-analysis.md).
--   [`api/README.md`](api/README.md), [`api/docs/`](api/docs/), [`pwa/README.md`](pwa/README.md), [`pwa/docs/`](pwa/docs/) — deployable-specific details.
+-   [`api/README.md`](api/README.md), `api/docs/`, [`pwa/README.md`](pwa/README.md), `pwa/docs/` — deployable-specific details.
 
 ## Working principles
 
@@ -136,6 +136,16 @@ Types: `feat | fix | docs | style | refactor | perf | test | build | ci | chore 
 
 [//]: # (- `compose.yaml` base-image digests and `replace`d polyfills in `api/composer.json` — Dependabot owns those bumps.)
 
+### Markdown link style in repo docs
+
+The repo's IDE Markdown linter rejects link targets that don't resolve to a concrete file (it surfaces them as `Cannot resolve file ''`). When writing or editing any `.md` in this repo:
+
+- **Link only to concrete files.** Never write a link whose target is a directory — i.e., no trailing-slash hrefs like `[api/docs/](api/docs/)`. Pick a representative file inside (`api/docs/agents.md`, `pwa/docs/production-deployment.md`, etc.) or render the directory as inline code instead: `` `api/docs/` ``.
+- **Don't link to globs either.** Patterns like `[…](.cursor/rules/*.mdc)` also fail to resolve. Use inline code: `` `.cursor/rules/*.mdc` ``, optionally followed by a link to one specific rule file.
+- These rules apply to repo-wide and per-deployable docs (`docs/`, `api/docs/`, `pwa/docs/`, `CLAUDE.md`, `AGENTS.md`, `README.md`). External `https://…` URLs are unaffected.
+
+When you find a violation while editing a Markdown file for another reason, fix it in the same change rather than leaving it for later.
+
 ### Keeping docs up to date
 
 Update the matching file as part of any PR that changes:
@@ -144,8 +154,8 @@ Update the matching file as part of any PR that changes:
 - **New `src/` directories or renamed ones** → this file (`CLAUDE.md`), [`docs/architecture-api.md`](docs/architecture-api.md) or [`docs/architecture-pwa.md`](docs/architecture-pwa.md), and [`docs/source-tree-analysis.md`](docs/source-tree-analysis.md)
 - **Architecture decisions** → [`docs/architecture-api.md`](docs/architecture-api.md) / [`docs/architecture-pwa.md`](docs/architecture-pwa.md), and [`docs/integration-architecture.md`](docs/integration-architecture.md) when cross-deployable
 - **Domain events / Messenger transports** → [`docs/architecture-api.md`](docs/architecture-api.md) (and any `docs/domain-events-and-messenger.md` referenced from it)
-- **API endpoints, controllers, or response shapes** → [`api/docs/`](api/docs/) and [`docs/architecture-api.md`](docs/architecture-api.md)
-- **PWA module boundaries / Inversify bindings** → [`pwa/docs/`](pwa/docs/) and [`docs/architecture-pwa.md`](docs/architecture-pwa.md)
+- **API endpoints, controllers, or response shapes** → `api/docs/` and [`docs/architecture-api.md`](docs/architecture-api.md)
+- **PWA module boundaries / Inversify bindings** → `pwa/docs/` and [`docs/architecture-pwa.md`](docs/architecture-pwa.md)
 - **Deployment / Compose / CORS / Mercure / mailer** → [`docs/deployment-guide.md`](docs/deployment-guide.md) and [`pwa/docs/production-deployment.md`](pwa/docs/production-deployment.md)
 - **Security-sensitive change** → `PRODUCTION_SECURITY_CHECKLIST.md` (authoritative — see `.cursor/rules/security.mdc`)
 
