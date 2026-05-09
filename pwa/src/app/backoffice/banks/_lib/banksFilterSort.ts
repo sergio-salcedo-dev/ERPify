@@ -1,14 +1,20 @@
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
 import type { DataTableSort } from "@/components/erpify";
+import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
 
 export interface BanksFilter {
   name: string;
   shortName: string;
+  /** `dd/mm/yyyy`. Empty string means "no lower bound". */
   createdFrom: string;
+  /** `dd/mm/yyyy`. Empty string means "no upper bound". */
   createdTo: string;
 }
 
 export type BanksSort = DataTableSort | null;
+
+/** Default sort: alphabetical by name, A → Z. */
+export const DEFAULT_SORT: BanksSort = { columnId: "name", direction: "asc" };
 
 export const EMPTY_FILTER: BanksFilter = {
   name: "",
@@ -19,7 +25,10 @@ export const EMPTY_FILTER: BanksFilter = {
 
 export function hasActiveFilter(filter: BanksFilter): boolean {
   return Boolean(
-    filter.name.trim() || filter.shortName.trim() || filter.createdFrom || filter.createdTo,
+    filter.name.trim() ||
+    filter.shortName.trim() ||
+    filter.createdFrom.trim() ||
+    filter.createdTo.trim(),
   );
 }
 
@@ -28,29 +37,20 @@ function containsCi(haystack: string, needle: string): boolean {
   return haystack.toLowerCase().includes(needle.toLowerCase());
 }
 
-function startOfDay(yyyymmdd: string): number {
-  if (!yyyymmdd) return Number.NEGATIVE_INFINITY;
-  const ts = new Date(`${yyyymmdd}T00:00:00`).getTime();
-  return Number.isNaN(ts) ? Number.NEGATIVE_INFINITY : ts;
-}
-
-function endOfDay(yyyymmdd: string): number {
-  if (!yyyymmdd) return Number.POSITIVE_INFINITY;
-  const ts = new Date(`${yyyymmdd}T23:59:59.999`).getTime();
-  return Number.isNaN(ts) ? Number.POSITIVE_INFINITY : ts;
-}
-
 function rowTimestamp(iso: string): number {
-  const ts = Date.parse(iso);
-  return ts;
+  return Date.parse(iso);
 }
 
 export function applyFilters(banks: readonly Bank[], filter: BanksFilter): Bank[] {
   const name = filter.name.trim();
   const shortName = filter.shortName.trim();
-  const fromTs = startOfDay(filter.createdFrom);
-  const toTs = endOfDay(filter.createdTo);
-  const rangeActive = Boolean(filter.createdFrom || filter.createdTo);
+  const fromTs = dateTimeProvider.parseDdMmYyyyToStartTimestamp(filter.createdFrom);
+  const toTs = dateTimeProvider.parseDdMmYyyyToEndTimestamp(filter.createdTo);
+  const fromActive = filter.createdFrom.trim().length > 0;
+  const toActive = filter.createdTo.trim().length > 0;
+  // A range field with text the user is still typing (e.g. "01/02") is treated
+  // as inactive — the filter only kicks in once a complete dd/mm/yyyy parses.
+  const rangeActive = (fromActive && fromTs !== null) || (toActive && toTs !== null);
 
   return banks.filter((bank) => {
     if (!containsCi(bank.name, name)) return false;
@@ -58,8 +58,8 @@ export function applyFilters(banks: readonly Bank[], filter: BanksFilter): Bank[
     if (rangeActive) {
       const ts = rowTimestamp(bank.createdAt);
       if (Number.isNaN(ts)) return false;
-      if (ts < fromTs) return false;
-      if (ts > toTs) return false;
+      if (fromTs !== null && ts < fromTs) return false;
+      if (toTs !== null && ts > toTs) return false;
     }
     return true;
   });
@@ -97,6 +97,9 @@ export function applySort(banks: readonly Bank[], sort: BanksSort): Bank[] {
       break;
     case "createdAt":
       sorted.sort((a, b) => direction * compareDate(a.createdAt, b.createdAt));
+      break;
+    case "updatedAt":
+      sorted.sort((a, b) => direction * compareDate(a.updatedAt, b.updatedAt));
       break;
     default:
       return banks.slice();

@@ -17,11 +17,17 @@ test.describe("BackOffice - Banks CRUD", () => {
       await mockBanksApi(page, { list: "happy" });
       await page.goto("/backoffice/banks");
 
-      await expect(page.getByRole("heading", { name: "Banks", level: 1 })).toBeVisible();
+      await expect(page.getByTestId("banks-list")).toHaveAttribute("data-state", "ready");
+      await expect(page.getByTestId("banks-list__title")).toHaveText("Banks");
+      await expect(page.getByTestId("banks-list__subtitle")).toBeVisible();
+      await expect(page.getByTestId("banks-table")).toBeVisible();
+      await expect(page.getByTestId("banks-pagination")).toBeVisible();
       await expect(page.getByRole("link", { name: /New bank/i })).toBeVisible();
       await expect(page.getByRole("cell", { name: "ACME", exact: true })).toBeVisible();
       await expect(page.getByRole("cell", { name: "Acme Savings", exact: true })).toBeVisible();
       await expect(page.getByRole("cell", { name: "BRT", exact: true })).toBeVisible();
+      await expect(page.getByTestId(`banks-table__row-${SAMPLE_BANK_A.id}`)).toBeVisible();
+      await expect(page.getByTestId(`banks-table__row-${SAMPLE_BANK_B.id}`)).toBeVisible();
     });
 
     test("shows the empty state when there are no banks", async ({ page }) => {
@@ -68,10 +74,41 @@ test.describe("BackOffice - Banks CRUD", () => {
       await mockBanksApi(page, { get: "happy", bank: SAMPLE_BANK_A });
       await page.goto(`/backoffice/banks/${SAMPLE_BANK_A.id}`);
 
-      await expect(page.getByRole("heading", { name: SAMPLE_BANK_A.name })).toBeVisible();
+      await expect(page.getByTestId("banks-detail")).toHaveAttribute("data-state", "ready");
+      await expect(page.getByTestId("banks-detail__name")).toHaveText(SAMPLE_BANK_A.name);
       await expect(page.getByTestId("banks-detail__shortname")).toHaveText(SAMPLE_BANK_A.shortName);
       await expect(page.getByTestId("banks-detail__edit-button")).toBeVisible();
       await expect(page.getByTestId("banks-detail__delete-button")).toBeVisible();
+      await expect(page.getByTestId("banks-detail__copy-id")).toBeVisible();
+      await expect(page.getByTestId("banks-detail__id")).toHaveText(SAMPLE_BANK_A.id);
+      await expect(page.getByTestId("banks-detail__field-name")).toHaveText(SAMPLE_BANK_A.name);
+      await expect(page.getByTestId("banks-detail__field-shortname")).toHaveText(
+        SAMPLE_BANK_A.shortName,
+      );
+      await expect(page.getByTestId("banks-detail__field-created")).toBeVisible();
+      await expect(page.getByTestId("banks-detail__field-updated")).toBeVisible();
+    });
+
+    test("copies the bank ID to the clipboard and flips the button to 'Copied'", async ({
+      page,
+      browserName,
+      context,
+    }) => {
+      // Clipboard read/write requires explicit permission in Chromium.
+      if (browserName === "chromium") {
+        await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+      }
+      await mockBanksApi(page, { get: "happy", bank: SAMPLE_BANK_A });
+      await page.goto(`/backoffice/banks/${SAMPLE_BANK_A.id}`);
+
+      const copyBtn = page.getByTestId("banks-detail__copy-id");
+      await expect(copyBtn).toHaveAttribute("data-copy-status", "idle");
+      await copyBtn.click();
+      await expect(copyBtn).toHaveAttribute("data-copy-status", "copied");
+      await expect(copyBtn).toContainText("Copied");
+
+      const clipboardValue = await page.evaluate(() => navigator.clipboard.readText());
+      expect(clipboardValue).toBe(SAMPLE_BANK_A.id);
     });
 
     test("shows EmptyState + correlation chip on 404 from the legacy envelope", async ({
@@ -203,17 +240,35 @@ test.describe("BackOffice - Banks CRUD", () => {
       await expect(page.getByRole("cell", { name: "Brookline Trust" })).toBeHidden();
     });
 
-    test("filters by createdAt range (inclusive bounds)", async ({ page }) => {
+    test("filters by createdAt range (inclusive bounds, dd/mm/yyyy)", async ({ page }) => {
       await mockBanksApi(page, { list: "happy", list_banks: allBanks });
       await page.goto("/backoffice/banks");
 
-      await page.getByTestId("banks-filters__created-from").fill("2026-02-01");
-      await page.getByTestId("banks-filters__created-to").fill("2026-03-31");
+      await page.getByTestId("banks-filters__created-from").fill("01/02/2026");
+      await page.getByTestId("banks-filters__created-to").fill("31/03/2026");
 
       await expect(page.getByRole("cell", { name: "Brookline Trust" })).toBeVisible();
       await expect(page.getByRole("cell", { name: "Cosmos Bank" })).toBeVisible();
       await expect(page.getByRole("cell", { name: "Acme Savings" })).toBeHidden();
       await expect(page.getByRole("cell", { name: "Delta Credit Union" })).toBeHidden();
+    });
+
+    test("created-from/to filter inputs are typed text fields with dd/mm/yyyy placeholders", async ({
+      page,
+    }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: allBanks });
+      await page.goto("/backoffice/banks");
+
+      await expect(page.getByTestId("banks-filters__created-from")).toHaveAttribute("type", "text");
+      await expect(page.getByTestId("banks-filters__created-from")).toHaveAttribute(
+        "placeholder",
+        "dd/mm/yyyy",
+      );
+      await expect(page.getByTestId("banks-filters__created-to")).toHaveAttribute("type", "text");
+      await expect(page.getByTestId("banks-filters__created-to")).toHaveAttribute(
+        "placeholder",
+        "dd/mm/yyyy",
+      );
     });
 
     test("shows the no-matches panel when filters narrow to zero", async ({ page }) => {
@@ -234,25 +289,32 @@ test.describe("BackOffice - Banks CRUD", () => {
       await expect(page.getByRole("cell", { name: "Acme Savings" })).toBeVisible();
     });
 
-    test("sorts by name with the asc → desc → unsorted cycle", async ({ page }) => {
+    test("default sort is alphabetical name ascending (A → Z)", async ({ page }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: allBanks });
+      await page.goto("/backoffice/banks");
+
+      const firstRow = page.getByRole("row").nth(1); // row 0 is the header
+      await expect(firstRow.getByRole("cell", { name: "Acme Savings", exact: true })).toBeVisible();
+      await expect(page.getByRole("columnheader", { name: "Name", exact: true })).toHaveAttribute(
+        "aria-sort",
+        "ascending",
+      );
+    });
+
+    test("name header cycles desc → unsorted → asc from the default ascending state", async ({
+      page,
+    }) => {
       await mockBanksApi(page, { list: "happy", list_banks: allBanks });
       await page.goto("/backoffice/banks");
 
       const nameHeader = page
         .getByRole("columnheader", { name: "Name", exact: true })
         .getByRole("button");
-      // Resilient to column reorder: assert the first body row contains the expected name cell.
-      const firstRow = page.getByRole("row").nth(1); // row 0 is the header
+      const firstRow = page.getByRole("row").nth(1);
       const expectFirstRowToContain = (name: string) =>
         expect(firstRow.getByRole("cell", { name, exact: true })).toBeVisible();
 
-      await nameHeader.click();
-      await expectFirstRowToContain("Acme Savings");
-      await expect(page.getByRole("columnheader", { name: "Name", exact: true })).toHaveAttribute(
-        "aria-sort",
-        "ascending",
-      );
-
+      // Default state is asc; first click flips to desc.
       await nameHeader.click();
       await expectFirstRowToContain("Delta Credit Union");
       await expect(page.getByRole("columnheader", { name: "Name", exact: true })).toHaveAttribute(
@@ -260,12 +322,69 @@ test.describe("BackOffice - Banks CRUD", () => {
         "descending",
       );
 
+      // Second click clears sort — rows fall back to API insertion order.
       await nameHeader.click();
       await expectFirstRowToContain(SAMPLE_BANK_A.name);
       await expect(page.getByRole("columnheader", { name: "Name", exact: true })).toHaveAttribute(
         "aria-sort",
         "none",
       );
+
+      // Third click re-applies asc.
+      await nameHeader.click();
+      await expectFirstRowToContain("Acme Savings");
+      await expect(page.getByRole("columnheader", { name: "Name", exact: true })).toHaveAttribute(
+        "aria-sort",
+        "ascending",
+      );
+    });
+
+    test("the Updated column header is sortable", async ({ page }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: allBanks });
+      await page.goto("/backoffice/banks");
+
+      const updatedHeader = page.getByRole("columnheader", { name: "Updated", exact: true });
+      await expect(updatedHeader).toBeVisible();
+      const updatedSortBtn = updatedHeader.getByRole("button");
+      await expect(updatedSortBtn).toBeVisible();
+
+      const firstRow = page.getByRole("row").nth(1);
+
+      // Click once → asc; SAMPLE_BANK_A has the earliest updatedAt (2026-04-15).
+      await updatedSortBtn.click();
+      await expect(updatedHeader).toHaveAttribute("aria-sort", "ascending");
+      await expect(firstRow.getByRole("cell", { name: "Acme Savings", exact: true })).toBeVisible();
+
+      // Click again → desc; SAMPLE_BANK_D has the latest updatedAt (2026-04-25).
+      await updatedSortBtn.click();
+      await expect(updatedHeader).toHaveAttribute("aria-sort", "descending");
+      await expect(
+        firstRow.getByRole("cell", { name: "Delta Credit Union", exact: true }),
+      ).toBeVisible();
+    });
+
+    test("Reset returns to the default sort (name ascending) and clears all filters", async ({
+      page,
+    }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: allBanks });
+      await page.goto("/backoffice/banks");
+
+      // Drift away from the defaults.
+      await page.getByTestId("banks-filters__name").fill("cosmos");
+      const nameHeader = page
+        .getByRole("columnheader", { name: "Name", exact: true })
+        .getByRole("button");
+      await nameHeader.click(); // asc → desc
+
+      await page.getByTestId("banks-filters__reset").click();
+
+      await expect(page.getByTestId("banks-filters__name")).toHaveValue("");
+      await expect(page.getByRole("columnheader", { name: "Name", exact: true })).toHaveAttribute(
+        "aria-sort",
+        "ascending",
+      );
+      const firstRow = page.getByRole("row").nth(1);
+      await expect(firstRow.getByRole("cell", { name: "Acme Savings", exact: true })).toBeVisible();
     });
 
     test("combines name + createdFrom + sort by createdAt desc simultaneously", async ({
@@ -278,7 +397,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       // Of the four fixtures, only Cosmos Bank (name="Cosmos Bank", createdAt 2026-03-20) matches.
       // Adding sort by createdAt desc must not change correctness — just confirm the row remains.
       await page.getByTestId("banks-filters__name").fill("bank");
-      await page.getByTestId("banks-filters__created-from").fill("2026-03-01");
+      await page.getByTestId("banks-filters__created-from").fill("01/03/2026");
 
       const createdHeader = page
         .getByRole("columnheader", { name: "Created", exact: true })
@@ -395,10 +514,21 @@ test.describe("BackOffice - Banks CRUD", () => {
       await page.goto("/backoffice/banks");
 
       const select = page.getByTestId("banks-pagination__page-size");
-      const optionValues = await select
-        .locator("option")
-        .evaluateAll((nodes) => nodes.map((node) => (node as HTMLOptionElement).value));
+      // Read the options off the select element directly. `select.locator("option")`
+      // can return zero matches when the dropdown is closed because Playwright's
+      // locators auto-wait for visibility and option elements inside a closed
+      // <select> are not laid out. Evaluating the <select>'s `.options` collection
+      // sidesteps that entirely.
+      const optionValues = await select.evaluate((node) =>
+        Array.from((node as HTMLSelectElement).options).map((option) => option.value),
+      );
       expect(optionValues).toEqual(["25", "50", "100", "500", "1000"]);
+
+      // Sanity-check selecting each value still applies and clamps to page 1.
+      for (const v of ["25", "50", "100", "500", "1000"]) {
+        await select.selectOption(v);
+        await expect(select).toHaveValue(v);
+      }
     });
 
     test("typing a filter that narrows below the page size hides Prev and Next and resets to page 1", async ({

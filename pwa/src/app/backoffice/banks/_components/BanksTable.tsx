@@ -8,6 +8,8 @@ import { DataTable } from "@/components/erpify";
 import type { DataTableColumn, DataTableSort } from "@/components/erpify";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
+import { safeHref } from "@/lib/safeHref";
 import { DeleteBankButton } from "./DeleteBankButton";
 
 interface BanksTableProps {
@@ -39,13 +41,14 @@ export function BanksTable({ banks, sort, onSortChange, onBankDeleted }: BanksTa
       id: "createdAt",
       header: "Created",
       sortable: true,
-      cell: (row) => new Date(row.createdAt).toLocaleString(),
+      cell: (row) => dateTimeProvider.formatIsoToDisplay(row.createdAt),
       className: "banks-table__col--md hidden md:table-cell",
     },
     {
       id: "updatedAt",
       header: "Updated",
-      cell: (row) => new Date(row.updatedAt).toLocaleString(),
+      sortable: true,
+      cell: (row) => dateTimeProvider.formatIsoToDisplay(row.updatedAt),
       className: "banks-table__col--lg hidden lg:table-cell",
     },
     {
@@ -61,7 +64,7 @@ export function BanksTable({ banks, sort, onSortChange, onBankDeleted }: BanksTa
           role="presentation"
         >
           <Link
-            href={`/backoffice/banks/${encodeURIComponent(row.id)}/edit`}
+            href={safeHref(`/backoffice/banks/${encodeURIComponent(row.id)}/edit`)}
             className={cn(buttonVariants({ variant: "outline", size: "icon-sm" }))}
             aria-label="Edit"
             title={`Edit bank ${row.name}`}
@@ -95,7 +98,7 @@ export function BanksTable({ banks, sort, onSortChange, onBankDeleted }: BanksTa
   ];
 
   return (
-    <div className="banks-table -mx-4 overflow-x-auto sm:mx-0">
+    <div className="banks-table -mx-4 overflow-x-auto sm:mx-0" data-testid="banks-table">
       <DataTable
         columns={columns}
         data={banks}
@@ -104,7 +107,11 @@ export function BanksTable({ banks, sort, onSortChange, onBankDeleted }: BanksTa
         density="comfortable"
         sort={sort ?? undefined}
         onSortChange={onSortChange}
-        onRowActivate={(row) => router.push(`/backoffice/banks/${encodeURIComponent(row.id)}`)}
+        onRowActivate={(row) =>
+          router.push(safeHref(`/backoffice/banks/${encodeURIComponent(row.id)}`))
+        }
+        rowTestId={(row) => `banks-table__row-${row.id}`}
+        testId="banks-table__inner"
         className="banks-table__inner"
       />
     </div>

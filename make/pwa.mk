@@ -38,28 +38,28 @@ pwa.lint: pwa.lint.eslint pwa.lint.prettier ## Full PWA lint (ESLint + Prettier 
 
 pwa.lint.fix: pwa.lint.eslint.fix pwa.format.prettier.fix ## Full PWA lint (ESLint + Prettier check)
 
-pwa.lint.eslint: ## ESLint (check only); pass c='…' for extra args
+pwa.lint.eslint: pwa.install.if-missing ## ESLint (check only); pass c='…' for extra args
 	@$(eval c ?=)
 	@$(call pwa_cmd,npm run lint -- $(c))
 
-pwa.lint.eslint.fix: ## ESLint --fix
+pwa.lint.eslint.fix: pwa.install.if-missing ## ESLint --fix
 	@$(call pwa_cmd,npm run lint:fix)
 
-pwa.lint.prettier: ## Prettier check (no writes)
+pwa.lint.prettier: pwa.install.if-missing ## Prettier check (no writes)
 	@$(call pwa_cmd,npx prettier --check .)
 
-pwa.format.prettier.fix: ## Prettier --write
+pwa.format.prettier.fix: pwa.install.if-missing ## Prettier --write
 	@$(call pwa_cmd,npm run format)
 
 ## —— PWA tests ——
 
 pwa.test: pwa.test.unit pwa.test.e2e ## Full PWA test suite (Vitest + Playwright)
 
-pwa.test.unit: ## Vitest (run once); pass c='…' for extra args (e.g. c='path/to/file.test.ts')
+pwa.test.unit: pwa.install.if-missing ## Vitest (run once); pass c='…' for extra args (e.g. c='path/to/file.test.ts')
 	@$(eval c ?=)
 	@$(call pwa_cmd,npm run test -- $(c))
 
-pwa.test.unit.watch: ## Vitest watch mode
+pwa.test.unit.watch: pwa.install.if-missing ## Vitest watch mode
 	@$(call pwa_cmd,npm run test:watch)
 
 pwa.test.e2e: pwa.install.if-missing ## Playwright E2E; CI_SHARD=N CI_TOTAL_SHARDS=M for sharded runs; pass c='…' for extra args

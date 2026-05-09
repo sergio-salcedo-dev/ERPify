@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Bank } from "@/context/backoffice/bank/domain/Bank";
 import {
+  DEFAULT_SORT,
   EMPTY_FILTER,
   applyFilters,
   applySort,
@@ -48,6 +49,12 @@ const broken = bank({ id: "d", name: "Wrong Date", shortName: "WD", createdAt: "
 
 const ROWS: Bank[] = [acme, brookline, cosmos];
 
+describe("DEFAULT_SORT", () => {
+  it("is alphabetical name ascending", () => {
+    expect(DEFAULT_SORT).toEqual({ columnId: "name", direction: "asc" });
+  });
+});
+
 describe("hasActiveFilter", () => {
   it("returns false on the empty filter", () => {
     expect(hasActiveFilter(EMPTY_FILTER)).toBe(false);
@@ -56,12 +63,20 @@ describe("hasActiveFilter", () => {
   it("returns true when any field is non-empty", () => {
     expect(hasActiveFilter({ ...EMPTY_FILTER, name: "x" })).toBe(true);
     expect(hasActiveFilter({ ...EMPTY_FILTER, shortName: "x" })).toBe(true);
-    expect(hasActiveFilter({ ...EMPTY_FILTER, createdFrom: "2026-01-01" })).toBe(true);
-    expect(hasActiveFilter({ ...EMPTY_FILTER, createdTo: "2026-01-01" })).toBe(true);
+    expect(hasActiveFilter({ ...EMPTY_FILTER, createdFrom: "01/01/2026" })).toBe(true);
+    expect(hasActiveFilter({ ...EMPTY_FILTER, createdTo: "01/01/2026" })).toBe(true);
   });
 
-  it("treats whitespace-only name/shortName as inactive", () => {
-    expect(hasActiveFilter({ ...EMPTY_FILTER, name: "   ", shortName: "  " })).toBe(false);
+  it("treats whitespace-only fields as inactive", () => {
+    expect(
+      hasActiveFilter({
+        ...EMPTY_FILTER,
+        name: "   ",
+        shortName: "  ",
+        createdFrom: " ",
+        createdTo: " ",
+      }),
+    ).toBe(false);
   });
 });
 
@@ -83,23 +98,23 @@ describe("applyFilters", () => {
     expect(applyFilters(ROWS, filter)).toEqual([cosmos]);
   });
 
-  it("includes rows on the inclusive lower createdAt bound", () => {
-    const filter: BanksFilter = { ...EMPTY_FILTER, createdFrom: "2026-01-15" };
+  it("includes rows on the inclusive lower createdAt bound (dd/mm/yyyy)", () => {
+    const filter: BanksFilter = { ...EMPTY_FILTER, createdFrom: "15/01/2026" };
     const result = applyFilters(ROWS, filter);
     expect(result.map((b) => b.id)).toEqual(["a", "b", "c"]);
   });
 
-  it("includes rows on the inclusive upper createdAt bound (end of day)", () => {
-    const filter: BanksFilter = { ...EMPTY_FILTER, createdTo: "2026-02-12" };
+  it("includes rows on the inclusive upper createdAt bound at end of day (dd/mm/yyyy)", () => {
+    const filter: BanksFilter = { ...EMPTY_FILTER, createdTo: "12/02/2026" };
     const result = applyFilters(ROWS, filter);
     expect(result.map((b) => b.id)).toEqual(["a", "b"]);
   });
 
-  it("supports a closed createdAt range", () => {
+  it("supports a closed createdAt range in dd/mm/yyyy", () => {
     const filter: BanksFilter = {
       ...EMPTY_FILTER,
-      createdFrom: "2026-01-20",
-      createdTo: "2026-03-01",
+      createdFrom: "20/01/2026",
+      createdTo: "01/03/2026",
     };
     expect(applyFilters(ROWS, filter).map((b) => b.id)).toEqual(["b"]);
   });
@@ -107,15 +122,25 @@ describe("applyFilters", () => {
   it("yields no matches when from > to", () => {
     const filter: BanksFilter = {
       ...EMPTY_FILTER,
-      createdFrom: "2026-12-01",
-      createdTo: "2026-01-01",
+      createdFrom: "01/12/2026",
+      createdTo: "01/01/2026",
     };
     expect(applyFilters(ROWS, filter)).toEqual([]);
   });
 
   it("excludes rows with invalid createdAt when a range is active", () => {
-    const filter: BanksFilter = { ...EMPTY_FILTER, createdFrom: "2026-01-01" };
+    const filter: BanksFilter = { ...EMPTY_FILTER, createdFrom: "01/01/2026" };
     expect(applyFilters([acme, broken], filter)).toEqual([acme]);
+  });
+
+  it("ignores partially-typed dd/mm/yyyy values until parseable", () => {
+    const filter: BanksFilter = { ...EMPTY_FILTER, createdFrom: "01/02" };
+    expect(applyFilters(ROWS, filter)).toEqual(ROWS);
+  });
+
+  it("rejects impossible calendar dates (31/02/2026)", () => {
+    const filter: BanksFilter = { ...EMPTY_FILTER, createdFrom: "31/02/2026" };
+    expect(applyFilters(ROWS, filter)).toEqual(ROWS);
   });
 
   it("keeps rows with invalid createdAt when no range is active", () => {
@@ -177,8 +202,20 @@ describe("applySort", () => {
     expect(desc.map((b) => b.id)).toEqual(["d", "b", "a"]);
   });
 
+  it("sorts by updatedAt asc / desc", () => {
+    const u1 = bank({ id: "u1", updatedAt: "2026-01-01T00:00:00Z" });
+    const u2 = bank({ id: "u2", updatedAt: "2026-04-01T00:00:00Z" });
+    const u3 = bank({ id: "u3", updatedAt: "2026-08-01T00:00:00Z" });
+    expect(
+      applySort([u3, u1, u2], { columnId: "updatedAt", direction: "asc" }).map((b) => b.id),
+    ).toEqual(["u1", "u2", "u3"]);
+    expect(
+      applySort([u1, u3, u2], { columnId: "updatedAt", direction: "desc" }).map((b) => b.id),
+    ).toEqual(["u3", "u2", "u1"]);
+  });
+
   it("ignores unknown columnIds and returns input order", () => {
-    const result = applySort(ROWS, { columnId: "updatedAt", direction: "asc" });
+    const result = applySort(ROWS, { columnId: "logo", direction: "asc" });
     expect(result).toEqual(ROWS);
   });
 

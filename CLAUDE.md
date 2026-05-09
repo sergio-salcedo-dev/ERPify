@@ -71,6 +71,83 @@ phpstan errors.
 
 ---
 
+## Security review on every change (backend AND frontend)
+
+Every PR — even a "small" one — MUST be self-reviewed for the most common
+attack classes BEFORE asking for human review and BEFORE pushing the final
+commit. This applies to both `api/` and `pwa/`. If a class doesn't apply,
+say so in the PR description; don't silently skip.
+
+For each diffed file, walk this checklist:
+
+**Frontend (`pwa/`)**
+- **XSS** — never write `dangerouslySetInnerHTML`, `innerHTML`,
+  `document.write`, `eval`, or `new Function(string)`. Wrap every dynamic
+  `href` / `src` / `router.push` URL in `safeHref(...)` from `@/lib/safeHref`
+  and `encodeURIComponent` the dynamic path segment. Static `aria-label` /
+  `title` only — see `pwa/CLAUDE.md` for the full rule list.
+- **CSRF / Open redirect** — Validate that any URL coming from query
+  params, location state, or API payload is same-origin or relative
+  before navigating; reject `data:`, `javascript:`, `file:`, `vbscript:`.
+- **Untrusted input → DOM attributes** — explicit allowlists for
+  `target`, `rel`, `download`. External `target="_blank"` always pairs
+  with `rel="noopener noreferrer"`.
+- **Storage / clipboard** — never put secrets, JWTs, or PII into
+  `localStorage` / `sessionStorage`; use httpOnly cookies. Clipboard
+  writes go through `<CopyButton>` which never trusts the value as HTML.
+- **Headers** — confirm `next.config.ts#headers()` (CSP,
+  `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`,
+  `Permissions-Policy`, COOP/CORP, HSTS) hasn't regressed. Don't add
+  `'unsafe-eval'` to production CSP and don't widen `connect-src` /
+  `script-src` without explicit reason.
+- **Dependencies** — `npm audit` clean, no new transitive package whose
+  ownership you haven't verified.
+
+**Backend (`api/`)**
+- **Injection** — every Doctrine query parameterised (`:placeholder` or
+  query builder bindings), no raw `${}`/`.$variable.` interpolation
+  reaching SQL or DQL. No `Process::fromShellCommandline($userInput)` —
+  use the array form. No `unserialize($userInput)`.
+- **Authentication / Authorization** — every new controller / handler
+  declares the security voter or `IsGranted` it expects; absence is a
+  conscious public route, called out in the PR.
+- **Input validation** — every DTO carries Symfony Validator constraints
+  (`#[Assert\…]`); requests pass through `ValidatorHelper` before any
+  domain call. Validate IDs are UUIDs, not arbitrary strings.
+- **Mass assignment / hidden fields** — entity setters / serializer
+  groups never expose audit fields (`createdAt`, `updatedAt`, `id`) to
+  client-supplied payloads.
+- **Output encoding / serialization** — JSON-only responses, no HTML
+  rendered server-side (no Twig templates emitting user content). Error
+  payloads follow RFC 9457 (Problem Details) without leaking stack
+  traces in non-dev environments.
+- **Secrets** — never logged, never returned, never committed. Confirm
+  `.env`/`*.local` are not in the diff. Use `APP_SECRET`,
+  `CADDY_MERCURE_JWT_SECRET`, `POSTGRES_PASSWORD` env-driven —
+  see `PRODUCTION_SECURITY_CHECKLIST.md`.
+- **CORS / CSRF / Mercure** — the allowlist hasn't broadened; the
+  Mercure JWT secret rotation policy is preserved.
+- **Migrations & data** — never seed PII or secrets; never
+  `DROP TABLE` outside an explicit destructive migration; the `down()`
+  method is reversible.
+- **Domain events / Messenger** — handlers are idempotent; transports
+  authenticated; payloads scrubbed of secrets.
+
+**Process**
+- Run `make php.lint` and `make pwa.lint` locally before pushing —
+  PHPStan / Psalm / ESLint catch many of the above implicitly.
+- For security-sensitive changes (auth, input parsing, file uploads,
+  SQL, headers, CSP), update `PRODUCTION_SECURITY_CHECKLIST.md` and
+  `.cursor/rules/security.mdc` if a new pattern is introduced.
+- When a finding is genuinely out of scope, file a follow-up issue
+  rather than ship-and-forget.
+
+If you cannot answer "yes" to every applicable item, fix it in the same
+PR or call it out explicitly in the PR description and link a tracking
+issue. Silent skips are the most common path to a CVE.
+
+---
+
 ## Parallelizing work with subagents
 
 When a task decomposes into independent subtasks (different bounded contexts, different files, no shared state), spawn parallel subagents rather than working sequentially. Each subagent must receive a self-contained prompt with full context.

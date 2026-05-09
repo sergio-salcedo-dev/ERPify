@@ -3,7 +3,7 @@
 import type { ChangeEvent } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { FormField } from "@/components/erpify";
+import { DateField, FormField } from "@/components/erpify";
 import type { BanksFilter } from "../_lib/banksFilterSort";
 
 interface BanksFiltersProps {
@@ -20,23 +20,30 @@ export function BanksFilters({
   onReset,
   resetDisabled,
 }: BanksFiltersProps) {
-  const update =
-    (field: keyof BanksFilter) =>
+  const updateText =
+    (field: "name" | "shortName") =>
     (event: ChangeEvent<HTMLInputElement>): void => {
       onFilterChange({ ...filter, [field]: event.target.value });
+    };
+
+  const updateDate =
+    (field: "createdFrom" | "createdTo") =>
+    (next: string): void => {
+      onFilterChange({ ...filter, [field]: next });
     };
 
   return (
     <section
       className="banks-filters border-border bg-muted/20 rounded-md border p-3 sm:p-4"
       aria-label="Bank filters"
+      data-testid="banks-filters"
     >
       <div className="banks-filters__grid grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <FormField name="banks-filters-name" label="Name">
           <Input
             type="text"
             value={filter.name}
-            onChange={update("name")}
+            onChange={updateText("name")}
             placeholder="e.g. acme"
             data-testid="banks-filters__name"
           />
@@ -45,27 +52,25 @@ export function BanksFilters({
           <Input
             type="text"
             value={filter.shortName}
-            onChange={update("shortName")}
+            onChange={updateText("shortName")}
             placeholder="e.g. ACM"
             data-testid="banks-filters__short-name"
           />
         </FormField>
-        <FormField name="banks-filters-created-from" label="Created from">
-          <Input
-            type="date"
-            value={filter.createdFrom}
-            onChange={update("createdFrom")}
-            data-testid="banks-filters__created-from"
-          />
-        </FormField>
-        <FormField name="banks-filters-created-to" label="Created to">
-          <Input
-            type="date"
-            value={filter.createdTo}
-            onChange={update("createdTo")}
-            data-testid="banks-filters__created-to"
-          />
-        </FormField>
+        <DateField
+          name="banks-filters-created-from"
+          label="Created from"
+          value={filter.createdFrom}
+          onChange={updateDate("createdFrom")}
+          testId="banks-filters__created-from"
+        />
+        <DateField
+          name="banks-filters-created-to"
+          label="Created to"
+          value={filter.createdTo}
+          onChange={updateDate("createdTo")}
+          testId="banks-filters__created-to"
+        />
       </div>
       <div className="banks-filters__actions mt-3 flex justify-end">
         <Button
