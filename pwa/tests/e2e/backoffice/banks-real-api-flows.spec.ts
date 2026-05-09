@@ -88,6 +88,12 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
     await page.goto("/backoffice/banks");
     await expect(page.getByTestId("banks-list")).toHaveAttribute("data-state", "ready");
 
+    // Bump the page size so the post-reset assertion below ("after reset, all
+    // SEED_COUNT seeded rows are back in the table") isn't truncated by the
+    // default page size of 25 (SEED_COUNT is 30 — the difference is the bug
+    // that surfaces on CI as a `toHaveCount(SEED_COUNT)` mismatch).
+    await page.getByTestId("banks-pagination__page-size").selectOption("50");
+
     // Pick a bank deterministically and filter by the unique tail of its
     // short name. The seed helper builds short names as
     // `<prefix-tail>-NNN`, so the `-NNN` suffix is unique within the run.
