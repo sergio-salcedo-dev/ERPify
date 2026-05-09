@@ -542,10 +542,11 @@ final class ProblemDetailsFactoryTest extends TestCase
     }
 
     /**
-     * Story 1.5 narrows the original `'Symfony\\'` ban (Story 1.3) to an explicit allowlist of three Symfony imports
+     * Story 1.5 narrows the original `'Symfony\\'` ban (Story 1.3) to an explicit allowlist of Symfony imports
      * (`HttpKernel\Exception\HttpExceptionInterface`, `Security\Core\Exception\AccessDeniedException`,
-     * `Security\Core\Exception\AuthenticationException`). Every other Symfony namespace is still banned via the
-     * narrower prefix list below.
+     * `Security\Core\Exception\AuthenticationException`, plus `HttpFoundation\Response` for the named
+     * `Response::HTTP_*` status constants used in `MARKER_STATUS_MAP` / `HTTP_STATUS_TYPE_MAP`). Every
+     * other Symfony namespace is still banned via the narrower prefix list below.
      */
     public function testSourceFileContainsNoBannedImports(): void
     {
@@ -558,7 +559,6 @@ final class ProblemDetailsFactoryTest extends TestCase
         $banned = [
             'Doctrine\\',
             'Psr\Http\\',
-            'Symfony\Component\HttpFoundation\\',
             'Symfony\Component\Messenger\\',
             'Symfony\Component\Routing\\',
             'Symfony\Bundle\\',
@@ -882,7 +882,7 @@ final class ProblemDetailsFactoryTest extends TestCase
         $this->assertSame('boom', $problemDetails->title);
     }
 
-    public function testValidationFailedExceptionMapsTo422ValidationFailedWithViolations(): void
+    public function testValidationFailedExceptionMapsTo400ValidationFailedWithViolations(): void
     {
         $constraintViolationList = new ConstraintViolationList([
             new ConstraintViolation(
@@ -924,7 +924,7 @@ final class ProblemDetailsFactoryTest extends TestCase
 
         $problemDetails = $this->factoryFor()->fromThrowable($validationFailedException, self::CID, self::INSTANCE);
 
-        $this->assertSame(422, $problemDetails->status);
+        $this->assertSame(400, $problemDetails->status);
         $this->assertSame('validation-failed', $problemDetails->type);
         $this->assertSame('Validation failed.', $problemDetails->title);
         $this->assertNull($problemDetails->detail);
@@ -1266,7 +1266,7 @@ final class ProblemDetailsFactoryTest extends TestCase
         $problemDetails = $this->factoryFor()->fromThrowable($httpException, self::CID, self::INSTANCE);
 
         $this->assertSame('validation-failed', $problemDetails->type);
-        $this->assertSame(422, $problemDetails->status);
+        $this->assertSame(400, $problemDetails->status);
         $this->assertSame('Validation failed.', $problemDetails->title);
         $this->assertNull($problemDetails->detail);
         $this->assertArrayHasKey('violations', $problemDetails->extensions);
@@ -1898,7 +1898,7 @@ final class ProblemDetailsFactoryTest extends TestCase
         // instance / correlation-id.
         $this->assertSame('validation-failed', $problemDetails->type);
         $this->assertSame('Validation failed.', $problemDetails->title);
-        $this->assertSame(422, $problemDetails->status);
+        $this->assertSame(400, $problemDetails->status);
         $this->assertNull($problemDetails->detail);
         $this->assertSame(self::INSTANCE, $problemDetails->instance);
         $this->assertSame(self::CID, $problemDetails->correlationId);
