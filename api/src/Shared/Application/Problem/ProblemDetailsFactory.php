@@ -16,6 +16,7 @@ use JsonSerializable;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 use Symfony\Component\Security\Core\Exception\AuthenticationException;
@@ -109,13 +110,13 @@ use Throwable;
 final readonly class ProblemDetailsFactory
 {
     private const array MARKER_STATUS_MAP = [
-        NotFound::class => 404,
-        Conflict::class => 409,
-        Forbidden::class => 403,
-        Unauthenticated::class => 401,
-        InvariantViolation::class => 422,
-        InvalidInput::class => 400,
-        RateLimited::class => 429,
+        NotFound::class => Response::HTTP_NOT_FOUND,
+        Conflict::class => Response::HTTP_CONFLICT,
+        Forbidden::class => Response::HTTP_FORBIDDEN,
+        Unauthenticated::class => Response::HTTP_UNAUTHORIZED,
+        InvariantViolation::class => Response::HTTP_UNPROCESSABLE_ENTITY,
+        InvalidInput::class => Response::HTTP_BAD_REQUEST,
+        RateLimited::class => Response::HTTP_TOO_MANY_REQUESTS,
     ];
 
     private const array MARKER_DEFAULT_TYPE_MAP = [
@@ -136,13 +137,13 @@ final readonly class ProblemDetailsFactory
      * `testHttpStatusTypeMapValuesMirrorMarkerDefaultTypeMapValues`.
      */
     private const array HTTP_STATUS_TYPE_MAP = [
-        400 => 'invalid-input',
-        401 => 'unauthenticated',
-        403 => 'forbidden',
-        404 => 'not-found',
-        409 => 'conflict',
-        422 => 'invariant-violation',
-        429 => 'rate-limited',
+        Response::HTTP_BAD_REQUEST => 'invalid-input',
+        Response::HTTP_UNAUTHORIZED => 'unauthenticated',
+        Response::HTTP_FORBIDDEN => 'forbidden',
+        Response::HTTP_NOT_FOUND => 'not-found',
+        Response::HTTP_CONFLICT => 'conflict',
+        Response::HTTP_UNPROCESSABLE_ENTITY => 'invariant-violation',
+        Response::HTTP_TOO_MANY_REQUESTS => 'rate-limited',
     ];
 
     private const array RESERVED_KEYS = ['type', 'title', 'status', 'detail', 'instance', 'correlation-id', 'violations', 'debug', 'truncated'];
@@ -200,7 +201,7 @@ final readonly class ProblemDetailsFactory
         if ($e instanceof DomainException) {
             $firstMarker = $this->firstMatchingMarker($e);
 
-            $status = null !== $firstMarker ? self::MARKER_STATUS_MAP[$firstMarker] : 500;
+            $status = null !== $firstMarker ? self::MARKER_STATUS_MAP[$firstMarker] : Response::HTTP_INTERNAL_SERVER_ERROR;
 
             $explicitType = $e->type();
 
@@ -229,7 +230,7 @@ final readonly class ProblemDetailsFactory
             return $this->applyBodyCap($this->withDebug(new ProblemDetails(
                 type: 'validation-failed',
                 title: 'Validation failed.',
-                status: 400,
+                status: Response::HTTP_BAD_REQUEST,
                 detail: null,
                 instance: $instance,
                 correlationId: $correlationId,
@@ -240,7 +241,7 @@ final readonly class ProblemDetailsFactory
         if ($e instanceof AccessDeniedException) {
             return $this->applyBodyCap($this->withDebug($this->buildBridgeResponse(
                 type: 'forbidden',
-                status: 403,
+                status: Response::HTTP_FORBIDDEN,
                 title: '' !== $e->getMessage() ? $e->getMessage() : 'Access denied.',
                 correlationId: $correlationId,
                 instance: $instance,
@@ -250,7 +251,7 @@ final readonly class ProblemDetailsFactory
         if ($e instanceof AuthenticationException) {
             return $this->applyBodyCap($this->withDebug($this->buildBridgeResponse(
                 type: 'unauthenticated',
-                status: 401,
+                status: Response::HTTP_UNAUTHORIZED,
                 title: '' !== $e->getMessage() ? $e->getMessage() : 'Authentication required.',
                 correlationId: $correlationId,
                 instance: $instance,
@@ -275,7 +276,7 @@ final readonly class ProblemDetailsFactory
         return $this->applyBodyCap($this->withDebug(new ProblemDetails(
             type: 'unhandled-exception',
             title: $title,
-            status: 500,
+            status: Response::HTTP_INTERNAL_SERVER_ERROR,
             detail: null,
             instance: $instance,
             correlationId: $correlationId,
