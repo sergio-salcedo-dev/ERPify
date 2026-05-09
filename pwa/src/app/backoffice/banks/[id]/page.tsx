@@ -12,7 +12,9 @@ import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { CorrelationIdChip, EmptyState, ProblemDisplay } from "@/components/erpify";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { CopyBankIdButton } from "../_components/CopyBankIdButton";
 import { DeleteBankButton } from "../_components/DeleteBankButton";
+import { formatBankDateTime } from "../_lib/formatDate";
 
 type State = "loading" | "ready" | "not-found" | "error";
 
@@ -106,6 +108,7 @@ export default function BankDetailPage() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+              <CopyBankIdButton id={bank.id} />
               <Link
                 href={`/backoffice/banks/${encodeURIComponent(bank.id)}/edit`}
                 className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
@@ -124,8 +127,14 @@ export default function BankDetailPage() {
           <dl className="banks-detail__meta border-border bg-card grid grid-cols-1 gap-4 rounded-lg border p-4 sm:grid-cols-2 xl:grid-cols-4">
             <Field label="Name" value={bank.name} />
             <Field label="Short name" value={bank.shortName} />
-            <Field label="Created" value={new Date(bank.createdAt).toLocaleString()} />
-            <Field label="Updated" value={new Date(bank.updatedAt).toLocaleString()} />
+            <Field label="Created" value={formatBankDateTime(bank.createdAt)} />
+            <Field label="Updated" value={formatBankDateTime(bank.updatedAt)} />
+            <Field
+              label="ID"
+              value={bank.id}
+              valueClassName="banks-detail__id break-all font-mono text-xs"
+              testId="banks-detail__id"
+            />
           </dl>
         </>
       ) : null}
@@ -147,11 +156,23 @@ function BackLink() {
   );
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+function Field({
+  label,
+  value,
+  valueClassName,
+  testId,
+}: {
+  label: string;
+  value: string;
+  valueClassName?: string;
+  testId?: string;
+}) {
   return (
     <div className="banks-detail__field">
       <dt className="text-muted-foreground text-xs font-medium uppercase tracking-wide">{label}</dt>
-      <dd className="text-foreground mt-1 text-sm">{value}</dd>
+      <dd className={cn("text-foreground mt-1 text-sm", valueClassName)} data-testid={testId}>
+        {value}
+      </dd>
     </div>
   );
 }

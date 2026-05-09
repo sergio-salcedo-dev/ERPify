@@ -50,19 +50,31 @@ export function BanksFilters({
             data-testid="banks-filters__short-name"
           />
         </FormField>
-        <FormField name="banks-filters-created-from" label="Created from">
+        <FormField name="banks-filters-created-from" label="Created from (dd/mm/yyyy)">
           <Input
-            type="date"
+            type="text"
+            inputMode="numeric"
             value={filter.createdFrom}
             onChange={update("createdFrom")}
+            placeholder="dd/mm/yyyy"
+            pattern="\d{2}/\d{2}/\d{4}"
+            maxLength={10}
+            autoComplete="off"
+            title="Date format dd/mm/yyyy, e.g. 15/04/2026"
             data-testid="banks-filters__created-from"
           />
         </FormField>
-        <FormField name="banks-filters-created-to" label="Created to">
+        <FormField name="banks-filters-created-to" label="Created to (dd/mm/yyyy)">
           <Input
-            type="date"
+            type="text"
+            inputMode="numeric"
             value={filter.createdTo}
             onChange={update("createdTo")}
+            placeholder="dd/mm/yyyy"
+            pattern="\d{2}/\d{2}/\d{4}"
+            maxLength={10}
+            autoComplete="off"
+            title="Date format dd/mm/yyyy, e.g. 15/04/2026"
             data-testid="banks-filters__created-to"
           />
         </FormField>

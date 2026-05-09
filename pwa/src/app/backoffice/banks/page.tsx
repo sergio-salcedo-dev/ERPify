@@ -15,6 +15,7 @@ import { BanksTable } from "./_components/BanksTable";
 import { BanksFilters } from "./_components/BanksFilters";
 import { BanksPagination } from "./_components/BanksPagination";
 import {
+  DEFAULT_SORT,
   EMPTY_FILTER,
   applyFilters,
   applySort,
@@ -43,7 +44,7 @@ export default function BanksListPage() {
   const [nextCursor, setNextCursor] = useState<string | undefined>(undefined);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
   const [filter, setFilter] = useState<BanksFilter>(EMPTY_FILTER);
-  const [sort, setSort] = useState<BanksSort>(null);
+  const [sort, setSort] = useState<BanksSort>(DEFAULT_SORT);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<BanksPageSize>(BANKS_PAGE_SIZE_DEFAULT);
 
@@ -88,8 +89,11 @@ export default function BanksListPage() {
 
   const resetFilters = (): void => {
     setFilter(EMPTY_FILTER);
-    setSort(null);
+    setSort(DEFAULT_SORT);
   };
+
+  const isDefaultSort =
+    sort?.columnId === DEFAULT_SORT?.columnId && sort?.direction === DEFAULT_SORT?.direction;
 
   const handleBankDeleted = (id: string): void => {
     setBanks((prev) => prev.filter((bank) => bank.id !== id));
@@ -124,7 +128,7 @@ export default function BanksListPage() {
           filter={filter}
           onFilterChange={setFilter}
           onReset={resetFilters}
-          resetDisabled={!hasActiveFilter(filter) && !sort}
+          resetDisabled={!hasActiveFilter(filter) && isDefaultSort}
         />
       ) : null}
 
