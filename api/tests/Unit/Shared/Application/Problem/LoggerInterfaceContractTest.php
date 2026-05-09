@@ -20,8 +20,8 @@ use ReflectionParameter;
 use SplFileInfo;
 
 /**
- * Story 3.8 (NFR5) — pins the "PSR-3 logger only, no custom async infrastructure"
- * invariant on the error path.
+ * Pins the "PSR-3 logger only, no custom async infrastructure" invariant on
+ * the error path.
  *
  * Two cooperating gates:
  *   1. Reflection: every logger-shaped constructor parameter on
@@ -30,14 +30,14 @@ use SplFileInfo;
  *      no Monolog `Logger` concrete, no internal logger abstraction — the
  *      production listener must accept a vanilla PSR-3 sink so a calling
  *      project can swap in their own observability target without code
- *      changes (NFR5).
+ *      changes.
  *   2. Source-text grep: neither the listener source nor the factory source
  *      imports `Symfony\Component\Messenger\…`, `react/async`, `amp/amp`, or
  *      similar custom-async infra. Synchronous PSR-3 writes (Monolog default
  *      stderr) are the contract; an async escape hatch on the error path is
- *      explicitly out-of-scope (NFR5).
+ *      explicitly out-of-scope.
  *
- * Mirrors the curated-grep + reflection pattern from Story 3.5's
+ * Mirrors the curated-grep + reflection pattern from
  * {@see NoDatabaseDependenciesContractTest} and {@see BannedDoctrineApisTest}
  * so a future contributor adding a Messenger-based async log on the error
  * path fails the build before merge.
@@ -58,7 +58,7 @@ final class LoggerInterfaceContractTest extends TestCase
         $this->assertInstanceOf(
             ReflectionMethod::class,
             $constructor,
-            \sprintf('%s must declare a constructor for the NFR5 logger-shape pin.', $class),
+            \sprintf('%s must declare a constructor for the logger-shape pin.', $class),
         );
 
         $loggerParameters = [];
@@ -72,9 +72,9 @@ final class LoggerInterfaceContractTest extends TestCase
         $this->assertNotEmpty(
             $loggerParameters,
             \sprintf(
-                'NFR5 — %s must accept at least one PSR-3 logger dependency so the wire '
+                '%s must accept at least one PSR-3 logger dependency so the wire '
                 . 'contract can satisfy the "exactly one structured log line per error" '
-                . 'requirement (FR32) without reaching for a global state.',
+                . 'requirement without reaching for a global state.',
                 $class,
             ),
         );
@@ -85,7 +85,7 @@ final class LoggerInterfaceContractTest extends TestCase
                 ReflectionNamedType::class,
                 $type,
                 \sprintf(
-                    'NFR5 — %s::__construct $%s must declare a single named PSR-3 type '
+                    '%s::__construct $%s must declare a single named PSR-3 type '
                     . '(union / intersection types are an explicit smell on the error path).',
                     $class,
                     $loggerParameter->getName(),
@@ -98,7 +98,7 @@ final class LoggerInterfaceContractTest extends TestCase
                 LoggerInterface::class,
                 $typeName,
                 \sprintf(
-                    'NFR5 — %s::__construct $%s must declare exactly Psr\Log\LoggerInterface, '
+                    '%s::__construct $%s must declare exactly Psr\Log\LoggerInterface, '
                     . 'not %s. PSR-3 is the only logger contract the error path may depend on; '
                     . 'no Monolog concrete, no LoggerAwareInterface, no internal abstraction.',
                     $class,
@@ -148,7 +148,7 @@ final class LoggerInterfaceContractTest extends TestCase
             [],
             $hits,
             \sprintf(
-                'NFR5 — error-path source MUST NOT depend on custom async infrastructure: %s '
+                'Error-path source MUST NOT depend on custom async infrastructure: %s '
                 . 'PSR-3 sync writes (Monolog default stderr) are the contract. Files: %s',
                 $rationale,
                 \implode(', ', $hits),
@@ -173,7 +173,7 @@ final class LoggerInterfaceContractTest extends TestCase
 
         yield 'amphp' => [
             '/use\s+Amp\\\/',
-            'Amp coroutines are an explicit non-goal for the error path (NFR5).',
+            'Amp coroutines are an explicit non-goal for the error path.',
         ];
 
         yield 'spatie-async' => [
@@ -198,7 +198,7 @@ final class LoggerInterfaceContractTest extends TestCase
         $this->assertGreaterThan(
             0,
             $count,
-            'NFR5 grep gate scanned zero files — check the directory roots match '
+            'Logger contract grep gate scanned zero files — check the directory roots match '
             . 'the actual error-path source tree.',
         );
     }
@@ -233,7 +233,7 @@ final class LoggerInterfaceContractTest extends TestCase
      * `Shared/Application/Problem/` subtree plus the responder and listener that emit
      * the wire body. Legacy search-path classes are intentionally excluded — they
      * predate the error contract and live in `Shared/Infrastructure/Http/` but are not
-     * part of the listener / factory / responder triple under NFR5.
+     * part of the listener / factory / responder triple.
      *
      * @return iterable<SplFileInfo>
      */

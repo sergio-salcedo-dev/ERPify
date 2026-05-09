@@ -21,17 +21,17 @@ use Psr\Log\NullLogger;
 use ReflectionClass;
 
 /**
- * Story 4.2 — per-marker contract pin (FR53, NFR25).
+ * Per-marker contract pin.
  *
  * The data provider reflects directly over {@see ProblemDetailsFactory::MARKER_STATUS_MAP}
  * and `MARKER_DEFAULT_TYPE_MAP` so the test cannot drift from the production constants:
  * adding or removing a marker without matching code-side updates makes this contract
- * fail. The seven canonical markers are FR8's marker-interface set:
+ * fail. The seven canonical markers are the marker-interface set:
  * {@see NotFound}, {@see Conflict}, {@see Forbidden}, {@see Unauthenticated},
  * {@see InvariantViolation}, {@see InvalidInput}, {@see RateLimited}.
  *
  * Co-located alongside {@see ProblemDetailsFactoryTest} under
- * `api/tests/Unit/Shared/Application/Problem/` per the story AC.
+ * `api/tests/Unit/Shared/Application/Problem/`.
  *
  * @internal
  */
@@ -39,7 +39,7 @@ use ReflectionClass;
 final class MarkerStatusMapContractTest extends TestCase
 {
     /**
-     * The seven FR8 marker interfaces. Pinned here as a STATIC list so any addition to
+     * The seven canonical marker interfaces. Pinned here as a STATIC list so any addition to
      * `MARKER_STATUS_MAP` without updating this canonical-set assertion fails the
      * `testMarkerStatusMapContainsExactlyTheCanonicalSeven` guard. The data-provider-driven
      * row tests still iterate from the constants directly — the canonical list is the
@@ -136,11 +136,10 @@ final class MarkerStatusMapContractTest extends TestCase
     }
 
     /**
-     * AC: "the factory's mapping constant array contains exactly those seven marker classes".
+     * Pins that the factory's mapping constant array contains exactly those seven marker classes.
      * Set-equality (not order-sensitive) so a marker addition that drifts the constant from
-     * the canonical FR8 list fails fast — without forcing a particular declaration order
-     * (Story 1.1's `testMarkerOrderingFollowsImplementsClause` already pins the ordering
-     * separately).
+     * the canonical list fails fast — without forcing a particular declaration order
+     * (`testMarkerOrderingFollowsImplementsClause` already pins the ordering separately).
      */
     public function testMarkerStatusMapContainsExactlyTheCanonicalSeven(): void
     {
@@ -149,7 +148,7 @@ final class MarkerStatusMapContractTest extends TestCase
         $this->assertCount(
             7,
             $statusMap,
-            'MARKER_STATUS_MAP must contain exactly the seven FR8 markers.',
+            'MARKER_STATUS_MAP must contain exactly the seven canonical markers.',
         );
 
         $actualKeys = \array_keys($statusMap);
@@ -161,14 +160,14 @@ final class MarkerStatusMapContractTest extends TestCase
         $this->assertSame(
             $expectedKeys,
             $actualKeys,
-            'MARKER_STATUS_MAP keys must equal the canonical FR8 marker set.',
+            'MARKER_STATUS_MAP keys must equal the canonical marker set.',
         );
     }
 
     /**
      * Sister pin to {@see testMarkerStatusMapContainsExactlyTheCanonicalSeven}: the default-type
      * map MUST mirror the status map's key set so every marker has a default `type` literal
-     * for FR44 PWA `type`-only routing.
+     * for PWA `type`-only routing.
      */
     public function testMarkerDefaultTypeMapKeysMatchMarkerStatusMapKeys(): void
     {
@@ -190,7 +189,7 @@ final class MarkerStatusMapContractTest extends TestCase
 
     /**
      * Builds a minimal anonymous {@see DomainException} that implements the requested marker.
-     * Each branch mirrors the seven FR8 markers; the `match` is exhaustive and falls through
+     * Each branch mirrors the seven canonical markers; the `match` is exhaustive and falls through
      * to a {@see LogicException} so a future marker addition without a corresponding branch
      * here surfaces immediately rather than silently skipping a row.
      */
@@ -212,7 +211,7 @@ final class MarkerStatusMapContractTest extends TestCase
             RateLimited::class => new class ('', 'x') extends DomainException implements RateLimited {
             },
             default => throw new LogicException(\sprintf(
-                'No anonymous-class branch for marker %s — add it when extending FR8.',
+                'No anonymous-class branch for marker %s — add it when extending the marker set.',
                 $markerClass,
             )),
         };

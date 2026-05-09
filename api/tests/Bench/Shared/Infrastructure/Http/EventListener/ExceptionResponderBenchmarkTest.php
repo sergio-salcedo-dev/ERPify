@@ -11,13 +11,13 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Story 3.8 (NFR2) — performance-budget harness for {@see \Erpify\Shared\Infrastructure\Http\EventListener\ExceptionResponder}.
+ * Performance-budget harness for {@see \Erpify\Shared\Infrastructure\Http\EventListener\ExceptionResponder}.
  *
  * Wired through a real Symfony kernel via {@see WebTestCase} so the measurement window
  * captures the listener's full work — factory mapping, body cap, JSON encode, response
  * write, log emission — exactly as it runs in production.
  *
- * Targets (NFR2, CI hardware baseline):
+ * Targets (CI hardware baseline):
  *   - 4xx path p99 ≤ 5 ms (route: `/api/test/_throw-not-found`).
  *   - 5xx path p99 ≤ 20 ms (route: `/api/test/_throw-runtime`).
  *
@@ -25,17 +25,17 @@ use Symfony\Component\HttpFoundation\Response;
  * autoload, then {@see MEASUREMENT_ITERATIONS} measured iterations whose per-iteration
  * wall clock (via `\hrtime(true)`) is sorted and the p99 sample picked. The assertion
  * runs against {@see P99_BUDGET_4XX_NS} and {@see P99_BUDGET_5XX_NS} verbatim so the
- * AC-mandated literals are visible in the test source.
+ * mandated literals are visible in the test source.
  *
  * Opt-in: marked `@group benchmark` AND gated on the `RUN_BENCHMARKS=1` environment
  * variable. Default `make php.unit` skips it so shared CI hardware noise cannot turn
- * NFR2 into a flaky red. Run via `make php.bench` (which sets both gates) or by hand:
+ * the budget into a flaky red. Run via `make php.bench` (which sets both gates) or by hand:
  *
  *   RUN_BENCHMARKS=1 vendor/bin/phpunit --group benchmark
  *
  * The shared-CI noise budget is intentionally absorbed by a +50% headroom over the
- * raw NFR2 numbers ({@see P99_BUDGET_4XX_NS} = 7.5 ms, {@see P99_BUDGET_5XX_NS} = 30 ms)
- * so the AC literal stays in the constant `NFR2_BUDGET_*_NS` for documentation while
+ * raw budget numbers ({@see P99_BUDGET_4XX_NS} = 7.5 ms, {@see P99_BUDGET_5XX_NS} = 30 ms)
+ * so the literal stays in the constant `NFR2_BUDGET_*_NS` for documentation while
  * the runtime check uses the headroom-adjusted threshold. A regression that doubled
  * the listener's cost (a real perf bug) would still trip the headroom-adjusted check;
  * sub-percent jitter under shared CPU contention will not.
@@ -47,14 +47,14 @@ use Symfony\Component\HttpFoundation\Response;
 final class ExceptionResponderBenchmarkTest extends WebTestCase
 {
     /**
-     * Story 3.8 (NFR2) — raw 4xx budget literal: p99 ≤ 5 ms on CI hardware. Documented
-     * in `docs/api-error-contract.md` (Story 4.4 doc page) so the wire contract and the
+     * Raw 4xx budget literal: p99 ≤ 5 ms on CI hardware. Documented
+     * in `docs/api-error-contract.md` so the wire contract and the
      * test-side budget reference the same number.
      */
     private const int NFR2_BUDGET_4XX_NS = 5_000_000;
 
     /**
-     * Story 3.8 (NFR2) — raw 5xx budget literal: p99 ≤ 20 ms on CI hardware.
+     * Raw 5xx budget literal: p99 ≤ 20 ms on CI hardware.
      */
     private const int NFR2_BUDGET_5XX_NS = 20_000_000;
 
@@ -80,7 +80,7 @@ final class ExceptionResponderBenchmarkTest extends WebTestCase
             $this->markTestSkipped(
                 'Performance-budget benchmarks are opt-in. Run `make php.bench` or set '
                 . '`RUN_BENCHMARKS=1` to execute. Default `make php.unit` skips this group '
-                . 'so shared CI hardware noise cannot turn NFR2 into a flaky red.',
+                . 'so shared CI hardware noise cannot turn the budget into a flaky red.',
             );
         }
     }
@@ -93,8 +93,8 @@ final class ExceptionResponderBenchmarkTest extends WebTestCase
             self::P99_BUDGET_4XX_NS,
             $p99,
             \sprintf(
-                'NFR2 4xx p99 budget exceeded — observed %.3f ms over %d samples '
-                . '(raw NFR2 budget: %.3f ms, +50%% shared-CI headroom: %.3f ms). '
+                '4xx p99 budget exceeded — observed %.3f ms over %d samples '
+                . '(raw budget: %.3f ms, +50%% shared-CI headroom: %.3f ms). '
                 . 'See docs/api-error-contract.md → "Performance Budgets".',
                 $p99 / 1_000_000,
                 self::MEASUREMENT_ITERATIONS,
@@ -112,8 +112,8 @@ final class ExceptionResponderBenchmarkTest extends WebTestCase
             self::P99_BUDGET_5XX_NS,
             $p99,
             \sprintf(
-                'NFR2 5xx p99 budget exceeded — observed %.3f ms over %d samples '
-                . '(raw NFR2 budget: %.3f ms, +50%% shared-CI headroom: %.3f ms). '
+                '5xx p99 budget exceeded — observed %.3f ms over %d samples '
+                . '(raw budget: %.3f ms, +50%% shared-CI headroom: %.3f ms). '
                 . 'See docs/api-error-contract.md → "Performance Budgets".',
                 $p99 / 1_000_000,
                 self::MEASUREMENT_ITERATIONS,
@@ -131,7 +131,7 @@ final class ExceptionResponderBenchmarkTest extends WebTestCase
      *
      * The kernel browser is reused across iterations (single client per call) so
      * factory + responder + listener stay in their steady-state hot path — the very
-     * shape NFR2 measures.
+     * shape the budget measures.
      */
     private function measureP99(string $path, int $expectedStatus): int
     {

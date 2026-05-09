@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Shared\Application\Problem;
 
 /**
- * Story 3.2 — exact-key case-insensitive denylist for sensitive context fields (FR34, NFR12).
+ * Exact-key case-insensitive denylist for sensitive context fields.
  *
  * Stripped from {@see ProblemDetailsFactory::redactKeys()} (body extensions before the
  * whitelist branch, so a denylisted `JsonSerializable` value cannot survive) AND from
@@ -21,21 +21,17 @@ namespace Erpify\Shared\Application\Problem;
  *
  * **Match scope:** exact-key (no substring), case-insensitive ASCII (`strtolower`),
  * single-level (no recursion into nested arrays). Substring/value-pattern redaction
- * (e.g. `password=secret` inside `$throwable->getMessage()`) is out of scope and tracked
- * as Story 4.x territory; see `_bmad-output/implementation-artifacts/deferred-work.md`
- * Story 2.4 / Story 3.1 entries.
+ * (e.g. `password=secret` inside `$throwable->getMessage()`) is out of scope.
  *
  * **Extending the denylist:** add the new key to {@see KEYS} and add four casing rows to
  * {@see \Erpify\Tests\Unit\Shared\Application\Problem\RedactionDenylistTest::denylistCasingProvider}.
- * The `testDataProviderRowCountMatchesKeysCountTimesFour` assertion fails CI (NFR8) if a
- * key is added without its parameterised tests. Story 4.4 documents the user-facing
- * extension procedure.
+ * The `testDataProviderRowCountMatchesKeysCountTimesFour` assertion fails CI if a key is
+ * added without its parameterised tests.
  *
- * **Static-only utility shape (AC #1):** declared as a caseless `enum` rather than a
- * `final class` with a private constructor. PHP enums cannot be instantiated by any
- * means (no `new`, no reflection bypass) — a strictly stronger invariant than the
- * spec's private-ctor sketch, and one the project's Rector `deadCode` preset cannot
- * unwind by pruning an "unused" private method.
+ * **Static-only utility shape:** declared as a caseless `enum` rather than a `final class`
+ * with a private constructor. PHP enums cannot be instantiated by any means (no `new`, no
+ * reflection bypass) — a strictly stronger invariant than a private-ctor sketch, and one
+ * the project's Rector `deadCode` preset cannot unwind by pruning an "unused" private method.
  */
 enum RedactionDenylist
 {

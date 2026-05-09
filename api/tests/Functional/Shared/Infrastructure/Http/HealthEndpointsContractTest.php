@@ -12,9 +12,9 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Story 4.6 — proves the RFC 9457 Problem Details contract applies retroactively to the
- * two `/health` endpoints whose authors predate the contract (FR11, AR12). NO production
- * source was modified for this story; the failure path is forced by a test-only event
+ * Proves the RFC 9457 Problem Details contract applies retroactively to the
+ * two `/health` endpoints whose authors predate the contract. NO production
+ * source was modified; the failure path is forced by a test-only event
  * subscriber wired in `api/config/services_test.yaml`
  * (see {@see EventListener\Fixtures\ForceHealthFailureSubscriber}).
  *
@@ -26,16 +26,16 @@ use Symfony\Component\HttpFoundation\Response;
  * What the suite pins:
  *   1. Failure path — adding `?_force_failure=1` causes the test subscriber to throw a
  *      plain `RuntimeException` BEFORE the controller runs. The listener pipeline maps
- *      it to the same default-deny `unhandled-exception` 500 Story 1.4 / 3.3 already
- *      pin for any unrecognised throwable. Body validates against the RFC 9457 schema
- *      from Story 4.3 (`tests/Fixtures/Problem/rfc-9457.schema.json`) and carries the
- *      `instance` + `correlation-id` UUIDv7 invariants from AR12.
+ *      it to the same default-deny `unhandled-exception` 500 already pinned for any
+ *      unrecognised throwable. Body validates against the RFC 9457 schema
+ *      (`tests/Fixtures/Problem/rfc-9457.schema.json`) and carries the
+ *      `instance` + `correlation-id` UUIDv7 invariants.
  *   2. Happy path — without the query param, the existing 200 contract is unchanged
  *      (regression pin: same status, same shape, same `status`/`service` keys).
  *
  * If a future change made the health controllers catch their own probe failures and
  * emit a `JsonResponse` 500 instead of letting the listener handle it, the failure-path
- * tests here would fail (contract drift) and Story 4.5's `php.lint.error-contract`
+ * tests here would fail (contract drift) and the `php.lint.error-contract`
  * gate would block the diff.
  *
  * @internal
@@ -111,7 +111,7 @@ final class HealthEndpointsContractTest extends WebTestCase
         /** @var array<string, mixed> $body */
         $body = $decodedAssoc;
 
-        // Schema validation against the bundled RFC 9457 fixture (Story 4.3 reuse).
+        // Schema validation against the bundled RFC 9457 fixture.
         $schemaRef = $this->loadSchemaRef();
         $decodedObject = \json_decode($rawBody, false, flags: JSON_THROW_ON_ERROR);
         $this->assertInstanceOf(stdClass::class, $decodedObject);
@@ -127,13 +127,13 @@ final class HealthEndpointsContractTest extends WebTestCase
             ),
         );
 
-        // Default-deny on unrecognised throwables (Story 3.3) — the test-only subscriber
+        // Default-deny on unrecognised throwables — the test-only subscriber
         // throws a plain RuntimeException, which lands on the terminal `unhandled-exception`
         // / 500 branch.
         $this->assertSame('unhandled-exception', $body['type'] ?? null);
         $this->assertSame(500, $body['status'] ?? null);
 
-        // AR12 — `instance` and `correlation-id` carried as valid UUIDv7s; the body's
+        // `instance` and `correlation-id` carried as valid UUIDv7s; the body's
         // correlation-id matches the response header.
         $this->assertArrayHasKey('instance', $body);
         $this->assertIsString($body['instance']);
@@ -178,7 +178,7 @@ final class HealthEndpointsContractTest extends WebTestCase
         $this->assertSame(
             ['status', 'service', 'datetime'],
             \array_keys($data),
-            'Health envelope `data` keys must be unchanged across the Story 4.6 wiring.',
+            'Health envelope `data` keys must be unchanged.',
         );
         $this->assertSame('ok', $data['status'] ?? null);
         $this->assertSame($expectedService, $data['service'] ?? null);
@@ -196,8 +196,7 @@ final class HealthEndpointsContractTest extends WebTestCase
         $schemaPath = __DIR__ . self::SCHEMA_FIXTURE;
         $this->assertFileExists(
             $schemaPath,
-            'RFC 9457 schema fixture must be bundled at tests/Fixtures/Problem/rfc-9457.schema.json '
-            . '(reused from Story 4.3).',
+            'RFC 9457 schema fixture must be bundled at tests/Fixtures/Problem/rfc-9457.schema.json.',
         );
 
         $resolvedPath = \realpath($schemaPath);

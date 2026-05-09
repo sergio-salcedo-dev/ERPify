@@ -10,8 +10,8 @@ use stdClass;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Story 3.3 — test-only controller throwing a `DomainException implements NotFound` whose
- * `context()` carries one closure, one `stdClass`, and one safe scalar. Lets the
+ * Test-only controller throwing a `DomainException implements NotFound` whose `context()`
+ * carries one closure, one `stdClass`, and one safe scalar. Lets the
  * `_throw-unserializable-context` route exercise the wire-level body sentinel substitution
  * (`'[unserializable]'`) end-to-end via a real Symfony kernel (functional + Behat).
  *

@@ -9,9 +9,9 @@ use Doctrine\DBAL\Exception\ConnectionLost;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Story 3.5 (NFR17) — test-only controller throwing a {@see ConnectionLost} mid-controller so
- * the listener pipeline can assert that a Doctrine driver-side connection failure still produces
- * a conforming RFC 9457 Problem Details 500 response — never a cascading failure.
+ * Test-only controller throwing a {@see ConnectionLost} mid-controller so the listener
+ * pipeline can assert that a Doctrine driver-side connection failure still produces a
+ * conforming RFC 9457 Problem Details 500 response — never a cascading failure.
  *
  * `ConnectionLost` extends `Doctrine\DBAL\Exception\ConnectionException` whose constructor
  * (inherited from `DriverException`) requires a `Driver\Exception` plus a nullable `Query`. We

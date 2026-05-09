@@ -16,12 +16,12 @@ use Symfony\Component\Security\Core\Exception\BadCredentialsException;
 use Throwable;
 
 /**
- * Story 3.7 (NFR9) — informational microbenchmark for the four 401/403 routes
- * through {@see ProblemDetailsFactory::fromThrowable}. NOT CI-gated in the
- * blocking sense: the threshold is deliberately generous (5x) so shared CI
- * hardware noise does not cause false positives. The test exists to surface
- * gross asymmetries — a regression that quintuples one branch's cost will
- * fail this; a 5% jitter under normal load will not.
+ * Informational microbenchmark for the four 401/403 routes through
+ * {@see ProblemDetailsFactory::fromThrowable}. NOT CI-gated in the blocking
+ * sense: the threshold is deliberately generous (5x) so shared CI hardware
+ * noise does not cause false positives. The test exists to surface gross
+ * asymmetries — a regression that quintuples one branch's cost will fail
+ * this; a 5% jitter under normal load will not.
  *
  * Methodology:
  *   - Warm-up loop (100 iterations per case) seeds the opcode / JIT caches and
@@ -32,7 +32,7 @@ use Throwable;
  *     to derive a mean. Means are compared by ratio (max / min); a single
  *     coefficient-of-variation gate keeps the test simple and the failure
  *     message informative.
- *   - The four cases exercise the AC-listed routes:
+ *   - The four cases exercise the routes:
  *       * Symfony bridge: `AccessDeniedException` (403)
  *       * Symfony bridge: `BadCredentialsException` extends `AuthenticationException` (401)
  *       * Marker path:    `DomainException implements Forbidden` (403)
@@ -40,9 +40,8 @@ use Throwable;
  *
  * Out of scope (explicit): application-level timing — database lookup latency,
  * controller-side resource resolution, repository round trips — is the
- * controller's concern, not the listener's. NFR9 only covers the listener /
- * factory's own contribution to response time, which is what this bench
- * measures.
+ * controller's concern, not the listener's. This bench only covers the
+ * listener / factory's own contribution to response time.
  *
  * The use of `\hrtime` in this test file is itself permissible because this is
  * a test, not the production source. The companion {@see ConstantTimeAuthBranchingContractTest}
@@ -74,9 +73,9 @@ final class ConstantTimeAuthBranchingBenchmarkTest extends TestCase
     private const float MAX_BRANCH_MEAN_RATIO = 5.0;
 
     /**
-     * Story 3.7 — the AC-mandated microbenchmark (documented, not CI-gated in
-     * the blocking sense — the 5x threshold is generous enough that the test
-     * is informational rather than precision-tuned).
+     * The microbenchmark (documented, not CI-gated in the blocking sense —
+     * the 5x threshold is generous enough that the test is informational
+     * rather than precision-tuned).
      */
     public function testConstantTimeAuthBranchingMeansAreWithinMeasurementNoise(): void
     {
@@ -142,8 +141,8 @@ final class ConstantTimeAuthBranchingBenchmarkTest extends TestCase
             self::MAX_BRANCH_MEAN_RATIO,
             $ratio,
             \sprintf(
-                'Auth branching timing asymmetry exceeds %sx threshold (NFR9, informational): '
-                . 'observed ratio = %.3f. Per-branch means (ns/call): %s. This is the Story 3.7 '
+                'Auth branching timing asymmetry exceeds %sx threshold (informational): '
+                . 'observed ratio = %.3f. Per-branch means (ns/call): %s. This is the '
                 . 'documented bench — a 5x threshold is generous enough to absorb shared-CI '
                 . 'noise; if you see this fail, inspect the means table for which branch '
                 . 'regressed and check the recent diff for conditional sleeps, I/O, or '

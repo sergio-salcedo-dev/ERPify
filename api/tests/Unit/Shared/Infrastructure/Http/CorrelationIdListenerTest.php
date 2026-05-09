@@ -32,7 +32,7 @@ final class CorrelationIdListenerTest extends TestCase
 
         $this->assertTrue($reflectionClass->isFinal(), 'CorrelationIdListener must be `final`.');
         $this->assertTrue($reflectionClass->isReadOnly(), 'CorrelationIdListener must be `readonly`.');
-        $this->assertNotInstanceOf(ReflectionMethod::class, $reflectionClass->getConstructor(), 'CorrelationIdListener must have no constructor (worker-mode safe, AR4).');
+        $this->assertNotInstanceOf(ReflectionMethod::class, $reflectionClass->getConstructor(), 'CorrelationIdListener must have no constructor (worker-mode safe).');
     }
 
     public function testListenerPriorityIsPinnedAtClassConstantValue(): void
@@ -42,14 +42,14 @@ final class CorrelationIdListenerTest extends TestCase
         // CorrelationIdListener::PRIORITY at parse time.
         $priority = (new ReflectionClass(CorrelationIdListener::class))->getConstant('PRIORITY');
 
-        $this->assertSame(1024, $priority, 'Priority must remain 1024 — Story 2.1 AC #2; bumping requires updating both the constant and this test.');
+        $this->assertSame(1024, $priority, 'Priority must remain 1024; bumping requires updating both the constant and this test.');
     }
 
     public function testAttributeKeyConstantValueIsExactlyUnderscoreCorrelationUnderscoreId(): void
     {
         $attributeKey = (new ReflectionClass(CorrelationIdListener::class))->getConstant('ATTRIBUTE_KEY');
 
-        $this->assertSame('_correlation_id', $attributeKey, 'ATTRIBUTE_KEY must be `_correlation_id` — Stories 2.2/2.3/2.4 reference this constant.');
+        $this->assertSame('_correlation_id', $attributeKey, 'ATTRIBUTE_KEY must be `_correlation_id`.');
     }
 
     public function testAbsentHeaderMintsAFreshUuidV7AndStoresItOnTheRequest(): void
@@ -85,7 +85,7 @@ final class CorrelationIdListenerTest extends TestCase
         $stored = $request->attributes->get(CorrelationIdListener::ATTRIBUTE_KEY);
         $this->assertIsString($stored);
         $this->assertMatchesRegularExpression(self::UUID_V7_REGEX, $stored);
-        $this->assertNotSame($uppercase, $stored, 'Uppercase UUIDv7 must NOT be propagated verbatim — NFR11 defense-in-depth.');
+        $this->assertNotSame($uppercase, $stored, 'Uppercase UUIDv7 must NOT be propagated verbatim — defense-in-depth.');
     }
 
     public function testEmptyStringInboundHeaderIsRejectedAndFreshIdIsMinted(): void
@@ -157,7 +157,7 @@ final class CorrelationIdListenerTest extends TestCase
         $this->assertIsString($stored);
         $this->assertMatchesRegularExpression(self::UUID_V7_REGEX, $stored);
         $this->assertNotSame($bad, $stored);
-        $this->assertStringNotContainsString("\n", $stored, 'Stored value must not contain newlines — HTTP response-splitting defense (NFR11).');
+        $this->assertStringNotContainsString("\n", $stored, 'Stored value must not contain newlines — HTTP response-splitting defense.');
     }
 
     public function testMalformedInboundHeaderWithLengthMismatchIsRejected(): void
@@ -238,7 +238,7 @@ final class CorrelationIdListenerTest extends TestCase
     public function testMultipleInboundHeadersAreRejectedAndFreshIdIsMinted(): void
     {
         // HTTP allows duplicate header names; the listener must treat any non-singleton list
-        // as malformed and mint fresh — defense-in-depth (NFR11). Even when both values are
+        // as malformed and mint fresh — defense-in-depth. Even when both values are
         // individually well-formed, the ambiguity of "which one wins?" is rejected at the door.
         $request = Request::create('/api/anything');
         $request->headers->set(
@@ -265,7 +265,7 @@ final class CorrelationIdListenerTest extends TestCase
 
         $this->assertFalse(
             $request->attributes->has(CorrelationIdListener::ATTRIBUTE_KEY),
-            'Sub-requests must not mint their own correlation-id (FR40 / NFR16).',
+            'Sub-requests must not mint their own correlation-id.',
         );
     }
 
@@ -286,7 +286,7 @@ final class CorrelationIdListenerTest extends TestCase
         $this->assertIsString($idB);
         $this->assertMatchesRegularExpression(self::UUID_V7_REGEX, $idA);
         $this->assertMatchesRegularExpression(self::UUID_V7_REGEX, $idB);
-        $this->assertNotSame($idA, $idB, 'Listener must mint a distinct UUIDv7 per invocation — no caching, no static state (NFR3 / NFR16).');
+        $this->assertNotSame($idA, $idB, 'Listener must mint a distinct UUIDv7 per invocation — no caching, no static state.');
     }
 
     public function testListenerProducesNoErrorWhenSymfonyUuidIsAvailable(): void
@@ -306,7 +306,7 @@ final class CorrelationIdListenerTest extends TestCase
         // CorrelationIdListener::RESPONSE_PRIORITY at parse time.
         $priority = (new ReflectionClass(CorrelationIdListener::class))->getConstant('RESPONSE_PRIORITY');
 
-        $this->assertSame(-1024, $priority, 'RESPONSE_PRIORITY must remain -1024 — Story 2.2 AC #4; bumping requires updating both the constant and this test.');
+        $this->assertSame(-1024, $priority, 'RESPONSE_PRIORITY must remain -1024; bumping requires updating both the constant and this test.');
     }
 
     public function testResponseHeaderEchoesAttributeValueWhenAttributeIsValidUuidV7(): void
@@ -365,7 +365,7 @@ final class CorrelationIdListenerTest extends TestCase
         $headerValue = $response->headers->get(CorrelationIdListener::HEADER_NAME);
         $this->assertIsString($headerValue);
         $this->assertMatchesRegularExpression(self::UUID_V7_REGEX, $headerValue);
-        $this->assertNotSame($uppercase, $headerValue, 'Uppercase attribute must be re-validated and replaced — NFR11 defense-in-depth.');
+        $this->assertNotSame($uppercase, $headerValue, 'Uppercase attribute must be re-validated and replaced — defense-in-depth.');
     }
 
     public function testResponseHeaderIsMintedFreshWhenAttributeContainsEmbeddedNewline(): void
@@ -382,7 +382,7 @@ final class CorrelationIdListenerTest extends TestCase
         $headerValue = $response->headers->get(CorrelationIdListener::HEADER_NAME);
         $this->assertIsString($headerValue);
         $this->assertMatchesRegularExpression(self::UUID_V7_REGEX, $headerValue);
-        $this->assertStringNotContainsString("\n", $headerValue, 'Header value must not contain newlines — HTTP response-splitting defense (NFR11).');
+        $this->assertStringNotContainsString("\n", $headerValue, 'Header value must not contain newlines — HTTP response-splitting defense.');
     }
 
     public function testResponseHeaderIsMintedFreshWhenAttributeContainsLengthMismatch(): void
@@ -445,7 +445,7 @@ final class CorrelationIdListenerTest extends TestCase
         $this->assertNotSame(
             $junk,
             $headerValue,
-            'Mint-on-miss path must overwrite a pre-existing junk header, not preserve it (NFR14).',
+            'Mint-on-miss path must overwrite a pre-existing junk header, not preserve it.',
         );
         $this->assertCount(
             1,
@@ -466,7 +466,7 @@ final class CorrelationIdListenerTest extends TestCase
 
         $this->assertFalse(
             $response->headers->has(CorrelationIdListener::HEADER_NAME),
-            'Sub-responses must not carry X-Correlation-Id — only main responses propagate to the wire (FR40 / NFR16).',
+            'Sub-responses must not carry X-Correlation-Id — only main responses propagate to the wire.',
         );
     }
 
@@ -489,7 +489,7 @@ final class CorrelationIdListenerTest extends TestCase
         $this->assertIsString($headerB);
         $this->assertMatchesRegularExpression(self::UUID_V7_REGEX, $headerA);
         $this->assertMatchesRegularExpression(self::UUID_V7_REGEX, $headerB);
-        $this->assertNotSame($headerA, $headerB, 'Listener must mint a distinct UUIDv7 per response when attribute is missing — no caching, no static state (NFR3 / NFR16).');
+        $this->assertNotSame($headerA, $headerB, 'Listener must mint a distinct UUIDv7 per response when attribute is missing — no caching, no static state.');
     }
 
     private function makeMainRequestEvent(Request $request): RequestEvent

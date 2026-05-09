@@ -12,8 +12,8 @@ use ReflectionClass;
 use ReflectionMethod;
 
 /**
- * Story 3.7 (NFR9) — pins the constant-time-branching invariant for the four
- * 401/403 routes through {@see ProblemDetailsFactory::fromThrowable}: the
+ * Pins the constant-time-branching invariant for the four 401/403 routes
+ * through {@see ProblemDetailsFactory::fromThrowable}: the
  * `Unauthenticated` / `Forbidden` marker paths and the `AuthenticationException`
  * / `AccessDeniedException` Symfony bridges. The contract is "the listener's own
  * contribution to response time is uniform across these four exception types,
@@ -36,13 +36,14 @@ use ReflectionMethod;
  *      directly because it must thread `buildExtensions(...)` for the
  *      `DomainException::context()` substrate; that asymmetry is type-driven
  *      (not resource-presence-driven) and applies symmetrically to ALL marker
- *      branches (NotFound, Conflict, etc.) — not just 401/403. NFR9 only forbids
- *      asymmetry across the 401-vs-403 split, not asymmetry across marker-vs-bridge.
+ *      branches (NotFound, Conflict, etc.) — not just 401/403. The contract
+ *      only forbids asymmetry across the 401-vs-403 split, not asymmetry
+ *      across marker-vs-bridge.
  *
  * Out of scope (explicit): application-level timing — database lookup latency,
  * controller-side resource resolution, repository round trips — is the
- * controller's concern, not the listener's. NFR9 only covers the listener /
- * factory's own contribution.
+ * controller's concern, not the listener's. This contract only covers the
+ * listener / factory's own contribution.
  *
  * @internal
  */
@@ -63,10 +64,11 @@ final class ConstantTimeAuthBranchingContractTest extends TestCase
             0,
             \preg_match($pattern, $source),
             \sprintf(
-                'ProblemDetailsFactory must not call %s() — Story 3.7 (NFR9) requires the '
-                . 'listener / factory path to perform no wall-clock, sleep, or random-source '
-                . 'work. A conditional %s() would either expose the path to wall-clock-based '
-                . 'branching, mask asymmetry instead of fixing it, or add unrelated variance.',
+                'ProblemDetailsFactory must not call %s() — the constant-time-branching '
+                . 'invariant requires the listener / factory path to perform no wall-clock, '
+                . 'sleep, or random-source work. A conditional %s() would either expose the '
+                . 'path to wall-clock-based branching, mask asymmetry instead of fixing it, '
+                . 'or add unrelated variance.',
                 $primitive,
                 $primitive,
             ),
@@ -112,14 +114,14 @@ final class ConstantTimeAuthBranchingContractTest extends TestCase
             \substr_count($fromThrowableSource, 'instanceof AccessDeniedException'),
             'fromThrowable must contain exactly one AccessDeniedException branch — the 403 '
             . 'bridge. A second branch would imply resource-presence-conditional logic, '
-            . 'breaking NFR9.',
+            . 'breaking the constant-time-branching invariant.',
         );
         $this->assertSame(
             1,
             \substr_count($fromThrowableSource, 'instanceof AuthenticationException'),
             'fromThrowable must contain exactly one AuthenticationException branch — the 401 '
             . 'bridge. A second branch would imply resource-presence-conditional logic, '
-            . 'breaking NFR9.',
+            . 'breaking the constant-time-branching invariant.',
         );
 
         // Both bridge branches must construct via `buildBridgeResponse(`. A divergent inline
@@ -133,13 +135,13 @@ final class ConstantTimeAuthBranchingContractTest extends TestCase
             '$this->buildBridgeResponse(',
             $accessDeniedFragment,
             'AccessDeniedException branch must construct via buildBridgeResponse() — a '
-            . 'divergent inline ProblemDetails would break NFR9 symmetry with the 401 bridge.',
+            . 'divergent inline ProblemDetails would break constant-time symmetry with the 401 bridge.',
         );
         $this->assertStringContainsString(
             '$this->buildBridgeResponse(',
             $authenticationFragment,
             'AuthenticationException branch must construct via buildBridgeResponse() — a '
-            . 'divergent inline ProblemDetails would break NFR9 symmetry with the 403 bridge.',
+            . 'divergent inline ProblemDetails would break constant-time symmetry with the 403 bridge.',
         );
 
         // Both bridge branches must wrap through the shared `withDebug(...)` and
@@ -150,13 +152,13 @@ final class ConstantTimeAuthBranchingContractTest extends TestCase
             '$this->applyBodyCap($this->withDebug($this->buildBridgeResponse(',
             $accessDeniedFragment,
             'AccessDeniedException branch must use the canonical applyBodyCap(withDebug(buildBridgeResponse(...))) '
-            . 'pipeline to remain symmetric with the AuthenticationException branch (NFR9).',
+            . 'pipeline to remain symmetric with the AuthenticationException branch.',
         );
         $this->assertStringContainsString(
             '$this->applyBodyCap($this->withDebug($this->buildBridgeResponse(',
             $authenticationFragment,
             'AuthenticationException branch must use the canonical applyBodyCap(withDebug(buildBridgeResponse(...))) '
-            . 'pipeline to remain symmetric with the AccessDeniedException branch (NFR9).',
+            . 'pipeline to remain symmetric with the AccessDeniedException branch.',
         );
     }
 

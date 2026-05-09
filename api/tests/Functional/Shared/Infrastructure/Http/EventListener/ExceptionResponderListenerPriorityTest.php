@@ -18,7 +18,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\KernelEvents;
 
 /**
- * Story 4.1 (FR42, FR43, NFR21) — pins the {@see ExceptionResponder} listener priority
+ * Pins the {@see ExceptionResponder} listener priority
  * relative to the rest of the kernel.exception chain, and pins NelmioCorsBundle's
  * kernel.response listener priority so CORS headers continue to attach AFTER the Problem
  * Details body has been built. The two pins together guarantee that a cross-origin request
@@ -41,7 +41,7 @@ use Symfony\Component\HttpKernel\KernelEvents;
 final class ExceptionResponderListenerPriorityTest extends WebTestCase
 {
     /**
-     * Story 4.1 — pinned baseline copied verbatim from
+     * Pinned baseline copied verbatim from
      * `vendor/nelmio/cors-bundle/Resources/config/services.php`. The
      * `nelmio_cors.cors_listener` service registers `onKernelResponse` at priority `0` on
      * `kernel.response`. If a future bundle release re-prioritises that listener, this
@@ -57,7 +57,7 @@ final class ExceptionResponderListenerPriorityTest extends WebTestCase
 
         $this->assertTrue(
             $reflectionClass->hasConstant('PRIORITY'),
-            'ExceptionResponder must declare a `PRIORITY` class constant — Story 4.1 (FR43).',
+            'ExceptionResponder must declare a `PRIORITY` class constant.',
         );
 
         $constantReflection = $reflectionClass->getReflectionConstant('PRIORITY');
@@ -70,7 +70,7 @@ final class ExceptionResponderListenerPriorityTest extends WebTestCase
         $this->assertSame(
             16,
             $reflectionClass->getConstant('PRIORITY'),
-            'ExceptionResponder::PRIORITY must remain 16 — Story 4.1 (FR43). Bumping requires '
+            'ExceptionResponder::PRIORITY must remain 16. Bumping requires '
             . 'updating both the constant and this test, plus re-checking that the value sits '
             . 'ABOVE Symfony HttpKernel ExceptionListener (-128) while leaving headroom for any '
             . 'future per-context carve-out listener at a higher positive priority.',
@@ -84,7 +84,7 @@ final class ExceptionResponderListenerPriorityTest extends WebTestCase
 
         $this->assertNotEmpty(
             $attributes,
-            'ExceptionResponder must carry the `#[AsEventListener]` attribute — Story 1.4 wiring.',
+            'ExceptionResponder must carry the `#[AsEventListener]` attribute.',
         );
 
         $asEventListener = $attributes[0]->newInstance();
@@ -93,7 +93,7 @@ final class ExceptionResponderListenerPriorityTest extends WebTestCase
             ExceptionResponder::PRIORITY,
             $asEventListener->priority,
             'The `#[AsEventListener]` attribute must read its priority from `self::PRIORITY` so '
-            . 'the constant is the single source of truth — Story 4.1 (FR43).',
+            . 'the constant is the single source of truth.',
         );
     }
 
@@ -107,7 +107,7 @@ final class ExceptionResponderListenerPriorityTest extends WebTestCase
 
         $this->assertNotNull(
             $priority,
-            'ExceptionResponder must be registered on `kernel.exception` — Story 1.4 wiring.',
+            'ExceptionResponder must be registered on `kernel.exception`.',
         );
         $this->assertSame(
             ExceptionResponder::PRIORITY,
@@ -165,13 +165,13 @@ final class ExceptionResponderListenerPriorityTest extends WebTestCase
         $this->assertSame(
             'application/problem+json',
             $response->headers->get('Content-Type'),
-            'Cross-origin failing request must still carry the Problem Details media type — NFR21.',
+            'Cross-origin failing request must still carry the Problem Details media type.',
         );
         $this->assertSame(
             'http://localhost:3000',
             $response->headers->get('Access-Control-Allow-Origin'),
             'NelmioCorsBundle must echo the allowed Origin back on the Problem Details error '
-            . 'response — Story 4.1 (NFR21). Failure here means the CORS response listener no '
+            . 'response. Failure here means the CORS response listener no '
             . 'longer fires after ExceptionResponder set the response on kernel.exception; '
             . 'inspect the listener priorities pinned in this test.',
         );

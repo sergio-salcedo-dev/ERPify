@@ -9,7 +9,7 @@ use Symfony\Component\Security\Core\Exception\AuthenticationException;
 
 /**
  * Test-only controller that throws an anonymous subclass of `AuthenticationException` carrying a
- * constructor-set message — exercises the factory's direct Security Core branch for FR25
+ * constructor-set message — exercises the factory's direct Security Core branch
  * (`type: 'unauthenticated'`).
  */
 final class ThrowSecurityAuthenticationController

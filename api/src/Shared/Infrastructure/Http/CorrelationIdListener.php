@@ -21,17 +21,17 @@ use Symfony\Component\Uid\Uuid;
  * (b) the value matches a strict lowercase UUIDv7 pattern (RFC 9562 §6.10). Any other shape —
  * uppercase, wrong version bits, wrong variant bits, extra garbage, embedded CRLF, lone
  * trailing `\n`, leading/trailing whitespace, embedded NUL byte, length mismatch, empty string,
- * or multiple `X-Correlation-Id` headers — is rejected and a fresh UUIDv7 is minted (FR29,
- * NFR11). The pattern uses `\A…\z` anchors (not `^…$`) so PHP's default `$`-before-final-`\n`
- * semantics cannot leak a trailing newline through.
+ * or multiple `X-Correlation-Id` headers — is rejected and a fresh UUIDv7 is minted. The
+ * pattern uses `\A…\z` anchors (not `^…$`) so PHP's default `$`-before-final-`\n` semantics
+ * cannot leak a trailing newline through.
  *
  * On the response side, the request attribute is **re-validated** with the same regex before
  * being written to the header — defense-in-depth against any listener that may have tampered
  * with `_correlation_id` between kernel.request and kernel.response. The header write
- * overwrites any pre-existing value (FR31, NFR11, NFR14).
+ * overwrites any pre-existing value.
  *
  * Sub-requests (ESI fragments, forwards) are skipped on both events — only the main request
- * mints, only the main response carries the header. See Story 2.1 Dev Notes for the rationale.
+ * mints, only the main response carries the header.
  *
  * Worker-mode safe: `final readonly`, no constructor, no instance / static state. Pinned by
  * `testListenerHasNoConstructorAndIsFinalReadonly` and the per-event behavioural pins

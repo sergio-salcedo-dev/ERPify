@@ -11,7 +11,7 @@ use Symfony\Component\Security\Core\Exception\AccessDeniedException;
  * Test-only controller that throws Security Core's `AccessDeniedException` (extends
  * `\RuntimeException`, NOT `HttpExceptionInterface`) — exercises the factory's direct Security
  * Core branch. This is distinct from the SecurityBundle-wrapped `AccessDeniedHttpException`
- * path; both must yield `type: 'forbidden'` per FR24.
+ * path; both must yield `type: 'forbidden'`.
  */
 final class ThrowSecurityAccessDeniedController
 {

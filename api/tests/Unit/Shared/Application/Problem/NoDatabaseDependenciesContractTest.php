@@ -20,7 +20,7 @@ use ReflectionType;
 use ReflectionUnionType;
 
 /**
- * Story 3.5 (FR40 / NFR17) — pins the no-database-on-the-error-path invariant: neither
+ * Pins the no-database-on-the-error-path invariant: neither
  * {@see ExceptionResponder} nor {@see ProblemDetailsFactory} may declare a constructor
  * dependency on `Doctrine\DBAL\Connection`, `Doctrine\ORM\EntityManagerInterface`, any
  * subclass / sub-interface of those, or a Doctrine `ManagerRegistry`. A driver-side
@@ -130,8 +130,7 @@ final class NoDatabaseDependenciesContractTest extends TestCase
                     $this->isOrExtends($typeName, $bannedType),
                     \sprintf(
                         '%s::__construct must not depend on %s (parameter $%s, type %s) — '
-                        . 'the error path is required to hold zero database dependency '
-                        . '(FR40 / NFR17).',
+                        . 'the error path is required to hold zero database dependency.',
                         $class,
                         $bannedType,
                         $parameter->getName(),
@@ -173,7 +172,7 @@ final class NoDatabaseDependenciesContractTest extends TestCase
     /**
      * `is_a($candidate, $needle, allow_string: true)` returns `true` for either a class
      * extending $needle, an interface extending $needle, or a class implementing $needle.
-     * That covers every "subclass or sub-interface" path we care about for FR40 / NFR17.
+     * That covers every "subclass or sub-interface" path this contract cares about.
      */
     private function isOrExtends(string $candidate, string $needle): bool
     {

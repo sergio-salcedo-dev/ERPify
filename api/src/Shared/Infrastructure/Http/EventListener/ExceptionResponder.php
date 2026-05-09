@@ -24,46 +24,43 @@ use Throwable;
  * per-error `instance` UUIDv7, reading the per-request `correlation-id` from the
  * {@see CorrelationIdListener::ATTRIBUTE_KEY} request attribute (defense-in-depth: re-validates
  * against the strict lowercase UUIDv7 regex; mints a fresh UUIDv7 if the attribute is missing
- * or malformed — Story 2.2 onResponse pattern), delegating marker→status resolution to
- * {@see ProblemDetailsFactory} and wire-envelope construction to {@see ProblemDetailsResponder}.
+ * or malformed), delegating marker→status resolution to {@see ProblemDetailsFactory} and
+ * wire-envelope construction to {@see ProblemDetailsResponder}.
  *
- * Emits exactly one structured PSR-3 log line per error (FR32, FR33) at a tiered level:
+ * Emits exactly one structured PSR-3 log line per error at a tiered level:
  *   - `unhandled-exception` (i.e. throwable not recognised by the factory) → `critical`
  *   - status >= 500 → `error`
  *   - status 4xx     → `warning`
  * The log record's eight context fields (`instance`, `correlation_id`, `type`, `status`,
  * `exception_class`, `exception_message`, `request_uri`, `request_method`) make the log
  * line operator-queryable: grep by `instance` for the single failure entry, grep by
- * `correlation_id` for the full request trail (FR48). Logger channel is the default `app`
- * channel (autowired `Psr\Log\LoggerInterface`); rationale in Story 2.4's PR description.
+ * `correlation_id` for the full request trail. Logger channel is the default `app`
+ * channel (autowired `Psr\Log\LoggerInterface`).
  *
  * Path-scoped to `/api/*`. Coexists with any earlier exception listener: if a higher-priority
  * listener has already set a response, this listener leaves it alone and does NOT log.
  *
- * Priority pinned by Story 4.1 (FR42, FR43) at {@see PRIORITY} = 16. Rationale: the value
- * must sit ABOVE Symfony's HttpKernel `ExceptionListener` (default -128) so this listener
- * owns the RFC 9457 envelope before the framework's generic exception path runs, while
- * leaving headroom (any positive priority less than ours fires first) for future per-context
- * carve-out listeners that need to short-circuit the unified contract for a narrow path.
- * Story 4.6 retired the legacy `SearchExceptionListener` (priority 32) once
- * {@see ProblemDetailsFactory} subsumed its `ValidationFailedException` /
- * `NotEncodableValueException` mapping natively. The CORS interaction
- * is decoupled by event channel: NelmioCorsBundle's `CorsListener` runs on `kernel.request`
- * (priority 250) and `kernel.response` (priority 0); the Problem Details response is set on
- * `kernel.exception` and then flows into the `kernel.response` cycle where Nelmio attaches
- * `Access-Control-Allow-Origin` to the already-built error body (NFR21). A regression test
+ * Priority pinned at {@see PRIORITY} = 16. Rationale: the value must sit ABOVE Symfony's
+ * HttpKernel `ExceptionListener` (default -128) so this listener owns the RFC 9457 envelope
+ * before the framework's generic exception path runs, while leaving headroom (any positive
+ * priority less than ours fires first) for future per-context carve-out listeners that need
+ * to short-circuit the unified contract for a narrow path. The CORS interaction is decoupled
+ * by event channel: NelmioCorsBundle's `CorsListener` runs on `kernel.request` (priority 250)
+ * and `kernel.response` (priority 0); the Problem Details response is set on `kernel.exception`
+ * and then flows into the `kernel.response` cycle where Nelmio attaches
+ * `Access-Control-Allow-Origin` to the already-built error body. A regression test
  * (`ExceptionResponderListenerPriorityTest`) pins both this constant and Nelmio's response
  * priority so a bundle upgrade that drifts those values fails with a clear diagnostic
  * pointing back to {@see PRIORITY}.
  *
- * Story 3.4 (FR39) — last-resort static body on listener self-failure. The body of `__invoke`
- * after the early returns is wrapped in a top-level `try { ... } catch (\Throwable) { ... }`
- * so a throw from the factory, the responder, the logger, or any helper still produces a
- * well-formed `application/problem+json` 500. The fallback emits the byte-for-byte literal
+ * Last-resort static body on listener self-failure. The body of `__invoke` after the early
+ * returns is wrapped in a top-level `try { ... } catch (\Throwable) { ... }` so a throw from
+ * the factory, the responder, the logger, or any helper still produces a well-formed
+ * `application/problem+json` 500. The fallback emits the byte-for-byte literal
  * {@see LAST_RESORT_BODY} (no `instance`, no `correlation-id` — intentionally self-sufficient
  * if those mints fail), with `Cache-Control: no-store`, and emits one CRITICAL PSR-3 log line
  * carrying the self-failure exception class + message. The CRITICAL emission is wrapped in
- * its own inner `try/catch` (NFR15) so a broken logger CANNOT block the response.
+ * its own inner `try/catch` so a broken logger CANNOT block the response.
  *
  * `instance` and `correlation-id` are different concerns: per-error vs per-request. The
  * body's `correlation-id`, the response header `X-Correlation-Id`, and the log's
@@ -76,10 +73,10 @@ use Throwable;
 final readonly class ExceptionResponder
 {
     /**
-     * Story 4.1 (FR42, FR43) — `kernel.exception` listener priority. Sits well above Symfony's
-     * HttpKernel `ExceptionListener` (default -128) so this listener owns the Problem Details
-     * envelope, and leaves headroom for any future per-context carve-out listener that needs
-     * to short-circuit the unified contract on a narrow path (a higher positive priority would
+     * `kernel.exception` listener priority. Sits well above Symfony's HttpKernel
+     * `ExceptionListener` (default -128) so this listener owns the Problem Details envelope,
+     * and leaves headroom for any future per-context carve-out listener that needs to
+     * short-circuit the unified contract on a narrow path (a higher positive priority would
      * fire first; if none is registered the value is the de-facto top of the chain on
      * `/api/*`). Read by the `AsEventListener` attribute above and by
      * `ExceptionResponderListenerPriorityTest` (kernel-bootstrapped regression that asserts
@@ -102,20 +99,20 @@ final readonly class ExceptionResponder
     private const string LOG_MESSAGE = 'API error response built';
 
     /**
-     * Story 3.4 (FR39) — byte-for-byte literal fallback body emitted when the listener's
-     * primary path throws. Intentionally omits `instance` and `correlation-id`: the fallback
-     * must remain self-sufficient even when {@see Uuid::v7} or the responder fail. Held as a
-     * compile-time string constant rather than `\json_encode([...])` so the encode itself
-     * cannot throw on the error path.
+     * Byte-for-byte literal fallback body emitted when the listener's primary path throws.
+     * Intentionally omits `instance` and `correlation-id`: the fallback must remain
+     * self-sufficient even when {@see Uuid::v7} or the responder fail. Held as a compile-time
+     * string constant rather than `\json_encode([...])` so the encode itself cannot throw on
+     * the error path.
      */
     private const string LAST_RESORT_BODY = '{"type":"internal-error","title":"Internal server error","status":500}';
 
     /**
-     * Story 3.4 (FR39) — single, narrow log message for the self-failure path. Operators grep
-     * by this string to surface every listener self-failure across the fleet; the CRITICAL
-     * level + the `self_failure_class` / `self_failure_message` context fields carry the
-     * diagnostic detail. Kept distinct from {@see LOG_MESSAGE} so it never collides with the
-     * primary "API error response built" stream in log filters.
+     * Single, narrow log message for the self-failure path. Operators grep by this string to
+     * surface every listener self-failure across the fleet; the CRITICAL level + the
+     * `self_failure_class` / `self_failure_message` context fields carry the diagnostic
+     * detail. Kept distinct from {@see LOG_MESSAGE} so it never collides with the primary
+     * "API error response built" stream in log filters.
      */
     private const string LAST_RESORT_LOG_MESSAGE = 'ExceptionResponder self-failure: emitting last-resort static body.';
 
@@ -139,10 +136,9 @@ final readonly class ExceptionResponder
         }
 
         // Hoisted out of the inner try so the last-resort log can still report the
-        // correlation pair when the factory / responder / logger throws (Edge #4 —
-        // observability hole on self-failure: without these locals, an operator
-        // grepping by `correlation_id` cannot reach the failed request from the
-        // CRITICAL line). Mint defensively: a corrupted attribute or a fresh request.
+        // correlation pair when the factory / responder / logger throws — without these
+        // locals, an operator grepping by `correlation_id` cannot reach the failed request
+        // from the CRITICAL line. Mint defensively: a corrupted attribute or a fresh request.
         $stored = $request->attributes->get(CorrelationIdListener::ATTRIBUTE_KEY);
 
         $correlationId = (\is_string($stored) && self::UUIDV7_LENGTH === \strlen($stored)
@@ -153,10 +149,10 @@ final readonly class ExceptionResponder
         $instance = Uuid::v7()->toRfc4122();
         $throwable = $event->getThrowable();
 
-        // Story 3.4 (FR39) — wrap the downstream path so a throw from the factory,
-        // the responder, the logger, or any helper still produces a well-formed RFC 9457
-        // 500 response. The early returns above are deliberately OUTSIDE this try: they are
-        // side-effect-free pre-conditions and must never be short-circuited into a fallback.
+        // Wrap the downstream path so a throw from the factory, the responder, the logger,
+        // or any helper still produces a well-formed RFC 9457 500 response. The early returns
+        // above are deliberately OUTSIDE this try: they are side-effect-free pre-conditions
+        // and must never be short-circuited into a fallback.
         try {
             $problemDetails = $this->problemDetailsFactory->fromThrowable(
                 $throwable,
@@ -177,13 +173,13 @@ final readonly class ExceptionResponder
     }
 
     /**
-     * Story 3.4 (FR39) — last-resort emission. Sets a 500 response carrying the byte-for-byte
+     * Last-resort emission. Sets a 500 response carrying the byte-for-byte
      * {@see LAST_RESORT_BODY} with `Content-Type: application/problem+json` and
      * `Cache-Control: no-store`, then emits a CRITICAL log line WITH the self-failure's class
      * and message PLUS the request's `correlation_id` / `instance` and the original throwable
-     * (Edge #4 — without these, an operator cannot grep the failed request trail from the
-     * CRITICAL fallback line). The log call is wrapped in its own `try { ... } catch (\Throwable) {}`
-     * (NFR15) so a broken logger cannot prevent the response from being produced.
+     * — without these, an operator cannot grep the failed request trail from the CRITICAL
+     * fallback line. The log call is wrapped in its own `try { ... } catch (\Throwable) {}`
+     * so a broken logger cannot prevent the response from being produced.
      *
      * No `\json_encode` on this path — the body is a string literal so no exception can
      * escape from the fallback emission itself. Order is load-bearing: the response is set
@@ -218,7 +214,7 @@ final readonly class ExceptionResponder
                 'request_method' => $request->getMethod(),
             ]);
         } catch (Throwable) {
-            // NFR15 — a broken primary logger MUST NOT prevent the response. Swallow.
+            // A broken primary logger MUST NOT prevent the response. Swallow.
         }
     }
 
@@ -232,7 +228,7 @@ final readonly class ExceptionResponder
     }
 
     /**
-     * Story 3.2 (NFR12) — the eight canonical log fields are not denylist-named today, so
+     * The eight canonical log fields are not denylist-named today, so
      * {@see RedactionDenylist::filter} is a runtime no-op for the canonical shape. The
      * defensive call pins the architectural invariant that any caller-controlled key
      * eventually flowing into this map (e.g. a future log-context extension that reflects

@@ -44,8 +44,8 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         $this->assertSame(
             ['type', 'title', 'status', 'instance', 'correlation-id', 'bankId', 'debug'],
             \array_keys($body),
-            'Body key order must match Story 1.2 (`type, title, status, [detail], instance, correlation-id, <extensions>`); '
-            . 'Story 3.1 appends `debug` LAST in `<extensions>` for the `test` env.',
+            'Body key order must match the canonical contract (`type, title, status, [detail], instance, correlation-id, <extensions>`); '
+            . '`debug` is appended LAST in `<extensions>` for the `test` env.',
         );
         $this->assertBodyEquals('not-found', $body, 'type');
         $this->assertBodyEquals('Bank not found', $body, 'title');
@@ -384,7 +384,7 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
 
         $body = $this->decodeBody($response->getContent());
 
-        // Story 3.1 — `APP_ENV=test` (set by `make php.unit`) must wire `'test'` through the
+        // `APP_ENV=test` (set by `make php.unit`) must wire `'test'` through the
         // `#[Autowire('%kernel.environment%')]` attribute on `ProblemDetailsFactory::__construct`,
         // so the body carries the full 5-key debug extension. This pins the autowire round-trip
         // end-to-end through a real Symfony kernel.
@@ -416,9 +416,9 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         $response = $kernelBrowser->getResponse();
         $body = $this->decodeBody($response->getContent());
 
-        // Story 3.1 — in test env, the message-pass-through behaviour is preserved on the
+        // In test env, the message-pass-through behaviour is preserved on the
         // unhandled-exception branch (only prod swaps the title to the safe literal). The
-        // `'boom'` title here is the exception's own message, identical to Story 1.4 baseline.
+        // `'boom'` title here is the exception's own message.
         $this->assertArrayHasKey('title', $body);
         $this->assertSame('boom', $body['title']);
 
@@ -446,7 +446,7 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND, $response->getStatusCode(), (string) $response->getContent());
 
         // Light-touch sanity: with an allowed cross-origin set, Nelmio's response listener still
-        // fires on the error response. Story 4.1's
+        // fires on the error response.
         // `ExceptionResponderListenerPriorityTest::testCrossOriginGetWithOriginHeaderReturnsBothCorsAndProblemDetails`
         // owns the strict regression pin; this assertion just guarantees the exception listener
         // does not break the CORS path on the long-standing fixture.
@@ -454,7 +454,7 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
     }
 
     /**
-     * Story 3.2 — wire-level pin: the `_throw-denylisted-context` fixture's `password` and
+     * Wire-level pin: the `_throw-denylisted-context` fixture's `password` and
      * `token` keys must be stripped from the body extensions; `safe_field` survives. The
      * `'sensitive'` value must not appear anywhere in the encoded response body.
      */
@@ -481,7 +481,7 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
     }
 
     /**
-     * Story 3.3 — wire-level pin: the `_throw-unserializable-context` fixture's `cb` (closure)
+     * Wire-level pin: the `_throw-unserializable-context` fixture's `cb` (closure)
      * and `proxy` (stdClass) keys must be substituted with the literal `'[unserializable]'`
      * sentinel; `safe_field` survives. The body must contain no class name and no NUL byte
      * even when the context carries an anonymous-class object.
@@ -512,7 +512,7 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
     }
 
     /**
-     * Story 3.5 (NFR16) — kernel.reset safety: two sequential requests against the SAME kernel
+     * kernel.reset safety: two sequential requests against the SAME kernel
      * instance, with an explicit `$container->reset()` (the same machinery `kernel.reset`
      * triggers in FrankenPHP worker mode) between them, MUST produce structurally identical
      * Problem Details responses. The body shape (key set, `type`, `title`, `status`) and the
@@ -573,7 +573,7 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         $this->assertSame(
             \array_keys($bodyA),
             \array_keys($bodyB),
-            'Body key set + order must be stable across kernel.reset (NFR16).',
+            'Body key set + order must be stable across kernel.reset.',
         );
 
         // Identical-shape fields — `type`, `title`, `status` and any domain-emitted
@@ -598,13 +598,13 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
             $this->assertSame(
                 $valueA,
                 $bodyB[$key] ?? null,
-                \sprintf('Body key "%s" must be identical across kernel.reset (NFR16).', $key),
+                \sprintf('Body key "%s" must be identical across kernel.reset.', $key),
             );
         }
 
         // Distinctness — the per-error `instance` UUIDv7 mint MUST be fresh on each
         // invocation. Without this, two error occurrences would share an `instance` value,
-        // breaking the per-error log-pivot contract (FR48).
+        // breaking the per-error log-pivot contract.
         $this->assertArrayHasKey('instance', $bodyA);
         $this->assertArrayHasKey('instance', $bodyB);
         $this->assertNotSame($bodyA['instance'], $bodyB['instance']);
@@ -613,11 +613,11 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
     }
 
     /**
-     * Story 3.5 (NFR17) — a `Doctrine\DBAL\Exception\ConnectionLost` thrown mid-controller
-     * MUST still produce a conforming Problem Details 500. The error-path holds zero
-     * dependency on `Connection` / `EntityManagerInterface` (pinned by reflection in
-     * `NoDatabaseDependenciesContractTest`); the wire-level pin here proves no cascading
-     * failure escapes the listener even when the underlying driver has dropped.
+     * A `Doctrine\DBAL\Exception\ConnectionLost` thrown mid-controller MUST still produce a
+     * conforming Problem Details 500. The error-path holds zero dependency on `Connection` /
+     * `EntityManagerInterface` (pinned by reflection in `NoDatabaseDependenciesContractTest`);
+     * the wire-level pin here proves no cascading failure escapes the listener even when the
+     * underlying driver has dropped.
      */
     public function testDoctrineConnectionLostMidControllerProducesConformingProblemDetailsResponse(): void
     {

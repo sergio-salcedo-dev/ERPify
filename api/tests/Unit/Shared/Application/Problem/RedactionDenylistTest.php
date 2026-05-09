@@ -166,7 +166,7 @@ final class RedactionDenylistTest extends TestCase
 
         $this->assertTrue(
             $reflectionClass->isEnum(),
-            'RedactionDenylist must be an enum — instantiation is forbidden by the PHP engine for this static-only utility (AC #1, anti-pattern: "Do NOT instantiate RedactionDenylist as a service").',
+            'RedactionDenylist must be an enum — instantiation is forbidden by the PHP engine for this static-only utility (anti-pattern: "Do NOT instantiate RedactionDenylist as a service").',
         );
         $this->assertNotInstanceOf(
             ReflectionMethod::class,

@@ -16,7 +16,7 @@ use Symfony\Component\HttpKernel\KernelEvents;
  * a real Symfony kernel: the listener fires on `kernel.request` *before* the controller runs (or
  * throws), so we assert against the request the kernel handed to the dispatcher.
  *
- * Reuses Story 1.4's `/api/test/_throw-not-found` route — the controller throws, but the listener
+ * Reuses the `/api/test/_throw-not-found` route — the controller throws, but the listener
  * has already populated `$request->attributes->get(CorrelationIdListener::ATTRIBUTE_KEY)` by then.
  *
  * @internal
@@ -99,7 +99,7 @@ final class CorrelationIdListenerFunctionalTest extends WebTestCase
         $this->assertSame(
             CorrelationIdListener::PRIORITY,
             $priority,
-            'Listener priority must match CorrelationIdListener::PRIORITY (1024) — FR43-style pin.',
+            'Listener priority must match CorrelationIdListener::PRIORITY (1024).',
         );
     }
 
@@ -193,7 +193,7 @@ final class CorrelationIdListenerFunctionalTest extends WebTestCase
         $this->assertSame(
             CorrelationIdListener::RESPONSE_PRIORITY,
             $priority,
-            'Listener priority must match CorrelationIdListener::RESPONSE_PRIORITY (-1024) — FR43-style pin.',
+            'Listener priority must match CorrelationIdListener::RESPONSE_PRIORITY (-1024).',
         );
     }
 }

@@ -23,7 +23,7 @@ use Symfony\Component\HttpFoundation\Response;
  *
  * Uses raw {@see Response}, not {@see \Symfony\Component\HttpFoundation\JsonResponse},
  * because `JsonResponse` hard-codes `Content-Type: application/json` (with charset) and
- * re-encodes via its own pipeline — we already own the encoding via Story 1.2's `toArray()`.
+ * re-encodes via its own pipeline — we already own the encoding via {@see ProblemDetails::toArray()}.
  */
 final readonly class ProblemDetailsResponder
 {
