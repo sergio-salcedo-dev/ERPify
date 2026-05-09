@@ -1039,7 +1039,7 @@ final class ProblemDetailsFactoryTest extends TestCase
         $this->assertNotNull($violations[0]['code']);
     }
 
-    public function testValidationFailedExceptionViolationPropertyPathPassesThroughEvenWhenEmpty(): void
+    public function testValidationFailedExceptionEmptyPropertyPathFallsBackToValueLiteral(): void
     {
         $constraintViolationList = new ConstraintViolationList([
             new ConstraintViolation(
@@ -1057,6 +1057,11 @@ final class ProblemDetailsFactoryTest extends TestCase
         $validationFailedException = new ValidationFailedException(value: null, violations: $constraintViolationList);
         $problemDetails = $this->factoryFor()->fromThrowable($validationFailedException, self::CID, self::INSTANCE);
 
+        // Wire contract: the PWA routes per-field on `violations[].field`; an empty value
+        // would force string-comparison fallbacks at the consumer. The factory collapses any
+        // still-empty path onto the neutral literal `'value'` as a last-resort safeguard.
+        // Callers SHOULD pass `propertyPath:` to `Validator::ensure` for scalar-root
+        // validations to surface a meaningful field name (e.g. `'id'`) instead.
         $this->assertArrayHasKey('violations', $problemDetails->extensions);
         $violations = $problemDetails->extensions['violations'];
         $this->assertIsArray($violations);
@@ -1064,7 +1069,7 @@ final class ProblemDetailsFactoryTest extends TestCase
         $this->assertArrayHasKey(0, $violations);
         $this->assertIsArray($violations[0]);
         $this->assertArrayHasKey('field', $violations[0]);
-        $this->assertSame('', $violations[0]['field']);
+        $this->assertSame('value', $violations[0]['field']);
     }
 
     public function testValidationFailedExceptionWithEmptyListProducesEmptyViolationsArray(): void
