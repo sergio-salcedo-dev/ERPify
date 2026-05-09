@@ -14,6 +14,8 @@ export {
 export type { DateFieldProps } from "./DateField";
 export { DataTable } from "./DataTable";
 export type { DataTableColumn, DataTableSort, DataTableSelection } from "./DataTable";
+export { DatePickerField } from "./DatePickerField";
+export type { DatePickerFieldProps } from "./DatePickerField";
 export { EmptyState } from "./EmptyState";
 export { FormField, useFormField } from "./FormField";
 export { ProblemDisplay } from "./ProblemDisplay";

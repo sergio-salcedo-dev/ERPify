@@ -3,7 +3,7 @@
 import type { ChangeEvent } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { DateField, FormField } from "@/components/erpify";
+import { DatePickerField, FormField } from "@/components/erpify";
 import type { BanksFilter } from "../_lib/banksFilterSort";
 
 interface BanksFiltersProps {
@@ -57,18 +57,20 @@ export function BanksFilters({
             data-testid="banks-filters__short-name"
           />
         </FormField>
-        <DateField
+        <DatePickerField
           name="banks-filters-created-from"
           label="Created from"
           value={filter.createdFrom}
           onChange={updateDate("createdFrom")}
+          max={filter.createdTo || undefined}
           testId="banks-filters__created-from"
         />
-        <DateField
+        <DatePickerField
           name="banks-filters-created-to"
           label="Created to"
           value={filter.createdTo}
           onChange={updateDate("createdTo")}
+          min={filter.createdFrom || undefined}
           testId="banks-filters__created-to"
         />
       </div>

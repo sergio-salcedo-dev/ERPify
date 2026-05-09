@@ -240,12 +240,12 @@ test.describe("BackOffice - Banks CRUD", () => {
       await expect(page.getByRole("cell", { name: "Brookline Trust" })).toBeHidden();
     });
 
-    test("filters by createdAt range (inclusive bounds, dd/mm/yyyy)", async ({ page }) => {
+    test("filters by createdAt range (inclusive bounds, native date picker)", async ({ page }) => {
       await mockBanksApi(page, { list: "happy", list_banks: allBanks });
       await page.goto("/backoffice/banks");
 
-      await page.getByTestId("banks-filters__created-from").fill("01/02/2026");
-      await page.getByTestId("banks-filters__created-to").fill("31/03/2026");
+      await page.getByTestId("banks-filters__created-from").fill("2026-02-01");
+      await page.getByTestId("banks-filters__created-to").fill("2026-03-31");
 
       await expect(page.getByRole("cell", { name: "Brookline Trust" })).toBeVisible();
       await expect(page.getByRole("cell", { name: "Cosmos Bank" })).toBeVisible();
@@ -253,22 +253,12 @@ test.describe("BackOffice - Banks CRUD", () => {
       await expect(page.getByRole("cell", { name: "Delta Credit Union" })).toBeHidden();
     });
 
-    test("created-from/to filter inputs are typed text fields with dd/mm/yyyy placeholders", async ({
-      page,
-    }) => {
+    test("created-from/to filter inputs are native date pickers", async ({ page }) => {
       await mockBanksApi(page, { list: "happy", list_banks: allBanks });
       await page.goto("/backoffice/banks");
 
-      await expect(page.getByTestId("banks-filters__created-from")).toHaveAttribute("type", "text");
-      await expect(page.getByTestId("banks-filters__created-from")).toHaveAttribute(
-        "placeholder",
-        "dd/mm/yyyy",
-      );
-      await expect(page.getByTestId("banks-filters__created-to")).toHaveAttribute("type", "text");
-      await expect(page.getByTestId("banks-filters__created-to")).toHaveAttribute(
-        "placeholder",
-        "dd/mm/yyyy",
-      );
+      await expect(page.getByTestId("banks-filters__created-from")).toHaveAttribute("type", "date");
+      await expect(page.getByTestId("banks-filters__created-to")).toHaveAttribute("type", "date");
     });
 
     test("shows the no-matches panel when filters narrow to zero", async ({ page }) => {
@@ -397,7 +387,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       // Of the four fixtures, only Cosmos Bank (name="Cosmos Bank", createdAt 2026-03-20) matches.
       // Adding sort by createdAt desc must not change correctness — just confirm the row remains.
       await page.getByTestId("banks-filters__name").fill("bank");
-      await page.getByTestId("banks-filters__created-from").fill("01/03/2026");
+      await page.getByTestId("banks-filters__created-from").fill("2026-03-01");
 
       const createdHeader = page
         .getByRole("columnheader", { name: "Created", exact: true })

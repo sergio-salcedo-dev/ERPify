@@ -5,9 +5,9 @@ import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvid
 export interface BanksFilter {
   name: string;
   shortName: string;
-  /** `dd/mm/yyyy`. Empty string means "no lower bound". */
+  /** ISO `yyyy-mm-dd` (native date-picker format). Empty string means "no lower bound". */
   createdFrom: string;
-  /** `dd/mm/yyyy`. Empty string means "no upper bound". */
+  /** ISO `yyyy-mm-dd` (native date-picker format). Empty string means "no upper bound". */
   createdTo: string;
 }
 
@@ -44,12 +44,13 @@ function rowTimestamp(iso: string): number {
 export function applyFilters(banks: readonly Bank[], filter: BanksFilter): Bank[] {
   const name = filter.name.trim();
   const shortName = filter.shortName.trim();
-  const fromTs = dateTimeProvider.parseDdMmYyyyToStartTimestamp(filter.createdFrom);
-  const toTs = dateTimeProvider.parseDdMmYyyyToEndTimestamp(filter.createdTo);
+  const fromTs = dateTimeProvider.parseIsoDateToStartTimestamp(filter.createdFrom);
+  const toTs = dateTimeProvider.parseIsoDateToEndTimestamp(filter.createdTo);
   const fromActive = filter.createdFrom.trim().length > 0;
   const toActive = filter.createdTo.trim().length > 0;
-  // A range field with text the user is still typing (e.g. "01/02") is treated
-  // as inactive — the filter only kicks in once a complete dd/mm/yyyy parses.
+  // A range field whose value doesn't parse to a real calendar day (e.g.
+  // mid-edit `2026-02`) is treated as inactive — the filter only kicks in
+  // once the native picker emits a complete yyyy-mm-dd.
   const rangeActive = (fromActive && fromTs !== null) || (toActive && toTs !== null);
 
   return banks.filter((bank) => {

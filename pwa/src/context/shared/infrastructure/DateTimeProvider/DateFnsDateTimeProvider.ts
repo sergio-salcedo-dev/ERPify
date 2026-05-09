@@ -44,6 +44,7 @@ export class DateFnsDateTimeProvider implements DateTimeProvider {
   private static readonly DISPLAY_DATE_TIME_FORMAT = "dd/MM/yyyy, HH:mm:ss";
   private static readonly DISPLAY_DATE_FORMAT = "dd/MM/yyyy";
   private static readonly DD_MM_YYYY_PATTERN = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+  private static readonly ISO_YYYY_MM_DD_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
   public now(): Date {
     return new Date();
@@ -159,5 +160,29 @@ export class DateFnsDateTimeProvider implements DateTimeProvider {
     if (!date) return null;
     const ts = this.endOfDay(date).getTime();
     return Number.isNaN(ts) ? null : ts;
+  }
+
+  public parseIsoDateToStartTimestamp(value: string): number | null {
+    const date = this.parseIsoDate(value);
+    if (!date) return null;
+    const ts = this.startOfDay(date).getTime();
+    return Number.isNaN(ts) ? null : ts;
+  }
+
+  public parseIsoDateToEndTimestamp(value: string): number | null {
+    const date = this.parseIsoDate(value);
+    if (!date) return null;
+    const ts = this.endOfDay(date).getTime();
+    return Number.isNaN(ts) ? null : ts;
+  }
+
+  private parseIsoDate(value: string): Date | null {
+    const trimmed = value.trim();
+    if (!DateFnsDateTimeProvider.ISO_YYYY_MM_DD_PATTERN.test(trimmed)) return null;
+    const parsed = dfParse(trimmed, "yyyy-MM-dd", new Date());
+    if (!isValid(parsed)) return null;
+    // Reject impossible calendar dates (`2026-02-31`) by round-tripping.
+    const reformatted = dfFormat(parsed, "yyyy-MM-dd");
+    return reformatted === trimmed ? parsed : null;
   }
 }

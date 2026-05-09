@@ -85,6 +85,18 @@ export interface DateTimeProvider {
 
   /** Upper-bound timestamp for a `dd/mm/yyyy` filter input (23:59:59.999). */
   parseDdMmYyyyToEndTimestamp(value: string): number | null;
+
+  /**
+   * Lower-bound timestamp for an ISO `yyyy-mm-dd` filter input
+   * (00:00:00.000 in the provider's local zone). Native HTML5
+   * `<input type="date">` controls emit values in this format, so this is
+   * the canonical helper for filters backed by the `DatePickerField`
+   * component.
+   */
+  parseIsoDateToStartTimestamp(value: string): number | null;
+
+  /** Upper-bound timestamp for an ISO `yyyy-mm-dd` filter input (23:59:59.999). */
+  parseIsoDateToEndTimestamp(value: string): number | null;
 }
 
 /** Units supported by {@link DateTimeProvider.calculateDuration}. */
