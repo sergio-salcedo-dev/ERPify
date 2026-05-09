@@ -3,8 +3,23 @@ set -e
 
 if [ "$1" = 'frankenphp' ] || [ "$1" = 'php' ] || [ "$1" = 'bin/console' ]; then
 
-	if [ -z "$(ls -A 'vendor/' 2>/dev/null)" ]; then
+	# Reinstall when vendor/ is empty (fresh checkout) or when composer.lock has
+	# drifted from what's installed on the host bind mount (e.g. after a pull
+	# that adds bundles like symfony/monolog-bundle).
+	LOCK_HASH=""
+	if [ -f composer.lock ]; then
+		LOCK_HASH=$(grep -m 1 '"content-hash"' composer.lock | awk -F '"' '{print $4}')
+	fi
+	STAMP_FILE="vendor/composer/.lock-content-hash"
+	INSTALLED_HASH=""
+	if [ -f "$STAMP_FILE" ]; then
+		INSTALLED_HASH=$(cat "$STAMP_FILE")
+	fi
+	if [ -z "$(ls -A 'vendor/' 2>/dev/null)" ] || [ "$LOCK_HASH" != "$INSTALLED_HASH" ]; then
 		composer install --prefer-dist --no-progress --no-interaction
+		if [ -n "$LOCK_HASH" ] && [ -d vendor/composer ]; then
+			printf '%s' "$LOCK_HASH" > "$STAMP_FILE"
+		fi
 	fi
 
 	# Display information about the current project
