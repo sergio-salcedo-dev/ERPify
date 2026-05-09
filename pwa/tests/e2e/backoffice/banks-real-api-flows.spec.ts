@@ -224,6 +224,10 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
 
     await page.goto("/backoffice/banks");
     await expect(page.getByTestId("banks-list")).toHaveAttribute("data-state", "ready");
+    // 30 seeded + 1 created by the previous test = 31 rows under the prefix.
+    // The default page size of 25 hides the newly-created `INLINE` bank on
+    // page 2 (default sort is name asc), so widen the window before locating.
+    await page.getByTestId("banks-pagination__page-size").selectOption("50");
     await page.getByTestId("banks-filters__name").fill(runPrefix);
 
     await page.getByTestId(`banks-table__edit-${id}`).click();
@@ -248,6 +252,9 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
 
     await page.goto("/backoffice/banks");
     await expect(page.getByTestId("banks-list")).toHaveAttribute("data-state", "ready");
+    // Same page-size-vs-row-count gotcha as the update test above: 31 rows
+    // under the prefix, default page size 25, target row sorted last by name.
+    await page.getByTestId("banks-pagination__page-size").selectOption("50");
     await page.getByTestId("banks-filters__name").fill(runPrefix);
 
     await expect(page.getByTestId(`banks-table__row-${id}`)).toBeVisible();
