@@ -157,5 +157,9 @@ return (new Config)
    ])
     ->setFinder($finder)
     ->setUsingCache(true) // Enable caching for faster subsequent runs
-    ->setCacheFile(__DIR__ . '/../../var/cache/php-cs-fixer/.php-cs-fixer.cache');
+    // Keep the cache next to this config file. PHP-CS-Fixer would otherwise drop
+    // it in the current working directory whenever the tool is invoked outside
+    // `api/` (e.g. from the repo root), which scatters `.php-cs-fixer.cache`
+    // files across the tree.
+    ->setCacheFile(__DIR__ . '/.php-cs-fixer.cache');
 

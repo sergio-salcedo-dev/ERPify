@@ -1,3 +1,5 @@
+import { API_ENDPOINTS } from "@/context/shared/infrastructure/api/ApiEndpoints";
+
 /**
  * Build absolute Mercure URL for FrankenPHP file-watch hot reload in the browser.
  *
@@ -29,9 +31,10 @@ export async function fetchFrankenPhpHotReloadSubscribeUrl(): Promise<string | n
   }
 
   try {
-    const res = await fetch(`${internal.replace(/\/$/, "")}/api/v1/dev/frankenphp-hot-reload`, {
-      cache: "no-store",
-    });
+    const res = await fetch(
+      `${internal.replace(/\/$/, "")}${API_ENDPOINTS.FRONTOFFICE.DEV.FRANKENPHP_HOT_RELOAD}`,
+      { cache: "no-store" },
+    );
     if (!res.ok) {
       return null;
     }

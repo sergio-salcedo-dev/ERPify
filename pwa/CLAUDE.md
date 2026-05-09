@@ -48,3 +48,141 @@ Full-stack targets (`make dev`, `make docker.up`, `make docker.down`, …) live 
 - New bounded contexts follow the `domain`/`application`/`infrastructure` split — don't flatten into `src/app/` or `src/lib/`.
 - Prefer functional components + hooks; strict TS types (no `any` unless justified).
 - BEM class names — `.card__header--highlighted`, not arbitrary utility clusters that escape the component.
+
+## Security review (mandatory on every change)
+
+Every PR — even small fixes — runs the security checklist documented in
+the root [`../CLAUDE.md`](../CLAUDE.md) ("Security review on every
+change"). The frontend-specific items below are part of that
+checklist; do not treat them as optional.
+
+## XSS prevention rules
+
+React escapes JSX text by default, but the framework does **not** block
+script-bearing URL schemes and several attribute / sink categories remain
+attack surface. Treat the following as load-bearing:
+
+- **Dynamic `href` / `src`** — every URL whose value is influenced by API
+  data, route params, query strings, or user input MUST go through
+  `safeHref(value, fallback)` from `@/lib/safeHref` (rejects `javascript:`,
+  `data:`, `vbscript:`, `file:` regardless of casing or whitespace
+  obfuscation). Combine with `encodeURIComponent` on the dynamic segment
+  when inserting it into a path. Never interpolate raw API data straight
+  into an `href` template literal.
+- **`router.push` / programmatic navigation** — same rule: wrap the URL in
+  `safeHref` so a malicious `javascript:` payload cannot be navigated to.
+- **`dangerouslySetInnerHTML`** — banned outside very specific, sanitized
+  Markdown / SVG embeds. If you genuinely need it, the input MUST be
+  produced by a vetted sanitizer (e.g. DOMPurify) and reviewed; do not
+  reach for it for "richtext" or "format-as-bold" hacks.
+- **`innerHTML` / direct DOM writes / `document.write` / `eval` /
+  `new Function(string)`** — banned. Use React state instead.
+- **Attributes that don't execute scripts (`title`, `aria-label`,
+  `data-*`)** — safe to interpolate; React escapes them. Still keep
+  static `aria-label`s where row context already conveys the resource
+  name (see `BanksTable`'s actions cell).
+- **Server response headers** — the security baseline lives in
+  `next.config.ts#headers()`: a strict-ish `Content-Security-Policy`
+  (`object-src 'none'`, `frame-ancestors 'none'`, `base-uri 'self'`,
+  `form-action 'self'`, `upgrade-insecure-requests`), plus
+  `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`,
+  `Permissions-Policy`, COOP / CORP, HSTS. `script-src` keeps
+  `'unsafe-inline'` for now to support Next.js hydration; the future
+  state is a nonce-based CSP via `middleware.ts`. Do NOT add
+  `'unsafe-eval'` outside development.
+- **Clipboard / navigator APIs** — `CopyButton` is the canonical path;
+  it never trusts the value as HTML. Don't compose your own
+  `navigator.clipboard.writeText` flows from entity components.
+
+## Shared building blocks (use these, don't reinvent)
+
+UI-level primitives live under `src/components/erpify/` and are exported from
+its barrel (`@/components/erpify`). Framework-agnostic helpers live under
+`src/lib/`. Reach for these from every entity instead of re-implementing them
+locally:
+
+- **Dates** — `formatDateTime` / `parseDdMmYyyy` / `startOfDdMmYyyy` /
+  `endOfDdMmYyyy` from `@/lib/formatDate`. Render `created_at` / `updated_at`
+  (and any other ISO timestamp) via `formatDateTime`; never call
+  `new Date(...).toLocaleString()` directly in entity components.
+- **Date filter inputs** — `<DateField>` from `@/components/erpify`. Renders
+  the canonical `dd/mm/yyyy` text input with the right `pattern` /
+  `inputMode` / `placeholder` / tooltip / `(dd/mm/yyyy)` label hint, and
+  pairs with the `parseDdMmYyyy` helpers above.
+- **Copy-to-clipboard** — `<CopyButton value={…}>` from `@/components/erpify`.
+  Handles the success / error feedback flip, the icon swap, the sr-only
+  fallback, and the async-clipboard / `execCommand` path. Never call
+  `navigator.clipboard.writeText` from an entity component directly.
+- **Tables / boundaries / sheets** — `<DataTable>`, `<AsyncBoundary>`,
+  `<RecordSheet>`, `<EmptyState>`, `<FormField>`, `<ProblemDisplay>`,
+  `<StatusBadge>`, `<CorrelationIdChip>`, `<AppShell>`.
+- **Form validation** — `Validator` / `ZodValidatorAdapter` / `useZodForm`
+  from `@/context/shared/infrastructure/Validation`. Each entity declares
+  its own schema in `src/context/<bounded-context>/<entity>/application/schemas/`
+  (e.g. `BankSchema.ts`) and exports a Zod schema **plus** the inferred
+  `*FormValues` type. React components consume the schema via
+  `useZodForm(schema, { defaultValues })` and the inferred type — they
+  never import `zod` or `@hookform/resolvers/zod` directly. Use the same
+  schema with `ZodValidatorAdapter` from non-React application services
+  to validate API payloads end-to-end. Match the schema's per-field
+  error messages to the strings the API returns in 422 responses so a
+  single set of UI assertions covers both client- and server-side
+  surfacing; map server `ProblemViolation`s onto RHF errors via
+  `setError(field, { type: "server", message: violation.message })`.
+
+When you need a new cross-entity primitive, add it to `components/erpify/` (or
+`src/lib/` for a pure helper) and export it from the matching barrel.
+
+## Test ID rules
+
+QA scripts target controls by `data-testid`. The contract is simple: **every
+static `data-testid` literal must be unique across the source tree** so that
+two elements with the same id never end up on the same page (Playwright's
+strict-mode locators fail with "more than one element matched" when they do).
+
+- Use BEM-flavoured prefixes that already match the entity / surface
+  (e.g. `banks-list__title`, `banks-detail__copy-id`,
+  `banks-pagination__next`).
+- For lists / tables, the testid MUST encode the row identity using the
+  **backend entity id** (typically a UUID) from the API — for example
+  ``data-testid={`banks-table__row-${row.id}`}`` for the row itself and
+  ``data-testid={`banks-table__edit-${row.id}`}`` /
+  ``data-testid={`banks-table__delete-${row.id}`}`` for the per-row
+  actions. The entity id is unique by construction, so the rendered DOM
+  stays unique. Do NOT emit a parallel `data-row-id` (or similar)
+  attribute — the `data-testid` is the canonical row identity for QA.
+  `<DataTable>` enforces this with its `rowTestId` prop.
+- For reusable components, **never hardcode a testid**. Accept a `testId`
+  prop and let the consumer set it (see `<DataTable testId rowTestId>`,
+  `<CopyButton testId>`, `<DateField testId>`). Hardcoding traps every
+  consumer into the same id and triggers the strict-mode failure mode.
+- The guard `tests/data-testid-uniqueness.test.ts` walks `src/` at CI time
+  and fails if a literal `data-testid="..."` appears in more than one file
+  or more than once in the same file. Do not weaken or skip it.
+
+## Accessibility rules for action buttons
+
+Every interactive control that triggers an action (button, anchor styled as
+button, dialog trigger, pagination control, form submit/cancel) must carry **all**
+of the following:
+
+- `title` — descriptive hover tooltip; include the resource name when meaningful
+  (e.g. `title={\`Edit bank ${row.name}\`}`).
+- `aria-label` — keep the accessible name **short and static** (`"Edit"`,
+  `"Delete"`, `"Previous page"`). When the control lives inside a `role="cell"`
+  or `role="row"`, the cell's accessible name is computed from descendant
+  control names, so dynamic labels containing the row's text break Playwright's
+  strict-mode locators (e.g. `getByRole("cell", { name: "Acme Savings" })`
+  matches both the name cell and the actions cell). Put the dynamic part in
+  `title` instead.
+- A textual fallback for icon-only controls — either visible text, an
+  `<span className="sr-only">…</span>`, or both — so the control still has a
+  name when CSS fails to load.
+- `aria-hidden="true"` on every decorative icon inside the control.
+- For pagination/navigation controls that have no valid target (no previous or
+  no next page), **hide** the control instead of rendering it disabled — a
+  disabled control is still discovered by assistive tech and adds noise.
+
+For destructive actions also wire the user through a confirmation dialog
+(`Dialog.*` from `@/components/ui/dialog`) and surface API failures inside the
+dialog via `<ProblemDisplay variant="inline" />` — never silently dismiss them.

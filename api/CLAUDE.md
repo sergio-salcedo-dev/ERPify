@@ -46,6 +46,25 @@ New bounded contexts/modules follow the same three-layer split. Cross-context ca
 -   Keep lines under 120 characters; wrap longer ones unless breaking them hurts readability (e.g. long URLs, string literals).
 -   Prod requires `APP_SECRET`, `CADDY_MERCURE_JWT_SECRET`, `POSTGRES_PASSWORD` in env — see [`../docs/deployment-guide.md`](../docs/deployment-guide.md) and [`../pwa/docs/production-deployment.md`](../pwa/docs/production-deployment.md).
 
+## Security review (mandatory on every change)
+
+Every PR — even small fixes — runs the security checklist documented in
+the root [`../CLAUDE.md`](../CLAUDE.md) ("Security review on every change").
+For API changes specifically, walk these before pushing:
+
+-   Doctrine queries are parameterised (`:placeholder` / query-builder bindings); no `${…}` interpolation reaching SQL/DQL.
+-   New controllers / handlers declare a Security voter or `IsGranted`, or document why they are public.
+-   Request DTOs carry `#[Assert\…]` constraints and pass through `ValidatorHelper` before any domain call. Validate UUIDs are UUIDs.
+-   Serializer groups never expose audit fields (`id`, `createdAt`, `updatedAt`, internal flags) to client-supplied payloads.
+-   Errors follow RFC 9457 Problem Details; no stack traces or DB strings leak outside `dev`.
+-   `.env*.local` and other secret files are NOT in the diff.
+-   CORS / CSRF / Mercure allowlist not broadened without justification.
+-   Migrations are reversible; no PII / secrets seeded; no untracked `DROP TABLE` outside an explicit destructive migration.
+-   Messenger handlers are idempotent; transport auth and payload scrub preserved.
+
+If a class doesn't apply, say so in the PR description rather than silently
+skipping. Silent skips are the most common path to a CVE.
+
 ## Docs to consult
 
 -   Adding endpoints (search, …): [`docs/adding-endpoints.md`](docs/adding-endpoints.md).

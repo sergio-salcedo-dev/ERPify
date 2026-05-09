@@ -39,10 +39,60 @@ const nextConfig: NextConfig = {
   },
   // Configuration of headers for security and PWA
   async headers() {
+    // Build a Content-Security-Policy. The dangerous directives are locked
+    // down (`object-src 'none'`, `frame-ancestors 'none'`, `base-uri 'self'`,
+    // `form-action 'self'`) so an injected element cannot exfiltrate via
+    // `<base>`, `<form action="…">`, or be embedded in a hostile iframe.
+    //
+    // Notes:
+    // - Next.js still emits inline `<script>` tags for hydration data and
+    //   inline `<style>` tags for critical CSS, so `script-src` / `style-src`
+    //   keep `'unsafe-inline'`. A nonce-based CSP via `middleware.ts` is the
+    //   future-state and removes both.
+    // - `'unsafe-eval'` is required by Next/Turbopack in development for HMR
+    //   only; it is dropped in production builds.
+    // - `connect-src` allows the Symfony API origin via
+    //   `NEXT_PUBLIC_SYMFONY_API_BASE_URL`. Same-origin (`'self'`) covers the
+    //   default Docker stack where FrankenPHP serves /api on the same host.
+    const isProd = process.env.NODE_ENV === "production";
+    const apiOrigin = (() => {
+      const raw = process.env.NEXT_PUBLIC_SYMFONY_API_BASE_URL?.trim();
+      if (!raw) return "";
+      try {
+        const u = new URL(raw);
+        return `${u.protocol}//${u.host}`;
+      } catch {
+        return "";
+      }
+    })();
+
+    const csp = [
+      "default-src 'self'",
+      `script-src 'self' 'unsafe-inline'${isProd ? "" : " 'unsafe-eval'"}`,
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob: https:",
+      "font-src 'self' data:",
+      `connect-src 'self' ${apiOrigin} https://picsum.photos`.trim(),
+      "media-src 'self' data: blob:",
+      "worker-src 'self' blob:",
+      "manifest-src 'self'",
+      "object-src 'none'",
+      "frame-ancestors 'none'",
+      "form-action 'self'",
+      "base-uri 'self'",
+      "upgrade-insecure-requests",
+    ]
+      .filter(Boolean)
+      .join("; ");
+
     return [
       {
         source: "/(.*)",
         headers: [
+          {
+            key: "Content-Security-Policy",
+            value: csp,
+          },
           {
             key: "X-Content-Type-Options",
             value: "nosniff",
@@ -57,7 +107,15 @@ const nextConfig: NextConfig = {
           },
           {
             key: "Permissions-Policy",
-            value: "camera=(), microphone=(), geolocation=()",
+            value: "camera=(), microphone=(), geolocation=(), interest-cohort=()",
+          },
+          {
+            key: "Cross-Origin-Opener-Policy",
+            value: "same-origin",
+          },
+          {
+            key: "Cross-Origin-Resource-Policy",
+            value: "same-origin",
           },
           {
             key: "Strict-Transport-Security",
@@ -68,15 +126,6 @@ const nextConfig: NextConfig = {
     ];
   },
 
-  logging: {
-    fetches: {
-      fullUrl: true,
-    },
-  },
-
-  devIndicators: {
-    position: "bottom-right",
-  },
   // async headers() {
   //   const csp = `
   //     default-src 'self';
@@ -114,6 +163,15 @@ const nextConfig: NextConfig = {
   //   ];
   // },
   //
+  logging: {
+    fetches: {
+      fullUrl: true,
+    },
+  },
+
+  devIndicators: {
+    position: "bottom-right",
+  },
   // async rewrites() {
   //   return [
   //     {
