@@ -327,11 +327,11 @@ jobs:
           retention-days: 7
 
   # -------------------------
-  # PWA BURN-IN (flaky detection — PRs and weekly schedule)
+  # PWA BURN-IN (flaky detection — weekly schedule only)
   # -------------------------
   pwa-burn-in:
     name: PWA Burn-In (Flaky Detection)
-    if: github.event_name == 'pull_request' || github.event_name == 'schedule'
+    if: github.event_name == 'schedule'
     needs: [pwa-node, api-build]
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -385,17 +385,8 @@ jobs:
         run: cd pwa && npx playwright install --with-deps chromium
 
       # Use Playwright's --repeat-each to detect flakiness in a single run
-      # (avoids per-iteration stack-bring-up cost). Tune REPEATS to balance
-      # signal vs. CI minutes — schedule run uses a higher value.
-      - name: Burn-in (PR — repeat-each=3)
-        if: github.event_name == 'pull_request'
-        env:
-          CI: true
-          PLAYWRIGHT_BASE_URL: https://localhost
-        run: make pwa.test.e2e c='--repeat-each=3'
-
-      - name: Burn-in (schedule — repeat-each=10)
-        if: github.event_name == 'schedule'
+      # (avoids per-iteration stack-bring-up cost).
+      - name: Burn-in (repeat-each=10)
         env:
           CI: true
           PLAYWRIGHT_BASE_URL: https://localhost
