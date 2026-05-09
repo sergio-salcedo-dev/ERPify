@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { AlertTriangle, Home, RefreshCw, ShieldCheck } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { CopyButton } from "@/components/erpify";
 import { cn } from "@/lib/utils";
 
 interface ErrorBoundaryProps {
@@ -84,12 +85,30 @@ export default function GlobalError({ error, reset }: ErrorBoundaryProps) {
           ) : null}
 
           {error?.digest ? (
-            <p
-              className="error-page__digest text-muted-foreground mt-4 font-mono text-xs"
+            <div
+              className="error-page__digest border-border bg-muted/40 mt-6 flex flex-col items-center justify-center gap-2 rounded-md border p-3 sm:flex-row"
               data-testid="error-page__digest"
             >
-              Reference: {error.digest}
-            </p>
+              <span className="error-page__digest-label text-muted-foreground text-xs font-medium tracking-wider uppercase">
+                Error ID
+              </span>
+              <code
+                className="error-page__digest-value text-foreground font-mono text-xs break-all select-all"
+                data-testid="error-page__digest-value"
+              >
+                {error.digest}
+              </code>
+              <CopyButton
+                value={error.digest}
+                label="Copy"
+                copiedLabel="Copied"
+                size="xs"
+                variant="ghost"
+                iconOnly
+                className="error-page__digest-copy data-[copy-status=copied]:[&_svg]:text-success"
+                testId="error-page__digest-copy"
+              />
+            </div>
           ) : null}
 
           <div className="error-page__actions mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
