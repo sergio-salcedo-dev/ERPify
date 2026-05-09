@@ -14,6 +14,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { safeHref } from "@/lib/safeHref";
 import { PersistenceAction, ViewStatus } from "@/context/shared/domain/types/status";
+import { HttpStatus } from "@/context/shared/domain/types/http";
 import { BankForm } from "../../_components/BankForm";
 
 type State = ViewStatus;
@@ -53,7 +54,9 @@ export default function EditBankPage() {
         if (cancelled) return;
         if (err instanceof HttpError) {
           setProblem(err.problem);
-          setState(err.problem.status === 404 ? ViewStatus.NOT_FOUND : ViewStatus.ERROR);
+          setState(
+            err.problem.status === HttpStatus.NOT_FOUND ? ViewStatus.NOT_FOUND : ViewStatus.ERROR,
+          );
           return;
         }
         setProblem(genericProblem(err instanceof Error ? err.message : "Unknown error"));

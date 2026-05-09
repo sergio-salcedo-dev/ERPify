@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { formatDateTime } from "@/lib/formatDate";
 import { safeHref } from "@/lib/safeHref";
 import { ViewStatus } from "@/context/shared/domain/types/status";
+import { HttpStatus } from "@/context/shared/domain/types/http";
 import { DeleteBankButton } from "../_components/DeleteBankButton";
 
 type State = ViewStatus;
@@ -54,7 +55,9 @@ export default function BankDetailPage() {
         if (cancelled) return;
         if (err instanceof HttpError) {
           setProblem(err.problem);
-          setState(err.problem.status === 404 ? ViewStatus.NOT_FOUND : ViewStatus.ERROR);
+          setState(
+            err.problem.status === HttpStatus.NOT_FOUND ? ViewStatus.NOT_FOUND : ViewStatus.ERROR,
+          );
           return;
         }
         setProblem(genericProblem(err instanceof Error ? err.message : "Unknown error"));

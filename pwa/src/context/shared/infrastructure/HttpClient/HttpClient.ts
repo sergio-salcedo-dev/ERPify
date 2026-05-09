@@ -1,4 +1,5 @@
 import { injectable } from "inversify";
+import { HttpStatus } from "../../domain/types/http";
 import { ApiRoutes } from "../ApiRoutes";
 import { HttpError } from "./HttpError";
 import { toProblemDetails } from "./legacyEnvelope";
@@ -88,7 +89,7 @@ export class FetchHttpClient implements HttpClient {
       throw await this.toHttpError(res);
     }
 
-    if (res.status === 204) {
+    if (res.status === HttpStatus.NO_CONTENT) {
       return undefined as T;
     }
 
@@ -134,7 +135,7 @@ export class FetchHttpClient implements HttpClient {
       throw await this.toHttpError(res);
     }
 
-    if (res.status === 204) {
+    if (res.status === HttpStatus.NO_CONTENT) {
       return undefined as T;
     }
 
