@@ -98,7 +98,7 @@ export function BanksTable({ banks, sort, onSortChange, onBankDeleted }: BanksTa
   ];
 
   return (
-    <div className="banks-table -mx-4 overflow-x-auto sm:mx-0" data-testid="banks-table">
+    <div className="banks-table overflow-x-auto sm:mx-0" data-testid="banks-table">
       <DataTable
         columns={columns}
         data={banks}
