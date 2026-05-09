@@ -115,7 +115,22 @@ locally:
   `navigator.clipboard.writeText` from an entity component directly.
 - **Tables / boundaries / sheets** — `<DataTable>`, `<AsyncBoundary>`,
   `<RecordSheet>`, `<EmptyState>`, `<FormField>`, `<ProblemDisplay>`,
-  `<StatusBadge>`, `<CorrelationIdChip>`, `<AppShell>`.
+  `<StatusBadge>`, `<CorrelationIdChip>`, `<AppShell>`, `<ErrorScreen>`.
+- **Error pages** — `<ErrorScreen>` is the shared shell behind every
+  `src/app/` error file (`not-found.tsx`, `error.tsx`, `global-error.tsx`,
+  the Next 15+ `forbidden.tsx` / `unauthorized.tsx` convention files, and
+  the bespoke `/maintenance`, `/rate-limited`, `/offline`,
+  `/unauthorized`, `/unauthenticated` routes). Tune mobile / tablet /
+  laptop / desktop / large breakpoints there once instead of forking
+  layouts per screen. The `error.tsx` / `global-error.tsx` boundaries
+  must continue to gate `error.message` behind
+  `process.env.NODE_ENV === "development"` so production never leaks
+  stack traces.
+- **`buttonVariants` import path** — import from
+  `@/components/ui/button-variants`, never from
+  `@/components/ui/button` (the latter is `"use client"` and Next 16
+  blocks server invocations of the cva helper). Import the `Button`
+  component itself from `@/components/ui/button` as before.
 - **Form validation** — `Validator` / `ZodValidatorAdapter` / `useZodForm`
   from `@/context/shared/infrastructure/Validation`. Each entity declares
   its own schema in `src/context/<bounded-context>/<entity>/application/schemas/`

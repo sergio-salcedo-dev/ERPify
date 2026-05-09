@@ -2,12 +2,16 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
-import { AlertTriangle, RefreshCw } from "lucide-react";
+import { AlertTriangle, Home, RefreshCw } from "lucide-react";
+import { ErrorScreen } from "@/components/erpify";
 
 interface GlobalErrorProps {
   error: Error & { digest?: string };
   reset: () => void;
 }
+
+const ACTION_BTN =
+  "inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg px-6 text-sm font-medium transition-colors sm:w-auto sm:h-10 lg:h-11 lg:text-base";
 
 export default function GlobalError({ error, reset }: GlobalErrorProps) {
   useEffect(() => {
@@ -25,45 +29,20 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
   return (
     <html lang="en">
       <body className="bg-background min-h-screen">
-        <div className="global-error flex min-h-screen flex-col" data-testid="global-error">
-          <main
-            role="alert"
-            aria-live="assertive"
-            className="global-error__main flex flex-1 items-center justify-center px-4 py-16 sm:px-6 lg:px-8"
-          >
-            <section
-              className="global-error__panel bg-card border-border w-full max-w-xl rounded-lg border p-8 text-center shadow-sm sm:p-12"
-              data-testid="global-error__panel"
-            >
-              <div className="global-error__icon-wrap bg-destructive/10 mx-auto flex size-16 items-center justify-center rounded-full">
-                <AlertTriangle className="text-destructive size-8" aria-hidden="true" />
-              </div>
-
-              <p
-                className="global-error__status text-muted-foreground mt-6 text-sm font-medium tracking-wider uppercase"
-                data-testid="global-error__status"
-              >
-                Critical error
-              </p>
-
-              <h1
-                className="global-error__title text-foreground mt-2 text-3xl font-semibold tracking-tight sm:text-4xl"
-                data-testid="global-error__title"
-              >
-                The application could not start
-              </h1>
-
-              <p
-                className="global-error__description text-muted-foreground mx-auto mt-4 max-w-md text-sm sm:text-base"
-                data-testid="global-error__description"
-              >
-                A critical failure occurred while loading Erpify. The team has been notified. Try
-                again, and if the issue persists contact support with the reference below.
-              </p>
-
+        <ErrorScreen
+          testIdPrefix="global-error"
+          status="Critical error"
+          title="The application could not start"
+          description="A critical failure occurred while loading Erpify. The team has been notified. Try again, and if the issue persists contact support with the reference below."
+          icon={AlertTriangle}
+          iconTone="destructive"
+          mainRole="alert"
+          withHeader={false}
+          extras={
+            <>
               {isDev && error?.message ? (
                 <pre
-                  className="global-error__details bg-muted text-foreground border-border mt-6 max-h-48 overflow-auto rounded-md border p-4 text-left font-mono text-xs whitespace-pre-wrap"
+                  className="global-error__details bg-muted text-foreground border-border mb-4 max-h-40 overflow-auto rounded-md border p-3 text-left font-mono text-xs whitespace-pre-wrap sm:max-h-48 sm:p-4"
                   data-testid="global-error__details"
                 >
                   {error.message}
@@ -72,46 +51,48 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
 
               {error?.digest ? (
                 <div
-                  className="global-error__digest border-border bg-muted/40 mt-6 flex flex-col items-center justify-center gap-2 rounded-md border p-3 sm:flex-row"
+                  className="global-error__digest border-border bg-muted/40 flex flex-col items-center justify-center gap-2 rounded-md border p-3 sm:flex-row"
                   data-testid="global-error__digest"
                 >
-                  <span className="global-error__digest-label text-muted-foreground text-xs font-medium tracking-wider uppercase">
+                  <span className="global-error__digest-label text-muted-foreground text-[11px] font-medium tracking-wider uppercase sm:text-xs">
                     Error ID
                   </span>
                   <code
-                    className="global-error__digest-value text-foreground font-mono text-xs break-all select-all"
+                    className="global-error__digest-value text-foreground max-w-full font-mono text-[11px] break-all select-all sm:text-xs"
                     data-testid="global-error__digest-value"
                   >
                     {error.digest}
                   </code>
                 </div>
               ) : null}
-
-              <div className="global-error__actions mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-                <button
-                  type="button"
-                  onClick={() => reset()}
-                  className="global-error__retry bg-primary text-primary-foreground hover:bg-primary/90 inline-flex h-10 items-center justify-center gap-2 rounded-lg px-5 text-sm font-medium transition-colors"
-                  title="Retry loading the application"
-                  aria-label="Try again"
-                  data-testid="global-error__retry"
-                >
-                  <RefreshCw className="size-4" aria-hidden="true" />
-                  Try again
-                </button>
-                <Link
-                  href="/"
-                  className="global-error__home-link border-border text-foreground hover:bg-muted inline-flex h-10 items-center justify-center rounded-lg border px-5 text-sm font-medium transition-colors"
-                  title="Reload home"
-                  aria-label="Home"
-                  data-testid="global-error__home-link"
-                >
-                  Reload home
-                </Link>
-              </div>
-            </section>
-          </main>
-        </div>
+            </>
+          }
+          actions={
+            <>
+              <button
+                type="button"
+                onClick={() => reset()}
+                className={`global-error__retry bg-primary text-primary-foreground hover:bg-primary/90 ${ACTION_BTN}`}
+                title="Retry loading the application"
+                aria-label="Try again"
+                data-testid="global-error__retry"
+              >
+                <RefreshCw className="size-4" aria-hidden="true" />
+                Try again
+              </button>
+              <Link
+                href="/"
+                className={`global-error__home-link border-border text-foreground hover:bg-muted border ${ACTION_BTN}`}
+                title="Reload home"
+                aria-label="Home"
+                data-testid="global-error__home-link"
+              >
+                <Home className="size-4" aria-hidden="true" />
+                Reload home
+              </Link>
+            </>
+          }
+        />
       </body>
     </html>
   );
