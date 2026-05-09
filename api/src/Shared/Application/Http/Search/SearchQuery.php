@@ -14,7 +14,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * Decorated with `#[Assert\…]`; consumed by Symfony `#[MapQueryString]`
  * and validated automatically — failures emit `ValidationFailedException`,
  * which {@see \Erpify\Shared\Application\Problem\ProblemDetailsFactory} maps
- * to a 422 `validation-failed` Problem Details body via
+ * to a 400 `validation-failed` Problem Details body via
  * {@see \Erpify\Shared\Infrastructure\Http\EventListener\ExceptionResponder}.
  *
  * Per-entity DTOs extend this and add filter properties; they should

@@ -62,13 +62,13 @@ Marker resolution honours implements-clause order, intersected with the canonica
 
 | Symfony exception                                     | HTTP status              | `type`                                     |
 |-------------------------------------------------------|--------------------------|--------------------------------------------|
-| `Validator\Exception\ValidationFailedException` *     | 422                      | `validation-failed` (+ `violations[]`)     |
+| `Validator\Exception\ValidationFailedException` *     | 400                      | `validation-failed` (+ `violations[]`)     |
 | `Security\Core\Exception\AccessDeniedException`       | 403                      | `forbidden`                                |
 | `Security\Core\Exception\AuthenticationException`     | 401                      | `unauthenticated`                          |
 | `HttpKernel\Exception\HttpExceptionInterface`         | from `getStatusCode()`   | mirrors marker default for known statuses, else `http-error` |
 | Anything else (`\Throwable`)                          | 500                      | `unhandled-exception`                      |
 
-\* The factory walks `getPrevious()` so wrapped `ValidationFailedException` (e.g. inside Symfony's `RequestPayloadValueResolver` 422 wrapper used by `#[MapRequestPayload]` / `#[MapQueryString]`) is unwrapped and mapped to the structured `violations[]` extension instead of a generic 422. `violations[]` shape: `[{field, message, code}, ...]`.
+\* The factory walks `getPrevious()` so wrapped `ValidationFailedException` (e.g. inside Symfony's `RequestPayloadValueResolver` 422 wrapper used by `#[MapRequestPayload]` / `#[MapQueryString]`) is unwrapped and re-mapped to a 400 with the structured `violations[]` extension instead of Symfony's generic 422. `violations[]` shape: `[{field, message, code}, ...]`.
 
 ## How to add a new error (Amelia walk-through from PRD §Journey 1)
 

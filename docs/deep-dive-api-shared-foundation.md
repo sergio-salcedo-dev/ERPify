@@ -53,7 +53,7 @@ api/src/Shared/
 - **LOC:** 57 — **Type:** HTTP-boundary `readonly` DTO; `MAX_PAGE = 10_000`, `MAX_LIMIT = 1_000`.
 - **Exports:** Constructor with `#[Assert\*]` constraints on `cursor`/`page`/`limit`/`paginationMode`/`ids`; `toCriteria(): SearchCriteria`.
 - **Used by:** `Backoffice/Bank/Application/BankSearcher`, `Backoffice/Bank/Infrastructure/Controller/BankSearchController` (binds via `#[MapQueryString]`), `Infrastructure/Persistence/AbstractSearchRepository`.
-- **Contributor note:** Subclass per entity to add domain-specific filters and override `toCriteria()`. Validation failures bubble to `ValidationFailedException` → `ProblemDetailsFactory` → 422.
+- **Contributor note:** Subclass per entity to add domain-specific filters and override `toCriteria()`. Validation failures bubble to `ValidationFailedException` → `ProblemDetailsFactory` → 400.
 - **Verification:** `api/tests/Unit/Shared/Application/Http/Search/SearchQueryTest.php`.
 
 #### `api/src/Shared/Application/Mailer/NotificationMailer.php`

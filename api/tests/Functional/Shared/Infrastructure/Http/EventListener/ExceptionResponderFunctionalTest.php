@@ -280,14 +280,14 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
 
         $response = $kernelBrowser->getResponse();
         $this->assertSame(
-            \Symfony\Component\HttpFoundation\Response::HTTP_UNPROCESSABLE_ENTITY,
+            \Symfony\Component\HttpFoundation\Response::HTTP_BAD_REQUEST,
             $response->getStatusCode(),
             (string) $response->getContent(),
         );
 
         $logRecord = $this->singleLogRecord($bufferingLogger);
         $this->assertSame(LogLevel::WARNING, $logRecord['level']);
-        $this->assertSame(422, $logRecord['context']['status'] ?? null);
+        $this->assertSame(400, $logRecord['context']['status'] ?? null);
         $this->assertSame('validation-failed', $logRecord['context']['type'] ?? null);
     }
 

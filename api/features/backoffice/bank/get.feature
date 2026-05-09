@@ -12,14 +12,14 @@ Feature: Get banks
     And the JSON node "data.createdAt" should not be null
     And the JSON node "data.updatedAt" should not be null
 
-  Scenario Outline: Get a bank with an invalid id returns a 422 validation-failed Problem Details body
+  Scenario Outline: Get a bank with an invalid id returns a 400 validation-failed Problem Details body
     When I send a "GET" request to "/backoffice/banks/<bankId>"
-    Then the response status code should be 422
+    Then the response status code should be 400
     And the header "Content-Type" should be equal to "application/problem+json"
     And the header "Cache-Control" should contain "no-store"
     And the response should be in JSON
     And the JSON node "type" should be equal to "validation-failed"
-    And the JSON node "status" should be equal to the number 422
+    And the JSON node "status" should be equal to the number 400
     And the JSON node "title" should be equal to "Validation failed."
     And the JSON node "violations[0].message" should be equal to "<errorMessage>"
     And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"

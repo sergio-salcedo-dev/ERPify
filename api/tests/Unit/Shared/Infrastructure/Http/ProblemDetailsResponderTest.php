@@ -54,7 +54,7 @@ final class ProblemDetailsResponderTest extends TestCase
 
     public function testBodyIsJsonEncodedToArrayOutput(): void
     {
-        $problemDetails = $this->makeProblemDetails(status: 422, type: 'validation-failed', title: 'Validation failed');
+        $problemDetails = $this->makeProblemDetails(status: 400, type: 'validation-failed', title: 'Validation failed');
 
         $response = (new ProblemDetailsResponder())->respond($problemDetails);
 
@@ -113,7 +113,7 @@ final class ProblemDetailsResponderTest extends TestCase
         $problemDetails = new ProblemDetails(
             type: 'validation-failed',
             title: 'Validation failed',
-            status: 422,
+            status: 400,
             detail: null,
             instance: self::INSTANCE,
             correlationId: self::CORRELATION_ID,

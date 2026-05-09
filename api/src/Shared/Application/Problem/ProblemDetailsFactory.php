@@ -229,7 +229,7 @@ final readonly class ProblemDetailsFactory
             return $this->applyBodyCap($this->withDebug(new ProblemDetails(
                 type: 'validation-failed',
                 title: 'Validation failed.',
-                status: 422,
+                status: 400,
                 detail: null,
                 instance: $instance,
                 correlationId: $correlationId,
