@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Media\Application;
 
+use Erpify\Shared\Application\Validation\Validator;
 use Erpify\Shared\Infrastructure\Uuid\SymfonyUuidGenerator;
 use Erpify\Shared\Media\Application\Port\ImageNormalizer;
 use Erpify\Shared\Media\Domain\Entity\Media;
@@ -15,6 +16,7 @@ final readonly class MediaRegistrar
     public function __construct(
         private ImageNormalizer $imageNormalizer,
         private MediaRepository $mediaRepository,
+        private Validator $validator,
     ) {
     }
 
@@ -35,6 +37,8 @@ final readonly class MediaRegistrar
             \strlen($normalizedImage->bytes),
             $normalizedImage->bytes,
         );
+
+        $this->validator->ensure($media);
 
         $this->mediaRepository->save($media);
 

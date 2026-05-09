@@ -88,6 +88,12 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
     await page.goto("/backoffice/banks");
     await expect(page.getByTestId("banks-list")).toHaveAttribute("data-state", "ready");
 
+    // Bump the page size so the post-reset assertion below ("after reset, all
+    // SEED_COUNT seeded rows are back in the table") isn't truncated by the
+    // default page size of 25 (SEED_COUNT is 30 — the difference is the bug
+    // that surfaces on CI as a `toHaveCount(SEED_COUNT)` mismatch).
+    await page.getByTestId("banks-pagination__page-size").selectOption("50");
+
     // Pick a bank deterministically and filter by the unique tail of its
     // short name. The seed helper builds short names as
     // `<prefix-tail>-NNN`, so the `-NNN` suffix is unique within the run.
@@ -135,9 +141,7 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
     ).toBeVisible();
   });
 
-  test("pagination — default page size 25 walks page 1 <-> page 2 round-trip", async ({
-    page,
-  }) => {
+  test("pagination — default page size 25 walks page 1 <-> page 2 round-trip", async ({ page }) => {
     await page.goto("/backoffice/banks");
     await expect(page.getByTestId("banks-list")).toHaveAttribute("data-state", "ready");
     await page.getByTestId("banks-filters__name").fill(runPrefix);
@@ -220,6 +224,10 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
 
     await page.goto("/backoffice/banks");
     await expect(page.getByTestId("banks-list")).toHaveAttribute("data-state", "ready");
+    // 30 seeded + 1 created by the previous test = 31 rows under the prefix.
+    // The default page size of 25 hides the newly-created `INLINE` bank on
+    // page 2 (default sort is name asc), so widen the window before locating.
+    await page.getByTestId("banks-pagination__page-size").selectOption("50");
     await page.getByTestId("banks-filters__name").fill(runPrefix);
 
     await page.getByTestId(`banks-table__edit-${id}`).click();
@@ -238,14 +246,15 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
     expect(body.data.name).toBe(updatedName);
   });
 
-  test("delete — inline row delete removes the bank without leaving the list", async ({
-    page,
-  }) => {
+  test("delete — inline row delete removes the bank without leaving the list", async ({ page }) => {
     expect(createdId, "the create test must run first to produce a row to delete").not.toBeNull();
     const id = createdId!;
 
     await page.goto("/backoffice/banks");
     await expect(page.getByTestId("banks-list")).toHaveAttribute("data-state", "ready");
+    // Same page-size-vs-row-count gotcha as the update test above: 31 rows
+    // under the prefix, default page size 25, target row sorted last by name.
+    await page.getByTestId("banks-pagination__page-size").selectOption("50");
     await page.getByTestId("banks-filters__name").fill(runPrefix);
 
     await expect(page.getByTestId(`banks-table__row-${id}`)).toBeVisible();

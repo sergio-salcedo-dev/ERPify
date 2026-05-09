@@ -87,10 +87,31 @@ export interface BanksApiScenario {
 const LIST_PATH = /\/api\/v1\/backoffice\/banks(\?.*)?$/;
 const ITEM_PATH = /\/api\/v1\/backoffice\/banks\/[^/?#]+$/;
 
-function legacyError(parameter: string, title: string, requestId: string): unknown {
+interface ProblemViolationFixture {
+  field: string;
+  message: string;
+}
+
+interface ProblemBodyOverrides {
+  detail?: string;
+  violations?: ProblemViolationFixture[];
+}
+
+function problemBody(
+  type: string,
+  title: string,
+  status: number,
+  correlationId: string,
+  overrides: ProblemBodyOverrides = {},
+): Record<string, unknown> {
   return {
-    errors: [{ source: { parameter }, title }],
-    meta: { requestId },
+    type,
+    title,
+    status,
+    instance: `${correlationId}-instance`,
+    "correlation-id": correlationId,
+    ...(overrides.detail !== undefined ? { detail: overrides.detail } : {}),
+    ...(overrides.violations ? { violations: overrides.violations } : {}),
   };
 }
 
@@ -98,6 +119,23 @@ async function fulfillJson(route: Route, status: number, body: unknown): Promise
   await route.fulfill({
     status,
     contentType: "application/json",
+    body: JSON.stringify(body),
+  });
+}
+
+async function fulfillProblem(
+  route: Route,
+  status: number,
+  body: Record<string, unknown>,
+  correlationId: string,
+): Promise<void> {
+  await route.fulfill({
+    status,
+    contentType: "application/problem+json",
+    headers: {
+      "X-Correlation-Id": correlationId,
+      "Cache-Control": "no-store",
+    },
     body: JSON.stringify(body),
   });
 }
@@ -129,13 +167,16 @@ export async function mockBanksApi(page: Page, scenario: BanksApiScenario): Prom
               },
             });
             return;
-          case "server-error":
-            await fulfillJson(
+          case "server-error": {
+            const correlationId = "01H-list-error";
+            await fulfillProblem(
               route,
               500,
-              legacyError("server", "Database unavailable.", "01H-list-error"),
+              problemBody("unhandled-exception", "Database unavailable.", 500, correlationId),
+              correlationId,
             );
             return;
+          }
           case "happy":
           default:
             await fulfillJson(route, 200, {
@@ -150,13 +191,18 @@ export async function mockBanksApi(page: Page, scenario: BanksApiScenario): Prom
 
       if (method === "POST") {
         switch (scenario.create) {
-          case "validation-error":
-            await fulfillJson(
+          case "validation-error": {
+            const correlationId = "01H-create-validation";
+            await fulfillProblem(
               route,
-              422,
-              legacyError("name", "The name field is required.", "01H-create-422"),
+              400,
+              problemBody("validation-failed", "Validation failed.", 400, correlationId, {
+                violations: [{ field: "name", message: "The name field is required." }],
+              }),
+              correlationId,
             );
             return;
+          }
           case "happy":
           default:
             await fulfillJson(route, 201, { data: bank });
@@ -175,16 +221,26 @@ export async function mockBanksApi(page: Page, scenario: BanksApiScenario): Prom
 
       if (method === "GET") {
         switch (scenario.get) {
-          case "not-found":
-            await fulfillJson(route, 404, legacyError("uuid", "Bank not found.", "01H-get-404"));
-            return;
-          case "server-error":
-            await fulfillJson(
+          case "not-found": {
+            const correlationId = "01H-get-404";
+            await fulfillProblem(
               route,
-              500,
-              legacyError("server", "Database unavailable.", "01H-get-error"),
+              404,
+              problemBody("bank-not-found", "Bank not found.", 404, correlationId),
+              correlationId,
             );
             return;
+          }
+          case "server-error": {
+            const correlationId = "01H-get-error";
+            await fulfillProblem(
+              route,
+              500,
+              problemBody("unhandled-exception", "Database unavailable.", 500, correlationId),
+              correlationId,
+            );
+            return;
+          }
           case "happy":
           default:
             await fulfillJson(route, 200, { data: bank });
@@ -194,17 +250,23 @@ export async function mockBanksApi(page: Page, scenario: BanksApiScenario): Prom
 
       if (method === "PUT") {
         switch (scenario.update) {
-          case "validation-error":
-            await fulfillJson(
+          case "validation-error": {
+            const correlationId = "01H-update-validation";
+            await fulfillProblem(
               route,
-              422,
-              legacyError(
-                "shortName",
-                "The shortName must not exceed 50 characters.",
-                "01H-update-422",
-              ),
+              400,
+              problemBody("validation-failed", "Validation failed.", 400, correlationId, {
+                violations: [
+                  {
+                    field: "shortName",
+                    message: "The shortName must not exceed 50 characters.",
+                  },
+                ],
+              }),
+              correlationId,
             );
             return;
+          }
           case "happy":
           default:
             await fulfillJson(route, 200, { data: bank });
@@ -214,9 +276,16 @@ export async function mockBanksApi(page: Page, scenario: BanksApiScenario): Prom
 
       if (method === "DELETE") {
         switch (scenario.delete) {
-          case "not-found":
-            await fulfillJson(route, 404, legacyError("uuid", "Bank not found.", "01H-delete-404"));
+          case "not-found": {
+            const correlationId = "01H-delete-404";
+            await fulfillProblem(
+              route,
+              404,
+              problemBody("bank-not-found", "Bank not found.", 404, correlationId),
+              correlationId,
+            );
             return;
+          }
           case "happy":
           default:
             await route.fulfill({ status: 204 });

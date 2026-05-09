@@ -32,6 +32,14 @@ if (class_exists(Dotenv::class) && is_file($apiRoot . '/.env')) {
     if (is_file($apiRoot . '/.env.test')) {
         $dotenv->overload($apiRoot . '/.env.test');
     }
+
+    // Per-developer local override (e.g. DATABASE_URL pointing at a host-side
+    // Postgres when running outside the docker stack). Loaded LAST so it wins
+    // over `.env.test`'s docker-internal hostname. Mirrors Symfony's standard
+    // dotenv precedence: .env → .env.<env> → .env.<env>.local.
+    if (is_file($apiRoot . '/.env.test.local')) {
+        $dotenv->overload($apiRoot . '/.env.test.local');
+    }
 }
 
 // PHPUnit's Util\Exporter lazily calls TextUI\Configuration\Registry::get(),

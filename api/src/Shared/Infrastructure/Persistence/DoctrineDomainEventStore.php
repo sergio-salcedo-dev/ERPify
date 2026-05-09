@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Shared\Infrastructure\Persistence;
 
 use Erpify\Shared\Application\DomainEvent\DomainEventStore;
+use Erpify\Shared\Application\Validation\Validator;
 use Erpify\Shared\Domain\Event\DomainEvent;
 use Erpify\Shared\Infrastructure\Persistence\Entity\StoredDomainEvent;
 use Override;
@@ -18,8 +19,10 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 #[AsAlias(DomainEventStore::class)]
 final readonly class DoctrineDomainEventStore implements DomainEventStore
 {
-    public function __construct(private StoredDomainEventRepository $storedDomainEventRepository)
-    {
+    public function __construct(
+        private StoredDomainEventRepository $storedDomainEventRepository,
+        private Validator $validator,
+    ) {
     }
 
     #[Override]
@@ -32,6 +35,8 @@ final readonly class DoctrineDomainEventStore implements DomainEventStore
             $domainEvent->occurredOn(),
             $domainEvent->toPrimitives(),
         );
+
+        $this->validator->ensure($storedDomainEvent);
 
         $this->storedDomainEventRepository->save($storedDomainEvent);
     }

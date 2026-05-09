@@ -9,8 +9,11 @@ Feature: Get banks
     And the JSON node "data" should have 7 elements
     And the JSON node "data.name" should be equal to "ING"
     And the JSON node "data.shortName" should be equal to "ING"
+    And the JSON node "data.id" should be equal to "11111111-1111-7000-8000-000000000001"
     And the JSON node "data.createdAt" should not be null
     And the JSON node "data.updatedAt" should not be null
+    And the JSON node "data.logoUrl" should be null
+    And the JSON node "data.storedObjectUrl" should be null
 
   Scenario Outline: Get a bank with an invalid id returns a 400 validation-failed Problem Details body
     When I send a "GET" request to "/backoffice/banks/<bankId>"
@@ -19,11 +22,15 @@ Feature: Get banks
     And the header "Cache-Control" should contain "no-store"
     And the response should be in JSON
     And the JSON node "type" should be equal to "validation-failed"
-    And the JSON node "status" should be equal to the number 400
     And the JSON node "title" should be equal to "Validation failed."
+    And the JSON node "status" should be equal to the number 400
+    And the JSON node "violations" should have 1 element
+    And the JSON node "violations[0].field" should be equal to "id"
     And the JSON node "violations[0].message" should be equal to "<errorMessage>"
+    And the JSON node "violations[0].code" should be equal to "51120b12-a2bc-41bf-aa53-cd73daf330d0"
     And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
     And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
+    And the JSON node "debug" should have 5 elements
     Examples:
       | bankId      | errorMessage                    |
       | null        | This value is not a valid UUID. |
@@ -36,8 +43,14 @@ Feature: Get banks
     And the header "Cache-Control" should contain "no-store"
     And the response should be in JSON
     And the JSON node "type" should be equal to "bank-not-found"
-    And the JSON node "status" should be equal to the number 404
     And the JSON node "title" should be equal to "Bank with id <2e6d865c-17b0-476a-85f2-037bf6d3b3dc> not found."
+    And the JSON node "status" should be equal to the number 404
     And the JSON node "bankId" should be equal to "2e6d865c-17b0-476a-85f2-037bf6d3b3dc"
     And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
     And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
+    And the JSON node "debug" should have 5 elements
+    And the JSON node "debug.exception_class" should exist
+    And the JSON node "debug.message" should exist
+    And the JSON node "debug.file" should exist
+    And the JSON node "debug.line" should exist
+    And the JSON node "debug.previous_chain" should exist
