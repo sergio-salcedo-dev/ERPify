@@ -1,53 +1,92 @@
 "use client";
 
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BANKS_PAGE_SIZE_OPTIONS, type BanksPageSize } from "../_lib/paginate";
 
 interface BanksPaginationProps {
   page: number;
-  totalPages: number;
+  pageSize: BanksPageSize;
+  hasPrev: boolean;
+  hasNext: boolean;
   onPageChange: (next: number) => void;
+  onPageSizeChange: (next: BanksPageSize) => void;
 }
 
-export function BanksPagination({ page, totalPages, onPageChange }: BanksPaginationProps) {
-  const onPrev = (): void => onPageChange(Math.max(1, page - 1));
-  const onNext = (): void => onPageChange(Math.min(totalPages, page + 1));
+export function BanksPagination({
+  page,
+  pageSize,
+  hasPrev,
+  hasNext,
+  onPageChange,
+  onPageSizeChange,
+}: BanksPaginationProps) {
+  const onPrev = (): void => {
+    if (hasPrev) onPageChange(page - 1);
+  };
+  const onNext = (): void => {
+    if (hasNext) onPageChange(page + 1);
+  };
 
   return (
     <nav
-      className="banks-pagination mt-3 flex items-center justify-end gap-3"
+      className="banks-pagination mt-3 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between"
       aria-label="Banks pagination"
     >
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="banks-pagination__prev"
-        onClick={onPrev}
-        disabled={page <= 1}
-        aria-label="Previous page"
-        data-testid="banks-pagination__prev"
-      >
-        Prev
-      </Button>
-      <span
-        className="banks-pagination__indicator text-muted-foreground text-xs"
-        aria-live="polite"
-        data-testid="banks-pagination__indicator"
-      >
-        Page {page} of {totalPages}
-      </span>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="banks-pagination__next"
-        onClick={onNext}
-        disabled={page >= totalPages}
-        aria-label="Next page"
-        data-testid="banks-pagination__next"
-      >
-        Next
-      </Button>
+      <label className="banks-pagination__page-size text-muted-foreground flex items-center gap-2 text-xs">
+        <span className="banks-pagination__page-size-label">Items per page</span>
+        <select
+          className="banks-pagination__page-size-select border-border bg-background text-foreground focus-visible:ring-ring h-7 rounded-md border px-2 text-xs focus-visible:ring-2 focus-visible:outline-none"
+          value={pageSize}
+          onChange={(event) => onPageSizeChange(Number(event.target.value) as BanksPageSize)}
+          aria-label="Items per page"
+          data-testid="banks-pagination__page-size"
+        >
+          {BANKS_PAGE_SIZE_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <div className="banks-pagination__controls flex items-center justify-end gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="banks-pagination__prev"
+          onClick={onPrev}
+          disabled={!hasPrev}
+          aria-label="Previous page"
+          data-testid="banks-pagination__prev"
+          data-icon="inline-start"
+        >
+          <ChevronLeft className="size-3.5" aria-hidden="true" />
+          <span className="hidden sm:inline">Prev</span>
+        </Button>
+        <span
+          className="banks-pagination__indicator text-muted-foreground min-w-[4.5rem] text-center text-xs"
+          aria-live="polite"
+          data-testid="banks-pagination__indicator"
+        >
+          Page {page}
+        </span>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="banks-pagination__next"
+          onClick={onNext}
+          disabled={!hasNext}
+          aria-label="Next page"
+          data-testid="banks-pagination__next"
+          data-icon="inline-end"
+        >
+          <span className="hidden sm:inline">Next</span>
+          <ChevronRight className="size-3.5" aria-hidden="true" />
+        </Button>
+      </div>
     </nav>
   );
 }

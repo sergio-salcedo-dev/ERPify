@@ -106,7 +106,7 @@ export function BankForm({ mode, initial }: BankFormProps) {
         />
       </FormField>
 
-      <footer className="bank-form__footer flex items-center justify-end gap-2 pt-2">
+      <footer className="bank-form__footer flex flex-col-reverse items-stretch gap-2 pt-2 sm:flex-row sm:items-center sm:justify-end">
         <Link
           href={cancelHref}
           aria-disabled={submitting || undefined}
@@ -116,12 +116,19 @@ export function BankForm({ mode, initial }: BankFormProps) {
           }}
           className={cn(
             buttonVariants({ variant: "ghost", size: "sm" }),
+            "w-full sm:w-auto",
             submitting && "pointer-events-none opacity-50",
           )}
         >
           Cancel
         </Link>
-        <Button type="submit" size="sm" disabled={submitting} data-testid="bank-form__submit">
+        <Button
+          type="submit"
+          size="sm"
+          disabled={submitting}
+          className="w-full sm:w-auto"
+          data-testid="bank-form__submit"
+        >
           {submitting ? "Saving…" : mode === "create" ? "Create bank" : "Save changes"}
         </Button>
       </footer>

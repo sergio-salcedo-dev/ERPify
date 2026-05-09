@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactElement } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
@@ -23,9 +23,23 @@ import {
 interface DeleteBankButtonProps {
   id: string;
   name: string;
+  /** When provided, runs after a successful delete instead of redirecting to the list. */
+  onDeleted?: (id: string) => void;
+  /** Custom trigger; defaults to a destructive button with a Trash icon. */
+  trigger?: ReactElement;
+  triggerTestId?: string;
+  /** Stop click events from reaching parent rows (for inline use inside a clickable row). */
+  stopPropagation?: boolean;
 }
 
-export function DeleteBankButton({ id, name }: DeleteBankButtonProps) {
+export function DeleteBankButton({
+  id,
+  name,
+  onDeleted,
+  trigger,
+  triggerTestId = "banks-detail__delete-button",
+  stopPropagation = false,
+}: DeleteBankButtonProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -46,6 +60,10 @@ export function DeleteBankButton({ id, name }: DeleteBankButtonProps) {
       const useCase = container.get<DeleteBank>("BackOfficeDeleteBank");
       await useCase.run(id);
       setOpen(false);
+      if (onDeleted) {
+        onDeleted(id);
+        return;
+      }
       router.push("/backoffice/banks");
       router.refresh();
     } catch (err) {
@@ -59,21 +77,23 @@ export function DeleteBankButton({ id, name }: DeleteBankButtonProps) {
     }
   }
 
+  const defaultTrigger = (
+    <Button
+      variant="destructive"
+      size="sm"
+      data-icon="inline-start"
+      data-testid={triggerTestId}
+      aria-label={`Delete ${name}`}
+      onClick={stopPropagation ? (event) => event.stopPropagation() : undefined}
+    >
+      <Trash2 className="size-3.5" aria-hidden="true" />
+      Delete
+    </Button>
+  );
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger
-        render={
-          <Button
-            variant="destructive"
-            size="sm"
-            data-icon="inline-start"
-            data-testid="banks-detail__delete-button"
-          >
-            <Trash2 className="size-3.5" aria-hidden="true" />
-            Delete
-          </Button>
-        }
-      />
+      <DialogTrigger render={trigger ?? defaultTrigger} />
       <DialogContent data-testid="banks-detail__delete-dialog">
         <DialogHeader>
           <DialogTitle>Delete bank</DialogTitle>

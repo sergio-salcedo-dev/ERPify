@@ -28,10 +28,10 @@ export function BanksFilters({
 
   return (
     <section
-      className="banks-filters border-border bg-muted/20 rounded-md border p-4"
+      className="banks-filters border-border bg-muted/20 rounded-md border p-3 sm:p-4"
       aria-label="Bank filters"
     >
-      <div className="banks-filters__grid grid grid-cols-1 gap-3 md:grid-cols-4">
+      <div className="banks-filters__grid grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <FormField name="banks-filters-name" label="Name">
           <Input
             type="text"
@@ -74,6 +74,7 @@ export function BanksFilters({
           size="sm"
           onClick={onReset}
           disabled={resetDisabled}
+          className="w-full sm:w-auto"
           data-testid="banks-filters__reset"
         >
           Reset

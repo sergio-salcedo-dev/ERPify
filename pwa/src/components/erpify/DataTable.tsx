@@ -194,6 +194,7 @@ export function DataTable<T>({
                     col.align === "right" && "text-right",
                     col.align === "center" && "text-center",
                     !col.align && "text-left",
+                    col.className,
                   )}
                 >
                   {col.sortable ? (

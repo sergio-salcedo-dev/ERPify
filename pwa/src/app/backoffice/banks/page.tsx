@@ -22,7 +22,7 @@ import {
   type BanksFilter,
   type BanksSort,
 } from "./_lib/banksFilterSort";
-import { BANKS_PAGE_SIZE, paginate } from "./_lib/paginate";
+import { BANKS_PAGE_SIZE_DEFAULT, type BanksPageSize, paginate } from "./_lib/paginate";
 
 type State = "loading" | "empty" | "error" | "ready";
 
@@ -45,17 +45,18 @@ export default function BanksListPage() {
   const [filter, setFilter] = useState<BanksFilter>(EMPTY_FILTER);
   const [sort, setSort] = useState<BanksSort>(null);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<BanksPageSize>(BANKS_PAGE_SIZE_DEFAULT);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const useCase = container.get<SearchBanks>("BackOfficeSearchBanks");
-        const page = await useCase.run();
+        const result = await useCase.run();
         if (cancelled) return;
-        setBanks(page.banks);
-        setNextCursor(page.nextCursor);
-        setState(page.banks.length === 0 ? "empty" : "ready");
+        setBanks(result.banks);
+        setNextCursor(result.nextCursor);
+        setState(result.banks.length === 0 ? "empty" : "ready");
       } catch (err) {
         if (cancelled) return;
         setProblem(
@@ -78,27 +79,36 @@ export default function BanksListPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [filter, sort]);
+  }, [filter, sort, pageSize]);
 
-  const paged = useMemo(() => paginate(visibleBanks, page, BANKS_PAGE_SIZE), [visibleBanks, page]);
+  const paged = useMemo(
+    () => paginate(visibleBanks, page, pageSize),
+    [visibleBanks, page, pageSize],
+  );
 
   const resetFilters = (): void => {
     setFilter(EMPTY_FILTER);
     setSort(null);
   };
 
+  const handleBankDeleted = (id: string): void => {
+    setBanks((prev) => prev.filter((bank) => bank.id !== id));
+  };
+
   return (
-    <div className="banks-list space-y-6">
-      <header className="banks-list__header flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-foreground text-2xl font-semibold tracking-tight">Banks</h1>
+    <div className="banks-list mx-auto w-full max-w-screen-2xl space-y-4 sm:space-y-6 2xl:max-w-[120rem]">
+      <header className="banks-list__header flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="banks-list__heading min-w-0">
+          <h1 className="text-foreground text-xl font-semibold tracking-tight sm:text-2xl">
+            Banks
+          </h1>
           <p className="text-muted-foreground mt-1 text-sm">
             Manage the banks available in the back office.
           </p>
         </div>
         <Link
           href="/backoffice/banks/new"
-          className={cn(buttonVariants({ size: "sm" }))}
+          className={cn(buttonVariants({ size: "sm" }), "banks-list__new-button w-full sm:w-auto")}
           data-icon="inline-start"
           data-testid="banks-list__new-button"
         >
@@ -152,14 +162,20 @@ export default function BanksListPage() {
             </section>
           ) : (
             <>
-              <BanksTable banks={paged.rows} sort={sort} onSortChange={setSort} />
-              {paged.totalPages > 1 ? (
-                <BanksPagination
-                  page={paged.page}
-                  totalPages={paged.totalPages}
-                  onPageChange={setPage}
-                />
-              ) : null}
+              <BanksTable
+                banks={paged.rows}
+                sort={sort}
+                onSortChange={setSort}
+                onBankDeleted={handleBankDeleted}
+              />
+              <BanksPagination
+                page={paged.page}
+                pageSize={pageSize}
+                hasPrev={paged.hasPrev}
+                hasNext={paged.hasNext}
+                onPageChange={setPage}
+                onPageSizeChange={setPageSize}
+              />
               {nextCursor ? (
                 <p className="text-muted-foreground text-xs">
                   More banks available. Filters, sort, and pagination apply only to this page.

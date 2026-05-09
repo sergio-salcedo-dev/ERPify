@@ -64,7 +64,7 @@ export default function BankDetailPage() {
   }, [id]);
 
   return (
-    <div className="banks-detail space-y-6">
+    <div className="banks-detail mx-auto w-full max-w-screen-2xl space-y-4 sm:space-y-6 2xl:max-w-[120rem]">
       <BackLink />
 
       {state === "loading" ? (
@@ -93,17 +93,19 @@ export default function BankDetailPage() {
 
       {state === "ready" && bank ? (
         <>
-          <header className="banks-detail__header flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-            <div>
-              <h1 className="text-foreground text-2xl font-semibold tracking-tight">{bank.name}</h1>
+          <header className="banks-detail__header flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <h1 className="text-foreground text-xl font-semibold tracking-tight break-words sm:text-2xl">
+                {bank.name}
+              </h1>
               <p
-                className="text-muted-foreground mt-1 text-sm"
+                className="text-muted-foreground mt-1 text-sm break-words"
                 data-testid="banks-detail__shortname"
               >
                 {bank.shortName}
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
               <Link
                 href={`/backoffice/banks/${encodeURIComponent(bank.id)}/edit`}
                 className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
@@ -117,7 +119,7 @@ export default function BankDetailPage() {
             </div>
           </header>
 
-          <dl className="banks-detail__meta border-border bg-card grid grid-cols-1 gap-4 rounded-lg border p-4 md:grid-cols-2">
+          <dl className="banks-detail__meta border-border bg-card grid grid-cols-1 gap-4 rounded-lg border p-4 sm:grid-cols-2 xl:grid-cols-4">
             <Field label="Name" value={bank.name} />
             <Field label="Short name" value={bank.shortName} />
             <Field label="Created" value={new Date(bank.createdAt).toLocaleString()} />

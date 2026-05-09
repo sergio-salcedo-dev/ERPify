@@ -64,7 +64,7 @@ export default function EditBankPage() {
   }, [id]);
 
   return (
-    <div className="banks-edit space-y-6">
+    <div className="banks-edit mx-auto w-full max-w-screen-md space-y-4 sm:space-y-6">
       <BackLink id={id} />
 
       {state === "loading" ? (
@@ -94,8 +94,10 @@ export default function EditBankPage() {
       {state === "ready" && bank ? (
         <>
           <header className="banks-edit__header space-y-1">
-            <h1 className="text-foreground text-2xl font-semibold tracking-tight">Edit bank</h1>
-            <p className="text-muted-foreground text-sm">Update {bank.name}.</p>
+            <h1 className="text-foreground text-xl font-semibold tracking-tight sm:text-2xl">
+              Edit bank
+            </h1>
+            <p className="text-muted-foreground text-sm break-words">Update {bank.name}.</p>
           </header>
 
           <BankForm
