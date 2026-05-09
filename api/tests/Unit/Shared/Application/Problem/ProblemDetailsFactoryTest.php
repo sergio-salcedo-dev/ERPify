@@ -281,7 +281,7 @@ final class ProblemDetailsFactoryTest extends TestCase
      */
     public function testContextNonWhitelistedValuesAreSubstitutedWithSentinel(): void
     {
-        $resource = \fopen('php://memory', 'r');
+        $resource = \fopen('php://memory', 'rb');
         $this->assertNotFalse($resource);
 
         try {
@@ -365,7 +365,7 @@ final class ProblemDetailsFactoryTest extends TestCase
     {
         $bufferingLogger = new BufferingLogger();
         $proxy = new class {
-            public function __get(string $name): mixed
+            public function __get(string $name): null
             {
                 return null;
             }
@@ -373,7 +373,7 @@ final class ProblemDetailsFactoryTest extends TestCase
             /**
              * @param list<mixed> $arguments
              */
-            public function __call(string $name, array $arguments): mixed
+            public function __call(string $name, array $arguments): null
             {
                 return null;
             }
@@ -978,7 +978,7 @@ final class ProblemDetailsFactoryTest extends TestCase
         $json = \json_encode($problemDetails->toArray(), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
 
         $this->assertMatchesRegularExpression(
-            '/"violations":\[\{"field":"p","message":"m","code":"C"\}\]/',
+            '/"violations":\[\{"field":"p","message":"m","code":"C"}]/',
             $json,
             'Violation entry must serialize with the deterministic key order field, message, code.',
         );

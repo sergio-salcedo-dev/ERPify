@@ -20,6 +20,7 @@ $finder = Finder::create()
         'vendor',
     ])
     ->notName('reference.php')
+    ->notName('.php-cs-fixer.cache')
     ->ignoreDotFiles(true)
     ->ignoreVCS(true);
 
@@ -36,6 +37,10 @@ return (new Config)
        '@PhpCsFixer:risky' => true,
 
        'new_with_parentheses' => false,
+
+       'class_definition' => [
+           'space_before_parenthesis' => true,
+       ],
 
        'single_trait_insert_per_statement' => true,       // Strict typing and modernization
        'declare_strict_types' => true,

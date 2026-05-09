@@ -26,12 +26,16 @@ final class BankLogoMultipartFunctionalTest extends WebTestCase
         \file_put_contents($tmp, \base64_decode(self::MIN_PNG, true));
         $uploadedFile = new UploadedFile($tmp, 'logo.png', 'image/png', null, true);
 
+        $suffix = \bin2hex(\random_bytes(4));
+        $name = 'Logo Bank Multipart ' . $suffix;
+        $shortName = 'LBM' . $suffix;
+
         $kernelBrowser->request(
             Request::METHOD_POST,
             '/api/v1/backoffice/banks',
             [
-                'name' => 'Logo Bank Multipart',
-                'shortName' => 'LBM',
+                'name' => $name,
+                'shortName' => $shortName,
             ],
             ['image' => $uploadedFile],
         );
@@ -44,7 +48,7 @@ final class BankLogoMultipartFunctionalTest extends WebTestCase
         $this->assertIsArray($payload);
         $this->assertArrayHasKey('name', $payload);
         $this->assertArrayHasKey('logoUrl', $payload);
-        $this->assertSame('Logo Bank Multipart', $payload['name']);
+        $this->assertSame($name, $payload['name']);
         $logoUrl = $payload['logoUrl'];
         $this->assertIsString($logoUrl);
         $this->assertMatchesRegularExpression('#/api/v1/media/[a-f0-9]{64}(?:\?.*)?$#', $logoUrl);
@@ -70,10 +74,14 @@ final class BankLogoMultipartFunctionalTest extends WebTestCase
         \file_put_contents($tmp, \base64_decode(self::MIN_PNG, true));
         $uploadedFile = new UploadedFile($tmp, 'logo.png', 'image/png', null, true);
 
+        $suffix = \bin2hex(\random_bytes(4));
+        $name = 'Etag Bank ' . $suffix;
+        $shortName = 'ETB' . $suffix;
+
         $kernelBrowser->request(
             Request::METHOD_POST,
             '/api/v1/backoffice/banks',
-            ['name' => 'Etag Bank', 'shortName' => 'ETB'],
+            ['name' => $name, 'shortName' => $shortName],
             ['image' => $uploadedFile],
         );
         $body = \json_decode((string) $kernelBrowser->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);

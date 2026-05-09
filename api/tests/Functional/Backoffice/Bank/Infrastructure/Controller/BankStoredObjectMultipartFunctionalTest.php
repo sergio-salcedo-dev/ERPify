@@ -30,12 +30,16 @@ final class BankStoredObjectMultipartFunctionalTest extends WebTestCase
         \file_put_contents($tmp, \base64_decode(self::MIN_PNG, true));
         $uploadedFile = new UploadedFile($tmp, 'extra.png', 'image/png', null, true);
 
+        $suffix = \bin2hex(\random_bytes(4));
+        $name = 'Stored Object Bank ' . $suffix;
+        $shortName = 'SOB' . $suffix;
+
         $kernelBrowser->request(
             Request::METHOD_POST,
             '/api/v1/backoffice/banks',
             [
-                'name' => 'Stored Object Bank',
-                'shortName' => 'SOB',
+                'name' => $name,
+                'shortName' => $shortName,
             ],
             ['storedObject' => $uploadedFile],
         );
@@ -48,7 +52,7 @@ final class BankStoredObjectMultipartFunctionalTest extends WebTestCase
         $this->assertIsArray($payload);
         $this->assertArrayHasKey('name', $payload);
         $this->assertArrayHasKey('storedObjectUrl', $payload);
-        $this->assertSame('Stored Object Bank', $payload['name']);
+        $this->assertSame($name, $payload['name']);
         $this->assertNull($payload['logoUrl'] ?? null);
         $storedObjectUrl = $payload['storedObjectUrl'];
         $this->assertIsString($storedObjectUrl);
