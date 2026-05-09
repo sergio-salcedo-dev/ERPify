@@ -120,6 +120,14 @@ export default function BanksListPage() {
           <p className="text-muted-foreground mt-1 text-sm" data-testid="banks-list__subtitle">
             Manage the banks available in the back office.
           </p>
+          {state === ViewStatus.READY ? (
+            <p
+              className="banks-list__total text-muted-foreground mt-1 text-xs"
+              data-testid="banks-list__total"
+            >
+              Total banks: <span className="text-foreground font-medium">{banks.length}</span>
+            </p>
+          ) : null}
         </div>
         <Link
           href="/backoffice/banks/new"

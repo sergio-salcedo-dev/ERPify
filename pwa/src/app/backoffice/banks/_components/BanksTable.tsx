@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Pencil, Trash2 } from "lucide-react";
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
-import { DataTable } from "@/components/erpify";
+import { CopyButton, DataTable } from "@/components/erpify";
 import type { DataTableColumn, DataTableSort } from "@/components/erpify";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -63,6 +63,16 @@ export function BanksTable({ banks, sort, onSortChange, onBankDeleted }: BanksTa
           onKeyDown={(event) => event.stopPropagation()}
           role="presentation"
         >
+          <CopyButton
+            value={row.id}
+            iconOnly
+            size="icon-sm"
+            label="Copy ID"
+            copiedLabel="ID copied"
+            errorLabel="Copy failed"
+            title={`Copy bank ${row.name} ID`}
+            testId={`banks-table__copy-${row.id}`}
+          />
           <Link
             href={safeHref(`/backoffice/banks/${encodeURIComponent(row.id)}/edit`)}
             className={cn(buttonVariants({ variant: "outline", size: "icon-sm" }))}
