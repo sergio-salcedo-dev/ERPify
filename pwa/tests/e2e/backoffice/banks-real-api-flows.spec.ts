@@ -135,9 +135,7 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
     ).toBeVisible();
   });
 
-  test("pagination — default page size 25 walks page 1 <-> page 2 round-trip", async ({
-    page,
-  }) => {
+  test("pagination — default page size 25 walks page 1 <-> page 2 round-trip", async ({ page }) => {
     await page.goto("/backoffice/banks");
     await expect(page.getByTestId("banks-list")).toHaveAttribute("data-state", "ready");
     await page.getByTestId("banks-filters__name").fill(runPrefix);
@@ -238,9 +236,7 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
     expect(body.data.name).toBe(updatedName);
   });
 
-  test("delete — inline row delete removes the bank without leaving the list", async ({
-    page,
-  }) => {
+  test("delete — inline row delete removes the bank without leaving the list", async ({ page }) => {
     expect(createdId, "the create test must run first to produce a row to delete").not.toBeNull();
     const id = createdId!;
 

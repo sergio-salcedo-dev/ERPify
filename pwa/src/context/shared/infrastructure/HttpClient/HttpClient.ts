@@ -1,8 +1,8 @@
 import { injectable } from "inversify";
+import { isProblemDetails, type ProblemDetails } from "../../domain/ProblemDetails";
 import { HttpStatus } from "../../domain/types/http";
 import { API_ENDPOINTS } from "../api/ApiEndpoints";
 import { HttpError } from "./HttpError";
-import { toProblemDetails } from "./legacyEnvelope";
 
 export interface HttpClient {
   get<T>(url: string): Promise<T>;
@@ -149,10 +149,15 @@ export class FetchHttpClient implements HttpClient {
 
   private async toHttpError(res: Response): Promise<HttpError> {
     const parsed = await res.json().catch(() => null);
-    const problem = toProblemDetails(parsed, res.status, {
-      type: "about:blank",
-      title: `HTTP ${res.status}`,
-    });
+    const problem: ProblemDetails = isProblemDetails(parsed)
+      ? parsed
+      : {
+          type: "about:blank",
+          title: `HTTP ${res.status}`,
+          status: res.status,
+          instance: crypto.randomUUID(),
+          "correlation-id": res.headers.get("X-Correlation-Id") ?? crypto.randomUUID(),
+        };
     return new HttpError(problem);
   }
 }

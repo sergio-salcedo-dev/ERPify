@@ -14,7 +14,6 @@ import {
   type BankFormValues,
 } from "@/context/backoffice/bank/application/schemas/BankSchema";
 import { PersistenceAction } from "@/context/shared/domain/types/status";
-import { HttpStatus } from "@/context/shared/domain/types/http";
 import { FormField, ProblemDisplay } from "@/components/erpify";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -82,7 +81,7 @@ export function BankForm({ mode, initial }: BankFormProps) {
     } catch (err) {
       if (!(err instanceof HttpError)) throw err;
 
-      if (err.problem.status === HttpStatus.UNPROCESSABLE_ENTITY && err.problem.violations) {
+      if (err.problem.type === "validation-failed" && err.problem.violations) {
         // Map server-side violations onto the same RHF errors object the
         // client validation populates, so the UI surfaces both via
         // `errors[name]?.message` without a parallel "violations" channel.
