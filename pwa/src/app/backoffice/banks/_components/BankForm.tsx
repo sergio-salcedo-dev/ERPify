@@ -19,6 +19,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { safeHref } from "@/lib/safeHref";
+import { HttpStatus } from "@/context/shared/domain/types/http";
 
 /** The two `PersistenceAction` values this form can be in. */
 export type BankFormMode = typeof PersistenceAction.CREATING | typeof PersistenceAction.UPDATING;
@@ -81,7 +82,7 @@ export function BankForm({ mode, initial }: BankFormProps) {
     } catch (err) {
       if (!(err instanceof HttpError)) throw err;
 
-      if (err.problem.type === "validation-failed" && err.problem.violations) {
+      if (err.problem.status === HttpStatus.BAD_REQUEST && err.problem.violations) {
         // Map server-side violations onto the same RHF errors object the
         // client validation populates, so the UI surfaces both via
         // `errors[name]?.message` without a parallel "violations" channel.
