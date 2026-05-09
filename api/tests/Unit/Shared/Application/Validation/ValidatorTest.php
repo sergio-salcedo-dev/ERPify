@@ -137,14 +137,14 @@ final class ValidatorTest extends TestCase
     public function testRebindsEmptyPropertyPathOntoSuppliedName(): void
     {
         $value = 'not-a-uuid';
-        $original = new ConstraintViolationList([
+        $constraintViolationList = new ConstraintViolationList([
             new ConstraintViolation('Invalid UUID.', null, [], $value, '', $value, null, 'uuid-code'),
         ]);
 
         $innerValidator = $this->createStub(ValidatorInterface::class);
         $innerValidator
             ->method('validate')
-            ->willReturn($original)
+            ->willReturn($constraintViolationList)
         ;
 
         try {
@@ -161,7 +161,7 @@ final class ValidatorTest extends TestCase
 
     public function testPreservesViolationsThatAlreadyCarryAPropertyPath(): void
     {
-        $original = new ConstraintViolationList([
+        $constraintViolationList = new ConstraintViolationList([
             new ConstraintViolation('blank', null, [], null, 'name', '', null, 'blank-code'),
             new ConstraintViolation('bad', null, [], null, '', 'x', null, 'bad-code'),
         ]);
@@ -169,7 +169,7 @@ final class ValidatorTest extends TestCase
         $innerValidator = $this->createStub(ValidatorInterface::class);
         $innerValidator
             ->method('validate')
-            ->willReturn($original)
+            ->willReturn($constraintViolationList)
         ;
 
         try {

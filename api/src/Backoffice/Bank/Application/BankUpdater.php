@@ -34,9 +34,6 @@ final readonly class BankUpdater
 
         $bank->rename(SymfonyUuidGenerator::generate(), $name, $shortName);
 
-        // Re-run entity-level constraints after the in-place rename so `#[UniqueEntity]`
-        // catches a name / shortName collision with another bank as a 400 violation rather
-        // than letting Postgres raise a unique-constraint violation on save.
         $this->validator->ensure($bank);
 
         $this->postgresBankRepository->save($bank);

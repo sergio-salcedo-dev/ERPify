@@ -50,10 +50,6 @@ final readonly class BankCreator
             $stored?->contentHash,
         );
 
-        // Runs entity-level constraints — `#[UniqueEntity]` on `name` / `shortName` queries
-        // the database and surfaces a per-field violation when a duplicate exists, so the
-        // PWA receives a 400 with `validation-failed` + `violations[]` instead of letting a
-        // raw Postgres unique-constraint violation bubble up to a 500.
         $this->validator->ensure($bank);
 
         $this->postgresBankRepository->save($bank);

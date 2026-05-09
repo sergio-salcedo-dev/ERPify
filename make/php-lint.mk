@@ -73,11 +73,11 @@ php.lint.yaml: ## yaml-lint
 	@$(PHP_TEST) bin/console lint:yaml config
 
 ## —— Error-contract drift gate ————————————————————————————————————————————
-# Story 4.5 (FR50, FR51, NFR26) — fails CI if a controller catches and
+# Fails CI if a controller catches and
 # responds with `new JsonResponse(...)` (skipping `api/.error-contract-allowlist`),
 # or if a new file under `api/src/Shared/Domain/Exception/` is added without
 # updating `docs/api-error-contract.md` in the same diff.
-php.lint.error-contract: ## Error-contract drift gate (FR50/FR51/NFR26)
+php.lint.error-contract: ## Error-contract drift gate
 	@$(PHP_TEST) bin/phpunit --filter=ErrorContractGateTest
 
 ## —— Aggregates ——————————————————————————————————————————————————————————

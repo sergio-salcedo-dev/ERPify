@@ -58,16 +58,16 @@ final readonly class Validator
         ConstraintViolationListInterface $violations,
         string $propertyPath,
     ): ConstraintViolationListInterface {
-        $rebound = new ConstraintViolationList();
+        $constraintViolationList = new ConstraintViolationList();
 
         foreach ($violations as $violation) {
             if ('' !== $violation->getPropertyPath()) {
-                $rebound->add($violation);
+                $constraintViolationList->add($violation);
 
                 continue;
             }
 
-            $rebound->add(new ConstraintViolation(
+            $constraintViolationList->add(new ConstraintViolation(
                 message: $violation->getMessage(),
                 messageTemplate: $violation->getMessageTemplate(),
                 parameters: $violation->getParameters(),
@@ -81,6 +81,6 @@ final readonly class Validator
             ));
         }
 
-        return $rebound;
+        return $constraintViolationList;
     }
 }
