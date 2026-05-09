@@ -63,10 +63,10 @@ export function BanksTable({ banks, sort, onSortChange, onBankDeleted }: BanksTa
           <Link
             href={`/backoffice/banks/${encodeURIComponent(row.id)}/edit`}
             className={cn(buttonVariants({ variant: "outline", size: "icon-sm" }))}
-            aria-label={`Edit ${row.name}`}
             data-testid={`banks-table__edit-${row.id}`}
           >
             <Pencil className="size-3.5" aria-hidden="true" />
+            <span className="sr-only">Edit</span>
           </Link>
           <DeleteBankButton
             id={row.id}
@@ -78,11 +78,10 @@ export function BanksTable({ banks, sort, onSortChange, onBankDeleted }: BanksTa
               <Button
                 variant="destructive"
                 size="icon-sm"
-                aria-label={`Delete ${row.name}`}
                 data-testid={`banks-table__delete-${row.id}`}
-                onClick={(event) => event.stopPropagation()}
               >
                 <Trash2 className="size-3.5" aria-hidden="true" />
+                <span className="sr-only">Delete</span>
               </Button>
             }
           />
