@@ -133,4 +133,52 @@ final class ValidatorTest extends TestCase
 
         (new Validator($innerValidator))->ensure('value', $constraints, $groupSequence);
     }
+
+    public function testRebindsEmptyPropertyPathOntoSuppliedName(): void
+    {
+        $value = 'not-a-uuid';
+        $original = new ConstraintViolationList([
+            new ConstraintViolation('Invalid UUID.', null, [], $value, '', $value, null, 'uuid-code'),
+        ]);
+
+        $innerValidator = $this->createStub(ValidatorInterface::class);
+        $innerValidator
+            ->method('validate')
+            ->willReturn($original)
+        ;
+
+        try {
+            (new Validator($innerValidator))->ensure($value, [new Uuid()], propertyPath: 'id');
+            $this->fail('Expected ValidationFailedException to be thrown.');
+        } catch (ValidationFailedException $validationFailedException) {
+            $rebound = $validationFailedException->getViolations();
+            $this->assertCount(1, $rebound);
+            $this->assertSame('id', $rebound->get(0)->getPropertyPath());
+            $this->assertSame('Invalid UUID.', $rebound->get(0)->getMessage());
+            $this->assertSame('uuid-code', $rebound->get(0)->getCode());
+        }
+    }
+
+    public function testPreservesViolationsThatAlreadyCarryAPropertyPath(): void
+    {
+        $original = new ConstraintViolationList([
+            new ConstraintViolation('blank', null, [], null, 'name', '', null, 'blank-code'),
+            new ConstraintViolation('bad', null, [], null, '', 'x', null, 'bad-code'),
+        ]);
+
+        $innerValidator = $this->createStub(ValidatorInterface::class);
+        $innerValidator
+            ->method('validate')
+            ->willReturn($original)
+        ;
+
+        try {
+            (new Validator($innerValidator))->ensure('whatever', null, null, 'fallback');
+            $this->fail('Expected ValidationFailedException to be thrown.');
+        } catch (ValidationFailedException $validationFailedException) {
+            $rebound = $validationFailedException->getViolations();
+            $this->assertSame('name', $rebound->get(0)->getPropertyPath());
+            $this->assertSame('fallback', $rebound->get(1)->getPropertyPath());
+        }
+    }
 }

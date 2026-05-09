@@ -6,6 +6,7 @@ namespace Erpify\Backoffice\Bank\Application;
 
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Infrastructure\Persistence\PostgresBankRepository;
+use Erpify\Shared\Application\Validation\Validator;
 use Erpify\Shared\Infrastructure\Uuid\SymfonyUuidGenerator;
 use Erpify\Shared\Media\Application\MediaRegistrar;
 use Erpify\Shared\Storage\Application\StoredImageObjectWriter;
@@ -19,6 +20,7 @@ final readonly class BankCreator
         private MessageBusInterface $messageBus,
         private MediaRegistrar $mediaRegistrar,
         private StoredImageObjectWriter $storedImageObjectWriter,
+        private Validator $validator,
     ) {
     }
 
@@ -47,6 +49,12 @@ final readonly class BankCreator
             $stored?->byteSize,
             $stored?->contentHash,
         );
+
+        // Runs entity-level constraints — `#[UniqueEntity]` on `name` / `shortName` queries
+        // the database and surfaces a per-field violation when a duplicate exists, so the
+        // PWA receives a 400 with `validation-failed` + `violations[]` instead of letting a
+        // raw Postgres unique-constraint violation bubble up to a 500.
+        $this->validator->ensure($bank);
 
         $this->postgresBankRepository->save($bank);
 

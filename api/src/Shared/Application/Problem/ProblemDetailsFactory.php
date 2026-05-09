@@ -285,6 +285,18 @@ final readonly class ProblemDetailsFactory
     }
 
     /**
+     * Empty-property-path fallback. Symfony emits an empty `propertyPath` when the validator
+     * runs against a scalar root (e.g. a route id passed through `Validator::ensure`) and the
+     * caller did not supply a `propertyPath:` argument to rebind it. The wire contract
+     * promises a non-empty `field` for every violation so the PWA can route per-field, so any
+     * still-empty path collapses onto this neutral literal here as a last-resort safeguard.
+     *
+     * Callers SHOULD pass `propertyPath:` to `Validator::ensure` for scalar-root validations
+     * — that produces a meaningful field name (e.g. `'id'`) instead of this generic fallback.
+     */
+    private const string VIOLATION_FIELD_FALLBACK = 'value';
+
+    /**
      * @param iterable<ConstraintViolationInterface> $violations
      *
      * @return list<array{field: string, message: string, code: string}>
@@ -294,8 +306,10 @@ final readonly class ProblemDetailsFactory
         $out = [];
 
         foreach ($violations as $violation) {
+            $field = $violation->getPropertyPath();
+
             $out[] = [
-                'field' => $violation->getPropertyPath(),
+                'field' => '' !== $field ? $field : self::VIOLATION_FIELD_FALLBACK,
                 'message' => (string) $violation->getMessage(),
                 'code' => $violation->getCode() ?? '',
             ];
