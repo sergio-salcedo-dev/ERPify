@@ -3,7 +3,7 @@
 import type { ChangeEvent } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { FormField } from "@/components/erpify";
+import { DateField, FormField } from "@/components/erpify";
 import type { BanksFilter } from "../_lib/banksFilterSort";
 
 interface BanksFiltersProps {
@@ -20,10 +20,16 @@ export function BanksFilters({
   onReset,
   resetDisabled,
 }: BanksFiltersProps) {
-  const update =
-    (field: keyof BanksFilter) =>
+  const updateText =
+    (field: "name" | "shortName") =>
     (event: ChangeEvent<HTMLInputElement>): void => {
       onFilterChange({ ...filter, [field]: event.target.value });
+    };
+
+  const updateDate =
+    (field: "createdFrom" | "createdTo") =>
+    (next: string): void => {
+      onFilterChange({ ...filter, [field]: next });
     };
 
   return (
@@ -36,7 +42,7 @@ export function BanksFilters({
           <Input
             type="text"
             value={filter.name}
-            onChange={update("name")}
+            onChange={updateText("name")}
             placeholder="e.g. acme"
             data-testid="banks-filters__name"
           />
@@ -45,39 +51,25 @@ export function BanksFilters({
           <Input
             type="text"
             value={filter.shortName}
-            onChange={update("shortName")}
+            onChange={updateText("shortName")}
             placeholder="e.g. ACM"
             data-testid="banks-filters__short-name"
           />
         </FormField>
-        <FormField name="banks-filters-created-from" label="Created from (dd/mm/yyyy)">
-          <Input
-            type="text"
-            inputMode="numeric"
-            value={filter.createdFrom}
-            onChange={update("createdFrom")}
-            placeholder="dd/mm/yyyy"
-            pattern="\d{2}/\d{2}/\d{4}"
-            maxLength={10}
-            autoComplete="off"
-            title="Date format dd/mm/yyyy, e.g. 15/04/2026"
-            data-testid="banks-filters__created-from"
-          />
-        </FormField>
-        <FormField name="banks-filters-created-to" label="Created to (dd/mm/yyyy)">
-          <Input
-            type="text"
-            inputMode="numeric"
-            value={filter.createdTo}
-            onChange={update("createdTo")}
-            placeholder="dd/mm/yyyy"
-            pattern="\d{2}/\d{2}/\d{4}"
-            maxLength={10}
-            autoComplete="off"
-            title="Date format dd/mm/yyyy, e.g. 15/04/2026"
-            data-testid="banks-filters__created-to"
-          />
-        </FormField>
+        <DateField
+          name="banks-filters-created-from"
+          label="Created from"
+          value={filter.createdFrom}
+          onChange={updateDate("createdFrom")}
+          testId="banks-filters__created-from"
+        />
+        <DateField
+          name="banks-filters-created-to"
+          label="Created to"
+          value={filter.createdTo}
+          onChange={updateDate("createdTo")}
+          testId="banks-filters__created-to"
+        />
       </div>
       <div className="banks-filters__actions mt-3 flex justify-end">
         <Button

@@ -1,23 +1,18 @@
 import { describe, expect, it } from "vitest";
-import {
-  endOfDdMmYyyy,
-  formatBankDateTime,
-  parseDdMmYyyy,
-  startOfDdMmYyyy,
-} from "@/app/backoffice/banks/_lib/formatDate";
+import { endOfDdMmYyyy, formatDateTime, parseDdMmYyyy, startOfDdMmYyyy } from "@/lib/formatDate";
 
-describe("formatBankDateTime", () => {
+describe("formatDateTime", () => {
   it("renders dd/mm/yyyy, HH:mm:ss in 24-hour time", () => {
     // 15:30 in UTC → en-GB locale displays the same time string when the
     // test environment uses UTC, which is the case for vitest in CI.
-    const out = formatBankDateTime("2026-04-15T15:30:45Z");
+    const out = formatDateTime("2026-04-15T15:30:45Z");
     // Match `dd/mm/yyyy, HH:mm:ss` (no AM/PM marker anywhere in the string).
     expect(out).toMatch(/^\d{2}\/\d{2}\/\d{4},\s\d{2}:\d{2}:\d{2}$/);
     expect(out.toLowerCase()).not.toMatch(/[ap]m/);
   });
 
   it("falls back to the raw value for unparseable input", () => {
-    expect(formatBankDateTime("not-a-date")).toBe("not-a-date");
+    expect(formatDateTime("not-a-date")).toBe("not-a-date");
   });
 });
 

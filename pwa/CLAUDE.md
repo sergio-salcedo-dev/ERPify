@@ -49,6 +49,32 @@ Full-stack targets (`make dev`, `make docker.up`, `make docker.down`, …) live 
 - Prefer functional components + hooks; strict TS types (no `any` unless justified).
 - BEM class names — `.card__header--highlighted`, not arbitrary utility clusters that escape the component.
 
+## Shared building blocks (use these, don't reinvent)
+
+UI-level primitives live under `src/components/erpify/` and are exported from
+its barrel (`@/components/erpify`). Framework-agnostic helpers live under
+`src/lib/`. Reach for these from every entity instead of re-implementing them
+locally:
+
+- **Dates** — `formatDateTime` / `parseDdMmYyyy` / `startOfDdMmYyyy` /
+  `endOfDdMmYyyy` from `@/lib/formatDate`. Render `created_at` / `updated_at`
+  (and any other ISO timestamp) via `formatDateTime`; never call
+  `new Date(...).toLocaleString()` directly in entity components.
+- **Date filter inputs** — `<DateField>` from `@/components/erpify`. Renders
+  the canonical `dd/mm/yyyy` text input with the right `pattern` /
+  `inputMode` / `placeholder` / tooltip / `(dd/mm/yyyy)` label hint, and
+  pairs with the `parseDdMmYyyy` helpers above.
+- **Copy-to-clipboard** — `<CopyButton value={…}>` from `@/components/erpify`.
+  Handles the success / error feedback flip, the icon swap, the sr-only
+  fallback, and the async-clipboard / `execCommand` path. Never call
+  `navigator.clipboard.writeText` from an entity component directly.
+- **Tables / boundaries / sheets** — `<DataTable>`, `<AsyncBoundary>`,
+  `<RecordSheet>`, `<EmptyState>`, `<FormField>`, `<ProblemDisplay>`,
+  `<StatusBadge>`, `<CorrelationIdChip>`, `<AppShell>`.
+
+When you need a new cross-entity primitive, add it to `components/erpify/` (or
+`src/lib/` for a pure helper) and export it from the matching barrel.
+
 ## Accessibility rules for action buttons
 
 Every interactive control that triggers an action (button, anchor styled as

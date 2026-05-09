@@ -1,6 +1,6 @@
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
 import type { DataTableSort } from "@/components/erpify";
-import { endOfDdMmYyyy, startOfDdMmYyyy } from "./formatDate";
+import { endOfDdMmYyyy, startOfDdMmYyyy } from "@/lib/formatDate";
 
 export interface BanksFilter {
   name: string;

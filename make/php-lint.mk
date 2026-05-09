@@ -19,11 +19,13 @@ php.rector.dry-run: ## Rector dry-run
 	@$(PHP) vendor/bin/rector process --config=tools/rector/rector.php --dry-run
 
 ## —— PHP-CS-Fixer —————————————————————————————————————————————————————————
+# Cache location is owned by the config (`setCacheFile`) — do not pass
+# `--cache-file` here or it will override the config and scatter cache files.
 php.cs-fixer: ## PHP-CS-Fixer apply
-	@$(PHP) vendor/bin/php-cs-fixer fix --config=tools/ecs/.php-cs-fixer.dist.php --cache-file=var/cache/php-cs-fixer/.php-cs-fixer.cache
+	@$(PHP) vendor/bin/php-cs-fixer fix --config=tools/ecs/.php-cs-fixer.dist.php
 
 php.cs-fixer.dry-run: ## PHP-CS-Fixer check only
-	@$(PHP) vendor/bin/php-cs-fixer fix --config=tools/ecs/.php-cs-fixer.dist.php --cache-file=var/cache/php-cs-fixer/.php-cs-fixer.cache --dry-run --diff
+	@$(PHP) vendor/bin/php-cs-fixer fix --config=tools/ecs/.php-cs-fixer.dist.php --dry-run --diff
 
 ## —— PHPMD ————————————————————————————————————————————————————————————————
 php.md: ## PHPMD code smell check

@@ -501,10 +501,21 @@ test.describe("BackOffice - Banks CRUD", () => {
       await page.goto("/backoffice/banks");
 
       const select = page.getByTestId("banks-pagination__page-size");
-      const optionValues = await select
-        .locator("option")
-        .evaluateAll((nodes) => nodes.map((node) => (node as HTMLOptionElement).value));
+      // Read the options off the select element directly. `select.locator("option")`
+      // can return zero matches when the dropdown is closed because Playwright's
+      // locators auto-wait for visibility and option elements inside a closed
+      // <select> are not laid out. Evaluating the <select>'s `.options` collection
+      // sidesteps that entirely.
+      const optionValues = await select.evaluate((node) =>
+        Array.from((node as HTMLSelectElement).options).map((option) => option.value),
+      );
       expect(optionValues).toEqual(["25", "50", "100", "500", "1000"]);
+
+      // Sanity-check selecting each value still applies and clamps to page 1.
+      for (const v of ["25", "50", "100", "500", "1000"]) {
+        await select.selectOption(v);
+        await expect(select).toHaveValue(v);
+      }
     });
 
     test("typing a filter that narrows below the page size hides Prev and Next and resets to page 1", async ({

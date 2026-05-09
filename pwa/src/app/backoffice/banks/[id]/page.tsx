@@ -9,12 +9,11 @@ import { FindBank } from "@/context/backoffice/bank/application/FindBank";
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
-import { CorrelationIdChip, EmptyState, ProblemDisplay } from "@/components/erpify";
+import { CopyButton, CorrelationIdChip, EmptyState, ProblemDisplay } from "@/components/erpify";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { CopyBankIdButton } from "../_components/CopyBankIdButton";
+import { formatDateTime } from "@/lib/formatDate";
 import { DeleteBankButton } from "../_components/DeleteBankButton";
-import { formatBankDateTime } from "../_lib/formatDate";
 
 type State = "loading" | "ready" | "not-found" | "error";
 
@@ -108,7 +107,12 @@ export default function BankDetailPage() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
-              <CopyBankIdButton id={bank.id} />
+              <CopyButton
+                value={bank.id}
+                label="Copy bank ID"
+                title={`Copy bank ID ${bank.id}`}
+                testId="banks-detail__copy-id"
+              />
               <Link
                 href={`/backoffice/banks/${encodeURIComponent(bank.id)}/edit`}
                 className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
@@ -127,8 +131,8 @@ export default function BankDetailPage() {
           <dl className="banks-detail__meta border-border bg-card grid grid-cols-1 gap-4 rounded-lg border p-4 sm:grid-cols-2 xl:grid-cols-4">
             <Field label="Name" value={bank.name} />
             <Field label="Short name" value={bank.shortName} />
-            <Field label="Created" value={formatBankDateTime(bank.createdAt)} />
-            <Field label="Updated" value={formatBankDateTime(bank.updatedAt)} />
+            <Field label="Created" value={formatDateTime(bank.createdAt)} />
+            <Field label="Updated" value={formatDateTime(bank.updatedAt)} />
             <Field
               label="ID"
               value={bank.id}

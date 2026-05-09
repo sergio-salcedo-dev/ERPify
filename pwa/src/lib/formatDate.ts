@@ -1,9 +1,15 @@
 /**
- * Format an ISO 8601 timestamp as `dd/mm/yyyy, HH:mm:ss` in 24-hour time.
- * Falls back to the raw value for non-parseable input so the table never
- * shows "Invalid Date" if the API ever returns something unexpected.
+ * Date formatting and dd/mm/yyyy parsing helpers used across entities (banks,
+ * customers, invoices, …). Keep them framework-agnostic — no Next, no React,
+ * no Inversify — so any module can import them.
  */
-export function formatBankDateTime(iso: string): string {
+
+/**
+ * Format an ISO 8601 timestamp as `dd/mm/yyyy, HH:mm:ss` in 24-hour time.
+ * Falls back to the raw value for non-parseable input so UI tables never
+ * show "Invalid Date" if the API ever returns something unexpected.
+ */
+export function formatDateTime(iso: string): string {
   const ts = Date.parse(iso);
   if (Number.isNaN(ts)) return iso;
   return new Intl.DateTimeFormat("en-GB", {
