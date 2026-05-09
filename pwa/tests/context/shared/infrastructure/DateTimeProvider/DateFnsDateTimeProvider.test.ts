@@ -223,6 +223,35 @@ describe("DateFnsDateTimeProvider", () => {
       expect(end - start).toBe(86_400_000 - 1);
     });
   });
+
+  describe("parseIsoDateToStartTimestamp / parseIsoDateToEndTimestamp", () => {
+    it("returns null for unparseable / empty / partial / impossible input", () => {
+      expect(provider.parseIsoDateToStartTimestamp("")).toBeNull();
+      expect(provider.parseIsoDateToStartTimestamp("2026-04")).toBeNull();
+      expect(provider.parseIsoDateToStartTimestamp("2026-02-31")).toBeNull();
+      expect(provider.parseIsoDateToStartTimestamp("15/04/2026")).toBeNull();
+      expect(provider.parseIsoDateToEndTimestamp("")).toBeNull();
+      expect(provider.parseIsoDateToEndTimestamp("nope")).toBeNull();
+    });
+
+    it("places start at 00:00:00.000 and end at 23:59:59.999 of the same day", () => {
+      const start = provider.parseIsoDateToStartTimestamp("2026-04-15");
+      const end = provider.parseIsoDateToEndTimestamp("2026-04-15");
+      expect(start).not.toBeNull();
+      expect(end).not.toBeNull();
+      if (start === null || end === null) return;
+      expect(end - start).toBe(86_400_000 - 1);
+    });
+
+    it("agrees with the dd/mm/yyyy variant for the same calendar day", () => {
+      expect(provider.parseIsoDateToStartTimestamp("2026-04-15")).toBe(
+        provider.parseDdMmYyyyToStartTimestamp("15/04/2026"),
+      );
+      expect(provider.parseIsoDateToEndTimestamp("2026-04-15")).toBe(
+        provider.parseDdMmYyyyToEndTimestamp("15/04/2026"),
+      );
+    });
+  });
 });
 
 describe("DateTimeProvider DI index", () => {

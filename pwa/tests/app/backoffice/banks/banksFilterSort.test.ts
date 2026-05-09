@@ -63,8 +63,8 @@ describe("hasActiveFilter", () => {
   it("returns true when any field is non-empty", () => {
     expect(hasActiveFilter({ ...EMPTY_FILTER, name: "x" })).toBe(true);
     expect(hasActiveFilter({ ...EMPTY_FILTER, shortName: "x" })).toBe(true);
-    expect(hasActiveFilter({ ...EMPTY_FILTER, createdFrom: "01/01/2026" })).toBe(true);
-    expect(hasActiveFilter({ ...EMPTY_FILTER, createdTo: "01/01/2026" })).toBe(true);
+    expect(hasActiveFilter({ ...EMPTY_FILTER, createdFrom: "2026-01-01" })).toBe(true);
+    expect(hasActiveFilter({ ...EMPTY_FILTER, createdTo: "2026-01-01" })).toBe(true);
   });
 
   it("treats whitespace-only fields as inactive", () => {
@@ -98,23 +98,23 @@ describe("applyFilters", () => {
     expect(applyFilters(ROWS, filter)).toEqual([cosmos]);
   });
 
-  it("includes rows on the inclusive lower createdAt bound (dd/mm/yyyy)", () => {
-    const filter: BanksFilter = { ...EMPTY_FILTER, createdFrom: "15/01/2026" };
+  it("includes rows on the inclusive lower createdAt bound (yyyy-mm-dd)", () => {
+    const filter: BanksFilter = { ...EMPTY_FILTER, createdFrom: "2026-01-15" };
     const result = applyFilters(ROWS, filter);
     expect(result.map((b) => b.id)).toEqual(["a", "b", "c"]);
   });
 
-  it("includes rows on the inclusive upper createdAt bound at end of day (dd/mm/yyyy)", () => {
-    const filter: BanksFilter = { ...EMPTY_FILTER, createdTo: "12/02/2026" };
+  it("includes rows on the inclusive upper createdAt bound at end of day (yyyy-mm-dd)", () => {
+    const filter: BanksFilter = { ...EMPTY_FILTER, createdTo: "2026-02-12" };
     const result = applyFilters(ROWS, filter);
     expect(result.map((b) => b.id)).toEqual(["a", "b"]);
   });
 
-  it("supports a closed createdAt range in dd/mm/yyyy", () => {
+  it("supports a closed createdAt range in yyyy-mm-dd", () => {
     const filter: BanksFilter = {
       ...EMPTY_FILTER,
-      createdFrom: "20/01/2026",
-      createdTo: "01/03/2026",
+      createdFrom: "2026-01-20",
+      createdTo: "2026-03-01",
     };
     expect(applyFilters(ROWS, filter).map((b) => b.id)).toEqual(["b"]);
   });
@@ -122,24 +122,24 @@ describe("applyFilters", () => {
   it("yields no matches when from > to", () => {
     const filter: BanksFilter = {
       ...EMPTY_FILTER,
-      createdFrom: "01/12/2026",
-      createdTo: "01/01/2026",
+      createdFrom: "2026-12-01",
+      createdTo: "2026-01-01",
     };
     expect(applyFilters(ROWS, filter)).toEqual([]);
   });
 
   it("excludes rows with invalid createdAt when a range is active", () => {
-    const filter: BanksFilter = { ...EMPTY_FILTER, createdFrom: "01/01/2026" };
+    const filter: BanksFilter = { ...EMPTY_FILTER, createdFrom: "2026-01-01" };
     expect(applyFilters([acme, broken], filter)).toEqual([acme]);
   });
 
-  it("ignores partially-typed dd/mm/yyyy values until parseable", () => {
-    const filter: BanksFilter = { ...EMPTY_FILTER, createdFrom: "01/02" };
+  it("ignores incomplete yyyy-mm-dd values until parseable", () => {
+    const filter: BanksFilter = { ...EMPTY_FILTER, createdFrom: "2026-02" };
     expect(applyFilters(ROWS, filter)).toEqual(ROWS);
   });
 
-  it("rejects impossible calendar dates (31/02/2026)", () => {
-    const filter: BanksFilter = { ...EMPTY_FILTER, createdFrom: "31/02/2026" };
+  it("rejects impossible calendar dates (2026-02-31)", () => {
+    const filter: BanksFilter = { ...EMPTY_FILTER, createdFrom: "2026-02-31" };
     expect(applyFilters(ROWS, filter)).toEqual(ROWS);
   });
 

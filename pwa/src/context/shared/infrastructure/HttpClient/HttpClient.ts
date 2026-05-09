@@ -1,6 +1,6 @@
 import { injectable } from "inversify";
 import { HttpStatus } from "../../domain/types/http";
-import { ApiRoutes } from "../ApiRoutes";
+import { API_ENDPOINTS } from "../api/ApiEndpoints";
 import { HttpError } from "./HttpError";
 import { toProblemDetails } from "./legacyEnvelope";
 
@@ -33,7 +33,7 @@ export class MockHttpClient implements HttpClient {
   async get<T>(url: string): Promise<T> {
     return new Promise((resolve) => {
       setTimeout(() => {
-        if (url.includes(ApiRoutes.v1.frontoffice.health)) {
+        if (url.includes(API_ENDPOINTS.FRONTOFFICE.HEALTH)) {
           resolve({
             data: {
               status: "ok",
@@ -41,7 +41,7 @@ export class MockHttpClient implements HttpClient {
               datetime: new Date().toISOString(),
             },
           } as T);
-        } else if (url.includes(ApiRoutes.v1.backoffice.health)) {
+        } else if (url.includes(API_ENDPOINTS.BACKOFFICE.HEALTH)) {
           resolve({
             data: {
               status: "ok",
