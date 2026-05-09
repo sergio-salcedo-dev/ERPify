@@ -72,17 +72,29 @@ php.gherkin.rules: ## Gherkinlint rules
 php.lint.yaml: ## yaml-lint
 	@$(PHP_TEST) bin/console lint:yaml config
 
+## —— Doctrine schema validation ——————————————————————————————————————————
+# Catches drift between the ORM mapping (entities) and the database schema:
+#   - missing / extra columns and indexes
+#   - wrong column types
+#   - association mappings that reference unmapped classes (e.g. an interface
+#     accidentally passed as `repositoryClass`)
+# `--skip-sync` skips the "schema is in sync" half so a clean dev DB with no
+# pending migrations still surfaces mapping-only issues; the migrations themselves
+# are the source of truth for schema sync, gated by `make db.status`.
+php.lint.doctrine: ## Doctrine ORM mapping validation
+	@$(PHP_TEST) bin/console doctrine:schema:validate --skip-sync --no-interaction
+
 ## —— Error-contract drift gate ————————————————————————————————————————————
-# Story 4.5 (FR50, FR51, NFR26) — fails CI if a controller catches and
+# Fails CI if a controller catches and
 # responds with `new JsonResponse(...)` (skipping `api/.error-contract-allowlist`),
 # or if a new file under `api/src/Shared/Domain/Exception/` is added without
 # updating `docs/api-error-contract.md` in the same diff.
-php.lint.error-contract: ## Error-contract drift gate (FR50/FR51/NFR26)
+php.lint.error-contract: ## Error-contract drift gate
 	@$(PHP_TEST) bin/phpunit --filter=ErrorContractGateTest
 
 ## —— Aggregates ——————————————————————————————————————————————————————————
 #php.lint: php.stan php.rector php.cs-fixer php.md php.cs php.psalm.fix.all php.gherkin ## Full PHP lint sweep
-php.lint: php.stan php.rector php.cs-fixer php.cs php.psalm.fix.all php.gherkin php.lint.error-contract ## Full PHP lint sweep
+php.lint: php.stan php.rector php.cs-fixer php.cs php.psalm.fix.all php.gherkin php.lint.doctrine php.lint.error-contract ## Full PHP lint sweep
 
 .PHONY: php.stan php.stan.baseline \
         php.rector php.rector.dry-run \
@@ -91,5 +103,6 @@ php.lint: php.stan php.rector php.cs-fixer php.cs php.psalm.fix.all php.gherkin 
         php.psalm php.psalm.baseline php.psalm.taint \
         php.psalm.fix.cleanup php.psalm.fix.types php.psalm.fix.all \
         php.gherkin \
+        php.lint.doctrine \
         php.lint.error-contract \
         php.lint

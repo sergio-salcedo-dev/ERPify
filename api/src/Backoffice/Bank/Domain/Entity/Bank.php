@@ -10,23 +10,25 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
-use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Shared\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Media\Domain\Entity\Media;
+use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Validator\Constraints as Assert;
 
-#[ORM\Entity(repositoryClass: BankRepository::class)]
+#[ORM\Entity]
 #[ORM\Table(name: 'bank')]
+#[UniqueEntity(fields: ['name'], message: 'This bank name is already in use.')]
+#[UniqueEntity(fields: ['shortName'], message: 'This short name is already in use.')]
 class Bank extends AggregateRoot
 {
-    #[ORM\Column(length: 255)]
+    #[ORM\Column(length: 255, unique: true)]
     #[Assert\NotBlank]
     #[Assert\Length(max: 255)]
     #[Groups(['bank:get', 'bank:search'])]
     private string $name;
 
-    #[ORM\Column(length: 50)]
+    #[ORM\Column(length: 50, unique: true)]
     #[Assert\NotBlank]
     #[Assert\Length(max: 50)]
     #[Groups(['bank:get', 'bank:search'])]

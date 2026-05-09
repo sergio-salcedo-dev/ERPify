@@ -27,38 +27,33 @@ use Throwable;
 /**
  * Single mapping site between domain throwables and the {@see ProblemDetails} wire shape.
  *
- * Marker resolution honours the implements-clause order pinned by Story 1.1's
+ * Marker resolution honours the implements-clause order pinned by
  * `testMarkerOrderingFollowsImplementsClause`; the constant `MARKER_STATUS_MAP` is the
- * sole source of truth for the marker→HTTP-status mapping (NFR25).
+ * sole source of truth for the marker→HTTP-status mapping.
  *
- * Marked `final readonly` (Rector canonicalisation since Story 3.1 introduced an immutable
- * `$environment` constructor argument). Stories 3.2 / 3.3 fill the `redactKeys` /
- * `applyUnserializableSentinel` seams via in-class edits, not subclass overrides — the
- * helpers are private to begin with, so `final` was always the right modifier.
- *
- * Story 3.1 — environment-aware `debug` extension:
+ * environment-aware `debug` extension:
  *   - `dev` / `test`: every body carries a `debug` extension with `exception_class`,
  *     `message`, `file`, `line`, `previous_chain` (cycle-safe walk of `getPrevious()`).
  *   - `staging`: minimal `debug` extension carrying only `exception_class` + `message`.
  *   - `prod` (and any unrecognised `$environment`): no `debug` extension AT ALL, and the
  *     terminal `unhandled-exception` branch's `title` is replaced by the safe literal
- *     `'An unexpected error occurred.'` regardless of `$throwable->getMessage()` (NFR7
- *     prod no-leak guarantee — closes the message-leak path; the absent debug closes the
+ *     `'An unexpected error occurred.'` regardless of `$throwable->getMessage()` (prod
+ *     no-leak guarantee — closes the message-leak path; the absent debug closes the
  *     stack-trace-leak path; the existing extensions whitelist closes the context-leak
  *     path). `$environment` flows in via `#[Autowire('%kernel.environment%')]` (the
  *     Symfony 8 idiom — never read `$_ENV` / `getenv()`).
  *   - `'debug'` is part of `RESERVED_KEYS` so domain code cannot inject a fake debug
  *     extension via {@see DomainException::context()}.
  *
- * Story 3.2 — redaction denylist (FR34, NFR12): the `redactKeys()` seam delegates to
+ * redaction denylist: the `redactKeys()` seam delegates to
  * {@see RedactionDenylist::filter}, stripping case-insensitive exact-match keys
  * (`password`, `token`, `secret`, `authorization`, `cookie`, `ssn`, `iban`) from the
  * `DomainException::context()` before extensions promotion. The strip runs AFTER the
  * {@see RESERVED_KEYS} `unset()` layer and BEFORE the whitelist branch so a denylisted
  * `JsonSerializable` value cannot survive via the whitelist.
  *
- * Story 3.3 — unserializable sentinel (FR38) and default-deny on unknown exception types
- * (NFR13): the `applyUnserializableSentinel()` seam now substitutes any non-whitelisted
+ * unserializable sentinel and default-deny on unknown exception types:
+ * the `applyUnserializableSentinel()` seam now substitutes any non-whitelisted
  * top-level context value with the literal token `'[unserializable]'` AND emits one PSR-3
  * `notice` log line per replacement carrying `{instance, correlation_id, context_key,
  * original_type}`. `original_type` is the {@see sanitiseExceptionClass}-cleaned FQCN for
@@ -72,7 +67,7 @@ use Throwable;
  * `AuthenticationException` / `HttpExceptionInterface`') lands on `type='unhandled-exception'`,
  * `status=500`, `extensions=[]`, and (in prod / unrecognised env) the safe literal title.
  *
- * Story 3.6 — 16 KiB body cap with truncation marker (NFR10). Every {@see ProblemDetails}
+ * 16 KiB body cap with truncation marker. Every {@see ProblemDetails}
  * returned from {@see fromThrowable} flows through {@see applyBodyCap}: if the JSON-encoded
  * body exceeds {@see BODY_BYTE_CAP}, extensions are truncated in a deterministic order and
  * `'truncated' => true` is appended as the LAST extension member. Truncation order:
@@ -83,12 +78,12 @@ use Throwable;
  *      `debug` first, then user-declared keys, finally `violations: []` when empty).
  *   3. If only the required core fields remain (`type, title, status, instance,
  *      correlation-id`) and the body STILL exceeds the cap, throw
- *      {@see ProblemBodyTooLargeException} so the listener's outer try/catch (Story 3.4)
+ *      {@see ProblemBodyTooLargeException} so the listener's outer try/catch
  *      escalates to the static last-resort body.
  * The cap operates on serialised byte length using `\json_encode` with `JSON_UNESCAPED_UNICODE
  * | JSON_THROW_ON_ERROR` (mirrors {@see \Erpify\Shared\Infrastructure\Http\ProblemDetailsResponder}).
  *
- * Story 3.7 — constant-time branching for 401/403 paths (NFR9). The four error routes that
+ * constant-time branching for 401/403 paths. The four error routes that
  * yield 401/403 (`Unauthenticated` / `Forbidden` markers on a `DomainException` plus the
  * Symfony `AuthenticationException` / `AccessDeniedException` bridges) all flow through the
  * same construction shape — either `withDebug(new ProblemDetails(...))` for the marker path
@@ -130,8 +125,8 @@ final readonly class ProblemDetailsFactory
     ];
 
     /**
-     * Story 1.5 — status→type alignment for Symfony framework exceptions. Values mirror
-     * `MARKER_DEFAULT_TYPE_MAP` for the corresponding statuses so PWA `type`-only routing (FR44)
+     * status→type alignment for Symfony framework exceptions. Values mirror
+     * `MARKER_DEFAULT_TYPE_MAP` for the corresponding statuses so PWA `type`-only routing
      * is uniform whether the error originated from a marker `DomainException`, a Security Core
      * exception, or a Symfony `HttpExceptionInterface`. The alignment is pinned by
      * `testHttpStatusTypeMapValuesMirrorMarkerDefaultTypeMapValues`.
@@ -157,22 +152,22 @@ final readonly class ProblemDetailsFactory
     private const string UNHANDLED_TITLE_FALLBACK = 'An unexpected error occurred.';
 
     /**
-     * Story 3.3 — wire-side body sentinel substituted for any non-whitelisted top-level context
+     * wire-side body sentinel substituted for any non-whitelisted top-level context
      * value (closure, resource, plain object, anonymous-class proxy, etc.). The literal is
      * type-uniform: no `'[resource]'` / `'[closure]'` variants, no class name in the token —
-     * structural metadata belongs in logs, not the body (FR38).
+     * structural metadata belongs in logs, not the body.
      */
     private const string UNSERIALIZABLE_SENTINEL = '[unserializable]';
 
     /**
-     * Story 3.3 — PSR-3 message emitted exactly once per substituted context value. Operators
+     * PSR-3 message emitted exactly once per substituted context value. Operators
      * grep by `instance` for the per-error correlation, `correlation_id` for the request trail,
      * and `original_type` for the dropped value's PHP shape.
      */
     private const string SENTINEL_LOG_MESSAGE = 'DomainException context value substituted with unserializable sentinel.';
 
     /**
-     * Story 3.6 — hard upper bound on the JSON-encoded Problem Details body, in bytes (NFR10).
+     * hard upper bound on the JSON-encoded Problem Details body, in bytes.
      * 16 KiB matches the typical proxy / CDN small-buffer cutoff above which downstream
      * intermediaries start fragmenting or buffering responses; bodies above this size also
      * exceed common observability-pipeline log-line limits (Datadog 1 MiB, but most grep tools
@@ -181,11 +176,23 @@ final readonly class ProblemDetailsFactory
     private const int BODY_BYTE_CAP = 16384;
 
     /**
-     * Story 3.6 — appended as the LAST extension member when {@see applyBodyCap} drops at
+     * appended as the LAST extension member when {@see applyBodyCap} drops at
      * least one extension entry. The literal `true` boolean signals truncation occurred to
      * downstream consumers without leaking which keys were dropped.
      */
     private const string TRUNCATED_MARKER_KEY = 'truncated';
+
+    /**
+     * Empty-property-path fallback. Symfony emits an empty `propertyPath` when the validator
+     * runs against a scalar root (e.g. a route id passed through `Validator::ensure`) and the
+     * caller did not supply a `propertyPath:` argument to rebind it. The wire contract
+     * promises a non-empty `field` for every violation so the PWA can route per-field, so any
+     * still-empty path collapses onto this neutral literal here as a last-resort safeguard.
+     *
+     * Callers SHOULD pass `propertyPath:` to `Validator::ensure` for scalar-root validations
+     * — that produces a meaningful field name (e.g. `'id'`) instead of this generic fallback.
+     */
+    private const string VIOLATION_FIELD_FALLBACK = 'value';
 
     public function __construct(
         #[Autowire('%kernel.environment%')]
@@ -194,16 +201,16 @@ final readonly class ProblemDetailsFactory
     ) {
     }
 
-    public function fromThrowable(Throwable $e, string $correlationId, string $instance): ProblemDetails
+    public function fromThrowable(Throwable $throwable, string $correlationId, string $instance): ProblemDetails
     {
-        $debug = $this->buildDebugExtension($e);
+        $debug = $this->buildDebugExtension($throwable);
 
-        if ($e instanceof DomainException) {
-            $firstMarker = $this->firstMatchingMarker($e);
+        if ($throwable instanceof DomainException) {
+            $firstMarker = $this->firstMatchingMarker($throwable);
 
             $status = null !== $firstMarker ? self::MARKER_STATUS_MAP[$firstMarker] : Response::HTTP_INTERNAL_SERVER_ERROR;
 
-            $explicitType = $e->type();
+            $explicitType = $throwable->type();
 
             if ('' !== $explicitType) {
                 $type = $explicitType;
@@ -213,18 +220,23 @@ final readonly class ProblemDetailsFactory
                 $type = 'domain-error';
             }
 
-            return $this->applyBodyCap($this->withDebug(new ProblemDetails(
-                type: $type,
-                title: $e->title(),
-                status: $status,
-                detail: null,
-                instance: $instance,
-                correlationId: $correlationId,
-                extensions: $this->buildExtensions($e, $correlationId, $instance),
-            ), $debug));
+            return $this->applyBodyCap(
+                $this->withDebug(
+                    new ProblemDetails(
+                        type: $type,
+                        title: $throwable->title(),
+                        status: $status,
+                        detail: null,
+                        instance: $instance,
+                        correlationId: $correlationId,
+                        extensions: $this->buildExtensions($throwable, $correlationId, $instance),
+                    ),
+                    $debug,
+                ),
+            );
         }
 
-        $validationException = $this->findInChain($e, ValidationFailedException::class);
+        $validationException = $this->findInChain($throwable, ValidationFailedException::class);
 
         if ($validationException instanceof ValidationFailedException) {
             return $this->applyBodyCap($this->withDebug(new ProblemDetails(
@@ -238,40 +250,40 @@ final readonly class ProblemDetailsFactory
             ), $debug));
         }
 
-        if ($e instanceof AccessDeniedException) {
+        if ($throwable instanceof AccessDeniedException) {
             return $this->applyBodyCap($this->withDebug($this->buildBridgeResponse(
                 type: 'forbidden',
                 status: Response::HTTP_FORBIDDEN,
-                title: '' !== $e->getMessage() ? $e->getMessage() : 'Access denied.',
+                title: '' !== $throwable->getMessage() ? $throwable->getMessage() : 'Access denied.',
                 correlationId: $correlationId,
                 instance: $instance,
             ), $debug));
         }
 
-        if ($e instanceof AuthenticationException) {
+        if ($throwable instanceof AuthenticationException) {
             return $this->applyBodyCap($this->withDebug($this->buildBridgeResponse(
                 type: 'unauthenticated',
                 status: Response::HTTP_UNAUTHORIZED,
-                title: '' !== $e->getMessage() ? $e->getMessage() : 'Authentication required.',
+                title: '' !== $throwable->getMessage() ? $throwable->getMessage() : 'Authentication required.',
                 correlationId: $correlationId,
                 instance: $instance,
             ), $debug));
         }
 
-        if ($e instanceof HttpExceptionInterface) {
-            $status = $e->getStatusCode();
+        if ($throwable instanceof HttpExceptionInterface) {
+            $status = $throwable->getStatusCode();
             $type = self::HTTP_STATUS_TYPE_MAP[$status] ?? 'http-error';
 
             return $this->applyBodyCap($this->withDebug($this->buildBridgeResponse(
                 type: $type,
                 status: $status,
-                title: '' !== $e->getMessage() ? $e->getMessage() : 'An HTTP error occurred.',
+                title: '' !== $throwable->getMessage() ? $throwable->getMessage() : 'An HTTP error occurred.',
                 correlationId: $correlationId,
                 instance: $instance,
             ), $debug));
         }
 
-        $title = $this->resolveUnhandledTitle($e);
+        $title = $this->resolveUnhandledTitle($throwable);
 
         return $this->applyBodyCap($this->withDebug(new ProblemDetails(
             type: 'unhandled-exception',
@@ -294,8 +306,10 @@ final readonly class ProblemDetailsFactory
         $out = [];
 
         foreach ($violations as $violation) {
+            $field = $violation->getPropertyPath();
+
             $out[] = [
-                'field' => $violation->getPropertyPath(),
+                'field' => '' !== $field ? $field : self::VIOLATION_FIELD_FALLBACK,
                 'message' => (string) $violation->getMessage(),
                 'code' => $violation->getCode() ?? '',
             ];
@@ -360,7 +374,7 @@ final readonly class ProblemDetailsFactory
 
     /**
      * Returns the FQCN of the first marker the exception declares, in `class_implements` order
-     * intersected with the canonical marker list. Mirrors the precedence pinned by Story 1.1's
+     * intersected with the canonical marker list. Mirrors the precedence pinned by
      * `testMarkerOrderingFollowsImplementsClause`.
      *
      * @return key-of<self::MARKER_STATUS_MAP>|null
@@ -382,9 +396,9 @@ final readonly class ProblemDetailsFactory
     /**
      * @return array<string, mixed>
      */
-    private function buildExtensions(DomainException $e, string $correlationId, string $instance): array
+    private function buildExtensions(DomainException $domainException, string $correlationId, string $instance): array
     {
-        $context = $e->context();
+        $context = $domainException->context();
 
         foreach (self::RESERVED_KEYS as $reserved) {
             unset($context[$reserved]);
@@ -401,8 +415,8 @@ final readonly class ProblemDetailsFactory
                 continue;
             }
 
-            // Story 3.3 — substitute non-whitelisted top-level value with the literal sentinel
-            // and emit one PSR-3 `notice` per replacement (FR38). The seam keeps factory state
+            // substitute non-whitelisted top-level value with the literal sentinel
+            // and emit one PSR-3 `notice` per replacement. The seam keeps factory state
             // out of the substitution helper by passing the correlation pair through.
             $extensions[$key] = $this->applyUnserializableSentinel($value, (string) $key, $correlationId, $instance);
         }
@@ -419,7 +433,7 @@ final readonly class ProblemDetailsFactory
     }
 
     /**
-     * Story 3.2 — exact-key case-insensitive denylist strip via {@see RedactionDenylist::filter}.
+     * exact-key case-insensitive denylist strip via {@see RedactionDenylist::filter}.
      *
      * Order is load-bearing: this runs AFTER the {@see RESERVED_KEYS} `unset()` strip and
      * BEFORE the {@see isWhitelistedValue} loop, so a denylisted `JsonSerializable` value
@@ -439,7 +453,7 @@ final readonly class ProblemDetailsFactory
     }
 
     /**
-     * Story 3.3 — body sentinel substitution + per-replacement structured log (FR38).
+     * body sentinel substitution + per-replacement structured log.
      *
      * Always returns the literal {@see UNSERIALIZABLE_SENTINEL} (no type-variant tokens —
      * structural metadata stays in logs). Emits exactly one PSR-3 `notice` per call carrying
@@ -473,7 +487,7 @@ final readonly class ProblemDetailsFactory
     }
 
     /**
-     * Story 3.1 — environment-aware decision (FR35 / FR36 / FR37, NFR13 default-deny):
+     * environment-aware decision:
      * exact-string match on `'dev'` / `'test'` / `'staging'`; anything else (including
      * uppercase, the empty string, `'ci'`, `'production'`) falls through to omit-debug.
      */
@@ -572,7 +586,7 @@ final readonly class ProblemDetailsFactory
      * The spread `[...$base->extensions, 'debug' => $debug]` preserves declaration order so
      * `debug` always slots after `violations` and any domain-emitted extensions. When `$debug`
      * is `null` (prod / unrecognised env), the base `ProblemDetails` is returned unchanged so
-     * production bodies never carry a `debug` key (FR35, NFR7).
+     * production bodies never carry a `debug` key.
      *
      * @param array{exception_class: string, message: string, file: string, line: int, previous_chain: list<array{exception_class: string, message: string, file: string, line: int}>}|array{exception_class: string, message: string}|null $debug
      */
@@ -594,10 +608,10 @@ final readonly class ProblemDetailsFactory
     }
 
     /**
-     * Story 3.1 — prod-safe title swap on the terminal `unhandled-exception` branch (FR35,
-     * NFR7). In prod (or any unrecognised env that falls through to `DEBUG_MODE_OMIT`), the
+     * prod-safe title swap on the terminal `unhandled-exception` branch.
+     * In prod (or any unrecognised env that falls through to `DEBUG_MODE_OMIT`), the
      * title is the static safe literal regardless of `$throwable->getMessage()`. In dev /
-     * test / staging, the existing Story 1.5 behaviour is preserved (message → title with a
+     * test / staging, the behaviour is preserved (message → title with a
      * safe fallback when empty), and the message also surfaces in `debug.message`.
      */
     private function resolveUnhandledTitle(Throwable $e): string
@@ -613,7 +627,7 @@ final readonly class ProblemDetailsFactory
 
     /**
      * Story 3.6 — enforces the {@see BODY_BYTE_CAP} hard upper bound on the JSON-encoded
-     * Problem Details body (NFR10). Returns the input unchanged when the encoded body fits;
+     * Problem Details body . Returns the input unchanged when the encoded body fits;
      * otherwise truncates extensions deterministically and appends `'truncated' => true` as
      * the LAST extension member.
      *

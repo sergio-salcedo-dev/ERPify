@@ -111,7 +111,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       expect(clipboardValue).toBe(SAMPLE_BANK_A.id);
     });
 
-    test("shows EmptyState + correlation chip on 404 from the legacy envelope", async ({
+    test("shows EmptyState + correlation chip on 404 from the RFC 9457 envelope", async ({
       page,
     }) => {
       await mockBanksApi(page, { get: "not-found" });
@@ -135,7 +135,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       await expect(page.getByRole("heading", { name: SAMPLE_BANK_A.name })).toBeVisible();
     });
 
-    test("surfaces 422 violations as field-level errors via the translator", async ({ page }) => {
+    test("surfaces validation-failed violations as field-level errors", async ({ page }) => {
       await mockBanksApi(page, { create: "validation-error" });
       await page.goto("/backoffice/banks/new");
 
@@ -159,7 +159,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       await expect(page).toHaveURL(`/backoffice/banks/${SAMPLE_BANK_A.id}`);
     });
 
-    test("surfaces 422 from the legacy envelope on update", async ({ page }) => {
+    test("surfaces validation-failed violations on update", async ({ page }) => {
       await mockBanksApi(page, { get: "happy", update: "validation-error", bank: SAMPLE_BANK_A });
       await page.goto(`/backoffice/banks/${SAMPLE_BANK_A.id}/edit`);
 
