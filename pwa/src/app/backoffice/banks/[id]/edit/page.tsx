@@ -12,6 +12,7 @@ import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { CorrelationIdChip, EmptyState, ProblemDisplay } from "@/components/erpify";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { safeHref } from "@/lib/safeHref";
 import { BankForm } from "../../_components/BankForm";
 
 type State = "loading" | "ready" | "not-found" | "error";
@@ -141,7 +142,7 @@ export default function EditBankPage() {
 function BackLink({ id }: { id: string }) {
   return (
     <Link
-      href={id ? `/backoffice/banks/${encodeURIComponent(id)}` : "/backoffice/banks"}
+      href={safeHref(id ? `/backoffice/banks/${encodeURIComponent(id)}` : "/backoffice/banks")}
       className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs"
       aria-label="Back to bank detail"
       title="Back to bank detail"

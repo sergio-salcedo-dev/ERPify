@@ -12,6 +12,7 @@ import { FormField, ProblemDisplay } from "@/components/erpify";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { safeHref } from "@/lib/safeHref";
 
 type Mode = "create" | "edit";
 
@@ -45,7 +46,7 @@ export function BankForm({ mode, initial }: BankFormProps) {
       if (mode === "create") {
         const useCase = container.get<CreateBank>("BackOfficeCreateBank");
         const created = await useCase.run({ name, shortName });
-        router.push(`/backoffice/banks/${created.id}`);
+        router.push(safeHref(`/backoffice/banks/${encodeURIComponent(created.id)}`));
         router.refresh();
         return;
       }
@@ -56,7 +57,7 @@ export function BankForm({ mode, initial }: BankFormProps) {
 
       const useCase = container.get<UpdateBank>("BackOfficeUpdateBank");
       const updated = await useCase.run(initial.id, { name, shortName });
-      router.push(`/backoffice/banks/${updated.id}`);
+      router.push(safeHref(`/backoffice/banks/${encodeURIComponent(updated.id)}`));
       router.refresh();
     } catch (err) {
       if (err instanceof HttpError) {
@@ -73,8 +74,11 @@ export function BankForm({ mode, initial }: BankFormProps) {
     }
   }
 
-  const cancelHref =
-    mode === "edit" && initial ? `/backoffice/banks/${initial.id}` : "/backoffice/banks";
+  const cancelHref = safeHref(
+    mode === "edit" && initial
+      ? `/backoffice/banks/${encodeURIComponent(initial.id)}`
+      : "/backoffice/banks",
+  );
 
   return (
     <form

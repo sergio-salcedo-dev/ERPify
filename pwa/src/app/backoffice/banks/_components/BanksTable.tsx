@@ -9,6 +9,7 @@ import type { DataTableColumn, DataTableSort } from "@/components/erpify";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatDateTime } from "@/lib/formatDate";
+import { safeHref } from "@/lib/safeHref";
 import { DeleteBankButton } from "./DeleteBankButton";
 
 interface BanksTableProps {
@@ -63,7 +64,7 @@ export function BanksTable({ banks, sort, onSortChange, onBankDeleted }: BanksTa
           role="presentation"
         >
           <Link
-            href={`/backoffice/banks/${encodeURIComponent(row.id)}/edit`}
+            href={safeHref(`/backoffice/banks/${encodeURIComponent(row.id)}/edit`)}
             className={cn(buttonVariants({ variant: "outline", size: "icon-sm" }))}
             aria-label="Edit"
             title={`Edit bank ${row.name}`}
@@ -106,7 +107,9 @@ export function BanksTable({ banks, sort, onSortChange, onBankDeleted }: BanksTa
         density="comfortable"
         sort={sort ?? undefined}
         onSortChange={onSortChange}
-        onRowActivate={(row) => router.push(`/backoffice/banks/${encodeURIComponent(row.id)}`)}
+        onRowActivate={(row) =>
+          router.push(safeHref(`/backoffice/banks/${encodeURIComponent(row.id)}`))
+        }
         rowTestId={(row) => `banks-table__row-${row.id}`}
         testId="banks-table__inner"
         className="banks-table__inner"

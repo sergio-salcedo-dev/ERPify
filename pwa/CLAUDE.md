@@ -49,6 +49,51 @@ Full-stack targets (`make dev`, `make docker.up`, `make docker.down`, …) live 
 - Prefer functional components + hooks; strict TS types (no `any` unless justified).
 - BEM class names — `.card__header--highlighted`, not arbitrary utility clusters that escape the component.
 
+## Security review (mandatory on every change)
+
+Every PR — even small fixes — runs the security checklist documented in
+the root [`../CLAUDE.md`](../CLAUDE.md) ("Security review on every
+change"). The frontend-specific items below are part of that
+checklist; do not treat them as optional.
+
+## XSS prevention rules
+
+React escapes JSX text by default, but the framework does **not** block
+script-bearing URL schemes and several attribute / sink categories remain
+attack surface. Treat the following as load-bearing:
+
+- **Dynamic `href` / `src`** — every URL whose value is influenced by API
+  data, route params, query strings, or user input MUST go through
+  `safeHref(value, fallback)` from `@/lib/safeHref` (rejects `javascript:`,
+  `data:`, `vbscript:`, `file:` regardless of casing or whitespace
+  obfuscation). Combine with `encodeURIComponent` on the dynamic segment
+  when inserting it into a path. Never interpolate raw API data straight
+  into an `href` template literal.
+- **`router.push` / programmatic navigation** — same rule: wrap the URL in
+  `safeHref` so a malicious `javascript:` payload cannot be navigated to.
+- **`dangerouslySetInnerHTML`** — banned outside very specific, sanitized
+  Markdown / SVG embeds. If you genuinely need it, the input MUST be
+  produced by a vetted sanitizer (e.g. DOMPurify) and reviewed; do not
+  reach for it for "richtext" or "format-as-bold" hacks.
+- **`innerHTML` / direct DOM writes / `document.write` / `eval` /
+  `new Function(string)`** — banned. Use React state instead.
+- **Attributes that don't execute scripts (`title`, `aria-label`,
+  `data-*`)** — safe to interpolate; React escapes them. Still keep
+  static `aria-label`s where row context already conveys the resource
+  name (see `BanksTable`'s actions cell).
+- **Server response headers** — the security baseline lives in
+  `next.config.ts#headers()`: a strict-ish `Content-Security-Policy`
+  (`object-src 'none'`, `frame-ancestors 'none'`, `base-uri 'self'`,
+  `form-action 'self'`, `upgrade-insecure-requests`), plus
+  `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`,
+  `Permissions-Policy`, COOP / CORP, HSTS. `script-src` keeps
+  `'unsafe-inline'` for now to support Next.js hydration; the future
+  state is a nonce-based CSP via `middleware.ts`. Do NOT add
+  `'unsafe-eval'` outside development.
+- **Clipboard / navigator APIs** — `CopyButton` is the canonical path;
+  it never trusts the value as HTML. Don't compose your own
+  `navigator.clipboard.writeText` flows from entity components.
+
 ## Shared building blocks (use these, don't reinvent)
 
 UI-level primitives live under `src/components/erpify/` and are exported from

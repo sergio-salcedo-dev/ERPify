@@ -13,6 +13,7 @@ import { CopyButton, CorrelationIdChip, EmptyState, ProblemDisplay } from "@/com
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatDateTime } from "@/lib/formatDate";
+import { safeHref } from "@/lib/safeHref";
 import { DeleteBankButton } from "../_components/DeleteBankButton";
 
 type State = "loading" | "ready" | "not-found" | "error";
@@ -139,7 +140,7 @@ export default function BankDetailPage() {
                 testId="banks-detail__copy-id"
               />
               <Link
-                href={`/backoffice/banks/${encodeURIComponent(bank.id)}/edit`}
+                href={safeHref(`/backoffice/banks/${encodeURIComponent(bank.id)}/edit`)}
                 className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
                 data-icon="inline-start"
                 data-testid="banks-detail__edit-button"
