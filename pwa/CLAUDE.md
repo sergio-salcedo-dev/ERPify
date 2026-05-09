@@ -48,3 +48,30 @@ Full-stack targets (`make dev`, `make docker.up`, `make docker.down`, …) live 
 - New bounded contexts follow the `domain`/`application`/`infrastructure` split — don't flatten into `src/app/` or `src/lib/`.
 - Prefer functional components + hooks; strict TS types (no `any` unless justified).
 - BEM class names — `.card__header--highlighted`, not arbitrary utility clusters that escape the component.
+
+## Accessibility rules for action buttons
+
+Every interactive control that triggers an action (button, anchor styled as
+button, dialog trigger, pagination control, form submit/cancel) must carry **all**
+of the following:
+
+- `title` — descriptive hover tooltip; include the resource name when meaningful
+  (e.g. `title={\`Edit bank ${row.name}\`}`).
+- `aria-label` — keep the accessible name **short and static** (`"Edit"`,
+  `"Delete"`, `"Previous page"`). When the control lives inside a `role="cell"`
+  or `role="row"`, the cell's accessible name is computed from descendant
+  control names, so dynamic labels containing the row's text break Playwright's
+  strict-mode locators (e.g. `getByRole("cell", { name: "Acme Savings" })`
+  matches both the name cell and the actions cell). Put the dynamic part in
+  `title` instead.
+- A textual fallback for icon-only controls — either visible text, an
+  `<span className="sr-only">…</span>`, or both — so the control still has a
+  name when CSS fails to load.
+- `aria-hidden="true"` on every decorative icon inside the control.
+- For pagination/navigation controls that have no valid target (no previous or
+  no next page), **hide** the control instead of rendering it disabled — a
+  disabled control is still discovered by assistive tech and adds noise.
+
+For destructive actions also wire the user through a confirmation dialog
+(`Dialog.*` from `@/components/ui/dialog`) and surface API failures inside the
+dialog via `<ProblemDisplay variant="inline" />` — never silently dismiss them.

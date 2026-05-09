@@ -74,6 +74,8 @@ export function BanksFilters({
           size="sm"
           onClick={onReset}
           disabled={resetDisabled}
+          aria-label="Reset filters"
+          title="Reset filters"
           className="w-full sm:w-auto"
           data-testid="banks-filters__reset"
         >

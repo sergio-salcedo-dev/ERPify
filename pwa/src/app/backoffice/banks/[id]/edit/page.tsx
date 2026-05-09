@@ -116,6 +116,8 @@ function BackLink({ id }: { id: string }) {
     <Link
       href={id ? `/backoffice/banks/${encodeURIComponent(id)}` : "/backoffice/banks"}
       className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs"
+      aria-label="Back to bank detail"
+      title="Back to bank detail"
     >
       <ChevronLeft className="size-3" aria-hidden="true" />
       Back to bank

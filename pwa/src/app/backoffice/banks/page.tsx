@@ -111,6 +111,8 @@ export default function BanksListPage() {
           className={cn(buttonVariants({ size: "sm" }), "banks-list__new-button w-full sm:w-auto")}
           data-icon="inline-start"
           data-testid="banks-list__new-button"
+          aria-label="Create a new bank"
+          title="Create a new bank"
         >
           <Plus className="size-3.5" aria-hidden="true" />
           New bank
@@ -134,7 +136,12 @@ export default function BanksListPage() {
         emptyHeading="No banks yet"
         emptyDescription="Create the first bank to get started."
         emptyAction={
-          <Link href="/backoffice/banks/new" className={cn(buttonVariants())}>
+          <Link
+            href="/backoffice/banks/new"
+            className={cn(buttonVariants())}
+            aria-label="Create your first bank"
+            title="Create your first bank"
+          >
             Create your first bank
           </Link>
         }
@@ -155,6 +162,8 @@ export default function BanksListPage() {
                 size="sm"
                 className="mt-4"
                 onClick={resetFilters}
+                title="Clear all bank filters"
+                aria-label="Clear all bank filters"
                 data-testid="banks-list__reset-filters"
               >
                 Reset filters

@@ -21,13 +21,6 @@ export function BanksPagination({
   onPageChange,
   onPageSizeChange,
 }: BanksPaginationProps) {
-  const onPrev = (): void => {
-    if (hasPrev) onPageChange(page - 1);
-  };
-  const onNext = (): void => {
-    if (hasNext) onPageChange(page + 1);
-  };
-
   return (
     <nav
       className="banks-pagination mt-3 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between"
@@ -40,6 +33,7 @@ export function BanksPagination({
           value={pageSize}
           onChange={(event) => onPageSizeChange(Number(event.target.value) as BanksPageSize)}
           aria-label="Items per page"
+          title="Items per page"
           data-testid="banks-pagination__page-size"
         >
           {BANKS_PAGE_SIZE_OPTIONS.map((option) => (
@@ -51,20 +45,22 @@ export function BanksPagination({
       </label>
 
       <div className="banks-pagination__controls flex items-center justify-end gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="banks-pagination__prev"
-          onClick={onPrev}
-          disabled={!hasPrev}
-          aria-label="Previous page"
-          data-testid="banks-pagination__prev"
-          data-icon="inline-start"
-        >
-          <ChevronLeft className="size-3.5" aria-hidden="true" />
-          <span className="hidden sm:inline">Prev</span>
-        </Button>
+        {hasPrev ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="banks-pagination__prev"
+            onClick={() => onPageChange(page - 1)}
+            aria-label="Previous page"
+            title="Previous page"
+            data-testid="banks-pagination__prev"
+            data-icon="inline-start"
+          >
+            <ChevronLeft className="size-3.5" aria-hidden="true" />
+            <span className="hidden sm:inline">Prev</span>
+          </Button>
+        ) : null}
         <span
           className="banks-pagination__indicator text-muted-foreground min-w-[4.5rem] text-center text-xs"
           aria-live="polite"
@@ -72,20 +68,22 @@ export function BanksPagination({
         >
           Page {page}
         </span>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="banks-pagination__next"
-          onClick={onNext}
-          disabled={!hasNext}
-          aria-label="Next page"
-          data-testid="banks-pagination__next"
-          data-icon="inline-end"
-        >
-          <span className="hidden sm:inline">Next</span>
-          <ChevronRight className="size-3.5" aria-hidden="true" />
-        </Button>
+        {hasNext ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="banks-pagination__next"
+            onClick={() => onPageChange(page + 1)}
+            aria-label="Next page"
+            title="Next page"
+            data-testid="banks-pagination__next"
+            data-icon="inline-end"
+          >
+            <span className="hidden sm:inline">Next</span>
+            <ChevronRight className="size-3.5" aria-hidden="true" />
+          </Button>
+        ) : null}
       </div>
     </nav>
   );

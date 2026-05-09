@@ -111,6 +111,8 @@ export default function BankDetailPage() {
                 className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
                 data-icon="inline-start"
                 data-testid="banks-detail__edit-button"
+                aria-label={`Edit bank ${bank.name}`}
+                title={`Edit bank ${bank.name}`}
               >
                 <Pencil className="size-3.5" aria-hidden="true" />
                 Edit
@@ -136,6 +138,8 @@ function BackLink() {
     <Link
       href="/backoffice/banks"
       className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs"
+      aria-label="Back to banks"
+      title="Back to banks"
     >
       <ChevronLeft className="size-3" aria-hidden="true" />
       Back to banks

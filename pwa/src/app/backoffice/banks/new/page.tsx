@@ -9,6 +9,8 @@ export default function NewBankPage() {
         <Link
           href="/backoffice/banks"
           className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs"
+          aria-label="Back to banks"
+          title="Back to banks"
         >
           <ChevronLeft className="size-3" aria-hidden="true" />
           Back to banks

@@ -110,6 +110,8 @@ export function BankForm({ mode, initial }: BankFormProps) {
         <Link
           href={cancelHref}
           aria-disabled={submitting || undefined}
+          aria-label={mode === "create" ? "Cancel and go back" : "Cancel and go back to bank"}
+          title={mode === "create" ? "Cancel and go back" : "Cancel and go back to bank"}
           tabIndex={submitting ? -1 : undefined}
           onClick={(event) => {
             if (submitting) event.preventDefault();
@@ -126,6 +128,8 @@ export function BankForm({ mode, initial }: BankFormProps) {
           type="submit"
           size="sm"
           disabled={submitting}
+          aria-label={mode === "create" ? "Create bank" : "Save bank changes"}
+          title={mode === "create" ? "Create bank" : "Save bank changes"}
           className="w-full sm:w-auto"
           data-testid="bank-form__submit"
         >

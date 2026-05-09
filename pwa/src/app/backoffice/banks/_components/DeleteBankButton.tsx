@@ -83,7 +83,8 @@ export function DeleteBankButton({
       size="sm"
       data-icon="inline-start"
       data-testid={triggerTestId}
-      aria-label={`Delete ${name}`}
+      aria-label={`Delete bank ${name}`}
+      title={`Delete bank ${name}`}
       onClick={stopPropagation ? (event) => event.stopPropagation() : undefined}
     >
       <Trash2 className="size-3.5" aria-hidden="true" />
@@ -108,7 +109,13 @@ export function DeleteBankButton({
         <DialogFooter>
           <DialogClose
             render={
-              <Button variant="ghost" size="sm" disabled={submitting}>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={submitting}
+                aria-label="Cancel deletion"
+                title="Cancel deletion"
+              >
                 Cancel
               </Button>
             }
@@ -118,6 +125,8 @@ export function DeleteBankButton({
             size="sm"
             onClick={handleConfirm}
             disabled={submitting}
+            aria-label={`Confirm delete of bank ${name}`}
+            title={`Confirm delete of bank ${name}`}
             data-testid="banks-detail__delete-confirm"
           >
             {submitting ? "Deleting…" : "Delete"}

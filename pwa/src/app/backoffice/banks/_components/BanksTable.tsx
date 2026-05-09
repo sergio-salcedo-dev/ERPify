@@ -63,6 +63,8 @@ export function BanksTable({ banks, sort, onSortChange, onBankDeleted }: BanksTa
           <Link
             href={`/backoffice/banks/${encodeURIComponent(row.id)}/edit`}
             className={cn(buttonVariants({ variant: "outline", size: "icon-sm" }))}
+            aria-label="Edit"
+            title={`Edit bank ${row.name}`}
             data-testid={`banks-table__edit-${row.id}`}
           >
             <Pencil className="size-3.5" aria-hidden="true" />
@@ -78,6 +80,8 @@ export function BanksTable({ banks, sort, onSortChange, onBankDeleted }: BanksTa
               <Button
                 variant="destructive"
                 size="icon-sm"
+                aria-label="Delete"
+                title={`Delete bank ${row.name}`}
                 data-testid={`banks-table__delete-${row.id}`}
               >
                 <Trash2 className="size-3.5" aria-hidden="true" />
