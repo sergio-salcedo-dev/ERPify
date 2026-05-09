@@ -157,5 +157,5 @@ return (new Config)
    ])
     ->setFinder($finder)
     ->setUsingCache(true) // Enable caching for faster subsequent runs
-    ->setCacheFile(__DIR__ . '/../../var/cache/php-cs-fixer/.php-cs-fixer.cache');
+    ->setCacheFile(__DIR__ . '/../../var/cache/ecs/.php-cs-fixer.cache');
 

@@ -4,21 +4,16 @@ declare(strict_types=1);
 
 namespace DoctrineMigrations;
 
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Schema\Schema;
 use Doctrine\Migrations\AbstractMigration;
 
 final class Version20260509111104 extends AbstractMigration
 {
     /**
-     * Deterministic UUIDs (v4-shaped) so the seed is idempotent across environments
-     * and stable for fixtures, e2e tests, and demo URLs. Each row is a well-known
-     * bank name + its widely-recognised short code. Inserts skip rows whose id
-     * already exists so this migration is safe to re-apply on a partially seeded
-     * database (e.g. one that previously held demo banks under the same ids).
-     *
      * @var array<int, array{id: string, name: string, shortName: string}>
      */
-    private const SEED_BANKS = [
+    private const array SEED_BANKS = [
         ['id' => 'b0000001-0000-4000-8000-000000000001', 'name' => 'JPMorgan Chase', 'shortName' => 'JPM'],
         ['id' => 'b0000001-0000-4000-8000-000000000002', 'name' => 'Bank of America', 'shortName' => 'BAC'],
         ['id' => 'b0000001-0000-4000-8000-000000000003', 'name' => 'Wells Fargo', 'shortName' => 'WFC'],
@@ -53,7 +48,7 @@ final class Version20260509111104 extends AbstractMigration
 
     public function getDescription(): string
     {
-        return 'Seed common banks (30+) for demo, fixtures and e2e baseline';
+        return 'Seed common banks';
     }
 
     public function up(Schema $schema): void
@@ -78,11 +73,11 @@ final class Version20260509111104 extends AbstractMigration
 
     public function down(Schema $schema): void
     {
-        $ids = array_column(self::SEED_BANKS, 'id');
+        $ids = \array_column(self::SEED_BANKS, 'id');
         $this->addSql(
             'DELETE FROM bank WHERE id IN (:ids)',
             ['ids' => $ids],
-            ['ids' => \Doctrine\DBAL\ArrayParameterType::STRING],
+            ['ids' => ArrayParameterType::STRING],
         );
     }
 }
