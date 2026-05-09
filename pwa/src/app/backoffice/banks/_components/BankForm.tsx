@@ -1,13 +1,18 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
 import { CreateBank } from "@/context/backoffice/bank/application/CreateBank";
 import { UpdateBank } from "@/context/backoffice/bank/application/UpdateBank";
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
-import type { ProblemDetails, ProblemViolation } from "@/context/shared/domain/ProblemDetails";
+import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
+import { useZodForm } from "@/context/shared/infrastructure/Validation";
+import {
+  BankSchema,
+  type BankFormValues,
+} from "@/context/backoffice/bank/application/schemas/BankSchema";
 import { FormField, ProblemDisplay } from "@/components/erpify";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,25 +32,37 @@ interface BankFormProps {
   initial?: BankFormInitial;
 }
 
+const BANK_FIELD_NAMES = ["name", "shortName"] as const;
+type BankFieldName = (typeof BANK_FIELD_NAMES)[number];
+
+function isBankFieldName(value: string): value is BankFieldName {
+  return (BANK_FIELD_NAMES as readonly string[]).includes(value);
+}
+
 export function BankForm({ mode, initial }: BankFormProps) {
   const router = useRouter();
-  const [name, setName] = useState(initial?.name ?? "");
-  const [shortName, setShortName] = useState(initial?.shortName ?? "");
-  const [violations, setViolations] = useState<ProblemViolation[]>([]);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
-  const [submitting, setSubmitting] = useState(false);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault();
-    if (submitting) return;
-    setViolations([]);
+  const {
+    register,
+    handleSubmit,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useZodForm<BankFormValues>(BankSchema, {
+    defaultValues: {
+      name: initial?.name ?? "",
+      shortName: initial?.shortName ?? "",
+    },
+  });
+
+  const submitting = isSubmitting;
+
+  const onSubmit = handleSubmit(async (values) => {
     setProblem(null);
-    setSubmitting(true);
-
     try {
       if (mode === "create") {
         const useCase = container.get<CreateBank>("BackOfficeCreateBank");
-        const created = await useCase.run({ name, shortName });
+        const created = await useCase.run(values);
         router.push(safeHref(`/backoffice/banks/${encodeURIComponent(created.id)}`));
         router.refresh();
         return;
@@ -56,23 +73,35 @@ export function BankForm({ mode, initial }: BankFormProps) {
       }
 
       const useCase = container.get<UpdateBank>("BackOfficeUpdateBank");
-      const updated = await useCase.run(initial.id, { name, shortName });
+      const updated = await useCase.run(initial.id, values);
       router.push(safeHref(`/backoffice/banks/${encodeURIComponent(updated.id)}`));
       router.refresh();
     } catch (err) {
-      if (err instanceof HttpError) {
-        if (err.problem.status === 422 && err.problem.violations) {
-          setViolations(err.problem.violations);
-        } else {
+      if (!(err instanceof HttpError)) throw err;
+
+      if (err.problem.status === 422 && err.problem.violations) {
+        // Map server-side violations onto the same RHF errors object the
+        // client validation populates, so the UI surfaces both via
+        // `errors[name]?.message` without a parallel "violations" channel.
+        let mappedAny = false;
+        let unmappedExist = false;
+        for (const violation of err.problem.violations) {
+          if (isBankFieldName(violation.field)) {
+            setError(violation.field, { type: "server", message: violation.message });
+            mappedAny = true;
+          } else {
+            unmappedExist = true;
+          }
+        }
+        if (!mappedAny || unmappedExist) {
           setProblem(err.problem);
         }
         return;
       }
-      throw err;
-    } finally {
-      setSubmitting(false);
+
+      setProblem(err.problem);
     }
-  }
+  });
 
   const cancelHref = safeHref(
     mode === "edit" && initial
@@ -82,17 +111,16 @@ export function BankForm({ mode, initial }: BankFormProps) {
 
   return (
     <form
-      onSubmit={handleSubmit}
+      onSubmit={onSubmit}
       className="bank-form border-border bg-card space-y-4 rounded-lg border p-4"
       data-testid="bank-form"
       noValidate
     >
       {problem ? <ProblemDisplay problem={problem} variant="inline" /> : null}
 
-      <FormField name="name" label="Name" required violations={violations}>
+      <FormField name="name" label="Name" required error={errors.name?.message}>
         <Input
-          value={name}
-          onChange={(event) => setName(event.currentTarget.value)}
+          {...register("name")}
           maxLength={255}
           autoComplete="off"
           autoFocus={mode === "create"}
@@ -100,10 +128,9 @@ export function BankForm({ mode, initial }: BankFormProps) {
         />
       </FormField>
 
-      <FormField name="shortName" label="Short name" required violations={violations}>
+      <FormField name="shortName" label="Short name" required error={errors.shortName?.message}>
         <Input
-          value={shortName}
-          onChange={(event) => setShortName(event.currentTarget.value)}
+          {...register("shortName")}
           maxLength={50}
           autoComplete="off"
           data-testid="bank-form__short-name"

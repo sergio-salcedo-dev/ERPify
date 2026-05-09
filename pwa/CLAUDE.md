@@ -116,6 +116,19 @@ locally:
 - **Tables / boundaries / sheets** — `<DataTable>`, `<AsyncBoundary>`,
   `<RecordSheet>`, `<EmptyState>`, `<FormField>`, `<ProblemDisplay>`,
   `<StatusBadge>`, `<CorrelationIdChip>`, `<AppShell>`.
+- **Form validation** — `Validator` / `ZodValidatorAdapter` / `useZodForm`
+  from `@/context/shared/infrastructure/Validation`. Each entity declares
+  its own schema in `src/context/<bounded-context>/<entity>/application/schemas/`
+  (e.g. `BankSchema.ts`) and exports a Zod schema **plus** the inferred
+  `*FormValues` type. React components consume the schema via
+  `useZodForm(schema, { defaultValues })` and the inferred type — they
+  never import `zod` or `@hookform/resolvers/zod` directly. Use the same
+  schema with `ZodValidatorAdapter` from non-React application services
+  to validate API payloads end-to-end. Match the schema's per-field
+  error messages to the strings the API returns in 422 responses so a
+  single set of UI assertions covers both client- and server-side
+  surfacing; map server `ProblemViolation`s onto RHF errors via
+  `setError(field, { type: "server", message: violation.message })`.
 
 When you need a new cross-entity primitive, add it to `components/erpify/` (or
 `src/lib/` for a pure helper) and export it from the matching barrel.
