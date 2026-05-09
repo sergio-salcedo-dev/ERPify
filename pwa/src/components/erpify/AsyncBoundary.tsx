@@ -2,10 +2,17 @@
 
 import type { ReactNode } from "react";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
+import { ApiStatus, ViewStatus } from "@/context/shared/domain/types/status";
 import { EmptyState } from "./EmptyState";
 import { ProblemDisplay } from "./ProblemDisplay";
 
-type AsyncState = "idle" | "loading" | "empty" | "error" | "ready";
+/**
+ * Accepted boundary states. {@link ApiStatus.IDLE} covers the pre-fetch
+ * window; the rest are UI render states from {@link ViewStatus}. We
+ * deliberately forbid raw string literals at consumer sites — pass
+ * `ApiStatus.IDLE` / `ViewStatus.LOADING` / etc.
+ */
+export type AsyncBoundaryState = typeof ApiStatus.IDLE | ViewStatus;
 
 interface AsyncBoundaryProps<TData> {
   /**
@@ -16,7 +23,7 @@ interface AsyncBoundaryProps<TData> {
    * - "error": fetch failed; an RFC 9457 problem must be supplied
    * - "ready": fetch succeeded with data; children render with data
    */
-  state: AsyncState;
+  state: AsyncBoundaryState;
   data?: TData;
   error?: ProblemDetails;
   /** Variant for the empty state. Defaults to "first-run". */
@@ -42,16 +49,16 @@ export function AsyncBoundary<TData>({
   loading,
   children,
 }: AsyncBoundaryProps<TData>) {
-  if (state === "idle" || state === "loading") {
+  if (state === ApiStatus.IDLE || state === ViewStatus.LOADING) {
     return (
       <div role="status" aria-live="polite" aria-busy="true" data-async-state={state}>
-        {state === "idle" && idle ? idle : null}
-        {state === "loading" ? (loading ?? <DefaultLoadingSkeleton />) : null}
+        {state === ApiStatus.IDLE && idle ? idle : null}
+        {state === ViewStatus.LOADING ? (loading ?? <DefaultLoadingSkeleton />) : null}
       </div>
     );
   }
 
-  if (state === "empty") {
+  if (state === ViewStatus.EMPTY) {
     return (
       <EmptyState
         variant={emptyVariant}
@@ -62,11 +69,11 @@ export function AsyncBoundary<TData>({
     );
   }
 
-  if (state === "error" && error) {
+  if (state === ViewStatus.ERROR && error) {
     return <ProblemDisplay problem={error} variant="panel" />;
   }
 
-  if (state === "ready" && data !== undefined) {
+  if (state === ViewStatus.READY && data !== undefined) {
     return <>{children(data)}</>;
   }
 

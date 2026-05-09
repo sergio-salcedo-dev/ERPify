@@ -5,6 +5,12 @@ import { ApiHealthCheckRepository as FrontOfficeApiHealthCheckRepository } from 
 import { ApiHealthCheckRepository as BackOfficeApiHealthCheckRepository } from "../../../backoffice/health/infrastructure/ApiHealthCheckRepository";
 import { CheckHealth as FrontOfficeCheckHealth } from "../../../frontoffice/health/application/CheckHealth";
 import { CheckHealth as BackOfficeCheckHealth } from "../../../backoffice/health/application/CheckHealth";
+import { ApiBankRepository } from "../../../backoffice/bank/infrastructure/ApiBankRepository";
+import { SearchBanks } from "../../../backoffice/bank/application/SearchBanks";
+import { FindBank } from "../../../backoffice/bank/application/FindBank";
+import { CreateBank } from "../../../backoffice/bank/application/CreateBank";
+import { UpdateBank } from "../../../backoffice/bank/application/UpdateBank";
+import { DeleteBank } from "../../../backoffice/bank/application/DeleteBank";
 
 const container = new Container();
 
@@ -28,5 +34,16 @@ container
 
 container.bind<FrontOfficeCheckHealth>("FrontOfficeCheckHealth").to(FrontOfficeCheckHealth);
 container.bind<BackOfficeCheckHealth>("BackOfficeCheckHealth").to(BackOfficeCheckHealth);
+
+container
+  .bind<ApiBankRepository>("BackOfficeBankRepository")
+  .to(ApiBankRepository)
+  .inSingletonScope();
+
+container.bind<SearchBanks>("BackOfficeSearchBanks").to(SearchBanks);
+container.bind<FindBank>("BackOfficeFindBank").to(FindBank);
+container.bind<CreateBank>("BackOfficeCreateBank").to(CreateBank);
+container.bind<UpdateBank>("BackOfficeUpdateBank").to(UpdateBank);
+container.bind<DeleteBank>("BackOfficeDeleteBank").to(DeleteBank);
 
 export { container };
