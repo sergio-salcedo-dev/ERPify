@@ -133,6 +133,27 @@ locally:
 When you need a new cross-entity primitive, add it to `components/erpify/` (or
 `src/lib/` for a pure helper) and export it from the matching barrel.
 
+## Test ID rules
+
+QA scripts target controls by `data-testid`. The contract is simple: **every
+static `data-testid` literal must be unique across the source tree** so that
+two elements with the same id never end up on the same page (Playwright's
+strict-mode locators fail with "more than one element matched" when they do).
+
+- Use BEM-flavoured prefixes that already match the entity / surface
+  (e.g. `banks-list__title`, `banks-detail__copy-id`,
+  `banks-pagination__next`).
+- For lists / tables, the testid MUST encode the row identity:
+  `data-testid={\`banks-table__edit-${row.id}\`}`. The row id is unique by
+  construction so the rendered DOM stays unique.
+- For reusable components, **never hardcode a testid**. Accept a `testId`
+  prop and let the consumer set it (see `<DataTable testId rowTestId>`,
+  `<CopyButton testId>`, `<DateField testId>`). Hardcoding traps every
+  consumer into the same id and triggers the strict-mode failure mode.
+- The guard `tests/data-testid-uniqueness.test.ts` walks `src/` at CI time
+  and fails if a literal `data-testid="..."` appears in more than one file
+  or more than once in the same file. Do not weaken or skip it.
+
 ## Accessibility rules for action buttons
 
 Every interactive control that triggers an action (button, anchor styled as
