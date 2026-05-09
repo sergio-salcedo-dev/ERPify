@@ -22,6 +22,7 @@ api/public/bundles/
 api/.phpunit.result.cache
 api/.phpunit.cache/
 api/.php-cs-fixer.cache
+/.php-cs-fixer.cache
 api/.phpstan.cache/
 api/.psalm.cache/
 api/.rector.cache/
