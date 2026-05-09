@@ -1,4 +1,4 @@
-Feature: ValidationFailedException surfaces as a 422 Problem Details with a structured violations[] extension
+Feature: ValidationFailedException surfaces as a 400 Problem Details with a structured violations[] extension
     As a PWA developer
     In order to render per-field errors without parsing strings
     I need ValidationFailedException to produce a Problem Details body whose violations
@@ -13,14 +13,14 @@ Feature: ValidationFailedException surfaces as a 422 Problem Details with a stru
   Background:
     Given I add "Accept" header equal to "application/json"
 
-  Scenario: ValidationFailedException with three field violations is mapped to a 422 validation-failed Problem Details body with structured violations
+  Scenario: ValidationFailedException with three field violations is mapped to a 400 validation-failed Problem Details body with structured violations
     When I send a "GET" request to "http://localhost/api/test/_throw-validation"
-    Then the response status code should be 422
+    Then the response status code should be 400
     And the header "Content-Type" should be equal to "application/problem+json"
     And the header "Cache-Control" should contain "no-store"
     And the response should be in JSON
     And the JSON node "type" should be equal to "validation-failed"
-    And the JSON node "status" should be equal to the number 422
+    And the JSON node "status" should be equal to the number 400
     And the JSON node "title" should be equal to "Validation failed."
     And the JSON node "violations" should have 3 elements
     And the JSON node "violations[0].field" should be equal to "name"
@@ -35,14 +35,14 @@ Feature: ValidationFailedException surfaces as a 422 Problem Details with a stru
     And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
     And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
 
-  Scenario: ValidationFailedException with no violations still produces a conforming 422 body with an empty violations array
+  Scenario: ValidationFailedException with no violations still produces a conforming 400 body with an empty violations array
     When I send a "GET" request to "http://localhost/api/test/_throw-validation-empty"
-    Then the response status code should be 422
+    Then the response status code should be 400
     And the header "Content-Type" should be equal to "application/problem+json"
     And the header "Cache-Control" should contain "no-store"
     And the response should be in JSON
     And the JSON node "type" should be equal to "validation-failed"
-    And the JSON node "status" should be equal to the number 422
+    And the JSON node "status" should be equal to the number 400
     And the JSON node "title" should be equal to "Validation failed."
     And the JSON node "violations" should have 0 elements
     # Note: JSON-array-vs-object form for empty violations is pinned at the unit-test layer
@@ -54,7 +54,7 @@ Feature: ValidationFailedException surfaces as a 422 Problem Details with a stru
 
   Scenario: ValidationFailedException violation entries omit invalid value and root from the wire body
     When I send a "GET" request to "http://localhost/api/test/_throw-validation-with-sensitive-payload"
-    Then the response status code should be 422
+    Then the response status code should be 400
     And the response should be in JSON
     And the JSON node "type" should be equal to "validation-failed"
     And the JSON node "violations" should have 1 elements
@@ -70,7 +70,7 @@ Feature: ValidationFailedException surfaces as a 422 Problem Details with a stru
 
   Scenario: ValidationFailedException violation entries serialize message verbatim, never the template form
     When I send a "GET" request to "http://localhost/api/test/_throw-validation-template"
-    Then the response status code should be 422
+    Then the response status code should be 400
     And the response should be in JSON
     And the JSON node "type" should be equal to "validation-failed"
     And the JSON node "violations[0].field" should be equal to "age"
@@ -79,7 +79,7 @@ Feature: ValidationFailedException surfaces as a 422 Problem Details with a stru
 
   Scenario: ValidationFailedException violation entries are reachable via JSON path under violations[N]
     When I send a "GET" request to "http://localhost/api/test/_throw-validation"
-    Then the response status code should be 422
+    Then the response status code should be 400
     And the response should be in JSON
     And the JSON node "violations[0].field" should be equal to "name"
     And the JSON node "violations[0].message" should be equal to "This value should not be blank."

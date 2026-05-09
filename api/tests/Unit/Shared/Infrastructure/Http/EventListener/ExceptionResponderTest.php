@@ -436,7 +436,7 @@ final class ExceptionResponderTest extends TestCase
 
         $logRecord = $this->singleLogRecord($bufferingLogger);
         $this->assertSame(LogLevel::WARNING, $logRecord['level']);
-        $this->assertSame(422, $logRecord['context']['status']);
+        $this->assertSame(400, $logRecord['context']['status']);
         $this->assertSame('validation-failed', $logRecord['context']['type']);
         $this->assertSame(ValidationFailedException::class, $logRecord['context']['exception_class']);
     }

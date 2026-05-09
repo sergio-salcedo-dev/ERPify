@@ -70,7 +70,7 @@ final class ProblemDetailsTest extends TestCase
         $problemDetails = new ProblemDetails(
             type: 'validation-failed',
             title: 'Validation failed',
-            status: 422,
+            status: 400,
             detail: self::DETAIL,
             instance: self::INSTANCE,
             correlationId: self::CORRELATION_ID,
@@ -82,7 +82,7 @@ final class ProblemDetailsTest extends TestCase
         $expected = [
             'type' => 'validation-failed',
             'title' => 'Validation failed',
-            'status' => 422,
+            'status' => 400,
             'detail' => self::DETAIL,
             'instance' => self::INSTANCE,
             'correlation-id' => self::CORRELATION_ID,
@@ -137,7 +137,7 @@ final class ProblemDetailsTest extends TestCase
         $problemDetails = new ProblemDetails(
             type: 'validation-failed',
             title: 'Validation failed',
-            status: 422,
+            status: 400,
             detail: self::DETAIL,
             instance: self::INSTANCE,
             correlationId: self::CORRELATION_ID,
@@ -207,7 +207,7 @@ final class ProblemDetailsTest extends TestCase
         $problemDetails = new ProblemDetails(
             type: 'https://erpify.local/errors/validation-failed',
             title: 'Validation failed',
-            status: 422,
+            status: 400,
             detail: self::DETAIL,
             instance: self::INSTANCE,
             correlationId: self::CORRELATION_ID,
