@@ -8,7 +8,7 @@ import { DataTable } from "@/components/erpify";
 import type { DataTableColumn, DataTableSort } from "@/components/erpify";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { formatDateTime } from "@/lib/formatDate";
+import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
 import { safeHref } from "@/lib/safeHref";
 import { DeleteBankButton } from "./DeleteBankButton";
 
@@ -41,14 +41,14 @@ export function BanksTable({ banks, sort, onSortChange, onBankDeleted }: BanksTa
       id: "createdAt",
       header: "Created",
       sortable: true,
-      cell: (row) => formatDateTime(row.createdAt),
+      cell: (row) => dateTimeProvider.formatIsoToDisplay(row.createdAt),
       className: "banks-table__col--md hidden md:table-cell",
     },
     {
       id: "updatedAt",
       header: "Updated",
       sortable: true,
-      cell: (row) => formatDateTime(row.updatedAt),
+      cell: (row) => dateTimeProvider.formatIsoToDisplay(row.updatedAt),
       className: "banks-table__col--lg hidden lg:table-cell",
     },
     {

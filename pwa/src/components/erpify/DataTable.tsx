@@ -42,7 +42,12 @@ interface DataTableProps<T> {
   /** Rendered when data is empty. */
   emptyState?: ReactNode;
   className?: string;
-  /** Optional per-row data-testid (forwarded to the `<tr>`). */
+  /**
+   * Required per-row data-testid (forwarded to the `<tr>`). Build it
+   * from the entity id from the backend (e.g. `\`banks-table__row-${row.id}\``)
+   * so each row is uniquely targetable from QA scripts. Returning a
+   * non-unique value will trip Playwright's strict-mode locators.
+   */
   rowTestId?: (row: T) => string;
   /** Optional data-testid on the surrounding wrapper (forwarded to the bordered `<div>`). */
   testId?: string;
@@ -243,7 +248,6 @@ export function DataTable<T>({
                 onClick={onRowActivate ? () => onRowActivate(row) : undefined}
                 onFocus={() => setFocusedRow(index)}
                 data-testid={rowTestId?.(row)}
-                data-row-id={id}
                 className={cn(
                   "border-border focus-visible:ring-ring border-b transition-colors focus-visible:ring-2 focus-visible:outline-none",
                   ROW_HEIGHTS[density],

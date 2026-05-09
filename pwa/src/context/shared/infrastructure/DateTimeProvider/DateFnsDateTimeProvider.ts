@@ -141,4 +141,23 @@ export class DateFnsDateTimeProvider implements DateTimeProvider {
   public endOfDay(date: Date): Date {
     return endOfDay(date);
   }
+
+  public formatIsoToDisplay(iso: string): string {
+    const date = this.parseISO(iso);
+    return date ? this.formatToDisplay(date) : iso;
+  }
+
+  public parseDdMmYyyyToStartTimestamp(value: string): number | null {
+    const date = this.parseDdMmYyyy(value);
+    if (!date) return null;
+    const ts = this.startOfDay(date).getTime();
+    return Number.isNaN(ts) ? null : ts;
+  }
+
+  public parseDdMmYyyyToEndTimestamp(value: string): number | null {
+    const date = this.parseDdMmYyyy(value);
+    if (!date) return null;
+    const ts = this.endOfDay(date).getTime();
+    return Number.isNaN(ts) ? null : ts;
+  }
 }

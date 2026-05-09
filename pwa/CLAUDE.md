@@ -143,9 +143,15 @@ strict-mode locators fail with "more than one element matched" when they do).
 - Use BEM-flavoured prefixes that already match the entity / surface
   (e.g. `banks-list__title`, `banks-detail__copy-id`,
   `banks-pagination__next`).
-- For lists / tables, the testid MUST encode the row identity:
-  `data-testid={\`banks-table__edit-${row.id}\`}`. The row id is unique by
-  construction so the rendered DOM stays unique.
+- For lists / tables, the testid MUST encode the row identity using the
+  **backend entity id** (typically a UUID) from the API:
+  `data-testid={\`banks-table__row-${row.id}\`}` (the row itself) and
+  `data-testid={\`banks-table__edit-${row.id}\`}` /
+  `\`banks-table__delete-${row.id}\`` (per-row actions). The entity id
+  is unique by construction, so the rendered DOM stays unique. Do NOT
+  emit a parallel `data-row-id` (or similar) attribute — the
+  `data-testid` is the canonical row identity for QA. `<DataTable>`
+  enforces this with its `rowTestId` prop.
 - For reusable components, **never hardcode a testid**. Accept a `testId`
   prop and let the consumer set it (see `<DataTable testId rowTestId>`,
   `<CopyButton testId>`, `<DateField testId>`). Hardcoding traps every

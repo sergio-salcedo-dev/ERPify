@@ -1,6 +1,6 @@
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
 import type { DataTableSort } from "@/components/erpify";
-import { endOfDdMmYyyy, startOfDdMmYyyy } from "@/lib/formatDate";
+import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
 
 export interface BanksFilter {
   name: string;
@@ -44,8 +44,8 @@ function rowTimestamp(iso: string): number {
 export function applyFilters(banks: readonly Bank[], filter: BanksFilter): Bank[] {
   const name = filter.name.trim();
   const shortName = filter.shortName.trim();
-  const fromTs = startOfDdMmYyyy(filter.createdFrom);
-  const toTs = endOfDdMmYyyy(filter.createdTo);
+  const fromTs = dateTimeProvider.parseDdMmYyyyToStartTimestamp(filter.createdFrom);
+  const toTs = dateTimeProvider.parseDdMmYyyyToEndTimestamp(filter.createdTo);
   const fromActive = filter.createdFrom.trim().length > 0;
   const toActive = filter.createdTo.trim().length > 0;
   // A range field with text the user is still typing (e.g. "01/02") is treated

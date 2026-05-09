@@ -65,6 +65,26 @@ export interface DateTimeProvider {
 
   /** Returns a new date at `23:59:59.999` of the same calendar day. */
   endOfDay(date: Date): Date;
+
+  // —————————————————————————————————————————————————————————————————————————
+  // Convenience methods for the most common UI pipelines. Implementations
+  // MUST behave as if implemented via the primitives above, so the port
+  // stays free of new semantics — they just compress three operations into
+  // one to keep entity components from re-implementing the dance.
+  // —————————————————————————————————————————————————————————————————————————
+
+  /**
+   * Render an ISO 8601 timestamp as `dd/mm/yyyy, HH:mm:ss` in 24-hour
+   * time. Returns the raw input back when it is unparseable, so UI tables
+   * never display "Invalid Date" for an unexpected payload.
+   */
+  formatIsoToDisplay(iso: string): string;
+
+  /** Lower-bound timestamp for a `dd/mm/yyyy` filter input (00:00:00.000). */
+  parseDdMmYyyyToStartTimestamp(value: string): number | null;
+
+  /** Upper-bound timestamp for a `dd/mm/yyyy` filter input (23:59:59.999). */
+  parseDdMmYyyyToEndTimestamp(value: string): number | null;
 }
 
 /** Units supported by {@link DateTimeProvider.calculateDuration}. */

@@ -35,8 +35,9 @@ export interface DateFieldProps {
 
 /**
  * `DateField` is the canonical dd/mm/yyyy text input used across entities
- * (banks, customers, invoices…). It pairs with the date helpers in
- * `@/lib/formatDate` (`parseDdMmYyyy` / `startOfDdMmYyyy` / `endOfDdMmYyyy`).
+ * (banks, customers, invoices…). It pairs with the date helpers on the
+ * shared `DateTimeProvider` (`parseDdMmYyyy` /
+ * `parseDdMmYyyyToStartTimestamp` / `parseDdMmYyyyToEndTimestamp`).
  *
  * The input is intentionally `<input type="text">` rather than `type="date"`
  * so the visible format is dd/mm/yyyy on every browser/locale; native date

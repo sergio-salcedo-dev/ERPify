@@ -192,6 +192,37 @@ describe("DateFnsDateTimeProvider", () => {
       expect(end.getDate()).toBe(d.getDate());
     });
   });
+
+  describe("formatIsoToDisplay", () => {
+    it("formats a well-formed ISO timestamp via formatToDisplay", () => {
+      const out = provider.formatIsoToDisplay("2026-04-15T15:30:45Z");
+      expect(out).toMatch(/^\d{2}\/\d{2}\/\d{4},\s\d{2}:\d{2}:\d{2}$/);
+    });
+
+    it("returns the raw value when the input cannot be parsed", () => {
+      expect(provider.formatIsoToDisplay("not-a-date")).toBe("not-a-date");
+      expect(provider.formatIsoToDisplay("")).toBe("");
+    });
+  });
+
+  describe("parseDdMmYyyyToStartTimestamp / parseDdMmYyyyToEndTimestamp", () => {
+    it("returns null for unparseable / empty input on both ends", () => {
+      expect(provider.parseDdMmYyyyToStartTimestamp("")).toBeNull();
+      expect(provider.parseDdMmYyyyToStartTimestamp("15/04")).toBeNull();
+      expect(provider.parseDdMmYyyyToStartTimestamp("31/02/2026")).toBeNull();
+      expect(provider.parseDdMmYyyyToEndTimestamp("")).toBeNull();
+      expect(provider.parseDdMmYyyyToEndTimestamp("nope")).toBeNull();
+    });
+
+    it("places start at 00:00:00.000 and end at 23:59:59.999 of the same day", () => {
+      const start = provider.parseDdMmYyyyToStartTimestamp("15/04/2026");
+      const end = provider.parseDdMmYyyyToEndTimestamp("15/04/2026");
+      expect(start).not.toBeNull();
+      expect(end).not.toBeNull();
+      if (start === null || end === null) return;
+      expect(end - start).toBe(86_400_000 - 1);
+    });
+  });
 });
 
 describe("DateTimeProvider DI index", () => {

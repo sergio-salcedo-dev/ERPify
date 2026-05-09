@@ -32,7 +32,7 @@ describe("DataTable", () => {
     expect(screen.getByRole("table", { name: "Bank list" })).toBeInTheDocument();
   });
 
-  it("forwards `testId` to the wrapper and `rowTestId` to each <tr>", () => {
+  it("forwards `testId` to the wrapper and a unique `rowTestId` to each <tr>", () => {
     render(
       <DataTable
         columns={columns}
@@ -44,8 +44,14 @@ describe("DataTable", () => {
       />,
     );
     expect(screen.getByTestId("banks-table__inner")).toBeInTheDocument();
-    expect(screen.getByTestId("banks-table__row-1")).toHaveAttribute("data-row-id", "1");
-    expect(screen.getByTestId("banks-table__row-2")).toHaveAttribute("data-row-id", "2");
+    // Each row's testid is built from the backend entity id, so the rendered
+    // DOM has exactly one `<tr>` per resource and Playwright strict locators
+    // resolve to a single element.
+    expect(screen.getByTestId("banks-table__row-1").tagName).toBe("TR");
+    expect(screen.getByTestId("banks-table__row-2").tagName).toBe("TR");
+    // No parallel `data-row-id` is emitted — the data-testid is the canonical
+    // row identity.
+    expect(screen.getByTestId("banks-table__row-1")).not.toHaveAttribute("data-row-id");
   });
 
   it("toggles aria-sort on sortable header click via onSortChange", () => {

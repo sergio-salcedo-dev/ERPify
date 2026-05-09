@@ -12,7 +12,7 @@ import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { CopyButton, CorrelationIdChip, EmptyState, ProblemDisplay } from "@/components/erpify";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { formatDateTime } from "@/lib/formatDate";
+import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
 import { safeHref } from "@/lib/safeHref";
 import { ViewStatus } from "@/context/shared/domain/types/status";
 import { HttpStatus } from "@/context/shared/domain/types/http";
@@ -170,12 +170,12 @@ export default function BankDetailPage() {
             />
             <Field
               label="Created"
-              value={formatDateTime(bank.createdAt)}
+              value={dateTimeProvider.formatIsoToDisplay(bank.createdAt)}
               testId="banks-detail__field-created"
             />
             <Field
               label="Updated"
-              value={formatDateTime(bank.updatedAt)}
+              value={dateTimeProvider.formatIsoToDisplay(bank.updatedAt)}
               testId="banks-detail__field-updated"
             />
             <Field
