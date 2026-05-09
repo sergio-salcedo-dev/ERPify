@@ -1,6 +1,6 @@
 # Deployment Guide
 
-This guide summarises how ERPify is deployed. For the detailed prod playbook, see [`production-deployment.md`](./production-deployment.md); for Mercure specifics see [`mercure-production-deployment.md`](./mercure-production-deployment.md) and [`mercure.md`](./mercure.md).
+This guide summarises how ERPify is deployed. For the detailed PWA prod playbook, see [`pwa/docs/production-deployment.md`](../pwa/docs/production-deployment.md); for FrankenPHP-specific options see [`api/docs/options.md`](../api/docs/options.md) and [`api/docs/tls.md`](../api/docs/tls.md).
 
 ## Infrastructure requirements
 
@@ -56,7 +56,7 @@ Plus SMTP credentials and any `NEXT_PUBLIC_SYMFONY_API_BASE_URL` override needed
    ```
 
 4. Watch `messenger_worker` logs: `ENV=prod make docker.logs` (filter by service).
-5. Run smoke tests per [`production-deployment.md`](./production-deployment.md).
+5. Run smoke tests per [`pwa/docs/production-deployment.md`](../pwa/docs/production-deployment.md).
 
 ## CI/CD
 
@@ -75,5 +75,5 @@ Plus SMTP credentials and any `NEXT_PUBLIC_SYMFONY_API_BASE_URL` override needed
 
 - `make docker.clean` drops volumes and is **destructive** — never on prod without explicit confirmation.
 - Do not run `db.reset` outside dev/ci.
-- DNS, CORS origins, and Mercure cookie/CORS config: see [`mercure-production-deployment.md`](./mercure-production-deployment.md) and [`production-deployment.md`](./production-deployment.md).
+- DNS, CORS origins, and Mercure cookie/CORS config: see [`pwa/docs/production-deployment.md`](../pwa/docs/production-deployment.md).
 - Xdebug must be disabled in prod images.

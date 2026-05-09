@@ -20,3 +20,30 @@ services:
     Symfony\Bridge\Doctrine\Middleware\Debug\DebugDataHolder:
         alias: Erpify\Tests\Doctrine\TestDebugDataHolder
         public: true
+
+    # Story 1.4 — test-only controllers that exercise the ExceptionResponder listener through a real
+    # kernel via WebTestCase. Loaded only when APP_ENV=test.
+    Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\:
+        resource: '../tests/Functional/Shared/Infrastructure/Http/EventListener/Fixtures/'
+        exclude: '../tests/Functional/Shared/Infrastructure/Http/EventListener/Fixtures/ForceHealthFailureSubscriber.php'
+        tags: ['controller.service_arguments']
+
+    # Story 4.6 — test-only kernel.controller subscriber that throws on the two `/health`
+    # endpoints when `?_force_failure=1` is present. Lets the integration + Behat tests
+    # prove the RFC 9457 contract applies retroactively (FR11) without modifying the
+    # production HealthController classes.
+    Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\ForceHealthFailureSubscriber:
+        tags:
+            - { name: kernel.event_subscriber }
+
+    # Story 2.4 — BufferingLogger captures structured log records emitted by ExceptionResponder
+    # in the test environment. Public so functional tests can pull it from the container via
+    # `self::getContainer()->get(BufferingLogger::class)` and assert on `cleanLogs()`.
+    Symfony\Component\ErrorHandler\BufferingLogger:
+        public: true
+
+    # Story 2.4 — override autowiring of LoggerInterface for ExceptionResponder ONLY (do NOT
+    # alias LoggerInterface globally — that would silence Symfony framework logs in tests).
+    Erpify\Shared\Infrastructure\Http\EventListener\ExceptionResponder:
+        arguments:
+            $logger: '@Symfony\Component\ErrorHandler\BufferingLogger'

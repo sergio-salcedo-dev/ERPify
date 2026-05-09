@@ -1,0 +1,266 @@
+# API Error Contract — RFC 9457 Problem Details
+
+> Authoritative one-pager for the uniform error contract every `/api/*` non-2xx response is expected to honour. Single mapping site: [`api/src/Shared/Application/Problem/ProblemDetailsFactory.php`](../api/src/Shared/Application/Problem/ProblemDetailsFactory.php). Single listener: [`api/src/Shared/Infrastructure/Http/EventListener/ExceptionResponder.php`](../api/src/Shared/Infrastructure/Http/EventListener/ExceptionResponder.php). PRD: [`_bmad-output/planning-artifacts/prd.md`](../_bmad-output/planning-artifacts/prd.md). Epic breakdown: [`_bmad-output/planning-artifacts/epics.md`](../_bmad-output/planning-artifacts/epics.md).
+
+## Body shape
+
+The wire body is a JSON object owned by [`ProblemDetails`](../api/src/Shared/Application/Problem/ProblemDetails.php) (`toArray()` lines 34–50). Deterministic key order is `type, title, status, detail?, instance, correlation-id, <extensions>`:
+
+```json
+{
+  "type": "bank-not-found",
+  "title": "Bank not found.",
+  "status": 404,
+  "detail": null,
+  "instance": "01926e83-7b5a-7d40-9c8f-2f9b5d3e1a2c",
+  "correlation-id": "01926e83-7b5a-7d40-9c8f-2f9b5d3e1a2c",
+  "violations": [],
+  "debug": { "exception_class": "...", "message": "..." }
+}
+```
+
+| Field            | Required | Source                                                           |
+|------------------|----------|------------------------------------------------------------------|
+| `type`           | yes      | Opaque category identifier (e.g. `not-found`, `validation-failed`) |
+| `title`          | yes      | Short human-readable summary                                     |
+| `status`         | yes      | Equals the HTTP status line                                      |
+| `detail`         | no       | Optional human-readable detail                                   |
+| `instance`       | yes      | Per-error UUIDv7, minted by `ExceptionResponder`                 |
+| `correlation-id` | yes      | Per-request UUIDv7, minted/propagated by `CorrelationIdListener` |
+| `<extensions>`   | varies   | Type-specific (e.g. `violations` for `validation-failed`, `debug` outside prod) |
+
+`detail` is the only optional core field — when `null`, it is OMITTED from the wire body (see `ProblemDetails::toArray()`). `extensions` carries per-type members appended after the core fields. Reserved keys (`type, title, status, detail, instance, correlation-id, violations, debug`) are stripped from `DomainException::context()` before serialization so domain code cannot accidentally clobber wire fields.
+
+## Media type and caching headers
+
+- `Content-Type: application/problem+json` (RFC 9457 §3 — no `charset` parameter; the media type mandates UTF-8).
+- `Cache-Control: no-store` (NFR — error responses MUST NOT be cached by proxies / CDNs).
+- `X-Correlation-Id: <uuidv7>` — per-request UUIDv7, mirrors body `correlation-id`. Written on **every** main response (not just errors) by `CorrelationIdListener::onResponse` (`kernel.response`, priority `-1024`).
+
+Encoding: `\json_encode($problemDetails->toArray(), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)`. Symfony `Response` (not `JsonResponse`) is used so `Content-Type` and the encoding pipeline stay under `ProblemDetailsResponder` control.
+
+## Marker interface → HTTP status table
+
+The mapping is the constant `ProblemDetailsFactory::MARKER_STATUS_MAP` (see [`api/src/Shared/Application/Problem/ProblemDetailsFactory.php`](../api/src/Shared/Application/Problem/ProblemDetailsFactory.php) lines 111–119). The default `type` per marker is `MARKER_DEFAULT_TYPE_MAP` (lines 121–129). **Do not duplicate the values here — this table is a navigation aid; the source is the constant** (NFR25).
+
+| Marker (`api/src/Shared/Domain/Exception/`) | HTTP status | Default `type`        |
+|---------------------------------------------|-------------|-----------------------|
+| `NotFound`                                  | 404         | `not-found`           |
+| `Conflict`                                  | 409         | `conflict`            |
+| `Forbidden`                                 | 403         | `forbidden`           |
+| `Unauthenticated`                           | 401         | `unauthenticated`     |
+| `InvariantViolation`                        | 422         | `invariant-violation` |
+| `InvalidInput`                              | 400         | `invalid-input`       |
+| `RateLimited`                               | 429         | `rate-limited`        |
+| Plain `DomainException` (no marker)         | 500         | `domain-error`        |
+
+Marker resolution honours implements-clause order, intersected with the canonical marker list (`firstMatchingMarker`, lines 352–364). Subclasses may override `DomainException::type()` to return a more specific opaque identifier. Markers are framework-free — no HTTP / ORM / transport imports allowed inside `Shared/Domain/Exception/`.
+
+> **Adding a marker interface or changing its mapping requires updating this page** (NFR26). The CI grep gate that enforces freshness lives in Story 4.5.
+
+### Symfony framework exception bridge
+
+| Symfony exception                                     | HTTP status              | `type`                                     |
+|-------------------------------------------------------|--------------------------|--------------------------------------------|
+| `Validator\Exception\ValidationFailedException` *     | 400                      | `validation-failed` (+ `violations[]`)     |
+| `Security\Core\Exception\AccessDeniedException`       | 403                      | `forbidden`                                |
+| `Security\Core\Exception\AuthenticationException`     | 401                      | `unauthenticated`                          |
+| `HttpKernel\Exception\HttpExceptionInterface`         | from `getStatusCode()`   | mirrors marker default for known statuses, else `http-error` |
+| Anything else (`\Throwable`)                          | 500                      | `unhandled-exception`                      |
+
+\* The factory walks `getPrevious()` so wrapped `ValidationFailedException` (e.g. inside Symfony's `RequestPayloadValueResolver` 422 wrapper used by `#[MapRequestPayload]` / `#[MapQueryString]`) is unwrapped and re-mapped to a 400 with the structured `violations[]` extension instead of Symfony's generic 422. `violations[]` shape: `[{field, message, code}, ...]`.
+
+## How to add a new error (Amelia walk-through from PRD §Journey 1)
+
+Amelia owns the Bank bounded context. Ticket: `GET /api/backoffice/banks/{id}` with an unknown ID currently throws and the PWA receives a Symfony HTML error page. She wants a proper 404 problem details body. **Twenty minutes, no controller edit, no listener edit, no DI config.**
+
+1. Define the domain exception under your bounded context's `Domain/Exception/` directory.
+2. Have it `extends Erpify\Shared\Domain\Exception\DomainException`.
+3. Have it `implements` ONE of the canonical marker interfaces from the table above.
+4. Throw it from your application service / domain entity.
+5. Done. The listener at `ExceptionResponder` builds the body via the factory; you write zero HTTP code, you register nothing in DI.
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace Erpify\Backoffice\Bank\Domain\Exception;
+
+use Erpify\Shared\Domain\Exception\DomainException;
+use Erpify\Shared\Domain\Exception\NotFound;
+
+final class BankNotFound extends DomainException implements NotFound
+{
+    public static function withId(string $id): self
+    {
+        return new self(
+            type: 'bank-not-found',
+            title: 'Bank not found.',
+            context: ['bank_id' => $id],
+        );
+    }
+}
+```
+
+Application handler:
+
+```php
+$bank = $this->banks->find($id) ?? throw BankNotFound::withId($id);
+```
+
+`curl -i /api/backoffice/banks/does-not-exist` returns:
+
+```text
+HTTP/1.1 404 Not Found
+Content-Type: application/problem+json
+Cache-Control: no-store
+X-Correlation-Id: 019045c3-7b8a-7c4e-9f30-000000000001
+
+{"type":"bank-not-found","title":"Bank not found.","status":404,
+ "instance":"019045c3-7b8a-7c4e-9f31-a2b7d1e4f5c6",
+ "correlation-id":"019045c3-7b8a-7c4e-9f30-000000000001",
+ "bank_id":"does-not-exist"}
+```
+
+The `bank_id` extension is the `context` array, with reserved keys stripped and the redaction denylist applied.
+
+## PWA consumption example (Marc walk-through from PRD §Journey 2)
+
+Marc is wiring a form for creating bank accounts. Validation failures, not-found, forbidden, and unexpected 500s are all possible. He routes on `body.type` (FR44 — `type` is the contract-level signal; status is the transport-level signal):
+
+```ts
+const res = await fetch(`/api/backoffice/banks/${id}`);
+if (!res.ok) {
+  const problem = await res.json();
+  switch (problem.type) {
+    case 'validation-failed':
+      // render field errors from problem.violations
+      return showFieldErrors(problem.violations);
+    case 'unauthenticated':
+      return redirectToLogin();
+    case 'bank-not-found':
+      return showNotFoundUi();
+    case 'forbidden':
+      return showAccessDenied();
+    default:
+      // 4xx → toast with title + Error ID for support
+      // 5xx → generic "something went wrong, Error ID: ..."
+      return showToast(problem.title, problem.instance);
+  }
+}
+```
+
+When QA reports an intermittent 500, they paste `problem.instance` into the ticket. Oncall finds the single log line by `instance=`, pulls the `correlation_id` from it, and queries the full request trail. Marc's error-handling code is ~30 lines for the whole form; he never touches it again until new `type` identifiers appear.
+
+## Extending the redaction denylist
+
+The denylist of context keys stripped before serialization lives at [`api/src/Shared/Application/Problem/RedactionDenylist.php`](../api/src/Shared/Application/Problem/RedactionDenylist.php) — the `RedactionDenylist::KEYS` constant (lines 42–50). Match scope is exact-key, case-insensitive ASCII, single-level (no recursion into nested arrays). **Strip semantics, not sentinel** — a denylisted key is removed entirely; its value is NOT replaced with `[redacted]`. The presence of a key labelled `password` is itself a signal.
+
+Procedure to add a key:
+
+1. Append the new (lowercase ASCII) key to `RedactionDenylist::KEYS`.
+2. Add four parameterised rows to `RedactionDenylistTest::denylistCasingProvider` (lower / upper / title / mixed casing).
+3. Run `make php.unit c='--filter RedactionDenylist'`. The assertion `testDataProviderRowCountMatchesKeysCountTimesFour` fails CI if the rows are missing (NFR8).
+4. Update this section if the procedure itself changes.
+
+The denylist is applied AFTER the reserved-key `unset()` layer and BEFORE the whitelist branch, so a denylisted `JsonSerializable` value cannot survive via the whitelist (`ProblemDetailsFactory::redactKeys`, lines 417–423).
+
+## Environment-aware `debug` extension
+
+Behavior is keyed off `%kernel.environment%` (injected via `#[Autowire('%kernel.environment%')]` — never `$_ENV` / `getenv()`). The decision lives in `ProblemDetailsFactory::buildDebugExtension()` (lines 482–504) and `resolveDebugMode()` (lines 464–471).
+
+| Env       | `debug` extension shape |
+|-----------|-------------------------|
+| `dev`     | full: `exception_class`, `message`, `file`, `line`, `previous_chain` (cycle-safe walk of `getPrevious()`) |
+| `test`    | full (same as `dev`) |
+| `staging` | minimal: `exception_class` + `message` only (no `file`, no `line`, no chain) |
+| `prod`    | omitted entirely; the terminal `unhandled-exception` branch's `title` is replaced by the safe literal `"An unexpected error occurred."` (FR35, NFR7) |
+| anything else (`'ci'`, `'production'`, empty, uppercase, …) | falls through to `prod` semantics (default-deny — NFR13) |
+
+Anonymous-class FQCNs are sanitised (`\0/path:line$N` suffix stripped) so the embedded path cannot leak through `exception_class` in staging mode (`sanitiseExceptionClass`, lines 546–551).
+
+## Observability: `instance` vs `correlation-id` (FR49)
+
+Two UUIDv7 identifiers, two different scopes — distinguishing them is the difference between debugging one failure and tracing one request.
+
+- **`instance`** — UUIDv7 minted per **ERROR**. One per failure event. Source: `ExceptionResponder::__invoke` mints it fresh every time it builds a body. Use it to **grep the single log line for that one failure**. End users can cite it from a PWA toast (Journey 3 — Priya's 3am pager) so support can find the exact server-side record.
+- **`correlation-id`** — UUIDv7 minted per **REQUEST**. Source: `CorrelationIdListener::__invoke` (`kernel.request`, priority `1024`). Either propagated from a strict-validated inbound `X-Correlation-Id` header or freshly minted. Mirrored in the body's `correlation-id` field, written to the `X-Correlation-Id` response header, and emitted in every PSR-3 log line for the request's lifetime. Use it to **trace the full request lifecycle across logs / traces / metrics** (ingress → controller → Messenger → DB).
+
+Per-error log line context (one PSR-3 write per error, default `app` channel):
+
+```text
+instance, correlation_id, type, status,
+exception_class, exception_message, request_uri, request_method
+```
+
+Tiering: `unhandled-exception` → `critical`; status ≥ 500 → `error`; 4xx → `warning`.
+
+Grep by `instance` for the single failure entry; grep by `correlation_id` for the full request trail.
+
+## Listener layout
+
+| Listener                            | Event              | Priority | Path scope         |
+|-------------------------------------|--------------------|----------|--------------------|
+| `CorrelationIdListener::__invoke`   | `kernel.request`   | 1024     | all main requests  |
+| `CorrelationIdListener::onResponse` | `kernel.response`  | -1024    | all main responses |
+| `ExceptionResponder::__invoke`      | `kernel.exception` | (default)| `/api/*` only      |
+| `SearchExceptionListener` (legacy)  | `kernel.exception` | 32       | search routes      |
+
+`ExceptionResponder` checks `$event->hasResponse()` first — if a higher-priority listener (e.g. `SearchExceptionListener`) already produced a response, it leaves it alone and does **not** log. Listener priority ordering vs. Nelmio CORS is pinned by Story 4.1 (`ExceptionResponderListenerPriorityTest`).
+
+## Performance Budgets
+
+Story 3.8 (NFR2 / NFR4 / NFR5) — pinned listener performance budgets. The benchmark harness lives at `api/tests/Bench/Shared/Infrastructure/Http/EventListener/ExceptionResponderBenchmarkTest.php` and runs through a real Symfony kernel via `WebTestCase`, so the measurement window captures the full listener path (factory mapping → body cap → `\json_encode` → `Response` write → PSR-3 log emission), exactly as it runs in production.
+
+| Path | Budget | Route | Status |
+|------|--------|-------|--------|
+| 4xx  | p99 ≤ **5 ms** (CI hardware baseline)  | `/api/test/_throw-not-found` | 404 |
+| 5xx  | p99 ≤ **20 ms** (CI hardware baseline) | `/api/test/_throw-runtime`   | 500 |
+
+Each path runs 100 warm-up iterations to seed opcache / classloader, then 1000 measured iterations whose per-iteration `\hrtime(true)` deltas are sorted to derive the p99. The runtime check applies a +50% shared-CI headroom (7.5 ms / 30 ms) over the raw NFR2 numbers so a real listener regression (a conditional sleep, a sync I/O, a serializer pipeline introduction) trips the gate while sub-percent jitter under shared CPU contention does not.
+
+### Hard contractual invariants
+
+These are pinned by always-on PHPUnit contract tests under `api/tests/Unit/Shared/Application/Problem/` (NOT the opt-in benchmark group):
+
+- **NFR4 — body serialisation:** native `\json_encode` with `JSON_THROW_ON_ERROR` only. No Symfony Serializer component, no normalizer, no reflection-based encoder anywhere under `Shared/Application/Problem/` or `Shared/Infrastructure/Http/`. Pinned by `NativeJsonEncodeContractTest::testNoSerializerImports` and `NativeJsonEncodeContractTest::testEveryJsonEncodeUsesJsonThrowOnError`.
+- **NFR5 — log write path:** the injected `Psr\Log\LoggerInterface` is the only logger contract on the error path. No Symfony Messenger dispatch, no `react/async`, no `amphp`, no `spatie/async`, no Swoole — synchronous PSR-3 writes (Monolog default stderr) are the contract. Pinned by `LoggerInterfaceContractTest::testListenerLoggerDepIsPsr3Only` (reflection on the constructor) and `LoggerInterfaceContractTest::testNoCustomAsyncInfrastructureInListenerOrFactory` (source-text grep).
+
+### Running the benchmark
+
+```bash
+make php.bench           # opt-in; default `make php.unit` skips this group
+```
+
+The bench is **not** CI-blocking. The contract tests above are CI-blocking (NFR4 / NFR5); the budget numbers themselves (NFR2) are documented and measurable on demand.
+
+## Test surface
+
+| Test class                                       | Pinning                                          |
+|--------------------------------------------------|--------------------------------------------------|
+| `ProblemDetailsFactoryTest`                      | full factory contract                            |
+| `MarkerStatusMapContractTest`                    | per-marker status + type pin (Story 4.2)         |
+| `ExceptionResponderTest`                         | listener happy path + last-resort body           |
+| `ExceptionResponderFunctionalTest`               | wire-level integration                           |
+| `ProblemDetailsApiSchemaSweepTest`               | every `/api/*` route conforms (Story 4.3)        |
+| `ExceptionResponderListenerPriorityTest`         | priority + Nelmio CORS (Story 4.1)               |
+| `BannedDoctrineApisTest`, `NoDatabaseDependenciesContractTest`, `StatelessPropertiesContractTest` | worker-mode safety (Story 3.5) |
+| `NativeJsonEncodeContractTest`, `LoggerInterfaceContractTest` | NFR4 / NFR5 contracts (Story 3.8)   |
+| `ConstantTimeAuthBranchingContractTest`, `ConstantTimeAuthBranchingBenchmarkTest` | NFR9 (Story 3.7)            |
+| `RedactionDenylistTest`                          | denylist semantics + extension procedure (NFR8)  |
+
+Behat features under `api/features/shared/error_contract/` pin the wire contract end-to-end (correlation-id propagation, instance UUIDv7, violations extension).
+
+## Review checklist
+
+Use this when reviewing a PR that touches `api/src/Shared/Domain/Exception/` or `api/src/Shared/Application/Problem/`:
+
+- [ ] Did the PR add a new marker interface? **Update the marker → HTTP status table above.**
+- [ ] Did the PR change a value in `MARKER_STATUS_MAP` or `MARKER_DEFAULT_TYPE_MAP`? **Update the table above** (the table is a navigation aid; the values themselves come from the constant).
+- [ ] Did the PR change the body shape (`ProblemDetails::toArray()`)? **Update the "Body shape" section.**
+- [ ] Did the PR add a key to `RedactionDenylist::KEYS`? **Update the "Extending the redaction denylist" section** if the procedure changed; the new key itself does not need to be listed here (it lives in the constant).
+- [ ] Did the PR change the env-aware `debug` shape? **Update the "Environment-aware `debug` extension" section.**
+- [ ] Did the PR change the listener priority or CORS interaction? **Update the "Listener layout" section.**
+
+> **Adding a marker interface or changing its mapping requires updating this page** (NFR26). The CI grep gate that enforces this lives in Story 4.5.

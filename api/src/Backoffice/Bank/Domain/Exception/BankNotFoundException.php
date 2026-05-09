@@ -4,12 +4,17 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\Bank\Domain\Exception;
 
-use DomainException;
+use Erpify\Shared\Domain\Exception\DomainException;
+use Erpify\Shared\Domain\Exception\NotFound;
 
-final class BankNotFoundException extends DomainException
+final class BankNotFoundException extends DomainException implements NotFound
 {
     public static function withId(string $id): self
     {
-        return new self(\sprintf('Bank with id <%s> not found.', $id));
+        return new self(
+            type: 'bank-not-found',
+            title: \sprintf('Bank with id <%s> not found.', $id),
+            context: ['bankId' => $id],
+        );
     }
 }

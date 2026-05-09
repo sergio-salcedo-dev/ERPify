@@ -21,4 +21,12 @@ php.behat.install: ## Install Behat tooling (api/tools/behat)
 
 php.test: php.unit php.behat ## Full PHP test suite (PHPUnit + Behat)
 
-.PHONY: php.unit php.unit.install php.behat php.behat.install php.test
+php.bench: ## Run listener performance-budget benchmarks (NFR2; opt-in, default php.unit skips)
+	@$(eval c ?=)
+ifeq ($(IN_CONTAINER),false)
+	@cd $(API_ROOT) && APP_ENV=test RUN_BENCHMARKS=1 bin/phpunit --group benchmark $(c)
+else
+	@$(DC) exec -e APP_ENV=test -e RUN_BENCHMARKS=1 $(PHP_SERVICE) bin/phpunit --group benchmark $(c)
+endif
+
+.PHONY: php.unit php.unit.install php.behat php.behat.install php.test php.bench

@@ -8,7 +8,7 @@ All commands below are run from the **repo root** via the root `Makefile`. The M
 - GNU Make
 - Optional: `jq`, `pre-commit` (for local hook install)
 
-See [`project-requirements.md`](./docs-info/project-requirements.md) for the full list.
+See [`README.md`](../README.md) and [`docs/deployment-guide.md`](./deployment-guide.md) for the full list.
 
 ## First-time setup
 
@@ -148,3 +148,4 @@ Load [`project-context.md`](./project-context.md) before generating code. Key ca
 - Attribute-only routing (`#[Route]`); thin controllers; `AbstractController::json()` over manual `JsonResponse`.
 - `messenger_worker` is a separate Compose service in prod/ci — handlers must be idempotent.
 - Mercure topics scoped per bounded context; never broadcast raw domain entities.
+- Errors on `/api/*` flow through the RFC 9457 pipeline ([`api-error-contract.md`](./api-error-contract.md)) — throw a marker `DomainException` (or let Symfony framework exceptions through); never `return new JsonResponse(['error' => …], 400)` from a controller.

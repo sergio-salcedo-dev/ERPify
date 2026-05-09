@@ -38,6 +38,6 @@ final class <Entity>SearchController extends AbstractSearchController
 
 ### Conventions that bite
 
-- The route name **must** end with `_search` so `Erpify\Shared\Infrastructure\Http\EventListener\SearchExceptionListener` normalizes `InvalidArgumentException` to 400.
-- `ValidationFailedException` from the DTO is automatically mapped to 422 with a `JsonApiErrorBuilder` envelope.
+- The route name **must** end with `_search`. The `_search` suffix is the project-wide convention for paginated read endpoints; downstream operators (logs, metrics, tracing) key off it.
+- `ValidationFailedException` from the DTO is automatically mapped to a 400 `validation-failed` RFC 9457 Problem Details body (Symfony's `RequestPayloadValueResolver` wraps it in an `HttpException(422)`; `Erpify\Shared\Application\Problem\ProblemDetailsFactory` walks `getPrevious()` and re-maps it to 400 with the structured `violations` extension). See [`../../docs/api-error-contract.md`](../../docs/api-error-contract.md).
 - Pagination caps live on `SearchQuery::MAX_PAGE` / `SearchQuery::MAX_LIMIT` — override per entity by re-declaring the `#[Assert\LessThanOrEqual]` attribute on the filter DTO.

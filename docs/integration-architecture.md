@@ -54,6 +54,7 @@ browser → localhost ──▶│     FrankenPHP (Caddy)      │
 | 7 | Symfony → Messenger transport | Internal | Doctrine transport | At-least-once delivery; handlers must be idempotent. |
 | 8 | `messenger_worker` → Mailer | Async | Symfony Messenger + Mailer | Email is async — see `domain-events-and-messenger.md`. |
 | 9 | Symfony → Mercure Hub | Publish | HTTP + JWT | Server-side publish; topics scoped per bounded context. |
+| 10 | Symfony → Browser/PWA | Error contract | HTTP (`application/problem+json`) | All `/api/*` non-2xx responses are RFC 9457 Problem Details with stable `type`, per-request `correlation-id`, per-error `instance`. PWA routes UI by `type` only. See [`api-error-contract.md`](./api-error-contract.md). |
 
 ## Alternative flow: `dev-local` (host Next, containerised API)
 
@@ -70,7 +71,7 @@ browser → localhost:80  ─▶  Next.js  (on host, next dev)
 - Mercure and Symfony share `:8000`; there is no FrankenPHP proxy in this mode.
 - Do **not** mix flows in a single session — switching requires clearing `pwa/.env.local` and rebuilding.
 
-Full walkthrough: [`local-fullstack-traffic.md`](./local-fullstack-traffic.md).
+Full walkthrough lives in `pwa/CLAUDE.md` and the Make `dev.local` target definition (`make/dev.mk`).
 
 ## Authentication / authorization flow
 
@@ -88,7 +89,7 @@ _(Quick scan — not read from source. Cross-check against `api/src/**` controll
 4. Handler orchestrates a mailer action (and/or publishes a Mercure update).
 5. Audit entry written per `docs/domain-events-and-messenger.md`.
 
-See [`domain-events-and-messenger.md`](./domain-events-and-messenger.md) for the full contract.
+See `api/docs/domain-events-and-messenger/` for the full contract.
 
 ## Shared dependencies
 
@@ -99,5 +100,5 @@ See [`domain-events-and-messenger.md`](./domain-events-and-messenger.md) for the
 ## Prod deployment notes
 
 - `messenger_worker` and mail pipeline are separate Compose services in `compose.prod.yaml`.
-- DNS, CORS origins, and Mercure cookie/CORS config: [`mercure-production-deployment.md`](../docs-info/mercure-production-deployment.md) and [`production-deployment.md`](../docs-info/production-deployment.md).
-- After deploy, run the documented smoke tests per [`production-deployment.md`](../docs-info/production-deployment.md).
+- DNS, CORS origins, and Mercure cookie/CORS config: [`pwa/docs/production-deployment.md`](../pwa/docs/production-deployment.md).
+- After deploy, run the documented smoke tests per [`pwa/docs/production-deployment.md`](../pwa/docs/production-deployment.md).

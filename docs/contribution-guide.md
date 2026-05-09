@@ -7,6 +7,7 @@ _For detailed rules, cross-reference [`project-context.md`](./project-context.md
 1. Load [`project-context.md`](./project-context.md) into your tool/IDE context — it encodes the non-obvious rules AI agents and humans both need.
 2. Skim [`architecture-api.md`](./architecture-api.md) or [`architecture-pwa.md`](./architecture-pwa.md) for the part you're changing.
 3. If you're touching multi-part behavior, read [`integration-architecture.md`](./integration-architecture.md).
+4. If you're touching error handling on `/api/*`, read [`api-error-contract.md`](./api-error-contract.md) — never bypass the RFC 9457 pipeline with manual `JsonResponse` error bodies.
 
 ## Branches
 

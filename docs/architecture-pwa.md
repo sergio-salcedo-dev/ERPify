@@ -2,118 +2,112 @@
 
 ## Executive summary
 
-The `pwa/` deployable is the ERPify web UI: **Next.js 16 (App Router) + React 19 + TypeScript 6**, styled with **Tailwind 4 + Shadcn**, with business logic organised as **DDD + Hexagonal / Clean Architecture** under `src/context/<bounded-context>/{domain,application,infrastructure}`. Dependency injection is handled by **Inversify 8** (constructor injection of domain interfaces). Tests are split between **Vitest 4** (unit) and **Playwright 1.59** (e2e).
+The `pwa/` deployable is a Next.js 16.2 (App Router) + React 19.2 + TypeScript 6 application styled with Tailwind 4 (CSS-first config) and Shadcn primitives. Business logic is wired through **Inversify 8** for runtime DI and organised by **bounded context** under `src/context/`, mirroring the API's DDD layering (`domain / application / infrastructure`). Tests are split between Vitest (unit) and Playwright (E2E).
 
 ## Technology stack
 
-| Category | Technology | Version |
-|---|---|---|
-| Runtime | Node.js (Alpine container) | **24** (`node:24-alpine`, digest-pinned) |
-| Package manager | npm | lockfile: `pwa/package-lock.json` |
-| Framework | Next.js (App Router, Turbopack dev) | **16.2.4** |
-| UI runtime | React / React DOM | 19.2 |
-| Language | TypeScript (`strict: true`) | 6 |
-| Styling | Tailwind (CSS-first) + Shadcn | 4.2 / 4.3 |
-| UI primitives | Base UI React, lucide-react, motion, tw-animate-css, tailwind-merge, cva | — |
-| DI | Inversify + reflect-metadata | 8.1 / 0.2 |
-| Forms | react-hook-form + `@hookform/resolvers` | 7.x / 5.2 |
-| Unit tests | Vitest + Testing Library + jest-dom + jsdom | 4 / 16 / 6 / 29 |
-| E2E tests | Playwright | 1.59 |
-| Lint / format | ESLint 10 + eslint-config-next + Prettier 3.8 | — |
-| Integrations in deps | `@google/genai`, `firebase-tools` | (present — verify usage before wiring) |
-
-See [`project-context.md`](./project-context.md) for the constraint table including Next 16 / React 19 / Tailwind 4 gotchas.
+| Category          | Technology                              | Version |
+|-------------------|-----------------------------------------|---------|
+| Runtime           | Node                                    | 24      |
+| Language          | TypeScript                              | 6.0     |
+| Framework         | Next.js (App Router, Turbopack dev)     | 16.2    |
+| UI runtime        | React / React DOM                       | 19.2    |
+| Styling           | Tailwind CSS                            | 4.2     |
+| Component lib     | Shadcn                                  | 4.7     |
+| Headless UI       | @base-ui/react                          | 1.4     |
+| Icons             | lucide-react                            | 1.x     |
+| Animation         | motion                                  | 12      |
+| Forms             | @hookform/resolvers                     | 5.x     |
+| DI                | Inversify (+ reflect-metadata)          | 8.1     |
+| Class utilities   | class-variance-authority, clsx, tailwind-merge | — |
+| Unit tests        | Vitest (jsdom)                          | 4.1     |
+| Testing library   | @testing-library/react, @testing-library/jest-dom | 16/6 |
+| E2E               | Playwright                              | 1.59    |
+| Linting           | ESLint + eslint-config-next             | 10 / 16 |
+| Formatting        | Prettier                                | 3.8     |
 
 ## Architecture pattern
 
-**DDD + Hexagonal + Clean Architecture.** Dependencies point inward to `domain/`.
+**DDD + Hexagonal / Clean Architecture**, mirrored from the API. Dependencies point inward to `domain/`. The `app/` directory is the App Router shell only — business logic lives in `src/context/<bounded-context>/{domain,application,infrastructure}/`. Inversify wires concrete adapters to ports declared in `domain/` / `application/`.
+
+### Bounded contexts
 
 ```text
-pwa/src/
-├── app/                         # Next.js App Router — routes & UI shells only
-│   ├── layout.tsx
-│   ├── page.tsx
-│   ├── globals.css              # Tailwind 4 CSS-first config (@theme / @config)
-│   └── backoffice/
-│       ├── layout.tsx
-│       ├── page.tsx
-│       ├── BackOfficeLayoutClient.tsx
-│       └── health/
-├── components/
-│   └── ui/                      # Shadcn primitives + shared UI
-├── context/                     # Business logic by bounded context
-│   ├── backoffice/
-│   │   └── health/ { domain, application, infrastructure }
-│   ├── frontoffice/
-│   │   └── health/ { domain, application, infrastructure }
-│   └── shared/
-│       ├── domain/
-│       └── infrastructure/      # Root / shared Inversify bindings
-└── lib/                         # Glue / utilities only
+pwa/src/context/
+├── backoffice/
+│   └── health/{application,domain,infrastructure}
+├── frontoffice/
+│   └── health/{application,domain,infrastructure}
+└── shared/
+    ├── domain/
+    └── infrastructure/
+        ├── DependencyInjection/   # Inversify container modules
+        ├── HttpClient/            # Fetch wrapper
+        └── ui/                    # Shared UI bindings
 ```
 
-- **App Router only** (`src/app/`) — no `pages/` directory.
-- **No default exports under `src/context/**`** — named exports only. `page.tsx` / `layout.tsx` default exports are the Next-required exception.
-- **Server vs Client**: default is Server Component; add `'use client'` only when needed (state, effects, browser APIs, event handlers). Use `import 'server-only'` for modules that must not leak to clients.
+`src/components/` holds presentational components only:
+- `ui/` — Shadcn primitives.
+- `erpify/` — project-specific components.
 
-## Component architecture
+`src/lib/` is glue/utility only — never business logic.
 
-- **Shadcn UI** primitives in `src/components/ui/`, extended in-repo (not forked upstream).
-- **BEM class naming** (`block__element--modifier`) for custom classes on top of Tailwind utilities.
-- Tailwind 4 is **CSS-first**: there is **no `tailwind.config.js`** — configuration lives in `src/app/globals.css` via `@theme {}` / `@config`.
-- Class composition with `cn()` (clsx + tailwind-merge); never string-concatenate class names.
-- Icons: `lucide-react`. Animations: `motion` / `tw-animate-css`.
+## Layer responsibilities
 
-## State management
+| Layer | Contains | Must NOT depend on |
+|---|---|---|
+| `domain/` | Entities, value objects, repository / port **interfaces**, domain errors | React, Next, Inversify, fetch, third-party SDKs |
+| `application/` | Use cases, DTOs, orchestration | Infrastructure implementations (only their interfaces) |
+| `infrastructure/` | HTTP clients, Inversify bindings, Next-aware adapters, presentational hooks bridging React to use cases | — (outermost) |
 
-- React hooks for local UI state.
-- Cross-cutting state via **Inversify-wired services** injected into client components through the DI container — avoid adding Redux/Zustand/Jotai unless a story justifies it.
-- Forms: `react-hook-form` + `@hookform/resolvers` at the resolver layer.
+## Routing
 
-## Dependency injection (Inversify 8)
+- **App Router** under `src/app/`.
+- Entry: `app/layout.tsx` (root layout) + `app/page.tsx` (root page).
+- `app/globals.css` holds Tailwind 4's CSS-first `@theme` / `@config` directives.
+- `app/backoffice/` is the backoffice route segment (e.g. `/backoffice/health`).
 
-- `reflect-metadata` is imported **once** at the app entry.
-- Requires `experimentalDecorators` + `emitDecoratorMetadata` in `pwa/tsconfig.json` (already set).
-- Bindings live per bounded context (e.g. `src/context/<bc>/infrastructure/container.ts`) and are composed into a root container under `src/context/shared/infrastructure/`.
-- Inject **domain interfaces** (from `domain/`) — never concrete infra classes — into application use cases.
+## Dependency injection
 
-## Data fetching & server integration
+- Inversify 8 container assembled in `src/context/shared/infrastructure/DependencyInjection/`.
+- `tsconfig.json`: `strict: true`, `experimentalDecorators: true`, `emitDecoratorMetadata: true` (required for Inversify class decorators).
+- `reflect-metadata` imported once at the React entry point (`app/layout.tsx`).
 
-- Prefer **Server Components** + direct fetch / DI-resolved services over client-side fetch.
-- Use React 19 `use(promise)` inside RSCs for streaming.
-- **Server Actions** live in server-only modules (`'use server'`) — validate inputs at the boundary; never trust client-supplied IDs.
-- API base URL: `NEXT_PUBLIC_SYMFONY_API_BASE_URL` (client). Internal SSR fetches: `SYMFONY_INTERNAL_URL`. See [`local-fullstack-traffic.md`](./local-fullstack-traffic.md).
-- Mercure client subscribes via EventSource to **same-origin** `/.well-known/mercure`.
+## Data fetching & integration
+
+- Same-origin under FrankenPHP in dev/prod: `/api/*` is served by Symfony on `localhost`.
+- Standalone Next dev (`make dev.local`): point at `http://localhost:8000` via `NEXT_PUBLIC_SYMFONY_API_BASE_URL` and `SYMFONY_INTERNAL_URL` in `pwa/.env.local`.
+- Server-side fetches use `SYMFONY_INTERNAL_URL` (Compose-internal); client-side fetches use the public URL.
+- Mercure SSE consumed at `/.well-known/mercure` (same origin, JWT subscribed).
+
+## Error consumption
+
+The PWA consumes the API's [RFC 9457 Problem Details](./api-error-contract.md) contract. Routing/UI logic determines the semantic category from `type` (opaque, stable identifier) — never from message text or status code alone. `correlation-id` from the body (or the `X-Correlation-Id` response header) is the link to server-side log lines for support tickets.
+
+## Configuration
+
+- Build/dev: `next.config.*` (Turbopack-aware), `eslint.config.*`, `tsconfig.json`.
+- Tailwind 4: configured via CSS in `app/globals.css` (no separate `tailwind.config.*` required).
+- Tests: `vitest.config.ts`, `playwright.config.ts`.
+- Env: `pwa/.env.local` for host overrides; `NEXT_PUBLIC_*` vars are inlined at build time.
 
 ## Testing strategy
 
-| Layer | Tool | Config | Command |
-|---|---|---|---|
-| Unit | **Vitest 4** + Testing Library | `pwa/vitest.config.ts` | `make pwa.test.unit` (optional `c='src/context/...'`) |
-| Watch | Vitest | — | `make pwa.test.unit.watch` |
-| E2E | **Playwright 1.59** | `pwa/playwright.config.ts` | `make pwa.test.e2e` |
-| Reports | Playwright | — | `make pwa.test.e2e.reports` |
-
-- **Playwright `baseURL: http://localhost:3000`** — e2e runs against `dev:e2e` on port 3000, **not** 80.
-- Tests live under `tests/` mirroring `src/`.
-- Query by role/label/text — avoid CSS class or test-ID selectors when accessible queries work.
-
-Detailed rules: [`project-context.md` → Testing Rules](./project-context.md).
-
-## Build & deployment
-
-- **Dev bundler: Turbopack** (`next dev --turbo`). Webpack-only `next.config.*` entries silently no-op.
-- Build: `make pwa.build` (`next build`). Start: `next start -p 80`.
-- Dev-in-container runs Next on `:3000`; the `dunglas/frankenphp` front-end reverse-proxies HTML to it.
-- Container image: built from `pwa/Dockerfile` using `node:24-alpine` (digest-pinned). Prod build env var: `NEXT_PUBLIC_SYMFONY_API_BASE_URL=https://localhost` by default (override per environment).
-
-Full deploy flow: [`deployment-guide.md`](./deployment-guide.md) and [`pwa/docs/`](../pwa/docs/).
-
-## Environment variables
-
-| Var | Scope | Purpose |
+| Layer | Tool | Entry |
 |---|---|---|
-| `NEXT_PUBLIC_SYMFONY_API_BASE_URL` | Public (client + server) | API base URL the browser uses |
-| `SYMFONY_INTERNAL_URL` | Server-only | URL used for SSR / RSC fetches to Symfony |
-| Others prefixed `NEXT_PUBLIC_` | Public | Must not contain secrets |
-| All others | Server-only | Never read from a client component |
+| Unit | **Vitest 4** (jsdom) | `pwa/vitest.config.ts`, run via `make pwa.test.unit` |
+| E2E | **Playwright 1.59** | `pwa/playwright.config.ts`, run via `make pwa.test.e2e` |
+| Watch | Vitest | `make pwa.test.unit.watch` |
+| Reports | Playwright HTML | `make pwa.test.e2e.reports` |
+| Lint / format | ESLint + Prettier | `make pwa.lint`, `make pwa.lint.eslint.fix`, `make pwa.format.prettier.fix` |
+
+`tests/` mirrors `src/`. Tests are colocated by bounded context.
+
+## Source tree
+
+See [`source-tree-analysis.md`](./source-tree-analysis.md) for the full annotated tree.
+
+## Development & deployment
+
+- Dev setup: [`development-guide-pwa.md`](./development-guide-pwa.md).
+- Prod deploy: [`deployment-guide.md`](./deployment-guide.md).

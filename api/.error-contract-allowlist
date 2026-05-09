@@ -1,0 +1,17 @@
+# Story 4.5 (FR50) — error-contract gate allowlist.
+#
+# Files listed here (relative to api/) are exempt from the
+# "no `catch (...) { ... new JsonResponse(...) }` in controllers" gate.
+# Controllers MUST not catch-and-respond — they should throw a DomainException
+# instead and let the ExceptionResponder listener build the RFC 9457 Problem
+# Details body. See docs/api-error-contract.md#how-to-add-a-new-error.
+#
+# Lines starting with `#` and blank lines are ignored. Paths must be POSIX,
+# relative to api/, with no leading slash.
+#
+# Adding a new entry here is a deliberate exception and SHOULD be reviewed:
+# the only legitimate reasons are
+#   (a) the file is part of the error-contract plumbing itself
+#       (e.g. ExceptionResponder, ProblemDetailsResponder), OR
+#   (b) the file is legacy controller code whose migration to the new
+#       error contract is tracked by a follow-up story.

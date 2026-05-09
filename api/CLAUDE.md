@@ -9,7 +9,7 @@ API-scoped guidance. Root [`../CLAUDE.md`](../CLAUDE.md) is authoritative for mo
 -   **Doctrine ORM** + **PostgreSQL**. Migrations in `migrations/`, fixtures via **Hautelook Alice**.
 -   **Symfony Messenger** with a dedicated `messenger_worker` service (async email + audit table).
 -   **Mercure** hub (built into FrankenPHP) for real-time.
--   **PHPUnit** + **Behat** for tests.
+-   **PHPUnit** + **Behat** for tests. (Behat preferred)
 -   Repo root `symfony-docker` scaffold is the upstream — when syncing, merge into the **root** Compose files, not into `api/`.
 
 ## Folder structure
@@ -70,6 +70,7 @@ skipping. Silent skips are the most common path to a CVE.
 -   Adding endpoints (search, …): [`docs/adding-endpoints.md`](docs/adding-endpoints.md).
 -   Make targets (run from repo root): [`docs/make-targets.md`](docs/make-targets.md).
 -   Architecture: [`../docs/architecture-api.md`](../docs/architecture-api.md), [`../docs/integration-architecture.md`](../docs/integration-architecture.md).
+-   Error contract one-pager (RFC 9457 Problem Details — marker→status map, env-aware `debug`, redaction, observability): [`../docs/api-error-contract.md`](../docs/api-error-contract.md). **Adding a marker interface or changing its mapping requires updating that page** (NFR26).
 -   Dev workflow: [`../docs/development-guide-api.md`](../docs/development-guide-api.md).
 -   Deployment: [`../docs/deployment-guide.md`](../docs/deployment-guide.md).
 -   Upstream symfony-docker references: [`docs/options.md`](docs/options.md), [`docs/tls.md`](docs/tls.md), [`docs/xdebug.md`](docs/xdebug.md), [`docs/troubleshooting.md`](docs/troubleshooting.md), [`docs/updating.md`](docs/updating.md).

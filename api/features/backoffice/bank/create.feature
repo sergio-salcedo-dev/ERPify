@@ -27,4 +27,4 @@ Feature: Create a bank
     """
     {"name": "Incomplete Bank"}
     """
-    Then the response status code should be 422
+    Then the response status code should be 400
