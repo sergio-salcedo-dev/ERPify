@@ -5,14 +5,15 @@
  */
 
 /**
- * Format an ISO 8601 timestamp as `dd/mm/yyyy, HH:mm:ss` in 24-hour time.
+ * Format an ISO 8601 timestamp as `dd/mm/yyyy, HH:mm:ss` in 24-hour time
+ * using the `es-ES` locale.
  * Falls back to the raw value for non-parseable input so UI tables never
  * show "Invalid Date" if the API ever returns something unexpected.
  */
 export function formatDateTime(iso: string): string {
   const ts = Date.parse(iso);
   if (Number.isNaN(ts)) return iso;
-  return new Intl.DateTimeFormat("en-GB", {
+  return new Intl.DateTimeFormat("es-ES", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
