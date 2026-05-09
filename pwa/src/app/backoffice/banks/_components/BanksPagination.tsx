@@ -25,6 +25,7 @@ export function BanksPagination({
     <nav
       className="banks-pagination mt-3 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between"
       aria-label="Banks pagination"
+      data-testid="banks-pagination"
     >
       <label className="banks-pagination__page-size text-muted-foreground flex items-center gap-2 text-xs">
         <span className="banks-pagination__page-size-label">Items per page</span>

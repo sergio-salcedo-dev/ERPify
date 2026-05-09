@@ -64,40 +64,67 @@ export default function EditBankPage() {
   }, [id]);
 
   return (
-    <div className="banks-edit mx-auto w-full max-w-screen-md space-y-4 sm:space-y-6">
+    <div
+      className="banks-edit mx-auto w-full max-w-screen-md space-y-4 sm:space-y-6"
+      data-testid="banks-edit"
+      data-state={state}
+    >
       <BackLink id={id} />
 
       {state === "loading" ? (
-        <p className="text-muted-foreground text-sm" role="status" aria-live="polite">
+        <p
+          className="text-muted-foreground text-sm"
+          role="status"
+          aria-live="polite"
+          data-testid="banks-edit__loading"
+        >
           Loading bank…
         </p>
       ) : null}
 
       {state === "not-found" && problem ? (
-        <EmptyState
-          variant="first-run"
-          heading="Bank not found"
-          description="We could not find a bank with that id. It may have been deleted."
-          action={
-            <div className="flex flex-col items-center gap-2">
-              <CorrelationIdChip id={problem["correlation-id"]} label="Error ID:" />
-              <Link href="/backoffice/banks" className={cn(buttonVariants())}>
-                Back to banks
-              </Link>
-            </div>
-          }
-        />
+        <div data-testid="banks-edit__not-found">
+          <EmptyState
+            variant="first-run"
+            heading="Bank not found"
+            description="We could not find a bank with that id. It may have been deleted."
+            action={
+              <div className="flex flex-col items-center gap-2">
+                <CorrelationIdChip id={problem["correlation-id"]} label="Error ID:" />
+                <Link
+                  href="/backoffice/banks"
+                  className={cn(buttonVariants())}
+                  data-testid="banks-edit__back-to-list"
+                >
+                  Back to banks
+                </Link>
+              </div>
+            }
+          />
+        </div>
       ) : null}
 
-      {state === "error" && problem ? <ProblemDisplay problem={problem} variant="panel" /> : null}
+      {state === "error" && problem ? (
+        <div data-testid="banks-edit__error">
+          <ProblemDisplay problem={problem} variant="panel" />
+        </div>
+      ) : null}
 
       {state === "ready" && bank ? (
         <>
-          <header className="banks-edit__header space-y-1">
-            <h1 className="text-foreground text-xl font-semibold tracking-tight sm:text-2xl">
+          <header className="banks-edit__header space-y-1" data-testid="banks-edit__header">
+            <h1
+              className="text-foreground text-xl font-semibold tracking-tight sm:text-2xl"
+              data-testid="banks-edit__title"
+            >
               Edit bank
             </h1>
-            <p className="text-muted-foreground text-sm break-words">Update {bank.name}.</p>
+            <p
+              className="text-muted-foreground text-sm break-words"
+              data-testid="banks-edit__subtitle"
+            >
+              Update {bank.name}.
+            </p>
           </header>
 
           <BankForm
@@ -118,6 +145,7 @@ function BackLink({ id }: { id: string }) {
       className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs"
       aria-label="Back to bank detail"
       title="Back to bank detail"
+      data-testid="banks-edit__back-link"
     >
       <ChevronLeft className="size-3" aria-hidden="true" />
       Back to bank

@@ -32,6 +32,22 @@ describe("DataTable", () => {
     expect(screen.getByRole("table", { name: "Bank list" })).toBeInTheDocument();
   });
 
+  it("forwards `testId` to the wrapper and `rowTestId` to each <tr>", () => {
+    render(
+      <DataTable
+        columns={columns}
+        data={banks}
+        rowKey={(r) => r.id}
+        caption="Banks"
+        testId="banks-table__inner"
+        rowTestId={(r) => `banks-table__row-${r.id}`}
+      />,
+    );
+    expect(screen.getByTestId("banks-table__inner")).toBeInTheDocument();
+    expect(screen.getByTestId("banks-table__row-1")).toHaveAttribute("data-row-id", "1");
+    expect(screen.getByTestId("banks-table__row-2")).toHaveAttribute("data-row-id", "2");
+  });
+
   it("toggles aria-sort on sortable header click via onSortChange", () => {
     const onSortChange = vi.fn();
     render(

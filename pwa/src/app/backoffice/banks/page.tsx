@@ -100,13 +100,23 @@ export default function BanksListPage() {
   };
 
   return (
-    <div className="banks-list mx-auto w-full max-w-screen-2xl space-y-4 sm:space-y-6 2xl:max-w-[120rem]">
-      <header className="banks-list__header flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div
+      className="banks-list mx-auto w-full max-w-screen-2xl space-y-4 sm:space-y-6 2xl:max-w-[120rem]"
+      data-testid="banks-list"
+      data-state={state}
+    >
+      <header
+        className="banks-list__header flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+        data-testid="banks-list__header"
+      >
         <div className="banks-list__heading min-w-0">
-          <h1 className="text-foreground text-xl font-semibold tracking-tight sm:text-2xl">
+          <h1
+            className="text-foreground text-xl font-semibold tracking-tight sm:text-2xl"
+            data-testid="banks-list__title"
+          >
             Banks
           </h1>
-          <p className="text-muted-foreground mt-1 text-sm">
+          <p className="text-muted-foreground mt-1 text-sm" data-testid="banks-list__subtitle">
             Manage the banks available in the back office.
           </p>
         </div>
@@ -156,8 +166,16 @@ export default function BanksListPage() {
               className="banks-list__empty-filtered border-border rounded-md border p-8 text-center"
               data-testid="banks-list__empty-filtered"
             >
-              <h2 className="text-foreground text-base font-medium">No banks match your filters</h2>
-              <p className="text-muted-foreground mt-1 text-sm">
+              <h2
+                className="text-foreground text-base font-medium"
+                data-testid="banks-list__empty-filtered-heading"
+              >
+                No banks match your filters
+              </h2>
+              <p
+                className="text-muted-foreground mt-1 text-sm"
+                data-testid="banks-list__empty-filtered-description"
+              >
                 Adjust the filters or clear them to see the full list.
               </p>
               <Button
@@ -190,7 +208,7 @@ export default function BanksListPage() {
                 onPageSizeChange={setPageSize}
               />
               {nextCursor ? (
-                <p className="text-muted-foreground text-xs">
+                <p className="text-muted-foreground text-xs" data-testid="banks-list__more-notice">
                   More banks available. Filters, sort, and pagination apply only to this page.
                 </p>
               ) : null}

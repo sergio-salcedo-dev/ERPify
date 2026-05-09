@@ -65,38 +65,63 @@ export default function BankDetailPage() {
   }, [id]);
 
   return (
-    <div className="banks-detail mx-auto w-full max-w-screen-2xl space-y-4 sm:space-y-6 2xl:max-w-[120rem]">
+    <div
+      className="banks-detail mx-auto w-full max-w-screen-2xl space-y-4 sm:space-y-6 2xl:max-w-[120rem]"
+      data-testid="banks-detail"
+      data-state={state}
+    >
       <BackLink />
 
       {state === "loading" ? (
-        <p className="text-muted-foreground text-sm" role="status" aria-live="polite">
+        <p
+          className="text-muted-foreground text-sm"
+          role="status"
+          aria-live="polite"
+          data-testid="banks-detail__loading"
+        >
           Loading bank…
         </p>
       ) : null}
 
       {state === "not-found" && problem ? (
-        <EmptyState
-          variant="first-run"
-          heading="Bank not found"
-          description="We could not find a bank with that id. It may have been deleted."
-          action={
-            <div className="flex flex-col items-center gap-2">
-              <CorrelationIdChip id={problem["correlation-id"]} label="Error ID:" />
-              <Link href="/backoffice/banks" className={cn(buttonVariants())}>
-                Back to banks
-              </Link>
-            </div>
-          }
-        />
+        <div data-testid="banks-detail__not-found">
+          <EmptyState
+            variant="first-run"
+            heading="Bank not found"
+            description="We could not find a bank with that id. It may have been deleted."
+            action={
+              <div className="flex flex-col items-center gap-2">
+                <CorrelationIdChip id={problem["correlation-id"]} label="Error ID:" />
+                <Link
+                  href="/backoffice/banks"
+                  className={cn(buttonVariants())}
+                  data-testid="banks-detail__back-to-list"
+                >
+                  Back to banks
+                </Link>
+              </div>
+            }
+          />
+        </div>
       ) : null}
 
-      {state === "error" && problem ? <ProblemDisplay problem={problem} variant="panel" /> : null}
+      {state === "error" && problem ? (
+        <div data-testid="banks-detail__error">
+          <ProblemDisplay problem={problem} variant="panel" />
+        </div>
+      ) : null}
 
       {state === "ready" && bank ? (
         <>
-          <header className="banks-detail__header flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <header
+            className="banks-detail__header flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
+            data-testid="banks-detail__header"
+          >
             <div className="min-w-0">
-              <h1 className="text-foreground text-xl font-semibold tracking-tight break-words sm:text-2xl">
+              <h1
+                className="text-foreground text-xl font-semibold tracking-tight break-words sm:text-2xl"
+                data-testid="banks-detail__name"
+              >
                 {bank.name}
               </h1>
               <p
@@ -128,11 +153,26 @@ export default function BankDetailPage() {
             </div>
           </header>
 
-          <dl className="banks-detail__meta border-border bg-card grid grid-cols-1 gap-4 rounded-lg border p-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Field label="Name" value={bank.name} />
-            <Field label="Short name" value={bank.shortName} />
-            <Field label="Created" value={formatDateTime(bank.createdAt)} />
-            <Field label="Updated" value={formatDateTime(bank.updatedAt)} />
+          <dl
+            className="banks-detail__meta border-border bg-card grid grid-cols-1 gap-4 rounded-lg border p-4 sm:grid-cols-2 xl:grid-cols-4"
+            data-testid="banks-detail__meta"
+          >
+            <Field label="Name" value={bank.name} testId="banks-detail__field-name" />
+            <Field
+              label="Short name"
+              value={bank.shortName}
+              testId="banks-detail__field-shortname"
+            />
+            <Field
+              label="Created"
+              value={formatDateTime(bank.createdAt)}
+              testId="banks-detail__field-created"
+            />
+            <Field
+              label="Updated"
+              value={formatDateTime(bank.updatedAt)}
+              testId="banks-detail__field-updated"
+            />
             <Field
               label="ID"
               value={bank.id}
@@ -153,6 +193,7 @@ function BackLink() {
       className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs"
       aria-label="Back to banks"
       title="Back to banks"
+      data-testid="banks-detail__back-link"
     >
       <ChevronLeft className="size-3" aria-hidden="true" />
       Back to banks

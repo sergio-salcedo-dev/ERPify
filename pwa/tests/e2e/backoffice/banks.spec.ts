@@ -17,11 +17,17 @@ test.describe("BackOffice - Banks CRUD", () => {
       await mockBanksApi(page, { list: "happy" });
       await page.goto("/backoffice/banks");
 
-      await expect(page.getByRole("heading", { name: "Banks", level: 1 })).toBeVisible();
+      await expect(page.getByTestId("banks-list")).toHaveAttribute("data-state", "ready");
+      await expect(page.getByTestId("banks-list__title")).toHaveText("Banks");
+      await expect(page.getByTestId("banks-list__subtitle")).toBeVisible();
+      await expect(page.getByTestId("banks-table")).toBeVisible();
+      await expect(page.getByTestId("banks-pagination")).toBeVisible();
       await expect(page.getByRole("link", { name: /New bank/i })).toBeVisible();
       await expect(page.getByRole("cell", { name: "ACME", exact: true })).toBeVisible();
       await expect(page.getByRole("cell", { name: "Acme Savings", exact: true })).toBeVisible();
       await expect(page.getByRole("cell", { name: "BRT", exact: true })).toBeVisible();
+      await expect(page.getByTestId(`banks-table__row-${SAMPLE_BANK_A.id}`)).toBeVisible();
+      await expect(page.getByTestId(`banks-table__row-${SAMPLE_BANK_B.id}`)).toBeVisible();
     });
 
     test("shows the empty state when there are no banks", async ({ page }) => {
@@ -68,12 +74,19 @@ test.describe("BackOffice - Banks CRUD", () => {
       await mockBanksApi(page, { get: "happy", bank: SAMPLE_BANK_A });
       await page.goto(`/backoffice/banks/${SAMPLE_BANK_A.id}`);
 
-      await expect(page.getByRole("heading", { name: SAMPLE_BANK_A.name })).toBeVisible();
+      await expect(page.getByTestId("banks-detail")).toHaveAttribute("data-state", "ready");
+      await expect(page.getByTestId("banks-detail__name")).toHaveText(SAMPLE_BANK_A.name);
       await expect(page.getByTestId("banks-detail__shortname")).toHaveText(SAMPLE_BANK_A.shortName);
       await expect(page.getByTestId("banks-detail__edit-button")).toBeVisible();
       await expect(page.getByTestId("banks-detail__delete-button")).toBeVisible();
       await expect(page.getByTestId("banks-detail__copy-id")).toBeVisible();
       await expect(page.getByTestId("banks-detail__id")).toHaveText(SAMPLE_BANK_A.id);
+      await expect(page.getByTestId("banks-detail__field-name")).toHaveText(SAMPLE_BANK_A.name);
+      await expect(page.getByTestId("banks-detail__field-shortname")).toHaveText(
+        SAMPLE_BANK_A.shortName,
+      );
+      await expect(page.getByTestId("banks-detail__field-created")).toBeVisible();
+      await expect(page.getByTestId("banks-detail__field-updated")).toBeVisible();
     });
 
     test("copies the bank ID to the clipboard and flips the button to 'Copied'", async ({

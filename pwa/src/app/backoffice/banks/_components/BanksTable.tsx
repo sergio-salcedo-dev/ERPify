@@ -97,7 +97,7 @@ export function BanksTable({ banks, sort, onSortChange, onBankDeleted }: BanksTa
   ];
 
   return (
-    <div className="banks-table -mx-4 overflow-x-auto sm:mx-0">
+    <div className="banks-table -mx-4 overflow-x-auto sm:mx-0" data-testid="banks-table">
       <DataTable
         columns={columns}
         data={banks}
@@ -107,6 +107,8 @@ export function BanksTable({ banks, sort, onSortChange, onBankDeleted }: BanksTa
         sort={sort ?? undefined}
         onSortChange={onSortChange}
         onRowActivate={(row) => router.push(`/backoffice/banks/${encodeURIComponent(row.id)}`)}
+        rowTestId={(row) => `banks-table__row-${row.id}`}
+        testId="banks-table__inner"
         className="banks-table__inner"
       />
     </div>

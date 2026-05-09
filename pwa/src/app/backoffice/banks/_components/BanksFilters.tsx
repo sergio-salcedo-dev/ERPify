@@ -36,6 +36,7 @@ export function BanksFilters({
     <section
       className="banks-filters border-border bg-muted/20 rounded-md border p-3 sm:p-4"
       aria-label="Bank filters"
+      data-testid="banks-filters"
     >
       <div className="banks-filters__grid grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <FormField name="banks-filters-name" label="Name">

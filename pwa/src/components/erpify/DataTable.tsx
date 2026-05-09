@@ -42,6 +42,10 @@ interface DataTableProps<T> {
   /** Rendered when data is empty. */
   emptyState?: ReactNode;
   className?: string;
+  /** Optional per-row data-testid (forwarded to the `<tr>`). */
+  rowTestId?: (row: T) => string;
+  /** Optional data-testid on the surrounding wrapper (forwarded to the bordered `<div>`). */
+  testId?: string;
 }
 
 const ROW_HEIGHTS = {
@@ -66,6 +70,8 @@ export function DataTable<T>({
   caption,
   emptyState,
   className,
+  rowTestId,
+  testId,
 }: DataTableProps<T>) {
   const tableId = useId();
   const [focusedRow, setFocusedRow] = useState(0);
@@ -152,7 +158,10 @@ export function DataTable<T>({
     selection?.mode === "multi" && data.length > 0 && selection.selected.size === data.length;
 
   return (
-    <div className={cn("border-border overflow-hidden rounded-md border", className)}>
+    <div
+      className={cn("border-border overflow-hidden rounded-md border", className)}
+      data-testid={testId}
+    >
       <table
         id={tableId}
         role="table"
@@ -233,6 +242,8 @@ export function DataTable<T>({
                 onKeyDown={interactive ? (e) => handleRowKeyDown(e, row, index) : undefined}
                 onClick={onRowActivate ? () => onRowActivate(row) : undefined}
                 onFocus={() => setFocusedRow(index)}
+                data-testid={rowTestId?.(row)}
+                data-row-id={id}
                 className={cn(
                   "border-border focus-visible:ring-ring border-b transition-colors focus-visible:ring-2 focus-visible:outline-none",
                   ROW_HEIGHTS[density],
