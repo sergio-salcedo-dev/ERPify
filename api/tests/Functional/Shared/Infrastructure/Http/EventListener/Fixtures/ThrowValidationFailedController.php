@@ -11,7 +11,7 @@ use Symfony\Component\Validator\Exception\ValidationFailedException;
 
 /**
  * Test-only controller that throws a `ValidationFailedException` carrying three field-level
- * violations on `name`, `email`, and `age`. Exercises the factory's Story 1.6 branch.
+ * violations on `name`, `email`, and `age`. Exercises the factory's validation-failed branch.
  */
 final class ThrowValidationFailedController
 {

@@ -13,11 +13,11 @@ use ReflectionClass;
 use ReflectionProperty;
 
 /**
- * Story 3.5 (FR41 / NFR16) — pins the worker-mode safety invariant: neither
+ * Pins the worker-mode safety invariant: neither
  * {@see ExceptionResponder} nor {@see ProblemDetailsFactory} may carry a `private`
  * non-readonly mutable property. Both classes are `final readonly` today, so every
  * promoted constructor argument is auto-readonly and the invariant is structurally
- * satisfied. This test makes that invariant load-bearing — a future PR adding a
+ * satisfied. This test makes that invariant load-bearing — a future change adding a
  * mutable per-request cache (e.g. `private array $cache = [];`) on either class fails
  * CI before it can corrupt FrankenPHP worker-mode reuse across requests.
  *
@@ -47,7 +47,7 @@ final class StatelessPropertiesContractTest extends TestCase
             $reflectionClass->isReadOnly(),
             \sprintf(
                 '%s must be declared `readonly` (PHP 8.2+) so every property is auto-readonly. '
-                . 'A mutable per-request property would break FrankenPHP worker-mode reuse (NFR16).',
+                . 'A mutable per-request property would break FrankenPHP worker-mode reuse.',
                 $class,
             ),
         );
@@ -90,7 +90,7 @@ final class StatelessPropertiesContractTest extends TestCase
     }
 
     /**
-     * Story 3.5 (FR41 / NFR16) — assert a single declared property is readonly. Static caches
+     * Assert a single declared property is readonly. Static caches
      * are explicitly disallowed: a `static` property on a stateless service is the canonical
      * worker-mode-poisoning vector (lives across requests, never reset by `kernel.reset`).
      */
@@ -102,7 +102,7 @@ final class StatelessPropertiesContractTest extends TestCase
             $property->isStatic(),
             \sprintf(
                 '%s::$%s must not be static — a static property survives `kernel.reset` and '
-                . 'leaks state across worker-mode requests (NFR16).',
+                . 'leaks state across worker-mode requests.',
                 $class,
                 $name,
             ),
@@ -112,7 +112,7 @@ final class StatelessPropertiesContractTest extends TestCase
             $property->isReadOnly(),
             \sprintf(
                 '%s::$%s must be readonly. A mutable property breaks the worker-mode safety '
-                . 'invariant (FR41 / NFR16) — `kernel.reset` will not reset it across requests.',
+                . 'invariant — `kernel.reset` will not reset it across requests.',
                 $class,
                 $name,
             ),

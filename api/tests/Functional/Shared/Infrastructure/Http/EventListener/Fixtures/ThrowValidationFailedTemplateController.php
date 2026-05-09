@@ -11,8 +11,8 @@ use Symfony\Component\Validator\Exception\ValidationFailedException;
 
 /**
  * Test-only controller that throws a `ValidationFailedException` whose violation carries both
- * a resolved `message` and a templated `messageTemplate`. Pins Story 1.6 AC #5: the wire shape
- * surfaces the resolved `message` and never the `{{ ... }}` placeholder template form.
+ * a resolved `message` and a templated `messageTemplate`. Pins the violation projection: the
+ * wire shape surfaces the resolved `message` and never the `{{ ... }}` placeholder template form.
  */
 final class ThrowValidationFailedTemplateController
 {

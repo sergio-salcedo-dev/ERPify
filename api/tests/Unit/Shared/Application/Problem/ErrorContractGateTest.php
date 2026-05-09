@@ -12,17 +12,17 @@ use RecursiveIteratorIterator;
 use SplFileInfo;
 
 /**
- * Story 4.5 (FR50, FR51, NFR26) — pins two error-contract drift invariants:
+ * Pins two error-contract drift invariants:
  *
  *   (1) Controllers MUST NOT catch-and-respond with `new JsonResponse(...)`.
  *       Throwing a `DomainException` is the contract — the {@see \Erpify\Shared\Infrastructure\Http\EventListener\ExceptionResponder}
  *       listener owns response shaping. A regression here would leak ad-hoc body
- *       shapes back into the `/api/*` surface and re-fragment the error wire
- *       format that Epic 1–3 paid to unify.
+ *       shapes back into the `/api/*` surface and re-fragment the unified error
+ *       wire format.
  *
  *   (2) Adding a new marker exception under `api/src/Shared/Domain/Exception/`
  *       without updating `docs/api-error-contract.md` in the same change is a
- *       documentation-freshness regression (NFR26). Implemented as a git-aware
+ *       documentation-freshness regression. Implemented as a git-aware
  *       sub-check that no-ops when no merge base is reachable (e.g. detached
  *       HEAD on a tag in CI), to avoid false positives outside PR context.
  *
@@ -39,7 +39,7 @@ use SplFileInfo;
  * `new JsonResponse(`. Files listed in `api/.error-contract-allowlist` are
  * exempt.
  *
- * Failure output, exactly as required by AC FR51:
+ * Failure output:
  *
  *   Controllers must not catch-and-respond. Throw a DomainException instead. See docs/api-error-contract.md#how-to-add-a-new-error
  *   <relative/path.php>:<line>: <matched code line>
@@ -175,13 +175,13 @@ final class ErrorContractGateTest extends TestCase
 
     public function testNewMarkerExceptionWithoutDocsUpdateIsRejected(): void
     {
-        // NFR26 — git-aware sub-check. Skipped when git context isn't usable
+        // Git-aware sub-check. Skipped when git context isn't usable
         // (detached tag build, missing merge base, sandbox without git binary).
         $base = $this->resolveGitBase();
 
         if (null === $base) {
             $this->markTestSkipped(
-                'NFR26 doc-freshness check skipped: no usable git merge base '
+                'Doc-freshness check skipped: no usable git merge base '
                 . '(set ERROR_CONTRACT_GATE_BASE=<sha> to override).',
             );
         }

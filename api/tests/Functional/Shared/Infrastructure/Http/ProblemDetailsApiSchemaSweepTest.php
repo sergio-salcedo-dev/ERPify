@@ -15,7 +15,7 @@ use Symfony\Component\Routing\Route;
 use Symfony\Component\Routing\RouterInterface;
 
 /**
- * Story 4.3 (FR52, NFR19) — `/api/*` integration sweep with RFC 9457 schema validation.
+ * `/api/*` integration sweep with RFC 9457 schema validation.
  *
  * This test discovers every route whose path starts with `/api/` via
  * {@see RouterInterface::getRouteCollection()}, triggers an error condition for each one
@@ -38,7 +38,7 @@ use Symfony\Component\Routing\RouterInterface;
  * developers can see at a glance which routes escape the contract.
  *
  * This sweep is a SAFETY NET — developers adding new endpoints are expected to write a
- * specific integration test for their own error paths (Story 4.4). The sweep catches drift
+ * specific integration test for their own error paths. The sweep catches drift
  * the per-feature suites miss; it is not a substitute for them.
  *
  * @internal
@@ -65,15 +65,14 @@ final class ProblemDetailsApiSchemaSweepTest extends WebTestCase
 
     /**
      * Routes that legitimately escape the sweep with an explicit, documented reason. Keep
-     * this list as close to empty as possible — every entry here is technical debt the next
-     * story (4.4 onwards) is expected to retire. Each entry MUST carry a one-line rationale.
+     * this list as close to empty as possible — every entry here is technical debt
+     * expected to be retired. Each entry MUST carry a one-line rationale.
      *
      * Today the sweep's wrong-method trigger reaches every `/api/*` route through Symfony's
      * `RouterListener`, which raises `MethodNotAllowedHttpException` BEFORE controller code
      * runs and so guarantees a Problem Details body even on routes whose controllers still
-     * emit legacy JSON:API bodies on their happy-error branches (tracked in
-     * `_bmad-output/implementation-artifacts/deferred-work.md`). No allowlist entries are
-     * required at story close.
+     * emit legacy JSON:API bodies on their happy-error branches. No allowlist entries are
+     * currently required.
      *
      * @var array<string, string>
      */
@@ -135,7 +134,7 @@ final class ProblemDetailsApiSchemaSweepTest extends WebTestCase
         }
 
         $this->fail(
-            "<<< Story 4.3: routes escaping the RFC 9457 Problem Details contract >>>\n"
+            "<<< Routes escaping the RFC 9457 Problem Details contract >>>\n"
             . \implode("\n", $diagnostics)
             . "\n\nRemediate at the controller / listener level — do NOT add to the sweep "
             . 'allowlist without a documented per-entry rationale (and a tracking link).',

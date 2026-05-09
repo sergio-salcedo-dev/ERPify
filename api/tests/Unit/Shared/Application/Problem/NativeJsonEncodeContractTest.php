@@ -12,8 +12,8 @@ use RecursiveIteratorIterator;
 use SplFileInfo;
 
 /**
- * Story 3.8 (NFR4) — pins the "native `\json_encode` only" invariant on the
- * Problem Details error contract path.
+ * Pins the "native `\json_encode` only" invariant on the Problem Details
+ * error contract path.
  *
  * The body-serialisation pipeline ({@see \Erpify\Shared\Application\Problem}
  * + {@see \Erpify\Shared\Infrastructure\Http\ProblemDetailsResponder}
@@ -25,21 +25,21 @@ use SplFileInfo;
  *   2. Reference no `SerializerInterface` or `NormalizerInterface` in the
  *      source — whether imported, fully-qualified, or used by alias.
  *   3. Pass `JSON_THROW_ON_ERROR` to every `\json_encode(` call so encode
- *      failures surface as a throw the listener's outer try/catch (Story 3.4)
- *      catches, rather than silently emitting a `false` body.
+ *      failures surface as a throw the listener's outer try/catch catches,
+ *      rather than silently emitting a `false` body.
  *
- * Curated grep — narrowest possible scope, mirrors the pattern from Story 3.5's
+ * Curated grep — narrowest possible scope, mirrors the pattern in
  * {@see BannedDoctrineApisTest}. The walk targets only the explicitly-listed
  * files / directories so the legacy search-path class
  * `AbstractSearchController` — which is NOT part of the Problem Details error
  * contract — keeps its existing Symfony Serializer dependency without tripping
- * this gate. (Story 4.6 retired `SearchExceptionListener` and its
- * `JsonApiErrorBuilder` envelope once {@see ProblemDetailsFactory} subsumed
- * their mappings natively.)
+ * this gate. (`SearchExceptionListener` and its `JsonApiErrorBuilder` envelope
+ * were retired once {@see ProblemDetailsFactory} subsumed their mappings
+ * natively.)
  *
  * Comments and docblocks are stripped before scanning so a docblock that names
  * `\json_encode([...])` to document an intentional NON-encode (e.g. the
- * Story 3.4 last-resort static body) does not produce a false positive.
+ * last-resort static body) does not produce a false positive.
  *
  * Out of scope: tests under `tests/` use Symfony Serializer freely (test
  * fixtures, client helpers); the contract is about the production source on
@@ -77,7 +77,7 @@ final class NativeJsonEncodeContractTest extends TestCase
         $this->assertSame(
             [],
             $hits,
-            'NFR4 — Problem Details error-path source MUST use native \json_encode with '
+            'Problem Details error-path source MUST use native \json_encode with '
             . 'JSON_THROW_ON_ERROR only. No Symfony Serializer component, no normalizer, '
             . 'no reflection-based encoder may be introduced under the listener / factory / '
             . 'responder triple. Offending files: ' . \implode(', ', $hits),
@@ -121,7 +121,7 @@ final class NativeJsonEncodeContractTest extends TestCase
         $this->assertGreaterThan(
             0,
             $totalCalls,
-            'NFR4 grep gate scanned zero json_encode calls — the directory roots no longer '
+            'json_encode grep gate scanned zero calls — the directory roots no longer '
             . 'cover any error-path encode site. Either the gate is misconfigured or the '
             . 'serialisation moved out of Shared/Application/Problem and Shared/Infrastructure/Http.',
         );
@@ -129,9 +129,9 @@ final class NativeJsonEncodeContractTest extends TestCase
         $this->assertSame(
             [],
             $offenders,
-            'NFR4 — every json_encode() call on the error path must pass JSON_THROW_ON_ERROR '
+            'Every json_encode() call on the error path must pass JSON_THROW_ON_ERROR '
             . 'so encode failures throw cleanly into the listener self-failure path '
-            . '(Story 3.4) instead of returning a silent `false`. Offending calls: '
+            . 'instead of returning a silent `false`. Offending calls: '
             . \implode(' | ', $offenders),
         );
     }
@@ -179,9 +179,9 @@ final class NativeJsonEncodeContractTest extends TestCase
      * the responder and listener that emit the wire body. The legacy search-path class
      * `AbstractSearchController` is intentionally excluded — it predates the error
      * contract and lives in `Shared/Infrastructure/Http/` but is not part of the
-     * listener / factory / responder triple under NFR4. (Story 4.6 retired
-     * `SearchExceptionListener` and its `JsonApiErrorBuilder` envelope once the
-     * factory subsumed their mappings natively.).
+     * listener / factory / responder triple. (`SearchExceptionListener` and its
+     * `JsonApiErrorBuilder` envelope were retired once the factory subsumed their
+     * mappings natively.).
      *
      * @return iterable<SplFileInfo>
      */
@@ -230,10 +230,10 @@ final class NativeJsonEncodeContractTest extends TestCase
     /**
      * Strips PHP comments and docblocks from `$source` so the grep matchers operate
      * on executable code only. Without this, a docblock that names `\json_encode([...])`
-     * to document an intentional non-encode (e.g. the Story 3.4 last-resort static
-     * body's docblock referencing `\json_encode([...])`) would produce a false
-     * positive. Uses `\token_get_all` so multi-line / nested docblocks are handled
-     * correctly without a regex misfire.
+     * to document an intentional non-encode (e.g. the last-resort static body's
+     * docblock referencing `\json_encode([...])`) would produce a false positive.
+     * Uses `\token_get_all` so multi-line / nested docblocks are handled correctly
+     * without a regex misfire.
      */
     private function stripCommentsAndDocblocks(string $source): string
     {

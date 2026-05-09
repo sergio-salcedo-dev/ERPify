@@ -44,7 +44,7 @@ final class ProblemDetailsResponderTest extends TestCase
         $response = (new ProblemDetailsResponder())->respond($problemDetails);
 
         // Symfony's ResponseHeaderBag::computeCacheControlValue() appends `, private` when neither
-        // `public` nor `s-maxage` is explicitly set. FR3 requires the response to carry `no-store`;
+        // `public` nor `s-maxage` is explicitly set. The response must carry `no-store`;
         // RFC 7234 § 5.2.2.5 makes `no-store` strictly subsume `private`, so the extra directive is
         // semantically redundant. Assert containment of the load-bearing directive.
         $cacheControl = $response->headers->get('Cache-Control');
@@ -156,7 +156,7 @@ final class ProblemDetailsResponderTest extends TestCase
             $this->assertStringNotContainsString(
                 $needle,
                 $contents,
-                \sprintf('ProblemDetailsResponder.php must not contain "%s" — see Story 1.4 ACs #3, #13.', $needle),
+                \sprintf('ProblemDetailsResponder.php must not contain "%s".', $needle),
             );
         }
     }

@@ -45,7 +45,7 @@ final class DomainExceptionTest extends TestCase
         };
 
         // class_implements() also surfaces Throwable/Stringable from \Exception. We pin the
-        // *relative* order of our markers — that's the precedence Story 1.3's factory relies on.
+        // *relative* order of our markers — that's the precedence the factory relies on.
         $markers = \array_values(\array_intersect(
             \class_implements($exception),
             [NotFound::class, Conflict::class],

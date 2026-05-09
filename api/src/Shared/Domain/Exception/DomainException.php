@@ -10,7 +10,7 @@ use Throwable;
  * Base class for domain exceptions targeted at an RFC 9457 ProblemDetails mapping.
  *
  * - {@see DomainException::type()} returns the opaque, stable identifier surfaced as
- *   ProblemDetails `type` (subclasses may override per FR13).
+ *   ProblemDetails `type` (subclasses may override).
  * - {@see DomainException::title()} returns a short, human-readable summary, also exposed
  *   via {@see Throwable::getMessage()}.
  * - {@see DomainException::context()} returns the app-defined extensions map; downstream

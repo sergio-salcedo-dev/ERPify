@@ -112,8 +112,8 @@ final class ExceptionResponderTest extends TestCase
 
     public function testCorrelationIdMintedAsUuidV7WhenAttributeMissing(): void
     {
-        // Story 2.1 contractually populates the `_correlation_id` request attribute on every
-        // main /api/* request. This test pins the defense-in-depth fallback per Story 2.2's
+        // The `_correlation_id` request attribute is contractually populated on every
+        // main /api/* request. This test pins the defense-in-depth fallback in the
         // onResponse pattern: if the attribute is missing (sub-request, future listener
         // tampering, etc.), the listener mints a fresh canonical lowercase UUIDv7.
         $exceptionResponder = $this->makeListener();
@@ -360,7 +360,7 @@ final class ExceptionResponderTest extends TestCase
         $this->assertSame(
             ['instance', 'correlation_id', 'type', 'status', 'exception_class', 'exception_message', 'request_uri', 'request_method'],
             \array_keys($looseContext),
-            'Context keys must appear in FR32 declaration order.',
+            'Context keys must appear in declaration order.',
         );
         $this->assertMatchesRegularExpression(self::UUID_V7_REGEX, $context['instance']);
         $this->assertMatchesRegularExpression(self::UUID_V7_REGEX, $context['correlation_id']);
@@ -508,7 +508,7 @@ final class ExceptionResponderTest extends TestCase
         $this->assertCount(
             0,
             $bufferingLogger->cleanLogs(),
-            'Listener must NOT log when an earlier listener already set the response (AC #11).',
+            'Listener must NOT log when an earlier listener already set the response.',
         );
     }
 
@@ -523,7 +523,7 @@ final class ExceptionResponderTest extends TestCase
         $this->assertCount(
             0,
             $bufferingLogger->cleanLogs(),
-            'Listener must NOT log for paths outside /api/ (AC #11).',
+            'Listener must NOT log for paths outside /api/.',
         );
     }
 
@@ -548,12 +548,12 @@ final class ExceptionResponderTest extends TestCase
         $this->assertSame(
             $body['correlation-id'] ?? null,
             $logRecord['context']['correlation_id'],
-            'Log correlation_id must equal body correlation-id (FR48 — operator pivot parity).',
+            'Log correlation_id must equal body correlation-id (operator pivot parity).',
         );
         $this->assertSame(
             $body['instance'] ?? null,
             $logRecord['context']['instance'],
-            'Log instance must equal body instance (FR48 — operator pivot parity).',
+            'Log instance must equal body instance (operator pivot parity).',
         );
     }
 
@@ -596,7 +596,7 @@ final class ExceptionResponderTest extends TestCase
         $this->assertSame(
             ExceptionResponder::PRIORITY,
             $asEventListener->priority,
-            'Story 4.1 (FR42, FR43) — the `#[AsEventListener]` attribute must read its priority '
+            'The `#[AsEventListener]` attribute must read its priority '
             . 'from `self::PRIORITY` so the constant is the single source of truth. '
             . 'See ExceptionResponderListenerPriorityTest for the kernel-bootstrapped pin.',
         );
@@ -624,7 +624,7 @@ final class ExceptionResponderTest extends TestCase
                 $needle,
                 $contents,
                 \sprintf(
-                    'ExceptionResponder.php must not contain "%s" — Story 1.4 AC #14, relaxed for Psr\Log\ in Story 2.4 AC #13 (NFR22).',
+                    'ExceptionResponder.php must not contain "%s".',
                     $needle,
                 ),
             );
@@ -632,10 +632,10 @@ final class ExceptionResponderTest extends TestCase
     }
 
     /**
-     * Story 3.2 (NFR12) — pins the defense-in-depth wiring: `buildLogContext` must invoke
+     * Pins the defense-in-depth wiring: `buildLogContext` must invoke
      * `RedactionDenylist::filter` even though the canonical 8-field log shape contains no
      * denylist-named keys (the call is a runtime no-op today; source-text inspection is the
-     * right scope per the cycle-guard pattern Story 3.1 established).
+     * right scope per the cycle-guard pattern).
      */
     public function testListenerLogContextBuilderInvokesRedactionDenylistFilter(): void
     {
@@ -657,18 +657,18 @@ final class ExceptionResponderTest extends TestCase
         $this->assertStringContainsString(
             'RedactionDenylist::filter(',
             $methodSource,
-            'ExceptionResponder::buildLogContext must invoke RedactionDenylist::filter for NFR12 defense-in-depth (Story 3.2 AC #4).',
+            'ExceptionResponder::buildLogContext must invoke RedactionDenylist::filter for defense-in-depth.',
         );
     }
 
     /**
-     * Story 3.4 (FR39) — last-resort static body when the factory throws.
+     * Last-resort static body when the factory throws.
      *
      * We force the throw via the factory's PSR-3 sink: a `DomainException` with a
      * non-whitelisted top-level context value triggers `applyUnserializableSentinel()`
      * which calls `$logger->log(LogLevel::NOTICE, ...)`. Injecting a throwing logger
      * into the factory propagates a `RuntimeException` out of `fromThrowable()` — the
-     * exact "factory raises mid-flight" condition the AC pins.
+     * exact "factory raises mid-flight" condition this test pins.
      */
     public function testLastResortStaticBodyEmittedWhenFactoryThrows(): void
     {
@@ -731,7 +731,7 @@ final class ExceptionResponderTest extends TestCase
     {
         // Both logger sinks throw: the factory's (forces fromThrowable to throw) AND the
         // listener's (would normally log the self-failure). The fallback response MUST still
-        // appear (NFR15 — broken logger never blocks the response).
+        // appear (broken logger never blocks the response).
         $exceptionResponder = $this->makeListener(
             logger: $this->throwingLogger('listener logger boom'),
             factoryLogger: $this->throwingLogger('factory boom'),
@@ -758,7 +758,7 @@ final class ExceptionResponderTest extends TestCase
     /**
      * Sanity test: a normal `DomainException` thrown event still produces the canonical
      * `WARNING` log with `API error response built` and NOT the last-resort body. Pins that
-     * Story 3.4's wrap did not regress the happy path.
+     * the last-resort wrap did not regress the happy path.
      */
     public function testHappyPathStillCallsPrimaryLoggerNotLastResort(): void
     {
@@ -787,10 +787,10 @@ final class ExceptionResponderTest extends TestCase
     }
 
     /**
-     * NFR6 — the fallback path must complete in ≤ 1ms. AC says "documented, not CI-gated";
+     * The fallback path must complete in ≤ 1ms. The target is documented, not CI-gated;
      * we run a generous-threshold synthetic loop here so the contract is exercised but
      * remains stable on shared CI hardware. The mean must beat 5ms; the per-iteration
-     * budget is a softer 1ms target documented in the epic.
+     * budget is a softer 1ms target.
      */
     public function testLastResortPathCompletesUnderOneMillisecondBenchmark(): void
     {
@@ -812,9 +812,9 @@ final class ExceptionResponderTest extends TestCase
         $elapsedNs = \hrtime(true) - $start;
         $meanMs = ($elapsedNs / $iterations) / 1_000_000;
 
-        // Generous CI-stable threshold (5ms). The 1ms NFR6 target is documented in the
-        // epic and is the goal under typical hardware; this assertion is a regression
-        // guard, not a strict perf gate.
+        // Generous CI-stable threshold (5ms). The 1ms target is the documented goal
+        // under typical hardware; this assertion is a regression guard, not a strict
+        // perf gate.
         $this->assertLessThan(
             5.0,
             $meanMs,
@@ -824,8 +824,8 @@ final class ExceptionResponderTest extends TestCase
 
     /**
      * Build a PSR-3 logger whose every method throws a `RuntimeException`. Used by the
-     * Story 3.4 self-failure tests to make either the factory's PSR-3 sink (forces
-     * `fromThrowable` to throw) or the listener's PSR-3 sink (NFR15 logger-resilience)
+     * self-failure tests to make either the factory's PSR-3 sink (forces
+     * `fromThrowable` to throw) or the listener's PSR-3 sink (logger-resilience)
      * fail loudly. Anonymous class — kept inline so the production listener never sees
      * a leaked test-double symbol.
      */
@@ -888,11 +888,11 @@ final class ExceptionResponderTest extends TestCase
         ?LoggerInterface $factoryLogger = null,
     ): ExceptionResponder {
         // The listener owns the BufferingLogger under test; the factory's PSR-3 sink is wired
-        // separately to a NullLogger so any Story 3.3 sentinel emissions from `applyUnserializableSentinel`
+        // separately to a NullLogger so any sentinel emissions from `applyUnserializableSentinel`
         // never pollute the listener's `singleLogRecord` assertions (factory and listener emit on
         // independent channels at runtime).
         //
-        // Story 3.4 (FR39) — `$factoryLogger` lets a self-failure test inject a logger whose
+        // `$factoryLogger` lets a self-failure test inject a logger whose
         // `log()` throws into the factory; the factory's `applyUnserializableSentinel()` will
         // re-raise that throw out of `fromThrowable()`, exercising the listener's outer
         // try/catch on a real code path (no PHPUnit mock needed — `ProblemDetailsFactory` is
@@ -929,17 +929,17 @@ final class ExceptionResponderTest extends TestCase
         $first = $logs[0];
         [$level, $message, $context] = $first;
 
-        // Runtime pin: every key in the FR32 contract is present with the right type.
+        // Runtime pin: every key in the contract is present with the right type.
         // PHPStan trusts the narrow @return shape for caller convenience; this loop ensures
         // a listener regression that drifted from the contract would surface as a test failure
         // (not just a PHPStan false-negative under treatPhpDocTypesAsCertain).
         foreach (['instance', 'correlation_id', 'type', 'exception_class', 'exception_message', 'request_uri', 'request_method'] as $stringKey) {
             $this->assertArrayHasKey($stringKey, $context);
-            $this->assertIsString($context[$stringKey], \sprintf('Context["%s"] must be a string per FR32.', $stringKey));
+            $this->assertIsString($context[$stringKey], \sprintf('Context["%s"] must be a string per the log contract.', $stringKey));
         }
 
         $this->assertArrayHasKey('status', $context);
-        $this->assertIsInt($context['status'], 'Context["status"] must be an int per FR32.');
+        $this->assertIsInt($context['status'], 'Context["status"] must be an int per the log contract.');
 
         return [
             'level' => $level,

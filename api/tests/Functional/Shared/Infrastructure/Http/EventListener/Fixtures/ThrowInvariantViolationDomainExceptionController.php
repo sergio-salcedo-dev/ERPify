@@ -10,9 +10,9 @@ use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Test-only controller that throws a `DomainException` implementing the `InvariantViolation`
- * marker. Used to pin Story 1.6's branch-order regression at the integration layer: a marker
- * 422 must surface as `type: 'invariant-violation'` (without a `violations` extension), NOT
- * as `type: 'validation-failed'`.
+ * marker. Pins the branch-order regression at the integration layer: a marker 422 must
+ * surface as `type: 'invariant-violation'` (without a `violations` extension), NOT as
+ * `type: 'validation-failed'`.
  */
 final class ThrowInvariantViolationDomainExceptionController
 {

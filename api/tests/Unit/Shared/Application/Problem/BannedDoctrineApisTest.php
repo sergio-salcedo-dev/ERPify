@@ -13,8 +13,8 @@ use RecursiveIteratorIterator;
 use SplFileInfo;
 
 /**
- * Story 3.5 (AR13) — pins the "no banned Doctrine 3 / DBAL 4 APIs on the error path"
- * invariant. The error-path source tree (`Shared/Application/Problem/` plus
+ * Pins the "no banned Doctrine 3 / DBAL 4 APIs on the error path" invariant.
+ * The error-path source tree (`Shared/Application/Problem/` plus
  * `Shared/Infrastructure/Http/`) MUST contain no occurrence of:
  *
  *   - `flush($entity)` — the per-entity overload removed in Doctrine ORM 3.0.
@@ -23,10 +23,10 @@ use SplFileInfo;
  *   - `iterate(`     — DBAL 3.0 removal; replaced by `iterateAssociative` / etc.
  *
  * Curated grep — narrowest possible scope (the two error-path subtrees only). This is
- * deliberately tighter than Story 4.5's repo-wide CI gate, which can use a Make target
- * once the broader tree is audited. For the listener / factory shell, a unit test is
- * the right fit: it runs in `make php.unit`, it fails the CI build before merge, and it
- * pins the source-text contract without spinning up a separate static-analysis tool.
+ * deliberately tighter than the repo-wide CI gate, which can use a Make target once the
+ * broader tree is audited. For the listener / factory shell, a unit test is the right
+ * fit: it runs in `make php.unit`, it fails the CI build before merge, and it pins the
+ * source-text contract without spinning up a separate static-analysis tool.
  *
  * False-positive shape: the `flush(` ban targets the deprecated single-arg overload
  * `flush($entity)`. The no-arg `flush()` form is still permitted, so the matcher excludes

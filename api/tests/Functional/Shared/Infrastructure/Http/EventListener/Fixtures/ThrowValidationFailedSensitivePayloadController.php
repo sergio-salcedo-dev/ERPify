@@ -12,7 +12,7 @@ use Symfony\Component\Validator\Exception\ValidationFailedException;
 /**
  * Test-only controller that throws a `ValidationFailedException` carrying a single violation
  * whose `invalidValue` and `root` contain payloads that MUST NOT propagate to the wire.
- * Pins Story 1.6 AC #5: only `propertyPath`, `message`, `code` reach the body.
+ * Pins the violation projection contract: only `propertyPath`, `message`, `code` reach the body.
  */
 final class ThrowValidationFailedSensitivePayloadController
 {
