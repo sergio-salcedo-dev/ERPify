@@ -13,13 +13,15 @@ import {
   BankSchema,
   type BankFormValues,
 } from "@/context/backoffice/bank/application/schemas/BankSchema";
+import { PersistenceAction } from "@/context/shared/domain/types/status";
 import { FormField, ProblemDisplay } from "@/components/erpify";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { safeHref } from "@/lib/safeHref";
 
-type Mode = "create" | "edit";
+/** The two `PersistenceAction` values this form can be in. */
+export type BankFormMode = typeof PersistenceAction.CREATING | typeof PersistenceAction.UPDATING;
 
 interface BankFormInitial {
   id: string;
@@ -28,7 +30,7 @@ interface BankFormInitial {
 }
 
 interface BankFormProps {
-  mode: Mode;
+  mode: BankFormMode;
   initial?: BankFormInitial;
 }
 
@@ -60,7 +62,7 @@ export function BankForm({ mode, initial }: BankFormProps) {
   const onSubmit = handleSubmit(async (values) => {
     setProblem(null);
     try {
-      if (mode === "create") {
+      if (mode === PersistenceAction.CREATING) {
         const useCase = container.get<CreateBank>("BackOfficeCreateBank");
         const created = await useCase.run(values);
         router.push(safeHref(`/backoffice/banks/${encodeURIComponent(created.id)}`));
@@ -104,7 +106,7 @@ export function BankForm({ mode, initial }: BankFormProps) {
   });
 
   const cancelHref = safeHref(
-    mode === "edit" && initial
+    mode === PersistenceAction.UPDATING && initial
       ? `/backoffice/banks/${encodeURIComponent(initial.id)}`
       : "/backoffice/banks",
   );
@@ -123,7 +125,7 @@ export function BankForm({ mode, initial }: BankFormProps) {
           {...register("name")}
           maxLength={255}
           autoComplete="off"
-          autoFocus={mode === "create"}
+          autoFocus={mode === PersistenceAction.CREATING}
           data-testid="bank-form__name"
         />
       </FormField>
@@ -141,8 +143,16 @@ export function BankForm({ mode, initial }: BankFormProps) {
         <Link
           href={cancelHref}
           aria-disabled={submitting || undefined}
-          aria-label={mode === "create" ? "Cancel and go back" : "Cancel and go back to bank"}
-          title={mode === "create" ? "Cancel and go back" : "Cancel and go back to bank"}
+          aria-label={
+            mode === PersistenceAction.CREATING
+              ? "Cancel and go back"
+              : "Cancel and go back to bank"
+          }
+          title={
+            mode === PersistenceAction.CREATING
+              ? "Cancel and go back"
+              : "Cancel and go back to bank"
+          }
           tabIndex={submitting ? -1 : undefined}
           onClick={(event) => {
             if (submitting) event.preventDefault();
@@ -159,12 +169,16 @@ export function BankForm({ mode, initial }: BankFormProps) {
           type="submit"
           size="sm"
           disabled={submitting}
-          aria-label={mode === "create" ? "Create bank" : "Save bank changes"}
-          title={mode === "create" ? "Create bank" : "Save bank changes"}
+          aria-label={mode === PersistenceAction.CREATING ? "Create bank" : "Save bank changes"}
+          title={mode === PersistenceAction.CREATING ? "Create bank" : "Save bank changes"}
           className="w-full sm:w-auto"
           data-testid="bank-form__submit"
         >
-          {submitting ? "Saving…" : mode === "create" ? "Create bank" : "Save changes"}
+          {submitting
+            ? "Saving…"
+            : mode === PersistenceAction.CREATING
+              ? "Create bank"
+              : "Save changes"}
         </Button>
       </footer>
     </form>

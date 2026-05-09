@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
+import { PersistenceAction } from "@/context/shared/domain/types/status";
 import { BankForm } from "../_components/BankForm";
 
 export default function NewBankPage() {
@@ -30,7 +31,7 @@ export default function NewBankPage() {
         </p>
       </header>
 
-      <BankForm mode="create" />
+      <BankForm mode={PersistenceAction.CREATING} />
     </div>
   );
 }

@@ -14,9 +14,10 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatDateTime } from "@/lib/formatDate";
 import { safeHref } from "@/lib/safeHref";
+import { ViewStatus } from "@/context/shared/domain/types/status";
 import { DeleteBankButton } from "../_components/DeleteBankButton";
 
-type State = "loading" | "ready" | "not-found" | "error";
+type State = ViewStatus;
 
 function genericProblem(detail: string): ProblemDetails {
   return {
@@ -32,14 +33,14 @@ function genericProblem(detail: string): ProblemDetails {
 export default function BankDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params?.id ?? "";
-  const [state, setState] = useState<State>("loading");
+  const [state, setState] = useState<State>(ViewStatus.LOADING);
   const [bank, setBank] = useState<Bank | null>(null);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
 
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
-    setState("loading");
+    setState(ViewStatus.LOADING);
     setBank(null);
     setProblem(null);
     (async () => {
@@ -48,16 +49,16 @@ export default function BankDetailPage() {
         const result = await useCase.run(id);
         if (cancelled) return;
         setBank(result);
-        setState("ready");
+        setState(ViewStatus.READY);
       } catch (err) {
         if (cancelled) return;
         if (err instanceof HttpError) {
           setProblem(err.problem);
-          setState(err.problem.status === 404 ? "not-found" : "error");
+          setState(err.problem.status === 404 ? ViewStatus.NOT_FOUND : ViewStatus.ERROR);
           return;
         }
         setProblem(genericProblem(err instanceof Error ? err.message : "Unknown error"));
-        setState("error");
+        setState(ViewStatus.ERROR);
       }
     })();
     return () => {
@@ -73,7 +74,7 @@ export default function BankDetailPage() {
     >
       <BackLink />
 
-      {state === "loading" ? (
+      {state === ViewStatus.LOADING ? (
         <p
           className="text-muted-foreground text-sm"
           role="status"
@@ -84,7 +85,7 @@ export default function BankDetailPage() {
         </p>
       ) : null}
 
-      {state === "not-found" && problem ? (
+      {state === ViewStatus.NOT_FOUND && problem ? (
         <div data-testid="banks-detail__not-found">
           <EmptyState
             variant="first-run"
@@ -106,13 +107,13 @@ export default function BankDetailPage() {
         </div>
       ) : null}
 
-      {state === "error" && problem ? (
+      {state === ViewStatus.ERROR && problem ? (
         <div data-testid="banks-detail__error">
           <ProblemDisplay problem={problem} variant="panel" />
         </div>
       ) : null}
 
-      {state === "ready" && bank ? (
+      {state === ViewStatus.READY && bank ? (
         <>
           <header
             className="banks-detail__header flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"

@@ -6,24 +6,23 @@ import { container } from "@/context/shared/infrastructure/DependencyInjection/C
 import { CheckHealth } from "@/context/backoffice/health/application/CheckHealth";
 import type { HealthCheck } from "@/context/backoffice/health/domain/HealthCheck";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
-import { AsyncBoundary } from "@/components/erpify";
+import { ApiStatus, ViewStatus } from "@/context/shared/domain/types/status";
+import { AsyncBoundary, type AsyncBoundaryState } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
 
-type AsyncState = "idle" | "loading" | "ready" | "error";
-
 export default function HealthPage() {
-  const [state, setState] = useState<AsyncState>("idle");
+  const [state, setState] = useState<AsyncBoundaryState>(ApiStatus.IDLE);
   const [data, setData] = useState<HealthCheck | null>(null);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
 
   async function runCheck(): Promise<void> {
-    setState("loading");
+    setState(ViewStatus.LOADING);
     setProblem(null);
     try {
       const useCase = container.get<CheckHealth>("BackOfficeCheckHealth");
       const result = await useCase.run();
       setData(result);
-      setState("ready");
+      setState(ViewStatus.READY);
     } catch (err) {
       // TODO: When the BackOffice CheckHealth adapter starts returning RFC 9457
       // envelopes (per the API error-contract PRD), pass the real envelope here
@@ -37,7 +36,7 @@ export default function HealthPage() {
         instance: crypto.randomUUID(),
         "correlation-id": crypto.randomUUID(),
       });
-      setState("error");
+      setState(ViewStatus.ERROR);
     }
   }
 
@@ -62,16 +61,16 @@ export default function HealthPage() {
             Perform a real-time health check to ensure all backend services are responding
             correctly.
           </p>
-          <Button onClick={runCheck} disabled={state === "loading"} size="lg">
+          <Button onClick={runCheck} disabled={state === ViewStatus.LOADING} size="lg">
             <Activity
-              className={`size-4 ${state === "loading" ? "animate-pulse" : ""}`}
+              className={`size-4 ${state === ViewStatus.LOADING ? "animate-pulse" : ""}`}
               aria-hidden="true"
             />
-            {state === "loading" ? "Checking API..." : "Run Health Check"}
+            {state === ViewStatus.LOADING ? "Checking API..." : "Run Health Check"}
           </Button>
         </div>
 
-        {state !== "idle" ? (
+        {state !== ApiStatus.IDLE ? (
           <AsyncBoundary state={state} data={data ?? undefined} error={problem ?? undefined}>
             {(result) => (
               <div

@@ -11,6 +11,7 @@ import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { AsyncBoundary } from "@/components/erpify";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { ViewStatus } from "@/context/shared/domain/types/status";
 import { BanksTable } from "./_components/BanksTable";
 import { BanksFilters } from "./_components/BanksFilters";
 import { BanksPagination } from "./_components/BanksPagination";
@@ -25,7 +26,7 @@ import {
 } from "./_lib/banksFilterSort";
 import { BANKS_PAGE_SIZE_DEFAULT, type BanksPageSize, paginate } from "./_lib/paginate";
 
-type State = "loading" | "empty" | "error" | "ready";
+type State = ViewStatus;
 
 function genericProblem(detail: string): ProblemDetails {
   return {
@@ -39,7 +40,7 @@ function genericProblem(detail: string): ProblemDetails {
 }
 
 export default function BanksListPage() {
-  const [state, setState] = useState<State>("loading");
+  const [state, setState] = useState<State>(ViewStatus.LOADING);
   const [banks, setBanks] = useState<Bank[]>([]);
   const [nextCursor, setNextCursor] = useState<string | undefined>(undefined);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
@@ -57,7 +58,7 @@ export default function BanksListPage() {
         if (cancelled) return;
         setBanks(result.banks);
         setNextCursor(result.nextCursor);
-        setState(result.banks.length === 0 ? "empty" : "ready");
+        setState(result.banks.length === 0 ? ViewStatus.EMPTY : ViewStatus.READY);
       } catch (err) {
         if (cancelled) return;
         setProblem(
@@ -65,7 +66,7 @@ export default function BanksListPage() {
             ? err.problem
             : genericProblem(err instanceof Error ? err.message : "Unknown error"),
         );
-        setState("error");
+        setState(ViewStatus.ERROR);
       }
     })();
     return () => {
@@ -133,7 +134,7 @@ export default function BanksListPage() {
         </Link>
       </header>
 
-      {state === "ready" ? (
+      {state === ViewStatus.READY ? (
         <BanksFilters
           filter={filter}
           onFilterChange={setFilter}

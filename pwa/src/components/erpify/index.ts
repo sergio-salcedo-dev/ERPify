@@ -1,5 +1,6 @@
 export { AppShell } from "./AppShell";
 export { AsyncBoundary } from "./AsyncBoundary";
+export type { AsyncBoundaryState } from "./AsyncBoundary";
 export { CopyButton } from "./CopyButton";
 export type { CopyButtonProps, CopyButtonStatus } from "./CopyButton";
 export { CorrelationIdChip } from "./CorrelationIdChip";
