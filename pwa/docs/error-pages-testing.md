@@ -14,7 +14,18 @@ are the executable contract.
 make dev   # full Compose stack on https://localhost
 ```
 
-Then open each URL in a browser:
+For a **single page that lists every error surface** (recommended for QA
+visual review), open
+[`https://localhost/dev-error-gallery`](https://localhost/dev-error-gallery).
+The route is gated to non-production and the whole folder
+(`pwa/src/app/(errors)/dev-error-gallery/`) is meant to be deleted before
+merging — `grep -rn QA-FIXTURE pwa/src` finds every reference. Removal:
+
+```bash
+git rm -r pwa/src/app/\(errors\)/dev-error-gallery
+```
+
+If you'd rather hit each surface directly:
 
 | Surface                 | URL                                     | Trigger               |
 | ----------------------- | --------------------------------------- | --------------------- |
@@ -25,6 +36,7 @@ Then open each URL in a browser:
 | 429 — Too many requests | `https://localhost/rate-limited`        | direct navigation     |
 | Offline (PWA)           | `https://localhost/offline`             | direct navigation     |
 | 500 — Boundary          | `https://localhost/dev-throw`           | dev/test-only fixture |
+| QA gallery (all of ↑)   | `https://localhost/dev-error-gallery`   | dev/test-only fixture |
 
 For the BackOffice context (primary CTA flips to `Return to BackOffice`),
 prefix the URL with `/backoffice` — e.g. `/backoffice/anything`.
