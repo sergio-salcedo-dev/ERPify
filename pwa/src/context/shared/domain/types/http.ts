@@ -30,6 +30,8 @@ export const HttpStatus = {
   CONFLICT: 409,
   /** 422 — semantic validation failure (per-field violations). */
   UNPROCESSABLE_ENTITY: 422,
+  /** 429 — request rate-limited; client should back off. */
+  TOO_MANY_REQUESTS: 429,
   /** 500 — generic server error. */
   INTERNAL_SERVER_ERROR: 500,
   /** 502 — upstream gateway error. */
