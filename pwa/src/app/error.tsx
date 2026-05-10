@@ -1,20 +1,25 @@
 "use client";
 
 import { useEffect } from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, RefreshCw } from "lucide-react";
 import { CopyButton } from "@/components/erpify";
-import { ErrorActions, ErrorScreen } from "@/context/shared/error/infrastructure/ui";
+import { Button } from "@/components/ui/button";
+import {
+  ERROR_ACTION_BTN_CLASSES,
+  ErrorActions,
+  ErrorScreen,
+} from "@/context/shared/error/infrastructure/ui";
 import { IconTone } from "@/context/shared/error/domain/IconTone";
 import { NodeEnv } from "@/context/shared/domain/types/nodeEnv";
+import { cn } from "@/lib/utils";
 
 interface ErrorBoundaryProps {
   error: Error & { digest?: string };
-  /** Provided by Next's error boundary contract; intentionally not wired to a UI control — the
-   *  shared {@link ErrorActions} row already exposes the canonical "Go back" recovery path. */
+  /** Next.js boundary `reset()` — re-renders the failing subtree without a navigation. */
   reset: () => void;
 }
 
-export default function GlobalError({ error }: ErrorBoundaryProps) {
+export default function GlobalError({ error, reset }: ErrorBoundaryProps) {
   useEffect(() => {
     // Placeholder hook for an external observability sink (Sentry, Datadog, …).
     // The real adapter must scrub PII / secrets before transmission and run
@@ -75,7 +80,23 @@ export default function GlobalError({ error }: ErrorBoundaryProps) {
           ) : null}
         </>
       }
-      actions={<ErrorActions />}
+      actions={
+        <>
+          <Button
+            type="button"
+            size="lg"
+            onClick={() => reset()}
+            title="Retry the failing operation"
+            aria-label="Try again"
+            data-testid="error-page__retry"
+            className={cn(ERROR_ACTION_BTN_CLASSES, "error-page__retry")}
+          >
+            <RefreshCw className="size-4" aria-hidden="true" />
+            Try again
+          </Button>
+          <ErrorActions primaryVariant="outline" />
+        </>
+      }
     />
   );
 }

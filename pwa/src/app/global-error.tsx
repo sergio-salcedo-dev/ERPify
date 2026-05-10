@@ -1,19 +1,24 @@
 "use client";
 
 import { useEffect } from "react";
-import { AlertTriangle } from "lucide-react";
-import { ErrorActions, ErrorScreen } from "@/context/shared/error/infrastructure/ui";
+import { AlertTriangle, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  ERROR_ACTION_BTN_CLASSES,
+  ErrorActions,
+  ErrorScreen,
+} from "@/context/shared/error/infrastructure/ui";
 import { IconTone } from "@/context/shared/error/domain/IconTone";
 import { NodeEnv } from "@/context/shared/domain/types/nodeEnv";
+import { cn } from "@/lib/utils";
 
 interface GlobalErrorProps {
   error: Error & { digest?: string };
-  /** Provided by Next's error boundary contract; intentionally not wired to a UI control — the
-   *  shared {@link ErrorActions} row already exposes the canonical "Go back" recovery path. */
+  /** Next.js boundary `reset()` — re-renders the failing subtree without a navigation. */
   reset: () => void;
 }
 
-export default function GlobalError({ error }: GlobalErrorProps) {
+export default function GlobalError({ error, reset }: GlobalErrorProps) {
   useEffect(() => {
     // Last-resort observability hook. The root layout has crashed, so this
     // boundary owns the entire document — keep dependencies minimal to avoid
@@ -67,7 +72,23 @@ export default function GlobalError({ error }: GlobalErrorProps) {
               ) : null}
             </>
           }
-          actions={<ErrorActions />}
+          actions={
+            <>
+              <Button
+                type="button"
+                size="lg"
+                onClick={() => reset()}
+                title="Retry loading the application"
+                aria-label="Try again"
+                data-testid="global-error__retry"
+                className={cn(ERROR_ACTION_BTN_CLASSES, "global-error__retry")}
+              >
+                <RefreshCw className="size-4" aria-hidden="true" />
+                Try again
+              </Button>
+              <ErrorActions primaryVariant="outline" />
+            </>
+          }
         />
       </body>
     </html>

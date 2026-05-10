@@ -7,7 +7,25 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { Routes } from "@/context/shared/domain/types/routes";
 import { cn } from "@/lib/utils";
 
-const ACTION_BTN = "h-11 w-full px-6 text-base sm:w-auto sm:h-10 lg:h-11 lg:text-base";
+/**
+ * Shared sizing for every action button in the error module. Exported so the
+ * Next.js error boundaries (`app/error.tsx`, `app/global-error.tsx`) can size
+ * their bespoke "Try again" reset button identically to the row this
+ * component renders.
+ */
+export const ERROR_ACTION_BTN_CLASSES =
+  "h-11 w-full px-6 text-base sm:w-auto sm:h-10 lg:h-11 lg:text-base";
+
+interface ErrorActionsProps {
+  /**
+   * Visual variant for the primary navigation button. Defaults to
+   * `"default"` (filled) for static error pages where no other CTA is
+   * present. The Next.js error boundaries pass `"outline"` so their
+   * `Try again` button can take the single filled-primary slot without
+   * competing visually with the navigation links.
+   */
+  primaryVariant?: "default" | "outline";
+}
 
 /**
  * Standard action row for every error / fallback screen in the PWA. Renders
@@ -25,12 +43,17 @@ const ACTION_BTN = "h-11 w-full px-6 text-base sm:w-auto sm:h-10 lg:h-11 lg:text
  * (server- or client-rendered) does not need to know which prefix the
  * request hit.
  */
-export function ErrorActions() {
+export function ErrorActions({ primaryVariant = "default" }: ErrorActionsProps = {}) {
   const router = useRouter();
   const pathname = usePathname();
   const inBackoffice = pathname?.startsWith(Routes.BACKOFFICE) ?? false;
 
   const primaryHref = inBackoffice ? Routes.BACKOFFICE : Routes.HOME;
+  const primaryClasses = cn(
+    buttonVariants({ variant: primaryVariant, size: "lg" }),
+    ERROR_ACTION_BTN_CLASSES,
+    "error-actions__primary-link",
+  );
 
   function handleBack(): void {
     if (typeof window !== "undefined" && window.history.length > 1) {
@@ -45,7 +68,7 @@ export function ErrorActions() {
       {inBackoffice ? (
         <Link
           href={Routes.BACKOFFICE}
-          className={cn(buttonVariants({ size: "lg" }), ACTION_BTN, "error-actions__primary-link")}
+          className={primaryClasses}
           data-icon="inline-start"
           title="Return to BackOffice"
           aria-label="BackOffice"
@@ -57,7 +80,7 @@ export function ErrorActions() {
       ) : (
         <Link
           href={Routes.HOME}
-          className={cn(buttonVariants({ size: "lg" }), ACTION_BTN, "error-actions__primary-link")}
+          className={primaryClasses}
           data-icon="inline-start"
           title="Return to home"
           aria-label="Home"
@@ -72,7 +95,7 @@ export function ErrorActions() {
         onClick={handleBack}
         className={cn(
           buttonVariants({ variant: "outline", size: "lg" }),
-          ACTION_BTN,
+          ERROR_ACTION_BTN_CLASSES,
           "error-actions__back-button",
         )}
         data-icon="inline-start"
