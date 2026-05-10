@@ -1,8 +1,19 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Menu, X, ShieldCheck, User as UserIcon, Settings, LogOut, HelpCircle } from "lucide-react";
+import {
+  Menu,
+  X,
+  ShieldCheck,
+  User as UserIcon,
+  Settings,
+  LogOut,
+  HelpCircle,
+  Wrench,
+} from "lucide-react";
+import Link from "next/link";
 import { Logo } from "../atoms/Logo";
 import { Button } from "../atoms/Button";
+import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,6 +30,7 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({ onGetStarted }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const showDevTools = isDevToolsAvailable();
 
   const navLinks = [
     { name: "Features", href: "#" },
@@ -51,6 +63,18 @@ export const Navbar: React.FC<NavbarProps> = ({ onGetStarted }) => {
                 {link.name}
               </a>
             ))}
+
+            {showDevTools ? (
+              <Link
+                href="/dev-tools"
+                className="navbar__link navbar__link--dev-tools text-amber-700 hover:text-amber-900 font-medium transition-colors inline-flex items-center gap-1.5"
+                title="Internal QA / engineering tools (dev/test only)"
+                data-testid="navbar__dev-tools-link"
+              >
+                <Wrench className="w-4 h-4" aria-hidden="true" />
+                Dev Tools
+              </Link>
+            ) : null}
 
             <DropdownMenu>
               <DropdownMenuTrigger
@@ -117,6 +141,17 @@ export const Navbar: React.FC<NavbarProps> = ({ onGetStarted }) => {
                 {link.name}
               </a>
             ))}
+            {showDevTools ? (
+              <Link
+                href="/dev-tools"
+                className="navbar__link navbar__link--dev-tools text-amber-700 hover:text-amber-900 font-medium inline-flex items-center gap-1.5"
+                title="Internal QA / engineering tools (dev/test only)"
+                data-testid="navbar__mobile-dev-tools-link"
+              >
+                <Wrench className="w-4 h-4" aria-hidden="true" />
+                Dev Tools
+              </Link>
+            ) : null}
             <Button onClick={onGetStarted} size="lg" className="navbar__button w-full rounded-xl">
               Get Started
             </Button>

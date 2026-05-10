@@ -16,14 +16,14 @@ make dev   # full Compose stack on https://localhost
 
 For a **single page that lists every error surface** (recommended for QA
 visual review), open
+[`https://localhost/dev-tools`](https://localhost/dev-tools) and pick
+`Error Gallery`, or jump straight to
 [`https://localhost/dev-error-gallery`](https://localhost/dev-error-gallery).
-The route is gated to non-production and the whole folder
-(`pwa/src/app/(errors)/dev-error-gallery/`) is meant to be deleted before
-merging — `grep -rn QA-FIXTURE pwa/src` finds every reference. Removal:
-
-```bash
-git rm -r pwa/src/app/\(errors\)/dev-error-gallery
-```
+Both routes are part of the dev-tools module and are gated by
+`isDevToolsAvailable()` (`process.env.NODE_ENV !== "production"`), so
+production users get a 404 regardless of how they hit the URL — the
+"Dev Tools" entry points in the frontoffice navbar and the backoffice
+sidebar likewise disappear in a production build.
 
 If you'd rather hit each surface directly:
 
@@ -36,7 +36,8 @@ If you'd rather hit each surface directly:
 | 429 — Too many requests | `https://localhost/rate-limited`        | direct navigation     |
 | Offline (PWA)           | `https://localhost/offline`             | direct navigation     |
 | 500 — Boundary          | `https://localhost/dev-throw`           | dev/test-only fixture |
-| QA gallery (all of ↑)   | `https://localhost/dev-error-gallery`   | dev/test-only fixture |
+| Dev Tools hub           | `https://localhost/dev-tools`           | dev/test-only         |
+| QA gallery (all of ↑)   | `https://localhost/dev-error-gallery`   | dev/test-only         |
 
 For the BackOffice context (primary CTA flips to `Return to BackOffice`),
 prefix the URL with `/backoffice` — e.g. `/backoffice/anything`.

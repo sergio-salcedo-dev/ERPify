@@ -15,9 +15,11 @@ import {
   Building2,
   ChevronLeft,
   ChevronRight,
+  Wrench,
 } from "lucide-react";
 import { Logo } from "@/context/shared/infrastructure/ui/components/atoms/Logo";
 import { SidebarItem } from "@/context/shared/infrastructure/ui/components/molecules/SidebarItem";
+import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
 interface NavSubItem {
@@ -64,6 +66,17 @@ export default function BackOfficeLayoutClient({ children }: { children: React.R
         },
       ],
     },
+    // Conditional dev/test-only category. Disappears entirely from the
+    // sidebar in production via the `isDevToolsAvailable()` check, which
+    // mirrors the gating model of the route at `app/dev-tools/page.tsx`.
+    ...(isDevToolsAvailable()
+      ? [
+          {
+            label: "Development",
+            items: [{ name: "Dev Tools", icon: Wrench, path: "/dev-tools" }],
+          },
+        ]
+      : []),
   ];
 
   const userProfileItem: NavItem = {

@@ -1,23 +1,17 @@
-// QA-FIXTURE — DELETE THIS FOLDER BEFORE MERGING ──────────────────────────
+// Visual inventory of every PWA error surface, linked from `/dev-tools`.
+// Hidden from production via `isDevToolsAvailable()` (same gating model as
+// the parent dev-tools hub and the `/dev-throw` fixture) — `notFound()`
+// kicks in for any production user that types the URL by hand.
 //
-// This page lists every error surface the PWA ships so a reviewer / QA can
-// open a single URL and visually inspect each variant. It is hidden from
-// production with the same `notFound()` guard the `/dev-throw` fixture
-// uses, plus this whole `(errors)/dev-error-gallery/` folder is meant to
-// be removed before the branch lands on `main`:
-//
-//     git rm -r pwa/src/app/\(errors\)/dev-error-gallery
-//
-// If you grep for `QA-FIXTURE` you'll find every reference. Removing the
-// folder leaves the rest of the error module untouched.
-// ───────────────────────────────────────────────────────────────────────
+// To add a new error surface to the gallery, drop an entry into
+// `NAVIGABLE_ROUTES` or `PROBLEM_FIXTURES` below.
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ProblemDisplay } from "@/components/erpify";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
-import { NodeEnv } from "@/context/shared/domain/types/nodeEnv";
 import { Routes } from "@/context/shared/domain/types/routes";
+import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 
@@ -212,13 +206,12 @@ const PROBLEM_FIXTURES: ReadonlyArray<ProblemCase> = [
 ];
 
 export const metadata = {
-  title: "QA Error Gallery · Erpify (dev/test only)",
-  description:
-    "Visual inventory of every PWA error surface. Hidden in production. Delete this folder before merging.",
+  title: "Error Gallery · Erpify (dev/test only)",
+  description: "Visual inventory of every PWA error surface. Hidden in production.",
 };
 
 export default function DevErrorGalleryPage() {
-  if (process.env.NODE_ENV === NodeEnv.PRODUCTION) {
+  if (!isDevToolsAvailable()) {
     notFound();
   }
 
@@ -227,24 +220,24 @@ export default function DevErrorGalleryPage() {
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
         <header className="dev-error-gallery__header border-warning/40 bg-warning/10 mb-8 rounded-md border p-4 sm:p-5">
           <p className="text-warning text-xs font-semibold tracking-wider uppercase">
-            QA fixture · dev / test only
+            Dev / test only · linked from{" "}
+            <Link
+              href="/dev-tools"
+              className="underline-offset-2 hover:underline"
+              data-testid="dev-error-gallery__back-to-tools"
+            >
+              /dev-tools
+            </Link>
           </p>
           <h1 className="text-foreground mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
             Error gallery
           </h1>
           <p className="text-muted-foreground mt-2 text-sm sm:text-base">
-            Visual inventory of every error surface the PWA ships. The route is gated to
-            non-production via{" "}
+            Visual inventory of every error surface the PWA ships. The route is gated by{" "}
             <code className="bg-muted rounded px-1 py-0.5 font-mono text-xs">
-              process.env.NODE_ENV !== NodeEnv.PRODUCTION
-            </code>
-            , and the whole{" "}
-            <code className="bg-muted rounded px-1 py-0.5 font-mono text-xs">
-              app/(errors)/dev-error-gallery/
+              isDevToolsAvailable()
             </code>{" "}
-            folder is meant to be deleted before merge — see the{" "}
-            <code className="bg-muted rounded px-1 py-0.5 font-mono text-xs">QA-FIXTURE</code>{" "}
-            markers in the source.
+            so a production build returns 404 here regardless of how the URL is reached.
           </p>
         </header>
 

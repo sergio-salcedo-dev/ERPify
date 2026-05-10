@@ -156,6 +156,25 @@ locally:
     `error.message` behind
     `process.env.NODE_ENV === NodeEnv.DEVELOPMENT` so production never
     leaks stack traces.
+- **Dev Tools module** — internal QA / engineering hub at
+  `https://localhost/dev-tools`, gated behind
+  `isDevToolsAvailable()` (`process.env.NODE_ENV !== NodeEnv.PRODUCTION`).
+  - `src/context/shared/dev-tools/domain/DevTool.ts` — `DevTool` /
+    `DevToolGroup` types.
+  - `src/context/shared/dev-tools/domain/isDevToolsAvailable.ts` —
+    central env predicate. Use it everywhere that mounts a dev/QA
+    surface (route file, navbar link, sidebar item) so the production
+    gate stays consistent.
+  - `src/context/shared/dev-tools/infrastructure/ui/devToolGroups.ts` —
+    authoritative registry. Adding a new tool = a new entry here; the
+    menu picks it up automatically.
+  - `src/context/shared/dev-tools/infrastructure/ui/DevToolsMenu.tsx` —
+    page UI. Re-exported from `app/dev-tools/page.tsx` (thin Next
+    binding with a `notFound()` guard).
+  - Entry points: a "Dev Tools" link in the frontoffice
+    `<Navbar>` (rendered only when `isDevToolsAvailable()`) and a
+    `Development` sidebar group with a `Dev Tools` item in
+    `BackOfficeLayoutClient.tsx`. Both disappear in production builds.
 - **String constants** — never compare `process.env.NODE_ENV` against
   the literal `"development"` / `"production"` / `"test"`; use
   `NodeEnv` from `@/context/shared/domain/types/nodeEnv`. Never hard-
