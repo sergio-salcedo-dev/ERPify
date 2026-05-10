@@ -70,7 +70,7 @@ export function ErrorScreen({
     >
       {withHeader ? (
         <header className="error-screen__header border-border bg-card border-b">
-          <div className="error-screen__header-inner mx-auto flex max-w-7xl items-center gap-2 px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
+          <div className="error-screen__header-inner mx-auto flex items-center gap-2 px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
             <div className="error-screen__logo-mark bg-primary rounded-lg p-1.5 sm:p-2">
               <ShieldCheck
                 className="text-primary-foreground size-4 sm:size-5"
