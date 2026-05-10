@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
-import { ShieldCheck, type LucideIcon } from "lucide-react";
+import { type LucideIcon } from "lucide-react";
 import { IconTone } from "@/context/shared/error/domain/IconTone";
+import { Logo } from "@/context/shared/infrastructure/ui/components/atoms/Logo";
 import { cn } from "@/lib/utils";
 
 const iconToneClasses: Record<IconTone, { wrap: string; icon: string }> = {
@@ -70,16 +71,14 @@ export function ErrorScreen({
     >
       {withHeader ? (
         <header className="error-screen__header border-border bg-card border-b">
-          <div className="error-screen__header-inner mx-auto flex items-center gap-2 px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
-            <div className="error-screen__logo-mark bg-primary rounded-lg p-1.5 sm:p-2">
-              <ShieldCheck
-                className="text-primary-foreground size-4 sm:size-5"
-                aria-hidden="true"
-              />
-            </div>
-            <span className="error-screen__logo-text text-foreground text-base font-semibold tracking-tight sm:text-lg">
-              Erpify
-            </span>
+          <div className="error-screen__header-inner mx-auto flex items-center px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
+            <Logo
+              variant="badge"
+              size="md"
+              className="error-screen__logo"
+              iconClassName="error-screen__logo-icon"
+              textClassName="error-screen__logo-text"
+            />
           </div>
         </header>
       ) : null}
