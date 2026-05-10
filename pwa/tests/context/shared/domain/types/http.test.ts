@@ -12,6 +12,7 @@ describe("HttpStatus", () => {
     expect(HttpStatus.NOT_FOUND).toBe(404);
     expect(HttpStatus.CONFLICT).toBe(409);
     expect(HttpStatus.UNPROCESSABLE_ENTITY).toBe(422);
+    expect(HttpStatus.TOO_MANY_REQUESTS).toBe(429);
     expect(HttpStatus.INTERNAL_SERVER_ERROR).toBe(500);
     expect(HttpStatus.BAD_GATEWAY).toBe(502);
     expect(HttpStatus.SERVICE_UNAVAILABLE).toBe(503);
@@ -29,11 +30,12 @@ describe("HttpStatus", () => {
       HttpStatus.NOT_FOUND,
       HttpStatus.CONFLICT,
       HttpStatus.UNPROCESSABLE_ENTITY,
+      HttpStatus.TOO_MANY_REQUESTS,
       HttpStatus.INTERNAL_SERVER_ERROR,
       HttpStatus.BAD_GATEWAY,
       HttpStatus.SERVICE_UNAVAILABLE,
     ];
-    expect(allowed).toHaveLength(12);
-    expect(new Set(allowed).size).toBe(12);
+    expect(allowed).toHaveLength(13);
+    expect(new Set(allowed).size).toBe(13);
   });
 });

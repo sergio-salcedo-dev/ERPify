@@ -2,11 +2,9 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Check, Copy } from "lucide-react";
-import { Button, type buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import { type ButtonVariantProps } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
-import type { VariantProps } from "class-variance-authority";
-
-type ButtonVariantProps = VariantProps<typeof buttonVariants>;
 
 export type CopyButtonStatus = "idle" | "copied" | "error";
 

@@ -8,6 +8,8 @@ interface SubItem {
   name: string;
   path: string;
   icon?: LucideIcon;
+  /** Optional `data-testid` for the sub-item button. */
+  testId?: string;
 }
 
 interface SidebarItemProps {
@@ -18,6 +20,8 @@ interface SidebarItemProps {
   onClick: (path: string) => void;
   subItems?: SubItem[];
   isCompact?: boolean;
+  /** Optional `data-testid` for the top-level item button. */
+  testId?: string;
 }
 
 export const SidebarItem: React.FC<SidebarItemProps> = ({
@@ -28,6 +32,7 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
   onClick,
   subItems,
   isCompact = false,
+  testId,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
@@ -59,6 +64,7 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
       <button
         onClick={handleItemClick}
         title={name}
+        data-testid={testId}
         className={`sidebar-item w-full flex items-center justify-between p-2.5 rounded-xl font-semibold transition-all group ${
           isActive
             ? "sidebar-item--active bg-primary/15 text-primary shadow-sm"
@@ -96,6 +102,7 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
                 key={subItem.name}
                 onClick={() => onClick(subItem.path)}
                 title={subItem.name}
+                data-testid={subItem.testId}
                 className={`sidebar-item__sub-item w-full flex items-center gap-2.5 p-2 rounded-lg text-xs font-medium transition-all ${
                   isSubActive
                     ? "text-primary bg-primary/10"

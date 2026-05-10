@@ -7,12 +7,14 @@ describe("CorrelationIdChip", () => {
     vi.useRealTimers();
   });
 
-  it("exposes the full ID via accessible name and renders truncated middle", () => {
+  it("exposes the full ID via the accessible name and the visible chip", () => {
     render(<CorrelationIdChip id="01926e7e-7b8a-7c4e-9f31-a2b7d1e4f5c6" />);
     expect(screen.getByRole("button")).toHaveAccessibleName(
       /Copy correlation ID 01926e7e-7b8a-7c4e-9f31-a2b7d1e4f5c6/,
     );
-    expect(screen.getByTestId("correlation-id-display")).toHaveTextContent("01926e7…f5c6");
+    expect(screen.getByTestId("correlation-id-display")).toHaveTextContent(
+      "01926e7e-7b8a-7c4e-9f31-a2b7d1e4f5c6",
+    );
   });
 
   it("copies the full ID to the clipboard and announces 'Copied'", async () => {
