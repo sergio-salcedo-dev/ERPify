@@ -281,7 +281,7 @@ final class ProblemDetailsFactoryTest extends TestCase
      */
     public function testContextNonWhitelistedValuesAreSubstitutedWithSentinel(): void
     {
-        $resource = \fopen('php://memory', 'rb');
+        $resource = \fopen('php://memory', 'r');
         $this->assertNotFalse($resource);
 
         try {

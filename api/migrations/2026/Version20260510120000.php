@@ -7,26 +7,6 @@ namespace DoctrineMigrations;
 use Doctrine\DBAL\Schema\Schema;
 use Doctrine\Migrations\AbstractMigration;
 
-/**
- * Consolidated bank schema. Replaces the prior four bank-only migrations
- * plus the case/accent-insensitive uniqueness work — all collapsed into a
- * single CREATE TABLE that reflects the entity's final shape.
- *
- * The seed data that previously lived in the schema migration moved to
- * Hautelook fixtures (`tests/DataFixtures/Fixtures/Bank.yaml`) so prod
- * never receives placeholder rows and dev/test get a richer dataset.
- *
- * Uniqueness rules:
- *   - `name`           — preserves the user's casing for display; uniqueness
- *                        is enforced through `name_normalized`, populated
- *                        via `NormalizedText::from()` (lower + trim + ICU
- *                        Latin-ASCII), so "BBVA" / "bbva" and "Sociedad
- *                        Anónima" / "Sociedad Anonima" collide.
- *   - `short_name`     — stored canonicalized (upper-case ASCII, no
- *                        diacritics) via `NormalizedText::toAsciiUpper()`,
- *                        with the unique index sitting directly on the
- *                        column. No separate normalized half is needed.
- */
 final class Version20260510120000 extends AbstractMigration
 {
     public function getDescription(): string

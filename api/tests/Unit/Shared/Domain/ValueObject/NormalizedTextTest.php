@@ -17,32 +17,38 @@ final class NormalizedTextTest extends TestCase
 {
     public function testPreservesDisplayCasing(): void
     {
-        $vo = NormalizedText::from('BBVA');
+        $normalizedText = NormalizedText::from('BBVA');
 
-        $this->assertSame('BBVA', $vo->display);
-        $this->assertSame('bbva', $vo->normalized);
+        $this->assertSame('BBVA', $normalizedText->display);
+        $this->assertSame('bbva', $normalizedText->normalized);
     }
 
     public function testTrimsSurroundingWhitespaceFromBothHalves(): void
     {
-        $vo = NormalizedText::from("  ING Direct \t");
+        $normalizedText = NormalizedText::from("  ING Direct \t");
 
-        $this->assertSame('ING Direct', $vo->display);
-        $this->assertSame('ing direct', $vo->normalized);
+        $this->assertSame('ING Direct', $normalizedText->display);
+        $this->assertSame('ing direct', $normalizedText->normalized);
     }
 
     public function testStripsDiacriticalMarksFromNormalizedHalfButNotFromDisplay(): void
     {
-        $vo = NormalizedText::from('Sociedad Anónima');
+        $normalizedText = NormalizedText::from('Sociedad Anónima');
 
-        $this->assertSame('Sociedad Anónima', $vo->display);
-        $this->assertSame('sociedad anonima', $vo->normalized);
+        $this->assertSame('Sociedad Anónima', $normalizedText->display);
+        $this->assertSame('sociedad anonima', $normalizedText->normalized);
+    }
+
+    #[DataProvider('provideEqualsIgnoresCaseWhitespaceAndDiacriticsCases')]
+    public function testEqualsIgnoresCaseWhitespaceAndDiacritics(string $a, string $b, bool $expected): void
+    {
+        $this->assertSame($expected, NormalizedText::from($a)->equals(NormalizedText::from($b)));
     }
 
     /**
      * @return iterable<string, array{string, string, bool}>
      */
-    public static function equalityCases(): iterable
+    public static function provideEqualsIgnoresCaseWhitespaceAndDiacriticsCases(): iterable
     {
         yield 'identical inputs' => ['BBVA', 'BBVA', true];
         yield 'differs only in case' => ['BBVA', 'bbva', true];
@@ -52,12 +58,6 @@ final class NormalizedTextTest extends TestCase
         yield 'distinct names' => ['BBVA', 'Santander', false];
     }
 
-    #[DataProvider('equalityCases')]
-    public function testEqualsIgnoresCaseWhitespaceAndDiacritics(string $a, string $b, bool $expected): void
-    {
-        $this->assertSame($expected, NormalizedText::from($a)->equals(NormalizedText::from($b)));
-    }
-
     public function testNormalizeMatchesFromOutput(): void
     {
         $raw = '  Banco Sabadell ';
@@ -65,10 +65,16 @@ final class NormalizedTextTest extends TestCase
         $this->assertSame(NormalizedText::from($raw)->normalized, NormalizedText::normalize($raw));
     }
 
+    #[DataProvider('provideToAsciiUpperProducesCanonicalCodeCases')]
+    public function testToAsciiUpperProducesCanonicalCode(string $raw, string $expected): void
+    {
+        $this->assertSame($expected, NormalizedText::toAsciiUpper($raw));
+    }
+
     /**
      * @return iterable<string, array{string, string}>
      */
-    public static function asciiUpperCases(): iterable
+    public static function provideToAsciiUpperProducesCanonicalCodeCases(): iterable
     {
         yield 'lower-case to upper' => ['bbva', 'BBVA'];
         yield 'mixed-case to upper' => ['BbVa', 'BBVA'];
@@ -76,11 +82,5 @@ final class NormalizedTextTest extends TestCase
         yield 'strips diacritics and lowers' => ['glé', 'GLE'];
         yield 'trims surrounding whitespace' => ['  bnp  ', 'BNP'];
         yield 'numbers preserved' => ['Bk7', 'BK7'];
-    }
-
-    #[DataProvider('asciiUpperCases')]
-    public function testToAsciiUpperProducesCanonicalCode(string $raw, string $expected): void
-    {
-        $this->assertSame($expected, NormalizedText::toAsciiUpper($raw));
     }
 }

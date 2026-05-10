@@ -15,8 +15,7 @@ use Transliterator;
  *
  * Persist both halves: `display` for UI, `normalized` for unique indexes and
  * lookups. The normalization rule lives here so every entity that needs
- * case- and accent-insensitive uniqueness (Bank.name, Company.name,
- * Customer.name, …) shares it.
+ * case- and accent-insensitive uniqueness shares it.
  *
  * For codes whose canonical form is upper-case ASCII (BIC, ticker, short
  * code), call `toAsciiUpper()` directly: those are stored canonicalized
@@ -25,6 +24,7 @@ use Transliterator;
 final readonly class NormalizedText
 {
     private const string LOWER_RULE = 'Any-Latin; Latin-ASCII; Lower();';
+
     private const string UPPER_RULE = 'Any-Latin; Latin-ASCII; Upper();';
 
     private function __construct(
@@ -68,6 +68,7 @@ final readonly class NormalizedText
         // unavailable) — surface it as a programmer/operator error, not as a
         // runtime condition that callers could meaningfully recover from.
         $transliterator = Transliterator::create($rule);
+
         if (!$transliterator instanceof Transliterator) {
             throw new LogicException(\sprintf(
                 'Failed to create Transliterator with id "%s"; ext-intl missing or ICU rules unavailable.',
@@ -76,6 +77,7 @@ final readonly class NormalizedText
         }
 
         $result = $transliterator->transliterate($value);
+
         if (false === $result) {
             throw new RuntimeException('Transliteration failed for the provided value.');
         }

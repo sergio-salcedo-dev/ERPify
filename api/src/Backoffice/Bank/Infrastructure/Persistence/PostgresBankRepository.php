@@ -55,7 +55,7 @@ final class PostgresBankRepository extends AbstractSearchRepository implements B
         $this->addWhereIdsIn($queryBuilderWithOptions, alias: 'b', ids: $criteria->ids ?? []);
 
         $normalizedNames = \array_map(
-            static fn (string $name): string => NormalizedText::normalize($name),
+            NormalizedText::normalize(...),
             $criteria->names ?? [],
         );
 

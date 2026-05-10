@@ -127,7 +127,9 @@ export function BankForm({ mode, initial }: BankFormProps) {
         label="Name"
         required
         error={errors.name?.message}
-        helper={'Must be unique. Casing and accents are ignored — e.g. "BBVA" collides with "bbva", and "Sociedad Anónima" collides with "Sociedad Anonima".'}
+        helper={
+          'Must be unique. Casing and accents are ignored — e.g. "BBVA" collides with "bbva", and "Sociedad Anónima" collides with "Sociedad Anonima".'
+        }
       >
         <Input
           {...register("name")}

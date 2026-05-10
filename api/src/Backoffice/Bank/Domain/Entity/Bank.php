@@ -73,12 +73,12 @@ class Bank extends AggregateRoot
         ?int $storedObjectByteSize = null,
         ?string $storedObjectContentHash = null,
     ): self {
-        $nameVo = NormalizedText::from($name);
+        $normalizedText = NormalizedText::from($name);
 
         $bank = new self();
         $bank->id = $id;
-        $bank->name = $nameVo->display;
-        $bank->nameNormalized = $nameVo->normalized;
+        $bank->name = $normalizedText->display;
+        $bank->nameNormalized = $normalizedText->normalized;
         $bank->shortName = NormalizedText::toAsciiUpper($shortName);
         $bank->media = $media;
         $bank->storedObjectKey = $storedObjectKey;
@@ -141,10 +141,10 @@ class Bank extends AggregateRoot
 
     public function rename(string $updateEventId, string $name, string $shortName): void
     {
-        $nameVo = NormalizedText::from($name);
+        $normalizedText = NormalizedText::from($name);
 
-        $this->name = $nameVo->display;
-        $this->nameNormalized = $nameVo->normalized;
+        $this->name = $normalizedText->display;
+        $this->nameNormalized = $normalizedText->normalized;
         $this->shortName = NormalizedText::toAsciiUpper($shortName);
         $now = new DateTimeImmutable();
         $this->updatedAt = $now;
