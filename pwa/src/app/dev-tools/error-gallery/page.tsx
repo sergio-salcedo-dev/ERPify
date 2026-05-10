@@ -21,12 +21,11 @@ interface RouteCase {
   description: string;
 }
 
+// Sorted ascending by HTTP status (and grouped by 4xx → 5xx → non-HTTP)
+// so the gallery reads top-to-bottom in the same order the API contract
+// document does. Non-HTTP rows (offline, /backoffice variant) trail their
+// cohort.
 const NAVIGABLE_ROUTES: ReadonlyArray<RouteCase> = [
-  {
-    label: "404 — Page not found",
-    url: "/this-route-does-not-exist",
-    description: "Renders `app/not-found.tsx` for any unmatched URL.",
-  },
   {
     label: "401 — Sign in required",
     url: "/unauthenticated",
@@ -38,19 +37,20 @@ const NAVIGABLE_ROUTES: ReadonlyArray<RouteCase> = [
     description: "Navigable info page for permission failures.",
   },
   {
-    label: "503 — Maintenance",
-    url: "/maintenance",
-    description: "Planned downtime / deployment window landing.",
+    label: "404 — Page not found",
+    url: "/this-route-does-not-exist",
+    description: "Renders `app/not-found.tsx` for any unmatched URL.",
+  },
+  {
+    label: "404 inside /backoffice — pathname-aware CTA",
+    url: "/backoffice/this-segment-does-not-exist",
+    description:
+      "Same `not-found.tsx` UI but `<ErrorActions>` flips the primary CTA to `Return to BackOffice`.",
   },
   {
     label: "429 — Rate limited",
     url: "/rate-limited",
     description: "Throttling / quota exceeded landing.",
-  },
-  {
-    label: "Offline (PWA)",
-    url: "/offline",
-    description: "Network unreachable fallback for the service worker.",
   },
   {
     label: "500 — error.tsx boundary",
@@ -59,10 +59,14 @@ const NAVIGABLE_ROUTES: ReadonlyArray<RouteCase> = [
       "`/dev-throw` server-throws and the segment-level `error.tsx` catches it. Verifies the dev-mode `error.message` block + green-check digest copy.",
   },
   {
-    label: "404 inside /backoffice — pathname-aware CTA",
-    url: "/backoffice/this-segment-does-not-exist",
-    description:
-      "Same `not-found.tsx` UI but `<ErrorActions>` flips the primary CTA to `Return to BackOffice`.",
+    label: "503 — Maintenance",
+    url: "/maintenance",
+    description: "Planned downtime / deployment window landing.",
+  },
+  {
+    label: "Offline (PWA)",
+    url: "/offline",
+    description: "Network unreachable fallback for the service worker.",
   },
 ];
 
