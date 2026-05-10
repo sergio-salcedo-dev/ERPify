@@ -31,7 +31,7 @@ final class BankStoredObjectMultipartFunctionalTest extends WebTestCase
         $uploadedFile = new UploadedFile($tmp, 'extra.png', 'image/png', null, true);
 
         $suffix = \bin2hex(\random_bytes(4));
-        $name = 'Stored Object Bank ' . $suffix;
+        $name = 'Test Stored Object Bank ' . $suffix;
         $shortName = 'SOB' . $suffix;
 
         $kernelBrowser->request(
