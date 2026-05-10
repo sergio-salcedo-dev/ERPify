@@ -9,6 +9,7 @@ use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Backoffice\Bank\Domain\Search\BankSearchCriteria;
 use Erpify\Shared\Domain\Search\PaginatedResult;
 use Erpify\Shared\Domain\Search\SearchCriteria;
+use Erpify\Shared\Domain\ValueObject\NormalizedText;
 use Erpify\Shared\Infrastructure\Persistence\AbstractSearchRepository;
 use Erpify\Shared\Infrastructure\Persistence\QueryBuilderWithOptions;
 use InvalidArgumentException;
@@ -53,7 +54,17 @@ final class PostgresBankRepository extends AbstractSearchRepository implements B
 
         $this->addWhereIdsIn($queryBuilderWithOptions, alias: 'b', ids: $criteria->ids ?? []);
 
-        $this->addWhereInCaseInsensitive($queryBuilderWithOptions, alias: 'b', field: 'name', values: $criteria->names ?? []);
+        $normalizedNames = \array_map(
+            NormalizedText::normalize(...),
+            $criteria->names ?? [],
+        );
+
+        $this->addWhereIn(
+            $queryBuilderWithOptions,
+            alias: 'b',
+            field: 'nameNormalized',
+            values: $normalizedNames,
+        );
 
         $this->addOrderByFromQueryParams(
             $queryBuilderWithOptions,

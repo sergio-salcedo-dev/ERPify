@@ -358,7 +358,7 @@ final class ExceptionResponderTest extends TestCase
         $looseContext = $context;
 
         $this->assertSame(
-            ['instance', 'correlation_id', 'type', 'status', 'exception_class', 'exception_message', 'request_uri', 'request_method'],
+            ['instance', 'correlation_id', 'type', 'status', 'exception_class', 'exception_category', 'exception_message', 'request_uri', 'request_method'],
             \array_keys($looseContext),
             'Context keys must appear in declaration order.',
         );
@@ -382,6 +382,7 @@ final class ExceptionResponderTest extends TestCase
         $this->assertSame(LogLevel::ERROR, $logRecord['level']);
         $this->assertSame(500, $logRecord['context']['status']);
         $this->assertSame('domain-error', $logRecord['context']['type']);
+        $this->assertSame('domain_error', $logRecord['context']['exception_category']);
         $this->assertSame('plain domain failure', $logRecord['context']['exception_message']);
     }
 
@@ -417,7 +418,31 @@ final class ExceptionResponderTest extends TestCase
         $this->assertSame(500, $logRecord['context']['status']);
         $this->assertSame('unhandled-exception', $logRecord['context']['type']);
         $this->assertSame(RuntimeException::class, $logRecord['context']['exception_class']);
+        $this->assertSame('runtime_error', $logRecord['context']['exception_category']);
         $this->assertSame('boom', $logRecord['context']['exception_message']);
+    }
+
+    /**
+     * Pins the SRE contract: LogicException carries the `programmer_error` taxonomy
+     * tag and is logged at CRITICAL irrespective of the factory's marker mapping.
+     * On-call routes off `exception_category` to separate platform-broken signals
+     * (page) from runtime / domain errors (triage).
+     */
+    public function testLogRecordIsEmittedWithLevelCriticalAndProgrammerErrorCategoryForLogicException(): void
+    {
+        $bufferingLogger = new BufferingLogger();
+        $exceptionResponder = $this->makeListener($bufferingLogger);
+        $exceptionEvent = $this->makeEvent('/api/v1/anything', new LogicException('platform misconfigured'));
+
+        $exceptionResponder($exceptionEvent);
+
+        $logRecord = $this->singleLogRecord($bufferingLogger);
+        $this->assertSame(LogLevel::CRITICAL, $logRecord['level']);
+        $this->assertSame(500, $logRecord['context']['status']);
+        $this->assertSame('unhandled-exception', $logRecord['context']['type']);
+        $this->assertSame(LogicException::class, $logRecord['context']['exception_class']);
+        $this->assertSame('programmer_error', $logRecord['context']['exception_category']);
+        $this->assertSame('platform misconfigured', $logRecord['context']['exception_message']);
     }
 
     public function testLogRecordIsEmittedWithLevelWarningForValidationFailedException(): void
@@ -914,6 +939,7 @@ final class ExceptionResponderTest extends TestCase
      *         type: string,
      *         status: int,
      *         exception_class: string,
+     *         exception_category: string,
      *         exception_message: string,
      *         request_uri: string,
      *         request_method: string,
@@ -933,7 +959,7 @@ final class ExceptionResponderTest extends TestCase
         // PHPStan trusts the narrow @return shape for caller convenience; this loop ensures
         // a listener regression that drifted from the contract would surface as a test failure
         // (not just a PHPStan false-negative under treatPhpDocTypesAsCertain).
-        foreach (['instance', 'correlation_id', 'type', 'exception_class', 'exception_message', 'request_uri', 'request_method'] as $stringKey) {
+        foreach (['instance', 'correlation_id', 'type', 'exception_class', 'exception_category', 'exception_message', 'request_uri', 'request_method'] as $stringKey) {
             $this->assertArrayHasKey($stringKey, $context);
             $this->assertIsString($context[$stringKey], \sprintf('Context["%s"] must be a string per the log contract.', $stringKey));
         }

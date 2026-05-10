@@ -36,7 +36,7 @@ include make/*.mk
 
 ## —— Aggregates ——
 
-app.lint: php.lint pwa.lint ## Run all linters (PHP + PWA)
+app.lint: php.lint pwa.lint.fix ## Run all linters (PHP + PWA)
 
 app.test: php.test pwa.test ## Run all tests (PHP + PWA)
 

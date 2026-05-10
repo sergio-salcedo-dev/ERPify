@@ -6,7 +6,7 @@ Feature: Search banks
   Scenario: List all banks
     When I send a "GET" request to "/backoffice/banks"
     Then the response status code should be 200
-    And the JSON node "data.items" should have 5 elements
+    And the JSON node "data.items" should have 31 elements
     And the JSON nodes matching "data.items[*]" should have 5 children
     And the JSON nodes matching "data.items[*].id" should exist
     And the JSON nodes matching "data.items[*].name" should exist
@@ -25,11 +25,16 @@ Feature: Search banks
     And the JSON node "data.items" should have 0 elements
     And the JSON node "data.pagination" should exist
 
-  Scenario: Search a bank by names in array form returns matching results
-    When I send a "GET" request to "/backoffice/banks?names[]=santander"
+  Scenario: Search a bank by names in array form returns matching results case-insensitively
+    When I send a "GET" request to "/backoffice/banks?names[]=BBVA"
     Then the response status code should be 200
     And the JSON node "data.items" should have 1 elements
     And the JSON node "data.pagination" should exist
+
+  Scenario: Search a bank by names ignores diacritics
+    When I send a "GET" request to "/backoffice/banks?names[]=Sociedad%20Anonima"
+    Then the response status code should be 200
+    And the JSON node "data.items" should have 1 elements
 
   Scenario: Search a bank by an invalid id returns a 400 validation-failed Problem Details body
     When I send a "GET" request to "/backoffice/banks?ids[]=invalid"

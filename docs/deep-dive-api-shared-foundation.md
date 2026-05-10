@@ -182,10 +182,10 @@ api/src/Shared/
 - **Verification:** `api/tests/Unit/Shared/Infrastructure/Http/CorrelationIdListenerTest.php`, `api/tests/Functional/Shared/Infrastructure/Http/CorrelationIdListenerFunctionalTest.php`.
 
 #### `api/src/Shared/Infrastructure/Http/EventListener/ExceptionResponder.php`
-- **LOC:** 271 — `final readonly`. **`PRIORITY = 16`** on `kernel.exception`.
+- **LOC:** 316 — `final readonly`. **`PRIORITY = 16`** on `kernel.exception`.
 - Path-scoped to `/api/*`. Mints a per-error UUIDv7 `instance`; reads `_correlation_id` from the request attribute and re-validates it.
 - Top-level try/catch wrapping the primary path: any throw from factory/responder/logger → static `LAST_RESORT_BODY` (literal byte-for-byte JSON, no encoding risk) and a CRITICAL log line (NFR15: even if the logger then throws, response is already set).
-- **Log tiers:** `unhandled-exception` → CRITICAL; status ≥ 500 → ERROR; 4xx → WARNING. Eight canonical context fields filtered through `RedactionDenylist::filter()`.
+- **Log tiers (first match wins):** `\LogicException` → CRITICAL (pinned ahead of marker matching so a programmer / platform error wakes on-call irrespective of how the factory mapped it); `unhandled-exception` → CRITICAL; status ≥ 500 → ERROR; 4xx → WARNING. Nine canonical context fields filtered through `RedactionDenylist::filter()`, including `exception_category` (`programmer_error` / `runtime_error` / `domain_error` / `engine_error` / `unknown`) for SRE routing without parsing FQCNs — see [`api-error-contract.md`](./api-error-contract.md#exception_category--sre-routable-taxonomy).
 - **Three invariants pinned by tests** (`ExceptionResponderListenerPriorityTest`):
   1. `PRIORITY === 16`.
   2. NelmioCors `kernel.response` listener priority remains `0` (so CORS headers attach **after** the Problem Details body).

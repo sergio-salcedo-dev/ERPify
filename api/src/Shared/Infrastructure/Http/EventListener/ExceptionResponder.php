@@ -7,10 +7,14 @@ namespace Erpify\Shared\Infrastructure\Http\EventListener;
 use Erpify\Shared\Application\Problem\ProblemDetails;
 use Erpify\Shared\Application\Problem\ProblemDetailsFactory;
 use Erpify\Shared\Application\Problem\RedactionDenylist;
+use Erpify\Shared\Domain\Exception\DomainException;
 use Erpify\Shared\Infrastructure\Http\CorrelationIdListener;
 use Erpify\Shared\Infrastructure\Http\ProblemDetailsResponder;
+use Error;
+use LogicException;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
+use RuntimeException;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -28,14 +32,37 @@ use Throwable;
  * wire-envelope construction to {@see ProblemDetailsResponder}.
  *
  * Emits exactly one structured PSR-3 log line per error at a tiered level:
- *   - `unhandled-exception` (i.e. throwable not recognised by the factory) → `critical`
- *   - status >= 500 → `error`
- *   - status 4xx     → `warning`
- * The log record's eight context fields (`instance`, `correlation_id`, `type`, `status`,
- * `exception_class`, `exception_message`, `request_uri`, `request_method`) make the log
- * line operator-queryable: grep by `instance` for the single failure entry, grep by
- * `correlation_id` for the full request trail. Logger channel is the default `app`
+ *   - non-domain `\LogicException` (programmer / platform error)  → `critical`
+ *   - `unhandled-exception` (throwable not recognised)            → `critical`
+ *   - status >= 500                                               → `error`
+ *   - status 4xx                                                  → `warning`
+ * The "non-domain" qualifier matters: PHP's SPL hierarchy puts `\DomainException`
+ * under `\LogicException`, so the project's `Erpify\Shared\Domain\Exception\DomainException`
+ * is also a `\LogicException` at the language level. Domain exceptions are *expected
+ * business outcomes*, not programmer errors, and must keep flowing to the status-based
+ * mapping (4xx → warning, 5xx → error).
+ * The log record's nine context fields (`instance`, `correlation_id`, `type`, `status`,
+ * `exception_class`, `exception_category`, `exception_message`, `request_uri`,
+ * `request_method`) make the log line operator-queryable: grep by `instance` for the
+ * single failure entry, grep by `correlation_id` for the full request trail, filter by
+ * `exception_category` to route programmer errors (page on-call) separately from
+ * runtime / domain errors (triaged normally). Logger channel is the default `app`
  * channel (autowired `Psr\Log\LoggerInterface`).
+ *
+ * `exception_category` is an SRE-facing taxonomy: stable, queryable, derived from the
+ * SPL hierarchy and the project's `DomainException` marker. Values:
+ *   - `programmer_error`  — `LogicException` and descendants. Indicates the build /
+ *                           platform / contract is broken (e.g. ext-intl missing,
+ *                           constant invariant violated). Wake on-call.
+ *   - `runtime_error`     — `RuntimeException` and descendants. Indicates an environmental
+ *                           or input failure that the caller could not have prevented at
+ *                           coding time (transient I/O, malformed input bytes).
+ *   - `domain_error`      — `DomainException` (project base). Expected business outcome.
+ *   - `engine_error`      — `\Error` and descendants (`TypeError`, `ParseError`, …).
+ *                           Engine-level failure; treat as severe as `programmer_error`.
+ *   - `unknown`           — anything else implementing `Throwable` directly. Investigate.
+ * `exception_category` is intentionally orthogonal to `type` (RFC 9457 marker) and
+ * `status` (HTTP code) so SRE filters do not depend on framework-specific FQCNs.
  *
  * Path-scoped to `/api/*`. Coexists with any earlier exception listener: if a higher-priority
  * listener has already set a response, this listener leaves it alone and does NOT log.
@@ -161,7 +188,7 @@ final readonly class ExceptionResponder
             );
 
             $this->logger->log(
-                $this->resolveLogLevel($problemDetails),
+                $this->resolveLogLevel($problemDetails, $throwable),
                 self::LOG_MESSAGE,
                 $this->buildLogContext($problemDetails, $throwable, $request),
             );
@@ -218,8 +245,23 @@ final readonly class ExceptionResponder
         }
     }
 
-    private function resolveLogLevel(ProblemDetails $problemDetails): string
+    private function resolveLogLevel(ProblemDetails $problemDetails, Throwable $throwable): string
     {
+        // Pin LogicException to CRITICAL irrespective of how the factory mapped it. A
+        // LogicException reaching the listener means the build / contract is broken;
+        // SRE must wake on-call even if a future custom marker were to map it to a
+        // semantic 4xx by mistake.
+        //
+        // CAVEAT: PHP's SPL hierarchy puts `\DomainException` under `\LogicException`,
+        // so the project's `Erpify\Shared\Domain\Exception\DomainException` (which
+        // extends `\DomainException`) is also a `\LogicException` at the language
+        // level. Exclude it explicitly: domain exceptions are *expected business
+        // outcomes*, not programmer errors, and must flow to the status-based
+        // mapping below (WARNING for 4xx, ERROR for 5xx).
+        if ($throwable instanceof LogicException && !$throwable instanceof DomainException) {
+            return LogLevel::CRITICAL;
+        }
+
         if ('unhandled-exception' === $problemDetails->type) {
             return LogLevel::CRITICAL;
         }
@@ -228,7 +270,24 @@ final readonly class ExceptionResponder
     }
 
     /**
-     * The eight canonical log fields are not denylist-named today, so
+     * SRE-facing taxonomy. See class docblock for the value contract. Order is
+     * load-bearing: `DomainException` is checked first so a project subclass that
+     * happens to descend from `LogicException` / `RuntimeException` (none today,
+     * but defended against) is still classified as `domain_error`.
+     */
+    private function resolveExceptionCategory(Throwable $throwable): string
+    {
+        return match (true) {
+            $throwable instanceof DomainException => 'domain_error',
+            $throwable instanceof LogicException => 'programmer_error',
+            $throwable instanceof RuntimeException => 'runtime_error',
+            $throwable instanceof Error => 'engine_error',
+            default => 'unknown',
+        };
+    }
+
+    /**
+     * The nine canonical log fields are not denylist-named today, so
      * {@see RedactionDenylist::filter} is a runtime no-op for the canonical shape. The
      * defensive call pins the architectural invariant that any caller-controlled key
      * eventually flowing into this map (e.g. a future log-context extension that reflects
@@ -240,6 +299,7 @@ final readonly class ExceptionResponder
      *     type: string,
      *     status: int,
      *     exception_class: string,
+     *     exception_category: string,
      *     exception_message: string,
      *     request_uri: string,
      *     request_method: string,
@@ -250,13 +310,14 @@ final readonly class ExceptionResponder
         Throwable $throwable,
         Request $request,
     ): array {
-        /** @var array{instance: string, correlation_id: string, type: string, status: int, exception_class: string, exception_message: string, request_uri: string, request_method: string} $context */
+        /** @var array{instance: string, correlation_id: string, type: string, status: int, exception_class: string, exception_category: string, exception_message: string, request_uri: string, request_method: string} $context */
         $context = RedactionDenylist::filter([
             'instance' => $problemDetails->instance,
             'correlation_id' => $problemDetails->correlationId,
             'type' => $problemDetails->type,
             'status' => $problemDetails->status,
             'exception_class' => $throwable::class,
+            'exception_category' => $this->resolveExceptionCategory($throwable),
             'exception_message' => $throwable->getMessage(),
             'request_uri' => $request->getRequestUri(),
             'request_method' => $request->getMethod(),
