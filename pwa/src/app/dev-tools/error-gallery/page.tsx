@@ -226,11 +226,11 @@ export default function DevErrorGalleryPage() {
           <p className="text-warning text-xs font-semibold tracking-wider uppercase">
             Dev / test only · linked from{" "}
             <Link
-              href="/dev-tools"
+              href={Routes.DEV_TOOLS}
               className="underline-offset-2 hover:underline"
               data-testid="error-gallery__back-to-tools"
             >
-              /dev-tools
+              {Routes.DEV_TOOLS}
             </Link>
           </p>
           <h1 className="text-foreground mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">

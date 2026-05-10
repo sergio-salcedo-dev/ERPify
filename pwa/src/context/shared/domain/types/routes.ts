@@ -15,5 +15,13 @@ export const Routes = {
   HOME: "/",
   /** Authenticated BackOffice root — every `/backoffice/*` path lives under this prefix. */
   BACKOFFICE: "/backoffice",
+  /**
+   * Dev / QA tools hub. Cross-referenced from the frontoffice navbar
+   * and the backoffice sidebar (and from inside the dev-tools module
+   * itself) so the literal `/dev-tools` doesn't drift across files.
+   * The route is gated behind `isDevToolsAvailable()` and short-
+   * circuited by the proxy in production.
+   */
+  DEV_TOOLS: "/dev-tools",
 } as const;
 export type Routes = (typeof Routes)[keyof typeof Routes];

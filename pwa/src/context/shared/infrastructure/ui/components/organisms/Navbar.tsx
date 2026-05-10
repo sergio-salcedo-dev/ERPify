@@ -14,6 +14,7 @@ import Link from "next/link";
 import { Logo } from "../atoms/Logo";
 import { Button } from "../atoms/Button";
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
+import { Routes } from "@/context/shared/domain/types/routes";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -67,7 +68,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onGetStarted }) => {
 
             {showDevTools ? (
               <Link
-                href="/dev-tools"
+                href={Routes.DEV_TOOLS}
                 className="navbar__link navbar__link--dev-tools text-amber-700 hover:text-amber-900 font-medium transition-colors inline-flex items-center gap-1.5"
                 title="Internal QA / engineering tools (dev/test only)"
                 data-testid="navbar__dev-tools-link"
@@ -172,7 +173,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onGetStarted }) => {
             ))}
             {showDevTools ? (
               <Link
-                href="/dev-tools"
+                href={Routes.DEV_TOOLS}
                 className="navbar__link navbar__link--dev-tools text-amber-700 hover:text-amber-900 font-medium inline-flex items-center gap-1.5"
                 title="Internal QA / engineering tools (dev/test only)"
                 data-testid="navbar__mobile-dev-tools-link"

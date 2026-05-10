@@ -20,6 +20,7 @@ import {
 import { Logo } from "@/context/shared/infrastructure/ui/components/atoms/Logo";
 import { SidebarItem } from "@/context/shared/infrastructure/ui/components/molecules/SidebarItem";
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
+import { Routes } from "@/context/shared/domain/types/routes";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
 interface NavSubItem {
@@ -79,7 +80,7 @@ export default function BackOfficeLayoutClient({ children }: { children: React.R
               {
                 name: "Dev Tools",
                 icon: Wrench,
-                path: "/dev-tools",
+                path: Routes.DEV_TOOLS,
                 testId: "bo-layout__sidebar-dev-tools",
               },
             ],
