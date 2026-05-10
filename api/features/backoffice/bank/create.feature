@@ -46,3 +46,12 @@ Feature: Create a bank
     Then the response status code should be 400
     And the JSON node "type" should be equal to "validation-failed"
     And the JSON node "violations[0].field" should be equal to "shortName"
+
+  Scenario: Fail to create a bank whose name only differs in diacritics from an existing one
+    When I send a POST request to "/backoffice/banks" with body:
+    """
+    {"name": "Sociedad Anonima", "shortName": "SA2"}
+    """
+    Then the response status code should be 400
+    And the JSON node "type" should be equal to "validation-failed"
+    And the JSON node "violations[0].field" should be equal to "name"
