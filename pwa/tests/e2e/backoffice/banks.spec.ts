@@ -206,6 +206,73 @@ test.describe("BackOffice - Banks CRUD", () => {
   test.describe("filters and sort", () => {
     const allBanks = [SAMPLE_BANK_A, SAMPLE_BANK_B, SAMPLE_BANK_C, SAMPLE_BANK_D];
 
+    test("filter panel is collapsed by default; the toggle reveals it", async ({ page }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: allBanks });
+      await page.goto("/backoffice/banks");
+
+      const toggle = page.getByTestId("banks-filters__toggle");
+      const panel = page.getByTestId("banks-filters__panel");
+
+      // Collapsed by default — minimalist landing state.
+      await expect(toggle).toBeVisible();
+      await expect(toggle).toHaveAttribute("aria-expanded", "false");
+      await expect(panel).toBeHidden();
+      // No filters active → no count badge.
+      await expect(page.getByTestId("banks-filters__count")).toHaveCount(0);
+
+      await toggle.click();
+      await expect(toggle).toHaveAttribute("aria-expanded", "true");
+      await expect(panel).toBeVisible();
+      await expect(page.getByTestId("banks-filters__name")).toBeVisible();
+
+      // Toggling again hides the panel without losing values.
+      await toggle.click();
+      await expect(toggle).toHaveAttribute("aria-expanded", "false");
+      await expect(panel).toBeHidden();
+    });
+
+    test("Reset button is hidden when no filters are active and appears once a filter is set", async ({
+      page,
+    }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: allBanks });
+      await page.goto("/backoffice/banks");
+
+      await page.getByTestId("banks-filters__toggle").click();
+      // Reset is removed from the DOM (not just disabled) when nothing to reset.
+      await expect(page.getByTestId("banks-filters__reset")).toHaveCount(0);
+
+      await page.getByTestId("banks-filters__name").fill("cosmos");
+      await expect(page.getByTestId("banks-filters__reset")).toBeVisible();
+
+      await page.getByTestId("banks-filters__reset").click();
+      await expect(page.getByTestId("banks-filters__name")).toHaveValue("");
+      await expect(page.getByTestId("banks-filters__reset")).toHaveCount(0);
+    });
+
+    test("toggle button shows a count badge with the number of active filters", async ({
+      page,
+    }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: allBanks });
+      await page.goto("/backoffice/banks");
+
+      await page.getByTestId("banks-filters__toggle").click();
+      await expect(page.getByTestId("banks-filters__count")).toHaveCount(0);
+
+      await page.getByTestId("banks-filters__name").fill("bank");
+      await expect(page.getByTestId("banks-filters__count")).toHaveText("1");
+
+      await page.getByTestId("banks-filters__short-name").fill("cos");
+      await expect(page.getByTestId("banks-filters__count")).toHaveText("2");
+
+      await page.getByTestId("banks-filters__created-from").fill("2026-01-01");
+      await expect(page.getByTestId("banks-filters__count")).toHaveText("3");
+
+      // Badge persists when the panel is collapsed — that's the whole point.
+      await page.getByTestId("banks-filters__toggle").click();
+      await expect(page.getByTestId("banks-filters__panel")).toBeHidden();
+      await expect(page.getByTestId("banks-filters__count")).toHaveText("3");
+    });
+
     test("filters by name case-insensitively, leaves the URL unchanged, and resets via the button", async ({
       page,
     }) => {
@@ -215,6 +282,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       await expect(page.getByRole("cell", { name: "Acme Savings" })).toBeVisible();
       await expect(page.getByRole("cell", { name: "Cosmos Bank" })).toBeVisible();
 
+      await page.getByTestId("banks-filters__toggle").click();
       await page.getByTestId("banks-filters__name").fill("cosmos");
       await expect(page.getByRole("cell", { name: "Cosmos Bank" })).toBeVisible();
       await expect(page.getByRole("cell", { name: "Acme Savings" })).toBeHidden();
@@ -232,6 +300,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       await mockBanksApi(page, { list: "happy", list_banks: allBanks });
       await page.goto("/backoffice/banks");
 
+      await page.getByTestId("banks-filters__toggle").click();
       await page.getByTestId("banks-filters__name").fill("bank");
       await page.getByTestId("banks-filters__short-name").fill("cos");
 
@@ -244,6 +313,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       await mockBanksApi(page, { list: "happy", list_banks: allBanks });
       await page.goto("/backoffice/banks");
 
+      await page.getByTestId("banks-filters__toggle").click();
       await page.getByTestId("banks-filters__created-from").fill("2026-02-01");
       await page.getByTestId("banks-filters__created-to").fill("2026-03-31");
 
@@ -257,6 +327,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       await mockBanksApi(page, { list: "happy", list_banks: allBanks });
       await page.goto("/backoffice/banks");
 
+      await page.getByTestId("banks-filters__toggle").click();
       await expect(page.getByTestId("banks-filters__created-from")).toHaveAttribute("type", "date");
       await expect(page.getByTestId("banks-filters__created-to")).toHaveAttribute("type", "date");
     });
@@ -265,6 +336,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       await mockBanksApi(page, { list: "happy", list_banks: allBanks });
       await page.goto("/backoffice/banks");
 
+      await page.getByTestId("banks-filters__toggle").click();
       await page.getByTestId("banks-filters__name").fill("zzz-does-not-match");
 
       const panel = page.getByTestId("banks-list__empty-filtered");
@@ -360,6 +432,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       await page.goto("/backoffice/banks");
 
       // Drift away from the defaults.
+      await page.getByTestId("banks-filters__toggle").click();
       await page.getByTestId("banks-filters__name").fill("cosmos");
       const nameHeader = page
         .getByRole("columnheader", { name: "Name", exact: true })
@@ -386,6 +459,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       // Filter to anything containing "bank" in the name with createdAt >= 2026-03-01.
       // Of the four fixtures, only Cosmos Bank (name="Cosmos Bank", createdAt 2026-03-20) matches.
       // Adding sort by createdAt desc must not change correctness — just confirm the row remains.
+      await page.getByTestId("banks-filters__toggle").click();
       await page.getByTestId("banks-filters__name").fill("bank");
       await page.getByTestId("banks-filters__created-from").fill("2026-03-01");
 
@@ -532,6 +606,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 2");
 
       // "Bank 005" is unique → 1 match → both nav buttons hidden, indicator on page 1.
+      await page.getByTestId("banks-filters__toggle").click();
       await page.getByTestId("banks-filters__name").fill("Bank 005");
 
       await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 1");
@@ -604,6 +679,31 @@ test.describe("BackOffice - Banks CRUD", () => {
 
       await expect(page.getByTestId(`banks-table__edit-${SAMPLE_BANK_A.id}`)).toBeVisible();
       await expect(page.getByTestId(`banks-table__delete-${SAMPLE_BANK_A.id}`)).toBeVisible();
+    });
+
+    test("on mobile, the Filters toggle is full-width, opens the panel, and exposes the count badge", async ({
+      page,
+    }) => {
+      await mockBanksApi(page, { list: "happy" });
+      await page.goto("/backoffice/banks");
+
+      const toggle = page.getByTestId("banks-filters__toggle");
+      await expect(toggle).toBeVisible();
+      // Spans the row on mobile (≥ 320px). Allow a small tolerance for borders/padding.
+      const toggleBox = await toggle.boundingBox();
+      expect(toggleBox).not.toBeNull();
+      expect(toggleBox!.width).toBeGreaterThan(VIEWPORT_MOBILE.width * 0.6);
+
+      // Panel collapsed by default on mobile too.
+      await expect(page.getByTestId("banks-filters__panel")).toBeHidden();
+      await expect(page.getByTestId("banks-filters__reset")).toHaveCount(0);
+
+      await toggle.click();
+      await expect(page.getByTestId("banks-filters__panel")).toBeVisible();
+
+      await page.getByTestId("banks-filters__name").fill("acme");
+      await expect(page.getByTestId("banks-filters__count")).toHaveText("1");
+      await expect(page.getByTestId("banks-filters__reset")).toBeVisible();
     });
   });
 

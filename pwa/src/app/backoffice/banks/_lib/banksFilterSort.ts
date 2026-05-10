@@ -24,12 +24,22 @@ export const EMPTY_FILTER: BanksFilter = {
 };
 
 export function hasActiveFilter(filter: BanksFilter): boolean {
-  return Boolean(
-    filter.name.trim() ||
-    filter.shortName.trim() ||
-    filter.createdFrom.trim() ||
-    filter.createdTo.trim(),
-  );
+  return countActiveFilters(filter) > 0;
+}
+
+/**
+ * Number of populated fields in the filter — used by the "Filters (n)" toggle
+ * badge so the user can tell at a glance how many filters are active when the
+ * panel is collapsed. Whitespace-only values count as inactive (mirrors
+ * `hasActiveFilter` and `applyFilters`).
+ */
+export function countActiveFilters(filter: BanksFilter): number {
+  let count = 0;
+  if (filter.name.trim()) count += 1;
+  if (filter.shortName.trim()) count += 1;
+  if (filter.createdFrom.trim()) count += 1;
+  if (filter.createdTo.trim()) count += 1;
+  return count;
 }
 
 function containsCi(haystack: string, needle: string): boolean {

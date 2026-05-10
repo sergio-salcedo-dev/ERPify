@@ -21,7 +21,6 @@ import {
   EMPTY_FILTER,
   applyFilters,
   applySort,
-  hasActiveFilter,
   type BanksFilter,
   type BanksSort,
 } from "./_lib/banksFilterSort";
@@ -94,9 +93,6 @@ export default function BanksListPage() {
     setSort(DEFAULT_SORT);
   };
 
-  const isDefaultSort =
-    sort?.columnId === DEFAULT_SORT?.columnId && sort?.direction === DEFAULT_SORT?.direction;
-
   const handleBankDeleted = (id: string): void => {
     setBanks((prev) => prev.filter((bank) => bank.id !== id));
   };
@@ -144,12 +140,7 @@ export default function BanksListPage() {
       </header>
 
       {state === ViewStatus.READY ? (
-        <BanksFilters
-          filter={filter}
-          onFilterChange={setFilter}
-          onReset={resetFilters}
-          resetDisabled={!hasActiveFilter(filter) && isDefaultSort}
-        />
+        <BanksFilters filter={filter} onFilterChange={setFilter} onReset={resetFilters} />
       ) : null}
 
       <AsyncBoundary

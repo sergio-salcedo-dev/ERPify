@@ -5,6 +5,7 @@ import {
   EMPTY_FILTER,
   applyFilters,
   applySort,
+  countActiveFilters,
   hasActiveFilter,
   type BanksFilter,
 } from "@/app/backoffice/banks/_lib/banksFilterSort";
@@ -52,6 +53,55 @@ const ROWS: Bank[] = [acme, brookline, cosmos];
 describe("DEFAULT_SORT", () => {
   it("is alphabetical name ascending", () => {
     expect(DEFAULT_SORT).toEqual({ columnId: "name", direction: "asc" });
+  });
+});
+
+describe("countActiveFilters", () => {
+  it("returns 0 on the empty filter", () => {
+    expect(countActiveFilters(EMPTY_FILTER)).toBe(0);
+  });
+
+  it("counts each populated field once", () => {
+    expect(countActiveFilters({ ...EMPTY_FILTER, name: "x" })).toBe(1);
+    expect(countActiveFilters({ ...EMPTY_FILTER, name: "x", shortName: "y" })).toBe(2);
+    expect(
+      countActiveFilters({
+        ...EMPTY_FILTER,
+        name: "x",
+        shortName: "y",
+        createdFrom: "2026-01-01",
+      }),
+    ).toBe(3);
+    expect(
+      countActiveFilters({
+        name: "x",
+        shortName: "y",
+        createdFrom: "2026-01-01",
+        createdTo: "2026-12-31",
+      }),
+    ).toBe(4);
+  });
+
+  it("treats whitespace-only fields as inactive", () => {
+    expect(
+      countActiveFilters({
+        name: "   ",
+        shortName: "  ",
+        createdFrom: " ",
+        createdTo: " ",
+      }),
+    ).toBe(0);
+  });
+
+  it("agrees with hasActiveFilter for the boundary case", () => {
+    const cases: BanksFilter[] = [
+      EMPTY_FILTER,
+      { ...EMPTY_FILTER, name: "x" },
+      { ...EMPTY_FILTER, createdFrom: " " },
+    ];
+    for (const filter of cases) {
+      expect(hasActiveFilter(filter)).toBe(countActiveFilters(filter) > 0);
+    }
   });
 });
 
