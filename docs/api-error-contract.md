@@ -197,14 +197,16 @@ request_uri, request_method
 
 Level tiering (in order, first match wins):
 
-| Match                                              | Level      |
-|----------------------------------------------------|------------|
-| `throwable instanceof \LogicException`             | `critical` |
-| `type === "unhandled-exception"`                   | `critical` |
-| `status >= 500`                                    | `error`    |
-| `status` 4xx                                       | `warning`  |
+| Match                                                                              | Level      |
+|------------------------------------------------------------------------------------|------------|
+| `throwable instanceof \LogicException && !$throwable instanceof DomainException`   | `critical` |
+| `type === "unhandled-exception"`                                                   | `critical` |
+| `status >= 500`                                                                    | `error`    |
+| `status` 4xx                                                                       | `warning`  |
 
-`LogicException` is pinned ahead of the marker check so a future custom marker that mistakenly maps a programmer error onto a 4xx still wakes on-call.
+Non-domain `\LogicException` is pinned ahead of the marker check so a future custom marker that mistakenly maps a programmer error onto a 4xx still wakes on-call.
+
+**Why the `DomainException` exclusion?** PHP's SPL hierarchy puts `\DomainException` under `\LogicException`, so the project's `Erpify\Shared\Domain\Exception\DomainException` is *also* a `\LogicException` at the language level. Domain exceptions are expected business outcomes (`bank-not-found`, validation conflicts, …), not platform errors — they must keep their status-based level (`warning` for 4xx, `error` for 5xx). The `!$throwable instanceof DomainException` guard preserves that contract while still pinning genuine programmer errors (e.g. `\LogicException` thrown from a value-object invariant when `ext-intl` is missing).
 
 ### `exception_category` — SRE-routable taxonomy
 

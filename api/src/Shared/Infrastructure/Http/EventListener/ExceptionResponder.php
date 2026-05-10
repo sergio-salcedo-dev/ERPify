@@ -32,10 +32,15 @@ use Throwable;
  * wire-envelope construction to {@see ProblemDetailsResponder}.
  *
  * Emits exactly one structured PSR-3 log line per error at a tiered level:
- *   - `LogicException` (programmer / platform error)         → `critical`
- *   - `unhandled-exception` (throwable not recognised)       → `critical`
- *   - status >= 500                                          → `error`
- *   - status 4xx                                             → `warning`
+ *   - non-domain `\LogicException` (programmer / platform error)  → `critical`
+ *   - `unhandled-exception` (throwable not recognised)            → `critical`
+ *   - status >= 500                                               → `error`
+ *   - status 4xx                                                  → `warning`
+ * The "non-domain" qualifier matters: PHP's SPL hierarchy puts `\DomainException`
+ * under `\LogicException`, so the project's `Erpify\Shared\Domain\Exception\DomainException`
+ * is also a `\LogicException` at the language level. Domain exceptions are *expected
+ * business outcomes*, not programmer errors, and must keep flowing to the status-based
+ * mapping (4xx → warning, 5xx → error).
  * The log record's nine context fields (`instance`, `correlation_id`, `type`, `status`,
  * `exception_class`, `exception_category`, `exception_message`, `request_uri`,
  * `request_method`) make the log line operator-queryable: grep by `instance` for the
@@ -246,7 +251,14 @@ final readonly class ExceptionResponder
         // LogicException reaching the listener means the build / contract is broken;
         // SRE must wake on-call even if a future custom marker were to map it to a
         // semantic 4xx by mistake.
-        if ($throwable instanceof LogicException) {
+        //
+        // CAVEAT: PHP's SPL hierarchy puts `\DomainException` under `\LogicException`,
+        // so the project's `Erpify\Shared\Domain\Exception\DomainException` (which
+        // extends `\DomainException`) is also a `\LogicException` at the language
+        // level. Exclude it explicitly: domain exceptions are *expected business
+        // outcomes*, not programmer errors, and must flow to the status-based
+        // mapping below (WARNING for 4xx, ERROR for 5xx).
+        if ($throwable instanceof LogicException && !$throwable instanceof DomainException) {
             return LogLevel::CRITICAL;
         }
 
