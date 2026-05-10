@@ -14,11 +14,6 @@ interface CorrelationIdChipProps {
   className?: string;
 }
 
-function truncateMiddle(id: string): string {
-  if (id.length <= 13) return id;
-  return `${id.slice(0, 7)}…${id.slice(-4)}`;
-}
-
 export function CorrelationIdChip({ id, label, size = "xs", className }: CorrelationIdChipProps) {
   const [copied, setCopied] = useState(false);
 
@@ -37,18 +32,18 @@ export function CorrelationIdChip({ id, label, size = "xs", className }: Correla
       type="button"
       onClick={handleCopy}
       aria-label={`Copy correlation ID ${id}`}
-      title={id}
+      title={`Copy error ID ${id}`}
       className={cn(
         "inline-flex items-center gap-1.5 rounded-[2px] border font-mono transition-colors",
         "border-border bg-muted/50 text-muted-foreground hover:bg-muted",
         "focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
-        size === "xs" ? "h-5 px-1.5 text-[11px]" : "h-6 px-2 text-xs",
+        size === "xs" ? "h-5 px-1.5 text-2xs" : "h-6 px-2 text-xs",
         className,
       )}
     >
       {label ? <span className="font-sans text-muted-foreground">{label}</span> : null}
       <span aria-hidden="true" data-testid="correlation-id-display">
-        {truncateMiddle(id)}
+        {id}
       </span>
       <span className="sr-only" role="status" aria-live="polite">
         {copied ? "Copied" : ""}

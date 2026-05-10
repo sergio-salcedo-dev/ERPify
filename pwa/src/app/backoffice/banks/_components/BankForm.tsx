@@ -15,7 +15,8 @@ import {
 } from "@/context/backoffice/bank/application/schemas/BankSchema";
 import { PersistenceAction } from "@/context/shared/domain/types/status";
 import { FormField, ProblemDisplay } from "@/components/erpify";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { safeHref } from "@/lib/safeHref";

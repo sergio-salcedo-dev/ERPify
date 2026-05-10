@@ -116,6 +116,93 @@ locally:
 - **Tables / boundaries / sheets** — `<DataTable>`, `<AsyncBoundary>`,
   `<RecordSheet>`, `<EmptyState>`, `<FormField>`, `<ProblemDisplay>`,
   `<StatusBadge>`, `<CorrelationIdChip>`, `<AppShell>`.
+- **Error module** — every Next.js error surface (`not-found.tsx`,
+  `error.tsx`, `global-error.tsx`, the Next 15+ `forbidden.tsx` /
+  `unauthorized.tsx` convention files, plus the navigable
+  `/maintenance`, `/rate-limited`, `/offline`, `/unauthorized`,
+  `/unauthenticated` routes inside the `app/(errors)/` route group)
+  composes a single bounded module:
+  - `src/context/shared/error/domain/IconTone.ts` — pure domain types
+    (`IconTone` constant + type).
+  - `src/context/shared/error/infrastructure/ui/ErrorScreen.tsx` —
+    responsive shell. Tune mobile / tablet / laptop / desktop / large
+    breakpoints here, once.
+  - `src/context/shared/error/infrastructure/ui/ErrorActions.tsx` —
+    Client Component that renders the canonical 2-button row (primary
+    `Home` outside `Routes.BACKOFFICE`, primary `Return to BackOffice`
+    inside it; secondary `Go back` via `router.back()` with a fallback
+    to the primary destination when there is no history).
+  - One Screen / Boundary component per surface lives in the same
+    `infrastructure/ui/` folder: `<NotFoundScreen>`,
+    `<AccessDeniedScreen>` (HTTP 403), `<SignInRequiredScreen>` (HTTP
+    401), `<SegmentErrorBoundary>` (HTTP 500), `<RootErrorBoundary>`
+    (root-layout crash). The Next convention files at
+    `app/{error,forbidden,global-error,not-found,unauthorized}.tsx`
+    are **thin re-exports** of these — the JSX has a single source of
+    truth that's discoverable next to the rest of the module. The
+    navigable `app/(errors)/<slug>/page.tsx` routes import the same
+    Screen so a `forbidden()` boundary and `/unauthorized` look
+    identical by construction.
+  - Exported via `@/context/shared/error/infrastructure/ui`. Do NOT
+    re-export from `@/components/erpify` — keep the boundary explicit.
+  - Local-test recipes for every error surface (and how to verify
+    production redaction) live in
+    [`docs/error-pages-testing.md`](docs/error-pages-testing.md). The
+    matching automated coverage is
+    [`tests/e2e/error-pages.spec.ts`](tests/e2e/error-pages.spec.ts);
+    drive `error.tsx` deterministically via the dev-only `/dev-throw`
+    fixture at `src/app/(errors)/dev-throw/page.tsx`.
+  - The `error.tsx` / `global-error.tsx` boundaries must continue to gate
+    `error.message` behind
+    `process.env.NODE_ENV === NodeEnv.DEVELOPMENT` so production never
+    leaks stack traces.
+- **Dev Tools module** — internal QA / engineering hub at
+  `https://localhost/dev-tools`, gated behind
+  `isDevToolsAvailable()` (`process.env.NODE_ENV !== NodeEnv.PRODUCTION`).
+  - `src/context/shared/dev-tools/domain/DevTool.ts` — `DevTool` /
+    `DevToolGroup` types.
+  - `src/context/shared/dev-tools/domain/isDevToolsAvailable.ts` —
+    central env predicate. Use it everywhere that mounts a dev/QA
+    surface (route file, navbar link, sidebar item) so the production
+    gate stays consistent.
+  - `src/context/shared/dev-tools/domain/devToolRoutes.ts` —
+    authoritative URL inventory (`/dev-tools` and its nested tools,
+    `/dev-throw`). Add a new dev URL here once and the middleware
+    matcher + the page-level guard pick it up.
+  - `src/context/shared/dev-tools/infrastructure/ui/devToolGroups.ts` —
+    authoritative registry. Adding a new tool = a new entry here; the
+    menu picks it up automatically.
+  - `src/context/shared/dev-tools/infrastructure/ui/DevToolsMenu.tsx` —
+    page UI. Re-exported from `app/dev-tools/page.tsx` (thin Next
+    binding with a `notFound()` guard).
+  - Entry points: a "Dev Tools" link in the frontoffice
+    `<Navbar>` (rendered only when `isDevToolsAvailable()`) and a
+    `Development` sidebar group with a `Dev Tools` item in
+    `BackOfficeLayoutClient.tsx`. Both disappear in production builds.
+  - **Production short-circuit** — `pwa/src/proxy.ts` (Next 16's
+    successor to `middleware.ts`) rewrites every dev-tool URL to a
+    guaranteed-unmatched path _before_ the page handler runs in
+    production, so the branded `not-found.tsx` is served and the dev
+    surface is unreachable even if a future contributor accidentally
+    drops the page-level `isDevToolsAvailable()` check. Turbopack
+    requires `config.matcher` to be a static literal, so the matcher
+    array in `proxy.ts` is hardcoded — its parity with
+    `DEV_TOOL_ROUTE_PREFIXES` is locked by
+    [`tests/proxy.test.ts`](tests/proxy.test.ts) so a forgotten entry
+    fails the build.
+- **String constants** — never compare `process.env.NODE_ENV` against
+  the literal `"development"` / `"production"` / `"test"`; use
+  `NodeEnv` from `@/context/shared/domain/types/nodeEnv`. Never hard-
+  code top-level paths (`/`, `/backoffice`) in shared infrastructure
+  code (error pages, navigation guards, fallbacks); use `Routes` from
+  `@/context/shared/domain/types/routes`. Entity-scoped paths
+  (`/backoffice/banks/${id}`) stay next to the use case that builds
+  them.
+- **`buttonVariants` import path** — import from
+  `@/components/ui/button-variants`, never from
+  `@/components/ui/button` (the latter is `"use client"` and Next 16
+  blocks server invocations of the cva helper). Import the `Button`
+  component itself from `@/components/ui/button` as before.
 - **Form validation** — `Validator` / `ZodValidatorAdapter` / `useZodForm`
   from `@/context/shared/infrastructure/Validation`. Each entity declares
   its own schema in `src/context/<bounded-context>/<entity>/application/schemas/`
