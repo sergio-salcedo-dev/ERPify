@@ -122,7 +122,15 @@ export function BankForm({ mode, initial }: BankFormProps) {
     >
       {problem ? <ProblemDisplay problem={problem} variant="inline" /> : null}
 
-      <FormField name="name" label="Name" required error={errors.name?.message}>
+      <FormField
+        name="name"
+        label="Name"
+        required
+        error={errors.name?.message}
+        helper={
+          'Must be unique. Casing and accents are ignored — e.g. "BBVA" collides with "bbva", and "Sociedad Anónima" collides with "Sociedad Anonima".'
+        }
+      >
         <Input
           {...register("name")}
           maxLength={255}
@@ -132,11 +140,18 @@ export function BankForm({ mode, initial }: BankFormProps) {
         />
       </FormField>
 
-      <FormField name="shortName" label="Short name" required error={errors.shortName?.message}>
+      <FormField
+        name="shortName"
+        label="Short name"
+        required
+        error={errors.shortName?.message}
+        helper={'Saved in upper-case ASCII without accents — e.g. "bbva" → "BBVA", "GLÉ" → "GLE".'}
+      >
         <Input
           {...register("shortName")}
           maxLength={50}
           autoComplete="off"
+          style={{ textTransform: "uppercase" }}
           data-testid="bank-form__short-name"
         />
       </FormField>

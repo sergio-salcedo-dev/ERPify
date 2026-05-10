@@ -27,7 +27,7 @@ final class BankLogoMultipartFunctionalTest extends WebTestCase
         $uploadedFile = new UploadedFile($tmp, 'logo.png', 'image/png', null, true);
 
         $suffix = \bin2hex(\random_bytes(4));
-        $name = 'Logo Bank Multipart ' . $suffix;
+        $name = 'Test Logo Bank Multipart ' . $suffix;
         $shortName = 'LBM' . $suffix;
 
         $kernelBrowser->request(
@@ -75,7 +75,7 @@ final class BankLogoMultipartFunctionalTest extends WebTestCase
         $uploadedFile = new UploadedFile($tmp, 'logo.png', 'image/png', null, true);
 
         $suffix = \bin2hex(\random_bytes(4));
-        $name = 'Etag Bank ' . $suffix;
+        $name = 'Test Etag Bank ' . $suffix;
         $shortName = 'ETB' . $suffix;
 
         $kernelBrowser->request(

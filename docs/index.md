@@ -41,7 +41,7 @@
 - **[architecture-api.md](./architecture-api.md)** — API layering, stack, Doctrine, Messenger, Mercure
 - **[architecture-pwa.md](./architecture-pwa.md)** — PWA layering, Next.js, Inversify DI, testing
 - **[integration-architecture.md](./integration-architecture.md)** — How API and PWA share `localhost`
-- **[api-error-contract.md](./api-error-contract.md)** — RFC 9457 Problem Details: marker→status map, correlation-id, instance UUIDv7, logging tiers
+- **[api-error-contract.md](./api-error-contract.md)** — RFC 9457 Problem Details: marker→status map, correlation-id, instance UUIDv7, logging tiers, `exception_category` SRE taxonomy
 
 ### Deep-Dive Documentation
 

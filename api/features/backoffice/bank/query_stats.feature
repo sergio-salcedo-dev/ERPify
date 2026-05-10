@@ -20,7 +20,7 @@ Feature: Doctrine query stats on bank CRUD
 
   Scenario: Listing banks with a name filter still hits a single connection
     Given I reset the stats for all doctrine connections
-    When I send a "GET" request to "/backoffice/banks?names[]=santander"
+    When I send a "GET" request to "/backoffice/banks?names[]=BBVA"
     Then the response status code should be 200
     And a request contains "SELECT" for doctrine connection "default"
     And the requests got executed only on doctrine connection "default"

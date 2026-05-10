@@ -91,9 +91,12 @@ parameters:
 
         # Audit/event-store entity: rows are written by the dispatcher and read via DBAL queries,
         # never through the entity's properties.
+        # Bank.nameNormalized: populated by the domain factory, read only by the Doctrine unique
+        # index (LIKE/= via the ORM) and Symfony's UniqueEntity reflection — never via a PHP getter.
         - identifier: property.onlyWritten
           paths:
               - ../../src/Shared/Infrastructure/Persistence/Entity/StoredDomainEvent.php
+              - ../../src/Backoffice/Bank/Domain/Entity/Bank.php
 
         # Doctrine BLOB columns hydrate to either string or stream resource depending on driver/platform;
         # the runtime narrowing in getRawBytes() is intentional.
