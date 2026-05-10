@@ -142,12 +142,13 @@ export function BankForm({ mode, initial }: BankFormProps) {
         label="Short name"
         required
         error={errors.shortName?.message}
-        helper="Must be unique. Casing and accents are ignored."
+        helper={'Saved in upper-case ASCII without accents — e.g. "bbva" → "BBVA", "GLÉ" → "GLE".'}
       >
         <Input
           {...register("shortName")}
           maxLength={50}
           autoComplete="off"
+          style={{ textTransform: "uppercase" }}
           data-testid="bank-form__short-name"
         />
       </FormField>

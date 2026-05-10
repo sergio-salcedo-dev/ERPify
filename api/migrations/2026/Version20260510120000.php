@@ -8,19 +8,24 @@ use Doctrine\DBAL\Schema\Schema;
 use Doctrine\Migrations\AbstractMigration;
 
 /**
- * Consolidated bank schema. Replaces the four prior bank-only migrations
- * (table creation, stored object columns, common-bank seed, uniqueness
- * indexes) plus the case/accent-insensitive uniqueness work — all collapsed
- * into a single CREATE TABLE that reflects the entity's final shape.
+ * Consolidated bank schema. Replaces the prior four bank-only migrations
+ * plus the case/accent-insensitive uniqueness work — all collapsed into a
+ * single CREATE TABLE that reflects the entity's final shape.
  *
  * The seed data that previously lived in the schema migration moved to
  * Hautelook fixtures (`tests/DataFixtures/Fixtures/Bank.yaml`) so prod
  * never receives placeholder rows and dev/test get a richer dataset.
  *
- * Uniqueness is enforced on `name_normalized` and `short_name_normalized`,
- * populated via `Erpify\Shared\Domain\ValueObject\NormalizedText` (lower +
- * trim + ICU `Latin-ASCII` transliteration), so "BBVA" / "bbva" and
- * "Sociedad Anónima" / "Sociedad Anonima" all collide.
+ * Uniqueness rules:
+ *   - `name`           — preserves the user's casing for display; uniqueness
+ *                        is enforced through `name_normalized`, populated
+ *                        via `NormalizedText::from()` (lower + trim + ICU
+ *                        Latin-ASCII), so "BBVA" / "bbva" and "Sociedad
+ *                        Anónima" / "Sociedad Anonima" collide.
+ *   - `short_name`     — stored canonicalized (upper-case ASCII, no
+ *                        diacritics) via `NormalizedText::toAsciiUpper()`,
+ *                        with the unique index sitting directly on the
+ *                        column. No separate normalized half is needed.
  */
 final class Version20260510120000 extends AbstractMigration
 {
@@ -37,7 +42,6 @@ final class Version20260510120000 extends AbstractMigration
             . 'name VARCHAR(255) NOT NULL, '
             . 'name_normalized VARCHAR(255) NOT NULL, '
             . 'short_name VARCHAR(50) NOT NULL, '
-            . 'short_name_normalized VARCHAR(50) NOT NULL, '
             . 'logo_media_id UUID DEFAULT NULL, '
             . 'stored_object_key VARCHAR(512) DEFAULT NULL, '
             . 'stored_object_mime_type VARCHAR(64) DEFAULT NULL, '
@@ -49,7 +53,7 @@ final class Version20260510120000 extends AbstractMigration
         );
 
         $this->addSql('CREATE UNIQUE INDEX UNIQ_bank_name_normalized ON bank (name_normalized)');
-        $this->addSql('CREATE UNIQUE INDEX UNIQ_bank_short_name_normalized ON bank (short_name_normalized)');
+        $this->addSql('CREATE UNIQUE INDEX UNIQ_bank_short_name ON bank (short_name)');
         $this->addSql('CREATE INDEX IDX_D860BF7ABAAE86A3 ON bank (logo_media_id)');
 
         $this->addSql(

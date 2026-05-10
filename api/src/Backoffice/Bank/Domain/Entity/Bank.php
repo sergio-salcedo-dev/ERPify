@@ -20,7 +20,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\Entity]
 #[ORM\Table(name: 'bank')]
 #[UniqueEntity(fields: ['nameNormalized'], message: 'This bank name is already in use.', errorPath: 'name')]
-#[UniqueEntity(fields: ['shortNameNormalized'], message: 'This short name is already in use.', errorPath: 'shortName')]
+#[UniqueEntity(fields: ['shortName'], message: 'This short name is already in use.')]
 class Bank extends AggregateRoot
 {
     #[ORM\Column(length: 255)]
@@ -32,14 +32,16 @@ class Bank extends AggregateRoot
     #[ORM\Column(name: 'name_normalized', length: 255, unique: true)]
     private string $nameNormalized;
 
-    #[ORM\Column(name: 'short_name', length: 50)]
+    /**
+     * Stored canonicalized: upper-case ASCII (no diacritics) via
+     * {@see NormalizedText::toAsciiUpper()}. Comparisons / uniqueness use
+     * the raw column directly — no separate normalized half needed.
+     */
+    #[ORM\Column(name: 'short_name', length: 50, unique: true)]
     #[Assert\NotBlank]
     #[Assert\Length(max: 50)]
     #[Groups(['bank:get', 'bank:search'])]
     private string $shortName;
-
-    #[ORM\Column(name: 'short_name_normalized', length: 50, unique: true)]
-    private string $shortNameNormalized;
 
     #[ORM\ManyToOne(targetEntity: Media::class, cascade: ['persist'])]
     #[ORM\JoinColumn(name: 'logo_media_id', referencedColumnName: 'id', nullable: true)]
@@ -72,14 +74,12 @@ class Bank extends AggregateRoot
         ?string $storedObjectContentHash = null,
     ): self {
         $nameVo = NormalizedText::from($name);
-        $shortNameVo = NormalizedText::from($shortName);
 
         $bank = new self();
         $bank->id = $id;
         $bank->name = $nameVo->display;
         $bank->nameNormalized = $nameVo->normalized;
-        $bank->shortName = $shortNameVo->display;
-        $bank->shortNameNormalized = $shortNameVo->normalized;
+        $bank->shortName = NormalizedText::toAsciiUpper($shortName);
         $bank->media = $media;
         $bank->storedObjectKey = $storedObjectKey;
         $bank->storedObjectMimeType = $storedObjectMimeType;
@@ -142,12 +142,10 @@ class Bank extends AggregateRoot
     public function rename(string $updateEventId, string $name, string $shortName): void
     {
         $nameVo = NormalizedText::from($name);
-        $shortNameVo = NormalizedText::from($shortName);
 
         $this->name = $nameVo->display;
         $this->nameNormalized = $nameVo->normalized;
-        $this->shortName = $shortNameVo->display;
-        $this->shortNameNormalized = $shortNameVo->normalized;
+        $this->shortName = NormalizedText::toAsciiUpper($shortName);
         $now = new DateTimeImmutable();
         $this->updatedAt = $now;
 

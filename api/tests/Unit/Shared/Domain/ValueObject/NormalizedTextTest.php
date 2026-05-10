@@ -64,4 +64,23 @@ final class NormalizedTextTest extends TestCase
 
         $this->assertSame(NormalizedText::from($raw)->normalized, NormalizedText::normalize($raw));
     }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function asciiUpperCases(): iterable
+    {
+        yield 'lower-case to upper' => ['bbva', 'BBVA'];
+        yield 'mixed-case to upper' => ['BbVa', 'BBVA'];
+        yield 'strips diacritics' => ['GLÉ', 'GLE'];
+        yield 'strips diacritics and lowers' => ['glé', 'GLE'];
+        yield 'trims surrounding whitespace' => ['  bnp  ', 'BNP'];
+        yield 'numbers preserved' => ['Bk7', 'BK7'];
+    }
+
+    #[DataProvider('asciiUpperCases')]
+    public function testToAsciiUpperProducesCanonicalCode(string $raw, string $expected): void
+    {
+        $this->assertSame($expected, NormalizedText::toAsciiUpper($raw));
+    }
 }
