@@ -30,6 +30,10 @@ api/.rector.cache/
 # Stray PHP-CS-Fixer cache (some IDE plugins drop it at the cwd)
 .php-cs-fixer.cache
 
+# Stray repo-root Node artefacts (e.g. when a tool runs `vitest` from the
+# repo root instead of `pwa/`, npm/Vite drops a `node_modules/` here).
+/node_modules/
+
 # PWA — Node / Next
 pwa/node_modules/
 pwa/.next/
