@@ -1,14 +1,13 @@
 import type { ReactNode } from "react";
 import { ShieldCheck, type LucideIcon } from "lucide-react";
+import { IconTone } from "@/context/shared/error/domain/IconTone";
 import { cn } from "@/lib/utils";
 
-type IconTone = "primary" | "destructive" | "warning" | "muted";
-
 const iconToneClasses: Record<IconTone, { wrap: string; icon: string }> = {
-  primary: { wrap: "bg-primary/10", icon: "text-primary" },
-  destructive: { wrap: "bg-destructive/10", icon: "text-destructive" },
-  warning: { wrap: "bg-warning/10", icon: "text-warning" },
-  muted: { wrap: "bg-muted", icon: "text-muted-foreground" },
+  [IconTone.PRIMARY]: { wrap: "bg-primary/10", icon: "text-primary" },
+  [IconTone.DESTRUCTIVE]: { wrap: "bg-destructive/10", icon: "text-destructive" },
+  [IconTone.WARNING]: { wrap: "bg-warning/10", icon: "text-warning" },
+  [IconTone.MUTED]: { wrap: "bg-muted", icon: "text-muted-foreground" },
 };
 
 export interface ErrorScreenProps {
@@ -56,7 +55,7 @@ export function ErrorScreen({
   title,
   description,
   icon: Icon,
-  iconTone = "primary",
+  iconTone = IconTone.PRIMARY,
   extras,
   actions,
   mainRole,

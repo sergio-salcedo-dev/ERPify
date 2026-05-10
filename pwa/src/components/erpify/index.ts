@@ -17,8 +17,6 @@ export type { DataTableColumn, DataTableSort, DataTableSelection } from "./DataT
 export { DatePickerField } from "./DatePickerField";
 export type { DatePickerFieldProps } from "./DatePickerField";
 export { EmptyState } from "./EmptyState";
-export { ErrorScreen } from "./ErrorScreen";
-export type { ErrorScreenProps } from "./ErrorScreen";
 export { FormField, useFormField } from "./FormField";
 export { ProblemDisplay } from "./ProblemDisplay";
 export { RecordSheet } from "./RecordSheet";

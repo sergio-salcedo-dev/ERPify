@@ -115,17 +115,37 @@ locally:
   `navigator.clipboard.writeText` from an entity component directly.
 - **Tables / boundaries / sheets** — `<DataTable>`, `<AsyncBoundary>`,
   `<RecordSheet>`, `<EmptyState>`, `<FormField>`, `<ProblemDisplay>`,
-  `<StatusBadge>`, `<CorrelationIdChip>`, `<AppShell>`, `<ErrorScreen>`.
-- **Error pages** — `<ErrorScreen>` is the shared shell behind every
-  `src/app/` error file (`not-found.tsx`, `error.tsx`, `global-error.tsx`,
-  the Next 15+ `forbidden.tsx` / `unauthorized.tsx` convention files, and
-  the bespoke `/maintenance`, `/rate-limited`, `/offline`,
-  `/unauthorized`, `/unauthenticated` routes). Tune mobile / tablet /
-  laptop / desktop / large breakpoints there once instead of forking
-  layouts per screen. The `error.tsx` / `global-error.tsx` boundaries
-  must continue to gate `error.message` behind
-  `process.env.NODE_ENV === "development"` so production never leaks
-  stack traces.
+  `<StatusBadge>`, `<CorrelationIdChip>`, `<AppShell>`.
+- **Error module** — every Next.js error surface (`not-found.tsx`,
+  `error.tsx`, `global-error.tsx`, the Next 15+ `forbidden.tsx` /
+  `unauthorized.tsx` convention files, plus the navigable
+  `/maintenance`, `/rate-limited`, `/offline`, `/unauthorized`,
+  `/unauthenticated` routes inside the `app/(errors)/` route group)
+  composes a single bounded module:
+  - `src/context/shared/error/domain/IconTone.ts` — pure domain types
+    (`IconTone` constant + type).
+  - `src/context/shared/error/infrastructure/ui/ErrorScreen.tsx` —
+    responsive shell. Tune mobile / tablet / laptop / desktop / large
+    breakpoints here, once.
+  - `src/context/shared/error/infrastructure/ui/ErrorActions.tsx` —
+    Client Component that renders the canonical 2-button row (primary
+    `Home` outside `Routes.BACKOFFICE`, primary `Return to BackOffice`
+    inside it; secondary `Go back` via `router.back()` with a fallback
+    to the primary destination when there is no history).
+  - Exported via `@/context/shared/error/infrastructure/ui`. Do NOT
+    re-export from `@/components/erpify` — keep the boundary explicit.
+    The `error.tsx` / `global-error.tsx` boundaries must continue to gate
+    `error.message` behind
+    `process.env.NODE_ENV === NodeEnv.DEVELOPMENT` so production never
+    leaks stack traces.
+- **String constants** — never compare `process.env.NODE_ENV` against
+  the literal `"development"` / `"production"` / `"test"`; use
+  `NodeEnv` from `@/context/shared/domain/types/nodeEnv`. Never hard-
+  code top-level paths (`/`, `/backoffice`) in shared infrastructure
+  code (error pages, navigation guards, fallbacks); use `Routes` from
+  `@/context/shared/domain/types/routes`. Entity-scoped paths
+  (`/backoffice/banks/${id}`) stay next to the use case that builds
+  them.
 - **`buttonVariants` import path** — import from
   `@/components/ui/button-variants`, never from
   `@/components/ui/button` (the latter is `"use client"` and Next 16

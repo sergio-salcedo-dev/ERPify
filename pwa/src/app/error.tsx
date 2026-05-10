@@ -1,32 +1,31 @@
 "use client";
 
 import { useEffect } from "react";
-import Link from "next/link";
-import { AlertTriangle, Home, RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { buttonVariants } from "@/components/ui/button-variants";
-import { CopyButton, ErrorScreen } from "@/components/erpify";
-import { cn } from "@/lib/utils";
+import { AlertTriangle } from "lucide-react";
+import { CopyButton } from "@/components/erpify";
+import { ErrorActions, ErrorScreen } from "@/context/shared/error/infrastructure/ui";
+import { IconTone } from "@/context/shared/error/domain/IconTone";
+import { NodeEnv } from "@/context/shared/domain/types/nodeEnv";
 
 interface ErrorBoundaryProps {
   error: Error & { digest?: string };
+  /** Provided by Next's error boundary contract; intentionally not wired to a UI control — the
+   *  shared {@link ErrorActions} row already exposes the canonical "Go back" recovery path. */
   reset: () => void;
 }
 
-const ACTION_BTN = "h-11 w-full px-6 text-base sm:w-auto sm:h-10 lg:h-11 lg:text-base";
-
-export default function GlobalError({ error, reset }: ErrorBoundaryProps) {
+export default function GlobalError({ error }: ErrorBoundaryProps) {
   useEffect(() => {
     // Placeholder hook for an external observability sink (Sentry, Datadog, …).
     // The real adapter must scrub PII / secrets before transmission and run
     // server-side where possible — never ship raw stack traces to a 3rd party
     // from the browser without explicit consent.
-    if (process.env.NODE_ENV === "development") {
+    if (process.env.NODE_ENV === NodeEnv.DEVELOPMENT) {
       console.error("[error-boundary]", error);
     }
   }, [error]);
 
-  const isDev = process.env.NODE_ENV === "development";
+  const isDev = process.env.NODE_ENV === NodeEnv.DEVELOPMENT;
 
   return (
     <ErrorScreen
@@ -35,7 +34,7 @@ export default function GlobalError({ error, reset }: ErrorBoundaryProps) {
       title="Something went wrong"
       description="We hit an unexpected problem while processing your request. The team has been notified. Please try again, and if the issue persists contact support."
       icon={AlertTriangle}
-      iconTone="destructive"
+      iconTone={IconTone.DESTRUCTIVE}
       mainRole="alert"
       extras={
         <>
@@ -76,37 +75,7 @@ export default function GlobalError({ error, reset }: ErrorBoundaryProps) {
           ) : null}
         </>
       }
-      actions={
-        <>
-          <Button
-            type="button"
-            size="lg"
-            onClick={() => reset()}
-            title="Retry the failing operation"
-            aria-label="Try again"
-            data-testid="error-page__retry"
-            className={cn(ACTION_BTN, "error-page__retry")}
-          >
-            <RefreshCw className="size-4" aria-hidden="true" />
-            Try again
-          </Button>
-          <Link
-            href="/"
-            className={cn(
-              buttonVariants({ variant: "outline", size: "lg" }),
-              ACTION_BTN,
-              "error-page__home-link",
-            )}
-            data-icon="inline-start"
-            title="Return to home"
-            aria-label="Home"
-            data-testid="error-page__home-link"
-          >
-            <Home className="size-4" aria-hidden="true" />
-            Return home
-          </Link>
-        </>
-      }
+      actions={<ErrorActions />}
     />
   );
 }

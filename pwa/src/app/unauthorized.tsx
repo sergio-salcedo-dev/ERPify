@@ -7,4 +7,4 @@
 // semantically means "Unauthenticated" — that's why the navigable route lives
 // at `/unauthenticated/page.tsx` while this Next-convention file mirrors the
 // HTTP wording.
-export { default } from "./unauthenticated/page";
+export { default } from "./(errors)/unauthenticated/page";

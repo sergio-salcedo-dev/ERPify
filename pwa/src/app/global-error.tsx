@@ -1,30 +1,30 @@
 "use client";
 
 import { useEffect } from "react";
-import Link from "next/link";
-import { AlertTriangle, Home, RefreshCw } from "lucide-react";
-import { ErrorScreen } from "@/components/erpify";
+import { AlertTriangle } from "lucide-react";
+import { ErrorActions, ErrorScreen } from "@/context/shared/error/infrastructure/ui";
+import { IconTone } from "@/context/shared/error/domain/IconTone";
+import { NodeEnv } from "@/context/shared/domain/types/nodeEnv";
 
 interface GlobalErrorProps {
   error: Error & { digest?: string };
+  /** Provided by Next's error boundary contract; intentionally not wired to a UI control — the
+   *  shared {@link ErrorActions} row already exposes the canonical "Go back" recovery path. */
   reset: () => void;
 }
 
-const ACTION_BTN =
-  "inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg px-6 text-sm font-medium transition-colors sm:w-auto sm:h-10 lg:h-11 lg:text-base";
-
-export default function GlobalError({ error, reset }: GlobalErrorProps) {
+export default function GlobalError({ error }: GlobalErrorProps) {
   useEffect(() => {
     // Last-resort observability hook. The root layout has crashed, so this
     // boundary owns the entire document — keep dependencies minimal to avoid
     // chaining the failure. The real adapter (Sentry, Datadog, …) must scrub
     // PII / secrets before transmission and tolerate a partially-broken DOM.
-    if (process.env.NODE_ENV === "development") {
+    if (process.env.NODE_ENV === NodeEnv.DEVELOPMENT) {
       console.error("[global-error]", error);
     }
   }, [error]);
 
-  const isDev = process.env.NODE_ENV === "development";
+  const isDev = process.env.NODE_ENV === NodeEnv.DEVELOPMENT;
 
   return (
     <html lang="en">
@@ -35,7 +35,7 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
           title="The application could not start"
           description="A critical failure occurred while loading Erpify. The team has been notified. Try again, and if the issue persists contact support with the reference below."
           icon={AlertTriangle}
-          iconTone="destructive"
+          iconTone={IconTone.DESTRUCTIVE}
           mainRole="alert"
           withHeader={false}
           extras={
@@ -67,31 +67,7 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
               ) : null}
             </>
           }
-          actions={
-            <>
-              <button
-                type="button"
-                onClick={() => reset()}
-                className={`global-error__retry bg-primary text-primary-foreground hover:bg-primary/90 ${ACTION_BTN}`}
-                title="Retry loading the application"
-                aria-label="Try again"
-                data-testid="global-error__retry"
-              >
-                <RefreshCw className="size-4" aria-hidden="true" />
-                Try again
-              </button>
-              <Link
-                href="/"
-                className={`global-error__home-link border-border text-foreground hover:bg-muted border ${ACTION_BTN}`}
-                title="Reload home"
-                aria-label="Home"
-                data-testid="global-error__home-link"
-              >
-                <Home className="size-4" aria-hidden="true" />
-                Reload home
-              </Link>
-            </>
-          }
+          actions={<ErrorActions />}
         />
       </body>
     </html>
