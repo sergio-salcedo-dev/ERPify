@@ -13,7 +13,7 @@ export default function MaintenancePage() {
       testIdPrefix="maintenance"
       status="Error 503"
       title="Scheduled maintenance"
-      description="Erpify is temporarily offline while we deploy improvements. We'll be back shortly — thank you for your patience."
+      description="Erpify is temporarily offline. We'll be back shortly — thank you for your patience."
       icon={Wrench}
       iconTone={IconTone.WARNING}
       actions={<ErrorActions />}

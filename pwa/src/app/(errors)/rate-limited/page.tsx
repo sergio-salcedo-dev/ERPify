@@ -13,7 +13,7 @@ export default function RateLimitedPage() {
       testIdPrefix="rate-limited"
       status="Error 429"
       title="Too many requests"
-      description="You've hit our request limit. Please wait a few moments before trying again. If you're running automation, slow down or contact support to request higher quotas."
+      description="You've hit our request limit. Please wait a few moments before trying again or contact support to request higher quotas."
       icon={Hourglass}
       iconTone={IconTone.WARNING}
       actions={<ErrorActions />}

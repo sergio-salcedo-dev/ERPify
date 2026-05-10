@@ -74,7 +74,7 @@ const STATIC_PAGES: ReadonlyArray<StaticErrorPageCase> = [
     testId: "maintenance",
     status: "Error 503",
     title: "Scheduled maintenance",
-    descriptionContains: "temporarily offline while we deploy improvements",
+    descriptionContains: "temporarily offline",
     expectedHttpStatus: 200,
   },
   {
