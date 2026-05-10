@@ -8,8 +8,8 @@ import { VIEWPORT_DESKTOP, VIEWPORT_MOBILE } from "./constants";
  * - Static / navigable error routes (`/maintenance`, `/rate-limited`,
  *   `/offline`, `/unauthenticated`, `/unauthorized`).
  * - The Next.js `not-found.tsx` boundary (any unmatched URL).
- * - The Next.js `error.tsx` boundary (driven by the dev-only `/__throw`
- *   fixture in `app/(errors)/__throw/page.tsx`).
+ * - The Next.js `error.tsx` boundary (driven by the dev-only `/dev-throw`
+ *   fixture in `app/(errors)/dev-throw/page.tsx`).
  * - The `<ErrorActions>` row's pathname-aware primary CTA (`Return home`
  *   vs `Return to BackOffice`).
  *
@@ -20,8 +20,8 @@ import { VIEWPORT_DESKTOP, VIEWPORT_MOBILE } from "./constants";
  *   verification is documented in `pwa/docs/error-pages-testing.md`.
  */
 
-/** Mirrors the constant exported from `app/(errors)/__throw/page.tsx`. */
-const THROW_FIXTURE_MESSAGE = "Triggered by /__throw — debug fixture for the error.tsx boundary.";
+/** Mirrors the constant exported from `app/(errors)/dev-throw/page.tsx`. */
+const THROW_FIXTURE_MESSAGE = "Triggered by /dev-throw — debug fixture for the error.tsx boundary.";
 
 interface StaticErrorPageCase {
   /** Display name for the test description. */
@@ -177,9 +177,9 @@ test.describe("Error pages — 500 boundary (error.tsx)", () => {
   test.use({ viewport: VIEWPORT_DESKTOP });
 
   test("renders the error.tsx boundary when a server component throws", async ({ page }) => {
-    // The `__throw` fixture is dev/test-only — it calls `notFound()` in
-    // production builds, see `app/(errors)/__throw/page.tsx`.
-    const response = await page.goto("/__throw");
+    // The `dev-throw` fixture is dev/test-only — it calls `notFound()` in
+    // production builds, see `app/(errors)/dev-throw/page.tsx`.
+    const response = await page.goto("/dev-throw");
     expect(response, "navigation should produce a response").not.toBeNull();
     expect(response?.status()).toBe(500);
 
@@ -207,7 +207,7 @@ test.describe("Error pages — 500 boundary (error.tsx)", () => {
     // block must contain the message we threw. The matching production
     // verification is manual and documented in
     // `pwa/docs/error-pages-testing.md`.
-    await page.goto("/__throw");
+    await page.goto("/dev-throw");
     const details = page.getByTestId("error-page__details");
     await expect(details).toBeVisible();
     await expect(details).toContainText(THROW_FIXTURE_MESSAGE);
@@ -215,7 +215,7 @@ test.describe("Error pages — 500 boundary (error.tsx)", () => {
 
   test("the Error ID can be copied to the clipboard", async ({ page, context }) => {
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-    await page.goto("/__throw");
+    await page.goto("/dev-throw");
 
     // Next assigns a digest hash to every server-thrown error; the digest
     // block plus its copy button must therefore always render.

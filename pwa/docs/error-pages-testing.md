@@ -24,7 +24,7 @@ Then open each URL in a browser:
 | 503 — Maintenance       | `https://localhost/maintenance`         | direct navigation     |
 | 429 — Too many requests | `https://localhost/rate-limited`        | direct navigation     |
 | Offline (PWA)           | `https://localhost/offline`             | direct navigation     |
-| 500 — Boundary          | `https://localhost/__throw`             | dev/test-only fixture |
+| 500 — Boundary          | `https://localhost/dev-throw`           | dev/test-only fixture |
 
 For the BackOffice context (primary CTA flips to `Return to BackOffice`),
 prefix the URL with `/backoffice` — e.g. `/backoffice/anything`.
@@ -45,7 +45,7 @@ src/app/
 ├── forbidden.tsx                      ← Next 15+ forbidden() (re-exports 403 UI)
 ├── unauthorized.tsx                   ← Next 15+ unauthorized() (re-exports 401 UI)
 └── (errors)/
-    ├── __throw/page.tsx               ← dev-only 500 trigger
+    ├── dev-throw/page.tsx               ← dev-only 500 trigger
     ├── maintenance/page.tsx           ← /maintenance
     ├── offline/page.tsx               ← /offline
     ├── rate-limited/page.tsx          ← /rate-limited
@@ -62,17 +62,17 @@ their use cases and surface the RFC 9457 problem inline via
 A backend 500 from `BankSearchController.php` therefore renders the
 inline panel, **not** `app/error.tsx`. That's by design. To exercise
 `error.tsx` itself you need an actual uncaught render error — that's
-what `/__throw` is for.
+what `/dev-throw` is for.
 
 ## Triggering the 500 boundary on demand
 
-`src/app/(errors)/__throw/page.tsx` is a server component that throws
+`src/app/(errors)/dev-throw/page.tsx` is a server component that throws
 synchronously when `process.env.NODE_ENV !== NodeEnv.PRODUCTION` and
 `notFound()`s otherwise. Visit it any time the dev or test stack is up:
 
 ```bash
 make dev
-open https://localhost/__throw
+open https://localhost/dev-throw
 ```
 
 You should see:
@@ -98,12 +98,34 @@ that can break the layout. To exercise it manually:
 2. Reload any page.
 3. Revert the change before committing.
 
-## Verifying production redaction
+## Production policy: only generic messages
 
-The boundary gates `error.message` behind
-`process.env.NODE_ENV === NodeEnv.DEVELOPMENT`. Because `NODE_ENV` is
-inlined at build time by Next.js, the only way to verify the production
-path is against a production build.
+In `NODE_ENV=production` every error surface MUST render only generic,
+hand-written copy. Concretely:
+
+- ✅ static title / description / status / icon (`Something went wrong`,
+  `Error 500`, …)
+- ✅ the opaque `error.digest` correlation hash (Next-generated, no
+  source content; users need it to quote support)
+- ❌ the original `error.message`
+- ❌ stack traces, framework / runtime class names, file paths, line
+  numbers, internal route handlers
+- ❌ PII, secrets, tokens, environment values, request bodies, header
+  contents
+
+This rule is locked by
+[`tests/app/error-redaction.test.tsx`](../tests/app/error-redaction.test.tsx),
+which renders `error.tsx` and `global-error.tsx` with
+`vi.stubEnv("NODE_ENV", "production")` plus a deliberately sensitive
+fixture string and asserts none of it reaches the DOM. If you need to
+loosen the policy, change the test FIRST.
+
+## Verifying production redaction end-to-end
+
+The unit test above proves the boundary gates correctly given a
+runtime `NODE_ENV`. To additionally prove the build pipeline doesn't
+introduce surprises, run the boundaries against a real production
+build:
 
 ```bash
 # 1. Build the PWA in production mode.

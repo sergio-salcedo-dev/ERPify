@@ -7,7 +7,7 @@ import { NodeEnv } from "@/context/shared/domain/types/nodeEnv";
  * `error.tsx` boundary actually rendered the original throw.
  */
 export const THROW_FIXTURE_MESSAGE =
-  "Triggered by /__throw — debug fixture for the error.tsx boundary.";
+  "Triggered by /dev-throw — debug fixture for the error.tsx boundary.";
 
 /**
  * Debug-only fixture route used to exercise `app/error.tsx` end-to-end.
@@ -20,7 +20,12 @@ export const THROW_FIXTURE_MESSAGE =
  *   debug surface never ships to real users. A direct visit returns the
  *   regular `not-found.tsx` page (HTTP 404) instead.
  *
- * Triggered manually (`make dev` then `https://localhost/__throw`) or
+ * NOTE: the folder is `dev-throw` (no leading underscore) because Next.js
+ * treats any folder prefixed with `_` as a *private* folder and excludes it
+ * from routing — a `__throw/` directory would 404 instead of running this
+ * page.
+ *
+ * Triggered manually (`make dev` then `https://localhost/dev-throw`) or
  * automatically by the E2E spec.
  */
 export default function ThrowPage(): never {
