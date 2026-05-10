@@ -1,22 +1,11 @@
-import { Lock } from "lucide-react";
-import { ErrorActions, ErrorScreen } from "@/context/shared/error/infrastructure/ui";
-import { IconTone } from "@/context/shared/error/domain/IconTone";
+import { AccessDeniedScreen } from "@/context/shared/error/infrastructure/ui";
 
 export const metadata = {
   title: "Unauthorized · Erpify",
   description: "You do not have permission to access this resource.",
 };
 
-export default function UnauthorizedPage() {
-  return (
-    <ErrorScreen
-      testIdPrefix="unauthorized"
-      status="Error 403"
-      title="Access denied"
-      description="You do not have permission to view this resource. If you believe this is a mistake, contact your administrator to request the appropriate access."
-      icon={Lock}
-      iconTone={IconTone.WARNING}
-      actions={<ErrorActions />}
-    />
-  );
-}
+// Reuses the same `<AccessDeniedScreen>` rendered by the Next 15+
+// `app/forbidden.tsx` convention file, so the navigable URL and the
+// `forbidden()`-driven boundary stay visually identical.
+export default AccessDeniedScreen;

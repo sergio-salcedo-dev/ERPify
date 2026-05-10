@@ -132,6 +132,17 @@ locally:
     `Home` outside `Routes.BACKOFFICE`, primary `Return to BackOffice`
     inside it; secondary `Go back` via `router.back()` with a fallback
     to the primary destination when there is no history).
+  - One Screen / Boundary component per surface lives in the same
+    `infrastructure/ui/` folder: `<NotFoundScreen>`,
+    `<AccessDeniedScreen>` (HTTP 403), `<SignInRequiredScreen>` (HTTP
+    401), `<SegmentErrorBoundary>` (HTTP 500), `<RootErrorBoundary>`
+    (root-layout crash). The Next convention files at
+    `app/{error,forbidden,global-error,not-found,unauthorized}.tsx`
+    are **thin re-exports** of these — the JSX has a single source of
+    truth that's discoverable next to the rest of the module. The
+    navigable `app/(errors)/<slug>/page.tsx` routes import the same
+    Screen so a `forbidden()` boundary and `/unauthorized` look
+    identical by construction.
   - Exported via `@/context/shared/error/infrastructure/ui`. Do NOT
     re-export from `@/components/erpify` — keep the boundary explicit.
   - Local-test recipes for every error surface (and how to verify
