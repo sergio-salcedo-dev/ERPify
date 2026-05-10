@@ -134,7 +134,14 @@ locally:
     to the primary destination when there is no history).
   - Exported via `@/context/shared/error/infrastructure/ui`. Do NOT
     re-export from `@/components/erpify` — keep the boundary explicit.
-    The `error.tsx` / `global-error.tsx` boundaries must continue to gate
+  - Local-test recipes for every error surface (and how to verify
+    production redaction) live in
+    [`docs/error-pages-testing.md`](docs/error-pages-testing.md). The
+    matching automated coverage is
+    [`tests/e2e/error-pages.spec.ts`](tests/e2e/error-pages.spec.ts);
+    drive `error.tsx` deterministically via the dev-only `/__throw`
+    fixture at `src/app/(errors)/__throw/page.tsx`.
+  - The `error.tsx` / `global-error.tsx` boundaries must continue to gate
     `error.message` behind
     `process.env.NODE_ENV === NodeEnv.DEVELOPMENT` so production never
     leaks stack traces.
