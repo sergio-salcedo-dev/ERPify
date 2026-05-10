@@ -15,7 +15,7 @@ export const DEV_TOOL_GROUPS: ReadonlyArray<DevToolGroup> = [
     tools: [
       {
         label: "Error Gallery",
-        url: "/dev-error-gallery",
+        url: "/dev-tools/error-gallery",
         description:
           "Visual inventory of every PWA error surface (404, 401, 403, 500, 503, 429, offline) plus inline `<ProblemDisplay>` fixtures for 4xx, 422 with violations, and 5xx with the dev-only `debug` block.",
         icon: LayoutGrid,

@@ -166,7 +166,7 @@ locally:
     surface (route file, navbar link, sidebar item) so the production
     gate stays consistent.
   - `src/context/shared/dev-tools/domain/devToolRoutes.ts` —
-    authoritative URL inventory (`/dev-tools`, `/dev-error-gallery`,
+    authoritative URL inventory (`/dev-tools` and its nested tools,
     `/dev-throw`). Add a new dev URL here once and the middleware
     matcher + the page-level guard pick it up.
   - `src/context/shared/dev-tools/infrastructure/ui/devToolGroups.ts` —

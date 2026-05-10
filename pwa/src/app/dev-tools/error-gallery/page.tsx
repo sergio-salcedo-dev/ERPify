@@ -216,15 +216,15 @@ export default function DevErrorGalleryPage() {
   }
 
   return (
-    <div className="dev-error-gallery bg-background min-h-screen" data-testid="dev-error-gallery">
+    <div className="error-gallery bg-background min-h-screen" data-testid="error-gallery">
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
-        <header className="dev-error-gallery__header border-warning/40 bg-warning/10 mb-8 rounded-md border p-4 sm:p-5">
+        <header className="error-gallery__header border-warning/40 bg-warning/10 mb-8 rounded-md border p-4 sm:p-5">
           <p className="text-warning text-xs font-semibold tracking-wider uppercase">
             Dev / test only · linked from{" "}
             <Link
               href="/dev-tools"
               className="underline-offset-2 hover:underline"
-              data-testid="dev-error-gallery__back-to-tools"
+              data-testid="error-gallery__back-to-tools"
             >
               /dev-tools
             </Link>
@@ -241,7 +241,7 @@ export default function DevErrorGalleryPage() {
           </p>
         </header>
 
-        <section className="dev-error-gallery__routes mb-12">
+        <section className="error-gallery__routes mb-12">
           <h2 className="text-foreground text-lg font-semibold tracking-tight sm:text-xl">
             Navigable error routes
           </h2>
@@ -257,7 +257,7 @@ export default function DevErrorGalleryPage() {
                     buttonVariants({ variant: "outline", size: "lg" }),
                     "h-auto w-full flex-col items-start gap-1 px-4 py-3 text-left whitespace-normal",
                   )}
-                  data-testid={`dev-error-gallery__route-${route.url}`}
+                  data-testid={`error-gallery__route-${route.url}`}
                 >
                   <span className="text-foreground text-sm font-semibold">{route.label}</span>
                   <span className="text-muted-foreground text-xs leading-snug font-normal">
@@ -272,7 +272,7 @@ export default function DevErrorGalleryPage() {
           </ul>
         </section>
 
-        <section className="dev-error-gallery__problems">
+        <section className="error-gallery__problems">
           <h2 className="text-foreground text-lg font-semibold tracking-tight sm:text-xl">
             Inline <code className="font-mono text-base">&lt;ProblemDisplay&gt;</code> fixtures
           </h2>
@@ -286,7 +286,7 @@ export default function DevErrorGalleryPage() {
             {PROBLEM_FIXTURES.map((fixture) => (
               <article
                 key={fixture.problem.type + fixture.problem.status}
-                className="dev-error-gallery__fixture"
+                className="error-gallery__fixture"
               >
                 <header className="mb-2">
                   <h3 className="text-foreground text-sm font-semibold sm:text-base">
@@ -300,7 +300,7 @@ export default function DevErrorGalleryPage() {
           </div>
         </section>
 
-        <footer className="dev-error-gallery__footer text-muted-foreground mt-12 border-t pt-6 text-xs">
+        <footer className="error-gallery__footer text-muted-foreground mt-12 border-t pt-6 text-xs">
           Need to return to a real surface?{" "}
           <Link href={Routes.HOME} className="text-primary underline-offset-4 hover:underline">
             Home
