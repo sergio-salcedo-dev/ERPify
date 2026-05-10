@@ -19,11 +19,15 @@ visual review), open
 [`https://localhost/dev-tools`](https://localhost/dev-tools) and pick
 `Error Gallery`, or jump straight to
 [`https://localhost/dev-error-gallery`](https://localhost/dev-error-gallery).
-Both routes are part of the dev-tools module and are gated by
-`isDevToolsAvailable()` (`process.env.NODE_ENV !== "production"`), so
-production users get a 404 regardless of how they hit the URL — the
+Both routes are part of the dev-tools module and are protected by **two
+layers** in production: the page-level `isDevToolsAvailable()` guard,
+_and_ the request-level short-circuit in `pwa/src/proxy.ts` that
+rewrites every dev-tool URL to a 404 before the page handler runs. The
 "Dev Tools" entry points in the frontoffice navbar and the backoffice
-sidebar likewise disappear in a production build.
+sidebar likewise disappear in a production build, so neither the
+buttons nor their underlying functionality are reachable. Adding a new
+dev URL is a one-line change in
+[`src/context/shared/dev-tools/domain/devToolRoutes.ts`](../src/context/shared/dev-tools/domain/devToolRoutes.ts).
 
 If you'd rather hit each surface directly:
 

@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { NodeEnv } from "@/context/shared/domain/types/nodeEnv";
+import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
 
 /**
  * Deterministic error message thrown by this debug route. Exported so the
@@ -29,7 +29,7 @@ export const THROW_FIXTURE_MESSAGE =
  * automatically by the E2E spec.
  */
 export default function ThrowPage(): never {
-  if (process.env.NODE_ENV === NodeEnv.PRODUCTION) {
+  if (!isDevToolsAvailable()) {
     notFound();
   }
   throw new Error(THROW_FIXTURE_MESSAGE);

@@ -165,6 +165,10 @@ locally:
     central env predicate. Use it everywhere that mounts a dev/QA
     surface (route file, navbar link, sidebar item) so the production
     gate stays consistent.
+  - `src/context/shared/dev-tools/domain/devToolRoutes.ts` —
+    authoritative URL inventory (`/dev-tools`, `/dev-error-gallery`,
+    `/dev-throw`). Add a new dev URL here once and the middleware
+    matcher + the page-level guard pick it up.
   - `src/context/shared/dev-tools/infrastructure/ui/devToolGroups.ts` —
     authoritative registry. Adding a new tool = a new entry here; the
     menu picks it up automatically.
@@ -175,6 +179,17 @@ locally:
     `<Navbar>` (rendered only when `isDevToolsAvailable()`) and a
     `Development` sidebar group with a `Dev Tools` item in
     `BackOfficeLayoutClient.tsx`. Both disappear in production builds.
+  - **Production short-circuit** — `pwa/src/proxy.ts` (Next 16's
+    successor to `middleware.ts`) rewrites every dev-tool URL to a
+    guaranteed-unmatched path _before_ the page handler runs in
+    production, so the branded `not-found.tsx` is served and the dev
+    surface is unreachable even if a future contributor accidentally
+    drops the page-level `isDevToolsAvailable()` check. Turbopack
+    requires `config.matcher` to be a static literal, so the matcher
+    array in `proxy.ts` is hardcoded — its parity with
+    `DEV_TOOL_ROUTE_PREFIXES` is locked by
+    [`tests/proxy.test.ts`](tests/proxy.test.ts) so a forgotten entry
+    fails the build.
 - **String constants** — never compare `process.env.NODE_ENV` against
   the literal `"development"` / `"production"` / `"test"`; use
   `NodeEnv` from `@/context/shared/domain/types/nodeEnv`. Never hard-
