@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Domain\ValueObject;
 
+use LogicException;
 use RuntimeException;
 use Transliterator;
 
@@ -62,9 +63,13 @@ final readonly class NormalizedText
 
     private static function transliterate(string $value, string $rule): string
     {
+        // ext-intl + the ICU rule string are part of the deployed platform;
+        // a null here means the build is broken (extension missing, ICU
+        // unavailable) — surface it as a programmer/operator error, not as a
+        // runtime condition that callers could meaningfully recover from.
         $transliterator = Transliterator::create($rule);
         if (!$transliterator instanceof Transliterator) {
-            throw new RuntimeException(\sprintf(
+            throw new LogicException(\sprintf(
                 'Failed to create Transliterator with id "%s"; ext-intl missing or ICU rules unavailable.',
                 $rule,
             ));
