@@ -191,12 +191,45 @@ Per-error log line context (one PSR-3 write per error, default `app` channel):
 
 ```text
 instance, correlation_id, type, status,
-exception_class, exception_message, request_uri, request_method
+exception_class, exception_category, exception_message,
+request_uri, request_method
 ```
 
-Tiering: `unhandled-exception` → `critical`; status ≥ 500 → `error`; 4xx → `warning`.
+Level tiering (in order, first match wins):
 
-Grep by `instance` for the single failure entry; grep by `correlation_id` for the full request trail.
+| Match                                              | Level      |
+|----------------------------------------------------|------------|
+| `throwable instanceof \LogicException`             | `critical` |
+| `type === "unhandled-exception"`                   | `critical` |
+| `status >= 500`                                    | `error`    |
+| `status` 4xx                                       | `warning`  |
+
+`LogicException` is pinned ahead of the marker check so a future custom marker that mistakenly maps a programmer error onto a 4xx still wakes on-call.
+
+### `exception_category` — SRE-routable taxonomy
+
+`exception_category` is a stable, queryable label derived from the SPL hierarchy and the project's `DomainException` marker. The order of the dispatch is load-bearing: `DomainException` is checked first so a project subclass that ever descended from `LogicException` / `RuntimeException` is still classified as `domain_error`.
+
+| Value              | Source                                  | What it means                                                                          | On-call action      |
+|--------------------|-----------------------------------------|----------------------------------------------------------------------------------------|---------------------|
+| `programmer_error` | `\LogicException` and descendants       | Build / platform / contract is broken (e.g. `ext-intl` missing, invariant violated).   | Page                |
+| `runtime_error`    | `\RuntimeException` and descendants     | Environmental / input failure not preventable at coding time (transient I/O, bad bytes). | Triage              |
+| `domain_error`     | `Erpify\Shared\Domain\Exception\DomainException` | Expected business outcome (4xx for the most part).                            | Log only            |
+| `engine_error`     | `\Error` and descendants (`TypeError`, `ParseError`, …) | Engine-level failure.                                                | Page                |
+| `unknown`          | Anything else implementing `Throwable`  | Not in the SPL split — investigate.                                                    | Investigate         |
+
+`exception_category` is **orthogonal** to `type` (RFC 9457 marker) and `status` (HTTP code) so SRE filters do not depend on framework-specific FQCNs. Routing examples for the existing Monolog stack ([`api/config/packages/monolog.yaml`](../api/config/packages/monolog.yaml)):
+
+```text
+exception_category=programmer_error                   → PagerDuty critical
+exception_category=engine_error                       → PagerDuty critical
+exception_category=runtime_error AND status >= 500    → PagerDuty warning
+exception_category=domain_error                       → log only
+```
+
+When the Sentry handler in `monolog.yaml` is uncommented, the field arrives in the event's `extra` automatically (PSR-3 context flows through Monolog's processors), so a Sentry `before_send` filter can sample `domain_error` to 0% without any custom code.
+
+Grep by `instance` for the single failure entry; grep by `correlation_id` for the full request trail; filter by `exception_category` to separate platform-broken from triage-normal.
 
 ## Listener layout
 
