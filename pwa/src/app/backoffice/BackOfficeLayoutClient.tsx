@@ -8,7 +8,6 @@ import {
   User,
   LogOut,
   Menu,
-  ShieldCheck,
   Settings as SettingsIcon,
   Bell,
   Activity,
@@ -130,19 +129,22 @@ export default function BackOfficeLayoutClient({ children }: { children: React.R
           {!isCompact && (
             <Logo
               href="/backoffice"
-              className="bo-layout__logo flex items-center gap-2 hover:opacity-80 transition-opacity"
-              iconClassName="bo-layout__logo-icon text-primary-foreground w-5 h-5"
-              textClassName="bo-layout__logo-text text-lg font-bold text-foreground tracking-tight"
-            >
-              <div className="bg-primary p-1.5 rounded-lg">
-                <ShieldCheck className="text-primary-foreground w-4 h-4" />
-              </div>
-            </Logo>
+              variant="badge"
+              size="md"
+              className="bo-layout__logo"
+              iconClassName="bo-layout__logo-icon"
+              textClassName="bo-layout__logo-text"
+            />
           )}
           {isCompact && (
-            <div className="bg-primary p-2 rounded-lg mx-auto">
-              <ShieldCheck className="text-primary-foreground w-5 h-5" />
-            </div>
+            <Logo
+              href="/backoffice"
+              variant="badge"
+              size="md"
+              iconOnly
+              className="bo-layout__logo bo-layout__logo--compact mx-auto"
+              iconClassName="bo-layout__logo-icon"
+            />
           )}
           <button
             onClick={() => setIsCompact(!isCompact)}
@@ -204,9 +206,11 @@ export default function BackOfficeLayoutClient({ children }: { children: React.R
       <div className="bo-layout__header-mobile md:hidden fixed top-0 left-0 right-0 bg-card border-b border-border h-14 flex items-center justify-between px-4 z-50">
         <Logo
           href="/backoffice"
-          className="bo-layout__logo-mobile flex items-center gap-2 hover:opacity-80 transition-opacity"
-          iconClassName="text-primary w-5 h-5"
-          textClassName="text-lg font-bold text-foreground"
+          variant="badge"
+          size="md"
+          className="bo-layout__logo-mobile"
+          iconClassName="bo-layout__logo-icon"
+          textClassName="bo-layout__logo-text"
         />
         <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
           <SheetTrigger
@@ -225,9 +229,11 @@ export default function BackOfficeLayoutClient({ children }: { children: React.R
               <SheetTitle className="hidden">Navigation Menu</SheetTitle>
               <Logo
                 href="/backoffice"
-                className="bo-layout__logo-mobile flex items-center gap-2 hover:opacity-80 transition-opacity"
-                iconClassName="text-primary w-5 h-5"
-                textClassName="text-lg font-bold text-foreground"
+                variant="badge"
+                size="md"
+                className="bo-layout__logo-mobile"
+                iconClassName="bo-layout__logo-icon"
+                textClassName="bo-layout__logo-text"
               />
             </SheetHeader>
             <nav className="bo-layout__sidebar-mobile-nav p-4 space-y-6 overflow-y-auto h-[calc(100vh-64px)]">

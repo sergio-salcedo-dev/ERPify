@@ -1,15 +1,6 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import {
-  Menu,
-  X,
-  ShieldCheck,
-  User as UserIcon,
-  Settings,
-  LogOut,
-  HelpCircle,
-  Wrench,
-} from "lucide-react";
+import { Menu, X, User as UserIcon, Settings, LogOut, HelpCircle, Wrench } from "lucide-react";
 import Link from "next/link";
 import { Logo } from "../atoms/Logo";
 import { Button } from "../atoms/Button";
@@ -44,14 +35,13 @@ export const Navbar: React.FC<NavbarProps> = ({ onGetStarted }) => {
       <div className="navbar__container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="navbar__inner flex justify-between h-16 items-center">
           <Logo
-            iconClassName="navbar__logo-icon text-white w-6 h-6"
-            className="navbar__logo flex items-center gap-2 hover:opacity-80 transition-opacity"
-            textClassName="navbar__logo-text text-2xl font-bold text-slate-900 tracking-tight"
-          >
-            <div className="bg-blue-600 p-2 rounded-lg">
-              <ShieldCheck className="text-white w-6 h-6" />
-            </div>
-          </Logo>
+            href="/"
+            variant="badge"
+            size="lg"
+            className="navbar__logo"
+            textClassName="navbar__logo-text"
+            iconClassName="navbar__logo-icon"
+          />
 
           {/* Desktop Menu */}
           <div className="navbar__menu hidden md:flex items-center space-x-8">
