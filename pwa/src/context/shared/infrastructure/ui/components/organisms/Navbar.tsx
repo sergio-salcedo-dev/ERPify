@@ -33,9 +33,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onGetStarted }) => {
   const showDevTools = isDevToolsAvailable();
 
   const navLinks = [
-    { name: "Features", href: "#" },
-    { name: "Pricing", href: "#" },
-    { name: "About", href: "#" },
+    { name: "Features", href: "#", testId: "navbar__link-features" },
+    { name: "Pricing", href: "#", testId: "navbar__link-pricing" },
+    { name: "About", href: "#", testId: "navbar__link-about" },
   ];
 
   return (
@@ -58,6 +58,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onGetStarted }) => {
               <a
                 key={link.name}
                 href={link.href}
+                data-testid={link.testId}
                 className="navbar__link text-slate-600 hover:text-blue-600 font-medium transition-colors"
               >
                 {link.name}
@@ -79,7 +80,12 @@ export const Navbar: React.FC<NavbarProps> = ({ onGetStarted }) => {
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
-                  <Button variant="ghost" size="icon" className="navbar__user-trigger rounded-full">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="navbar__user-trigger rounded-full"
+                    data-testid="navbar__user-trigger"
+                  >
                     <UserIcon className="w-5 h-5 text-slate-600" />
                   </Button>
                 }
@@ -89,34 +95,56 @@ export const Navbar: React.FC<NavbarProps> = ({ onGetStarted }) => {
                   <DropdownMenuLabel className="navbar__user-label">My Account</DropdownMenuLabel>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="navbar__user-item cursor-pointer">
+                <DropdownMenuItem
+                  className="navbar__user-item cursor-pointer"
+                  data-testid="navbar__user-item-profile"
+                >
                   <UserIcon className="mr-2 h-4 w-4" />
                   <span>Profile</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem className="navbar__user-item cursor-pointer">
+                <DropdownMenuItem
+                  className="navbar__user-item cursor-pointer"
+                  data-testid="navbar__user-item-settings"
+                >
                   <Settings className="mr-2 h-4 w-4" />
                   <span>Settings</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem className="navbar__user-item cursor-pointer">
+                <DropdownMenuItem
+                  className="navbar__user-item cursor-pointer"
+                  data-testid="navbar__user-item-support"
+                >
                   <HelpCircle className="mr-2 h-4 w-4" />
                   <span>Support</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="navbar__user-item cursor-pointer text-rose-600 focus:text-rose-600">
+                <DropdownMenuItem
+                  className="navbar__user-item cursor-pointer text-rose-600 focus:text-rose-600"
+                  data-testid="navbar__user-item-logout"
+                >
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>Log out</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <Button onClick={onGetStarted} size="md" className="navbar__button rounded-full">
+            <Button
+              onClick={onGetStarted}
+              size="md"
+              className="navbar__button rounded-full"
+              data-testid="navbar__get-started"
+            >
               Get Started
             </Button>
           </div>
 
           {/* Mobile Menu Button */}
           <div className="navbar__mobile-toggle md:hidden">
-            <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2 text-slate-600">
+            <button
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="p-2 text-slate-600"
+              aria-label={isMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+              data-testid="navbar__mobile-menu-toggle"
+            >
               {isMenuOpen ? <X /> : <Menu />}
             </button>
           </div>
@@ -136,6 +164,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onGetStarted }) => {
               <a
                 key={link.name}
                 href={link.href}
+                data-testid={`${link.testId}--mobile`}
                 className="navbar__link block text-slate-600 font-medium"
               >
                 {link.name}
@@ -152,7 +181,12 @@ export const Navbar: React.FC<NavbarProps> = ({ onGetStarted }) => {
                 Dev Tools
               </Link>
             ) : null}
-            <Button onClick={onGetStarted} size="lg" className="navbar__button w-full rounded-xl">
+            <Button
+              onClick={onGetStarted}
+              size="lg"
+              className="navbar__button w-full rounded-xl"
+              data-testid="navbar__get-started--mobile"
+            >
               Get Started
             </Button>
           </motion.div>

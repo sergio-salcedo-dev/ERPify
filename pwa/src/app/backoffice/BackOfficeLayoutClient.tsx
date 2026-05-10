@@ -26,6 +26,7 @@ interface NavSubItem {
   name: string;
   path: string;
   icon?: LucideIcon;
+  testId?: string;
 }
 
 interface NavItem {
@@ -33,6 +34,7 @@ interface NavItem {
   icon: LucideIcon;
   path: string;
   subItems?: NavSubItem[];
+  testId?: string;
 }
 
 interface NavGroup {
@@ -73,7 +75,14 @@ export default function BackOfficeLayoutClient({ children }: { children: React.R
       ? [
           {
             label: "Development",
-            items: [{ name: "Dev Tools", icon: Wrench, path: "/dev-tools" }],
+            items: [
+              {
+                name: "Dev Tools",
+                icon: Wrench,
+                path: "/dev-tools",
+                testId: "bo-layout__sidebar-dev-tools",
+              },
+            ],
           },
         ]
       : []),
@@ -231,6 +240,7 @@ export default function BackOfficeLayoutClient({ children }: { children: React.R
                       <button
                         onClick={() => handleNavigation(item.path)}
                         title={item.name}
+                        data-testid={item.testId ? `${item.testId}--mobile` : undefined}
                         className={`bo-layout__sidebar-mobile-link w-full flex items-center gap-3 p-3 rounded-xl font-bold transition-all ${
                           pathname === item.path
                             ? "bg-primary/15 text-primary"
@@ -247,6 +257,7 @@ export default function BackOfficeLayoutClient({ children }: { children: React.R
                               key={subItem.name}
                               onClick={() => handleNavigation(subItem.path)}
                               title={subItem.name}
+                              data-testid={subItem.testId ? `${subItem.testId}--mobile` : undefined}
                               className={`w-full flex items-center gap-2.5 p-2 rounded-lg text-xs font-bold transition-all ${
                                 pathname === subItem.path
                                   ? "text-primary bg-primary/10"

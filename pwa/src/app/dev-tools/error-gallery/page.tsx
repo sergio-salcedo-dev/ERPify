@@ -306,13 +306,18 @@ export default function DevErrorGalleryPage() {
 
         <footer className="error-gallery__footer text-muted-foreground mt-12 border-t pt-6 text-xs">
           Need to return to a real surface?{" "}
-          <Link href={Routes.HOME} className="text-primary underline-offset-4 hover:underline">
+          <Link
+            href={Routes.HOME}
+            className="text-primary underline-offset-4 hover:underline"
+            data-testid="error-gallery__footer-home"
+          >
             Home
           </Link>{" "}
           ·{" "}
           <Link
             href={Routes.BACKOFFICE}
             className="text-primary underline-offset-4 hover:underline"
+            data-testid="error-gallery__footer-backoffice"
           >
             BackOffice
           </Link>
