@@ -71,6 +71,7 @@ test.describe("BackOffice - Banks CRUD (real API)", () => {
 
     // Narrow the client-side filter to test-owned rows so other banks in
     // the dev DB don't leak into our assertions.
+    await page.getByTestId("banks-filters__toggle").click();
     await page.getByTestId("banks-filters__name").fill(runPrefix);
 
     // Default sort is name ascending — the first row should be `… 001`.
@@ -166,6 +167,7 @@ test.describe("BackOffice - Banks CRUD (real API)", () => {
     await page.getByTestId("banks-detail__delete-confirm").click();
 
     await expect(page).toHaveURL(/\/backoffice\/banks$/);
+    await page.getByTestId("banks-filters__toggle").click();
     await page.getByTestId("banks-filters__name").fill(updatedName);
     await expect(page.getByTestId("banks-list__empty-filtered")).toBeVisible();
 
