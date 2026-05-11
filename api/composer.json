@@ -54,6 +54,7 @@
         "symfony/monolog-bundle": "^4.0.2",
         "symfony/property-access": "^8.0.8",
         "symfony/property-info": "^8.0.8",
+        "symfony/rate-limiter": "^8.0.8",
         "symfony/routing": "^8.0.9",
         "symfony/runtime": "^8.0.8",
         "symfony/security-core": "8.0.*",

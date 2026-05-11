@@ -36,6 +36,7 @@ The wire body is a JSON object owned by [`ProblemDetails`](../api/src/Shared/App
 - `Content-Type: application/problem+json` (RFC 9457 §3 — no `charset` parameter; the media type mandates UTF-8).
 - `Cache-Control: no-store` (NFR — error responses MUST NOT be cached by proxies / CDNs).
 - `X-Correlation-Id: <uuidv7>` — per-request UUIDv7, mirrors body `correlation-id`. Written on **every** main response (not just errors) by `CorrelationIdListener::onResponse` (`kernel.response`, priority `-1024`).
+- `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` (IETF `draft-ietf-httpapi-ratelimit-headers`) and the legacy de-facto `X-RateLimit-*` aliases — written on **every** main `/api/*` response by `RateLimitListener::onResponse` (`kernel.response`, priority `-128`). `Retry-After` is ALSO written on the rejected (429) path (RFC 9110 §10.2.3). Values are derived from the per-request snapshot stamped on `kernel.request` and use delta-seconds (not epoch).
 
 Encoding: `\json_encode($problemDetails->toArray(), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)`. Symfony `Response` (not `JsonResponse`) is used so `Content-Type` and the encoding pipeline stay under `ProblemDetailsResponder` control.
 
@@ -238,11 +239,19 @@ Grep by `instance` for the single failure entry; grep by `correlation_id` for th
 | Listener                            | Event              | Priority | Path scope         |
 |-------------------------------------|--------------------|----------|--------------------|
 | `CorrelationIdListener::__invoke`   | `kernel.request`   | 1024     | all main requests  |
+| `RateLimitListener::onRequest`      | `kernel.request`   | 512      | `/api/*` only      |
+| `ExceptionResponder::__invoke`      | `kernel.exception` | 16       | `/api/*` only      |
+| `RateLimitListener::onResponse`     | `kernel.response`  | -128     | `/api/*` only      |
 | `CorrelationIdListener::onResponse` | `kernel.response`  | -1024    | all main responses |
-| `ExceptionResponder::__invoke`      | `kernel.exception` | (default)| `/api/*` only      |
 | `SearchExceptionListener` (legacy)  | `kernel.exception` | 32       | search routes      |
 
 `ExceptionResponder` checks `$event->hasResponse()` first — if a higher-priority listener (e.g. `SearchExceptionListener`) already produced a response, it leaves it alone and does **not** log. Listener priority ordering vs. Nelmio CORS is pinned by Story 4.1 (`ExceptionResponderListenerPriorityTest`).
+
+## Rate limiting (per-IP)
+
+`RateLimitListener` enforces the `anonymous_api` policy declared in [`api/config/packages/rate_limiter.yaml`](../api/config/packages/rate_limiter.yaml) on every `/api/*` main request, keyed by `Request::getClientIp()`. The listener is intentionally **pre-router** (priority 512 > Symfony's `RouterListener` 32) so endpoint enumeration through 404 paths still consumes the budget. On rejection it throws [`RateLimitExceeded`](../api/src/Shared/Domain/Exception/RateLimitExceeded.php) — a concrete `DomainException` implementing the `RateLimited` marker — so the standard `ExceptionResponder` pipeline emits the conforming RFC 9457 429 envelope (`type=rate-limited`). **No `JsonResponse` shortcut on the rate-limit path** (NFR26).
+
+For correct per-client granularity behind FrankenPHP / a load balancer, set `framework.trusted_proxies` (env `SYMFONY_TRUSTED_PROXIES`) so `X-Forwarded-For` is honoured by `getClientIp()`. Without trusted proxies the limiter keys on the immediate connection IP — still safe (it over-limits a NAT pool) but not granular per real client. For multi-worker / multi-host deploys, swap the limiter's storage from the default `cache.rate_limiter` pool to a shared Redis pool so the budget is consistent across processes.
 
 ## Performance Budgets
 

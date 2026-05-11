@@ -1,0 +1,228 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Erpify\Tests\Unit\Shared\Infrastructure\Http\EventListener;
+
+use Erpify\Shared\Domain\Exception\RateLimitExceeded;
+use Erpify\Shared\Infrastructure\Http\EventListener\RateLimitListener;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\TestCase;
+use ReflectionClass;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Event\RequestEvent;
+use Symfony\Component\HttpKernel\Event\ResponseEvent;
+use Symfony\Component\HttpKernel\HttpKernelInterface;
+use Symfony\Component\RateLimiter\RateLimiterFactory;
+use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
+
+/**
+ * @internal
+ */
+#[CoversClass(RateLimitListener::class)]
+final class RateLimitListenerTest extends TestCase
+{
+    private const int TEST_LIMIT = 3;
+
+    private const string CLIENT_IP = '203.0.113.42';
+
+    public function testAcceptsRequestUnderBudgetAndStampsHeaders(): void
+    {
+        $rateLimitListener = $this->makeListener();
+        $requestEvent = $this->makeRequestEvent('/api/v1/anything', self::CLIENT_IP);
+
+        $rateLimitListener->onRequest($requestEvent);
+
+        $snapshot = $requestEvent->getRequest()->attributes->get(RateLimitListener::ATTRIBUTE_KEY);
+        $this->assertIsArray($snapshot);
+        $this->assertTrue($snapshot['accepted'] ?? false);
+        $this->assertSame(self::TEST_LIMIT, $snapshot['limit'] ?? null);
+        $this->assertSame(self::TEST_LIMIT - 1, $snapshot['remaining'] ?? null);
+
+        $responseEvent = $this->makeResponseEvent($requestEvent->getRequest());
+        $rateLimitListener->onResponse($responseEvent);
+
+        $headers = $responseEvent->getResponse()->headers;
+        $this->assertSame((string) self::TEST_LIMIT, $headers->get('RateLimit-Limit'));
+        $this->assertSame((string) (self::TEST_LIMIT - 1), $headers->get('RateLimit-Remaining'));
+        $this->assertSame((string) self::TEST_LIMIT, $headers->get('X-RateLimit-Limit'));
+        $this->assertSame((string) (self::TEST_LIMIT - 1), $headers->get('X-RateLimit-Remaining'));
+        $this->assertNotNull($headers->get('RateLimit-Reset'));
+        $this->assertNotNull($headers->get('X-RateLimit-Reset'));
+        $this->assertNull($headers->get('Retry-After'), 'Retry-After must only ship on the rejected path.');
+    }
+
+    public function testThrowsRateLimitExceededOnceBudgetIsExhausted(): void
+    {
+        $rateLimitListener = $this->makeListener();
+
+        for ($i = 0; $i < self::TEST_LIMIT; ++$i) {
+            $rateLimitListener->onRequest($this->makeRequestEvent('/api/v1/anything', self::CLIENT_IP));
+        }
+
+        $overflowEvent = $this->makeRequestEvent('/api/v1/anything', self::CLIENT_IP);
+
+        try {
+            $rateLimitListener->onRequest($overflowEvent);
+            $this->fail('Listener must throw RateLimitExceeded once the budget is exhausted.');
+        } catch (RateLimitExceeded $rateLimitExceeded) {
+            $this->assertSame(self::TEST_LIMIT, $rateLimitExceeded->limit);
+            $this->assertSame(0, $rateLimitExceeded->remaining);
+            $this->assertGreaterThanOrEqual(1, $rateLimitExceeded->retryAfterSeconds);
+            $this->assertSame(self::CLIENT_IP, $rateLimitExceeded->limiterKey);
+        }
+
+        $snapshot = $overflowEvent->getRequest()->attributes->get(RateLimitListener::ATTRIBUTE_KEY);
+        $this->assertIsArray($snapshot);
+        $this->assertFalse($snapshot['accepted'] ?? true);
+    }
+
+    public function testRejectedResponseCarriesRetryAfterHeader(): void
+    {
+        $rateLimitListener = $this->makeListener();
+
+        for ($i = 0; $i < self::TEST_LIMIT; ++$i) {
+            $rateLimitListener->onRequest($this->makeRequestEvent('/api/v1/anything', self::CLIENT_IP));
+        }
+
+        $overflowEvent = $this->makeRequestEvent('/api/v1/anything', self::CLIENT_IP);
+
+        try {
+            $rateLimitListener->onRequest($overflowEvent);
+        } catch (RateLimitExceeded) {
+            // Expected — snapshot was stamped before the throw so the response listener can
+            // still read it from the same request attribute.
+        }
+
+        $responseEvent = $this->makeResponseEvent($overflowEvent->getRequest(), Response::HTTP_TOO_MANY_REQUESTS);
+        $rateLimitListener->onResponse($responseEvent);
+
+        $headers = $responseEvent->getResponse()->headers;
+        $this->assertSame('0', $headers->get('RateLimit-Remaining'));
+        $this->assertSame('0', $headers->get('X-RateLimit-Remaining'));
+        $retryAfter = $headers->get('Retry-After');
+        $this->assertNotNull($retryAfter);
+        $this->assertGreaterThanOrEqual(1, (int) $retryAfter);
+    }
+
+    public function testSkipsNonApiPaths(): void
+    {
+        $rateLimitListener = $this->makeListener();
+        $requestEvent = $this->makeRequestEvent('/_profiler/something', self::CLIENT_IP);
+
+        $rateLimitListener->onRequest($requestEvent);
+
+        $this->assertNull(
+            $requestEvent->getRequest()->attributes->get(RateLimitListener::ATTRIBUTE_KEY),
+            'Listener must not stamp a snapshot on non-/api/ paths.',
+        );
+    }
+
+    public function testSkipsSubRequests(): void
+    {
+        $rateLimitListener = $this->makeListener();
+        $kernel = $this->makeKernel();
+        $request = Request::create('/api/v1/anything');
+        $request->server->set('REMOTE_ADDR', self::CLIENT_IP);
+        $subEvent = new RequestEvent($kernel, $request, HttpKernelInterface::SUB_REQUEST);
+
+        $rateLimitListener->onRequest($subEvent);
+
+        $this->assertNull(
+            $request->attributes->get(RateLimitListener::ATTRIBUTE_KEY),
+            'Sub-requests must not consume the per-IP budget.',
+        );
+    }
+
+    public function testIsolatesClientIpsIntoSeparateBuckets(): void
+    {
+        $rateLimitListener = $this->makeListener();
+
+        for ($i = 0; $i < self::TEST_LIMIT; ++$i) {
+            $rateLimitListener->onRequest($this->makeRequestEvent('/api/v1/anything', '198.51.100.7'));
+        }
+
+        // A different client IP must still have its full budget after the first IP exhausts.
+        $freshClientEvent = $this->makeRequestEvent('/api/v1/anything', '198.51.100.8');
+        $rateLimitListener->onRequest($freshClientEvent);
+
+        $snapshot = $freshClientEvent->getRequest()->attributes->get(RateLimitListener::ATTRIBUTE_KEY);
+        $this->assertIsArray($snapshot);
+        $this->assertTrue($snapshot['accepted'] ?? false);
+        $this->assertSame(self::TEST_LIMIT - 1, $snapshot['remaining'] ?? null);
+    }
+
+    public function testResponseListenerSkipsWhenSnapshotMissing(): void
+    {
+        $rateLimitListener = $this->makeListener();
+        $responseEvent = $this->makeResponseEvent(Request::create('/anything'));
+
+        $rateLimitListener->onResponse($responseEvent);
+
+        $this->assertNull($responseEvent->getResponse()->headers->get('RateLimit-Limit'));
+        $this->assertNull($responseEvent->getResponse()->headers->get('X-RateLimit-Limit'));
+    }
+
+    public function testListenerPrioritiesArePinned(): void
+    {
+        $this->assertSame(512, RateLimitListener::REQUEST_PRIORITY);
+        $this->assertSame(-128, RateLimitListener::RESPONSE_PRIORITY);
+    }
+
+    public function testListenerIsFinalReadonlyAndHasOnlyInjectedDependencies(): void
+    {
+        $reflectionClass = new ReflectionClass(RateLimitListener::class);
+
+        $this->assertTrue($reflectionClass->isFinal());
+        $this->assertTrue($reflectionClass->isReadOnly());
+
+        $constructor = $reflectionClass->getConstructor();
+        $this->assertNotNull($constructor);
+
+        foreach ($constructor->getParameters() as $parameter) {
+            $this->assertTrue(
+                $parameter->isPromoted(),
+                'Constructor params must be promoted to satisfy the worker-mode pattern.',
+            );
+        }
+    }
+
+    private function makeListener(): RateLimitListener
+    {
+        $factory = new RateLimiterFactory(
+            ['id' => 'test_anonymous_api', 'policy' => 'sliding_window', 'limit' => self::TEST_LIMIT, 'interval' => '1 minute'],
+            new InMemoryStorage(),
+        );
+
+        return new RateLimitListener($factory);
+    }
+
+    private function makeRequestEvent(string $path, string $clientIp): RequestEvent
+    {
+        $request = Request::create($path);
+        $request->server->set('REMOTE_ADDR', $clientIp);
+
+        return new RequestEvent($this->makeKernel(), $request, HttpKernelInterface::MAIN_REQUEST);
+    }
+
+    private function makeResponseEvent(Request $request, int $status = Response::HTTP_OK): ResponseEvent
+    {
+        return new ResponseEvent(
+            $this->makeKernel(),
+            $request,
+            HttpKernelInterface::MAIN_REQUEST,
+            new Response('ok', $status),
+        );
+    }
+
+    private function makeKernel(): HttpKernelInterface
+    {
+        return new class implements HttpKernelInterface {
+            public function handle(Request $request, int $type = HttpKernelInterface::MAIN_REQUEST, bool $catch = true): Response
+            {
+                throw new \LogicException('Test kernel: handle() must not be called by the listener.');
+            }
+        };
+    }
+}
