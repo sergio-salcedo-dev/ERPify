@@ -24,6 +24,13 @@
 # workers behind a load balancer, swap to a shared backend (Redis) so the
 # budget is consistent across processes; pin the override in deploy config.
 #
+# Numeric policy values are env-driven so operators can tighten the budget on
+# the fly (e.g. drop RATE_LIMIT_ANONYMOUS_API to 10 during a sustained attack
+# and bounce the worker — no redeploy needed). Defaults live in api/.env;
+# environment-specific overrides in api/.env.<env>. The test environment
+# already lowers the anonymous budget to 5/min so functional tests can assert
+# the 429 path deterministically (api/.env.test).
+#
 # The kernel.request listener that consumes `anonymous_api` lives at
 # api/src/Shared/Infrastructure/Http/EventListener/RateLimitListener.php.
 # It is path-scoped to /api/* and rejects with a domain exception implementing
@@ -33,19 +40,11 @@ framework:
     rate_limiter:
         anonymous_api:
             policy: 'sliding_window'
-            limit: 120
-            interval: '1 minute'
+            limit: '%env(int:RATE_LIMIT_ANONYMOUS_API_LIMIT)%'
+            interval: '%env(RATE_LIMIT_ANONYMOUS_API_INTERVAL)%'
         authenticated_api:
             policy: 'token_bucket'
-            limit: 1000
-            rate: { interval: '1 minute', amount: 100 }
-
-when@test:
-    framework:
-        rate_limiter:
-            anonymous_api:
-                # Lower budget keeps functional / behat scenarios fast and lets
-                # tests assert the 429 path deterministically.
-                policy: 'sliding_window'
-                limit: 5
-                interval: '1 minute'
+            limit: '%env(int:RATE_LIMIT_AUTHENTICATED_API_LIMIT)%'
+            rate:
+                interval: '%env(RATE_LIMIT_AUTHENTICATED_API_RATE_INTERVAL)%'
+                amount: '%env(int:RATE_LIMIT_AUTHENTICATED_API_RATE_AMOUNT)%'
