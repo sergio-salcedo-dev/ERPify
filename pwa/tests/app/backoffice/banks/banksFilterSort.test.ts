@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { Bank } from "@/context/backoffice/bank/domain/Bank";
 import {
+  BANKS_SORTABLE_COLUMNS,
   DEFAULT_SORT,
   EMPTY_FILTER,
   applyFilters,
   applySort,
   countActiveFilters,
   hasActiveFilter,
+  isDefaultSort,
   type BanksFilter,
 } from "@/app/backoffice/banks/_lib/banksFilterSort";
 
@@ -53,6 +55,45 @@ const ROWS: Bank[] = [acme, brookline, cosmos];
 describe("DEFAULT_SORT", () => {
   it("is alphabetical name ascending", () => {
     expect(DEFAULT_SORT).toEqual({ columnId: "name", direction: "asc" });
+  });
+});
+
+describe("BANKS_SORTABLE_COLUMNS", () => {
+  it("matches the sortable columns rendered by the table headers", () => {
+    expect(BANKS_SORTABLE_COLUMNS.map((column) => column.id)).toEqual([
+      "shortName",
+      "name",
+      "createdAt",
+      "updatedAt",
+    ]);
+  });
+
+  it("exposes a human label for every option (used by the filters panel select)", () => {
+    for (const column of BANKS_SORTABLE_COLUMNS) {
+      expect(column.label.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("isDefaultSort", () => {
+  it("returns true for the DEFAULT_SORT reference", () => {
+    expect(isDefaultSort(DEFAULT_SORT)).toBe(true);
+  });
+
+  it("returns true for a fresh equivalent object", () => {
+    expect(isDefaultSort({ columnId: "name", direction: "asc" })).toBe(true);
+  });
+
+  it("returns false for a non-default direction", () => {
+    expect(isDefaultSort({ columnId: "name", direction: "desc" })).toBe(false);
+  });
+
+  it("returns false for a different column", () => {
+    expect(isDefaultSort({ columnId: "createdAt", direction: "asc" })).toBe(false);
+  });
+
+  it("returns false when sort is null (user disabled sorting)", () => {
+    expect(isDefaultSort(null)).toBe(false);
   });
 });
 

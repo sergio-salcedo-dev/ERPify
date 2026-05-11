@@ -5,23 +5,45 @@ import { SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { DatePickerField, FormField } from "@/components/erpify";
-import { countActiveFilters, hasActiveFilter, type BanksFilter } from "../_lib/banksFilterSort";
+import {
+  BANKS_SORTABLE_COLUMNS,
+  countActiveFilters,
+  hasActiveFilter,
+  isDefaultSort,
+  type BanksFilter,
+  type BanksSort,
+  type BanksSortableColumn,
+} from "../_lib/banksFilterSort";
 
 interface BanksFiltersProps {
   filter: BanksFilter;
   onFilterChange: (next: BanksFilter) => void;
+  sort: BanksSort;
+  onSortChange: (next: BanksSort) => void;
   onReset: () => void;
   /**
    * Initial open state. When omitted the panel starts collapsed if no filters
-   * are active and expanded otherwise — so a user landing on the page with
-   * pre-set filters (e.g. from future URL state) sees them immediately.
+   * are active and the sort is at its default — so a user landing on the page
+   * with pre-set filters / sort (e.g. from future URL state) sees them
+   * immediately.
    */
   defaultOpen?: boolean;
 }
 
-export function BanksFilters({ filter, onFilterChange, onReset, defaultOpen }: BanksFiltersProps) {
+const NONE_SORT_VALUE = "__none__" as const;
+
+export function BanksFilters({
+  filter,
+  onFilterChange,
+  sort,
+  onSortChange,
+  onReset,
+  defaultOpen,
+}: BanksFiltersProps) {
   const panelId = useId();
-  const [open, setOpen] = useState<boolean>(defaultOpen ?? hasActiveFilter(filter));
+  const [open, setOpen] = useState<boolean>(
+    defaultOpen ?? (hasActiveFilter(filter) || !isDefaultSort(sort)),
+  );
 
   const updateText =
     (field: "name" | "shortName") =>
@@ -35,14 +57,38 @@ export function BanksFilters({ filter, onFilterChange, onReset, defaultOpen }: B
       onFilterChange({ ...filter, [field]: next });
     };
 
+  const handleSortColumnChange = (event: ChangeEvent<HTMLSelectElement>): void => {
+    const value = event.target.value;
+    if (value === NONE_SORT_VALUE) {
+      onSortChange(null);
+      return;
+    }
+    const direction = sort?.direction ?? "asc";
+    onSortChange({ columnId: value as BanksSortableColumn, direction });
+  };
+
+  const handleSortDirectionChange = (event: ChangeEvent<HTMLSelectElement>): void => {
+    if (!sort) return;
+    onSortChange({ ...sort, direction: event.target.value as "asc" | "desc" });
+  };
+
   const activeCount = countActiveFilters(filter);
   const hasActive = activeCount > 0;
+  const sortDrift = !isDefaultSort(sort);
+  const canReset = hasActive || sortDrift;
   const toggleLabel = hasActive ? `Filters, ${activeCount} active` : "Filters";
+
+  const sortColumnValue = sort?.columnId ?? NONE_SORT_VALUE;
+  const sortDirectionValue = sort?.direction ?? "asc";
+  const sortDirectionDisabled = !sort;
+
+  const selectClassName =
+    "border-border bg-background text-foreground focus-visible:ring-ring h-9 w-full rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50";
 
   return (
     <section
       className="banks-filters"
-      aria-label="Bank filters"
+      aria-label="Bank filters and sort"
       data-testid="banks-filters"
       data-open={open ? "true" : "false"}
     >
@@ -118,15 +164,53 @@ export function BanksFilters({ filter, onFilterChange, onReset, defaultOpen }: B
             testId="banks-filters__created-to"
           />
         </div>
-        {hasActive ? (
+
+        <div
+          className="banks-filters__sort mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2"
+          data-testid="banks-filters__sort"
+        >
+          <FormField name="banks-filters-sort-by" label="Sort by">
+            <select
+              className={selectClassName}
+              value={sortColumnValue}
+              onChange={handleSortColumnChange}
+              aria-label="Sort by"
+              title="Sort by"
+              data-testid="banks-filters__sort-by"
+            >
+              <option value={NONE_SORT_VALUE}>None</option>
+              {BANKS_SORTABLE_COLUMNS.map((column) => (
+                <option key={column.id} value={column.id}>
+                  {column.label}
+                </option>
+              ))}
+            </select>
+          </FormField>
+          <FormField name="banks-filters-sort-direction" label="Direction">
+            <select
+              className={selectClassName}
+              value={sortDirectionValue}
+              onChange={handleSortDirectionChange}
+              disabled={sortDirectionDisabled}
+              aria-label="Sort direction"
+              title="Sort direction"
+              data-testid="banks-filters__sort-direction"
+            >
+              <option value="asc">Ascending</option>
+              <option value="desc">Descending</option>
+            </select>
+          </FormField>
+        </div>
+
+        {canReset ? (
           <div className="banks-filters__actions mt-3 flex justify-end">
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={onReset}
-              aria-label="Reset filters"
-              title="Reset filters"
+              aria-label="Reset filters and sort"
+              title="Reset filters and sort"
               className="w-full sm:w-auto"
               data-testid="banks-filters__reset"
             >

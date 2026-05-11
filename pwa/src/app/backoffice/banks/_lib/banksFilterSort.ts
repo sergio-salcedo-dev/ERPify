@@ -16,6 +16,21 @@ export type BanksSort = DataTableSort | null;
 /** Default sort: alphabetical by name, A → Z. */
 export const DEFAULT_SORT: BanksSort = { columnId: "name", direction: "asc" };
 
+export type BanksSortableColumn = "shortName" | "name" | "createdAt" | "updatedAt";
+
+/** The set of columns the user can sort by, paired with the labels shown in the filters panel. */
+export const BANKS_SORTABLE_COLUMNS: ReadonlyArray<{ id: BanksSortableColumn; label: string }> = [
+  { id: "shortName", label: "Short name" },
+  { id: "name", label: "Name" },
+  { id: "createdAt", label: "Created" },
+  { id: "updatedAt", label: "Updated" },
+];
+
+export function isDefaultSort(sort: BanksSort): boolean {
+  if (!sort || !DEFAULT_SORT) return sort === DEFAULT_SORT;
+  return sort.columnId === DEFAULT_SORT.columnId && sort.direction === DEFAULT_SORT.direction;
+}
+
 export const EMPTY_FILTER: BanksFilter = {
   name: "",
   shortName: "",

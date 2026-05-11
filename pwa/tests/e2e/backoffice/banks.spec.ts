@@ -478,6 +478,121 @@ test.describe("BackOffice - Banks CRUD", () => {
       ).toHaveAttribute("aria-sort", "descending");
     });
 
+    test("filters panel exposes Sort by + Direction selects mirroring the default table sort", async ({
+      page,
+    }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: allBanks });
+      await page.goto("/backoffice/banks");
+
+      await page.getByTestId("banks-filters__toggle").click();
+
+      const sortBy = page.getByTestId("banks-filters__sort-by");
+      const sortDirection = page.getByTestId("banks-filters__sort-direction");
+      await expect(sortBy).toBeVisible();
+      await expect(sortDirection).toBeVisible();
+      // Defaults match DEFAULT_SORT (name ascending).
+      await expect(sortBy).toHaveValue("name");
+      await expect(sortDirection).toHaveValue("asc");
+    });
+
+    test("changing Sort by from the filters panel re-orders rows and updates the column header", async ({
+      page,
+    }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: allBanks });
+      await page.goto("/backoffice/banks");
+
+      await page.getByTestId("banks-filters__toggle").click();
+      await page.getByTestId("banks-filters__sort-by").selectOption("createdAt");
+      await page.getByTestId("banks-filters__sort-direction").selectOption("desc");
+
+      // Table column header reflects the same sort (panel ↔ headers two-way sync).
+      await expect(
+        page.getByRole("columnheader", { name: "Created", exact: true }),
+      ).toHaveAttribute("aria-sort", "descending");
+      // Newest first: Delta Credit Union has the latest createdAt (2026-04-10) of the four fixtures.
+      const firstRow = page.getByRole("row").nth(1);
+      await expect(
+        firstRow.getByRole("cell", { name: "Delta Credit Union", exact: true }),
+      ).toBeVisible();
+    });
+
+    test("clicking a column header keeps the filters panel selects in sync", async ({ page }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: allBanks });
+      await page.goto("/backoffice/banks");
+
+      await page.getByTestId("banks-filters__toggle").click();
+      // Panel reflects the default.
+      await expect(page.getByTestId("banks-filters__sort-by")).toHaveValue("name");
+      await expect(page.getByTestId("banks-filters__sort-direction")).toHaveValue("asc");
+
+      // Click the Name header → asc cycles to desc.
+      await page
+        .getByRole("columnheader", { name: "Name", exact: true })
+        .getByRole("button")
+        .click();
+      await expect(page.getByTestId("banks-filters__sort-direction")).toHaveValue("desc");
+
+      // Click again → clears the sort entirely. Panel switches to "None" and disables Direction.
+      await page
+        .getByRole("columnheader", { name: "Name", exact: true })
+        .getByRole("button")
+        .click();
+      await expect(page.getByTestId("banks-filters__sort-by")).toHaveValue("__none__");
+      await expect(page.getByTestId("banks-filters__sort-direction")).toBeDisabled();
+    });
+
+    test("Sort by = None disables the Direction select and removes the column-header sort", async ({
+      page,
+    }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: allBanks });
+      await page.goto("/backoffice/banks");
+
+      await page.getByTestId("banks-filters__toggle").click();
+      await page.getByTestId("banks-filters__sort-by").selectOption("__none__");
+
+      await expect(page.getByTestId("banks-filters__sort-direction")).toBeDisabled();
+      await expect(page.getByRole("columnheader", { name: "Name", exact: true })).toHaveAttribute(
+        "aria-sort",
+        "none",
+      );
+    });
+
+    test("Reset button appears when sort drifts even without an active filter", async ({
+      page,
+    }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: allBanks });
+      await page.goto("/backoffice/banks");
+
+      await page.getByTestId("banks-filters__toggle").click();
+      await expect(page.getByTestId("banks-filters__reset")).toHaveCount(0);
+
+      await page.getByTestId("banks-filters__sort-direction").selectOption("desc");
+      await expect(page.getByTestId("banks-filters__reset")).toBeVisible();
+
+      await page.getByTestId("banks-filters__reset").click();
+      await expect(page.getByTestId("banks-filters__sort-by")).toHaveValue("name");
+      await expect(page.getByTestId("banks-filters__sort-direction")).toHaveValue("asc");
+      await expect(page.getByTestId("banks-filters__reset")).toHaveCount(0);
+    });
+
+    test("sort selected in the panel applies to the cards view as well", async ({ page }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: allBanks });
+      await page.goto("/backoffice/banks");
+
+      // Switch to cards before changing sort — sort still applies.
+      await page.getByTestId("banks-list__view-toggle-cards").click();
+      await page.getByTestId("banks-filters__toggle").click();
+      await page.getByTestId("banks-filters__sort-by").selectOption("createdAt");
+      await page.getByTestId("banks-filters__sort-direction").selectOption("desc");
+
+      // The first card in the grid is the most-recently-created bank.
+      const firstCard = page.getByTestId("banks-cards").locator("li").first();
+      await expect(firstCard).toHaveAttribute(
+        "data-testid",
+        `banks-cards__item-${SAMPLE_BANK_D.id}`,
+      );
+    });
+
     test("notice copy when meta.nextCursor is present calls out the page-only scope", async ({
       page,
     }) => {

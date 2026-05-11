@@ -163,7 +163,13 @@ export default function BanksListPage() {
       </header>
 
       {state === ViewStatus.READY ? (
-        <BanksFilters filter={filter} onFilterChange={setFilter} onReset={resetFilters} />
+        <BanksFilters
+          filter={filter}
+          onFilterChange={setFilter}
+          sort={sort}
+          onSortChange={setSort}
+          onReset={resetFilters}
+        />
       ) : null}
 
       <AsyncBoundary
