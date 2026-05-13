@@ -10,6 +10,7 @@ use Erpify\Shared\Media\Domain\Entity\Media;
 use Erpify\Shared\Storage\Application\Port\StoredObjectPublicUrlGenerator;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AutoconfigureTag;
+use Symfony\Component\Serializer\Exception\ExceptionInterface;
 use Symfony\Component\Serializer\Normalizer\NormalizerAwareInterface;
 use Symfony\Component\Serializer\Normalizer\NormalizerAwareTrait;
 use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
@@ -30,12 +31,18 @@ final class BankLogoUrlNormalizer implements NormalizerInterface, NormalizerAwar
     ) {
     }
 
+    /**
+     * @throws ExceptionInterface
+     *
+     * @return array<string, mixed>
+     */
     #[Override]
     public function normalize(mixed $data, ?string $format = null, array $context = []): array
     {
         $context[self::MARK] = true;
+
+        /** @var array<string, mixed> $normalizedData */
         $normalizedData = $this->normalizer->normalize($data, $format, $context);
-        \assert(\is_array($normalizedData));
 
         $groups = \is_array($context['groups'] ?? null) ? $context['groups'] : [];
 
