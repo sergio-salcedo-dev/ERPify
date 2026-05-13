@@ -235,6 +235,7 @@ jobs:
 
       - name: Start full stack
         env:
+          APP_ENV: test
           COMPOSE_PROJECT_NAME: erpify-e2e
         run: make docker.up.wait.no-build
 
