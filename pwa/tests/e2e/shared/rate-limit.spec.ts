@@ -47,7 +47,7 @@ test.describe("Rate limiting — 429 Too Many Requests", () => {
   //   expect(body.status).toBe(429);
   //   expect(body["correlation-id"]).toBeDefined();
   //   expect(body.context).toBeDefined();
-  //   expect(body.context?.retry_after_seconds).toBeGreaterThan(0);
+  //   expect(body.context?.retryAfterSeconds).toBeGreaterThan(0);
   //   expect(body.context?.limit).toBe(5);
   //   expect(body.context?.remaining).toBe(0);
   // });

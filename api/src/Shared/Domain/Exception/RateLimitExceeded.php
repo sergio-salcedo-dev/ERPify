@@ -40,7 +40,7 @@ final class RateLimitExceeded extends DomainException implements RateLimited
             type: self::TYPE,
             title: self::TITLE,
             context: [
-                'retry_after_seconds' => $retryAfterSeconds,
+                'retryAfterSeconds' => $retryAfterSeconds,
                 'limit' => $limit,
                 'remaining' => $remaining,
             ],

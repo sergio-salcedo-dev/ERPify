@@ -41,7 +41,7 @@ final class RateLimitExceededTest extends TestCase
 
         $context = $rateLimitExceeded->context();
 
-        $this->assertSame(30, $context['retry_after_seconds'] ?? null);
+        $this->assertSame(30, $context['retryAfterSeconds'] ?? null);
         $this->assertSame(100, $context['limit'] ?? null);
         $this->assertSame(0, $context['remaining'] ?? null);
     }
