@@ -1,20 +1,76 @@
-```
-# Environment files
-.env.local
-*.env.*
-
-# Build artifacts and dependencies
-_bmad-output/
-
-# Logs and temporary files
-*.log
-*.tmp
-
-# Editor/IDE files
-.vscode/
+# IDE / editors
 .idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+*~
 
-# System files
+# OS
 .DS_Store
 Thumbs.db
-```
+
+# Environment & secrets (committed `.env` / `.env.dist` stay tracked)
+.env.local
+.env.local.php
+.env.*.local
+
+# API — PHP / Composer / Symfony
+api/vendor/
+api/var/
+api/public/bundles/
+api/.phpunit.result.cache
+api/.phpunit.cache/
+api/.php-cs-fixer.cache
+api/tools/ecs/.php-cs-fixer.cache
+api/.phpstan.cache/
+api/.psalm.cache/
+api/.rector.cache/
+
+# Stray PHP-CS-Fixer cache (some IDE plugins drop it at the cwd)
+.php-cs-fixer.cache
+
+# Stray repo-root Node artefacts (e.g. when a tool runs `vitest` from the
+# repo root instead of `pwa/`, npm/Vite drops a `node_modules/` here).
+/node_modules/
+
+# PWA — Node / Next
+pwa/node_modules/
+pwa/.next/
+pwa/.nuxt/
+pwa/dist/
+pwa/build/
+pwa/out/
+pwa/coverage/
+pwa/.turbo/
+pwa/.vercel/
+pwa/next-env.d.ts
+pwa/reports/*
+
+# E2E — Playwright (root-level convenience paths)
+e2e/node_modules/
+e2e/test-results/
+e2e/playwright-report/
+e2e/blob-report/
+e2e/playwright/.cache/
+pwa/test-results/
+pwa/playwright-report/
+pwa/blob-report/
+pwa/playwright/.cache/
+
+# Logs & temp
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.orig
+*.bak
+
+# CodeQL local CLI bundle, database, and SARIF
+.codeql/
+
+# BMad generated artifacts
+/_bmad/
+/.agents/skills/bmad-*/
+/.claude/skills/bmad-*/
