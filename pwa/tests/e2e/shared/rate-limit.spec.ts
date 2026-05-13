@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { VIEWPORT_DESKTOP } from "../constants";
 
 /**
- * E2E coverage for HTTP 429 (Too Many Requests) rate limiting behavior.
+ * E2E coverage for HTTP 429 (Too Many Requests) rate-limiting behavior.
  *
  * Scope
  * - Verify that the API returns a 429 RFC 9457 Problem Details response
@@ -18,20 +18,6 @@ import { VIEWPORT_DESKTOP } from "../constants";
  *   functional tests can assert the 429 path deterministically without
  *   hammering the limiter 120+ times.
  */
-
-interface RateLimitProblemDetails {
-  type: string;
-  title: string;
-  status: number;
-  instance: string;
-  "correlation-id": string;
-  detail?: string;
-  context?: {
-    retry_after_seconds?: number;
-    limit?: number;
-    remaining?: number;
-  };
-}
 
 test.describe("Rate limiting — 429 Too Many Requests", () => {
   test.use({ viewport: VIEWPORT_DESKTOP });
