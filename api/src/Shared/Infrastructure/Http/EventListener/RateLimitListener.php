@@ -70,7 +70,7 @@ use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
  *
  * On limiter rejection, the listener throws {@see RateLimitExceeded} (implements the
  * `RateLimited` marker) instead of setting a response directly. The existing
- * {@see \Erpify\Shared\Infrastructure\Http\EventListener\ExceptionResponder} converts it
+ * {@see ExceptionResponder} converts it
  * into a conforming RFC 9457 Problem Details 429 envelope, preserving the project's single
  * error-contract pipeline. The response listener then stamps the rate-limit headers
  * on top of that 429 body.
