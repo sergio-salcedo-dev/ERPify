@@ -6,9 +6,11 @@ namespace Erpify\Tests\Unit\Shared\Infrastructure\Http\EventListener;
 
 use Erpify\Shared\Domain\Exception\RateLimitExceeded;
 use Erpify\Shared\Infrastructure\Http\EventListener\RateLimitListener;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
+use ReflectionMethod;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
@@ -61,10 +63,11 @@ final class RateLimitListenerTest extends TestCase
             $rateLimitListener->onRequest($this->makeRequestEvent('/api/v1/anything', self::CLIENT_IP));
         }
 
-        $overflowEvent = $this->makeRequestEvent('/api/v1/anything', self::CLIENT_IP);
+        // overflowEvent
+        $requestEvent = $this->makeRequestEvent('/api/v1/anything', self::CLIENT_IP);
 
         try {
-            $rateLimitListener->onRequest($overflowEvent);
+            $rateLimitListener->onRequest($requestEvent);
             $this->fail('Listener must throw RateLimitExceeded once the budget is exhausted.');
         } catch (RateLimitExceeded $rateLimitExceeded) {
             $this->assertSame(self::TEST_LIMIT, $rateLimitExceeded->limit);
@@ -73,7 +76,7 @@ final class RateLimitListenerTest extends TestCase
             $this->assertSame(self::CLIENT_IP, $rateLimitExceeded->limiterKey);
         }
 
-        $snapshot = $overflowEvent->getRequest()->attributes->get(RateLimitListener::ATTRIBUTE_KEY);
+        $snapshot = $requestEvent->getRequest()->attributes->get(RateLimitListener::ATTRIBUTE_KEY);
         $this->assertIsArray($snapshot);
         $this->assertFalse($snapshot['accepted'] ?? true);
     }
@@ -86,16 +89,17 @@ final class RateLimitListenerTest extends TestCase
             $rateLimitListener->onRequest($this->makeRequestEvent('/api/v1/anything', self::CLIENT_IP));
         }
 
-        $overflowEvent = $this->makeRequestEvent('/api/v1/anything', self::CLIENT_IP);
+        // overflowEvent
+        $requestEvent = $this->makeRequestEvent('/api/v1/anything', self::CLIENT_IP);
 
         try {
-            $rateLimitListener->onRequest($overflowEvent);
+            $rateLimitListener->onRequest($requestEvent);
         } catch (RateLimitExceeded) {
             // Expected — snapshot was stamped before the throw so the response listener can
             // still read it from the same request attribute.
         }
 
-        $responseEvent = $this->makeResponseEvent($overflowEvent->getRequest(), Response::HTTP_TOO_MANY_REQUESTS);
+        $responseEvent = $this->makeResponseEvent($requestEvent->getRequest(), Response::HTTP_TOO_MANY_REQUESTS);
         $rateLimitListener->onResponse($responseEvent);
 
         $headers = $responseEvent->getResponse()->headers;
