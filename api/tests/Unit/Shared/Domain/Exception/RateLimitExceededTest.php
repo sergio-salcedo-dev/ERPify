@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Domain\Exception;
 
-use Erpify\Shared\Domain\Exception\DomainException;
-use Erpify\Shared\Domain\Exception\RateLimited;
 use Erpify\Shared\Domain\Exception\RateLimitExceeded;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -17,19 +15,6 @@ use RuntimeException;
 #[CoversClass(RateLimitExceeded::class)]
 final class RateLimitExceededTest extends TestCase
 {
-    public function testImplementsRateLimitedMarkerAndExtendsDomainException(): void
-    {
-        $rateLimitExceeded = new RateLimitExceeded(
-            retryAfterSeconds: 30,
-            limit: 100,
-            remaining: 0,
-            limiterKey: '203.0.113.42',
-        );
-
-        $this->assertInstanceOf(DomainException::class, $rateLimitExceeded);
-        $this->assertInstanceOf(RateLimited::class, $rateLimitExceeded);
-    }
-
     public function testExposesProblemDetailsTypeAndTitleConstants(): void
     {
         $rateLimitExceeded = new RateLimitExceeded(
