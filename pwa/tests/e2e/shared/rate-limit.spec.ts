@@ -27,16 +27,16 @@ test.describe("Rate limiting — 429 Too Many Requests", () => {
   }) => {
     // The test environment sets RATE_LIMIT_ANONYMOUS_API_LIMIT=5, so we
     // need to make 6 requests to trigger the 429 (the 6th should be rejected).
-    const healthEndpoint = "/api/v1/health";
+    const healthEndpoint = "/api/v1/backoffice/health";
 
     // Make successful requests up to the limit
-    for (let i = 0; i < 120; i++) {
+    for (let i = 0; i < 5; i++) {
       const response = await page.request.get(healthEndpoint);
       // expect(response.ok(), `Request ${i + 1} should succeed`).toBe(true);
       expect(response.status()).toBe(200);
     }
 
-    // The 6th request should be rate limited
+    // The 6th request should be rate-limited
     const rateLimitedResponse = await page.request.get(healthEndpoint);
     expect(rateLimitedResponse.status()).toBe(429);
 
