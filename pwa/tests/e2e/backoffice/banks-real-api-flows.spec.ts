@@ -74,7 +74,9 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
     const total = Number(totalText.match(/(\d+)/)?.[1] ?? "0");
     expect(total).toBeGreaterThanOrEqual(SEED_COUNT);
 
-    // Narrow the client-side filter to test-owned rows.
+    // Narrow the client-side filter to test-owned rows. The filters panel
+    // is collapsed by default, so reveal it before driving its inputs.
+    await page.getByTestId("banks-filters__toggle").click();
     await page.getByTestId("banks-filters__name").fill(runPrefix);
 
     // Default sort is name ascending — first row = `<prefix> 001`.
@@ -100,6 +102,7 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
     const target = seeded[3];
     const uniqueTail = target.shortName.slice(-4); // "-004"
 
+    await page.getByTestId("banks-filters__toggle").click();
     await page.getByTestId("banks-filters__name").fill(runPrefix);
     await page.getByTestId("banks-filters__short-name").fill(uniqueTail);
 
@@ -116,6 +119,7 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
   test("sort — Short name column flips ascending and descending", async ({ page }) => {
     await page.goto("/backoffice/banks");
     await expect(page.getByTestId("banks-list")).toHaveAttribute("data-state", "ready");
+    await page.getByTestId("banks-filters__toggle").click();
     await page.getByTestId("banks-filters__name").fill(runPrefix);
     await page.getByTestId("banks-pagination__page-size").selectOption("50");
 
@@ -144,6 +148,7 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
   test("pagination — default page size 25 walks page 1 <-> page 2 round-trip", async ({ page }) => {
     await page.goto("/backoffice/banks");
     await expect(page.getByTestId("banks-list")).toHaveAttribute("data-state", "ready");
+    await page.getByTestId("banks-filters__toggle").click();
     await page.getByTestId("banks-filters__name").fill(runPrefix);
 
     // The smallest selectable page size is 25; with 30 seeded rows that
@@ -190,7 +195,7 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
 
   test("create — happy path lands on the detail page with the new bank", async ({ page }) => {
     const createName = `${runPrefix} INLINE`;
-    const createShort = `${runPrefix.slice(-40)}-INL`.slice(0, 50);
+    const createShortName = `${runPrefix.slice(-40)}-INL`.slice(0, 50).toLocaleUpperCase();
 
     await page.goto("/backoffice/banks");
     await expect(page.getByTestId("banks-list")).toHaveAttribute("data-state", "ready");
@@ -199,7 +204,7 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
     await expect(page).toHaveURL(/\/backoffice\/banks\/new$/);
 
     await page.getByTestId("bank-form__name").fill(createName);
-    await page.getByTestId("bank-form__short-name").fill(createShort);
+    await page.getByTestId("bank-form__short-name").fill(createShortName);
     await page.getByTestId("bank-form__submit").click();
 
     await expect(page).toHaveURL(/\/backoffice\/banks\/[0-9a-f-]{36}$/);
@@ -209,7 +214,7 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
 
     await expect(page.getByTestId("banks-detail")).toHaveAttribute("data-state", "ready");
     await expect(page.getByTestId("banks-detail__name")).toHaveText(createName);
-    await expect(page.getByTestId("banks-detail__shortname")).toHaveText(createShort);
+    await expect(page.getByTestId("banks-detail__shortname")).toHaveText(createShortName);
     await expect(page.getByTestId("banks-detail__id")).toHaveText(createdId);
 
     // Confirm the API agrees the bank exists.
@@ -228,6 +233,7 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
     // The default page size of 25 hides the newly-created `INLINE` bank on
     // page 2 (default sort is name asc), so widen the window before locating.
     await page.getByTestId("banks-pagination__page-size").selectOption("50");
+    await page.getByTestId("banks-filters__toggle").click();
     await page.getByTestId("banks-filters__name").fill(runPrefix);
 
     await page.getByTestId(`banks-table__edit-${id}`).click();
@@ -255,6 +261,7 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
     // Same page-size-vs-row-count gotcha as the update test above: 31 rows
     // under the prefix, default page size 25, target row sorted last by name.
     await page.getByTestId("banks-pagination__page-size").selectOption("50");
+    await page.getByTestId("banks-filters__toggle").click();
     await page.getByTestId("banks-filters__name").fill(runPrefix);
 
     await expect(page.getByTestId(`banks-table__row-${id}`)).toBeVisible();

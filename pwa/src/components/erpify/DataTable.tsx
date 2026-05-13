@@ -3,6 +3,7 @@
 import { useCallback, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SortDirection } from "@/context/shared/domain/types/sorting";
 
 export interface DataTableColumn<T> {
   id: string;
@@ -19,7 +20,7 @@ export interface DataTableColumn<T> {
 
 export interface DataTableSort {
   columnId: string;
-  direction: "asc" | "desc";
+  direction: SortDirection;
 }
 
 export interface DataTableSelection {
@@ -86,11 +87,11 @@ export function DataTable<T>({
     (columnId: string) => {
       if (!onSortChange) return;
       if (sort?.columnId !== columnId) {
-        onSortChange({ columnId, direction: "asc" });
+        onSortChange({ columnId, direction: SortDirection.ASC });
         return;
       }
-      if (sort.direction === "asc") {
-        onSortChange({ columnId, direction: "desc" });
+      if (sort.direction === SortDirection.ASC) {
+        onSortChange({ columnId, direction: SortDirection.DESC });
         return;
       }
       onSortChange(null);
@@ -195,7 +196,7 @@ export function DataTable<T>({
                 ? undefined
                 : !isSorted
                   ? "none"
-                  : sort.direction === "asc"
+                  : sort.direction === SortDirection.ASC
                     ? "ascending"
                     : "descending";
               return (
@@ -291,9 +292,9 @@ export function DataTable<T>({
   );
 }
 
-function SortIcon({ sorted, direction }: { sorted: boolean; direction?: "asc" | "desc" }) {
+function SortIcon({ sorted, direction }: { sorted: boolean; direction?: SortDirection }) {
   if (!sorted) return <ArrowUpDown className="size-3" aria-hidden="true" />;
-  return direction === "asc" ? (
+  return direction === SortDirection.ASC ? (
     <ArrowUp className="size-3" aria-hidden="true" />
   ) : (
     <ArrowDown className="size-3" aria-hidden="true" />
