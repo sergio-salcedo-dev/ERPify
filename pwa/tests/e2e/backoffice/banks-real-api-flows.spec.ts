@@ -195,7 +195,7 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
 
   test("create — happy path lands on the detail page with the new bank", async ({ page }) => {
     const createName = `${runPrefix} INLINE`;
-    const createShort = `${runPrefix.slice(-40)}-INL`.slice(0, 50);
+    const createShortName = `${runPrefix.slice(-40)}-INL`.slice(0, 50).toLocaleUpperCase();
 
     await page.goto("/backoffice/banks");
     await expect(page.getByTestId("banks-list")).toHaveAttribute("data-state", "ready");
@@ -204,7 +204,7 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
     await expect(page).toHaveURL(/\/backoffice\/banks\/new$/);
 
     await page.getByTestId("bank-form__name").fill(createName);
-    await page.getByTestId("bank-form__short-name").fill(createShort);
+    await page.getByTestId("bank-form__short-name").fill(createShortName);
     await page.getByTestId("bank-form__submit").click();
 
     await expect(page).toHaveURL(/\/backoffice\/banks\/[0-9a-f-]{36}$/);
@@ -214,7 +214,7 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
 
     await expect(page.getByTestId("banks-detail")).toHaveAttribute("data-state", "ready");
     await expect(page.getByTestId("banks-detail__name")).toHaveText(createName);
-    await expect(page.getByTestId("banks-detail__shortname")).toHaveText(createShort);
+    await expect(page.getByTestId("banks-detail__shortname")).toHaveText(createShortName);
     await expect(page.getByTestId("banks-detail__id")).toHaveText(createdId);
 
     // Confirm the API agrees the bank exists.
