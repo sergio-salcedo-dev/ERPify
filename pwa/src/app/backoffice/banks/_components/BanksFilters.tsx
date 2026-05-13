@@ -5,6 +5,7 @@ import { SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { DatePickerField, FormField } from "@/components/erpify";
+import { SortDirection } from "@/context/shared/domain/types/sorting";
 import {
   BANKS_SORTABLE_COLUMNS,
   countActiveFilters,
@@ -63,13 +64,13 @@ export function BanksFilters({
       onSortChange(null);
       return;
     }
-    const direction = sort?.direction ?? "asc";
+    const direction = sort?.direction ?? SortDirection.ASC;
     onSortChange({ columnId: value as BanksSortableColumn, direction });
   };
 
   const handleSortDirectionChange = (event: ChangeEvent<HTMLSelectElement>): void => {
     if (!sort) return;
-    onSortChange({ ...sort, direction: event.target.value as "asc" | "desc" });
+    onSortChange({ ...sort, direction: event.target.value as SortDirection });
   };
 
   const activeCount = countActiveFilters(filter);
@@ -79,7 +80,7 @@ export function BanksFilters({
   const toggleLabel = hasActive ? `Filters, ${activeCount} active` : "Filters";
 
   const sortColumnValue = sort?.columnId ?? NONE_SORT_VALUE;
-  const sortDirectionValue = sort?.direction ?? "asc";
+  const sortDirectionValue = sort?.direction ?? SortDirection.ASC;
   const sortDirectionDisabled = !sort;
 
   const selectClassName =
@@ -196,8 +197,8 @@ export function BanksFilters({
               title="Sort direction"
               data-testid="banks-filters__sort-direction"
             >
-              <option value="asc">Ascending</option>
-              <option value="desc">Descending</option>
+              <option value={SortDirection.ASC}>Ascending</option>
+              <option value={SortDirection.DESC}>Descending</option>
             </select>
           </FormField>
         </div>

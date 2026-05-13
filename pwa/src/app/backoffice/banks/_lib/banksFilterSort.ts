@@ -1,6 +1,7 @@
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
 import type { DataTableSort } from "@/components/erpify";
 import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
+import { SortDirection } from "@/context/shared/domain/types/sorting";
 
 export interface BanksFilter {
   name: string;
@@ -14,7 +15,7 @@ export interface BanksFilter {
 export type BanksSort = DataTableSort | null;
 
 /** Default sort: alphabetical by name, A → Z. */
-export const DEFAULT_SORT: BanksSort = { columnId: "name", direction: "asc" };
+export const DEFAULT_SORT: BanksSort = { columnId: "name", direction: SortDirection.ASC };
 
 export type BanksSortableColumn = "shortName" | "name" | "createdAt" | "updatedAt";
 
@@ -111,7 +112,7 @@ function compareDate(a: string, b: string): number {
 export function applySort(banks: readonly Bank[], sort: BanksSort): Bank[] {
   if (!sort) return banks.slice();
 
-  const direction = sort.direction === "desc" ? -1 : 1;
+  const direction = sort.direction === SortDirection.DESC ? -1 : 1;
   const sorted = banks.slice();
 
   switch (sort.columnId) {
