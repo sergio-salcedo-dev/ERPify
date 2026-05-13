@@ -149,10 +149,10 @@ final class RateLimitListenerTest extends TestCase
         }
 
         // A different client IP must still have its full budget after the first IP exhausts.
-        $freshClientEvent = $this->makeRequestEvent('/api/v1/anything', '198.51.100.8');
-        $rateLimitListener->onRequest($freshClientEvent);
+        $freshClientRequestEvent = $this->makeRequestEvent('/api/v1/anything', '198.51.100.8');
+        $rateLimitListener->onRequest($freshClientRequestEvent);
 
-        $snapshot = $freshClientEvent->getRequest()->attributes->get(RateLimitListener::ATTRIBUTE_KEY);
+        $snapshot = $freshClientRequestEvent->getRequest()->attributes->get(RateLimitListener::ATTRIBUTE_KEY);
         $this->assertIsArray($snapshot);
         $this->assertTrue($snapshot['accepted'] ?? false);
         $this->assertSame(self::TEST_LIMIT - 1, $snapshot['remaining'] ?? null);
