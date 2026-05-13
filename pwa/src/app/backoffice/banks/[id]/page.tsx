@@ -38,12 +38,18 @@ export default function BankDetailPage() {
   const [bank, setBank] = useState<Bank | null>(null);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
 
-  useEffect(() => {
-    if (!id) return;
-    let cancelled = false;
+  // Reset state when ID changes to avoid synchronous setState in useEffect
+  const [prevId, setPrevId] = useState(id);
+  if (id !== prevId) {
+    setPrevId(id);
     setState(ViewStatus.LOADING);
     setBank(null);
     setProblem(null);
+  }
+
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
     (async () => {
       try {
         const useCase = container.get<FindBank>("BackOfficeFindBank");

@@ -71,6 +71,7 @@ test.describe("BackOffice - Banks CRUD (real API)", () => {
 
     // Narrow the client-side filter to test-owned rows so other banks in
     // the dev DB don't leak into our assertions.
+    await page.getByTestId("banks-filters__toggle").click();
     await page.getByTestId("banks-filters__name").fill(runPrefix);
 
     // Default sort is name ascending — the first row should be `… 001`.
@@ -124,14 +125,14 @@ test.describe("BackOffice - Banks CRUD (real API)", () => {
     // Create — drive the UI form against the real POST endpoint.
     // -----------------------------------------------------------------
     const createName = `${runPrefix} CRUD`;
-    const createShort = `${runPrefix.slice(-40)}-CRUD`.slice(0, 50);
+    const createShortName = `${runPrefix.slice(-40)}-CRUD`.slice(0, 50).toLocaleUpperCase();
     const updatedName = `${createName} (renamed)`;
 
     await page.getByTestId("banks-list__new-button").click();
     await expect(page).toHaveURL(/\/backoffice\/banks\/new$/);
 
     await page.getByTestId("bank-form__name").fill(createName);
-    await page.getByTestId("bank-form__short-name").fill(createShort);
+    await page.getByTestId("bank-form__short-name").fill(createShortName);
     await page.getByTestId("bank-form__submit").click();
 
     // The detail page lives at /backoffice/banks/<uuid>. Capture the id so
@@ -143,7 +144,7 @@ test.describe("BackOffice - Banks CRUD (real API)", () => {
 
     await expect(page.getByTestId("banks-detail")).toHaveAttribute("data-state", "ready");
     await expect(page.getByTestId("banks-detail__name")).toHaveText(createName);
-    await expect(page.getByTestId("banks-detail__shortname")).toHaveText(createShort);
+    await expect(page.getByTestId("banks-detail__shortname")).toHaveText(createShortName);
     await expect(page.getByTestId("banks-detail__id")).toHaveText(createdId);
 
     // -----------------------------------------------------------------
@@ -166,6 +167,7 @@ test.describe("BackOffice - Banks CRUD (real API)", () => {
     await page.getByTestId("banks-detail__delete-confirm").click();
 
     await expect(page).toHaveURL(/\/backoffice\/banks$/);
+    await page.getByTestId("banks-filters__toggle").click();
     await page.getByTestId("banks-filters__name").fill(updatedName);
     await expect(page.getByTestId("banks-list__empty-filtered")).toBeVisible();
 

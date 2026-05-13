@@ -1,6 +1,7 @@
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
 import type { DataTableSort } from "@/components/erpify";
 import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
+import { SortDirection } from "@/context/shared/domain/types/sorting";
 
 export interface BanksFilter {
   name: string;
@@ -14,7 +15,22 @@ export interface BanksFilter {
 export type BanksSort = DataTableSort | null;
 
 /** Default sort: alphabetical by name, A → Z. */
-export const DEFAULT_SORT: BanksSort = { columnId: "name", direction: "asc" };
+export const DEFAULT_SORT: BanksSort = { columnId: "name", direction: SortDirection.ASC };
+
+export type BanksSortableColumn = "shortName" | "name" | "createdAt" | "updatedAt";
+
+/** The set of columns the user can sort by, paired with the labels shown in the filters panel. */
+export const BANKS_SORTABLE_COLUMNS: ReadonlyArray<{ id: BanksSortableColumn; label: string }> = [
+  { id: "shortName", label: "Short name" },
+  { id: "name", label: "Name" },
+  { id: "createdAt", label: "Created" },
+  { id: "updatedAt", label: "Updated" },
+];
+
+export function isDefaultSort(sort: BanksSort): boolean {
+  if (!sort || !DEFAULT_SORT) return sort === DEFAULT_SORT;
+  return sort.columnId === DEFAULT_SORT.columnId && sort.direction === DEFAULT_SORT.direction;
+}
 
 export const EMPTY_FILTER: BanksFilter = {
   name: "",
@@ -24,12 +40,22 @@ export const EMPTY_FILTER: BanksFilter = {
 };
 
 export function hasActiveFilter(filter: BanksFilter): boolean {
-  return Boolean(
-    filter.name.trim() ||
-    filter.shortName.trim() ||
-    filter.createdFrom.trim() ||
-    filter.createdTo.trim(),
-  );
+  return countActiveFilters(filter) > 0;
+}
+
+/**
+ * Number of populated fields in the filter — used by the "Filters (n)" toggle
+ * badge so the user can tell at a glance how many filters are active when the
+ * panel is collapsed. Whitespace-only values count as inactive (mirrors
+ * `hasActiveFilter` and `applyFilters`).
+ */
+export function countActiveFilters(filter: BanksFilter): number {
+  let count = 0;
+  if (filter.name.trim()) count += 1;
+  if (filter.shortName.trim()) count += 1;
+  if (filter.createdFrom.trim()) count += 1;
+  if (filter.createdTo.trim()) count += 1;
+  return count;
 }
 
 function containsCi(haystack: string, needle: string): boolean {
@@ -86,7 +112,7 @@ function compareDate(a: string, b: string): number {
 export function applySort(banks: readonly Bank[], sort: BanksSort): Bank[] {
   if (!sort) return banks.slice();
 
-  const direction = sort.direction === "desc" ? -1 : 1;
+  const direction = sort.direction === SortDirection.DESC ? -1 : 1;
   const sorted = banks.slice();
 
   switch (sort.columnId) {

@@ -14,20 +14,28 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 import { ViewStatus } from "@/context/shared/domain/types/status";
 import { BanksTable } from "./_components/BanksTable";
+import { BanksCards } from "./_components/BanksCards";
 import { BanksFilters } from "./_components/BanksFilters";
 import { BanksPagination } from "./_components/BanksPagination";
+import { BanksViewToggle, type BanksView } from "./_components/BanksViewToggle";
 import {
   DEFAULT_SORT,
   EMPTY_FILTER,
   applyFilters,
   applySort,
-  hasActiveFilter,
   type BanksFilter,
   type BanksSort,
 } from "./_lib/banksFilterSort";
 import { BANKS_PAGE_SIZE_DEFAULT, type BanksPageSize, paginate } from "./_lib/paginate";
 
 type State = ViewStatus;
+
+const BANKS_VIEW_STORAGE_KEY = "erpify:banks-view";
+const DEFAULT_VIEW: BanksView = "table";
+
+function isBanksView(value: unknown): value is BanksView {
+  return value === "table" || value === "cards";
+}
 
 function genericProblem(detail: string): ProblemDetails {
   return {
@@ -49,6 +57,16 @@ export default function BanksListPage() {
   const [sort, setSort] = useState<BanksSort>(DEFAULT_SORT);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<BanksPageSize>(BANKS_PAGE_SIZE_DEFAULT);
+  const [view, setView] = useState<BanksView>(() => {
+    if (typeof window === "undefined") return DEFAULT_VIEW;
+    const stored = window.localStorage.getItem(BANKS_VIEW_STORAGE_KEY);
+    return isBanksView(stored) ? stored : DEFAULT_VIEW;
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(BANKS_VIEW_STORAGE_KEY, view);
+  }, [view]);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,9 +98,16 @@ export default function BanksListPage() {
     [banks, filter, sort],
   );
 
-  useEffect(() => {
+  // Reset page when filters, sort or pageSize change (adjusting state during render)
+  const [prevFilter, setPrevFilter] = useState(filter);
+  const [prevSort, setPrevSort] = useState(sort);
+  const [prevPageSize, setPrevPageSize] = useState(pageSize);
+  if (filter !== prevFilter || sort !== prevSort || pageSize !== prevPageSize) {
+    setPrevFilter(filter);
+    setPrevSort(sort);
+    setPrevPageSize(pageSize);
     setPage(1);
-  }, [filter, sort, pageSize]);
+  }
 
   const paged = useMemo(
     () => paginate(visibleBanks, page, pageSize),
@@ -93,9 +118,6 @@ export default function BanksListPage() {
     setFilter(EMPTY_FILTER);
     setSort(DEFAULT_SORT);
   };
-
-  const isDefaultSort =
-    sort?.columnId === DEFAULT_SORT?.columnId && sort?.direction === DEFAULT_SORT?.direction;
 
   const handleBankDeleted = (id: string): void => {
     setBanks((prev) => prev.filter((bank) => bank.id !== id));
@@ -147,8 +169,9 @@ export default function BanksListPage() {
         <BanksFilters
           filter={filter}
           onFilterChange={setFilter}
+          sort={sort}
+          onSortChange={setSort}
           onReset={resetFilters}
-          resetDisabled={!hasActiveFilter(filter) && isDefaultSort}
         />
       ) : null}
 
@@ -203,12 +226,22 @@ export default function BanksListPage() {
             </section>
           ) : (
             <>
-              <BanksTable
-                banks={paged.rows}
-                sort={sort}
-                onSortChange={setSort}
-                onBankDeleted={handleBankDeleted}
-              />
+              <div
+                className="banks-list__toolbar flex items-center justify-end"
+                data-testid="banks-list__toolbar"
+              >
+                <BanksViewToggle view={view} onViewChange={setView} />
+              </div>
+              {view === "table" ? (
+                <BanksTable
+                  banks={paged.rows}
+                  sort={sort}
+                  onSortChange={setSort}
+                  onBankDeleted={handleBankDeleted}
+                />
+              ) : (
+                <BanksCards banks={paged.rows} onBankDeleted={handleBankDeleted} />
+              )}
               <BanksPagination
                 page={paged.page}
                 pageSize={pageSize}

@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { createElement, type ReactNode } from "react";
 import {
   AlertCircle,
   AlertTriangle,
@@ -189,7 +189,7 @@ export function ProblemDisplay({
 }: ProblemDisplayProps) {
   const violations = problem.violations ?? [];
   const tone = TONE_CLASSES[toneForStatus(problem.status)];
-  const Icon = iconForStatus(problem.status, violations.length > 0);
+  const statusIcon = iconForStatus(problem.status, violations.length > 0);
   const isUrgent = problem.status >= HttpStatus.INTERNAL_SERVER_ERROR;
   const debugCandidate = (problem as { debug?: unknown }).debug;
   const debug = !isProductionEnv() && isProblemDebug(debugCandidate) ? debugCandidate : undefined;
@@ -217,7 +217,10 @@ export function ProblemDisplay({
             tone.badge,
           )}
         >
-          <Icon className={cn("size-4 sm:size-4.5", tone.icon)} aria-hidden="true" />
+          {createElement(statusIcon, {
+            className: cn("size-4 sm:size-4.5", tone.icon),
+            "aria-hidden": "true",
+          })}
         </span>
         <div className="problem-display__heading min-w-0 flex-1">
           <div className="problem-display__meta flex flex-wrap items-center gap-x-2 gap-y-1">

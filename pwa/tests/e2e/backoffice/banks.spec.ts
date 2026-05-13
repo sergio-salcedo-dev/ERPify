@@ -206,6 +206,73 @@ test.describe("BackOffice - Banks CRUD", () => {
   test.describe("filters and sort", () => {
     const allBanks = [SAMPLE_BANK_A, SAMPLE_BANK_B, SAMPLE_BANK_C, SAMPLE_BANK_D];
 
+    test("filter panel is collapsed by default; the toggle reveals it", async ({ page }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: allBanks });
+      await page.goto("/backoffice/banks");
+
+      const toggle = page.getByTestId("banks-filters__toggle");
+      const panel = page.getByTestId("banks-filters__panel");
+
+      // Collapsed by default — minimalist landing state.
+      await expect(toggle).toBeVisible();
+      await expect(toggle).toHaveAttribute("aria-expanded", "false");
+      await expect(panel).toBeHidden();
+      // No filters active → no count badge.
+      await expect(page.getByTestId("banks-filters__count")).toHaveCount(0);
+
+      await toggle.click();
+      await expect(toggle).toHaveAttribute("aria-expanded", "true");
+      await expect(panel).toBeVisible();
+      await expect(page.getByTestId("banks-filters__name")).toBeVisible();
+
+      // Toggling again hides the panel without losing values.
+      await toggle.click();
+      await expect(toggle).toHaveAttribute("aria-expanded", "false");
+      await expect(panel).toBeHidden();
+    });
+
+    test("Reset button is hidden when no filters are active and appears once a filter is set", async ({
+      page,
+    }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: allBanks });
+      await page.goto("/backoffice/banks");
+
+      await page.getByTestId("banks-filters__toggle").click();
+      // Reset is removed from the DOM (not just disabled) when nothing to reset.
+      await expect(page.getByTestId("banks-filters__reset")).toHaveCount(0);
+
+      await page.getByTestId("banks-filters__name").fill("cosmos");
+      await expect(page.getByTestId("banks-filters__reset")).toBeVisible();
+
+      await page.getByTestId("banks-filters__reset").click();
+      await expect(page.getByTestId("banks-filters__name")).toHaveValue("");
+      await expect(page.getByTestId("banks-filters__reset")).toHaveCount(0);
+    });
+
+    test("toggle button shows a count badge with the number of active filters", async ({
+      page,
+    }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: allBanks });
+      await page.goto("/backoffice/banks");
+
+      await page.getByTestId("banks-filters__toggle").click();
+      await expect(page.getByTestId("banks-filters__count")).toHaveCount(0);
+
+      await page.getByTestId("banks-filters__name").fill("bank");
+      await expect(page.getByTestId("banks-filters__count")).toHaveText("1");
+
+      await page.getByTestId("banks-filters__short-name").fill("cos");
+      await expect(page.getByTestId("banks-filters__count")).toHaveText("2");
+
+      await page.getByTestId("banks-filters__created-from").fill("2026-01-01");
+      await expect(page.getByTestId("banks-filters__count")).toHaveText("3");
+
+      // Badge persists when the panel is collapsed — that's the whole point.
+      await page.getByTestId("banks-filters__toggle").click();
+      await expect(page.getByTestId("banks-filters__panel")).toBeHidden();
+      await expect(page.getByTestId("banks-filters__count")).toHaveText("3");
+    });
+
     test("filters by name case-insensitively, leaves the URL unchanged, and resets via the button", async ({
       page,
     }) => {
@@ -215,6 +282,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       await expect(page.getByRole("cell", { name: "Acme Savings" })).toBeVisible();
       await expect(page.getByRole("cell", { name: "Cosmos Bank" })).toBeVisible();
 
+      await page.getByTestId("banks-filters__toggle").click();
       await page.getByTestId("banks-filters__name").fill("cosmos");
       await expect(page.getByRole("cell", { name: "Cosmos Bank" })).toBeVisible();
       await expect(page.getByRole("cell", { name: "Acme Savings" })).toBeHidden();
@@ -232,6 +300,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       await mockBanksApi(page, { list: "happy", list_banks: allBanks });
       await page.goto("/backoffice/banks");
 
+      await page.getByTestId("banks-filters__toggle").click();
       await page.getByTestId("banks-filters__name").fill("bank");
       await page.getByTestId("banks-filters__short-name").fill("cos");
 
@@ -244,6 +313,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       await mockBanksApi(page, { list: "happy", list_banks: allBanks });
       await page.goto("/backoffice/banks");
 
+      await page.getByTestId("banks-filters__toggle").click();
       await page.getByTestId("banks-filters__created-from").fill("2026-02-01");
       await page.getByTestId("banks-filters__created-to").fill("2026-03-31");
 
@@ -257,6 +327,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       await mockBanksApi(page, { list: "happy", list_banks: allBanks });
       await page.goto("/backoffice/banks");
 
+      await page.getByTestId("banks-filters__toggle").click();
       await expect(page.getByTestId("banks-filters__created-from")).toHaveAttribute("type", "date");
       await expect(page.getByTestId("banks-filters__created-to")).toHaveAttribute("type", "date");
     });
@@ -265,6 +336,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       await mockBanksApi(page, { list: "happy", list_banks: allBanks });
       await page.goto("/backoffice/banks");
 
+      await page.getByTestId("banks-filters__toggle").click();
       await page.getByTestId("banks-filters__name").fill("zzz-does-not-match");
 
       const panel = page.getByTestId("banks-list__empty-filtered");
@@ -360,6 +432,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       await page.goto("/backoffice/banks");
 
       // Drift away from the defaults.
+      await page.getByTestId("banks-filters__toggle").click();
       await page.getByTestId("banks-filters__name").fill("cosmos");
       const nameHeader = page
         .getByRole("columnheader", { name: "Name", exact: true })
@@ -386,6 +459,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       // Filter to anything containing "bank" in the name with createdAt >= 2026-03-01.
       // Of the four fixtures, only Cosmos Bank (name="Cosmos Bank", createdAt 2026-03-20) matches.
       // Adding sort by createdAt desc must not change correctness — just confirm the row remains.
+      await page.getByTestId("banks-filters__toggle").click();
       await page.getByTestId("banks-filters__name").fill("bank");
       await page.getByTestId("banks-filters__created-from").fill("2026-03-01");
 
@@ -402,6 +476,121 @@ test.describe("BackOffice - Banks CRUD", () => {
       await expect(
         page.getByRole("columnheader", { name: "Created", exact: true }),
       ).toHaveAttribute("aria-sort", "descending");
+    });
+
+    test("filters panel exposes Sort by + Direction selects mirroring the default table sort", async ({
+      page,
+    }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: allBanks });
+      await page.goto("/backoffice/banks");
+
+      await page.getByTestId("banks-filters__toggle").click();
+
+      const sortBy = page.getByTestId("banks-filters__sort-by");
+      const sortDirection = page.getByTestId("banks-filters__sort-direction");
+      await expect(sortBy).toBeVisible();
+      await expect(sortDirection).toBeVisible();
+      // Defaults match DEFAULT_SORT (name ascending).
+      await expect(sortBy).toHaveValue("name");
+      await expect(sortDirection).toHaveValue("asc");
+    });
+
+    test("changing Sort by from the filters panel re-orders rows and updates the column header", async ({
+      page,
+    }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: allBanks });
+      await page.goto("/backoffice/banks");
+
+      await page.getByTestId("banks-filters__toggle").click();
+      await page.getByTestId("banks-filters__sort-by").selectOption("createdAt");
+      await page.getByTestId("banks-filters__sort-direction").selectOption("desc");
+
+      // Table column header reflects the same sort (panel ↔ headers two-way sync).
+      await expect(
+        page.getByRole("columnheader", { name: "Created", exact: true }),
+      ).toHaveAttribute("aria-sort", "descending");
+      // Newest first: Delta Credit Union has the latest createdAt (2026-04-10) of the four fixtures.
+      const firstRow = page.getByRole("row").nth(1);
+      await expect(
+        firstRow.getByRole("cell", { name: "Delta Credit Union", exact: true }),
+      ).toBeVisible();
+    });
+
+    test("clicking a column header keeps the filters panel selects in sync", async ({ page }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: allBanks });
+      await page.goto("/backoffice/banks");
+
+      await page.getByTestId("banks-filters__toggle").click();
+      // Panel reflects the default.
+      await expect(page.getByTestId("banks-filters__sort-by")).toHaveValue("name");
+      await expect(page.getByTestId("banks-filters__sort-direction")).toHaveValue("asc");
+
+      // Click the Name header → asc cycles to desc.
+      await page
+        .getByRole("columnheader", { name: "Name", exact: true })
+        .getByRole("button")
+        .click();
+      await expect(page.getByTestId("banks-filters__sort-direction")).toHaveValue("desc");
+
+      // Click again → clears the sort entirely. Panel switches to "None" and disables Direction.
+      await page
+        .getByRole("columnheader", { name: "Name", exact: true })
+        .getByRole("button")
+        .click();
+      await expect(page.getByTestId("banks-filters__sort-by")).toHaveValue("__none__");
+      await expect(page.getByTestId("banks-filters__sort-direction")).toBeDisabled();
+    });
+
+    test("Sort by = None disables the Direction select and removes the column-header sort", async ({
+      page,
+    }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: allBanks });
+      await page.goto("/backoffice/banks");
+
+      await page.getByTestId("banks-filters__toggle").click();
+      await page.getByTestId("banks-filters__sort-by").selectOption("__none__");
+
+      await expect(page.getByTestId("banks-filters__sort-direction")).toBeDisabled();
+      await expect(page.getByRole("columnheader", { name: "Name", exact: true })).toHaveAttribute(
+        "aria-sort",
+        "none",
+      );
+    });
+
+    test("Reset button appears when sort drifts even without an active filter", async ({
+      page,
+    }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: allBanks });
+      await page.goto("/backoffice/banks");
+
+      await page.getByTestId("banks-filters__toggle").click();
+      await expect(page.getByTestId("banks-filters__reset")).toHaveCount(0);
+
+      await page.getByTestId("banks-filters__sort-direction").selectOption("desc");
+      await expect(page.getByTestId("banks-filters__reset")).toBeVisible();
+
+      await page.getByTestId("banks-filters__reset").click();
+      await expect(page.getByTestId("banks-filters__sort-by")).toHaveValue("name");
+      await expect(page.getByTestId("banks-filters__sort-direction")).toHaveValue("asc");
+      await expect(page.getByTestId("banks-filters__reset")).toHaveCount(0);
+    });
+
+    test("sort selected in the panel applies to the cards view as well", async ({ page }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: allBanks });
+      await page.goto("/backoffice/banks");
+
+      // Switch to cards before changing sort — sort still applies.
+      await page.getByTestId("banks-list__view-toggle-cards").click();
+      await page.getByTestId("banks-filters__toggle").click();
+      await page.getByTestId("banks-filters__sort-by").selectOption("createdAt");
+      await page.getByTestId("banks-filters__sort-direction").selectOption("desc");
+
+      // The first card in the grid is the most-recently-created bank.
+      const firstCard = page.getByTestId("banks-cards").locator("li").first();
+      await expect(firstCard).toHaveAttribute(
+        "data-testid",
+        `banks-cards__item-${SAMPLE_BANK_D.id}`,
+      );
     });
 
     test("notice copy when meta.nextCursor is present calls out the page-only scope", async ({
@@ -532,6 +721,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 2");
 
       // "Bank 005" is unique → 1 match → both nav buttons hidden, indicator on page 1.
+      await page.getByTestId("banks-filters__toggle").click();
       await page.getByTestId("banks-filters__name").fill("Bank 005");
 
       await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 1");
@@ -585,6 +775,141 @@ test.describe("BackOffice - Banks CRUD", () => {
     });
   });
 
+  test.describe("view toggle (table vs cards)", () => {
+    test("defaults to the table view on a fresh visit", async ({ page }) => {
+      await mockBanksApi(page, { list: "happy" });
+      await page.goto("/backoffice/banks");
+
+      const toggle = page.getByTestId("banks-list__view-toggle");
+      const tableButton = page.getByTestId("banks-list__view-toggle-table");
+      const cardsButton = page.getByTestId("banks-list__view-toggle-cards");
+
+      await expect(toggle).toBeVisible();
+      await expect(tableButton).toHaveAttribute("aria-pressed", "true");
+      await expect(cardsButton).toHaveAttribute("aria-pressed", "false");
+
+      await expect(page.getByTestId("banks-table")).toBeVisible();
+      await expect(page.getByTestId("banks-cards")).toBeHidden();
+    });
+
+    test("switching to cards renders a card per bank with mirrored actions", async ({ page }) => {
+      await mockBanksApi(page, { list: "happy" });
+      await page.goto("/backoffice/banks");
+
+      await page.getByTestId("banks-list__view-toggle-cards").click();
+
+      await expect(page.getByTestId("banks-list__view-toggle-cards")).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+      await expect(page.getByTestId("banks-list__view-toggle-table")).toHaveAttribute(
+        "aria-pressed",
+        "false",
+      );
+
+      // Table is gone, cards are visible.
+      await expect(page.getByTestId("banks-table")).toBeHidden();
+      await expect(page.getByTestId("banks-cards")).toBeVisible();
+
+      // The two sample banks are both rendered as cards with the same action set
+      // as the table (copy / edit / delete).
+      await expect(page.getByTestId(`banks-cards__item-${SAMPLE_BANK_A.id}`)).toBeVisible();
+      await expect(page.getByTestId(`banks-cards__item-${SAMPLE_BANK_B.id}`)).toBeVisible();
+      await expect(page.getByTestId(`banks-cards__name-${SAMPLE_BANK_A.id}`)).toHaveText(
+        SAMPLE_BANK_A.name,
+      );
+      await expect(page.getByTestId(`banks-cards__edit-${SAMPLE_BANK_A.id}`)).toBeVisible();
+      await expect(page.getByTestId(`banks-cards__delete-${SAMPLE_BANK_A.id}`)).toBeVisible();
+      await expect(page.getByTestId(`banks-cards__copy-${SAMPLE_BANK_A.id}`)).toBeVisible();
+    });
+
+    test("clicking a card's name navigates to the detail page", async ({ page }) => {
+      await mockBanksApi(page, { list: "happy", get: "happy", bank: SAMPLE_BANK_A });
+      await page.goto("/backoffice/banks");
+
+      await page.getByTestId("banks-list__view-toggle-cards").click();
+      await page.getByTestId(`banks-cards__name-${SAMPLE_BANK_A.id}`).click();
+
+      await expect(page).toHaveURL(`/backoffice/banks/${SAMPLE_BANK_A.id}`);
+    });
+
+    test("inline delete from the cards view removes the card without navigating away", async ({
+      page,
+    }) => {
+      await mockBanksApi(page, { list: "happy", delete: "happy", bank: SAMPLE_BANK_A });
+      await page.goto("/backoffice/banks");
+
+      await page.getByTestId("banks-list__view-toggle-cards").click();
+      await expect(page.getByTestId(`banks-cards__item-${SAMPLE_BANK_A.id}`)).toBeVisible();
+
+      await page.getByTestId(`banks-cards__delete-${SAMPLE_BANK_A.id}`).click();
+      await page.getByTestId("banks-detail__delete-confirm").click();
+
+      await expect(page).toHaveURL(/\/backoffice\/banks$/);
+      await expect(page.getByTestId(`banks-cards__item-${SAMPLE_BANK_A.id}`)).toHaveCount(0);
+      await expect(page.getByTestId(`banks-cards__item-${SAMPLE_BANK_B.id}`)).toBeVisible();
+    });
+
+    test("filters and pagination still apply to the cards view", async ({ page }) => {
+      const allBanks = [SAMPLE_BANK_A, SAMPLE_BANK_B, SAMPLE_BANK_C, SAMPLE_BANK_D];
+      await mockBanksApi(page, { list: "happy", list_banks: allBanks });
+      await page.goto("/backoffice/banks");
+
+      await page.getByTestId("banks-list__view-toggle-cards").click();
+      await page.getByTestId("banks-filters__toggle").click();
+      await page.getByTestId("banks-filters__name").fill("cosmos");
+
+      await expect(page.getByTestId(`banks-cards__item-${SAMPLE_BANK_C.id}`)).toBeVisible();
+      await expect(page.getByTestId(`banks-cards__item-${SAMPLE_BANK_A.id}`)).toHaveCount(0);
+      await expect(page.getByTestId(`banks-cards__item-${SAMPLE_BANK_B.id}`)).toHaveCount(0);
+      await expect(page.getByTestId(`banks-cards__item-${SAMPLE_BANK_D.id}`)).toHaveCount(0);
+    });
+
+    test("the user's view preference persists across reloads via localStorage", async ({
+      page,
+    }) => {
+      await mockBanksApi(page, { list: "happy" });
+      await page.goto("/backoffice/banks");
+
+      await page.getByTestId("banks-list__view-toggle-cards").click();
+      await expect(page.getByTestId("banks-cards")).toBeVisible();
+
+      const stored = await page.evaluate(() => window.localStorage.getItem("erpify:banks-view"));
+      expect(stored).toBe("cards");
+
+      await page.reload();
+      await expect(page.getByTestId("banks-list")).toHaveAttribute("data-state", "ready");
+      await expect(page.getByTestId("banks-list__view-toggle-cards")).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+      await expect(page.getByTestId("banks-cards")).toBeVisible();
+      await expect(page.getByTestId("banks-table")).toBeHidden();
+
+      // Switching back persists too.
+      await page.getByTestId("banks-list__view-toggle-table").click();
+      await expect(
+        await page.evaluate(() => window.localStorage.getItem("erpify:banks-view")),
+      ).toBe("table");
+    });
+
+    test("ignores an unknown localStorage value and falls back to the table default", async ({
+      page,
+    }) => {
+      await page.addInitScript(() => {
+        window.localStorage.setItem("erpify:banks-view", "not-a-real-view");
+      });
+      await mockBanksApi(page, { list: "happy" });
+      await page.goto("/backoffice/banks");
+
+      await expect(page.getByTestId("banks-list__view-toggle-table")).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+      await expect(page.getByTestId("banks-table")).toBeVisible();
+    });
+  });
+
   test.describe("responsive", () => {
     test.use({ viewport: VIEWPORT_MOBILE });
 
@@ -604,6 +929,47 @@ test.describe("BackOffice - Banks CRUD", () => {
 
       await expect(page.getByTestId(`banks-table__edit-${SAMPLE_BANK_A.id}`)).toBeVisible();
       await expect(page.getByTestId(`banks-table__delete-${SAMPLE_BANK_A.id}`)).toBeVisible();
+    });
+
+    test("on mobile, the Filters toggle is full-width, opens the panel, and exposes the count badge", async ({
+      page,
+    }) => {
+      await mockBanksApi(page, { list: "happy" });
+      await page.goto("/backoffice/banks");
+
+      const toggle = page.getByTestId("banks-filters__toggle");
+      await expect(toggle).toBeVisible();
+      // Spans the row on mobile (≥ 320px). Allow a small tolerance for borders/padding.
+      const toggleBox = await toggle.boundingBox();
+      expect(toggleBox).not.toBeNull();
+      expect(toggleBox!.width).toBeGreaterThan(VIEWPORT_MOBILE.width * 0.6);
+
+      // Panel collapsed by default on mobile too.
+      await expect(page.getByTestId("banks-filters__panel")).toBeHidden();
+      await expect(page.getByTestId("banks-filters__reset")).toHaveCount(0);
+
+      await toggle.click();
+      await expect(page.getByTestId("banks-filters__panel")).toBeVisible();
+
+      await page.getByTestId("banks-filters__name").fill("acme");
+      await expect(page.getByTestId("banks-filters__count")).toHaveText("1");
+      await expect(page.getByTestId("banks-filters__reset")).toBeVisible();
+    });
+
+    test("on mobile, switching to cards renders a single-column stack", async ({ page }) => {
+      await mockBanksApi(page, { list: "happy" });
+      await page.goto("/backoffice/banks");
+
+      await page.getByTestId("banks-list__view-toggle-cards").click();
+
+      const cardA = await page.getByTestId(`banks-cards__item-${SAMPLE_BANK_A.id}`).boundingBox();
+      const cardB = await page.getByTestId(`banks-cards__item-${SAMPLE_BANK_B.id}`).boundingBox();
+      expect(cardA).not.toBeNull();
+      expect(cardB).not.toBeNull();
+      // Stacked: second card sits below the first (its y is larger than card A's bottom).
+      expect(cardB!.y).toBeGreaterThanOrEqual(cardA!.y + cardA!.height - 1);
+      // Each card spans most of the mobile viewport width (single column).
+      expect(cardA!.width).toBeGreaterThan(VIEWPORT_MOBILE.width * 0.7);
     });
   });
 

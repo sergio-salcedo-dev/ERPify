@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { Bank } from "@/context/backoffice/bank/domain/Bank";
 import {
+  BANKS_SORTABLE_COLUMNS,
   DEFAULT_SORT,
   EMPTY_FILTER,
   applyFilters,
   applySort,
+  countActiveFilters,
   hasActiveFilter,
+  isDefaultSort,
   type BanksFilter,
 } from "@/app/backoffice/banks/_lib/banksFilterSort";
 
@@ -52,6 +55,94 @@ const ROWS: Bank[] = [acme, brookline, cosmos];
 describe("DEFAULT_SORT", () => {
   it("is alphabetical name ascending", () => {
     expect(DEFAULT_SORT).toEqual({ columnId: "name", direction: "asc" });
+  });
+});
+
+describe("BANKS_SORTABLE_COLUMNS", () => {
+  it("matches the sortable columns rendered by the table headers", () => {
+    expect(BANKS_SORTABLE_COLUMNS.map((column) => column.id)).toEqual([
+      "shortName",
+      "name",
+      "createdAt",
+      "updatedAt",
+    ]);
+  });
+
+  it("exposes a human label for every option (used by the filters panel select)", () => {
+    for (const column of BANKS_SORTABLE_COLUMNS) {
+      expect(column.label.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("isDefaultSort", () => {
+  it("returns true for the DEFAULT_SORT reference", () => {
+    expect(isDefaultSort(DEFAULT_SORT)).toBe(true);
+  });
+
+  it("returns true for a fresh equivalent object", () => {
+    expect(isDefaultSort({ columnId: "name", direction: "asc" })).toBe(true);
+  });
+
+  it("returns false for a non-default direction", () => {
+    expect(isDefaultSort({ columnId: "name", direction: "desc" })).toBe(false);
+  });
+
+  it("returns false for a different column", () => {
+    expect(isDefaultSort({ columnId: "createdAt", direction: "asc" })).toBe(false);
+  });
+
+  it("returns false when sort is null (user disabled sorting)", () => {
+    expect(isDefaultSort(null)).toBe(false);
+  });
+});
+
+describe("countActiveFilters", () => {
+  it("returns 0 on the empty filter", () => {
+    expect(countActiveFilters(EMPTY_FILTER)).toBe(0);
+  });
+
+  it("counts each populated field once", () => {
+    expect(countActiveFilters({ ...EMPTY_FILTER, name: "x" })).toBe(1);
+    expect(countActiveFilters({ ...EMPTY_FILTER, name: "x", shortName: "y" })).toBe(2);
+    expect(
+      countActiveFilters({
+        ...EMPTY_FILTER,
+        name: "x",
+        shortName: "y",
+        createdFrom: "2026-01-01",
+      }),
+    ).toBe(3);
+    expect(
+      countActiveFilters({
+        name: "x",
+        shortName: "y",
+        createdFrom: "2026-01-01",
+        createdTo: "2026-12-31",
+      }),
+    ).toBe(4);
+  });
+
+  it("treats whitespace-only fields as inactive", () => {
+    expect(
+      countActiveFilters({
+        name: "   ",
+        shortName: "  ",
+        createdFrom: " ",
+        createdTo: " ",
+      }),
+    ).toBe(0);
+  });
+
+  it("agrees with hasActiveFilter for the boundary case", () => {
+    const cases: BanksFilter[] = [
+      EMPTY_FILTER,
+      { ...EMPTY_FILTER, name: "x" },
+      { ...EMPTY_FILTER, createdFrom: " " },
+    ];
+    for (const filter of cases) {
+      expect(hasActiveFilter(filter)).toBe(countActiveFilters(filter) > 0);
+    }
   });
 });
 
