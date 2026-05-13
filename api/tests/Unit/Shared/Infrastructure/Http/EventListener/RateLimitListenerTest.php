@@ -122,12 +122,13 @@ final class RateLimitListenerTest extends TestCase
     public function testSkipsSubRequests(): void
     {
         $rateLimitListener = $this->makeListener();
-        $kernel = $this->makeKernel();
+        $httpKernel = $this->makeKernel();
         $request = Request::create('/api/v1/anything');
         $request->server->set('REMOTE_ADDR', self::CLIENT_IP);
-        $subEvent = new RequestEvent($kernel, $request, HttpKernelInterface::SUB_REQUEST);
 
-        $rateLimitListener->onRequest($subEvent);
+        $requestEvent = new RequestEvent($httpKernel, $request, HttpKernelInterface::SUB_REQUEST);
+
+        $rateLimitListener->onRequest($requestEvent);
 
         $this->assertNull(
             $request->attributes->get(RateLimitListener::ATTRIBUTE_KEY),
@@ -166,8 +167,10 @@ final class RateLimitListenerTest extends TestCase
 
     public function testListenerPrioritiesArePinned(): void
     {
-        $this->assertSame(512, RateLimitListener::REQUEST_PRIORITY);
-        $this->assertSame(-128, RateLimitListener::RESPONSE_PRIORITY);
+        $reflectionClass = new ReflectionClass(RateLimitListener::class);
+
+        $this->assertSame(512, $reflectionClass->getConstant('REQUEST_PRIORITY'));
+        $this->assertSame(-128, $reflectionClass->getConstant('RESPONSE_PRIORITY'));
     }
 
     public function testListenerIsFinalReadonlyAndHasOnlyInjectedDependencies(): void
@@ -178,11 +181,11 @@ final class RateLimitListenerTest extends TestCase
         $this->assertTrue($reflectionClass->isReadOnly());
 
         $constructor = $reflectionClass->getConstructor();
-        $this->assertNotNull($constructor);
+        $this->assertInstanceOf(ReflectionMethod::class, $constructor);
 
-        foreach ($constructor->getParameters() as $parameter) {
+        foreach ($constructor->getParameters() as $reflectionParameter) {
             $this->assertTrue(
-                $parameter->isPromoted(),
+                $reflectionParameter->isPromoted(),
                 'Constructor params must be promoted to satisfy the worker-mode pattern.',
             );
         }
@@ -190,12 +193,12 @@ final class RateLimitListenerTest extends TestCase
 
     private function makeListener(): RateLimitListener
     {
-        $factory = new RateLimiterFactory(
+        $rateLimiterFactory = new RateLimiterFactory(
             ['id' => 'test_anonymous_api', 'policy' => 'sliding_window', 'limit' => self::TEST_LIMIT, 'interval' => '1 minute'],
             new InMemoryStorage(),
         );
 
-        return new RateLimitListener($factory);
+        return new RateLimitListener($rateLimiterFactory);
     }
 
     private function makeRequestEvent(string $path, string $clientIp): RequestEvent
@@ -221,7 +224,7 @@ final class RateLimitListenerTest extends TestCase
         return new class implements HttpKernelInterface {
             public function handle(Request $request, int $type = HttpKernelInterface::MAIN_REQUEST, bool $catch = true): Response
             {
-                throw new \LogicException('Test kernel: handle() must not be called by the listener.');
+                throw new LogicException('Test kernel: handle() must not be called by the listener.');
             }
         };
     }
