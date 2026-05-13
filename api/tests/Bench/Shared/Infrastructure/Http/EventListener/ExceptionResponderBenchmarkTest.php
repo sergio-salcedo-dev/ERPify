@@ -35,7 +35,7 @@ use Symfony\Component\HttpFoundation\Response;
  *
  * The shared-CI noise budget is intentionally absorbed by a +50% headroom over the
  * raw budget numbers ({@see P99_BUDGET_4XX_NS} = 7.5 ms, {@see P99_BUDGET_5XX_NS} = 30 ms)
- * so the literal stays in the constant `NFR2_BUDGET_*_NS` for documentation while
+ * so the literal stays in the constant `BUDGET_*_NS` for documentation while
  * the runtime check uses the headroom-adjusted threshold. A regression that doubled
  * the listener's cost (a real perf bug) would still trip the headroom-adjusted check;
  * sub-percent jitter under shared CPU contention will not.
@@ -51,15 +51,15 @@ final class ExceptionResponderBenchmarkTest extends WebTestCase
      * in `docs/api-error-contract.md` so the wire contract and the
      * test-side budget reference the same number.
      */
-    private const int NFR2_BUDGET_4XX_NS = 5_000_000;
+    private const int BUDGET_4XX_NS = 5_000_000;
 
     /**
      * Raw 5xx budget literal: p99 ≤ 20 ms on CI hardware.
      */
-    private const int NFR2_BUDGET_5XX_NS = 20_000_000;
+    private const int BUDGET_5XX_NS = 20_000_000;
 
     /**
-     * +50% shared-CI headroom over {@see NFR2_BUDGET_4XX_NS}. Real listener regressions
+     * +50% shared-CI headroom over {@see BUDGET_4XX_NS}. Real listener regressions
      * (a conditional sleep, a sync I/O, a serializer pipeline introduction) manifest as
      * 2–10x cost increases — well above this threshold. Sub-percent jitter under shared
      * CPU contention does not.
@@ -98,7 +98,7 @@ final class ExceptionResponderBenchmarkTest extends WebTestCase
                 . 'See docs/api-error-contract.md → "Performance Budgets".',
                 $p99 / 1_000_000,
                 self::MEASUREMENT_ITERATIONS,
-                self::NFR2_BUDGET_4XX_NS / 1_000_000,
+                self::BUDGET_4XX_NS / 1_000_000,
                 self::P99_BUDGET_4XX_NS / 1_000_000,
             ),
         );
@@ -117,7 +117,7 @@ final class ExceptionResponderBenchmarkTest extends WebTestCase
                 . 'See docs/api-error-contract.md → "Performance Budgets".',
                 $p99 / 1_000_000,
                 self::MEASUREMENT_ITERATIONS,
-                self::NFR2_BUDGET_5XX_NS / 1_000_000,
+                self::BUDGET_5XX_NS / 1_000_000,
                 self::P99_BUDGET_5XX_NS / 1_000_000,
             ),
         );

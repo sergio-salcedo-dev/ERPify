@@ -143,6 +143,8 @@ final readonly class ExceptionResponder
      */
     private const string LAST_RESORT_LOG_MESSAGE = 'ExceptionResponder self-failure: emitting last-resort static body.';
 
+    public const string API_PATH_PREFIX = '/api/';
+
     public function __construct(
         private ProblemDetailsFactory $problemDetailsFactory,
         private ProblemDetailsResponder $problemDetailsResponder,
@@ -158,7 +160,7 @@ final readonly class ExceptionResponder
 
         $request = $event->getRequest();
 
-        if (!\str_starts_with($request->getPathInfo(), '/api/')) {
+        if (!\str_starts_with($request->getPathInfo(), self::API_PATH_PREFIX)) {
             return;
         }
 
