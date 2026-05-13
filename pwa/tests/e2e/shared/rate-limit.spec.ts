@@ -27,7 +27,7 @@ test.describe("Rate limiting — 429 Too Many Requests", () => {
   }) => {
     // The test environment sets RATE_LIMIT_ANONYMOUS_API_LIMIT=5, so we
     // need to make 6 requests to trigger the 429 (the 6th should be rejected).
-    const healthEndpoint = "/api/v1/frontoffice/health";
+    const healthEndpoint = "/api/v1/health";
 
     // Make successful requests up to the limit
     for (let i = 0; i < 4; i++) {
@@ -100,7 +100,7 @@ test.describe("Rate limiting — 429 Too Many Requests", () => {
 
     // Verify the title
     const title = problemDisplay.locator('[data-testid="problem-display__title"]');
-    await expect(title).toContainText("Rate limit");
+    await expect(title).toContainText("Too many requests");
 
     // Verify the Hourglass icon is rendered
     const hourglassIcon = problemDisplay.locator('svg[aria-hidden="true"]').first();
