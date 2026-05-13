@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { usePathname } from "next/navigation";
 import { LucideIcon, ChevronRight, ChevronDown } from "lucide-react";
 
@@ -39,12 +39,14 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
 
   const hasSubItems = subItems && subItems.length > 0;
 
-  // Auto-open if a sub-item is active
-  useEffect(() => {
+  // Auto-open if a sub-item is active (adjusting state during render to avoid cascading renders)
+  const [prevIsActive, setPrevIsActive] = useState(isActive);
+  if (isActive !== prevIsActive) {
+    setPrevIsActive(isActive);
     if (isActive && hasSubItems) {
       setIsOpen(true);
     }
-  }, [isActive, hasSubItems]);
+  }
 
   const handleItemClick = () => {
     if (!hasSubItems) {

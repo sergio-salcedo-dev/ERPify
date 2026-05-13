@@ -57,15 +57,11 @@ export default function BanksListPage() {
   const [sort, setSort] = useState<BanksSort>(DEFAULT_SORT);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<BanksPageSize>(BANKS_PAGE_SIZE_DEFAULT);
-  const [view, setView] = useState<BanksView>(DEFAULT_VIEW);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
+  const [view, setView] = useState<BanksView>(() => {
+    if (typeof window === "undefined") return DEFAULT_VIEW;
     const stored = window.localStorage.getItem(BANKS_VIEW_STORAGE_KEY);
-    if (isBanksView(stored)) {
-      setView(stored);
-    }
-  }, []);
+    return isBanksView(stored) ? stored : DEFAULT_VIEW;
+  });
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -102,9 +98,16 @@ export default function BanksListPage() {
     [banks, filter, sort],
   );
 
-  useEffect(() => {
+  // Reset page when filters, sort or pageSize change (adjusting state during render)
+  const [prevFilter, setPrevFilter] = useState(filter);
+  const [prevSort, setPrevSort] = useState(sort);
+  const [prevPageSize, setPrevPageSize] = useState(pageSize);
+  if (filter !== prevFilter || sort !== prevSort || pageSize !== prevPageSize) {
+    setPrevFilter(filter);
+    setPrevSort(sort);
+    setPrevPageSize(pageSize);
     setPage(1);
-  }, [filter, sort, pageSize]);
+  }
 
   const paged = useMemo(
     () => paginate(visibleBanks, page, pageSize),

@@ -31,15 +31,11 @@ export function AppShell({
   children,
   defaultSidebarOpen = true,
 }: AppShellProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(defaultSidebarOpen);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof window === "undefined") return defaultSidebarOpen;
     const stored = window.localStorage.getItem(SIDEBAR_STORAGE_KEY);
-    if (stored !== null) {
-      setSidebarOpen(stored === "1");
-    }
-  }, []);
+    return stored !== null ? stored === "1" : defaultSidebarOpen;
+  });
 
   useEffect(() => {
     if (typeof window === "undefined") return;
