@@ -45,7 +45,7 @@ jobs:
       - uses: ./.github/actions/docker-setup
 
       - name: Build images
-        uses: docker/bake-action@v7
+        uses: docker/bake-action@v7.1.0
         with:
           source: "."
           pull: true
@@ -79,7 +79,7 @@ jobs:
       - uses: ./.github/actions/docker-setup
 
       - name: Build images
-        uses: docker/bake-action@v7
+        uses: docker/bake-action@v7.1.0
         with:
           source: "."
           pull: true
@@ -140,7 +140,7 @@ jobs:
       - uses: ./.github/actions/docker-setup
 
       - name: Build images
-        uses: docker/bake-action@v7
+        uses: docker/bake-action@v7.1.0
         with:
           source: "."
           pull: true
@@ -216,7 +216,7 @@ jobs:
       - uses: ./.github/actions/full-setup/
 
       - name: Build images
-        uses: docker/bake-action@v7
+        uses: docker/bake-action@v7.1.0
         with:
           source: "."
           pull: true
@@ -345,7 +345,7 @@ jobs:
       - uses: ./.github/actions/full-setup/
 
       - name: Build images
-        uses: docker/bake-action@v7
+        uses: docker/bake-action@v7.1.0
         with:
           source: "."
           pull: true
