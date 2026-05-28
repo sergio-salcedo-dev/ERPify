@@ -31,6 +31,9 @@ class Kernel extends BaseKernel
 
     /**
      * @SuppressWarnings("PHPMD.UnusedPrivateMethod")
+     *
+     * This method is called indirectly, invoked by MicroKernelTrait::registerContainerConfiguration
+     * via the trait alias.
      */
     private function configureContainer(ContainerConfigurator $container): void
     {
