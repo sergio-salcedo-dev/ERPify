@@ -33,6 +33,8 @@ make php.behat c='features/...'     # Behat only.
 make php.bench                      # Opt-in performance-budget benchmarks (default php.unit skips).
 make php.quality                    # Full sweep: PHPStan, Rector, PHP-CS-Fixer, PHPMD, PHPCS, Psalm.
 make php.stan                       # PHPStan only — REQUIRED on every PHP file you change.
+make composer.update                # Safe dependency update (within composer.json ranges).
+make composer.upgrade               # Force-upgrade direct deps to latest (bumps constraints across majors).
 make db.migrate                     # Run pending Doctrine migrations.
 make db.diff                        # Generate migration from entity/schema diff.
 make db.status                      # Migration status.
@@ -67,8 +69,10 @@ make pwa.quality.dry-run            # ESLint + Prettier check (no writes).
 ### Aggregates and CI
 
 ```bash
-make app.quality                       # All linters (PHP + PWA).
+make app.quality                    # All linters (PHP + PWA).
 make app.test                       # All tests (PHP + PWA).
+make app.update                     # Safe dep update for API + PWA (within constraints).
+make app.upgrade                    # Force upgrade API + PWA deps to latest (across majors).
 make ci                             # Full CI (ci.quality + ci.test).
 make ci.api                         # API only: lint + tests.
 make ci.pwa                         # PWA only: lint + unit + build (no E2E).
