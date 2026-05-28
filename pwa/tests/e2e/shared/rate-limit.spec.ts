@@ -22,36 +22,6 @@ import { VIEWPORT_DESKTOP } from "../constants";
 test.describe("Rate limiting — 429 Too Many Requests", () => {
   test.use({ viewport: VIEWPORT_DESKTOP });
 
-  // test("API returns RFC 9457 Problem Details with HTTP 429 after exceeding limit", async ({
-  //   page,
-  // }) => {
-  //   // The test environment sets RATE_LIMIT_ANONYMOUS_API_LIMIT=5, so we
-  //   // need to make 6 requests to trigger the 429 (the 6th should be rejected).
-  //   const healthEndpoint = "/api/v1/backoffice/health";
-  //
-  //   // Make successful requests up to the limit
-  //   for (let i = 0; i < 5; i++) {
-  //     const response = await page.request.get(healthEndpoint);
-  //     // expect(response.ok(), `Request ${i + 1} should succeed`).toBe(true);
-  //     expect(response.status()).toBe(200);
-  //   }
-  //
-  //   // The 6th request should be rate-limited
-  //   const rateLimitedResponse = await page.request.get(healthEndpoint);
-  //   expect(rateLimitedResponse.status()).toBe(429);
-  //
-  //   // Verify RFC 9457 Problem Details structure
-  //   const body = await rateLimitedResponse.json();
-  //   expect(body.type).toBe("rate-limited");
-  //   expect(body.title).toBe("Rate limit exceeded.");
-  //   expect(body.status).toBe(429);
-  //   expect(body["correlation-id"]).toBeDefined();
-  //   expect(body.context).toBeDefined();
-  //   expect(body.context?.retryAfterSeconds).toBeGreaterThan(0);
-  //   expect(body.context?.limit).toBe(5);
-  //   expect(body.context?.remaining).toBe(0);
-  // });
-
   test("PWA renders the branded /rate-limited page when API returns 429", async ({ page }) => {
     // Navigate directly to the rate-limited error page
     const response = await page.goto("/rate-limited");
