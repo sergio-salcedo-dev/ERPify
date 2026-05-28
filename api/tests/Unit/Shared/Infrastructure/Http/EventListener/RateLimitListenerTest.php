@@ -172,10 +172,10 @@ final class RateLimitListenerTest extends TestCase
 
     public function testListenerPrioritiesArePinned(): void
     {
-        $reflectionClass = new ReflectionClass(RateLimitListener::class);
-
-        $this->assertSame(512, $reflectionClass->getConstant('REQUEST_PRIORITY'));
-        $this->assertSame(-128, $reflectionClass->getConstant('RESPONSE_PRIORITY'));
+        // @phpstan-ignore method.alreadyNarrowedType (the assertion IS the test — pins the constant baseline at runtime)
+        $this->assertSame(512, RateLimitListener::REQUEST_PRIORITY);
+        // @phpstan-ignore method.alreadyNarrowedType (the assertion IS the test — pins the constant baseline at runtime)
+        $this->assertSame(-128, RateLimitListener::RESPONSE_PRIORITY);
     }
 
     public function testListenerIsFinalReadonlyAndHasOnlyInjectedDependencies(): void
