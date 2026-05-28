@@ -20,7 +20,7 @@ export function BanksPagination({
   hasNext,
   onPageChange,
   onPageSizeChange,
-}: BanksPaginationProps) {
+}: Readonly<BanksPaginationProps>) {
   return (
     <nav
       className="banks-pagination mt-3 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between"

@@ -7,6 +7,7 @@ import {
   isValidElement,
   useContext,
   useId,
+  useMemo,
   type ReactElement,
   type ReactNode,
 } from "react";
@@ -63,7 +64,7 @@ export function FormField({
   violations,
   layout = "stacked",
   className,
-}: FormFieldProps) {
+}: Readonly<FormFieldProps>) {
   const baseId = useId();
   const id = `field-${name}-${baseId}`;
   const helperId = helper ? `${id}-helper` : undefined;
@@ -93,8 +94,13 @@ export function FormField({
     // Multiple children — leave unchanged. Consumer must wire props via useFormField().
   }
 
+  const contextValue = useMemo(
+    () => ({ id, errorId, helperId, invalid }),
+    [id, errorId, helperId, invalid],
+  );
+
   return (
-    <FormFieldContext.Provider value={{ id, errorId, helperId, invalid }}>
+    <FormFieldContext.Provider value={contextValue}>
       <div
         data-form-field={name}
         className={cn(

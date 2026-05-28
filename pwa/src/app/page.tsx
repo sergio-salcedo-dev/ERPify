@@ -23,8 +23,9 @@ export default function LandingPage() {
       setHealthStatus(
         `Status: ${result.status} | Service: ${result.service} | Date: ${new Date(result.datetime).toLocaleString()}`,
       );
-    } catch (_error) {
-      setHealthStatus("Error checking health");
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "unknown error";
+      setHealthStatus(`Error checking health: ${detail}`);
     } finally {
       setLoading(false);
     }

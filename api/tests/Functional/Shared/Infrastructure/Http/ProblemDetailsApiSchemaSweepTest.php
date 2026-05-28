@@ -360,7 +360,7 @@ final class ProblemDetailsApiSchemaSweepTest extends WebTestCase
     /**
      * @param list<string> $failures
      */
-    private function decodeProblemBody(string|false $rawBody, array &$failures): ?stdClass
+    private function decodeProblemBody(false|string $rawBody, array &$failures): ?stdClass
     {
         if (!\is_string($rawBody) || '' === $rawBody) {
             $failures[] = 'response body was empty (expected JSON Problem Details body)';
@@ -450,26 +450,17 @@ final class ProblemDetailsApiSchemaSweepTest extends WebTestCase
 
         $callback = static function (array $matches) use ($requirements): string {
             $name = isset($matches[1]) && \is_string($matches[1]) ? $matches[1] : '';
+            $requirement = '' === $name ? null : ($requirements[$name] ?? null);
 
-            if ('' === $name) {
-                return 'sweep-placeholder';
-            }
-
-            $requirement = $requirements[$name] ?? null;
-
-            // Hash-shaped param (e.g. `[a-f0-9]{64}`) → 64 zero bytes.
-            if (\is_string($requirement) && \str_contains($requirement, '[a-f0-9]')) {
-                return \str_repeat('0', 64);
-            }
-
-            // Numeric requirement → 0.
-            if (\is_string($requirement) && \str_contains($requirement, '\d')) {
-                return '0';
-            }
-
-            // Default: a deterministic placeholder. We do not need it to validate as a UUID —
-            // a wrong-method trigger short-circuits before any controller-side validation.
-            return 'sweep-placeholder';
+            return match (true) {
+                // Hash-shaped param (e.g. `[a-f0-9]{64}`) → 64 zero bytes.
+                \is_string($requirement) && \str_contains($requirement, '[a-f0-9]') => \str_repeat('0', 64),
+                // Numeric requirement → 0.
+                \is_string($requirement) && \str_contains($requirement, '\d') => '0',
+                // Default: a deterministic placeholder. We do not need it to validate as a UUID —
+                // a wrong-method trigger short-circuits before any controller-side validation.
+                default => 'sweep-placeholder',
+            };
         };
 
         $rewritten = \preg_replace_callback('/\{(\w+)\}/', $callback, $path);

@@ -35,13 +35,13 @@ vi.mock("next/server", () => {
 });
 
 import { config, proxy } from "@/proxy";
+import type { NextRequest } from "next/server";
 
-interface FakeRequest {
-  nextUrl: URL;
-}
-
-function fakeRequest(pathname: string): FakeRequest {
-  return { nextUrl: new URL(pathname, "https://localhost") };
+function fakeRequest(pathname: string): NextRequest {
+  // jsdom doesn't ship a Web Request polyfill that satisfies NextRequest.
+  // The proxy only reads `nextUrl`, so a structural stub is enough and
+  // avoids the `as never` casts the type assertion would otherwise need.
+  return { nextUrl: new URL(pathname, "https://localhost") } as unknown as NextRequest;
 }
 
 describe("isDevToolRoute", () => {
@@ -92,18 +92,18 @@ describe("proxy — dev-tools production short-circuit", () => {
     });
 
     it.each(DEV_TOOL_ROUTE_PREFIXES)("rewrites %s to a guaranteed 404", (prefix) => {
-      const result = proxy(fakeRequest(prefix) as never);
+      const result = proxy(fakeRequest(prefix));
       expect(result.kind).toBe("rewrite");
       expect(result.destination?.pathname).toBe("/__erpify-dev-tools-disabled__");
     });
 
     it("rewrites nested dev-tool URLs as well", () => {
-      const result = proxy(fakeRequest("/dev-tools/anything/here") as never);
+      const result = proxy(fakeRequest("/dev-tools/anything/here"));
       expect(result.kind).toBe("rewrite");
     });
 
     it("ignores non-dev paths", () => {
-      const result = proxy(fakeRequest("/backoffice/banks") as never);
+      const result = proxy(fakeRequest("/backoffice/banks"));
       expect(result.kind).toBe("next");
     });
   });
@@ -117,7 +117,7 @@ describe("proxy — dev-tools production short-circuit", () => {
     });
 
     it.each(DEV_TOOL_ROUTE_PREFIXES)("lets %s pass through untouched", (prefix) => {
-      const result = proxy(fakeRequest(prefix) as never);
+      const result = proxy(fakeRequest(prefix));
       expect(result.kind).toBe("next");
     });
   });
@@ -131,7 +131,7 @@ describe("proxy — dev-tools production short-circuit", () => {
     });
 
     it("lets dev URLs pass through (CI E2E uses /dev-throw)", () => {
-      const result = proxy(fakeRequest("/dev-throw") as never);
+      const result = proxy(fakeRequest("/dev-throw"));
       expect(result.kind).toBe("next");
     });
   });

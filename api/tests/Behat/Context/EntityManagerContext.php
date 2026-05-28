@@ -445,20 +445,7 @@ class EntityManagerContext extends AbstractContext
         }
 
         if (null !== $type && \is_a($type, HumanReadableIntEnumInterface::class, true)) {
-            if (\is_array($value)) {
-                $resolved = [];
-
-                foreach ($value as $index => $label) {
-                    \assert(\is_string($label));
-                    $resolved[$index] = $type::fromLabel($label) ?? $label;
-                }
-
-                return $resolved;
-            }
-
-            \assert(\is_string($value));
-
-            return $type::fromLabel($value) ?? $value;
+            return $this->resolveEnumValue($value, $type);
         }
 
         if (\is_string($type) && \class_exists($type)) {
@@ -476,6 +463,30 @@ class EntityManagerContext extends AbstractContext
         }
 
         return $value;
+    }
+
+    /**
+     * Resolves an enum value (or list of enum labels) for {@see handleQueryStringTypeHinting},
+     * extracted to keep the parent under the S1142 return budget.
+     *
+     * @param class-string<HumanReadableIntEnumInterface> $type
+     */
+    private function resolveEnumValue(mixed $value, string $type): mixed
+    {
+        if (\is_array($value)) {
+            $resolved = [];
+
+            foreach ($value as $index => $label) {
+                \assert(\is_string($label));
+                $resolved[$index] = $type::fromLabel($label) ?? $label;
+            }
+
+            return $resolved;
+        }
+
+        \assert(\is_string($value));
+
+        return $type::fromLabel($value) ?? $value;
     }
 
     /**
@@ -641,13 +652,11 @@ class EntityManagerContext extends AbstractContext
     private function findByWithRelations(string $entityClass, string $findByQueryString): array
     {
         if (RelationQueryHelper::hasRelationshipQuery($findByQueryString)) {
-            /** @var array<int, object> $result */
-            $result = $this->buildQueryBuilderWithRelations($entityClass, $findByQueryString)
+            /** @var array<int, object> */
+            return $this->buildQueryBuilderWithRelations($entityClass, $findByQueryString)
                 ->getQuery()
                 ->getResult()
             ;
-
-            return $result;
         }
 
         return $this->getRepository($entityClass)->findBy(

@@ -33,4 +33,32 @@ class StoredDomainEvent
         private array $body,
     ) {
     }
+
+    public function name(): string
+    {
+        return $this->name;
+    }
+
+    public function aggregateId(): string
+    {
+        return $this->aggregateId;
+    }
+
+    public function eventId(): string
+    {
+        return $this->eventId;
+    }
+
+    public function occurredOn(): DateTimeImmutable
+    {
+        return $this->occurredOn;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function body(): array
+    {
+        return $this->body;
+    }
 }

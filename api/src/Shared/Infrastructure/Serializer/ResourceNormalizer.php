@@ -28,10 +28,8 @@ final readonly class ResourceNormalizer
         $normalized = $this->normalizer->normalize($resource, $format, ['groups' => $groups]);
 
         if ($normalized instanceof ArrayObject) {
-            /** @var array<string, mixed> $copy */
-            $copy = $normalized->getArrayCopy();
-
-            return $copy;
+            /** @var array<string, mixed> */
+            return $normalized->getArrayCopy();
         }
 
         if (!\is_array($normalized)) {

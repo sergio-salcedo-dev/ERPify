@@ -7,8 +7,8 @@ namespace Erpify\Tests\Behat\Support\Json;
 use JsonException;
 use JsonSchema\SchemaStorage;
 use JsonSchema\Validator;
-use RuntimeException;
 use Stringable;
+use UnexpectedValueException;
 
 class JsonSchema extends Json
 {
@@ -44,7 +44,7 @@ class JsonSchema extends Json
                 $msg .= \sprintf('  - [%s] %s' . PHP_EOL, $error['property'], $error['message']);
             }
 
-            throw new RuntimeException($msg);
+            throw new UnexpectedValueException($msg);
         }
 
         return true;

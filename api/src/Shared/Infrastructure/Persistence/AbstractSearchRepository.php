@@ -78,6 +78,9 @@ abstract class AbstractSearchRepository extends AbstractRepository
             $options[PaginatorOption::FETCH_JOIN_COLLECTION->value] = false;
         }
 
+        // Local variable + @var annotation is load-bearing: PHPStan can't infer
+        // Paginator<T> from the constructor call alone, and the surrounding generic
+        // contract (`@return Paginator<T>`) is what callers rely on for typed iteration.
         /** @var Paginator<T> $paginator */
         $paginator = new Paginator(
             $queryBuilder,

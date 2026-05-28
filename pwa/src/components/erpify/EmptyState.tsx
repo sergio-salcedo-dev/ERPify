@@ -19,7 +19,13 @@ const iconByVariant: Record<EmptyStateVariant, LucideIcon> = {
   "permission-denied": Lock,
 };
 
-export function EmptyState({ variant, heading, description, action, className }: EmptyStateProps) {
+export function EmptyState({
+  variant,
+  heading,
+  description,
+  action,
+  className,
+}: Readonly<EmptyStateProps>) {
   const Icon = iconByVariant[variant];
   return (
     <section

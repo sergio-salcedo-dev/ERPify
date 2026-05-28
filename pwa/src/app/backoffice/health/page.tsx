@@ -7,8 +7,20 @@ import { CheckHealth } from "@/context/backoffice/health/application/CheckHealth
 import type { HealthCheck } from "@/context/backoffice/health/domain/HealthCheck";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { ApiStatus, ViewStatus } from "@/context/shared/domain/types/status";
+import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
 import { AsyncBoundary, type AsyncBoundaryState } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
+
+function transportFailureProblem(detail: string): ProblemDetails {
+  return {
+    type: "health-check-failed",
+    title: "Health check failed",
+    status: 0,
+    detail,
+    instance: crypto.randomUUID(),
+    "correlation-id": crypto.randomUUID(),
+  };
+}
 
 export default function HealthPage() {
   const [state, setState] = useState<AsyncBoundaryState>(ApiStatus.IDLE);
@@ -24,18 +36,8 @@ export default function HealthPage() {
       setData(result);
       setState(ViewStatus.READY);
     } catch (err) {
-      // TODO: When the BackOffice CheckHealth adapter starts returning RFC 9457
-      // envelopes (per the API error-contract PRD), pass the real envelope here
-      // instead of synthesizing one. The synthesized fallback is a temporary
-      // bridge — not a parallel UI error shape.
-      setProblem({
-        type: "health-check-failed",
-        title: "Health check failed",
-        status: 0,
-        detail: err instanceof Error ? err.message : "Unknown error",
-        instance: crypto.randomUUID(),
-        "correlation-id": crypto.randomUUID(),
-      });
+      const detail = err instanceof Error ? err.message : "Unknown error";
+      setProblem(err instanceof HttpError ? err.problem : transportFailureProblem(detail));
       setState(ViewStatus.ERROR);
     }
   }
@@ -70,7 +72,7 @@ export default function HealthPage() {
           </Button>
         </div>
 
-        {state !== ApiStatus.IDLE ? (
+        {state === ApiStatus.IDLE ? null : (
           <AsyncBoundary state={state} data={data ?? undefined} error={problem ?? undefined}>
             {(result) => (
               <div
@@ -85,7 +87,7 @@ export default function HealthPage() {
               </div>
             )}
           </AsyncBoundary>
-        ) : null}
+        )}
       </section>
     </div>
   );

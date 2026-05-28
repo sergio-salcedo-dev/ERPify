@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures;
 
 use Override;
-use RuntimeException;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpKernel\Event\ControllerEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
+use UnexpectedValueException;
 
 /**
  * Test-only failure injector for the `/api/v1/backoffice/health` and `/api/v1/health`
@@ -17,7 +17,7 @@ use Symfony\Component\HttpKernel\KernelEvents;
  *
  * The subscriber listens on `kernel.controller`. When the request matches one of the
  * two health paths AND carries the `_force_failure` query parameter, it throws a plain
- * {@see RuntimeException} BEFORE the controller runs. The exception escapes back into
+ * {@see UnexpectedValueException} BEFORE the controller runs. The exception escapes back into
  * Symfony's kernel, where {@see \Erpify\Shared\Infrastructure\Http\EventListener\ExceptionResponder}
  * catches it and emits a conforming RFC 9457 Problem Details 500 response.
  *
@@ -68,6 +68,6 @@ final class ForceHealthFailureSubscriber implements EventSubscriberInterface
             return;
         }
 
-        throw new RuntimeException(self::FAILURE_MESSAGE);
+        throw new UnexpectedValueException(self::FAILURE_MESSAGE);
     }
 }

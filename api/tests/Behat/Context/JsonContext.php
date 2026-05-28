@@ -18,9 +18,10 @@ use Erpify\Tests\Behat\Support\PostProcess\JsonPathToolTrait;
 use Erpify\Tests\Behat\Support\PostProcess\JsonToolTrait;
 use Exception;
 use Flow\JSONPath\JSONPathException;
+use InvalidArgumentException;
 use JsonException;
-use RuntimeException;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
+use UnexpectedValueException;
 
 use const DIRECTORY_SEPARATOR;
 
@@ -731,7 +732,7 @@ class JsonContext extends AbstractContext
             'not be equal to' => $this->theMatchingJsonNodeShouldNotBeEqualTo($nodeSelector, $expected),
             'not be in' => $this->theMatchingJsonNodeValueShouldNotBeIn($nodeSelector, (string) $expected),
             'not contain' => $this->theMatchingJsonNodeShouldNotContain($nodeSelector, $expected),
-            default => throw new RuntimeException('Unknown operator'),
+            default => throw new UnexpectedValueException('Unknown operator'),
         };
     }
 
@@ -924,7 +925,7 @@ class JsonContext extends AbstractContext
         $nodeModifier = $this->nodeModifierLocator->getFor($nodeSelector, $expectedFrom);
 
         if (!$nodeModifier instanceof NodeModifierInterface) {
-            throw new RuntimeException('NodeModifier not found');
+            throw new UnexpectedValueException('NodeModifier not found');
         }
 
         $from = $nodeModifier->getProcessedValue($expectedFrom);
@@ -1077,7 +1078,7 @@ class JsonContext extends AbstractContext
             $length = \strrpos($nodeSelector, '.');
 
             if (false === $length) {
-                throw new RuntimeException('The nodeSelector is invalid');
+                throw new InvalidArgumentException('The nodeSelector is invalid');
             }
 
             // Remove the last segment after the last dot

@@ -40,7 +40,7 @@ describe("RecordSheet", () => {
 
   it("prompts for confirmation when dirty and intercepts close on cancel", () => {
     const onOpenChange = vi.fn();
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const confirm = vi.spyOn(globalThis, "confirm").mockReturnValue(false);
     render(
       <RecordSheet
         open={true}
@@ -59,7 +59,7 @@ describe("RecordSheet", () => {
 
   it("allows close when dirty + user confirms", () => {
     const onOpenChange = vi.fn();
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.spyOn(globalThis, "confirm").mockReturnValue(true);
     render(
       <RecordSheet open={true} onOpenChange={onOpenChange} title="Bank" dirty>
         <p>body</p>

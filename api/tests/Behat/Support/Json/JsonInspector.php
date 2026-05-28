@@ -10,8 +10,9 @@ use JsonSchema\SchemaStorage;
 use JsonSchema\Uri\UriResolver;
 use JsonSchema\Uri\UriRetriever;
 use JsonSchema\Validator;
-use RuntimeException;
+use LogicException;
 use Symfony\Component\PropertyAccess\PropertyAccessor;
+use UnexpectedValueException;
 
 readonly class JsonInspector
 {
@@ -38,7 +39,7 @@ readonly class JsonInspector
         try {
             return $json->read($expression, $this->propertyAccessor);
         } catch (Exception $exception) {
-            throw new RuntimeException(\sprintf("Failed to evaluate expression '%s'", $expression), $exception->getCode(), $exception);
+            throw new UnexpectedValueException(\sprintf("Failed to evaluate expression '%s'", $expression), $exception->getCode(), $exception);
         }
     }
 
@@ -48,7 +49,7 @@ readonly class JsonInspector
     public function validate(Json $json, JsonSchema $jsonSchema): bool
     {
         if (!\class_exists(Validator::class)) {
-            throw new RuntimeException('Missing extension, please install dev package for "justinrainbow/json-schema"');
+            throw new LogicException('Missing extension, please install dev package for "justinrainbow/json-schema"');
         }
 
         $validator = new Validator();

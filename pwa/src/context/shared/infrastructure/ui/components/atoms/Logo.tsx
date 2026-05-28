@@ -57,7 +57,7 @@ export const Logo: React.FC<LogoProps> = ({
       />
     );
 
-  const wordmark = !iconOnly ? (
+  const wordmark = iconOnly ? null : (
     <span
       className={cn(
         "logo__text text-foreground font-bold tracking-tight",
@@ -67,7 +67,7 @@ export const Logo: React.FC<LogoProps> = ({
     >
       Erpify
     </span>
-  ) : null;
+  );
 
   const wrapperClass = cn(
     "logo inline-flex items-center hover:opacity-80 transition-opacity",

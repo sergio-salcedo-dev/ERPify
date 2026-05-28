@@ -52,19 +52,19 @@ ipset create allowed-domains hash:net
 echo "Fetching GitHub IP ranges..."
 gh_ranges=$(curl -s --connect-timeout 10 --max-time 30 --fail https://api.github.com/meta)
 [ -z "$gh_ranges" ] && {
-	echo "ERROR: Failed to fetch GitHub IP ranges"
+	echo "ERROR: Failed to fetch GitHub IP ranges" >&2
 	exit 1
 }
 echo "$gh_ranges" | jq -e '.web and .api and .git' >/dev/null ||
 	{
-		echo "ERROR: GitHub API response missing required fields"
+		echo "ERROR: GitHub API response missing required fields" >&2
 		exit 1
 	}
 
 while read -r cidr; do
 	[[ "$cidr" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/[0-9]{1,2}$ ]] ||
 		{
-			echo "ERROR: Invalid CIDR: $cidr"
+			echo "ERROR: Invalid CIDR: $cidr" >&2
 			exit 1
 		}
 	echo "Adding GitHub range $cidr"
@@ -78,7 +78,7 @@ done < <(echo "$gh_ranges" | jq -r '(.web + .api + .git)[]' | grep -v ':' | aggr
 # uid-owner tricks needed) and don't require the DOCKER_OUTPUT NAT chain.
 DOCKER_DNS_PORT=$(echo "$DOCKER_DNS_RULES" | sed -n 's/.*udp.*--to-destination 127\.0\.0\.11:\([0-9]*\).*/\1/p' | head -1)
 [ -z "$DOCKER_DNS_PORT" ] && {
-	echo "ERROR: Failed to extract Docker DNS port"
+	echo "ERROR: Failed to extract Docker DNS port" >&2
 	exit 1
 }
 echo "Docker DNS port: $DOCKER_DNS_PORT"
@@ -114,7 +114,7 @@ iptables -t nat -I OUTPUT -p udp --dport 53 -j DNAT --to-destination 127.0.0.2:5
 # Allow traffic to/from the host gateway IP
 HOST_IP=$(ip route | grep default | cut -d" " -f3)
 [ -z "$HOST_IP" ] && {
-	echo "ERROR: Failed to detect host IP"
+	echo "ERROR: Failed to detect host IP" >&2
 	exit 1
 }
 echo "Host gateway IP: $HOST_IP"
@@ -153,14 +153,14 @@ echo "Firewall configuration complete"
 
 # Verify
 if curl --connect-timeout 5 https://example.com >/dev/null 2>&1; then
-	echo "ERROR: Firewall check failed — able to reach example.com"
+	echo "ERROR: Firewall check failed — able to reach example.com" >&2
 	exit 1
 else
 	echo "OK: example.com is blocked"
 fi
 
 if ! curl --connect-timeout 5 https://api.github.com/zen >/dev/null 2>&1; then
-	echo "ERROR: Firewall check failed — unable to reach api.github.com"
+	echo "ERROR: Firewall check failed — unable to reach api.github.com" >&2
 	exit 1
 else
 	echo "OK: api.github.com is reachable"

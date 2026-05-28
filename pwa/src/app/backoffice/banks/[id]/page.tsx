@@ -217,12 +217,12 @@ function Field({
   value,
   valueClassName,
   testId,
-}: {
+}: Readonly<{
   label: string;
   value: string;
   valueClassName?: string;
   testId?: string;
-}) {
+}>) {
   return (
     <div className="banks-detail__field">
       <dt className="text-muted-foreground text-xs font-medium uppercase tracking-wide">{label}</dt>

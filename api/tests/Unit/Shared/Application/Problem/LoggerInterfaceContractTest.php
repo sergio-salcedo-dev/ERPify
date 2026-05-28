@@ -203,11 +203,7 @@ final class LoggerInterfaceContractTest extends TestCase
     {
         $type = $parameter->getType();
 
-        if (!$type instanceof ReflectionNamedType) {
-            return false;
-        }
-
-        if ($type->isBuiltin()) {
+        if (!$type instanceof ReflectionNamedType || $type->isBuiltin()) {
             return false;
         }
 
@@ -217,11 +213,8 @@ final class LoggerInterfaceContractTest extends TestCase
             return true;
         }
 
-        if (!\interface_exists($typeName) && !\class_exists($typeName)) {
-            return false;
-        }
-
-        return \is_a($typeName, LoggerInterface::class, allow_string: true);
+        return (\interface_exists($typeName) || \class_exists($typeName))
+            && \is_a($typeName, LoggerInterface::class, allow_string: true);
     }
 
     /**

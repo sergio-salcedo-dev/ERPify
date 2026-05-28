@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Pencil, Trash2 } from "lucide-react";
@@ -20,36 +21,102 @@ interface BanksTableProps {
   onBankDeleted?: (id: string) => void;
 }
 
-export function BanksTable({ banks, sort, onSortChange, onBankDeleted }: BanksTableProps) {
-  const router = useRouter();
+interface BanksActionsCellProps {
+  row: Bank;
+  onBankDeleted?: (id: string) => void;
+}
 
-  const columns: DataTableColumn<Bank>[] = [
+function BanksActionsCell({ row, onBankDeleted }: Readonly<BanksActionsCellProps>) {
+  return (
+    // Wrapper exists purely to stop row click/keydown propagation so the action
+    // buttons don't trigger row navigation. role="presentation" is the most
+    // appropriate signal for assistive tech that this <div> is non-interactive
+    // chrome (not a semantic landmark).
+    <div
+      className="banks-table__actions flex items-center justify-end gap-1"
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+      role="presentation"
+    >
+      <CopyButton
+        value={row.id}
+        iconOnly
+        size="icon-sm"
+        label="Copy ID"
+        copiedLabel="ID copied"
+        errorLabel="Copy failed"
+        title={`Copy bank ${row.name} ID`}
+        testId={`banks-table__copy-${row.id}`}
+      />
+      <Link
+        href={safeHref(`/backoffice/banks/${encodeURIComponent(row.id)}/edit`)}
+        className={cn(buttonVariants({ variant: "outline", size: "icon-sm" }))}
+        aria-label="Edit"
+        title={`Edit bank ${row.name}`}
+        data-testid={`banks-table__edit-${row.id}`}
+      >
+        <Pencil className="size-3.5" aria-hidden="true" />
+        <span className="sr-only">Edit</span>
+      </Link>
+      <DeleteBankButton
+        id={row.id}
+        name={row.name}
+        stopPropagation
+        triggerTestId={`banks-table__delete-${row.id}`}
+        onDeleted={onBankDeleted}
+        trigger={
+          <Button
+            variant="destructive"
+            size="icon-sm"
+            aria-label="Delete"
+            title={`Delete bank ${row.name}`}
+            data-testid={`banks-table__delete-${row.id}`}
+          >
+            <Trash2 className="size-3.5" aria-hidden="true" />
+            <span className="sr-only">Delete</span>
+          </Button>
+        }
+      />
+    </div>
+  );
+}
+
+const renderShortNameCell = (row: Bank) => row.shortName;
+const renderNameCell = (row: Bank) => row.name;
+const renderCreatedAtCell = (row: Bank) => dateTimeProvider.formatIsoToDisplay(row.createdAt);
+const renderUpdatedAtCell = (row: Bank) => dateTimeProvider.formatIsoToDisplay(row.updatedAt);
+
+function buildBanksColumns(onBankDeleted?: (id: string) => void): DataTableColumn<Bank>[] {
+  const renderActionsCell = (row: Bank) => (
+    <BanksActionsCell row={row} onBankDeleted={onBankDeleted} />
+  );
+  return [
     {
       id: "shortName",
       header: "Short name",
       sortable: true,
-      cell: (row) => row.shortName,
+      cell: renderShortNameCell,
       className: "max-w-[8rem] truncate",
     },
     {
       id: "name",
       header: "Name",
       sortable: true,
-      cell: (row) => row.name,
+      cell: renderNameCell,
       className: "min-w-0",
     },
     {
       id: "createdAt",
       header: "Created",
       sortable: true,
-      cell: (row) => dateTimeProvider.formatIsoToDisplay(row.createdAt),
+      cell: renderCreatedAtCell,
       className: "banks-table__col--md hidden md:table-cell",
     },
     {
       id: "updatedAt",
       header: "Updated",
       sortable: true,
-      cell: (row) => dateTimeProvider.formatIsoToDisplay(row.updatedAt),
+      cell: renderUpdatedAtCell,
       className: "banks-table__col--lg hidden lg:table-cell",
     },
     {
@@ -57,56 +124,20 @@ export function BanksTable({ banks, sort, onSortChange, onBankDeleted }: BanksTa
       header: "Actions",
       align: "right",
       className: "banks-table__col--actions w-[1%] whitespace-nowrap",
-      cell: (row) => (
-        <div
-          className="banks-table__actions flex items-center justify-end gap-1"
-          onClick={(event) => event.stopPropagation()}
-          onKeyDown={(event) => event.stopPropagation()}
-          role="presentation"
-        >
-          <CopyButton
-            value={row.id}
-            iconOnly
-            size="icon-sm"
-            label="Copy ID"
-            copiedLabel="ID copied"
-            errorLabel="Copy failed"
-            title={`Copy bank ${row.name} ID`}
-            testId={`banks-table__copy-${row.id}`}
-          />
-          <Link
-            href={safeHref(`/backoffice/banks/${encodeURIComponent(row.id)}/edit`)}
-            className={cn(buttonVariants({ variant: "outline", size: "icon-sm" }))}
-            aria-label="Edit"
-            title={`Edit bank ${row.name}`}
-            data-testid={`banks-table__edit-${row.id}`}
-          >
-            <Pencil className="size-3.5" aria-hidden="true" />
-            <span className="sr-only">Edit</span>
-          </Link>
-          <DeleteBankButton
-            id={row.id}
-            name={row.name}
-            stopPropagation
-            triggerTestId={`banks-table__delete-${row.id}`}
-            onDeleted={onBankDeleted}
-            trigger={
-              <Button
-                variant="destructive"
-                size="icon-sm"
-                aria-label="Delete"
-                title={`Delete bank ${row.name}`}
-                data-testid={`banks-table__delete-${row.id}`}
-              >
-                <Trash2 className="size-3.5" aria-hidden="true" />
-                <span className="sr-only">Delete</span>
-              </Button>
-            }
-          />
-        </div>
-      ),
+      cell: renderActionsCell,
     },
   ];
+}
+
+export function BanksTable({
+  banks,
+  sort,
+  onSortChange,
+  onBankDeleted,
+}: Readonly<BanksTableProps>) {
+  const router = useRouter();
+
+  const columns = useMemo(() => buildBanksColumns(onBankDeleted), [onBankDeleted]);
 
   return (
     <div className="banks-table overflow-x-auto sm:mx-0" data-testid="banks-table">

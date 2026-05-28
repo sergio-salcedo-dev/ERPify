@@ -58,14 +58,14 @@ export default function BanksListPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<BanksPageSize>(BANKS_PAGE_SIZE_DEFAULT);
   const [view, setView] = useState<BanksView>(() => {
-    if (typeof window === "undefined") return DEFAULT_VIEW;
-    const stored = window.localStorage.getItem(BANKS_VIEW_STORAGE_KEY);
+    if (globalThis.window === undefined) return DEFAULT_VIEW;
+    const stored = globalThis.localStorage.getItem(BANKS_VIEW_STORAGE_KEY);
     return isBanksView(stored) ? stored : DEFAULT_VIEW;
   });
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(BANKS_VIEW_STORAGE_KEY, view);
+    if (globalThis.window === undefined) return;
+    globalThis.localStorage.setItem(BANKS_VIEW_STORAGE_KEY, view);
   }, [view]);
 
   useEffect(() => {
@@ -80,11 +80,9 @@ export default function BanksListPage() {
         setState(result.banks.length === 0 ? ViewStatus.EMPTY : ViewStatus.READY);
       } catch (err) {
         if (cancelled) return;
-        setProblem(
-          err instanceof HttpError
-            ? err.problem
-            : genericProblem(err instanceof Error ? err.message : "Unknown error"),
-        );
+        const fallbackDetail = err instanceof Error ? err.message : "Unknown error";
+        const nextProblem = err instanceof HttpError ? err.problem : genericProblem(fallbackDetail);
+        setProblem(nextProblem);
         setState(ViewStatus.ERROR);
       }
     })();

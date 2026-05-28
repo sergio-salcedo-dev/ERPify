@@ -560,10 +560,6 @@ final class ErrorContractGateTest extends TestCase
 
         $exit = \proc_close($process);
 
-        if (0 !== $exit) {
-            return null;
-        }
-
-        return false === $stdout ? null : $stdout;
+        return (0 !== $exit || false === $stdout) ? null : $stdout;
     }
 }

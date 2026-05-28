@@ -30,16 +30,16 @@ export function AppShell({
   topBarRight,
   children,
   defaultSidebarOpen = true,
-}: AppShellProps) {
+}: Readonly<AppShellProps>) {
   const [sidebarOpen, setSidebarOpen] = useState(() => {
-    if (typeof window === "undefined") return defaultSidebarOpen;
-    const stored = window.localStorage.getItem(SIDEBAR_STORAGE_KEY);
-    return stored !== null ? stored === "1" : defaultSidebarOpen;
+    if (globalThis.window === undefined) return defaultSidebarOpen;
+    const stored = globalThis.localStorage.getItem(SIDEBAR_STORAGE_KEY);
+    return stored === null ? defaultSidebarOpen : stored === "1";
   });
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(SIDEBAR_STORAGE_KEY, sidebarOpen ? "1" : "0");
+    if (globalThis.window === undefined) return;
+    globalThis.localStorage.setItem(SIDEBAR_STORAGE_KEY, sidebarOpen ? "1" : "0");
   }, [sidebarOpen]);
 
   useEffect(() => {
@@ -49,8 +49,8 @@ export function AppShell({
         setSidebarOpen((s) => !s);
       }
     }
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
+    globalThis.addEventListener("keydown", handleKey);
+    return () => globalThis.removeEventListener("keydown", handleKey);
   }, []);
 
   return (

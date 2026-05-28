@@ -7,8 +7,8 @@ namespace Erpify\Shared\Infrastructure\Persistence;
 use Erpify\Shared\Domain\Search\SearchCursor;
 use InvalidArgumentException;
 use JsonException;
-use RuntimeException;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use UnexpectedValueException;
 
 /**
  * @SuppressWarnings("PHPMD.ErrorControlOperator")
@@ -35,27 +35,9 @@ class PaginatorCursorFactory
      */
     public function createFromString(?string $string): PaginatorCursorInterface
     {
-        if (null === $string) {
-            return new PaginatorCursor();
-        }
+        $body = $this->extractVerifiedBody($string);
 
-        $string = \trim($string);
-
-        if ('' === $string) {
-            return new PaginatorCursor();
-        }
-
-        $separatorPosition = \strrpos($string, self::SIGNATURE_SEPARATOR);
-
-        if (false === $separatorPosition) {
-            return new PaginatorCursor();
-        }
-
-        $body = \substr($string, 0, $separatorPosition);
-        $signature = \substr($string, $separatorPosition + 1);
-        $expected = \hash_hmac(self::HMAC_ALGO, $body, $this->secret);
-
-        if (!\hash_equals($expected, $signature)) {
+        if (null === $body) {
             return new PaginatorCursor();
         }
 
@@ -109,13 +91,34 @@ class PaginatorCursorFactory
         $compressed = \gzcompress($payload);
 
         if (false === $compressed) {
-            throw new RuntimeException('Failed to compress paginator cursor payload.');
+            throw new UnexpectedValueException('Failed to compress paginator cursor payload.');
         }
 
         $body = \base64_encode($compressed);
         $signature = \hash_hmac(self::HMAC_ALGO, $body, $this->secret);
 
         return $body . self::SIGNATURE_SEPARATOR . $signature;
+    }
+
+    /**
+     * Returns the verified body portion of `<body>.<hmac>` after HMAC validation, or
+     * `null` if the input is missing, malformed, or the signature does not match.
+     * Kept separate so {@see createFromString} reads as a thin "verify, decode, normalise" pipeline.
+     */
+    private function extractVerifiedBody(?string $string): ?string
+    {
+        $trimmed = null === $string ? '' : \trim($string);
+        $separatorPosition = '' === $trimmed ? false : \strrpos($trimmed, self::SIGNATURE_SEPARATOR);
+
+        if (false === $separatorPosition) {
+            return null;
+        }
+
+        $body = \substr($trimmed, 0, $separatorPosition);
+        $signature = \substr($trimmed, $separatorPosition + 1);
+        $expected = \hash_hmac(self::HMAC_ALGO, $body, $this->secret);
+
+        return \hash_equals($expected, $signature) ? $body : null;
     }
 
     /**

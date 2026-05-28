@@ -205,21 +205,26 @@ final readonly class ProblemDetailsFactory
     ) {
     }
 
+    /**
+     * @SuppressWarnings("PHPMD.CyclomaticComplexity")
+     * @SuppressWarnings("PHPMD.NPathComplexity")
+     */
     public function fromThrowable(Throwable $throwable, string $correlationId, string $instance): ProblemDetails
     {
+        $validationException = $this->findInChain($throwable, ValidationFailedException::class);
+        $message = $throwable->getMessage();
         $debug = $this->buildDebugExtension($throwable);
 
-        if ($throwable instanceof DomainException) {
-            return $this->applyBodyCap($this->withDebug(
+        // Each match arm independently wraps through applyBodyCap(withDebug(...)) so the
+        // AccessDeniedException and AuthenticationException bridges remain structurally
+        // identical (pinned by ConstantTimeAuthBranchingContractTest). Sharing a single
+        // post-match wrap would let an attacker time-distinguish the 401/403 bridges.
+        return match (true) {
+            $throwable instanceof DomainException => $this->applyBodyCap($this->withDebug(
                 $this->buildDomainExceptionResponse($throwable, $correlationId, $instance),
                 $debug,
-            ));
-        }
-
-        $validationException = $this->findInChain($throwable, ValidationFailedException::class);
-
-        if ($validationException instanceof ValidationFailedException) {
-            return $this->applyBodyCap($this->withDebug(new ProblemDetails(
+            )),
+            $validationException instanceof ValidationFailedException => $this->applyBodyCap($this->withDebug(new ProblemDetails(
                 type: 'validation-failed',
                 title: 'Validation failed.',
                 status: Response::HTTP_BAD_REQUEST,
@@ -227,51 +232,38 @@ final readonly class ProblemDetailsFactory
                 instance: $instance,
                 correlationId: $correlationId,
                 extensions: ['violations' => $this->buildViolations($validationException->getViolations())],
-            ), $debug));
-        }
-
-        if ($throwable instanceof AccessDeniedException) {
-            return $this->applyBodyCap($this->withDebug($this->buildBridgeResponse(
+            ), $debug)),
+            $throwable instanceof AccessDeniedException => $this->applyBodyCap($this->withDebug($this->buildBridgeResponse(
                 type: 'forbidden',
                 status: Response::HTTP_FORBIDDEN,
-                title: '' !== $throwable->getMessage() ? $throwable->getMessage() : 'Access denied.',
+                title: '' !== $message ? $message : 'Access denied.',
                 correlationId: $correlationId,
                 instance: $instance,
-            ), $debug));
-        }
-
-        if ($throwable instanceof AuthenticationException) {
-            return $this->applyBodyCap($this->withDebug($this->buildBridgeResponse(
+            ), $debug)),
+            $throwable instanceof AuthenticationException => $this->applyBodyCap($this->withDebug($this->buildBridgeResponse(
                 type: 'unauthenticated',
                 status: Response::HTTP_UNAUTHORIZED,
-                title: '' !== $throwable->getMessage() ? $throwable->getMessage() : 'Authentication required.',
+                title: '' !== $message ? $message : 'Authentication required.',
                 correlationId: $correlationId,
                 instance: $instance,
-            ), $debug));
-        }
-
-        if ($throwable instanceof HttpExceptionInterface) {
-            $status = $throwable->getStatusCode();
-            $type = self::HTTP_STATUS_TYPE_MAP[$status] ?? 'http-error';
-
-            return $this->applyBodyCap($this->withDebug($this->buildBridgeResponse(
-                type: $type,
-                status: $status,
-                title: '' !== $throwable->getMessage() ? $throwable->getMessage() : 'An HTTP error occurred.',
+            ), $debug)),
+            $throwable instanceof HttpExceptionInterface => $this->applyBodyCap($this->withDebug($this->buildBridgeResponse(
+                type: self::HTTP_STATUS_TYPE_MAP[$throwable->getStatusCode()] ?? 'http-error',
+                status: $throwable->getStatusCode(),
+                title: '' !== $message ? $message : 'An HTTP error occurred.',
                 correlationId: $correlationId,
                 instance: $instance,
-            ), $debug));
-        }
-
-        return $this->applyBodyCap($this->withDebug(new ProblemDetails(
-            type: 'unhandled-exception',
-            title: $this->resolveUnhandledTitle($throwable),
-            status: Response::HTTP_INTERNAL_SERVER_ERROR,
-            detail: null,
-            instance: $instance,
-            correlationId: $correlationId,
-            extensions: [],
-        ), $debug));
+            ), $debug)),
+            default => $this->applyBodyCap($this->withDebug(new ProblemDetails(
+                type: 'unhandled-exception',
+                title: $this->resolveUnhandledTitle($throwable),
+                status: Response::HTTP_INTERNAL_SERVER_ERROR,
+                detail: null,
+                instance: $instance,
+                correlationId: $correlationId,
+                extensions: [],
+            ), $debug)),
+        };
     }
 
     /**
@@ -469,10 +461,8 @@ final readonly class ProblemDetailsFactory
      */
     private function redactKeys(array $context): array
     {
-        /** @var array<string, mixed> $filtered */
-        $filtered = RedactionDenylist::filter($context);
-
-        return $filtered;
+        /** @var array<string, mixed> */
+        return RedactionDenylist::filter($context);
     }
 
     /**

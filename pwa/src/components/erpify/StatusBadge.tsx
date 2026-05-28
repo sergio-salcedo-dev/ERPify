@@ -36,12 +36,12 @@ interface StatusBadgeProps extends VariantProps<typeof statusVariants> {
   className?: string;
 }
 
-export function StatusBadge({ variant, label, className }: StatusBadgeProps) {
+export function StatusBadge({ variant, label, className }: Readonly<StatusBadgeProps>) {
   const Icon = iconByVariant[variant];
   return (
-    <span role="status" className={cn(statusVariants({ variant }), className)}>
+    <output className={cn(statusVariants({ variant }), className)}>
       <Icon className="size-3" aria-hidden="true" />
       {label}
-    </span>
+    </output>
   );
 }

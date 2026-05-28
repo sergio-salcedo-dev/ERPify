@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Shared\Domain\Exception;
 
 use Generator;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use RuntimeException;
 
 /**
  * Architecture guard for Erpify\Shared\Domain\Exception: enforces that the taxonomy stays
@@ -66,7 +66,7 @@ final class TaxonomyArchitectureTest extends TestCase
         $files = \glob($dir . '/*.php');
 
         if (false === $files || [] === $files) {
-            throw new RuntimeException(\sprintf('No taxonomy files found under %s', $dir));
+            throw new LogicException(\sprintf('No taxonomy files found under %s', $dir));
         }
 
         foreach ($files as $file) {

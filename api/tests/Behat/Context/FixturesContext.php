@@ -13,11 +13,12 @@ use Doctrine\DBAL\DriverManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Tests\Behat\State\FixturesChangeTracker;
 use Exception;
-use RuntimeException;
+use InvalidArgumentException;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\NullOutput;
 use Symfony\Component\HttpKernel\KernelInterface;
+use UnexpectedValueException;
 
 /**
  * Optimized fixture loading via Postgres template-clone.
@@ -133,7 +134,7 @@ final class FixturesContext implements Context
         $exitCode = $application->run(new ArrayInput($input), new NullOutput());
 
         if (0 !== $exitCode) {
-            throw new RuntimeException(\sprintf(
+            throw new UnexpectedValueException(\sprintf(
                 'Failed to run "%s" before scenario at %s:%d (exit %d).',
                 (string) ($input['command'] ?? 'unknown'),
                 $scope->getFeature()->getFile() ?? 'unknown',
@@ -212,7 +213,7 @@ final class FixturesContext implements Context
         $dbName = $params['dbname'] ?? null;
 
         if (!\is_string($dbName) || '' === $dbName) {
-            throw new RuntimeException('Doctrine connection has no dbname; cannot manage test database.');
+            throw new InvalidArgumentException('Doctrine connection has no dbname; cannot manage test database.');
         }
 
         return $dbName;

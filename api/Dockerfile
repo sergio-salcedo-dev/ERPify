@@ -8,7 +8,7 @@
 # https://docs.docker.com/build/building/multi-stage/#stop-at-a-specific-build-stage
 # https://docs.docker.com/reference/compose-file/build/#target
 
-FROM dunglas/frankenphp:1-php8.5@sha256:3f58675c38bbc3f5a2ac1bdf442b7a2c541adc0f785700ed68bb224b7c2e5132 AS frankenphp_upstream
+FROM dunglas/frankenphp@sha256:3f58675c38bbc3f5a2ac1bdf442b7a2c541adc0f785700ed68bb224b7c2e5132 AS frankenphp_upstream
 
 # Base FrankenPHP image
 FROM frankenphp_upstream AS frankenphp_base
@@ -141,7 +141,7 @@ RUN <<-'EOF'
 EOF
 
 # Prod FrankenPHP image
-FROM debian:13-slim@sha256:cedb1ef40439206b673ee8b33a46a03a0c9fa90bf3732f54704f99cb061d2c5a AS frankenphp_prod
+FROM debian@sha256:cedb1ef40439206b673ee8b33a46a03a0c9fa90bf3732f54704f99cb061d2c5a AS frankenphp_prod
 
 SHELL ["/bin/bash", "-euxo", "pipefail", "-c"]
 

@@ -14,14 +14,19 @@ interface CorrelationIdChipProps {
   className?: string;
 }
 
-export function CorrelationIdChip({ id, label, size = "xs", className }: CorrelationIdChipProps) {
+export function CorrelationIdChip({
+  id,
+  label,
+  size = "xs",
+  className,
+}: Readonly<CorrelationIdChipProps>) {
   const [copied, setCopied] = useState(false);
 
   async function handleCopy(): Promise<void> {
     try {
       await navigator.clipboard.writeText(id);
       setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
+      globalThis.setTimeout(() => setCopied(false), 2000);
     } catch {
       // Clipboard denied or unavailable — leave the visible chip alone.
     }
