@@ -101,6 +101,10 @@ use Throwable;
  * ({@see \Erpify\Tests\Unit\Shared\Application\Problem\ConstantTimeAuthBranchingBenchmarkTest})
  * with a generous 2x asymmetry threshold so it stays informative on shared CI hardware
  * without false-positive flakiness.
+ *
+ * @SuppressWarnings("PHPMD.ExcessiveClassComplexity")
+ * @SuppressWarnings("PHPMD.ExcessiveClassLength")
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 final readonly class ProblemDetailsFactory
 {
@@ -206,34 +210,10 @@ final readonly class ProblemDetailsFactory
         $debug = $this->buildDebugExtension($throwable);
 
         if ($throwable instanceof DomainException) {
-            $firstMarker = $this->firstMatchingMarker($throwable);
-
-            $status = null !== $firstMarker ? self::MARKER_STATUS_MAP[$firstMarker] : Response::HTTP_INTERNAL_SERVER_ERROR;
-
-            $explicitType = $throwable->type();
-
-            if ('' !== $explicitType) {
-                $type = $explicitType;
-            } elseif (null !== $firstMarker) {
-                $type = self::MARKER_DEFAULT_TYPE_MAP[$firstMarker];
-            } else {
-                $type = 'domain-error';
-            }
-
-            return $this->applyBodyCap(
-                $this->withDebug(
-                    new ProblemDetails(
-                        type: $type,
-                        title: $throwable->title(),
-                        status: $status,
-                        detail: null,
-                        instance: $instance,
-                        correlationId: $correlationId,
-                        extensions: $this->buildExtensions($throwable, $correlationId, $instance),
-                    ),
-                    $debug,
-                ),
-            );
+            return $this->applyBodyCap($this->withDebug(
+                $this->buildDomainExceptionResponse($throwable, $correlationId, $instance),
+                $debug,
+            ));
         }
 
         $validationException = $this->findInChain($throwable, ValidationFailedException::class);
@@ -283,17 +263,60 @@ final readonly class ProblemDetailsFactory
             ), $debug));
         }
 
-        $title = $this->resolveUnhandledTitle($throwable);
-
         return $this->applyBodyCap($this->withDebug(new ProblemDetails(
             type: 'unhandled-exception',
-            title: $title,
+            title: $this->resolveUnhandledTitle($throwable),
             status: Response::HTTP_INTERNAL_SERVER_ERROR,
             detail: null,
             instance: $instance,
             correlationId: $correlationId,
             extensions: [],
         ), $debug));
+    }
+
+    /**
+     * Builds the `ProblemDetails` for a `DomainException`. Extracted so {@see fromThrowable}
+     * stays within PHPMD complexity budgets — keeps the marker-precedence + explicit-type
+     * resolution out of the top-level dispatcher.
+     */
+    private function buildDomainExceptionResponse(
+        DomainException $throwable,
+        string $correlationId,
+        string $instance,
+    ): ProblemDetails {
+        $firstMarker = $this->firstMatchingMarker($throwable);
+        $status = null !== $firstMarker ? self::MARKER_STATUS_MAP[$firstMarker] : Response::HTTP_INTERNAL_SERVER_ERROR;
+
+        return new ProblemDetails(
+            type: $this->resolveDomainType($throwable->type(), $firstMarker),
+            title: $throwable->title(),
+            status: $status,
+            detail: null,
+            instance: $instance,
+            correlationId: $correlationId,
+            extensions: $this->buildExtensions($throwable, $correlationId, $instance),
+        );
+    }
+
+    /**
+     * Resolves the wire `type` for a `DomainException`: explicit `type()` wins, otherwise
+     * the marker default, otherwise the generic `'domain-error'` literal. Extracted to remove
+     * the `else` clause and the chained `if/elseif/else` that previously lived inside
+     * {@see fromThrowable}.
+     *
+     * @param key-of<self::MARKER_STATUS_MAP>|null $firstMarker
+     */
+    private function resolveDomainType(string $explicitType, ?string $firstMarker): string
+    {
+        if ('' !== $explicitType) {
+            return $explicitType;
+        }
+
+        if (null !== $firstMarker) {
+            return self::MARKER_DEFAULT_TYPE_MAP[$firstMarker];
+        }
+
+        return 'domain-error';
     }
 
     /**

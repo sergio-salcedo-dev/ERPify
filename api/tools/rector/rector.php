@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Rector\Config\RectorConfig;
 use Rector\Naming\Rector\ClassMethod\RenameParamToMatchTypeRector;
+use Rector\Php83\Rector\Class_\ReadOnlyAnonymousClassRector;
 use Rector\Php84\Rector\MethodCall\NewMethodCallWithoutParenthesesRector;
 
 return RectorConfig::configure()
@@ -54,5 +55,11 @@ return RectorConfig::configure()
         // Do not simplify (new Class())->method()
         NewMethodCallWithoutParenthesesRector::class,
         RenameParamToMatchTypeRector::class,
+        // PDepend (bundled by phpmd 2.15) cannot parse `new readonly class` —
+        // keep the explicit `readonly` on the inner property in the affected
+        // file instead, so `make php.md` does not abort on a parser error.
+        ReadOnlyAnonymousClassRector::class => [
+            __DIR__ . '/../../tests/Unit/Shared/Infrastructure/Http/EventListener/ExceptionResponderTest.php',
+        ],
     ])
 ;

@@ -19,6 +19,10 @@ use Symfony\Component\HttpKernel\HttpKernelInterface;
 
 /**
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.TooManyMethods")
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods")
+ * @SuppressWarnings("PHPMD.ExcessiveClassLength")
  */
 #[CoversClass(CorrelationIdListener::class)]
 final class CorrelationIdListenerTest extends TestCase
@@ -503,6 +507,10 @@ final class CorrelationIdListenerTest extends TestCase
         return new ResponseEvent($this->makeKernel(), $request, HttpKernelInterface::MAIN_REQUEST, $response);
     }
 
+    /**
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
+     * @SuppressWarnings("PHPMD.BooleanArgumentFlag")
+     */
     private function makeKernel(): HttpKernelInterface
     {
         return new class implements HttpKernelInterface {

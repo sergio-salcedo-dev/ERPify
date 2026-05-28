@@ -14,6 +14,8 @@ use stdClass;
 
 /**
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods")
  */
 #[CoversClass(RedactionDenylist::class)]
 final class RedactionDenylistTest extends TestCase

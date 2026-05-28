@@ -117,9 +117,7 @@ php.lint.error-contract: ## Error-contract drift gate
 
 ## —— Aggregates ——————————————————————————————————————————————————————————
 
-# todo add php.md
-#php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.psalm.fix.all php.gherkin ## Full PHP lint sweep
-php.quality: php.stan php.rector php.cs-fixer php.cs php.psalm.fix.all php.gherkin php.lint.doctrine php.lint.error-contract ## Full PHP lint sweep
+php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.psalm.fix.all php.gherkin php.lint.doctrine php.lint.error-contract ## Full PHP lint sweep
 
 .PHONY: php.stan php.stan.baseline \
         php.rector php.rector.dry-run \

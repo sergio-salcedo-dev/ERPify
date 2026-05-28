@@ -43,6 +43,13 @@ use Symfony\Component\Validator\Exception\ValidationFailedException;
 
 /**
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods")
+ * @SuppressWarnings("PHPMD.TooManyMethods")
+ * @SuppressWarnings("PHPMD.ExcessivePublicCount")
+ * @SuppressWarnings("PHPMD.ExcessiveClassComplexity")
+ * @SuppressWarnings("PHPMD.ExcessiveClassLength")
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[CoversClass(ProblemDetailsFactory::class)]
 final class ProblemDetailsFactoryTest extends TestCase
@@ -65,6 +72,9 @@ final class ProblemDetailsFactoryTest extends TestCase
         return new ProblemDetailsFactory($environment, $logger ?? new NullLogger());
     }
 
+    /**
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
+     */
     #[DataProvider('provideMarkers')]
     public function testStatusMappingForEachMarker(
         DomainException $exception,
@@ -78,6 +88,9 @@ final class ProblemDetailsFactoryTest extends TestCase
         $this->assertSame($expectedStatus, $problemDetails->status);
     }
 
+    /**
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
+     */
     #[DataProvider('provideMarkers')]
     public function testDefaultTypeForEachMarker(
         DomainException $exception,
@@ -364,6 +377,8 @@ final class ProblemDetailsFactoryTest extends TestCase
      * `__get` / `__call`) substitutes to the body sentinel, and the log's `original_type`
      * reuses {@see ProblemDetailsFactory::sanitiseExceptionClass}: no `\0`, no path leak from
      * the `\0/path:line$N` anonymous-class suffix PHP appends to the FQCN.
+     *
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
     public function testFactoryDoctrineProxyStandInLogsSanitisedOriginalTypeWithoutNulOrPathLeak(): void
     {
@@ -889,6 +904,9 @@ final class ProblemDetailsFactoryTest extends TestCase
         $this->assertSame('boom', $problemDetails->title);
     }
 
+    /**
+     * @SuppressWarnings("PHPMD.ExcessiveMethodLength")
+     */
     public function testValidationFailedExceptionMapsTo400ValidationFailedWithViolations(): void
     {
         $constraintViolationList = new ConstraintViolationList([
