@@ -1,0 +1,6 @@
+framework:
+    cache:
+        # Use an in-memory array adapter for tests so the rate limiter state
+        # is isolated per test process and reset automatically between tests.
+        # This avoids cross-test pollution when asserting 429 responses.
+        app: cache.adapter.array

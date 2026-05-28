@@ -69,7 +69,7 @@ const useWebServer =
   playwrightBaseURL.startsWith("http://") &&
   process.env.PLAYWRIGHT_SKIP_WEBSERVER !== "1";
 
-/** Override parallel workers: `pwa/.env`, `.env.local`, or shell. Takes precedence over CI default (1). */
+/** Override parallel workers: `pwa/.env`, `.env.local`, or shell. Takes precedence over CI default (2). */
 function playwrightWorkers(): number | undefined {
   const raw = process.env.PW_WORKERS?.trim();
   if (raw) {
@@ -78,7 +78,7 @@ function playwrightWorkers(): number | undefined {
       return n;
     }
   }
-  return process.env.CI ? 1 : undefined;
+  return process.env.CI ? 2 : undefined;
 }
 
 export default defineConfig({
