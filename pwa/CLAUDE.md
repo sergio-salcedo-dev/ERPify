@@ -98,14 +98,22 @@ its barrel (`@/components/erpify`). Framework-agnostic helpers live under
 `src/lib/`. Reach for these from every entity instead of re-implementing them
 locally:
 
-- **Dates** — `formatDateTime` / `parseDdMmYyyy` / `startOfDdMmYyyy` /
-  `endOfDdMmYyyy` from `@/lib/formatDate`. Render `created_at` / `updated_at`
-  (and any other ISO timestamp) via `formatDateTime`; never call
-  `new Date(...).toLocaleString()` directly in entity components.
+- **Dates** — the `dateTimeProvider` singleton from
+  `@/context/shared/infrastructure/DateTimeProvider`, typed as the
+  `DateTimeProvider` port (never as the concrete `DateFnsDateTimeProvider`).
+  No `date-fns` / `dayjs` / `Temporal` types leak past this boundary. Render
+  `created_at` / `updated_at` (and any other ISO timestamp) via
+  `dateTimeProvider.formatIsoToDisplay(iso)` — it returns the raw input back
+  on unparseable values so tables never show "Invalid Date". Use
+  `formatToDisplay(date)` / `formatToDate(date)` for `Date` objects. Never
+  call `new Date(...).toLocaleString()` directly in entity components.
 - **Date filter inputs** — `<DateField>` from `@/components/erpify`. Renders
   the canonical `dd/mm/yyyy` text input with the right `pattern` /
   `inputMode` / `placeholder` / tooltip / `(dd/mm/yyyy)` label hint, and
-  pairs with the `parseDdMmYyyy` helpers above.
+  pairs with `dateTimeProvider.parseDdMmYyyyToStartTimestamp` /
+  `parseDdMmYyyyToEndTimestamp` for inclusive filter bounds. For the native
+  `<DatePickerField>` (`yyyy-mm-dd`) use `parseIsoDateToStartTimestamp` /
+  `parseIsoDateToEndTimestamp` instead.
 - **Copy-to-clipboard** — `<CopyButton value={…}>` from `@/components/erpify`.
   Handles the success / error feedback flip, the icon swap, the sr-only
   fallback, and the async-clipboard / `execCommand` path. Never call
