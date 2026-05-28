@@ -39,6 +39,8 @@ class JsonContext extends AbstractContext
     use JsonPathToolTrait;
     use JsonToolTrait;
 
+    private const string EXPECTED_STRING_FORMAT = 'Expected text for node %s to be a string, %s given';
+
     public function __construct(
         protected readonly HttpResponseContainer $httpResponseContainer,
     ) {
@@ -154,7 +156,7 @@ class JsonContext extends AbstractContext
             }
 
             if (!\is_string($text)) {
-                self::fail(\sprintf('Expected text for node %s to be a string, %s given', $node, \gettype($text)));
+                self::fail(\sprintf(self::EXPECTED_STRING_FORMAT, $node, \gettype($text)));
             }
 
             $this->theJsonNodeShouldBeEqualTo($node, $text);
@@ -270,7 +272,7 @@ class JsonContext extends AbstractContext
             }
 
             if (!\is_string($text)) {
-                self::fail(\sprintf('Expected text for node %s to be a string, %s given', $node, \gettype($text)));
+                self::fail(\sprintf(self::EXPECTED_STRING_FORMAT, $node, \gettype($text)));
             }
 
             $this->theJsonNodeShouldContain($node, $text);
@@ -298,7 +300,7 @@ class JsonContext extends AbstractContext
             }
 
             if (!\is_string($text)) {
-                self::fail(\sprintf('Expected text for node %s to be a string, %s given', $node, \gettype($text)));
+                self::fail(\sprintf(self::EXPECTED_STRING_FORMAT, $node, \gettype($text)));
             }
 
             $this->theJsonNodeShouldNotContain($node, $text);

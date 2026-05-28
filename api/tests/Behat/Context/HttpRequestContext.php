@@ -34,6 +34,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class HttpRequestContext extends AbstractContext
 {
+    private const string HEADER_NOT_NULL_MESSAGE = 'The header "%s" should not be null';
+
     protected ?KernelBrowser $client = null;
 
     protected array $headers = [];
@@ -399,7 +401,7 @@ class HttpRequestContext extends AbstractContext
         $response = $this->getLastResponse();
 
         $actual = $response->headers->get($name);
-        self::assertNotNull($actual, \sprintf('The header "%s" should not be null', $name));
+        self::assertNotNull($actual, \sprintf(self::HEADER_NOT_NULL_MESSAGE, $name));
         self::assertEquals(
             \strtolower($value),
             \strtolower($actual),
@@ -416,7 +418,7 @@ class HttpRequestContext extends AbstractContext
         $response = $this->getLastResponse();
 
         $actual = $response->headers->get($name);
-        self::assertNotNull($actual, \sprintf('The header "%s" should not be null', $name));
+        self::assertNotNull($actual, \sprintf(self::HEADER_NOT_NULL_MESSAGE, $name));
         self::assertNotEquals(
             \strtolower($value),
             \strtolower($actual),
@@ -433,7 +435,7 @@ class HttpRequestContext extends AbstractContext
         $response = $this->getLastResponse();
 
         $actual = $response->headers->get($name);
-        self::assertNotNull($actual, \sprintf('The header "%s" should not be null', $name));
+        self::assertNotNull($actual, \sprintf(self::HEADER_NOT_NULL_MESSAGE, $name));
         self::assertStringContainsStringIgnoringCase(
             $value,
             $actual,

@@ -28,11 +28,13 @@ final class CorrelationIdListenerFunctionalTest extends WebTestCase
 
     private const string VALID_UUID_V7 = '0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c';
 
+    private const string THROW_NOT_FOUND_URI = '/api/test/_throw-not-found';
+
     public function testRequestWithoutInboundHeaderHasMintedCorrelationIdInAttributes(): void
     {
         $kernelBrowser = self::createClient();
         $kernelBrowser->catchExceptions(true);
-        $kernelBrowser->request(Request::METHOD_GET, '/api/test/_throw-not-found');
+        $kernelBrowser->request(Request::METHOD_GET, self::THROW_NOT_FOUND_URI);
 
         $stored = $kernelBrowser->getRequest()->attributes->get(CorrelationIdListener::ATTRIBUTE_KEY);
 
@@ -46,7 +48,7 @@ final class CorrelationIdListenerFunctionalTest extends WebTestCase
         $kernelBrowser->catchExceptions(true);
         $kernelBrowser->request(
             method: Request::METHOD_GET,
-            uri: '/api/test/_throw-not-found',
+            uri: self::THROW_NOT_FOUND_URI,
             server: ['HTTP_X_CORRELATION_ID' => self::VALID_UUID_V7],
         );
 
@@ -62,7 +64,7 @@ final class CorrelationIdListenerFunctionalTest extends WebTestCase
         $kernelBrowser->catchExceptions(true);
         $kernelBrowser->request(
             method: Request::METHOD_GET,
-            uri: '/api/test/_throw-not-found',
+            uri: self::THROW_NOT_FOUND_URI,
             server: ['HTTP_X_CORRELATION_ID' => 'not-a-uuid'],
         );
 
@@ -107,7 +109,7 @@ final class CorrelationIdListenerFunctionalTest extends WebTestCase
     {
         $kernelBrowser = self::createClient();
         $kernelBrowser->catchExceptions(true);
-        $kernelBrowser->request(Request::METHOD_GET, '/api/test/_throw-not-found');
+        $kernelBrowser->request(Request::METHOD_GET, self::THROW_NOT_FOUND_URI);
 
         $headerValue = $kernelBrowser->getResponse()->headers->get(CorrelationIdListener::HEADER_NAME);
 
@@ -121,7 +123,7 @@ final class CorrelationIdListenerFunctionalTest extends WebTestCase
         $kernelBrowser->catchExceptions(true);
         $kernelBrowser->request(
             method: Request::METHOD_GET,
-            uri: '/api/test/_throw-not-found',
+            uri: self::THROW_NOT_FOUND_URI,
             server: ['HTTP_X_CORRELATION_ID' => self::VALID_UUID_V7],
         );
 
@@ -137,7 +139,7 @@ final class CorrelationIdListenerFunctionalTest extends WebTestCase
         $kernelBrowser->catchExceptions(true);
         $kernelBrowser->request(
             method: Request::METHOD_GET,
-            uri: '/api/test/_throw-not-found',
+            uri: self::THROW_NOT_FOUND_URI,
             server: ['HTTP_X_CORRELATION_ID' => 'not-a-uuid'],
         );
 

@@ -51,6 +51,8 @@ final class ExceptionResponderListenerPriorityTest extends WebTestCase
      */
     private const int EXPECTED_NELMIO_RESPONSE_PRIORITY = 0;
 
+    private const string LOCALHOST_FRONTOFFICE_ORIGIN = 'http://localhost:3000';
+
     public function testListenerPriorityIsDeclaredAsPublicClassConstant(): void
     {
         $reflectionClass = new ReflectionClass(ExceptionResponder::class);
@@ -151,7 +153,7 @@ final class ExceptionResponderListenerPriorityTest extends WebTestCase
             Request::METHOD_GET,
             '/api/test/_throw-not-found',
             server: [
-                'HTTP_ORIGIN' => 'http://localhost:3000',
+                'HTTP_ORIGIN' => self::LOCALHOST_FRONTOFFICE_ORIGIN,
             ],
         );
 
@@ -168,7 +170,7 @@ final class ExceptionResponderListenerPriorityTest extends WebTestCase
             'Cross-origin failing request must still carry the Problem Details media type.',
         );
         $this->assertSame(
-            'http://localhost:3000',
+            self::LOCALHOST_FRONTOFFICE_ORIGIN,
             $response->headers->get('Access-Control-Allow-Origin'),
             'NelmioCorsBundle must echo the allowed Origin back on the Problem Details error '
             . 'response. Failure here means the CORS response listener no '
@@ -190,7 +192,7 @@ final class ExceptionResponderListenerPriorityTest extends WebTestCase
             Request::METHOD_OPTIONS,
             '/api/test/_throw-not-found',
             server: [
-                'HTTP_ORIGIN' => 'http://localhost:3000',
+                'HTTP_ORIGIN' => self::LOCALHOST_FRONTOFFICE_ORIGIN,
                 'HTTP_ACCESS_CONTROL_REQUEST_METHOD' => 'GET',
             ],
         );
@@ -203,7 +205,7 @@ final class ExceptionResponderListenerPriorityTest extends WebTestCase
             'Preflight OPTIONS must short-circuit with 200/204 — NelmioCorsBundle owns this path.',
         );
         $this->assertSame(
-            'http://localhost:3000',
+            self::LOCALHOST_FRONTOFFICE_ORIGIN,
             $response->headers->get('Access-Control-Allow-Origin'),
             'Preflight response must echo the Origin back.',
         );

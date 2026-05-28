@@ -328,28 +328,9 @@ final class ProblemDetailsApiSchemaSweepTest extends WebTestCase
             );
         }
 
-        $rawBody = $response->getContent();
-
-        if (!\is_string($rawBody) || '' === $rawBody) {
-            $failures[] = 'response body was empty (expected JSON Problem Details body)';
-
-            return $this->formatDiagnostic($routeName, $method, $uri, $failures);
-        }
-
-        try {
-            $decoded = \json_decode($rawBody, false, flags: JSON_THROW_ON_ERROR);
-        } catch (JsonException $jsonException) {
-            $failures[] = \sprintf('body is not valid JSON: %s', $jsonException->getMessage());
-
-            return $this->formatDiagnostic($routeName, $method, $uri, $failures);
-        }
+        $decoded = $this->decodeProblemBody($response->getContent(), $failures);
 
         if (!$decoded instanceof stdClass) {
-            $failures[] = \sprintf(
-                'body root is %s (expected: JSON object)',
-                \get_debug_type($decoded),
-            );
-
             return $this->formatDiagnostic($routeName, $method, $uri, $failures);
         }
 
@@ -357,28 +338,10 @@ final class ProblemDetailsApiSchemaSweepTest extends WebTestCase
         $validator->validate($decoded, $schemaRef);
 
         if (!$validator->isValid()) {
-            $errorBlobs = [];
-
-            foreach ($validator->getErrors() as $error) {
-                $property = '';
-                $message = '';
-
-                if (\is_array($error)) {
-                    $rawProperty = $error['property'] ?? '';
-                    $rawMessage = $error['message'] ?? '';
-                    $property = \is_string($rawProperty) ? $rawProperty : '';
-                    $message = \is_string($rawMessage) ? $rawMessage : '';
-                }
-
-                $errorBlobs[] = \sprintf('[%s] %s', $property, $message);
-            }
-
-            $failures[] = 'body fails RFC 9457 schema: ' . \implode('; ', $errorBlobs);
+            $failures[] = 'body fails RFC 9457 schema: ' . \implode('; ', $this->collectSchemaErrors($validator));
         }
 
-        /** @var stdClass $body */
-        $body = $decoded;
-        $instance = \property_exists($body, 'instance') ? $body->instance : null;
+        $instance = \property_exists($decoded, 'instance') ? $decoded->instance : null;
 
         if (!\is_string($instance) || 1 !== \preg_match(self::UUID_V7_REGEX, $instance)) {
             $failures[] = \sprintf(
@@ -392,6 +355,61 @@ final class ProblemDetailsApiSchemaSweepTest extends WebTestCase
         }
 
         return $this->formatDiagnostic($routeName, $method, $uri, $failures);
+    }
+
+    /**
+     * @param list<string> $failures
+     */
+    private function decodeProblemBody(string|false $rawBody, array &$failures): ?stdClass
+    {
+        if (!\is_string($rawBody) || '' === $rawBody) {
+            $failures[] = 'response body was empty (expected JSON Problem Details body)';
+
+            return null;
+        }
+
+        try {
+            $decoded = \json_decode($rawBody, false, flags: JSON_THROW_ON_ERROR);
+        } catch (JsonException $jsonException) {
+            $failures[] = \sprintf('body is not valid JSON: %s', $jsonException->getMessage());
+
+            return null;
+        }
+
+        if (!$decoded instanceof stdClass) {
+            $failures[] = \sprintf(
+                'body root is %s (expected: JSON object)',
+                \get_debug_type($decoded),
+            );
+
+            return null;
+        }
+
+        return $decoded;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function collectSchemaErrors(JsonSchemaValidator $validator): array
+    {
+        $errorBlobs = [];
+
+        foreach ($validator->getErrors() as $error) {
+            $property = '';
+            $message = '';
+
+            if (\is_array($error)) {
+                $rawProperty = $error['property'] ?? '';
+                $rawMessage = $error['message'] ?? '';
+                $property = \is_string($rawProperty) ? $rawProperty : '';
+                $message = \is_string($rawMessage) ? $rawMessage : '';
+            }
+
+            $errorBlobs[] = \sprintf('[%s] %s', $property, $message);
+        }
+
+        return $errorBlobs;
     }
 
     /**

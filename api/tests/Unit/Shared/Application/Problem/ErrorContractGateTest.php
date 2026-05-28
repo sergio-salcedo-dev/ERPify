@@ -286,31 +286,45 @@ final class ErrorContractGateTest extends TestCase
                 continue;
             }
 
-            $end = \min($count - 1, $i + self::CATCH_BODY_LOOKAHEAD);
+            $hit = $this->findJsonResponseInCatchBody($lines, $i, $count);
 
-            for ($j = $i; $j <= $end; ++$j) {
-                if (!\array_key_exists($j, $lines)) {
-                    break;
-                }
-
-                $body = $lines[$j];
-
-                if ($this->isCommentLine($body)) {
-                    continue;
-                }
-
-                if (1 === \preg_match('/\bnew\s+JsonResponse\s*\(/', $body)) {
-                    $hits[] = [
-                        'line' => $j + 1,
-                        'code' => \trim($body),
-                    ];
-
-                    break;
-                }
+            if (null !== $hit) {
+                $hits[] = $hit;
             }
         }
 
         return $hits;
+    }
+
+    /**
+     * @param list<string> $lines
+     *
+     * @return array{line: int, code: string}|null
+     */
+    private function findJsonResponseInCatchBody(array $lines, int $startIdx, int $count): ?array
+    {
+        $end = \min($count - 1, $startIdx + self::CATCH_BODY_LOOKAHEAD);
+
+        for ($j = $startIdx; $j <= $end; ++$j) {
+            if (!\array_key_exists($j, $lines)) {
+                return null;
+            }
+
+            $body = $lines[$j];
+
+            if ($this->isCommentLine($body)) {
+                continue;
+            }
+
+            if (1 === \preg_match('/\bnew\s+JsonResponse\s*\(/', $body)) {
+                return [
+                    'line' => $j + 1,
+                    'code' => \trim($body),
+                ];
+            }
+        }
+
+        return null;
     }
 
     private function isCommentLine(string $line): bool
