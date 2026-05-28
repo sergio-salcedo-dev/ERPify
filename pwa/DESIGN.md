@@ -21,7 +21,7 @@ Three deliberate departures from the project's earlier defaults — load-bearing
 
 - **Light-mode default, Linear-similar dark mode.** Light is the canonical authoring environment. Dark mode is the Linear-treatment variant for operators who prefer it.
 - **Geist + Geist Mono.** Loaded via `next/font/google`. Three weights: `400` reading, `500` emphasis, `600` strong emphasis. No OpenType feature toggling.
-- **Tokens-first.** Every color, type token, radius, elevation, and motion lives as a CSS variable in `src/app/globals.css` `@theme`. Light and dark share the same alias contract.
+- **Tokens-first.** Every color, type size, radius, and elevation lives as a CSS variable in `src/app/globals.css` `@theme`. Light and dark share the same alias contract. (Spacing rides Tailwind's default scale; motion is reduced-at-root but durations aren't yet tokenized — see those sections.)
 - **Shadcn primitives are unforked.** ERPify-specific composites live in `src/components/erpify/` and wrap Shadcn primitives via slots and `cn()`.
 - **RFC 9457 is a first-class UI primitive.** `<ProblemDisplay>` consumes the API error envelope verbatim — `title`, `detail`, `violations[]`, copyable `correlation-id`.
 - **Four-state async surfaces are mandatory.** Every fetched surface wraps in `<AsyncBoundary>` with explicit idle / loading / empty / error.
@@ -45,7 +45,15 @@ Three deliberate departures from the project's earlier defaults — load-bearing
 
 ## Tokens — the contract
 
-All tokens live in `src/app/globals.css` inside `@theme {}` and `:root` (light, canonical) / `.dark` (Linear-similar) blocks. Components consume **semantic aliases**, never raw ramp values. Linear's hex values are authored directly — Tailwind 4 accepts hex, sRGB, and oklch interchangeably.
+All tokens live in `src/app/globals.css`. The wiring is three layers, top to bottom:
+
+1. **Raw ramp values** are authored as `--erpify-*` custom properties in `:root` (light, canonical) and `.dark` (Linear-similar). This is the only place a hex value appears, and the only place light/dark diverge.
+2. **`@theme inline {}`** re-exports them as the semantic `--color-*` aliases this document names (`--color-bg → var(--erpify-bg)`, etc.) **and** maps the Shadcn-named tokens (`--background`, `--primary`, `--card`, …) onto the same ramp so unforked Shadcn primitives work without edits.
+3. **Components consume the aliases** — never the raw `--erpify-*` ramp, never a literal hex.
+
+Linear's hex values are authored directly — Tailwind 4 accepts hex, sRGB, and oklch interchangeably.
+
+> **Alias-name caveat.** Two semantic names collide with Shadcn's own theme keys, so the ERPify alias carries a `-default` suffix in `@theme`: the brand violet is **`--color-accent-default`** (`--color-accent` is Shadcn's, mapped to `--color-bg-subtle`) and the default border is **`--color-border-default`** (`--color-border` is Shadcn's, same value). The tables below use the short conceptual names; reach for the `-default` alias when consuming the CSS variable directly.
 
 ### Color — surface ramp
 
@@ -119,7 +127,7 @@ const geistSans = Geist({ subsets: ["latin"], variable: "--font-sans", preload: 
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono", preload: false });
 ```
 
-`<html>` gets `${geistSans.variable} ${geistMono.variable}` on `className`. Tailwind's `font-sans` / `font-mono` utilities resolve through these CSS variables; components consume Tailwind utility classes (`font-sans`, `font-mono`) — they do not reference the variable directly.
+`<html>` gets `cn("font-sans", geistSans.variable, geistMono.variable)` on `className` (composed via `cn()`, never a string template). Tailwind's `font-sans` / `font-mono` utilities resolve through these CSS variables; components consume Tailwind utility classes (`font-sans`, `font-mono`) — they do not reference the variable directly. `@theme` also aliases `--font-heading` to `--font-sans` so headings share the Geist face.
 
 #### Type scale (Linear-derived sizing; weights collapsed to Geist 400 / 500 / 600)
 
@@ -147,6 +155,8 @@ const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono", prel
 | Mono Caption  | 0.8125 / 13     | 400       | 1.50        | normal    |
 | Mono Label    | 0.75 / 12       | 400       | 1.40        | normal    |
 
+The role table above is the design vocabulary (sizes / weights / tracking per role). The **implemented** size tokens are a compact Tailwind scale in `@theme`: `--text-2xs` 11 px · `--text-xs` 12 px · `--text-sm` 13 px · `--text-base` 14 px · `--text-md` 16 px · `--text-lg` 18 px · `--text-xl` 20 px · `--text-2xl` 24 px · `--text-3xl` 30 px · `--text-4xl` 48 px · `--text-5xl` 64 px · `--text-6xl` 72 px. Note the density default: `<body>` is set to `--text-base` **(14 px)**, so the role-table "Body / 16 px" is the _comfortable_ reading size (`--text-md`), not the compact default. Weight and tracking are applied per-component; only the sizes are tokenized.
+
 #### Typography principles (non-negotiable)
 
 - **Three weights only:** 400 (read), 500 (emphasize / UI), 600 (announce). Weight 700+ is forbidden.
@@ -157,14 +167,16 @@ const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono", prel
 
 ### Spacing
 
-Base unit 8 px with optical micro-adjustments at 1, 4, 7, 11. Standard rhythm: 8, 16, 24, 32 px.
+Base unit 8 px. Standard rhythm: 8, 16, 24, 32 px.
+
+Spacing rides on **Tailwind 4's default scale** (`p-2` = 8 px, `gap-4` = 16 px, …) — no custom `--space-*` tokens are emitted in `globals.css`. The scale below is the rhythm the system standardizes on; use the Tailwind utility, not a bespoke variable. The original spec's optical micro-steps (7 / 11 / 19 / 35 px) are **not** on the Tailwind scale and were intentionally dropped in favor of Tailwind's nearest steps (`1.5` = 6 px, `2.5` = 10 px, `5` = 20 px, `9` = 36 px); reintroduce them as tokens only if a surface demonstrably needs the half-pixel optical tuning.
 
 ```text
---space-px: 1px      --space-1: 4px      --space-1.5: 7px
---space-2: 8px       --space-2.5: 11px   --space-3: 12px
---space-4: 16px      --space-5: 19px     --space-6: 24px
---space-7: 28px      --space-8: 32px     --space-9: 35px
---space-12: 48px     --space-16: 64px    --space-20: 80px
+px → 1px     1   → 4px      1.5 → 6px
+2  → 8px     2.5 → 10px     3   → 12px
+4  → 16px    5   → 20px     6   → 24px
+7  → 28px    8   → 32px     9   → 36px
+12 → 48px    16  → 64px     20  → 80px
 ```
 
 ### Radii
@@ -176,10 +188,11 @@ Base unit 8 px with optical micro-adjustments at 1, 4, 7, 11. Standard rhythm: 8
 --radius-lg:     8px    cards, dropdowns, popovers
 --radius-xl:    12px    panels, featured cards, command palette
 --radius-2xl:   22px    large panel elements
---radius-full: 9999px   chips, filter pills, status tags
+--radius-3xl:   24px    extra-large panel elements
+rounded-full   9999px   chips, filter pills, status tags
 ```
 
-Table cells stay sharp — no radius.
+`--radius-micro … --radius-3xl` are emitted in `@theme`. The full pill uses Tailwind's built-in `rounded-full` rather than a custom token. Table cells stay sharp — no radius.
 
 ### Density
 
@@ -193,7 +206,7 @@ Table cells stay sharp — no radius.
 
 ### Elevation
 
-Two systems, one for each mode. Both are token-driven; components do not branch on mode.
+Two systems, one for each mode. Both are token-driven; components do not branch on mode. The shadow values live behind mode-agnostic aliases — `--shadow-elevation-0` … `--shadow-elevation-5` plus `--shadow-elevation-inset` (Tailwind `shadow-elevation-*` utilities) — whose underlying `--erpify-shadow-*` values flip in `:root` vs. `.dark`. A component asks for `shadow-elevation-4`; the mode decides whether that renders as a drop shadow (light) or a luminance ring (dark).
 
 #### Light mode (canonical) — sRGB neutrals + faint drop shadows
 
@@ -224,15 +237,17 @@ On dark surfaces, traditional shadows (dark-on-dark) read as nothing. Linear con
 
 ### Motion
 
+The duration scale below is the intended vocabulary, applied today via Tailwind/inline durations and the Shadcn primitives' own transitions. Named `--duration-*` tokens are **not** yet emitted in `globals.css`; add them if a third surface needs to share a value (the threshold for tokenizing).
+
 ```text
---duration-instant  0ms      operator-initiated state change
---duration-fast     120ms    hover, micro-feedback
---duration-base     180ms    modal, drawer, popover enter/exit
---duration-slow     240ms    page-level transition (rare)
+instant   0ms      operator-initiated state change
+fast      120ms    hover, micro-feedback
+base      180ms    modal, drawer, popover enter/exit
+slow      240ms    page-level transition (rare)
 ```
 
 - Easing: `cubic-bezier(0.16, 1, 0.3, 1)` (ease-out, no bounce).
-- `prefers-reduced-motion` collapses every duration to `0 ms` and reduces transitions to opacity swaps. Handled once in the token layer.
+- `prefers-reduced-motion` **is** handled once at the root of `globals.css`: a global `@media (prefers-reduced-motion: reduce)` rule collapses every `animation-duration` / `transition-duration` to `0 ms` and forces `scroll-behavior: auto`. Components do not need to re-implement this.
 
 ### Breakpoints
 
@@ -250,7 +265,7 @@ On dark surfaces, traditional shadows (dark-on-dark) read as nothing. Linear con
 
 Live in `pwa/src/components/erpify/`. Wrap Shadcn primitives via slots and `cn()`. Forkable; Shadcn primitives are not.
 
-> **Status (v1):** all 9 composites are built and unit-tested. Import via `@/components/erpify`. Tests at `pwa/tests/components/erpify/*.test.tsx` (48 tests passing).
+> **Status (v1):** all 9 mandatory composites are built and unit-tested, plus three supporting primitives (`<CopyButton>`, `<DateField>`, `<DatePickerField>` — see below). Import via `@/components/erpify`. Tests at `pwa/tests/components/erpify/*.test.tsx` (12 files, 69 tests passing).
 
 ### `<ProblemDisplay>`
 
@@ -300,6 +315,16 @@ Values are mode-aware via tokens; the table shows the alias each variant consume
 | **Icon** (circular)        | `--color-bg-subtle`                                             | `--color-text`           | `1px solid --color-border`        | `--radius-full` | Close, menu toggle          |
 | **Pill** (filter chip)     | transparent                                                     | `--color-text-muted`     | `1px solid --color-border-strong` | `--radius-full` | Tags, filters, status       |
 | **Destructive**            | `--color-danger`                                                | `#ffffff`                | none                              | `--radius-md`   | Delete, remove              |
+
+### Supporting primitives
+
+Exported from the same `@/components/erpify` barrel. Not part of the "mandatory four-state / error / form" contract, but cross-entity enough to live beside the composites rather than being re-implemented per feature.
+
+- **`<CopyButton value testId>`** — canonical copy-to-clipboard control. Owns the success/error feedback flip, the icon swap, the `sr-only` fallback, and the async-clipboard → `execCommand` degradation path. Never trusts the value as HTML. `<CorrelationIdChip>` builds on it; entity components must use it instead of calling `navigator.clipboard.writeText` directly.
+- **`<DateField testId>`** — the canonical `dd/mm/yyyy` text input: correct `pattern` / `inputMode` / `placeholder` / tooltip and the `(dd/mm/yyyy)` label hint, exported alongside the `DD_MM_YYYY_*` constants. Pairs with the `dateTimeProvider.parseDdMmYyyyToStartTimestamp` / `parseDdMmYyyyToEndTimestamp` methods (from `@/context/shared/infrastructure/DateTimeProvider`) for inclusive filter bounds.
+- **`<DatePickerField>`** — wraps the **native** `<input type="date">` (`yyyy-mm-dd`) inside `<FormField>`, with `min` / `max` bounds and `violations[]` wiring. Zero added dependency — distinct from the deferred third-party date-picker _library_ (see "Out of scope"); use it where a native picker is acceptable and `<DateField>`'s free-text `dd/mm/yyyy` is not.
+
+All three take a `testId` prop rather than hardcoding a `data-testid` (per the PWA test-id uniqueness contract).
 
 ---
 
@@ -436,19 +461,19 @@ Every API non-2xx response returns:
 
 ## Governance — when each pattern wins
 
-| Decision                               | Rule                                                                                                                                                                                                                                           |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Extending Shadcn vs. wrapping          | **Always wrap.** Composites in `src/components/erpify/`. Never modify upstream Shadcn files.                                                                                                                                                   |
-| Tailwind utility vs. BEM custom class  | Default to utility. BEM only when utilities cannot express the rule cleanly.                                                                                                                                                                   |
-| `cn()` vs. string concat               | **Always `cn()`.** Never string-concat class names.                                                                                                                                                                                            |
-| Inline `style=` vs. utility            | Utility unless the value is genuinely dynamic.                                                                                                                                                                                                 |
-| Adding a dependency                    | `class-variance-authority` is implicitly approved. Geist + Geist Mono via `next/font/google` are approved. Other additions require explicit pre-approval. Currently deferred-with-approval-required: virtualized table, date picker, charting. |
-| Optimistic UI                          | Pessimistic by default. Optimistic is opt-in per action and requires a documented rollback path.                                                                                                                                               |
-| Toast for confirmation                 | **Never.** Confirmation lives in the action's surface.                                                                                                                                                                                         |
-| Decorative illustration in empty state | **Never.** Small icon + clear copy + recovery action.                                                                                                                                                                                          |
-| Forking a Shadcn primitive             | **Never** (in v1). Wrap, don't modify.                                                                                                                                                                                                         |
-| Web fonts                              | Geist + Geist Mono via `next/font/google`. No third-party font loaders. No additional fonts.                                                                                                                                                   |
-| Mode authoring                         | Light is canonical. Build and review in light first, then verify dark. Both ship.                                                                                                                                                              |
+| Decision                               | Rule                                                                                                                                                                                                                                                                                                                                      |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Extending Shadcn vs. wrapping          | **Always wrap.** Composites in `src/components/erpify/`. Never modify upstream Shadcn files.                                                                                                                                                                                                                                              |
+| Tailwind utility vs. BEM custom class  | Default to utility. BEM only when utilities cannot express the rule cleanly.                                                                                                                                                                                                                                                              |
+| `cn()` vs. string concat               | **Always `cn()`.** Never string-concat class names.                                                                                                                                                                                                                                                                                       |
+| Inline `style=` vs. utility            | Utility unless the value is genuinely dynamic.                                                                                                                                                                                                                                                                                            |
+| Adding a dependency                    | `class-variance-authority` is implicitly approved. Geist + Geist Mono via `next/font/google` are approved. Other additions require explicit pre-approval. Currently deferred-with-approval-required: virtualized table, third-party date-picker library, charting. (The native `<DatePickerField>` adds no dependency and is already in.) |
+| Optimistic UI                          | Pessimistic by default. Optimistic is opt-in per action and requires a documented rollback path.                                                                                                                                                                                                                                          |
+| Toast for confirmation                 | **Never.** Confirmation lives in the action's surface.                                                                                                                                                                                                                                                                                    |
+| Decorative illustration in empty state | **Never.** Small icon + clear copy + recovery action.                                                                                                                                                                                                                                                                                     |
+| Forking a Shadcn primitive             | **Never** (in v1). Wrap, don't modify.                                                                                                                                                                                                                                                                                                    |
+| Web fonts                              | Geist + Geist Mono via `next/font/google`. No third-party font loaders. No additional fonts.                                                                                                                                                                                                                                              |
+| Mode authoring                         | Light is canonical. Build and review in light first, then verify dark. Both ship.                                                                                                                                                                                                                                                         |
 
 ---
 
@@ -501,17 +526,20 @@ Step-by-step for a typical brownfield page (the landing page is the canonical ex
 
 ### Adoption status
 
-| Surface                                                            | Status                       | Notes                                                                                                                                                                                                                                                                                                                                  |
-| ------------------------------------------------------------------ | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/app/backoffice/health/page.tsx`                               | **migrated (Phase 5)**       | Uses `<AsyncBoundary>` for state machine. Synthesizes `ProblemDetails` on error as a temporary bridge until the BackOffice CheckHealth adapter returns RFC 9457 envelopes (TODO marked in source).                                                                                                                                     |
-| `src/app/backoffice/page.tsx` (dashboard)                          | **migrated (Phase 5)**       | Token swap: slate/blue/emerald/amber/rose → semantic tokens (`text-foreground`, `text-primary`, `text-success`, `text-warning`, `text-destructive`). StatCard / PlaceholderCard molecules left as-is (props-driven; out of scope).                                                                                                     |
-| `src/app/backoffice/BackOfficeLayoutClient.tsx`                    | **token-migrated (Phase 5)** | Slate/blue palette swapped to tokens. **Not** restructured to `<AppShell>` — the existing sidebar has multi-level submenu expand/collapse that v1 `<AppShell>` doesn't support, and e2e tests (`tests/e2e/backoffice/sidebar.spec.ts`) depend on the existing button structure. Promote to `<AppShell>` once it gains submenu support. |
-| `src/app/page.tsx` (landing)                                       | **un-migrated**              | Public marketing surface. Uses raw slate/blue and custom `Navbar` / `Footer` / `FeatureCard` molecules. Out of scope for v1 (back-office-first). Migrate when the landing page next ships a change.                                                                                                                                    |
-| `src/context/shared/infrastructure/ui/components/atoms/Button.tsx` | **un-migrated**              | Custom Button atom with motion + raw blue/slate/emerald colors. Used by health page (now replaced with Shadcn `Button`) and Navbar. Replace fully once Navbar migrates.                                                                                                                                                                |
+| Surface                                                            | Status                       | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------------------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/app/backoffice/health/page.tsx`                               | **migrated (Phase 5)**       | Uses `<AsyncBoundary>` for state machine. Synthesizes `ProblemDetails` on error as a temporary bridge until the BackOffice CheckHealth adapter returns RFC 9457 envelopes (TODO marked in source).                                                                                                                                                                                                                                       |
+| `src/app/backoffice/page.tsx` (dashboard)                          | **migrated (Phase 5)**       | Token swap: slate/blue/emerald/amber/rose → semantic tokens (`text-foreground`, `text-primary`, `text-success`, `text-warning`, `text-destructive`). StatCard / PlaceholderCard molecules left as-is (props-driven; out of scope).                                                                                                                                                                                                       |
+| `src/app/backoffice/BackOfficeLayoutClient.tsx`                    | **token-migrated (Phase 5)** | Slate/blue palette swapped to tokens. **Not** restructured to `<AppShell>` — the existing sidebar has multi-level submenu expand/collapse that v1 `<AppShell>` doesn't support, and e2e tests (`tests/e2e/backoffice/sidebar.spec.ts`) depend on the existing button structure. Promote to `<AppShell>` once it gains submenu support.                                                                                                   |
+| `src/app/backoffice/banks/**`                                      | **authored on system**       | Canonical "author against the system" surface (the `pwa/CLAUDE.md` running example). `<DataTable>` + `<BanksCards>` responsive list, `<BanksFilters>` with `<DateField>`, keyset `<BanksPagination>`, `<RecordSheet>`-style `<BankForm>` create/edit, `<DeleteBankButton>` confirmation dialog surfacing failures via `<ProblemDisplay variant="inline">`, `<CopyButton>` for ids. The reference for how a new entity should look.       |
+| `src/context/shared/error/infrastructure/ui/**`                    | **authored on system**       | Token-native error module: `<ErrorScreen>` shell + `<ErrorActions>` + per-surface Screens (`<NotFoundScreen>`, `<AccessDeniedScreen>` 403, `<SignInRequiredScreen>` 401, `<SegmentErrorBoundary>` 500, `<RootErrorBoundary>`). Backs the Next convention files (`error.tsx`, `not-found.tsx`, `global-error.tsx`, …) and the navigable `app/(errors)/*` routes. Boundary kept explicit — **not** re-exported from `@/components/erpify`. |
+| `src/context/shared/dev-tools/infrastructure/ui/**`                | **authored on system**       | Token-native internal QA hub at `/dev-tools`, gated by `isDevToolsAvailable()` and short-circuited in production via `src/proxy.ts`. Dev-only surface; ships disabled in prod builds.                                                                                                                                                                                                                                                    |
+| `src/app/page.tsx` (landing)                                       | **un-migrated**              | Public marketing surface. Uses raw slate/blue and custom `Navbar` / `Footer` / `FeatureCard` molecules. Out of scope for v1 (back-office-first). Migrate when the landing page next ships a change.                                                                                                                                                                                                                                      |
+| `src/context/shared/infrastructure/ui/components/atoms/Button.tsx` | **un-migrated**              | Custom Button atom with motion + raw blue/slate/emerald colors. Used by health page (now replaced with Shadcn `Button`) and Navbar. Replace fully once Navbar migrates.                                                                                                                                                                                                                                                                  |
 
 ### Lint enforcement (deferred)
 
-A long-term goal is an ESLint rule that flags raw Shadcn primitive use where an ERPify composite exists, plus a rule that flags raw palette utilities (`text-slate-*`, `bg-blue-*`) outside `node_modules`. **Blocked**: the project does not currently ship an ESLint config (`eslint.config.*` absent), so the rule has no host. Re-evaluate once an ESLint config lands.
+A long-term goal is an ESLint rule that flags raw Shadcn primitive use where an ERPify composite exists, plus a rule that flags raw palette utilities (`text-slate-*`, `bg-blue-*`) outside `node_modules`. **No longer blocked**: the project now ships `pwa/eslint.config.mjs` (the flat config `make pwa.quality` runs), so these custom rules have a host. **Not yet written** — author them as a local plugin / `no-restricted-syntax` block in that config and wire them into `make pwa.quality`.
 
 ---
 
@@ -525,8 +553,8 @@ A long-term goal is an ESLint rule that flags raw Shadcn primitive use where an 
 - Command palette UI (`Cmd/Ctrl+K` reserved; not built).
 - Saved views.
 - Virtualized data grid; `<DataTable>` v1 renders a flat `<tbody>` and is fine up to ~500 rows.
-- Date picker, charting library — reach when a real feature requires.
-- ESLint rule enforcement (blocked on ESLint config absence; see Phase 4 above).
+- Third-party date-picker library and charting library — reach when a real feature requires. (A dependency-free native `<DatePickerField>` already ships; this defers a richer calendar library only.)
+- The two custom ESLint rules (composite-over-primitive, no-raw-palette). The ESLint config now exists (`eslint.config.mjs`), so this is unblocked but unwritten; see Phase 4 above.
 
 ---
 

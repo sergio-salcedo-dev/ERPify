@@ -39,6 +39,8 @@ app.quality: php.quality pwa.quality ## Run all linters (PHP + PWA)
 
 app.test: php.test pwa.test ## Run all tests (PHP + PWA)
 
+app.pre-commit: app.quality app.test ## Run all linters and all tests (PHP + PWA)
+
 app.update: composer.update pwa.update ## Safe update of API + PWA deps (within composer.json / package.json ranges)
 
 app.upgrade: composer.upgrade pwa.upgrade ## Force upgrade API + PWA deps to the latest (bumps constraints across majors)
