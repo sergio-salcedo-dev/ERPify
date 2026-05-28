@@ -1,5 +1,7 @@
-# make/config.mk — variables only, no targets.
-#
+# =============================================================================
+# Config module for Makefile. Variables only, no targets.
+# =============================================================================
+
 # Defines paths, compose wiring, and the PHP/PWA exec helpers consumed
 # by every other module.
 
@@ -33,7 +35,7 @@ else
 endif
 
 DOCKER_COMPOSE := cd $(PROJECT_ROOT) && docker compose $(COMPOSE_FILES)
-DC             := $(DOCKER_COMPOSE)
+DOCKER_COMPOSE_EXEC := $(DOCKER_COMPOSE) exec
 
 # —— PHP exec helpers ——————————————————————————————————————————————————————
 # IN_CONTAINER=true  → exec into the running php container (default)
@@ -43,9 +45,9 @@ ifeq ($(IN_CONTAINER),false)
   PHP_TEST  := cd $(API_ROOT) && APP_ENV=test
   PHP_BEHAT := cd $(API_ROOT) && APP_ENV=test MINK_BASE_URL=$(MINK_BASE_URL)
 else
-  PHP_CONT  := $(DC) exec $(PHP_SERVICE)
-  PHP_TEST  := $(DC) exec -e APP_ENV=test $(PHP_SERVICE)
-  PHP_BEHAT := $(DC) exec -e APP_ENV=test -e MINK_BASE_URL=$(MINK_BASE_URL) $(PHP_SERVICE)
+  PHP_CONT  := $(DOCKER_COMPOSE_EXEC) $(PHP_SERVICE)
+  PHP_TEST  := $(DOCKER_COMPOSE_EXEC) -e APP_ENV=test $(PHP_SERVICE)
+  PHP_BEHAT := $(DOCKER_COMPOSE_EXEC) -e APP_ENV=test -e MINK_BASE_URL=$(MINK_BASE_URL) $(PHP_SERVICE)
 endif
 
 PHP       := $(PHP_CONT) php
@@ -53,18 +55,9 @@ COMPOSER  := $(PHP_CONT) composer
 SYMFONY   := $(PHP) bin/console
 
 # —— Overrides —————————————————————————————————————————————————————————————
-HEALTH_URL         ?= https://localhost/api/v1/health
 MINK_BASE_URL      ?= http://php
-OPEN_BROWSER       ?= 1
 XDEBUG_MODE_OFF    ?= off
 XDEBUG_MODE_DEBUG  ?= develop,debug
-
-# —— SuperLinter ———————————————————————————————————————————————————————————
-GITHUB_TOKEN                      ?=
-SUPERLINTER_IMAGE                 ?= ghcr.io/super-linter/super-linter:latest
-SUPERLINTER_SLIM_IMAGE            ?= ghcr.io/super-linter/super-linter:slim-latest
-SUPERLINTER_VALIDATE_ALL_CODEBASE ?= true
-SUPERLINTER_EXCLUDES              ?= (^|/)(vendor|node_modules|var|public/bundles|\.next)/
 
 # —— PWA host exec wrapper ————————————————————————————————————————————————
 # IDEs (PHPStorm External Tool) launch sh with a minimal PATH. Prefer a

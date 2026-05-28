@@ -32,6 +32,7 @@ final class PostgresBankRepository extends AbstractSearchRepository implements B
         $this->removeAndFlush($bank);
     }
 
+    #[Override]
     public function findById(string $id): ?Bank
     {
         return $this->find($id);

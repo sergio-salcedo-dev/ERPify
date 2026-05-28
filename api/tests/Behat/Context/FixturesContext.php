@@ -134,9 +134,10 @@ final class FixturesContext implements Context
 
         if (0 !== $exitCode) {
             throw new RuntimeException(\sprintf(
-                'Failed to run "%s" before scenario "%s" (exit %d).',
+                'Failed to run "%s" before scenario at %s:%d (exit %d).',
                 (string) ($input['command'] ?? 'unknown'),
-                $scope->getScenario()->getTitle() ?? 'unknown',
+                $scope->getFeature()->getFile() ?? 'unknown',
+                $scope->getScenario()->getLine(),
                 $exitCode,
             ));
         }

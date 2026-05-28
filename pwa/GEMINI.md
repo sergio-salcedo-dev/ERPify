@@ -25,7 +25,7 @@ Specific guidance for the Next.js PWA. Reference the root [GEMINI.md](../GEMINI.
 
 Run from the repository root:
 
-- `make pwa.lint`: Runs ESLint and Prettier. Fixers: `pwa.lint.eslint.fix`, `pwa.format.prettier.fix`.
+- `make pwa.quality`: Runs ESLint and Prettier. Fixers: `pwa.lint` (ESLint --fix), `pwa.format` (Prettier --write).
 - `make pwa.test.unit`: Vitest unit tests. Mirror `src/` structure in `tests/`.
 - `make pwa.test.e2e`: Playwright end-to-end tests.
 - `make pwa.install`: `npm ci`. Use `pwa.install.if-missing` for a faster check.

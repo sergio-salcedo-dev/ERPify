@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Shared\Application\Http\Search;
 use Erpify\Shared\Application\Http\Search\SearchQuery;
 use Erpify\Shared\Domain\Search\PaginationMode;
 use Generator;
+use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -21,6 +22,7 @@ final class SearchQueryTest extends TestCase
 {
     private ValidatorInterface $validator;
 
+    #[Override]
     protected function setUp(): void
     {
         $this->validator = Validation::createValidatorBuilder()

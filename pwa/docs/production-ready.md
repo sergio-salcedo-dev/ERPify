@@ -29,7 +29,7 @@ For **secure production deployment** (TLS, CORS allowlists, secrets, Docker): se
 
 1. **Build**: Run `npm run build` to generate the production-ready bundle.
 2. **Test**: Execute all unit tests (`npm test`) and E2E tests (`npm run e2e`) in a CI/CD pipeline.
-3. **Lint**: Ensure all code passes linting (`npm run lint`) and formatting checks.
+3. **Lint**: Ensure all code passes linting (`npm run lint`) and formatting checks (`npm run format`).
 4. **Deploy**: Push to your preferred hosting provider (Vercel, Netlify, or a custom VPS).
 5. **Post-Deployment Check**: Verify that all core functionalities (Landing Page, Backoffice, API Health Checks) are working as expected in the live environment.
 

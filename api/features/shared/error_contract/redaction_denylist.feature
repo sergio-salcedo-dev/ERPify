@@ -4,7 +4,7 @@ Feature: Redaction denylist strips sensitive context keys from error bodies
     from leaking through DomainException::context() into the wire body
     I need every /api/* error response to omit those keys at the factory layer.
 
-  # Story 3.2 — RedactionDenylist::filter is invoked from ProblemDetailsFactory::redactKeys
+  # RedactionDenylist::filter is invoked from ProblemDetailsFactory::redactKeys
   # before the JsonSerializable / array whitelist branch, so even a denylisted key whose
   # value is a JsonSerializable cannot smuggle its payload onto the wire.
 

@@ -19,6 +19,7 @@ use Erpify\Shared\Domain\Exception\Unauthenticated;
 use JsonSchema\Validator as JsonSchemaValidator;
 use JsonSerializable;
 use LogicException;
+use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -32,6 +33,7 @@ use RuntimeException;
 use stdClass;
 use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\HttpKernel\Exception\HttpException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 use Symfony\Component\Security\Core\Exception\AuthenticationException;
 use Symfony\Component\Security\Core\Exception\BadCredentialsException;
@@ -50,11 +52,11 @@ final class ProblemDetailsFactoryTest extends TestCase
     private const string INSTANCE = 'urn:uuid:0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c';
 
     /**
-     * Story 3.1 — env-aware factory helper. Defaults to 'prod' so existing tests' byte-for-byte
+     * env-aware factory helper. Defaults to 'prod' so existing tests' byte-for-byte
      * `extensions` assertions stay green (prod omits the `debug` extension entirely). New
-     * Story 3.1 tests pass `'dev'` / `'test'` / `'staging'` / `'prod'` explicitly.
+     * tests pass `'dev'` / `'test'` / `'staging'` / `'prod'` explicitly.
      *
-     * Story 3.3 — accepts an optional `LoggerInterface` so tests that assert on the per-replacement
+     * accepts an optional `LoggerInterface` so tests that assert on the per-replacement
      * sentinel log record can pass a `BufferingLogger`. Defaults to `NullLogger` so existing tests'
      * behaviour is unchanged byte-for-byte.
      */
@@ -95,49 +97,49 @@ final class ProblemDetailsFactoryTest extends TestCase
     public static function provideMarkers(): iterable
     {
         yield 'NotFound' => [
-            new class ('', 'x') extends DomainException implements NotFound {
+            new class('', 'x') extends DomainException implements NotFound {
             },
             404,
             'not-found',
         ];
 
         yield 'Conflict' => [
-            new class ('', 'x') extends DomainException implements Conflict {
+            new class('', 'x') extends DomainException implements Conflict {
             },
             409,
             'conflict',
         ];
 
         yield 'Forbidden' => [
-            new class ('', 'x') extends DomainException implements Forbidden {
+            new class('', 'x') extends DomainException implements Forbidden {
             },
             403,
             'forbidden',
         ];
 
         yield 'Unauthenticated' => [
-            new class ('', 'x') extends DomainException implements Unauthenticated {
+            new class('', 'x') extends DomainException implements Unauthenticated {
             },
             401,
             'unauthenticated',
         ];
 
         yield 'InvariantViolation' => [
-            new class ('', 'x') extends DomainException implements InvariantViolation {
+            new class('', 'x') extends DomainException implements InvariantViolation {
             },
             422,
             'invariant-violation',
         ];
 
         yield 'InvalidInput' => [
-            new class ('', 'x') extends DomainException implements InvalidInput {
+            new class('', 'x') extends DomainException implements InvalidInput {
             },
             400,
             'invalid-input',
         ];
 
         yield 'RateLimited' => [
-            new class ('', 'x') extends DomainException implements RateLimited {
+            new class('', 'x') extends DomainException implements RateLimited {
             },
             429,
             'rate-limited',
@@ -146,7 +148,8 @@ final class ProblemDetailsFactoryTest extends TestCase
 
     public function testTypeOverrideWinsWhenNonEmpty(): void
     {
-        $exception = new class ('does-not-matter', 'Bank not found') extends DomainException implements NotFound {
+        $exception = new class('does-not-matter', 'Bank not found') extends DomainException implements NotFound {
+            #[Override]
             public function type(): string
             {
                 return 'bank-not-found';
@@ -163,9 +166,9 @@ final class ProblemDetailsFactoryTest extends TestCase
     {
         $problemDetailsFactory = $this->factoryFor();
 
-        $notFoundFirst = new class ('', 'x') extends DomainException implements NotFound, Conflict {
+        $notFoundFirst = new class('', 'x') extends DomainException implements NotFound, Conflict {
         };
-        $conflictFirst = new class ('', 'x') extends DomainException implements Conflict, NotFound {
+        $conflictFirst = new class('', 'x') extends DomainException implements Conflict, NotFound {
         };
 
         $problemDetails = $problemDetailsFactory->fromThrowable($notFoundFirst, self::CID, self::INSTANCE);
@@ -180,7 +183,7 @@ final class ProblemDetailsFactoryTest extends TestCase
 
     public function testPlainDomainExceptionMapsToFiveHundredDomainError(): void
     {
-        $exception = new class ('', 'plain') extends DomainException {
+        $exception = new class('', 'plain') extends DomainException {
         };
 
         $problemDetails = $this->factoryFor()->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -219,7 +222,7 @@ final class ProblemDetailsFactoryTest extends TestCase
     public function testCorrelationIdAndInstancePassThroughVerbatim(): void
     {
         $problemDetailsFactory = $this->factoryFor();
-        $exception = new class ('', 'x') extends DomainException implements NotFound {
+        $exception = new class('', 'x') extends DomainException implements NotFound {
         };
 
         $problemDetails = $problemDetailsFactory->fromThrowable($exception, '', '');
@@ -235,7 +238,7 @@ final class ProblemDetailsFactoryTest extends TestCase
 
     public function testTitlePassThroughFromDomainException(): void
     {
-        $exception = new class ('', 'Bank not found') extends DomainException implements NotFound {
+        $exception = new class('', 'Bank not found') extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor()->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -250,6 +253,7 @@ final class ProblemDetailsFactoryTest extends TestCase
             /**
              * @return array{nested: bool}
              */
+            #[Override]
             public function jsonSerialize(): array
             {
                 return ['nested' => true];
@@ -266,7 +270,7 @@ final class ProblemDetailsFactoryTest extends TestCase
             'serializable' => $serializable,
         ];
 
-        $exception = new class ('', 'x', $context) extends DomainException implements NotFound {
+        $exception = new class('', 'x', $context) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor()->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -296,7 +300,7 @@ final class ProblemDetailsFactoryTest extends TestCase
                 'safe' => 1,
             ];
 
-            $exception = new class ('', 'x', $context) extends DomainException implements NotFound {
+            $exception = new class('', 'x', $context) extends DomainException implements NotFound {
             };
 
             $result = $this->factoryFor()->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -317,7 +321,7 @@ final class ProblemDetailsFactoryTest extends TestCase
     }
 
     /**
-     * Story 3.3 — every substitution emits exactly one PSR-3 `notice` log record with the
+     * every substitution emits exactly one PSR-3 `notice` log record with the
      * four-field context shape `{instance, correlation_id, context_key, original_type}`.
      * `original_type` is the {@see ProblemDetailsFactory::sanitiseExceptionClass}-cleaned
      * FQCN for objects (no NUL byte, no `__FILE__`-shaped path leak from anonymous-class FQCNs).
@@ -334,7 +338,7 @@ final class ProblemDetailsFactoryTest extends TestCase
             'safe' => 1,
         ];
 
-        $exception = new class ('', 'x', $context) extends DomainException implements NotFound {
+        $exception = new class('', 'x', $context) extends DomainException implements NotFound {
         };
 
         $this->factoryFor('prod', $bufferingLogger)->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -356,7 +360,7 @@ final class ProblemDetailsFactoryTest extends TestCase
     }
 
     /**
-     * Story 3.3 — anonymous-class context value (e.g. a Doctrine proxy stand-in carrying
+     * anonymous-class context value (e.g. a Doctrine proxy stand-in carrying
      * `__get` / `__call`) substitutes to the body sentinel, and the log's `original_type`
      * reuses {@see ProblemDetailsFactory::sanitiseExceptionClass}: no `\0`, no path leak from
      * the `\0/path:line$N` anonymous-class suffix PHP appends to the FQCN.
@@ -379,7 +383,7 @@ final class ProblemDetailsFactoryTest extends TestCase
             }
         };
 
-        $exception = new class ('', 'x', ['proxy' => $proxy]) extends DomainException implements NotFound {
+        $exception = new class('', 'x', ['proxy' => $proxy]) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor('prod', $bufferingLogger)->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -402,10 +406,10 @@ final class ProblemDetailsFactoryTest extends TestCase
     }
 
     /**
-     * Story 3.3 — substitution is single-level. A non-whitelisted value LIVING INSIDE a
+     * substitution is single-level. A non-whitelisted value LIVING INSIDE a
      * top-level array survives unchanged: the top-level value is `array` (whitelisted) so the
      * factory does not descend, and no sentinel log is emitted. Documents the deliberate
-     * scope limit (matches Story 3.2's single-level redaction).
+     * scope limit.
      */
     public function testFactorySentinelDoesNotApplyToNestedObjectsInsideWhitelistedArray(): void
     {
@@ -413,7 +417,7 @@ final class ProblemDetailsFactoryTest extends TestCase
         $stdObject = new stdClass();
         $stdObject->field = 'nested-value';
 
-        $exception = new class ('', 'x', ['user' => ['o' => $stdObject]]) extends DomainException implements NotFound {
+        $exception = new class('', 'x', ['user' => ['o' => $stdObject]]) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor('prod', $bufferingLogger)->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -424,7 +428,7 @@ final class ProblemDetailsFactoryTest extends TestCase
     }
 
     /**
-     * Story 3.3 — denylist still wins (Story 3.2 contract preserved). A denylisted key carrying
+     * denylist still wins (contract preserved). A denylisted key carrying
      * a non-whitelisted value is REMOVED from extensions — the substitution branch never sees
      * it, so no sentinel log is emitted either.
      */
@@ -433,7 +437,7 @@ final class ProblemDetailsFactoryTest extends TestCase
         $bufferingLogger = new BufferingLogger();
         $closure = static fn (): int => 1;
 
-        $exception = new class ('', 'x', ['password' => $closure, 'safe' => 'kept']) extends DomainException implements NotFound {
+        $exception = new class('', 'x', ['password' => $closure, 'safe' => 'kept']) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor('prod', $bufferingLogger)->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -478,7 +482,7 @@ final class ProblemDetailsFactoryTest extends TestCase
             'safe_key' => 'ok',
         ];
 
-        $exception = new class ('', 'x', $context) extends DomainException implements NotFound {
+        $exception = new class('', 'x', $context) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor()->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -542,7 +546,7 @@ final class ProblemDetailsFactoryTest extends TestCase
     }
 
     /**
-     * Story 1.5 narrows the original `'Symfony\\'` ban (Story 1.3) to an explicit allowlist of Symfony imports
+     * It narrows the original `'Symfony\\'` ban to an explicit allowlist of Symfony imports
      * (`HttpKernel\Exception\HttpExceptionInterface`, `Security\Core\Exception\AccessDeniedException`,
      * `Security\Core\Exception\AuthenticationException`, plus `HttpFoundation\Response` for the named
      * `Response::HTTP_*` status constants used in `MARKER_STATUS_MAP` / `HTTP_STATUS_TYPE_MAP`). Every
@@ -587,7 +591,7 @@ final class ProblemDetailsFactoryTest extends TestCase
         $this->assertInstanceOf(
             ReflectionMethod::class,
             $constructor,
-            'ProblemDetailsFactory must declare a constructor for the Story 3.1 environment injection.',
+            'ProblemDetailsFactory must declare a constructor for the environment injection.',
         );
         $this->assertSame(2, $constructor->getNumberOfParameters());
         $this->assertSame(2, $constructor->getNumberOfRequiredParameters());
@@ -614,10 +618,10 @@ final class ProblemDetailsFactoryTest extends TestCase
         $this->assertFalse($loggerType->allowsNull());
         $this->assertTrue(
             $loggerParameter->isPromoted(),
-            'Logger argument must be a promoted readonly property — Story 3.3 keeps the factory stateless.',
+            'Logger argument must be a promoted readonly property — keeps the factory stateless.',
         );
 
-        // Seam methods exist; Story 3.3 has now filled `applyUnserializableSentinel`.
+        // Seam methods exist; it has now filled `applyUnserializableSentinel`.
         // Visibility is private because the class is final (Rector privatizes protected methods on
         // final classes — see memory `feedback_api_lint_privatize_final.md`).
         $this->assertTrue($reflectionClass->hasMethod('redactKeys'));
@@ -632,6 +636,7 @@ final class ProblemDetailsFactoryTest extends TestCase
             /**
              * @return array{ok: bool}
              */
+            #[Override]
             public function jsonSerialize(): array
             {
                 return ['ok' => true];
@@ -639,7 +644,7 @@ final class ProblemDetailsFactoryTest extends TestCase
         };
 
         $context = ['payload' => $serializable, 'count' => 7];
-        $exception = new class ('', 'x', $context) extends DomainException implements NotFound {
+        $exception = new class('', 'x', $context) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor()->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -666,7 +671,7 @@ final class ProblemDetailsFactoryTest extends TestCase
     }
 
     /**
-     * Story 1.5 — HttpExceptionInterface branch: status from getStatusCode(), type from HTTP_STATUS_TYPE_MAP.
+     * HttpExceptionInterface branch: status from getStatusCode(), type from HTTP_STATUS_TYPE_MAP.
      *
      * @return iterable<string, array{int, string}>
      */
@@ -753,7 +758,7 @@ final class ProblemDetailsFactoryTest extends TestCase
 
     public function testAuthenticationExceptionMapsToUnauthenticated(): void
     {
-        $authenticationException = new class ('Token expired.') extends AuthenticationException {
+        $authenticationException = new class('Token expired.') extends AuthenticationException {
         };
 
         $problemDetails = $this->factoryFor()->fromThrowable($authenticationException, self::CID, self::INSTANCE);
@@ -765,7 +770,7 @@ final class ProblemDetailsFactoryTest extends TestCase
 
     public function testAuthenticationExceptionTitleFallsBackOnEmptyMessage(): void
     {
-        $authenticationException = new class ('') extends AuthenticationException {
+        $authenticationException = new class('') extends AuthenticationException {
         };
 
         $problemDetails = $this->factoryFor()->fromThrowable($authenticationException, self::CID, self::INSTANCE);
@@ -777,8 +782,9 @@ final class ProblemDetailsFactoryTest extends TestCase
     {
         // Artificial multi-implementer: DomainException + HttpExceptionInterface (the same Symfony interface
         // the factory's branch 4 keys on). The DomainException branch must win — pins the branch order
-        // in fromThrowable() (Story 1.5 places Symfony branches AFTER the DomainException branch).
-        $exception = new class ('', 'Bank not found') extends DomainException implements NotFound, \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface {
+        // in fromThrowable() (places Symfony branches AFTER the DomainException branch).
+        $exception = new class ('', 'Bank not found') extends DomainException implements NotFound, HttpExceptionInterface {
+            #[Override]
             public function getStatusCode(): int
             {
                 // Returns a status that disagrees with NotFound's 404 — if precedence regressed and the
@@ -789,6 +795,7 @@ final class ProblemDetailsFactoryTest extends TestCase
             /**
              * @return array<string, string>
              */
+            #[Override]
             public function getHeaders(): array
             {
                 return [];
@@ -1182,7 +1189,7 @@ final class ProblemDetailsFactoryTest extends TestCase
 
     public function testDomainExceptionImplementingInvariantViolationDoesNotProduceViolationsExtension(): void
     {
-        $exception = new class ('', 'Account already settled') extends DomainException implements InvariantViolation {
+        $exception = new class('', 'Account already settled') extends DomainException implements InvariantViolation {
         };
 
         $problemDetails = $this->factoryFor()->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -1306,7 +1313,7 @@ final class ProblemDetailsFactoryTest extends TestCase
 
         $validationFailedException = new ValidationFailedException(value: null, violations: $constraintViolationList);
 
-        $domainException = new class ('', 'Domain wins', [], $validationFailedException) extends DomainException implements InvariantViolation {
+        $domainException = new class('', 'Domain wins', [], $validationFailedException) extends DomainException implements InvariantViolation {
         };
 
         $problemDetails = $this->factoryFor()->fromThrowable($domainException, self::CID, self::INSTANCE);
@@ -1356,7 +1363,7 @@ final class ProblemDetailsFactoryTest extends TestCase
 
     public function testTestEnvironmentBodyHasFullDebugExtensionForDomainException(): void
     {
-        $exception = new class ('', 'Bank not found') extends DomainException implements NotFound {
+        $exception = new class('', 'Bank not found') extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor('test')->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -1422,7 +1429,7 @@ final class ProblemDetailsFactoryTest extends TestCase
         // PHP appends `\0/path/to/file.php:line$N` to anonymous-class FQCNs. Without
         // sanitisation, json_encode emits this NUL-suffixed string through `exception_class`,
         // smuggling the file path past AC #4's "no `file`/`line` in staging" rule.
-        $exception = new class ('boom') extends RuntimeException {
+        $exception = new class('boom') extends RuntimeException {
         };
 
         $this->assertStringContainsString("\0", $exception::class, 'pre-condition: PHP must embed a NUL byte in the anonymous-class FQCN.');
@@ -1442,7 +1449,7 @@ final class ProblemDetailsFactoryTest extends TestCase
     {
         $runtimeException = new RuntimeException('innermost');
         $logicException = new LogicException('inner', 0, $runtimeException);
-        $exception = new class ('domain', 'Bank not found', [], $logicException) extends DomainException implements NotFound {
+        $exception = new class('domain', 'Bank not found', [], $logicException) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor('dev')->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -1521,7 +1528,7 @@ final class ProblemDetailsFactoryTest extends TestCase
 
     public function testReservedKeyDebugIsStrippedFromDomainExceptionContextInDevEnv(): void
     {
-        $exception = new class ('domain', 'Bank not found', ['debug' => ['exception_class' => 'spoofed', 'message' => 'spoofed']]) extends DomainException implements NotFound {
+        $exception = new class('domain', 'Bank not found', ['debug' => ['exception_class' => 'spoofed', 'message' => 'spoofed']]) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor('dev')->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -1544,7 +1551,7 @@ final class ProblemDetailsFactoryTest extends TestCase
 
     public function testReservedKeyDebugIsAbsentInProdEvenWhenSpoofedFromContext(): void
     {
-        $exception = new class ('domain', 'Bank not found', ['debug' => ['exception_class' => 'spoofed', 'message' => 'spoofed']]) extends DomainException implements NotFound {
+        $exception = new class('domain', 'Bank not found', ['debug' => ['exception_class' => 'spoofed', 'message' => 'spoofed']]) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor('prod')->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -1555,7 +1562,7 @@ final class ProblemDetailsFactoryTest extends TestCase
     #[DataProvider('provideDebugExtensionIsAlwaysLastInExtensionsArrayOrderCases')]
     public function testDebugExtensionIsAlwaysLastInExtensionsArrayOrder(string $environment): void
     {
-        $exception = new class ('domain', 'Bank not found', ['custom_field' => 'value', 'another' => 42]) extends DomainException implements NotFound {
+        $exception = new class('domain', 'Bank not found', ['custom_field' => 'value', 'another' => 42]) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor($environment)->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -1669,7 +1676,7 @@ final class ProblemDetailsFactoryTest extends TestCase
     #[DataProvider('provideFactoryStripsDenylistedContextKeysFromBodyExtensionsCases')]
     public function testFactoryStripsDenylistedContextKeysFromBodyExtensions(string $caseVariant): void
     {
-        $exception = new class ('', 'x', [$caseVariant => 'sensitive', 'safe' => 'value']) extends DomainException implements NotFound {
+        $exception = new class('', 'x', [$caseVariant => 'sensitive', 'safe' => 'value']) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor()->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -1683,7 +1690,7 @@ final class ProblemDetailsFactoryTest extends TestCase
     }
 
     /**
-     * Story 3.2 — every denylisted key in {@see RedactionDenylist::KEYS} expanded across the
+     * every denylisted key in {@see RedactionDenylist::KEYS} expanded across the
      * four canonical casings (lower / Title / UPPER / mIxEd). Total rows = 7 × 4 = 28.
      *
      * @return iterable<string, array{0: non-empty-string}>
@@ -1699,7 +1706,7 @@ final class ProblemDetailsFactoryTest extends TestCase
     }
 
     /**
-     * Story 3.2 — substring / prefix / whitespace / non-ASCII / numeric-string keys must NOT
+     * substring / prefix / whitespace / non-ASCII / numeric-string keys must NOT
      * be stripped. Documents the exact-key-match scope.
      *
      * @param non-empty-string $key
@@ -1707,7 +1714,7 @@ final class ProblemDetailsFactoryTest extends TestCase
     #[DataProvider('provideFactoryDoesNotStripNonDenylistKeysCases')]
     public function testFactoryDoesNotStripNonDenylistKeys(string $key): void
     {
-        $exception = new class ('', 'x', [$key => 'kept']) extends DomainException implements NotFound {
+        $exception = new class('', 'x', [$key => 'kept']) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor()->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -1717,7 +1724,7 @@ final class ProblemDetailsFactoryTest extends TestCase
     }
 
     /**
-     * Story 3.2 — non-strip rows pinning exact-match-only scope.
+     * non-strip rows pinning exact-match-only scope.
      *
      * @return iterable<string, array{0: non-empty-string}>
      */
@@ -1734,19 +1741,20 @@ final class ProblemDetailsFactoryTest extends TestCase
     }
 
     /**
-     * Story 3.2 — pins that redaction runs BEFORE the whitelist branch: a denylisted
+     * pins that redaction runs BEFORE the whitelist branch: a denylisted
      * `JsonSerializable` value must NOT survive the `isWhitelistedValue` check.
      */
     public function testFactoryStripsDenylistedKeyEvenWhenValueIsJsonSerializable(): void
     {
         $serializable = new class implements JsonSerializable {
+            #[Override]
             public function jsonSerialize(): mixed
             {
                 return 'leaked-secret';
             }
         };
 
-        $exception = new class ('', 'x', ['password' => $serializable, 'safe' => 'kept']) extends DomainException implements NotFound {
+        $exception = new class('', 'x', ['password' => $serializable, 'safe' => 'kept']) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor()->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -1759,12 +1767,12 @@ final class ProblemDetailsFactoryTest extends TestCase
     }
 
     /**
-     * Story 3.2 — denylist strip applies even when the value is a nested array (the array
+     * denylist strip applies even when the value is a nested array (the array
      * itself goes; the redaction is at the OUTER key level, not at the value structure).
      */
     public function testFactoryStripsDenylistedKeyEvenWhenValueIsArray(): void
     {
-        $exception = new class ('', 'x', ['authorization' => ['scheme' => 'Bearer', 'value' => 'abc'], 'safe' => 'kept']) extends DomainException implements NotFound {
+        $exception = new class('', 'x', ['authorization' => ['scheme' => 'Bearer', 'value' => 'abc'], 'safe' => 'kept']) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor()->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -1778,14 +1786,14 @@ final class ProblemDetailsFactoryTest extends TestCase
     }
 
     /**
-     * Story 3.2 — single-level scope: redaction does NOT recurse into nested arrays. A
+     * single-level scope: redaction does NOT recurse into nested arrays. A
      * `password` key inside `context['user']` survives because the outer `user` key is not
      * denylisted. Documents the limit; future story may extend.
      */
     public function testFactoryRedactionDoesNotApplyRecursivelyToNestedArrays(): void
     {
         $context = ['user' => ['password' => 'sensitive', 'name' => 'alice']];
-        $exception = new class ('', 'x', $context) extends DomainException implements NotFound {
+        $exception = new class('', 'x', $context) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor()->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -1794,11 +1802,11 @@ final class ProblemDetailsFactoryTest extends TestCase
     }
 
     /**
-     * Story 3.2 — declaration order of surviving keys is preserved across the strip.
+     * declaration order of surviving keys is preserved across the strip.
      */
     public function testFactoryRedactionPreservesDeclarationOrderOfSurvivors(): void
     {
-        $exception = new class ('', 'x', ['a' => 1, 'password' => 'x', 'b' => 2, 'token' => 'y', 'c' => 3]) extends DomainException implements NotFound {
+        $exception = new class('', 'x', ['a' => 1, 'password' => 'x', 'b' => 2, 'token' => 'y', 'c' => 3]) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor()->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -1808,12 +1816,12 @@ final class ProblemDetailsFactoryTest extends TestCase
     }
 
     /**
-     * Story 3.2 — the two strip layers compose: RESERVED_KEYS strips reserved labels first,
+     * the two strip layers compose: RESERVED_KEYS strips reserved labels first,
      * then `redactKeys` strips denylisted ones. Both must take effect.
      */
     public function testFactoryRedactionAppliesAfterReservedKeyStrip(): void
     {
-        $exception = new class ('', 'x', ['type' => 'spoofed', 'password' => 'x', 'safe' => 'v']) extends DomainException implements NotFound {
+        $exception = new class('', 'x', ['type' => 'spoofed', 'password' => 'x', 'safe' => 'v']) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor()->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -1824,13 +1832,13 @@ final class ProblemDetailsFactoryTest extends TestCase
     }
 
     /**
-     * Story 3.2 — redaction is environment-agnostic at the body layer. In `'dev'` env the
-     * `debug` extension is appended LAST (Story 3.1) but the denylisted key is still gone
+     * redaction is environment-agnostic at the body layer. In `'dev'` env the
+     * `debug` extension is appended LAST but the denylisted key is still gone
      * from the surviving extensions.
      */
     public function testFactoryRedactionInDevEnvAlsoAppliesToBodyExtensions(): void
     {
-        $exception = new class ('', 'x', ['password' => 'sensitive', 'safe' => 'kept']) extends DomainException implements NotFound {
+        $exception = new class('', 'x', ['password' => 'sensitive', 'safe' => 'kept']) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor('dev')->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -1863,7 +1871,7 @@ final class ProblemDetailsFactoryTest extends TestCase
     }
 
     /**
-     * Story 3.6 (AC) — synthetic ValidationFailedException with 500 violations. The encoded
+     * synthetic ValidationFailedException with 500 violations. The encoded
      * body must come in at or under 16384 bytes, carry `truncated: true` as the LAST
      * extension member, and leave the required core fields (`type, title, status, instance,
      * correlation-id`) intact and unmodified.
@@ -1918,7 +1926,7 @@ final class ProblemDetailsFactoryTest extends TestCase
     }
 
     /**
-     * Story 3.6 — truncation is deterministic. Building the same body twice from the same
+     * truncation is deterministic. Building the same body twice from the same
      * input must yield byte-identical encoded output (no random pop, no hash-order
      * dependency). Pinned by encoding twice and asserting equality.
      */
@@ -1957,7 +1965,7 @@ final class ProblemDetailsFactoryTest extends TestCase
     }
 
     /**
-     * Story 3.6 — happy path: a body that is already under the cap is returned unmodified
+     *  happy path: a body that is already under the cap is returned unmodified
      * and carries NO `truncated` marker. Documents that the cap is silent on small bodies.
      */
     public function testBodyCapNoOpWhenBodyAlreadyUnderCap(): void
@@ -1983,7 +1991,7 @@ final class ProblemDetailsFactoryTest extends TestCase
     }
 
     /**
-     * Story 3.6 — non-violations extensions are dropped in REVERSE declaration order. Build
+     * non-violations extensions are dropped in REVERSE declaration order. Build
      * a DomainException with several extensions where the LAST-declared one (`large_b`) is
      * a multi-KB string; the cap must drop `large_b` first while `large_a` (declared
      * earlier, also large) survives. Documents the deterministic reverse-order rule for
@@ -1996,7 +2004,7 @@ final class ProblemDetailsFactoryTest extends TestCase
         $payloadB = \str_repeat('b', 6000);
         $payloadC = \str_repeat('c', 6000);
 
-        $exception = new class ('', 'x', ['large_a' => $payloadA, 'large_b' => $payloadB, 'large_c' => $payloadC]) extends DomainException implements NotFound {
+        $exception = new class('', 'x', ['large_a' => $payloadA, 'large_b' => $payloadB, 'large_c' => $payloadC]) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor()->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -2016,7 +2024,7 @@ final class ProblemDetailsFactoryTest extends TestCase
     }
 
     /**
-     * Story 3.6 — when a body exceeds the cap and BOTH violations and other extensions
+     * when a body exceeds the cap and BOTH violations and other extensions
      * exist, violations entries are popped FIRST. After violations is empty, only THEN are
      * other extensions dropped in reverse declaration order. Pinned by composing a
      * DomainException carrying a list-shaped extension AFTER a bulky non-list extension —
@@ -2047,7 +2055,7 @@ final class ProblemDetailsFactoryTest extends TestCase
             $entries[] = ['index' => $i, 'message' => \sprintf('entry %d for cap probe.', $i)];
         }
 
-        $exception = new class ('', 'x', ['head' => 'kept', 'entries' => $entries]) extends DomainException implements NotFound {
+        $exception = new class('', 'x', ['head' => 'kept', 'entries' => $entries]) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor()->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -2065,9 +2073,9 @@ final class ProblemDetailsFactoryTest extends TestCase
     }
 
     /**
-     * Story 3.6 — escalation path: if the required core fields PLUS the lone `truncated`
+     * escalation path: if the required core fields PLUS the lone `truncated`
      * marker still exceed 16 KiB, the factory throws {@see ProblemBodyTooLargeException}.
-     * The listener's outer try/catch (Story 3.4) then escalates to the static last-resort
+     * The listener's outer try/catch then escalates to the static last-resort
      * body. Synthesised by a domain exception whose `title()` returns a 17 KiB string —
      * exotic but the contract MUST be a strict invariant, not a best-effort guideline.
      */
@@ -2075,7 +2083,7 @@ final class ProblemDetailsFactoryTest extends TestCase
     {
         $oversizedTitle = \str_repeat('T', 17000);
 
-        $exception = new class ('', $oversizedTitle) extends DomainException implements NotFound {
+        $exception = new class('', $oversizedTitle) extends DomainException implements NotFound {
         };
 
         $this->expectException(ProblemBodyTooLargeException::class);
@@ -2085,7 +2093,7 @@ final class ProblemDetailsFactoryTest extends TestCase
     }
 
     /**
-     * Story 3.6 — the survivor extensions and the appended `truncated` marker compose a
+     * the survivor extensions and the appended `truncated` marker compose a
      * stable, key-ordered map: head violations (in declaration order from the source list)
      * first, then `truncated` last. Pinned via direct key inspection so a regression that
      * inserts `truncated` mid-extensions or that reorders surviving violations is caught.
@@ -2135,7 +2143,7 @@ final class ProblemDetailsFactoryTest extends TestCase
     }
 
     /**
-     * Story 3.6 — `applyBodyCap` is a private helper on the final factory class. Pinned via
+     * `applyBodyCap` is a private helper on the final factory class. Pinned via
      * reflection so a regression that promotes it to public / protected (and breaks the
      * single-source-of-truth contract) is caught.
      */
@@ -2151,7 +2159,7 @@ final class ProblemDetailsFactoryTest extends TestCase
     }
 
     /**
-     * Story 3.3 — narrows a single `BufferingLogger::cleanLogs()` row to the four-key sentinel
+     * narrows a single `BufferingLogger::cleanLogs()` row to the four-key sentinel
      * context shape so individual tests can read fields without `offsetAccess.notFound` noise.
      *
      * @return array{instance: string, correlation_id: string, context_key: string, original_type: string}
@@ -2221,7 +2229,7 @@ final class ProblemDetailsFactoryTest extends TestCase
     }
 
     /**
-     * Story 3.1 — narrows the dev/test full-shape `debug` extension for downstream assertions.
+     * narrows the dev/test full-shape `debug` extension for downstream assertions.
      *
      * @return array{exception_class: string, message: string, file: string, line: int, previous_chain: list<array{exception_class: string, message: string, file: string, line: int}>}
      */
@@ -2251,7 +2259,7 @@ final class ProblemDetailsFactoryTest extends TestCase
     }
 
     /**
-     * Story 3.1 — narrows the staging minimal-shape `debug` extension for downstream assertions.
+     * narrows the staging minimal-shape `debug` extension for downstream assertions.
      *
      * @return array{exception_class: string, message: string}
      */

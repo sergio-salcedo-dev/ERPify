@@ -9,11 +9,12 @@
     "start": "next start -p 80",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "format": "prettier --write .",
-    "test": "vitest run",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write .",
+    "test:unit": "vitest run",
     "test:watch": "vitest",
-    "e2e": "playwright test",
-    "e2e:reports": "playwright show-report reports",
+    "test:e2e": "playwright test",
+    "test:e2e:reports": "playwright show-report reports",
     "clean": "rm -rf .next .next-e2e"
   },
   "dependencies": {

@@ -5,7 +5,7 @@ Feature: Unserializable sentinel substitutes non-whitelisted context values
     JSON-serializable, the factory must substitute the literal `[unserializable]` token
     while keeping diagnostic detail in logs only.
 
-  # Story 3.3 — applyUnserializableSentinel substitutes any non-whitelisted top-level
+  # applyUnserializableSentinel substitutes any non-whitelisted top-level
   # context value (closure, resource, stdClass, anonymous proxy) with the literal
   # `'[unserializable]'` and emits one PSR-3 notice per replacement. Body sentinel is
   # type-uniform: no `'[resource]'` / `'[closure]'` variants, no class name, no NUL byte.

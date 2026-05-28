@@ -68,12 +68,12 @@ sequenceDiagram
 
 ## Configuration
 
-| Variable | Purpose |
-|----------|---------|
-| `MESSENGER_TRANSPORT_DSN` | Doctrine DB transport; use `doctrine://default?auto_setup=0` with migrations creating `messenger_messages`. Queue name `async` is set in `api/config/packages/messenger.yaml` (`options.queue_name`). |
-| `MAILER_DSN` | Mailer transport (e.g. `null://null` locally, real SMTP/API in production). |
-| `MAILER_FROM` | `From` address for notification emails (default `noreply@erpify.local` via `services.yaml` default parameter). |
-| `DEFAULT_NOTIFICATION_EMAIL` | Recipient for notifications (default `sergio.salcedo.dev@gmail.com` via parameter default). |
+| Variable                     | Purpose                                                                                                                                                                                               |
+|------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `MESSENGER_TRANSPORT_DSN`    | Doctrine DB transport; use `doctrine://default?auto_setup=0` with migrations creating `messenger_messages`. Queue name `async` is set in `api/config/packages/messenger.yaml` (`options.queue_name`). |
+| `MAILER_DSN`                 | Mailer transport (e.g. `null://null` locally, real SMTP/API in production).                                                                                                                           |
+| `MAILER_FROM`                | `From` address for notification emails (default `noreply@erpify.local` via `services.yaml` default parameter).                                                                                        |
+| `DEFAULT_NOTIFICATION_EMAIL` | Recipient for notifications (default `sergio.salcedo.dev@gmail.com` via parameter default).                                                                                                           |
 
 Test environment (`APP_ENV=test`): `async` and `failed` use **`in-memory://?serialize=true`** so PHPUnit does not need a worker, while messages still pass through the Messenger serializer (like a real queue). Use `null://null` for mailer in tests if you extend integration coverage.
 
@@ -83,11 +83,9 @@ The async consumer is a **Compose service** named **`messenger_worker`**: it is 
 
 1. Copy [`api/.env.example`](../api/.env.example) to `api/.env` and set variables as needed.
 2. Run migrations (Docker entrypoint on **`php`** usually runs `doctrine:migrations:migrate` before FrankenPHP listens; the worker waits for **`php`** to be healthy).
-3. Start the stack from the repo root so the daemon is included (same files as `make dev-up` / `make up-wait` when using dev overrides):
+3. Start the stack from the repo root so the daemon is included (same files as `make app.dev` / `make docker.up.wait` when using dev overrides):
    - `docker compose -f compose.yaml -f compose.dev.yaml up --wait -d`
 4. Tail the consumer: `docker compose -f compose.yaml -f compose.dev.yaml logs -f messenger_worker`.
-
-**API + DB only** (`make api-up-http`) also starts **`messenger_worker`** so queued bank emails are still processed.
 
 Optional one-off consume in the **`php`** container (same codebase as the worker):
 
@@ -116,7 +114,7 @@ Messenger-specific reminders:
 
 ## Extending
 
-- Add new event classes extending `Erpify\Shared\Domain\Event\DomainEvent`. They are **automatically audited** when dispatched (middleware).  
+- Add new event classes extending `Erpify\Shared\Domain\Event\DomainEvent`. They are **automatically audited** when dispatched (middleware).
 - To add **async** side effects, register handlers and add **`routing`** entries in `api/config/packages/messenger.yaml` for the new message class.
 - For **email notifications**, add a dedicated **`AsMessageHandler`** class under the relevant bounded context (like `BankChangedNotifyEmailHandler`). Inject **`NotificationMailer`**; add a new implementation (e.g. Twig-based) and **`#[AsAlias(NotificationMailer::class)]`** (or a container alias) if you outgrow plain text. Wire **`Autowire` env** for per-topic recipients (e.g. `DEFAULT_NOTIFICATION_EMAIL`, `ORDER_OPS_EMAIL`).
 

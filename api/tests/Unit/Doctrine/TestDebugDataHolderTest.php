@@ -8,6 +8,7 @@ use Erpify\Tests\Doctrine\TestDebugDataHolder;
 use Erpify\Tests\Unit\Doctrine\Stubs\Controller\FakeAction;
 use Erpify\Tests\Unit\Doctrine\Stubs\FakeCommand;
 use Erpify\Tests\Unit\Doctrine\Stubs\FakeController;
+use Override;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bridge\Doctrine\Middleware\Debug\Query;
 
@@ -25,6 +26,7 @@ final class TestDebugDataHolderTest extends TestCase
 {
     private TestDebugDataHolder $testDebugDataHolder;
 
+    #[Override]
     protected function setUp(): void
     {
         $this->testDebugDataHolder = new TestDebugDataHolder();

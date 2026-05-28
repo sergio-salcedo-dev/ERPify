@@ -1,6 +1,8 @@
-# make/codeql.mk — local CodeQL static analysis.
-#
-# Replaces the deleted .github/workflows/codeql.yml: GitHub Code Scanning
+# =============================================================================
+# CodeQL static analysis (local)
+# =============================================================================
+
+# Replaces the .github/workflows/codeql.yml: GitHub Code Scanning
 # requires GitHub Advanced Security on private repos, which we don't pay
 # for. The CodeQL CLI itself is free under the GitHub CodeQL Terms &
 # Conditions for non-automated, local use against your own code.
@@ -9,8 +11,6 @@
 #   make codeql.run        # install → build db → analyze → report
 #   make codeql.report     # re-print summary from the last SARIF
 #   make codeql.clean      # nuke .codeql/
-
-## —— CodeQL (local) ——
 
 CODEQL_DIR             ?= $(PROJECT_ROOT)/.codeql
 CODEQL_BUNDLE_TAG      ?= latest

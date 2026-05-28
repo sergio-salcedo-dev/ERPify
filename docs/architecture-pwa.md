@@ -6,25 +6,25 @@ The `pwa/` deployable is a Next.js 16.2 (App Router) + React 19.2 + TypeScript 6
 
 ## Technology stack
 
-| Category          | Technology                              | Version |
-|-------------------|-----------------------------------------|---------|
-| Runtime           | Node                                    | 24      |
-| Language          | TypeScript                              | 6.0     |
-| Framework         | Next.js (App Router, Turbopack dev)     | 16.2    |
-| UI runtime        | React / React DOM                       | 19.2    |
-| Styling           | Tailwind CSS                            | 4.2     |
-| Component lib     | Shadcn                                  | 4.7     |
-| Headless UI       | @base-ui/react                          | 1.4     |
-| Icons             | lucide-react                            | 1.x     |
-| Animation         | motion                                  | 12      |
-| Forms             | @hookform/resolvers                     | 5.x     |
-| DI                | Inversify (+ reflect-metadata)          | 8.1     |
-| Class utilities   | class-variance-authority, clsx, tailwind-merge | — |
-| Unit tests        | Vitest (jsdom)                          | 4.1     |
-| Testing library   | @testing-library/react, @testing-library/jest-dom | 16/6 |
-| E2E               | Playwright                              | 1.59    |
-| Linting           | ESLint + eslint-config-next             | 10 / 16 |
-| Formatting        | Prettier                                | 3.8     |
+| Category        | Technology                                        | Version |
+|-----------------|---------------------------------------------------|---------|
+| Runtime         | Node                                              | 24      |
+| Language        | TypeScript                                        | 6.0     |
+| Framework       | Next.js (App Router, Turbopack dev)               | 16.2    |
+| UI runtime      | React / React DOM                                 | 19.2    |
+| Styling         | Tailwind CSS                                      | 4.2     |
+| Component lib   | Shadcn                                            | 4.7     |
+| Headless UI     | @base-ui/react                                    | 1.4     |
+| Icons           | lucide-react                                      | 1.x     |
+| Animation       | motion                                            | 12      |
+| Forms           | @hookform/resolvers                               | 5.x     |
+| DI              | Inversify (+ reflect-metadata)                    | 8.1     |
+| Class utilities | class-variance-authority, clsx, tailwind-merge    | —       |
+| Unit tests      | Vitest (jsdom)                                    | 4.1     |
+| Testing library | @testing-library/react, @testing-library/jest-dom | 16/6    |
+| E2E             | Playwright                                        | 1.59    |
+| Linting         | ESLint + eslint-config-next                       | 10 / 16 |
+| Formatting      | Prettier                                          | 3.8     |
 
 ## Architecture pattern
 
@@ -76,7 +76,6 @@ pwa/src/context/
 ## Data fetching & integration
 
 - Same-origin under FrankenPHP in dev/prod: `/api/*` is served by Symfony on `localhost`.
-- Standalone Next dev (`make dev.local`): point at `http://localhost:8000` via `NEXT_PUBLIC_SYMFONY_API_BASE_URL` and `SYMFONY_INTERNAL_URL` in `pwa/.env.local`.
 - Server-side fetches use `SYMFONY_INTERNAL_URL` (Compose-internal); client-side fetches use the public URL.
 - Mercure SSE consumed at `/.well-known/mercure` (same origin, JWT subscribed).
 
@@ -99,7 +98,7 @@ The PWA consumes the API's [RFC 9457 Problem Details](./api-error-contract.md) c
 | E2E | **Playwright 1.59** | `pwa/playwright.config.ts`, run via `make pwa.test.e2e` |
 | Watch | Vitest | `make pwa.test.unit.watch` |
 | Reports | Playwright HTML | `make pwa.test.e2e.reports` |
-| Lint / format | ESLint + Prettier | `make pwa.lint`, `make pwa.lint.eslint.fix`, `make pwa.format.prettier.fix` |
+| Lint / format | ESLint + Prettier | `make pwa.quality` (check), `make pwa.lint` (ESLint --fix), `make pwa.format` (Prettier --write) |
 
 `tests/` mirrors `src/`. Tests are colocated by bounded context.
 
