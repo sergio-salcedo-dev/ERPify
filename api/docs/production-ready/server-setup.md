@@ -2,11 +2,11 @@
 
 ## Prerequisites
 
-| Requirement | Notes |
-|---|---|
-| Linux server with Docker Engine ≥ 26 and Docker Compose v2 | Any cloud provider works |
+| Requirement                                                | Notes                                    |
+|------------------------------------------------------------|------------------------------------------|
+| Linux server with Docker Engine ≥ 26 and Docker Compose v2 | Any cloud provider works                 |
 | A domain name with an `A` record pointing to the server IP | Required for automatic Let's Encrypt TLS |
-| Git (or another way to copy the repo to the server) | |
+| Git (or another way to copy the repo to the server)        |                                          |
 
 Clone the repository on the server and **`cd` to the repository root** (Compose
 files [`compose.yaml`](../../../compose.yaml) and [`compose.prod.yaml`](../../../compose.prod.yaml) live there):
@@ -61,7 +61,7 @@ docker compose \
 
 The **`messenger_worker`** service starts with the same Compose project and must
 have a valid **`MAILER_DSN`** if you rely on async email (see
-[docs/production-deployment.md](../../../docs/production-deployment.md)).
+[docs-info/production-deployment.md](../../../docs-info/production-deployment.md)).
 
 ### Option B — `.env.prod.local` file (recommended)
 

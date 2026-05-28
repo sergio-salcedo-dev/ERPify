@@ -1,20 +1,31 @@
-# make/pwa.mk — Next.js install/dev/build/test/lint (host execution only).
-#
+# =============================================================================
+# PWA - Next.js install/dev/build/test/lint (host execution only).
+# =============================================================================
+
 # All targets run on the host via $(pwa_cmd) (defined in config.mk), not in
 # the pwa container — see make/CONVENTIONS.md §7.1 and §8 for the rationale.
 #
 # Target names match CI (.github/workflows/ci.yml):
-#   pwa.install / pwa.dev / pwa.build
-#   pwa.lint / pwa.lint.eslint[.fix] / pwa.lint.prettier / pwa.format.prettier.fix
+#   pwa.install / pwa.update / pwa.upgrade / pwa.dev
+#   pwa.production.build / pwa.production.start
+#   pwa.quality.dry-run / pwa.quality
+#   pwa.lint[.dry-run] / pwa.format[.dry-run]
 #   pwa.test / pwa.test.unit[.watch] / pwa.test.e2e[.reports]
-#   pwa.clean (destructive)
+#   pwa.clean.soft / pwa.clean.all (destructive)
+
+.PHONY: pwa.install pwa.install.if-missing pwa.update pwa.upgrade pwa.dev \
+        pwa.production.build pwa.production.start \
+        pwa.quality.dry-run pwa.quality \
+        pwa.lint.dry-run pwa.lint pwa.format.dry-run pwa.format \
+        pwa.test pwa.test.unit pwa.test.unit.watch pwa.test.e2e pwa.test.e2e.reports npm.dev.e2e \
+        pwa.util.extract.testids pwa.clean.soft pwa.clean.all pwa.clean.sudo
 
 ## —— PWA install / dev / build ——
 
-pwa.install: ## npm ci in pwa/ (auto-cleans empty root-owned node_modules left by the dev compose volume)
+pwa.install: ## Install dependencies in the PWA directory (auto-cleans empty root-owned node_modules left by the dev compose volume)
 	@if [ -d $(PWA_ROOT)/node_modules ] && [ ! -w $(PWA_ROOT)/node_modules ] && [ -z "$$(ls -A $(PWA_ROOT)/node_modules 2>/dev/null)" ]; then \
 		echo "Removing empty root-owned pwa/node_modules (Docker mount artifact)…"; \
-		$(DC) stop $(PWA_SERVICE) 2>/dev/null || true; \
+		$(DOCKER_COMPOSE) stop $(PWA_SERVICE) 2>/dev/null || true; \
 		docker run --rm -v "$(PWA_ROOT):/work" -w /work alpine rmdir node_modules || true; \
 	fi
 	@$(call pwa_cmd,npm ci)
@@ -26,52 +37,72 @@ pwa.install.if-missing: ## Run pwa.install only if pwa/node_modules is missing o
 		$(MAKE) --no-print-directory pwa.install; \
 	fi
 
+pwa.update: ## Safe update dependencies (within semantic version ranges)
+	@$(call pwa_cmd,npm update)
+
+pwa.upgrade: ## Force upgrade all dependencies to the latest versions (npm-check-updates)
+	@$(call pwa_cmd,npx npm-check-updates -u && npm install)
+
 pwa.dev: ## Next dev server (Turbopack) on host :80 (needs pwa/.env.local)
 	@$(call pwa_cmd,npm run dev)
 
-pwa.build: ## Next production build
+
+## —— PWA production ——
+
+pwa.production.build: ## Next production build
 	@$(call pwa_cmd,npm run build)
 
-## —— PWA lint / format ——
+pwa.production.start: ## Start production server on port 80
+	@$(call pwa_cmd,npm run start)
 
-pwa.lint: pwa.lint.eslint pwa.lint.prettier ## Full PWA lint (ESLint + Prettier check)
+## —— PWA quality ——
 
-pwa.lint.fix: pwa.lint.eslint.fix pwa.format.prettier.fix ## Full PWA lint (ESLint + Prettier check)
+pwa.quality.dry-run: pwa.lint.dry-run pwa.format.dry-run ## Full PWA lint (ESLint + Prettier check)
 
-pwa.lint.eslint: pwa.install.if-missing ## ESLint (check only); pass c='…' for extra args
-	@$(eval c ?=)
+pwa.quality: pwa.lint pwa.format ## Full PWA lint (ESLint + Prettier check)
+
+## —— PWA lint (ESLint) ——
+
+pwa.lint.dry-run: pwa.install.if-missing ## ESLint (check only); pass c='…' for extra args
 	@$(call pwa_cmd,npm run lint -- $(c))
 
-pwa.lint.eslint.fix: pwa.install.if-missing ## ESLint --fix
+pwa.lint: pwa.install.if-missing ## ESLint --fix
 	@$(call pwa_cmd,npm run lint:fix)
 
-pwa.lint.prettier: pwa.install.if-missing ## Prettier check (no writes)
-	@$(call pwa_cmd,npx prettier --check .)
+## —— PWA format (Prettier) ——
 
-pwa.format.prettier.fix: pwa.install.if-missing ## Prettier --write
+pwa.format.dry-run: pwa.install.if-missing ## Prettier check (no writes)
 	@$(call pwa_cmd,npm run format)
+
+pwa.format: pwa.install.if-missing ## Prettier --write
+	@$(call pwa_cmd,npm run format:fix)
+
+## —— Unit Tests (Vitest) ——
+
+pwa.test.unit: pwa.install.if-missing ## Run unit tests with Vitest (run once); pass c='…' for extra args (e.g. c='path/to/file.test.ts')
+	@$(call pwa_cmd,npm run test:unit -- $(c))
+
+pwa.test.unit.watch: pwa.install.if-missing ## Run unit tests (Vitest) watch mode
+	@$(call pwa_cmd,npm run test:watch)
+
+## —— E2E Tests (Playwright) ——
+
+pwa.test.e2e: pwa.install.if-missing ## Run end-to-end tests with Playwright; CI_SHARD=N CI_TOTAL_SHARDS=M for sharded runs; pass c='…' for extra args
+	@if [ -n "$(CI_SHARD)" ] && [ -n "$(CI_TOTAL_SHARDS)" ]; then \
+		$(call pwa_cmd,npm run test:e2e -- --shard=$(CI_SHARD)/$(CI_TOTAL_SHARDS) $(c)); \
+	else \
+		$(call pwa_cmd,npm run test:e2e -- $(c)); \
+	fi
+
+pwa.test.e2e.reports: ## Open the Playwright test HTML report
+	@$(call pwa_cmd,npm run test:e2e:reports)
+
+npm.dev.e2e: ## Start development server for E2E testing on port 3000
+	@$(call pwa_cmd,npm run dev:e2e)
 
 ## —— PWA tests ——
 
 pwa.test: pwa.test.unit pwa.test.e2e ## Full PWA test suite (Vitest + Playwright)
-
-pwa.test.unit: pwa.install.if-missing ## Vitest (run once); pass c='…' for extra args (e.g. c='path/to/file.test.ts')
-	@$(eval c ?=)
-	@$(call pwa_cmd,npm run test -- $(c))
-
-pwa.test.unit.watch: pwa.install.if-missing ## Vitest watch mode
-	@$(call pwa_cmd,npm run test:watch)
-
-pwa.test.e2e: pwa.install.if-missing ## Playwright E2E; CI_SHARD=N CI_TOTAL_SHARDS=M for sharded runs; pass c='…' for extra args
-	@$(eval c ?=)
-	@if [ -n "$(CI_SHARD)" ] && [ -n "$(CI_TOTAL_SHARDS)" ]; then \
-		$(call pwa_cmd,npm run e2e -- --shard=$(CI_SHARD)/$(CI_TOTAL_SHARDS) $(c)); \
-	else \
-		$(call pwa_cmd,npm run e2e -- $(c)); \
-	fi
-
-pwa.test.e2e.reports: ## Open the Playwright HTML report
-	@$(call pwa_cmd,npm run e2e:reports)
 
 ## —— PWA utilities ——
 
@@ -80,10 +111,15 @@ pwa.util.extract.testids: ## Extract data-testid attributes
 
 ## —— PWA clean ——
 
-pwa.clean: ## Remove node_modules, package-lock.json, .next, .next-e2e (destructive)
-	@$(call pwa_cmd,rm -rf node_modules package-lock.json .next .next-e2e)
+pwa.clean.soft: ## Remove .next, .next-e2e
+	@$(call pwa_cmd,npm run clean)
 
-.PHONY: pwa.install pwa.install.if-missing pwa.dev pwa.build \
-        pwa.lint pwa.lint.eslint pwa.lint.eslint.fix pwa.lint.prettier pwa.format.prettier.fix \
-        pwa.test pwa.test.unit pwa.test.unit.watch pwa.test.e2e pwa.test.e2e.reports \
-        pwa.util.extract.testids pwa.clean
+pwa.clean.all: pwa.clean.soft ## Remove node_modules, .next, .next-e2e (destructive)
+	@$(call pwa_cmd,rm -rf node_modules)
+
+# Host-side sudo wipe. `.next` / `.next-e2e` are written by the container as root,
+# so the host user can't remove them without sudo — this target can. Mirrors
+# pwa.clean.all's target set (node_modules, .next, .next-e2e).
+pwa.clean.sudo: ## Wipe pwa node_modules/.next/.next-e2e host-side (requires sudo; dev/test only)
+	$(call guard_var_writable,pwa.clean.sudo)
+	@sudo rm -rf $(PWA_ROOT)/node_modules $(PWA_ROOT)/.next $(PWA_ROOT)/.next-e2e

@@ -1,6 +1,6 @@
 # Local full stack: FrankenPHP, Next.js, and Symfony API
 
-This document describes HTTP traffic when you run the **default Docker stack** from the repo root (`make up-wait` or `docker compose up --wait`). The model matches the [API Platform distribution](https://github.com/api-platform/api-platform): **one public entry** — FrankenPHP/Caddy in the **`php`** container — which **reverse-proxies** HTML and Next assets to **`pwa:3000`** and runs Symfony for **`/api*`** and Mercure.
+This document describes HTTP traffic when you run the **default Docker stack** from the repo root (`make docker.up.wait` or `docker compose up --wait`). The model matches the [API Platform distribution](https://github.com/api-platform/api-platform): **one public entry** — FrankenPHP/Caddy in the **`php`** container — which **reverse-proxies** HTML and Next assets to **`pwa:3000`** and runs Symfony for **`/api*`** and Mercure.
 
 ## Who serves what
 
@@ -56,5 +56,5 @@ Subscriber traffic to **`/.well-known/mercure`** is handled by the **`mercure { 
 
 ## Production (reminder)
 
-- Use real TLS (Let’s Encrypt or your LB) and strong secrets; see [pwa/docs/production-deployment.md](../pwa/docs/production-deployment.md) and [api/docs/production-ready/](../api/docs/production-ready/).
+- Use real TLS (Let’s Encrypt or your LB) and strong secrets; see [pwa/docs/production-deployment.md](../pwa/docs/production-deployment.md) and [api/docs/production-ready/production.md](../api/docs/production-ready/production.md).
 - Set **`CORS_ALLOW_ORIGINS`** in Symfony to your real app origins.

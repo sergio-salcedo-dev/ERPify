@@ -5,8 +5,8 @@ All targets are ENV-aware (`ENV=dev|ci|staging|prod`) and default to `IN_CONTAIN
 ## Composer / Symfony
 
 -   `make composer c='…'` — composer in the container (e.g. `c='req vendor/pkg'`).
--   `make composer.install`, `composer.update`, `composer.checks` (platform-reqs + require-checker + unused).
--   `make sf c='…'` — Symfony console. Shortcuts: `make cc` (cache:clear), `make cache.warmup`, `make routes f='filter'`, `make symfony.about`.
+-   `make composer.install`, `composer.update`, `composer.check.all` (platform-reqs + require-checker + unused).
+-   `make sf c='…'` — Symfony console. Shortcuts: `make sf.cc` (cache:clear), `make sf.cache.warmup`, `make sf.routes f='filter'`, `make sf.about`.
 
 ## Tests
 
@@ -17,7 +17,7 @@ All targets are ENV-aware (`ENV=dev|ci|staging|prod`) and default to `IN_CONTAIN
 
 ## Lint / static analysis
 
--   `make php.lint` — full sweep (PHPStan, Rector, PHP-CS-Fixer, PHPMD, PHPCS, Psalm auto-fixes).
+-   `make php.quality` — full sweep (PHPStan, Rector, PHP-CS-Fixer, PHPMD, PHPCS, Psalm auto-fixes).
 -   Individual: `php.stan[.baseline]`, `php.rector[.dry-run]`, `php.cs-fixer[.dry-run]`, `php.md`, `php.cs[.dry-run]`, `php.psalm`, `php.psalm.taint` (SARIF), `php.psalm.baseline`, `php.psalm.fix.{cleanup,types,all}`.
 
 ## Database (Doctrine)
@@ -31,7 +31,7 @@ All targets are ENV-aware (`ENV=dev|ci|staging|prod`) and default to `IN_CONTAIN
 
 ## Messenger
 
--   `make messenger.stop-workers` — use after deploys so workers pick up new code.
+-   `make sf.messenger.stop-workers` — use after deploys so workers pick up new code.
 
 ## Xdebug
 
@@ -41,8 +41,7 @@ All targets are ENV-aware (`ENV=dev|ci|staging|prod`) and default to `IN_CONTAIN
 
 Full list in root [`../../CLAUDE.md`](../../CLAUDE.md).
 
--   `make api-up-http` — API + DB only on host `:8000` (no PWA container). Pairs with `make pwa.dev` for local Next against containerised API.
--   `make docker.bash` — bash shell in the `php` container.
+-   `make php.bash` — bash shell in the `php` container.
 
 ## Running PHP on the host
 

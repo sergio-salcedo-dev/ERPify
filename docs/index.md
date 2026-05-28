@@ -74,10 +74,10 @@ make db.migrate
 make db.load.fixtures
 
 # Common daily commands
-make docker.up | docker.down | docker.logs | docker.ps | docker.health
-make php.test | php.lint
-make pwa.test | pwa.lint
-make test     | lint     # both parts
+make docker.up | docker.down | docker.logs | docker.ps |
+make php.test | php.quality
+make pwa.test | pwa.quality
+make app.test | app.quality  # both parts
 make composer c='...'    # composer in container
 make db.migrate | db.diff | db.status | db.shell
 ```

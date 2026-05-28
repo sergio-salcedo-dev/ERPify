@@ -11,7 +11,7 @@ are the executable contract.
 ## TL;DR — manual smoke-test
 
 ```bash
-make dev   # full Compose stack on https://localhost
+make app.dev   # full Compose stack on https://localhost
 ```
 
 For a **single page that lists every error surface** (recommended for QA
@@ -88,7 +88,7 @@ synchronously when `process.env.NODE_ENV !== NodeEnv.PRODUCTION` and
 `notFound()`s otherwise. Visit it any time the dev or test stack is up:
 
 ```bash
-make dev
+make app.dev
 open https://localhost/dev-throw
 ```
 

@@ -11,6 +11,7 @@ use Erpify\Shared\Infrastructure\Http\CorrelationIdListener;
 use Erpify\Shared\Infrastructure\Http\EventListener\ExceptionResponder;
 use Erpify\Shared\Infrastructure\Http\ProblemDetailsResponder;
 use LogicException;
+use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
@@ -861,46 +862,55 @@ final class ExceptionResponderTest extends TestCase
             {
             }
 
+            #[Override]
             public function emergency(string|Stringable $message, array $context = []): void
             {
                 throw new RuntimeException($this->message);
             }
 
+            #[Override]
             public function alert(string|Stringable $message, array $context = []): void
             {
                 throw new RuntimeException($this->message);
             }
 
+            #[Override]
             public function critical(string|Stringable $message, array $context = []): void
             {
                 throw new RuntimeException($this->message);
             }
 
+            #[Override]
             public function error(string|Stringable $message, array $context = []): void
             {
                 throw new RuntimeException($this->message);
             }
 
+            #[Override]
             public function warning(string|Stringable $message, array $context = []): void
             {
                 throw new RuntimeException($this->message);
             }
 
+            #[Override]
             public function notice(string|Stringable $message, array $context = []): void
             {
                 throw new RuntimeException($this->message);
             }
 
+            #[Override]
             public function info(string|Stringable $message, array $context = []): void
             {
                 throw new RuntimeException($this->message);
             }
 
+            #[Override]
             public function debug(string|Stringable $message, array $context = []): void
             {
                 throw new RuntimeException($this->message);
             }
 
+            #[Override]
             public function log($level, string|Stringable $message, array $context = []): void
             {
                 throw new RuntimeException($this->message);
@@ -1011,6 +1021,7 @@ final class ExceptionResponderTest extends TestCase
     {
         $request = Request::create($path);
         $kernel = new class implements HttpKernelInterface {
+            #[Override]
             public function handle(Request $request, int $type = HttpKernelInterface::MAIN_REQUEST, bool $catch = true): Response
             {
                 throw new LogicException('Test kernel: handle() must not be called by the listener.');

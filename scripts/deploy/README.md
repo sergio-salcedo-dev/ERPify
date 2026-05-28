@@ -51,9 +51,8 @@ If scripts fail, run directly from repository root:
 
 ```bash
 make db.migrate                # Run migrations
-make cache.warmup             # Warm cache
-make messenger.stop-workers   # Reload workers
-make health                   # Health check
+make sf.cache.warmup           # Warm cache
+make sf.messenger.stop-workers # Reload workers
 ```
 
 ## Environment Variables

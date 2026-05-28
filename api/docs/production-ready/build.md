@@ -17,9 +17,9 @@ docker compose \
   build --pull --no-cache
 ```
 
-| Flag | Why |
-|---|---|
-| `--pull` | Always fetches the latest base image (`dunglas/frankenphp:1-php8.5`) to include upstream security patches |
+| Flag         | Why                                                                                                          |
+|--------------|--------------------------------------------------------------------------------------------------------------|
+| `--pull`     | Always fetches the latest base image (`dunglas/frankenphp:1-php8.5`) to include upstream security patches    |
 | `--no-cache` | Prevents Docker from using stale layer caches; required after `Dockerfile` changes (e.g. adding `pdo_pgsql`) |
 
 > [!CAUTION]
@@ -35,13 +35,13 @@ docker compose \
 The `frankenphp_prod` stage runs the following automatically — you do not need
 to trigger any of these manually:
 
-| Step | Command | Effect |
-|---|---|---|
-| Install prod dependencies | `composer install --no-dev` | Excludes `phpunit`, `behat`, `maker-bundle`, etc. |
-| Optimise autoloader | `composer dump-autoload --classmap-authoritative` | Replaces PSR-4 scanning with a static classmap for faster cold starts |
-| Bake environment | `composer dump-env prod` | Writes `.env.local.php` — Symfony skips Dotenv entirely at runtime |
-| Run post-install scripts | `composer run-script post-install-cmd` | Clears cache, installs assets |
-| Strip Xdebug | *(not installed in base stage)* | Xdebug is only added in `frankenphp_dev`; the prod stage inherits from `frankenphp_base` |
+| Step                      | Command                                           | Effect                                                                                   |
+|---------------------------|---------------------------------------------------|------------------------------------------------------------------------------------------|
+| Install prod dependencies | `composer install --no-dev`                       | Excludes `phpunit`, `behat`, `maker-bundle`, etc.                                        |
+| Optimise autoloader       | `composer dump-autoload --classmap-authoritative` | Replaces PSR-4 scanning with a static classmap for faster cold starts                    |
+| Bake environment          | `composer dump-env prod`                          | Writes `.env.local.php` — Symfony skips Dotenv entirely at runtime                       |
+| Run post-install scripts  | `composer run-script post-install-cmd`            | Clears cache, installs assets                                                            |
+| Strip Xdebug              | *(not installed in base stage)*                   | Xdebug is only added in `frankenphp_dev`; the prod stage inherits from `frankenphp_base` |
 
 ---
 

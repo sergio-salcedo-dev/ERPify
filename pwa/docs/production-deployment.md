@@ -54,7 +54,5 @@ Step-by-step guidance for deploying the monorepo safely. For a shorter checklist
 
 ## Monorepo commands (reference)
 
-- **Full stack**: `make up-wait` — **`php`**, **`database`**, **`pwa`** ([`compose.yaml`](../../compose.yaml) + override).
+- **Full stack**: `make docker.up.wait` — **`php`**, **`database`**, **`pwa`** ([`compose.yaml`](../../compose.yaml) + override).
 - **Production build**: `docker compose -f compose.yaml -f compose.prod.yaml build` (from repo root).
-- **API on :8000 only** (host Next against Docker API): `make api-up-http` — set **`pwa/.env.local`** to **`http://localhost:8000`** for API URLs.
-- **Local Next + API on 8000**: `make dev-local` — see [`pwa/.env.example`](../.env.example).

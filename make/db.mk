@@ -1,6 +1,8 @@
-# make/db.mk — Database (Doctrine migrations, fixtures, psql).
+# =============================================================================
+# Database (Doctrine migrations, fixtures, psql).
+# =============================================================================
 
-## —— Database ——
+.PHONY: db.migrate db.diff db.status db.validate db.load.fixtures db.drop db.reset db.shell
 
 db.migrate: ## Run pending Doctrine migrations
 	@$(SYMFONY) doctrine:migrations:migrate --no-interaction --all-or-nothing
@@ -17,13 +19,11 @@ db.validate: ## Validate ORM mapping against the database
 db.load.fixtures: ## Load Hautelook Alice fixtures (purge first)
 	@$(SYMFONY) hautelook:fixtures:load --no-interaction --purge-with-truncate
 
-db.reset: ## Drop DB → migrate → fixtures (destructive)
+db.drop: ## Drop DB (destructive)
 	@$(SYMFONY) doctrine:schema:drop --force --full-database --no-interaction
-	@$(SYMFONY) doctrine:migrations:migrate --no-interaction --all-or-nothing
-	@$(SYMFONY) hautelook:fixtures:load --no-interaction --purge-with-truncate
+
+db.reset: db.drop db.migrate db.load.fixtures ## Drop DB → migrate → fixtures (destructive)
 
 db.shell: ## Interactive psql shell in the database container
-	$(DC) exec $(DB_SERVICE) \
+	$(DOCKER_COMPOSE_EXEC) $(DB_SERVICE) \
 		psql --username=$${POSTGRES_USER:-erpify_user} $${POSTGRES_DB:-erpify_db}
-
-.PHONY: db.migrate db.diff db.status db.validate db.load.fixtures db.reset db.shell

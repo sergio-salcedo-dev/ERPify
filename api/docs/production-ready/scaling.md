@@ -21,12 +21,12 @@ docker stack deploy \
 
 **Key considerations when running multiple `php` replicas:**
 
-| Concern | Recommendation |
-|---|---|
+| Concern                                 | Recommendation                                                                                                                        |
+|-----------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------|
 | `caddy_data` and `caddy_config` volumes | Mount a shared NFS volume, or designate a single ingress node that handles TLS termination and forward plain HTTP to the PHP replicas |
-| `database_data` volume | PostgreSQL should run on exactly **one** node with a persistent volume — do not replicate the `database` service |
-| Migrations | Run migrations once as a one-off task before scaling up PHP replicas, not in the entrypoint when using multiple replicas |
-| Sessions | Use a shared session store (e.g. Redis) if the application ever adds stateful sessions |
+| `database_data` volume                  | PostgreSQL should run on exactly **one** node with a persistent volume — do not replicate the `database` service                      |
+| Migrations                              | Run migrations once as a one-off task before scaling up PHP replicas, not in the entrypoint when using multiple replicas              |
+| Sessions                                | Use a shared session store (e.g. Redis) if the application ever adds stateful sessions                                                |
 
 ### Pinning the database service to one node
 

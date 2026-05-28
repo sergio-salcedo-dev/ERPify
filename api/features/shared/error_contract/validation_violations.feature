@@ -4,7 +4,7 @@ Feature: ValidationFailedException surfaces as a 400 Problem Details with a stru
     I need ValidationFailedException to produce a Problem Details body whose violations
     extension is a JSON array of objects with the keys field, message, code
 
-  # Routes are wired at /api/test/_throw-validation* (Story 1.6). The default Behat suite's
+  # Routes are wired at /api/test/_throw-validation*. The default Behat suite's
   # HttpRequestContext is constructor-bound to baseUrl=/api/v1 (FriendsOfBehat\SymfonyExtension
   # reuses the same service instance across suites, so a per-suite override does not take effect).
   # To bypass the baseUrl prefix entirely, scenarios use absolute URLs (HttpRequestContext skips

@@ -103,7 +103,7 @@ jobs:
         run: make php.behat.install
 
       - name: PHP lint
-        run: make php.lint
+        run: make php.quality.dry-run
 
       - name: PHPUnit
         run: make php.unit
@@ -191,9 +191,9 @@ jobs:
       - uses: ./.github/actions/node-setup
 
       - run: make pwa.install
-      - run: make pwa.lint
+      - run: make pwa.quality.dry-run
       - run: make pwa.test.unit
-      - run: make pwa.build
+      - run: make pwa.production.build
 
   # -------------------------
   # PWA E2E (sharded — depends on build)

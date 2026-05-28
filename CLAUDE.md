@@ -13,25 +13,25 @@ Monorepo with two deployables sharing one Compose stack: a Symfony HTTP API on F
 Always invoke from the repo root. Targets decide whether to exec inside the `php`/`pwa` container based on `ENV` and `IN_CONTAINER`.
 
 ```bash
-make dev                            # Full dev stack (--wait --build -d) + open browser.
+make app.dev                        # Full dev stack (down → install → up --wait → fix ownership)
 make docker.up                      # Stack up detached (ENV=dev|staging|prod).
 make docker.down                    # Stop stack and remove orphans.
-make docker.bash                    # Shell into the php container.
-make sf c='about'                   # Symfony console (also: make cc, make routes f='…').
+make php.bash                       # Shell into the php container (also: php.sh, php.exec).
+make sf c='about'                   # Symfony console (also: make sf.cc, make sf.routes f='…').
 make composer c='req vendor/pkg'    # Composer in container.
 make php.unit c='--filter SomeTest' # PHPUnit (also: make php.behat, make php.test).
 make php.stan                       # PHPStan — REQUIRED on every PHP file you change.
-make php.lint                       # Full PHP lint sweep — REQUIRED at end of any PHP task.
+make php.quality                       # Full PHP lint sweep — REQUIRED at end of any PHP task.
 make db.diff                        # Generate migration from entity diff (then make db.migrate).
-make pwa.dev                        # Next dev (Turbopack, host :80) — pair with make api-up-http.
+make pwa.dev                        # Next dev (Turbopack, host :80) — needs pwa/.env.local.
 make pwa.test                       # Vitest + Playwright (also: make pwa.test.unit/.e2e).
-make pwa.lint                       # ESLint + Prettier — REQUIRED at end of any PWA task.
-make lint                           # All linters (PHP + PWA).
-make test                           # All tests (PHP + PWA).
-make ci                             # Full CI (ci.lint + ci.test).
+make pwa.quality                    # ESLint + Prettier — REQUIRED at end of any PWA task.
+make app.quality                    # All linters (PHP + PWA).
+make app.test                       # All tests (PHP + PWA).
+make ci                             # Full CI (ci.quality + ci.test).
 ```
 
-**Always start the stack with `make dev` or `make docker.up`.** Bare `docker compose up -d` skips composer install on cold checkouts and the `pwa.install.if-missing` guard.
+**Always start the stack with `make app.dev` or `make docker.up`.** Bare `docker compose up -d` skips composer install on cold checkouts and the `pwa.install.if-missing` guard.
 
 ---
 
@@ -47,7 +47,7 @@ Browser → FrankenPHP :80/:443 ──┬─ /api/*                 → Symfony 
                                                   Messenger (Doctrine transport) → messenger_worker
 ```
 
-`make dev.local` skips the PWA container: API on host `:8000`, `next dev` on host `:80` (requires env vars in `pwa/.env.local` — see quickref). Full diagram and trade-offs in [`docs/integration-architecture.md`](docs/integration-architecture.md).
+Full request-routing diagram and host/container trade-offs in [`docs/integration-architecture.md`](docs/integration-architecture.md).
 
 Both sides follow **DDD + Hexagonal / Clean Architecture**, with dependencies pointing inward. **Do not** import frameworks (Symfony, Doctrine, Next, Inversify, HTTP clients, ORM) inside `Domain/` — adapters go in `Infrastructure/`, orchestration in `Application/`. Full rule set: `.cursor/rules/*.mdc` (architecture, clean-code, database, frontend, php-standards, security, solid-principles, testing) and `pwa/AGENTS.md`.
 
@@ -55,8 +55,8 @@ Both sides follow **DDD + Hexagonal / Clean Architecture**, with dependencies po
 
 ## Required checks
 
-- **PHP edits** → run `make php.stan` on every changed file before declaring the task done; fix anything reported. At the end, run `make php.lint` and fix anything new it reports.
-- **PWA edits** → run `make pwa.lint` at the end.
+- **PHP edits** → run `make php.stan` on every changed file before declaring the task done; fix anything reported. At the end, run `make php.quality` and fix anything new it reports.
+- **PWA edits** → run `make pwa.quality` at the end.
 - **HTTP error responses** → never bypass the RFC 9457 pipeline with manual `JsonResponse` error bodies. Adding a marker interface or changing its mapping requires updating [`docs/api-error-contract.md`](docs/api-error-contract.md) (NFR26). The drift gate is `make php.lint.error-contract`.
 - **Migrations** → generate via `make db.diff`. You may only edit a migration created on the current feature branch. Once merged into `main`, it is immutable — create a new migration instead.
 
@@ -135,7 +135,7 @@ For each diffed file, walk this checklist:
   authenticated; payloads scrubbed of secrets.
 
 **Process**
-- Run `make php.lint` and `make pwa.lint` locally before pushing —
+- Run `make php.quality` and `make pwa.quality` locally before pushing —
   PHPStan / Psalm / ESLint catch many of the above implicitly.
 - For security-sensitive changes (auth, input parsing, file uploads,
   SQL, headers, CSP), update `PRODUCTION_SECURITY_CHECKLIST.md` and
@@ -153,7 +153,7 @@ issue. Silent skips are the most common path to a CVE.
 
 When a task decomposes into independent subtasks (different bounded contexts, different files, no shared state), spawn parallel subagents rather than working sequentially. Each subagent must receive a self-contained prompt with full context.
 
-Example: plan → subagent A (API: domain entity + Doctrine mapping + migration in `api/`) + subagent B (PWA: route + component + Inversify wiring in `pwa/`) running in parallel → verify each (`make php.stan`, `make pwa.lint`) → commit.
+Example: plan → subagent A (API: domain entity + Doctrine mapping + migration in `api/`) + subagent B (PWA: route + component + Inversify wiring in `pwa/`) running in parallel → verify each (`make php.stan`, `make pwa.quality`) → commit.
 
 Do not spawn subagents for tasks that share state mid-flight — e.g. two agents editing the same migration, the same `services.yaml`, the same Inversify container module, or both touching `api/src/Shared/`.
 

@@ -18,6 +18,7 @@ services:
       mailpit:
         condition: service_started
     volumes:
+      # TODO  ./api:/app/api
       - ./api:/app
       - ./api/var:/app/var
       - ./api/frankenphp/Caddyfile:/etc/frankenphp/Caddyfile:ro

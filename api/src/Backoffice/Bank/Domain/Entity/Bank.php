@@ -29,7 +29,7 @@ class Bank extends AggregateRoot
     #[Groups(['bank:get', 'bank:search'])]
     private string $name;
 
-    #[ORM\Column(name: 'name_normalized', length: 255, unique: true)]
+    #[ORM\Column(length: 255, unique: true)]
     private string $nameNormalized;
 
     /**
@@ -37,7 +37,7 @@ class Bank extends AggregateRoot
      * {@see NormalizedText::toAsciiUpper()}. Comparisons / uniqueness use
      * the raw column directly — no separate normalized half needed.
      */
-    #[ORM\Column(name: 'short_name', length: 50, unique: true)]
+    #[ORM\Column(length: 50, unique: true)]
     #[Assert\NotBlank]
     #[Assert\Length(max: 50)]
     #[Groups(['bank:get', 'bank:search'])]

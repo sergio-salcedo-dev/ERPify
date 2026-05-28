@@ -16,13 +16,13 @@ so you never have to keep the two in sync by hand.
 The repository ships with safe-for-local-use defaults that take effect when no
 override is provided:
 
-| Variable | Default |
-|---|---|
-| `POSTGRES_USER` | `erpify_user` |
-| `POSTGRES_PASSWORD` | `erpify_password` |
-| `POSTGRES_DB` | `erpify_db` |
-| `POSTGRES_VERSION` | `18` |
-| `POSTGRES_PORT` | `15432` (host-side only) |
+| Variable            | Default                  |
+|---------------------|--------------------------|
+| `POSTGRES_USER`     | `erpify_user`            |
+| `POSTGRES_PASSWORD` | `erpify_password`        |
+| `POSTGRES_DB`       | `erpify_db`              |
+| `POSTGRES_VERSION`  | `18`                     |
+| `POSTGRES_PORT`     | `15432` (host-side only) |
 
 These values appear in:
 
@@ -94,7 +94,7 @@ docker volume ls | grep database_data
 
 > [!WARNING]
 >
-> Running `docker compose down --volumes` or `make clean` **permanently
+> Running `docker compose down --volumes` or `make docker.down.clean-volumes` **permanently
 > destroys** the `database_data` volume and all data in it.
 > Never run these commands on a production server.
 

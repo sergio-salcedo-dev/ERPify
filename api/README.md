@@ -1,11 +1,11 @@
 # Symfony Docker
 
-> **ERPify monorepo:** service definitions (`php`, `database`, `pwa`, `messenger_worker`) live in the **repository root** [`compose.yaml`](../compose.yaml) with overlays [`compose.dev.yaml`](../compose.dev.yaml) and [`compose.prod.yaml`](../compose.prod.yaml). FrankenPHP in **`php`** reverse-proxies the Next app (`pwa:3000`) for HTML; there is no separate edge Caddy service. Prefer the root [`Makefile`](../Makefile) (e.g. **`make dev`**, **`make docker.up`**, **`make composer c='…'`**, **`make php.lint`**, **`make php.test`**, **`make db.migrate`**) — it is ENV-aware (`ENV=dev|staging|prod`) and wraps Compose/Composer/Symfony from the repo root. The **`php`** base image in [`Dockerfile`](Dockerfile) is pinned to a **`sha256`** digest and tracked by Dependabot. When syncing upstream **symfony-docker**, merge changes into the **root** Compose files. Domain events, Messenger (`messenger_worker`), and notification email: [`docs/domain-events-and-messenger.md`](../docs/domain-events-and-messenger.md).
+> **ERPify monorepo:** service definitions (`php`, `database`, `pwa`, `messenger_worker`) live in the **repository root** [`compose.yaml`](../compose.yaml) with overlays [`compose.dev.yaml`](../compose.dev.yaml) and [`compose.prod.yaml`](../compose.prod.yaml). FrankenPHP in **`php`** reverse-proxies the Next app (`pwa:3000`) for HTML; there is no separate edge Caddy service. Prefer the root [`Makefile`](../Makefile) (e.g. **`make app.dev`**, **`make docker.up`**, **`make composer c='…'`**, **`make php.quality`**, **`make php.test`**, **`make db.migrate`**) — it is ENV-aware (`ENV=dev|staging|prod`) and wraps Compose/Composer/Symfony from the repo root. The **`php`** base image in [`Dockerfile`](Dockerfile) is pinned to a **`sha256`** digest and tracked by Dependabot. When syncing upstream **symfony-docker**, merge changes into the **root** Compose files. Domain events, Messenger (`messenger_worker`), and notification email: [`docs-info/domain-events-and-messenger.md`](../docs-info/domain-events-and-messenger.md).
 
 A [Docker](https://www.docker.com/)-based installer and runtime for the [Symfony](https://symfony.com) web framework,
 with [FrankenPHP](https://frankenphp.dev) and [Caddy](https://caddyserver.com/) inside!
 
-Specially tailored for coding agents: the monorepo [Dev Container](https://containers.dev/) lives at [`.devcontainer/`](../.devcontainer/) (repo root) so you work in **`/workspace`** with **`api/`**, **`pwa/`**, and Compose together. It lets [Claude Code](https://claude.ai/claude-code) (and other assistants) run in autonomous mode inside a sandboxed environment.
+Specially tailored for coding agents: the monorepo [Dev Container](https://containers.dev/) lives at [`.devcontainer/`](../.devcontainer/devcontainer.json) (repo root) so you work in **`/workspace`** with **`api/`**, **`pwa/`**, and Compose together. It lets [Claude Code](https://claude.ai/claude-code) (and other assistants) run in autonomous mode inside a sandboxed environment.
 
 ![CI](https://github.com/dunglas/symfony-docker/workflows/CI/badge.svg)
 
@@ -42,12 +42,12 @@ Specially tailored for coding agents: the monorepo [Dev Container](https://conta
 2. [Using Symfony Docker with an existing project](docs/existing-project.md)
 3. [Support for extra services](docs/extra-services.md)
 4. [Deploying in production](docs/production-ready/production.md)
-5. [Monorepo production (Messenger, mailer, DNS)](../docs/production-deployment.md) (repo root `docs/`)
+5. [Monorepo production (Messenger, mailer, DNS)](../docs-info/production-deployment.md) (repo root `docs-info/`)
 6. [Debugging with Xdebug](docs/xdebug.md)
 7. [TLS Certificates](docs/tls.md)
 8. [Using MySQL instead of PostgreSQL](docs/mysql.md)
 9. [Using Alpine Linux instead of Debian](docs/alpine.md)
-10. [Using a Makefile](docs/makefile.md)
+10. [Using a Makefile](docs/make-targets.md)
 11. [Updating the template](docs/updating.md)
 12. [Troubleshooting](docs/troubleshooting.md)
 13. [Using AI Coding Agents](docs/agents.md)
