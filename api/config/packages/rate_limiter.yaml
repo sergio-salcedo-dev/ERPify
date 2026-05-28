@@ -1,0 +1,50 @@
+# Rate limiter policies for the public HTTP surface.
+#
+# Two limiters are declared so a single deployment can attenuate two distinct
+# attack profiles with different curves:
+#
+#   * `anonymous_api`  — sliding_window, applied per client IP on every /api/*
+#                        request. Sliding window avoids the boundary burst flaw
+#                        of fixed_window (a caller can otherwise spend the tail
+#                        of window N AND the head of window N+1 within seconds).
+#                        Default budget: 120 requests / minute per IP. Tuned
+#                        for normal SPA navigation; well below the per-IP load
+#                        a single tab generates during boot.
+#
+#   * `authenticated_api` — token_bucket, applied per authenticated principal
+#                           (user id or API key). token_bucket lets a logged-in
+#                           caller front-load short bursts (e.g. batch list +
+#                           detail prefetch) while flattening the long-term
+#                           average back to a sustainable rate. Reserved for
+#                           future authenticated routes; not wired yet.
+#
+# Both limiters share Symfony's default `cache.rate_limiter` pool so state
+# survives within a deploy. The pool is reset on cache clear — see
+# api/config/packages/cache.yaml. For production with multiple FrankenPHP
+# workers behind a load balancer, swap to a shared backend (Redis) so the
+# budget is consistent across processes; pin the override in deploy config.
+#
+# Numeric policy values are env-driven so operators can tighten the budget on
+# the fly (e.g. drop RATE_LIMIT_ANONYMOUS_API to 10 during a sustained attack
+# and bounce the worker — no redeploy needed). Defaults live in api/.env;
+# environment-specific overrides in api/.env.<env>. The test environment
+# already lowers the anonymous budget to 5/min so functional tests can assert
+# the 429 path deterministically (api/.env.test).
+#
+# The kernel.request listener that consumes `anonymous_api` lives at
+# api/src/Shared/Infrastructure/Http/EventListener/RateLimitListener.php.
+# It is path-scoped to /api/* and rejects with a domain exception implementing
+# the RateLimited marker so the existing ProblemDetailsFactory pipeline emits
+# an RFC 9457 429 response (type=rate-limited) without bypassing the contract.
+framework:
+    rate_limiter:
+        anonymous_api:
+            policy: 'sliding_window'
+            limit: '%env(int:RATE_LIMIT_ANONYMOUS_API_LIMIT)%'
+            interval: '%env(RATE_LIMIT_ANONYMOUS_API_INTERVAL)%'
+        authenticated_api:
+            policy: 'token_bucket'
+            limit: '%env(int:RATE_LIMIT_AUTHENTICATED_API_LIMIT)%'
+            rate:
+                interval: '%env(RATE_LIMIT_AUTHENTICATED_API_RATE_INTERVAL)%'
+                amount: '%env(int:RATE_LIMIT_AUTHENTICATED_API_RATE_AMOUNT)%'

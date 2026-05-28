@@ -24,6 +24,7 @@ default:
                 - Erpify\Tests\Behat\Context\EntityManagerContext
                 - Erpify\Tests\Behat\Context\FixturesContext
                 - Erpify\Tests\Behat\Context\JsonContext
+                - Erpify\Tests\Behat\Context\RateLimitContext
                 
     extensions:
         FriendsOfBehat\SymfonyExtension:
