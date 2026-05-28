@@ -382,7 +382,7 @@ final class ProblemDetailsApiSchemaSweepTest extends WebTestCase
                 \get_debug_type($decoded),
             );
 
-            return null;
+            $decoded = null;
         }
 
         return $decoded;
