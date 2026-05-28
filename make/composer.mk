@@ -24,8 +24,8 @@ composer.check.platform-reqs: ## composer check-platform-reqs
 	@$(COMPOSER) check-platform-reqs
 
 composer.check.missing-deps: ## Check for missing composer dependencies
-	$(PHP_CONT) sh -c 'CONFIG=$$(find /app -name "composer-require-checker.json" | head -n 1); \
-	XDEBUG_MODE=off /app/vendor/bin/composer-require-checker check --config-file=$$CONFIG /app/composer.json'
+	$(PHP_CONT) sh -c 'CONFIG=$$(find /app/api -name "composer-require-checker.json" | head -n 1); \
+	XDEBUG_MODE=off /app/api/vendor/bin/composer-require-checker check --config-file=$$CONFIG /app/api/composer.json'
 
 composer.check.unused: ## Check for unused Composer packages
 	$(PHP) vendor/bin/composer-unused \

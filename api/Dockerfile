@@ -15,9 +15,9 @@ FROM frankenphp_upstream AS frankenphp_base
 
 SHELL ["/bin/bash", "-euxo", "pipefail", "-c"]
 
-WORKDIR /app
+WORKDIR /app/api
 
-VOLUME /app/var/
+VOLUME /app/api/var/
 
 # persistent deps
 RUN <<-EOF
@@ -89,7 +89,7 @@ RUN <<-EOF
 	rm -rf /var/lib/apt/lists/*
 	useradd -m -s /bin/bash nonroot
 	echo "nonroot ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/nonroot
-	git config --system --add safe.directory /app
+	git config --system --add safe.directory /app/api
 EOF
 
 COPY --link frankenphp/conf.d/20-app.dev.ini $PHP_INI_DIR/app.conf.d/
@@ -178,16 +178,16 @@ RUN <<-EOF
 	find / -perm /6000 -type f -exec chmod a-s {} + 2>/dev/null || true
 EOF
 
-COPY --link --exclude=var --from=frankenphp_prod_builder /app /app
-COPY --chown=www-data:www-data --from=frankenphp_prod_builder /app/var /app/var
+COPY --link --exclude=var --from=frankenphp_prod_builder /app/api /app/api
+COPY --chown=www-data:www-data --from=frankenphp_prod_builder /app/api/var /app/api/var
 
 COPY --link --chmod=755 frankenphp/docker-entrypoint.sh /usr/local/bin/docker-entrypoint
 
-VOLUME /app/var/
+VOLUME /app/api/var/
 
 USER www-data
 
-WORKDIR /app
+WORKDIR /app/api
 
 ENTRYPOINT ["docker-entrypoint"]
 
