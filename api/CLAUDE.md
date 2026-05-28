@@ -41,7 +41,7 @@ New bounded contexts/modules follow the same three-layer split. Cross-context ca
 
 -   **Never** put Doctrine annotations/attributes, Symfony services, HTTP concerns, or Messenger handlers inside `Domain/`. Map entities via XML/attributes in `Infrastructure/Persistence/` or via separate mapping files.
 -   **Never** hand-edit a migration that has already been applied. Generate a new one with `make db.diff`.
--   **Don't skip** `make php.lint` locally — CI runs it and the fixers (`cs-fixer`, `psalm.fix.*`) mutate files, so running them first keeps diffs clean.
+-   **Don't skip** `make php.quality` locally — CI runs it and the fixers (`cs-fixer`, `psalm.fix.*`) mutate files, so running them first keeps diffs clean.
 -   Add async jobs via Messenger buses; don't spawn processes or inline long work in request handlers. See [`docs/architecture-api.md`](../docs/architecture-api.md) for the audit table + domain-event flow.
 -   Keep lines under 120 characters; wrap longer ones unless breaking them hurts readability (e.g. long URLs, string literals).
 -   Prod requires `APP_SECRET`, `CADDY_MERCURE_JWT_SECRET`, `POSTGRES_PASSWORD` in env — see [`../docs/deployment-guide.md`](../docs/deployment-guide.md) and [`../pwa/docs/production-deployment.md`](../pwa/docs/production-deployment.md).
@@ -70,7 +70,7 @@ skipping. Silent skips are the most common path to a CVE.
 -   Adding endpoints (search, …): [`docs/adding-endpoints.md`](docs/adding-endpoints.md).
 -   Make targets (run from repo root): [`docs/make-targets.md`](docs/make-targets.md).
 -   Architecture: [`../docs/architecture-api.md`](../docs/architecture-api.md), [`../docs/integration-architecture.md`](../docs/integration-architecture.md).
--   Error contract one-pager (RFC 9457 Problem Details — marker→status map, env-aware `debug`, redaction, observability): [`../docs/api-error-contract.md`](../docs/api-error-contract.md). **Adding a marker interface or changing its mapping requires updating that page** (NFR26).
+-   Error contract one-pager (RFC 9457 Problem Details — marker→status map, env-aware `debug`, redaction, observability): [`../docs/api-error-contract.md`](../docs/api-error-contract.md). **Adding a marker interface or changing its mapping requires updating that page**.
 -   Dev workflow: [`../docs/development-guide-api.md`](../docs/development-guide-api.md).
 -   Deployment: [`../docs/deployment-guide.md`](../docs/deployment-guide.md).
 -   Upstream symfony-docker references: [`docs/options.md`](docs/options.md), [`docs/tls.md`](docs/tls.md), [`docs/xdebug.md`](docs/xdebug.md), [`docs/troubleshooting.md`](docs/troubleshooting.md), [`docs/updating.md`](docs/updating.md).

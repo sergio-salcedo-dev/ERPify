@@ -9,16 +9,16 @@ is **FrankenPHP + Caddy**, **PostgreSQL 18**, **Symfony 8**, **Next.js PWA**, an
 
 ## Guides
 
-| Document | What it covers |
-|---|---|
-| [docs/production-deployment.md](../../../docs/production-deployment.md) | **Monorepo** production: Compose services, **Messenger worker**, **mailer**, DNS, Mercure, CORS, smoke tests |
-| [server-setup.md](server-setup.md) | Prerequisites, domain DNS, starting and stopping the stack |
-| [secrets.md](secrets.md) | Required secrets, generating safe values, `.env.prod.local`, full environment variable reference |
-| [database.md](database.md) | PostgreSQL credentials, data persistence, backups, port isolation, migrations, fixtures |
-| [build.md](build.md) | Building the production Docker image, PHP extensions, image registry |
-| [tls.md](tls.md) | Automatic Let's Encrypt certificates, certificate storage, custom certificates, disabling HTTPS |
-| [hardening.md](hardening.md) | Pre-go-live checklist covering application, database, secrets, TLS, Docker image, and network |
-| [scaling.md](scaling.md) | Docker Swarm, Kubernetes, and managed database options |
+| Document                                                                | What it covers                                                                                               |
+|-------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------|
+| [docs-info/production-deployment.md](../../../docs-info/production-deployment.md) | **Monorepo** production: Compose services, **Messenger worker**, **mailer**, DNS, Mercure, CORS, smoke tests |
+| [server-setup.md](server-setup.md)                                      | Prerequisites, domain DNS, starting and stopping the stack                                                   |
+| [secrets.md](secrets.md)                                                | Required secrets, generating safe values, `.env.prod.local`, full environment variable reference             |
+| [database.md](database.md)                                              | PostgreSQL credentials, data persistence, backups, port isolation, migrations, fixtures                      |
+| [build.md](build.md)                                                    | Building the production Docker image, PHP extensions, image registry                                         |
+| [tls.md](tls.md)                                                        | Automatic Let's Encrypt certificates, certificate storage, custom certificates, disabling HTTPS              |
+| [hardening.md](hardening.md)                                            | Pre-go-live checklist covering application, database, secrets, TLS, Docker image, and network                |
+| [scaling.md](scaling.md)                                                | Docker Swarm, Kubernetes, and managed database options                                                       |
 
 ---
 
@@ -26,7 +26,7 @@ is **FrankenPHP + Caddy**, **PostgreSQL 18**, **Symfony 8**, **Next.js PWA**, an
 
 If you are deploying for the first time, follow these steps in order:
 
-1. **[docs/production-deployment.md](../../../docs/production-deployment.md)** — read the monorepo overview (DNS, `messenger_worker`, mailer, env alignment).
+1. **[docs-info/production-deployment.md](../../../docs-info/production-deployment.md)** — read the monorepo overview (DNS, `messenger_worker`, mailer, env alignment).
 2. **[server-setup.md §Prerequisites](server-setup.md#prerequisites)** — provision the server and clone the repo.
 3. **[secrets.md](secrets.md)** — generate all secrets and create `.env.prod.local`.
 4. **[database.md §Credentials](database.md#credentials)** — confirm DB variables are set.

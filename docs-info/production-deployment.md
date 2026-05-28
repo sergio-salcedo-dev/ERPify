@@ -24,7 +24,7 @@ cd /path/to/ERPify
 docker compose -f compose.yaml -f compose.prod.yaml up --wait --build --detach
 ```
 
-(`make prod-up` does the same merge; ensure required secrets are in the environment.)
+(`ENV=prod make docker.up.wait` does the same merge; ensure required secrets are in the environment.)
 
 ---
 
@@ -80,8 +80,8 @@ Full variable tables: [api/docs/production-ready/secrets.md](../api/docs/product
 
 - **Deploys / new code**
   After shipping new code, follow this sequence:
-  1. **Warm cache** (ensure new code is cached): `make cache.warmup` or `php bin/console cache:warmup`
-  2. **Stop workers** (reload code): `make messenger.stop-workers` or `php bin/console messenger:stop-workers`
+  1. **Warm cache** (ensure new code is cached): `make sf.cache.warmup` or `php bin/console cache:warmup`
+  2. **Stop workers** (reload code): `make sf.messenger.stop-workers` or `php bin/console messenger:stop-workers`
 
   This ensures service definitions and message handlers match the newly deployed code before workers restart. If you use multiple nodes, use a **shared** cache for stop signals (see [Symfony: Deploying Messenger](https://symfony.com/doc/current/messenger.html#deploying-to-production)).
 

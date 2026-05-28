@@ -79,7 +79,7 @@ HTTP_PORT=8000 HTTPS_PORT=4443 HTTP3_PORT=4443 docker compose up --wait
 
 to access your application on [https://localhost:4443](https://localhost:4443).
 
-The monorepo default stack (FrankenPHP + PWA) uses **80** / **443** on the host; **`HTTP_PORT=8000`** is mainly for **API-only** runs (e.g. **`make api-up-http`**) when Next runs on the host.
+The monorepo default stack (FrankenPHP + PWA) uses **80** / **443** on the host.
 
 > [!NOTE]
 >
@@ -100,7 +100,7 @@ to inject options block, directive or configuration.
 <!-- markdownlint-disable MD013 -->
 
 | Environment variable            | Description                                                                                                                                                                             | Default value |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+|---------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------|
 | `CADDY_GLOBAL_OPTIONS`          | the [global options block](https://caddyserver.com/docs/caddyfile/options#global-options), one per line                                                                                 |               |
 | `CADDY_EXTRA_CONFIG`            | the [snippet](https://caddyserver.com/docs/caddyfile/concepts#snippets) or the [named-routes](https://caddyserver.com/docs/caddyfile/concepts#named-routes) options block, one per line |               |
 | `CADDY_SERVER_EXTRA_DIRECTIVES` | the [`Caddyfile` directives](https://caddyserver.com/docs/caddyfile/concepts#directives)                                                                                                |               |
@@ -108,7 +108,7 @@ to inject options block, directive or configuration.
 | `SERVER_NAME`                   | the server name or address                                                                                                                                                              | `localhost`   |
 | `FRANKENPHP_CONFIG`             | a list of extra [FrankenPHP global directives](https://frankenphp.dev/docs/config/#caddyfile-config), one per line                                                                      |               |
 | `FRANKENPHP_WORKER_CONFIG`      | a list of extra [FrankenPHP worker directives](https://frankenphp.dev/docs/config/#caddyfile-config), one per line                                                                      |               |
-| `FRANKENPHP_SITE_CONFIG`        | extra directives inside the site `php` handler block in `frankenphp/Caddyfile` (e.g. [`hot_reload`](https://frankenphp.dev/docs/hot-reload/) in dev — set in root `compose.dev.yaml`) |               |
+| `FRANKENPHP_SITE_CONFIG`        | extra directives inside the site `php` handler block in `frankenphp/Caddyfile` (e.g. [`hot_reload`](https://frankenphp.dev/docs/hot-reload/) in dev — set in root `compose.dev.yaml`)   |               |
 | `MERCURE_PUBLISHER_JWT_KEY`     | the JWT key to use for publishers                                                                                                                                                       |               |
 | `MERCURE_PUBLISHER_JWT_ALG`     | the JWT algorithm to use for publishers                                                                                                                                                 | `HS256`       |
 | `MERCURE_SUBSCRIBER_JWT_KEY`    | the JWT key to use for subscribers                                                                                                                                                      |               |

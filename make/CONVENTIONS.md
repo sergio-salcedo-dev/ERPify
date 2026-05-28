@@ -27,15 +27,12 @@ Rules:
 
 **Reserved top-level names** (no namespace, top of `make help`):
 
-| Name   | Meaning                             |
-|--------|-------------------------------------|
-| `dev`  | Start the stack and open a browser  |
-| `test` | Run the full test suite (API + PWA) |
-| `lint` | Run all linters (API + PWA)         |
-| `ci`   | Run the full CI pipeline locally    |
-| `help` | Print grouped target help           |
+| Name   | Meaning                          |
+|--------|----------------------------------|
+| `ci`   | Run the full CI pipeline locally |
+| `help` | Print grouped target help        |
 
-These exist because a first-day contributor guesses them without reading docs. Do not add more.
+Cross-cutting aggregates are namespaced under `app.*` — `app.dev` (start the full dev stack), `app.test` (full test suite, API + PWA), `app.quality` (all linters), `app.clean.*` (wipe build artifacts). A first-day contributor still guesses these without reading docs. Do not add more bare top-level names.
 
 ---
 
@@ -66,7 +63,7 @@ Rules:
 ### Do not
 
 - Do not parse help output in scripts. If you need machine-readable target metadata, add a `help.json` target instead.
-- Do not skip the section header because "this module only has two targets." Empty sections are fine; missing sections break grouping for *other* modules.
+- Do not skip the section header because "this module only has two targets." A module with no header falls back to its filename namespace in `make help` (`git.mk` → `git`) — functional, but a curated `## —— Title ——` reads far better. Add one.
 - Do not add color codes, emoji, or multiline descriptions to `##` comments — the awk parser in `help.mk` only handles one plain line.
 
 ---
@@ -75,23 +72,27 @@ Rules:
 
 Each module in `make/` owns one domain. The active modules:
 
-| Module           | Owns                                                     |
-|------------------|----------------------------------------------------------|
-| `config.mk`      | Variables only, no targets                               |
-| `docker.mk`      | Stack lifecycle (`docker.*`)                             |
-| `dev.mk`         | Developer ergonomics (`dev`, `dev.local`, `xdebug.*`)    |
-| `api.mk`         | Composer, Symfony console, Messenger                     |
-| `db.mk`          | Doctrine migrations, fixtures, psql                      |
-| `php-test.mk`    | PHPUnit, Behat                                           |
-| `php-lint.mk`    | PHPStan, Rector, PHP-CS-Fixer, PHPMD, PHPCS, Psalm       |
-| `pwa.mk`         | Next.js install/dev/build/test/lint                      |
-| `ci.mk`          | CI aggregates only (composes other modules)              |
-| `super-lint.mk`  | GitHub SuperLinter (Docker)                              |
-| `help.mk`        | `help` + `help-targets` (always last in include order)   |
+| Module           | Owns                                                           |
+|------------------|----------------------------------------------------------------|
+| `config.mk`      | Variables only, no targets                                     |
+| `docker.mk`      | Stack lifecycle (`docker.*`)                                   |
+| `xdebug.mk`      | Xdebug mode toggling (`xdebug.*`)                              |
+| `composer.mk`    | Composer install/update + integrity checks (`composer.*`)      |
+| `symfony.mk`     | Symfony console, Messenger, var/cache (`sf.*`)                 |
+| `db.mk`          | Doctrine migrations, fixtures, psql (`db.*`)                   |
+| `git.mk`         | Git container config + submodules (`git.*`)                    |
+| `php.mk`         | PHP container utilities — shell, exec, ownership (`php.*`)     |
+| `php-test.mk`    | PHPUnit, Behat, benchmarks                                     |
+| `php-quality.mk` | PHPStan, Rector, PHP-CS-Fixer, PHPMD, PHPCS, Psalm, lint gates |
+| `pwa.mk`         | Next.js install/dev/build/test/lint/format/clean               |
+| `ci.mk`          | CI aggregates only (composes other modules)                    |
+| `super-lint.mk`  | GitHub SuperLinter (Docker)                                    |
+| `codeql.mk`      | CodeQL database build + analysis (`codeql.*`)                  |
+| `help.mk`        | `help` + `help-targets`                                        |
 
 ### Splitting a module
 
-Split when a single file exceeds ~100 lines *and* has two clearly separable concerns (e.g., composer vs symfony console — both live in `api.mk` today, but if Composer grows to 10 targets, split it out).
+Split when a single file exceeds ~100 lines *and* has two clearly separable concerns. Composer and the Symfony console started in one `api.mk` module and were split into `composer.mk` and `symfony.mk` once each grew its own cluster of targets.
 
 Never split for cosmetic reasons. Fewer files beats more files.
 
@@ -104,7 +105,7 @@ Never split for cosmetic reasons. Fewer files beats more files.
 
 ### Not allowed
 
-- No target definitions outside `make/*.mk`. The root `Makefile` contains includes and the three top-level aggregates (`lint`, `test`) plus `.DEFAULT_GOAL`.
+- No target definitions outside `make/*.mk`. The root `Makefile` contains includes, the cross-cutting `app.*` aggregates (`app.dev`, `app.test`, `app.quality`, `app.clean.*`), plus `.DEFAULT_GOAL`.
 - No cross-module variable definitions. All shared vars live in `config.mk`.
 - No recipe that shells out to another `make/*.mk` file directly. Depend on targets, not files.
 
@@ -116,7 +117,6 @@ Every target that forwards arguments to an underlying tool uses the `c` variable
 
 ```makefile
 composer: ## Run composer; pass c='…'
-	@$(eval c ?=)
 	@$(COMPOSER) $(c)
 ```
 
@@ -132,7 +132,7 @@ Rules:
 
 - **Never post-process the underlying tool's output** — no `tee`, no `grep`, no color stripping. PHPStorm's test runner, ESLint's stylish reporter, and Playwright's reporter all need raw output.
 - **Never add default arguments that the user can't override.** If you need a sensible default, document it in the description and let `c='…'` replace it.
-- `c=` is for passthrough. For target-specific knobs (filters, modes), use distinct variables: `f=` for `make routes`, `cmd=` for `make docker.exec`, `CI_SHARD=` / `CI_TOTAL_SHARDS=` for sharded E2E.
+- `c=` is for passthrough. For target-specific knobs (filters, modes), use distinct variables: `f=` for `make sf.routes`, `cmd=` for `make php.exec`, `CI_SHARD=` / `CI_TOTAL_SHARDS=` for sharded E2E.
 
 ---
 
@@ -142,12 +142,11 @@ Rules:
 |------------------|--------------------------|---------------|-------------------------------------------------------------|
 | `ENV`            | `dev`, `staging`, `prod` | `dev`         | Chooses Compose overlay                                     |
 | `IN_CONTAINER`   | `true`, `false`          | `true`        | `false` = run PHP on host instead of `docker compose exec`  |
-| `OPEN_BROWSER`   | `0`, `1`                 | `1`           | `0` skips `xdg-open` / `open` in `dev` and `prod-up`        |
 | `CI_SHARD`       | `1..N`                   | unset         | Playwright shard index (requires `CI_TOTAL_SHARDS`)         |
 | `CI_TOTAL_SHARDS`| `N`                      | unset         | Playwright total shard count (requires `CI_SHARD`)          |
 | `c`              | any string               | empty         | Passthrough args to the underlying tool                     |
-| `f`              | any string               | empty         | Filter for `routes`                                         |
-| `cmd`            | any string               | empty         | Command for `docker.exec`                                   |
+| `f`              | any string               | empty         | Filter for `sf.routes`                                      |
+| `cmd`            | any string               | empty         | Command for `php.exec`                                      |
 
 Rules:
 
@@ -173,8 +172,8 @@ Rules:
 
 Reserved for CI-tuned variants of domain targets:
 
-- `ci` — full pipeline (`ci.lint` + `ci.test`)
-- `ci.lint`, `ci.test` — aggregate linters / tests
+- `ci` — full pipeline (`ci.quality` + `ci.test`)
+- `ci.quality`, `ci.test` — aggregate linters / tests
 - `ci.api`, `ci.pwa` — side-specific aggregates
 
 Targets in this namespace do not have dev-facing variants. If devs want CI behavior, they run `ci.*` directly.
@@ -215,7 +214,7 @@ See #4 — no post-processing. PHPStorm, Playwright's HTML reporter, and ESLint'
 
 ### 7.4 Checked-in Run Configurations
 
-`.idea/runConfigurations/` contains Run Configurations for the most common targets (`dev`, `test`, `lint`, `php.unit`, `pwa.test.e2e`, `docker.up`, `docker.down`, `db.reset`, `ci`). These are the onboarding artifact — a new dev opens the project in PHPStorm and can run everything without reading any docs.
+`.idea/runConfigurations/` contains Run Configurations for the most common targets (`app.dev`, `app.test`, `app.quality`, `php.unit`, `pwa.test.e2e`, `docker.up`, `docker.down`, `db.reset`, `ci`). These are the onboarding artifact — a new dev opens the project in PHPStorm and can run everything without reading any docs.
 
 Do not delete these. Update them when target names change.
 
@@ -256,14 +255,16 @@ If re-opened, the preferred response is containerizing **Playwright only**, pinn
 Any target that deletes data, drops volumes, or resets state MUST:
 
 - End with `(destructive)` in its `##` description.
-- Not be invoked transitively by a non-destructive target. `db.reset` is called by the human, never by `test` or `ci`.
+- Not be invoked transitively by a non-destructive target. `db.reset` is called by the human, never by `app.test` or `ci`.
 - Not be the default recipe for anything. `.DEFAULT_GOAL := help`, full stop.
 
-Current destructive targets:
+Current destructive targets (representative):
 
-- `docker.clean` — drops Compose volumes
+- `docker.down.clean-volumes` — drops Compose volumes
+- `docker.prune` — prunes all Docker images, volumes, and containers system-wide
 - `db.reset` — drops schema and re-seeds
-- `pwa.clean` — removes `node_modules`, `package-lock.json`, `.next`
+- `pwa.clean.all` — removes `node_modules` (and `.next`, `.next-e2e` via `pwa.clean.soft`)
+- `app.clean.sudo` — host-side sudo wipe of all build artifacts
 
 ---
 
@@ -272,15 +273,6 @@ Current destructive targets:
 Module files scheduled for removal contain a single-line deprecation comment and no targets. They stay on disk until the team confirms nothing external references them, then they're deleted.
 
 **Do not restore deprecated targets.** If you need a removed behavior, re-add it under the current naming scheme.
-
-Current deprecated files (consolidated into the active modules):
-
-- `composer.mk` → `api.mk`
-- `php.mk` → `api.mk` + `db.mk`
-- `php-linters.mk` → `php-lint.mk`
-- `js.mk`, `js-test.mk`, `js-lint.mk`, `npm.mk` → `pwa.mk`
-- `utils.mk` → `help.mk` + `dev.mk`
-- `super-linter.mk` → `super-lint.mk`
 
 ---
 

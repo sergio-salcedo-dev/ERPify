@@ -9,10 +9,6 @@ use Psr\Http\Message\ResponseInterface;
 
 final class JsonDecoder
 {
-    private function __construct()
-    {
-    }
-
     /**
      * @throws JsonException
      *

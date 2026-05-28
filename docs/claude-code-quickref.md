@@ -11,31 +11,30 @@ The root `Makefile` is the canonical interface — it includes the modules in `m
 ### Stack
 
 ```bash
-make dev                 # Full dev stack (--wait --build -d) + open browser. OPEN_BROWSER=0 to skip.
+make app.dev             # Full dev stack (down → install → up --wait → fix ownership)
 make docker.up           # Start stack detached, rebuild images (ENV=dev|staging|prod).
 make docker.up.wait      # Same, with --wait health gate.
 make docker.down         # Stop stack and remove orphans.
 make docker.logs         # Follow compose logs (all services).
 make docker.ps           # Compose ps.
-make docker.health       # GET HEALTH_URL, require HTTP 200 + JSON status ok.
-make docker.bash         # Shell into the php container.
-make docker.clean        # Stop stack and REMOVE volumes (destructive).
-make dev.local           # API + DB on :8000 + Next dev on host :80 (needs pwa/.env.local).
-make api-up-http         # API + DB only on :8000 (no PWA container).
-make prod-up             # Production overlay; requires APP_SECRET, CADDY_MERCURE_JWT_SECRET, POSTGRES_PASSWORD.
+make php.bash            # Shell into the php container (also: make php.sh, make php.exec cmd='…').
+make docker.down.clean-volumes  # Stop stack and REMOVE volumes (destructive).
+make docker.prune        # Prune ALL Docker images/volumes/containers system-wide (destructive).
 ```
 
 ### API / PHP
 
 ```bash
 make composer c='req vendor/pkg'    # Run composer inside the container.
-make sf c='about'                   # Symfony console (also: make cc, make routes f='…').
+make sf c='about'                   # Symfony console (also: make sf.cc, make sf.routes f='…', make sf.about).
 make php.test                       # PHPUnit + Behat. Pass c='…' for extra args.
 make php.unit c='--filter SomeTest' # PHPUnit only.
 make php.behat c='features/...'     # Behat only.
-make php.bench                      # Opt-in performance-budget benchmarks (NFR2; default php.unit skips).
-make php.lint                       # Full sweep: PHPStan, Rector, PHP-CS-Fixer, PHPMD, PHPCS, Psalm.
+make php.bench                      # Opt-in performance-budget benchmarks (default php.unit skips).
+make php.quality                    # Full sweep: PHPStan, Rector, PHP-CS-Fixer, PHPMD, PHPCS, Psalm.
 make php.stan                       # PHPStan only — REQUIRED on every PHP file you change.
+make composer.update                # Safe dependency update (within composer.json ranges).
+make composer.upgrade               # Force-upgrade direct deps to latest (bumps constraints across majors).
 make db.migrate                     # Run pending Doctrine migrations.
 make db.diff                        # Generate migration from entity/schema diff.
 make db.status                      # Migration status.
@@ -46,48 +45,54 @@ make db.shell                       # Interactive psql.
 make xdebug.enable                  # Toggle Xdebug in api/.env (also xdebug.disable, xdebug.status).
 ```
 
-Individual linters: `php.rector[.dry-run]`, `php.cs-fixer[.dry-run]`, `php.md`, `php.cs[.dry-run]`, `php.psalm`, `php.psalm.taint`, `php.psalm.baseline`, `composer.checks`. Error-contract drift gate: `php.lint.error-contract` (FR50/FR51/NFR26).
+Individual linters: `php.rector[.dry-run]`, `php.cs-fixer[.dry-run]`, `php.md`, `php.cs[.dry-run]`, `php.psalm`, `php.psalm.taint`, `php.psalm.baseline`, `composer.check.all`. Error-contract drift gate: `php.lint.error-contract` (FR50/FR51/NFR26).
 
 ### PWA / JS
 
 ```bash
 make pwa.install                    # npm ci in pwa/.
-make pwa.dev                        # Next dev (Turbopack, host :80) — pair with make api-up-http.
-make pwa.build                      # Production build.
+make pwa.update                     # Safe dependency update (within semver ranges).
+make pwa.upgrade                    # Force-upgrade all deps to latest (npm-check-updates).
+make pwa.dev                        # Next dev server (Turbopack) on host :80 (needs pwa/.env.local).
+make pwa.production.build           # Production build.
+make pwa.production.start           # Serve the production build on :80.
 make pwa.test                       # Vitest + Playwright.
 make pwa.test.unit c='path/to.test' # Vitest single file.
 make pwa.test.unit.watch            # Vitest watch mode.
 make pwa.test.e2e                   # Playwright. Sharded: CI_SHARD=N CI_TOTAL_SHARDS=M make pwa.test.e2e.
 make pwa.test.e2e.reports           # Open the Playwright HTML report.
-make pwa.lint                       # ESLint + Prettier check.
-make pwa.lint.eslint.fix            # ESLint --fix.
-make pwa.format.prettier.fix        # Prettier --write.
+make pwa.lint                       # ESLint --fix.
+make pwa.format                     # Prettier --write.
+make pwa.quality.dry-run            # ESLint + Prettier check (no writes).
 ```
 
 ### Aggregates and CI
 
 ```bash
-make lint                           # All linters (PHP + PWA).
-make test                           # All tests (PHP + PWA).
-make ci                             # Full CI (ci.lint + ci.test).
+make app.quality                    # All linters (PHP + PWA).
+make app.test                       # All tests (PHP + PWA).
+make app.update                     # Safe dep update for API + PWA (within constraints).
+make app.upgrade                    # Force upgrade API + PWA deps to latest (across majors).
+make ci                             # Full CI (ci.quality + ci.test).
 make ci.api                         # API only: lint + tests.
 make ci.pwa                         # PWA only: lint + unit + build (no E2E).
-make super-lint                     # SuperLinter via Docker (requires GITHUB_TOKEN).
-make super-lint.quick               # SuperLinter on changed files only.
+make super-lint.full                # SuperLinter over the whole repo (requires GITHUB_TOKEN).
+make super-lint.fast                # SuperLinter on changed files only (faster).
+make super-lint.slim                # SuperLinter on changed files only (slim image).
 ```
 
-**Always start the stack with `make dev` or `make docker.up`.** Bare `docker compose up -d` skips composer install on cold checkouts and the `pwa.install.if-missing` guard, leaving the PWA container without dependencies.
+**Always start the stack with `make app.dev` or `make docker.up`.** Bare `docker compose up -d` skips composer install on cold checkouts and the `pwa.install.if-missing` guard, leaving the PWA container without dependencies.
 
 ---
 
 ## Services
 
-| Service             | Image / Build                | Port (host)                          | Purpose                                       |
-|---------------------|------------------------------|--------------------------------------|-----------------------------------------------|
-| `php`               | `./api` (FrankenPHP worker)  | `:80` / `:443` / `:443/udp` (HTTP/3) | Symfony API + reverse proxy to PWA + Mercure  |
-| `pwa`               | `./pwa` (Next.js 16)         | internal `:3000`                     | App Router HTML, served via FrankenPHP        |
-| `database`          | `postgres:18-alpine` (sha256-pinned) | internal `:5432`             | Main app DB                                   |
-| `messenger_worker`  | reuses `php` image           | —                                    | Async Symfony Messenger consumer              |
+| Service            | Image / Build                        | Port (host)                          | Purpose                                      |
+|--------------------|--------------------------------------|--------------------------------------|----------------------------------------------|
+| `php`              | `./api` (FrankenPHP worker)          | `:80` / `:443` / `:443/udp` (HTTP/3) | Symfony API + reverse proxy to PWA + Mercure |
+| `pwa`              | `./pwa` (Next.js 16)                 | internal `:3000`                     | App Router HTML, served via FrankenPHP       |
+| `database`         | `postgres:18-alpine` (sha256-pinned) | internal `:5432`                     | Main app DB                                  |
+| `messenger_worker` | reuses `php` image                   | —                                    | Async Symfony Messenger consumer             |
 
 Compose base images are sha256-pinned; Dependabot tracks digest bumps. `compose.yaml` + `compose.dev.yaml` / `compose.prod.yaml` overlays live at the repo root.
 
@@ -108,36 +113,36 @@ scripts/        Utility scripts
 
 ### `api/`
 
-| What                                    | Where                                                        |
-|-----------------------------------------|--------------------------------------------------------------|
-| Symfony kernel                          | `api/src/Kernel.php`                                         |
-| Bounded contexts (DDD)                  | `api/src/{Backoffice,Frontoffice,Shared}/<Module>/`          |
-| Domain layer (entities, VOs, ports)     | `<Module>/Domain/`                                           |
-| Application layer (use cases, DTOs)     | `<Module>/Application/`                                      |
-| Infrastructure (Doctrine, controllers, Messenger handlers, mailers, clients) | `<Module>/Infrastructure/` |
-| Cross-cutting kernel                    | `api/src/Shared/`                                            |
-| Symfony config (services, routes, packages, Messenger transports) | `api/config/`              |
-| Doctrine migrations                     | `api/migrations/` (generate via `make db.diff`, never edit applied ones) |
-| Test fixtures (Hautelook Alice)         | `api/tests/DataFixtures/` and `api/tests/Fixtures/`          |
-| Unit tests                              | `api/tests/Unit/`                                            |
-| Functional tests                        | `api/tests/Functional/`                                      |
-| Behat contexts                          | `api/tests/Behat/`                                           |
-| Behat features                          | `api/features/`                                              |
-| Performance budgets (opt-in)            | `api/tests/Bench/`                                           |
-| Isolated tooling Composer installs      | `api/tools/{phpunit,behat,…}/`                               |
-| FrankenPHP Caddyfile + worker entry     | `api/frankenphp/`                                            |
+| What                                                                         | Where                                                                    |
+|------------------------------------------------------------------------------|--------------------------------------------------------------------------|
+| Symfony kernel                                                               | `api/src/Kernel.php`                                                     |
+| Bounded contexts (DDD)                                                       | `api/src/{Backoffice,Frontoffice,Shared}/<Module>/`                      |
+| Domain layer (entities, VOs, ports)                                          | `<Module>/Domain/`                                                       |
+| Application layer (use cases, DTOs)                                          | `<Module>/Application/`                                                  |
+| Infrastructure (Doctrine, controllers, Messenger handlers, mailers, clients) | `<Module>/Infrastructure/`                                               |
+| Cross-cutting kernel                                                         | `api/src/Shared/`                                                        |
+| Symfony config (services, routes, packages, Messenger transports)            | `api/config/`                                                            |
+| Doctrine migrations                                                          | `api/migrations/` (generate via `make db.diff`, never edit applied ones) |
+| Test fixtures (Hautelook Alice)                                              | `api/tests/DataFixtures/` and `api/tests/Fixtures/`                      |
+| Unit tests                                                                   | `api/tests/Unit/`                                                        |
+| Functional tests                                                             | `api/tests/Functional/`                                                  |
+| Behat contexts                                                               | `api/tests/Behat/`                                                       |
+| Behat features                                                               | `api/features/`                                                          |
+| Performance budgets (opt-in)                                                 | `api/tests/Bench/`                                                       |
+| Isolated tooling Composer installs                                           | `api/tools/{phpunit,behat,…}/`                                           |
+| FrankenPHP Caddyfile + worker entry                                          | `api/frankenphp/`                                                        |
 
 ### `pwa/`
 
-| What                                    | Where                                                        |
-|-----------------------------------------|--------------------------------------------------------------|
-| Next.js App Router                      | `pwa/src/app/`                                               |
-| Bounded contexts (DDD)                  | `pwa/src/context/<bounded-context>/{domain,application,infrastructure}/` |
-| Cross-cutting kernel                    | `pwa/src/context/shared/`                                    |
-| Reusable UI (Shadcn-based)              | `pwa/src/components/`                                        |
-| Framework glue                          | `pwa/src/lib/`                                               |
-| Unit tests (Vitest)                     | `pwa/tests/` (mirrors `src/`)                                |
-| E2E tests (Playwright)                  | `pwa/tests/e2e/`                                             |
+| What                       | Where                                                                    |
+|----------------------------|--------------------------------------------------------------------------|
+| Next.js App Router         | `pwa/src/app/`                                                           |
+| Bounded contexts (DDD)     | `pwa/src/context/<bounded-context>/{domain,application,infrastructure}/` |
+| Cross-cutting kernel       | `pwa/src/context/shared/`                                                |
+| Reusable UI (Shadcn-based) | `pwa/src/components/`                                                    |
+| Framework glue             | `pwa/src/lib/`                                                           |
+| Unit tests (Vitest)        | `pwa/tests/` (mirrors `src/`)                                            |
+| E2E tests (Playwright)     | `pwa/tests/e2e/`                                                         |
 
 For a deeper, machine-generated tree, see [`source-tree-analysis.md`](source-tree-analysis.md).
 
@@ -153,7 +158,7 @@ For a deeper, machine-generated tree, see [`source-tree-analysis.md`](source-tre
 4. Wire services in `api/config/services.yaml` (or per-module config) — autoconfigure handles most cases.
 5. Schema changes: `make db.diff` → review the file in `api/migrations/` → `make db.migrate`.
 6. Test: unit tests for domain/application in `api/tests/Unit/`; HTTP behaviour in a Behat scenario under `api/features/`.
-7. Run `make php.stan` on every PHP file you changed; then `make php.lint` at the end.
+7. Run `make php.stan` on every PHP file you changed; then `make php.quality` at the end.
 
 See [`../api/docs/adding-endpoints.md`](../api/docs/adding-endpoints.md) for the search-endpoint walkthrough.
 
@@ -173,7 +178,7 @@ See [`../api/docs/adding-endpoints.md`](../api/docs/adding-endpoints.md) for the
 4. Inversify bindings live in the matching container module — keep `domain/` framework-free.
 5. Reusable UI in `pwa/src/components/` (Shadcn + Tailwind, BEM class naming `block__element--modifier`).
 6. Test: Vitest under `pwa/tests/` mirroring source; Playwright scenarios under `pwa/tests/e2e/`.
-7. Run `make pwa.lint` at the end.
+7. Run `make pwa.quality` at the end.
 
 ### New Doctrine migration
 
@@ -199,10 +204,9 @@ Behat is **preferred** over PHPUnit functional tests for HTTP behaviour. Do not 
 ## Known limitations / gotchas
 
 - **Always run `make` from the repo root.** Compose, target paths, and `IN_CONTAINER` detection assume it. Bare `docker compose up -d` skips composer install on cold checkouts and the `pwa.install.if-missing` guard.
-- **Prod boot requires secrets** — `APP_SECRET`, `CADDY_MERCURE_JWT_SECRET`, `POSTGRES_PASSWORD`. `make prod-up` fails non-obviously if any are missing.
-- **`make dev.local` requires `pwa/.env.local`** with `NEXT_PUBLIC_SYMFONY_API_BASE_URL=http://localhost:8000` and `SYMFONY_INTERNAL_URL=http://localhost:8000`. Without these, the host Next dev server can't reach the API on `:8000`.
+- **Prod boot requires secrets** — `APP_SECRET`, `CADDY_MERCURE_JWT_SECRET`, `POSTGRES_PASSWORD`. The prod overlay fails non-obviously if any are missing.
 - **First boot is slow.** FrankenPHP's healthcheck has a 120s `start_period` because the entrypoint runs composer install (cold), waits for the DB, runs migrations, then starts the worker. Don't kill it early.
 - **Port collisions on `:80` / `:443` / `:8000`** will surface as a non-obvious Compose error. Free the port or override `HTTP_PORT` / `HTTPS_PORT`.
 - **API tests services config must be YAML** (`api/config/services_test.yaml`) — never `services_test.php`. Symfony's test kernel only loads the YAML variant.
-- **Rector silently privatizes `protected` methods on `final` classes** during `make php.lint`. If you intentionally leave a method `protected` on a `final` class, expect it to be rewritten — refactor the design or drop `final`.
+- **Rector silently privatizes `protected` methods on `final` classes** during `make php.quality`. If you intentionally leave a method `protected` on a `final` class, expect it to be rewritten — refactor the design or drop `final`.
 - **PHP multi-line `if`/`while`/`match` formatting** — newline after the opening `(`; do not put the first operand on the same line as the keyword. PHP-CS-Fixer enforces this.

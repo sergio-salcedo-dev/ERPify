@@ -63,7 +63,7 @@ api/src/Shared/
 - **Implementation:** `Infrastructure/Mailer/PlainTextNotificationMailer` (autowired via `#[AsAlias]`).
 
 #### `api/src/Shared/Application/Problem/ProblemBodyTooLargeException.php`
-- **LOC:** 30 (1 code, 29 docblock) — **Type:** marker exception (Story 3.6 / NFR10).
+- **LOC:** 30 (1 code, 29 docblock) — **Type:** marker exception.
 - **Used by:** `ProblemDetailsFactory::applyBodyCap()` (thrown), `Infrastructure/Http/EventListener/ExceptionResponder` (caught → static last-resort body).
 - **Contributor note:** Indicates the multi-KB error title alone exceeds the 16 KiB cap. Never catch elsewhere; the listener owns escalation.
 
@@ -88,7 +88,7 @@ api/src/Shared/
 - **Verification:** Big test pin set: `ProblemDetailsFactoryTest`, `ErrorContractGateTest`, `MarkerStatusMapContractTest`, `ConstantTimeAuthBranchingContractTest`, `ConstantTimeAuthBranchingBenchmarkTest`, `NativeJsonEncodeContractTest`, `BannedDoctrineApisTest`, `LoggerInterfaceContractTest`, `NoDatabaseDependenciesContractTest`, `StatelessPropertiesContractTest`, plus `api/tests/Bench/.../ExceptionResponderBenchmarkTest.php` (NFR2 budget — opt-in via `make php.bench`).
 
 #### `api/src/Shared/Application/Problem/RedactionDenylist.php`
-- **LOC:** 81 (50 code, 31 docblock) — **Type:** caseless `enum` (Story 3.2 / FR34 / NFR12).
+- **LOC:** 81 (50 code, 31 docblock) — **Type:** caseless `enum`.
 - **Exports:** `KEYS = ['password','token','secret','authorization','cookie','ssn','iban']`; `static filter(array): array`.
 - **Semantics:** Strip (key removed) — not redact-with-sentinel. Match scope: exact-key, case-insensitive ASCII (`strtolower`), single-level (no recursion).
 - **Used by:** `ProblemDetailsFactory::redactKeys()`, `Infrastructure/Http/EventListener/ExceptionResponder::buildLogContext()` (defense in depth).
@@ -178,7 +178,7 @@ api/src/Shared/
 #### `api/src/Shared/Infrastructure/Http/CorrelationIdListener.php`
 - **LOC:** 90 — two listeners on the same class via attributes.
 - **`PRIORITY = 1024`** on `kernel.request`; **`RESPONSE_PRIORITY = -1024`** on `kernel.response`.
-- Inbound `X-Correlation-Id` is validated against a strict UUIDv7 regex (`UUIDV7_PATTERN`, `\A…\z` anchors, lowercase hex, RFC 9562 §6.10) with a length short-circuit (`UUIDV7_LENGTH = 36`) to prevent regex-DoS on multi-MB attribute values. Skips sub-requests (Story 2.1). Response handler **re-validates** the request attribute before writing the `X-Correlation-Id` header (defense-in-depth).
+- Inbound `X-Correlation-Id` is validated against a strict UUIDv7 regex (`UUIDV7_PATTERN`, `\A…\z` anchors, lowercase hex, RFC 9562 §6.10) with a length short-circuit (`UUIDV7_LENGTH = 36`) to prevent regex-DoS on multi-MB attribute values. Skips sub-requests. Response handler **re-validates** the request attribute before writing the `X-Correlation-Id` header (defense-in-depth).
 - **Verification:** `api/tests/Unit/Shared/Infrastructure/Http/CorrelationIdListenerTest.php`, `api/tests/Functional/Shared/Infrastructure/Http/CorrelationIdListenerFunctionalTest.php`.
 
 #### `api/src/Shared/Infrastructure/Http/EventListener/ExceptionResponder.php`
@@ -400,7 +400,7 @@ Key invariants pinned by tests:
 - NelmioCors `kernel.response` priority remains `0` (so the Problem Details body is written before CORS headers attach).
 - The last-resort body is a literal string (never `json_encode`), so an encoding bug or malformed `Throwable` chain still produces a parseable 500.
 - 16 KiB body cap; truncation algorithm pops violations tail → drops extension keys reverse-order → throws `ProblemBodyTooLargeException` if the core fields alone overflow → outer try/catch emits the static fallback.
-- All 401/403 paths flow through identical construction shape (Story 3.7 / NFR9 — constant-time auth branching).
+- All 401/403 paths flow through identical construction shape (constant-time auth branching).
 - `correlation-id` is per-request (in the response header, in every log line on that request); `instance` is per-error (in the problem body and on the matching log line).
 
 ---
@@ -628,7 +628,7 @@ StoredObjectOrphanCleaner::cleanupAfterRemoval($hash)
 ### Pre-PR checklist
 - [ ] `make php.stan` clean on every PHP file you touched.
 - [ ] `make php.unit` and `make php.behat` green.
-- [ ] `make php.lint` (final sweep).
+- [ ] `make php.quality` (final sweep).
 - [ ] If error-pipeline change: `make php.bench`.
 - [ ] If you renamed/added a public class in `Domain/`, update the architecture-purity guard test list.
 - [ ] If you added a new domain that stores objects: `StoredObjectReferenceInspector` implemented + tagged + tested.
@@ -637,19 +637,19 @@ StoredObjectOrphanCleaner::cleanupAfterRemoval($hash)
 
 ## Contributor Quick Index
 
-| Need to… | Start here |
-|---|---|
-| Map an exception to a new HTTP status | `Application/Problem/ProblemDetailsFactory.php` (`MARKER_STATUS_MAP`) |
-| Add a sensitive key to denylist | `Application/Problem/RedactionDenylist.php` + `RedactionDenylistTest` |
-| Customize debug payload per env | `ProblemDetailsFactory::resolveDebugMode()` + `buildDebugExtension()` |
-| Build a search endpoint | `Application/Http/Search/SearchQuery` (subclass) + `Infrastructure/Persistence/AbstractSearchRepository` (extend) + `Infrastructure/Http/Controller/AbstractSearchController` (extend) |
-| Add a domain event | `Domain/Event/DomainEvent` (subclass) — audit persistence is wired |
-| Send an email | `Application/Mailer/NotificationMailer` (port) — already has plain-text adapter |
-| Store a small image (BYTEA) | `Media/Application/MediaRegistrar` |
-| Store a larger object (Flysystem) | `Storage/Application/StoredImageObjectWriter` + implement `StoredObjectReferenceInspector` for your domain |
-| Generate a public URL | inject `MediaPublicUrlGenerator` or `StoredObjectPublicUrlGenerator` |
-| Validate inside a use case | inject `Application/Validation/Validator` |
-| Build a Result for the responder | `Application/UseCase/Result::ok()` / `created()` / `noContent()` |
+| Need to…                              | Start here                                                                                                                                                                             |
+|---------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Map an exception to a new HTTP status | `Application/Problem/ProblemDetailsFactory.php` (`MARKER_STATUS_MAP`)                                                                                                                  |
+| Add a sensitive key to denylist       | `Application/Problem/RedactionDenylist.php` + `RedactionDenylistTest`                                                                                                                  |
+| Customize debug payload per env       | `ProblemDetailsFactory::resolveDebugMode()` + `buildDebugExtension()`                                                                                                                  |
+| Build a search endpoint               | `Application/Http/Search/SearchQuery` (subclass) + `Infrastructure/Persistence/AbstractSearchRepository` (extend) + `Infrastructure/Http/Controller/AbstractSearchController` (extend) |
+| Add a domain event                    | `Domain/Event/DomainEvent` (subclass) — audit persistence is wired                                                                                                                     |
+| Send an email                         | `Application/Mailer/NotificationMailer` (port) — already has plain-text adapter                                                                                                        |
+| Store a small image (BYTEA)           | `Media/Application/MediaRegistrar`                                                                                                                                                     |
+| Store a larger object (Flysystem)     | `Storage/Application/StoredImageObjectWriter` + implement `StoredObjectReferenceInspector` for your domain                                                                             |
+| Generate a public URL                 | inject `MediaPublicUrlGenerator` or `StoredObjectPublicUrlGenerator`                                                                                                                   |
+| Validate inside a use case            | inject `Application/Validation/Validator`                                                                                                                                              |
+| Build a Result for the responder      | `Application/UseCase/Result::ok()` / `created()` / `noContent()`                                                                                                                       |
 
 ---
 

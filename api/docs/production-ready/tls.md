@@ -21,13 +21,13 @@ When `SERVER_NAME` is set to a public domain, Caddy:
 
 **Requirements:**
 
-| Requirement | Why |
-|---|---|
+| Requirement                                                 | Why                                                        |
+|-------------------------------------------------------------|------------------------------------------------------------|
 | `SERVER_NAME` set to a real domain (e.g. `api.example.com`) | Let's Encrypt does not issue certificates for IP addresses |
-| DNS `A` record already pointing to the server IP | Caddy validates domain ownership immediately on startup |
-| Port **80** open in the server firewall | Let's Encrypt HTTP-01 challenge |
-| Port **443** open in the server firewall | HTTPS traffic |
-| Port **443 UDP** open | HTTP/3 (QUIC) — optional but recommended |
+| DNS `A` record already pointing to the server IP            | Caddy validates domain ownership immediately on startup    |
+| Port **80** open in the server firewall                     | Let's Encrypt HTTP-01 challenge                            |
+| Port **443** open in the server firewall                    | HTTPS traffic                                              |
+| Port **443 UDP** open                                       | HTTP/3 (QUIC) — optional but recommended                   |
 
 If the certificate request fails (e.g. DNS not propagated yet), Caddy will retry
 automatically. Check `docker compose logs php` for certificate-related errors.

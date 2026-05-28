@@ -1,18 +1,33 @@
 # =============================================================================
 # PHP Composer
-# DEPRECATED
+# All recipes run via $(PHP_CONT) (container) or on host when IN_CONTAINER=false.
 # =============================================================================
 
-.PHONY: composer.check.deps composer.check.platform-reqs composer.unused composer.checks
+.PHONY: composer composer.install composer.update composer.upgrade composer.check.all \
+        composer.check.platform-reqs composer.check.missing-deps composer.check.unused
 
-composer.check.deps: ## Check for missing composer dependencies
+## —— Composer ————————————————————————————————————————————————————————————
+
+composer: ## Run composer; pass c='…' (e.g. make composer c='req vendor/pkg')
+	@$(COMPOSER) $(c)
+
+composer.install: ## composer install (production-style flags)
+	@$(COMPOSER) install --prefer-dist --no-dev --no-progress --no-scripts --no-interaction
+
+composer.update: ## composer update (safe, within composer.json constraints)
+	@$(COMPOSER) update -W
+
+composer.upgrade: ## Force upgrade direct Composer deps to the latest stable (bumps constraints across majors)
+	@$(PHP) bin/composer-upgrade
+
+composer.check.platform-reqs: ## composer check-platform-reqs
+	@$(COMPOSER) check-platform-reqs
+
+composer.check.missing-deps: ## Check for missing composer dependencies
 	$(PHP_CONT) sh -c 'CONFIG=$$(find /app -name "composer-require-checker.json" | head -n 1); \
 	XDEBUG_MODE=off /app/vendor/bin/composer-require-checker check --config-file=$$CONFIG /app/composer.json'
 
-composer.check.platform-reqs: ## Check for missing composer dependencies
-	$(COMPOSER) check-platform-reqs
-
-composer.unused: ## Check for unused Composer packages
+composer.check.unused: ## Check for unused Composer packages
 	$(PHP) vendor/bin/composer-unused \
 				--excludePackage=symfony/flex \
 				--excludePackage=symfony/runtime \
@@ -21,4 +36,4 @@ composer.unused: ## Check for unused Composer packages
 				--excludePackage=nelmio/cors-bundle \
 				--ignore-exit-code
 
-composer.checks: composer.check.platform-reqs composer.check.deps composer.unused ## Run all composer linters
+composer.check.all: composer.check.platform-reqs composer.check.missing-deps composer.check.unused ## Run all composer integrity checks

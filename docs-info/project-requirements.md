@@ -5,7 +5,7 @@ Tools you need on your **host** machine to work with this repository (the API it
 ## Required
 
 - **Docker** and **Docker Compose** (v2) — to build and run the Symfony stack (image **`context: ./api`**, Compose files at the repo root). See [api/README.md](../api/README.md) and the root [README](../README.md).
-- **GNU Make** — optional but expected if you use the root [`Makefile`](../Makefile) targets (`make up`, `make health`, etc.).
+- **GNU Make** — optional but expected if you use the root [`Makefile`](../Makefile) targets (`make docker.up`, `make app.dev`, etc.).
 
 You do **not** need PHP on the host to run the app if you use Docker; use [`api/bin/sf`](../api/bin/sf) or, from the **repository root**, `docker compose -f compose.yaml -f compose.dev.yaml exec php bin/console` when `php` is not on your `PATH`.
 
@@ -15,12 +15,12 @@ Install **[jq](https://jqlang.org/)** (a command-line JSON processor).
 
 ### Why it matters here
 
-The root `make health` target calls `curl` against `https://localhost/api/v1/health` and checks that the response is HTTP 200 and that the JSON body reports a healthy status (`"status": "ok"`).
+The health endpoint at `https://localhost/api/v1/health` returns a JSON body reporting status (`"status": "ok"`). When you probe it with `curl` — or inspect any API / Problem Details response — `jq` makes the output readable and lets you assert on its structure.
 
-- **With `jq` installed:** the Makefile pretty-prints the response (`jq .`) and validates the payload with `jq -e '.status == "ok"'`. That checks real JSON structure, not just a text pattern.
-- **Without `jq`:** the same target still works: it prints the raw body and uses `grep` to look for `"status":"ok"`. That is slightly more brittle (e.g. unusual spacing or unexpected extra fields are handled less cleanly than with `jq`).
+- **With `jq` installed:** pretty-print the response (`curl -sk https://localhost/api/v1/health | jq .`) and validate the payload (`jq -e '.status == "ok"'`). That checks real JSON structure, not just a text pattern.
+- **Without `jq`:** you can still read the raw body and `grep` for `"status":"ok"`, but that is more brittle (e.g. unusual spacing or unexpected extra fields are handled less cleanly than with `jq`).
 
-So `jq` is **not strictly required**, but installing it is recommended for clearer output and stricter checks when you run `make health`.
+So `jq` is **not strictly required**, but installing it is recommended for clearer output and stricter checks when you inspect API responses.
 
 ### Install
 

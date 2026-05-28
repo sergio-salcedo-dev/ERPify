@@ -4,8 +4,8 @@ Feature: Symfony framework exceptions surface through the RFC 9457 error contrac
     I need Symfony's HttpExceptionInterface, AccessDeniedException, and AuthenticationException
     to produce Problem Details responses with the canonical type and status
 
-  # Routes are wired at /api/test/_throw-* (Story 1.4) and /api/test/_throw-http-*,
-  # /api/test/_throw-security-* (Story 1.5). The default Behat suite's HttpRequestContext is
+  # Routes are wired at /api/test/_throw-* and /api/test/_throw-http-*,
+  # /api/test/_throw-security-* . The default Behat suite's HttpRequestContext is
   # constructor-bound to baseUrl=/api/v1 (FriendsOfBehat\SymfonyExtension reuses the same
   # service instance across suites, so a per-suite override does not take effect). To bypass
   # the baseUrl prefix entirely, scenarios use absolute URLs (HttpRequestContext skips the

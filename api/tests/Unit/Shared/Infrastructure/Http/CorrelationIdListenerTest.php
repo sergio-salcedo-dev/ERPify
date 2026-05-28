@@ -6,6 +6,7 @@ namespace Erpify\Tests\Unit\Shared\Infrastructure\Http;
 
 use Erpify\Shared\Infrastructure\Http\CorrelationIdListener;
 use LogicException;
+use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
@@ -505,6 +506,7 @@ final class CorrelationIdListenerTest extends TestCase
     private function makeKernel(): HttpKernelInterface
     {
         return new class implements HttpKernelInterface {
+            #[Override]
             public function handle(Request $request, int $type = HttpKernelInterface::MAIN_REQUEST, bool $catch = true): Response
             {
                 throw new LogicException('Test kernel: handle() must not be called by the listener.');

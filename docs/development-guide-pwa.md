@@ -6,7 +6,7 @@ All commands below are run from the **repo root** via the root `Makefile`. The M
 
 - Docker + Docker Compose (v2) — default flow runs Next inside the container.
 - GNU Make.
-- **Node.js 24 + npm on the host** — required. Vitest and Playwright run host-only via `$(pwa_cmd)`; there is no container variant (rationale: `make/CONVENTIONS.md` §8). Also needed for the `dev-local` / host-Next flow below. Match the container runtime (`node:24-alpine`).
+- **Node.js 24 + npm on the host** — required. Vitest and Playwright run host-only via `$(pwa_cmd)`; there is no container variant (rationale: `make/CONVENTIONS.md` §8). Match the container runtime (`node:24-alpine`).
 
 ## First-time setup (Docker flow, default)
 
@@ -17,39 +17,25 @@ make pwa.install               # install npm deps into the pwa container
 
 Browser opens at `http://localhost` (and `https://localhost`). Accept the dev certificate if prompted.
 
-## Alternative: host Next + containerised API (`dev-local`)
-
-```bash
-make api-up-http               # API on :8000 only
-# pwa/.env.local must contain:
-#   NEXT_PUBLIC_SYMFONY_API_BASE_URL=http://localhost:8000
-#   SYMFONY_INTERNAL_URL=http://localhost:8000
-make dev.local                 # next dev on host :80 against API :8000
-```
-
-Do not mix flows in one session; switch by clearing `pwa/.env.local` and rebuilding.
-
-Details: [`integration-architecture.md`](./integration-architecture.md#alternative-flow-dev-local-host-next-containerised-api).
-
 ## Run / build / tests
 
-| Task | Command | Notes |
-|---|---|---|
-| Next dev (container) | `make pwa.dev` | Turbopack on `:3000` inside `pwa`; proxied by FrankenPHP |
-| Production build | `make pwa.build` | `next build` |
-| Install deps | `make pwa.install` | `npm ci` |
-| Unit tests | `make pwa.test.unit` | Vitest; optional `c='path/to/file.test.ts'` |
-| Unit — watch | `make pwa.test.unit.watch` | |
-| E2E tests | `make pwa.test.e2e` | Playwright — targets **`:3000`** |
-| Playwright reports | `make pwa.test.e2e.reports` | |
-| Unit + E2E | `make pwa.test` | |
+| Task                 | Command                     | Notes                                                    |
+|----------------------|-----------------------------|----------------------------------------------------------|
+| Next dev (container) | `make pwa.dev`              | Turbopack on `:3000` inside `pwa`; proxied by FrankenPHP |
+| Production build     | `make pwa.production.build` | `next build`                                             |
+| Install deps         | `make pwa.install`          | `npm ci`                                                 |
+| Unit tests           | `make pwa.test.unit`        | Vitest; optional `c='path/to/file.test.ts'`              |
+| Unit — watch         | `make pwa.test.unit.watch`  |                                                          |
+| E2E tests            | `make pwa.test.e2e`         | Playwright — targets **`:3000`**                         |
+| Playwright reports   | `make pwa.test.e2e.reports` |                                                          |
+| Unit + E2E           | `make pwa.test`             |                                                          |
 
 ## Lint / format
 
 ```bash
-make pwa.lint                       # ESLint + Prettier check
-make pwa.lint.fix                   # ESLint --fix
-make pwa.format.fix                 # Prettier --write
+make pwa.quality                    # ESLint + Prettier check
+make pwa.lint                       # ESLint --fix
+make pwa.format                     # Prettier --write
 ```
 
 ESLint 10 + `eslint-config-next` + Prettier are **authoritative** — do not hand-format against them.
@@ -101,12 +87,12 @@ pwa/src/
 
 ## Environment variables
 
-| Var | Scope | Purpose |
-|---|---|---|
-| `NEXT_PUBLIC_SYMFONY_API_BASE_URL` | Client + server | API base URL the browser uses |
-| `SYMFONY_INTERNAL_URL` | Server only | URL used for SSR / RSC fetches |
-| `NEXT_PUBLIC_*` | Public | Must not contain secrets |
-| Any other var | Server only | Never read from a client component |
+| Var                                | Scope           | Purpose                            |
+|------------------------------------|-----------------|------------------------------------|
+| `NEXT_PUBLIC_SYMFONY_API_BASE_URL` | Client + server | API base URL the browser uses      |
+| `SYMFONY_INTERNAL_URL`             | Server only     | URL used for SSR / RSC fetches     |
+| `NEXT_PUBLIC_*`                    | Public          | Must not contain secrets           |
+| Any other var                      | Server only     | Never read from a client component |
 
 ## Critical rules to load before coding
 

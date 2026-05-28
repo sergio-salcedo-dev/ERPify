@@ -1,4 +1,4 @@
-# Story 4.5 (FR50) — error-contract gate allowlist.
+# error-contract gate allowlist.
 #
 # Files listed here (relative to api/) are exempt from the
 # "no `catch (...) { ... new JsonResponse(...) }` in controllers" gate.

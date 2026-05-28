@@ -7,7 +7,7 @@ How the `api/` and `pwa/` parts communicate, and the traffic topology that makes
 | Part | Role | Port(s) |
 |---|---|---|
 | `api/` (FrankenPHP) | Origin for all browser traffic; hosts Symfony API + serves Mercure Hub + reverse-proxies HTML | `:80` / `:443` (dev), `:443` (prod) |
-| `pwa/` (Next.js) | Web UI rendering | `:3000` (inside the Compose network); `:80` on host for `dev-local` |
+| `pwa/` (Next.js) | Web UI rendering | `:3000` (inside the Compose network) |
 | PostgreSQL | API's primary data store | Internal Compose network |
 | Mercure Hub | SSE hub (separate or embedded) | Behind `/.well-known/mercure` on the FrankenPHP origin |
 | `messenger_worker` (prod/ci only) | Symfony Messenger consumer | N/A (no HTTP) |
@@ -49,29 +49,12 @@ browser → localhost ──▶│     FrankenPHP (Caddy)      │
 | 2 | Browser → FrankenPHP | Symfony API | HTTP | Path `/api/*`. Same origin as HTML, so no CORS preflight in the default flow. |
 | 3 | Browser → FrankenPHP | Mercure Hub | SSE / HTTP | Path `/.well-known/mercure`. JWT required. |
 | 4 | Next SSR/RSC → Symfony API | Server-side fetch | HTTP | Uses `SYMFONY_INTERNAL_URL` (container-internal URL), **not** the browser URL. |
-| 5 | Next client → Symfony API | Client-side fetch | HTTP | Uses `NEXT_PUBLIC_SYMFONY_API_BASE_URL`. In the Docker dev flow this is same-origin; in `dev-local` it is `http://localhost:8000`. |
+| 5 | Next client → Symfony API | Client-side fetch | HTTP | Uses `NEXT_PUBLIC_SYMFONY_API_BASE_URL`. In the Docker dev flow this is same-origin. |
 | 6 | Symfony → PostgreSQL | Doctrine DBAL | TCP (Compose network) | — |
 | 7 | Symfony → Messenger transport | Internal | Doctrine transport | At-least-once delivery; handlers must be idempotent. |
 | 8 | `messenger_worker` → Mailer | Async | Symfony Messenger + Mailer | Email is async — see `domain-events-and-messenger.md`. |
 | 9 | Symfony → Mercure Hub | Publish | HTTP + JWT | Server-side publish; topics scoped per bounded context. |
 | 10 | Symfony → Browser/PWA | Error contract | HTTP (`application/problem+json`) | All `/api/*` non-2xx responses are RFC 9457 Problem Details with stable `type`, per-request `correlation-id`, per-error `instance`. PWA routes UI by `type` only. See [`api-error-contract.md`](./api-error-contract.md). |
-
-## Alternative flow: `dev-local` (host Next, containerised API)
-
-```text
-browser → localhost:80  ─▶  Next.js  (on host, next dev)
-                                  │
-                                  └─▶  localhost:8000  ─▶  Symfony API (container)
-```
-
-- `make api-up-http` / `make dev.local` starts API on `:8000` only (no `pwa` container).
-- **Required env in `pwa/.env.local`:**
-  - `NEXT_PUBLIC_SYMFONY_API_BASE_URL=http://localhost:8000`
-  - `SYMFONY_INTERNAL_URL=http://localhost:8000`
-- Mercure and Symfony share `:8000`; there is no FrankenPHP proxy in this mode.
-- Do **not** mix flows in a single session — switching requires clearing `pwa/.env.local` and rebuilding.
-
-Full walkthrough lives in `pwa/CLAUDE.md` and the Make `dev.local` target definition (`make/dev.mk`).
 
 ## Authentication / authorization flow
 

@@ -103,7 +103,7 @@ jobs:
         run: make php.behat.install
 
       - name: PHP lint
-        run: make php.lint
+        run: make php.quality
 
       - name: PHPUnit
         run: make php.unit
@@ -191,9 +191,9 @@ jobs:
       - uses: ./.github/actions/node-setup
 
       - run: make pwa.install
-      - run: make pwa.lint
+      - run: make pwa.quality.dry-run
       - run: make pwa.test.unit
-      - run: make pwa.build
+      - run: make pwa.production.build
 
   # -------------------------
   # PWA E2E (sharded — depends on build)
@@ -240,7 +240,7 @@ jobs:
 
       - name: Get Playwright version
         id: playwright-version
-        run: echo "version=$(node -p "require('./pwa/package-lock.json').packages['pwa/node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(node -p "require('./pwa/package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
 
       - name: Cache Playwright Browsers
         uses: actions/cache@v5
@@ -254,6 +254,10 @@ jobs:
       - name: Install Playwright Browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: cd pwa && npx playwright install --with-deps chromium
+
+      - name: Install Playwright system deps (cached browsers)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: cd pwa && npx playwright install-deps chromium
 
       - name: Run E2E
         env:
@@ -369,7 +373,7 @@ jobs:
 
       - name: Get Playwright version
         id: playwright-version
-        run: echo "version=$(node -p "require('./pwa/package-lock.json').packages['pwa/node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(node -p "require('./pwa/package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
 
       - name: Cache Playwright Browsers
         uses: actions/cache@v5
@@ -383,6 +387,10 @@ jobs:
       - name: Install Playwright Browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: cd pwa && npx playwright install --with-deps chromium
+
+      - name: Install Playwright system deps (cached browsers)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: cd pwa && npx playwright install-deps chromium
 
       # Use Playwright's --repeat-each to detect flakiness in a single run
       # (avoids per-iteration stack-bring-up cost).

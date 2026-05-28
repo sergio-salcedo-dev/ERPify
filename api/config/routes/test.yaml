@@ -1,4 +1,4 @@
-# Story 1.4 — test-only routes wiring throwaway controllers under /api/test/_throw-* so the
+# test-only routes wiring throwaway controllers under /api/test/_throw-* so the
 # ExceptionResponder listener is exercised through a real Symfony kernel via WebTestCase.
 when@test:
     test_throw_not_found:
@@ -11,7 +11,7 @@ when@test:
         controller: Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\ThrowRuntimeController
         methods: [GET]
 
-    # Story 1.5 — Symfony framework exception bridges.
+    # Symfony framework exception bridges.
     test_throw_http_403:
         path: /api/test/_throw-http-403
         controller: Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\ThrowHttpForbiddenController
@@ -37,7 +37,7 @@ when@test:
         controller: Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\ThrowSecurityAuthenticationController
         methods: [GET]
 
-    # Story 1.6 — ValidationFailedException violations[] coverage.
+    # ValidationFailedException violations[] coverage.
     test_throw_validation:
         path: /api/test/_throw-validation
         controller: Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\ThrowValidationFailedController
@@ -63,13 +63,13 @@ when@test:
         controller: Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\ThrowInvariantViolationDomainExceptionController
         methods: [GET]
 
-    # Story 3.2 — denylisted context keys (password, token) must be stripped from the body.
+    # denylisted context keys (password, token) must be stripped from the body.
     test_throw_denylisted_context:
         path: /api/test/_throw-denylisted-context
         controller: Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\ThrowDenylistedContextController
         methods: [GET]
 
-    # Story 3.3 — non-whitelisted context values (closure, stdClass, …) must be substituted
+    # non-whitelisted context values (closure, stdClass, …) must be substituted
     # with the literal `'[unserializable]'` sentinel; the body must carry no class name and
     # no NUL byte from anonymous-class FQCNs.
     test_throw_unserializable_context:
@@ -77,7 +77,7 @@ when@test:
         controller: Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\ThrowUnserializableContextController
         methods: [GET]
 
-    # Story 3.5 (NFR17) — a `Doctrine\DBAL\Exception\ConnectionLost` thrown mid-controller must
+    # a `Doctrine\DBAL\Exception\ConnectionLost` thrown mid-controller must
     # still produce a conforming Problem Details 500 (`type='unhandled-exception'`). The error
     # path holds zero database dependency by construction, so a connection-side failure cannot
     # cascade through the listener.
