@@ -9,6 +9,7 @@ use Behat\Gherkin\Node\TableNode;
 use Behat\Step\Given;
 use Behat\Step\Then;
 use DateMalformedStringException;
+use Exception;
 use Erpify\Tests\Behat\Context\Abstraction\AbstractContext;
 use Erpify\Tests\Behat\NodeModifier\NodeModifierInterface;
 use Erpify\Tests\Behat\State\HttpResponseContainer;
