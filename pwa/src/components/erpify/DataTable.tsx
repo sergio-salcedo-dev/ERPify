@@ -237,6 +237,10 @@ export function DataTable<T>({
             const id = rowKey(row);
             const isSelected = selection?.selected.has(id) ?? false;
             const interactive = Boolean(onRowActivate || selection);
+            const onKeyDown = interactive
+              ? (e: KeyboardEvent<HTMLTableRowElement>) => handleRowKeyDown(e, row, index)
+              : undefined;
+            const onClick = onRowActivate ? () => onRowActivate(row) : undefined;
             return (
               <tr
                 key={id}
@@ -245,8 +249,8 @@ export function DataTable<T>({
                 }}
                 tabIndex={interactive ? (focusedRow === index ? 0 : -1) : undefined}
                 aria-selected={selection ? isSelected : undefined}
-                onKeyDown={interactive ? (e) => handleRowKeyDown(e, row, index) : undefined}
-                onClick={onRowActivate ? () => onRowActivate(row) : undefined}
+                onKeyDown={onKeyDown}
+                onClick={onClick}
                 onFocus={() => setFocusedRow(index)}
                 data-testid={rowTestId?.(row)}
                 className={cn(

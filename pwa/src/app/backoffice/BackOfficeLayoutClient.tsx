@@ -109,6 +109,8 @@ export default function BackOfficeLayoutClient({ children }: { children: React.R
     setIsSidebarOpen(false);
   };
 
+  const navigateTo = (path: string) => () => handleNavigation(path);
+
   const isItemActive = (item: NavItem) => {
     if (pathname === item.path) return true;
     if (item.subItems) {
@@ -262,7 +264,7 @@ export default function BackOfficeLayoutClient({ children }: { children: React.R
                           {item.subItems.map((subItem) => (
                             <button
                               key={subItem.name}
-                              onClick={() => handleNavigation(subItem.path)}
+                              onClick={navigateTo(subItem.path)}
                               title={subItem.name}
                               data-testid={subItem.testId ? `${subItem.testId}--mobile` : undefined}
                               className={`w-full flex items-center gap-2.5 p-2 rounded-lg text-xs font-bold transition-all ${
