@@ -124,6 +124,21 @@ final class RateLimitListenerTest extends TestCase
         );
     }
 
+    public function testSkipsOptionsPreflightRequests(): void
+    {
+        $rateLimitListener = $this->makeListener();
+        $request = Request::create('/api/v1/anything', Request::METHOD_OPTIONS);
+        $request->server->set('REMOTE_ADDR', self::CLIENT_IP);
+        $requestEvent = new RequestEvent($this->makeKernel(), $request, HttpKernelInterface::MAIN_REQUEST);
+
+        $rateLimitListener->onRequest($requestEvent);
+
+        $this->assertNull(
+            $requestEvent->getRequest()->attributes->get(RateLimitListener::ATTRIBUTE_KEY),
+            'OPTIONS preflights must not consume the per-IP budget (CorsListener short-circuits them).',
+        );
+    }
+
     public function testSkipsSubRequests(): void
     {
         $rateLimitListener = $this->makeListener();

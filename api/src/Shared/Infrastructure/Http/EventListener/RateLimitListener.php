@@ -54,6 +54,27 @@ use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
  * same delta-seconds convention (not an epoch timestamp) so callers do not need to know the
  * server clock to act on it.
  *
+ * `Reset` semantics follow Symfony's `RateLimit::getRetryAfter()` exactly. For
+ * `sliding_window` that yields, in order: (a) `now` for an accepted request that still
+ * leaves tokens — so `Reset` floors to `1s` via the `\max(1, …)` clamp; (b) the
+ * replenish timestamp for the request that consumed the LAST token; (c) the moment the
+ * oldest hit ages out of the window for a rejected request. This is intentionally
+ * narrower than the IETF draft definition ("seconds until the quota fully resets") —
+ * clients that need the absolute window reset should derive it from the policy
+ * interval rather than this header. The chosen semantics match what Symfony's stock
+ * helpers emit, so downstream observability tooling interoperates with the wider
+ * ecosystem without surprise.
+ *
+ * CORS preflight (`OPTIONS`) requests are skipped before the limiter is consumed.
+ * Nelmio's `CorsListener` runs at priority 250 (after this listener's 512) and short-
+ * circuits preflights with a 200; budgeting them would either drop a legitimate
+ * preflight under load or — worse — return a 429 in place of the preflight, breaking
+ * CORS for cross-origin clients without any actual API work having been performed.
+ * The trade-off is that an attacker can spam `OPTIONS /api/…` without consuming the
+ * budget; this is acceptable because preflights cannot exercise application code
+ * (they bypass the router) and the limiter still gates every non-preflight method
+ * including those an attacker would actually use to enumerate the API.
+ *
  * Client IP resolution is via `Request::getClientIp()`. For correct values behind FrankenPHP's
  * embedded Caddy / a load balancer, callers MUST configure `framework.trusted_proxies` (env
  * `SYMFONY_TRUSTED_PROXIES`) so `X-Forwarded-For` is honoured. Without trusted proxies the
@@ -103,6 +124,10 @@ final readonly class RateLimitListener
         $request = $event->getRequest();
 
         if (!\str_starts_with($request->getPathInfo(), self::API_PATH_PREFIX)) {
+            return;
+        }
+
+        if (Request::METHOD_OPTIONS === $request->getMethod()) {
             return;
         }
 

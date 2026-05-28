@@ -54,6 +54,8 @@ final class RateLimitListenerFunctionalTest extends WebTestCase
 
     private const string REMOTE_ADDR_NON_API = '203.0.113.40';
 
+    private const string REMOTE_ADDR_OPTIONS = '203.0.113.50';
+
     public function testFirstRequestSucceedsAndStampsBothRateLimitHeaderFamilies(): void
     {
         $kernelBrowser = self::createClient();
@@ -178,6 +180,37 @@ final class RateLimitListenerFunctionalTest extends WebTestCase
             Response::HTTP_TOO_MANY_REQUESTS,
             $response->getStatusCode(),
             'Non-/api/ requests must never be rate-limited.',
+        );
+        $this->assertNull($response->headers->get('RateLimit-Limit'));
+        $this->assertNull($response->headers->get('X-RateLimit-Limit'));
+        $this->assertNull($response->headers->get('Retry-After'));
+    }
+
+    public function testOptionsPreflightBypassesTheLimiterAndDoesNotStampRateLimitHeaders(): void
+    {
+        // CORS preflight (OPTIONS) requests must not consume budget. With the budget pre-
+        // exhausted via direct factory probes, a fresh OPTIONS request must still avoid 429.
+        // The listener's early return on Request::METHOD_OPTIONS guarantees both that no
+        // token is consumed and that no snapshot is written — so the response listener
+        // stamps no RateLimit-* headers either.
+        $kernelBrowser = self::createClient();
+        $this->consumeTokens(self::REMOTE_ADDR_OPTIONS, self::BUDGET);
+
+        $kernelBrowser->request(
+            Request::METHOD_OPTIONS,
+            self::ENDPOINT,
+            server: [
+                'REMOTE_ADDR' => self::REMOTE_ADDR_OPTIONS,
+                'HTTP_ORIGIN' => 'https://localhost',
+                'HTTP_ACCESS_CONTROL_REQUEST_METHOD' => Request::METHOD_GET,
+            ],
+        );
+
+        $response = $kernelBrowser->getResponse();
+        $this->assertNotSame(
+            Response::HTTP_TOO_MANY_REQUESTS,
+            $response->getStatusCode(),
+            'OPTIONS preflight must never be rate-limited.',
         );
         $this->assertNull($response->headers->get('RateLimit-Limit'));
         $this->assertNull($response->headers->get('X-RateLimit-Limit'));
