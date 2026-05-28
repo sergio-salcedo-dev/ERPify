@@ -40,8 +40,8 @@ pwa.install.if-missing: ## Run pwa.install only if pwa/node_modules is missing o
 pwa.update: ## Safe update dependencies (within semantic version ranges)
 	@$(call pwa_cmd,npm update)
 
-pwa.upgrade: ## Force upgrade all dependencies to the latest versions (npm-check-updates)
-	@$(call pwa_cmd,npx npm-check-updates -u && npm install)
+pwa.upgrade: ## Force upgrade all dependencies to the latest versions (npm-check-updates). Uses --legacy-peer-deps because cross-major bumps routinely trip npm's strict peer resolver on transitive ranges (e.g. eslint-config-next pinning @typescript-eslint/*).
+	@$(call pwa_cmd,npx npm-check-updates -u && npm install --legacy-peer-deps)
 
 pwa.dev: ## Next dev server (Turbopack) on host :80 (needs pwa/.env.local)
 	@$(call pwa_cmd,npm run dev)

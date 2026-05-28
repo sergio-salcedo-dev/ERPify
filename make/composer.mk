@@ -3,7 +3,7 @@
 # All recipes run via $(PHP_CONT) (container) or on host when IN_CONTAINER=false.
 # =============================================================================
 
-.PHONY: composer composer.install composer.update composer.check.all \
+.PHONY: composer composer.install composer.update composer.upgrade composer.check.all \
         composer.check.platform-reqs composer.check.missing-deps composer.check.unused
 
 ## —— Composer ————————————————————————————————————————————————————————————
@@ -14,8 +14,11 @@ composer: ## Run composer; pass c='…' (e.g. make composer c='req vendor/pkg')
 composer.install: ## composer install (production-style flags)
 	@$(COMPOSER) install --prefer-dist --no-dev --no-progress --no-scripts --no-interaction
 
-composer.update: ## composer update
+composer.update: ## composer update (safe, within composer.json constraints)
 	@$(COMPOSER) update -W
+
+composer.upgrade: ## Force upgrade direct Composer deps to the latest stable (bumps constraints across majors)
+	@$(PHP) bin/composer-upgrade
 
 composer.check.platform-reqs: ## composer check-platform-reqs
 	@$(COMPOSER) check-platform-reqs

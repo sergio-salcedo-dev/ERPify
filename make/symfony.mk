@@ -76,4 +76,4 @@ sf.clear: sf.clear.vendor sf.clear.var ## Remove api/vendor + api/var (live stac
 # api/var + api/vendor are recreated on the next `make docker.up` / composer install.
 sf.clear.sudo: ## Wipe api/var + api/vendor host-side (requires sudo; dev/test only; run with stack down)
 	$(call guard_var_writable,clear.sudo)
-	@sudo rm -R $(API_ROOT)/var/* $(API_ROOT)/vendor/* .php-cs-fixer.cache
+	@sudo rm -Rf $(API_ROOT)/var/* $(API_ROOT)/vendor/* .php-cs-fixer.cache

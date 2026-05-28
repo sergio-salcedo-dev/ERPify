@@ -39,6 +39,10 @@ app.quality: php.quality pwa.quality ## Run all linters (PHP + PWA)
 
 app.test: php.test pwa.test ## Run all tests (PHP + PWA)
 
+app.update: composer.update pwa.update ## Safe update of API + PWA deps (within composer.json / package.json ranges)
+
+app.upgrade: composer.upgrade pwa.upgrade ## Force upgrade API + PWA deps to the latest (bumps constraints across majors)
+
 app.clean.soft: sf.clear.var pwa.clean.soft ## Clean build artifacts (Symfony var + Next .next/.next-e2e)
 
 app.clean.all: sf.clear pwa.clean.all ## Clean all build artifacts (Symfony var + vendor + Next .next/.next-e2e + node_modules)
@@ -49,6 +53,6 @@ app.dev: docker.down pwa.install.if-missing docker.up.wait php.fix.ownership ## 
 
 app.dev.clean: docker.down app.clean.sudo app.dev ## Full dev stack with --wait (destructive)
 
-.PHONY: app.quality app.test \
+.PHONY: app.quality app.test app.update app.upgrade \
 		app.dev app.dev.clean \
 		app.clean.soft app.clean.all app.clean.sudo

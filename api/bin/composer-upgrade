@@ -1,0 +1,68 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+// Cross-major Composer upgrade for direct deps. Mirrors `pwa.upgrade` (npm-check-updates).
+// Steps:
+//   1. Ask composer for outdated direct deps as JSON.
+//   2. Split them into require / require-dev using composer.json.
+//   3. Re-require each set without a version → composer picks the latest stable
+//      and writes a fresh `^X.Y` constraint, then resolves the dependency graph.
+//
+// Run inside the FrankenPHP container (CWD is /app). Invoked by `make composer.upgrade`.
+
+if (PHP_SAPI !== 'cli') {
+    fwrite(STDERR, "composer-upgrade: must run from CLI\n");
+    exit(2);
+}
+
+chdir(__DIR__ . '/..');
+
+$json = shell_exec('composer outdated --direct --strict --format=json 2>/dev/null');
+$data = $json !== null ? json_decode($json, true) : null;
+$installed = is_array($data) ? ($data['installed'] ?? []) : [];
+
+if ($installed === []) {
+    echo "All direct Composer packages are at their latest version.\n";
+    exit(0);
+}
+
+$composer = json_decode((string) file_get_contents('composer.json'), true);
+if (!is_array($composer)) {
+    fwrite(STDERR, "composer-upgrade: cannot read composer.json\n");
+    exit(1);
+}
+
+$devSet = array_flip(array_keys($composer['require-dev'] ?? []));
+$prod = [];
+$dev = [];
+
+foreach ($installed as $pkg) {
+    $name = $pkg['name'] ?? null;
+    if (!is_string($name) || $name === '') {
+        continue;
+    }
+    if (isset($devSet[$name])) {
+        $dev[] = $name;
+    } else {
+        $prod[] = $name;
+    }
+}
+
+$run = static function (array $cmd): void {
+    echo '→ ' . implode(' ', $cmd) . PHP_EOL;
+    $status = 0;
+    passthru(implode(' ', array_map('escapeshellarg', $cmd)), $status);
+    if ($status !== 0) {
+        exit($status);
+    }
+};
+
+if ($prod !== []) {
+    $run(array_merge(['composer', 'require', '-W'], $prod));
+}
+
+if ($dev !== []) {
+    $run(array_merge(['composer', 'require', '-W', '--dev'], $dev));
+}
