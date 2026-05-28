@@ -189,11 +189,7 @@ final class LoggerInterfaceContractTest extends TestCase
 
     public function testGrepGateActuallyScannedAtLeastOneSourceFile(): void
     {
-        $count = 0;
-
-        foreach ($this->errorPathPhpFiles() as $_) {
-            ++$count;
-        }
+        $count = \iterator_count($this->errorPathPhpFiles());
 
         $this->assertGreaterThan(
             0,

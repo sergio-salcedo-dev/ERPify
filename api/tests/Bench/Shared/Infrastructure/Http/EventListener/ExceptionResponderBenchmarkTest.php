@@ -72,6 +72,9 @@ final class ExceptionResponderBenchmarkTest extends WebTestCase
 
     private const int MEASUREMENT_ITERATIONS = 1000;
 
+    /**
+     * @SuppressWarnings("PHPMD.Superglobals")
+     */
     #[\Override]
     protected function setUp(): void
     {

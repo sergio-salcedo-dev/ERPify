@@ -42,6 +42,9 @@ use Symfony\Component\Routing\RouterInterface;
  * the per-feature suites miss; it is not a substitute for them.
  *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.ExcessiveClassComplexity")
+ * @SuppressWarnings("PHPMD.ExcessiveClassLength")
  */
 #[CoversNothing]
 final class ProblemDetailsApiSchemaSweepTest extends WebTestCase
@@ -78,6 +81,9 @@ final class ProblemDetailsApiSchemaSweepTest extends WebTestCase
      */
     private const array SWEEP_ALLOWLIST = [];
 
+    /**
+     * @SuppressWarnings("PHPMD.Superglobals")
+     */
     public function testEveryApiRouteEmitsConformingProblemDetailsOnError(): void
     {
         if (!empty($_SERVER['SKIP_SWEEP']) || !empty($_ENV['SKIP_SWEEP'])) {
@@ -263,6 +269,10 @@ final class ProblemDetailsApiSchemaSweepTest extends WebTestCase
      * formatted multi-line diagnostic string listing every contract violation observed.
      *
      * @param array<string, list<string>> $methodsByPath
+     *
+     * @SuppressWarnings("PHPMD.CyclomaticComplexity")
+     * @SuppressWarnings("PHPMD.NPathComplexity")
+     * @SuppressWarnings("PHPMD.ExcessiveMethodLength")
      */
     private function checkRoute(
         KernelBrowser $kernelBrowser,

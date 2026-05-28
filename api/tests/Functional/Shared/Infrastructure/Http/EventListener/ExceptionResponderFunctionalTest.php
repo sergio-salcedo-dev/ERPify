@@ -16,6 +16,9 @@ use Symfony\Component\HttpFoundation\Request;
  * resolves → responder builds the Problem Details response.
  *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods")
+ * @SuppressWarnings("PHPMD.ExcessiveClassLength")
  */
 #[CoversNothing]
 final class ExceptionResponderFunctionalTest extends WebTestCase
@@ -524,6 +527,8 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
      * the second response. The intermediate `Container::reset()` call exercises every
      * `ResetInterface`-tagged service (the `services_resetter` machinery) — exactly what
      * Symfony invokes between worker iterations.
+     *
+     * @SuppressWarnings("PHPMD.ExcessiveMethodLength")
      */
     public function testKernelResetBetweenSequentialRequestsProducesIdenticallyShapedProblemDetails(): void
     {

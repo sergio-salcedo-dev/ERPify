@@ -35,6 +35,11 @@ use Throwable;
 
 /**
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.TooManyMethods")
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods")
+ * @SuppressWarnings("PHPMD.ExcessiveClassLength")
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[CoversClass(ExceptionResponder::class)]
 final class ExceptionResponderTest extends TestCase
@@ -854,11 +859,13 @@ final class ExceptionResponderTest extends TestCase
      * `fromThrowable` to throw) or the listener's PSR-3 sink (logger-resilience)
      * fail loudly. Anonymous class — kept inline so the production listener never sees
      * a leaked test-double symbol.
+     *
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
     private function throwingLogger(string $message): LoggerInterface
     {
-        return new readonly class ($message) implements LoggerInterface {
-            public function __construct(private string $message)
+        return new class ($message) implements LoggerInterface {
+            public function __construct(private readonly string $message)
             {
             }
 
@@ -1017,6 +1024,10 @@ final class ExceptionResponderTest extends TestCase
         $this->assertMatchesRegularExpression($regex, $value);
     }
 
+    /**
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
+     * @SuppressWarnings("PHPMD.BooleanArgumentFlag")
+     */
     private function makeEvent(string $path, Throwable $exception): ExceptionEvent
     {
         $request = Request::create($path);
