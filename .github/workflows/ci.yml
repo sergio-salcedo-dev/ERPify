@@ -103,7 +103,7 @@ jobs:
         run: make php.behat.install
 
       - name: PHP lint
-        run: make php.quality.dry-run
+        run: make php.quality
 
       - name: PHPUnit
         run: make php.unit
