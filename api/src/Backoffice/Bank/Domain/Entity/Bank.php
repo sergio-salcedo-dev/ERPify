@@ -13,6 +13,7 @@ use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
 use Erpify\Shared\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Domain\ValueObject\NormalizedText;
 use Erpify\Shared\Media\Domain\Entity\Media;
+use Erpify\Shared\Storage\Domain\StoredObject;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Validator\Constraints as Assert;
@@ -68,10 +69,7 @@ class Bank extends AggregateRoot
         string $name,
         string $shortName,
         ?Media $media = null,
-        ?string $storedObjectKey = null,
-        ?string $storedObjectMimeType = null,
-        ?int $storedObjectByteSize = null,
-        ?string $storedObjectContentHash = null,
+        ?StoredObject $storedObject = null,
     ): self {
         $normalizedText = NormalizedText::from($name);
 
@@ -81,10 +79,10 @@ class Bank extends AggregateRoot
         $bank->nameNormalized = $normalizedText->normalized;
         $bank->shortName = NormalizedText::toAsciiUpper($shortName);
         $bank->media = $media;
-        $bank->storedObjectKey = $storedObjectKey;
-        $bank->storedObjectMimeType = $storedObjectMimeType;
-        $bank->storedObjectByteSize = $storedObjectByteSize;
-        $bank->storedObjectContentHash = $storedObjectContentHash;
+        $bank->storedObjectKey = $storedObject?->objectKey;
+        $bank->storedObjectMimeType = $storedObject?->mimeType;
+        $bank->storedObjectByteSize = $storedObject?->byteSize;
+        $bank->storedObjectContentHash = $storedObject?->contentHash;
 
         $createdAt = $bank->createdAt->format(DateTimeInterface::ATOM);
 
@@ -97,8 +95,8 @@ class Bank extends AggregateRoot
             $createdAt,
             $media?->getId(),
             $media?->getContentHash(),
-            $storedObjectContentHash,
-            $storedObjectMimeType,
+            $storedObject?->contentHash,
+            $storedObject?->mimeType,
         ));
 
         return $bank;

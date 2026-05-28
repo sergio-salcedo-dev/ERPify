@@ -10,6 +10,7 @@ use Erpify\Shared\Application\Validation\Validator;
 use Erpify\Shared\Infrastructure\Uuid\SymfonyUuidGenerator;
 use Erpify\Shared\Media\Application\MediaRegistrar;
 use Erpify\Shared\Storage\Application\StoredImageObjectWriter;
+use Erpify\Shared\Storage\Domain\StoredObject;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\Messenger\MessageBusInterface;
 
@@ -34,6 +35,10 @@ final readonly class BankCreator
             ? $this->storedImageObjectWriter->storeFromUploadedFile($storedObjectFile, 'storedObject')
             : null;
 
+        $storedObject = $stored !== null
+            ? new StoredObject($stored->objectKey, $stored->mimeType, $stored->byteSize, $stored->contentHash)
+            : null;
+
         $logo = $logoFile instanceof UploadedFile
             ? $this->mediaRegistrar->registerFromUploadedFile($logoFile)
             : null;
@@ -44,10 +49,7 @@ final readonly class BankCreator
             $name,
             $shortName,
             $logo,
-            $stored?->objectKey,
-            $stored?->mimeType,
-            $stored?->byteSize,
-            $stored?->contentHash,
+            $storedObject,
         );
 
         $this->validator->ensure($bank);
