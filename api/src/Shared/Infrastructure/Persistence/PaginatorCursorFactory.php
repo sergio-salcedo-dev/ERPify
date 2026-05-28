@@ -103,7 +103,7 @@ class PaginatorCursorFactory
     /**
      * Returns the verified body portion of `<body>.<hmac>` after HMAC validation, or
      * `null` if the input is missing, malformed, or the signature does not match.
-     * Extracted from {@see createFromString} to keep that method under the S1142 return budget.
+     * Kept separate so {@see createFromString} reads as a thin "verify, decode, normalise" pipeline.
      */
     private function extractVerifiedBody(?string $string): ?string
     {

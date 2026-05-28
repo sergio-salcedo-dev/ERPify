@@ -41,7 +41,7 @@ final readonly class StoredObjectGetController
 
     /**
      * Materialises the full-body response (or 404 if the object key is missing).
-     * Extracted from {@see __invoke} to keep that method under the S1142 return budget.
+     * Kept separate so {@see __invoke} stays a thin "resolve hash → delegate" shim.
      */
     private function buildBodyResponse(string $hash): Response
     {

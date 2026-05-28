@@ -24,9 +24,9 @@ const OPTIONS: readonly ViewOption[] = [
 
 export function BanksViewToggle({ view, onViewChange }: Readonly<BanksViewToggleProps>) {
   return (
-    // NOTE(SonarQube S6819): This is a presentational toggle of icon buttons (not
-    // form controls), so <fieldset> would be inappropriate. role="group" with
-    // aria-label gives assistive tech the correct semantics here.
+    // This is a presentational toggle of icon buttons (not form controls), so
+    // <fieldset> would be inappropriate. role="group" + aria-label gives
+    // assistive tech the correct semantics here.
     <div
       role="group"
       aria-label="Banks view"

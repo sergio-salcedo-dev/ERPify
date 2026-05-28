@@ -51,9 +51,9 @@ async function writeToClipboard(value: string): Promise<void> {
   document.body.appendChild(ta);
   ta.select();
   try {
-    // NOTE(SonarQube S1874): document.execCommand("copy") is deprecated but is
-    // the only fallback for non-secure contexts where navigator.clipboard is
-    // unavailable. We already prefer the async Clipboard API above.
+    // execCommand("copy") is deprecated but is the only fallback for non-secure
+    // contexts where navigator.clipboard is unavailable. The async Clipboard API
+    // is already preferred above.
     const ok = document.execCommand("copy");
     if (!ok) throw new Error("execCommand('copy') returned false");
   } finally {

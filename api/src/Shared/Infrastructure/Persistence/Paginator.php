@@ -218,8 +218,9 @@ final class Paginator implements PaginatedResult
     /**
      * Builds the cursor-pagination WHERE clause and the parameters that bind to it,
      * or returns `null` when the cursor cannot produce a valid condition (e.g. the
-     * cursor fields don't cover every order-by column). Extracted from {@see alterWhere}
-     * to keep that method under the S3776 cognitive-complexity budget.
+     * cursor fields don't cover every order-by column). Kept separate so
+     * {@see alterWhere} stays a thin "gate, build, apply" sequence and isolates the
+     * cursor-direction decision tree from QueryBuilder mutation.
      *
      * @return array{condition: string, parameters: list<array{parameter: string, orderBy: mixed}>}|null
      *

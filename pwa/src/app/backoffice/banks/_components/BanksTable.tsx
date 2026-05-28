@@ -28,10 +28,10 @@ interface BanksActionsCellProps {
 
 function BanksActionsCell({ row, onBankDeleted }: Readonly<BanksActionsCellProps>) {
   return (
-    // NOTE(SonarQube S6819): This wrapper exists purely to stop row click/keydown
-    // propagation so the action buttons don't trigger row navigation; replacing
-    // it with <img alt=""> would be semantically wrong, so role="presentation"
-    // stays as the most appropriate non-interactive grouping signal.
+    // Wrapper exists purely to stop row click/keydown propagation so the action
+    // buttons don't trigger row navigation. role="presentation" is the most
+    // appropriate signal for assistive tech that this <div> is non-interactive
+    // chrome (not a semantic landmark).
     <div
       className="banks-table__actions flex items-center justify-end gap-1"
       onClick={(event) => event.stopPropagation()}

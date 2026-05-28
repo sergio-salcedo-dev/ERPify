@@ -49,16 +49,13 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
   }
 
   const handleItemClick = () => {
-    if (hasSubItems) {
-      if (isCompact) {
-        // In compact mode, clicking might just navigate to the first sub-item or the main path
-        onClick(path);
-      } else {
-        setIsOpen(!isOpen);
-      }
-    } else {
-      onClick(path);
+    if (hasSubItems && !isCompact) {
+      setIsOpen(!isOpen);
+      return;
     }
+    // No sub-items, or compact mode collapses the chevron interaction — fall
+    // back to navigating to the main path.
+    onClick(path);
   };
 
   return (
