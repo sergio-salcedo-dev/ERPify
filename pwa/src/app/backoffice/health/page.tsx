@@ -36,11 +36,8 @@ export default function HealthPage() {
       setData(result);
       setState(ViewStatus.READY);
     } catch (err) {
-      setProblem(
-        err instanceof HttpError
-          ? err.problem
-          : transportFailureProblem(err instanceof Error ? err.message : "Unknown error"),
-      );
+      const detail = err instanceof Error ? err.message : "Unknown error";
+      setProblem(err instanceof HttpError ? err.problem : transportFailureProblem(detail));
       setState(ViewStatus.ERROR);
     }
   }
