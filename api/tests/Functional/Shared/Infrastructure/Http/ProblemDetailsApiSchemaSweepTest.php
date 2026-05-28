@@ -334,13 +334,6 @@ final class ProblemDetailsApiSchemaSweepTest extends WebTestCase
             return $this->formatDiagnostic($routeName, $method, $uri, $failures);
         }
 
-        $validator = new JsonSchemaValidator();
-        $validator->validate($decoded, $schemaRef);
-
-        if (!$validator->isValid()) {
-            $failures[] = 'body fails RFC 9457 schema: ' . \implode('; ', $this->collectSchemaErrors($validator));
-        }
-
         $instance = \property_exists($decoded, 'instance') ? $decoded->instance : null;
 
         if (!\is_string($instance) || 1 !== \preg_match(self::UUID_V7_REGEX, $instance)) {
@@ -348,6 +341,13 @@ final class ProblemDetailsApiSchemaSweepTest extends WebTestCase
                 'body instance: %s (expected: valid UUIDv7)',
                 $this->renderBodyValue($instance),
             );
+        }
+
+        $validator = new JsonSchemaValidator();
+        $validator->validate($decoded, $schemaRef);
+
+        if (!$validator->isValid()) {
+            $failures[] = 'body fails RFC 9457 schema: ' . \implode('; ', $this->collectSchemaErrors($validator));
         }
 
         if ([] === $failures) {
