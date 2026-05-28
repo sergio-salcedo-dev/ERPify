@@ -56,20 +56,20 @@ Walk through `.cursor/rules/security.mdc`. In particular:
 
 ## Tests must pass
 
-- `make test` (aggregate) — equivalent to `make ci.test`.
+- `make app.test` (aggregate) — equivalent to `make ci.test`.
 - All existing and new tests **100% green** before opening a PR.
 - New code in `Domain/` (API) or `context/<bc>/domain/` (PWA) must have unit tests.
 
 ## Linters
 
-- Run `make lint` (PHP + JS aggregate) before pushing.
-- Individual tools: `make php.lint`, `make pwa.lint`. Auto-fix variants: `php.rector`, `php.cs-fixer`, `php.cs`, `pwa.lint.fix`, `pwa.format.fix`.
+- Run `make app.quality` (PHP + JS aggregate) before pushing.
+- Individual tools: `make php.quality`, `make pwa.quality`. Auto-fix variants: `php.rector`, `php.cs-fixer`, `php.cs`, `pwa.lint`, `pwa.format`.
 
 ## Pull requests
 
 - Target `main`. Title mirrors the primary commit's Conventional Commit subject.
 - Body: **what** changed, **why**, **test plan** (bulleted checklist). Screenshots for UI changes.
-- CI must be green (`ci.yml` + CodeQL). If you touched files that SuperLinter covers, also run `make ci.superlint`.
+- CI must be green (`ci.yml` + CodeQL). If you touched files that SuperLinter covers, also run `make super-lint.fast`.
 - Require one review minimum. Security-sensitive changes must include the checklist update in the PR body.
 - **Never** force-push shared branches without coordinating.
 

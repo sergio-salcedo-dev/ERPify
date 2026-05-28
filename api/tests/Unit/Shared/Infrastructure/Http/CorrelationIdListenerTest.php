@@ -6,6 +6,7 @@ namespace Erpify\Tests\Unit\Shared\Infrastructure\Http;
 
 use Erpify\Shared\Infrastructure\Http\CorrelationIdListener;
 use LogicException;
+use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
@@ -18,6 +19,10 @@ use Symfony\Component\HttpKernel\HttpKernelInterface;
 
 /**
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.TooManyMethods")
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods")
+ * @SuppressWarnings("PHPMD.ExcessiveClassLength")
  */
 #[CoversClass(CorrelationIdListener::class)]
 final class CorrelationIdListenerTest extends TestCase
@@ -502,9 +507,14 @@ final class CorrelationIdListenerTest extends TestCase
         return new ResponseEvent($this->makeKernel(), $request, HttpKernelInterface::MAIN_REQUEST, $response);
     }
 
+    /**
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
+     * @SuppressWarnings("PHPMD.BooleanArgumentFlag")
+     */
     private function makeKernel(): HttpKernelInterface
     {
         return new class implements HttpKernelInterface {
+            #[Override]
             public function handle(Request $request, int $type = HttpKernelInterface::MAIN_REQUEST, bool $catch = true): Response
             {
                 throw new LogicException('Test kernel: handle() must not be called by the listener.');

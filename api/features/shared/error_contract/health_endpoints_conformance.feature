@@ -4,7 +4,7 @@ Feature: Health endpoints conform to the RFC 9457 contract retroactively
     predate it (FR11), the two `/health` endpoints must produce conforming Problem
     Details responses on failure WITHOUT any change to their controller source.
 
-  # Story 4.6 — the two HealthController classes throw nothing of their own; a test-only
+  # the two HealthController classes throw nothing of their own; a test-only
   # `kernel.controller` subscriber wired in `api/config/services_test.yaml` injects a
   # RuntimeException when `?_force_failure=1` is present on either health path. The
   # listener pipeline then maps that uncaught throwable to the default-deny

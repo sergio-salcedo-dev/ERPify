@@ -61,9 +61,9 @@ Plus SMTP credentials and any `NEXT_PUBLIC_SYMFONY_API_BASE_URL` override needed
 ## CI/CD
 
 - GitHub Actions workflows under `.github/workflows/`:
-  - `ci.yml` — lint + test pipeline (runs `make ci.lint` + `make ci.test`).
+  - `ci.yml` — lint + test pipeline (runs `make ci.quality` + `make ci.test`).
 - Static security analysis (CodeQL): run locally with `make codeql.run` — the GitHub workflow was removed because Code Scanning on private repos requires GitHub Advanced Security.
-- SuperLinter (container-based): `make ci.superlint` (requires `GITHUB_TOKEN`).
+- SuperLinter (container-based): `make super-lint.full` (requires `GITHUB_TOKEN`).
 - Dependabot tracks Docker digests at `/api` and `/pwa` and composer/npm dependency updates.
 
 ## Rollback
@@ -73,7 +73,7 @@ Plus SMTP credentials and any `NEXT_PUBLIC_SYMFONY_API_BASE_URL` override needed
 
 ## Operational notes
 
-- `make docker.clean` drops volumes and is **destructive** — never on prod without explicit confirmation.
+- `make docker.down.clean-volumes` drops volumes and is **destructive** — never on prod without explicit confirmation.
 - Do not run `db.reset` outside dev/ci.
 - DNS, CORS origins, and Mercure cookie/CORS config: see [`pwa/docs/production-deployment.md`](../pwa/docs/production-deployment.md).
 - Xdebug must be disabled in prod images.

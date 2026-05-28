@@ -30,7 +30,7 @@ Follow these rules for persisting project context:
 
 ### API (PHP/Symfony)
 - **Static Analysis:** `make php.stan` is mandatory for all changed files.
-- **Linting:** `make php.lint` for full cleanup (Rector, PHP-CS-Fixer, Psalm auto-fixes).
+- **Code Quality:** `make php.quality` for full cleanup (Rector, PHP-CS-Fixer, Psalm auto-fixes).
 - **Database:** Migrations via `make db.diff`. Only edit migrations on the current branch. Applied migrations are immutable.
 
 ### PWA (TS/Next.js)

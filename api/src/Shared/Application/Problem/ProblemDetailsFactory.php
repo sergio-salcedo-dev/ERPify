@@ -101,6 +101,10 @@ use Throwable;
  * ({@see \Erpify\Tests\Unit\Shared\Application\Problem\ConstantTimeAuthBranchingBenchmarkTest})
  * with a generous 2x asymmetry threshold so it stays informative on shared CI hardware
  * without false-positive flakiness.
+ *
+ * @SuppressWarnings("PHPMD.ExcessiveClassComplexity")
+ * @SuppressWarnings("PHPMD.ExcessiveClassLength")
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 final readonly class ProblemDetailsFactory
 {
@@ -206,34 +210,10 @@ final readonly class ProblemDetailsFactory
         $debug = $this->buildDebugExtension($throwable);
 
         if ($throwable instanceof DomainException) {
-            $firstMarker = $this->firstMatchingMarker($throwable);
-
-            $status = null !== $firstMarker ? self::MARKER_STATUS_MAP[$firstMarker] : Response::HTTP_INTERNAL_SERVER_ERROR;
-
-            $explicitType = $throwable->type();
-
-            if ('' !== $explicitType) {
-                $type = $explicitType;
-            } elseif (null !== $firstMarker) {
-                $type = self::MARKER_DEFAULT_TYPE_MAP[$firstMarker];
-            } else {
-                $type = 'domain-error';
-            }
-
-            return $this->applyBodyCap(
-                $this->withDebug(
-                    new ProblemDetails(
-                        type: $type,
-                        title: $throwable->title(),
-                        status: $status,
-                        detail: null,
-                        instance: $instance,
-                        correlationId: $correlationId,
-                        extensions: $this->buildExtensions($throwable, $correlationId, $instance),
-                    ),
-                    $debug,
-                ),
-            );
+            return $this->applyBodyCap($this->withDebug(
+                $this->buildDomainExceptionResponse($throwable, $correlationId, $instance),
+                $debug,
+            ));
         }
 
         $validationException = $this->findInChain($throwable, ValidationFailedException::class);
@@ -283,17 +263,60 @@ final readonly class ProblemDetailsFactory
             ), $debug));
         }
 
-        $title = $this->resolveUnhandledTitle($throwable);
-
         return $this->applyBodyCap($this->withDebug(new ProblemDetails(
             type: 'unhandled-exception',
-            title: $title,
+            title: $this->resolveUnhandledTitle($throwable),
             status: Response::HTTP_INTERNAL_SERVER_ERROR,
             detail: null,
             instance: $instance,
             correlationId: $correlationId,
             extensions: [],
         ), $debug));
+    }
+
+    /**
+     * Builds the `ProblemDetails` for a `DomainException`. Extracted so {@see fromThrowable}
+     * stays within PHPMD complexity budgets — keeps the marker-precedence + explicit-type
+     * resolution out of the top-level dispatcher.
+     */
+    private function buildDomainExceptionResponse(
+        DomainException $throwable,
+        string $correlationId,
+        string $instance,
+    ): ProblemDetails {
+        $firstMarker = $this->firstMatchingMarker($throwable);
+        $status = null !== $firstMarker ? self::MARKER_STATUS_MAP[$firstMarker] : Response::HTTP_INTERNAL_SERVER_ERROR;
+
+        return new ProblemDetails(
+            type: $this->resolveDomainType($throwable->type(), $firstMarker),
+            title: $throwable->title(),
+            status: $status,
+            detail: null,
+            instance: $instance,
+            correlationId: $correlationId,
+            extensions: $this->buildExtensions($throwable, $correlationId, $instance),
+        );
+    }
+
+    /**
+     * Resolves the wire `type` for a `DomainException`: explicit `type()` wins, otherwise
+     * the marker default, otherwise the generic `'domain-error'` literal. Extracted to remove
+     * the `else` clause and the chained `if/elseif/else` that previously lived inside
+     * {@see fromThrowable}.
+     *
+     * @param key-of<self::MARKER_STATUS_MAP>|null $firstMarker
+     */
+    private function resolveDomainType(string $explicitType, ?string $firstMarker): string
+    {
+        if ('' !== $explicitType) {
+            return $explicitType;
+        }
+
+        if (null !== $firstMarker) {
+            return self::MARKER_DEFAULT_TYPE_MAP[$firstMarker];
+        }
+
+        return 'domain-error';
     }
 
     /**
@@ -501,7 +524,7 @@ final readonly class ProblemDetailsFactory
     }
 
     /**
-     * Story 3.1 — builds the `debug` extension shape per environment, or `null` to omit.
+     * builds the `debug` extension shape per environment, or `null` to omit.
      *
      * Dev/test: 5-key map with `previous_chain` (cycle-safe flat walk of `getPrevious()`).
      * Staging: 2-key map (`exception_class`, `message`) only — NO `file`, NO `line`, NO chain.
@@ -581,7 +604,7 @@ final readonly class ProblemDetailsFactory
     }
 
     /**
-     * Story 3.1 — post-processing wrap that appends the `debug` extension LAST when present.
+     * post-processing wrap that appends the `debug` extension LAST when present.
      *
      * The spread `[...$base->extensions, 'debug' => $debug]` preserves declaration order so
      * `debug` always slots after `violations` and any domain-emitted extensions. When `$debug`
@@ -626,7 +649,7 @@ final readonly class ProblemDetailsFactory
     }
 
     /**
-     * Story 3.6 — enforces the {@see BODY_BYTE_CAP} hard upper bound on the JSON-encoded
+     * enforces the {@see BODY_BYTE_CAP} hard upper bound on the JSON-encoded
      * Problem Details body . Returns the input unchanged when the encoded body fits;
      * otherwise truncates extensions deterministically and appends `'truncated' => true` as
      * the LAST extension member.
@@ -648,13 +671,13 @@ final readonly class ProblemDetailsFactory
      *      c. Recompute the candidate.
      *   3. If extensions becomes empty AND the core fields PLUS `'truncated' => true` STILL
      *      exceed the cap, throw {@see ProblemBodyTooLargeException}. The listener's outer
-     *      try/catch (Story 3.4) then escalates to the static last-resort body. This is the
+     *      try/catch then escalates to the static last-resort body. This is the
      *      only path where the cap can fail to produce a conforming body — by design,
      *      because the alternative is leaking partial / truncated core fields.
      *
      * The encoder flags MUST mirror {@see ProblemDetailsResponder::respond} so the cap and
      * the wire emission compute the same byte length. `JSON_THROW_ON_ERROR` keeps the helper
-     * type-safe (encoder failures bubble out — they are listener self-failures and Story 3.4
+     * type-safe (encoder failures bubble out — they are listener self-failures and
      * handles them via the same outer try/catch).
      */
     private function applyBodyCap(ProblemDetails $problemDetails): ProblemDetails
@@ -714,7 +737,7 @@ final readonly class ProblemDetailsFactory
     }
 
     /**
-     * Story 3.6 — single encode site shared by {@see applyBodyCap}'s size probe and the cap
+     * single encode site shared by {@see applyBodyCap}'s size probe and the cap
      * loop. Flags mirror {@see ProblemDetailsResponder::respond} byte-for-byte so the cap
      * and the wire emission agree on length.
      *

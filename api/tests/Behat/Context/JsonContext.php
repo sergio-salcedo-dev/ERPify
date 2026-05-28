@@ -32,6 +32,7 @@ use const DIRECTORY_SEPARATOR;
  * @SuppressWarnings("PHPMD.ExcessiveClassComplexity")
  * @SuppressWarnings("PHPMD.ExcessivePublicCount")
  * @SuppressWarnings("PHPMD.ExcessiveClassLength")
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 class JsonContext extends AbstractContext
 {

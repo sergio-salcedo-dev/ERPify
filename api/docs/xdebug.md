@@ -7,17 +7,17 @@ a popular debugger and profiler for PHP.
 
 The documented default IDE for step debugging is **PhpStorm**. Compose sets **`PHP_IDE_CONFIG=serverName=<name>`** on the `php` service, where **`<name>`** defaults to **`dev`** and can be overridden with **`PHP_IDE_SERVER_NAME`** in **`api/.env`** (same mechanism as **`XDEBUG_MODE`**). That name must match the server entry under **Settings | PHP | Servers** in PhpStorm (see below). Other editors (for example VS Code or Cursor) are unaffected; they use their own launch configuration instead.
 
-Step debugging is **off by default**. The `php` service gets **`XDEBUG_MODE`** from Docker Compose interpolation: **`${XDEBUG_MODE:-off}`** in `compose.dev.yaml`. Values are read from your **shell environment** and from a **`.env` file in the Compose project directory** (the repo root, next to `compose.yaml`, if present). **`api/.env`** is what Symfony uses; `make xdebug-enable` / `make xdebug-disable` edit **`api/.env`** — export those variables in the shell before `docker compose up`, or mirror `XDEBUG_MODE` in a **root** `.env` if you rely on Compose file substitution without exporting.
+Step debugging is **off by default**. The `php` service gets **`XDEBUG_MODE`** from Docker Compose interpolation: **`${XDEBUG_MODE:-off}`** in `compose.dev.yaml`. Values are read from your **shell environment** and from a **`.env` file in the Compose project directory** (the repo root, next to `compose.yaml`, if present). **`api/.env`** is what Symfony uses; `make xdebug.enable` / `make xdebug.disable` edit **`api/.env`** — export those variables in the shell before `docker compose up`, or mirror `XDEBUG_MODE` in a **root** `.env` if you rely on Compose file substitution without exporting.
 
 From the **monorepo root** (parent of `api/`):
 
-| Command | Effect |
-|--------|--------|
-| **`make xdebug-enable`** | Ensures a `XDEBUG_MODE=` line exists in `api/.env`, sets it to **`develop,debug`**, recreates the `php` container (IDE on port **9003**). |
-| **`make xdebug-disable`** | Sets **`XDEBUG_MODE=off`** in `api/.env` when that line exists, then recreates `php`. If there is no line, Compose still defaults to **`off`**. |
-| **`make xdebug-verify`** | Prints PHP / Xdebug versions and effective `XDEBUG_MODE` (stack must be running: `make up`). |
+| Command                   | Effect                                                                                                                                          |
+|---------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------|
+| **`make xdebug.enable`**  | Ensures a `XDEBUG_MODE=` line exists in `api/.env`, sets it to **`develop,debug`**, recreates the `php` container (IDE on port **9003**).       |
+| **`make xdebug.disable`** | Sets **`XDEBUG_MODE=off`** in `api/.env` when that line exists, then recreates `php`. If there is no line, Compose still defaults to **`off`**. |
+| **`make xdebug.status`**  | Prints PHP / Xdebug versions and effective `XDEBUG_MODE` (stack must be running: `make docker.up`).                                             |
 
-You can set **`XDEBUG_MODE`** in **`api/.env`** (start from [`api/.env.example`](../.env.example)) and export it before Compose, use **`make xdebug-enable`**, or run from the **repo root**, e.g. `XDEBUG_MODE=develop,debug docker compose -f compose.yaml -f compose.dev.yaml up`.
+You can set **`XDEBUG_MODE`** in **`api/.env`** (start from [`api/.env.example`](../.env.example)) and export it before Compose, use **`make xdebug.enable`**, or run from the **repo root**, e.g. `XDEBUG_MODE=develop,debug docker compose -f compose.yaml -f compose.dev.yaml up`.
 
 If you previously used **`api/.env.xdebug`**, remove that file; it is no longer used.
 
@@ -27,7 +27,7 @@ When using [Dev Containers](https://containers.dev/), the devcontainer Compose f
 
 ### Path mappings (monorepo)
 
-The app is mounted at **`/app`** in the container and lives under **`./api`** on the host. In **PhpStorm**, map **`/app`** → your **`api`** directory (see the PhpStorm section below). If you use **VS Code or Cursor** instead, use the repo root [`.vscode/launch.json`](../../../.vscode/launch.json) (`${workspaceFolder}/api`).
+The app is mounted at **`/app`** in the container and lives under **`./api`** on the host. In **PhpStorm**, map **`/app`** → your **`api`** directory (see the PhpStorm section below). If you use **VS Code or Cursor** instead, use the repo root [`.vscode/launch.json`](../../.vscode/launch.json) (`${workspaceFolder}/api`).
 
 ## Debugging with Xdebug and PhpStorm
 
@@ -43,7 +43,7 @@ First, [create a PHP debug remote server configuration](https://www.jetbrains.co
    - Absolute path on the server: `/app`
    - Absolute path on the host: path to your **`api`** directory in the monorepo
 
-You can now use the debugger after **`make xdebug-enable`** (or equivalent **`XDEBUG_MODE`**):
+You can now use the debugger after **`make xdebug.enable`** (or equivalent **`XDEBUG_MODE`**):
 
 1. In PhpStorm, open the `Run` menu and click on `Start Listening for PHP Debug Connections`
 2. Add the `XDEBUG_SESSION=PHPSTORM` query parameter to the URL of
@@ -64,11 +64,11 @@ You can now use the debugger after **`make xdebug-enable`** (or equivalent **`XD
 
 1. Install the [PHP Debug](https://marketplace.visualstudio.com/items?itemName=xdebug.php-debug) extension (`xdebug.php-debug`).
 2. Use the repo root `.vscode/launch.json` configuration **Listen for Xdebug (API)** (port **9003**, path mapping `/app` → `api`).
-3. Run **Listen for Xdebug (API)** and trigger a request (browser extension or `XDEBUG_SESSION`), with step debugging enabled (`make xdebug-enable` or `XDEBUG_MODE` including `debug`).
+3. Run **Listen for Xdebug (API)** and trigger a request (browser extension or `XDEBUG_SESSION`), with step debugging enabled (`make xdebug.enable` or `XDEBUG_MODE` including `debug`).
 
 ## Troubleshooting
 
-From the **ERPify** repository root, run `make xdebug-verify` (alias: `make xdebug-check`) to print `php -v`, PHP and Xdebug versions, `XDEBUG_MODE`, and `PHP_IDE_CONFIG`. The stack must be running (`make up`).
+From the **ERPify** repository root, run `make xdebug.status` to print `php -v`, PHP and Xdebug versions, `XDEBUG_MODE`, and `PHP_IDE_CONFIG`. The stack must be running (`make docker.up`).
 
 The extension can still appear in `php -v` while step debugging is disabled; ensure **`XDEBUG_MODE`** includes **`debug`** when the IDE does not connect.
 

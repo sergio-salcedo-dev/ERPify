@@ -46,6 +46,9 @@ use SplFileInfo;
  *   ...
  *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.ExcessiveClassComplexity")
+ * @SuppressWarnings("PHPMD.ExcessiveClassLength")
  */
 #[CoversNothing]
 final class ErrorContractGateTest extends TestCase
@@ -95,11 +98,7 @@ final class ErrorContractGateTest extends TestCase
     {
         // Pins that the iterator wiring resolves to a non-empty set — a silent
         // zero-file scan would make the contract vacuous and let drift merge.
-        $count = 0;
-
-        foreach ($this->phpFiles($this->apiSrcRoot()) as $_) {
-            ++$count;
-        }
+        $count = \iterator_count($this->phpFiles($this->apiSrcRoot()));
 
         $this->assertGreaterThan(0, $count, 'Error-contract gate scanned zero files.');
     }
@@ -499,6 +498,9 @@ final class ErrorContractGateTest extends TestCase
 
     /**
      * @param list<string> $args
+     *
+     * @SuppressWarnings("PHPMD.CyclomaticComplexity")
+     * @SuppressWarnings("PHPMD.NPathComplexity")
      */
     private function runGit(string $cwd, array $args): ?string
     {

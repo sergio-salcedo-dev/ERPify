@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures;
 
+use Override;
 use RuntimeException;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpKernel\Event\ControllerEvent;
@@ -47,6 +48,7 @@ final class ForceHealthFailureSubscriber implements EventSubscriberInterface
     /**
      * @return array<string, array<int, string|int>>
      */
+    #[Override]
     public static function getSubscribedEvents(): array
     {
         // Priority 0 — anywhere on `kernel.controller` is fine; the listener pipeline

@@ -1,6 +1,6 @@
 # API Error Contract — RFC 9457 Problem Details
 
-> Authoritative one-pager for the uniform error contract every `/api/*` non-2xx response is expected to honour. Single mapping site: [`api/src/Shared/Application/Problem/ProblemDetailsFactory.php`](../api/src/Shared/Application/Problem/ProblemDetailsFactory.php). Single listener: [`api/src/Shared/Infrastructure/Http/EventListener/ExceptionResponder.php`](../api/src/Shared/Infrastructure/Http/EventListener/ExceptionResponder.php). PRD: [`_bmad-output/planning-artifacts/prd.md`](../_bmad-output/planning-artifacts/prd.md). Epic breakdown: [`_bmad-output/planning-artifacts/epics.md`](../_bmad-output/planning-artifacts/epics.md).
+> Authoritative one-pager for the uniform error contract every `/api/*` non-2xx response is expected to honour. Single mapping site: [`api/src/Shared/Application/Problem/ProblemDetailsFactory.php`](../api/src/Shared/Application/Problem/ProblemDetailsFactory.php). Single listener: [`api/src/Shared/Infrastructure/Http/EventListener/ExceptionResponder.php`](../api/src/Shared/Infrastructure/Http/EventListener/ExceptionResponder.php).
 
 ## Body shape
 
@@ -19,14 +19,14 @@ The wire body is a JSON object owned by [`ProblemDetails`](../api/src/Shared/App
 }
 ```
 
-| Field            | Required | Source                                                           |
-|------------------|----------|------------------------------------------------------------------|
-| `type`           | yes      | Opaque category identifier (e.g. `not-found`, `validation-failed`) |
-| `title`          | yes      | Short human-readable summary                                     |
-| `status`         | yes      | Equals the HTTP status line                                      |
-| `detail`         | no       | Optional human-readable detail                                   |
-| `instance`       | yes      | Per-error UUIDv7, minted by `ExceptionResponder`                 |
-| `correlation-id` | yes      | Per-request UUIDv7, minted/propagated by `CorrelationIdListener` |
+| Field            | Required | Source                                                                          |
+|------------------|----------|---------------------------------------------------------------------------------|
+| `type`           | yes      | Opaque category identifier (e.g. `not-found`, `validation-failed`)              |
+| `title`          | yes      | Short human-readable summary                                                    |
+| `status`         | yes      | Equals the HTTP status line                                                     |
+| `detail`         | no       | Optional human-readable detail                                                  |
+| `instance`       | yes      | Per-error UUIDv7, minted by `ExceptionResponder`                                |
+| `correlation-id` | yes      | Per-request UUIDv7, minted/propagated by `CorrelationIdListener`                |
 | `<extensions>`   | varies   | Type-specific (e.g. `violations` for `validation-failed`, `debug` outside prod) |
 
 `detail` is the only optional core field — when `null`, it is OMITTED from the wire body (see `ProblemDetails::toArray()`). `extensions` carries per-type members appended after the core fields. Reserved keys (`type, title, status, detail, instance, correlation-id, violations, debug`) are stripped from `DomainException::context()` before serialization so domain code cannot accidentally clobber wire fields.
@@ -57,17 +57,17 @@ The mapping is the constant `ProblemDetailsFactory::MARKER_STATUS_MAP` (see [`ap
 
 Marker resolution honours implements-clause order, intersected with the canonical marker list (`firstMatchingMarker`, lines 352–364). Subclasses may override `DomainException::type()` to return a more specific opaque identifier. Markers are framework-free — no HTTP / ORM / transport imports allowed inside `Shared/Domain/Exception/`.
 
-> **Adding a marker interface or changing its mapping requires updating this page** (NFR26). The CI grep gate that enforces freshness lives in Story 4.5.
+> **Adding a marker interface or changing its mapping requires updating this page**. The CI grep gate that enforces freshness.
 
 ### Symfony framework exception bridge
 
-| Symfony exception                                     | HTTP status              | `type`                                     |
-|-------------------------------------------------------|--------------------------|--------------------------------------------|
-| `Validator\Exception\ValidationFailedException` *     | 400                      | `validation-failed` (+ `violations[]`)     |
-| `Security\Core\Exception\AccessDeniedException`       | 403                      | `forbidden`                                |
-| `Security\Core\Exception\AuthenticationException`     | 401                      | `unauthenticated`                          |
-| `HttpKernel\Exception\HttpExceptionInterface`         | from `getStatusCode()`   | mirrors marker default for known statuses, else `http-error` |
-| Anything else (`\Throwable`)                          | 500                      | `unhandled-exception`                      |
+| Symfony exception                                 | HTTP status            | `type`                                                       |
+|---------------------------------------------------|------------------------|--------------------------------------------------------------|
+| `Validator\Exception\ValidationFailedException` * | 400                    | `validation-failed` (+ `violations[]`)                       |
+| `Security\Core\Exception\AccessDeniedException`   | 403                    | `forbidden`                                                  |
+| `Security\Core\Exception\AuthenticationException` | 401                    | `unauthenticated`                                            |
+| `HttpKernel\Exception\HttpExceptionInterface`     | from `getStatusCode()` | mirrors marker default for known statuses, else `http-error` |
+| Anything else (`\Throwable`)                      | 500                    | `unhandled-exception`                                        |
 
 \* The factory walks `getPrevious()` so wrapped `ValidationFailedException` (e.g. inside Symfony's `RequestPayloadValueResolver` 422 wrapper used by `#[MapRequestPayload]` / `#[MapQueryString]`) is unwrapped and re-mapped to a 400 with the structured `violations[]` extension instead of Symfony's generic 422. `violations[]` shape: `[{field, message, code}, ...]`.
 
@@ -171,13 +171,13 @@ The denylist is applied AFTER the reserved-key `unset()` layer and BEFORE the wh
 
 Behavior is keyed off `%kernel.environment%` (injected via `#[Autowire('%kernel.environment%')]` — never `$_ENV` / `getenv()`). The decision lives in `ProblemDetailsFactory::buildDebugExtension()` (lines 482–504) and `resolveDebugMode()` (lines 464–471).
 
-| Env       | `debug` extension shape |
-|-----------|-------------------------|
-| `dev`     | full: `exception_class`, `message`, `file`, `line`, `previous_chain` (cycle-safe walk of `getPrevious()`) |
-| `test`    | full (same as `dev`) |
-| `staging` | minimal: `exception_class` + `message` only (no `file`, no `line`, no chain) |
-| `prod`    | omitted entirely; the terminal `unhandled-exception` branch's `title` is replaced by the safe literal `"An unexpected error occurred."` (FR35, NFR7) |
-| anything else (`'ci'`, `'production'`, empty, uppercase, …) | falls through to `prod` semantics (default-deny — NFR13) |
+| Env                                                         | `debug` extension shape                                                                                                                              |
+|-------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `dev`                                                       | full: `exception_class`, `message`, `file`, `line`, `previous_chain` (cycle-safe walk of `getPrevious()`)                                            |
+| `test`                                                      | full (same as `dev`)                                                                                                                                 |
+| `staging`                                                   | minimal: `exception_class` + `message` only (no `file`, no `line`, no chain)                                                                         |
+| `prod`                                                      | omitted entirely; the terminal `unhandled-exception` branch's `title` is replaced by the safe literal `"An unexpected error occurred."` (FR35, NFR7) |
+| anything else (`'ci'`, `'production'`, empty, uppercase, …) | falls through to `prod` semantics (default-deny — NFR13)                                                                                             |
 
 Anonymous-class FQCNs are sanitised (`\0/path:line$N` suffix stripped) so the embedded path cannot leak through `exception_class` in staging mode (`sanitiseExceptionClass`, lines 546–551).
 
@@ -213,13 +213,13 @@ Non-domain `\LogicException` is pinned ahead of the marker check so a future cus
 
 `exception_category` is a stable, queryable label derived from the SPL hierarchy and the project's `DomainException` marker. The order of the dispatch is load-bearing: `DomainException` is checked first so a project subclass that ever descended from `LogicException` / `RuntimeException` is still classified as `domain_error`.
 
-| Value              | Source                                  | What it means                                                                          | On-call action      |
-|--------------------|-----------------------------------------|----------------------------------------------------------------------------------------|---------------------|
-| `programmer_error` | `\LogicException` and descendants       | Build / platform / contract is broken (e.g. `ext-intl` missing, invariant violated).   | Page                |
-| `runtime_error`    | `\RuntimeException` and descendants     | Environmental / input failure not preventable at coding time (transient I/O, bad bytes). | Triage              |
-| `domain_error`     | `Erpify\Shared\Domain\Exception\DomainException` | Expected business outcome (4xx for the most part).                            | Log only            |
-| `engine_error`     | `\Error` and descendants (`TypeError`, `ParseError`, …) | Engine-level failure.                                                | Page                |
-| `unknown`          | Anything else implementing `Throwable`  | Not in the SPL split — investigate.                                                    | Investigate         |
+| Value              | Source                                                  | What it means                                                                            | On-call action |
+|--------------------|---------------------------------------------------------|------------------------------------------------------------------------------------------|----------------|
+| `programmer_error` | `\LogicException` and descendants                       | Build / platform / contract is broken (e.g. `ext-intl` missing, invariant violated).     | Page           |
+| `runtime_error`    | `\RuntimeException` and descendants                     | Environmental / input failure not preventable at coding time (transient I/O, bad bytes). | Triage         |
+| `domain_error`     | `Erpify\Shared\Domain\Exception\DomainException`        | Expected business outcome (4xx for the most part).                                       | Log only       |
+| `engine_error`     | `\Error` and descendants (`TypeError`, `ParseError`, …) | Engine-level failure.                                                                    | Page           |
+| `unknown`          | Anything else implementing `Throwable`                  | Not in the SPL split — investigate.                                                      | Investigate    |
 
 `exception_category` is **orthogonal** to `type` (RFC 9457 marker) and `status` (HTTP code) so SRE filters do not depend on framework-specific FQCNs. Routing examples for the existing Monolog stack ([`api/config/packages/monolog.yaml`](../api/config/packages/monolog.yaml)):
 
@@ -245,7 +245,7 @@ Grep by `instance` for the single failure entry; grep by `correlation_id` for th
 | `CorrelationIdListener::onResponse` | `kernel.response`  | -1024    | all main responses |
 | `SearchExceptionListener` (legacy)  | `kernel.exception` | 32       | search routes      |
 
-`ExceptionResponder` checks `$event->hasResponse()` first — if a higher-priority listener (e.g. `SearchExceptionListener`) already produced a response, it leaves it alone and does **not** log. Listener priority ordering vs. Nelmio CORS is pinned by Story 4.1 (`ExceptionResponderListenerPriorityTest`).
+`ExceptionResponder` checks `$event->hasResponse()` first — if a higher-priority listener (e.g. `SearchExceptionListener`) already produced a response, it leaves it alone and does **not** log. Listener priority ordering vs. Nelmio CORS is pinned by (`ExceptionResponderListenerPriorityTest`).
 
 ## Rate limiting (per-IP)
 
@@ -255,12 +255,12 @@ For correct per-client granularity behind FrankenPHP / a load balancer, set `fra
 
 ## Performance Budgets
 
-Story 3.8 (NFR2 / NFR4 / NFR5) — pinned listener performance budgets. The benchmark harness lives at `api/tests/Bench/Shared/Infrastructure/Http/EventListener/ExceptionResponderBenchmarkTest.php` and runs through a real Symfony kernel via `WebTestCase`, so the measurement window captures the full listener path (factory mapping → body cap → `\json_encode` → `Response` write → PSR-3 log emission), exactly as it runs in production.
+pinned listener performance budgets. The benchmark harness lives at `api/tests/Bench/Shared/Infrastructure/Http/EventListener/ExceptionResponderBenchmarkTest.php` and runs through a real Symfony kernel via `WebTestCase`, so the measurement window captures the full listener path (factory mapping → body cap → `\json_encode` → `Response` write → PSR-3 log emission), exactly as it runs in production.
 
-| Path | Budget | Route | Status |
-|------|--------|-------|--------|
-| 4xx  | p99 ≤ **5 ms** (CI hardware baseline)  | `/api/test/_throw-not-found` | 404 |
-| 5xx  | p99 ≤ **20 ms** (CI hardware baseline) | `/api/test/_throw-runtime`   | 500 |
+| Path | Budget                                 | Route                        | Status |
+|------|----------------------------------------|------------------------------|--------|
+| 4xx  | p99 ≤ **5 ms** (CI hardware baseline)  | `/api/test/_throw-not-found` | 404    |
+| 5xx  | p99 ≤ **20 ms** (CI hardware baseline) | `/api/test/_throw-runtime`   | 500    |
 
 Each path runs 100 warm-up iterations to seed opcache / classloader, then 1000 measured iterations whose per-iteration `\hrtime(true)` deltas are sorted to derive the p99. The runtime check applies a +50% shared-CI headroom (7.5 ms / 30 ms) over the raw NFR2 numbers so a real listener regression (a conditional sleep, a sync I/O, a serializer pipeline introduction) trips the gate while sub-percent jitter under shared CPU contention does not.
 
@@ -281,18 +281,18 @@ The bench is **not** CI-blocking. The contract tests above are CI-blocking (NFR4
 
 ## Test surface
 
-| Test class                                       | Pinning                                          |
-|--------------------------------------------------|--------------------------------------------------|
-| `ProblemDetailsFactoryTest`                      | full factory contract                            |
-| `MarkerStatusMapContractTest`                    | per-marker status + type pin (Story 4.2)         |
-| `ExceptionResponderTest`                         | listener happy path + last-resort body           |
-| `ExceptionResponderFunctionalTest`               | wire-level integration                           |
-| `ProblemDetailsApiSchemaSweepTest`               | every `/api/*` route conforms (Story 4.3)        |
-| `ExceptionResponderListenerPriorityTest`         | priority + Nelmio CORS (Story 4.1)               |
-| `BannedDoctrineApisTest`, `NoDatabaseDependenciesContractTest`, `StatelessPropertiesContractTest` | worker-mode safety (Story 3.5) |
-| `NativeJsonEncodeContractTest`, `LoggerInterfaceContractTest` | NFR4 / NFR5 contracts (Story 3.8)   |
-| `ConstantTimeAuthBranchingContractTest`, `ConstantTimeAuthBranchingBenchmarkTest` | NFR9 (Story 3.7)            |
-| `RedactionDenylistTest`                          | denylist semantics + extension procedure (NFR8)  |
+| Test class                                                                                        | Pinning                                         |
+|---------------------------------------------------------------------------------------------------|-------------------------------------------------|
+| `ProblemDetailsFactoryTest`                                                                       | full factory contract                           |
+| `MarkerStatusMapContractTest`                                                                     | per-marker status + type pin                    |
+| `ExceptionResponderTest`                                                                          | listener happy path + last-resort body          |
+| `ExceptionResponderFunctionalTest`                                                                | wire-level integration                          |
+| `ProblemDetailsApiSchemaSweepTest`                                                                | every `/api/*` route conforms                   |
+| `ExceptionResponderListenerPriorityTest`                                                          | priority + Nelmio CORS                          |
+| `BannedDoctrineApisTest`, `NoDatabaseDependenciesContractTest`, `StatelessPropertiesContractTest` | worker-mode safety                              |
+| `NativeJsonEncodeContractTest`, `LoggerInterfaceContractTest`                                     | NFR4 / NFR5 contracts                           |
+| `ConstantTimeAuthBranchingContractTest`, `ConstantTimeAuthBranchingBenchmarkTest`                 | NFR9                                            |
+| `RedactionDenylistTest`                                                                           | denylist semantics + extension procedure (NFR8) |
 
 Behat features under `api/features/shared/error_contract/` pin the wire contract end-to-end (correlation-id propagation, instance UUIDv7, violations extension).
 
@@ -307,4 +307,4 @@ Use this when reviewing a PR that touches `api/src/Shared/Domain/Exception/` or 
 - [ ] Did the PR change the env-aware `debug` shape? **Update the "Environment-aware `debug` extension" section.**
 - [ ] Did the PR change the listener priority or CORS interaction? **Update the "Listener layout" section.**
 
-> **Adding a marker interface or changing its mapping requires updating this page** (NFR26). The CI grep gate that enforces this lives in Story 4.5.
+> **Adding a marker interface or changing its mapping requires updating this page**.

@@ -1,6 +1,6 @@
 ---
 # Dev Container overrides (monorepo): firewall caps, Xdebug, full repo at /workspace.
-# Symfony stays at /app via root compose.override.yaml (./api:/app).
+# Symfony stays at /app/api via root compose.dev.yaml (./api:/app/api).
 services:
   php:
     cap_add:

@@ -52,7 +52,7 @@ a firewall script (`.devcontainer/init-firewall.sh`) that locks down outbound ne
 access using `iptables` and `ipset`. Only the following destinations are allowed:
 
 | Destination                                       | Reason                          |
-| ------------------------------------------------- | ------------------------------- |
+|---------------------------------------------------|---------------------------------|
 | GitHub (`github.com`, `api.github.com`)           | Git operations, API access      |
 | Anthropic (`anthropic.com`)                       | Claude Code backend             |
 | npm registry (`registry.npmjs.org`)               | Node.js dependencies            |

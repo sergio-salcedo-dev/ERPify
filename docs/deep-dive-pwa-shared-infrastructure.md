@@ -6,11 +6,11 @@
 
 `shared/infrastructure` is the cross-cutting **outermost layer** of the PWA — the only place allowed to depend on Next, Inversify, `fetch`, and Shadcn UI primitives. It contains three orthogonal sub-systems that every bounded context relies on:
 
-| Sub-system | Files | Purpose |
-|---|---|---|
-| **DI container** (`DependencyInjection/`) | 1 | Single Inversify container, wires `HttpClient` + per-context use cases. Bootstrapped by `src/app/layout.tsx` via `import "reflect-metadata"`. |
-| **HTTP transport** (`HttpClient/` + `ApiRoutes.ts`) | 2 | `HttpClient` port + `FetchHttpClient` / `MockHttpClient` adapters. `ApiRoutes` centralises Symfony URL paths so contexts never hard-code strings. |
-| **Shared UI** (`ui/components/{atoms,molecules,organisms}/`) | 8 | Atomic-design React components shared across `app/` segments. BEM class names, Shadcn-based, motion-animated. |
+| Sub-system                                                   | Files | Purpose                                                                                                                                           |
+|--------------------------------------------------------------|-------|---------------------------------------------------------------------------------------------------------------------------------------------------|
+| **DI container** (`DependencyInjection/`)                    | 1     | Single Inversify container, wires `HttpClient` + per-context use cases. Bootstrapped by `src/app/layout.tsx` via `import "reflect-metadata"`.     |
+| **HTTP transport** (`HttpClient/` + `ApiRoutes.ts`)          | 2     | `HttpClient` port + `FetchHttpClient` / `MockHttpClient` adapters. `ApiRoutes` centralises Symfony URL paths so contexts never hard-code strings. |
+| **Shared UI** (`ui/components/{atoms,molecules,organisms}/`) | 8     | Atomic-design React components shared across `app/` segments. BEM class names, Shadcn-based, motion-animated.                                     |
 
 **Out of scope for this layer (per `pwa/CLAUDE.md` rule):** business logic, routing, persistence. Those live in per-context `application/` and `infrastructure/`. **Domain code may not import from this folder.**
 
@@ -63,7 +63,7 @@ Total in scope: **11 files / ~640 LOC**.
 - **Internal helpers (not exported):**
   - `trimBase(url)` — strips trailing `/`.
   - `browserApiBase()` — reads `NEXT_PUBLIC_SYMFONY_API_BASE_URL`, falls back to `https://localhost`. Public env, leaks to the client bundle by Next convention.
-  - `serverApiBase()` — reads `SYMFONY_INTERNAL_URL` (e.g. `http://php:80` inside Compose, `http://localhost:8000` for `make dev.local`); falls back to `browserApiBase()`.
+  - `serverApiBase()` — reads `SYMFONY_INTERNAL_URL` (e.g. `http://php:80` inside Compose); falls back to `browserApiBase()`.
 - **Imports:** `inversify.injectable`, `../ApiRoutes`.
 - **Used by:** `frontoffice/health/infrastructure/ApiHealthCheckRepository.ts`, `backoffice/health/infrastructure/ApiHealthCheckRepository.ts`. Always via `@inject("HttpClient")` — never instantiated directly.
 - **Side effects:** Real network I/O via `fetch` (`FetchHttpClient`), `setTimeout` in `MockHttpClient`.
@@ -240,8 +240,7 @@ In tests (`NODE_ENV==="test"` || `VITEST==="true"`), the same call resolves to `
 
 | Run mode | `NEXT_PUBLIC_SYMFONY_API_BASE_URL` | `SYMFONY_INTERNAL_URL` | Browser base | Server (RSC) base |
 |---|---|---|---|---|
-| Docker `make dev` | `https://localhost` (Compose default) | `http://php:80` | `https://localhost` | `http://php:80` |
-| `make dev.local` (host Next) | `http://localhost:8000` | `http://localhost:8000` | `http://localhost:8000` | `http://localhost:8000` |
+| Docker `make app.dev` | `https://localhost` (Compose default) | `http://php:80` | `https://localhost` | `http://php:80` |
 | Vitest | (irrelevant — `MockHttpClient` is bound) | — | — | — |
 | Production | `https://<public-host>` | `http://php:80` (Compose internal) | public host | internal hostname |
 
@@ -297,7 +296,7 @@ No outbound integration outside the Symfony API.
 - **E2E:** the Playwright suite covers the landing-page flow indirectly through `app/page.tsx`.
 - **Suggested commands:**
   - `make pwa.test.unit c='context/shared/infrastructure'` — once tests exist, runs only this surface.
-  - `make pwa.lint` — ESLint + Prettier; mandatory before merging.
+  - `make pwa.quality` — ESLint + Prettier; mandatory before merging.
 
 ## 7. Related code & reuse opportunities
 
@@ -333,12 +332,12 @@ No outbound integration outside the Symfony API.
 ## 8. Per-file contributor checklist (before changing this folder)
 
 - [ ] **Did you touch `Container.ts`?** Re-run `make pwa.dev` and exercise `/`, `/backoffice`, `/backoffice/health` — wiring failures don't show up in unit tests today.
-- [ ] **Did you touch `HttpClient.ts`?** Verify both base-URL paths (`make dev` browser + `make dev.local` host) and the test bind (`make pwa.test.unit`).
+- [ ] **Did you touch `HttpClient.ts`?** Verify the base-URL path (`make app.dev` browser) and the test bind (`make pwa.test.unit`).
 - [ ] **Did you touch `ApiRoutes.ts`?** Cross-check `api/config/routes.yaml`. Update `MockHttpClient` URL discrimination if the new path is one your tests will hit.
 - [ ] **Did you touch a UI component?** BEM names must follow `block__element--modifier`. Verify the consumer renders unchanged in a real browser — Vitest will not catch motion / layout regressions.
 - [ ] **Did you add a binding?** Bind via string token, scope to singleton unless the symbol carries per-call state, and document the token next to the binding (no central registry yet).
 - [ ] **Did you remove a binding?** Grep `@inject("…")` for the token across all contexts before deleting — TS will not catch a stale string.
-- [ ] **Run `make pwa.lint` before pushing.**
+- [ ] **Run `make pwa.quality` before pushing.**
 
 ## 9. Known follow-ups (file an issue if you don't do them now)
 

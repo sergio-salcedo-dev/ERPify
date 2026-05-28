@@ -95,6 +95,8 @@ use Throwable;
  * happy path. The regex constant is a deliberate copy of
  * {@see CorrelationIdListener::UUIDV7_PATTERN} (still private there) — duplication is
  * preferred to widening that constant's visibility for a single cross-class consumer.
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[AsEventListener(event: KernelEvents::EXCEPTION, priority: self::PRIORITY)]
 final readonly class ExceptionResponder

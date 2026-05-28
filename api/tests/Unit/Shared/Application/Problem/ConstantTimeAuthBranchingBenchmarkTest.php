@@ -76,6 +76,8 @@ final class ConstantTimeAuthBranchingBenchmarkTest extends TestCase
      * The microbenchmark (documented, not CI-gated in the blocking sense —
      * the 5x threshold is generous enough that the test is informational
      * rather than precision-tuned).
+     *
+     * @SuppressWarnings("PHPMD.ExcessiveMethodLength")
      */
     public function testConstantTimeAuthBranchingMeansAreWithinMeasurementNoise(): void
     {

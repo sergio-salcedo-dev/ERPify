@@ -37,7 +37,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 | E2E tests                 | **Behat 3** in isolated tree                                                               | Lives exclusively under `api/tools/behat/composer.json`. **Never** `composer require behat/*` into `api/composer.json`. Install via `composer behat-tools-install`.                                                                                                                                                                                                      |
 | Static analysis           | PHPStan 2, Psalm 6.16, Rector 2                                                            | Configs: `api/phpstan.neon`, `api/psalm.xml`, `api/rector.php`.                                                                                                                                                                                                                                                                                                          |
 | Style                     | PHP-CS-Fixer 3.95, PHPCS 4, PHPMD                                                          | Config: `api/.php-cs-fixer.php`. PSR-12 + `declare(strict_types=1);`.                                                                                                                                                                                                                                                                                                    |
-| Hygiene                   | composer-unused, composer-require-checker, `roave/security-advisories: dev-latest`         | Run via `make composer.checks`.                                                                                                                                                                                                                                                                                                                                          |
+| Hygiene                   | composer-unused, composer-require-checker, `roave/security-advisories: dev-latest`         | Run via `make composer.check.all`.                                                                                                                                                                                                                                                                                                                                          |
 
 ### PWA (`pwa/`) — Next.js / React
 
@@ -55,7 +55,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 | Unit tests           | **Vitest 4**                                                                     | Config: `pwa/vitest.config.ts` (v4 config API differs from v1/v2). Command: `make pwa.test.unit c='src/context/foo/bar.test.ts'`.                                                                                 |
 | E2E tests            | **Playwright 1.59**                                                              | Config: `pwa/playwright.config.ts`. `baseURL: http://localhost:3000` (**not `:80`**) — `dev:e2e` runs Next on `:3000`.                                                                                            |
 | Testing libs         | @testing-library/react 16, jest-dom 6, jsdom                                     | —                                                                                                                                                                                                                 |
-| Lint / format        | ESLint 10.2 + `eslint-config-next` 16.2 + `eslint-config-prettier`, Prettier 3.8 | Run via `make pwa.lint`.                                                                                                                                                                                          |
+| Lint / format        | ESLint 10.2 + `eslint-config-next` 16.2 + `eslint-config-prettier`, Prettier 3.8 | Run via `make pwa.quality`.                                                                                                                                                                                          |
 | Integrations in deps | `@google/genai`, `firebase-tools`                                                | Present — do not assume usage; check code before wiring.                                                                                                                                                          |
 
 ### Infrastructure / Dev
@@ -70,11 +70,10 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 
 ### Ports
 
-| Flow                                    | Host                              | Service                                                                                                                                |
-|-----------------------------------------|-----------------------------------|----------------------------------------------------------------------------------------------------------------------------------------|
-| Docker dev (default)                    | `http://localhost` → `:80`/`:443` | FrankenPHP (HTML proxied to Next `:3000` in-container)                                                                                 |
-| Next container (e2e target)             | `:3000`                           | `next dev --turbo -p 3000` (`dev:e2e`)                                                                                                 |
-| `dev-local` (host Next vs host Symfony) | `:80` (Next), `:8000` (Symfony)   | Requires `NEXT_PUBLIC_SYMFONY_API_BASE_URL=http://localhost:8000` and `SYMFONY_INTERNAL_URL=http://localhost:8000` in `pwa/.env.local` |
+| Flow                        | Host                              | Service                                                |
+|-----------------------------|-----------------------------------|--------------------------------------------------------|
+| Docker dev (default)        | `http://localhost` → `:80`/`:443` | FrankenPHP (HTML proxied to Next `:3000` in-container) |
+| Next container (e2e target) | `:3000`                           | `next dev --turbo -p 3000` (`dev:e2e`)                 |
 
 ## Critical Implementation Rules
 
@@ -213,7 +212,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 
 - Critical business logic in `Domain/` and `context/<bc>/domain` **must** be unit-tested. Adapters covered by integration/e2e.
 - All existing and new tests must pass 100% before a story is done (`.cursor/rules/testing.mdc`, `bmad-agent-dev` principle).
-- CI runs `make ci.test` — verify locally with `make test` before pushing.
+- CI runs `make ci.test` — verify locally with `make app.test` before pushing.
 
 ### Code Quality & Style Rules
 
@@ -245,12 +244,12 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 - **PWA (`pwa/src/`)**: `app/` (routes), `components/` (UI), `context/<bc>/{domain,application,infrastructure}` (business logic), `lib/` (glue). Shared cross-cutting code lives in `src/context/shared`, not ad-hoc folders.
 - Tests mirror source trees (`api/tests/`, `pwa/tests/`).
 
-#### Linting / Formatting — tools are authoritative
+#### Code Quality - Linting / Formatting — tools are authoritative
 
-- **PHP**: PHP-CS-Fixer (`api/.php-cs-fixer.php`), PHPCS, PHPStan 2 (`api/phpstan.neon`), Psalm 6.16, Rector 2, PHPMD. Run all via `make php.lint`. Don't hand-format against these tools.
-- **JS/TS**: ESLint 10 + `eslint-config-next` + `eslint-config-prettier`, Prettier 3.8. Run via `make pwa.lint`; fix via `make pwa.lint.fix` / `make pwa.format.fix`. Don't hand-format.
+- **PHP**: PHP-CS-Fixer (`api/.php-cs-fixer.php`), PHPCS, PHPStan 2 (`api/phpstan.neon`), Psalm 6.16, Rector 2, PHPMD. Run all via `make php.quality`. Don't hand-format against these tools.
+- **JS/TS**: ESLint 10 + `eslint-config-next` + `eslint-config-prettier`, Prettier 3.8. Run via `make pwa.quality`; fix via `make pwa.lint` / `make pwa.format`. Don't hand-format.
 - **All files**: `.editorconfig` wins. LF line endings (enforced by pre-commit). Max file size 1MB (pre-commit). No mixed line endings.
-- Aggregates: `make lint` (both sides), `make ci` (`ci.lint` + `ci.test`).
+- Aggregates: `make app.quality` (both sides), `make ci` (`ci.quality` + `ci.test`).
 
 #### UI / CSS (pwa/)
 
@@ -273,7 +272,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 - The root `Makefile` + `make/*.mk` is the canonical interface. Prefer `make <target>` over raw `docker compose` / `composer` / `npm` / linter calls.
 - Run Make targets from **repo root**, never from `api/` or `pwa/`.
 - Environment overlay: `ENV=dev|ci|staging|prod` (default `dev`). `IN_CONTAINER` is handled by the Make layer — do not invoke container exec directly.
-- Common: `make docker.up | docker.down | docker.logs | docker.ps | docker.health | docker.bash | docker.clean`. `docker.clean` is **destructive** (drops volumes) — confirm before use.
+- Common: `make docker.up | docker.down | docker.logs | docker.ps | php.bash | docker.down.clean-volumes`. `docker.down.clean-volumes` is **destructive** (drops volumes) — confirm before use.
 - Passthrough: `c='...'` — e.g. `make composer c='req vendor/pkg'`, `make php.unit c='--filter X'`, `make pwa.test.unit c='src/context/foo/bar.test.ts'`.
 - DB: `make db.migrate | db.diff | db.status | db.validate | db.load.fixtures | db.shell`. `db.reset` is **destructive** (drop → migrate → fixtures) — only on dev/ci.
 
@@ -304,7 +303,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 
 - Target `main`. Title mirrors the primary commit's Conventional Commit subject.
 - Body: **what** changed, **why**, and a **test plan** (bulleted checklist). Include screenshots for UI changes.
-- CI must be green (`make ci` equivalent + SuperLinter via `make ci.superlint` if touched).
+- CI must be green (`make ci` equivalent + SuperLinter via `make super-lint.fast` if touched).
 - At least one review. Security-sensitive changes require the checklist update in the PR body.
 - Don't push directly to `main`. Don't force-push shared branches without coordinating.
 
@@ -317,10 +316,9 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 - Base images are pinned by sha256 digest (`dunglas/frankenphp:1-php8.5`, `debian:13-slim`, `node:24-alpine`); Dependabot at `/api` and `/pwa` handles digest bumps. Do not unpin.
 - DNS, CORS origins, and Mercure cookie/CORS config per `docs/mercure-production-deployment.md` and `docs/production-deployment.md`. After deploy, run the documented smoke tests.
 
-#### Local traffic model — don't confuse the two
+#### Local traffic model
 
 - **Docker dev (default)**: browser → `http(s)://localhost` → FrankenPHP. HTML `/` is proxied to Next (`:3000` in-container). `/api/*` and `/.well-known/mercure` stay on PHP. See `docs/local-fullstack-traffic.md`.
-- **`dev-local`**: host-run Next on `:80` + host-run Symfony on `:8000`. Requires `NEXT_PUBLIC_SYMFONY_API_BASE_URL=http://localhost:8000` and `SYMFONY_INTERNAL_URL=http://localhost:8000` in `pwa/.env.local`. Pick one flow per session — don't mix.
 
 ### Critical Don't-Miss Rules
 
@@ -345,7 +343,6 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 - `messenger_worker` is a **separate Compose service** in prod/ci. Handlers must be idempotent; delivery is at-least-once.
 - `reflect-metadata` must be imported **once** at the PWA app entry.
 - Mercure client must hit **same-origin** `/.well-known/mercure`. Don't hardcode cross-origin URLs.
-- In `dev-local`, both `NEXT_PUBLIC_SYMFONY_API_BASE_URL` and `SYMFONY_INTERNAL_URL` must be `http://localhost:8000`.
 
 #### Security (authoritative: `.cursor/rules/security.mdc`)
 
@@ -375,7 +372,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 - Never `--no-verify` without explicit authorization.
 - Never amend after a hook failure — create a new commit.
 - Never force-push `main` or shared branches without coordination.
-- Never destructive-delete (`rm -rf`, `db.reset`, `docker.clean`, `git reset --hard`) without explicit confirmation.
+- Never destructive-delete (`rm -rf`, `db.reset`, `docker.down.clean-volumes`, `git reset --hard`) without explicit confirmation.
 - Never introduce a new package manager, build tool, or framework without an approved story.
 
 ---

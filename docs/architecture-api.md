@@ -59,11 +59,11 @@ Cross-context calls go through **published Application services** or **domain ev
 
 ## Layer responsibilities
 
-| Layer | Contains | Must NOT depend on |
-|---|---|---|
-| `Domain/` | Entities, value objects, domain services, repository/port **interfaces**, domain exceptions, domain events | Framework, ORM, HTTP, DI container |
-| `Application/` | Use cases (command/query handlers), DTOs, orchestration, validators over DTOs | Infrastructure implementations (only their interfaces) |
-| `Infrastructure/` | Doctrine mappings, repository implementations, Symfony controllers, Messenger handlers, Mercure publishers, Flysystem adapters, external-service clients | — (outermost layer) |
+| Layer             | Contains                                                                                                                                                 | Must NOT depend on                                     |
+|-------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------|
+| `Domain/`         | Entities, value objects, domain services, repository/port **interfaces**, domain exceptions, domain events                                               | Framework, ORM, HTTP, DI container                     |
+| `Application/`    | Use cases (command/query handlers), DTOs, orchestration, validators over DTOs                                                                            | Infrastructure implementations (only their interfaces) |
+| `Infrastructure/` | Doctrine mappings, repository implementations, Symfony controllers, Messenger handlers, Mercure publishers, Flysystem adapters, external-service clients | — (outermost layer)                                    |
 
 ## Data architecture
 
@@ -117,15 +117,15 @@ Full reference (mapping table, header rules, observability, code map, test surfa
 
 ## Testing strategy
 
-| Layer | Tool | Entry |
-|---|---|---|
-| Unit | **PHPUnit 13** | `api/phpunit.xml.dist`, run via `make php.unit` |
-| Functional | PHPUnit (kernel/HTTP) | `api/tests/Functional/`, run via `make php.unit` |
-| E2E / BDD | **Behat 3** (isolated Composer tree) | `api/tools/behat/`, features in `api/features/`, run via `make php.behat` |
-| Fixtures | Hautelook Alice | `make db.load.fixtures` |
-| Static analysis | PHPStan, Psalm, Rector | `make php.stan`, `php.psalm`, `php.rector[.dry-run]` |
-| Style / quality | PHP-CS-Fixer, PHPCS, PHPMD | `make php.lint` (aggregate) |
-| Composer hygiene | composer-unused, composer-require-checker | `make composer.checks` |
+| Layer            | Tool                                      | Entry                                                                     |
+|------------------|-------------------------------------------|---------------------------------------------------------------------------|
+| Unit             | **PHPUnit 13**                            | `api/phpunit.xml.dist`, run via `make php.unit`                           |
+| Functional       | PHPUnit (kernel/HTTP)                     | `api/tests/Functional/`, run via `make php.unit`                          |
+| E2E / BDD        | **Behat 3** (isolated Composer tree)      | `api/tools/behat/`, features in `api/features/`, run via `make php.behat` |
+| Fixtures         | Hautelook Alice                           | `make db.load.fixtures`                                                   |
+| Static analysis  | PHPStan, Psalm, Rector                    | `make php.stan`, `php.psalm`, `php.rector[.dry-run]`                      |
+| Style / quality  | PHP-CS-Fixer, PHPCS, PHPMD                | `make php.quality` (aggregate)                                            |
+| Composer hygiene | composer-unused, composer-require-checker | `make composer.check.all`                                                 |
 
 Integration tests that hit Doctrine use a **real Postgres** (Compose), not SQLite or mocks. No network in unit tests — mock at the transport level.
 

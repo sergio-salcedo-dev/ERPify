@@ -27,15 +27,14 @@ make composer c='behat-tools-install'
 
 ## Run / stop / inspect
 
-| Task                           | Command              |
-|--------------------------------|----------------------|
-| Start dev stack                | `make docker.up`     |
-| Stop stack                     | `make docker.down`   |
-| Tail logs                      | `make docker.logs`   |
-| List services                  | `make docker.ps`     |
-| Health check                   | `make docker.health` |
-| Shell into `php` container     | `make docker.bash`   |
-| **Destructive** — drop volumes | `make docker.clean`  |
+| Task                           | Command                          |
+|--------------------------------|----------------------------------|
+| Start dev stack                | `make docker.up`                 |
+| Stop stack                     | `make docker.down`               |
+| Tail logs                      | `make docker.logs`               |
+| List services                  | `make docker.ps`                 |
+| Shell into `php` container     | `make php.bash`                  |
+| **Destructive** — drop volumes | `make docker.down.clean-volumes` |
 
 Switch overlay: `make docker.up ENV=ci|staging|prod` (default `dev`).
 
@@ -47,7 +46,7 @@ Switch overlay: `make docker.up ENV=ci|staging|prod` (default `dev`).
 | `test`                    | `api/var/log/test.log` (fingers_crossed on `error`)      | line   |
 | `prod` / `staging` / `ci` | container stderr only (JSON), fingers_crossed on `error` | JSON   |
 
-Dev file logs are visible on the host because `compose.dev.yaml` bind-mounts `./api/var:/app/var`. Files are root-owned — use `sudo rm -rf api/var/log/*` to clean.
+Dev file logs are visible on the host because `compose.dev.yaml` bind-mounts `./api/var:/app/api/var`. Files are root-owned — use `sudo rm -rf api/var/log/*` to clean.
 
 ```bash
 # Dev — pick whichever is convenient:
@@ -67,7 +66,7 @@ Log levels: `debug` in `dev`/`test`, `fingers_crossed` (action level `error`) wi
 make composer c='req symfony/uid'     # install a package
 make composer c='require --dev ...'   # dev dependency
 make composer c='update'              # respect allow-plugins + bump-after-update
-make composer.checks                  # composer-unused + composer-require-checker + security advisories
+make composer.check.all               # composer-unused + composer-require-checker + security advisories
 ```
 
 **Never** add `symfony/symfony` (in `conflict`) or `behat/*` (isolated tree) to `api/composer.json`.
@@ -103,7 +102,7 @@ make php.behat                             # Behat (isolated tree)
 ## Lint / analyze
 
 ```bash
-make php.lint                  # PHPStan + Rector + PHP-CS-Fixer + PHPMD + PHPCS + Psalm (aggregate)
+make php.quality                  # PHPStan + Rector + PHP-CS-Fixer + PHPMD + PHPCS + Psalm (aggregate)
 make php.stan
 make php.rector                # apply
 make php.rector.dry-run

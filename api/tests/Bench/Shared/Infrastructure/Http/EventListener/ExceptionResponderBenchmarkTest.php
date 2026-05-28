@@ -72,6 +72,10 @@ final class ExceptionResponderBenchmarkTest extends WebTestCase
 
     private const int MEASUREMENT_ITERATIONS = 1000;
 
+    /**
+     * @SuppressWarnings("PHPMD.Superglobals")
+     */
+    #[\Override]
     protected function setUp(): void
     {
         parent::setUp();
@@ -167,6 +171,6 @@ final class ExceptionResponderBenchmarkTest extends WebTestCase
 
         $this->assertArrayHasKey($p99Index, $samples, 'p99 index must lie within the sample array.');
 
-        return (int) $samples[$p99Index];
+        return $samples[$p99Index];
     }
 }

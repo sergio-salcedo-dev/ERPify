@@ -111,11 +111,7 @@ final class BannedDoctrineApisTest extends TestCase
         // Pins that the iterator wiring (path, recursion, .php filter) does not silently
         // resolve to an empty set — a silent zero-file scan would make the contract vacuous
         // and let a banned API merge undetected.
-        $count = 0;
-
-        foreach ($this->errorPathPhpFiles() as $_) {
-            ++$count;
-        }
+        $count = \iterator_count($this->errorPathPhpFiles());
 
         $this->assertGreaterThan(
             0,

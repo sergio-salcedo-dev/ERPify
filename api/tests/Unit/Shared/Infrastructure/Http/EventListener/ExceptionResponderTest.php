@@ -11,6 +11,7 @@ use Erpify\Shared\Infrastructure\Http\CorrelationIdListener;
 use Erpify\Shared\Infrastructure\Http\EventListener\ExceptionResponder;
 use Erpify\Shared\Infrastructure\Http\ProblemDetailsResponder;
 use LogicException;
+use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
@@ -34,6 +35,11 @@ use Throwable;
 
 /**
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.TooManyMethods")
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods")
+ * @SuppressWarnings("PHPMD.ExcessiveClassLength")
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[CoversClass(ExceptionResponder::class)]
 final class ExceptionResponderTest extends TestCase
@@ -853,54 +859,65 @@ final class ExceptionResponderTest extends TestCase
      * `fromThrowable` to throw) or the listener's PSR-3 sink (logger-resilience)
      * fail loudly. Anonymous class — kept inline so the production listener never sees
      * a leaked test-double symbol.
+     *
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
     private function throwingLogger(string $message): LoggerInterface
     {
-        return new readonly class ($message) implements LoggerInterface {
-            public function __construct(private string $message)
+        return new class ($message) implements LoggerInterface {
+            public function __construct(private readonly string $message)
             {
             }
 
+            #[Override]
             public function emergency(string|Stringable $message, array $context = []): void
             {
                 throw new RuntimeException($this->message);
             }
 
+            #[Override]
             public function alert(string|Stringable $message, array $context = []): void
             {
                 throw new RuntimeException($this->message);
             }
 
+            #[Override]
             public function critical(string|Stringable $message, array $context = []): void
             {
                 throw new RuntimeException($this->message);
             }
 
+            #[Override]
             public function error(string|Stringable $message, array $context = []): void
             {
                 throw new RuntimeException($this->message);
             }
 
+            #[Override]
             public function warning(string|Stringable $message, array $context = []): void
             {
                 throw new RuntimeException($this->message);
             }
 
+            #[Override]
             public function notice(string|Stringable $message, array $context = []): void
             {
                 throw new RuntimeException($this->message);
             }
 
+            #[Override]
             public function info(string|Stringable $message, array $context = []): void
             {
                 throw new RuntimeException($this->message);
             }
 
+            #[Override]
             public function debug(string|Stringable $message, array $context = []): void
             {
                 throw new RuntimeException($this->message);
             }
 
+            #[Override]
             public function log($level, string|Stringable $message, array $context = []): void
             {
                 throw new RuntimeException($this->message);
@@ -1007,10 +1024,15 @@ final class ExceptionResponderTest extends TestCase
         $this->assertMatchesRegularExpression($regex, $value);
     }
 
+    /**
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
+     * @SuppressWarnings("PHPMD.BooleanArgumentFlag")
+     */
     private function makeEvent(string $path, Throwable $exception): ExceptionEvent
     {
         $request = Request::create($path);
         $kernel = new class implements HttpKernelInterface {
+            #[Override]
             public function handle(Request $request, int $type = HttpKernelInterface::MAIN_REQUEST, bool $catch = true): Response
             {
                 throw new LogicException('Test kernel: handle() must not be called by the listener.');

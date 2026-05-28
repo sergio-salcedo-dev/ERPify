@@ -20,6 +20,7 @@ use Erpify\Tests\Doctrine\TestDebugDataHolder;
  *
  * @SuppressWarnings("PHPMD.TooManyPublicMethods")
  * @SuppressWarnings("PHPMD.ExcessiveClassComplexity")
+ * @SuppressWarnings("PHPMD.DevelopmentCodeFragment")
  */
 class DoctrineContext extends AbstractContext
 {
