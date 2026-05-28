@@ -20,7 +20,6 @@ use Psr\Log\NullLogger;
 use ReflectionClass;
 use RuntimeException;
 use Stringable;
-use UnexpectedValueException;
 use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -33,6 +32,7 @@ use Symfony\Component\Validator\ConstraintViolation;
 use Symfony\Component\Validator\ConstraintViolationList;
 use Symfony\Component\Validator\Exception\ValidationFailedException;
 use Throwable;
+use UnexpectedValueException;
 
 /**
  * @internal

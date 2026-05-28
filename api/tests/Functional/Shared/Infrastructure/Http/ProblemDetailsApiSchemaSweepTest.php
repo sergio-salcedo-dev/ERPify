@@ -360,7 +360,7 @@ final class ProblemDetailsApiSchemaSweepTest extends WebTestCase
     /**
      * @param list<string> $failures
      */
-    private function decodeProblemBody(string|false $rawBody, array &$failures): ?stdClass
+    private function decodeProblemBody(false|string $rawBody, array &$failures): ?stdClass
     {
         if (!\is_string($rawBody) || '' === $rawBody) {
             $failures[] = 'response body was empty (expected JSON Problem Details body)';

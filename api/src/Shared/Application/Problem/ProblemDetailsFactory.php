@@ -205,14 +205,26 @@ final readonly class ProblemDetailsFactory
     ) {
     }
 
+    /**
+     * @SuppressWarnings("PHPMD.CyclomaticComplexity")
+     * @SuppressWarnings("PHPMD.NPathComplexity")
+     */
     public function fromThrowable(Throwable $throwable, string $correlationId, string $instance): ProblemDetails
     {
         $validationException = $this->findInChain($throwable, ValidationFailedException::class);
         $message = $throwable->getMessage();
+        $debug = $this->buildDebugExtension($throwable);
 
-        $problemDetails = match (true) {
-            $throwable instanceof DomainException => $this->buildDomainExceptionResponse($throwable, $correlationId, $instance),
-            $validationException instanceof ValidationFailedException => new ProblemDetails(
+        // Each match arm independently wraps through applyBodyCap(withDebug(...)) so the
+        // AccessDeniedException and AuthenticationException bridges remain structurally
+        // identical (pinned by ConstantTimeAuthBranchingContractTest). Sharing a single
+        // post-match wrap would let an attacker time-distinguish the 401/403 bridges.
+        return match (true) {
+            $throwable instanceof DomainException => $this->applyBodyCap($this->withDebug(
+                $this->buildDomainExceptionResponse($throwable, $correlationId, $instance),
+                $debug,
+            )),
+            $validationException instanceof ValidationFailedException => $this->applyBodyCap($this->withDebug(new ProblemDetails(
                 type: 'validation-failed',
                 title: 'Validation failed.',
                 status: Response::HTTP_BAD_REQUEST,
@@ -220,29 +232,29 @@ final readonly class ProblemDetailsFactory
                 instance: $instance,
                 correlationId: $correlationId,
                 extensions: ['violations' => $this->buildViolations($validationException->getViolations())],
-            ),
-            $throwable instanceof AccessDeniedException => $this->buildBridgeResponse(
+            ), $debug)),
+            $throwable instanceof AccessDeniedException => $this->applyBodyCap($this->withDebug($this->buildBridgeResponse(
                 type: 'forbidden',
                 status: Response::HTTP_FORBIDDEN,
                 title: '' !== $message ? $message : 'Access denied.',
                 correlationId: $correlationId,
                 instance: $instance,
-            ),
-            $throwable instanceof AuthenticationException => $this->buildBridgeResponse(
+            ), $debug)),
+            $throwable instanceof AuthenticationException => $this->applyBodyCap($this->withDebug($this->buildBridgeResponse(
                 type: 'unauthenticated',
                 status: Response::HTTP_UNAUTHORIZED,
                 title: '' !== $message ? $message : 'Authentication required.',
                 correlationId: $correlationId,
                 instance: $instance,
-            ),
-            $throwable instanceof HttpExceptionInterface => $this->buildBridgeResponse(
+            ), $debug)),
+            $throwable instanceof HttpExceptionInterface => $this->applyBodyCap($this->withDebug($this->buildBridgeResponse(
                 type: self::HTTP_STATUS_TYPE_MAP[$throwable->getStatusCode()] ?? 'http-error',
                 status: $throwable->getStatusCode(),
                 title: '' !== $message ? $message : 'An HTTP error occurred.',
                 correlationId: $correlationId,
                 instance: $instance,
-            ),
-            default => new ProblemDetails(
+            ), $debug)),
+            default => $this->applyBodyCap($this->withDebug(new ProblemDetails(
                 type: 'unhandled-exception',
                 title: $this->resolveUnhandledTitle($throwable),
                 status: Response::HTTP_INTERNAL_SERVER_ERROR,
@@ -250,10 +262,8 @@ final readonly class ProblemDetailsFactory
                 instance: $instance,
                 correlationId: $correlationId,
                 extensions: [],
-            ),
+            ), $debug)),
         };
-
-        return $this->applyBodyCap($this->withDebug($problemDetails, $this->buildDebugExtension($throwable)));
     }
 
     /**

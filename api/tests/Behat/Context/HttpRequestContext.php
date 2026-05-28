@@ -22,6 +22,7 @@ use Symfony\Component\DependencyInjection\Container;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use UnexpectedValueException;
 
 /**
  * This context gives the capability to make http requests and check responses.
@@ -330,13 +331,14 @@ class HttpRequestContext extends AbstractContext
 
         foreach (\explode('.', $node) as $segment) {
             if (!\is_array($value) || !\array_key_exists($segment, $value)) {
-                throw new \UnexpectedValueException(\sprintf('JSON node "%s" not found in the previous response.', $node));
+                throw new UnexpectedValueException(\sprintf('JSON node "%s" not found in the previous response.', $node));
             }
+
             $value = $value[$segment];
         }
 
         if (!\is_scalar($value)) {
-            throw new \UnexpectedValueException(\sprintf('JSON node "%s" is not a scalar (got %s).', $node, \get_debug_type($value)));
+            throw new UnexpectedValueException(\sprintf('JSON node "%s" is not a scalar (got %s).', $node, \get_debug_type($value)));
         }
 
         $this->iSendARequestTo($method, \str_replace('{value}', \rawurlencode((string) $value), $url));

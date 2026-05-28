@@ -80,26 +80,35 @@ Feature: Search banks
     When I send a "GET" request to "/backoffice/banks?cursor=invalidBase64"
     Then the response status code should be 200
 
-  # The following three scenarios pin the Paginator refactor (Paginator::alterWhere +
-  # Paginator::buildCursorWhere extraction, and Paginator::setCursorCount with the
-  # inlined "first page fits results" optimisation). They exercise:
-  #   1. Cursor-based page traversal — drives buildCursorWhere through the loop and
-  #      back through alterWhere's WHERE-clause + parameter binding.
-  #   2. `paginationMode=detailed` with a sub-limit page — drives the inlined
-  #      isSingleFirstPageQuery short-circuit so the count is taken from the result
-  #      set instead of issuing a COUNT(*) query.
-  #   3. `paginationMode=detailed` with a small limit — forces the count query to
-  #      hit the database (isSingleFirstPageQuery returns false).
-  Scenario: Cursor pagination returns the next page of banks without overlap
-    When I send a "GET" request to "/backoffice/banks?limit=5"
+  # Paginator refactor coverage: alterWhere + buildCursorWhere extraction
+  # and the inlined isSingleFirstPageQuery short-circuit in setCursorCount.
+  Scenario: Light pagination mode emits a cursor and skips pageCount on page one
+    When I send a "GET" request to "/backoffice/banks?paginationMode=light&limit=5"
     Then the response status code should be 200
     And the JSON node "data.items" should have 5 elements
+    And the JSON node "data.pagination.currentPage" should be equal to the number 1
+    And the JSON node "data.pagination.pageCount" should be null
     And the JSON node "data.pagination.hasMorePages" should be true
     And the JSON node "data.pagination.cursor" should not be null
-    When I send a "GET" request to "/backoffice/banks?limit=5&cursor={value}" using the JSON node "data.pagination.cursor" from the previous response
+
+  Scenario: Light pagination mode follows the cursor to the next page
+    Given I send a "GET" request to "/backoffice/banks?paginationMode=light&limit=5"
+    And I send a "GET" request to "/backoffice/banks?paginationMode=light&limit=5&page=2&cursor={value}" using the JSON node "data.pagination.cursor" from the previous response
     Then the response status code should be 200
     And the JSON node "data.items" should have 5 elements
     And the JSON node "data.pagination.currentPage" should be equal to the number 2
+    And the JSON node "data.pagination.pageCount" should be null
+    And the JSON node "data.pagination.hasMorePages" should be true
+    And the JSON node "data.pagination.cursor" should not be null
+
+  Scenario: Detailed pagination mode follows the cursor to the next page
+    Given I send a "GET" request to "/backoffice/banks?paginationMode=detailed&limit=5"
+    And I send a "GET" request to "/backoffice/banks?paginationMode=detailed&limit=5&page=2&cursor={value}" using the JSON node "data.pagination.cursor" from the previous response
+    Then the response status code should be 200
+    And the JSON node "data.items" should have 5 elements
+    And the JSON node "data.pagination.currentPage" should be equal to the number 2
+    And the JSON node "data.pagination.pageCount" should be equal to the number 7
+    And the JSON node "data.pagination.hasMorePages" should be true
     And the JSON node "data.pagination.cursor" should not be null
 
   Scenario: Detailed pagination mode exposes total counts on a full first page

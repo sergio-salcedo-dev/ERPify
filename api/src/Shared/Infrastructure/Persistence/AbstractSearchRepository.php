@@ -78,8 +78,11 @@ abstract class AbstractSearchRepository extends AbstractRepository
             $options[PaginatorOption::FETCH_JOIN_COLLECTION->value] = false;
         }
 
-        /** @var Paginator<T> */
-        return new Paginator(
+        // Local variable + @var annotation is load-bearing: PHPStan can't infer
+        // Paginator<T> from the constructor call alone, and the surrounding generic
+        // contract (`@return Paginator<T>`) is what callers rely on for typed iteration.
+        /** @var Paginator<T> $paginator */
+        $paginator = new Paginator(
             $queryBuilder,
             $cursor,
             $idFieldNames,
@@ -87,6 +90,8 @@ abstract class AbstractSearchRepository extends AbstractRepository
             $page,
             $queryBuilder->getMaxResults() ?? self::MAX_LIMIT,
         );
+
+        return $paginator;
     }
 
     protected function addOrderByFromQueryParams(

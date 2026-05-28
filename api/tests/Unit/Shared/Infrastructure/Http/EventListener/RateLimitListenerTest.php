@@ -129,6 +129,7 @@ final class RateLimitListenerTest extends TestCase
         $rateLimitListener = $this->makeListener();
         $request = Request::create('/api/v1/anything', Request::METHOD_OPTIONS);
         $request->server->set('REMOTE_ADDR', self::CLIENT_IP);
+
         $requestEvent = new RequestEvent($this->makeKernel(), $request, HttpKernelInterface::MAIN_REQUEST);
 
         $rateLimitListener->onRequest($requestEvent);
@@ -190,7 +191,7 @@ final class RateLimitListenerTest extends TestCase
         // @phpstan-ignore method.alreadyNarrowedType (the assertion IS the test — pins the constant baseline at runtime)
         $this->assertSame(512, RateLimitListener::REQUEST_PRIORITY);
         // @phpstan-ignore method.alreadyNarrowedType (the assertion IS the test — pins the constant baseline at runtime)
-        $this->assertSame(-128, RateLimitListener::RESPONSE_PRIORITY);
+        $this->assertSame(RateLimitListener::RESPONSE_PRIORITY, -128);
     }
 
     public function testListenerIsFinalReadonlyAndHasOnlyInjectedDependencies(): void
