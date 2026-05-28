@@ -4,7 +4,9 @@
       "command": "sonar",
       "args": [
         "run",
-        "mcp"
+        "mcp",
+        "--project",
+        "sergio-salcedo-dev_ERPify"
       ]
     }
   }
