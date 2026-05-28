@@ -119,7 +119,7 @@ trait HumanReadableIntEnumTrait
                     ReflectionAttribute::IS_INSTANCEOF,
                 );
 
-                if (0 === \count($reflectionAttributes)) {
+                if ([] === $reflectionAttributes) {
                     continue;
                 }
 

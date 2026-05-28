@@ -9,11 +9,11 @@ const STUB_UUID = "00000000-0000-4000-8000-000000000000";
 function makeResponse(
   status: number,
   body: unknown,
-  init: { contentType?: string; headers?: Record<string, string> } = {},
+  init?: { contentType?: string; headers?: Record<string, string> },
 ): Response {
   const headers = new Headers({
-    "Content-Type": init.contentType ?? "application/json",
-    ...(init.headers ?? {}),
+    "Content-Type": init?.contentType ?? "application/json",
+    ...(init?.headers ?? {}),
   });
   return new Response(body === undefined ? null : JSON.stringify(body), {
     status,

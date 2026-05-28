@@ -30,7 +30,7 @@ interface RootErrorBoundaryProps {
  * already crashed once, so we want to avoid pulling extras (e.g. the
  * `<CopyButton>` clipboard shim) that could chain the failure.
  */
-export function RootErrorBoundary({ error, reset }: RootErrorBoundaryProps) {
+export function RootErrorBoundary({ error, reset }: Readonly<RootErrorBoundaryProps>) {
   useEffect(() => {
     // Last-resort observability hook. The real adapter (Sentry, Datadog, …)
     // must scrub PII / secrets before transmission and tolerate a partially-

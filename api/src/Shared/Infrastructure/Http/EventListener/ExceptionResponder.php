@@ -314,8 +314,8 @@ final readonly class ExceptionResponder
         Throwable $throwable,
         Request $request,
     ): array {
-        /** @var array{instance: string, correlation_id: string, type: string, status: int, exception_class: string, exception_category: string, exception_message: string, request_uri: string, request_method: string} $context */
-        $context = RedactionDenylist::filter([
+        /** @var array{instance: string, correlation_id: string, type: string, status: int, exception_class: string, exception_category: string, exception_message: string, request_uri: string, request_method: string} */
+        return RedactionDenylist::filter([
             'instance' => $problemDetails->instance,
             'correlation_id' => $problemDetails->correlationId,
             'type' => $problemDetails->type,
@@ -326,7 +326,5 @@ final readonly class ExceptionResponder
             'request_uri' => $request->getRequestUri(),
             'request_method' => $request->getMethod(),
         ]);
-
-        return $context;
     }
 }

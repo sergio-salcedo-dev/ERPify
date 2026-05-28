@@ -49,15 +49,15 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
   }
 
   const handleItemClick = () => {
-    if (!hasSubItems) {
-      onClick(path);
-    } else {
-      if (!isCompact) {
-        setIsOpen(!isOpen);
-      } else {
+    if (hasSubItems) {
+      if (isCompact) {
         // In compact mode, clicking might just navigate to the first sub-item or the main path
         onClick(path);
+      } else {
+        setIsOpen(!isOpen);
       }
+    } else {
+      onClick(path);
     }
   };
 

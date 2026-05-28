@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace Erpify\Shared\Infrastructure\Persistence;
 
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Mapping\ClassMetadata;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 use Override;
@@ -38,19 +36,6 @@ abstract class AbstractRepository extends ServiceEntityRepository
             ->select($alias)
             ->from($this->getClassName(), $alias, $indexBy)
         ;
-    }
-
-    #[Override]
-    protected function getEntityManager(): EntityManagerInterface
-    {
-        return parent::getEntityManager();
-    }
-
-    /** @return ClassMetadata<T> */
-    #[Override]
-    protected function getClassMetadata(): ClassMetadata
-    {
-        return parent::getClassMetadata();
     }
 
     /** @param T $object */

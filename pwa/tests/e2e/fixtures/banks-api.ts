@@ -110,7 +110,7 @@ function problemBody(
     status,
     instance: `${correlationId}-instance`,
     "correlation-id": correlationId,
-    ...(overrides.detail !== undefined ? { detail: overrides.detail } : {}),
+    ...(overrides.detail === undefined ? {} : { detail: overrides.detail }),
     ...(overrides.violations ? { violations: overrides.violations } : {}),
   };
 }

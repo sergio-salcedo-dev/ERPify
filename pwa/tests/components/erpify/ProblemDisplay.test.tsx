@@ -14,7 +14,7 @@ const baseProblem: ProblemDetails = {
 };
 
 const SENSITIVE_DEBUG = {
-  exception_class: "Symfony\\Component\\HttpKernel\\Exception\\NotFoundHttpException",
+  exception_class: String.raw`Symfony\Component\HttpKernel\Exception\NotFoundHttpException`,
   message: "secret token=sk_live_42",
   file: "/app/src/Backoffice/Bank/Infrastructure/Controller/BankSearchController.php",
   line: 41,
@@ -105,7 +105,7 @@ describe("ProblemDisplay — debug rendering (development / test)", () => {
     );
     const debug = screen.getByTestId("problem-display__debug");
     expect(debug).toBeInTheDocument();
-    expect(debug).toHaveTextContent("Symfony\\Component\\HttpKernel");
+    expect(debug).toHaveTextContent(String.raw`Symfony\Component\HttpKernel`);
     expect(debug).toHaveTextContent("BankSearchController.php");
     expect(debug).toHaveTextContent(":41");
     expect(debug).toHaveTextContent("InvalidArgumentException");

@@ -6,10 +6,10 @@ namespace Erpify\Tests\Behat\Support\Json;
 
 use JsonException;
 use Override;
-use RuntimeException;
 use stdClass;
 use Stringable;
 use Symfony\Component\PropertyAccess\PropertyAccessor;
+use UnexpectedValueException;
 
 class Json implements Stringable
 {
@@ -93,7 +93,7 @@ class Json implements Stringable
         $result = \json_decode($content, false, 512, JSON_THROW_ON_ERROR);
 
         if (JSON_ERROR_NONE !== \json_last_error()) {
-            throw new RuntimeException(\sprintf("The string '%s' is not valid json", $content));
+            throw new UnexpectedValueException(\sprintf("The string '%s' is not valid json", $content));
         }
 
         return $result;

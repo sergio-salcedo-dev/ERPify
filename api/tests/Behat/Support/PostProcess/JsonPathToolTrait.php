@@ -33,14 +33,12 @@ trait JsonPathToolTrait
             $values = [$values];
         }
 
-        /** @var array<string, mixed> $decoded */
-        $decoded = \json_decode(
+        /** @var array<string, mixed> */
+        return \json_decode(
             \json_encode($values, JSON_THROW_ON_ERROR),
             true,
             512,
             JSON_THROW_ON_ERROR,
         );
-
-        return $decoded;
     }
 }

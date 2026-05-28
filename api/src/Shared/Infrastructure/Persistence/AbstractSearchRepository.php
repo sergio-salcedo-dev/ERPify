@@ -78,8 +78,8 @@ abstract class AbstractSearchRepository extends AbstractRepository
             $options[PaginatorOption::FETCH_JOIN_COLLECTION->value] = false;
         }
 
-        /** @var Paginator<T> $paginator */
-        $paginator = new Paginator(
+        /** @var Paginator<T> */
+        return new Paginator(
             $queryBuilder,
             $cursor,
             $idFieldNames,
@@ -87,8 +87,6 @@ abstract class AbstractSearchRepository extends AbstractRepository
             $page,
             $queryBuilder->getMaxResults() ?? self::MAX_LIMIT,
         );
-
-        return $paginator;
     }
 
     protected function addOrderByFromQueryParams(

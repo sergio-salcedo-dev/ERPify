@@ -42,7 +42,9 @@ interface NavGroup {
   items: NavItem[];
 }
 
-export default function BackOfficeLayoutClient({ children }: { children: React.ReactNode }) {
+export default function BackOfficeLayoutClient({
+  children,
+}: Readonly<{ children: React.ReactNode }>) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isCompact, setIsCompact] = useState(false);
   const router = useRouter();

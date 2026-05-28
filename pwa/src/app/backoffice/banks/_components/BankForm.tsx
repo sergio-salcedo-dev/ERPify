@@ -43,7 +43,7 @@ function isBankFieldName(value: string): value is BankFieldName {
   return (BANK_FIELD_NAMES as readonly string[]).includes(value);
 }
 
-export function BankForm({ mode, initial }: BankFormProps) {
+export function BankForm({ mode, initial }: Readonly<BankFormProps>) {
   const router = useRouter();
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
 
@@ -114,6 +114,10 @@ export function BankForm({ mode, initial }: BankFormProps) {
       ? `/backoffice/banks/${encodeURIComponent(initial.id)}`
       : "/backoffice/banks",
   );
+
+  const isCreating = mode === PersistenceAction.CREATING;
+  const submitLabelIdle = isCreating ? "Create bank" : "Save changes";
+  const submitButtonLabel = submitting ? "Saving…" : submitLabelIdle;
 
   return (
     <form
@@ -193,11 +197,7 @@ export function BankForm({ mode, initial }: BankFormProps) {
           className="w-full sm:w-auto"
           data-testid="bank-form__submit"
         >
-          {submitting
-            ? "Saving…"
-            : mode === PersistenceAction.CREATING
-              ? "Create bank"
-              : "Save changes"}
+          {submitButtonLabel}
         </Button>
       </footer>
     </form>

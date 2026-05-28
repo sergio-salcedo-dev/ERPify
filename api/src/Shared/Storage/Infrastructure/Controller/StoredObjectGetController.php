@@ -36,6 +36,15 @@ final readonly class StoredObjectGetController
             return $response;
         }
 
+        return $this->buildBodyResponse($hash);
+    }
+
+    /**
+     * Materialises the full-body response (or 404 if the object key is missing).
+     * Extracted from {@see __invoke} to keep that method under the S1142 return budget.
+     */
+    private function buildBodyResponse(string $hash): Response
+    {
         $key = ContentAddressableObjectKey::fromContentHash($hash);
 
         if (!$this->objectStoragePort->exists($key)) {

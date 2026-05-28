@@ -33,7 +33,7 @@ interface SegmentErrorBoundaryProps {
  * The matching production redaction policy is locked by
  * `tests/app/error-redaction.test.tsx`.
  */
-export function SegmentErrorBoundary({ error, reset }: SegmentErrorBoundaryProps) {
+export function SegmentErrorBoundary({ error, reset }: Readonly<SegmentErrorBoundaryProps>) {
   useEffect(() => {
     // Placeholder hook for an external observability sink (Sentry, Datadog, …).
     // The real adapter must scrub PII / secrets before transmission and run

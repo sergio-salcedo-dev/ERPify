@@ -51,7 +51,7 @@ export function DatePickerField({
   min,
   max,
   autoComplete = "off",
-}: DatePickerFieldProps) {
+}: Readonly<DatePickerFieldProps>) {
   function handleChange(event: ChangeEvent<HTMLInputElement>): void {
     onChange(event.target.value);
   }

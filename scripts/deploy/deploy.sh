@@ -21,12 +21,15 @@ CYAN='\033[0;36m'
 MAGENTA='\033[0;35m'
 NC='\033[0m'
 
+# CI-mode log timestamp format (passed to `date +`)
+readonly LOG_TS_FMT='%Y-%m-%d %H:%M:%S'
+
 # --- Helper Functions ---
 
 log_info() {
     local timestamp
     if [[ $CI_MODE -eq 1 ]]; then
-        timestamp=$(date +"%Y-%m-%d %H:%M:%S")
+        timestamp=$(date +"$LOG_TS_FMT")
         echo "[$timestamp] [INFO] $*"
     else
         echo -e "${BLUE}ℹ ${*}${NC}"
@@ -36,7 +39,7 @@ log_info() {
 log_success() {
     local timestamp
     if [[ $CI_MODE -eq 1 ]]; then
-        timestamp=$(date +"%Y-%m-%d %H:%M:%S")
+        timestamp=$(date +"$LOG_TS_FMT")
         echo "[$timestamp] [SUCCESS] $*"
     else
         echo -e "${GREEN}✔ ${*}${NC}"
@@ -46,7 +49,7 @@ log_success() {
 log_warning() {
     local timestamp
     if [[ $CI_MODE -eq 1 ]]; then
-        timestamp=$(date +"%Y-%m-%d %H:%M:%S")
+        timestamp=$(date +"$LOG_TS_FMT")
         echo "[$timestamp] [WARN] $*"
     else
         echo -e "${YELLOW}⚠ ${*}${NC}"
@@ -56,10 +59,10 @@ log_warning() {
 log_error() {
     local timestamp
     if [[ $CI_MODE -eq 1 ]]; then
-        timestamp=$(date +"%Y-%m-%d %H:%M:%S")
-        echo "[$timestamp] [ERROR] $*"
+        timestamp=$(date +"$LOG_TS_FMT")
+        echo "[$timestamp] [ERROR] $*" >&2
     else
-        echo -e "${RED}✖ ${*}${NC}"
+        echo -e "${RED}✖ ${*}${NC}" >&2
     fi
 }
 

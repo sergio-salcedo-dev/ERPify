@@ -48,7 +48,7 @@ describe("fetchFrankenPhpHotReloadSubscribeUrl", () => {
     vi.stubEnv("SYMFONY_INTERNAL_URL", "http://php:80");
     vi.stubEnv("NEXT_PUBLIC_SYMFONY_API_BASE_URL", "https://localhost");
 
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () =>
         Promise.resolve({
@@ -59,9 +59,12 @@ describe("fetchFrankenPhpHotReloadSubscribeUrl", () => {
 
     const url = await fetchFrankenPhpHotReloadSubscribeUrl();
     expect(url).toBe("https://localhost/.well-known/mercure?topic=test");
-    expect(global.fetch).toHaveBeenCalledWith("http://php:80/api/v1/dev/frankenphp-hot-reload", {
-      cache: "no-store",
-    });
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "http://php:80/api/v1/dev/frankenphp-hot-reload",
+      {
+        cache: "no-store",
+      },
+    );
   });
 
   it("returns null when API responds disabled", async () => {
@@ -69,7 +72,7 @@ describe("fetchFrankenPhpHotReloadSubscribeUrl", () => {
     vi.stubEnv("SYMFONY_INTERNAL_URL", "http://php:80");
     vi.stubEnv("NEXT_PUBLIC_SYMFONY_API_BASE_URL", "https://localhost");
 
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ enabled: false }),
     });

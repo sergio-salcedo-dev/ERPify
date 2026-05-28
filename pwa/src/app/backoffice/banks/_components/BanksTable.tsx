@@ -20,7 +20,72 @@ interface BanksTableProps {
   onBankDeleted?: (id: string) => void;
 }
 
-export function BanksTable({ banks, sort, onSortChange, onBankDeleted }: BanksTableProps) {
+interface BanksActionsCellProps {
+  row: Bank;
+  onBankDeleted?: (id: string) => void;
+}
+
+function BanksActionsCell({ row, onBankDeleted }: Readonly<BanksActionsCellProps>) {
+  return (
+    // NOTE(SonarQube S6819): This wrapper exists purely to stop row click/keydown
+    // propagation so the action buttons don't trigger row navigation; replacing
+    // it with <img alt=""> would be semantically wrong, so role="presentation"
+    // stays as the most appropriate non-interactive grouping signal.
+    <div
+      className="banks-table__actions flex items-center justify-end gap-1"
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+      role="presentation"
+    >
+      <CopyButton
+        value={row.id}
+        iconOnly
+        size="icon-sm"
+        label="Copy ID"
+        copiedLabel="ID copied"
+        errorLabel="Copy failed"
+        title={`Copy bank ${row.name} ID`}
+        testId={`banks-table__copy-${row.id}`}
+      />
+      <Link
+        href={safeHref(`/backoffice/banks/${encodeURIComponent(row.id)}/edit`)}
+        className={cn(buttonVariants({ variant: "outline", size: "icon-sm" }))}
+        aria-label="Edit"
+        title={`Edit bank ${row.name}`}
+        data-testid={`banks-table__edit-${row.id}`}
+      >
+        <Pencil className="size-3.5" aria-hidden="true" />
+        <span className="sr-only">Edit</span>
+      </Link>
+      <DeleteBankButton
+        id={row.id}
+        name={row.name}
+        stopPropagation
+        triggerTestId={`banks-table__delete-${row.id}`}
+        onDeleted={onBankDeleted}
+        trigger={
+          <Button
+            variant="destructive"
+            size="icon-sm"
+            aria-label="Delete"
+            title={`Delete bank ${row.name}`}
+            data-testid={`banks-table__delete-${row.id}`}
+          >
+            <Trash2 className="size-3.5" aria-hidden="true" />
+            <span className="sr-only">Delete</span>
+          </Button>
+        }
+      />
+    </div>
+  );
+}
+
+export function BanksTable({
+  banks,
+  sort,
+  onSortChange,
+  onBankDeleted,
+}: Readonly<BanksTableProps>) {
   const router = useRouter();
 
   const columns: DataTableColumn<Bank>[] = [
@@ -57,54 +122,7 @@ export function BanksTable({ banks, sort, onSortChange, onBankDeleted }: BanksTa
       header: "Actions",
       align: "right",
       className: "banks-table__col--actions w-[1%] whitespace-nowrap",
-      cell: (row) => (
-        <div
-          className="banks-table__actions flex items-center justify-end gap-1"
-          onClick={(event) => event.stopPropagation()}
-          onKeyDown={(event) => event.stopPropagation()}
-          role="presentation"
-        >
-          <CopyButton
-            value={row.id}
-            iconOnly
-            size="icon-sm"
-            label="Copy ID"
-            copiedLabel="ID copied"
-            errorLabel="Copy failed"
-            title={`Copy bank ${row.name} ID`}
-            testId={`banks-table__copy-${row.id}`}
-          />
-          <Link
-            href={safeHref(`/backoffice/banks/${encodeURIComponent(row.id)}/edit`)}
-            className={cn(buttonVariants({ variant: "outline", size: "icon-sm" }))}
-            aria-label="Edit"
-            title={`Edit bank ${row.name}`}
-            data-testid={`banks-table__edit-${row.id}`}
-          >
-            <Pencil className="size-3.5" aria-hidden="true" />
-            <span className="sr-only">Edit</span>
-          </Link>
-          <DeleteBankButton
-            id={row.id}
-            name={row.name}
-            stopPropagation
-            triggerTestId={`banks-table__delete-${row.id}`}
-            onDeleted={onBankDeleted}
-            trigger={
-              <Button
-                variant="destructive"
-                size="icon-sm"
-                aria-label="Delete"
-                title={`Delete bank ${row.name}`}
-                data-testid={`banks-table__delete-${row.id}`}
-              >
-                <Trash2 className="size-3.5" aria-hidden="true" />
-                <span className="sr-only">Delete</span>
-              </Button>
-            }
-          />
-        </div>
-      ),
+      cell: (row) => <BanksActionsCell row={row} onBankDeleted={onBankDeleted} />,
     },
   ];
 

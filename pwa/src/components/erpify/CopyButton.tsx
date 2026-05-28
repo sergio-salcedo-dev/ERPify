@@ -41,7 +41,7 @@ async function writeToClipboard(value: string): Promise<void> {
   }
   // Fallback for non-secure contexts and old browsers without the async API.
   if (typeof document === "undefined") {
-    throw new Error("Clipboard API unavailable.");
+    throw new TypeError("Clipboard API unavailable.");
   }
   const ta = document.createElement("textarea");
   ta.value = value;
@@ -51,10 +51,13 @@ async function writeToClipboard(value: string): Promise<void> {
   document.body.appendChild(ta);
   ta.select();
   try {
+    // NOTE(SonarQube S1874): document.execCommand("copy") is deprecated but is
+    // the only fallback for non-secure contexts where navigator.clipboard is
+    // unavailable. We already prefer the async Clipboard API above.
     const ok = document.execCommand("copy");
     if (!ok) throw new Error("execCommand('copy') returned false");
   } finally {
-    document.body.removeChild(ta);
+    ta.remove();
   }
 }
 
@@ -71,7 +74,7 @@ export function CopyButton({
   className,
   testId,
   onCopyResult,
-}: CopyButtonProps) {
+}: Readonly<CopyButtonProps>) {
   const [status, setStatus] = useState<CopyButtonStatus>("idle");
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -96,15 +99,19 @@ export function CopyButton({
     timeoutRef.current = setTimeout(() => setStatus("idle"), feedbackTimeoutMs);
   }
 
-  const currentLabel = status === "copied" ? copiedLabel : status === "error" ? errorLabel : label;
+  const labelByStatus: Record<CopyButtonStatus, ReactNode> = {
+    copied: copiedLabel,
+    error: errorLabel,
+    idle: label,
+  };
+  const fallbackAriaLabelByStatus: Record<CopyButtonStatus, string> = {
+    copied: "Copied",
+    error: "Copy failed",
+    idle: "Copy",
+  };
+  const currentLabel = labelByStatus[status];
   const ariaLabel =
-    typeof currentLabel === "string"
-      ? currentLabel
-      : status === "copied"
-        ? "Copied"
-        : status === "error"
-          ? "Copy failed"
-          : "Copy";
+    typeof currentLabel === "string" ? currentLabel : fallbackAriaLabelByStatus[status];
   const tooltip = title ?? (typeof label === "string" ? label : "Copy");
   const Icon = status === "copied" ? Check : Copy;
 

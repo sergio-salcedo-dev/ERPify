@@ -9,6 +9,6 @@ export const metadata: Metadata = {
   },
 };
 
-export default function BackOfficeLayout({ children }: { children: ReactNode }) {
+export default function BackOfficeLayout({ children }: Readonly<{ children: ReactNode }>) {
   return <BackOfficeLayoutClient>{children}</BackOfficeLayoutClient>;
 }

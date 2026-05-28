@@ -61,18 +61,13 @@ class HttpResponse
      */
     public function getJson(): Json
     {
-        if (\is_string($this->value)) {
-            return new Json($this->value);
-        }
+        $content = match (true) {
+            \is_string($this->value) => $this->value,
+            $this->value instanceof StreamedResponse => $this->getStreamedResponse()->getContent(),
+            $this->value instanceof SymfonyResponse => $this->value->getContent(),
+            default => $this->value->getBody()->getContents(),
+        };
 
-        if ($this->value instanceof StreamedResponse) {
-            return new Json($this->getStreamedResponse()->getContent());
-        }
-
-        if ($this->value instanceof SymfonyResponse) {
-            return new Json($this->value->getContent());
-        }
-
-        return new Json($this->value->getBody()->getContents());
+        return new Json($content);
     }
 }

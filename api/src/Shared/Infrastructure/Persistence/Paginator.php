@@ -202,6 +202,33 @@ final class Paginator implements PaginatedResult
             return false;
         }
 
+        $built = $this->buildCursorWhere($queryBuilder);
+
+        if (null === $built) {
+            return false;
+        }
+
+        $queryBuilder->andWhere($built['condition']);
+
+        foreach ($built['parameters'] as $parameter) {
+            $queryBuilder->setParameter($parameter['parameter'], $parameter['orderBy']);
+        }
+
+        return true;
+    }
+
+    /**
+     * Builds the cursor-pagination WHERE clause and the parameters that bind to it,
+     * or returns `null` when the cursor cannot produce a valid condition (e.g. the
+     * cursor fields don't cover every order-by column). Extracted from {@see alterWhere}
+     * to keep that method under the S1142 return budget.
+     *
+     * @return array{condition: string, parameters: list<array{parameter: string, orderBy: mixed}>}|null
+     *
+     * @SuppressWarnings("PHPMD.CyclomaticComplexity")
+     */
+    private function buildCursorWhere(QueryBuilder $queryBuilder): ?array
+    {
         $fields = $this->paginatorCursor->getLastItem();
         $goToNextPage = true;
         $isIncluded = false;
@@ -221,7 +248,7 @@ final class Paginator implements PaginatedResult
 
         foreach (\array_reverse($this->getOrderByColumns($queryBuilder)) as $orderBy => $orderByDirection) {
             if (!isset($fields[$orderBy])) {
-                return false;
+                return null;
             }
 
             $parameter = ':pagination_' . \substr(\hash('xxh128', $orderBy), 0, 16);
@@ -245,16 +272,10 @@ final class Paginator implements PaginatedResult
         }
 
         if (null === $condition) {
-            return false;
+            return null;
         }
 
-        $queryBuilder->andWhere($condition);
-
-        foreach ($parameters as $parameter) {
-            $queryBuilder->setParameter($parameter['parameter'], $parameter['orderBy']);
-        }
-
-        return true;
+        return ['condition' => $condition, 'parameters' => $parameters];
     }
 
     private function getWhereOperator(bool $goToNextPage, string $direction, bool $isIncluded): string

@@ -20,6 +20,7 @@ use Psr\Log\NullLogger;
 use ReflectionClass;
 use RuntimeException;
 use Stringable;
+use UnexpectedValueException;
 use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -754,7 +755,7 @@ final class ExceptionResponderTest extends TestCase
         $this->assertStringContainsString('self-failure', $message);
         $this->assertArrayHasKey('self_failure_class', $context);
         $this->assertArrayHasKey('self_failure_message', $context);
-        $this->assertSame(RuntimeException::class, $context['self_failure_class']);
+        $this->assertSame(UnexpectedValueException::class, $context['self_failure_class']);
         $this->assertSame('factory boom', $context['self_failure_message']);
     }
 
@@ -854,8 +855,8 @@ final class ExceptionResponderTest extends TestCase
     }
 
     /**
-     * Build a PSR-3 logger whose every method throws a `RuntimeException`. Used by the
-     * self-failure tests to make either the factory's PSR-3 sink (forces
+     * Build a PSR-3 logger whose every method throws an `UnexpectedValueException`. Used by
+     * the self-failure tests to make either the factory's PSR-3 sink (forces
      * `fromThrowable` to throw) or the listener's PSR-3 sink (logger-resilience)
      * fail loudly. Anonymous class — kept inline so the production listener never sees
      * a leaked test-double symbol.
@@ -872,55 +873,55 @@ final class ExceptionResponderTest extends TestCase
             #[Override]
             public function emergency(string|Stringable $message, array $context = []): void
             {
-                throw new RuntimeException($this->message);
+                throw new UnexpectedValueException($this->message);
             }
 
             #[Override]
             public function alert(string|Stringable $message, array $context = []): void
             {
-                throw new RuntimeException($this->message);
+                throw new UnexpectedValueException($this->message);
             }
 
             #[Override]
             public function critical(string|Stringable $message, array $context = []): void
             {
-                throw new RuntimeException($this->message);
+                throw new UnexpectedValueException($this->message);
             }
 
             #[Override]
             public function error(string|Stringable $message, array $context = []): void
             {
-                throw new RuntimeException($this->message);
+                throw new UnexpectedValueException($this->message);
             }
 
             #[Override]
             public function warning(string|Stringable $message, array $context = []): void
             {
-                throw new RuntimeException($this->message);
+                throw new UnexpectedValueException($this->message);
             }
 
             #[Override]
             public function notice(string|Stringable $message, array $context = []): void
             {
-                throw new RuntimeException($this->message);
+                throw new UnexpectedValueException($this->message);
             }
 
             #[Override]
             public function info(string|Stringable $message, array $context = []): void
             {
-                throw new RuntimeException($this->message);
+                throw new UnexpectedValueException($this->message);
             }
 
             #[Override]
             public function debug(string|Stringable $message, array $context = []): void
             {
-                throw new RuntimeException($this->message);
+                throw new UnexpectedValueException($this->message);
             }
 
             #[Override]
             public function log($level, string|Stringable $message, array $context = []): void
             {
-                throw new RuntimeException($this->message);
+                throw new UnexpectedValueException($this->message);
             }
         };
     }

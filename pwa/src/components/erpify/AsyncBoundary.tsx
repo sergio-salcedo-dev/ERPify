@@ -48,7 +48,7 @@ export function AsyncBoundary<TData>({
   idle,
   loading,
   children,
-}: AsyncBoundaryProps<TData>) {
+}: Readonly<AsyncBoundaryProps<TData>>) {
   if (state === ApiStatus.IDLE || state === ViewStatus.LOADING) {
     return (
       <div role="status" aria-live="polite" aria-busy="true" data-async-state={state}>

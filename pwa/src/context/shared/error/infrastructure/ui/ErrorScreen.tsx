@@ -61,7 +61,7 @@ export function ErrorScreen({
   actions,
   mainRole,
   withHeader = true,
-}: ErrorScreenProps) {
+}: Readonly<ErrorScreenProps>) {
   const tone = iconToneClasses[iconTone];
 
   return (

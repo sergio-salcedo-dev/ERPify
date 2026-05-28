@@ -25,7 +25,7 @@ interface BanksCardsProps {
   onBankDeleted?: (id: string) => void;
 }
 
-export function BanksCards({ banks, onBankDeleted }: BanksCardsProps) {
+export function BanksCards({ banks, onBankDeleted }: Readonly<BanksCardsProps>) {
   return (
     <ul
       className="banks-cards grid list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"

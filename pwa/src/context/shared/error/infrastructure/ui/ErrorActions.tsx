@@ -56,7 +56,7 @@ export function ErrorActions({ primaryVariant = "default" }: ErrorActionsProps =
   );
 
   function handleBack(): void {
-    if (typeof window !== "undefined" && window.history.length > 1) {
+    if (typeof globalThis.window !== "undefined" && globalThis.window.history.length > 1) {
       router.back();
       return;
     }

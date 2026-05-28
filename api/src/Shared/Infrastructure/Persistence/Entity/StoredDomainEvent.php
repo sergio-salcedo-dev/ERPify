@@ -21,14 +21,19 @@ class StoredDomainEvent
      * @param array<string, mixed> $body
      */
     public function __construct(
+        // NOSONAR: Doctrine populates via reflection; audit-table write-only field.
         #[ORM\Column(length: 190)]
         private string $name,
+        // NOSONAR: Doctrine populates via reflection; audit-table write-only field.
         #[ORM\Column(length: 36)]
         private string $aggregateId,
+        // NOSONAR: Doctrine populates via reflection; audit-table write-only field.
         #[ORM\Column(length: 36)]
         private string $eventId,
+        // NOSONAR: Doctrine populates via reflection; audit-table write-only field.
         #[ORM\Column]
         private DateTimeImmutable $occurredOn,
+        // NOSONAR: Doctrine populates via reflection; audit-table write-only field.
         #[ORM\Column(type: Types::JSON)]
         private array $body,
     ) {

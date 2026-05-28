@@ -40,7 +40,7 @@ export function BanksFilters({
   onSortChange,
   onReset,
   defaultOpen,
-}: BanksFiltersProps) {
+}: Readonly<BanksFiltersProps>) {
   const panelId = useId();
   const [open, setOpen] = useState<boolean>(
     defaultOpen ?? (hasActiveFilter(filter) || !isDefaultSort(sort)),
@@ -121,9 +121,8 @@ export function BanksFilters({
         </Button>
       </div>
 
-      <div
+      <section
         id={panelId}
-        role="region"
         aria-label="Bank filter fields"
         hidden={!open}
         className="banks-filters__panel border-border bg-muted/20 mt-3 rounded-md border p-3 sm:p-4"
@@ -219,7 +218,7 @@ export function BanksFilters({
             </Button>
           </div>
         ) : null}
-      </div>
+      </section>
     </section>
   );
 }

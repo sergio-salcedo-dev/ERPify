@@ -117,7 +117,7 @@ interface DebugSectionProps {
   depth?: number;
 }
 
-function DebugSection({ debug, rule, depth = 0 }: DebugSectionProps) {
+function DebugSection({ debug, rule, depth = 0 }: Readonly<DebugSectionProps>) {
   const heading = depth === 0 ? "Debug details" : `Caused by (chain depth ${depth})`;
   const previous = debug.previous_chain ?? [];
 
@@ -149,7 +149,12 @@ function DebugSection({ debug, rule, depth = 0 }: DebugSectionProps) {
           <span className="text-muted-foreground">chain</span>
           <div className="space-y-2">
             {previous.map((entry, i) => (
-              <DebugSection key={i} debug={entry} rule={rule} depth={depth + 1} />
+              <DebugSection
+                key={`${entry.exception_class ?? "exception"}@${entry.file ?? "unknown"}:${entry.line ?? i}`}
+                debug={entry}
+                rule={rule}
+                depth={depth + 1}
+              />
             ))}
           </div>
         </>
@@ -186,7 +191,7 @@ export function ProblemDisplay({
   variant = "inline",
   action,
   className,
-}: ProblemDisplayProps) {
+}: Readonly<ProblemDisplayProps>) {
   const violations = problem.violations ?? [];
   const tone = TONE_CLASSES[toneForStatus(problem.status)];
   const statusIcon = iconForStatus(problem.status, violations.length > 0);

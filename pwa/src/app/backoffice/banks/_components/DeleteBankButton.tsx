@@ -39,7 +39,7 @@ export function DeleteBankButton({
   trigger,
   triggerTestId = "banks-detail__delete-button",
   stopPropagation = false,
-}: DeleteBankButtonProps) {
+}: Readonly<DeleteBankButtonProps>) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);

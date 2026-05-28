@@ -33,10 +33,13 @@ export function RecordSheet({
   dirty = false,
   confirmCloseMessage = "Discard unsaved changes?",
   className,
-}: RecordSheetProps) {
+}: Readonly<RecordSheetProps>) {
   function handleOpenChange(next: boolean): void {
     if (!next && dirty) {
-      const ok = typeof window !== "undefined" ? window.confirm(confirmCloseMessage) : true;
+      const ok =
+        typeof globalThis.window === "undefined"
+          ? true
+          : globalThis.window.confirm(confirmCloseMessage);
       if (!ok) return;
     }
     onOpenChange(next);

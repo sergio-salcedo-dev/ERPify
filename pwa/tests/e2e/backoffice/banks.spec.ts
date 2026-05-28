@@ -874,7 +874,9 @@ test.describe("BackOffice - Banks CRUD", () => {
       await page.getByTestId("banks-list__view-toggle-cards").click();
       await expect(page.getByTestId("banks-cards")).toBeVisible();
 
-      const stored = await page.evaluate(() => window.localStorage.getItem("erpify:banks-view"));
+      const stored = await page.evaluate(() =>
+        globalThis.localStorage.getItem("erpify:banks-view"),
+      );
       expect(stored).toBe("cards");
 
       await page.reload();
@@ -889,7 +891,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       // Switching back persists too.
       await page.getByTestId("banks-list__view-toggle-table").click();
       await expect(
-        await page.evaluate(() => window.localStorage.getItem("erpify:banks-view")),
+        await page.evaluate(() => globalThis.localStorage.getItem("erpify:banks-view")),
       ).toBe("table");
     });
 
@@ -897,7 +899,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       page,
     }) => {
       await page.addInitScript(() => {
-        window.localStorage.setItem("erpify:banks-view", "not-a-real-view");
+        globalThis.localStorage.setItem("erpify:banks-view", "not-a-real-view");
       });
       await mockBanksApi(page, { list: "happy" });
       await page.goto("/backoffice/banks");

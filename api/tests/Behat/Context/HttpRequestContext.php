@@ -70,10 +70,8 @@ class HttpRequestContext extends AbstractContext
         $result = $this->httpResponseContainer->getResult();
         self::assertNotNull($result, 'You cannot call this method without a request made previously');
 
-        /** @var Response $response */
-        $response = $result->getValue();
-
-        return $response;
+        /** @var Response */
+        return $result->getValue();
     }
 
     public function getLastRequest(): Request

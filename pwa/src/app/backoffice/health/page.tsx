@@ -70,7 +70,7 @@ export default function HealthPage() {
           </Button>
         </div>
 
-        {state !== ApiStatus.IDLE ? (
+        {state === ApiStatus.IDLE ? null : (
           <AsyncBoundary state={state} data={data ?? undefined} error={problem ?? undefined}>
             {(result) => (
               <div
@@ -85,7 +85,7 @@ export default function HealthPage() {
               </div>
             )}
           </AsyncBoundary>
-        ) : null}
+        )}
       </section>
     </div>
   );

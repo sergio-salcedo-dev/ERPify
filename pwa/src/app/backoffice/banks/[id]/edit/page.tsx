@@ -149,7 +149,7 @@ export default function EditBankPage() {
   );
 }
 
-function BackLink({ id }: { id: string }) {
+function BackLink({ id }: Readonly<{ id: string }>) {
   return (
     <Link
       href={safeHref(id ? `/backoffice/banks/${encodeURIComponent(id)}` : "/backoffice/banks")}

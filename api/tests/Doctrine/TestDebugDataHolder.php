@@ -138,24 +138,30 @@ class TestDebugDataHolder extends DebugDataHolder
         }
 
         foreach (\array_keys($seen) as $class) {
-            if (\in_array($class, self::EXCLUDED_CLASSES, true)) {
-                return false;
-            }
+            $decision = $this->classifyClass($class);
 
-            if (\in_array($class, self::INCLUDED_CLASSES, true)) {
-                return true;
-            }
-
-            if ($this->isSkippedClass($class)) {
-                continue;
-            }
-
-            if ($this->hasAppSuffix($class) || $this->isInControllerNamespace($class)) {
-                return true;
+            if (null !== $decision) {
+                return $decision;
             }
         }
 
         return false;
+    }
+
+    /**
+     * Tri-state classification for a single backtrace class — `true` to log, `false` to
+     * suppress, `null` to defer to the next frame. Extracted from {@see shouldLog} to keep
+     * that loop under the S1142 return budget without changing semantics.
+     */
+    private function classifyClass(string $class): ?bool
+    {
+        return match (true) {
+            \in_array($class, self::EXCLUDED_CLASSES, true) => false,
+            \in_array($class, self::INCLUDED_CLASSES, true) => true,
+            $this->isSkippedClass($class) => null,
+            $this->hasAppSuffix($class) || $this->isInControllerNamespace($class) => true,
+            default => null,
+        };
     }
 
     private function isSkippedClass(string $class): bool

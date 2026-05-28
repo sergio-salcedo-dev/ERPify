@@ -49,8 +49,7 @@ const BOUNDARIES: ReadonlyArray<Boundary> = [
   },
 ];
 
-const SENSITIVE_MESSAGE =
-  "Symfony\\Component\\HttpKernel\\Exception\\NotFoundHttpException at /app/src/Backoffice/Bank/Infrastructure/Controller/BankSearchController.php:41 — secret token=sk_live_42";
+const SENSITIVE_MESSAGE = String.raw`Symfony\Component\HttpKernel\Exception\NotFoundHttpException at /app/src/Backoffice/Bank/Infrastructure/Controller/BankSearchController.php:41 — secret token=sk_live_42`;
 
 describe.each(BOUNDARIES)(
   "$name — production redaction (only generic messages allowed)",

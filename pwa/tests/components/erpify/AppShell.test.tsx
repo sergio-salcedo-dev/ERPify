@@ -4,7 +4,7 @@ import { AppShell } from "@/components/erpify/AppShell";
 
 describe("AppShell", () => {
   afterEach(() => {
-    window.localStorage.clear();
+    globalThis.localStorage.clear();
   });
 
   it("renders nav items with active state and accessible link", () => {
@@ -33,7 +33,7 @@ describe("AppShell", () => {
     render(<AppShell navigation={[{ href: "/", label: "Home" }]}>content</AppShell>);
     const toggle = screen.getByRole("button", { name: /Collapse sidebar/i });
     fireEvent.click(toggle);
-    expect(window.localStorage.getItem("erpify:sidebar-open")).toBe("0");
+    expect(globalThis.localStorage.getItem("erpify:sidebar-open")).toBe("0");
     expect(screen.getByRole("button", { name: /Expand sidebar/i })).toBeInTheDocument();
   });
 

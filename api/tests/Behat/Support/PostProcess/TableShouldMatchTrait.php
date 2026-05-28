@@ -117,18 +117,13 @@ trait TableShouldMatchTrait
             return $expected;
         }
 
-        if (\is_int($actual)) {
-            return (int) $expected;
-        }
-
-        if (\is_bool($actual)) {
-            return \filter_var($expected, FILTER_VALIDATE_BOOLEAN);
-        }
-
-        if (\is_string($actual) && \str_starts_with($expected, '"') && \str_ends_with($expected, '"')) {
-            return \trim($expected, '"');
-        }
-
-        return $expected;
+        return match (true) {
+            \is_int($actual) => (int) $expected,
+            \is_bool($actual) => \filter_var($expected, FILTER_VALIDATE_BOOLEAN),
+            \is_string($actual)
+                && \str_starts_with($expected, '"')
+                && \str_ends_with($expected, '"') => \trim($expected, '"'),
+            default => $expected,
+        };
     }
 }

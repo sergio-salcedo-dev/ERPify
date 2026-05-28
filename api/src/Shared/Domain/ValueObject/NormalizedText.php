@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Erpify\Shared\Domain\ValueObject;
 
 use LogicException;
-use RuntimeException;
 use Transliterator;
+use UnexpectedValueException;
 
 /**
  * Pair of (display, normalized) representations of a human-readable text whose
@@ -79,7 +79,7 @@ final readonly class NormalizedText
         $result = $transliterator->transliterate($value);
 
         if (false === $result) {
-            throw new RuntimeException('Transliteration failed for the provided value.');
+            throw new UnexpectedValueException('Transliteration failed for the provided value.');
         }
 
         return $result;

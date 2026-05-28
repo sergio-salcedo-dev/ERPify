@@ -208,18 +208,29 @@ final readonly class ProblemDetailsFactory
     public function fromThrowable(Throwable $throwable, string $correlationId, string $instance): ProblemDetails
     {
         $debug = $this->buildDebugExtension($throwable);
+        $problemDetails = $this->resolveProblemDetails($throwable, $correlationId, $instance);
 
+        return $this->applyBodyCap($this->withDebug($problemDetails, $debug));
+    }
+
+    /**
+     * Selects the appropriate {@see ProblemDetails} variant for the given throwable. Extracted
+     * from {@see fromThrowable} so the dispatcher keeps a single applyBodyCap+withDebug return
+     * site (S1142 budget).
+     */
+    private function resolveProblemDetails(
+        Throwable $throwable,
+        string $correlationId,
+        string $instance,
+    ): ProblemDetails {
         if ($throwable instanceof DomainException) {
-            return $this->applyBodyCap($this->withDebug(
-                $this->buildDomainExceptionResponse($throwable, $correlationId, $instance),
-                $debug,
-            ));
+            return $this->buildDomainExceptionResponse($throwable, $correlationId, $instance);
         }
 
         $validationException = $this->findInChain($throwable, ValidationFailedException::class);
 
         if ($validationException instanceof ValidationFailedException) {
-            return $this->applyBodyCap($this->withDebug(new ProblemDetails(
+            return new ProblemDetails(
                 type: 'validation-failed',
                 title: 'Validation failed.',
                 status: Response::HTTP_BAD_REQUEST,
@@ -227,43 +238,56 @@ final readonly class ProblemDetailsFactory
                 instance: $instance,
                 correlationId: $correlationId,
                 extensions: ['violations' => $this->buildViolations($validationException->getViolations())],
-            ), $debug));
+            );
         }
 
+        return $this->resolveBridgeOrFallback($throwable, $correlationId, $instance);
+    }
+
+    /**
+     * Handles the bridge-exception branch (Access/Authentication/Http) plus the
+     * unhandled fallback. Extracted to keep {@see resolveProblemDetails} under the
+     * S1142 return budget.
+     */
+    private function resolveBridgeOrFallback(
+        Throwable $throwable,
+        string $correlationId,
+        string $instance,
+    ): ProblemDetails {
         if ($throwable instanceof AccessDeniedException) {
-            return $this->applyBodyCap($this->withDebug($this->buildBridgeResponse(
+            return $this->buildBridgeResponse(
                 type: 'forbidden',
                 status: Response::HTTP_FORBIDDEN,
                 title: '' !== $throwable->getMessage() ? $throwable->getMessage() : 'Access denied.',
                 correlationId: $correlationId,
                 instance: $instance,
-            ), $debug));
+            );
         }
 
         if ($throwable instanceof AuthenticationException) {
-            return $this->applyBodyCap($this->withDebug($this->buildBridgeResponse(
+            return $this->buildBridgeResponse(
                 type: 'unauthenticated',
                 status: Response::HTTP_UNAUTHORIZED,
                 title: '' !== $throwable->getMessage() ? $throwable->getMessage() : 'Authentication required.',
                 correlationId: $correlationId,
                 instance: $instance,
-            ), $debug));
+            );
         }
 
         if ($throwable instanceof HttpExceptionInterface) {
             $status = $throwable->getStatusCode();
             $type = self::HTTP_STATUS_TYPE_MAP[$status] ?? 'http-error';
 
-            return $this->applyBodyCap($this->withDebug($this->buildBridgeResponse(
+            return $this->buildBridgeResponse(
                 type: $type,
                 status: $status,
                 title: '' !== $throwable->getMessage() ? $throwable->getMessage() : 'An HTTP error occurred.',
                 correlationId: $correlationId,
                 instance: $instance,
-            ), $debug));
+            );
         }
 
-        return $this->applyBodyCap($this->withDebug(new ProblemDetails(
+        return new ProblemDetails(
             type: 'unhandled-exception',
             title: $this->resolveUnhandledTitle($throwable),
             status: Response::HTTP_INTERNAL_SERVER_ERROR,
@@ -271,7 +295,7 @@ final readonly class ProblemDetailsFactory
             instance: $instance,
             correlationId: $correlationId,
             extensions: [],
-        ), $debug));
+        );
     }
 
     /**
@@ -469,10 +493,8 @@ final readonly class ProblemDetailsFactory
      */
     private function redactKeys(array $context): array
     {
-        /** @var array<string, mixed> $filtered */
-        $filtered = RedactionDenylist::filter($context);
-
-        return $filtered;
+        /** @var array<string, mixed> */
+        return RedactionDenylist::filter($context);
     }
 
     /**

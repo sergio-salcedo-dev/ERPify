@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { FormField } from "./FormField";
 
 export const DD_MM_YYYY_PLACEHOLDER = "dd/mm/yyyy";
-export const DD_MM_YYYY_PATTERN = "\\d{2}/\\d{2}/\\d{4}";
+export const DD_MM_YYYY_PATTERN = String.raw`\d{2}/\d{2}/\d{4}`;
 export const DD_MM_YYYY_MAX_LENGTH = 10;
 export const DD_MM_YYYY_TITLE = "Date format dd/mm/yyyy, e.g. 15/04/2026";
 
@@ -58,7 +58,7 @@ export function DateField({
   title = DD_MM_YYYY_TITLE,
   className,
   autoComplete = "off",
-}: DateFieldProps) {
+}: Readonly<DateFieldProps>) {
   const composedLabel = appendFormatHint ? `${label} (${DD_MM_YYYY_PLACEHOLDER})` : label;
 
   function handleChange(event: ChangeEvent<HTMLInputElement>): void {

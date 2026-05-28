@@ -32,6 +32,7 @@ class Kernel extends BaseKernel
     /**
      * @SuppressWarnings("PHPMD.UnusedPrivateMethod")
      */
+    // NOSONAR: invoked by MicroKernelTrait::registerContainerConfiguration via the trait alias.
     private function configureContainer(ContainerConfigurator $container): void
     {
         $this->defaultConfigureContainer($container);
