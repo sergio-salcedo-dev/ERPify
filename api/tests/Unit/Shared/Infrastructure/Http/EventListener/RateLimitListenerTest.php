@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Shared\Infrastructure\Http\EventListener;
 use Erpify\Shared\Domain\Exception\RateLimitExceeded;
 use Erpify\Shared\Infrastructure\Http\EventListener\RateLimitListener;
 use LogicException;
+use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
@@ -223,9 +224,14 @@ final class RateLimitListenerTest extends TestCase
         );
     }
 
+    /**
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
+     * @SuppressWarnings("PHPMD.BooleanArgumentFlag")
+     */
     private function makeKernel(): HttpKernelInterface
     {
         return new class implements HttpKernelInterface {
+            #[Override]
             public function handle(Request $request, int $type = HttpKernelInterface::MAIN_REQUEST, bool $catch = true): Response
             {
                 throw new LogicException('Test kernel: handle() must not be called by the listener.');

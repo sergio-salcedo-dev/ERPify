@@ -6,8 +6,8 @@ use Rector\Config\RectorConfig;
 use Rector\Naming\Rector\Assign\RenameVariableToMatchMethodCallReturnTypeRector;
 use Rector\Naming\Rector\Class_\RenamePropertyToMatchTypeRector;
 use Rector\Naming\Rector\ClassMethod\RenameParamToMatchTypeRector;
-use Rector\Php83\Rector\Class_\ReadOnlyAnonymousClassRector;
 use Rector\Naming\Rector\ClassMethod\RenameVariableToMatchNewTypeRector;
+use Rector\Php83\Rector\Class_\ReadOnlyAnonymousClassRector;
 use Rector\Php84\Rector\MethodCall\NewMethodCallWithoutParenthesesRector;
 
 return RectorConfig::configure()

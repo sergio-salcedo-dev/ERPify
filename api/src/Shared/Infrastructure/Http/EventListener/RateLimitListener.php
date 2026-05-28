@@ -177,18 +177,7 @@ final readonly class RateLimitListener
      */
     private function readSnapshot(mixed $stored): ?array
     {
-        if (!\is_array($stored)) {
-            return null;
-        }
-
-        if (
-            !\array_key_exists('limit', $stored) || !\is_int($stored['limit'])
-            || !\array_key_exists('remaining', $stored) || !\is_int($stored['remaining'])
-            || !\array_key_exists('reset', $stored) || !\is_int($stored['reset'])
-            || !\array_key_exists('retry_after', $stored) || !\is_int($stored['retry_after'])
-            || !\array_key_exists('accepted', $stored) || !\is_bool($stored['accepted'])
-            || !\array_key_exists('key', $stored) || !\is_string($stored['key'])
-        ) {
+        if (!$this->hasExpectedSnapshotShape($stored)) {
             return null;
         }
 
@@ -200,6 +189,30 @@ final readonly class RateLimitListener
             'accepted' => $stored['accepted'],
             'key' => $stored['key'],
         ];
+    }
+
+    /**
+     * @phpstan-assert-if-true array{limit: int, remaining: int, reset: int, retry_after: int, accepted: bool, key: string} $stored
+     */
+    private function hasExpectedSnapshotShape(mixed $stored): bool
+    {
+        if (!\is_array($stored)) {
+            return false;
+        }
+
+        $expectations = [
+            'limit' => 'is_int',
+            'remaining' => 'is_int',
+            'reset' => 'is_int',
+            'retry_after' => 'is_int',
+            'accepted' => 'is_bool',
+            'key' => 'is_string',
+        ];
+
+        return \array_all(
+            $expectations,
+            static fn (string $check, string $key): bool => \array_key_exists($key, $stored) && $check($stored[$key]),
+        );
     }
 
     /**
