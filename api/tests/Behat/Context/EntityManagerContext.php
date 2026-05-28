@@ -52,6 +52,10 @@ class EntityManagerContext extends AbstractContext
 
     private const string NOW_PARAM = '__em_context_now';
 
+    private const string ENTITY_FOUND_BY_REGEX_PREFIX = '/^(?:the|The) entity "([^"]*)" found by "([^"]*)" ';
+
+    private const string NO_SQL_RESULT_MESSAGE = 'No sqlResult available to test';
+
     /** @var array<string, Connection> */
     public array $connections = [];
 
@@ -170,7 +174,7 @@ class EntityManagerContext extends AbstractContext
     }
 
     #[Then(
-        '/^(?:the|The) entity "([^"]*)" found by "([^"]*)" '
+        self::ENTITY_FOUND_BY_REGEX_PREFIX
         . 'should have "([^"]*)" as part of the property "([^"]*)"$/',
     )]
     public function anEntityPropertyKeyFindByShouldExist(
@@ -184,7 +188,7 @@ class EntityManagerContext extends AbstractContext
     }
 
     #[Then(
-        '/^(?:the|The) entity "([^"]*)" found by "([^"]*)" '
+        self::ENTITY_FOUND_BY_REGEX_PREFIX
         . 'should have "([^"]*)" equal to "([^"]*)" as part of the property "([^"]*)"$/',
     )]
     public function anEntityPropertyFieldFindByShouldBeEqualToValue(
@@ -200,7 +204,7 @@ class EntityManagerContext extends AbstractContext
     }
 
     #[Then(
-        '/^(?:the|The) entity "([^"]*)" found by "([^"]*)" '
+        self::ENTITY_FOUND_BY_REGEX_PREFIX
         . 'should have "([^"]*)" not existing as part of the property "([^"]*)"$/',
     )]
     public function anEntityPropertyFieldFindByShouldNotExist(
@@ -341,7 +345,7 @@ class EntityManagerContext extends AbstractContext
     public function theSQLResultAsJSONShouldBe(PyStringNode $string): void
     {
         $expected = \json_decode($string->getRaw(), true);
-        self::assertNotNull($this->result, 'No sqlResult available to test');
+        self::assertNotNull($this->result, self::NO_SQL_RESULT_MESSAGE);
         $this->arrayAreTheSame($expected, $this->result->fetchAllAssociative(), true);
     }
 
@@ -349,14 +353,14 @@ class EntityManagerContext extends AbstractContext
     public function theSQLResultAsJSONWithoutSortingShouldBe(PyStringNode $string): void
     {
         $expected = \json_decode($string->getRaw(), true);
-        self::assertNotNull($this->result, 'No sqlResult available to test');
+        self::assertNotNull($this->result, self::NO_SQL_RESULT_MESSAGE);
         $this->arrayAreTheSame($expected, $this->result->fetchAllAssociative());
     }
 
     #[Then('/^(?:there|There) should have (\d+) records in SQL result$/')]
     public function theSQLResultPropertyShouldMatch(int $recordCount): void
     {
-        self::assertNotNull($this->result, 'No sqlResult available to test');
+        self::assertNotNull($this->result, self::NO_SQL_RESULT_MESSAGE);
         self::assertCount($recordCount, $this->result->fetchAllAssociative());
     }
 

@@ -148,6 +148,10 @@ run_profile() {
             check_health || true
             run_cmd "Database Status" "make db.status"
             ;;
+        *)
+            log_error "Unknown deployment profile: ${target_profile}"
+            exit 1
+            ;;
     esac
 
     log_success "Deployment process finished successfully."

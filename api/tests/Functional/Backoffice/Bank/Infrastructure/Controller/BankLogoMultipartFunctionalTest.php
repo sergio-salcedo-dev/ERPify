@@ -17,6 +17,8 @@ final class BankLogoMultipartFunctionalTest extends WebTestCase
 {
     private const string MIN_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
 
+    private const string PNG_MIME = 'image/png';
+
     public function testPostMultipartBankWithLogoReturnsLogoUrlAndServesImage(): void
     {
         $kernelBrowser = self::createClient();
@@ -24,7 +26,7 @@ final class BankLogoMultipartFunctionalTest extends WebTestCase
         $tmp = \tempnam(\sys_get_temp_dir(), 'erpify_logo');
         $this->assertNotFalse($tmp);
         \file_put_contents($tmp, \base64_decode(self::MIN_PNG, true));
-        $uploadedFile = new UploadedFile($tmp, 'logo.png', 'image/png', null, true);
+        $uploadedFile = new UploadedFile($tmp, 'logo.png', self::PNG_MIME, null, true);
 
         $suffix = \bin2hex(\random_bytes(4));
         $name = 'Test Logo Bank Multipart ' . $suffix;
@@ -57,7 +59,7 @@ final class BankLogoMultipartFunctionalTest extends WebTestCase
 
         $kernelBrowser->request(Request::METHOD_GET, $path);
         self::assertResponseIsSuccessful();
-        $this->assertSame('image/png', $kernelBrowser->getResponse()->headers->get('Content-Type'));
+        $this->assertSame(self::PNG_MIME, $kernelBrowser->getResponse()->headers->get('Content-Type'));
         $this->assertStringContainsString(
             'immutable',
             (string) $kernelBrowser->getResponse()->headers->get('Cache-Control'),
@@ -72,7 +74,7 @@ final class BankLogoMultipartFunctionalTest extends WebTestCase
         $tmp = \tempnam(\sys_get_temp_dir(), 'erpify_logo2');
         $this->assertNotFalse($tmp);
         \file_put_contents($tmp, \base64_decode(self::MIN_PNG, true));
-        $uploadedFile = new UploadedFile($tmp, 'logo.png', 'image/png', null, true);
+        $uploadedFile = new UploadedFile($tmp, 'logo.png', self::PNG_MIME, null, true);
 
         $suffix = \bin2hex(\random_bytes(4));
         $name = 'Test Etag Bank ' . $suffix;

@@ -61,6 +61,29 @@ export function BankForm({ mode, initial }: BankFormProps) {
 
   const submitting = isSubmitting;
 
+  const handleHttpError = (err: HttpError) => {
+    if (err.problem.status !== HttpStatus.BAD_REQUEST || !err.problem.violations) {
+      setProblem(err.problem);
+      return;
+    }
+    // Map server-side violations onto the same RHF errors object the
+    // client validation populates, so the UI surfaces both via
+    // `errors[name]?.message` without a parallel "violations" channel.
+    let mappedAny = false;
+    let unmappedExist = false;
+    for (const violation of err.problem.violations) {
+      if (isBankFieldName(violation.field)) {
+        setError(violation.field, { type: "server", message: violation.message });
+        mappedAny = true;
+      } else {
+        unmappedExist = true;
+      }
+    }
+    if (!mappedAny || unmappedExist) {
+      setProblem(err.problem);
+    }
+  };
+
   const onSubmit = handleSubmit(async (values) => {
     setProblem(null);
     try {
@@ -82,28 +105,7 @@ export function BankForm({ mode, initial }: BankFormProps) {
       router.refresh();
     } catch (err) {
       if (!(err instanceof HttpError)) throw err;
-
-      if (err.problem.status === HttpStatus.BAD_REQUEST && err.problem.violations) {
-        // Map server-side violations onto the same RHF errors object the
-        // client validation populates, so the UI surfaces both via
-        // `errors[name]?.message` without a parallel "violations" channel.
-        let mappedAny = false;
-        let unmappedExist = false;
-        for (const violation of err.problem.violations) {
-          if (isBankFieldName(violation.field)) {
-            setError(violation.field, { type: "server", message: violation.message });
-            mappedAny = true;
-          } else {
-            unmappedExist = true;
-          }
-        }
-        if (!mappedAny || unmappedExist) {
-          setProblem(err.problem);
-        }
-        return;
-      }
-
-      setProblem(err.problem);
+      handleHttpError(err);
     }
   });
 
