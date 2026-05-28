@@ -79,3 +79,41 @@ Feature: Search banks
   Scenario: Cursor without HMAC signature is silently treated as empty
     When I send a "GET" request to "/backoffice/banks?cursor=invalidBase64"
     Then the response status code should be 200
+
+  # The following three scenarios pin the Paginator refactor (Paginator::alterWhere +
+  # Paginator::buildCursorWhere extraction, and Paginator::setCursorCount with the
+  # inlined "first page fits results" optimisation). They exercise:
+  #   1. Cursor-based page traversal — drives buildCursorWhere through the loop and
+  #      back through alterWhere's WHERE-clause + parameter binding.
+  #   2. `paginationMode=detailed` with a sub-limit page — drives the inlined
+  #      isSingleFirstPageQuery short-circuit so the count is taken from the result
+  #      set instead of issuing a COUNT(*) query.
+  #   3. `paginationMode=detailed` with a small limit — forces the count query to
+  #      hit the database (isSingleFirstPageQuery returns false).
+  Scenario: Cursor pagination returns the next page of banks without overlap
+    When I send a "GET" request to "/backoffice/banks?limit=5"
+    Then the response status code should be 200
+    And the JSON node "data.items" should have 5 elements
+    And the JSON node "data.pagination.hasMorePages" should be true
+    And the JSON node "data.pagination.cursor" should not be null
+    When I send a "GET" request to "/backoffice/banks?limit=5&cursor={value}" using the JSON node "data.pagination.cursor" from the previous response
+    Then the response status code should be 200
+    And the JSON node "data.items" should have 5 elements
+    And the JSON node "data.pagination.currentPage" should be equal to the number 2
+    And the JSON node "data.pagination.cursor" should not be null
+
+  Scenario: Detailed pagination mode exposes total counts on a full first page
+    When I send a "GET" request to "/backoffice/banks?paginationMode=detailed&limit=1000"
+    Then the response status code should be 200
+    And the JSON node "data.items" should have 31 elements
+    And the JSON node "data.pagination.currentPage" should be equal to the number 1
+    And the JSON node "data.pagination.pageCount" should be equal to the number 1
+    And the JSON node "data.pagination.hasMorePages" should be false
+
+  Scenario: Detailed pagination mode runs the COUNT query when the page does not fit
+    When I send a "GET" request to "/backoffice/banks?paginationMode=detailed&limit=10"
+    Then the response status code should be 200
+    And the JSON node "data.items" should have 10 elements
+    And the JSON node "data.pagination.currentPage" should be equal to the number 1
+    And the JSON node "data.pagination.pageCount" should be equal to the number 4
+    And the JSON node "data.pagination.hasMorePages" should be true

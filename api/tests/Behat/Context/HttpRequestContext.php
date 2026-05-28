@@ -312,6 +312,36 @@ class HttpRequestContext extends AbstractContext
         $this->iSendARequestTo($method, $url, body: $pyStringNode);
     }
 
+    /**
+     * Issue a request to `$url` after substituting `{value}` with the scalar JSON node
+     * `$node` from the previous response. Useful for following pagination cursors,
+     * resource ids, or any other value embedded in the previous response.
+     *
+     * Example: `When I send a "GET" request to "/backoffice/banks?cursor={value}"
+     *           using the JSON node "data.pagination.cursor" from the previous response`
+     *
+     * @throws JsonException
+     */
+    #[Given('I send a :method request to :url using the JSON node :node from the previous response')]
+    public function iSendARequestUsingJsonNodeFromPreviousResponse(string $method, string $url, string $node): void
+    {
+        $payload = JsonDecoder::decodeArray((string) $this->getLastResponse()->getContent());
+        $value = $payload;
+
+        foreach (\explode('.', $node) as $segment) {
+            if (!\is_array($value) || !\array_key_exists($segment, $value)) {
+                throw new \UnexpectedValueException(\sprintf('JSON node "%s" not found in the previous response.', $node));
+            }
+            $value = $value[$segment];
+        }
+
+        if (!\is_scalar($value)) {
+            throw new \UnexpectedValueException(\sprintf('JSON node "%s" is not a scalar (got %s).', $node, \get_debug_type($value)));
+        }
+
+        $this->iSendARequestTo($method, \str_replace('{value}', \rawurlencode((string) $value), $url));
+    }
+
     // THEN SCENARIOS
 
     /**
