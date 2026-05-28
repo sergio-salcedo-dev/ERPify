@@ -27,16 +27,24 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
 
     private const string VALID_UUID_V7 = '0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c';
 
+    private const string THROW_NOT_FOUND_URI = '/api/test/_throw-not-found';
+
+    private const string THROW_RUNTIME_URI = '/api/test/_throw-runtime';
+
+    private const string PROBLEM_JSON_CONTENT_TYPE = 'application/problem+json';
+
+    private const string BUFFER_NOT_EMPTY_MESSAGE = 'Buffer must start empty for this test.';
+
     public function testDomainExceptionMappedToProblemDetailsResponse(): void
     {
         $kernelBrowser = self::createClient();
         $kernelBrowser->catchExceptions(true);
-        $kernelBrowser->request(Request::METHOD_GET, '/api/test/_throw-not-found');
+        $kernelBrowser->request(Request::METHOD_GET, self::THROW_NOT_FOUND_URI);
 
         $response = $kernelBrowser->getResponse();
 
         $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND, $response->getStatusCode(), (string) $response->getContent());
-        $this->assertSame('application/problem+json', $response->headers->get('Content-Type'));
+        $this->assertSame(self::PROBLEM_JSON_CONTENT_TYPE, $response->headers->get('Content-Type'));
 
         $cacheControl = $response->headers->get('Cache-Control');
         $this->assertNotNull($cacheControl);
@@ -62,12 +70,12 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
     {
         $kernelBrowser = self::createClient();
         $kernelBrowser->catchExceptions(true);
-        $kernelBrowser->request(Request::METHOD_GET, '/api/test/_throw-runtime');
+        $kernelBrowser->request(Request::METHOD_GET, self::THROW_RUNTIME_URI);
 
         $response = $kernelBrowser->getResponse();
 
         $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_INTERNAL_SERVER_ERROR, $response->getStatusCode(), (string) $response->getContent());
-        $this->assertSame('application/problem+json', $response->headers->get('Content-Type'));
+        $this->assertSame(self::PROBLEM_JSON_CONTENT_TYPE, $response->headers->get('Content-Type'));
 
         $body = $this->decodeBody($response->getContent());
         $this->assertBodyEquals('unhandled-exception', $body, 'type');
@@ -114,13 +122,13 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         $kernelBrowser->catchExceptions(true);
         $kernelBrowser->request(
             Request::METHOD_GET,
-            '/api/test/_throw-not-found',
+            self::THROW_NOT_FOUND_URI,
             server: ['HTTP_X_CORRELATION_ID' => self::VALID_UUID_V7],
         );
 
         $response = $kernelBrowser->getResponse();
         $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND, $response->getStatusCode(), (string) $response->getContent());
-        $this->assertSame('application/problem+json', $response->headers->get('Content-Type'));
+        $this->assertSame(self::PROBLEM_JSON_CONTENT_TYPE, $response->headers->get('Content-Type'));
 
         $headerValue = $response->headers->get('X-Correlation-Id');
         $this->assertSame(self::VALID_UUID_V7, $headerValue);
@@ -143,7 +151,7 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
     {
         $kernelBrowser = self::createClient();
         $kernelBrowser->catchExceptions(true);
-        $kernelBrowser->request(Request::METHOD_GET, '/api/test/_throw-not-found');
+        $kernelBrowser->request(Request::METHOD_GET, self::THROW_NOT_FOUND_URI);
 
         $response = $kernelBrowser->getResponse();
         $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND, $response->getStatusCode(), (string) $response->getContent());
@@ -163,7 +171,7 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
 
         $kernelBrowser->request(
             Request::METHOD_GET,
-            '/api/test/_throw-not-found',
+            self::THROW_NOT_FOUND_URI,
             server: ['HTTP_X_CORRELATION_ID' => self::VALID_UUID_V7],
         );
         $responseA = $kernelBrowser->getResponse();
@@ -178,7 +186,7 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
 
         $kernelBrowser->request(
             Request::METHOD_GET,
-            '/api/test/_throw-not-found',
+            self::THROW_NOT_FOUND_URI,
             server: ['HTTP_X_CORRELATION_ID' => self::VALID_UUID_V7],
         );
         $responseB = $kernelBrowser->getResponse();
@@ -206,7 +214,7 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
     {
         $kernelBrowser = self::createClient();
         $kernelBrowser->catchExceptions(true);
-        $kernelBrowser->request(Request::METHOD_GET, '/api/test/_throw-runtime');
+        $kernelBrowser->request(Request::METHOD_GET, self::THROW_RUNTIME_URI);
 
         $response = $kernelBrowser->getResponse();
         $this->assertSame(
@@ -230,9 +238,9 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         $kernelBrowser->catchExceptions(true);
 
         $bufferingLogger = $this->bufferingLogger();
-        $this->assertCount(0, $bufferingLogger->cleanLogs(), 'Buffer must start empty for this test.');
+        $this->assertCount(0, $bufferingLogger->cleanLogs(), self::BUFFER_NOT_EMPTY_MESSAGE);
 
-        $kernelBrowser->request(Request::METHOD_GET, '/api/test/_throw-not-found');
+        $kernelBrowser->request(Request::METHOD_GET, self::THROW_NOT_FOUND_URI);
 
         $response = $kernelBrowser->getResponse();
         $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND, $response->getStatusCode(), (string) $response->getContent());
@@ -244,7 +252,7 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         $this->assertSame('not-found', $logRecord['context']['type'] ?? null);
         $this->assertSame('GET', $logRecord['context']['request_method'] ?? null);
         $this->assertIsString($logRecord['context']['request_uri'] ?? null);
-        $this->assertStringStartsWith('/api/test/_throw-not-found', $logRecord['context']['request_uri']);
+        $this->assertStringStartsWith(self::THROW_NOT_FOUND_URI, $logRecord['context']['request_uri']);
     }
 
     public function testFunctionalLogRecordIsEmittedAtLevelCriticalForUnhandledRuntimeRoute(): void
@@ -253,9 +261,9 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         $kernelBrowser->catchExceptions(true);
 
         $bufferingLogger = $this->bufferingLogger();
-        $this->assertCount(0, $bufferingLogger->cleanLogs(), 'Buffer must start empty for this test.');
+        $this->assertCount(0, $bufferingLogger->cleanLogs(), self::BUFFER_NOT_EMPTY_MESSAGE);
 
-        $kernelBrowser->request(Request::METHOD_GET, '/api/test/_throw-runtime');
+        $kernelBrowser->request(Request::METHOD_GET, self::THROW_RUNTIME_URI);
 
         $response = $kernelBrowser->getResponse();
         $this->assertSame(
@@ -277,7 +285,7 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         $kernelBrowser->catchExceptions(true);
 
         $bufferingLogger = $this->bufferingLogger();
-        $this->assertCount(0, $bufferingLogger->cleanLogs(), 'Buffer must start empty for this test.');
+        $this->assertCount(0, $bufferingLogger->cleanLogs(), self::BUFFER_NOT_EMPTY_MESSAGE);
 
         $kernelBrowser->request(Request::METHOD_GET, '/api/test/_throw-validation');
 
@@ -300,11 +308,11 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         $kernelBrowser->catchExceptions(true);
 
         $bufferingLogger = $this->bufferingLogger();
-        $this->assertCount(0, $bufferingLogger->cleanLogs(), 'Buffer must start empty for this test.');
+        $this->assertCount(0, $bufferingLogger->cleanLogs(), self::BUFFER_NOT_EMPTY_MESSAGE);
 
         $kernelBrowser->request(
             Request::METHOD_GET,
-            '/api/test/_throw-not-found',
+            self::THROW_NOT_FOUND_URI,
             server: ['HTTP_X_CORRELATION_ID' => self::VALID_UUID_V7],
         );
 
@@ -335,7 +343,7 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         $kernelBrowser->catchExceptions(true);
 
         $bufferingLogger = $this->bufferingLogger();
-        $this->assertCount(0, $bufferingLogger->cleanLogs(), 'Buffer must start empty for this test.');
+        $this->assertCount(0, $bufferingLogger->cleanLogs(), self::BUFFER_NOT_EMPTY_MESSAGE);
 
         $kernelBrowser->request(Request::METHOD_GET, '/api/v1/health');
 
@@ -380,7 +388,7 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
     {
         $kernelBrowser = self::createClient();
         $kernelBrowser->catchExceptions(true);
-        $kernelBrowser->request(Request::METHOD_GET, '/api/test/_throw-runtime');
+        $kernelBrowser->request(Request::METHOD_GET, self::THROW_RUNTIME_URI);
 
         $response = $kernelBrowser->getResponse();
         $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_INTERNAL_SERVER_ERROR, $response->getStatusCode(), (string) $response->getContent());
@@ -414,7 +422,7 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
     {
         $kernelBrowser = self::createClient();
         $kernelBrowser->catchExceptions(true);
-        $kernelBrowser->request(Request::METHOD_GET, '/api/test/_throw-runtime');
+        $kernelBrowser->request(Request::METHOD_GET, self::THROW_RUNTIME_URI);
 
         $response = $kernelBrowser->getResponse();
         $body = $this->decodeBody($response->getContent());
@@ -439,7 +447,7 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         // configured by `CORS_ALLOW_ORIGINS` (see `api/config/packages/nelmio_cors.php`).
         $kernelBrowser->request(
             Request::METHOD_GET,
-            '/api/test/_throw-not-found',
+            self::THROW_NOT_FOUND_URI,
             server: [
                 'HTTP_ORIGIN' => 'http://localhost:3000',
             ],
@@ -470,7 +478,7 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         $response = $kernelBrowser->getResponse();
 
         $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND, $response->getStatusCode(), (string) $response->getContent());
-        $this->assertSame('application/problem+json', $response->headers->get('Content-Type'));
+        $this->assertSame(self::PROBLEM_JSON_CONTENT_TYPE, $response->headers->get('Content-Type'));
 
         $body = $this->decodeBody($response->getContent());
 
@@ -498,7 +506,7 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         $response = $kernelBrowser->getResponse();
 
         $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND, $response->getStatusCode(), (string) $response->getContent());
-        $this->assertSame('application/problem+json', $response->headers->get('Content-Type'));
+        $this->assertSame(self::PROBLEM_JSON_CONTENT_TYPE, $response->headers->get('Content-Type'));
 
         $body = $this->decodeBody($response->getContent());
 
@@ -537,7 +545,7 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         $kernelBrowser->catchExceptions(true);
 
         // Request 1 — capture the canonical body shape.
-        $kernelBrowser->request(Request::METHOD_GET, '/api/test/_throw-not-found');
+        $kernelBrowser->request(Request::METHOD_GET, self::THROW_NOT_FOUND_URI);
 
         $responseA = $kernelBrowser->getResponse();
         $this->assertSame(
@@ -560,7 +568,7 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         $container->reset();
 
         // Request 2 — same route, same kernel.
-        $kernelBrowser->request(Request::METHOD_GET, '/api/test/_throw-not-found');
+        $kernelBrowser->request(Request::METHOD_GET, self::THROW_NOT_FOUND_URI);
         $responseB = $kernelBrowser->getResponse();
         $this->assertSame(
             \Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND,
@@ -637,7 +645,7 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
             $response->getStatusCode(),
             (string) $response->getContent(),
         );
-        $this->assertSame('application/problem+json', $response->headers->get('Content-Type'));
+        $this->assertSame(self::PROBLEM_JSON_CONTENT_TYPE, $response->headers->get('Content-Type'));
 
         $cacheControl = $response->headers->get('Cache-Control');
         $this->assertNotNull($cacheControl);

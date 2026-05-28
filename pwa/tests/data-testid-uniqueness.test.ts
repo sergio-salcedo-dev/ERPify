@@ -65,7 +65,7 @@ describe("data-testid uniqueness", () => {
       .filter(([, hits]) => new Set(hits.map((h) => h.file)).size > 1)
       .map(([value, hits]) => ({
         value,
-        files: [...new Set(hits.map((h) => h.file))].sort(),
+        files: [...new Set(hits.map((h) => h.file))].sort((a, b) => a.localeCompare(b)),
       }));
 
     expect(

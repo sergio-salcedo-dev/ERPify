@@ -74,3 +74,6 @@ pnpm-debug.log*
 /_bmad/
 /.agents/skills/bmad-*/
 /.claude/skills/bmad-*/
+
+# Claude Code worktrees (transient, machine-local)
+/.claude/worktrees/
