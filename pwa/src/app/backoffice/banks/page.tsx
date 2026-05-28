@@ -58,13 +58,13 @@ export default function BanksListPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<BanksPageSize>(BANKS_PAGE_SIZE_DEFAULT);
   const [view, setView] = useState<BanksView>(() => {
-    if (typeof globalThis.window === "undefined") return DEFAULT_VIEW;
+    if (globalThis.window === undefined) return DEFAULT_VIEW;
     const stored = globalThis.localStorage.getItem(BANKS_VIEW_STORAGE_KEY);
     return isBanksView(stored) ? stored : DEFAULT_VIEW;
   });
 
   useEffect(() => {
-    if (typeof globalThis.window === "undefined") return;
+    if (globalThis.window === undefined) return;
     globalThis.localStorage.setItem(BANKS_VIEW_STORAGE_KEY, view);
   }, [view]);
 

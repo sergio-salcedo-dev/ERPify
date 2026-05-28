@@ -37,9 +37,7 @@ export function RecordSheet({
   function handleOpenChange(next: boolean): void {
     if (!next && dirty) {
       const ok =
-        typeof globalThis.window === "undefined"
-          ? true
-          : globalThis.window.confirm(confirmCloseMessage);
+        globalThis.window === undefined ? true : globalThis.window.confirm(confirmCloseMessage);
       if (!ok) return;
     }
     onOpenChange(next);

@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Pencil, Trash2 } from "lucide-react";
@@ -80,6 +81,54 @@ function BanksActionsCell({ row, onBankDeleted }: Readonly<BanksActionsCellProps
   );
 }
 
+const renderShortNameCell = (row: Bank) => row.shortName;
+const renderNameCell = (row: Bank) => row.name;
+const renderCreatedAtCell = (row: Bank) => dateTimeProvider.formatIsoToDisplay(row.createdAt);
+const renderUpdatedAtCell = (row: Bank) => dateTimeProvider.formatIsoToDisplay(row.updatedAt);
+
+function buildBanksColumns(onBankDeleted?: (id: string) => void): DataTableColumn<Bank>[] {
+  const renderActionsCell = (row: Bank) => (
+    <BanksActionsCell row={row} onBankDeleted={onBankDeleted} />
+  );
+  return [
+    {
+      id: "shortName",
+      header: "Short name",
+      sortable: true,
+      cell: renderShortNameCell,
+      className: "max-w-[8rem] truncate",
+    },
+    {
+      id: "name",
+      header: "Name",
+      sortable: true,
+      cell: renderNameCell,
+      className: "min-w-0",
+    },
+    {
+      id: "createdAt",
+      header: "Created",
+      sortable: true,
+      cell: renderCreatedAtCell,
+      className: "banks-table__col--md hidden md:table-cell",
+    },
+    {
+      id: "updatedAt",
+      header: "Updated",
+      sortable: true,
+      cell: renderUpdatedAtCell,
+      className: "banks-table__col--lg hidden lg:table-cell",
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      align: "right",
+      className: "banks-table__col--actions w-[1%] whitespace-nowrap",
+      cell: renderActionsCell,
+    },
+  ];
+}
+
 export function BanksTable({
   banks,
   sort,
@@ -88,43 +137,7 @@ export function BanksTable({
 }: Readonly<BanksTableProps>) {
   const router = useRouter();
 
-  const columns: DataTableColumn<Bank>[] = [
-    {
-      id: "shortName",
-      header: "Short name",
-      sortable: true,
-      cell: (row) => row.shortName,
-      className: "max-w-[8rem] truncate",
-    },
-    {
-      id: "name",
-      header: "Name",
-      sortable: true,
-      cell: (row) => row.name,
-      className: "min-w-0",
-    },
-    {
-      id: "createdAt",
-      header: "Created",
-      sortable: true,
-      cell: (row) => dateTimeProvider.formatIsoToDisplay(row.createdAt),
-      className: "banks-table__col--md hidden md:table-cell",
-    },
-    {
-      id: "updatedAt",
-      header: "Updated",
-      sortable: true,
-      cell: (row) => dateTimeProvider.formatIsoToDisplay(row.updatedAt),
-      className: "banks-table__col--lg hidden lg:table-cell",
-    },
-    {
-      id: "actions",
-      header: "Actions",
-      align: "right",
-      className: "banks-table__col--actions w-[1%] whitespace-nowrap",
-      cell: (row) => <BanksActionsCell row={row} onBankDeleted={onBankDeleted} />,
-    },
-  ];
+  const columns = useMemo(() => buildBanksColumns(onBankDeleted), [onBankDeleted]);
 
   return (
     <div className="banks-table overflow-x-auto sm:mx-0" data-testid="banks-table">

@@ -76,7 +76,7 @@ export class FetchHttpClient implements HttpClient {
   private readonly baseUrl: string;
 
   constructor() {
-    this.baseUrl = typeof globalThis.window === "undefined" ? serverApiBase() : browserApiBase();
+    this.baseUrl = globalThis.window === undefined ? serverApiBase() : browserApiBase();
   }
 
   async get<T>(url: string): Promise<T> {

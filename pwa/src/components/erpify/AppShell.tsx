@@ -32,13 +32,13 @@ export function AppShell({
   defaultSidebarOpen = true,
 }: Readonly<AppShellProps>) {
   const [sidebarOpen, setSidebarOpen] = useState(() => {
-    if (typeof globalThis.window === "undefined") return defaultSidebarOpen;
+    if (globalThis.window === undefined) return defaultSidebarOpen;
     const stored = globalThis.localStorage.getItem(SIDEBAR_STORAGE_KEY);
     return stored === null ? defaultSidebarOpen : stored === "1";
   });
 
   useEffect(() => {
-    if (typeof globalThis.window === "undefined") return;
+    if (globalThis.window === undefined) return;
     globalThis.localStorage.setItem(SIDEBAR_STORAGE_KEY, sidebarOpen ? "1" : "0");
   }, [sidebarOpen]);
 

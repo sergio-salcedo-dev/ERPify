@@ -107,24 +107,15 @@ class PaginatorCursorFactory
      */
     private function extractVerifiedBody(?string $string): ?string
     {
-        if (null === $string) {
-            return null;
-        }
-
-        $string = \trim($string);
-
-        if ('' === $string) {
-            return null;
-        }
-
-        $separatorPosition = \strrpos($string, self::SIGNATURE_SEPARATOR);
+        $trimmed = null === $string ? '' : \trim($string);
+        $separatorPosition = '' === $trimmed ? false : \strrpos($trimmed, self::SIGNATURE_SEPARATOR);
 
         if (false === $separatorPosition) {
             return null;
         }
 
-        $body = \substr($string, 0, $separatorPosition);
-        $signature = \substr($string, $separatorPosition + 1);
+        $body = \substr($trimmed, 0, $separatorPosition);
+        $signature = \substr($trimmed, $separatorPosition + 1);
         $expected = \hash_hmac(self::HMAC_ALGO, $body, $this->secret);
 
         return \hash_equals($expected, $signature) ? $body : null;

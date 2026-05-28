@@ -195,87 +195,69 @@ final class Paginator implements PaginatedResult
 
     /**
      * @SuppressWarnings("PHPMD.CyclomaticComplexity")
+     * @SuppressWarnings("PHPMD.NPathComplexity")
      */
     private function alterWhere(QueryBuilder $queryBuilder): bool
     {
-        if (null === $this->paginatorCursor->getCurrentPage() || !$this->isCursorPaginationEnabled()) {
-            return false;
-        }
+        $hasOptimizedWhere = false;
 
-        $built = $this->buildCursorWhere($queryBuilder);
+        if (null !== $this->paginatorCursor->getCurrentPage() && $this->isCursorPaginationEnabled()) {
+            $fields = $this->paginatorCursor->getLastItem();
+            $goToNextPage = true;
+            $isIncluded = false;
 
-        if (null === $built) {
-            return false;
-        }
-
-        $queryBuilder->andWhere($built['condition']);
-
-        foreach ($built['parameters'] as $parameter) {
-            $queryBuilder->setParameter($parameter['parameter'], $parameter['orderBy']);
-        }
-
-        return true;
-    }
-
-    /**
-     * Builds the cursor-pagination WHERE clause and the parameters that bind to it,
-     * or returns `null` when the cursor cannot produce a valid condition (e.g. the
-     * cursor fields don't cover every order-by column). Extracted from {@see alterWhere}
-     * to keep that method under the S1142 return budget.
-     *
-     * @return array{condition: string, parameters: list<array{parameter: string, orderBy: mixed}>}|null
-     *
-     * @SuppressWarnings("PHPMD.CyclomaticComplexity")
-     */
-    private function buildCursorWhere(QueryBuilder $queryBuilder): ?array
-    {
-        $fields = $this->paginatorCursor->getLastItem();
-        $goToNextPage = true;
-        $isIncluded = false;
-
-        if ($this->paginatorCursor->getCurrentPage() === $this->currentPage) {
-            $fields = $this->paginatorCursor->getFirstItem();
-            $isIncluded = true;
-        }
-
-        if ($this->currentPage < $this->paginatorCursor->getCurrentPage()) {
-            $fields = $this->paginatorCursor->getFirstItem();
-            $goToNextPage = false;
-        }
-
-        $condition = null;
-        $parameters = [];
-
-        foreach (\array_reverse($this->getOrderByColumns($queryBuilder)) as $orderBy => $orderByDirection) {
-            if (!isset($fields[$orderBy])) {
-                return null;
+            if ($this->paginatorCursor->getCurrentPage() === $this->currentPage) {
+                $fields = $this->paginatorCursor->getFirstItem();
+                $isIncluded = true;
             }
 
-            $parameter = ':pagination_' . \substr(\hash('xxh128', $orderBy), 0, 16);
-            $parameters[] = ['parameter' => $parameter, 'orderBy' => $fields[$orderBy]];
-
-            $newStrictCondition = \sprintf(
-                '%s %s %s',
-                $orderBy,
-                $this->getWhereOperator($goToNextPage, $orderByDirection, $isIncluded),
-                $parameter,
-            );
-
-            if (null === $condition) {
-                $condition = $newStrictCondition;
-
-                continue;
+            if ($this->currentPage < $this->paginatorCursor->getCurrentPage()) {
+                $fields = $this->paginatorCursor->getFirstItem();
+                $goToNextPage = false;
             }
 
-            $newEqualsCondition = \sprintf('%s = %s', $orderBy, $parameter);
-            $condition = \sprintf('(%s OR (%s AND %s))', $newStrictCondition, $newEqualsCondition, $condition);
+            $condition = null;
+            $parameters = [];
+            $abort = false;
+
+            foreach (\array_reverse($this->getOrderByColumns($queryBuilder)) as $orderBy => $orderByDirection) {
+                if (!isset($fields[$orderBy])) {
+                    $abort = true;
+                    break;
+                }
+
+                $parameter = ':pagination_' . \substr(\hash('xxh128', $orderBy), 0, 16);
+                $parameters[] = ['parameter' => $parameter, 'orderBy' => $fields[$orderBy]];
+
+                $newStrictCondition = \sprintf(
+                    '%s %s %s',
+                    $orderBy,
+                    $this->getWhereOperator($goToNextPage, $orderByDirection, $isIncluded),
+                    $parameter,
+                );
+
+                if (null === $condition) {
+                    $condition = $newStrictCondition;
+
+                    continue;
+                }
+
+                $newEqualsCondition = \sprintf('%s = %s', $orderBy, $parameter);
+                $condition = \sprintf('(%s OR (%s AND %s))', $newStrictCondition, $newEqualsCondition, $condition);
+            }
+
+            if (!$abort && null !== $condition) {
+                $queryBuilder->andWhere($condition);
+
+                foreach ($parameters as $parameter) {
+                    $queryBuilder->setParameter($parameter['parameter'], $parameter['orderBy']);
+                }
+
+                $hasOptimizedWhere = true;
+            }
         }
 
-        if (null === $condition) {
-            return null;
-        }
-
-        return ['condition' => $condition, 'parameters' => $parameters];
+        return $hasOptimizedWhere;
     }
 
     private function getWhereOperator(bool $goToNextPage, string $direction, bool $isIncluded): string

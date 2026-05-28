@@ -207,30 +207,12 @@ final readonly class ProblemDetailsFactory
 
     public function fromThrowable(Throwable $throwable, string $correlationId, string $instance): ProblemDetails
     {
-        $debug = $this->buildDebugExtension($throwable);
-        $problemDetails = $this->resolveProblemDetails($throwable, $correlationId, $instance);
-
-        return $this->applyBodyCap($this->withDebug($problemDetails, $debug));
-    }
-
-    /**
-     * Selects the appropriate {@see ProblemDetails} variant for the given throwable. Extracted
-     * from {@see fromThrowable} so the dispatcher keeps a single applyBodyCap+withDebug return
-     * site (S1142 budget).
-     */
-    private function resolveProblemDetails(
-        Throwable $throwable,
-        string $correlationId,
-        string $instance,
-    ): ProblemDetails {
-        if ($throwable instanceof DomainException) {
-            return $this->buildDomainExceptionResponse($throwable, $correlationId, $instance);
-        }
-
         $validationException = $this->findInChain($throwable, ValidationFailedException::class);
+        $message = $throwable->getMessage();
 
-        if ($validationException instanceof ValidationFailedException) {
-            return new ProblemDetails(
+        $problemDetails = match (true) {
+            $throwable instanceof DomainException => $this->buildDomainExceptionResponse($throwable, $correlationId, $instance),
+            $validationException instanceof ValidationFailedException => new ProblemDetails(
                 type: 'validation-failed',
                 title: 'Validation failed.',
                 status: Response::HTTP_BAD_REQUEST,
@@ -238,64 +220,40 @@ final readonly class ProblemDetailsFactory
                 instance: $instance,
                 correlationId: $correlationId,
                 extensions: ['violations' => $this->buildViolations($validationException->getViolations())],
-            );
-        }
-
-        return $this->resolveBridgeOrFallback($throwable, $correlationId, $instance);
-    }
-
-    /**
-     * Handles the bridge-exception branch (Access/Authentication/Http) plus the
-     * unhandled fallback. Extracted to keep {@see resolveProblemDetails} under the
-     * S1142 return budget.
-     */
-    private function resolveBridgeOrFallback(
-        Throwable $throwable,
-        string $correlationId,
-        string $instance,
-    ): ProblemDetails {
-        if ($throwable instanceof AccessDeniedException) {
-            return $this->buildBridgeResponse(
+            ),
+            $throwable instanceof AccessDeniedException => $this->buildBridgeResponse(
                 type: 'forbidden',
                 status: Response::HTTP_FORBIDDEN,
-                title: '' !== $throwable->getMessage() ? $throwable->getMessage() : 'Access denied.',
+                title: '' !== $message ? $message : 'Access denied.',
                 correlationId: $correlationId,
                 instance: $instance,
-            );
-        }
-
-        if ($throwable instanceof AuthenticationException) {
-            return $this->buildBridgeResponse(
+            ),
+            $throwable instanceof AuthenticationException => $this->buildBridgeResponse(
                 type: 'unauthenticated',
                 status: Response::HTTP_UNAUTHORIZED,
-                title: '' !== $throwable->getMessage() ? $throwable->getMessage() : 'Authentication required.',
+                title: '' !== $message ? $message : 'Authentication required.',
                 correlationId: $correlationId,
                 instance: $instance,
-            );
-        }
-
-        if ($throwable instanceof HttpExceptionInterface) {
-            $status = $throwable->getStatusCode();
-            $type = self::HTTP_STATUS_TYPE_MAP[$status] ?? 'http-error';
-
-            return $this->buildBridgeResponse(
-                type: $type,
-                status: $status,
-                title: '' !== $throwable->getMessage() ? $throwable->getMessage() : 'An HTTP error occurred.',
+            ),
+            $throwable instanceof HttpExceptionInterface => $this->buildBridgeResponse(
+                type: self::HTTP_STATUS_TYPE_MAP[$throwable->getStatusCode()] ?? 'http-error',
+                status: $throwable->getStatusCode(),
+                title: '' !== $message ? $message : 'An HTTP error occurred.',
                 correlationId: $correlationId,
                 instance: $instance,
-            );
-        }
+            ),
+            default => new ProblemDetails(
+                type: 'unhandled-exception',
+                title: $this->resolveUnhandledTitle($throwable),
+                status: Response::HTTP_INTERNAL_SERVER_ERROR,
+                detail: null,
+                instance: $instance,
+                correlationId: $correlationId,
+                extensions: [],
+            ),
+        };
 
-        return new ProblemDetails(
-            type: 'unhandled-exception',
-            title: $this->resolveUnhandledTitle($throwable),
-            status: Response::HTTP_INTERNAL_SERVER_ERROR,
-            detail: null,
-            instance: $instance,
-            correlationId: $correlationId,
-            extensions: [],
-        );
+        return $this->applyBodyCap($this->withDebug($problemDetails, $this->buildDebugExtension($throwable)));
     }
 
     /**
