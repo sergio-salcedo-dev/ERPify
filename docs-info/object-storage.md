@@ -49,7 +49,7 @@ Migrations add **`bank.stored_object_*`** columns (and any future tables you int
 Do these **in addition** to the main monorepo checklist in [`docs/production-deployment.md`](production-deployment.md).
 
 1. **Persistent volume**  
-   Map **`OBJECT_STORAGE_LOCAL_PATH`** to storage that **survives container recreation** (named Docker volume, bind mount to the host, EBS/EFS, etc.). Do **not** rely on an unmounted path under `/app/var` in production unless you have explicitly mounted it.
+   Map **`OBJECT_STORAGE_LOCAL_PATH`** to storage that **survives container recreation** (named Docker volume, bind mount to the host, EBS/EFS, etc.). Do **not** rely on an unmounted path under `/app/api/var` in production unless you have explicitly mounted it.
 
 2. **Permissions**  
    The user running PHP inside **`frankenphp`** / **`php`** must be able to **read and write** that directory. On first deploy, ensure the directory exists and ownership matches the container user (adjust host `chown`/`chmod` or image `USER` + volume `uid`/`gid` as needed).

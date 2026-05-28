@@ -100,7 +100,7 @@ services:
       timeout: 5s
       retries: 3
       start_period: 40s
-    working_dir: /app
+    working_dir: /app/api
     environment:
       APP_ENV: ${APP_ENV:-dev}
       DATABASE_URL: postgresql://${POSTGRES_USER:-erpify_user}:${POSTGRES_PASSWORD:-erpify_password}@database:5432/${POSTGRES_DB:-erpify_db}?serverVersion=${POSTGRES_VERSION:-18}&charset=${POSTGRES_CHARSET:-utf8}

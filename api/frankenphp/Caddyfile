@@ -27,7 +27,7 @@
 		}
 	}
 
-	root /app/public
+	root /app/api/public
 	encode zstd br gzip
 
 	mercure {

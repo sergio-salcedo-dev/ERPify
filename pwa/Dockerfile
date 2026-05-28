@@ -12,7 +12,7 @@ FROM node:24-alpine@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40
 # Shared dependencies (dev + build)
 FROM node_upstream AS base
 
-WORKDIR /srv/app
+WORKDIR /app/pwa
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
@@ -20,7 +20,7 @@ COPY package.json package-lock.json ./
 
 RUN npm ci
 
-# Development image (use with bind-mount of ./pwa → /srv/app, or run standalone)
+# Development image (use with bind-mount of ./pwa → /app/pwa, or run standalone)
 FROM base AS dev
 
 COPY . .
@@ -48,16 +48,16 @@ RUN npm run build
 # Production — copy standalone output (same idea as upstream `prod` stage)
 FROM node_upstream AS prod
 
-WORKDIR /srv/app
+WORKDIR /app/pwa
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 
-COPY --from=builder --link /srv/app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /srv/app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /srv/app/.next/static ./.next/static
+COPY --from=builder --link /app/pwa/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/pwa/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/pwa/.next/static ./.next/static
 
 USER nextjs
 

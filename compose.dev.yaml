@@ -18,9 +18,8 @@ services:
       mailpit:
         condition: service_started
     volumes:
-      # TODO  ./api:/app/api
-      - ./api:/app
-      - ./api/var:/app/var
+      - ./api:/app/api
+      - ./api/var:/app/api/var
       - ./api/frankenphp/Caddyfile:/etc/frankenphp/Caddyfile:ro
       - ./api/frankenphp/worker.Caddyfile:/etc/frankenphp/worker.Caddyfile:ro
       - ./api/frankenphp/conf.d/20-app.dev.ini:/usr/local/etc/php/app.conf.d/20-app.dev.ini:ro
@@ -52,8 +51,8 @@ services:
       args:
         NEXT_PUBLIC_SYMFONY_API_BASE_URL: ${NEXT_PUBLIC_SYMFONY_API_BASE_URL:-https://localhost}
     volumes:
-      - ./pwa:/srv/app
-      - pwa_node_modules:/srv/app/node_modules
+      - ./pwa:/app/pwa
+      - pwa_node_modules:/app/pwa/node_modules
     environment:
       NODE_ENV: development
     healthcheck:
@@ -83,8 +82,8 @@ services:
     environment:
       MAILER_DSN: "${MAILER_DSN:-smtp://mailpit:1025}"
     volumes:
-      - ./api:/app
-      - ./api/var:/app/var
+      - ./api:/app/api
+      - ./api/var:/app/api/var
       - ./api/frankenphp/conf.d/20-app.dev.ini:/usr/local/etc/php/app.conf.d/20-app.dev.ini:ro
 
 volumes:

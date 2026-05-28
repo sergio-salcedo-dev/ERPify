@@ -46,7 +46,7 @@ Switch overlay: `make docker.up ENV=ci|staging|prod` (default `dev`).
 | `test`                    | `api/var/log/test.log` (fingers_crossed on `error`)      | line   |
 | `prod` / `staging` / `ci` | container stderr only (JSON), fingers_crossed on `error` | JSON   |
 
-Dev file logs are visible on the host because `compose.dev.yaml` bind-mounts `./api/var:/app/var`. Files are root-owned — use `sudo rm -rf api/var/log/*` to clean.
+Dev file logs are visible on the host because `compose.dev.yaml` bind-mounts `./api/var:/app/api/var`. Files are root-owned — use `sudo rm -rf api/var/log/*` to clean.
 
 ```bash
 # Dev — pick whichever is convenient:
