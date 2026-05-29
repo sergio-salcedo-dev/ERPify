@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { safeHref } from "@/lib/safeHref";
 import { PersistenceAction, ViewStatus } from "@/context/shared/domain/types/status";
 import { HttpStatus } from "@/context/shared/domain/types/http";
+import { bankRoutes } from "../../_lib/bankRoutes";
 import { BankForm } from "../../_components/BankForm";
 
 type State = ViewStatus;
@@ -103,7 +104,7 @@ export default function EditBankPage() {
               <div className="flex flex-col items-center gap-2">
                 <CorrelationIdChip id={problem["correlation-id"]} label="Error ID:" />
                 <Link
-                  href="/backoffice/banks"
+                  href={bankRoutes.list}
                   className={cn(buttonVariants())}
                   data-testid="banks-edit__back-to-list"
                 >
@@ -152,7 +153,7 @@ export default function EditBankPage() {
 function BackLink({ id }: Readonly<{ id: string }>) {
   return (
     <Link
-      href={safeHref(id ? `/backoffice/banks/${encodeURIComponent(id)}` : "/backoffice/banks")}
+      href={safeHref(id ? bankRoutes.detail(id) : bankRoutes.list)}
       className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs"
       aria-label="Back to bank detail"
       title="Back to bank detail"

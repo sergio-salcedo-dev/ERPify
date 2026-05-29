@@ -976,7 +976,7 @@ test.describe("BackOffice - Banks CRUD", () => {
   });
 
   test.describe("nav", () => {
-    test("Catalogs > Banks appears in the sidebar and links to the list", async ({ page }) => {
+    test("Banking > Banks appears in the sidebar and links to the list", async ({ page }) => {
       await mockBanksApi(page, { list: "empty" });
       await page.goto("/backoffice");
 

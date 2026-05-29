@@ -27,6 +27,7 @@ import {
   type BanksSort,
 } from "./_lib/banksFilterSort";
 import { BANKS_PAGE_SIZE_DEFAULT, type BanksPageSize, paginate } from "./_lib/paginate";
+import { bankRoutes } from "./_lib/bankRoutes";
 
 type State = ViewStatus;
 
@@ -151,7 +152,7 @@ export default function BanksListPage() {
           ) : null}
         </div>
         <Link
-          href="/backoffice/banks/new"
+          href={bankRoutes.new}
           className={cn(buttonVariants({ size: "sm" }), "banks-list__new-button w-full sm:w-auto")}
           data-icon="inline-start"
           data-testid="banks-list__new-button"
@@ -182,7 +183,7 @@ export default function BanksListPage() {
         emptyDescription="Create the first bank to get started."
         emptyAction={
           <Link
-            href="/backoffice/banks/new"
+            href={bankRoutes.new}
             className={cn(buttonVariants())}
             aria-label="Create your first bank"
             title="Create your first bank"

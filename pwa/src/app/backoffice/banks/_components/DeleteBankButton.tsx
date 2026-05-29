@@ -19,6 +19,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { bankRoutes } from "../_lib/bankRoutes";
 
 interface DeleteBankButtonProps {
   id: string;
@@ -64,7 +65,7 @@ export function DeleteBankButton({
         onDeleted(id);
         return;
       }
-      router.push("/backoffice/banks");
+      router.push(bankRoutes.list);
       router.refresh();
     } catch (err) {
       if (err instanceof HttpError) {

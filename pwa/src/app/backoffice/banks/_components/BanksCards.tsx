@@ -18,6 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
 import { safeHref } from "@/lib/safeHref";
+import { bankRoutes } from "../_lib/bankRoutes";
 import { DeleteBankButton } from "./DeleteBankButton";
 
 interface BanksCardsProps {
@@ -32,8 +33,8 @@ export function BanksCards({ banks, onBankDeleted }: Readonly<BanksCardsProps>) 
       data-testid="banks-cards"
     >
       {banks.map((bank) => {
-        const detailHref = safeHref(`/backoffice/banks/${encodeURIComponent(bank.id)}`);
-        const editHref = safeHref(`/backoffice/banks/${encodeURIComponent(bank.id)}/edit`);
+        const detailHref = safeHref(bankRoutes.detail(bank.id));
+        const editHref = safeHref(bankRoutes.edit(bank.id));
         return (
           <li
             key={bank.id}

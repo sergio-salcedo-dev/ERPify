@@ -16,6 +16,7 @@ import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvid
 import { safeHref } from "@/lib/safeHref";
 import { ViewStatus } from "@/context/shared/domain/types/status";
 import { HttpStatus } from "@/context/shared/domain/types/http";
+import { bankRoutes } from "../_lib/bankRoutes";
 import { DeleteBankButton } from "../_components/DeleteBankButton";
 
 type State = ViewStatus;
@@ -104,7 +105,7 @@ export default function BankDetailPage() {
               <div className="flex flex-col items-center gap-2">
                 <CorrelationIdChip id={problem["correlation-id"]} label="Error ID:" />
                 <Link
-                  href="/backoffice/banks"
+                  href={bankRoutes.list}
                   className={cn(buttonVariants())}
                   data-testid="banks-detail__back-to-list"
                 >
@@ -150,7 +151,7 @@ export default function BankDetailPage() {
                 testId="banks-detail__copy-id"
               />
               <Link
-                href={safeHref(`/backoffice/banks/${encodeURIComponent(bank.id)}/edit`)}
+                href={safeHref(bankRoutes.edit(bank.id))}
                 className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
                 data-icon="inline-start"
                 data-testid="banks-detail__edit-button"
@@ -200,7 +201,7 @@ export default function BankDetailPage() {
 function BackLink() {
   return (
     <Link
-      href="/backoffice/banks"
+      href={bankRoutes.list}
       className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs"
       aria-label="Back to banks"
       title="Back to banks"

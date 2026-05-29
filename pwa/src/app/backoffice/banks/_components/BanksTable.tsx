@@ -12,6 +12,7 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
 import { safeHref } from "@/lib/safeHref";
+import { bankRoutes } from "../_lib/bankRoutes";
 import { DeleteBankButton } from "./DeleteBankButton";
 
 interface BanksTableProps {
@@ -44,7 +45,7 @@ function BanksActionsCell({ row, onBankDeleted }: Readonly<BanksActionsCellProps
         testId={`banks-table__copy-${row.id}`}
       />
       <Link
-        href={safeHref(`/backoffice/banks/${encodeURIComponent(row.id)}/edit`)}
+        href={safeHref(bankRoutes.edit(row.id))}
         className={cn(buttonVariants({ variant: "outline", size: "icon-sm" }))}
         aria-label="Edit"
         title={`Edit bank ${row.name}`}
@@ -144,9 +145,7 @@ export function BanksTable({
         density="comfortable"
         sort={sort ?? undefined}
         onSortChange={onSortChange}
-        onRowActivate={(row) =>
-          router.push(safeHref(`/backoffice/banks/${encodeURIComponent(row.id)}`))
-        }
+        onRowActivate={(row) => router.push(safeHref(bankRoutes.detail(row.id)))}
         rowTestId={(row) => `banks-table__row-${row.id}`}
         testId="banks-table__inner"
         className="banks-table__inner"

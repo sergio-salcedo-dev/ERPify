@@ -21,6 +21,7 @@ import { SidebarItem } from "@/context/shared/infrastructure/ui/components/molec
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
 import { Routes } from "@/context/shared/domain/types/routes";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { bankRoutes } from "./banks/_lib/bankRoutes";
 
 interface NavSubItem {
   name: string;
@@ -56,8 +57,8 @@ export default function BackOfficeLayoutClient({
       items: [{ name: "Dashboard", icon: LayoutDashboard, path: "/backoffice" }],
     },
     {
-      label: "Catalogs",
-      items: [{ name: "Banks", icon: Building2, path: "/backoffice/banks" }],
+      label: "Banking",
+      items: [{ name: "Banks", icon: Building2, path: bankRoutes.list }],
     },
     {
       label: "System",

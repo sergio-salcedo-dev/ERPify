@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { PersistenceAction } from "@/context/shared/domain/types/status";
+import { bankRoutes } from "../_lib/bankRoutes";
 import { BankForm } from "../_components/BankForm";
 
 export default function NewBankPage() {
@@ -11,7 +12,7 @@ export default function NewBankPage() {
     >
       <header className="banks-new__header space-y-2" data-testid="banks-new__header">
         <Link
-          href="/backoffice/banks"
+          href={bankRoutes.list}
           className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs"
           aria-label="Back to banks"
           title="Back to banks"

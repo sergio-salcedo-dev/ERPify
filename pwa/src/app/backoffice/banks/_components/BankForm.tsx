@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { safeHref } from "@/lib/safeHref";
 import { HttpStatus } from "@/context/shared/domain/types/http";
+import { bankRoutes } from "../_lib/bankRoutes";
 
 /** The two `PersistenceAction` values this form can be in. */
 export type BankFormMode = typeof PersistenceAction.CREATING | typeof PersistenceAction.UPDATING;
@@ -90,7 +91,7 @@ export function BankForm({ mode, initial }: Readonly<BankFormProps>) {
       if (mode === PersistenceAction.CREATING) {
         const useCase = container.get<CreateBank>("BackOfficeCreateBank");
         const created = await useCase.run(values);
-        router.push(safeHref(`/backoffice/banks/${encodeURIComponent(created.id)}`));
+        router.push(safeHref(bankRoutes.detail(created.id)));
         router.refresh();
         return;
       }
@@ -101,7 +102,7 @@ export function BankForm({ mode, initial }: Readonly<BankFormProps>) {
 
       const useCase = container.get<UpdateBank>("BackOfficeUpdateBank");
       const updated = await useCase.run(initial.id, values);
-      router.push(safeHref(`/backoffice/banks/${encodeURIComponent(updated.id)}`));
+      router.push(safeHref(bankRoutes.detail(updated.id)));
       router.refresh();
     } catch (err) {
       if (!(err instanceof HttpError)) throw err;
@@ -111,8 +112,8 @@ export function BankForm({ mode, initial }: Readonly<BankFormProps>) {
 
   const cancelHref = safeHref(
     mode === PersistenceAction.UPDATING && initial
-      ? `/backoffice/banks/${encodeURIComponent(initial.id)}`
-      : "/backoffice/banks",
+      ? bankRoutes.detail(initial.id)
+      : bankRoutes.list,
   );
 
   const isCreating = mode === PersistenceAction.CREATING;
