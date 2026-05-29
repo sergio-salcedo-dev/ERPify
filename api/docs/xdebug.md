@@ -21,10 +21,6 @@ You can set **`XDEBUG_MODE`** in **`api/.env`** (start from [`api/.env.example`]
 
 If you previously used **`api/.env.xdebug`**, remove that file; it is no longer used.
 
-### Dev Containers
-
-When using [Dev Containers](https://containers.dev/), the devcontainer Compose file at **`.devcontainer/compose.devcontainer.yaml`** (repo root) may set `XDEBUG_MODE` for the in-container IDE. That is separate from the `docker compose` workflow above. Workspace folder in the container is **`/workspace`**; Symfony files are under **`api/`** (and **`/app`**).
-
 ### Path mappings (monorepo)
 
 The app is mounted at **`/app`** in the container and lives under **`./api`** on the host. In **PhpStorm**, map **`/app`** → your **`api`** directory (see the PhpStorm section below). If you use **VS Code or Cursor** instead, use the repo root [`.vscode/launch.json`](../../.vscode/launch.json) (`${workspaceFolder}/api`).

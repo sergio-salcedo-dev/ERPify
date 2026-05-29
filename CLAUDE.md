@@ -6,6 +6,13 @@ Monorepo with two deployables sharing one Compose stack: a Symfony HTTP API on F
 
 > Full command catalog, repo layout tables, "adding new code" recipes, and gotchas → [`docs/claude-code-quickref.md`](docs/claude-code-quickref.md). Run `make help` for the live target list.
 
+
+## What to do
+
+- Every time Claude makes a mistake → you add a rule
+- Every time you repeat yourself → you add a workflow
+- Every time something breaks → you add a guardrail
+-
 ---
 
 ## Top-hits commands
@@ -49,7 +56,7 @@ Browser → FrankenPHP :80/:443 ──┬─ /api/*                 → Symfony 
 
 Full request-routing diagram and host/container trade-offs in [`docs/integration-architecture.md`](docs/integration-architecture.md).
 
-Both sides follow **DDD + Hexagonal / Clean Architecture**, with dependencies pointing inward. **Do not** import frameworks (Symfony, Doctrine, Next, Inversify, HTTP clients, ORM) inside `Domain/` — adapters go in `Infrastructure/`, orchestration in `Application/`. Full rule set: `.cursor/rules/*.mdc` (architecture, clean-code, database, frontend, php-standards, security, solid-principles, testing) and `pwa/AGENTS.md`.
+Both sides follow **DDD + Hexagonal / Clean Architecture**, with dependencies pointing inward. **Do not** import frameworks (Symfony, Doctrine, Next, Inversify, HTTP clients, ORM) inside `Domain/` — adapters go in `Infrastructure/`, orchestration in `Application/`. Full rule set: `docs/rules/*.md` (architecture, clean-code, database, frontend, php-standards, security, solid-principles, testing) and `pwa/AGENTS.md`.
 
 ---
 
@@ -139,7 +146,7 @@ For each diffed file, walk this checklist:
   PHPStan / Psalm / ESLint catch many of the above implicitly.
 - For security-sensitive changes (auth, input parsing, file uploads,
   SQL, headers, CSP), update `PRODUCTION_SECURITY_CHECKLIST.md` and
-  `.cursor/rules/security.mdc` if a new pattern is introduced.
+  [`docs/rules/security.md`](docs/rules/security.md) if a new pattern is introduced.
 - When a finding is genuinely out of scope, file a follow-up issue
   rather than ship-and-forget.
 
@@ -190,7 +197,7 @@ Do not spawn subagents for tasks that share state mid-flight — e.g. two agents
 The repo's IDE Markdown linter rejects link targets that don't resolve to a concrete file. When writing or editing any `.md`:
 
 - **Link only to concrete files.** No trailing-slash directory hrefs (`[api/docs/](api/docs/)`). Pick a representative file or use inline code: `` `api/docs/` ``.
-- **Don't link to globs** like `[…](.cursor/rules/*.mdc)`. Use inline code: `` `.cursor/rules/*.mdc` ``, optionally followed by a link to one specific rule file.
+- **Don't link to globs** like `[…](docs/rules/*.md)`. Use inline code: `` `docs/rules/*.md` ``, optionally followed by a link to one specific rule file.
 
 Fix violations you spot while editing a file for another reason.
 
@@ -206,9 +213,9 @@ Update the matching file as part of any PR that changes:
 - **Error contract (markers, status mapping, redaction, `debug` block, per-error log line shape, `exception_category` taxonomy)** → [`docs/api-error-contract.md`](docs/api-error-contract.md). Adding a marker interface, changing its mapping, or changing the per-error log line (fields, declaration order, level tiering, `exception_category` dispatch) is mandatory here (NFR26).
 - **PWA module boundaries / Inversify bindings** → `pwa/docs/` and [`docs/architecture-pwa.md`](docs/architecture-pwa.md).
 - **Deployment / Compose / CORS / Mercure / mailer** → [`docs/deployment-guide.md`](docs/deployment-guide.md) and [`pwa/docs/production-deployment.md`](pwa/docs/production-deployment.md).
-- **Security-sensitive change** → `PRODUCTION_SECURITY_CHECKLIST.md` (authoritative — see `.cursor/rules/security.mdc`).
+- **Security-sensitive change** → `PRODUCTION_SECURITY_CHECKLIST.md` (authoritative — see [`docs/rules/security.md`](docs/rules/security.md)).
 
-When a rule here conflicts with `.cursor/rules/*.mdc`, [`api/CLAUDE.md`](api/CLAUDE.md), [`pwa/CLAUDE.md`](pwa/CLAUDE.md), or `pwa/AGENTS.md`, flag the conflict rather than silently picking one.
+When a rule here conflicts with `docs/rules/*.md`, [`api/CLAUDE.md`](api/CLAUDE.md), [`pwa/CLAUDE.md`](pwa/CLAUDE.md), or `pwa/AGENTS.md`, flag the conflict rather than silently picking one.
 
 ---
 

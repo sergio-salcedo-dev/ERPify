@@ -10,9 +10,6 @@ on:
     - cron: "0 2 * * 0"
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
@@ -36,6 +33,8 @@ jobs:
     name: API Build (Docker)
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@v6
@@ -70,6 +69,8 @@ jobs:
     needs: api-build
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@v6
@@ -131,6 +132,8 @@ jobs:
     needs: api-build
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@v6
@@ -182,6 +185,8 @@ jobs:
   pwa-node:
     name: PWA (Node)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@v6
@@ -199,14 +204,19 @@ jobs:
   # PWA E2E (sharded — depends on build)
   # -------------------------
   pwa-e2e:
-    name: PWA (E2E) [shard ${{ matrix.shard }}/3]
+    name: PWA (E2E) [shard ${{ matrix.shard }}/${{ strategy.job-total }}]
     needs: [pwa-node, api-build]
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        # Single source of truth for E2E sharding. To scale, just extend this
+        # list (e.g. [1, 2, 3]); the job name and CI_TOTAL_SHARDS both derive
+        # the count from `strategy.job-total` automatically.
+        shard: [1]
 
     steps:
       - uses: actions/checkout@v6
@@ -263,7 +273,7 @@ jobs:
         env:
           CI: true
           PLAYWRIGHT_BASE_URL: https://localhost
-        run: make pwa.test.e2e CI_SHARD=${{ matrix.shard }} CI_TOTAL_SHARDS=3
+        run: make pwa.test.e2e CI_SHARD=${{ matrix.shard }} CI_TOTAL_SHARDS=${{ strategy.job-total }}
 
       - name: Upload blob report
         if: always()
@@ -296,6 +306,8 @@ jobs:
     needs: [pwa-e2e]
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@v6
@@ -340,6 +352,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     continue-on-error: true
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@v6
@@ -433,6 +447,7 @@ jobs:
     needs: [api-build, api-test, api-behat, pwa-node, pwa-e2e, pwa-burn-in]
     runs-on: ubuntu-latest
     timeout-minutes: 2
+    permissions: {}
 
     steps:
       - name: Render summary
@@ -468,6 +483,7 @@ jobs:
     name: CI Status
     needs: [api-test, api-behat, pwa-node, pwa-e2e]
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
       - name: Success
         run: echo "All checks passed successfully!"

@@ -1,6 +1,6 @@
 # api/CLAUDE.md — ERPify API (Symfony + FrankenPHP)
 
-API-scoped guidance. Root [`../CLAUDE.md`](../CLAUDE.md) is authoritative for monorepo conventions, the Docker stack, and the full `make` target list — this file only covers API specifics. Also consult `../.cursor/rules/*.mdc` (especially `architecture`, `php-standards`, `database`, `security`, `solid-principles`, `testing`).
+API-scoped guidance. Root [`../CLAUDE.md`](../CLAUDE.md) is authoritative for monorepo conventions, the Docker stack, and the full `make` target list — this file only covers API specifics. Also consult `../docs/rules/*.md` (especially `architecture`, `php-standards`, `database`, `security`, `solid-principles`, `testing`).
 
 ## Stack
 

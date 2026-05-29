@@ -346,7 +346,7 @@ No outbound integration outside the Symfony API.
 3. **Migrate string DI tokens to a typed `TYPES` map** (e.g. `Symbol.for("HttpClient")` exported from `DependencyInjection/types.ts`). Do it before the container exceeds ~15 bindings.
 4. **Refactor `Footer` to use `<Logo>`.** One brand-change vector instead of two.
 5. **Extract a `<Card.Frame>` primitive** if a fourth project-specific card variant appears.
-6. **Decide between this `Button` and `components/ui/button.tsx`.** Either consolidate, or document the use-case split in `pwa/AGENTS.md`.
+6. **Decide between this `Button` and `components/ui/button.tsx`.** Either consolidate, or document the use-case.
 
 ---
 

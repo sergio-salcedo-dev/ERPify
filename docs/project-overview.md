@@ -20,7 +20,7 @@ Construction-industry SaaS ERP/CRM (per `pwa/CLAUDE.md`). The repository holds t
 
 ## Architecture type
 
-**DDD + Hexagonal + Clean Architecture** on both parts. Each bounded context is split into `Domain / Application / Infrastructure` layers with dependencies pointing inward to `Domain`. See `.cursor/rules/architecture.mdc` and `docs/project-context.md`.
+**DDD + Hexagonal + Clean Architecture** on both parts. Each bounded context is split into `Domain / Application / Infrastructure` layers with dependencies pointing inward to `Domain`. See `docs/rules/architecture.md` and `docs/project-context.md`.
 
 - **API bounded contexts:** `Backoffice/{Bank, Health}`, `Frontoffice/{Dev, Health, Mercure}`, `Shared/{Application, Domain, Guzzle, Infrastructure, Media, Storage}`.
 - **PWA bounded contexts:** `backoffice/{health}`, `frontoffice/{health}`, `shared/{domain, infrastructure}`.

@@ -108,7 +108,7 @@ ERPify/
 ├── .github/workflows/
 │   └── ci.yml                      # Lint + test pipeline
 │
-├── .cursor/rules/                  # Authoritative coding rules (architecture, security, testing, …)
+├── docs/rules/                  # Authoritative coding rules (architecture, security, testing, …)
 ├── _bmad/                          # BMad module config
 ├── _bmad-output/                   # BMad outputs (planning + implementation artifacts)
 ├── binaries/ scripts/              # Local scripts/tools
@@ -133,24 +133,24 @@ All browser traffic terminates at **FrankenPHP on `localhost`**. `/` is reverse-
 
 ## Critical folders — quick reference
 
-| Path | Purpose |
-|---|---|
-| `api/src/{Backoffice,Frontoffice,Shared}/*/Domain/` | Pure domain — no framework imports |
-| `api/src/Shared/Domain/Exception/` | Marker interfaces + `DomainException` base — see [`api-error-contract.md`](./api-error-contract.md) |
-| `api/src/Shared/Application/Problem/` | `ProblemDetails` VO + `ProblemDetailsFactory` (single throwable→wire mapping site) |
-| `api/src/Shared/Infrastructure/Http/` | `CorrelationIdListener`, `ProblemDetailsResponder`, `EventListener/ExceptionResponder` |
-| `api/src/*/Application/` | Use cases, DTOs, orchestration |
-| `api/src/*/Infrastructure/` | Doctrine, HTTP, Messenger adapters |
-| `api/config/packages/` | All bundle config (Doctrine, Messenger, Mercure, …) |
-| `api/migrations/2026/` | Doctrine migrations (timestamped per year) |
-| `api/tools/behat/` | Isolated Behat Composer tree — never add Behat deps to `api/composer.json` |
-| `api/features/` | Behat `.feature` files |
-| `pwa/src/app/` | App Router routes & UI shells only |
-| `pwa/src/context/<bc>/{domain,application,infrastructure}/` | Business logic per bounded context |
-| `pwa/src/components/ui/` | Shadcn primitives |
-| `pwa/src/components/erpify/` | Project-specific components |
-| `pwa/src/context/shared/infrastructure/DependencyInjection/` | Inversify container wiring |
-| `pwa/src/lib/` | Glue / utilities only |
-| `docs/` | Primary AI retrieval source — start at `index.md` |
-| `.cursor/rules/` | Authoritative coding rules |
-| `make/` | Make modules included by root `Makefile` |
+| Path                                                         | Purpose                                                                                             |
+|--------------------------------------------------------------|-----------------------------------------------------------------------------------------------------|
+| `api/src/{Backoffice,Frontoffice,Shared}/*/Domain/`          | Pure domain — no framework imports                                                                  |
+| `api/src/Shared/Domain/Exception/`                           | Marker interfaces + `DomainException` base — see [`api-error-contract.md`](./api-error-contract.md) |
+| `api/src/Shared/Application/Problem/`                        | `ProblemDetails` VO + `ProblemDetailsFactory` (single throwable→wire mapping site)                  |
+| `api/src/Shared/Infrastructure/Http/`                        | `CorrelationIdListener`, `ProblemDetailsResponder`, `EventListener/ExceptionResponder`              |
+| `api/src/*/Application/`                                     | Use cases, DTOs, orchestration                                                                      |
+| `api/src/*/Infrastructure/`                                  | Doctrine, HTTP, Messenger adapters                                                                  |
+| `api/config/packages/`                                       | All bundle config (Doctrine, Messenger, Mercure, …)                                                 |
+| `api/migrations/2026/`                                       | Doctrine migrations (timestamped per year)                                                          |
+| `api/tools/behat/`                                           | Isolated Behat Composer tree — never add Behat deps to `api/composer.json`                          |
+| `api/features/`                                              | Behat `.feature` files                                                                              |
+| `pwa/src/app/`                                               | App Router routes & UI shells only                                                                  |
+| `pwa/src/context/<bc>/{domain,application,infrastructure}/`  | Business logic per bounded context                                                                  |
+| `pwa/src/components/ui/`                                     | Shadcn primitives                                                                                   |
+| `pwa/src/components/erpify/`                                 | Project-specific components                                                                         |
+| `pwa/src/context/shared/infrastructure/DependencyInjection/` | Inversify container wiring                                                                          |
+| `pwa/src/lib/`                                               | Glue / utilities only                                                                               |
+| `docs/`                                                      | Primary AI retrieval source — start at `index.md`                                                   |
+| `docs/rules/`                                                | Authoritative coding rules                                                                          |
+| `make/`                                                      | Make modules included by root `Makefile`                                                            |
