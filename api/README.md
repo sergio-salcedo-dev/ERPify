@@ -5,8 +5,6 @@
 A [Docker](https://www.docker.com/)-based installer and runtime for the [Symfony](https://symfony.com) web framework,
 with [FrankenPHP](https://frankenphp.dev) and [Caddy](https://caddyserver.com/) inside!
 
-Specially tailored for coding agents: the monorepo [Dev Container](https://containers.dev/) lives at [`.devcontainer/`](../.devcontainer/devcontainer.json) (repo root) so you work in **`/workspace`** with **`api/`**, **`pwa/`**, and Compose together. It lets [Claude Code](https://claude.ai/claude-code) (and other assistants) run in autonomous mode inside a sandboxed environment.
-
 ![CI](https://github.com/dunglas/symfony-docker/workflows/CI/badge.svg)
 
 ## Getting Started
@@ -30,8 +28,6 @@ Specially tailored for coding agents: the monorepo [Dev Container](https://conta
 - [Vulcain](https://vulcain.rocks) support
 - Native [XDebug](docs/xdebug.md) integration
 - [Hot Reloading](https://frankenphp.dev/docs/hot-reload/)
-- [Dev Container](https://containers.dev/) support, optimized for AI coding agents
-- [AI coding agents](docs/agents.md) with sandboxing out of the box
 - Rootless, slim production image
 
 **Enjoy!**
@@ -50,7 +46,6 @@ Specially tailored for coding agents: the monorepo [Dev Container](https://conta
 10. [Using a Makefile](docs/make-targets.md)
 11. [Updating the template](docs/updating.md)
 12. [Troubleshooting](docs/troubleshooting.md)
-13. [Using AI Coding Agents](docs/agents.md)
 
 ## License
 

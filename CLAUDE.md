@@ -6,6 +6,13 @@ Monorepo with two deployables sharing one Compose stack: a Symfony HTTP API on F
 
 > Full command catalog, repo layout tables, "adding new code" recipes, and gotchas → [`docs/claude-code-quickref.md`](docs/claude-code-quickref.md). Run `make help` for the live target list.
 
+
+## What to do
+
+- Every time Claude makes a mistake → you add a rule
+- Every time you repeat yourself → you add a workflow
+- Every time something breaks → you add a guardrail
+-
 ---
 
 ## Top-hits commands

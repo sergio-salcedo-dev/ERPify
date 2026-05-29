@@ -23,9 +23,6 @@ indent_style = tab
 indent_style = unset
 indent_size = unset
 
-[.devcontainer/**]
-indent_size = 2
-
 [**.{yml,yaml}]
 indent_size = 2
 
@@ -40,9 +37,6 @@ indent_style = tab
 indent_size = 2
 
 [api/{bin/sf,frankenphp/**/*.sh}]
-indent_style = tab
-
-[.devcontainer/**/*.sh]
 indent_style = tab
 
 [scripts/**/*.sh]

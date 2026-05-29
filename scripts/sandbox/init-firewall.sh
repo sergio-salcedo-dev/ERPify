@@ -1,4 +1,18 @@
 #!/bin/bash
+# Outbound DNS-allowlist firewall for a sandboxed/CI agent container.
+#
+# Usage: run as root inside a container that has the NET_ADMIN capability and
+# the docker network's embedded DNS (127.0.0.11), e.g. `sudo ./init-firewall.sh`.
+# After it runs, only the allowlisted domains (+ GitHub CIDRs + private nets)
+# are reachable outbound; everything else is REJECTed.
+#
+# Editing the allowlist: add the domain to the `ipset=` line in the dnsmasq
+# block below (domains are `/`-separated, ending with the `allowed-domains`
+# ipset name), then re-run this script for the change to take effect.
+#
+# NOTE: this script was salvaged from the removed `.devcontainer/`. Nothing
+# invokes it automatically anymore — it is parked here for future CI/sandbox use.
+#
 # Adapted from https://github.com/anthropics/claude-code/blob/main/.devcontainer/init-firewall.sh
 #
 # Modifications:

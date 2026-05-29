@@ -263,7 +263,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 
 - Public APIs (controller routes, message types, domain services) get a one-line purpose docblock only when the name alone is insufficient.
 - Non-obvious decisions, workarounds, and invariants get a short `// why: ...` comment with the reason.
-- Keep `pwa/AGENTS.md`, `api/README.md`, and `docs/` in sync when behavior changes. `PRODUCTION_SECURITY_CHECKLIST.md` is authoritative — update it on any security-sensitive change (see `docs/rules/security.md`).
+- Keep `api/README.md`, and `docs/` in sync when behavior changes. `PRODUCTION_SECURITY_CHECKLIST.md` is authoritative — update it on any security-sensitive change (see `docs/rules/security.md`).
 
 ### Development Workflow Rules
 
@@ -384,7 +384,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 - Read this file before implementing any code.
 - Follow all rules exactly as documented. When in doubt, prefer the more restrictive option.
 - Defer to the codebase over training-data defaults — PHP 8.5, Next 16, React 19, Tailwind 4, Doctrine 3/DBAL 4, and Inversify 8 are all beyond common training cutoffs.
-- When a rule here conflicts with `docs/rules/*.md`, `pwa/CLAUDE.md`, or `pwa/AGENTS.md`, flag the conflict rather than silently picking one.
+- When a rule here conflicts with `docs/rules/*.md`, `pwa/CLAUDE.md`, or `api/CLAUDE.md`, flag the conflict rather than silently picking one.
 
 **For Humans:**
 
