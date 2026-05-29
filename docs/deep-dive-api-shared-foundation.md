@@ -31,9 +31,8 @@ api/src/Shared/
 - Domain events are persisted to the `domain_event` audit table **before** Messenger transport enqueue, via `PersistDomainEventMiddleware`.
 - Image normalizer (Intervention Image / GD) and Flysystem are hidden behind ports; swapping backends is a config change.
 
-**Two architectural debts surfaced by the literal sweep (see "Known issues" near the end):**
+**Architectural debt surfaced by the literal sweep (see "Known issues" near the end):**
 1. `Shared/Domain/Entity/Identifiable.php` and `Shared/Domain/Entity/Timestamped.php` import Doctrine ORM, Symfony Serializer, and Symfony Validator — a documented violation of the "no framework imports inside `Domain/`" rule in `CLAUDE.md`.
-2. `Shared/Domain/DomainError.php` is a legacy abstract class with **zero** subclasses; the active error taxonomy goes through `Shared/Domain/Exception/DomainException` + marker interfaces.
 
 ---
 
@@ -115,10 +114,6 @@ api/src/Shared/
 - **Exports:** `final pullDomainEvents(): list<DomainEvent>` (idempotent drain), `final protected record(DomainEvent): void`.
 - **Constructor seeds** `createdAt`/`updatedAt = now()`; subclass owns `id` via `Identifiable`.
 - **Used by:** `Bank` (Backoffice), `Media` (Shared), `StoredDomainEvent` ORM entity.
-
-#### `api/src/Shared/Domain/DomainError.php`
-- **LOC:** 22 — **Type:** legacy abstract; extends PHP's built-in `\DomainException`, requires `errorCode()` + `errorMessage()`.
-- **Currently unused** in the codebase; the active taxonomy goes through `Shared/Domain/Exception/DomainException` + marker interfaces. Treat as deprecated; do not extend in new code.
 
 #### `api/src/Shared/Domain/Entity/Identifiable.php`
 - **LOC:** 34 — UUID identity trait composed into `AggregateRoot`.
@@ -580,17 +575,15 @@ StoredObjectOrphanCleaner::cleanupAfterRemoval($hash)
 
 1. **Framework leak in `Domain/Entity/`.** `Identifiable.php` and `Timestamped.php` import `Doctrine\…\Mapping`, `Doctrine\DBAL\Types`, `Symfony\Bridge\Doctrine\IdGenerator\UuidGenerator`, `Symfony\Component\Serializer\Attribute`, and `Symfony\Component\Validator\Constraints`. This violates the "no framework imports inside `Domain/`" rule in `CLAUDE.md` (and in `docs/rules/architecture.md`). The `TaxonomyArchitectureTest` purity guard only covers `Domain/Exception/`, so it doesn't catch these. Documented debt — refactor cost is high because every aggregate and the `StoredDomainEvent` entity composes the traits.
 
-2. **`Domain/DomainError.php` is dead.** Zero subclasses across `api/src` and `api/tests`. The active error taxonomy goes through `Domain/Exception/DomainException` + marker interfaces. Either delete or annotate `@deprecated` so contributors don't extend it.
+2. **`Guzzle/Enum/GuzzleContextTypeEnum.php` has no callers.** Forward-compat placeholder. Either land the consuming HTTP-client adapter or delete to keep the tree honest.
 
-3. **`Guzzle/Enum/GuzzleContextTypeEnum.php` has no callers.** Forward-compat placeholder. Either land the consuming HTTP-client adapter or delete to keep the tree honest.
+3. **Storage orphan cleanup has no production caller.** `StoredObjectOrphanCleaner::cleanupAfterRemoval()` is well-designed (composite inspectors, conservative delete), but nothing invokes it yet. Until a domain calls it on aggregate removal, blobs accumulate. New domains storing objects must (a) implement `StoredObjectReferenceInspector`, (b) tag it `stored_object.reference_inspector`, and (c) wire a cleanup call from a domain-event handler.
 
-4. **Storage orphan cleanup has no production caller.** `StoredObjectOrphanCleaner::cleanupAfterRemoval()` is well-designed (composite inspectors, conservative delete), but nothing invokes it yet. Until a domain calls it on aggregate removal, blobs accumulate. New domains storing objects must (a) implement `StoredObjectReferenceInspector`, (b) tag it `stored_object.reference_inspector`, and (c) wire a cleanup call from a domain-event handler.
+4. **`Infrastructure/Mailer/PlainTextNotificationMailer` has no size cap.** A pathological `$fields` array with deeply nested data produces an unbounded body. Acceptable today (callers control inputs); worth a max-bytes guard before exposing the port to user-driven content.
 
-5. **`Infrastructure/Mailer/PlainTextNotificationMailer` has no size cap.** A pathological `$fields` array with deeply nested data produces an unbounded body. Acceptable today (callers control inputs); worth a max-bytes guard before exposing the port to user-driven content.
+5. **Two near-identical URL generators** (`Configurable{Media,StoredObject}PublicUrlGenerator`). Three resolution branches duplicated. Extract a base class or trait if a third URL generator joins.
 
-6. **Two near-identical URL generators** (`Configurable{Media,StoredObject}PublicUrlGenerator`). Three resolution branches duplicated. Extract a base class or trait if a third URL generator joins.
-
-7. **`Symfony/Uid` v4 vs v7 inconsistency.** `Domain/Uuid/UuidGenerator` (port) → `Infrastructure/Uuid/SymfonyUuidGenerator` (v4). HTTP error pipeline uses `Uuid::v7()` directly. Not wrong, but a contributor adding a new caller could pick the wrong one. Consider a v7-specific port or a clearer naming scheme.
+6. **`Symfony/Uid` v4 vs v7 inconsistency.** `Domain/Uuid/UuidGenerator` (port) → `Infrastructure/Uuid/SymfonyUuidGenerator` (v4). HTTP error pipeline uses `Uuid::v7()` directly. Not wrong, but a contributor adding a new caller could pick the wrong one. Consider a v7-specific port or a clearer naming scheme.
 
 ---
 
