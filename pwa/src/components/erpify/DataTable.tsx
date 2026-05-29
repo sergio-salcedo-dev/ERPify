@@ -1,9 +1,25 @@
 "use client";
 
-import { useCallback, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import {
+  useCallback,
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SortDirection } from "@/context/shared/domain/types/sorting";
+import { KeyboardKey } from "@/context/shared/domain/types/keyboard";
+
+export const SelectionMode = {
+  NONE: "none",
+  SINGLE: "single",
+  MULTI: "multi",
+} as const;
+export type SelectionMode = (typeof SelectionMode)[keyof typeof SelectionMode];
 
 export interface DataTableColumn<T> {
   id: string;
@@ -24,7 +40,7 @@ export interface DataTableSort {
 }
 
 export interface DataTableSelection {
-  mode: "none" | "single" | "multi";
+  mode: SelectionMode;
   selected: ReadonlySet<string>;
   onChange: (next: Set<string>) => void;
 }
@@ -87,6 +103,22 @@ function alignClass(align: DataTableColumn<unknown>["align"]): string | undefine
   return "text-left";
 }
 
+/**
+ * Controls inside a row (action buttons, links, the selection checkbox) are
+ * themselves interactive. Selector for those descendants so a click / Enter
+ * landing on one is NOT also interpreted as a row activation — this replaces
+ * the per-cell `stopPropagation()` wrappers consumers would otherwise need,
+ * which trip the "interactive handler on a non-interactive element" lint rule.
+ */
+const INTERACTIVE_DESCENDANT_SELECTOR =
+  "a[href], button, input, select, textarea, [role='button'], [role='link'], [role='menuitem'], [role='checkbox']";
+
+function isFromInteractiveControl(target: EventTarget | null, row: Element): boolean {
+  if (!(target instanceof Element) || target === row) return false;
+  const control = target.closest(INTERACTIVE_DESCENDANT_SELECTOR);
+  return control != null && row.contains(control);
+}
+
 interface DataTableHeadCellProps<T> {
   column: DataTableColumn<T>;
   sort?: DataTableSort;
@@ -146,7 +178,7 @@ function DataTableBodyCell<T>({ column, row }: Readonly<DataTableBodyCellProps<T
 }
 
 interface SelectionCellProps {
-  selectionMode: "single" | "multi";
+  selectionMode: typeof SelectionMode.SINGLE | typeof SelectionMode.MULTI;
   rowId: string;
   isSelected: boolean;
   onRowSelect: (id: string) => void;
@@ -161,7 +193,7 @@ function SelectionCell({
   return (
     <td className="px-3">
       <input
-        type={selectionMode === "single" ? "radio" : "checkbox"}
+        type={selectionMode === SelectionMode.SINGLE ? "radio" : "checkbox"}
         aria-label={`Select row ${rowId}`}
         checked={isSelected}
         onChange={() => onRowSelect(rowId)}
@@ -186,7 +218,7 @@ interface DataTableRowProps<T> {
   setFocusedRow: (index: number) => void;
   rowTestId?: (row: T) => string;
   registerRowRef: (index: number, el: HTMLTableRowElement | null) => void;
-  onClickRow?: () => void;
+  onClickRow?: (event: MouseEvent<HTMLTableRowElement>) => void;
   onKeyDownRow?: (e: KeyboardEvent<HTMLTableRowElement>) => void;
   onRowSelect: (id: string) => void;
 }
@@ -230,7 +262,9 @@ function DataTableRow<T>({
     >
       {showSelectionColumn && selection ? (
         <SelectionCell
-          selectionMode={selection.mode === "single" ? "single" : "multi"}
+          selectionMode={
+            selection.mode === SelectionMode.SINGLE ? SelectionMode.SINGLE : SelectionMode.MULTI
+          }
           rowId={rowId}
           isSelected={isSelected}
           onRowSelect={onRowSelect}
@@ -279,7 +313,7 @@ export function DataTable<T>({
   );
 
   const handleSelectAll = useCallback(() => {
-    if (!selection || selection.mode !== "multi") return;
+    if (selection?.mode !== SelectionMode.MULTI) return;
     if (selection.selected.size === data.length) {
       selection.onChange(new Set());
     } else {
@@ -289,8 +323,8 @@ export function DataTable<T>({
 
   const handleRowSelect = useCallback(
     (id: string) => {
-      if (!selection || selection.mode === "none") return;
-      if (selection.mode === "single") {
+      if (!selection || selection.mode === SelectionMode.NONE) return;
+      if (selection.mode === SelectionMode.SINGLE) {
         selection.onChange(new Set([id]));
         return;
       }
@@ -307,26 +341,33 @@ export function DataTable<T>({
 
   const handleRowKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTableRowElement>, row: T, index: number) => {
-      if (event.key === "ArrowDown") {
+      // A key pressed while an in-row control (action button, link, checkbox)
+      // is focused belongs to that control, not the row.
+      if (isFromInteractiveControl(event.target, event.currentTarget)) return;
+      if (event.key === KeyboardKey.ARROW_DOWN) {
         event.preventDefault();
         const next = Math.min(index + 1, data.length - 1);
         setFocusedRow(next);
         rowRefs.current[next]?.focus();
         return;
       }
-      if (event.key === "ArrowUp") {
+      if (event.key === KeyboardKey.ARROW_UP) {
         event.preventDefault();
         const next = Math.max(index - 1, 0);
         setFocusedRow(next);
         rowRefs.current[next]?.focus();
         return;
       }
-      if (event.key === "Enter") {
+      if (event.key === KeyboardKey.ENTER) {
         event.preventDefault();
         onRowActivate?.(row);
         return;
       }
-      if (event.key === " " && selection != null && selection.mode !== "none") {
+      if (
+        event.key === KeyboardKey.SPACE &&
+        selection != null &&
+        selection.mode !== SelectionMode.NONE
+      ) {
         event.preventDefault();
         handleRowSelect(rowKey(row));
       }
@@ -342,9 +383,11 @@ export function DataTable<T>({
     return <>{emptyState}</>;
   }
 
-  const showSelectionColumn = selection != null && selection.mode !== "none";
+  const showSelectionColumn = selection != null && selection.mode !== SelectionMode.NONE;
   const allSelected =
-    selection?.mode === "multi" && data.length > 0 && selection.selected.size === data.length;
+    selection?.mode === SelectionMode.MULTI &&
+    data.length > 0 &&
+    selection.selected.size === data.length;
   const interactive = Boolean(onRowActivate || selection);
 
   return (
@@ -363,7 +406,7 @@ export function DataTable<T>({
           <tr className={cn("border-border border-b", HEADER_HEIGHTS[density])}>
             {showSelectionColumn && selection ? (
               <th scope="col" className="w-10 px-3 text-left">
-                {selection.mode === "multi" ? (
+                {selection.mode === SelectionMode.MULTI ? (
                   <input
                     type="checkbox"
                     aria-label="Select all rows"
@@ -391,7 +434,14 @@ export function DataTable<T>({
             const onKeyDownRow = interactive
               ? (e: KeyboardEvent<HTMLTableRowElement>) => handleRowKeyDown(e, row, index)
               : undefined;
-            const onClickRow = onRowActivate ? () => onRowActivate(row) : undefined;
+            const onClickRow = onRowActivate
+              ? (event: MouseEvent<HTMLTableRowElement>) => {
+                  // A click landing on an in-row control (action button, link,
+                  // checkbox) activates that control, not the row.
+                  if (isFromInteractiveControl(event.target, event.currentTarget)) return;
+                  onRowActivate(row);
+                }
+              : undefined;
             return (
               <DataTableRow
                 key={id}

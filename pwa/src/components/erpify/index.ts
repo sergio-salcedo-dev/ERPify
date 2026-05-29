@@ -12,7 +12,7 @@ export {
   DD_MM_YYYY_TITLE,
 } from "./DateField";
 export type { DateFieldProps } from "./DateField";
-export { DataTable } from "./DataTable";
+export { DataTable, SelectionMode } from "./DataTable";
 export type { DataTableColumn, DataTableSort, DataTableSelection } from "./DataTable";
 export { DatePickerField } from "./DatePickerField";
 export type { DatePickerFieldProps } from "./DatePickerField";

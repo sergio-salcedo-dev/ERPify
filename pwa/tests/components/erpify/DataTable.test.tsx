@@ -126,6 +126,60 @@ describe("DataTable", () => {
     expect(onRowActivate).toHaveBeenCalledWith(banks[0]);
   });
 
+  it("does not activate the row when a click lands on an in-row control", () => {
+    const onRowActivate = vi.fn();
+    const withAction: DataTableColumn<Bank>[] = [
+      ...columns,
+      {
+        id: "actions",
+        header: "Actions",
+        cell: (r) => (
+          <button type="button" data-testid={`edit-${r.id}`}>
+            Edit
+          </button>
+        ),
+      },
+    ];
+    render(
+      <DataTable
+        columns={withAction}
+        data={banks}
+        rowKey={(r) => r.id}
+        caption="Banks"
+        onRowActivate={onRowActivate}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("edit-1"));
+    expect(onRowActivate).not.toHaveBeenCalled();
+  });
+
+  it("does not activate the row when Enter is pressed on an in-row control", () => {
+    const onRowActivate = vi.fn();
+    const withAction: DataTableColumn<Bank>[] = [
+      ...columns,
+      {
+        id: "actions",
+        header: "Actions",
+        cell: (r) => (
+          <button type="button" data-testid={`edit-${r.id}`}>
+            Edit
+          </button>
+        ),
+      },
+    ];
+    render(
+      <DataTable
+        columns={withAction}
+        data={banks}
+        rowKey={(r) => r.id}
+        caption="Banks"
+        onRowActivate={onRowActivate}
+      />,
+    );
+    fireEvent.keyDown(screen.getByTestId("edit-1"), { key: "Enter" });
+    expect(onRowActivate).not.toHaveBeenCalled();
+  });
+
   it("supports multi-selection via checkbox", () => {
     const onChange = vi.fn();
     render(

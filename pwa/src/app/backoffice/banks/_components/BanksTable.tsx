@@ -28,16 +28,11 @@ interface BanksActionsCellProps {
 
 function BanksActionsCell({ row, onBankDeleted }: Readonly<BanksActionsCellProps>) {
   return (
-    // Wrapper exists purely to stop row click/keydown propagation so the action
-    // buttons don't trigger row navigation. role="presentation" is the most
-    // appropriate signal for assistive tech that this <div> is non-interactive
-    // chrome (not a semantic landmark).
-    <div
-      className="banks-table__actions flex items-center justify-end gap-1"
-      onClick={(event) => event.stopPropagation()}
-      onKeyDown={(event) => event.stopPropagation()}
-      role="presentation"
-    >
+    // Pure layout wrapper. <DataTable> already skips row activation when a
+    // click / key lands on an in-row control, so no propagation handlers (and
+    // therefore no interactive handlers on a non-interactive element) are
+    // needed here.
+    <div className="banks-table__actions flex items-center justify-end gap-1">
       <CopyButton
         value={row.id}
         iconOnly

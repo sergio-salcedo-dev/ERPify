@@ -13,7 +13,7 @@ function makeResponse(
 ): Response {
   const headers = new Headers({
     "Content-Type": init?.contentType ?? "application/json",
-    ...(init?.headers ?? {}),
+    ...init?.headers,
   });
   return new Response(body === undefined ? null : JSON.stringify(body), {
     status,
