@@ -55,9 +55,9 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 
-COPY --from=builder --link /app/pwa/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/pwa/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/pwa/.next/static ./.next/static
+COPY --from=builder --link --chmod=555 /app/pwa/public ./public
+COPY --from=builder --chmod=555 /app/pwa/.next/standalone ./
+COPY --from=builder --chmod=555 /app/pwa/.next/static ./.next/static
 
 USER nextjs
 
