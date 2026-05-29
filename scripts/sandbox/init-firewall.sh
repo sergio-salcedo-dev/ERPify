@@ -43,7 +43,7 @@ ipset destroy allowed-domains 2>/dev/null || true
 #    These are restored first; later, our DNS redirect rules are inserted with
 #    `iptables -t nat -I OUTPUT ...`, so they precede these Docker rules. Only
 #    dnsmasq's upstream queries (which are exempt from our redirect) pass through them.
-if [ -n "$DOCKER_DNS_RULES" ]; then
+if [[ -n "$DOCKER_DNS_RULES" ]]; then
 	echo "Restoring Docker DNS rules..."
 	iptables -t nat -N DOCKER_OUTPUT 2>/dev/null || true
 	iptables -t nat -N DOCKER_POSTROUTING 2>/dev/null || true
@@ -65,7 +65,7 @@ ipset create allowed-domains hash:net
 # GitHub IP ranges
 echo "Fetching GitHub IP ranges..."
 gh_ranges=$(curl -s --connect-timeout 10 --max-time 30 --fail https://api.github.com/meta)
-[ -z "$gh_ranges" ] && {
+[[ -z "$gh_ranges" ]] && {
 	echo "ERROR: Failed to fetch GitHub IP ranges" >&2
 	exit 1
 }
@@ -91,7 +91,7 @@ done < <(echo "$gh_ranges" | jq -r '(.web + .api + .git)[]' | grep -v ':' | aggr
 # port, its upstream queries naturally bypass our port-53 DNAT rules (no
 # uid-owner tricks needed) and don't require the DOCKER_OUTPUT NAT chain.
 DOCKER_DNS_PORT=$(echo "$DOCKER_DNS_RULES" | sed -n 's/.*udp.*--to-destination 127\.0\.0\.11:\([0-9]*\).*/\1/p' | head -1)
-[ -z "$DOCKER_DNS_PORT" ] && {
+[[ -z "$DOCKER_DNS_PORT" ]] && {
 	echo "ERROR: Failed to extract Docker DNS port" >&2
 	exit 1
 }
@@ -127,7 +127,7 @@ iptables -t nat -I OUTPUT -p udp --dport 53 -j DNAT --to-destination 127.0.0.2:5
 
 # Allow traffic to/from the host gateway IP
 HOST_IP=$(ip route | grep default | cut -d" " -f3)
-[ -z "$HOST_IP" ] && {
+[[ -z "$HOST_IP" ]] && {
 	echo "ERROR: Failed to detect host IP" >&2
 	exit 1
 }

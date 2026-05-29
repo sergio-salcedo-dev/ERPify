@@ -26,7 +26,7 @@ export function apiBaseURL(): string {
   return (
     process.env.PLAYWRIGHT_API_BASE_URL?.trim() ||
     process.env.PLAYWRIGHT_BASE_URL?.trim() ||
-    (process.env.CI ? "https://localhost" : "https://localhost")
+    "https://localhost"
   );
 }
 

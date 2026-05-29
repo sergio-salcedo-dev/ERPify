@@ -14,11 +14,11 @@ declare(strict_types=1);
 $behatRoot = __DIR__;
 $apiRoot = dirname($behatRoot, 2);
 
-require $apiRoot . '/vendor/autoload.php';
-require $behatRoot . '/vendor/autoload.php';
+require_once $apiRoot . '/vendor/autoload.php';
+require_once $behatRoot . '/vendor/autoload.php';
 
 if (is_file($apiRoot . '/.env')) {
     (new Symfony\Component\Dotenv\Dotenv())->bootEnv($apiRoot . '/.env');
 }
 
-require $behatRoot . '/vendor/behat/behat/bin/behat';
+require_once $behatRoot . '/vendor/behat/behat/bin/behat';

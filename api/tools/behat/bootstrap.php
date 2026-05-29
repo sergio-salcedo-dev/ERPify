@@ -20,7 +20,7 @@ $_ENV['APP_ENV'] = 'test';
 $_SERVER['APP_ENV'] = 'test';
 putenv('APP_ENV=test');
 
-require $apiRoot . '/vendor/autoload.php';
+require_once $apiRoot . '/vendor/autoload.php';
 
 if (class_exists(Dotenv::class) && is_file($apiRoot . '/.env')) {
     $dotenv = new Dotenv();

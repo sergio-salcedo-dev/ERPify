@@ -6,7 +6,7 @@ use Symfony\Component\Dotenv\Dotenv;
 
 $apiRoot = dirname(__DIR__, 2);
 
-require $apiRoot . '/vendor/autoload.php';
+require_once $apiRoot . '/vendor/autoload.php';
 
 if (class_exists(Dotenv::class) && is_file($apiRoot . '/.env')) {
     (new Dotenv())->bootEnv($apiRoot . '/.env');

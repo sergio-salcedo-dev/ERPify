@@ -9,6 +9,7 @@ use Erpify\Backoffice\Bank\Infrastructure\Persistence\PostgresBankRepository;
 use Erpify\Shared\Application\Validation\Validator;
 use Erpify\Shared\Infrastructure\Uuid\SymfonyUuidGenerator;
 use Erpify\Shared\Media\Application\MediaRegistrar;
+use Erpify\Shared\Storage\Application\Dto\StoredObjectWriteResult;
 use Erpify\Shared\Storage\Application\StoredImageObjectWriter;
 use Erpify\Shared\Storage\Domain\StoredObject;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
@@ -35,7 +36,7 @@ final readonly class BankCreator
             ? $this->storedImageObjectWriter->storeFromUploadedFile($storedObjectFile, 'storedObject')
             : null;
 
-        $storedObject = $stored !== null
+        $storedObject = $stored instanceof StoredObjectWriteResult
             ? new StoredObject($stored->objectKey, $stored->mimeType, $stored->byteSize, $stored->contentHash)
             : null;
 
