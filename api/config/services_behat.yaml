@@ -27,4 +27,7 @@ services:
     Erpify\Tests\Behat\Context\HttpRequestContext:
         arguments:
             $baseUrl: '/api/v1'
+
+    Erpify\Tests\Behat\Context\HttpResponseContext:
+        arguments:
             $serverPort: 80

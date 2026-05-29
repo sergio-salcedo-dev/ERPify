@@ -17,14 +17,19 @@ default:
                 - '%paths.base%/../../features/frontoffice'
                 - '%paths.base%/../../features/shared'
             contexts:
-                - Erpify\Tests\Behat\Context\HttpRequestContext:
-                      baseUrl: '/api/v1'
-                      serverPort: 80
                 - Erpify\Tests\Behat\Context\DoctrineContext
                 - Erpify\Tests\Behat\Context\EntityManagerContext
                 - Erpify\Tests\Behat\Context\FixturesContext
-                - Erpify\Tests\Behat\Context\JsonContext
+                - Erpify\Tests\Behat\Context\HttpRequestContext:
+                      baseUrl: '/api/v1'
+                - Erpify\Tests\Behat\Context\HttpResponseContext:
+                      serverPort: 80
+                - Erpify\Tests\Behat\Context\Json\JsonErrorContext
+                - Erpify\Tests\Behat\Context\Json\JsonNodeContext
+                - Erpify\Tests\Behat\Context\Json\JsonPathContext
+                - Erpify\Tests\Behat\Context\Json\JsonSchemaContext
                 - Erpify\Tests\Behat\Context\RateLimitContext
+                - Erpify\Tests\Behat\Context\SqlQueryContext
                 
     extensions:
         FriendsOfBehat\SymfonyExtension:
