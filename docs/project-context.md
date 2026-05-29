@@ -31,13 +31,13 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 | Realtime                  | Symfony Mercure 0.7 (+ bundle 0.4)                                                         | Served at `/.well-known/mercure` on the FrankenPHP origin. Prod requires `CADDY_MERCURE_JWT_SECRET`.                                                                                                                                                                                                                                                                     |
 | Mail                      | symfony/mailer 8                                                                           | Async via Messenger — see domain-events doc.                                                                                                                                                                                                                                                                                                                             |
 | Storage / Media           | league/flysystem 3.33 (+ bundle 3.7), Intervention Image 4                                 | Use Flysystem adapters; do not hit local FS directly.                                                                                                                                                                                                                                                                                                                    |
-| CORS                      | nelmio/cors-bundle 2.6                                                                     | No wildcard `*` origins (see `.cursor/rules/security.mdc`).                                                                                                                                                                                                                                                                                                              |
+| CORS                      | nelmio/cors-bundle 2.6                                                                     | No wildcard `*` origins (see `docs/rules/security.md`).                                                                                                                                                                                                                                                                                                                  |
 | Autoload                  | PSR-4                                                                                      | `Erpify\\ → api/src/`, `Erpify\Tests\\ → api/tests/`. Polyfills `symfony/polyfill-ctype\|iconv\|php72..84` are `replace`d — **do not** add them transitively.                                                                                                                                                                                                            |
 | Unit tests                | **PHPUnit 13**                                                                             | Config: `api/phpunit.xml.dist`.                                                                                                                                                                                                                                                                                                                                          |
 | E2E tests                 | **Behat 3** in isolated tree                                                               | Lives exclusively under `api/tools/behat/composer.json`. **Never** `composer require behat/*` into `api/composer.json`. Install via `composer behat-tools-install`.                                                                                                                                                                                                      |
 | Static analysis           | PHPStan 2, Psalm 6.16, Rector 2                                                            | Configs: `api/phpstan.neon`, `api/psalm.xml`, `api/rector.php`.                                                                                                                                                                                                                                                                                                          |
 | Style                     | PHP-CS-Fixer 3.95, PHPCS 4, PHPMD                                                          | Config: `api/.php-cs-fixer.php`. PSR-12 + `declare(strict_types=1);`.                                                                                                                                                                                                                                                                                                    |
-| Hygiene                   | composer-unused, composer-require-checker, `roave/security-advisories: dev-latest`         | Run via `make composer.check.all`.                                                                                                                                                                                                                                                                                                                                          |
+| Hygiene                   | composer-unused, composer-require-checker, `roave/security-advisories: dev-latest`         | Run via `make composer.check.all`.                                                                                                                                                                                                                                                                                                                                       |
 
 ### PWA (`pwa/`) — Next.js / React
 
@@ -55,7 +55,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 | Unit tests           | **Vitest 4**                                                                     | Config: `pwa/vitest.config.ts` (v4 config API differs from v1/v2). Command: `make pwa.test.unit c='src/context/foo/bar.test.ts'`.                                                                                 |
 | E2E tests            | **Playwright 1.59**                                                              | Config: `pwa/playwright.config.ts`. `baseURL: http://localhost:3000` (**not `:80`**) — `dev:e2e` runs Next on `:3000`.                                                                                            |
 | Testing libs         | @testing-library/react 16, jest-dom 6, jsdom                                     | —                                                                                                                                                                                                                 |
-| Lint / format        | ESLint 10.2 + `eslint-config-next` 16.2 + `eslint-config-prettier`, Prettier 3.8 | Run via `make pwa.quality`.                                                                                                                                                                                          |
+| Lint / format        | ESLint 10.2 + `eslint-config-next` 16.2 + `eslint-config-prettier`, Prettier 3.8 | Run via `make pwa.quality`.                                                                                                                                                                                       |
 | Integrations in deps | `@google/genai`, `firebase-tools`                                                | Present — do not assume usage; check code before wiring.                                                                                                                                                          |
 
 ### Infrastructure / Dev
@@ -90,7 +90,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 - No `eval`, no `extract`, no variable-variables, no `@` error suppression.
 - No global state: `global`, static mutable state, and service-locator patterns are forbidden; use constructor DI.
 - Early returns; max nesting 3–4 levels; functions small and single-purpose.
-- Never import framework/ORM/HTTP classes inside `Domain/` — domain stays pure (see `.cursor/rules/architecture.mdc`).
+- Never import framework/ORM/HTTP classes inside `Domain/` — domain stays pure (see `docs/rules/architecture.md`).
 - Namespace root is `Erpify\` → `api/src/`. Tests: `Erpify\Tests\` → `api/tests/`. Keep `Backoffice` / `Frontoffice` / `Shared` top-level boundaries.
 - Doctrine entities live in `Infrastructure/` (or designated persistence folder), not `Domain/`. Domain objects are POPOs; mapping is via XML/attributes in the infra layer.
 
@@ -125,7 +125,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
     - The **`messenger_worker`** is a separate Compose service in prod/ci — handlers must be idempotent and tolerate re-delivery.
     - See `docs/domain-events-and-messenger.md` before touching async email, audit, or transport config.
 - **Mercure**: publish via the Mercure hub at `/.well-known/mercure`. Topics must be scoped per bounded context; never broadcast raw domain entities.
-- **CORS**: edit `nelmio_cors.yaml` — never wildcard `*` for credentialed requests (see `.cursor/rules/security.mdc`).
+- **CORS**: edit `nelmio_cors.yaml` — never wildcard `*` for credentialed requests (see `docs/rules/security.md`).
 - **Flysystem**: always go through configured adapters; never `file_get_contents` / `fopen` on user-facing paths.
 - **Env**: access via `$_ENV` / Symfony's env-var processors — never `getenv()` directly. Secrets go through Symfony Secrets vault in prod.
 - **Console commands**: use `#[AsCommand]`. Place under `Infrastructure/Cli/` or a dedicated `Command/` folder — not in `Domain/`.
@@ -211,7 +211,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 #### Coverage & gates
 
 - Critical business logic in `Domain/` and `context/<bc>/domain` **must** be unit-tested. Adapters covered by integration/e2e.
-- All existing and new tests must pass 100% before a story is done (`.cursor/rules/testing.mdc`, `bmad-agent-dev` principle).
+- All existing and new tests must pass 100% before a story is done (`docs/rules/testing.md`, `bmad-agent-dev` principle).
 - CI runs `make ci.test` — verify locally with `make app.test` before pushing.
 
 ### Code Quality & Style Rules
@@ -263,7 +263,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 
 - Public APIs (controller routes, message types, domain services) get a one-line purpose docblock only when the name alone is insufficient.
 - Non-obvious decisions, workarounds, and invariants get a short `// why: ...` comment with the reason.
-- Keep `pwa/AGENTS.md`, `api/README.md`, and `docs/` in sync when behavior changes. `PRODUCTION_SECURITY_CHECKLIST.md` is authoritative — update it on any security-sensitive change (see `.cursor/rules/security.mdc`).
+- Keep `pwa/AGENTS.md`, `api/README.md`, and `docs/` in sync when behavior changes. `PRODUCTION_SECURITY_CHECKLIST.md` is authoritative — update it on any security-sensitive change (see `docs/rules/security.md`).
 
 ### Development Workflow Rules
 
@@ -291,7 +291,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 - Optional body explains **why**; reference issues in the footer (`Closes #123`).
 - Pre-commit validates the message (commitlint via pre-commit hooks). **Never** skip with `--no-verify` unless the user explicitly authorizes.
 - Create new commits rather than amending; prefer small, focused commits.
-- Before committing, run security checks per `.cursor/rules/security.mdc` and update `PRODUCTION_SECURITY_CHECKLIST.md` when security-relevant files change.
+- Before committing, run security checks per `docs/rules/security.md` and update `PRODUCTION_SECURITY_CHECKLIST.md` when security-relevant files change.
 
 #### Pre-commit hooks
 
@@ -344,7 +344,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 - `reflect-metadata` must be imported **once** at the PWA app entry.
 - Mercure client must hit **same-origin** `/.well-known/mercure`. Don't hardcode cross-origin URLs.
 
-#### Security (authoritative: `.cursor/rules/security.mdc`)
+#### Security (authoritative: `docs/rules/security.md`)
 
 - Never commit secrets: `.env`, credentials, API keys, tokens. Pre-commit scans block most — still review diffs.
 - No debug artifacts (`var_dump`, `print_r`, `dd()`, `console.log`) in committed code.
@@ -384,7 +384,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 - Read this file before implementing any code.
 - Follow all rules exactly as documented. When in doubt, prefer the more restrictive option.
 - Defer to the codebase over training-data defaults — PHP 8.5, Next 16, React 19, Tailwind 4, Doctrine 3/DBAL 4, and Inversify 8 are all beyond common training cutoffs.
-- When a rule here conflicts with `.cursor/rules/*.mdc`, `pwa/CLAUDE.md`, or `pwa/AGENTS.md`, flag the conflict rather than silently picking one.
+- When a rule here conflicts with `docs/rules/*.md`, `pwa/CLAUDE.md`, or `pwa/AGENTS.md`, flag the conflict rather than silently picking one.
 
 **For Humans:**
 

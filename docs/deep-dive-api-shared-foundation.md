@@ -578,7 +578,7 @@ StoredObjectOrphanCleaner::cleanupAfterRemoval($hash)
 
 ## Known Issues / Tech Debt
 
-1. **Framework leak in `Domain/Entity/`.** `Identifiable.php` and `Timestamped.php` import `Doctrine\…\Mapping`, `Doctrine\DBAL\Types`, `Symfony\Bridge\Doctrine\IdGenerator\UuidGenerator`, `Symfony\Component\Serializer\Attribute`, and `Symfony\Component\Validator\Constraints`. This violates the "no framework imports inside `Domain/`" rule in `CLAUDE.md` (and in `.cursor/rules/architecture.mdc`). The `TaxonomyArchitectureTest` purity guard only covers `Domain/Exception/`, so it doesn't catch these. Documented debt — refactor cost is high because every aggregate and the `StoredDomainEvent` entity composes the traits.
+1. **Framework leak in `Domain/Entity/`.** `Identifiable.php` and `Timestamped.php` import `Doctrine\…\Mapping`, `Doctrine\DBAL\Types`, `Symfony\Bridge\Doctrine\IdGenerator\UuidGenerator`, `Symfony\Component\Serializer\Attribute`, and `Symfony\Component\Validator\Constraints`. This violates the "no framework imports inside `Domain/`" rule in `CLAUDE.md` (and in `docs/rules/architecture.md`). The `TaxonomyArchitectureTest` purity guard only covers `Domain/Exception/`, so it doesn't catch these. Documented debt — refactor cost is high because every aggregate and the `StoredDomainEvent` entity composes the traits.
 
 2. **`Domain/DomainError.php` is dead.** Zero subclasses across `api/src` and `api/tests`. The active error taxonomy goes through `Domain/Exception/DomainException` + marker interfaces. Either delete or annotate `@deprecated` so contributors don't extend it.
 

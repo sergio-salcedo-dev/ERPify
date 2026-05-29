@@ -1,8 +1,3 @@
----
-description: Clean Architecture principles and architectural goals
-alwaysApply: false
----
-
 # Architecture
 
 ## Clean Architecture Principles

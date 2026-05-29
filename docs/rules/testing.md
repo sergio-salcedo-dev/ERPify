@@ -1,8 +1,3 @@
----
-description: Testing strategies and best practices
-alwaysApply: false
----
-
 # Testing
 
 - Add tests whenever relevant and appropriate

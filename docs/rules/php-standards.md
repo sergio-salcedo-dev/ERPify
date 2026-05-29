@@ -1,10 +1,3 @@
----
-description: PHP coding standards and best practices
-globs:
-  - "**/*.php"
-alwaysApply: false
----
-
 # PHP Coding Standards
 
 - Follow PSR-12 Extended Coding Style Guide

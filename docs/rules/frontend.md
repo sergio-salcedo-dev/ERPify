@@ -1,16 +1,3 @@
----
-description: Frontend development guidelines for HTML, CSS, and JavaScript/TypeScript
-globs:
-  - "app/frontend/**"
-  - "**/*.html"
-  - "**/*.css"
-  - "**/*.js"
-  - "**/*.ts"
-  - "**/*.jsx"
-  - "**/*.tsx"
-alwaysApply: false
----
-
 # Frontend Guidelines
 
 ## HTML

@@ -62,7 +62,7 @@ Detailed exhaustive analysis of specific areas:
 - [CLAUDE.md](../CLAUDE.md) — Repo-wide Claude Code guidance
 - [api/CLAUDE.md](../api/CLAUDE.md) · [api/README.md](../api/README.md) · `api/docs/` — API-specific docs
 - [pwa/CLAUDE.md](../pwa/CLAUDE.md) · [pwa/AGENTS.md](../pwa/AGENTS.md) · [pwa/README.md](../pwa/README.md) · `pwa/docs/` — PWA-specific docs
-- `.cursor/rules/*.mdc` — Authoritative coding rules (architecture, clean-code, database, frontend, php-standards, security, solid-principles, testing)
+- `docs/rules/*.md` — Authoritative coding rules (architecture, clean-code, database, frontend, php-standards, security, solid-principles, testing)
 
 ## Getting started
 

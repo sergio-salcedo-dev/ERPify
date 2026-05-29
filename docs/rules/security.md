@@ -1,8 +1,3 @@
----
-description: Security best practices and pre-commit security checks
-alwaysApply: true
----
-
 # Security Best Practices
 
 ## General Security

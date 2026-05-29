@@ -1,8 +1,3 @@
----
-description: Clean Code principles and best practices
-alwaysApply: false
----
-
 # Clean Code Principles
 
 ## Core Principles

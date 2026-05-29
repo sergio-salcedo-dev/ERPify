@@ -1,6 +1,6 @@
 # Contribution Guide
 
-_For detailed rules, cross-reference [`project-context.md`](./project-context.md) and `.cursor/rules/*.mdc` — those are authoritative._
+_For detailed rules, cross-reference [`project-context.md`](./project-context.md) and `docs/rules/*.md` — those are authoritative._
 
 ## Before you start
 
@@ -47,7 +47,7 @@ Hooks run on every commit: trailing whitespace, EOF fixer, YAML/JSON/TOML valida
 
 ## Before committing — security checks
 
-Walk through `.cursor/rules/security.mdc`. In particular:
+Walk through `docs/rules/security.md`. In particular:
 
 - No hardcoded secrets / API keys / tokens. No `.env` files committed.
 - No debug code: `var_dump`, `print_r`, `dd()`, `console.log`, `console.debug`.

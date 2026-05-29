@@ -1,8 +1,3 @@
----
-description: Commit message conventions and pre-commit hooks configuration
-alwaysApply: false
----
-
 # Commit Messages
 
 Commit messages must follow the Conventional Commits specification.

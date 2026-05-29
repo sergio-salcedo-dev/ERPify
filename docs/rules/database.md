@@ -1,8 +1,3 @@
----
-description: Database best practices and PostgreSQL-specific guidelines
-alwaysApply: false
----
-
 # Database Best Practices
 
 ## General Practices
