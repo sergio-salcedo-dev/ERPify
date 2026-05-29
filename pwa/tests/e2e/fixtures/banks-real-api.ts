@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { request, type APIRequestContext } from "@playwright/test";
 
 /**
@@ -50,7 +51,7 @@ export async function createApiContext(): Promise<APIRequestContext> {
  * banks the dev DB happens to hold.
  */
 export function uniqueRunPrefix(label: string): string {
-  const random = Math.random().toString(36).slice(2, 8);
+  const random = randomBytes(4).toString("hex");
   // E2E-<label>-<epoch>-<rand> — readable + collision-resistant across
   // parallel CI shards.
   return `E2E-${label}-${Date.now().toString(36)}-${random}`;

@@ -6,3 +6,16 @@ node_modules
 coverage
 playwright-report
 test-results
+
+# Secrets / credentials — must never be baked into the image (defence in
+# depth for docker:S6470; the recursive `COPY . .` below relies on this).
+# Note: plain `.env` / `.env.production` are intentionally NOT excluded —
+# Next.js reads them at build time and they hold only public defaults.
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+.secrets/
+*.secret
