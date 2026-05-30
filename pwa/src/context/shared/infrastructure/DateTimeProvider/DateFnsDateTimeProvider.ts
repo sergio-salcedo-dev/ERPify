@@ -187,7 +187,7 @@ export class DateFnsDateTimeProvider implements DateTimeProvider {
     return endOfDay(date);
   }
 
-  public formatIsoToDisplay(iso: string): string {
+  public formatIsoToLocalDateTime(iso: string): string {
     const date = this.parseISO(iso);
     return date ? this.formatToDisplay(date) : iso;
   }

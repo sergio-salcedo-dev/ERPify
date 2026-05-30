@@ -22,7 +22,7 @@ export default function LandingPage() {
       const useCase = container.get<CheckHealth>("FrontOfficeCheckHealth");
       const result = await useCase.run();
       setHealthStatus(
-        `Status: ${result.status} | Service: ${result.service} | Date: ${dateTimeProvider.formatIsoToDisplay(result.datetime)}`,
+        `Status: ${result.status} | Service: ${result.service} | Date: ${dateTimeProvider.formatIsoToLocalDateTime(result.datetime)}`,
       );
     } catch (error) {
       const detail = error instanceof Error ? error.message : "unknown error";

@@ -83,7 +83,7 @@ export default function HealthPage() {
                 <span className="bg-success size-2 shrink-0 rounded-full" aria-hidden="true" />
                 <span>
                   Status: {result.status} | Service: {result.service} | Date:{" "}
-                  {dateTimeProvider.formatIsoToDisplay(result.datetime)}
+                  {dateTimeProvider.formatIsoToLocalDateTime(result.datetime)}
                 </span>
               </div>
             )}

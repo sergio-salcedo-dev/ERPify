@@ -109,14 +109,14 @@ export function BanksCards({ banks, onBankDeleted }: Readonly<BanksCardsProps>) 
                     className="banks-cards__created text-foreground"
                     data-testid={`banks-cards__created-${bank.id}`}
                   >
-                    {dateTimeProvider.formatIsoToDisplay(bank.createdAt)}
+                    {dateTimeProvider.formatIsoToLocalDateTime(bank.createdAt)}
                   </dd>
                   <dt className="text-muted-foreground">Updated</dt>
                   <dd
                     className="banks-cards__updated text-foreground"
                     data-testid={`banks-cards__updated-${bank.id}`}
                   >
-                    {dateTimeProvider.formatIsoToDisplay(bank.updatedAt)}
+                    {dateTimeProvider.formatIsoToLocalDateTime(bank.updatedAt)}
                   </dd>
                 </dl>
               </CardContent>

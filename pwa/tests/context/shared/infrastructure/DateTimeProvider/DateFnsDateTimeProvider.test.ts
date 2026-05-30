@@ -213,15 +213,15 @@ describe("DateFnsDateTimeProvider", () => {
     });
   });
 
-  describe("formatIsoToDisplay", () => {
+  describe("formatIsoToLocalDateTime", () => {
     it("formats a well-formed ISO timestamp via formatToDisplay (local timezone)", () => {
-      const out = provider.formatIsoToDisplay("2026-04-15T15:30:45Z");
+      const out = provider.formatIsoToLocalDateTime("2026-04-15T15:30:45Z");
       expect(out).toBe(localDisplay(new Date("2026-04-15T15:30:45Z")));
     });
 
     it("returns the raw value when the input cannot be parsed", () => {
-      expect(provider.formatIsoToDisplay("not-a-date")).toBe("not-a-date");
-      expect(provider.formatIsoToDisplay("")).toBe("");
+      expect(provider.formatIsoToLocalDateTime("not-a-date")).toBe("not-a-date");
+      expect(provider.formatIsoToLocalDateTime("")).toBe("");
     });
   });
 

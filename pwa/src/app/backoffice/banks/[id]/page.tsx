@@ -200,12 +200,12 @@ export default function BankDetailPage() {
             />
             <Field
               label="Created"
-              value={dateTimeProvider.formatIsoToDisplay(bank.createdAt)}
+              value={dateTimeProvider.formatIsoToLocalDateTime(bank.createdAt)}
               testId="banks-detail__field-created"
             />
             <Field
               label="Updated"
-              value={dateTimeProvider.formatIsoToDisplay(bank.updatedAt)}
+              value={dateTimeProvider.formatIsoToLocalDateTime(bank.updatedAt)}
               testId="banks-detail__field-updated"
             />
             <Field

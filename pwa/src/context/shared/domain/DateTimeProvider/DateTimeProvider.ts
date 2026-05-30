@@ -81,7 +81,7 @@ export interface DateTimeProvider {
    * unparseable, so UI tables never display "Invalid Date" for an unexpected
    * payload.
    */
-  formatIsoToDisplay(iso: string): string;
+  formatIsoToLocalDateTime(iso: string): string;
 
   /** Lower-bound timestamp for a `dd/mm/yyyy` filter input (00:00:00.000). */
   parseDdMmYyyyToStartTimestamp(value: string): number | null;
