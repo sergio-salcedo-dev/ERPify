@@ -22,6 +22,9 @@ you change anything here.
       required key). The deploy script runs this before touching Docker.
 - [ ] `APP_SECRET`, `POSTGRES_PASSWORD`, and `CADDY_MERCURE_JWT_SECRET` were
       freshly generated (`openssl rand …`), not reused from dev.
+- [ ] `POSTGRES_PASSWORD` is URL-safe — generate with `openssl rand -hex`, not
+      `-base64`. It is interpolated raw into `DATABASE_URL`, so `/` `+` `=` from
+      base64 corrupt the DSN (`MalformedDsnException`, php boot fails).
 
 ## 2. No weak fallbacks
 
