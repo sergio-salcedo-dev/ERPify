@@ -32,13 +32,15 @@ log_success() { echo -e "${GREEN}✔ ${*}${NC}"; }
 log_warning() { echo -e "${YELLOW}⚠ ${*}${NC}"; }
 log_error()   { echo -e "${RED}✖ ${*}${NC}" >&2; }
 
-run() { # run "description" "command"
-    log_info "$1"
+run() {
+    local desc="$1"
+    local cmd="$2"
+    log_info "$desc"
     if [[ $DRY_RUN -eq 1 ]]; then
-        echo -e "  ${YELLOW}[DRY-RUN]${NC} $2"
+        echo -e "  ${YELLOW}[DRY-RUN]${NC} $cmd"
         return 0
     fi
-    eval "$2"
+    eval "$cmd"
 }
 
 while [[ $# -gt 0 ]]; do
