@@ -173,7 +173,7 @@ abstract class AbstractRepository extends ServiceEntityRepository
 
     private function generateUniqueParameter(QueryBuilder $queryBuilder, mixed $value): string
     {
-        $paramName = 'p' . \md5($queryBuilder->getDQL()) . \count($queryBuilder->getParameters());
+        $paramName = $this->generateUniqueParameterName($queryBuilder);
 
         $queryBuilder->setParameter(
             key: $this->generateUniqueParameterName($queryBuilder),
@@ -194,7 +194,11 @@ abstract class AbstractRepository extends ServiceEntityRepository
          * Keep consistency based on custom query builder state (change for every request), and
          * counting generated parameters is also important to handle the case where we ask to generate 2
          * consecutive ones without adding them yet to the DQL.
+         *
+         * The hash is a non-cryptographic digest used purely to derive a stable, collision-resistant
+         * parameter name from the DQL — it never guards a secret, so a fast hash (xxh128) is the
+         * correct, intent-revealing choice here (not a security context).
          */
-        return 'p' . \md5($queryBuilder->getDQL()) . \count($queryBuilder->getParameters());
+        return 'p' . \hash('xxh128', $queryBuilder->getDQL()) . \count($queryBuilder->getParameters());
     }
 }
