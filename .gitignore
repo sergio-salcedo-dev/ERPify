@@ -16,6 +16,12 @@ Thumbs.db
 .env.local.php
 .env.*.local
 
+# Local prod TLS: Caddy's internal-CA root, exported per-box by the deploy
+# script (scripts/deploy/deploy-local.sh) so clients can trust `tls internal`.
+# Not secret (public cert, no private key) but machine-specific and regenerated
+# on demand — committing one box's root is stale/meaningless elsewhere.
+erpify-local-root-ca.crt
+
 # API — PHP / Composer / Symfony
 api/vendor/
 api/var/
