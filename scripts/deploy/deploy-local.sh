@@ -136,7 +136,7 @@ if [[ $TRUST -eq 1 ]]; then
             echo -e "  ${YELLOW}[DRY-RUN]${NC} certutil -d sql:${NSS_DB} -A -t 'C,,' -n '${NSS_NICK}' -i ./${CA_OUT}"
         elif command -v certutil >/dev/null 2>&1; then
             mkdir -p "$NSS_DB"
-            [ -f "$NSS_DB/cert9.db" ] || certutil -d sql:"$NSS_DB" -N --empty-password
+            [[ -f "$NSS_DB/cert9.db" ]] || certutil -d sql:"$NSS_DB" -N --empty-password
             certutil -d sql:"$NSS_DB" -D -n "$NSS_NICK" 2>/dev/null || true   # drop stale entry first
             certutil -d sql:"$NSS_DB" -A -t "C,," -n "$NSS_NICK" -i "./${CA_OUT}"
             NSS_TRUSTED=1
