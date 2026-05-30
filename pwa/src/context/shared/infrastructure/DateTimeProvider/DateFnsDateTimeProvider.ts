@@ -24,7 +24,6 @@ import {
   parseISO,
   startOfDay,
 } from "date-fns";
-import { es } from "date-fns/locale";
 import type {
   AddUnit,
   DateTimeProvider,
@@ -34,15 +33,42 @@ import type {
 /**
  * `date-fns`-backed adapter for {@link DateTimeProvider}.
  *
- * - Display formatting uses the `es-ES` locale and 24-hour time.
+ * - Display formatting uses the `es-ES` locale and 24-hour time, rendered in
+ *   the viewer's own local timezone (a UTC instant from the API is shown as
+ *   Madrid time for a user in Spain, London time for a user in the UK, …).
  * - Working-day policy is Mon-Fri. Calendar holidays are NOT applied here;
  *   subclass or wrap this provider if a calendar-aware policy is required.
  * - All methods that return a `Date` return a fresh instance; inputs are
  *   never mutated.
  */
 export class DateFnsDateTimeProvider implements DateTimeProvider {
-  private static readonly DISPLAY_DATE_TIME_FORMAT = "dd/MM/yyyy, HH:mm:ss";
-  private static readonly DISPLAY_DATE_FORMAT = "dd/MM/yyyy";
+  private static readonly DISPLAY_LOCALE = "es-ES";
+
+  // No `timeZone` option: `Intl.DateTimeFormat` then renders in the runtime's
+  // local zone — i.e. each end user sees timestamps in their own timezone,
+  // converted from the UTC instant the backend serves.
+  private static readonly DISPLAY_DATE_TIME_FORMATTER = new Intl.DateTimeFormat(
+    DateFnsDateTimeProvider.DISPLAY_LOCALE,
+    {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    },
+  );
+
+  private static readonly DISPLAY_DATE_FORMATTER = new Intl.DateTimeFormat(
+    DateFnsDateTimeProvider.DISPLAY_LOCALE,
+    {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    },
+  );
+
   private static readonly DD_MM_YYYY_PATTERN = /^(\d{2})\/(\d{2})\/(\d{4})$/;
   private static readonly ISO_YYYY_MM_DD_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -55,11 +81,29 @@ export class DateFnsDateTimeProvider implements DateTimeProvider {
   }
 
   public formatToDisplay(date: Date): string {
-    return dfFormat(date, DateFnsDateTimeProvider.DISPLAY_DATE_TIME_FORMAT, { locale: es });
+    const p = DateFnsDateTimeProvider.toParts(
+      DateFnsDateTimeProvider.DISPLAY_DATE_TIME_FORMATTER,
+      date,
+    );
+    return `${p.day}/${p.month}/${p.year}, ${p.hour}:${p.minute}:${p.second}`;
   }
 
   public formatToDate(date: Date): string {
-    return dfFormat(date, DateFnsDateTimeProvider.DISPLAY_DATE_FORMAT, { locale: es });
+    const p = DateFnsDateTimeProvider.toParts(DateFnsDateTimeProvider.DISPLAY_DATE_FORMATTER, date);
+    return `${p.day}/${p.month}/${p.year}`;
+  }
+
+  /**
+   * Reduce an `Intl.DateTimeFormat` part list to a `type → value` map so the
+   * output string can be assembled deterministically, independent of the
+   * locale's literal separators.
+   */
+  private static toParts(formatter: Intl.DateTimeFormat, date: Date): Record<string, string> {
+    const parts: Record<string, string> = {};
+    for (const part of formatter.formatToParts(date)) {
+      parts[part.type] = part.value;
+    }
+    return parts;
   }
 
   public parseISO(value: string): Date | null {

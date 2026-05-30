@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
+import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
 import { CheckHealth } from "@/context/frontoffice/health/application/CheckHealth";
 import { motion } from "motion/react";
 import { Activity, LayoutDashboard } from "lucide-react";
@@ -21,7 +22,7 @@ export default function LandingPage() {
       const useCase = container.get<CheckHealth>("FrontOfficeCheckHealth");
       const result = await useCase.run();
       setHealthStatus(
-        `Status: ${result.status} | Service: ${result.service} | Date: ${new Date(result.datetime).toLocaleString()}`,
+        `Status: ${result.status} | Service: ${result.service} | Date: ${dateTimeProvider.formatIsoToDisplay(result.datetime)}`,
       );
     } catch (error) {
       const detail = error instanceof Error ? error.message : "unknown error";

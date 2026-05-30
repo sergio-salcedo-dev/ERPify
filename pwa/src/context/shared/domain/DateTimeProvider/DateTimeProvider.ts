@@ -21,7 +21,9 @@ export interface DateTimeProvider {
 
   /**
    * Format a date for end-user display as `dd/mm/yyyy, HH:mm:ss` in 24-hour
-   * time using the `es-ES` locale.
+   * time using the `es-ES` locale, rendered in the viewer's own local
+   * timezone. The instant is unchanged — only its wall-clock presentation is
+   * localized, so a UTC timestamp from the API shows as the user's local time.
    */
   formatToDisplay(date: Date): string;
 
@@ -74,9 +76,10 @@ export interface DateTimeProvider {
   // —————————————————————————————————————————————————————————————————————————
 
   /**
-   * Render an ISO 8601 timestamp as `dd/mm/yyyy, HH:mm:ss` in 24-hour
-   * time. Returns the raw input back when it is unparseable, so UI tables
-   * never display "Invalid Date" for an unexpected payload.
+   * Render an ISO 8601 timestamp as `dd/mm/yyyy, HH:mm:ss` in 24-hour time,
+   * in the viewer's own local timezone. Returns the raw input back when it is
+   * unparseable, so UI tables never display "Invalid Date" for an unexpected
+   * payload.
    */
   formatIsoToDisplay(iso: string): string;
 
