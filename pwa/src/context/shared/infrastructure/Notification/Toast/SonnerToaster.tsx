@@ -8,7 +8,7 @@ import { Toaster, type ToasterProps } from "sonner";
  * Sonner implementation lives together. Defaults can be overridden via props.
  *
  * - `position="bottom-right"` — app-wide placement.
- * - `richColors` — tonal styling per level, aligned with the StatusBadge palette.
+ * - `richColors` — Sonner's built-in tonal styling per level (success/error/info/warning).
  * - `closeButton` — Sonner renders it with an accessible name ("Close toast").
  */
 export function SonnerToaster(props: Readonly<ToasterProps>) {
