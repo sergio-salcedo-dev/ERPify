@@ -71,17 +71,33 @@ publicly-trusted cert, so clients import nothing.
 
 Then import `erpify-local-root-ca.crt`:
 
-- **Linux (system trust):**
+- **Linux (system trust — CLI: `curl`, `openssl`, Node, etc.):**
 
   ```bash
   sudo cp erpify-local-root-ca.crt /usr/local/share/ca-certificates/erpify-local-root-ca.crt
   sudo update-ca-certificates
   ```
 
+- **Linux + Chrome / Chromium / Edge / Electron:** these do **not** read the
+  system bundle above — on Linux they use a per-user **NSS** store
+  (`~/.pki/nssdb`). Add the CA there too, or the browser still shows
+  `NET::ERR_CERT_AUTHORITY_INVALID`:
+
+  ```bash
+  sudo apt-get install -y libnss3-tools          # provides certutil
+  mkdir -p "$HOME/.pki/nssdb"
+  # initialise the DB once if it doesn't exist yet:
+  [ -f "$HOME/.pki/nssdb/cert9.db" ] || certutil -d sql:"$HOME/.pki/nssdb" -N --empty-password
+  certutil -d sql:"$HOME/.pki/nssdb" -A -t "C,," -n "erpify.local Local CA" \
+      -i erpify-local-root-ca.crt
+  certutil -d sql:"$HOME/.pki/nssdb" -L        # verify it is listed (trust "C,,")
+  ```
+
 - **macOS:** `sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain erpify-local-root-ca.crt`
+  (Chrome/Safari use the system keychain; Firefox still needs its own import below.)
 - **Windows (Admin PowerShell):** `Import-Certificate -FilePath erpify-local-root-ca.crt -CertStoreLocation Cert:\LocalMachine\Root`
-- **Firefox** keeps its own store — import under *Settings → Privacy & Security →
-  Certificates → View Certificates → Authorities → Import*.
+- **Firefox** (every OS) keeps its own store — import under *Settings → Privacy &
+  Security → Certificates → View Certificates → Authorities → Import*.
 
 Restart the browser, then open `https://erpify.local`.
 
@@ -127,6 +143,7 @@ and host setup differ. On a VPS with a real domain:
 | `prod.env.check` fails                           | Copy `.env.prod.example` → `.env.prod.local`, replace every `CHANGE_ME`.                                                                                           |
 | Compose aborts naming a `VAR`                    | A required secret is unset in `.env.prod.local`.                                                                                                                   |
 | Browser warns on the cert                        | Import the internal CA root (step 4); restart the browser.                                                                                                         |
+| Chrome/Chromium still says `ERR_CERT_AUTHORITY_INVALID` after `update-ca-certificates` | On Linux they use the NSS store, not the system bundle. Add the CA to `~/.pki/nssdb` with `certutil` (step 4, "Chrome / Chromium / Edge"). |
 | `erpify.local` won't resolve                     | Add the `/etc/hosts` line (step 2).                                                                                                                                |
 | php boot-loops, logs `Malformed parameter "url"` | `POSTGRES_PASSWORD` has a URL-unsafe char (`/`,`+`,`=`). Regenerate with `openssl rand -hex 24`, then recreate the db volume so it re-inits with the new password. |
 | Health stays non-200                             | `ENV=prod make docker.logs` — check `php` / `messenger_worker`.                                                                                                    |
