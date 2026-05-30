@@ -24,6 +24,13 @@ services:
       MERCURE_JWT_SECRET: ${CADDY_MERCURE_JWT_SECRET:?CADDY_MERCURE_JWT_SECRET is required in prod}
       MERCURE_PUBLISHER_JWT_KEY: ${CADDY_MERCURE_JWT_SECRET:?CADDY_MERCURE_JWT_SECRET is required in prod}
       MERCURE_SUBSCRIBER_JWT_KEY: ${CADDY_MERCURE_JWT_SECRET:?CADDY_MERCURE_JWT_SECRET is required in prod}
+      # Non-public host served over Caddy's own CA. `tls internal` mints a cert
+      # without ACME; clear CADDY_SERVER_EXTRA_DIRECTIVES on a public VPS to let
+      # Caddy switch to automatic ACME with the same overlay.
+      SERVER_NAME: ${SERVER_NAME:-erpify.local}, php:80
+      CADDY_SERVER_EXTRA_DIRECTIVES: ${CADDY_SERVER_EXTRA_DIRECTIVES-tls internal}
+      DEFAULT_URI: ${DEFAULT_URI:-https://${SERVER_NAME:-erpify.local}}
+      MERCURE_PUBLIC_URL: ${MERCURE_PUBLIC_URL:-https://${SERVER_NAME:-erpify.local}/.well-known/mercure}
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -46,7 +53,7 @@ services:
       context: ./pwa
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_SYMFONY_API_BASE_URL: ${NEXT_PUBLIC_SYMFONY_API_BASE_URL:-https://localhost}
+        NEXT_PUBLIC_SYMFONY_API_BASE_URL: ${NEXT_PUBLIC_SYMFONY_API_BASE_URL:-https://erpify.local}
     security_opt:
       - no-new-privileges:true
     cap_drop:
