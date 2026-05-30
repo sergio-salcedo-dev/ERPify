@@ -38,7 +38,41 @@ Defined in `compose.prod.yaml` on top of the base stack:
 - `CADDY_MERCURE_JWT_SECRET`
 - `POSTGRES_PASSWORD`
 
-Plus SMTP credentials and any `NEXT_PUBLIC_SYMFONY_API_BASE_URL` override needed for the public origin.
+Plus SMTP credentials and the `SERVER_NAME` / `NEXT_PUBLIC_SYMFONY_API_BASE_URL`
+origin for the deployment host.
+
+Secrets are delivered through a **gitignored root `.env.prod.local`** (copy from
+[`../.env.prod.example`](../.env.prod.example)), loaded via `--env-file` for
+`ENV=prod|staging` (wired in `make/config.mk`). The prod overlay declares each
+required secret as `${VAR:?msg}`, so a missing value aborts `docker compose` by
+name — never a weak fallback. Validate before deploying:
+
+```bash
+make prod.env.check
+```
+
+## Prod hardening (compose.prod.yaml)
+
+- Every service runs `no-new-privileges`, drops all Linux caps and re-adds only
+  the minimum, and carries parametrizable CPU/memory ceilings.
+- Postgres is on an `internal` `backend` network with **no published host port**.
+- `pwa` runs with a read-only root filesystem.
+- TLS: a non-public host uses `CADDY_SERVER_EXTRA_DIRECTIVES=tls internal`
+  (Caddy's own CA); a public domain clears it for automatic ACME — same overlay.
+
+See [`../PRODUCTION_SECURITY_CHECKLIST.md`](../PRODUCTION_SECURITY_CHECKLIST.md).
+
+## Reproducible local prod deploy (`erpify.local`)
+
+To stand the prod profile up on a LAN box or laptop at `https://erpify.local`:
+
+```bash
+cp .env.prod.example .env.prod.local   # fill in the CHANGE_ME secrets
+make deploy.local                      # preflight → up → migrate → smoke
+```
+
+Step-by-step (incl. internal-CA trust and `/etc/hosts`) and VPS promotion:
+[`erpify-local-test-deployment.md`](erpify-local-test-deployment.md).
 
 ## Deploy process (operator view)
 

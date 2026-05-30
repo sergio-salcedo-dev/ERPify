@@ -20,7 +20,14 @@ make docker.ps           # Compose ps.
 make php.bash            # Shell into the php container (also: make php.sh, make php.exec cmd='…').
 make docker.down.clean-volumes  # Stop stack and REMOVE volumes (destructive).
 make docker.prune        # Prune ALL Docker images/volumes/containers system-wide (destructive).
+make prod.env.check      # Validate .env.prod.local has all required prod secrets (no placeholders).
+make deploy.local        # Stand up the PROD profile at https://erpify.local (preflight → up → migrate → smoke).
 ```
+
+Prod/staging load secrets from a gitignored root `.env.prod.local` (copy from
+[`.env.prod.example`](../.env.prod.example)) via `--env-file`. Full runbook:
+[`erpify-local-test-deployment.md`](erpify-local-test-deployment.md); security
+gate: [`../PRODUCTION_SECURITY_CHECKLIST.md`](../PRODUCTION_SECURITY_CHECKLIST.md).
 
 ### API / PHP
 
