@@ -3,11 +3,6 @@ import { NotificationLevel } from "@/context/shared/domain/Notification/Notifica
 
 describe("NotificationLevel", () => {
   it("enumerates the four supported levels", () => {
-    expect(Object.values(NotificationLevel)).toEqual([
-      "success",
-      "error",
-      "info",
-      "warning",
-    ]);
+    expect(Object.values(NotificationLevel)).toEqual(["success", "error", "info", "warning"]);
   });
 });

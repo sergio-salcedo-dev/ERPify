@@ -10,5 +10,4 @@ export const NotificationLevel = {
   Warning: "warning",
 } as const;
 
-export type NotificationLevel =
-  (typeof NotificationLevel)[keyof typeof NotificationLevel];
+export type NotificationLevel = (typeof NotificationLevel)[keyof typeof NotificationLevel];
