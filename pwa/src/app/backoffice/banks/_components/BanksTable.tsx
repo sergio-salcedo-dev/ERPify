@@ -57,7 +57,6 @@ function BanksActionsCell({ row, onBankDeleted }: Readonly<BanksActionsCellProps
       <DeleteBankButton
         id={row.id}
         name={row.name}
-        stopPropagation
         triggerTestId={`banks-table__delete-${row.id}`}
         onDeleted={onBankDeleted}
         trigger={

@@ -29,8 +29,6 @@ interface DeleteBankButtonProps {
   /** Custom trigger; defaults to a destructive button with a Trash icon. */
   trigger?: ReactElement;
   triggerTestId?: string;
-  /** Stop click events from reaching parent rows (for inline use inside a clickable row). */
-  stopPropagation?: boolean;
 }
 
 export function DeleteBankButton({
@@ -39,7 +37,6 @@ export function DeleteBankButton({
   onDeleted,
   trigger,
   triggerTestId = "banks-detail__delete-button",
-  stopPropagation = false,
 }: Readonly<DeleteBankButtonProps>) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -86,7 +83,6 @@ export function DeleteBankButton({
       data-testid={triggerTestId}
       aria-label={`Delete bank ${name}`}
       title={`Delete bank ${name}`}
-      onClick={stopPropagation ? (event) => event.stopPropagation() : undefined}
     >
       <Trash2 className="size-3.5" aria-hidden="true" />
       Delete

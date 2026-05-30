@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { createPortal } from "react-dom";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { DataTable, type DataTableColumn } from "@/components/erpify/DataTable";
 
@@ -150,6 +151,41 @@ describe("DataTable", () => {
       />,
     );
     fireEvent.click(screen.getByTestId("edit-1"));
+    expect(onRowActivate).not.toHaveBeenCalled();
+  });
+
+  it("does not activate the row when a click lands on an in-row control rendered through a portal", () => {
+    const onRowActivate = vi.fn();
+    const withPortalAction: DataTableColumn<Bank>[] = [
+      ...columns,
+      {
+        id: "actions",
+        header: "Actions",
+        // Dialogs / dropdown menus / popovers render their content into
+        // document.body via a React portal. The portal's DOM node is NOT a
+        // descendant of the <tr>, but React synthetic events still bubble
+        // through the React tree to the row's onClick — so a click on a
+        // portaled in-row control (e.g. the Cancel / Confirm button of a
+        // delete dialog) must NOT be mistaken for a row activation.
+        cell: (r) =>
+          createPortal(
+            <button type="button" data-testid={`portal-edit-${r.id}`}>
+              Edit
+            </button>,
+            document.body,
+          ),
+      },
+    ];
+    render(
+      <DataTable
+        columns={withPortalAction}
+        data={banks}
+        rowKey={(r) => r.id}
+        caption="Banks"
+        onRowActivate={onRowActivate}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("portal-edit-1"));
     expect(onRowActivate).not.toHaveBeenCalled();
   });
 

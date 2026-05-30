@@ -116,7 +116,15 @@ const INTERACTIVE_DESCENDANT_SELECTOR =
 function isFromInteractiveControl(target: EventTarget | null, row: Element): boolean {
   if (!(target instanceof Element) || target === row) return false;
   const control = target.closest(INTERACTIVE_DESCENDANT_SELECTOR);
-  return control != null && row.contains(control);
+  // A control reached the row's handler because the event bubbled to it —
+  // either through the DOM (a control nested in the row) or through the React
+  // tree (a control inside a dialog / menu / popover that the row renders into
+  // a portal on document.body). Both are "in-row" controls and must suppress
+  // row activation. Testing `!control.contains(row)` covers both cases while
+  // still activating when the only interactive ancestor wraps the whole table
+  // (e.g. a DataTable nested inside a link), where `row.contains(control)`
+  // would wrongly miss the portal case.
+  return control != null && !control.contains(row);
 }
 
 interface DataTableHeadCellProps<T> {

@@ -7,6 +7,7 @@ import { container } from "@/context/shared/infrastructure/DependencyInjection/C
 import { SearchBanks } from "@/context/backoffice/bank/application/SearchBanks";
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
+import { toastNotifier } from "@/context/shared/infrastructure/Notification/Toast";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { AsyncBoundary } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
@@ -119,6 +120,11 @@ export default function BanksListPage() {
   };
 
   const handleBankDeleted = (id: string): void => {
+    // Mirror the detail view's feedback: confirm the deletion with a toast.
+    // The list stays put (no redirect), so without this the row simply
+    // vanished with no acknowledgement.
+    const deleted = banks.find((bank) => bank.id === id);
+    toastNotifier.success("Bank deleted", deleted ? { description: deleted.name } : undefined);
     setBanks((prev) => prev.filter((bank) => bank.id !== id));
   };
 

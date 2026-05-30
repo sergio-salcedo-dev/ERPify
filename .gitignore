@@ -58,6 +58,10 @@ pwa/playwright-report/
 pwa/blob-report/
 pwa/playwright/.cache/
 
+# playwright-cli skill run artifacts (console logs + page snapshots)
+.playwright-cli/
+.playwright/
+
 # Logs & temp
 *.log
 npm-debug.log*
