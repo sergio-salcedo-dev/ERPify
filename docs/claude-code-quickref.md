@@ -21,7 +21,8 @@ make php.bash            # Shell into the php container (also: make php.sh, make
 make docker.down.clean-volumes  # Stop stack and REMOVE volumes (destructive).
 make docker.prune        # Prune ALL Docker images/volumes/containers system-wide (destructive).
 make prod.env.check      # Validate .env.prod.local has all required prod secrets (no placeholders).
-make deploy.local        # Stand up the PROD profile at https://erpify.local (preflight → up → migrate → smoke).
+make deploy.local        # Stand up the PROD profile at https://erpify.local (preflight → up → migrate → smoke → CA export + trust guidance).
+sudo make deploy.local.trust  # Privileged client-trust steps (hosts + system CA + Chromium NSS); targets $SUDO_USER. Don't `sudo make deploy.local`.
 ```
 
 Prod/staging load secrets from a gitignored root `.env.prod.local` (copy from

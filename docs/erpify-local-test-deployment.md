@@ -63,6 +63,20 @@ Re-running it is safe (idempotent). Flags: `--dry-run` (print steps, change
 nothing), `--skip-migrations`, `--no-trust` (skip the CA export / NSS / guidance
 phase).
 
+For the root-requiring parts (the `/etc/hosts` entry, the system-trust import,
+and the Chromium/NSS import) you can run them all at once with:
+
+```bash
+sudo make deploy.local.trust
+```
+
+It targets the invoking user (`$SUDO_USER`), not root, so your browser's NSS
+store gets the CA. **Do not run `sudo make deploy.local`** — that builds, boots,
+and migrates the whole stack as root, leaving root-owned artifacts (the exported
+CA, build cache) and trusting the CA in root's profile (`HOME=/root`) instead of
+yours, so your browser still wouldn't trust it. Keep the deploy unprivileged and
+isolate the few root steps in `deploy.local.trust`. Firefox is GUI-only (step 4).
+
 ## 4. Trust the internal CA
 
 With `tls internal`, Caddy mints the site cert from its own CA. Export the root
@@ -118,6 +132,26 @@ Then import `erpify-local-root-ca.crt`:
   stack was recreated with a new CA), delete it first, then re-import.
 
 Restart the browser, then open `https://erpify.local`.
+
+### What this changes outside the repo (on your OS)
+
+Trusting the CA writes files **outside the ERPify checkout**. `sudo make
+deploy.local.trust` does the Linux ones for you; here is the full footprint so
+nothing is a surprise (preview anytime with
+`bash scripts/deploy/trust-local.sh --dry-run`):
+
+| File / store (outside the repo)                              | Written by                          | Undo |
+|--------------------------------------------------------------|-------------------------------------|------|
+| `/etc/hosts` (append `127.0.0.1 erpify.local`)               | hosts step / `deploy.local.trust`   | delete the line |
+| `/usr/local/share/ca-certificates/erpify-local-root-ca.crt`  | `update-ca-certificates` step       | `sudo rm` it, then `sudo update-ca-certificates --fresh` |
+| `/etc/ssl/certs/ca-certificates.crt` (regenerated)           | `update-ca-certificates`            | regenerated on the line above |
+| `~/.pki/nssdb/{cert9.db,key4.db,pkcs11.txt}` (per-user)      | `certutil` (Chrome/Chromium/Edge)   | `certutil -d sql:~/.pki/nssdb -D -n "erpify.local Local CA"` |
+| system package `libnss3-tools`                               | `apt-get install` (only if missing) | `sudo apt-get remove libnss3-tools` |
+| Firefox profile `cert9.db`                                   | manual GUI import                   | remove the CA under *Authorities* in the cert manager |
+| **macOS:** `/Library/Keychains/System.keychain`             | `security add-trusted-cert`         | `sudo security delete-certificate -c "erpify.local"` |
+| **Windows:** `Cert:\LocalMachine\Root`                       | `Import-Certificate`                | remove it via `certmgr.msc` → Trusted Root |
+
+Inside the repo, only `./erpify-local-root-ca.crt` is written (gitignored).
 
 ## 5. Verify
 

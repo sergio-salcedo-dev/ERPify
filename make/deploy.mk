@@ -35,7 +35,10 @@ prod.env.check: ## Validate .env.prod.local holds every required prod secret (fa
 	fi; \
 	echo "✓ $(PROD_ENV_FILE) is complete — all required keys set."
 
-deploy.local: ## Stand up the prod profile on this host at https://erpify.local (preflight → up → migrate → smoke)
+deploy.local: ## Stand up the prod profile on this host at https://erpify.local (preflight → up → migrate → smoke → CA export + trust guidance)
 	@bash $(PROJECT_ROOT)/scripts/deploy/deploy-local.sh
 
-.PHONY: prod.env.check deploy.local
+deploy.local.trust: ## Run the PRIVILEGED client-trust steps (hosts + system CA + Chromium NSS). Run with sudo: `sudo make deploy.local.trust`
+	@bash $(PROJECT_ROOT)/scripts/deploy/trust-local.sh
+
+.PHONY: prod.env.check deploy.local deploy.local.trust

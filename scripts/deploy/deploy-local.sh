@@ -161,38 +161,54 @@ echo
 log_success "Deploy complete — ${SERVER_NAME} serves the PWA + /api/* over Caddy internal TLS."
 echo
 
-steps=""
-n=1
-add_step() { steps+="  ${n}) ${1}\n"; n=$((n + 1)); }
+# What still needs a privileged (root) action?
+NEED_HOSTS=0; [[ $HOSTS_OK   -eq 0 ]] && NEED_HOSTS=1
+NEED_SYS=0;   [[ $SYS_TRUSTED -eq 0 ]] && NEED_SYS=1
+NEED_NSS=0;   [[ "$OS" == "Linux" && $NSS_TRUSTED -eq 0 ]] && NEED_NSS=1
+PRIV_PENDING=$(( NEED_HOSTS + NEED_SYS + NEED_NSS ))
 
-if [[ $HOSTS_OK -eq 0 ]]; then
-    add_step "Make ${SERVER_NAME} resolve (sudo):\n       echo '${HOSTS_LINE}' | sudo tee -a /etc/hosts"
-fi
-
-if [[ $SYS_TRUSTED -eq 0 ]]; then
-    if [[ "$OS" == "Darwin" ]]; then
-        add_step "Trust the CA system-wide (sudo, covers Chrome/Safari + CLI):\n       sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ./${CA_OUT}"
-    else
-        add_step "Trust the CA for CLI tools — curl/openssl/Node (sudo):\n       sudo cp ./${CA_OUT} /usr/local/share/ca-certificates/${CA_OUT} && sudo update-ca-certificates"
-    fi
-fi
-
-if [[ "$OS" == "Linux" && $NSS_TRUSTED -eq 0 ]]; then
-    add_step "Trust the CA for Chrome/Chromium/Edge — per-user NSS, no sudo:\n       sudo apt-get install -y libnss3-tools   # once, provides certutil\n       certutil -d sql:\$HOME/.pki/nssdb -A -t 'C,,' -n '${NSS_NICK}' -i ./${CA_OUT}"
-fi
-
-# Firefox always keeps its own store (GUI import).
-add_step "Firefox only — import ./${CA_OUT}: about:preferences#privacy →\n       View Certificates → Authorities → Import → check\n       'Trust this CA to identify websites'."
-
-if [[ -n "$steps" ]]; then
-    echo "To reach https://${SERVER_NAME} with a TRUSTED certificate, finish these (copy/paste):"
+if [[ $PRIV_PENDING -gt 0 || $DRY_RUN -eq 1 ]]; then
+    echo "To reach https://${SERVER_NAME} with a TRUSTED certificate:"
     echo
-    echo -e "$steps"
-fi
-
-if [[ $HOSTS_OK -eq 1 && $SYS_TRUSTED -eq 1 && ( "$OS" != "Linux" || $NSS_TRUSTED -eq 1 ) ]]; then
-    log_success "Hosts + CLI + Chromium trust already in place. Just open:  https://${SERVER_NAME}"
+    echo -e "  ${GREEN}▶ Easiest — do every root-requiring trust step in ONE command:${NC}"
+    echo -e "        ${YELLOW}sudo make deploy.local.trust${NC}"
+    echo "      (adds the /etc/hosts entry, installs the CA into the system trust"
+    echo "       store, and adds it to YOUR Chromium/NSS store via \$SUDO_USER)"
+    echo "      It writes files OUTSIDE this repo (/etc/hosts, the OS CA store,"
+    echo "      ~/.pki/nssdb). Preview them first, no sudo:"
+    echo "        bash scripts/deploy/trust-local.sh --dry-run"
+    echo
+    echo "  …or run them yourself — each tagged whether it needs sudo:"
+    echo
+    n=1
+    if [[ $NEED_HOSTS -eq 1 || $DRY_RUN -eq 1 ]]; then
+        echo -e "    ${n}) ${YELLOW}[sudo]${NC} make ${SERVER_NAME} resolve:"
+        echo    "         echo '${HOSTS_LINE}' | sudo tee -a /etc/hosts"
+        n=$((n + 1))
+    fi
+    if [[ $NEED_SYS -eq 1 || $DRY_RUN -eq 1 ]]; then
+        if [[ "$OS" == "Darwin" ]]; then
+            echo -e "    ${n}) ${YELLOW}[sudo]${NC} trust the CA system-wide (Chrome/Safari + CLI):"
+            echo    "         sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ./${CA_OUT}"
+        else
+            echo -e "    ${n}) ${YELLOW}[sudo]${NC} trust the CA for CLI tools (curl/openssl/Node):"
+            echo    "         sudo cp ./${CA_OUT} /usr/local/share/ca-certificates/${CA_OUT} && sudo update-ca-certificates"
+        fi
+        n=$((n + 1))
+    fi
+    if [[ $NEED_NSS -eq 1 || $DRY_RUN -eq 1 ]]; then
+        echo -e "    ${n}) ${YELLOW}[sudo once]${NC} Chrome/Chromium/Edge (per-user NSS):"
+        echo    "         sudo apt-get install -y libnss3-tools   # once, provides certutil"
+        echo    "         certutil -d sql:\$HOME/.pki/nssdb -A -t 'C,,' -n '${NSS_NICK}' -i ./${CA_OUT}"
+        n=$((n + 1))
+    fi
+    echo -e "    ${n}) ${GREEN}[no sudo — GUI]${NC} Firefox: import ./${CA_OUT} via about:preferences#privacy"
+    echo    "         → View Certificates → Authorities → Import → 'Trust this CA to identify websites'."
+    echo
+    echo "  How to continue: restart the browser, then open  https://${SERVER_NAME}"
+    echo "  (re-run 'make deploy.local' to re-verify trust — already-done steps drop off.)"
 else
-    echo "After the above, restart the browser and open:  https://${SERVER_NAME}"
+    log_success "Hosts + CLI + Chromium trust already in place. Just open:  https://${SERVER_NAME}"
+    echo "  (Firefox keeps its own store — import ./${CA_OUT} via its GUI if you use Firefox.)"
 fi
 echo "Full per-OS trust guide: docs/erpify-local-test-deployment.md (step 4)."
