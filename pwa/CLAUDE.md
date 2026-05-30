@@ -161,6 +161,18 @@ locally:
     `error.message` behind
     `process.env.NODE_ENV === NodeEnv.DEVELOPMENT` so production never
     leaks stack traces.
+- **Toast notifications** — `toastNotifier` from
+  `@/context/shared/infrastructure/Notification/Toast`, typed as the
+  `ToastNotifier` port (never as the concrete `SonnerToastNotifier`). Call
+  `toastNotifier.success("…")` / `.error` / `.info` / `.warning` from any
+  client component for transient feedback; pass `{ description, durationMs,
+  id }` via `ToastOptions`. The Sonner adapter (`SonnerToastNotifier` trigger +
+  `SonnerToaster` viewport) is co-located under
+  `src/context/shared/infrastructure/Notification/Toast/`; the viewport is
+  mounted once in `app/layout.tsx`. Messages are plain strings rendered as
+  escaped text — never pass HTML. To swap libraries, replace the two Sonner
+  files and the singleton; the port and call sites stay put. Future channels
+  (`Banner`/`Push`) are siblings under `domain/Notification/`.
 - **Dev Tools module** — internal QA / engineering hub at
   `https://localhost/dev-tools`, gated behind
   `isDevToolsAvailable()` (`process.env.NODE_ENV !== NodeEnv.PRODUCTION`).
