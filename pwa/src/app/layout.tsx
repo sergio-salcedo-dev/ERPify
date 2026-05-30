@@ -4,6 +4,7 @@ import "./globals.css";
 import { Geist, Geist_Mono } from "next/font/google";
 import { fetchFrankenPhpHotReloadSubscribeUrl } from "@/lib/frankenphp-hot-reload";
 import { cn } from "@/lib/utils";
+import { SonnerToaster } from "@/context/shared/infrastructure/Notification/Toast/SonnerToaster";
 import Script from "next/script";
 
 const geistSans = Geist({
@@ -44,7 +45,10 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           </>
         ) : null}
       </head>
-      <body suppressHydrationWarning>{children}</body>
+      <body suppressHydrationWarning>
+        {children}
+        <SonnerToaster />
+      </body>
     </html>
   );
 }
