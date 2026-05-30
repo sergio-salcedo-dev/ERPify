@@ -50,9 +50,18 @@ make deploy.local
 
 This runs `scripts/deploy/deploy-local.sh`: preflight → `make docker.up.wait
 ENV=prod` (build + health gate) → `make db.migrate ENV=prod` → a retried
-`curl -k https://erpify.local/api/v1/health` smoke test. Re-running it is safe
-(idempotent). Flags: `--dry-run` (print steps, change nothing),
-`--skip-migrations`.
+`curl -k https://erpify.local/api/v1/health` smoke test. It then sets up client
+trust as far as it can **without sudo** — exports the CA root to
+`./erpify-local-root-ca.crt` and, on Linux with `certutil` available, adds it to
+Chromium's per-user NSS store (`~/.pki/nssdb`) — and finally prints the exact
+remaining copy/paste commands (hosts entry, system-trust import, Firefox),
+**skipping any it detects are already done**. So in many cases steps 2 and 4
+below are handled or spelled out for you by the script; they remain the full
+per-client reference.
+
+Re-running it is safe (idempotent). Flags: `--dry-run` (print steps, change
+nothing), `--skip-migrations`, `--no-trust` (skip the CA export / NSS / guidance
+phase).
 
 ## 4. Trust the internal CA
 

@@ -9,9 +9,14 @@
 #   2. up         — make docker.up.wait ENV=prod  (build + health gate)
 #   3. migrate    — make db.migrate ENV=prod       (unless --skip-migrations)
 #   4. smoke      — curl -k https://$SERVER_NAME/api/v1/health  (expects 200)
-#   5. hints      — print the CA-trust export + /etc/hosts one-liners
+#   5. trust      — export the internal CA root and (Linux, no sudo) add it to
+#                   the per-user NSS store so Chrome/Chromium/Edge trust it
+#                   (unless --no-trust)
+#   6. next steps — print ONLY the remaining copy/paste commands (hosts entry,
+#                   system-trust import, Firefox) needed to reach a *trusted*
+#                   https://$SERVER_NAME; already-done steps are skipped
 #
-# Usage: scripts/deploy/deploy-local.sh [--dry-run] [--skip-migrations] [-h]
+# Usage: scripts/deploy/deploy-local.sh [--dry-run] [--skip-migrations] [--no-trust] [-h]
 # Also reachable as `make deploy.local`.
 set -euo pipefail
 
@@ -22,9 +27,12 @@ ENV_FILE="${PROD_ENV_FILE:-.env.prod.local}"
 HEALTH_PATH="${HEALTH_PATH:-/api/v1/health}"
 CA_PATH_IN_CONTAINER="/data/caddy/pki/authorities/local/root.crt"
 CA_OUT="erpify-local-root-ca.crt"
+# Make `docker compose` target the same project make uses, regardless of cwd basename.
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-erpify}"
 
 DRY_RUN=0
 SKIP_MIGRATIONS=0
+TRUST=1
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
 log_info()    { echo -e "${BLUE}ℹ ${*}${NC}"; }
@@ -47,6 +55,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --dry-run) DRY_RUN=1; shift ;;
         --skip-migrations) SKIP_MIGRATIONS=1; shift ;;
+        --no-trust) TRUST=0; shift ;;
         -h|--help)
             grep -E '^# ' "$0" | sed 's/^# \{0,1\}//'
             exit 0 ;;
@@ -55,6 +64,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 MAKE="make ENV=prod PROD_ENV_FILE=$ENV_FILE"
+COMPOSE="docker compose --env-file $ENV_FILE -f compose.yaml -f compose.prod.yaml"
+OS="$(uname -s)"
 
 # —— 1. Preflight ——————————————————————————————————————————————————————————
 log_info "Preflight checks..."
@@ -68,12 +79,15 @@ make PROD_ENV_FILE="$ENV_FILE" prod.env.check
 SERVER_NAME="$(grep -E '^SERVER_NAME=' "$ENV_FILE" 2>/dev/null | head -n1 | cut -d= -f2- | tr -d '"' | xargs || true)"
 SERVER_NAME="${SERVER_NAME:-erpify.local}"
 HOSTS_LINE="127.0.0.1   ${SERVER_NAME}"
+NSS_DB="$HOME/.pki/nssdb"
+NSS_NICK="${SERVER_NAME} Local CA"
 
+HOSTS_OK=0
 if getent hosts "$SERVER_NAME" >/dev/null 2>&1 || grep -qE "[[:space:]]${SERVER_NAME}([[:space:]]|\$)" /etc/hosts 2>/dev/null; then
+    HOSTS_OK=1
     log_success "${SERVER_NAME} resolves."
 else
-    log_warning "${SERVER_NAME} is not resolvable. Add this line to /etc/hosts (non-fatal):"
-    echo "    ${HOSTS_LINE}"
+    log_warning "${SERVER_NAME} is not resolvable yet (non-fatal; fixed in the next-steps below)."
 fi
 
 # —— 2. Bring the stack up ————————————————————————————————————————————————
@@ -107,17 +121,78 @@ else
     fi
 fi
 
-# —— 5. Trust + hosts hints ———————————————————————————————————————————————
-cat <<EOF
+# —— 5. Client trust (auto, no sudo): export CA + add to Chromium's NSS store ——
+NSS_TRUSTED=0
+if [[ $TRUST -eq 1 ]]; then
+    log_info "Setting up client trust for the internal CA..."
+    # 5a. Export the CA root (idempotent — refreshes after a CA rotation).
+    run "Exporting internal CA root → ./${CA_OUT}" \
+        "$COMPOSE cp php:${CA_PATH_IN_CONTAINER} ./${CA_OUT}"
 
-$(echo -e "${GREEN}✔ Deploy complete.${NC}") ${SERVER_NAME} is serving the PWA + /api/* over Caddy internal TLS.
+    # 5b. Chrome/Chromium/Edge on Linux read the per-user NSS store, NOT the
+    #     system bundle — add it there without sudo when certutil is available.
+    if [[ "$OS" == "Linux" ]]; then
+        if [[ $DRY_RUN -eq 1 ]]; then
+            echo -e "  ${YELLOW}[DRY-RUN]${NC} certutil -d sql:${NSS_DB} -A -t 'C,,' -n '${NSS_NICK}' -i ./${CA_OUT}"
+        elif command -v certutil >/dev/null 2>&1; then
+            mkdir -p "$NSS_DB"
+            [ -f "$NSS_DB/cert9.db" ] || certutil -d sql:"$NSS_DB" -N --empty-password
+            certutil -d sql:"$NSS_DB" -D -n "$NSS_NICK" 2>/dev/null || true   # drop stale entry first
+            certutil -d sql:"$NSS_DB" -A -t "C,," -n "$NSS_NICK" -i "./${CA_OUT}"
+            NSS_TRUSTED=1
+            log_success "Chrome/Chromium/Edge trust set (NSS: ${NSS_DB})."
+        else
+            log_warning "certutil not found — Chromium-family trust deferred to next-steps."
+        fi
+    fi
+else
+    log_info "Skipping client-trust setup (--no-trust)."
+fi
 
-To trust the internal CA on this client (so the browser shows a valid cert):
-    docker compose --env-file ${ENV_FILE} -f compose.yaml -f compose.prod.yaml \\
-        cp php:${CA_PATH_IN_CONTAINER} ./${CA_OUT}
-  Then import ./${CA_OUT} into your OS/browser trust store
-  (see docs/erpify-local-test-deployment.md for per-OS steps).
+# —— 6. Next steps ————————————————————————————————————————————————————————
+# Detect whether CLI/system trust already validates the chain (curl w/o -k).
+SYS_TRUSTED=0
+if [[ $DRY_RUN -eq 0 && $HOSTS_OK -eq 1 ]] && \
+   curl -sS -o /dev/null --connect-timeout 3 "$HEALTH_URL" 2>/dev/null; then
+    SYS_TRUSTED=1
+fi
 
-If the browser cannot resolve ${SERVER_NAME}, add to /etc/hosts:
-    ${HOSTS_LINE}
-EOF
+echo
+log_success "Deploy complete — ${SERVER_NAME} serves the PWA + /api/* over Caddy internal TLS."
+echo
+
+steps=""
+n=1
+add_step() { steps+="  ${n}) ${1}\n"; n=$((n + 1)); }
+
+if [[ $HOSTS_OK -eq 0 ]]; then
+    add_step "Make ${SERVER_NAME} resolve (sudo):\n       echo '${HOSTS_LINE}' | sudo tee -a /etc/hosts"
+fi
+
+if [[ $SYS_TRUSTED -eq 0 ]]; then
+    if [[ "$OS" == "Darwin" ]]; then
+        add_step "Trust the CA system-wide (sudo, covers Chrome/Safari + CLI):\n       sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ./${CA_OUT}"
+    else
+        add_step "Trust the CA for CLI tools — curl/openssl/Node (sudo):\n       sudo cp ./${CA_OUT} /usr/local/share/ca-certificates/${CA_OUT} && sudo update-ca-certificates"
+    fi
+fi
+
+if [[ "$OS" == "Linux" && $NSS_TRUSTED -eq 0 ]]; then
+    add_step "Trust the CA for Chrome/Chromium/Edge — per-user NSS, no sudo:\n       sudo apt-get install -y libnss3-tools   # once, provides certutil\n       certutil -d sql:\$HOME/.pki/nssdb -A -t 'C,,' -n '${NSS_NICK}' -i ./${CA_OUT}"
+fi
+
+# Firefox always keeps its own store (GUI import).
+add_step "Firefox only — import ./${CA_OUT}: about:preferences#privacy →\n       View Certificates → Authorities → Import → check\n       'Trust this CA to identify websites'."
+
+if [[ -n "$steps" ]]; then
+    echo "To reach https://${SERVER_NAME} with a TRUSTED certificate, finish these (copy/paste):"
+    echo
+    echo -e "$steps"
+fi
+
+if [[ $HOSTS_OK -eq 1 && $SYS_TRUSTED -eq 1 && ( "$OS" != "Linux" || $NSS_TRUSTED -eq 1 ) ]]; then
+    log_success "Hosts + CLI + Chromium trust already in place. Just open:  https://${SERVER_NAME}"
+else
+    echo "After the above, restart the browser and open:  https://${SERVER_NAME}"
+fi
+echo "Full per-OS trust guide: docs/erpify-local-test-deployment.md (step 4)."
