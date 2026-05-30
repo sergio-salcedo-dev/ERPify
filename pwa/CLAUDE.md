@@ -165,8 +165,9 @@ locally:
   `@/context/shared/infrastructure/Notification/Toast`, typed as the
   `ToastNotifier` port (never as the concrete `SonnerToastNotifier`). Call
   `toastNotifier.success("…")` / `.error` / `.info` / `.warning` from any
-  client component for transient feedback; pass `{ description, durationMs,
-  id }` via `ToastOptions`. The Sonner adapter (`SonnerToastNotifier` trigger +
+  client component for transient feedback; pass
+  `{ description, durationMs, id }` via `ToastOptions`. The Sonner adapter
+  (`SonnerToastNotifier` trigger +
   `SonnerToaster` viewport) is co-located under
   `src/context/shared/infrastructure/Notification/Toast/`; the viewport is
   mounted once in `app/layout.tsx`. Messages are plain strings rendered as
