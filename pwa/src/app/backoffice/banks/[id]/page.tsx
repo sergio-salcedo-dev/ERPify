@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { ChevronLeft, Pencil } from "lucide-react";
 import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
 import { FindBank } from "@/context/backoffice/bank/application/FindBank";
@@ -14,6 +14,7 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
 import { safeHref } from "@/lib/safeHref";
+import { toastNotifier } from "@/context/shared/infrastructure/Notification/Toast";
 import { ViewStatus } from "@/context/shared/domain/types/status";
 import { HttpStatus } from "@/context/shared/domain/types/http";
 import { bankRoutes } from "../_lib/bankRoutes";
@@ -34,10 +35,15 @@ function genericProblem(detail: string): ProblemDetails {
 
 export default function BankDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const id = params?.id ?? "";
   const [state, setState] = useState<State>(ViewStatus.LOADING);
   const [bank, setBank] = useState<Bank | null>(null);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
+  // Set once a delete succeeds: suppress the detail UI (so the now-deleted id
+  // never refetches into a "Bank not found" flash) while we redirect cleanly
+  // to the list, where the success toast lands.
+  const [redirecting, setRedirecting] = useState(false);
 
   // Reset state when ID changes to avoid synchronous setState in useEffect
   const [prevId, setPrevId] = useState(id);
@@ -48,8 +54,14 @@ export default function BankDetailPage() {
     setProblem(null);
   }
 
+  function handleDeleted(): void {
+    setRedirecting(true);
+    toastNotifier.success("Bank deleted", bank ? { description: bank.name } : undefined);
+    router.push(bankRoutes.list);
+  }
+
   useEffect(() => {
-    if (!id) return;
+    if (!id || redirecting) return;
     let cancelled = false;
     (async () => {
       try {
@@ -74,7 +86,7 @@ export default function BankDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, redirecting]);
 
   return (
     <div
@@ -84,7 +96,18 @@ export default function BankDetailPage() {
     >
       <BackLink />
 
-      {state === ViewStatus.LOADING ? (
+      {redirecting ? (
+        <p
+          className="text-muted-foreground text-sm"
+          role="status"
+          aria-live="polite"
+          data-testid="banks-detail__redirecting"
+        >
+          Returning to the banks list…
+        </p>
+      ) : null}
+
+      {!redirecting && state === ViewStatus.LOADING ? (
         <p
           className="text-muted-foreground text-sm"
           role="status"
@@ -95,7 +118,7 @@ export default function BankDetailPage() {
         </p>
       ) : null}
 
-      {state === ViewStatus.NOT_FOUND && problem ? (
+      {!redirecting && state === ViewStatus.NOT_FOUND && problem ? (
         <div data-testid="banks-detail__not-found">
           <EmptyState
             variant="first-run"
@@ -117,13 +140,13 @@ export default function BankDetailPage() {
         </div>
       ) : null}
 
-      {state === ViewStatus.ERROR && problem ? (
+      {!redirecting && state === ViewStatus.ERROR && problem ? (
         <div data-testid="banks-detail__error">
           <ProblemDisplay problem={problem} variant="panel" />
         </div>
       ) : null}
 
-      {state === ViewStatus.READY && bank ? (
+      {!redirecting && state === ViewStatus.READY && bank ? (
         <>
           <header
             className="banks-detail__header flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
@@ -161,7 +184,7 @@ export default function BankDetailPage() {
                 <Pencil className="size-3.5" aria-hidden="true" />
                 Edit
               </Link>
-              <DeleteBankButton id={bank.id} name={bank.name} />
+              <DeleteBankButton id={bank.id} name={bank.name} onDeleted={handleDeleted} />
             </div>
           </header>
 
