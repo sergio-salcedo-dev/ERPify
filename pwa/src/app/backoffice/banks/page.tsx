@@ -177,6 +177,11 @@ export default function BanksListPage() {
           sort={sort}
           onSortChange={setSort}
           onReset={resetFilters}
+          leading={
+            visibleBanks.length > 0 ? (
+              <BanksViewToggle view={view} onViewChange={setView} />
+            ) : undefined
+          }
         />
       ) : null}
 
@@ -231,12 +236,6 @@ export default function BanksListPage() {
             </section>
           ) : (
             <>
-              <div
-                className="banks-list__toolbar flex items-center justify-end"
-                data-testid="banks-list__toolbar"
-              >
-                <BanksViewToggle view={view} onViewChange={setView} />
-              </div>
               {view === "table" ? (
                 <BanksTable
                   banks={paged.rows}

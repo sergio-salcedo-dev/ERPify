@@ -66,6 +66,45 @@ test.describe("BackOffice - Banks CRUD", () => {
       await expect(page).toHaveURL(/\/backoffice\/banks$/);
       await expect(page.getByRole("cell", { name: "Acme Savings", exact: true })).toBeHidden();
       await expect(page.getByRole("cell", { name: "Brookline Trust", exact: true })).toBeVisible();
+      // The list mirrors the detail view's feedback: a success toast naming the
+      // removed bank (the row vanished without navigating away, so the toast is
+      // the only acknowledgement).
+      await expect(page.getByText("Bank deleted")).toBeVisible();
+      await expect(page.getByText(SAMPLE_BANK_A.name)).toBeVisible();
+    });
+
+    test("deleting two banks in a row stacks both toasts newest-on-top", async ({ page }) => {
+      await mockBanksApi(page, {
+        list: "happy",
+        delete: "happy",
+        list_banks: [SAMPLE_BANK_A, SAMPLE_BANK_B, SAMPLE_BANK_C],
+      });
+      await page.goto("/backoffice/banks");
+
+      // Delete A, then B — back-to-back so both toasts are still on-screen
+      // (well within Sonner's default lifetime) when we assert ordering.
+      await page.getByTestId(`banks-table__delete-${SAMPLE_BANK_A.id}`).click();
+      await page.getByTestId("banks-detail__delete-confirm").click();
+      await expect(page.getByRole("cell", { name: SAMPLE_BANK_A.name, exact: true })).toBeHidden();
+
+      await page.getByTestId(`banks-table__delete-${SAMPLE_BANK_B.id}`).click();
+      await page.getByTestId("banks-detail__delete-confirm").click();
+      await expect(page.getByRole("cell", { name: SAMPLE_BANK_B.name, exact: true })).toBeHidden();
+
+      // Both deletions surface their own toast (Cosmos Bank stays in the list).
+      await expect(page.getByText("Bank deleted")).toHaveCount(2);
+      const toastA = page.locator("[data-sonner-toast]", { hasText: SAMPLE_BANK_A.name });
+      const toastB = page.locator("[data-sonner-toast]", { hasText: SAMPLE_BANK_B.name });
+      await expect(toastA).toBeVisible();
+      await expect(toastB).toBeVisible();
+
+      // Newest first: B (deleted last) sits above A in the top-center stack.
+      const boxA = await toastA.boundingBox();
+      const boxB = await toastB.boundingBox();
+      if (!boxA || !boxB) {
+        throw new Error("expected both delete toasts to be measurable");
+      }
+      expect(boxB.y).toBeLessThan(boxA.y);
     });
   });
 
@@ -873,6 +912,9 @@ test.describe("BackOffice - Banks CRUD", () => {
       await expect(page).toHaveURL(/\/backoffice\/banks$/);
       await expect(page.getByTestId(`banks-cards__item-${SAMPLE_BANK_A.id}`)).toHaveCount(0);
       await expect(page.getByTestId(`banks-cards__item-${SAMPLE_BANK_B.id}`)).toBeVisible();
+      // Same acknowledgement as the table view: a success toast naming the bank.
+      await expect(page.getByText("Bank deleted")).toBeVisible();
+      await expect(page.getByText(SAMPLE_BANK_A.name)).toBeVisible();
     });
 
     test("filters and pagination still apply to the cards view", async ({ page }) => {

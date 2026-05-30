@@ -60,6 +60,7 @@ pwa/playwright/.cache/
 
 # playwright-cli skill run artifacts (console logs + page snapshots)
 .playwright-cli/
+.playwright-mcp/
 .playwright/
 
 # Logs & temp
