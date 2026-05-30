@@ -96,8 +96,17 @@ Then import `erpify-local-root-ca.crt`:
 - **macOS:** `sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain erpify-local-root-ca.crt`
   (Chrome/Safari use the system keychain; Firefox still needs its own import below.)
 - **Windows (Admin PowerShell):** `Import-Certificate -FilePath erpify-local-root-ca.crt -CertStoreLocation Cert:\LocalMachine\Root`
-- **Firefox** (every OS) keeps its own store — import under *Settings → Privacy &
-  Security → Certificates → View Certificates → Authorities → Import*.
+- **Firefox** (every OS) keeps its **own** store — it ignores both the system
+  bundle and `~/.pki/nssdb`, so import the root into Firefox directly:
+  1. Open `about:preferences#privacy` (or ☰ → *Settings* → *Privacy & Security*).
+  2. Under **Certificates**, click **View Certificates…**.
+  3. Select the **Authorities** tab → **Import…**.
+  4. Pick `erpify-local-root-ca.crt` (switch the file filter to *All Files* if
+     `.crt` is hidden).
+  5. Check **“Trust this CA to identify websites.”** → **OK**.
+
+  If an old `Caddy Local Authority` entry is already listed (e.g. after the
+  stack was recreated with a new CA), delete it first, then re-import.
 
 Restart the browser, then open `https://erpify.local`.
 
