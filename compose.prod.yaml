@@ -1,5 +1,10 @@
 ---
 # Production overrides (monorepo root). Build context: ./api and ./pwa
+#
+# Secrets flow in via `--env-file .env.prod.local` (wired in make/config.mk).
+# Required secrets use `${VAR:?msg}` so a missing value aborts `docker compose`
+# by name instead of silently falling back to the weak dev defaults that
+# compose.yaml keeps for `make app.dev`.
 services:
   php:
     image: ${IMAGES_PREFIX:-}app-php-prod
@@ -7,9 +12,15 @@ services:
       context: ./api
       target: frankenphp_prod
     environment:
-      APP_SECRET: ${APP_SECRET}
-      MERCURE_PUBLISHER_JWT_KEY: ${CADDY_MERCURE_JWT_SECRET}
-      MERCURE_SUBSCRIBER_JWT_KEY: ${CADDY_MERCURE_JWT_SECRET}
+      APP_SECRET: ${APP_SECRET:?APP_SECRET is required in prod}
+      # Override the weak password fallback that compose.yaml composes for dev.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-erpify_user}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in prod}@database:5432/${POSTGRES_DB:-erpify_db}?serverVersion=${POSTGRES_VERSION:-18}&charset=${POSTGRES_CHARSET:-utf8}
+      MERCURE_JWT_SECRET: ${CADDY_MERCURE_JWT_SECRET:?CADDY_MERCURE_JWT_SECRET is required in prod}
+      MERCURE_PUBLISHER_JWT_KEY: ${CADDY_MERCURE_JWT_SECRET:?CADDY_MERCURE_JWT_SECRET is required in prod}
+      MERCURE_SUBSCRIBER_JWT_KEY: ${CADDY_MERCURE_JWT_SECRET:?CADDY_MERCURE_JWT_SECRET is required in prod}
+    networks:
+      - frontend
+      - backend
 
   pwa:
     image: ${IMAGES_PREFIX:-}app-pwa-prod
@@ -18,10 +29,16 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_SYMFONY_API_BASE_URL: ${NEXT_PUBLIC_SYMFONY_API_BASE_URL:-https://localhost}
+    networks:
+      - frontend
 
   database:
     environment:
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in prod}
+    # Backend-only network + no published port: Postgres is unreachable from
+    # the host and the public internet under the prod profile.
+    networks:
+      - backend
 
   messenger_worker:
     image: ${IMAGES_PREFIX:-}app-php-prod
@@ -30,6 +47,20 @@ services:
       target: frankenphp_prod
     environment:
       APP_ENV: prod
-      APP_SECRET: ${APP_SECRET}
-      MAILER_DSN: ${MAILER_DSN}
+      APP_SECRET: ${APP_SECRET:?APP_SECRET is required in prod}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-erpify_user}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in prod}@database:5432/${POSTGRES_DB:-erpify_db}?serverVersion=${POSTGRES_VERSION:-18}&charset=${POSTGRES_CHARSET:-utf8}
+      # null mailer by default so an unset DSN can't break the worker boot.
+      MAILER_DSN: ${MAILER_DSN:-null://null}
+    # frontend = outbound SMTP egress; backend = reach Postgres.
+    networks:
+      - frontend
+      - backend
     command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600", "--limit=10000", "--memory-limit=256M"]
+
+# frontend: host-facing + inter-service. backend: internal-only (no egress,
+# no host port) so the database is fully isolated. mailpit lives in the dev
+# overlay only, so naming networks here never touches dev.
+networks:
+  frontend:
+  backend:
+    internal: true
