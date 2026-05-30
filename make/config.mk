@@ -16,7 +16,48 @@ PHP_SERVICE  ?= php
 PWA_SERVICE  ?= pwa
 DB_SERVICE   ?= database
 
-COMPOSE_PROJECT_NAME ?= erpify
+# —— Per-worktree stack isolation ————————————————————————————————————————
+# Each git worktree runs its own Compose project so multiple checkouts can keep
+# isolated stacks up at the same time — containers, networks, and volumes are
+# all namespaced by the project name. The primary checkout keeps the bare
+# `erpify` name (so its existing stack/volumes are untouched); a linked worktree
+# under .claude/worktrees/ derives `erpify-<dir-slug>`.
+#
+# Linked-worktree stacks also publish their host ports ephemerally (port 0 → a
+# random free port) so they never collide on 80/443/15432/8025 with the primary
+# stack or with each other. They are meant to be driven through
+# `docker compose exec` and the internal Docker network (e.g. MINK_BASE_URL,
+# pwa→php), not fixed host ports — so the random ports don't matter for the
+# checks/tests a worktree runs. Browse the UI from the primary checkout, or set
+# the *_PORT vars explicitly to opt back into fixed ports.
+#
+# Everything below is `?=`/overridable: exporting COMPOSE_PROJECT_NAME or any
+# *_PORT in your environment or on the command line wins.
+
+# True only inside a linked worktree (git-common-dir's parent != this checkout).
+# Resolves a possibly-relative --git-common-dir against PROJECT_ROOT.
+IS_LINKED_WORKTREE := $(shell cd "$(PROJECT_ROOT)" 2>/dev/null && \
+	_c="$$(git rev-parse --git-common-dir 2>/dev/null)" && [ -n "$$_c" ] && \
+	[ "$$(cd "$$_c/.." 2>/dev/null && pwd -P)" != "$$(pwd -P)" ] && echo true)
+
+ifeq ($(IS_LINKED_WORKTREE),true)
+  # Lower-cased dir name, non-alphanumerics → '-', trimmed (e.g. chore+x → chore-x).
+  WORKTREE_SLUG := $(shell printf '%s' "$$(basename '$(PROJECT_ROOT)')" \
+	| tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9' '-' | sed -E 's/^-+|-+$$//g')
+  COMPOSE_PROJECT_NAME ?= erpify-$(WORKTREE_SLUG)
+  # Ephemeral host ports for dev-overlay worktree stacks only; never touch the
+  # fixed ports a real staging/prod deploy needs.
+  ifeq ($(filter $(ENV),prod staging),)
+    HTTP_PORT       ?= 0
+    HTTPS_PORT      ?= 0
+    HTTP3_PORT      ?= 0
+    POSTGRES_PORT   ?= 0
+    MAILPIT_UI_PORT ?= 0
+    export HTTP_PORT HTTPS_PORT HTTP3_PORT POSTGRES_PORT MAILPIT_UI_PORT
+  endif
+else
+  COMPOSE_PROJECT_NAME ?= erpify
+endif
 export COMPOSE_PROJECT_NAME
 
 # —— Compose overlay by ENV ————————————————————————————————————————————————

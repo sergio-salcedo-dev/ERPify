@@ -30,6 +30,16 @@ docker.logs: ## Follow compose logs (all services)
 docker.ps: ## Compose ps
 	$(DOCKER_COMPOSE) ps
 
+docker.info: ## Show this checkout's resolved stack identity (project + host ports)
+	@printf 'checkout            : %s\n' '$(PROJECT_ROOT)'
+	@printf 'linked worktree     : %s\n' '$(if $(IS_LINKED_WORKTREE),yes,no (primary))'
+	@printf 'COMPOSE_PROJECT_NAME: %s\n' '$(COMPOSE_PROJECT_NAME)'
+	@printf 'host ports          : http=%s https=%s http3=%s postgres=%s mailpit=%s\n' \
+		'$(if $(HTTP_PORT),$(HTTP_PORT),80)' '$(if $(HTTPS_PORT),$(HTTPS_PORT),443)' \
+		'$(if $(HTTP3_PORT),$(HTTP3_PORT),443)' '$(if $(POSTGRES_PORT),$(POSTGRES_PORT),15432)' \
+		'$(if $(MAILPIT_UI_PORT),$(MAILPIT_UI_PORT),8025)'
+	@printf '                      (0 = ephemeral/random; see `make docker.ps` for the assigned port)\n'
+
 docker.down: ## Stop stack and remove orphans
 	$(DOCKER_COMPOSE) down --remove-orphans
 
@@ -42,6 +52,6 @@ docker.prune: docker.down ## Prune ALL Docker images, volumes and containers sys
 .PHONY: docker.up docker.up.wait docker.up.wait.no-build docker.build \
 		docker.restart \
         docker.logs \
-        docker.ps \
+        docker.ps docker.info \
         docker.down docker.down.clean-volumes docker.reset \
         docker.prune
