@@ -5,6 +5,12 @@
 # Required secrets use `${VAR:?msg}` so a missing value aborts `docker compose`
 # by name instead of silently falling back to the weak dev defaults that
 # compose.yaml keeps for `make app.dev`.
+#
+# Runtime hardening on every service: `no-new-privileges`, all Linux caps
+# dropped then the minimum re-added, and parametrizable CPU/memory ceilings
+# (override via the *_CPU_LIMIT / *_MEM_LIMIT knobs in .env.prod.local).
+# Minimal caps are a starting point — widen only if a service fails to boot
+# (that is an "Ask First" per the spec). Verify with a real `make deploy.local`.
 services:
   php:
     image: ${IMAGES_PREFIX:-}app-php-prod
@@ -18,6 +24,18 @@ services:
       MERCURE_JWT_SECRET: ${CADDY_MERCURE_JWT_SECRET:?CADDY_MERCURE_JWT_SECRET is required in prod}
       MERCURE_PUBLISHER_JWT_KEY: ${CADDY_MERCURE_JWT_SECRET:?CADDY_MERCURE_JWT_SECRET is required in prod}
       MERCURE_SUBSCRIBER_JWT_KEY: ${CADDY_MERCURE_JWT_SECRET:?CADDY_MERCURE_JWT_SECRET is required in prod}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # FrankenPHP/Caddy binds privileged ports 80/443.
+      - NET_BIND_SERVICE
+    deploy:
+      resources:
+        limits:
+          cpus: ${PHP_CPU_LIMIT:-2.0}
+          memory: ${PHP_MEM_LIMIT:-1g}
     networks:
       - frontend
       - backend
@@ -29,12 +47,42 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_SYMFONY_API_BASE_URL: ${NEXT_PUBLIC_SYMFONY_API_BASE_URL:-https://localhost}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # Next.js standalone serves from an immutable build and only writes to
+    # /tmp at runtime, so the root filesystem can be read-only.
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: ${PWA_CPU_LIMIT:-1.0}
+          memory: ${PWA_MEM_LIMIT:-512m}
     networks:
       - frontend
 
   database:
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in prod}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # Postgres entrypoint chowns the data dir and drops to the postgres user.
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    deploy:
+      resources:
+        limits:
+          cpus: ${DB_CPU_LIMIT:-2.0}
+          memory: ${DB_MEM_LIMIT:-1g}
     # Backend-only network + no published port: Postgres is unreachable from
     # the host and the public internet under the prod profile.
     networks:
@@ -51,6 +99,16 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-erpify_user}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in prod}@database:5432/${POSTGRES_DB:-erpify_db}?serverVersion=${POSTGRES_VERSION:-18}&charset=${POSTGRES_CHARSET:-utf8}
       # null mailer by default so an unset DSN can't break the worker boot.
       MAILER_DSN: ${MAILER_DSN:-null://null}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # No privileged port and no daemon — the console consumer needs no caps.
+    deploy:
+      resources:
+        limits:
+          cpus: ${WORKER_CPU_LIMIT:-1.0}
+          memory: ${WORKER_MEM_LIMIT:-512m}
     # frontend = outbound SMTP egress; backend = reach Postgres.
     networks:
       - frontend
