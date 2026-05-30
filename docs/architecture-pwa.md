@@ -52,6 +52,13 @@ pwa/src/context/
 
 `src/lib/` is glue/utility only — never business logic.
 
+The `Notification` module (`context/shared/{domain,infrastructure}/Notification/`)
+provides transient user feedback. Its first channel is **Toast**: the
+`ToastNotifier` port with a Sonner adapter (`SonnerToastNotifier` +
+`SonnerToaster`, mounted once in the root layout) and the `toastNotifier`
+singleton. The naming leaves room for additional channels (`Banner`, `Push`)
+and alternative adapters without renaming the port.
+
 ## Layer responsibilities
 
 | Layer | Contains | Must NOT depend on |
