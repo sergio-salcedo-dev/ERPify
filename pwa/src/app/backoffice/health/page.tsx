@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Activity, ShieldCheck } from "lucide-react";
 import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
+import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
 import { CheckHealth } from "@/context/backoffice/health/application/CheckHealth";
 import type { HealthCheck } from "@/context/backoffice/health/domain/HealthCheck";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
@@ -82,7 +83,7 @@ export default function HealthPage() {
                 <span className="bg-success size-2 shrink-0 rounded-full" aria-hidden="true" />
                 <span>
                   Status: {result.status} | Service: {result.service} | Date:{" "}
-                  {new Date(result.datetime).toLocaleString()}
+                  {dateTimeProvider.formatIsoToLocalDateTime(result.datetime)}
                 </span>
               </div>
             )}

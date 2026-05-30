@@ -103,7 +103,7 @@ locally:
   `DateTimeProvider` port (never as the concrete `DateFnsDateTimeProvider`).
   No `date-fns` / `dayjs` / `Temporal` types leak past this boundary. Render
   `created_at` / `updated_at` (and any other ISO timestamp) via
-  `dateTimeProvider.formatIsoToDisplay(iso)` — it returns the raw input back
+  `dateTimeProvider.formatIsoToLocalDateTime(iso)` — it returns the raw input back
   on unparseable values so tables never show "Invalid Date". Use
   `formatToDisplay(date)` / `formatToDate(date)` for `Date` objects. Never
   call `new Date(...).toLocaleString()` directly in entity components.

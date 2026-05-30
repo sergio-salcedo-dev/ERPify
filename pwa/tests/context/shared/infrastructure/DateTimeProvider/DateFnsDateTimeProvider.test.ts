@@ -34,11 +34,26 @@ describe("DateFnsDateTimeProvider", () => {
     });
   });
 
+  // Builds the expected `dd/MM/yyyy, HH:mm:ss` string from the Date's *local*
+  // components, so these assertions hold on any CI host regardless of its TZ
+  // while still proving the output reflects the viewer's local timezone.
+  const pad = (n: number): string => String(n).padStart(2, "0");
+  const localDisplay = (d: Date): string =>
+    `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}, ` +
+    `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  const localDate = (d: Date): string =>
+    `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+
   describe("formatToDisplay", () => {
     it("returns dd/MM/yyyy, HH:mm:ss in 24-hour time", () => {
       const out = provider.formatToDisplay(new Date("2026-04-15T15:30:45Z"));
       expect(out).toMatch(/^\d{2}\/\d{2}\/\d{4},\s\d{2}:\d{2}:\d{2}$/);
       expect(out.toLowerCase()).not.toMatch(/[ap]m/);
+    });
+
+    it("renders the UTC instant converted to the viewer's local timezone", () => {
+      const instant = new Date("2026-04-15T15:30:45Z");
+      expect(provider.formatToDisplay(instant)).toBe(localDisplay(instant));
     });
   });
 
@@ -46,6 +61,11 @@ describe("DateFnsDateTimeProvider", () => {
     it("returns dd/MM/yyyy", () => {
       const out = provider.formatToDate(new Date("2026-04-15T00:00:00Z"));
       expect(out).toMatch(/^\d{2}\/\d{2}\/\d{4}$/);
+    });
+
+    it("uses the viewer's local calendar day", () => {
+      const instant = new Date("2026-04-15T00:00:00Z");
+      expect(provider.formatToDate(instant)).toBe(localDate(instant));
     });
   });
 
@@ -193,15 +213,15 @@ describe("DateFnsDateTimeProvider", () => {
     });
   });
 
-  describe("formatIsoToDisplay", () => {
-    it("formats a well-formed ISO timestamp via formatToDisplay", () => {
-      const out = provider.formatIsoToDisplay("2026-04-15T15:30:45Z");
-      expect(out).toMatch(/^\d{2}\/\d{2}\/\d{4},\s\d{2}:\d{2}:\d{2}$/);
+  describe("formatIsoToLocalDateTime", () => {
+    it("formats a well-formed ISO timestamp via formatToDisplay (local timezone)", () => {
+      const out = provider.formatIsoToLocalDateTime("2026-04-15T15:30:45Z");
+      expect(out).toBe(localDisplay(new Date("2026-04-15T15:30:45Z")));
     });
 
     it("returns the raw value when the input cannot be parsed", () => {
-      expect(provider.formatIsoToDisplay("not-a-date")).toBe("not-a-date");
-      expect(provider.formatIsoToDisplay("")).toBe("");
+      expect(provider.formatIsoToLocalDateTime("not-a-date")).toBe("not-a-date");
+      expect(provider.formatIsoToLocalDateTime("")).toBe("");
     });
   });
 
