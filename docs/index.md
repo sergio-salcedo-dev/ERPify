@@ -1,6 +1,6 @@
 # ERPify — Documentation Index
 
-> Updated 2026-05-08. Primary entry point for repo-wide docs. AI agents: load [`project-context.md`](./project-context.md) before generating code. RFC 9457 error contract: [`api-error-contract.md`](./api-error-contract.md). Deep-dives: 2.
+> Updated 2026-05-30. Primary entry point for repo-wide docs. AI agents: load [`project-context.md`](./project-context.md) before generating code. RFC 9457 error contract: [`api-error-contract.md`](./api-error-contract.md). Deep-dives: 2.
 
 ## Project at a glance
 
@@ -54,6 +54,7 @@ Detailed exhaustive analysis of specific areas:
 
 - **[contribution-guide.md](./contribution-guide.md)** — Branches, commits, PR conventions
 - **[deployment-guide.md](./deployment-guide.md)** — Docker Compose envs and prod services
+- **[erpify-local-test-deployment.md](./erpify-local-test-deployment.md)** — Step-by-step: run the prod profile at `https://erpify.local` (internal TLS) + VPS promotion
 - **[development-guide-api.md](./development-guide-api.md)** — Day-to-day API workflow via `make`
 - **[development-guide-pwa.md](./development-guide-pwa.md)** — Day-to-day PWA workflow via `make`
 
