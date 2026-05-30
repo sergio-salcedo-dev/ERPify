@@ -10,7 +10,8 @@
 .DS_Store
 Thumbs.db
 
-# Environment & secrets (committed `.env` / `.env.dist` stay tracked)
+# Environment & secrets (committed `.env` / `.env.dist` / `.env.prod.example`
+# stay tracked; the populated `.env.prod.local` is ignored by `.env.*.local`)
 .env.local
 .env.local.php
 .env.*.local
