@@ -188,6 +188,31 @@ test.describe("BackOffice - Banks CRUD", () => {
       await expect(page.getByRole("heading", { name: "No banks yet" })).toBeVisible();
     });
 
+    test("redirects to the list with a success toast and never flashes 'Bank not found'", async ({
+      page,
+    }) => {
+      await mockBanksApi(page, {
+        get: "happy",
+        delete: "happy",
+        list: "empty",
+        bank: SAMPLE_BANK_A,
+      });
+      await page.goto(`/backoffice/banks/${SAMPLE_BANK_A.id}`);
+
+      await page.getByTestId("banks-detail__delete-button").click();
+      await page.getByTestId("banks-detail__delete-confirm").click();
+
+      // Lands cleanly on the list — the deleted id never refetches into the
+      // "Bank not found" empty state.
+      await expect(page).toHaveURL("/backoffice/banks");
+      await expect(page.getByRole("heading", { name: "No banks yet" })).toBeVisible();
+      await expect(page.getByTestId("banks-detail__not-found")).toHaveCount(0);
+      // The success toast surfaces on the list after the redirect, naming the
+      // bank that was removed.
+      await expect(page.getByText("Bank deleted")).toBeVisible();
+      await expect(page.getByText(SAMPLE_BANK_A.name)).toBeVisible();
+    });
+
     test("shows ProblemDisplay inside the dialog when DELETE returns 404", async ({ page }) => {
       await mockBanksApi(page, { get: "happy", delete: "not-found", bank: SAMPLE_BANK_A });
       await page.goto(`/backoffice/banks/${SAMPLE_BANK_A.id}`);

@@ -70,6 +70,7 @@
     "typescript": "^6.0.3"
   },
   "overrides": {
-    "eslint": "$eslint"
+    "eslint": "$eslint",
+    "postcss": "$postcss"
   }
 }
