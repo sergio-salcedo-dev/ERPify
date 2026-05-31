@@ -32,7 +32,11 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-CMD ["sh", "-c", "npm install && npx next dev --turbo -H 0.0.0.0 -p 3000"]
+# `npm ci` (not `install`): base already ran it, and the persistent
+# pwa_node_modules volume keeps deps across restarts. `ci` is deterministic and,
+# unlike `install`, never rewrites the bind-mounted package-lock.json — which
+# would leave it root-owned on the host.
+CMD ["sh", "-c", "npm ci && npx next dev --turbo -H 0.0.0.0 -p 3000"]
 
 FROM base AS builder
 
