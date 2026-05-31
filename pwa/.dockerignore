@@ -2,15 +2,19 @@ node_modules
 .next
 .git
 *.md
-.env*.local
+.env*
 coverage
 playwright-report
 test-results
 
-# Secrets / credentials — must never be baked into the image (defence in
-# depth for docker:S6470; the recursive `COPY . .` below relies on this).
-# Note: plain `.env` / `.env.production` are intentionally NOT excluded —
-# Next.js reads them at build time and they hold only public defaults.
+# Secrets / credentials — must never enter the build context (defence in
+# depth for docker:S6470; the `COPY . .` in the dev/builder stages reads it).
+# All `.env*` are excluded: the build's only public input is the
+# NEXT_PUBLIC_SYMFONY_API_BASE_URL Docker ARG, not a committed env file, and
+# the prod stage copies build artifacts only (.next/standalone, .next/static,
+# public) — never source or env files. Note this CANNOT guard against a
+# NEXT_PUBLIC_*-prefixed value: Next.js inlines those into the shipped JS
+# bundle at build time, so never put a secret behind a NEXT_PUBLIC_ var.
 *.pem
 *.key
 *.crt
