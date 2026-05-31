@@ -17,6 +17,7 @@ framework:
         routing:
             Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent: async
             Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent: async
+            Erpify\Backoffice\Bank\Domain\Event\BankDeletedDomainEvent: async
 
         buses:
             messenger.bus.default:

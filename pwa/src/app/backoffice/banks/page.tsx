@@ -37,6 +37,7 @@ import { BANKS_PAGE_SIZE_DEFAULT, type BanksPageSize, paginate } from "./_lib/pa
 import { bankRoutes } from "./_lib/bankRoutes";
 import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
 import { countRecentlyCreated } from "./_lib/bankRecency";
+import { bankTopics, useBankRealtime } from "@/context/backoffice/bank/infrastructure/bankRealtime";
 
 type State = ViewStatus;
 
@@ -216,6 +217,23 @@ export default function BanksListPage() {
       });
     }
   };
+
+  // Real-time sync of changes made by OTHER clients (Mercure). These reconcile
+  // state silently (no toast): the acting user already got their own feedback,
+  // and passive viewers shouldn't be spammed. Merges are id-keyed so duplicate
+  // at-least-once deliveries are no-ops.
+  useBankRealtime([bankTopics.collection], {
+    onCreated: (incoming) => {
+      setBanks((prev) => (prev.some((b) => b.id === incoming.id) ? prev : [incoming, ...prev]));
+      setState((prev) => (prev === ViewStatus.EMPTY ? ViewStatus.READY : prev));
+    },
+    onUpdated: (incoming) => {
+      setBanks((prev) => prev.map((b) => (b.id === incoming.id ? incoming : b)));
+    },
+    onDeleted: (deletedId) => {
+      setBanks((prev) => prev.filter((b) => b.id !== deletedId));
+    },
+  });
 
   return (
     <div
