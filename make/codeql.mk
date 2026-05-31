@@ -2,9 +2,10 @@
 # CodeQL static analysis (local)
 # =============================================================================
 
-# Replaces the .github/workflows/codeql.yml: GitHub Code Scanning
-# requires GitHub Advanced Security on private repos, which we don't pay
-# for. The CodeQL CLI itself is free under the GitHub CodeQL Terms &
+# Local counterpart to the .github/workflows/codeql.yml CI job: the CI scan
+# covers the PWA (JS/TS) + GitHub Actions, while these targets let you run
+# CodeQL against any source root (incl. api/) on your machine without GitHub
+# Advanced Security. The CodeQL CLI is free under the GitHub CodeQL Terms &
 # Conditions for non-automated, local use against your own code.
 #
 # Usage:

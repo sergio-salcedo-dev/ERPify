@@ -1,0 +1,71 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '23 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # CodeQL semantic analysis. PHP has no CodeQL analyzer, so the Symfony api/
+  # is covered by local SAST (`make codeql.run` / `make security.sast`); see
+  # make/codeql.mk for the local CLI workflow. Here we scan the PWA's
+  # JavaScript/TypeScript and the GitHub Actions workflows themselves. Findings
+  # land in the repo's Security ▸ Code scanning tab (needs code scanning enabled).
+  analyze:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: javascript-typescript
+            source-root: pwa
+          - language: actions
+            source-root: .
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          source-root: ${{ matrix.source-root }}
+          queries: security-extended
+          config: |
+            paths-ignore:
+              - '**/node_modules'
+              - '**/.next'
+              - '**/dist'
+              - '**/build'
+              - '**/public/build'
+              - '**/tests'
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"

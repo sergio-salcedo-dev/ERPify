@@ -96,7 +96,7 @@ Step-by-step (incl. internal-CA trust and `/etc/hosts`) and VPS promotion:
 
 - GitHub Actions workflows under `.github/workflows/`:
   - `ci.yml` — lint + test pipeline (runs `make ci.quality` + `make ci.test`).
-- Static security analysis (CodeQL): run locally with `make codeql.run` — the GitHub workflow was removed because Code Scanning on private repos requires GitHub Advanced Security.
+- Static security analysis (CodeQL): the `codeql.yml` workflow scans the PWA (JavaScript/TypeScript) and the GitHub Actions workflows on push/PR and weekly; results land in **Security ▸ Code scanning** (needs Code Scanning enabled — GitHub Advanced Security on private repos). CodeQL has no PHP analyzer, so scan `api/` locally with `make codeql.run`.
 - SuperLinter (container-based): `make super-lint.full` (requires `GITHUB_TOKEN`).
 - Dependabot tracks Docker digests at `/api` and `/pwa` and composer/npm dependency updates.
 
