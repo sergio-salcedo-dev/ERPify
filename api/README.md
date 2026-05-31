@@ -46,6 +46,8 @@ with [FrankenPHP](https://frankenphp.dev) and [Caddy](https://caddyserver.com/) 
 10. [Using a Makefile](docs/make-targets.md)
 11. [Updating the template](docs/updating.md)
 12. [Troubleshooting](docs/troubleshooting.md)
+13. [Reproducible `erpify.local` prod deploy](../docs/erpify-local-test-deployment.md)
+14. [Production security checklist](../PRODUCTION_SECURITY_CHECKLIST.md)
 
 ## License
 

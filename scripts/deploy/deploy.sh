@@ -10,7 +10,18 @@ DRY_RUN=0
 SKIP_MIGRATIONS=0
 CI_MODE=0
 PROFILE=""
-HEALTH_URL="${HEALTH_URL:-https://localhost/api/v1/health}"
+# ENV is passed through to every `make` call so prod/staging select the prod
+# overlay + `--env-file` (see make/config.mk). Defaults to prod — this is the
+# production deployment entrypoint. Override: `DEPLOY_ENV=staging ./deploy.sh …`.
+DEPLOY_ENV="${DEPLOY_ENV:-prod}"
+# Reject typos early — an unrecognised value would silently fall through to the
+# dev overlay (no --env-file, weak fallbacks) while appearing to deploy prod.
+case "$DEPLOY_ENV" in
+    dev|ci|staging|prod) ;;
+    *) echo "✗ Invalid DEPLOY_ENV='$DEPLOY_ENV' (expected: ci|staging|prod)" >&2; exit 1 ;;
+esac
+SERVER_NAME="${SERVER_NAME:-erpify.local}"
+HEALTH_URL="${HEALTH_URL:-https://${SERVER_NAME}/api/v1/health}"
 
 # Color Definitions
 RED='\033[0;31m'
@@ -103,12 +114,12 @@ check_repo() {
 deploy_steps() {
     cd "${REPO_ROOT}"
     if [[ $SKIP_MIGRATIONS -eq 0 ]]; then
-        run_cmd "1/3: Database migrations" "make db.migrate"
+        run_cmd "1/3: Database migrations" "make db.migrate ENV=${DEPLOY_ENV}"
     else
         log_warning "Skipping Migrations (SKIP_MIGRATIONS=1)"
     fi
-    run_cmd "2/3: Cache warmup" "make cache.warmup"
-    run_cmd "3/3: Reloading workers" "make messenger.stop-workers"
+    run_cmd "2/3: Cache warmup" "make sf.cache.warmup ENV=${DEPLOY_ENV}"
+    run_cmd "3/3: Reloading workers" "make sf.messenger.stop-workers ENV=${DEPLOY_ENV}"
 }
 
 check_health() {
@@ -135,6 +146,12 @@ run_profile() {
     local target_profile="$1"
     check_repo
 
+    # Prod/staging make calls load secrets via `--env-file` (make/config.mk);
+    # fail fast if the secret file is missing or incomplete before touching the stack.
+    if [[ $DRY_RUN -eq 0 && ( "$DEPLOY_ENV" == "prod" || "$DEPLOY_ENV" == "staging" ) ]]; then
+        run_cmd "Preflight: validating prod secrets" "make prod.env.check" || exit 1
+    fi
+
     case $target_profile in
         "simple")
             deploy_steps
@@ -149,7 +166,7 @@ run_profile() {
             ;;
         "check")
             check_health || true
-            run_cmd "Database Status" "make db.status"
+            run_cmd "Database Status" "make db.status ENV=${DEPLOY_ENV}"
             ;;
         *)
             log_error "Unknown deployment profile: ${target_profile}"
@@ -210,7 +227,29 @@ while [[ $# -gt 0 ]]; do
         --dry-run) DRY_RUN=1; shift ;;
         --skip-migrations) SKIP_MIGRATIONS=1; shift ;;
         --help|-h)
-            echo "Usage: ./deploy.sh [OPTIONS]"
+            cat <<'USAGE'
+Usage: ./scripts/deploy/deploy.sh [PROFILE] [OPTIONS]
+
+Post-deploy operations for an ALREADY-RUNNING stack: migrations, cache
+warmup, worker reload, health checks. To stand the stack up first, use
+`make deploy.local` (scripts/deploy/deploy-local.sh).
+
+Profiles (omit for an interactive menu):
+  --simple          Migrations -> cache warmup -> worker reload
+  --advanced        Health check -> deploy steps -> stabilize -> health check
+  --ci              Advanced with structured logs; health failures are fatal
+  --check-only      Validate secrets + health + DB status only (no changes)
+
+Options:
+  --dry-run         Print the commands instead of running them
+  --skip-migrations Skip the migration step
+  -h, --help        Show this help
+
+Environment:
+  DEPLOY_ENV        ENV passed to every make call (default: prod)
+  SERVER_NAME       Host used to derive the health URL (default: erpify.local)
+  HEALTH_URL        Override the health endpoint outright
+USAGE
             exit 0
             ;;
         *) log_error "Unknown option: $1"; exit 1 ;;

@@ -67,15 +67,24 @@ export COMPOSE_PROJECT_NAME
 #
 # CI runs with ENV unset (= dev overlay). If CI-specific Compose behavior is
 # ever needed, introduce compose.ci.yaml and re-add ENV=ci deliberately.
+#
+# Prod/staging additionally load secrets through `--env-file $(PROD_ENV_FILE)`.
+# Compose interpolation (`${VAR}` in a compose file) only reads the shell env
+# or `--env-file`/default `.env` — NOT a service's `env_file:` — so prod
+# secrets MUST flow through this wiring, not an `env_file:` on a service.
+PROD_ENV_FILE ?= .env.prod.local
 ifeq ($(ENV),prod)
   COMPOSE_FILES := -f compose.yaml -f compose.prod.yaml
+  ENV_FILE_ARGS := --env-file $(PROD_ENV_FILE)
 else ifeq ($(ENV),staging)
   COMPOSE_FILES := -f compose.yaml -f compose.prod.yaml
+  ENV_FILE_ARGS := --env-file $(PROD_ENV_FILE)
 else
   COMPOSE_FILES := -f compose.yaml -f compose.dev.yaml
+  ENV_FILE_ARGS :=
 endif
 
-DOCKER_COMPOSE := cd $(PROJECT_ROOT) && docker compose $(COMPOSE_FILES)
+DOCKER_COMPOSE := cd $(PROJECT_ROOT) && docker compose $(ENV_FILE_ARGS) $(COMPOSE_FILES)
 DOCKER_COMPOSE_EXEC := $(DOCKER_COMPOSE) exec
 
 # —— PHP exec helpers ——————————————————————————————————————————————————————

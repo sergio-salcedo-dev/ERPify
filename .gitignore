@@ -10,10 +10,17 @@
 .DS_Store
 Thumbs.db
 
-# Environment & secrets (committed `.env` / `.env.dist` stay tracked)
+# Environment & secrets (committed `.env` / `.env.dist` / `.env.prod.example`
+# stay tracked; the populated `.env.prod.local` is ignored by `.env.*.local`)
 .env.local
 .env.local.php
 .env.*.local
+
+# Local prod TLS: Caddy's internal-CA root, exported per-box by the deploy
+# script (scripts/deploy/deploy-local.sh) so clients can trust `tls internal`.
+# Not secret (public cert, no private key) but machine-specific and regenerated
+# on demand — committing one box's root is stale/meaningless elsewhere.
+erpify-local-root-ca.crt
 
 # API — PHP / Composer / Symfony
 api/vendor/

@@ -1,5 +1,16 @@
 ---
 # Production overrides (monorepo root). Build context: ./api and ./pwa
+#
+# Secrets flow in via `--env-file .env.prod.local` (wired in make/config.mk).
+# Required secrets use `${VAR:?msg}` so a missing value aborts `docker compose`
+# by name instead of silently falling back to the weak dev defaults that
+# compose.yaml keeps for `make app.dev`.
+#
+# Runtime hardening on every service: `no-new-privileges`, all Linux caps
+# dropped then the minimum re-added, and parametrizable CPU/memory ceilings
+# (override via the *_CPU_LIMIT / *_MEM_LIMIT knobs in .env.prod.local).
+# Minimal caps are a starting point — widen only if a service fails to boot
+# (that is an "Ask First" per the spec). Verify with a real `make deploy.local`.
 services:
   php:
     image: ${IMAGES_PREFIX:-}app-php-prod
@@ -7,9 +18,36 @@ services:
       context: ./api
       target: frankenphp_prod
     environment:
-      APP_SECRET: ${APP_SECRET}
-      MERCURE_PUBLISHER_JWT_KEY: ${CADDY_MERCURE_JWT_SECRET}
-      MERCURE_SUBSCRIBER_JWT_KEY: ${CADDY_MERCURE_JWT_SECRET}
+      APP_SECRET: ${APP_SECRET:?APP_SECRET is required in prod}
+      # Require explicit DB identity + password; close the weak fallbacks
+      # (erpify_user / erpify_db / erpify_password) that compose.yaml keeps for
+      # `make app.dev`. serverVersion/charset stay defaulted — non-secret knobs.
+      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required in prod}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in prod}@database:5432/${POSTGRES_DB:?POSTGRES_DB is required in prod}?serverVersion=${POSTGRES_VERSION:-18}&charset=${POSTGRES_CHARSET:-utf8}
+      MERCURE_JWT_SECRET: ${CADDY_MERCURE_JWT_SECRET:?CADDY_MERCURE_JWT_SECRET is required in prod}
+      MERCURE_PUBLISHER_JWT_KEY: ${CADDY_MERCURE_JWT_SECRET:?CADDY_MERCURE_JWT_SECRET is required in prod}
+      MERCURE_SUBSCRIBER_JWT_KEY: ${CADDY_MERCURE_JWT_SECRET:?CADDY_MERCURE_JWT_SECRET is required in prod}
+      # Non-public host served over Caddy's own CA. `tls internal` mints a cert
+      # without ACME; clear CADDY_SERVER_EXTRA_DIRECTIVES on a public VPS to let
+      # Caddy switch to automatic ACME with the same overlay.
+      SERVER_NAME: ${SERVER_NAME:?SERVER_NAME is required in prod}, php:80
+      CADDY_SERVER_EXTRA_DIRECTIVES: ${CADDY_SERVER_EXTRA_DIRECTIVES-tls internal}
+      DEFAULT_URI: ${DEFAULT_URI:-https://${SERVER_NAME:?SERVER_NAME is required in prod}}
+      MERCURE_PUBLIC_URL: ${MERCURE_PUBLIC_URL:-https://${SERVER_NAME:?SERVER_NAME is required in prod}/.well-known/mercure}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # FrankenPHP/Caddy binds privileged ports 80/443.
+      - NET_BIND_SERVICE
+    deploy:
+      resources:
+        limits:
+          cpus: ${PHP_CPU_LIMIT:-2.0}
+          memory: ${PHP_MEM_LIMIT:-1g}
+    networks:
+      - frontend
+      - backend
 
   pwa:
     image: ${IMAGES_PREFIX:-}app-pwa-prod
@@ -17,11 +55,66 @@ services:
       context: ./pwa
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_SYMFONY_API_BASE_URL: ${NEXT_PUBLIC_SYMFONY_API_BASE_URL:-https://localhost}
+        NEXT_PUBLIC_SYMFONY_API_BASE_URL: ${NEXT_PUBLIC_SYMFONY_API_BASE_URL:?NEXT_PUBLIC_SYMFONY_API_BASE_URL is required in prod}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # Next.js standalone serves from an immutable build, so the root filesystem
+    # is read-only. The only runtime writes are scratch (/tmp) and the Next
+    # cache (.next/cache: image-optimizer output, ISR/data-cache, fetch-cache).
+    # Both are tmpfs (in-memory, wiped on restart) so the root FS stays
+    # read-only. The cache is currently dormant — no next/image, no ISR — but
+    # `images.remotePatterns` is already wired, so a future <Image remote/> or
+    # `export const revalidate` would otherwise EROFS → 500 at runtime and slip
+    # past a smoke test that only hits the static "/". The size cap keeps the
+    # cache bounded inside the container's memory cgroup (PWA_MEM_LIMIT) so an
+    # unbounded optimizer cache degrades to ENOSPC instead of OOM-killing pwa.
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - type: tmpfs
+        target: /app/pwa/.next/cache
+        tmpfs:
+          size: 67108864 # 64 MiB; raise if image optimization is used heavily
+    deploy:
+      resources:
+        limits:
+          cpus: ${PWA_CPU_LIMIT:-1.0}
+          memory: ${PWA_MEM_LIMIT:-512m}
+    networks:
+      - frontend
 
   database:
     environment:
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required in prod}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in prod}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required in prod}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # Postgres entrypoint chowns the data dir and drops to the postgres user.
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    deploy:
+      resources:
+        limits:
+          cpus: ${DB_CPU_LIMIT:-2.0}
+          memory: ${DB_MEM_LIMIT:-1g}
+    # Backend-only network + no published port: Postgres is unreachable from
+    # the host and the public internet under the prod profile. The pinned IP
+    # (DB_BACKEND_IP, overridable) is a stable target for SSH-tunnelled DB GUI
+    # clients against a remote box — see docs/vps-deployment.md. This changes
+    # nothing about exposure: still internal-only, still no published port.
+    networks:
+      backend:
+        ipv4_address: ${DB_BACKEND_IP:-10.89.0.10}
 
   messenger_worker:
     image: ${IMAGES_PREFIX:-}app-php-prod
@@ -30,6 +123,37 @@ services:
       target: frankenphp_prod
     environment:
       APP_ENV: prod
-      APP_SECRET: ${APP_SECRET}
-      MAILER_DSN: ${MAILER_DSN}
+      APP_SECRET: ${APP_SECRET:?APP_SECRET is required in prod}
+      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required in prod}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in prod}@database:5432/${POSTGRES_DB:?POSTGRES_DB is required in prod}?serverVersion=${POSTGRES_VERSION:-18}&charset=${POSTGRES_CHARSET:-utf8}
+      # null mailer by default so an unset DSN can't break the worker boot.
+      MAILER_DSN: ${MAILER_DSN:-null://null}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # No privileged port and no daemon — the console consumer needs no caps.
+    deploy:
+      resources:
+        limits:
+          cpus: ${WORKER_CPU_LIMIT:-1.0}
+          memory: ${WORKER_MEM_LIMIT:-512m}
+    # frontend = outbound SMTP egress; backend = reach Postgres.
+    networks:
+      - frontend
+      - backend
     command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600", "--limit=10000", "--memory-limit=256M"]
+
+# frontend: host-facing + inter-service. backend: internal-only (no egress,
+# no host port) so the database is fully isolated. mailpit lives in the dev
+# overlay only, so naming networks here never touches dev.
+networks:
+  frontend:
+  backend:
+    internal: true
+    # Fixed subnet so the database keeps a stable IP across restarts (see the
+    # `database` service's ipv4_address). Override DB_BACKEND_SUBNET (and
+    # DB_BACKEND_IP within it) in .env.prod.local if it clashes with an existing
+    # network on the host.
+    ipam:
+      config:
+        - subnet: ${DB_BACKEND_SUBNET:-10.89.0.0/24}

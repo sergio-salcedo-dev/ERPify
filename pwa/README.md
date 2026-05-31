@@ -40,3 +40,4 @@ Pass extra args with **`c='…'`**, e.g. `make pwa.test.unit c='path/to/file.tes
 
 - [docs/production-deployment.md](docs/production-deployment.md)
 - Repo root [README.md](../README.md) and [docs-info/local-fullstack-traffic.md](../docs-info/local-fullstack-traffic.md)
+- [Reproducible `erpify.local` prod deploy](../docs/erpify-local-test-deployment.md) and the [production security checklist](../PRODUCTION_SECURITY_CHECKLIST.md)

@@ -2,7 +2,7 @@
 
 Monorepo with two deployables sharing one Compose stack: a Symfony HTTP API on FrankenPHP and a Next.js PWA. Nested `CLAUDE.md` files ([`api/CLAUDE.md`](api/CLAUDE.md), [`pwa/CLAUDE.md`](pwa/CLAUDE.md)) auto-load inside their subtree — this file is the monorepo-wide baseline.
 
-**Stack:** PHP 8.5 · Symfony 7 · FrankenPHP (Caddy embedded) · PostgreSQL 18 · Doctrine ORM · Symfony Messenger · Mercure · Next.js 16 (App Router) · TypeScript · Tailwind 4 · Inversify · Vitest · Playwright · PHPUnit · Behat
+**Stack:** PHP 8.5 · Symfony 8 · FrankenPHP (Caddy embedded) · PostgreSQL 18 · Doctrine ORM · Symfony Messenger · Mercure · Next.js 16 (App Router) · TypeScript · Tailwind 4 · Inversify · Vitest · Playwright · PHPUnit · Behat
 
 > Full command catalog, repo layout tables, "adding new code" recipes, and gotchas → [`docs/claude-code-quickref.md`](docs/claude-code-quickref.md). Run `make help` for the live target list.
 
@@ -212,7 +212,7 @@ Update the matching file as part of any PR that changes:
 - **API endpoints, controllers, or response shapes** → `api/docs/` and [`docs/architecture-api.md`](docs/architecture-api.md).
 - **Error contract (markers, status mapping, redaction, `debug` block, per-error log line shape, `exception_category` taxonomy)** → [`docs/api-error-contract.md`](docs/api-error-contract.md). Adding a marker interface, changing its mapping, or changing the per-error log line (fields, declaration order, level tiering, `exception_category` dispatch) is mandatory here (NFR26).
 - **PWA module boundaries / Inversify bindings** → `pwa/docs/` and [`docs/architecture-pwa.md`](docs/architecture-pwa.md).
-- **Deployment / Compose / CORS / Mercure / mailer** → [`docs/deployment-guide.md`](docs/deployment-guide.md) and [`pwa/docs/production-deployment.md`](pwa/docs/production-deployment.md).
+- **Deployment / Compose / CORS / Mercure / mailer** → [`docs/deployment-guide.md`](docs/deployment-guide.md) and [`pwa/docs/production-deployment.md`](pwa/docs/production-deployment.md); local prod rehearsal → [`docs/erpify-local-test-deployment.md`](docs/erpify-local-test-deployment.md); VPS promotion + remote DB access → [`docs/vps-deployment.md`](docs/vps-deployment.md).
 - **Security-sensitive change** → `PRODUCTION_SECURITY_CHECKLIST.md` (authoritative — see [`docs/rules/security.md`](docs/rules/security.md)).
 
 When a rule here conflicts with `docs/rules/*.md`, [`api/CLAUDE.md`](api/CLAUDE.md), [`pwa/CLAUDE.md`](pwa/CLAUDE.md), or `pwa/AGENTS.md`, flag the conflict rather than silently picking one.
@@ -228,6 +228,7 @@ When a rule here conflicts with `docs/rules/*.md`, [`api/CLAUDE.md`](api/CLAUDE.
 - [`docs/architecture-pwa.md`](docs/architecture-pwa.md) — PWA layering and module boundaries.
 - [`docs/api-error-contract.md`](docs/api-error-contract.md) — RFC 9457 Problem Details: marker → status map, env-aware `debug`, redaction, performance budgets.
 - [`docs/deployment-guide.md`](docs/deployment-guide.md), [`pwa/docs/production-deployment.md`](pwa/docs/production-deployment.md) — prod Compose, mailer, DNS, CORS, Mercure, smoke tests.
+- [`docs/vps-deployment.md`](docs/vps-deployment.md) — VPS promotion + remote database access (CLI / GUI over SSH, pinned internal IP).
 - [`docs/development-guide-api.md`](docs/development-guide-api.md), [`docs/development-guide-pwa.md`](docs/development-guide-pwa.md) — day-to-day workflows.
 - [`docs/contribution-guide.md`](docs/contribution-guide.md), [`docs/source-tree-analysis.md`](docs/source-tree-analysis.md).
 - [`api/README.md`](api/README.md), `api/docs/`, [`pwa/README.md`](pwa/README.md), `pwa/docs/` — deployable-specific details.

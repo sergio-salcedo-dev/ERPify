@@ -35,7 +35,11 @@ vendor/
 # Secrets / credentials — must never be baked into the image (defence in
 # depth for docker:S6470; the recursive `COPY . .` build step relies on this).
 # Note: plain `.env` is intentionally NOT excluded — `composer dump-env prod`
-# reads it at build time and it holds only non-secret defaults.
+# reads it at build time and it holds only non-secret defaults. Those defaults
+# (incl. the dev DATABASE_URL credentials) ARE compiled into the shipped
+# `.env.local.php`; they are overridden at runtime by injected env vars, so
+# `.env` must never gain a real secret. Real secrets live in `.env.*.local`
+# (excluded above) or a secret manager.
 **/*.pem
 **/*.key
 **/*.crt

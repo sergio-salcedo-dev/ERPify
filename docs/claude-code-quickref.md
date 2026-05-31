@@ -21,7 +21,15 @@ make docker.info         # Show this checkout's resolved stack identity (project
 make php.bash            # Shell into the php container (also: make php.sh, make php.exec cmd='…').
 make docker.down.clean-volumes  # Stop stack and REMOVE volumes (destructive).
 make docker.prune        # Prune ALL Docker images/volumes/containers system-wide (destructive).
+make prod.env.check      # Validate .env.prod.local has all required prod secrets (no placeholders).
+make deploy.local        # Stand up the PROD profile at https://erpify.local (preflight → up → migrate → smoke → CA export + trust guidance).
+sudo make deploy.local.trust  # Privileged client-trust steps (hosts + system CA + Chromium NSS); targets $SUDO_USER. Don't `sudo make deploy.local`.
 ```
+
+Prod/staging load secrets from a gitignored root `.env.prod.local` (copy from
+[`.env.prod.example`](../.env.prod.example)) via `--env-file`. Full runbook:
+[`erpify-local-test-deployment.md`](erpify-local-test-deployment.md); security
+gate: [`../PRODUCTION_SECURITY_CHECKLIST.md`](../PRODUCTION_SECURITY_CHECKLIST.md).
 
 ### API / PHP
 
@@ -42,7 +50,8 @@ make db.status                      # Migration status.
 make db.validate                    # Validate ORM mapping against the database.
 make db.load.fixtures               # Load Hautelook Alice fixtures.
 make db.reset                       # Drop → migrate → fixtures (destructive).
-make db.shell                       # Interactive psql.
+make db.shell                       # Interactive psql (CLI, any ENV — uses docker exec, no host port).
+make db.tunnel                      # Expose prod/staging DB on 127.0.0.1:15432 for a GUI client (pre-prod only; db.tunnel.stop to remove).
 make xdebug.enable                  # Toggle Xdebug in api/.env (also xdebug.disable, xdebug.status).
 ```
 
