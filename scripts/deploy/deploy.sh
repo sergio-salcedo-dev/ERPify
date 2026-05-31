@@ -221,7 +221,29 @@ while [[ $# -gt 0 ]]; do
         --dry-run) DRY_RUN=1; shift ;;
         --skip-migrations) SKIP_MIGRATIONS=1; shift ;;
         --help|-h)
-            echo "Usage: ./deploy.sh [OPTIONS]"
+            cat <<'USAGE'
+Usage: ./scripts/deploy/deploy.sh [PROFILE] [OPTIONS]
+
+Post-deploy operations for an ALREADY-RUNNING stack: migrations, cache
+warmup, worker reload, health checks. To stand the stack up first, use
+`make deploy.local` (scripts/deploy/deploy-local.sh).
+
+Profiles (omit for an interactive menu):
+  --simple          Migrations -> cache warmup -> worker reload
+  --advanced        Health check -> deploy steps -> stabilize -> health check
+  --ci              Advanced with structured logs; health failures are fatal
+  --check-only      Validate secrets + health + DB status only (no changes)
+
+Options:
+  --dry-run         Print the commands instead of running them
+  --skip-migrations Skip the migration step
+  -h, --help        Show this help
+
+Environment:
+  DEPLOY_ENV        ENV passed to every make call (default: prod)
+  SERVER_NAME       Host used to derive the health URL (default: erpify.local)
+  HEALTH_URL        Override the health endpoint outright
+USAGE
             exit 0
             ;;
         *) log_error "Unknown option: $1"; exit 1 ;;
