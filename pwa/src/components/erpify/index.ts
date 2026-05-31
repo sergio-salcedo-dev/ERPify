@@ -20,4 +20,5 @@ export { EmptyState } from "./EmptyState";
 export { FormField, useFormField } from "./FormField";
 export { ProblemDisplay } from "./ProblemDisplay";
 export { RecordSheet } from "./RecordSheet";
+export { Spinner } from "./Spinner";
 export { StatusBadge } from "./StatusBadge";
