@@ -58,19 +58,23 @@ make sf.messenger.stop-workers # Reload workers
 ## Environment Variables
 
 ```bash
-HEALTH_URL=https://app.example.com/api/v1/health  # Override health endpoint
-DEPLOY_ENV=prod              # For CI/CD
-HEALTH_CHECK=true            # Enable health validation
+DEPLOY_ENV=prod              # ENV passed to every `make` call (default: prod). Use staging/dev to switch overlay.
+SERVER_NAME=erpify.local     # Host used to derive the default health URL (default: erpify.local)
+HEALTH_URL=https://app.example.com/api/v1/health  # Override the health endpoint outright
 ```
+
+> `DEPLOY_ENV=prod`/`staging` makes the script run `make prod.env.check` first and
+> load secrets via `--env-file` (see `make/config.mk`); a missing/incomplete
+> `.env.prod.local` aborts before the stack is touched.
 
 ## Troubleshooting
 
-| Issue | Solution |
-|-------|----------|
-| **"Makefile not found"** | Run from repo root: `cd /path/to/ERPify` |
-| **Migrations fail** | Check status: `make db.status` then `make db.migrate` |
-| **Health check fails** | Wait for containers: `sleep 5 && docker compose ps` |
-| **Workers not reloading** | Restart: `docker compose restart messenger_worker` |
+| Issue                     | Solution                                              |
+|---------------------------|-------------------------------------------------------|
+| **"Makefile not found"**  | Run from repo root: `cd /path/to/ERPify`              |
+| **Migrations fail**       | Check status: `make db.status` then `make db.migrate` |
+| **Health check fails**    | Wait for containers: `sleep 5 && docker compose ps`   |
+| **Workers not reloading** | Restart: `docker compose restart messenger_worker`    |
 
 ## CI/CD Integration
 

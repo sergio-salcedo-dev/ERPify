@@ -10,7 +10,12 @@ DRY_RUN=0
 SKIP_MIGRATIONS=0
 CI_MODE=0
 PROFILE=""
-HEALTH_URL="${HEALTH_URL:-https://localhost/api/v1/health}"
+# ENV is passed through to every `make` call so prod/staging select the prod
+# overlay + `--env-file` (see make/config.mk). Defaults to prod — this is the
+# production deployment entrypoint. Override: `DEPLOY_ENV=staging ./deploy.sh …`.
+DEPLOY_ENV="${DEPLOY_ENV:-prod}"
+SERVER_NAME="${SERVER_NAME:-erpify.local}"
+HEALTH_URL="${HEALTH_URL:-https://${SERVER_NAME}/api/v1/health}"
 
 # Color Definitions
 RED='\033[0;31m'
@@ -103,12 +108,12 @@ check_repo() {
 deploy_steps() {
     cd "${REPO_ROOT}"
     if [[ $SKIP_MIGRATIONS -eq 0 ]]; then
-        run_cmd "1/3: Database migrations" "make db.migrate"
+        run_cmd "1/3: Database migrations" "make db.migrate ENV=${DEPLOY_ENV}"
     else
         log_warning "Skipping Migrations (SKIP_MIGRATIONS=1)"
     fi
-    run_cmd "2/3: Cache warmup" "make cache.warmup"
-    run_cmd "3/3: Reloading workers" "make messenger.stop-workers"
+    run_cmd "2/3: Cache warmup" "make sf.cache.warmup ENV=${DEPLOY_ENV}"
+    run_cmd "3/3: Reloading workers" "make sf.messenger.stop-workers ENV=${DEPLOY_ENV}"
 }
 
 check_health() {
@@ -135,6 +140,12 @@ run_profile() {
     local target_profile="$1"
     check_repo
 
+    # Prod/staging make calls load secrets via `--env-file` (make/config.mk);
+    # fail fast if the secret file is missing or incomplete before touching the stack.
+    if [[ $DRY_RUN -eq 0 && ( "$DEPLOY_ENV" == "prod" || "$DEPLOY_ENV" == "staging" ) ]]; then
+        run_cmd "Preflight: validating prod secrets" "make prod.env.check" || exit 1
+    fi
+
     case $target_profile in
         "simple")
             deploy_steps
@@ -149,7 +160,7 @@ run_profile() {
             ;;
         "check")
             check_health || true
-            run_cmd "Database Status" "make db.status"
+            run_cmd "Database Status" "make db.status ENV=${DEPLOY_ENV}"
             ;;
         *)
             log_error "Unknown deployment profile: ${target_profile}"

@@ -2,7 +2,7 @@
 title: 'Production-profile hardening + reproducible erpify.local deploy'
 type: 'chore'
 created: '2026-05-30'
-status: 'draft'
+status: 'implemented'
 context:
   - '{project-root}/CLAUDE.md'
   - '{project-root}/docs/project-context.md'
@@ -43,25 +43,29 @@ context:
 - `compose.prod.yaml` -- prod overlay; target for required-secret syntax, hardening, `tls internal`, `erpify.local` defaults, resource limits, internal DB net.
 - `compose.dev.yaml` -- dev overlay; must stay functionally unchanged (verify only).
 - `make/config.mk` -- `DOCKER_COMPOSE` wiring; add `--env-file` for prod/staging + secret-file path var.
-- `make/docker.mk` / new `make/deploy.mk` -- new `deploy.local` + `prod.env.check` targets.
+- `make/docker.mk` / new `make/deploy.mk` -- new `deploy.local`, `deploy.local.trust` + `prod.env.check` targets.
 - `Makefile` / `make/help.mk` -- include new module, help text.
 - `api/frankenphp/Caddyfile` -- confirm `{$CADDY_SERVER_EXTRA_DIRECTIVES}` injection point for `tls internal` (read-only check; no edit unless needed).
 - `.gitignore` -- ensure `.env.prod.local` ignored; keep `.env.prod.example` tracked.
 - `.env.prod.example` (new, root) -- versioned prod template.
-- `scripts/deploy.sh` (new) -- idempotent deploy/validate/smoke.
+- `scripts/deploy/deploy-local.sh` (new) -- idempotent deploy/validate/smoke; run via `make deploy.local`.
+- `scripts/deploy/trust-local.sh` (new) -- privileged client CA-trust helper; run via `sudo make deploy.local.trust`.
+- `scripts/deploy/deploy.sh` + `scripts/deploy/README.md` (pre-existing) -- day-2 deploy orchestrator (`--simple/--advanced/--ci/--check`); reconciled to the prod-env model (was calling dev-context + non-existent make targets).
 - `PRODUCTION_SECURITY_CHECKLIST.md` (new, root) -- authoritative checklist.
 - `docs/deployment-guide.md`, `docs/erpify-local-test-deployment.md` (new), `docs/claude-code-quickref.md`, `CLAUDE.md`, `api/README.md`, `pwa/README.md` -- docs sync.
 
 ## Tasks & Acceptance
 
 **Execution (each bullet ≈ one commit):**
-- [ ] `.gitignore` + `.env.prod.example` -- add root prod env template (all required vars, secure placeholders, `openssl rand` hints, `erpify.local` origins) and confirm `.env.prod.local` is ignored. _(commit: `chore(shared): add prod env template`)_
-- [ ] `make/config.mk` + new `make/deploy.mk` + `Makefile`/`make/help.mk` -- wire `--env-file $(PROD_ENV_FILE)` for prod/staging; add `prod.env.check` (fails on missing file / unset/placeholder required keys) and `deploy.local`. _(commit: `build(shared): wire prod env-file and deploy targets`)_
-- [ ] `compose.yaml` + `compose.prod.yaml` -- neutralize weak prod fallbacks via `${VAR:?msg}` (DATABASE_URL, POSTGRES_PASSWORD, Mercure secret, APP_SECRET) on php/messenger_worker/database; add `frontend`/`backend` networks with `backend: internal`. _(commit: `fix(shared): require prod secrets, isolate db network`)_
-- [ ] `compose.prod.yaml` -- runtime hardening: `security_opt no-new-privileges`, `cap_drop: [ALL]` + minimal `cap_add` per service, `read_only` + `tmpfs` where viable, parametrizable `deploy.resources.limits` (`${*_CPU_LIMIT}`/`${*_MEM_LIMIT}` defaults). _(commit: `fix(shared): harden prod container runtime`)_
-- [ ] `compose.prod.yaml` -- `SERVER_NAME: ${SERVER_NAME:-erpify.local}`, `CADDY_SERVER_EXTRA_DIRECTIVES: tls internal`, align `DEFAULT_URI`/`MERCURE_PUBLIC_URL`/`NEXT_PUBLIC_SYMFONY_API_BASE_URL` to the prod host. _(commit: `feat(shared): erpify.local internal-TLS prod profile`)_
-- [ ] `scripts/deploy.sh` -- idempotent: preflight (docker, env file via `prod.env.check`, `/etc/hosts` warn), `make docker.up ENV=prod` (build+wait), `make db.migrate ENV=prod`, smoke `curl -k https://erpify.local/api/v1/health`, print CA-export + hosts hints. _(commit: `feat(shared): add reproducible deploy script`)_
-- [ ] `PRODUCTION_SECURITY_CHECKLIST.md` (new) + docs sync (`docs/deployment-guide.md`, new `docs/erpify-local-test-deployment.md`, `docs/claude-code-quickref.md`, `CLAUDE.md` stack line drift Symfony 7→8, `api/README.md`, `pwa/README.md`). _(commit: `docs(shared): document prod hardening and erpify.local deploy`)_
+- [x] `.gitignore` + `.env.prod.example` -- add root prod env template (all required vars, secure placeholders, `openssl rand` hints, `erpify.local` origins) and confirm `.env.prod.local` is ignored. _(commit: `chore(shared): add prod env template`)_
+- [x] `make/config.mk` + new `make/deploy.mk` + `Makefile`/`make/help.mk` -- wire `--env-file $(PROD_ENV_FILE)` for prod/staging; add `prod.env.check` (fails on missing file / unset/placeholder required keys) and `deploy.local`. _(commit: `build(shared): wire prod env-file and deploy targets`)_
+- [x] `compose.yaml` + `compose.prod.yaml` -- neutralize weak prod fallbacks via `${VAR:?msg}` (DATABASE_URL, POSTGRES_PASSWORD, Mercure secret, APP_SECRET) on php/messenger_worker/database; add `frontend`/`backend` networks with `backend: internal`. _(commit: `fix(shared): require prod secrets, isolate db network`)_
+- [x] `compose.prod.yaml` -- runtime hardening: `security_opt no-new-privileges`, `cap_drop: [ALL]` + minimal `cap_add` per service, `read_only` + `tmpfs` where viable, parametrizable `deploy.resources.limits` (`${*_CPU_LIMIT}`/`${*_MEM_LIMIT}` defaults). _(commit: `fix(shared): harden prod container runtime`)_
+- [x] `compose.prod.yaml` -- `SERVER_NAME: ${SERVER_NAME:-erpify.local}`, `CADDY_SERVER_EXTRA_DIRECTIVES: tls internal`, align `DEFAULT_URI`/`MERCURE_PUBLIC_URL`/`NEXT_PUBLIC_SYMFONY_API_BASE_URL` to the prod host. _(commit: `feat(shared): erpify.local internal-TLS prod profile`)_
+- [x] `scripts/deploy/deploy-local.sh` (run via `make deploy.local`) -- idempotent: preflight (docker, env file via `prod.env.check`, `/etc/hosts` warn), `make docker.up.wait ENV=prod` (build+wait), `make db.migrate ENV=prod`, smoke `curl -k https://erpify.local/api/v1/health`, print CA-export + hosts hints. _(commit: `feat(shared): add reproducible deploy script`)_
+- [x] `scripts/deploy/trust-local.sh` + `make deploy.local.trust` -- privileged client-trust helper: append `erpify.local` to `/etc/hosts`, install Caddy's exported root CA into the system trust store and the Chromium/Firefox NSS DBs so clients see valid TLS without `-k`; discloses every OS file it touches. _(commit: `feat(shared): one-command CA trust helper with OS-file disclosure`)_
+- [x] `scripts/deploy/deploy.sh` + README -- reconcile the pre-existing day-2 orchestrator with the prod-env model: pass `ENV=$DEPLOY_ENV` (default prod) to every `make` call, fix broken target names (`cache.warmup`→`sf.cache.warmup`, `messenger.stop-workers`→`sf.messenger.stop-workers`), derive health URL from `SERVER_NAME`, run `prod.env.check` preflight for prod/staging. _(commit: `fix(shared): reconcile deploy.sh with prod env model`)_
+- [x] `PRODUCTION_SECURITY_CHECKLIST.md` (new) + docs sync (`docs/deployment-guide.md`, new `docs/erpify-local-test-deployment.md`, `docs/claude-code-quickref.md`, `CLAUDE.md` stack line drift Symfony 7→8, `api/README.md`, `pwa/README.md`). _(commit: `docs(shared): document prod hardening and erpify.local deploy`)_
 
 **Acceptance Criteria:**
 - Given `ENV=prod` and a complete `.env.prod.local`, when `make deploy.local`, then the stack reaches healthy, migrations apply, and `https://erpify.local` serves the PWA + `/api/*` over Caddy internal TLS.
@@ -69,6 +73,8 @@ context:
 - Given `ENV` unset/`dev`, when `make app.dev`, then dev behavior is unchanged (no `--env-file`, no hardening side effects).
 - Given the prod profile, when inspected, then Postgres is on an `internal` network with no published host port, and every service has `no-new-privileges` + dropped caps.
 - Given a fresh VPS with a public domain, when `SERVER_NAME` + origins + secrets are set, then the same overlay deploys with real ACME TLS and no compose edits.
+- Given `DEPLOY_ENV=prod ./scripts/deploy/deploy.sh`, when it runs, then it validates `.env.prod.local` via `prod.env.check` first and every `make` call targets the prod overlay (`ENV=prod`) using the correct `sf.*` targets — no dev-context fallback, no "no rule to make target".
+- Given a trusting client, when `sudo make deploy.local.trust` runs, then `erpify.local` resolves and the exported Caddy root CA is installed into the system + Chromium/Firefox NSS trust stores, so `https://erpify.local` validates without `-k`; the helper discloses every OS file it modifies.
 
 ## Design Notes
 
@@ -84,7 +90,7 @@ Minimal caps: postgres ≈ `CHOWN,DAC_OVERRIDE,FOWNER,SETGID,SETUID`; frankenphp
 - `ENV=prod make prod.env.check` -- expected: fails clearly without `.env.prod.local`, passes with a complete one.
 - `docker compose -f compose.yaml -f compose.prod.yaml --env-file .env.prod.local config` -- expected: renders with no weak defaults; DB has no published ports; networks/caps/limits present.
 - `make app.dev` (or `docker compose -f compose.yaml -f compose.dev.yaml config`) -- expected: dev overlay unchanged.
-- `bash scripts/deploy.sh` on the test box -- expected: healthy stack, migrations applied, smoke 200.
+- `make deploy.local` (runs `scripts/deploy/deploy-local.sh`) on the test box -- expected: healthy stack, migrations applied, smoke 200. Then `sudo make deploy.local.trust` for client TLS trust.
 - `make pwa.quality` / markdown lint on touched `.md` -- expected: clean (no broken links, concrete-file link style).
 
 **Manual checks:**
