@@ -1,6 +1,6 @@
 # Deployment Guide
 
-This guide summarises how ERPify is deployed. For the detailed PWA prod playbook, see [`pwa/docs/production-deployment.md`](../pwa/docs/production-deployment.md); for FrankenPHP-specific options see [`api/docs/options.md`](../api/docs/options.md) and [`api/docs/tls.md`](../api/docs/tls.md).
+This guide summarises how ERPify is deployed. For the detailed PWA prod playbook, see [`pwa/docs/production-deployment.md`](../pwa/docs/production-deployment.md); for FrankenPHP-specific options see [`api/docs/options.md`](../api/docs/options.md) and [`api/docs/tls.md`](../api/docs/tls.md). To stand up the prod profile locally first, see [`erpify-local-test-deployment.md`](./erpify-local-test-deployment.md); to promote to a public VPS and reach the database remotely, see [`vps-deployment.md`](./vps-deployment.md).
 
 ## Infrastructure requirements
 

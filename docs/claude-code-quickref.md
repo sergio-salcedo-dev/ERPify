@@ -50,7 +50,8 @@ make db.status                      # Migration status.
 make db.validate                    # Validate ORM mapping against the database.
 make db.load.fixtures               # Load Hautelook Alice fixtures.
 make db.reset                       # Drop → migrate → fixtures (destructive).
-make db.shell                       # Interactive psql.
+make db.shell                       # Interactive psql (CLI, any ENV — uses docker exec, no host port).
+make db.tunnel                      # Expose prod/staging DB on 127.0.0.1:15432 for a GUI client (pre-prod only; db.tunnel.stop to remove).
 make xdebug.enable                  # Toggle Xdebug in api/.env (also xdebug.disable, xdebug.status).
 ```
 

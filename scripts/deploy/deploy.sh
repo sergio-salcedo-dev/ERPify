@@ -14,6 +14,12 @@ PROFILE=""
 # overlay + `--env-file` (see make/config.mk). Defaults to prod — this is the
 # production deployment entrypoint. Override: `DEPLOY_ENV=staging ./deploy.sh …`.
 DEPLOY_ENV="${DEPLOY_ENV:-prod}"
+# Reject typos early — an unrecognised value would silently fall through to the
+# dev overlay (no --env-file, weak fallbacks) while appearing to deploy prod.
+case "$DEPLOY_ENV" in
+    dev|ci|staging|prod) ;;
+    *) echo "✗ Invalid DEPLOY_ENV='$DEPLOY_ENV' (expected: ci|staging|prod)" >&2; exit 1 ;;
+esac
 SERVER_NAME="${SERVER_NAME:-erpify.local}"
 HEALTH_URL="${HEALTH_URL:-https://${SERVER_NAME}/api/v1/health}"
 

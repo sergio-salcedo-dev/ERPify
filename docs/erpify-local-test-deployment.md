@@ -160,33 +160,54 @@ Inside the repo, only `./erpify-local-root-ca.crt` is written (gitignored).
 - `docker compose --env-file .env.prod.local -f compose.yaml -f compose.prod.yaml ps`
   shows every service healthy.
 
+## Inspect the database (psql or a GUI client)
+
+Under the prod overlay Postgres has **no published port** and sits on the
+`internal: true` `backend` network, so it is unreachable from the host (and the
+internet) by design. Two ways in, depending on what you need:
+
+**CLI — works everywhere, no port, nothing to open:**
+
+```bash
+make db.shell           # interactive psql via `docker exec` into the db container
+```
+
+**GUI client (PhpStorm / DataGrip / DBeaver) — local pre-prod box:**
+
+```bash
+make db.tunnel          # starts a throwaway socat sidecar, binds 127.0.0.1:15432
+# … connect your client, then …
+make db.tunnel.stop     # tears the sidecar down
+```
+
+`db.tunnel` bridges the host-facing `frontend` network (to publish the port)
+and `backend` (to reach `database`), because a port can't be published from the
+internal network directly. It binds **127.0.0.1 only**, so it never leaves the
+laptop, and it touches nothing in the running stack. Point the client at:
+
+| Field    | Value                                            |
+|----------|--------------------------------------------------|
+| Host     | `127.0.0.1` (or `erpify.local`)                  |
+| Port     | `15432` (override: `make db.tunnel DB_TUNNEL_PORT=5432`) |
+| Database | `POSTGRES_DB` from `.env.prod.local`             |
+| User     | `POSTGRES_USER` from `.env.prod.local`           |
+| Password | `POSTGRES_PASSWORD` from `.env.prod.local`       |
+
+Port `15432` matches the dev stack, so a single data source works against both.
+This is a **local pre-prod convenience** — never run `db.tunnel` on the VPS as a
+standing service.
+
+> **On a remote VPS** the DB-access flow is different (SSH-gated, no published
+> port). All options — CLI, GUI SSH tunnel to the pinned container IP, an
+> `~/.ssh/config` forward, and the socat fallback — are documented in
+> [`vps-deployment.md`](./vps-deployment.md#database-access-from-your-workstation).
+
 ## Promote to a public VPS
 
 The prod overlay is **byte-identical** to the LAN box; only `.env.prod.local`
-and host setup differ. On a VPS with a real domain:
-
-1. **Host prep.** Install Docker + Compose v2, check out the repo. Open the
-   firewall for **inbound 80/443 only** (e.g. `ufw allow 80,443/tcp`). Postgres
-   already has no published port (backend-internal), so nothing else is exposed.
-2. **DNS.** Point an `A`/`AAAA` record for your domain at the box — no
-   `/etc/hosts` entry needed.
-3. **Secrets / origins** in `.env.prod.local` (freshly generated, never reused
-   from the LAN box):
-   - `SERVER_NAME=your.domain`
-   - `NEXT_PUBLIC_SYMFONY_API_BASE_URL=https://your.domain`
-   - **Clear** `CADDY_SERVER_EXTRA_DIRECTIVES=` (empty) so Caddy switches from
-     `tls internal` to automatic **ACME** — a publicly-trusted cert, so clients
-     import **no** CA (skip step 4 entirely).
-   - For real outbound mail, set a real `MAILER_DSN=` (the default
-     `null://null` silently discards mail) and `MAILER_FROM` /
-     `DEFAULT_NOTIFICATION_EMAIL`.
-   - Optionally tune the `*_CPU_LIMIT` / `*_MEM_LIMIT` knobs to the VPS size.
-4. **Deploy:** `make deploy.local` (or
-   `ENV=prod make docker.up.wait && ENV=prod make db.migrate`). No compose edits
-   — the overlay is identical. ACME needs ports 80/443 reachable from the
-   internet to issue the cert on first boot.
-5. **Verify:** `https://your.domain/api/v1/health` returns `200` with a valid
-   public cert; `docker compose … ps` shows every service healthy.
+and host setup differ. The full promotion runbook (host prep, firewall, DNS,
+ACME, deploy, verify) and remote DB access live in
+[`vps-deployment.md`](./vps-deployment.md).
 
 ## Troubleshooting
 

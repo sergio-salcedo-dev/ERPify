@@ -22,8 +22,8 @@ prod.env.check: ## Validate .env.prod.local holds every required prod secret (fa
 	fi; \
 	missing=""; \
 	for key in $(PROD_REQUIRED_KEYS); do \
-		val=$$(grep -E "^$$key=" "$$file" | head -n1 | cut -d= -f2-); \
-		if [ -z "$$val" ] || printf '%s' "$$val" | grep -q 'CHANGE_ME'; then \
+		val=$$(grep -E "^$$key=" "$$file" | head -n1 | cut -d= -f2- | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$$//'); \
+		if [ -z "$$val" ] || printf '%s' "$$val" | grep -qE '^CHANGE_ME'; then \
 			missing="$$missing $$key"; \
 		fi; \
 	done; \
@@ -31,6 +31,12 @@ prod.env.check: ## Validate .env.prod.local holds every required prod secret (fa
 		echo "✗ $(PROD_ENV_FILE) has unset or placeholder required keys:"; \
 		for k in $$missing; do echo "    - $$k"; done; \
 		echo "  Edit $(PROD_ENV_FILE) and replace every CHANGE_ME value (see .env.prod.example)."; \
+		exit 1; \
+	fi; \
+	pw=$$(grep -E "^POSTGRES_PASSWORD=" "$$file" | head -n1 | cut -d= -f2- | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$$//'); \
+	if printf '%s' "$$pw" | grep -q '[/+=:@? ]'; then \
+		echo "✗ POSTGRES_PASSWORD contains a URL-unsafe char (/ + = : @ ? or space) — it corrupts DATABASE_URL."; \
+		echo "  Regenerate URL-safe, e.g.: openssl rand -hex 24"; \
 		exit 1; \
 	fi; \
 	echo "✓ $(PROD_ENV_FILE) is complete — all required keys set."

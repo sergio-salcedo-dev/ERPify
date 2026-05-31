@@ -54,7 +54,8 @@ Detailed exhaustive analysis of specific areas:
 
 - **[contribution-guide.md](./contribution-guide.md)** — Branches, commits, PR conventions
 - **[deployment-guide.md](./deployment-guide.md)** — Docker Compose envs and prod services
-- **[erpify-local-test-deployment.md](./erpify-local-test-deployment.md)** — Step-by-step: run the prod profile at `https://erpify.local` (internal TLS) + VPS promotion
+- **[erpify-local-test-deployment.md](./erpify-local-test-deployment.md)** — Step-by-step: run the prod profile at `https://erpify.local` (internal TLS) on a local box
+- **[vps-deployment.md](./vps-deployment.md)** — Promote to a public VPS + remote database access (CLI / GUI over SSH)
 - **[development-guide-api.md](./development-guide-api.md)** — Day-to-day API workflow via `make`
 - **[development-guide-pwa.md](./development-guide-pwa.md)** — Day-to-day PWA workflow via `make`
 

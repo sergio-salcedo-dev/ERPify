@@ -82,12 +82,15 @@ HOSTS_LINE="127.0.0.1   ${SERVER_NAME}"
 NSS_DB="$HOME/.pki/nssdb"
 NSS_NICK="${SERVER_NAME} Local CA"
 
+# Authoritative check is the /etc/hosts entry itself — `getent` would resolve a
+# `*.local` name via mDNS/avahi even with no hosts entry (false positive) and
+# would not flag a conflicting IP.
 HOSTS_OK=0
-if getent hosts "$SERVER_NAME" >/dev/null 2>&1 || grep -qE "[[:space:]]${SERVER_NAME}([[:space:]]|\$)" /etc/hosts 2>/dev/null; then
+if grep -qE "^[[:space:]]*[0-9.]+([[:space:]]+[^[:space:]#]+)*[[:space:]]+${SERVER_NAME}([[:space:]]|\$)" /etc/hosts 2>/dev/null; then
     HOSTS_OK=1
-    log_success "${SERVER_NAME} resolves."
+    log_success "${SERVER_NAME} has an /etc/hosts entry."
 else
-    log_warning "${SERVER_NAME} is not resolvable yet (non-fatal; fixed in the next-steps below)."
+    log_warning "${SERVER_NAME} has no /etc/hosts entry yet (non-fatal; fixed in the next-steps below)."
 fi
 
 # —— 2. Bring the stack up ————————————————————————————————————————————————
@@ -122,27 +125,43 @@ else
 fi
 
 # —— 5. Client trust (auto, no sudo): export CA + add to Chromium's NSS store ——
+# Best-effort: a public/ACME profile has no internal CA, and a transient trust
+# failure must never abort an otherwise-healthy deploy.
 NSS_TRUSTED=0
 if [[ $TRUST -eq 1 ]]; then
-    log_info "Setting up client trust for the internal CA..."
-    # 5a. Export the CA root (idempotent — refreshes after a CA rotation).
-    run "Exporting internal CA root → ./${CA_OUT}" \
-        "$COMPOSE cp php:${CA_PATH_IN_CONTAINER} ./${CA_OUT}"
-
-    # 5b. Chrome/Chromium/Edge on Linux read the per-user NSS store, NOT the
-    #     system bundle — add it there without sudo when certutil is available.
-    if [[ "$OS" == "Linux" ]]; then
-        if [[ $DRY_RUN -eq 1 ]]; then
-            echo -e "  ${YELLOW}[DRY-RUN]${NC} certutil -d sql:${NSS_DB} -A -t 'C,,' -n '${NSS_NICK}' -i ./${CA_OUT}"
-        elif command -v certutil >/dev/null 2>&1; then
-            mkdir -p "$NSS_DB"
-            [[ -f "$NSS_DB/cert9.db" ]] || certutil -d sql:"$NSS_DB" -N --empty-password
-            certutil -d sql:"$NSS_DB" -D -n "$NSS_NICK" 2>/dev/null || true   # drop stale entry first
-            certutil -d sql:"$NSS_DB" -A -t "C,," -n "$NSS_NICK" -i "./${CA_OUT}"
-            NSS_TRUSTED=1
-            log_success "Chrome/Chromium/Edge trust set (NSS: ${NSS_DB})."
+    # Public TLS (ACME) ships no internal CA root to export — clients trust the
+    # public chain, so there is nothing to install locally.
+    SERVER_DIRECTIVES="$(grep -E '^CADDY_SERVER_EXTRA_DIRECTIVES=' "$ENV_FILE" 2>/dev/null | head -n1 | cut -d= -f2- | tr -d '"' | xargs || true)"
+    if [[ -z "${SERVER_DIRECTIVES//[[:space:]]/}" ]]; then
+        log_info "Public/ACME TLS profile detected — clients trust the public CA; skipping internal-CA export."
+    else
+        log_info "Setting up client trust for the internal CA..."
+        # 5a. Export the CA root (idempotent — refreshes after a CA rotation).
+        #     Non-fatal: a missing CA must not fail the deploy.
+        if run "Exporting internal CA root → ./${CA_OUT}" \
+               "$COMPOSE cp php:${CA_PATH_IN_CONTAINER} ./${CA_OUT}"; then
+            # 5b. Chrome/Chromium/Edge on Linux read the per-user NSS store, NOT
+            #     the system bundle — add it there without sudo when certutil is
+            #     available. Each step is best-effort.
+            if [[ "$OS" == "Linux" ]]; then
+                if [[ $DRY_RUN -eq 1 ]]; then
+                    echo -e "  ${YELLOW}[DRY-RUN]${NC} certutil -d sql:${NSS_DB} -A -t 'C,,' -n '${NSS_NICK}' -i ./${CA_OUT}"
+                elif command -v certutil >/dev/null 2>&1; then
+                    mkdir -p "$NSS_DB"
+                    [[ -f "$NSS_DB/cert9.db" ]] || certutil -d sql:"$NSS_DB" -N --empty-password || true
+                    certutil -d sql:"$NSS_DB" -D -n "$NSS_NICK" 2>/dev/null || true   # drop stale entry first
+                    if certutil -d sql:"$NSS_DB" -A -t "C,," -n "$NSS_NICK" -i "./${CA_OUT}"; then
+                        NSS_TRUSTED=1
+                        log_success "Chrome/Chromium/Edge trust set (NSS: ${NSS_DB})."
+                    else
+                        log_warning "Failed to add CA to the NSS store — Chromium-family trust deferred to next-steps."
+                    fi
+                else
+                    log_warning "certutil not found — Chromium-family trust deferred to next-steps."
+                fi
+            fi
         else
-            log_warning "certutil not found — Chromium-family trust deferred to next-steps."
+            log_warning "Could not export the internal CA (not found?) — skipping client-trust setup."
         fi
     fi
 else

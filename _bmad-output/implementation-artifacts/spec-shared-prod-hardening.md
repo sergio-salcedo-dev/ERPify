@@ -2,7 +2,7 @@
 title: 'Production-profile hardening + reproducible erpify.local deploy'
 type: 'chore'
 created: '2026-05-30'
-status: 'implemented'
+status: 'in-progress'  # code review 2026-05-31: 6 patches applied; 2 action items open (pwa read_only tmpfs MEDIUM, reference.php revert LOW)
 context:
   - '{project-root}/CLAUDE.md'
   - '{project-root}/docs/project-context.md'
@@ -74,7 +74,7 @@ context:
 - Given the prod profile, when inspected, then Postgres is on an `internal` network with no published host port, and every service has `no-new-privileges` + dropped caps.
 - Given a fresh VPS with a public domain, when `SERVER_NAME` + origins + secrets are set, then the same overlay deploys with real ACME TLS and no compose edits.
 - Given `DEPLOY_ENV=prod ./scripts/deploy/deploy.sh`, when it runs, then it validates `.env.prod.local` via `prod.env.check` first and every `make` call targets the prod overlay (`ENV=prod`) using the correct `sf.*` targets — no dev-context fallback, no "no rule to make target".
-- Given a trusting client, when `sudo make deploy.local.trust` runs, then `erpify.local` resolves and the exported Caddy root CA is installed into the system + Chromium/Firefox NSS trust stores, so `https://erpify.local` validates without `-k`; the helper discloses every OS file it modifies.
+- Given a trusting client, when `sudo make deploy.local.trust` runs, then `erpify.local` resolves and the exported Caddy root CA is installed into the system trust store + the Chromium-family NSS store, so `https://erpify.local` validates without `-k`; Firefox uses its own per-profile store and is imported via GUI (it cannot be reliably scripted); the helper discloses every OS file it modifies.
 
 ## Design Notes
 
@@ -96,3 +96,36 @@ Minimal caps: postgres ≈ `CHOWN,DAC_OVERRIDE,FOWNER,SETGID,SETUID`; frankenphp
 **Manual checks:**
 - From a trusting client, `https://erpify.local` loads PWA + reaches `/api/*`; browser shows valid (internally-trusted) TLS.
 - `docker compose ps` shows all services healthy under the prod overlay.
+
+## Review Findings
+
+_Adversarial code review (Blind Hunter + Edge Case Hunter + Acceptance Auditor), 2026-05-31 — branch `feat/shared-prod-hardening` vs `main`._
+
+### Decision needed
+
+- [x] [Review][Decision] **RESOLVED (AC7 text reconciled)** — AC7 vs implementation: helper does not install into Firefox NSS — AC7 states `deploy.local.trust` installs the CA into "Chromium/**Firefox** NSS trust stores", but `scripts/deploy/trust-local.sh` deliberately touches only the system bundle + Chromium NSS (`~/.pki/nssdb`) and leaves Firefox GUI-only (trust-local.sh:1331-1332,1449-1451). Defensible (Firefox's per-profile store can't be reliably scripted), but the AC wording is unmet. Resolve by reconciling the AC text or implementing Firefox NSS scripting.
+
+### Patch
+
+- [x] [Review][Patch][HIGH] **APPLIED** — Client-trust phase is fatal on a missing internal CA — on a VPS (ACME, `CADDY_SERVER_EXTRA_DIRECTIVES=` empty) there is no CA at `/data/caddy/pki/authorities/local/root.crt`, so `docker compose cp` inside `run()` (eval under `set -euo pipefail`) aborts *after* a healthy deploy. The VPS doc tells operators to run `make deploy.local`, which cannot pass `--no-trust`. Make the whole trust phase non-fatal (`|| log_warning`) and/or auto-skip when the directive is empty. [scripts/deploy/deploy-local.sh:43-52,129-130; docs/erpify-local-test-deployment.md:184]
+- [ ] [Review][Patch][MEDIUM] `pwa` `read_only` + only `/tmp` tmpfs → EROFS on `.next/cache` — any ISR / data-cache / on-demand-revalidate / image-optimization route makes Next write under `/app/pwa/.next/cache`, which is read-only; fails at request time (passes the health gate). Verify the PWA's caching mode, then add `/app/pwa/.next/cache` to the `pwa` tmpfs list. [compose.prod.yaml (pwa service)]
+- [x] [Review][Patch][MEDIUM] **APPLIED** — `deploy.sh` accepts arbitrary `DEPLOY_ENV` → silent dev deploy — a typo (`production`, `PROD`) skips the `prod.env.check` preflight and `--env-file` wiring (which key on exact `prod`/`staging`) and falls through to the dev overlay with weak fallbacks. Validate `DEPLOY_ENV ∈ {dev,ci,staging,prod}` and fail fast. [scripts/deploy/deploy.sh]
+- [x] [Review][Patch][MEDIUM] **APPLIED** — `prod.env.check` does not enforce `POSTGRES_PASSWORD` URL-safety — a `/ + = : @` char (e.g. `openssl rand -base64`) passes the guard then crashes php boot with `MalformedDsnException` via `DATABASE_URL`. Documented in troubleshooting but not guarded. Reject non-URL-safe `POSTGRES_PASSWORD`. [make/deploy.mk:24-28]
+- [ ] [Review][Patch][LOW] `api/config/reference.php` modified despite CLAUDE.md "Do not touch" (auto-generated) — spurious `// Default: null` comment reorder. Revert to `main`. [api/config/reference.php:944-945]
+- [x] [Review][Patch][LOW] **APPLIED** — `prod.env.check` placeholder/empty detection weaknesses — `grep -q 'CHANGE_ME'` matches the substring anywhere (rejects a legit secret containing it); a whitespace-only or CRLF (`\r`) value passes `[ -z ]` and survives into `DATABASE_URL`/`SERVER_NAME`. Anchor (`^CHANGE_ME`) and strip `\r` + re-test after trimming. [make/deploy.mk:25-26]
+- [x] [Review][Patch][LOW] **APPLIED** — Hosts preflight reports false `HOSTS_OK` — `getent hosts` resolves `*.local` via mDNS/avahi even without an `/etc/hosts` entry, and a conflicting-IP entry isn't detected. Rely on the `/etc/hosts` grep / assert the resolved address is `127.0.0.1` locally. [scripts/deploy/deploy-local.sh:86]
+
+### Deferred
+
+- [x] [Review][Defer] Spec Task 3 / Code Map claim a `compose.yaml` change that never happened — all secret-neutralization + named networks landed only in `compose.prod.yaml`; outcome is correct/cleaner, spec text is inaccurate. — spec hygiene
+- [x] [Review][Defer] Two uncatalogued `api/` edits — `api/frankenphp/docker-entrypoint.sh` (functional, verified correct & necessary for prod boot; guards composer reconcile behind `command -v composer`) and `reference.php` (see patch). Not in Code Map/Tasks; acknowledge in PR description. — out of declared scope
+- [x] [Review][Defer] `trust-local.sh` assumes `runuser` present — on a minimal/busybox host the NSS step aborts mid-trust after touching `/etc/hosts` + system CA. [scripts/deploy/trust-local.sh] — narrow host edge case
+- [x] [Review][Defer] `CADDY_SERVER_EXTRA_DIRECTIVES` single-dash default is correct (empty→ACME) but *deleting* the line silently re-enables `tls internal` on a VPS — add a guard comment in `.env.prod.example`. [compose.prod.yaml:500] — robustness/doc
+- [x] [Review][Defer] Smoke-test retry window ~30s — `docker.up.wait --wait` already health-gates before smoke so likely sufficient; extend only if cold prod boots exceed it. [scripts/deploy/deploy-local.sh:110-115] — tuning
+
+### Dismissed (noise / false positive / handled)
+
+- `deploy.resources.limits` "ignored by `docker compose up`" (claimed HIGH) — false positive: Compose **v2** (used here, `docker compose ... up --wait`) honors `deploy.resources.limits` cpus/memory; `--compatibility` was a v1 requirement. Blind Hunter lacked the v2 context.
+- macOS next-steps never collapse; `-h` help dumps banner lines — cosmetic.
+- `eval` of `$PROD_ENV_FILE`/`$ENV_FILE` — operator-supplied, negligible risk.
+- `logname`/`SUDO_USER` unset; DB healthcheck/connectivity; worker-on-`frontend`; `deploy.local.trust` sudo guard — verified handled in the diff or surrounding files.

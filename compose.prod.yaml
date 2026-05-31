@@ -60,11 +60,24 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    # Next.js standalone serves from an immutable build and only writes to
-    # /tmp at runtime, so the root filesystem can be read-only.
+    # Next.js standalone serves from an immutable build, so the root filesystem
+    # is read-only. The only runtime writes are scratch (/tmp) and the Next
+    # cache (.next/cache: image-optimizer output, ISR/data-cache, fetch-cache).
+    # Both are tmpfs (in-memory, wiped on restart) so the root FS stays
+    # read-only. The cache is currently dormant — no next/image, no ISR — but
+    # `images.remotePatterns` is already wired, so a future <Image remote/> or
+    # `export const revalidate` would otherwise EROFS → 500 at runtime and slip
+    # past a smoke test that only hits the static "/". The size cap keeps the
+    # cache bounded inside the container's memory cgroup (PWA_MEM_LIMIT) so an
+    # unbounded optimizer cache degrades to ENOSPC instead of OOM-killing pwa.
     read_only: true
     tmpfs:
       - /tmp
+    volumes:
+      - type: tmpfs
+        target: /app/pwa/.next/cache
+        tmpfs:
+          size: 67108864 # 64 MiB; raise if image optimization is used heavily
     deploy:
       resources:
         limits:
@@ -95,9 +108,13 @@ services:
           cpus: ${DB_CPU_LIMIT:-2.0}
           memory: ${DB_MEM_LIMIT:-1g}
     # Backend-only network + no published port: Postgres is unreachable from
-    # the host and the public internet under the prod profile.
+    # the host and the public internet under the prod profile. The pinned IP
+    # (DB_BACKEND_IP, overridable) is a stable target for SSH-tunnelled DB GUI
+    # clients against a remote box — see docs/vps-deployment.md. This changes
+    # nothing about exposure: still internal-only, still no published port.
     networks:
-      - backend
+      backend:
+        ipv4_address: ${DB_BACKEND_IP:-10.89.0.10}
 
   messenger_worker:
     image: ${IMAGES_PREFIX:-}app-php-prod
@@ -133,3 +150,10 @@ networks:
   frontend:
   backend:
     internal: true
+    # Fixed subnet so the database keeps a stable IP across restarts (see the
+    # `database` service's ipv4_address). Override DB_BACKEND_SUBNET (and
+    # DB_BACKEND_IP within it) in .env.prod.local if it clashes with an existing
+    # network on the host.
+    ipam:
+      config:
+        - subnet: ${DB_BACKEND_SUBNET:-10.89.0.0/24}
