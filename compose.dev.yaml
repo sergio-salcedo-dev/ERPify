@@ -55,6 +55,11 @@ services:
     volumes:
       - ./pwa:/app/pwa
       - pwa_node_modules:/app/pwa/node_modules
+      # Keep Next build artifacts in container-managed volumes so the dev process
+      # (root, inside the container) never writes root-owned .next/.next-e2e onto
+      # the bind-mounted host tree (caused EACCES on host-side build/clean).
+      - pwa_next:/app/pwa/.next
+      - pwa_next_e2e:/app/pwa/.next-e2e
     environment:
       NODE_ENV: development
     healthcheck:
@@ -90,3 +95,5 @@ services:
 
 volumes:
   pwa_node_modules:
+  pwa_next:
+  pwa_next_e2e:

@@ -17,6 +17,7 @@ make docker.up.wait      # Same, with --wait health gate.
 make docker.down         # Stop stack and remove orphans.
 make docker.logs         # Follow compose logs (all services).
 make docker.ps           # Compose ps.
+make docker.info         # Show this checkout's resolved stack identity (project + host ports).
 make php.bash            # Shell into the php container (also: make php.sh, make php.exec cmd='…').
 make docker.down.clean-volumes  # Stop stack and REMOVE volumes (destructive).
 make docker.prune        # Prune ALL Docker images/volumes/containers system-wide (destructive).
@@ -215,6 +216,7 @@ Behat is **preferred** over PHPUnit functional tests for HTTP behaviour. Do not 
 - **Prod boot requires secrets** — `APP_SECRET`, `CADDY_MERCURE_JWT_SECRET`, `POSTGRES_PASSWORD`. The prod overlay fails non-obviously if any are missing.
 - **First boot is slow.** FrankenPHP's healthcheck has a 120s `start_period` because the entrypoint runs composer install (cold), waits for the DB, runs migrations, then starts the worker. Don't kill it early.
 - **Port collisions on `:80` / `:443` / `:8000`** will surface as a non-obvious Compose error. Free the port or override `HTTP_PORT` / `HTTPS_PORT`.
+- **One stack per worktree, not one stack total.** `make/config.mk` derives `COMPOSE_PROJECT_NAME` from the checkout: the primary checkout keeps `erpify`; a linked worktree under `.claude/worktrees/` gets `erpify-<dir-slug>`. So each worktree's containers/networks/volumes are isolated and several stacks can run at once. Linked-worktree stacks publish host ports **ephemerally** (random free ports, not the fixed `80/443/15432/8025`) so they never collide — they are meant for `make php.*` / `make pwa.quality` / Behat (which exec into the container or use the internal network), not for browsing the UI. Browse from the primary checkout, run `make docker.info` to see a checkout's resolved project + ports, or set `HTTP_PORT=…`/`HTTPS_PORT=…` to opt a worktree back into fixed published ports. CI is unaffected (it runs in the primary checkout → `erpify`, fixed ports).
 - **API tests services config must be YAML** (`api/config/services_test.yaml`) — never `services_test.php`. Symfony's test kernel only loads the YAML variant.
 - **Rector silently privatizes `protected` methods on `final` classes** during `make php.quality`. If you intentionally leave a method `protected` on a `final` class, expect it to be rewritten — refactor the design or drop `final`.
 - **PHP multi-line `if`/`while`/`match` formatting** — newline after the opening `(`; do not put the first operand on the same line as the keyword. PHP-CS-Fixer enforces this.

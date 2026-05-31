@@ -117,8 +117,11 @@ pwa.clean.soft: ## Remove .next, .next-e2e
 pwa.clean.all: pwa.clean.soft ## Remove node_modules, .next, .next-e2e (destructive)
 	@$(call pwa_cmd,rm -rf node_modules)
 
-# Host-side sudo wipe. `.next` / `.next-e2e` are written by the container as root,
-# so the host user can't remove them without sudo — this target can. Mirrors
+# Host-side sudo wipe. The dev container now keeps .next / .next-e2e in named
+# volumes (pwa_next / pwa_next_e2e), so a fresh stack no longer writes them
+# root-owned onto the host tree — wipe those with `docker compose down -v` (or
+# remove the volumes). This target stays as an escape hatch for root-owned
+# leftovers from pre-volume checkouts (and host node_modules). Mirrors
 # pwa.clean.all's target set (node_modules, .next, .next-e2e).
 pwa.clean.sudo: ## Wipe pwa node_modules/.next/.next-e2e host-side (requires sudo; dev/test only)
 	$(call guard_var_writable,pwa.clean.sudo)

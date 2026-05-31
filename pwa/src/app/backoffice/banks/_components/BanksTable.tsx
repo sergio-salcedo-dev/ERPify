@@ -57,7 +57,6 @@ function BanksActionsCell({ row, onBankDeleted }: Readonly<BanksActionsCellProps
       <DeleteBankButton
         id={row.id}
         name={row.name}
-        stopPropagation
         triggerTestId={`banks-table__delete-${row.id}`}
         onDeleted={onBankDeleted}
         trigger={
@@ -79,8 +78,8 @@ function BanksActionsCell({ row, onBankDeleted }: Readonly<BanksActionsCellProps
 
 const renderShortNameCell = (row: Bank) => row.shortName;
 const renderNameCell = (row: Bank) => row.name;
-const renderCreatedAtCell = (row: Bank) => dateTimeProvider.formatIsoToDisplay(row.createdAt);
-const renderUpdatedAtCell = (row: Bank) => dateTimeProvider.formatIsoToDisplay(row.updatedAt);
+const renderCreatedAtCell = (row: Bank) => dateTimeProvider.formatIsoToLocalDateTime(row.createdAt);
+const renderUpdatedAtCell = (row: Bank) => dateTimeProvider.formatIsoToLocalDateTime(row.updatedAt);
 
 function buildBanksColumns(onBankDeleted?: (id: string) => void): DataTableColumn<Bank>[] {
   const renderActionsCell = (row: Bank) => (

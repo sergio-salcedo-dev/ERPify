@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, type ChangeEvent } from "react";
+import { useId, useState, type ChangeEvent, type ReactNode } from "react";
 import { SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,13 @@ interface BanksFiltersProps {
    * immediately.
    */
   defaultOpen?: boolean;
+  /**
+   * Optional control rendered on the leading edge of the toolbar (left on
+   * tablet/desktop, below the full-width Filters button on mobile). The banks
+   * list passes its view toggle here so both list controls share one row from
+   * `sm` up instead of stacking into a near-empty second row.
+   */
+  leading?: ReactNode;
 }
 
 const NONE_SORT_VALUE = "__none__" as const;
@@ -40,6 +47,7 @@ export function BanksFilters({
   onSortChange,
   onReset,
   defaultOpen,
+  leading,
 }: Readonly<BanksFiltersProps>) {
   const panelId = useId();
   const [open, setOpen] = useState<boolean>(
@@ -93,7 +101,16 @@ export function BanksFilters({
       data-testid="banks-filters"
       data-open={open ? "true" : "false"}
     >
-      <div className="banks-filters__toolbar flex justify-end">
+      <div className="banks-filters__toolbar flex flex-col gap-3 sm:flex-row sm:items-stretch sm:justify-end">
+        {leading ? (
+          // Mobile: sits below the full-width Filters button, right-aligned to
+          // mirror the previous standalone toggle row. Tablet+: leads the
+          // right-aligned cluster (toggle then Filters). `items-stretch` lets
+          // the Filters button match the toggle group's taller height.
+          <div className="banks-filters__leading order-2 flex justify-end sm:order-1 sm:items-center sm:justify-start">
+            {leading}
+          </div>
+        ) : null}
         <Button
           type="button"
           variant="outline"
@@ -103,7 +120,7 @@ export function BanksFilters({
           aria-controls={panelId}
           aria-label={toggleLabel}
           title={toggleLabel}
-          className="banks-filters__toggle w-full sm:w-auto"
+          className="banks-filters__toggle order-1 h-auto min-h-7 w-full sm:order-2 sm:w-auto"
           data-testid="banks-filters__toggle"
           data-icon="inline-start"
         >
