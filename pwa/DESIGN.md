@@ -7,6 +7,60 @@ Lean implementation-facing reference for polishing the ERPify back-office PWA. D
 
 ---
 
+## Product context & enterprise-first UX philosophy
+
+ERPify is a **professional ERP/CRM for the construction industry** — a business application, **not** a marketing website. Its operators (construction company **owners, project managers, site managers, accountants, administrators, back-office staff**) spend **hours a day** inside it moving large volumes of operational data. Every design decision optimizes — in priority order — for:
+
+1. **Efficiency** — fewest steps to finish a task.
+2. **Information density** — see more per screen (the same "density is a feature" rule the Density table below enforces).
+3. **Fast scanning** of large datasets.
+4. **Data visibility** — the important business facts surface first.
+5. **Keyboard-driven workflows** (the keyboard contract in _Principles_ + _Accessibility_).
+6. **Bulk operations.**
+7. **Reduced click count.**
+8. **Predictable, consistent interactions.**
+
+**Prefer professional enterprise patterns over decorative design.** Benchmark quality against **Linear, GitHub, Stripe Dashboard, Vercel, and Notion** and adopt their _underlying usability_ — clear visual hierarchy, consistent spacing, high density, minimal visual noise, strong keyboard support, fast perceived performance, excellent accessibility. **Apply the principles; never copy the appearance.** (This system is Linear-_derived_, not a Linear clone — same discipline.)
+
+### Entity presentation
+
+Entity surfaces — **Customers, Suppliers, Companies, Contacts, Projects, Quotations, Invoices, Purchase Orders, Work Orders, Assets, Employees** — must let an operator **identify a record within milliseconds**:
+
+- Prioritize **recognition over decoration**; surface the single most important business fact first.
+- Make **status, ownership, and key metrics** immediately visible — status through `<StatusBadge>`, identity through `<MonogramAvatar>` + the record name.
+- Avoid excessive whitespace; support rapid scanning of large datasets.
+- Keep actions discoverable **without** clutter: frequent, non-destructive actions stay as direct per-row controls; destructive ones demote into the `⋯` overflow (see the _List view_ pattern).
+
+### Lists, tables, and cards — default preference
+
+**1. Data tables (`<DataTable>`) → 2. dense list views → 3. compact cards.** Avoid large marketing-style cards. When dozens–hundreds of records may exist, prefer a table or dense list with **sorting, filtering, bulk actions, row selection, and keyboard navigation**. Use cards only when they earn a genuine usability benefit (e.g. the responsive narrow-viewport view — see _Card readability over density_).
+
+### Interaction states (every interactive component)
+
+Define and visibly distinguish all of: **default · hover · focus-visible · active · selected · disabled · loading · error.** Affordances must be visually obvious, and **state is never carried by color alone** — always pair with icon, label, or position (an _Accessibility_ non-negotiable). Fetched surfaces route their loading / empty / error states through `<AsyncBoundary>`.
+
+### Responsive priority
+
+| Tier        | Role          | Posture                                                                                                      |
+| ----------- | ------------- | ------------------------------------------------------------------------------------------------------------ |
+| **Desktop** | **primary**   | Large datasets, multi-column layouts, power-user workflows, high-density display.                            |
+| **Tablet**  | **secondary** | Keep productivity-focused layouts; reduce density only when necessary.                                       |
+| **Mobile**  | **tertiary**  | Preserve essential workflows; **reconsider** hierarchy and actions — never just stack the desktop view down. |
+
+Exact thresholds live in the _Breakpoints_ table; the list/table → cards transition at `< 768 px` is the canonical example of "reconsider, don't stack."
+
+---
+
+## UI review mandate
+
+When analyzing, creating, or modifying **any** UI component, do **not** assume the current implementation is correct — **reconsider it from first principles** and propose structural improvements when warranted. Review every component against:
+
+> visual hierarchy · information architecture · information density · accessibility (**WCAG 2.2 AA minimum**) · keyboard navigation · focus management · responsive behavior · discoverability · error prevention · consistency with this design system.
+
+**When proposing UI improvements, deliver, in order:** (1) the UX issues, (2) why they matter, (3) a better structure, (4) the trade-offs, (5) accessibility implications, (6) responsive behavior, (7) keyboard workflows — each aligned with the enterprise-first philosophy above. The objective is software that feels **professional, efficient, scalable, and trustworthy** to people running complex operations every day.
+
+---
+
 ## Reconciliation notes (departures from prior project conventions)
 
 Three deliberate departures from the project's earlier defaults — load-bearing for the polish identity. Documented here so future readers don't undo them by accident.
@@ -299,7 +353,7 @@ Geist Mono, truncated middle (`01926e7…f5c6`), one-click copy with 2-second co
 
 ### `<EmptyState>`
 
-Three variants only: `first-run` (invitation), `filtered-to-zero` (clear-filter affordance), `permission-denied` (honest, non-blaming). Real heading element + supporting copy + action. **No decorative illustrations.** Heading uses Heading 3 token (20 px / 600); supporting copy uses Body (16 px / 400 / `--color-text-muted`).
+Three variants only: `first-run` (invitation), `filtered-to-zero` (clear-filter affordance), `permission-denied` (honest, non-blaming). Real heading element + supporting copy + action. **No decorative illustrations.** Heading uses Heading 3 token (20 px / 600); supporting copy uses Body (16 px / 400 / `--color-text-muted`). Optional `icon` prop overrides the per-variant default icon for feature-placeholder tiles (e.g. the dashboard "coming soon" cards, which replaced the former `PlaceholderCard`).
 
 ### `<AppShell>`
 
@@ -344,8 +398,11 @@ All three take a `testId` prop rather than hardcoding a `data-testid` (per the P
 - Filter bar above table, debounced 250 ms.
 - Sort persists in URL params.
 - Keyset (cursor) pagination. Never `OFFSET`.
-- Row click opens `<RecordSheet>` drawer (default).
-- Selection persists across pagination.
+- **Whole-surface navigation to the detail page.** The table row uses `onRowActivate`; the card name carries a stretched-link (`after:inset-0`) overlay so the whole card is the target, with in-card controls lifted to `z-10`. `<RecordSheet>` stays the pattern for inline create/edit — not for list navigation.
+- **Per-row actions.** Non-destructive, high-frequency controls (Copy ID, Edit) stay as direct icon buttons — hover/focus-revealed on cards, always-visible in the dense table. The **destructive Delete is demoted into a `⋯` overflow menu** (`<DropdownMenu>`) so it is never a mis-click away from Edit. A menu item cannot itself be a dialog trigger, so it opens a parent-controlled confirmation dialog.
+- **Card readability over density.** In the cards (comfortable) view the name and short name **wrap in full** — never truncate. The dense table row truncates with the absolute value in `title`. (The card is the comfortable view; the table is the default dense one.)
+- **Recency ("New").** Signalled with the `success` (emerald) `<StatusBadge>` — never the brand-indigo `info` variant, which is reserved for interactive accents (the "indigo is interactive-only" rule; the monogram tint is the only sanctioned exception).
+- **Bulk selection.** Multi-select checkboxes (table via `<DataTable selection>`, cards via a per-card checkbox) drive a selection action bar. Selection persists across pagination.
 - Mobile: filters in a sheet, table renders as cards.
 
 ### Async loading
@@ -361,6 +418,7 @@ All three take a `testId` prop rather than hardcoding a `data-testid` (per the P
 - `Esc` cancels.
 - Destructive primary action uses `--color-danger`, has a verbal label ("Delete invoice", not "OK"), and does **not** auto-focus.
 - Pessimistic submit. Errors keep the dialog open with `<ProblemDisplay>` inline.
+- **Bulk delete is the one sanctioned optimistic action** (documented exception to pessimistic-by-default): the selected rows are removed immediately, then any failures are restored and surfaced via an error toast. Single-row delete stays pessimistic — its dialog keeps the error inline.
 
 ### Notification (toast)
 
@@ -528,16 +586,16 @@ Step-by-step for a typical brownfield page (the landing page is the canonical ex
 
 ### Adoption status
 
-| Surface                                                            | Status                       | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| ------------------------------------------------------------------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/app/backoffice/health/page.tsx`                               | **migrated (Phase 5)**       | Uses `<AsyncBoundary>` for state machine. Synthesizes `ProblemDetails` on error as a temporary bridge until the BackOffice CheckHealth adapter returns RFC 9457 envelopes (TODO marked in source).                                                                                                                                                                                                                                       |
-| `src/app/backoffice/page.tsx` (dashboard)                          | **migrated (Phase 5)**       | Token swap: slate/blue/emerald/amber/rose → semantic tokens (`text-foreground`, `text-primary`, `text-success`, `text-warning`, `text-destructive`). StatCard / PlaceholderCard molecules left as-is (props-driven; out of scope).                                                                                                                                                                                                       |
-| `src/app/backoffice/BackOfficeLayoutClient.tsx`                    | **token-migrated (Phase 5)** | Slate/blue palette swapped to tokens. **Not** restructured to `<AppShell>` — the existing sidebar has multi-level submenu expand/collapse that v1 `<AppShell>` doesn't support, and e2e tests (`tests/e2e/backoffice/sidebar.spec.ts`) depend on the existing button structure. Promote to `<AppShell>` once it gains submenu support.                                                                                                   |
-| `src/app/backoffice/banks/**`                                      | **authored on system**       | Canonical "author against the system" surface (the `pwa/CLAUDE.md` running example). `<DataTable>` + `<BanksCards>` responsive list, `<BanksFilters>` with `<DateField>`, keyset `<BanksPagination>`, `<RecordSheet>`-style `<BankForm>` create/edit, `<DeleteBankButton>` confirmation dialog surfacing failures via `<ProblemDisplay variant="inline">`, `<CopyButton>` for ids. The reference for how a new entity should look.       |
-| `src/context/shared/error/infrastructure/ui/**`                    | **authored on system**       | Token-native error module: `<ErrorScreen>` shell + `<ErrorActions>` + per-surface Screens (`<NotFoundScreen>`, `<AccessDeniedScreen>` 403, `<SignInRequiredScreen>` 401, `<SegmentErrorBoundary>` 500, `<RootErrorBoundary>`). Backs the Next convention files (`error.tsx`, `not-found.tsx`, `global-error.tsx`, …) and the navigable `app/(errors)/*` routes. Boundary kept explicit — **not** re-exported from `@/components/erpify`. |
-| `src/context/shared/dev-tools/infrastructure/ui/**`                | **authored on system**       | Token-native internal QA hub at `/dev-tools`, gated by `isDevToolsAvailable()` and short-circuited in production via `src/proxy.ts`. Dev-only surface; ships disabled in prod builds.                                                                                                                                                                                                                                                    |
-| `src/app/page.tsx` (landing)                                       | **un-migrated**              | Public marketing surface. Uses raw slate/blue and custom `Navbar` / `Footer` / `FeatureCard` molecules. Out of scope for v1 (back-office-first). Migrate when the landing page next ships a change.                                                                                                                                                                                                                                      |
-| `src/context/shared/infrastructure/ui/components/atoms/Button.tsx` | **un-migrated**              | Custom Button atom with motion + raw blue/slate/emerald colors. Used by health page (now replaced with Shadcn `Button`) and Navbar. Replace fully once Navbar migrates.                                                                                                                                                                                                                                                                  |
+| Surface                                                      | Status                       | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------------ | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/app/backoffice/health/page.tsx`                         | **migrated (Phase 5)**       | Uses `<AsyncBoundary>` for state machine. Synthesizes `ProblemDetails` on error as a temporary bridge until the BackOffice CheckHealth adapter returns RFC 9457 envelopes (TODO marked in source).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `src/app/backoffice/page.tsx` (dashboard)                    | **migrated (Phase 5)**       | Token swap: slate/blue/emerald/amber/rose → semantic tokens (`text-foreground`, `text-primary`, `text-success`, `text-warning`, `text-destructive`). `StatCard` moved to `@/components/erpify`; `PlaceholderCard` folded into `<EmptyState>` (optional `icon` prop) — the "coming soon" tiles now use `<EmptyState variant="first-run" icon={…}>`.                                                                                                                                                                                                                                                                                                                                         |
+| `src/app/backoffice/BackOfficeLayoutClient.tsx`              | **token-migrated (Phase 5)** | Slate/blue palette swapped to tokens. **Not** restructured to `<AppShell>` — the existing sidebar has multi-level submenu expand/collapse that v1 `<AppShell>` doesn't support, and e2e tests (`tests/e2e/backoffice/sidebar.spec.ts`) depend on the existing button structure. Promote to `<AppShell>` once it gains submenu support.                                                                                                                                                                                                                                                                                                                                                     |
+| `src/app/backoffice/banks/**`                                | **authored on system**       | Canonical "author against the system" surface (the `pwa/CLAUDE.md` running example). `<DataTable>` + `<BanksCards>` responsive list, `<BanksFilters>` with `<DateField>`, keyset `<BanksPagination>`, `<RecordSheet>`-style `<BankForm>` create/edit, `<DeleteBankButton>` confirmation dialog surfacing failures via `<ProblemDisplay variant="inline">`, `<CopyButton>` for ids. The reference for how a new entity should look. **List/card UX polish (2026-06):** whole-surface detail navigation, shared `<BankRowActions>` `⋯` overflow (Copy/Edit visible, Delete demoted), full-wrap card names, emerald recency badge, `<BanksBulkBar>` multi-select with optimistic bulk delete. |
+| `src/context/shared/error/infrastructure/ui/**`              | **authored on system**       | Token-native error module: `<ErrorScreen>` shell + `<ErrorActions>` + per-surface Screens (`<NotFoundScreen>`, `<AccessDeniedScreen>` 403, `<SignInRequiredScreen>` 401, `<SegmentErrorBoundary>` 500, `<RootErrorBoundary>`). Backs the Next convention files (`error.tsx`, `not-found.tsx`, `global-error.tsx`, …) and the navigable `app/(errors)/*` routes. Boundary kept explicit — **not** re-exported from `@/components/erpify`.                                                                                                                                                                                                                                                   |
+| `src/context/shared/dev-tools/infrastructure/ui/**`          | **authored on system**       | Token-native internal QA hub at `/dev-tools`, gated by `isDevToolsAvailable()` and short-circuited in production via `src/proxy.ts`. Dev-only surface; ships disabled in prod builds.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `src/app/page.tsx` (landing)                                 | **un-migrated**              | Public marketing surface. Uses raw slate/blue and custom `Navbar` / `Footer` / `FeatureCard` components, now co-located under `src/app/_components/` (relocated out of the retired `context/shared/infrastructure/ui/components/` folder). Palette still un-migrated — out of scope for v1 (back-office-first). Migrate when the landing page next ships a change.                                                                                                                                                                                                                                                                                                                         |
+| `src/context/shared/infrastructure/ui/components/` (retired) | **relocated (2026-06)**      | Folder removed. App-shell primitives (`Logo`, `SidebarItem`, `StatCard`) → `@/components/erpify`; marketing (`Navbar`, `Footer`, `FeatureCard`) → `src/app/_components/`; `PlaceholderCard` → `<EmptyState>`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
 ### Lint enforcement (deferred)
 
@@ -562,7 +620,7 @@ A long-term goal is an ESLint rule that flags raw Shadcn primitive use where an 
 
 ## Provisional decisions to confirm
 
-- **Persona.** "Finance/operations back-office operator" pending confirmation. Token-only impact if changed.
+- **Persona.** Defined: construction-industry ERP/CRM operators — owners, project/site managers, accountants, administrators, back-office staff (see _Product context & enterprise-first UX philosophy_ above). Token-only impact if the segment is later narrowed.
 - **Brand hue.** Locked to Linear-derived indigo `#5e6ad2` / `#7170ff`. Token-only change if a stakeholder rebrands.
 - **Persistent sidebar collapse default.** Currently expanded; flip to collapsed if telemetry shows otherwise.
 - **Light-mode ramp tuning.** The light-mode neutrals (`#f7f8f8`, `#f3f4f5`, `#e9eaec`, `#dcdfe3`, `#bfc3ca`) are first-pass. Refine after the first feature surface ships and we see them in context.

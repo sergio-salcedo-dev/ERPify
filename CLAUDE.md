@@ -40,7 +40,16 @@ make ci                             # Full CI (ci.quality + ci.test).
 
 **Always start the stack with `make app.dev` or `make docker.up`.** Bare `docker compose up -d` skips composer install on cold checkouts and the `pwa.install.if-missing` guard.
 
-**Per-worktree stacks — isolated, no collision with `main`.** You can bring a worktree's stack up without touching the primary checkout's. `make/config.mk` derives `COMPOSE_PROJECT_NAME` from the checkout automatically: the primary keeps the bare `erpify` (fixed ports `80/443/15432/8025`, volumes untouched); a linked worktree under `.claude/worktrees/` gets `erpify-<dir-slug>` and, in dev, publishes host ports ephemerally (`0` → a random free port) so it never collides with `main` or other worktrees. Run `make app.dev` / `make docker.up` from inside the worktree — `make` targets then exec into *that* stack (so checks/tests see the worktree's code). Worktree stacks are driven via `docker compose exec` and the internal network (`MINK_BASE_URL`, pwa→php), not fixed host ports; browse the UI from the primary checkout, or set `HTTP_PORT=…` / `COMPOSE_PROJECT_NAME=…` to opt back into fixed values. `make docker.info` prints the resolved project + ports. Full details → [`docs/claude-code-quickref.md`](docs/claude-code-quickref.md).
+**Per-worktree stacks — isolated, no collision with `main`.** You can bring a worktree's stack up without touching the primary checkout's. `make/config.mk` derives `COMPOSE_PROJECT_NAME` from the checkout automatically: the primary keeps the bare `erpify` (fixed ports `80/443/15432/8025`, volumes untouched); a linked worktree under `.claude/worktrees/` gets `erpify-<dir-slug>` and, in dev, publishes host ports ephemerally (`0` → a random free port) so it never collides with `main` or other worktrees. Run `make app.dev` / `make docker.up` from inside the worktree — `make` targets then exec into *that* stack (so checks/tests see the worktree's code). Worktree stacks are driven via `docker compose exec` and the internal network (`MINK_BASE_URL`, pwa→php), not fixed host ports — so the random ports don't matter for the checks/tests a worktree runs.
+
+**Browsing a worktree's UI (on demand).** The default is browse-from-`main`. When you do need a worktree's UI in the browser, opt that run into a fixed, non-colliding port instead of adding any new tooling — every `*_PORT` is `?=`, so a value you pass wins over the ephemeral `0`:
+
+```bash
+HTTPS_PORT=8443 make docker.up      # from inside the worktree; pick any free port ≠ main's 443
+# then open https://localhost:8443  — HTTPS_PORT also feeds DEFAULT_URI / Mercure, so internal URLs stay consistent
+```
+
+Set additional `*_PORT` vars (`HTTP_PORT`, `MAILPIT_UI_PORT`, `POSTGRES_PORT`, …) the same way if you need those surfaces too; leave the rest ephemeral. `make docker.info` prints the resolved project + ports. Full details → [`docs/claude-code-quickref.md`](docs/claude-code-quickref.md).
 
 ---
 
@@ -58,7 +67,7 @@ Browser → FrankenPHP :80/:443 ──┬─ /api/*                 → Symfony 
 
 Full request-routing diagram and host/container trade-offs in [`docs/integration-architecture.md`](docs/integration-architecture.md).
 
-Both sides follow **DDD + Hexagonal / Clean Architecture**, with dependencies pointing inward. **Do not** import frameworks (Symfony, Doctrine, Next, Inversify, HTTP clients, ORM) inside `Domain/` — adapters go in `Infrastructure/`, orchestration in `Application/`. Full rule set: `docs/rules/*.md` (architecture, clean-code, database, frontend, php-standards, security, solid-principles, testing) and `pwa/AGENTS.md`.
+Both sides follow **DDD + Hexagonal / Clean Architecture**, with dependencies pointing inward. **Do not** import frameworks (Symfony, Doctrine, Next, Inversify, HTTP clients, ORM) inside `Domain/` — adapters go in `Infrastructure/`, orchestration in `Application/`. Full rule set: `docs/rules/*.md` (architecture, clean-code, database, frontend, php-standards, security, solid-principles, testing).
 
 ---
 
@@ -217,7 +226,7 @@ Update the matching file as part of any PR that changes:
 - **Deployment / Compose / CORS / Mercure / mailer** → [`docs/deployment-guide.md`](docs/deployment-guide.md) and [`pwa/docs/production-deployment.md`](pwa/docs/production-deployment.md); local prod rehearsal → [`docs/erpify-local-test-deployment.md`](docs/erpify-local-test-deployment.md); VPS promotion + remote DB access → [`docs/vps-deployment.md`](docs/vps-deployment.md).
 - **Security-sensitive change** → `PRODUCTION_SECURITY_CHECKLIST.md` (authoritative — see [`docs/rules/security.md`](docs/rules/security.md)).
 
-When a rule here conflicts with `docs/rules/*.md`, [`api/CLAUDE.md`](api/CLAUDE.md), [`pwa/CLAUDE.md`](pwa/CLAUDE.md), or `pwa/AGENTS.md`, flag the conflict rather than silently picking one.
+When a rule here conflicts with `docs/rules/*.md`, [`api/CLAUDE.md`](api/CLAUDE.md), or [`pwa/CLAUDE.md`](pwa/CLAUDE.md), flag the conflict rather than silently picking one.
 
 ---
 

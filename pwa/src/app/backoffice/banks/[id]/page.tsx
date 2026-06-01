@@ -177,7 +177,7 @@ export default function BankDetailPage() {
                   </h1>
                   {isRecentlyCreated(bank.createdAt, dateTimeProvider) ? (
                     <StatusBadge
-                      variant="info"
+                      variant="success"
                       label="New"
                       className="banks-detail__new flex-none"
                       testId="banks-detail__new-badge"

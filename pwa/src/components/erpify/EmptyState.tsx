@@ -10,6 +10,8 @@ interface EmptyStateProps {
   description: string;
   /** Optional recovery action (e.g. "Create your first invoice", "Clear filters"). */
   action?: ReactNode;
+  /** Override the default per-variant icon (e.g. a feature-specific placeholder). */
+  icon?: LucideIcon;
   className?: string;
 }
 
@@ -24,9 +26,10 @@ export function EmptyState({
   heading,
   description,
   action,
+  icon,
   className,
 }: Readonly<EmptyStateProps>) {
-  const Icon = iconByVariant[variant];
+  const Icon = icon ?? iconByVariant[variant];
   return (
     <section
       data-empty-variant={variant}
