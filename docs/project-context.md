@@ -49,7 +49,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 | UI runtime           | **React 19.2**                                                                   | Use `use()` for promise unwrapping; `React.FC` is out of favor — use plain function components with typed props.                                                                                                  |
 | Language             | **TypeScript 6** (`strict: true`)                                                | Strict mode is ON in `pwa/tsconfig.json`. Decorators need `experimentalDecorators` + `emitDecoratorMetadata` (required by Inversify). `target: ES2017`.                                                           |
 | Styling              | **Tailwind 4.2** (via `@tailwindcss/postcss`) + Shadcn 4.3                       | **No `tailwind.config.js`** — Tailwind 4 is CSS-first. Configuration lives in `pwa/src/app/globals.css` via `@theme {}` / `@config`. Do **not** generate v3-style JS config.                                      |
-| UI kit               | Shadcn, Base UI React, tw-animate-css, tailwind-merge, cva, lucide-react, motion | BEM class naming (`block__element--modifier`), mobile-first.                                                                                                                                                      |
+| UI kit               | Shadcn, Base UI React, tw-animate-css, tailwind-merge, cva, lucide-react | BEM class naming (`block__element--modifier`), mobile-first.                                                                                                                                                      |
 | DI                   | **Inversify 8** + reflect-metadata                                               | Constructor injection of **domain interfaces** (defined in `src/context/<bc>/domain`). `reflect-metadata` must be imported **once** at the app entry point. Use `@injectable()` + `@inject()`.                    |
 | Forms                | react-hook-form + `@hookform/resolvers`                                          | —                                                                                                                                                                                                                 |
 | Unit tests           | **Vitest 4**                                                                     | Config: `pwa/vitest.config.ts` (v4 config API differs from v1/v2). Command: `make pwa.test.unit c='src/context/foo/bar.test.ts'`.                                                                                 |
@@ -151,7 +151,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
     - `src/lib/` — glue/util only.
 - **UI**:
     - Shadcn UI + Tailwind 4 + BEM class naming (`block__element--modifier`). Mobile-first.
-    - Icons from `lucide-react`; animations via `motion` / `tw-animate-css`.
+    - Icons from `lucide-react`; animations via `tw-animate-css` / CSS.
     - Use `clsx` + `tailwind-merge` (`cn()` helper) — never hand-concatenate class strings.
 - **Forms**: `react-hook-form` + `@hookform/resolvers`. Validate at the resolver layer.
 - **Next config**: `next.config.*` is Turbopack-aware. Webpack-only config blocks are silently ignored — don't assume they run in dev.

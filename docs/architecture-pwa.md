@@ -16,7 +16,7 @@ The `pwa/` deployable is a Next.js 16.2 (App Router) + React 19.2 + TypeScript 6
 | Component lib   | Shadcn                                            | 4.7     |
 | Headless UI     | @base-ui/react                                    | 1.4     |
 | Icons           | lucide-react                                      | 1.x     |
-| Animation       | motion                                            | 12      |
+| Animation       | tw-animate-css (+ CSS)                            | 1       |
 | Forms           | @hookform/resolvers                               | 5.x     |
 | DI              | Inversify (+ reflect-metadata)                    | 8.1     |
 | Class utilities | class-variance-authority, clsx, tailwind-merge    | —       |
