@@ -85,17 +85,17 @@ jobs:
           source: "."
           pull: true
           load: true
+          # API-only job: build the php image (shared by messenger_worker); skip pwa.
+          targets: php
           files: |
             compose.yaml
             compose.dev.yaml
           set: |
             php.cache-from=type=gha,scope=php-${{ github.ref_name }}
             php.cache-from=type=gha,scope=php-main
-            pwa.cache-from=type=gha,scope=pwa-${{ github.ref_name }}
-            pwa.cache-from=type=gha,scope=pwa-main
 
-      - name: Start API stack
-        run: make docker.up.wait.no-build
+      - name: Start API stack (backend only — no PWA)
+        run: make docker.up.wait.no-build.api
 
       - name: Health check
         run: curl -skSf https://localhost/api/v1/health
@@ -148,17 +148,17 @@ jobs:
           source: "."
           pull: true
           load: true
+          # API-only job: build the php image (shared by messenger_worker); skip pwa.
+          targets: php
           files: |
             compose.yaml
             compose.dev.yaml
           set: |
             php.cache-from=type=gha,scope=php-${{ github.ref_name }}
             php.cache-from=type=gha,scope=php-main
-            pwa.cache-from=type=gha,scope=pwa-${{ github.ref_name }}
-            pwa.cache-from=type=gha,scope=pwa-main
 
-      - name: Start API stack
-        run: make docker.up.wait.no-build
+      - name: Start API stack (backend only — no PWA)
+        run: make docker.up.wait.no-build.api
 
       - name: Health check
         run: curl -skSf https://localhost/api/v1/health
