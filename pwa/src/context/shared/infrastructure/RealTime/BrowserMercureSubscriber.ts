@@ -3,6 +3,7 @@ import type {
   MercureSubscriber,
   MercureSubscription,
 } from "@/context/shared/domain/RealTime/MercureSubscriber";
+import { telemetry } from "@/context/shared/infrastructure/Observability";
 
 /**
  * Builds the same-origin Mercure hub URL. The PWA is served by FrankenPHP on the
@@ -49,8 +50,10 @@ export class BrowserMercureSubscriber implements MercureSubscriber {
     source.onmessage = (event: MessageEvent<string>): void => {
       try {
         onMessage(JSON.parse(event.data));
-      } catch {
-        // Ignore malformed payloads; the next valid event reconciles state.
+      } catch (error) {
+        // Malformed payload — the next valid event reconciles state. Report for
+        // diagnostics (never user-facing); shared across every entity's stream.
+        telemetry.warn("malformed realtime payload", { scope: "realtime:mercure", cause: error });
       }
     };
 

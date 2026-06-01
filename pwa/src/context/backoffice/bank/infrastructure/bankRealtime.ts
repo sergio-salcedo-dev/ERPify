@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useEffectEvent } from "react";
 import { Bank, type BankPrimitives } from "@/context/backoffice/bank/domain/Bank";
 import { API_ENDPOINTS } from "@/context/shared/infrastructure/api/ApiEndpoints";
-import { mercureSubscriber } from "@/context/shared/infrastructure/RealTime/BrowserMercureSubscriber";
+import { useMercureRealtime } from "@/context/shared/infrastructure/RealTime/useMercureRealtime";
 
 /**
  * Mercure topic IRIs for back-office banks. MUST stay in lock-step with the API
@@ -61,85 +60,26 @@ export function parseBankRealtimeEvent(data: unknown): BankRealtimeEvent | null 
   }
 }
 
-async function authorize(): Promise<void> {
-  // Resolve an absolute URL against the current origin so `fetch` works the same
-  // way the EventSource subscription does (a bare relative path is unparseable
-  // outside a browser, e.g. under test/SSR).
-  const base = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
-  const origin = globalThis.window?.location.origin ?? "http://localhost";
-  const url = new URL(`${base}${API_ENDPOINTS.BACKOFFICE.BANKS.REALTIME_AUTHORIZE}`, origin);
-  const response = await fetch(url, { credentials: "include", cache: "no-store" });
-  if (!response.ok) {
-    // Surface a failed cookie mint so the caller skips opening a doomed stream
-    // (the hub never delivers private topics without a valid subscriber cookie).
-    throw new Error(`Mercure authorize failed: ${response.status}`);
-  }
-}
-
-/**
- * Re-mints the subscriber cookie after a stream error, swallowing any failure so
- * a transient refresh never surfaces as an unhandled rejection. The EventSource's
- * automatic reconnect then carries the fresh cookie.
- */
-function refreshAuthorization(): void {
-  void authorize().catch(() => undefined);
-}
-
 /**
  * Subscribes to the given bank Mercure topics and dispatches typed events to the
- * provided handlers. Authorizes (mints the subscriber cookie) before opening the
- * stream. No-op on the server and when `topics` is empty.
+ * provided handlers. Delegates authorize / subscribe / telemetry to the shared
+ * {@link useMercureRealtime} hook; this wrapper only owns the bank-specific
+ * topic parse + handler mapping.
  */
 export function useBankRealtime(topics: readonly string[], handlers: BankRealtimeHandlers): void {
-  // `topicsKey` is the only effect dependency: a stable primitive that changes
-  // exactly when the set of topics changes (topic IRIs never contain "|"). This
-  // keeps the EventSource open across unrelated re-renders.
-  const topicsKey = topics.join("|");
-
-  // Effect Event: always sees the latest `handlers` without being a dependency,
-  // so changing handler identity each render never tears down the stream.
-  const dispatch = useEffectEvent((data: unknown): void => {
-    const event = parseBankRealtimeEvent(data);
-    if (!event) {
-      return;
-    }
-    if (event.kind === "created") {
-      handlers.onCreated?.(event.bank);
-    } else if (event.kind === "updated") {
-      handlers.onUpdated?.(event.bank);
-    } else {
-      handlers.onDeleted?.(event.id);
-    }
-  });
-
-  useEffect(() => {
-    if (!topicsKey || globalThis.window === undefined) {
-      return;
-    }
-
-    const topicList = topicsKey.split("|");
-    let subscription: { close(): void } | undefined;
-    let cancelled = false;
-
-    void (async (): Promise<void> => {
-      try {
-        await authorize();
-        if (!cancelled) {
-          // onError re-mints the (possibly expired) subscriber cookie so the
-          // EventSource's automatic reconnect is authorized again.
-          subscription = mercureSubscriber.subscribe(topicList, (data) => dispatch(data), {
-            onError: refreshAuthorization,
-          });
-        }
-      } catch {
-        // Best-effort: a missing cookie, an absent EventSource (SSR/test), or a
-        // transient network error must never surface as an unhandled rejection.
+  useMercureRealtime<BankRealtimeEvent>({
+    topics,
+    authorizePath: API_ENDPOINTS.BACKOFFICE.BANKS.REALTIME_AUTHORIZE,
+    parse: parseBankRealtimeEvent,
+    onEvent: (event) => {
+      if (event.kind === "created") {
+        handlers.onCreated?.(event.bank);
+      } else if (event.kind === "updated") {
+        handlers.onUpdated?.(event.bank);
+      } else {
+        handlers.onDeleted?.(event.id);
       }
-    })();
-
-    return (): void => {
-      cancelled = true;
-      subscription?.close();
-    };
-  }, [topicsKey]);
+    },
+    scope: "realtime:bank",
+  });
 }
