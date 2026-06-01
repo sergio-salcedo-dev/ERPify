@@ -24,9 +24,8 @@ final class ThrowDenylistedContextController
     public function __invoke(): Response
     {
         $context = ['password' => 'sensitive', 'token' => 'sensitive', 'safe_field' => 'kept'];
-        $exception = new class ('', 'Bank not found', $context) extends DomainException implements NotFound {
-        };
 
-        throw $exception;
+        throw new class ('', 'Bank not found', $context) extends DomainException implements NotFound {
+        };
     }
 }
