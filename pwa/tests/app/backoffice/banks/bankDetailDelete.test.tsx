@@ -5,9 +5,7 @@ import { Bank } from "@/context/backoffice/bank/domain/Bank";
 import { toastNotifier } from "@/context/shared/infrastructure/Notification/Toast";
 
 /**
- * PR 2 of the toast-notifier work (spec:
- * `docs/superpowers/specs/2026-05-30-pwa-toast-notifier-design.md`): deleting a
- * bank from its detail page must redirect cleanly to the list and surface a
+ * deleting a  bank from its detail page must redirect cleanly to the list and surface a
  * success toast, without flashing the "Bank not found" empty state while the
  * navigation settles.
  */

@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
  * (already in the bundle) or plain Tailwind / CSS. This guard keeps it gone —
  * re-adding the dependency or importing `motion` / `motion/react` from `src/`
  * fails CI, the same way the `data-testid-uniqueness` and `proxy` guards lock
- * in their invariants. See docs/superpowers/specs/2026-06-01-drop-motion-animations-design.md.
+ * in their invariants.
  */
 
 const PWA_ROOT = path.resolve(__dirname, "..");
