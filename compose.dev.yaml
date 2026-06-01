@@ -26,8 +26,12 @@ services:
     environment:
       # Scope file watching to source dirs so composer/behat installs writing into
       # vendor/ and tools/behat/vendor/ don't trigger a worker reload mid-step.
-      FRANKENPHP_WORKER_CONFIG: "${FRANKENPHP_WORKER_CONFIG:-watch /app/api/src/**/*.php}"
-      FRANKENPHP_SITE_CONFIG: "${FRANKENPHP_SITE_CONFIG:-hot_reload}"
+      # Use `-` (not `:-`) so an explicit empty value disables watching/hot-reload:
+      # CI sets these to "" (see ci.yml) to avoid cold-boot worker reloads, but `:-`
+      # would treat "" as unset and re-apply the defaults. Unset (local dev) still
+      # falls back to the watch/hot_reload defaults below.
+      FRANKENPHP_WORKER_CONFIG: "${FRANKENPHP_WORKER_CONFIG-watch /app/api/src/**/*.php}"
+      FRANKENPHP_SITE_CONFIG: "${FRANKENPHP_SITE_CONFIG-hot_reload}"
       MERCURE_EXTRA_DIRECTIVES: demo
       XDEBUG_MODE: "${XDEBUG_MODE:-off}"
       PHP_IDE_CONFIG: "serverName=${PHP_IDE_SERVER_NAME:-dev}"
