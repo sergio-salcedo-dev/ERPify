@@ -48,6 +48,7 @@ php.cs.dry-run: ## PHPCS (check only); pass c= for extra args
 
 PSALM_CONFIG = tools/psalm/psalm.xml
 PSALM_TAINT_CONFIG = tools/psalm/psalm-taint.xml
+PSALM_BASELINE = tools/psalm/psalm-baseline.xml
 PSALM_BIN = vendor/bin/psalm
 
 # Todo add to CLEANUP_ISSUES ,PossiblyUnusedMethod,ClassMustBeFinal,MissingParamType
@@ -80,10 +81,13 @@ php.psalm.fix.types: ## Infer and inject missing types (Review changes carefully
 php.psalm.fix.all: ## Run all supported auto-fixes (cleanup + types)
 	$(PHP_TEST) $(PSALM_BIN) --config=$(PSALM_CONFIG) --alter --issues=$(CLEANUP_ISSUES),$(TYPE_ISSUES) --no-cache
 
-# --set-baseline is resolved relative to the config-file dir (resolveFromConfigFile=true),
-# i.e. tools/psalm/, so the value is the bare filename — matching errorBaseline in psalm.xml.
+# --config resolves from cwd (api/), so PSALM_* configs carry the tools/psalm/ prefix.
+# --set-baseline, however, resolves relative to the config-file dir (resolveFromConfigFile=true),
+# i.e. tools/psalm/ — so it needs the bare filename. We keep PSALM_BASELINE in the same
+# tools/psalm/ form as the configs and strip the dir with $(notdir) only here, matching
+# errorBaseline in psalm.xml. (Passing the full path would write tools/psalm/tools/psalm/….)
 php.psalm.baseline: ## Generate or update the error baseline (run after fixing psalm issues)
-	$(PHP_TEST) $(PSALM_BIN) --config=$(PSALM_CONFIG) --set-baseline=psalm-baseline.xml
+	$(PHP_TEST) $(PSALM_BIN) --config=$(PSALM_CONFIG) --set-baseline=$(notdir $(PSALM_BASELINE))
 
 # Uses a baseline-free config (PSALM_TAINT_CONFIG) so taint mode does not flag every
 # regular baseline entry as UnusedBaselineEntry — see tools/psalm/psalm-taint.xml.
