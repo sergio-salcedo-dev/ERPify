@@ -55,6 +55,7 @@ export function BanksCards({ banks, onBankDeleted }: Readonly<BanksCardsProps>) 
                 </CardTitle>
                 <CardDescription
                   className="banks-cards__shortname truncate font-mono text-xs uppercase"
+                  title={bank.shortName}
                   data-testid={`banks-cards__shortname-${bank.id}`}
                 >
                   {bank.shortName}

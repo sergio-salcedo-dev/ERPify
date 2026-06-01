@@ -76,7 +76,11 @@ function BanksActionsCell({ row, onBankDeleted }: Readonly<BanksActionsCellProps
   );
 }
 
-const renderShortNameCell = (row: Bank) => row.shortName;
+const renderShortNameCell = (row: Bank) => (
+  <span className="block truncate" title={row.shortName}>
+    {row.shortName}
+  </span>
+);
 const renderNameCell = (row: Bank) => row.name;
 const renderCreatedAtCell = (row: Bank) => dateTimeProvider.formatIsoToLocalDateTime(row.createdAt);
 const renderUpdatedAtCell = (row: Bank) => dateTimeProvider.formatIsoToLocalDateTime(row.updatedAt);
