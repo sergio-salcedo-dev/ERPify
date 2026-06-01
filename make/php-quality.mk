@@ -47,6 +47,7 @@ php.cs.dry-run: ## PHPCS (check only); pass c= for extra args
 ## —— Psalm ——
 
 PSALM_CONFIG = tools/psalm/psalm.xml
+PSALM_TAINT_CONFIG = tools/psalm/psalm-taint.xml
 PSALM_BIN = vendor/bin/psalm
 
 # Todo add to CLEANUP_ISSUES ,PossiblyUnusedMethod,ClassMustBeFinal,MissingParamType
@@ -84,8 +85,10 @@ php.psalm.fix.all: ## Run all supported auto-fixes (cleanup + types)
 php.psalm.baseline: ## Generate or update the error baseline (run after fixing psalm issues)
 	$(PHP_TEST) $(PSALM_BIN) --config=$(PSALM_CONFIG) --set-baseline=psalm-baseline.xml
 
+# Uses a baseline-free config (PSALM_TAINT_CONFIG) so taint mode does not flag every
+# regular baseline entry as UnusedBaselineEntry — see tools/psalm/psalm-taint.xml.
 php.psalm.taint: ## Psalm taint analysis (SARIF)
-	$(PHP_TEST) $(PSALM_BIN) --config=$(PSALM_CONFIG) --taint-analysis --report=psalm-taint.sarif
+	$(PHP_TEST) $(PSALM_BIN) --config=$(PSALM_TAINT_CONFIG) --taint-analysis --report=psalm-taint.sarif
 
 ## —— Gherkinlint ——————————————————————————————————————————————————————————
 

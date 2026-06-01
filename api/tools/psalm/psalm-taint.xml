@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+<!--
+    Dedicated config for `make php.psalm.taint` — taint/security flow analysis only.
+
+    It deliberately does NOT inherit psalm.xml's error baseline. When psalm runs taint
+    analysis it evaluates taint flows, not the regular issue set, so none of the entries
+    in psalm-baseline.xml get "used" — with `findUnusedBaselineEntry="true"` that turns
+    every baselined issue into a false `UnusedBaselineEntry` error and floods the SARIF.
+
+    So here: no `errorBaseline`, no `findUnusedBaselineEntry`, and `findUnusedCode="false"`
+    (dead-code detection is the regular `make php.psalm` gate's job). The result is a
+    taint-only report — psalm exits 0 with an empty result set, or non-zero on a genuine
+    Tainted* flow. Cache is isolated from the main psalm run.
+-->
+<psalm
+    errorLevel="3"
+    resolveFromConfigFile="true"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns="https://getpsalm.org/schema/config"
+    xsi:schemaLocation="https://getpsalm.org/schema/config vendor/vimeo/psalm/config.xsd"
+    findUnusedCode="false"
+    cacheDirectory="../../var/cache/psalm-taint"
+    autoloader="../../vendor/autoload.php"
+>
+    <projectFiles>
+        <directory name="../../src" />
+        <directory name="../../tests" />
+        <ignoreFiles>
+            <directory name="../../vendor" />
+        </ignoreFiles>
+    </projectFiles>
+
+    <plugins>
+        <pluginClass class="Psalm\SymfonyPsalmPlugin\Plugin" />
+    </plugins>
+</psalm>
