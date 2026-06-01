@@ -1,6 +1,7 @@
 "use client";
 
-import { useId, useState, type ChangeEvent, type ReactNode } from "react";
+import { useEffect, useId, useState, type ChangeEvent, type ReactNode } from "react";
+import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import { SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,7 @@ interface BanksFiltersProps {
 }
 
 const NONE_SORT_VALUE = "__none__" as const;
+const FILTER_DEBOUNCE_MS = 300;
 
 export function BanksFilters({
   filter,
@@ -54,10 +56,49 @@ export function BanksFilters({
     defaultOpen ?? (hasActiveFilter(filter) || !isDefaultSort(sort)),
   );
 
+  // Local mirror of the text filters so typing stays instant while the
+  // (expensive) parent re-filter is debounced. Synced back down when the
+  // parent changes the filter externally (e.g. the Reset button).
+  //
+  // We use the React getDerivedState-during-render idiom: store the previous
+  // prop value as state, compare it to the new prop during render, and call
+  // setState inline (not in an effect) so no double-render or lint error occurs.
+  const [nameInput, setNameInput] = useState(filter.name);
+  const [shortNameInput, setShortNameInput] = useState(filter.shortName);
+  const [prevFilterName, setPrevFilterName] = useState(filter.name);
+  const [prevFilterShortName, setPrevFilterShortName] = useState(filter.shortName);
+
+  if (prevFilterName !== filter.name) {
+    setPrevFilterName(filter.name);
+    setNameInput(filter.name);
+  }
+  if (prevFilterShortName !== filter.shortName) {
+    setPrevFilterShortName(filter.shortName);
+    setShortNameInput(filter.shortName);
+  }
+
+  const debouncedName = useDebouncedValue(nameInput, FILTER_DEBOUNCE_MS);
+  const debouncedShortName = useDebouncedValue(shortNameInput, FILTER_DEBOUNCE_MS);
+
+  useEffect(() => {
+    if (debouncedName === filter.name && debouncedShortName === filter.shortName) {
+      return;
+    }
+    onFilterChange({ ...filter, name: debouncedName, shortName: debouncedShortName });
+    // We intentionally only react to the debounced values; `filter` is read
+    // as the latest closure value each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedName, debouncedShortName]);
+
   const updateText =
     (field: "name" | "shortName") =>
     (event: ChangeEvent<HTMLInputElement>): void => {
-      onFilterChange({ ...filter, [field]: event.target.value });
+      const next = event.target.value;
+      if (field === "name") {
+        setNameInput(next);
+      } else {
+        setShortNameInput(next);
+      }
     };
 
   const updateDate =
@@ -149,7 +190,7 @@ export function BanksFilters({
           <FormField name="banks-filters-name" label="Name">
             <Input
               type="text"
-              value={filter.name}
+              value={nameInput}
               onChange={updateText("name")}
               placeholder="e.g. acme"
               data-testid="banks-filters__name"
@@ -158,7 +199,7 @@ export function BanksFilters({
           <FormField name="banks-filters-short-name" label="Short name">
             <Input
               type="text"
-              value={filter.shortName}
+              value={shortNameInput}
               onChange={updateText("shortName")}
               placeholder="e.g. ACM"
               data-testid="banks-filters__short-name"
