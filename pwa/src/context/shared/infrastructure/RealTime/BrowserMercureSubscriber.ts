@@ -1,4 +1,5 @@
 import type {
+  MercureSubscribeOptions,
   MercureSubscriber,
   MercureSubscription,
 } from "@/context/shared/domain/RealTime/MercureSubscriber";
@@ -20,11 +21,23 @@ function mercureUrl(topics: readonly string[]): string {
 }
 
 /**
+ * Minimum gap between authorization refreshes triggered by stream errors.
+ * EventSource retries every few seconds, so a reconnect storm (e.g. a hub
+ * restart) would otherwise fire the authorize request on every attempt; this
+ * still refreshes comfortably within the subscriber cookie's lifetime.
+ */
+const REAUTHORIZE_DEBOUNCE_MS = 30_000;
+
+/**
  * Browser EventSource adapter. `withCredentials` sends the same-origin Mercure
  * authorization cookie minted by the back-end so private topics are delivered.
  */
 export class BrowserMercureSubscriber implements MercureSubscriber {
-  subscribe(topics: readonly string[], onMessage: (data: unknown) => void): MercureSubscription {
+  subscribe(
+    topics: readonly string[],
+    onMessage: (data: unknown) => void,
+    options?: MercureSubscribeOptions,
+  ): MercureSubscription {
     // EventSource is absent under SSR / jsdom; degrade to a no-op subscription
     // rather than throwing, so callers don't need to guard the environment.
     if (typeof EventSource === "undefined") {
@@ -40,6 +53,24 @@ export class BrowserMercureSubscriber implements MercureSubscriber {
         // Ignore malformed payloads; the next valid event reconciles state.
       }
     };
+
+    const onError = options?.onError;
+    if (onError) {
+      // EventSource auto-reconnects on error. If the subscriber cookie's JWT has
+      // expired (long-lived tab), every reconnect is rejected by the hub and
+      // updates stop silently. Refresh authorization (debounced) so the imminent
+      // retry carries a valid cookie; for a transient blip the cookie is still
+      // valid and this is a harmless no-op.
+      let lastReauthorizeAt = 0;
+      source.onerror = (): void => {
+        const now = Date.now();
+        if (now - lastReauthorizeAt < REAUTHORIZE_DEBOUNCE_MS) {
+          return;
+        }
+        lastReauthorizeAt = now;
+        onError();
+      };
+    }
 
     return { close: (): void => source.close() };
   }

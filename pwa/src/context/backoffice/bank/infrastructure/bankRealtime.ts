@@ -111,7 +111,11 @@ export function useBankRealtime(topics: readonly string[], handlers: BankRealtim
       try {
         await authorize();
         if (!cancelled) {
-          subscription = mercureSubscriber.subscribe(topicList, (data) => dispatch(data));
+          subscription = mercureSubscriber.subscribe(topicList, (data) => dispatch(data), {
+            // On a stream error the subscriber cookie may have expired; re-mint
+            // it so the EventSource's automatic reconnect is authorized again.
+            onError: () => void authorize().catch(() => {}),
+          });
         }
       } catch {
         // Best-effort: a missing cookie, an absent EventSource (SSR/test), or a

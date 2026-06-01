@@ -11,10 +11,18 @@ Collected during quick-dev. Not part of the current story's shippable scope.
   and with `mercure_subscribe.yaml` granting `subscribe: '*'`. When auth lands
   for backoffice, gate this controller and narrow the granted topics per
   user/role. Must be called out as a public route in the PR description.
-- **EventSource observability / reconnect-on-cookie-expiry.** The browser
-  `EventSource` auto-reconnects and the subscriber cookie is a session cookie,
-  so the happy path is covered. If a TTL is later added to the cookie, add an
-  `onerror` re-authorize hook in `BrowserMercureSubscriber` / `useBankRealtime`.
+- **RESOLVED — reconnect-on-cookie-expiry.** The premise above was wrong: the
+  subscriber cookie is emitted without `Max-Age` (a *session* cookie), but the
+  Mercure authorization **JWT inside it carries a ~1h `exp`** (Symfony's
+  `default_cookie_lifetime` → `framework.session.cookie_lifetime`). So a tab left
+  open past that window silently stops receiving updates on the next `EventSource`
+  reconnect (network blip, HTTP/2 recycle, sleep/wake). Surfaced during the prod
+  (`make deploy.local`) verification of this feature. Fixed by adding the planned
+  `onError` re-authorize hook: `MercureSubscriber.subscribe` now accepts an
+  `onError` callback, `BrowserMercureSubscriber` invokes it (debounced 30s) from
+  `EventSource.onerror`, and `useBankRealtime` passes `authorize` so the imminent
+  reconnect carries a fresh cookie. Covered by
+  `tests/context/shared/infrastructure/RealTime/BrowserMercureSubscriber.test.ts`.
 - **E2E coverage (Playwright).** Added `pwa/tests/e2e/backoffice/banks-realtime.spec.ts`:
   the API context plays "the other client", the browser observes live updates. All 5 pass
   (list create/update/delete + detail update/delete) — the create-live test is now active
