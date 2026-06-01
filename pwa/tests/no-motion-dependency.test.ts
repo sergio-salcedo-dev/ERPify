@@ -42,7 +42,7 @@ describe("motion dependency removal", () => {
       offenders,
       offenders.length > 0
         ? "These files still import `motion`; re-express the animation with " +
-            `tw-animate-css / CSS instead:\n${offenders.map((f) => `  ${f}`).join("\n")}`
+            `tw-animate-css / CSS instead:\n${offenders.map((f) => "  " + f).join("\n")}`
         : "",
     ).toEqual([]);
   });
