@@ -19,6 +19,7 @@ import { BanksCards } from "./_components/BanksCards";
 import { BanksFilters } from "./_components/BanksFilters";
 import { BanksPagination } from "./_components/BanksPagination";
 import { BanksViewToggle, type BanksView } from "./_components/BanksViewToggle";
+import { BanksListSkeleton } from "./_components/BanksListSkeleton";
 import {
   DEFAULT_SORT,
   EMPTY_FILTER,
@@ -189,6 +190,7 @@ export default function BanksListPage() {
         state={state}
         data={banks}
         error={problem ?? undefined}
+        loading={<BanksListSkeleton view={view} rows={Math.min(pageSize, 8)} />}
         emptyVariant="first-run"
         emptyHeading="No banks yet"
         emptyDescription="Create the first bank to get started."
