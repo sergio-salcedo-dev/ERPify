@@ -101,6 +101,17 @@ export function BanksFilters({
       }
     };
 
+  const handleReset = (): void => {
+    // Clear local input state too: relying on the parent→child sync alone
+    // misses the case where Reset fires before the debounce propagated the
+    // typed value (parent filter.name is still ""), which would otherwise
+    // leave the stale text in the box and let the pending debounce re-apply
+    // it. Clearing the local state here also cancels that pending timer.
+    setNameInput("");
+    setShortNameInput("");
+    onReset();
+  };
+
   const updateDate =
     (field: "createdFrom" | "createdTo") =>
     (next: string): void => {
@@ -276,7 +287,7 @@ export function BanksFilters({
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={onReset}
+                  onClick={handleReset}
                   aria-label="Reset filters and sort"
                   title="Reset filters and sort"
                   className="w-full sm:w-auto"

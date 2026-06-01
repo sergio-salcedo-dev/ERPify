@@ -50,6 +50,39 @@ describe("BanksFilters — debounce", () => {
     expect(onFilterChange).not.toHaveBeenCalled();
   });
 
+  it("clears the name input on Reset even when the debounce has not propagated yet", () => {
+    const onFilterChange = vi.fn();
+    const onReset = vi.fn();
+    // Reset button is visible because another field is already active,
+    // while the name input is only in local (pending, un-propagated) state.
+    render(
+      <BanksFilters
+        filter={{ ...EMPTY_FILTER, shortName: "x" }}
+        onFilterChange={onFilterChange}
+        sort={DEFAULT_SORT}
+        onSortChange={vi.fn()}
+        onReset={onReset}
+        defaultOpen
+      />,
+    );
+
+    const nameInput = screen.getByTestId("banks-filters__name") as HTMLInputElement;
+    fireEvent.change(nameInput, { target: { value: "cosmos" } });
+    // Debounce NOT advanced — the parent filter.name is still "".
+
+    fireEvent.click(screen.getByTestId("banks-filters__reset"));
+    expect(onReset).toHaveBeenCalledTimes(1);
+
+    // The local input must clear immediately…
+    expect((screen.getByTestId("banks-filters__name") as HTMLInputElement).value).toBe("");
+
+    // …and the pending debounce must NOT re-apply the stale "cosmos".
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(onFilterChange).not.toHaveBeenCalledWith(expect.objectContaining({ name: "cosmos" }));
+  });
+
   it("debounces name filter changes (~300ms) and emits the latest value once", () => {
     const onFilterChange = vi.fn();
     render(
