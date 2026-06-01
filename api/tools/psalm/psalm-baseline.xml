@@ -29,10 +29,6 @@
     <ClassMustBeFinal>
       <code><![CDATA[Bank]]></code>
     </ClassMustBeFinal>
-    <PossiblyNullArgument>
-      <code><![CDATA[$this->id]]></code>
-      <code><![CDATA[$this->id]]></code>
-    </PossiblyNullArgument>
     <PossiblyUnusedMethod>
       <code><![CDATA[getName]]></code>
       <code><![CDATA[getShortName]]></code>

@@ -149,7 +149,7 @@ class Bank extends AggregateRoot
         $this->updatedAt = $now;
 
         $this->record(new BankUpdatedDomainEvent(
-            $this->id,
+            $this->id(),
             $updateEventId,
             $this->name,
             $this->shortName,
@@ -164,6 +164,6 @@ class Bank extends AggregateRoot
 
     public function delete(string $deleteEventId): void
     {
-        $this->record(new BankDeletedDomainEvent($this->id, $deleteEventId));
+        $this->record(new BankDeletedDomainEvent($this->id(), $deleteEventId));
     }
 }
