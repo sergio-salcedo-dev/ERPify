@@ -21,6 +21,15 @@ docker.up.wait.no-build: ## Start stack detached with --wait, skip rebuild (CI: 
 	$(DOCKER_COMPOSE) up --wait --no-build --detach \
 		|| { echo '[docker.up.wait.no-build] first --wait aborted (cold-boot restart); retrying once after settle...'; sleep 10; $(DOCKER_COMPOSE) up --wait --no-build --detach; }
 
+# Backend-only variant for API-only CI jobs (PHPUnit/Behat hit /api/* and need the
+# async worker for audit/email; they never touch the pwa container). Naming the php
+# + messenger_worker services pulls database + mailpit in as depends_on but excludes
+# pwa entirely — skips its build, `npm ci`, and ~180s cold `next dev` boot from the
+# critical path. Mirrors the cold-boot retry-once logic of docker.up.wait.no-build.
+docker.up.wait.no-build.api: ## Start backend only (php + worker + deps), --wait, skip rebuild — excludes pwa (CI: API-only jobs)
+	$(DOCKER_COMPOSE) up --wait --no-build --detach php messenger_worker \
+		|| { echo '[docker.up.wait.no-build.api] first --wait aborted (cold-boot restart); retrying once after settle...'; sleep 10; $(DOCKER_COMPOSE) up --wait --no-build --detach php messenger_worker; }
+
 docker.build: ## Rebuild images (--pull --no-cache)
 	$(DOCKER_COMPOSE) build --pull --no-cache
 
@@ -54,7 +63,7 @@ docker.down.clean-volumes: ## Stop stack and REMOVE volumes (destructive)
 docker.prune: docker.down ## Prune ALL Docker images, volumes and containers system-wide (destructive, prompts)
 	docker system prune --all --volumes
 
-.PHONY: docker.up docker.up.wait docker.up.wait.no-build docker.build \
+.PHONY: docker.up docker.up.wait docker.up.wait.no-build docker.up.wait.no-build.api docker.build \
 		docker.restart \
         docker.logs \
         docker.ps docker.info \
