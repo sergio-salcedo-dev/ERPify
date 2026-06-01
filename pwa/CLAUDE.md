@@ -16,9 +16,23 @@ PWA-scoped guidance. Root [`../CLAUDE.md`](../CLAUDE.md) is authoritative for mo
   - `domain/` — pure types, value objects, interfaces. **No** Next, Inversify, HTTP, or ORM imports.
   - `application/` — use cases / orchestration; depends only on `domain`.
   - `infrastructure/` — adapters (HTTP clients, storage, framework glue).
-- `src/context/shared/` — cross-cutting code. Don't scatter shared utilities elsewhere.
-- `src/components/` — reusable UI (Shadcn-based). `src/lib/` — framework glue.
+- `src/context/shared/` — cross-cutting **domain/application/infrastructure** code (ports + adapters). Presentation primitives and pure glue live in `src/components/` and `src/lib/` instead — see the decision rule below.
+- `src/components/` — reusable UI. `src/lib/` — framework glue.
 - `tests/` — mirrors `src/` structure.
+
+### Where shared code goes (decision rule)
+
+Several homes exist for cross-cutting code; pick by **purpose**, not just "is it reused":
+
+| Put it in…                                     | When it is…                                                                                                                                                | Examples                                                                                    |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `context/shared/infrastructure/<Module>/`      | backed by a **domain port** / swappable adapter, or part of a port-backed module                                                                           | `Notification/Toast`, `DateTimeProvider`, `HttpClient`, `Validation`, `DependencyInjection` |
+| `context/shared/infrastructure/ui/components/` | an **app-shell or landing/marketing** presentational component consumed directly by `app/` routes/layouts (its own visual language: motion buttons, cards) | `Navbar`, `Footer`, `Logo`, `SidebarItem`, `StatCard`, `FeatureCard`                        |
+| `components/erpify/`                           | an **entity-agnostic backoffice design-system primitive**, reused across entity CRUD, barrel-exported from `@/components/erpify`                           | `DataTable`, `AsyncBoundary`, `EmptyState`, `StatusBadge`, `Spinner`                        |
+| `components/ui/`                               | a raw **Shadcn** primitive                                                                                                                                 | `button`, `dialog`, `input`                                                                 |
+| `src/lib/`                                     | a **pure helper or generic hook** with no domain identity                                                                                                  | `safeHref`, `useDebouncedValue`, `utils`                                                    |
+
+Note: `components/ui/button` (Shadcn, backoffice) and `ui/components/atoms/Button` (motion, landing) are two deliberate design languages — reach for the one matching the surface you're building, don't cross-import.
 
 ## Make targets (run from repo root)
 
@@ -94,9 +108,9 @@ attack surface. Treat the following as load-bearing:
 ## Shared building blocks (use these, don't reinvent)
 
 UI-level primitives live under `src/components/erpify/` and are exported from
-its barrel (`@/components/erpify`). Framework-agnostic helpers live under
-`src/lib/`. Reach for these from every entity instead of re-implementing them
-locally:
+its barrel (`@/components/erpify`). Framework glue and generic hooks with no
+domain identity (e.g. `safeHref`, `useDebouncedValue`) live under `src/lib/`.
+Reach for these from every entity instead of re-implementing them locally:
 
 - **Dates** — the `dateTimeProvider` singleton from
   `@/context/shared/infrastructure/DateTimeProvider`, typed as the
@@ -236,7 +250,8 @@ locally:
   `setError(field, { type: "server", message: violation.message })`.
 
 When you need a new cross-entity primitive, add it to `components/erpify/` (or
-`src/lib/` for a pure helper) and export it from the matching barrel.
+`src/lib/` for a pure helper or generic hook) and export it from the matching
+barrel.
 
 ## Test ID rules
 
