@@ -18,6 +18,8 @@ export { DatePickerField } from "./DatePickerField";
 export type { DatePickerFieldProps } from "./DatePickerField";
 export { EmptyState } from "./EmptyState";
 export { FormField, useFormField } from "./FormField";
+export { MonogramAvatar } from "./MonogramAvatar";
+export { initials } from "./initials";
 export { ProblemDisplay } from "./ProblemDisplay";
 export { RecordSheet } from "./RecordSheet";
 export { Spinner } from "./Spinner";
