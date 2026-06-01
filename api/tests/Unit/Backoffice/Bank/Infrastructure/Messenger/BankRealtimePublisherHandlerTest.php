@@ -15,9 +15,11 @@ use Symfony\Component\Mercure\HubInterface;
 use Symfony\Component\Mercure\Update;
 
 /**
- * Asserts on the published payload as a JSON string (like {@see \Erpify\Tests\Unit\Frontoffice\Mercure
- * \Infrastructure\Controller\MercurePublishDemoControllerTest}) to keep the test free of
- * offset-access gymnastics over decoded mixed arrays.
+ * Locks the exact realtime payload contract the PWA `isBankPrimitives` consumer
+ * depends on. The published JSON is decoded and asserted structurally (not via
+ * substrings) so any drift in `BankCreatedDomainEvent::toPrimitives()` — a
+ * renamed key, a dropped field, or a leaked `logo*` / `storedObject*` field —
+ * fails CI here instead of silently producing a `null` the consumer drops.
  *
  * @internal
  */
@@ -34,6 +36,8 @@ final class BankRealtimePublisherHandlerTest extends TestCase
 
     public function testPublishesCreatedToCollectionTopicAsPrivate(): void
     {
+        // Pass the optional logo / stored-object metadata to prove it never
+        // leaves the handler — only the five public bank fields ship.
         $this->handler()->onBankCreated(new BankCreatedDomainEvent(
             self::BANK_ID,
             'event-id',
@@ -41,19 +45,25 @@ final class BankRealtimePublisherHandlerTest extends TestCase
             'ACME',
             self::CREATED_AT,
             self::UPDATED_AT,
+            'logo-media-id',
+            'logo-content-hash',
+            'stored-object-content-hash',
+            'image/png',
         ));
 
         $update = $this->capturedUpdate();
         $this->assertSame([MercureBankTopic::COLLECTION], $update->getTopics());
         $this->assertTrue($update->isPrivate());
-
-        $data = $update->getData();
-        $this->assertStringContainsString('"type":"bank.created"', $data);
-        $this->assertStringContainsString('"id":"' . self::BANK_ID . '"', $data);
-        $this->assertStringContainsString('"name":"Acme Savings"', $data);
-        $this->assertStringContainsString('"shortName":"ACME"', $data);
-        $this->assertStringNotContainsString('logoMediaId', $data);
-        $this->assertStringNotContainsString('storedObjectContentHash', $data);
+        $this->assertSame([
+            'type' => 'bank.created',
+            'bank' => [
+                'id' => self::BANK_ID,
+                'name' => 'Acme Savings',
+                'shortName' => 'ACME',
+                'createdAt' => self::CREATED_AT,
+                'updatedAt' => self::UPDATED_AT,
+            ],
+        ], $this->decoded($update));
     }
 
     public function testPublishesUpdatedToCollectionAndPerBankTopics(): void
@@ -65,6 +75,10 @@ final class BankRealtimePublisherHandlerTest extends TestCase
             'ACME',
             self::CREATED_AT,
             self::UPDATED_AT,
+            'logo-media-id',
+            'logo-content-hash',
+            'stored-object-content-hash',
+            'image/png',
         ));
 
         $update = $this->capturedUpdate();
@@ -73,8 +87,16 @@ final class BankRealtimePublisherHandlerTest extends TestCase
             $update->getTopics(),
         );
         $this->assertTrue($update->isPrivate());
-        $this->assertStringContainsString('"type":"bank.updated"', $update->getData());
-        $this->assertStringContainsString('"name":"Acme Renamed"', $update->getData());
+        $this->assertSame([
+            'type' => 'bank.updated',
+            'bank' => [
+                'id' => self::BANK_ID,
+                'name' => 'Acme Renamed',
+                'shortName' => 'ACME',
+                'createdAt' => self::CREATED_AT,
+                'updatedAt' => self::UPDATED_AT,
+            ],
+        ], $this->decoded($update));
     }
 
     public function testPublishesDeletedWithIdOnlyToCollectionAndPerBankTopics(): void
@@ -87,11 +109,45 @@ final class BankRealtimePublisherHandlerTest extends TestCase
             $update->getTopics(),
         );
         $this->assertTrue($update->isPrivate());
+        $this->assertSame(
+            ['type' => 'bank.deleted', 'id' => self::BANK_ID],
+            $this->decoded($update),
+        );
+    }
 
-        $data = $update->getData();
-        $this->assertStringContainsString('"type":"bank.deleted"', $data);
-        $this->assertStringContainsString('"id":"' . self::BANK_ID . '"', $data);
-        $this->assertStringNotContainsString('"bank"', $data);
+    /**
+     * At-least-once delivery may replay the same event. The handler is a pure
+     * function of the event, so re-handling must publish a byte-identical Update
+     * (the client then reconciles by id — re-applying is a no-op once in sync).
+     */
+    public function testRehandlingTheSameEventPublishesAnIdenticalUpdate(): void
+    {
+        $payloads = [];
+        $hub = $this->createMock(HubInterface::class);
+        $hub->expects($this->exactly(2))
+            ->method('publish')
+            ->willReturnCallback(static function (Update $update) use (&$payloads): string {
+                $payloads[] = $update->getData();
+
+                return 'id';
+            })
+        ;
+
+        $handler = new BankRealtimePublisherHandler($hub);
+        $event = new BankUpdatedDomainEvent(
+            self::BANK_ID,
+            'event-id',
+            'Acme Savings',
+            'ACME',
+            self::CREATED_AT,
+            self::UPDATED_AT,
+        );
+
+        $handler->onBankUpdated($event);
+        $handler->onBankUpdated($event);
+
+        $this->assertCount(2, $payloads);
+        $this->assertSame($payloads[0], $payloads[1]);
     }
 
     private function handler(): BankRealtimePublisherHandler
@@ -114,5 +170,17 @@ final class BankRealtimePublisherHandlerTest extends TestCase
         $this->assertInstanceOf(Update::class, $this->captured);
 
         return $this->captured;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function decoded(Update $update): array
+    {
+        $data = \json_decode($update->getData(), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertIsArray($data);
+
+        /** @var array<string, mixed> $data */
+        return $data;
     }
 }
