@@ -20,6 +20,7 @@ import { BanksFilters } from "./_components/BanksFilters";
 import { BanksPagination } from "./_components/BanksPagination";
 import { BanksViewToggle, type BanksView } from "./_components/BanksViewToggle";
 import { BanksListSkeleton } from "./_components/BanksListSkeleton";
+import { BanksEmptyFiltered } from "./_components/BanksEmptyFiltered";
 import {
   DEFAULT_SORT,
   EMPTY_FILTER,
@@ -234,35 +235,7 @@ export default function BanksListPage() {
       >
         {() =>
           visibleBanks.length === 0 ? (
-            <section
-              className="banks-list__empty-filtered border-border rounded-md border p-8 text-center"
-              data-testid="banks-list__empty-filtered"
-            >
-              <h2
-                className="text-foreground text-base font-medium"
-                data-testid="banks-list__empty-filtered-heading"
-              >
-                No banks match your filters
-              </h2>
-              <p
-                className="text-muted-foreground mt-1 text-sm"
-                data-testid="banks-list__empty-filtered-description"
-              >
-                Adjust the filters or clear them to see the full list.
-              </p>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="mt-4"
-                onClick={resetFilters}
-                title="Clear all bank filters"
-                aria-label="Clear all bank filters"
-                data-testid="banks-list__reset-filters"
-              >
-                Reset filters
-              </Button>
-            </section>
+            <BanksEmptyFiltered onReset={resetFilters} />
           ) : (
             <>
               {view === "table" ? (
