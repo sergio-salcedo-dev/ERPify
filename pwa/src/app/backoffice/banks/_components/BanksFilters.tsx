@@ -179,6 +179,12 @@ export function BanksFilters({
         </Button>
       </div>
 
+      {/*
+        Animated expand/collapse via the grid-rows 0fr→1fr trick. INVARIANT:
+        keep all box-model (padding / border / margin) on `__panel-fields`,
+        never on this outer section or `__panel-inner`. The collapsed panel
+        must render at zero height so the e2e `toBeHidden()` assertions hold.
+      */}
       <section
         id={panelId}
         aria-label="Bank filter fields"
