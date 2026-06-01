@@ -39,3 +39,38 @@ Collected during quick-dev. Not part of the current story's shippable scope.
 - **Infra fix included here:** `compose.yaml` `messenger_worker` was missing
   `MERCURE_URL`/`MERCURE_JWT_SECRET`, so async Mercure publishes failed (`Failed to send an
   update`) in every environment. Added, mirroring the `php` service.
+
+## Deferred from: code review of spec-banks-mercure-realtime (2026-06-01)
+
+Post-merge adversarial review of PR #87 (`5753a4c`). Two `patch` items are tracked in the
+spec's Review Findings section; the items below are the deferred (design-level / documented) ones.
+
+- **Public `authorize` route + `private:true` = privacy-theater until auth lands.** No new
+  exposure vs. the already-public bank REST API, but the in-code "no data leak" framing is
+  optimistic. Gate the controller and narrow granted topics per user/role when backoffice auth
+  arrives (already noted above).
+- **RESOLVED (commit `6b2222e`) — EventSource `onerror` / re-authorize hook + subscriber JWT TTL.**
+  The subscriber JWT carries a ~1h `exp`, so a long-lived tab stopped receiving updates on the next
+  reconnect. Fixed upstream by the debounced (30s) `onError` → re-authorize hook in
+  `BrowserMercureSubscriber` + `useBankRealtime`, covered by `BrowserMercureSubscriber.test.ts`.
+  See the RESOLVED entry in the first section above.
+- **No event-id / `Last-Event-ID` replay.** Updates published during a reconnect gap are lost; the
+  view can silently diverge from the DB with no resync. Either set stable `Update` ids + a Mercure
+  history store, or refetch the list/detail once on (re)connect to reconcile.
+- **Producer-soft-null + consumer-strict = silent drop.** `bankPayload()` coerces missing fields to
+  `null`; the PWA `isBankPrimitives` rejects any `null`, dropping the event with no log. If the event
+  shape ever drifts, live updates vanish invisibly. Log on the producer or make the payload non-null.
+- **Cross-event-type redelivery resurrection.** A late at-least-once redelivery of a `created` after
+  a `delete` re-inserts the row on every list viewer (client merges are duplicate-safe per-event-type
+  but not across types/ordering). Narrow window; would need sequence/versioning to fully close.
+- **Cookie `SameSite=Strict` + cross-origin deployment.** The code supports a non-empty
+  `NEXT_PUBLIC_SYMFONY_API_BASE_URL` (cross-origin), but a `SameSite=Strict` cookie is dropped on the
+  cross-origin EventSource request, silently killing realtime. Untested. Default same-origin flow is fine.
+- **Handler test strength.** `BankRealtimePublisherHandlerTest` asserts on JSON substrings (mirrors the
+  existing demo-controller test), and idempotency / `?? null` paths and the `BankDeleter` dispatch are
+  not unit-asserted (the latter deferred to an un-diffed Behat `delete.feature` — spot-check it exists).
+- **`topicsKey` join("|") + unvalidated `id`.** The detail route `id` flows unvalidated into the topic
+  IRI and the `"|"`-joined effect key. Validate `id` as a UUID before subscribing (defense in depth).
+- **psalm baseline growth.** A 2nd `$this->id` `PossiblyNullArgument` entry was baselined rather than
+  fixed. Consider a non-null id accessor on the aggregate (clears all create/rename/delete entries at
+  once) to honor the no-paper-over rule — but it touches the pre-existing pattern, so out of PR #87 scope.

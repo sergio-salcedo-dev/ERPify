@@ -174,3 +174,28 @@ context:
 
 - Parser de payloads Mercure (happy + malformados).
   [`bankRealtime.test.ts:13`](../../pwa/tests/context/backoffice/bank/infrastructure/bankRealtime.test.ts#L13)
+
+## Review Findings (post-merge code review, 2026-06-01)
+
+Adversarial review (Blind Hunter + Edge Case Hunter + Acceptance Auditor + Portability Analyst) of the merged PR #87 (`5753a4c`). Spec-conformance assessed **HIGH** — every Always/Never constraint, payload envelope, private topics, domain purity and acceptance criteria are faithfully implemented. Items below are hardening/follow-ups, not contract breaches.
+
+### Patch (unchecked — fixable without further decisions)
+
+- [x] [Review][Patch] List real-time `onDeleted` does not prune `selectedIds` → phantom selection count after a remote delete [`pwa/src/app/backoffice/banks/page.tsx:233`] — applied 2026-06-02
+- [x] [Review][Patch] `authorize()` never checks `res.ok`; a failed cookie mint opens a doomed, data-less EventSource with no signal [`pwa/src/context/backoffice/bank/infrastructure/bankRealtime.ts:71`] — applied 2026-06-02
+
+### Deferred (real, but design-level or documented — see deferred-work.md)
+
+- [x] [Review][Defer] Public `authorize` route makes `private:true` privacy-theater until backoffice auth lands [`api/src/Backoffice/Bank/Infrastructure/Controller/BankRealtimeAuthorizeController.php:26`] — deferred, documented (no NEW exposure vs. already-public REST API)
+- [x] [Review][Resolved] No EventSource `onerror`/re-authorize; subscriber JWT (~1h `exp`) lapses → silent delivery stop — **RESOLVED upstream** in `6b2222e` (debounced `onError` → re-authorize hook + `BrowserMercureSubscriber.test.ts`)
+- [x] [Review][Defer] No event-id/Last-Event-ID replay; events during a reconnect gap are lost (views silently diverge) [`pwa/src/context/shared/infrastructure/RealTime/BrowserMercureSubscriber.ts:34`] — deferred
+- [x] [Review][Defer] Producer `?? null` + strict consumer = silent drop if event shape drifts; "resilient" comment is misleading [`api/src/Backoffice/Bank/Infrastructure/Messenger/BankRealtimePublisherHandler.php:95`] — deferred
+- [x] [Review][Defer] Cross-event redelivery (a late `created` after a `delete`) can resurrect a row; no sequence/versioning [`pwa/src/app/backoffice/banks/page.tsx:227`] — deferred, narrow window
+- [x] [Review][Defer] Cookie `SameSite=Strict` unasserted; a cross-origin deployment (non-empty API base) would drop it on the EventSource request [`api/src/Backoffice/Bank/Infrastructure/Controller/BankRealtimeAuthorizeController.php:29`] — deferred, default same-origin flow OK
+- [x] [Review][Defer] Handler test uses substring JSON assertions; idempotency and `?? null` paths untested; `BankDeleter` dispatch only covered by un-diffed Behat [`api/tests/Unit/Backoffice/Bank/Infrastructure/Messenger/BankRealtimePublisherHandlerTest.php:51`] — deferred
+- [x] [Review][Defer] `topicsKey = topics.join("|")` + unvalidated route `id` in topic IRI — theoretical corruption if `id` contains "|" [`pwa/src/context/backoffice/bank/infrastructure/bankRealtime.ts:83`] — deferred
+- [x] [Review][Defer] psalm baseline grows a 2nd `$this->id` `PossiblyNullArgument` suppression instead of a non-null id guard (conflicts with the no-paper-over preference) [`api/tools/psalm/psalm-baseline.xml:34`] — deferred, consistent with existing create/rename baseline
+
+### Portability (answer to the explicit question — see report)
+
+Verdict: **Mercure is the right fit** (one-way server→browser SSE, embedded in FrankenPHP). Raw WebSockets = over-spec. Kafka = wrong layer (browsers cannot consume Kafka; it could only replace the server-side Messenger backbone while STILL needing an SSE/WS edge). No full API-side abstraction warranted now (YAGNI). Single high-value seam: move the `authorize()` cookie handshake behind the PWA `MercureSubscriber` port and rename it `RealtimeSubscriber`, so a future swap touches one adapter file. Do NOT add an API-side `RealtimePublisher` port until a second non-demo publisher exists.

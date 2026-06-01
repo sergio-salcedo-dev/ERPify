@@ -232,6 +232,14 @@ export default function BanksListPage() {
     },
     onDeleted: (deletedId) => {
       setBanks((prev) => prev.filter((b) => b.id !== deletedId));
+      // Mirror the local-delete pruning so a remote delete of a selected row
+      // doesn't leave a phantom id inflating the bulk-selection count.
+      setSelectedIds((prev) => {
+        if (!prev.has(deletedId)) return prev;
+        const next = new Set(prev);
+        next.delete(deletedId);
+        return next;
+      });
     },
   });
 

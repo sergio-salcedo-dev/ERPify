@@ -68,7 +68,12 @@ async function authorize(): Promise<void> {
   const base = (process.env.NEXT_PUBLIC_SYMFONY_API_BASE_URL ?? "").replace(/\/$/, "");
   const origin = globalThis.window?.location.origin ?? "http://localhost";
   const url = new URL(`${base}${API_ENDPOINTS.BACKOFFICE.BANKS.REALTIME_AUTHORIZE}`, origin);
-  await fetch(url, { credentials: "include", cache: "no-store" });
+  const response = await fetch(url, { credentials: "include", cache: "no-store" });
+  if (!response.ok) {
+    // Surface a failed cookie mint so the caller skips opening a doomed stream
+    // (the hub never delivers private topics without a valid subscriber cookie).
+    throw new Error(`Mercure authorize failed: ${response.status}`);
+  }
 }
 
 /**
