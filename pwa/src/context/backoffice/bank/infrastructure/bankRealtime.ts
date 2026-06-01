@@ -72,6 +72,15 @@ async function authorize(): Promise<void> {
 }
 
 /**
+ * Re-mints the subscriber cookie after a stream error, swallowing any failure so
+ * a transient refresh never surfaces as an unhandled rejection. The EventSource's
+ * automatic reconnect then carries the fresh cookie.
+ */
+function refreshAuthorization(): void {
+  void authorize().catch(() => undefined);
+}
+
+/**
  * Subscribes to the given bank Mercure topics and dispatches typed events to the
  * provided handlers. Authorizes (mints the subscriber cookie) before opening the
  * stream. No-op on the server and when `topics` is empty.
@@ -111,7 +120,11 @@ export function useBankRealtime(topics: readonly string[], handlers: BankRealtim
       try {
         await authorize();
         if (!cancelled) {
-          subscription = mercureSubscriber.subscribe(topicList, (data) => dispatch(data));
+          // onError re-mints the (possibly expired) subscriber cookie so the
+          // EventSource's automatic reconnect is authorized again.
+          subscription = mercureSubscriber.subscribe(topicList, (data) => dispatch(data), {
+            onError: refreshAuthorization,
+          });
         }
       } catch {
         // Best-effort: a missing cookie, an absent EventSource (SSR/test), or a
