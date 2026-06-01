@@ -8,7 +8,7 @@ This document describes HTTP traffic when you run the **default Docker stack** f
 |-------------|--------------|--------|
 | **Docker default** | **`php`** on host **80** / **443** | No separate edge Caddy container. Next is internal on **3000**. |
 | **Local dev (Make)** | Same public entry | Root **`Makefile`** uses **[`compose.dev.yaml`](../compose.dev.yaml)** so **`pwa`** runs **`next dev`** with a bind mount (hot reload). CI uses **`compose.yaml`** + **`compose.dev.yaml`** only (production-style Next). |
-| **Production Compose** | Same idea: **`compose.yaml`** + **`compose.prod.yaml`** build **`php`** and **`pwa`**. | Set **`SERVER_NAME`**, secrets, and **`NEXT_PUBLIC_SYMFONY_API_BASE_URL`** for your real host. |
+| **Production Compose** | Same idea: **`compose.yaml`** + **`compose.prod.yaml`** build **`php`** and **`pwa`**. | Set **`SERVER_NAME`**, secrets, and **`NEXT_PUBLIC_API_BASE_URL`** for your real host. |
 
 ## High-level flow
 
@@ -33,7 +33,7 @@ flowchart TB
 ```
 
 - **Same origin** for the browser: **`https://localhost`** serves both the UI (via proxy to Next) and **`/api/...`** (Symfony), which keeps CORS and mixed-content simple.
-- **`NEXT_PUBLIC_SYMFONY_API_BASE_URL`** should match that origin (e.g. **`https://localhost`** in the default image build).
+- **`NEXT_PUBLIC_API_BASE_URL`** should match that origin (e.g. **`https://localhost`** in the default image build).
 - **`SYMFONY_INTERNAL_URL`** inside the **`pwa`** container stays **`http://php:80`** for server-side fetches.
 
 ## Sequences

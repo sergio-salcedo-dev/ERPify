@@ -30,7 +30,7 @@ import {
  *
  * Running locally requires the full stack (`make docker.up.wait`) and the
  * webServer config in `playwright.config.ts` to pick up
- * `NEXT_PUBLIC_SYMFONY_API_BASE_URL=https://localhost`.
+ * `NEXT_PUBLIC_API_BASE_URL=https://localhost`.
  */
 test.describe.configure({ mode: "serial" });
 

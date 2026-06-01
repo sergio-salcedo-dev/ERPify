@@ -62,7 +62,7 @@ Total in scope: **11 files / ~640 LOC**.
   - `class MockHttpClient implements HttpClient` (`@injectable`) — test adapter. Returns canned `{data: {status, service, datetime}}` envelopes after a 500 ms `setTimeout`, discriminated by URL substring against `ApiRoutes`.
 - **Internal helpers (not exported):**
   - `trimBase(url)` — strips trailing `/`.
-  - `browserApiBase()` — reads `NEXT_PUBLIC_SYMFONY_API_BASE_URL`, falls back to `https://localhost`. Public env, leaks to the client bundle by Next convention.
+  - `browserApiBase()` — reads `NEXT_PUBLIC_API_BASE_URL`, falls back to `https://localhost`. Public env, leaks to the client bundle by Next convention.
   - `serverApiBase()` — reads `SYMFONY_INTERNAL_URL` (e.g. `http://php:80` inside Compose); falls back to `browserApiBase()`.
 - **Imports:** `inversify.injectable`, `../ApiRoutes`.
 - **Used by:** `frontoffice/health/infrastructure/ApiHealthCheckRepository.ts`, `backoffice/health/infrastructure/ApiHealthCheckRepository.ts`. Always via `@inject("HttpClient")` — never instantiated directly.
@@ -238,7 +238,7 @@ In tests (`NODE_ENV==="test"` || `VITEST==="true"`), the same call resolves to `
 
 ### 4.2 Origin resolution
 
-| Run mode | `NEXT_PUBLIC_SYMFONY_API_BASE_URL` | `SYMFONY_INTERNAL_URL` | Browser base | Server (RSC) base |
+| Run mode | `NEXT_PUBLIC_API_BASE_URL` | `SYMFONY_INTERNAL_URL` | Browser base | Server (RSC) base |
 |---|---|---|---|---|
 | Docker `make app.dev` | `https://localhost` (Compose default) | `http://php:80` | `https://localhost` | `http://php:80` |
 | Vitest | (irrelevant — `MockHttpClient` is bound) | — | — | — |
@@ -279,7 +279,7 @@ The container is **only resolved inside `app/`**. No deeper code calls `containe
 | HTTP `GET /api/v1/...` | Symfony API | `fetch` via `FetchHttpClient` | Same-origin in browser (FrankenPHP reverse-proxy); internal `http://php:80` from RSC. |
 | Mercure SSE | Symfony API at `/.well-known/mercure` | **Not yet wired in `shared/infrastructure`.** The architecture allows for it; today no PWA code subscribes. Add an `EventSourceClient` here when needed. |
 | `process.env.NODE_ENV` / `VITEST` | Vitest, Next runtime | Picked up at module-load to swap `HttpClient` adapter | See §2.2 Risks. |
-| `process.env.NEXT_PUBLIC_SYMFONY_API_BASE_URL` | Compose / `pwa/.env.local` | Browser base URL | Public — leaks to client bundle. |
+| `process.env.NEXT_PUBLIC_API_BASE_URL` | Compose / `pwa/.env.local` | Browser base URL | Public — leaks to client bundle. |
 | `process.env.SYMFONY_INTERNAL_URL` | Compose service network | RSC base URL | Server-only. |
 
 No outbound integration outside the Symfony API.

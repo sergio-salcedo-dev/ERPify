@@ -55,7 +55,7 @@ services:
       dockerfile: Dockerfile
       target: dev
       args:
-        NEXT_PUBLIC_SYMFONY_API_BASE_URL: ${NEXT_PUBLIC_SYMFONY_API_BASE_URL:-https://localhost}
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-https://localhost}
     volumes:
       - ./pwa:/app/pwa
       - pwa_node_modules:/app/pwa/node_modules

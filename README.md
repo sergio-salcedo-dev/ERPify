@@ -25,7 +25,7 @@ See [docs/project-overview.md](docs/project-overview.md).
 3. Accept the dev certificate for HTTPS if prompted. The UI is Next.js; **`/api/...`** and **`/.well-known/mercure`** are handled by Symfony on the same host.
 4. **`make docker.down`** to stop.
 
-The PWA image is built with **`NEXT_PUBLIC_SYMFONY_API_BASE_URL=https://localhost`** by default (same origin as the page). Override at build time with env if needed (see [pwa/docs/production-deployment.md](pwa/docs/production-deployment.md)).
+The PWA image is built with **`NEXT_PUBLIC_API_BASE_URL=https://localhost`** by default (same origin as the page). Override at build time with env if needed (see [pwa/docs/production-deployment.md](pwa/docs/production-deployment.md)).
 
 ## Useful Make targets
 

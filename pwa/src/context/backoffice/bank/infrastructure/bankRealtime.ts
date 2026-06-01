@@ -65,7 +65,7 @@ async function authorize(): Promise<void> {
   // Resolve an absolute URL against the current origin so `fetch` works the same
   // way the EventSource subscription does (a bare relative path is unparseable
   // outside a browser, e.g. under test/SSR).
-  const base = (process.env.NEXT_PUBLIC_SYMFONY_API_BASE_URL ?? "").replace(/\/$/, "");
+  const base = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
   const origin = globalThis.window?.location.origin ?? "http://localhost";
   const url = new URL(`${base}${API_ENDPOINTS.BACKOFFICE.BANKS.REALTIME_AUTHORIZE}`, origin);
   const response = await fetch(url, { credentials: "include", cache: "no-store" });

@@ -55,7 +55,7 @@ Full-stack targets (`make app.dev`, `make docker.up`, `make docker.down`, …) l
 
 ## Env
 
-- **Docker stack** (default): `NEXT_PUBLIC_SYMFONY_API_BASE_URL=https://localhost`, `SYMFONY_INTERNAL_URL=http://php:80` (set in Compose).
+- **Docker stack** (default): `NEXT_PUBLIC_API_BASE_URL=https://localhost`, `SYMFONY_INTERNAL_URL=http://php:80` (set in Compose).
 
 ## Rules that bite
 

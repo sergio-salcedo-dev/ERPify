@@ -10,7 +10,7 @@ test-results
 # Secrets / credentials — must never enter the build context (defence in
 # depth for docker:S6470; the `COPY . .` in the dev/builder stages reads it).
 # All `.env*` are excluded: the build's only public input is the
-# NEXT_PUBLIC_SYMFONY_API_BASE_URL Docker ARG, not a committed env file, and
+# NEXT_PUBLIC_API_BASE_URL Docker ARG, not a committed env file, and
 # the prod stage copies build artifacts only (.next/standalone, .next/static,
 # public) — never source or env files. Note this CANNOT guard against a
 # NEXT_PUBLIC_*-prefixed value: Next.js inlines those into the shipped JS

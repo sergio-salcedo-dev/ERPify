@@ -17,7 +17,7 @@ function trimBase(url: string): string {
 }
 
 function browserApiBase(): string {
-  const v = process.env.NEXT_PUBLIC_SYMFONY_API_BASE_URL?.trim();
+  const v = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
   return trimBase(v || "https://localhost");
 }
 

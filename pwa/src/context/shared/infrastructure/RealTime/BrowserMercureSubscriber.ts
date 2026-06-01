@@ -8,10 +8,10 @@ import type {
  * Builds the same-origin Mercure hub URL. The PWA is served by FrankenPHP on the
  * same origin as the hub (`/.well-known/mercure`), so an empty API base resolves
  * to a relative URL against the current origin; an explicit
- * `NEXT_PUBLIC_SYMFONY_API_BASE_URL` is honoured when set.
+ * `NEXT_PUBLIC_API_BASE_URL` is honoured when set.
  */
 function mercureUrl(topics: readonly string[]): string {
-  const base = (process.env.NEXT_PUBLIC_SYMFONY_API_BASE_URL ?? "").replace(/\/$/, "");
+  const base = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
   const origin = globalThis.window?.location.origin ?? "http://localhost";
   const url = new URL(`${base}/.well-known/mercure`, origin);
   for (const topic of topics) {
