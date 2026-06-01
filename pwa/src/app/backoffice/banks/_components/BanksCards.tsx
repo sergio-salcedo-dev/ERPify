@@ -43,7 +43,6 @@ export function BanksCards({
           <li
             key={bank.id}
             className="banks-cards__item"
-            aria-selected={onToggleSelect ? selected : undefined}
             data-testid={`banks-cards__item-${bank.id}`}
           >
             {/*

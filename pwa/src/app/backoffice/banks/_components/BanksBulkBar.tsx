@@ -38,9 +38,8 @@ export function BanksBulkBar({ count, onClear, onConfirmDelete }: Readonly<Banks
   }
 
   return (
-    <div
+    <section
       className="banks-list__bulk-bar border-border bg-card flex flex-wrap items-center gap-3 rounded-lg border p-2 sm:flex-nowrap"
-      role="region"
       aria-label="Bulk actions"
       data-testid="banks-list__bulk-bar"
     >
@@ -117,6 +116,6 @@ export function BanksBulkBar({ count, onClear, onConfirmDelete }: Readonly<Banks
           </DialogContent>
         </Dialog>
       </div>
-    </div>
+    </section>
   );
 }
