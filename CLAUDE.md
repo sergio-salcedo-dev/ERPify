@@ -40,6 +40,8 @@ make ci                             # Full CI (ci.quality + ci.test).
 
 **Always start the stack with `make app.dev` or `make docker.up`.** Bare `docker compose up -d` skips composer install on cold checkouts and the `pwa.install.if-missing` guard.
 
+**Per-worktree stacks — isolated, no collision with `main`.** You can bring a worktree's stack up without touching the primary checkout's. `make/config.mk` derives `COMPOSE_PROJECT_NAME` from the checkout automatically: the primary keeps the bare `erpify` (fixed ports `80/443/15432/8025`, volumes untouched); a linked worktree under `.claude/worktrees/` gets `erpify-<dir-slug>` and, in dev, publishes host ports ephemerally (`0` → a random free port) so it never collides with `main` or other worktrees. Run `make app.dev` / `make docker.up` from inside the worktree — `make` targets then exec into *that* stack (so checks/tests see the worktree's code). Worktree stacks are driven via `docker compose exec` and the internal network (`MINK_BASE_URL`, pwa→php), not fixed host ports; browse the UI from the primary checkout, or set `HTTP_PORT=…` / `COMPOSE_PROJECT_NAME=…` to opt back into fixed values. `make docker.info` prints the resolved project + ports. Full details → [`docs/claude-code-quickref.md`](docs/claude-code-quickref.md).
+
 ---
 
 ## Architecture
