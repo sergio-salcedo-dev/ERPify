@@ -25,7 +25,11 @@ final class ProblemDetailsResponderTest extends TestCase
 
         $response = (new ProblemDetailsResponder())->respond($problemDetails);
 
-        $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND, $response->getStatusCode(), (string) $response->getContent());
+        $this->assertSame(
+            \Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND,
+            $response->getStatusCode(),
+            (string) $response->getContent(),
+        );
     }
 
     public function testContentTypeHeaderIsExactProblemJsonWithNoCharsetSuffix(): void
@@ -79,7 +83,11 @@ final class ProblemDetailsResponderTest extends TestCase
         $body = (string) $response->getContent();
 
         $this->assertStringContainsString('Não encontrado — 資源未找到', $body);
-        $this->assertStringNotContainsString('\u', $body, 'JSON_UNESCAPED_UNICODE must emit literal UTF-8 (no \uXXXX escapes).');
+        $this->assertStringNotContainsString(
+            '\u',
+            $body,
+            'JSON_UNESCAPED_UNICODE must emit literal UTF-8 (no \uXXXX escapes).',
+        );
     }
 
     public function testBodyIsByteForByteStableAcrossRepeatedCalls(): void
@@ -104,8 +112,16 @@ final class ProblemDetailsResponderTest extends TestCase
         $secondResponse = $problemDetailsResponder->respond($second);
 
         $this->assertNotSame($firstResponse, $secondResponse, 'The responder must build a fresh Response per call.');
-        $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND, $firstResponse->getStatusCode(), (string) $firstResponse->getContent());
-        $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_CONFLICT, $secondResponse->getStatusCode(), (string) $secondResponse->getContent());
+        $this->assertSame(
+            \Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND,
+            $firstResponse->getStatusCode(),
+            (string) $firstResponse->getContent(),
+        );
+        $this->assertSame(
+            \Symfony\Component\HttpFoundation\Response::HTTP_CONFLICT,
+            $secondResponse->getStatusCode(),
+            (string) $secondResponse->getContent(),
+        );
     }
 
     public function testExtensionsFlowThroughInDeterministicOrder(): void

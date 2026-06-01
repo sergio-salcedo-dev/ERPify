@@ -345,7 +345,11 @@ class JsonNodeContext extends AbstractContext
         self::assertNotNull($lastResult, 'No HTTP Call made');
 
         $response = $lastResult->getValue();
-        self::assertInstanceOf(SymfonyResponse::class, $response, 'Response header lookup requires a Symfony Response.');
+        self::assertInstanceOf(
+            SymfonyResponse::class,
+            $response,
+            'Response header lookup requires a Symfony Response.',
+        );
 
         $value = $response->headers->get($name);
         self::assertNotNull($value, \sprintf('Response header "%s" is not set.', $name));

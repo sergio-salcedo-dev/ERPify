@@ -33,7 +33,11 @@ final readonly class FlysystemObjectStorage implements ObjectStoragePort
         try {
             return $this->filesystemOperator->read($key);
         } catch (UnableToReadFile $unableToReadFile) {
-            throw new UnexpectedValueException(\sprintf('Cannot read object storage key "%s".', $key), 0, $unableToReadFile);
+            throw new UnexpectedValueException(
+                \sprintf('Cannot read object storage key "%s".', $key),
+                0,
+                $unableToReadFile,
+            );
         }
     }
 

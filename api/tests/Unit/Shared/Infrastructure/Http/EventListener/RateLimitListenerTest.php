@@ -188,9 +188,9 @@ final class RateLimitListenerTest extends TestCase
 
     public function testListenerPrioritiesArePinned(): void
     {
-        // @phpstan-ignore method.alreadyNarrowedType (the assertion IS the test — pins the constant baseline at runtime)
+        // @phpstan-ignore method.alreadyNarrowedType (the assertion IS the test — pins the constant baseline)
         $this->assertSame(512, RateLimitListener::REQUEST_PRIORITY);
-        // @phpstan-ignore method.alreadyNarrowedType (the assertion IS the test — pins the constant baseline at runtime)
+        // @phpstan-ignore method.alreadyNarrowedType (the assertion IS the test — pins the constant baseline)
         $this->assertSame(RateLimitListener::RESPONSE_PRIORITY, -128);
     }
 
@@ -215,7 +215,12 @@ final class RateLimitListenerTest extends TestCase
     private function makeListener(): RateLimitListener
     {
         $rateLimiterFactory = new RateLimiterFactory(
-            ['id' => 'test_anonymous_api', 'policy' => 'sliding_window', 'limit' => self::TEST_LIMIT, 'interval' => '1 minute'],
+            [
+                'id' => 'test_anonymous_api',
+                'policy' => 'sliding_window',
+                'limit' => self::TEST_LIMIT,
+                'interval' => '1 minute',
+            ],
             new InMemoryStorage(),
         );
 
@@ -248,8 +253,11 @@ final class RateLimitListenerTest extends TestCase
     {
         return new class implements HttpKernelInterface {
             #[Override]
-            public function handle(Request $request, int $type = HttpKernelInterface::MAIN_REQUEST, bool $catch = true): Response
-            {
+            public function handle(
+                Request $request,
+                int $type = HttpKernelInterface::MAIN_REQUEST,
+                bool $catch = true,
+            ): Response {
                 throw new LogicException('Test kernel: handle() must not be called by the listener.');
             }
         };

@@ -56,7 +56,8 @@ final class RateLimitContext extends AbstractContext implements Context
         }
 
         self::fail(\sprintf(
-            'Could not exhaust the anonymous_api budget for "%s" within %d attempts — check the limit configured in api/.env.test.',
+            'Could not exhaust the anonymous_api budget for "%s" within %d attempts'
+            . ' — check the limit configured in api/.env.test.',
             $clientIp,
             $safetyCap,
         ));

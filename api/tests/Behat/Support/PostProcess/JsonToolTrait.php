@@ -231,6 +231,9 @@ trait JsonToolTrait
         $values = \explode(',', $list);
         $values = \array_map(trim(...), $values);
 
-        self::assertTrue(\in_array($actual, $values, true), \sprintf('The node value is "%s", which is not one of "%s"', $actual, $list));
+        self::assertTrue(
+            \in_array($actual, $values, true),
+            \sprintf('The node value is "%s", which is not one of "%s"', $actual, $list),
+        );
     }
 }

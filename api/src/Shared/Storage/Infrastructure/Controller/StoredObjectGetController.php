@@ -11,7 +11,12 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
-#[Route('/stored-objects/{hash}', name: 'shared_stored_object_get', requirements: ['hash' => '[a-f0-9]{64}'], methods: ['GET'])]
+#[Route(
+    '/stored-objects/{hash}',
+    name: 'shared_stored_object_get',
+    requirements: ['hash' => '[a-f0-9]{64}'],
+    methods: ['GET'],
+)]
 final readonly class StoredObjectGetController
 {
     private const string CACHE_CONTROL = 'public, max-age=31536000, immutable';

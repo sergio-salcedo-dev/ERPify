@@ -48,7 +48,9 @@ final class PostgresBankRepository extends AbstractSearchRepository implements B
     public function getSearchQueryBuilder(SearchCriteria $criteria): QueryBuilderWithOptions
     {
         if (!$criteria instanceof BankSearchCriteria) {
-            throw new InvalidArgumentException('Invalid criteria type. Expected BankSearchCriteria, got ' . $criteria::class . ' instead.');
+            throw new InvalidArgumentException(
+                'Invalid criteria type. Expected BankSearchCriteria, got ' . $criteria::class . ' instead.',
+            );
         }
 
         $queryBuilderWithOptions = $this->createQueryBuilder('b');

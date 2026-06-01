@@ -22,7 +22,7 @@ final class RedactionDenylistTest extends TestCase
 {
     public function testKeysConstantContainsTheSevenCanonicalDenylistKeys(): void
     {
-        // @phpstan-ignore method.alreadyNarrowedType (the assertion IS the test — pins the constant baseline at runtime)
+        // @phpstan-ignore method.alreadyNarrowedType (the assertion IS the test — pins the constant baseline)
         $this->assertSame(
             RedactionDenylist::KEYS,
             ['password', 'token', 'secret', 'authorization', 'cookie', 'ssn', 'iban'],
@@ -33,7 +33,11 @@ final class RedactionDenylistTest extends TestCase
     {
         foreach (RedactionDenylist::KEYS as $key) {
             $this->assertSame($key, \strtolower($key), \sprintf('Key "%s" must be lowercase.', $key));
-            $this->assertSame(1, \preg_match('/\A[a-z][a-z0-9_-]*\z/', $key), \sprintf('Key "%s" must be ASCII identifier-shaped.', $key));
+            $this->assertSame(
+                1,
+                \preg_match('/\A[a-z][a-z0-9_-]*\z/', $key),
+                \sprintf('Key "%s" must be ASCII identifier-shaped.', $key),
+            );
         }
     }
 
@@ -157,9 +161,14 @@ final class RedactionDenylistTest extends TestCase
         $this->assertSame(
             ['filter'],
             $userDefinedPublicMethods,
-            'RedactionDenylist must declare only the static `filter` public method (the implicit enum `cases()` is engine-provided and exempt).',
+            'RedactionDenylist must declare only the static `filter` public method '
+            . '(the implicit enum `cases()` is engine-provided and exempt).',
         );
-        $this->assertCount(1, $reflectionClass->getReflectionConstants(), 'RedactionDenylist must declare exactly one constant (KEYS).');
+        $this->assertCount(
+            1,
+            $reflectionClass->getReflectionConstants(),
+            'RedactionDenylist must declare exactly one constant (KEYS).',
+        );
     }
 
     public function testCannotInstantiate(): void
@@ -168,7 +177,9 @@ final class RedactionDenylistTest extends TestCase
 
         $this->assertTrue(
             $reflectionClass->isEnum(),
-            'RedactionDenylist must be an enum — instantiation is forbidden by the PHP engine for this static-only utility (anti-pattern: "Do NOT instantiate RedactionDenylist as a service").',
+            'RedactionDenylist must be an enum — instantiation is forbidden by the PHP engine '
+            . 'for this static-only utility '
+            . '(anti-pattern: "Do NOT instantiate RedactionDenylist as a service").',
         );
         $this->assertNotInstanceOf(
             ReflectionMethod::class,
@@ -184,7 +195,8 @@ final class RedactionDenylistTest extends TestCase
         $this->assertCount(
             \count(RedactionDenylist::KEYS) * 4,
             $rows,
-            'Adding a new key to RedactionDenylist::KEYS requires adding four casing rows to provideFilterStripsExactKeyMatchCaseInsensitiveCases.',
+            'Adding a new key to RedactionDenylist::KEYS requires adding four casing rows '
+            . 'to provideFilterStripsExactKeyMatchCaseInsensitiveCases.',
         );
     }
 
@@ -198,7 +210,9 @@ final class RedactionDenylistTest extends TestCase
         $characters = \str_split($value);
 
         $alternated = \array_map(
-            static fn (string $character, int $index): string => 0 === $index % 2 ? $character : \strtoupper($character),
+            static fn (string $character, int $index): string => 0 === $index % 2
+                ? $character
+                : \strtoupper($character),
             $characters,
             \array_keys($characters),
         );
