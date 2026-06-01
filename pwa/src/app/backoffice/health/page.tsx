@@ -11,6 +11,7 @@ import { ApiStatus, ViewStatus } from "@/context/shared/domain/types/status";
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
 import { AsyncBoundary, type AsyncBoundaryState } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
+import { uuidV7 } from "@/lib/uuidV7";
 
 function transportFailureProblem(detail: string): ProblemDetails {
   return {
@@ -18,8 +19,8 @@ function transportFailureProblem(detail: string): ProblemDetails {
     title: "Health check failed",
     status: 0,
     detail,
-    instance: crypto.randomUUID(),
-    "correlation-id": crypto.randomUUID(),
+    instance: uuidV7(),
+    "correlation-id": uuidV7(),
   };
 }
 

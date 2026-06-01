@@ -13,6 +13,7 @@ import { AsyncBoundary } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
+import { uuidV7 } from "@/lib/uuidV7";
 import { ViewStatus } from "@/context/shared/domain/types/status";
 import { BanksTable } from "./_components/BanksTable";
 import { BanksCards } from "./_components/BanksCards";
@@ -49,8 +50,8 @@ function genericProblem(detail: string): ProblemDetails {
     title: "Unexpected error",
     status: 0,
     detail,
-    instance: crypto.randomUUID(),
-    "correlation-id": crypto.randomUUID(),
+    instance: uuidV7(),
+    "correlation-id": uuidV7(),
   };
 }
 

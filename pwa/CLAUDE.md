@@ -236,6 +236,16 @@ Reach for these from every entity instead of re-implementing them locally:
   `@/components/ui/button` (the latter is `"use client"` and Next 16
   blocks server invocations of the cva helper). Import the `Button`
   component itself from `@/components/ui/button` as before.
+- **UUIDs** — generate every client-side identifier with `uuidV7()` from
+  `@/lib/uuidV7` (a thin wrapper over the `uuid` library). **Never call
+  `crypto.randomUUID()`** — it always returns a UUID **v4**, while the
+  whole stack is UUID **v7**: the API's persisted PKs and minted
+  `correlation-id` are v7 (its `CorrelationIdListener` strictly rejects
+  non-v7), and `ProblemDetails.instance` / `correlation-id` are typed as
+  v7. This matters wherever the UI fabricates a fallback `ProblemDetails`
+  (no response / non-ProblemDetails body). Keep the `uuid` import inside
+  `@/lib/uuidV7` only — don't scatter `import … from "uuid"` across
+  components.
 - **Form validation** — `Validator` / `ZodValidatorAdapter` / `useZodForm`
   from `@/context/shared/infrastructure/Validation`. Each entity declares
   its own schema in `src/context/<bounded-context>/<entity>/application/schemas/`
