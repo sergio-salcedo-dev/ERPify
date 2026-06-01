@@ -104,9 +104,9 @@ jobs:
         run: make php.behat.install
 
       # Check-only sweep (fails on drift instead of auto-fixing) fanned out
-      # read-only. -j2 is a conservative start: psalm is internally multi-threaded
-      # and memory-heavy, so over-subscribing risks OOM on the 2-core runner —
-      # tune up only if a run shows headroom. --output-sync keeps logs per-tool.
+      # read-only. phpstan is the heaviest target; -j2 is a conservative start on
+      # the 2-core runner — tune up if a run shows headroom. --output-sync keeps
+      # logs grouped per-tool. (psalm/phpcs are excluded — see issue #95.)
       - name: PHP lint (check, parallel)
         run: make -j2 --output-sync=target php.quality.dry-run
 
