@@ -104,7 +104,7 @@ export default function BanksListPage() {
     // setState is intentional (it also drives the Retry path) and runs through
     // a stable callback, so the cascading-render warning does not apply here.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadBanks();
+    loadBanks();
   }, [loadBanks]);
 
   const visibleBanks = useMemo(
@@ -210,7 +210,7 @@ export default function BanksListPage() {
             variant="outline"
             size="sm"
             onClick={() => {
-              void loadBanks();
+              loadBanks();
             }}
             title="Retry loading banks"
             aria-label="Retry loading banks"

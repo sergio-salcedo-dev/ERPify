@@ -200,7 +200,7 @@ export function BanksFilters({
         id={panelId}
         aria-label="Bank filter fields"
         aria-hidden={!open}
-        inert={!open ? true : undefined}
+        inert={open ? undefined : true}
         className="banks-filters__panel grid transition-[grid-template-rows] duration-200 ease-out"
         style={{ gridTemplateRows: open ? "1fr" : "0fr" }}
         data-testid="banks-filters__panel"
