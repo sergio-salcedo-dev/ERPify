@@ -5,11 +5,13 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
 import { SearchBanks } from "@/context/backoffice/bank/application/SearchBanks";
+import { DeleteBank } from "@/context/backoffice/bank/application/DeleteBank";
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
 import { toastNotifier } from "@/context/shared/infrastructure/Notification/Toast";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
-import { AsyncBoundary } from "@/components/erpify";
+import { AsyncBoundary, SelectionMode } from "@/components/erpify";
+import type { DataTableSelection } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
@@ -21,6 +23,7 @@ import { BanksPagination } from "./_components/BanksPagination";
 import { BanksViewToggle, type BanksView } from "./_components/BanksViewToggle";
 import { BanksListSkeleton } from "./_components/BanksListSkeleton";
 import { BanksEmptyFiltered } from "./_components/BanksEmptyFiltered";
+import { BanksBulkBar } from "./_components/BanksBulkBar";
 import {
   DEFAULT_SORT,
   EMPTY_FILTER,
@@ -63,6 +66,7 @@ export default function BanksListPage() {
   const [sort, setSort] = useState<BanksSort>(DEFAULT_SORT);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<BanksPageSize>(BANKS_PAGE_SIZE_DEFAULT);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [view, setView] = useState<BanksView>(() => {
     if (globalThis.window === undefined) return DEFAULT_VIEW;
     const stored = globalThis.localStorage.getItem(BANKS_VIEW_STORAGE_KEY);
@@ -151,6 +155,65 @@ export default function BanksListPage() {
     const deleted = banks.find((bank) => bank.id === id);
     toastNotifier.success("Bank deleted", deleted ? { description: deleted.name } : undefined);
     setBanks((prev) => prev.filter((bank) => bank.id !== id));
+    setSelectedIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  };
+
+  const toggleSelect = useCallback((id: string): void => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback((): void => setSelectedIds(new Set()), []);
+
+  const tableSelection = useMemo<DataTableSelection>(
+    () => ({ mode: SelectionMode.MULTI, selected: selectedIds, onChange: setSelectedIds }),
+    [selectedIds],
+  );
+
+  // Bulk delete is OPTIMISTIC (a documented exception to the pessimistic-by-
+  // default rule): the selected rows vanish immediately, then any failures are
+  // restored and reported. Single-row delete stays pessimistic (its dialog
+  // keeps the error inline).
+  const handleBulkDelete = async (): Promise<void> => {
+    const ids = [...selectedIds].filter((id) => banks.some((bank) => bank.id === id));
+    if (ids.length === 0) return;
+    const snapshot = banks;
+    const removing = new Set(ids);
+    setBanks((prev) => prev.filter((bank) => !removing.has(bank.id)));
+    setSelectedIds(new Set());
+
+    const useCase = container.get<DeleteBank>("BackOfficeDeleteBank");
+    const results = await Promise.allSettled(ids.map((id) => useCase.run(id)));
+    if (!mountedRef.current) return;
+
+    const failed = ids.filter((_, index) => results[index].status === "rejected");
+    const succeeded = ids.length - failed.length;
+    if (succeeded > 0) {
+      toastNotifier.success(`${succeeded} ${succeeded === 1 ? "bank" : "banks"} deleted`);
+    }
+    if (failed.length > 0) {
+      const failedSet = new Set(failed);
+      const restored = snapshot.filter((bank) => failedSet.has(bank.id));
+      setBanks((prev) => {
+        const present = new Set(prev.map((bank) => bank.id));
+        return [...prev, ...restored.filter((bank) => !present.has(bank.id))];
+      });
+      toastNotifier.error("Some banks could not be deleted", {
+        description: `${failed.length} of ${ids.length} could not be deleted.`,
+      });
+    }
   };
 
   return (
@@ -216,6 +279,14 @@ export default function BanksListPage() {
         />
       ) : null}
 
+      {state === ViewStatus.READY && selectedIds.size > 0 ? (
+        <BanksBulkBar
+          count={selectedIds.size}
+          onClear={clearSelection}
+          onConfirmDelete={handleBulkDelete}
+        />
+      ) : null}
+
       <AsyncBoundary
         state={state}
         data={banks}
@@ -261,9 +332,15 @@ export default function BanksListPage() {
                   sort={sort}
                   onSortChange={setSort}
                   onBankDeleted={handleBankDeleted}
+                  selection={tableSelection}
                 />
               ) : (
-                <BanksCards banks={paged.rows} onBankDeleted={handleBankDeleted} />
+                <BanksCards
+                  banks={paged.rows}
+                  onBankDeleted={handleBankDeleted}
+                  selectedIds={selectedIds}
+                  onToggleSelect={toggleSelect}
+                />
               )}
               <BanksPagination
                 page={paged.page}

@@ -1,17 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { Pencil, Trash2 } from "lucide-react";
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
-import { CopyButton, MonogramAvatar, StatusBadge } from "@/components/erpify";
-import { Button } from "@/components/ui/button";
-import { buttonVariants } from "@/components/ui/button-variants";
+import { MonogramAvatar, StatusBadge } from "@/components/erpify";
 import {
   Card,
   CardAction,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -20,14 +16,21 @@ import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvid
 import { safeHref } from "@/lib/safeHref";
 import { bankRoutes } from "../_lib/bankRoutes";
 import { isRecentlyCreated } from "../_lib/bankRecency";
-import { DeleteBankButton } from "./DeleteBankButton";
+import { BankRowActions } from "./BankRowActions";
 
 interface BanksCardsProps {
   banks: Bank[];
   onBankDeleted?: (id: string) => void;
+  selectedIds?: ReadonlySet<string>;
+  onToggleSelect?: (id: string) => void;
 }
 
-export function BanksCards({ banks, onBankDeleted }: Readonly<BanksCardsProps>) {
+export function BanksCards({
+  banks,
+  onBankDeleted,
+  selectedIds,
+  onToggleSelect,
+}: Readonly<BanksCardsProps>) {
   return (
     <ul
       className="banks-cards grid list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
@@ -35,98 +38,84 @@ export function BanksCards({ banks, onBankDeleted }: Readonly<BanksCardsProps>) 
     >
       {banks.map((bank) => {
         const detailHref = safeHref(bankRoutes.detail(bank.id));
-        const editHref = safeHref(bankRoutes.edit(bank.id));
+        const selected = selectedIds?.has(bank.id) ?? false;
         return (
           <li
             key={bank.id}
             className="banks-cards__item"
+            aria-selected={onToggleSelect ? selected : undefined}
             data-testid={`banks-cards__item-${bank.id}`}
           >
-            <Card size="sm" className="banks-cards__card h-full">
+            {/*
+             * `relative` anchors the name link's stretched `::after` overlay so
+             * the whole card navigates to the detail page; the action cluster
+             * and the selection checkbox sit at `z-10` above that overlay so
+             * their controls stay clickable.
+             */}
+            <Card
+              size="sm"
+              className={cn(
+                "banks-cards__card relative h-full transition-shadow hover:shadow-elevation-1 hover:ring-foreground/20",
+                selected && "ring-2 ring-primary",
+              )}
+            >
               <CardHeader>
-                <div className="banks-cards__identity flex min-w-0 items-center gap-2.5">
-                  <MonogramAvatar name={bank.name} testId={`banks-cards__avatar-${bank.id}`} />
-                  <div className="min-w-0 flex-1">
-                    <CardTitle className="banks-cards__title flex min-w-0 items-center gap-2">
+                <div className="banks-cards__identity flex min-w-0 items-start gap-2.5">
+                  {onToggleSelect ? (
+                    <input
+                      type="checkbox"
+                      aria-label={`Select bank ${bank.name}`}
+                      checked={selected}
+                      onChange={() => onToggleSelect(bank.id)}
+                      className="banks-cards__select accent-primary border-border relative z-10 mt-1 size-4 flex-none cursor-pointer rounded opacity-0 transition-opacity group-hover/card:opacity-100 checked:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
+                      data-testid={`banks-cards__select-${bank.id}`}
+                    />
+                  ) : null}
+                  <MonogramAvatar
+                    name={bank.name}
+                    className="mt-0.5"
+                    testId={`banks-cards__avatar-${bank.id}`}
+                  />
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <CardTitle className="banks-cards__title">
                       <Link
                         href={detailHref}
-                        className="banks-cards__name min-w-0 truncate hover:underline focus-visible:underline focus-visible:outline-none"
+                        className="banks-cards__name font-semibold text-foreground [overflow-wrap:anywhere] hover:underline focus-visible:underline focus-visible:outline-none after:absolute after:inset-0"
                         title={`View bank ${bank.name}`}
                         data-testid={`banks-cards__name-${bank.id}`}
                       >
                         {bank.name}
                       </Link>
-                      {isRecentlyCreated(bank.createdAt, dateTimeProvider) ? (
-                        <StatusBadge
-                          variant="info"
-                          label="New"
-                          className="banks-cards__new flex-none"
-                          testId={`banks-cards__new-${bank.id}`}
-                        />
-                      ) : null}
                     </CardTitle>
                     <CardDescription
-                      className="banks-cards__shortname truncate font-mono text-xs uppercase"
+                      className="banks-cards__shortname font-mono text-xs uppercase [overflow-wrap:anywhere]"
                       title={bank.shortName}
                       data-testid={`banks-cards__shortname-${bank.id}`}
                     >
                       {bank.shortName}
                     </CardDescription>
+                    {isRecentlyCreated(bank.createdAt, dateTimeProvider) ? (
+                      <StatusBadge
+                        variant="success"
+                        label="New"
+                        className="banks-cards__new mt-0.5"
+                        testId={`banks-cards__new-${bank.id}`}
+                      />
+                    ) : null}
                   </div>
                 </div>
                 <CardAction>
-                  <div className="banks-cards__actions flex items-center gap-1">
-                    <CopyButton
-                      value={bank.id}
-                      iconOnly
-                      size="icon-sm"
-                      label="Copy ID"
-                      copiedLabel="ID copied"
-                      errorLabel="Copy failed"
-                      title={`Copy bank ${bank.name} ID`}
-                      testId={`banks-cards__copy-${bank.id}`}
-                    />
-                    <Link
-                      href={editHref}
-                      className={cn(buttonVariants({ variant: "outline", size: "icon-sm" }))}
-                      aria-label="Edit"
-                      title={`Edit bank ${bank.name}`}
-                      data-testid={`banks-cards__edit-${bank.id}`}
-                    >
-                      <Pencil className="size-3.5" aria-hidden="true" />
-                      <span className="sr-only">Edit</span>
-                    </Link>
-                    <DeleteBankButton
-                      id={bank.id}
-                      name={bank.name}
-                      triggerTestId={`banks-cards__delete-${bank.id}`}
-                      onDeleted={onBankDeleted}
-                      trigger={
-                        <Button
-                          variant="destructive"
-                          size="icon-sm"
-                          aria-label="Delete"
-                          title={`Delete bank ${bank.name}`}
-                          data-testid={`banks-cards__delete-${bank.id}`}
-                        >
-                          <Trash2 className="size-3.5" aria-hidden="true" />
-                          <span className="sr-only">Delete</span>
-                        </Button>
-                      }
-                    />
-                  </div>
+                  <BankRowActions
+                    id={bank.id}
+                    name={bank.name}
+                    surface="cards"
+                    onBankDeleted={onBankDeleted}
+                    className="banks-cards__actions relative z-10 opacity-0 transition-opacity group-hover/card:opacity-100 group-focus-within/card:opacity-100 [@media(hover:none)]:opacity-100"
+                  />
                 </CardAction>
               </CardHeader>
               <CardContent>
-                <dl className="banks-cards__meta grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-                  <dt className="text-muted-foreground">Created</dt>
-                  <dd
-                    className="banks-cards__created text-foreground"
-                    title={dateTimeProvider.formatIsoToLocalDateTime(bank.createdAt)}
-                    data-testid={`banks-cards__created-${bank.id}`}
-                  >
-                    {dateTimeProvider.formatIsoToRelative(bank.createdAt)}
-                  </dd>
+                <dl className="banks-cards__meta grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs tabular-nums">
                   <dt className="text-muted-foreground">Updated</dt>
                   <dd
                     className="banks-cards__updated text-foreground"
@@ -135,22 +124,16 @@ export function BanksCards({ banks, onBankDeleted }: Readonly<BanksCardsProps>) 
                   >
                     {dateTimeProvider.formatIsoToRelative(bank.updatedAt)}
                   </dd>
+                  <dt className="text-muted-foreground">Created</dt>
+                  <dd
+                    className="banks-cards__created text-foreground"
+                    title={dateTimeProvider.formatIsoToLocalDateTime(bank.createdAt)}
+                    data-testid={`banks-cards__created-${bank.id}`}
+                  >
+                    {dateTimeProvider.formatIsoToRelative(bank.createdAt)}
+                  </dd>
                 </dl>
               </CardContent>
-              <CardFooter className="banks-cards__footer justify-end py-2">
-                <Link
-                  href={detailHref}
-                  className={cn(
-                    buttonVariants({ variant: "ghost", size: "sm" }),
-                    "banks-cards__view-link",
-                  )}
-                  title={`View bank ${bank.name}`}
-                  aria-label="View"
-                  data-testid={`banks-cards__view-${bank.id}`}
-                >
-                  View details
-                </Link>
-              </CardFooter>
             </Card>
           </li>
         );

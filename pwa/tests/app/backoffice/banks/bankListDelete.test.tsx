@@ -65,7 +65,8 @@ describe("BanksListPage — delete UX", () => {
     render(<BanksListPage />);
     expect(await screen.findByTestId(`banks-table__row-${ACME.id}`)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId(`banks-table__delete-${ACME.id}`));
+    fireEvent.click(screen.getByTestId(`banks-table__actions-${ACME.id}`));
+    fireEvent.click(await screen.findByTestId(`banks-table__delete-${ACME.id}`));
     fireEvent.click(await screen.findByTestId("banks-detail__delete-confirm"));
 
     await waitFor(() => {
@@ -84,7 +85,8 @@ describe("BanksListPage — delete UX", () => {
     render(<BanksListPage />);
     expect(await screen.findByTestId(`banks-table__row-${ACME.id}`)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId(`banks-table__delete-${ACME.id}`));
+    fireEvent.click(screen.getByTestId(`banks-table__actions-${ACME.id}`));
+    fireEvent.click(await screen.findByTestId(`banks-table__delete-${ACME.id}`));
     fireEvent.click(await screen.findByTestId("banks-detail__delete-confirm"));
 
     await waitFor(() => {
