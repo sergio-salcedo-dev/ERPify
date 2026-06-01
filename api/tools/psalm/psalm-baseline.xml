@@ -185,11 +185,6 @@
       <code><![CDATA[DoctrineConnectionResetListener]]></code>
     </UnusedClass>
   </file>
-  <file src="../../src/Shared/Infrastructure/Persistence/DoctrineDomainEventStore.php">
-    <UnusedClass>
-      <code><![CDATA[DoctrineDomainEventStore]]></code>
-    </UnusedClass>
-  </file>
   <file src="../../src/Shared/Infrastructure/Persistence/DoctrineStoredDomainEventRepository.php">
     <UnusedClass>
       <code><![CDATA[DoctrineStoredDomainEventRepository]]></code>
@@ -200,10 +195,7 @@
       <code><![CDATA[StoredDomainEvent]]></code>
     </ClassMustBeFinal>
     <PossiblyUnusedMethod>
-      <code><![CDATA[aggregateId]]></code>
       <code><![CDATA[body]]></code>
-      <code><![CDATA[eventId]]></code>
-      <code><![CDATA[name]]></code>
       <code><![CDATA[occurredOn]]></code>
     </PossiblyUnusedMethod>
   </file>
