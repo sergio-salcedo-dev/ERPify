@@ -14,7 +14,8 @@ import {
   type BankFormValues,
 } from "@/context/backoffice/bank/application/schemas/BankSchema";
 import { PersistenceAction } from "@/context/shared/domain/types/status";
-import { FormField, ProblemDisplay } from "@/components/erpify";
+import { FormField, ProblemDisplay, Spinner } from "@/components/erpify";
+import { toastNotifier } from "@/context/shared/infrastructure/Notification/Toast";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Input } from "@/components/ui/input";
@@ -91,6 +92,7 @@ export function BankForm({ mode, initial }: Readonly<BankFormProps>) {
       if (mode === PersistenceAction.CREATING) {
         const useCase = container.get<CreateBank>("BackOfficeCreateBank");
         const created = await useCase.run(values);
+        toastNotifier.success("Bank created", { description: created.name });
         router.push(safeHref(bankRoutes.detail(created.id)));
         router.refresh();
         return;
@@ -102,6 +104,7 @@ export function BankForm({ mode, initial }: Readonly<BankFormProps>) {
 
       const useCase = container.get<UpdateBank>("BackOfficeUpdateBank");
       const updated = await useCase.run(initial.id, values);
+      toastNotifier.success("Changes saved", { description: updated.name });
       router.push(safeHref(bankRoutes.detail(updated.id)));
       router.refresh();
     } catch (err) {
@@ -118,7 +121,6 @@ export function BankForm({ mode, initial }: Readonly<BankFormProps>) {
 
   const isCreating = mode === PersistenceAction.CREATING;
   const submitLabelIdle = isCreating ? "Create bank" : "Save changes";
-  const submitButtonLabel = submitting ? "Saving…" : submitLabelIdle;
 
   return (
     <form
@@ -193,12 +195,20 @@ export function BankForm({ mode, initial }: Readonly<BankFormProps>) {
           type="submit"
           size="sm"
           disabled={submitting}
+          data-icon={submitting ? "inline-start" : undefined}
           aria-label={mode === PersistenceAction.CREATING ? "Create bank" : "Save bank changes"}
           title={mode === PersistenceAction.CREATING ? "Create bank" : "Save bank changes"}
           className="w-full sm:w-auto"
           data-testid="bank-form__submit"
         >
-          {submitButtonLabel}
+          {submitting ? (
+            <>
+              <Spinner className="size-3.5" testId="bank-form__submit-spinner" />
+              Saving…
+            </>
+          ) : (
+            submitLabelIdle
+          )}
         </Button>
       </footer>
     </form>

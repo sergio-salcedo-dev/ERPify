@@ -44,6 +44,9 @@ test.describe("BackOffice - Banks CRUD", () => {
 
       await expect(page.getByRole("columnheader", { name: "Actions", exact: true })).toBeVisible();
       await expect(page.getByTestId(`banks-table__edit-${SAMPLE_BANK_A.id}`)).toBeVisible();
+      await expect(page.getByTestId(`banks-table__actions-${SAMPLE_BANK_A.id}`)).toBeVisible();
+      // Delete is demoted into the per-row overflow (⋯) menu.
+      await page.getByTestId(`banks-table__actions-${SAMPLE_BANK_A.id}`).click();
       await expect(page.getByTestId(`banks-table__delete-${SAMPLE_BANK_A.id}`)).toBeVisible();
     });
 
@@ -60,6 +63,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       await page.goto("/backoffice/banks");
 
       await expect(page.getByRole("cell", { name: "Acme Savings", exact: true })).toBeVisible();
+      await page.getByTestId(`banks-table__actions-${SAMPLE_BANK_A.id}`).click();
       await page.getByTestId(`banks-table__delete-${SAMPLE_BANK_A.id}`).click();
       await page.getByTestId("banks-detail__delete-confirm").click();
 
@@ -83,10 +87,12 @@ test.describe("BackOffice - Banks CRUD", () => {
 
       // Delete A, then B — back-to-back so both toasts are still on-screen
       // (well within Sonner's default lifetime) when we assert ordering.
+      await page.getByTestId(`banks-table__actions-${SAMPLE_BANK_A.id}`).click();
       await page.getByTestId(`banks-table__delete-${SAMPLE_BANK_A.id}`).click();
       await page.getByTestId("banks-detail__delete-confirm").click();
       await expect(page.getByRole("cell", { name: SAMPLE_BANK_A.name, exact: true })).toBeHidden();
 
+      await page.getByTestId(`banks-table__actions-${SAMPLE_BANK_B.id}`).click();
       await page.getByTestId(`banks-table__delete-${SAMPLE_BANK_B.id}`).click();
       await page.getByTestId("banks-detail__delete-confirm").click();
       await expect(page.getByRole("cell", { name: SAMPLE_BANK_B.name, exact: true })).toBeHidden();
@@ -118,7 +124,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       await expect(page.getByTestId("banks-detail__shortname")).toHaveText(SAMPLE_BANK_A.shortName);
       await expect(page.getByTestId("banks-detail__edit-button")).toBeVisible();
       await expect(page.getByTestId("banks-detail__delete-button")).toBeVisible();
-      await expect(page.getByTestId("banks-detail__copy-id")).toBeVisible();
+      await expect(page.getByTestId("banks-detail__id-copy")).toBeVisible();
       await expect(page.getByTestId("banks-detail__id")).toHaveText(SAMPLE_BANK_A.id);
       await expect(page.getByTestId("banks-detail__field-name")).toHaveText(SAMPLE_BANK_A.name);
       await expect(page.getByTestId("banks-detail__field-shortname")).toHaveText(
@@ -140,11 +146,11 @@ test.describe("BackOffice - Banks CRUD", () => {
       await mockBanksApi(page, { get: "happy", bank: SAMPLE_BANK_A });
       await page.goto(`/backoffice/banks/${SAMPLE_BANK_A.id}`);
 
-      const copyBtn = page.getByTestId("banks-detail__copy-id");
+      const copyBtn = page.getByTestId("banks-detail__id-copy");
       await expect(copyBtn).toHaveAttribute("data-copy-status", "idle");
       await copyBtn.click();
       await expect(copyBtn).toHaveAttribute("data-copy-status", "copied");
-      await expect(copyBtn).toContainText("Copied");
+      await expect(copyBtn).toContainText("ID copied");
 
       const clipboardValue = await page.evaluate(() => navigator.clipboard.readText());
       expect(clipboardValue).toBe(SAMPLE_BANK_A.id);
@@ -883,8 +889,8 @@ test.describe("BackOffice - Banks CRUD", () => {
         SAMPLE_BANK_A.name,
       );
       await expect(page.getByTestId(`banks-cards__edit-${SAMPLE_BANK_A.id}`)).toBeVisible();
-      await expect(page.getByTestId(`banks-cards__delete-${SAMPLE_BANK_A.id}`)).toBeVisible();
       await expect(page.getByTestId(`banks-cards__copy-${SAMPLE_BANK_A.id}`)).toBeVisible();
+      await expect(page.getByTestId(`banks-cards__actions-${SAMPLE_BANK_A.id}`)).toBeVisible();
     });
 
     test("clicking a card's name navigates to the detail page", async ({ page }) => {
@@ -906,6 +912,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       await page.getByTestId("banks-list__view-toggle-cards").click();
       await expect(page.getByTestId(`banks-cards__item-${SAMPLE_BANK_A.id}`)).toBeVisible();
 
+      await page.getByTestId(`banks-cards__actions-${SAMPLE_BANK_A.id}`).click();
       await page.getByTestId(`banks-cards__delete-${SAMPLE_BANK_A.id}`).click();
       await page.getByTestId("banks-detail__delete-confirm").click();
 
@@ -997,7 +1004,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       await expect(page.getByRole("columnheader", { name: "Updated", exact: true })).toBeHidden();
 
       await expect(page.getByTestId(`banks-table__edit-${SAMPLE_BANK_A.id}`)).toBeVisible();
-      await expect(page.getByTestId(`banks-table__delete-${SAMPLE_BANK_A.id}`)).toBeVisible();
+      await expect(page.getByTestId(`banks-table__actions-${SAMPLE_BANK_A.id}`)).toBeVisible();
     });
 
     test("on mobile, the Filters toggle is full-width, opens the panel, and exposes the count badge", async ({

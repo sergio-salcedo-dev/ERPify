@@ -326,7 +326,8 @@ final class ProblemDetailsFactoryTest extends TestCase
                     'safe' => 1,
                 ],
                 $result->extensions,
-                'Non-whitelisted values must be replaced (not dropped) with the literal sentinel; whitelisted values pass through unchanged.',
+                'Non-whitelisted values must be replaced (not dropped) with the literal sentinel; '
+                . 'whitelisted values pass through unchanged.',
             );
         } finally {
             \fclose($resource);
@@ -357,7 +358,11 @@ final class ProblemDetailsFactoryTest extends TestCase
         $this->factoryFor('prod', $bufferingLogger)->fromThrowable($exception, self::CID, self::INSTANCE);
 
         $logs = $bufferingLogger->cleanLogs();
-        $this->assertCount(2, $logs, 'Exactly one notice per non-whitelisted top-level value (closure + stdClass = 2 records).');
+        $this->assertCount(
+            2,
+            $logs,
+            'Exactly one notice per non-whitelisted top-level value (closure + stdClass = 2 records).',
+        );
 
         $byKey = [];
 
@@ -401,13 +406,19 @@ final class ProblemDetailsFactoryTest extends TestCase
         $exception = new class ('', 'x', ['proxy' => $proxy]) extends DomainException implements NotFound {
         };
 
-        $problemDetails = $this->factoryFor('prod', $bufferingLogger)->fromThrowable($exception, self::CID, self::INSTANCE);
+        $problemDetails = $this->factoryFor('prod', $bufferingLogger)
+            ->fromThrowable($exception, self::CID, self::INSTANCE)
+        ;
 
         $this->assertArrayHasKey('proxy', $problemDetails->extensions);
         $this->assertSame('[unserializable]', $problemDetails->extensions['proxy']);
 
         $encoded = \json_encode($problemDetails->toArray(), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
-        $this->assertStringNotContainsString("\0", $encoded, 'Wire body must not carry the anonymous-class NUL-byte FQCN.');
+        $this->assertStringNotContainsString(
+            "\0",
+            $encoded,
+            'Wire body must not carry the anonymous-class NUL-byte FQCN.',
+        );
         $this->assertStringNotContainsString(__FILE__, $encoded, 'Wire body must not leak the throw-site file path.');
 
         $logs = \array_values($bufferingLogger->cleanLogs());
@@ -415,9 +426,21 @@ final class ProblemDetailsFactoryTest extends TestCase
         $logContext = $this->assertSentinelLogShape($logs[0]);
         $this->assertSame('proxy', $logContext['context_key']);
         $originalType = $logContext['original_type'];
-        $this->assertStringNotContainsString("\0", $originalType, 'Sanitised original_type must not contain a NUL byte.');
-        $this->assertStringNotContainsString(__FILE__, $originalType, 'Sanitised original_type must not leak the file path.');
-        $this->assertStringContainsString('@anonymous', $originalType, 'Anonymous-class FQCN convention preserved up to the @anonymous marker.');
+        $this->assertStringNotContainsString(
+            "\0",
+            $originalType,
+            'Sanitised original_type must not contain a NUL byte.',
+        );
+        $this->assertStringNotContainsString(
+            __FILE__,
+            $originalType,
+            'Sanitised original_type must not leak the file path.',
+        );
+        $this->assertStringContainsString(
+            '@anonymous',
+            $originalType,
+            'Anonymous-class FQCN convention preserved up to the @anonymous marker.',
+        );
     }
 
     /**
@@ -435,11 +458,17 @@ final class ProblemDetailsFactoryTest extends TestCase
         $exception = new class ('', 'x', ['user' => ['o' => $stdObject]]) extends DomainException implements NotFound {
         };
 
-        $problemDetails = $this->factoryFor('prod', $bufferingLogger)->fromThrowable($exception, self::CID, self::INSTANCE);
+        $problemDetails = $this->factoryFor('prod', $bufferingLogger)
+            ->fromThrowable($exception, self::CID, self::INSTANCE)
+        ;
 
         $this->assertArrayHasKey('user', $problemDetails->extensions);
         $this->assertSame(['o' => $stdObject], $problemDetails->extensions['user']);
-        $this->assertCount(0, $bufferingLogger->cleanLogs(), 'Single-level scope: nested values must not trigger sentinel emission.');
+        $this->assertCount(
+            0,
+            $bufferingLogger->cleanLogs(),
+            'Single-level scope: nested values must not trigger sentinel emission.',
+        );
     }
 
     /**
@@ -452,14 +481,21 @@ final class ProblemDetailsFactoryTest extends TestCase
         $bufferingLogger = new BufferingLogger();
         $closure = static fn (): int => 1;
 
-        $exception = new class ('', 'x', ['password' => $closure, 'safe' => 'kept']) extends DomainException implements NotFound {
+        $context = ['password' => $closure, 'safe' => 'kept'];
+        $exception = new class ('', 'x', $context) extends DomainException implements NotFound {
         };
 
-        $problemDetails = $this->factoryFor('prod', $bufferingLogger)->fromThrowable($exception, self::CID, self::INSTANCE);
+        $problemDetails = $this->factoryFor('prod', $bufferingLogger)
+            ->fromThrowable($exception, self::CID, self::INSTANCE)
+        ;
 
         $this->assertArrayNotHasKey('password', $problemDetails->extensions);
         $this->assertSame(['safe' => 'kept'], $problemDetails->extensions);
-        $this->assertCount(0, $bufferingLogger->cleanLogs(), 'Denylist strip happens before the substitution branch — no sentinel log.');
+        $this->assertCount(
+            0,
+            $bufferingLogger->cleanLogs(),
+            'Denylist strip happens before the substitution branch — no sentinel log.',
+        );
     }
 
     /**
@@ -474,14 +510,24 @@ final class ProblemDetailsFactoryTest extends TestCase
         $bufferingLogger = new BufferingLogger();
         $runtimeException = new RuntimeException('boom');
 
-        $problemDetails = $this->factoryFor('prod', $bufferingLogger)->fromThrowable($runtimeException, self::CID, self::INSTANCE);
+        $problemDetails = $this->factoryFor('prod', $bufferingLogger)
+            ->fromThrowable($runtimeException, self::CID, self::INSTANCE)
+        ;
 
         $this->assertSame('unhandled-exception', $problemDetails->type);
         $this->assertSame(500, $problemDetails->status);
         $this->assertSame('An unexpected error occurred.', $problemDetails->title);
-        $this->assertSame([], $problemDetails->extensions, 'Default-deny: extensions must be empty (no debug, no leaked context).');
+        $this->assertSame(
+            [],
+            $problemDetails->extensions,
+            'Default-deny: extensions must be empty (no debug, no leaked context).',
+        );
         $this->assertArrayNotHasKey('debug', $problemDetails->extensions);
-        $this->assertCount(0, $bufferingLogger->cleanLogs(), 'Default-deny path must not emit a factory-side sentinel log.');
+        $this->assertCount(
+            0,
+            $bufferingLogger->cleanLogs(),
+            'Default-deny path must not emit a factory-side sentinel log.',
+        );
     }
 
     public function testReservedKeysAreFilteredFromExtensions(): void
@@ -534,7 +580,11 @@ final class ProblemDetailsFactoryTest extends TestCase
             RateLimited::class => 429,
         ];
 
-        $this->assertSame($expected, $value, 'MARKER_STATUS_MAP must contain exactly the seven canonical marker→status entries in canonical order.');
+        $this->assertSame(
+            $expected,
+            $value,
+            'MARKER_STATUS_MAP must contain exactly the seven canonical marker→status entries in canonical order.',
+        );
     }
 
     public function testMarkerDefaultTypeMapHasExactlyTheCanonicalSevenEntries(): void
@@ -557,7 +607,12 @@ final class ProblemDetailsFactoryTest extends TestCase
             RateLimited::class => 'rate-limited',
         ];
 
-        $this->assertSame($expected, $value, 'MARKER_DEFAULT_TYPE_MAP must contain exactly the seven canonical marker→default-type entries in canonical order.');
+        $this->assertSame(
+            $expected,
+            $value,
+            'MARKER_DEFAULT_TYPE_MAP must contain exactly the seven canonical '
+            . 'marker→default-type entries in canonical order.',
+        );
     }
 
     /**
@@ -589,7 +644,10 @@ final class ProblemDetailsFactoryTest extends TestCase
             $this->assertStringNotContainsString(
                 'use ' . $prefix,
                 $contents,
-                \sprintf('ProblemDetailsFactory.php must not import any %s symbol — factory stays mapping-focused.', $prefix),
+                \sprintf(
+                    'ProblemDetailsFactory.php must not import any %s symbol — factory stays mapping-focused.',
+                    $prefix,
+                ),
             );
         }
     }
@@ -621,7 +679,8 @@ final class ProblemDetailsFactoryTest extends TestCase
         $this->assertFalse($environmentType->allowsNull());
         $this->assertTrue(
             $environmentParameter->isPromoted(),
-            'Constructor argument must be a promoted readonly property to keep the factory stateless beyond the env value.',
+            'Constructor argument must be a promoted readonly property to keep the factory stateless '
+            . 'beyond the env value.',
         );
 
         $this->assertArrayHasKey(1, $parameters);
@@ -798,7 +857,8 @@ final class ProblemDetailsFactoryTest extends TestCase
         // Artificial multi-implementer: DomainException + HttpExceptionInterface (the same Symfony interface
         // the factory's branch 4 keys on). The DomainException branch must win — pins the branch order
         // in fromThrowable() (places Symfony branches AFTER the DomainException branch).
-        $exception = new class ('', 'Bank not found') extends DomainException implements NotFound, HttpExceptionInterface {
+        $title = 'Bank not found';
+        $exception = new class ('', $title) extends DomainException implements NotFound, HttpExceptionInterface {
             #[Override]
             public function getStatusCode(): int
             {
@@ -819,7 +879,8 @@ final class ProblemDetailsFactoryTest extends TestCase
 
         $problemDetails = $this->factoryFor()->fromThrowable($exception, self::CID, self::INSTANCE);
 
-        // Status 404 (from marker — NOT 418 from getStatusCode), type 'not-found' (from MARKER_DEFAULT_TYPE_MAP — NOT 'http-error').
+        // Status 404 (from marker — NOT 418 from getStatusCode), type 'not-found'
+        // (from MARKER_DEFAULT_TYPE_MAP — NOT 'http-error').
         $this->assertSame(404, $problemDetails->status);
         $this->assertSame('not-found', $problemDetails->type);
         $this->assertSame('Bank not found', $problemDetails->title);
@@ -845,7 +906,11 @@ final class ProblemDetailsFactoryTest extends TestCase
             429 => 'rate-limited',
         ];
 
-        $this->assertSame($expected, $value, 'HTTP_STATUS_TYPE_MAP must contain exactly the seven canonical status→type entries in canonical order.');
+        $this->assertSame(
+            $expected,
+            $value,
+            'HTTP_STATUS_TYPE_MAP must contain exactly the seven canonical status→type entries in canonical order.',
+        );
     }
 
     public function testHttpStatusTypeMapValuesMirrorMarkerDefaultTypeMapValues(): void
@@ -885,7 +950,8 @@ final class ProblemDetailsFactoryTest extends TestCase
             $derived,
             $httpType,
             'HTTP_STATUS_TYPE_MAP must use the same type strings as MARKER_DEFAULT_TYPE_MAP for the same status, '
-            . 'so PWA `type`-only routing is uniform across DomainException markers, Security Core, and Symfony HttpException sources.',
+            . 'so PWA `type`-only routing is uniform across DomainException markers, Security Core, '
+            . 'and Symfony HttpException sources.',
         );
     }
 
@@ -1123,7 +1189,11 @@ final class ProblemDetailsFactoryTest extends TestCase
 
         $json = \json_encode($problemDetails->toArray(), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
 
-        $this->assertStringContainsString('"violations":[{', $json, 'violations must serialize as a JSON array, not an object.');
+        $this->assertStringContainsString(
+            '"violations":[{',
+            $json,
+            'violations must serialize as a JSON array, not an object.',
+        );
         $this->assertSame(1, \preg_match('/"violations":\[\{/', $json));
         $this->assertDoesNotMatchRegularExpression('/"violations":\{/', $json);
     }
@@ -1131,9 +1201,36 @@ final class ProblemDetailsFactoryTest extends TestCase
     public function testValidationFailedExceptionTitleIsTheLiteralValidationFailedNotTheMessage(): void
     {
         $constraintViolationList = new ConstraintViolationList([
-            new ConstraintViolation('This value should not be blank.', null, [], null, 'name', '', null, 'c1051bb4-d103-4f74-8988-acbcafc7fdc3'),
-            new ConstraintViolation('This value is not a valid email address.', null, [], null, 'email', 'invalid', null, 'bd79c0ab-ddba-46cc-a703-a7a4b08de310'),
-            new ConstraintViolation('This value should be greater than or equal to 18.', null, [], null, 'age', 17, null, 'ea4e51d1-3342-48bd-87f1-9e672cd90cad'),
+            new ConstraintViolation(
+                'This value should not be blank.',
+                null,
+                [],
+                null,
+                'name',
+                '',
+                null,
+                'c1051bb4-d103-4f74-8988-acbcafc7fdc3',
+            ),
+            new ConstraintViolation(
+                'This value is not a valid email address.',
+                null,
+                [],
+                null,
+                'email',
+                'invalid',
+                null,
+                'bd79c0ab-ddba-46cc-a703-a7a4b08de310',
+            ),
+            new ConstraintViolation(
+                'This value should be greater than or equal to 18.',
+                null,
+                [],
+                null,
+                'age',
+                17,
+                null,
+                'ea4e51d1-3342-48bd-87f1-9e672cd90cad',
+            ),
         ]);
 
         $validationFailedException = new ValidationFailedException(value: null, violations: $constraintViolationList);
@@ -1162,12 +1259,19 @@ final class ProblemDetailsFactoryTest extends TestCase
             ),
         ]);
 
-        $validationFailedException = new ValidationFailedException(value: ['password' => 'leaked-secret'], violations: $constraintViolationList);
+        $validationFailedException = new ValidationFailedException(
+            value: ['password' => 'leaked-secret'],
+            violations: $constraintViolationList,
+        );
         $problemDetails = $this->factoryFor()->fromThrowable($validationFailedException, self::CID, self::INSTANCE);
 
         $json = \json_encode($problemDetails->toArray(), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
 
-        $this->assertStringNotContainsString('super-secret-payload', $json, 'invalidValue must not propagate to the wire body.');
+        $this->assertStringNotContainsString(
+            'super-secret-payload',
+            $json,
+            'invalidValue must not propagate to the wire body.',
+        );
         $this->assertStringNotContainsString('leaked-secret', $json, 'root must not propagate to the wire body.');
     }
 
@@ -1222,9 +1326,36 @@ final class ProblemDetailsFactoryTest extends TestCase
     public function testRfc9457SchemaValidationStillPassesWithViolationsExtension(): void
     {
         $constraintViolationList = new ConstraintViolationList([
-            new ConstraintViolation('This value should not be blank.', null, [], null, 'name', '', null, 'c1051bb4-d103-4f74-8988-acbcafc7fdc3'),
-            new ConstraintViolation('This value is not a valid email address.', null, [], null, 'email', 'invalid', null, 'bd79c0ab-ddba-46cc-a703-a7a4b08de310'),
-            new ConstraintViolation('This value should be greater than or equal to 18.', null, [], null, 'age', 17, null, 'ea4e51d1-3342-48bd-87f1-9e672cd90cad'),
+            new ConstraintViolation(
+                'This value should not be blank.',
+                null,
+                [],
+                null,
+                'name',
+                '',
+                null,
+                'c1051bb4-d103-4f74-8988-acbcafc7fdc3',
+            ),
+            new ConstraintViolation(
+                'This value is not a valid email address.',
+                null,
+                [],
+                null,
+                'email',
+                'invalid',
+                null,
+                'bd79c0ab-ddba-46cc-a703-a7a4b08de310',
+            ),
+            new ConstraintViolation(
+                'This value should be greater than or equal to 18.',
+                null,
+                [],
+                null,
+                'age',
+                17,
+                null,
+                'ea4e51d1-3342-48bd-87f1-9e672cd90cad',
+            ),
         ]);
 
         $validationFailedException = new ValidationFailedException(value: null, violations: $constraintViolationList);
@@ -1245,7 +1376,10 @@ final class ProblemDetailsFactoryTest extends TestCase
 
         $this->assertTrue(
             $validator->isValid(),
-            \sprintf('Body must validate against RFC 9457 schema; got errors: %s', \json_encode($validator->getErrors())),
+            \sprintf(
+                'Body must validate against RFC 9457 schema; got errors: %s',
+                \json_encode($validator->getErrors()),
+            ),
         );
     }
 
@@ -1286,8 +1420,26 @@ final class ProblemDetailsFactoryTest extends TestCase
     public function testWrappedValidationFailedExceptionFromHttpExceptionIsUnwrappedAndProducesViolations(): void
     {
         $constraintViolationList = new ConstraintViolationList([
-            new ConstraintViolation('This value should not be blank.', null, [], null, 'name', null, null, 'c1051bb4-d103-4f74-8988-acbcafc7fdc3'),
-            new ConstraintViolation('This value is not a valid email address.', null, [], null, 'email', null, null, 'bd79c0ab-ddba-46cc-a703-a7a4b08de310'),
+            new ConstraintViolation(
+                'This value should not be blank.',
+                null,
+                [],
+                null,
+                'name',
+                null,
+                null,
+                'c1051bb4-d103-4f74-8988-acbcafc7fdc3',
+            ),
+            new ConstraintViolation(
+                'This value is not a valid email address.',
+                null,
+                [],
+                null,
+                'email',
+                null,
+                null,
+                'bd79c0ab-ddba-46cc-a703-a7a4b08de310',
+            ),
         ]);
 
         $validationFailedException = new ValidationFailedException(value: null, violations: $constraintViolationList);
@@ -1303,14 +1455,35 @@ final class ProblemDetailsFactoryTest extends TestCase
         $violations = $problemDetails->extensions['violations'];
         $this->assertIsArray($violations);
         $this->assertCount(2, $violations);
-        $this->assertExpectedViolationEntry($violations, 0, 'name', 'This value should not be blank.', 'c1051bb4-d103-4f74-8988-acbcafc7fdc3');
-        $this->assertExpectedViolationEntry($violations, 1, 'email', 'This value is not a valid email address.', 'bd79c0ab-ddba-46cc-a703-a7a4b08de310');
+        $this->assertExpectedViolationEntry(
+            $violations,
+            0,
+            'name',
+            'This value should not be blank.',
+            'c1051bb4-d103-4f74-8988-acbcafc7fdc3',
+        );
+        $this->assertExpectedViolationEntry(
+            $violations,
+            1,
+            'email',
+            'This value is not a valid email address.',
+            'bd79c0ab-ddba-46cc-a703-a7a4b08de310',
+        );
     }
 
     public function testWrappedValidationFailedExceptionTitleIsLiteralNotLeakedFromWrapper(): void
     {
         $constraintViolationList = new ConstraintViolationList([
-            new ConstraintViolation('This value should not be blank.', null, [], null, 'name', null, null, 'c1051bb4-d103-4f74-8988-acbcafc7fdc3'),
+            new ConstraintViolation(
+                'This value should not be blank.',
+                null,
+                [],
+                null,
+                'name',
+                null,
+                null,
+                'c1051bb4-d103-4f74-8988-acbcafc7fdc3',
+            ),
         ]);
 
         $validationFailedException = new ValidationFailedException(value: null, violations: $constraintViolationList);
@@ -1323,15 +1496,16 @@ final class ProblemDetailsFactoryTest extends TestCase
         $this->assertStringNotContainsString('This value should not be blank.', $problemDetails->title);
     }
 
-    public function testDomainExceptionWithValidationFailedExceptionAsPreviousIsRoutedThroughDomainExceptionBranch(): void
+    public function testDomainExceptionWithValidationFailedExceptionAsPreviousIsRoutedThroughDomainBranch(): void
     {
         $constraintViolationList = new ConstraintViolationList([
             new ConstraintViolation('m', null, [], null, 'p', null, null, 'C'),
         ]);
 
-        $validationFailedException = new ValidationFailedException(value: null, violations: $constraintViolationList);
+        $previous = new ValidationFailedException(value: null, violations: $constraintViolationList);
 
-        $domainException = new class ('', 'Domain wins', [], $validationFailedException) extends DomainException implements InvariantViolation {
+        $title = 'Domain wins';
+        $domainException = new class ('', $title, [], $previous) extends DomainException implements InvariantViolation {
         };
 
         $problemDetails = $this->factoryFor()->fromThrowable($domainException, self::CID, self::INSTANCE);
@@ -1345,8 +1519,26 @@ final class ProblemDetailsFactoryTest extends TestCase
     public function testValidationFailedExceptionPreservesDuplicateViolationsOnSameField(): void
     {
         $constraintViolationList = new ConstraintViolationList([
-            new ConstraintViolation('This value should not be blank.', null, [], null, 'name', null, null, 'c1051bb4-d103-4f74-8988-acbcafc7fdc3'),
-            new ConstraintViolation('This value is too short.', null, [], null, 'name', null, null, '9ff3fdc4-b214-49db-8718-39c315e33d45'),
+            new ConstraintViolation(
+                'This value should not be blank.',
+                null,
+                [],
+                null,
+                'name',
+                null,
+                null,
+                'c1051bb4-d103-4f74-8988-acbcafc7fdc3',
+            ),
+            new ConstraintViolation(
+                'This value is too short.',
+                null,
+                [],
+                null,
+                'name',
+                null,
+                null,
+                '9ff3fdc4-b214-49db-8718-39c315e33d45',
+            ),
         ]);
 
         $validationFailedException = new ValidationFailedException(value: null, violations: $constraintViolationList);
@@ -1355,9 +1547,25 @@ final class ProblemDetailsFactoryTest extends TestCase
         $this->assertArrayHasKey('violations', $problemDetails->extensions);
         $violations = $problemDetails->extensions['violations'];
         $this->assertIsArray($violations);
-        $this->assertCount(2, $violations, 'Two violations on the same field must both surface — no silent dedup.');
-        $this->assertExpectedViolationEntry($violations, 0, 'name', 'This value should not be blank.', 'c1051bb4-d103-4f74-8988-acbcafc7fdc3');
-        $this->assertExpectedViolationEntry($violations, 1, 'name', 'This value is too short.', '9ff3fdc4-b214-49db-8718-39c315e33d45');
+        $this->assertCount(
+            2,
+            $violations,
+            'Two violations on the same field must both surface — no silent dedup.',
+        );
+        $this->assertExpectedViolationEntry(
+            $violations,
+            0,
+            'name',
+            'This value should not be blank.',
+            'c1051bb4-d103-4f74-8988-acbcafc7fdc3',
+        );
+        $this->assertExpectedViolationEntry(
+            $violations,
+            1,
+            'name',
+            'This value is too short.',
+            '9ff3fdc4-b214-49db-8718-39c315e33d45',
+        );
     }
 
     // -----------------------------------------------------------------------------------------
@@ -1416,7 +1624,8 @@ final class ProblemDetailsFactoryTest extends TestCase
 
     public function testProdEnvironmentUnhandledExceptionTitleIsSafeLiteral(): void
     {
-        $leakyMessage = "/abs/path/Module.php SELECT * FROM users WHERE password = 'secret' (App\\Backoffice\\Bank\\Internal)";
+        $leakyMessage = "/abs/path/Module.php SELECT * FROM users WHERE password = 'secret' "
+            . '(App\Backoffice\Bank\Internal)';
         $runtimeException = new RuntimeException($leakyMessage);
 
         $problemDetails = $this->factoryFor('prod')->fromThrowable($runtimeException, self::CID, self::INSTANCE);
@@ -1450,31 +1659,56 @@ final class ProblemDetailsFactoryTest extends TestCase
         $exception = new class ('boom') extends RuntimeException {
         };
 
-        $this->assertStringContainsString("\0", $exception::class, 'pre-condition: PHP must embed a NUL byte in the anonymous-class FQCN.');
+        $this->assertStringContainsString(
+            "\0",
+            $exception::class,
+            'pre-condition: PHP must embed a NUL byte in the anonymous-class FQCN.',
+        );
 
         $problemDetails = $this->factoryFor('staging')->fromThrowable($exception, self::CID, self::INSTANCE);
 
         $debug = $this->assertMinimalDebugExtension($problemDetails);
-        $this->assertStringNotContainsString("\0", $debug['exception_class'], 'sanitised exception_class must not contain a NUL byte.');
-        $this->assertStringEndsWith('@anonymous', $debug['exception_class'], 'sanitised anonymous-class FQCN ends at the @anonymous marker — file path is stripped.');
+        $this->assertStringNotContainsString(
+            "\0",
+            $debug['exception_class'],
+            'sanitised exception_class must not contain a NUL byte.',
+        );
+        $this->assertStringEndsWith(
+            '@anonymous',
+            $debug['exception_class'],
+            'sanitised anonymous-class FQCN ends at the @anonymous marker — file path is stripped.',
+        );
 
         $encoded = \json_encode($problemDetails->toArray(), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
-        $this->assertStringNotContainsString(' ', $encoded, 'encoded body must not contain an escaped NUL byte (would precede a leaked file path).');
-        $this->assertStringNotContainsString(__FILE__, $encoded, 'encoded body must not contain this test file path leaked via anonymous-class FQCN.');
+        $this->assertStringNotContainsString(
+            ' ',
+            $encoded,
+            'encoded body must not contain an escaped NUL byte (would precede a leaked file path).',
+        );
+        $this->assertStringNotContainsString(
+            __FILE__,
+            $encoded,
+            'encoded body must not contain this test file path leaked via anonymous-class FQCN.',
+        );
     }
 
     public function testDevEnvironmentDebugPreviousChainPopulatesForWrappedExceptions(): void
     {
         $runtimeException = new RuntimeException('innermost');
         $logicException = new LogicException('inner', 0, $runtimeException);
-        $exception = new class ('domain', 'Bank not found', [], $logicException) extends DomainException implements NotFound {
+        $msg = 'Bank not found';
+        $exception = new class ('domain', $msg, [], $logicException) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor('dev')->fromThrowable($exception, self::CID, self::INSTANCE);
 
         $debug = $this->assertFullDebugExtension($problemDetails);
         $chain = $debug['previous_chain'];
-        $this->assertCount(2, $chain, 'previous_chain has the inner + innermost; the outer throwable IS the top-level entry.');
+        $this->assertCount(
+            2,
+            $chain,
+            'previous_chain has the inner + innermost; the outer throwable IS the top-level entry.',
+        );
         $this->assertSame('LogicException', $chain[0]['exception_class']);
         $this->assertSame('inner', $chain[0]['message']);
         $this->assertSame('RuntimeException', $chain[1]['exception_class']);
@@ -1508,9 +1742,21 @@ final class ProblemDetailsFactoryTest extends TestCase
         $bodyLines = \array_slice(\explode("\n", $contents), $startLine - 1, $endLine - $startLine + 1);
         $body = \implode("\n", $bodyLines);
 
-        $this->assertStringContainsString('spl_object_id', $body, 'walkPreviousChain must use spl_object_id() to identify visited throwables.');
-        $this->assertStringContainsString('$seen', $body, 'walkPreviousChain must keep a `$seen` map of visited throwable ids.');
-        $this->assertStringContainsString('break', $body, 'walkPreviousChain must `break` when a previously-seen throwable is revisited.');
+        $this->assertStringContainsString(
+            'spl_object_id',
+            $body,
+            'walkPreviousChain must use spl_object_id() to identify visited throwables.',
+        );
+        $this->assertStringContainsString(
+            '$seen',
+            $body,
+            'walkPreviousChain must keep a `$seen` map of visited throwable ids.',
+        );
+        $this->assertStringContainsString(
+            'break',
+            $body,
+            'walkPreviousChain must `break` when a previously-seen throwable is revisited.',
+        );
     }
 
     #[DataProvider('provideUnrecognisedEnvironmentValueDefaultsToProdCases')]
@@ -1546,7 +1792,8 @@ final class ProblemDetailsFactoryTest extends TestCase
 
     public function testReservedKeyDebugIsStrippedFromDomainExceptionContextInDevEnv(): void
     {
-        $exception = new class ('domain', 'Bank not found', ['debug' => ['exception_class' => 'spoofed', 'message' => 'spoofed']]) extends DomainException implements NotFound {
+        $context = ['debug' => ['exception_class' => 'spoofed', 'message' => 'spoofed']];
+        $exception = new class ('domain', 'Bank not found', $context) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor('dev')->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -1558,18 +1805,31 @@ final class ProblemDetailsFactoryTest extends TestCase
         // be overwritten by the trailing spread in `withDebug()` (so `exception_class` would
         // still pass the NotSame check below) but `array_keys` would still equal `['debug']`,
         // which is why the structural assertion is the load-bearing one.
-        $this->assertSame(['debug'], \array_keys($problemDetails->extensions), 'context-supplied debug must be stripped pre-wrap; only the factory-computed debug remains.');
+        $this->assertSame(
+            ['debug'],
+            \array_keys($problemDetails->extensions),
+            'context-supplied debug must be stripped pre-wrap; only the factory-computed debug remains.',
+        );
 
         $debug = $this->assertFullDebugExtension($problemDetails);
-        $this->assertNotSame('spoofed', $debug['exception_class'], 'Factory-computed debug must not be clobbered by domain context.');
+        $this->assertNotSame(
+            'spoofed',
+            $debug['exception_class'],
+            'Factory-computed debug must not be clobbered by domain context.',
+        );
         $this->assertNotSame('spoofed', $debug['message']);
-        $this->assertStringContainsString('@anonymous', $debug['exception_class'], 'exception_class is the real anonymous-class FQCN derived from `$throwable::class`.');
+        $this->assertStringContainsString(
+            '@anonymous',
+            $debug['exception_class'],
+            'exception_class is the real anonymous-class FQCN derived from `$throwable::class`.',
+        );
         $this->assertSame('Bank not found', $debug['message']);
     }
 
     public function testReservedKeyDebugIsAbsentInProdEvenWhenSpoofedFromContext(): void
     {
-        $exception = new class ('domain', 'Bank not found', ['debug' => ['exception_class' => 'spoofed', 'message' => 'spoofed']]) extends DomainException implements NotFound {
+        $context = ['debug' => ['exception_class' => 'spoofed', 'message' => 'spoofed']];
+        $exception = new class ('domain', 'Bank not found', $context) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor('prod')->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -1580,7 +1840,8 @@ final class ProblemDetailsFactoryTest extends TestCase
     #[DataProvider('provideDebugExtensionIsAlwaysLastInExtensionsArrayOrderCases')]
     public function testDebugExtensionIsAlwaysLastInExtensionsArrayOrder(string $environment): void
     {
-        $exception = new class ('domain', 'Bank not found', ['custom_field' => 'value', 'another' => 42]) extends DomainException implements NotFound {
+        $context = ['custom_field' => 'value', 'another' => 42];
+        $exception = new class ('domain', 'Bank not found', $context) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor($environment)->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -1626,12 +1887,22 @@ final class ProblemDetailsFactoryTest extends TestCase
         ]);
         $validationFailedException = new ValidationFailedException(value: null, violations: $constraintViolationList);
 
-        $problemDetails = $this->factoryFor('dev')->fromThrowable($validationFailedException, self::CID, self::INSTANCE);
+        $problemDetails = $this->factoryFor('dev')
+            ->fromThrowable($validationFailedException, self::CID, self::INSTANCE)
+        ;
 
         $this->assertArrayHasKey('violations', $problemDetails->extensions);
-        $this->assertSame('debug', \array_key_last($problemDetails->extensions), 'debug must be the LAST extension key.');
+        $this->assertSame(
+            'debug',
+            \array_key_last($problemDetails->extensions),
+            'debug must be the LAST extension key.',
+        );
         $keys = \array_keys($problemDetails->extensions);
-        $this->assertSame(['violations', 'debug'], $keys, 'violations must precede debug for deterministic key order.');
+        $this->assertSame(
+            ['violations', 'debug'],
+            $keys,
+            'violations must precede debug for deterministic key order.',
+        );
 
         $debug = $this->assertFullDebugExtension($problemDetails);
         $this->assertSame(ValidationFailedException::class, $debug['exception_class']);
@@ -1643,7 +1914,11 @@ final class ProblemDetailsFactoryTest extends TestCase
 
         $problemDetails = $this->factoryFor('dev')->fromThrowable($httpException, self::CID, self::INSTANCE);
 
-        $this->assertSame('debug', \array_key_last($problemDetails->extensions), 'debug must be the LAST extension key on the http-exception branch.');
+        $this->assertSame(
+            'debug',
+            \array_key_last($problemDetails->extensions),
+            'debug must be the LAST extension key on the http-exception branch.',
+        );
         $debug = $this->assertFullDebugExtension($problemDetails);
         $this->assertSame(HttpException::class, $debug['exception_class']);
         $this->assertSame('maintenance', $debug['message']);
@@ -1652,14 +1927,26 @@ final class ProblemDetailsFactoryTest extends TestCase
     public function testAccessDeniedAndAuthenticationDebugCoexistWithBridgeBranches(): void
     {
         $accessDeniedException = new AccessDeniedException('Access denied.');
-        $problemDetails = $this->factoryFor('dev')->fromThrowable($accessDeniedException, self::CID, self::INSTANCE);
-        $this->assertSame('debug', \array_key_last($problemDetails->extensions), 'debug must be the LAST extension key on the access-denied branch.');
+        $problemDetails = $this->factoryFor('dev')
+            ->fromThrowable($accessDeniedException, self::CID, self::INSTANCE)
+        ;
+        $this->assertSame(
+            'debug',
+            \array_key_last($problemDetails->extensions),
+            'debug must be the LAST extension key on the access-denied branch.',
+        );
         $accessDeniedDebug = $this->assertFullDebugExtension($problemDetails);
         $this->assertSame(AccessDeniedException::class, $accessDeniedDebug['exception_class']);
 
         $badCredentialsException = new BadCredentialsException('Bad credentials.');
-        $badCredentialsDetails = $this->factoryFor('dev')->fromThrowable($badCredentialsException, self::CID, self::INSTANCE);
-        $this->assertSame('debug', \array_key_last($badCredentialsDetails->extensions), 'debug must be the LAST extension key on the authentication branch.');
+        $badCredentialsDetails = $this->factoryFor('dev')
+            ->fromThrowable($badCredentialsException, self::CID, self::INSTANCE)
+        ;
+        $this->assertSame(
+            'debug',
+            \array_key_last($badCredentialsDetails->extensions),
+            'debug must be the LAST extension key on the authentication branch.',
+        );
         $badCredentialsDebug = $this->assertFullDebugExtension($badCredentialsDetails);
         $this->assertSame(BadCredentialsException::class, $badCredentialsDebug['exception_class']);
     }
@@ -1674,9 +1961,17 @@ final class ProblemDetailsFactoryTest extends TestCase
         // extension, no leaked context fields. A future regression that smuggles the message
         // through a new extension key would slip past pure substring scans; the key-set
         // assertion catches it.
-        $this->assertSame([], $problemDetails->extensions, 'prod must emit no extensions on the unhandled-exception branch.');
+        $this->assertSame(
+            [],
+            $problemDetails->extensions,
+            'prod must emit no extensions on the unhandled-exception branch.',
+        );
         $body = $problemDetails->toArray();
-        $this->assertSame(['type', 'title', 'status', 'instance', 'correlation-id'], \array_keys($body), 'prod body keys are exactly the RFC 9457 minimum; no debug, no extensions.');
+        $this->assertSame(
+            ['type', 'title', 'status', 'instance', 'correlation-id'],
+            \array_keys($body),
+            'prod body keys are exactly the RFC 9457 minimum; no debug, no extensions.',
+        );
 
         $encoded = \json_encode($body, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
         $this->assertStringNotContainsString('secret123', $encoded);
@@ -1694,7 +1989,8 @@ final class ProblemDetailsFactoryTest extends TestCase
     #[DataProvider('provideFactoryStripsDenylistedContextKeysFromBodyExtensionsCases')]
     public function testFactoryStripsDenylistedContextKeysFromBodyExtensions(string $caseVariant): void
     {
-        $exception = new class ('', 'x', [$caseVariant => 'sensitive', 'safe' => 'value']) extends DomainException implements NotFound {
+        $context = [$caseVariant => 'sensitive', 'safe' => 'value'];
+        $exception = new class ('', 'x', $context) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor()->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -1772,7 +2068,8 @@ final class ProblemDetailsFactoryTest extends TestCase
             }
         };
 
-        $exception = new class ('', 'x', ['password' => $serializable, 'safe' => 'kept']) extends DomainException implements NotFound {
+        $context = ['password' => $serializable, 'safe' => 'kept'];
+        $exception = new class ('', 'x', $context) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor()->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -1790,7 +2087,8 @@ final class ProblemDetailsFactoryTest extends TestCase
      */
     public function testFactoryStripsDenylistedKeyEvenWhenValueIsArray(): void
     {
-        $exception = new class ('', 'x', ['authorization' => ['scheme' => 'Bearer', 'value' => 'abc'], 'safe' => 'kept']) extends DomainException implements NotFound {
+        $context = ['authorization' => ['scheme' => 'Bearer', 'value' => 'abc'], 'safe' => 'kept'];
+        $exception = new class ('', 'x', $context) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor()->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -1824,7 +2122,8 @@ final class ProblemDetailsFactoryTest extends TestCase
      */
     public function testFactoryRedactionPreservesDeclarationOrderOfSurvivors(): void
     {
-        $exception = new class ('', 'x', ['a' => 1, 'password' => 'x', 'b' => 2, 'token' => 'y', 'c' => 3]) extends DomainException implements NotFound {
+        $context = ['a' => 1, 'password' => 'x', 'b' => 2, 'token' => 'y', 'c' => 3];
+        $exception = new class ('', 'x', $context) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor()->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -1839,13 +2138,22 @@ final class ProblemDetailsFactoryTest extends TestCase
      */
     public function testFactoryRedactionAppliesAfterReservedKeyStrip(): void
     {
-        $exception = new class ('', 'x', ['type' => 'spoofed', 'password' => 'x', 'safe' => 'v']) extends DomainException implements NotFound {
+        $context = ['type' => 'spoofed', 'password' => 'x', 'safe' => 'v'];
+        $exception = new class ('', 'x', $context) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor()->fromThrowable($exception, self::CID, self::INSTANCE);
 
-        $this->assertArrayNotHasKey('type', $problemDetails->extensions, 'RESERVED_KEYS strip must remove the spoofed type key.');
-        $this->assertArrayNotHasKey('password', $problemDetails->extensions, 'RedactionDenylist::filter must remove the password key.');
+        $this->assertArrayNotHasKey(
+            'type',
+            $problemDetails->extensions,
+            'RESERVED_KEYS strip must remove the spoofed type key.',
+        );
+        $this->assertArrayNotHasKey(
+            'password',
+            $problemDetails->extensions,
+            'RedactionDenylist::filter must remove the password key.',
+        );
         $this->assertSame(['safe' => 'v'], $problemDetails->extensions);
     }
 
@@ -1856,7 +2164,8 @@ final class ProblemDetailsFactoryTest extends TestCase
      */
     public function testFactoryRedactionInDevEnvAlsoAppliesToBodyExtensions(): void
     {
-        $exception = new class ('', 'x', ['password' => 'sensitive', 'safe' => 'kept']) extends DomainException implements NotFound {
+        $context = ['password' => 'sensitive', 'safe' => 'kept'];
+        $exception = new class ('', 'x', $context) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor('dev')->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -1864,7 +2173,11 @@ final class ProblemDetailsFactoryTest extends TestCase
         $this->assertArrayNotHasKey('password', $problemDetails->extensions);
         $this->assertArrayHasKey('safe', $problemDetails->extensions);
         $this->assertArrayHasKey('debug', $problemDetails->extensions);
-        $this->assertSame(['safe', 'debug'], \array_keys($problemDetails->extensions), 'denylist key gone, debug appended last.');
+        $this->assertSame(
+            ['safe', 'debug'],
+            \array_keys($problemDetails->extensions),
+            'denylist key gone, debug appended last.',
+        );
 
         $encoded = \json_encode($problemDetails->toArray(), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
         $this->assertStringNotContainsString('sensitive', $encoded);
@@ -1923,7 +2236,11 @@ final class ProblemDetailsFactoryTest extends TestCase
 
         $this->assertArrayHasKey('truncated', $problemDetails->extensions);
         $this->assertTrue($problemDetails->extensions['truncated']);
-        $this->assertSame('truncated', \array_key_last($problemDetails->extensions), 'truncated marker MUST be the LAST extension member.');
+        $this->assertSame(
+            'truncated',
+            \array_key_last($problemDetails->extensions),
+            'truncated marker MUST be the LAST extension member.',
+        );
 
         // Core fields preserved verbatim — the cap MUST NOT touch type / title / status /
         // instance / correlation-id.
@@ -2022,7 +2339,8 @@ final class ProblemDetailsFactoryTest extends TestCase
         $payloadB = \str_repeat('b', 6000);
         $payloadC = \str_repeat('c', 6000);
 
-        $exception = new class ('', 'x', ['large_a' => $payloadA, 'large_b' => $payloadB, 'large_c' => $payloadC]) extends DomainException implements NotFound {
+        $context = ['large_a' => $payloadA, 'large_b' => $payloadB, 'large_c' => $payloadC];
+        $exception = new class ('', 'x', $context) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor()->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -2036,8 +2354,16 @@ final class ProblemDetailsFactoryTest extends TestCase
         // survive at minimum. large_b's fate depends on whether dropping large_c alone
         // brings the body under the cap; with 6 KiB each plus envelope, dropping large_c
         // leaves ~12 KiB which fits.
-        $this->assertArrayNotHasKey('large_c', $problemDetails->extensions, 'last-declared extension must be dropped first.');
-        $this->assertArrayHasKey('large_a', $problemDetails->extensions, 'first-declared extension must survive while later ones are dropped.');
+        $this->assertArrayNotHasKey(
+            'large_c',
+            $problemDetails->extensions,
+            'last-declared extension must be dropped first.',
+        );
+        $this->assertArrayHasKey(
+            'large_a',
+            $problemDetails->extensions,
+            'first-declared extension must survive while later ones are dropped.',
+        );
         $this->assertSame('truncated', \array_key_last($problemDetails->extensions));
     }
 
@@ -2073,7 +2399,8 @@ final class ProblemDetailsFactoryTest extends TestCase
             $entries[] = ['index' => $i, 'message' => \sprintf('entry %d for cap probe.', $i)];
         }
 
-        $exception = new class ('', 'x', ['head' => 'kept', 'entries' => $entries]) extends DomainException implements NotFound {
+        $context = ['head' => 'kept', 'entries' => $entries];
+        $exception = new class ('', 'x', $context) extends DomainException implements NotFound {
         };
 
         $problemDetails = $this->factoryFor()->fromThrowable($exception, self::CID, self::INSTANCE);
@@ -2083,7 +2410,11 @@ final class ProblemDetailsFactoryTest extends TestCase
 
         // `entries` (the LAST-declared, large list extension) was dropped wholesale —
         // no partial list survives under a non-`violations` key.
-        $this->assertArrayNotHasKey('entries', $problemDetails->extensions, 'non-violations list extensions are dropped as a whole, not entry-by-entry.');
+        $this->assertArrayNotHasKey(
+            'entries',
+            $problemDetails->extensions,
+            'non-violations list extensions are dropped as a whole, not entry-by-entry.',
+        );
         $this->assertArrayHasKey('head', $problemDetails->extensions);
         $this->assertSame('kept', $problemDetails->extensions['head']);
         $this->assertArrayHasKey('truncated', $problemDetails->extensions);
@@ -2238,7 +2569,9 @@ final class ProblemDetailsFactoryTest extends TestCase
         $characters = \str_split($value);
 
         $alternated = \array_map(
-            static fn (string $character, int $index): string => 0 === $index % 2 ? $character : \strtoupper($character),
+            static fn (string $character, int $index): string => 0 === $index % 2
+                ? $character
+                : \strtoupper($character),
             $characters,
             \array_keys($characters),
         );
@@ -2249,7 +2582,13 @@ final class ProblemDetailsFactoryTest extends TestCase
     /**
      * narrows the dev/test full-shape `debug` extension for downstream assertions.
      *
-     * @return array{exception_class: string, message: string, file: string, line: int, previous_chain: list<array{exception_class: string, message: string, file: string, line: int}>}
+     * @return array{
+     *     exception_class: string,
+     *     message: string,
+     *     file: string,
+     *     line: int,
+     *     previous_chain: list<array{exception_class: string, message: string, file: string, line: int}>,
+     * }
      */
     private function assertFullDebugExtension(ProblemDetails $problemDetails): array
     {
@@ -2272,7 +2611,15 @@ final class ProblemDetailsFactoryTest extends TestCase
         $this->assertIsInt($debug['line']);
         $this->assertIsArray($debug['previous_chain']);
 
-        /** @var array{exception_class: string, message: string, file: string, line: int, previous_chain: list<array{exception_class: string, message: string, file: string, line: int}>} $debug */
+        /**
+         * @var array{
+         *     exception_class: string,
+         *     message: string,
+         *     file: string,
+         *     line: int,
+         *     previous_chain: list<array{exception_class: string, message: string, file: string, line: int}>,
+         * } $debug
+         */
         return $debug;
     }
 

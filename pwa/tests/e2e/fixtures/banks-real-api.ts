@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { request, type APIRequestContext } from "@playwright/test";
+import { expect, request, type APIRequestContext, type Page } from "@playwright/test";
 
 /**
  * Real-API helpers for the Banks E2E suite that exercises the live Symfony
@@ -104,6 +104,24 @@ export async function seedBanks(
     created.push(await createBank(api, name, shortName));
   }
   return created;
+}
+
+/**
+ * Type into the list's name filter and WAIT for the debounce to flush before
+ * returning. `BanksFilters` mirrors the input locally and debounces
+ * `onFilterChange` by 300ms, so the applied `filter` — and the page reset it
+ * drives in the list page — lands well after the keystroke. A test that
+ * filters-to-isolate its seeded rows and then immediately paginates would
+ * otherwise have the late filter-change yank it back to page 1 mid-assertion.
+ *
+ * The active-filter badge (`banks-filters__count`) renders only once the
+ * parent `filter` prop updates, so it is the canonical "debounce has flushed"
+ * signal — and unlike row counts it is independent of how many unrelated banks
+ * the shared dev DB already holds. The filter panel must already be open.
+ */
+export async function filterByName(page: Page, value: string): Promise<void> {
+  await page.getByTestId("banks-filters__name").fill(value);
+  await expect(page.getByTestId("banks-filters__count")).toBeVisible();
 }
 
 /**

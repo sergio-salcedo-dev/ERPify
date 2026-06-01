@@ -15,7 +15,8 @@ use SplFileInfo;
  * Pins two error-contract drift invariants:
  *
  *   (1) Controllers MUST NOT catch-and-respond with `new JsonResponse(...)`.
- *       Throwing a `DomainException` is the contract — the {@see \Erpify\Shared\Infrastructure\Http\EventListener\ExceptionResponder}
+ *       Throwing a `DomainException` is the contract — the
+ *       {@see \Erpify\Shared\Infrastructure\Http\EventListener\ExceptionResponder}
  *       listener owns response shaping. A regression here would leak ad-hoc body
  *       shapes back into the `/api/*` surface and re-fragment the unified error
  *       wire format.
@@ -41,7 +42,8 @@ use SplFileInfo;
  *
  * Failure output:
  *
- *   Controllers must not catch-and-respond. Throw a DomainException instead. See docs/api-error-contract.md#how-to-add-a-new-error
+ *   Controllers must not catch-and-respond. Throw a DomainException instead.
+ *   See docs/api-error-contract.md#how-to-add-a-new-error
  *   <relative/path.php>:<line>: <matched code line>
  *   ...
  *

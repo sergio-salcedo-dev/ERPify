@@ -7,7 +7,7 @@ The `pwa/` deployable is a Next.js 16.2 (App Router) + React 19.2 + TypeScript 6
 ## Technology stack
 
 | Category        | Technology                                        | Version |
-|-----------------|---------------------------------------------------|---------|
+| --------------- | ------------------------------------------------- | ------- |
 | Runtime         | Node                                              | 24      |
 | Language        | TypeScript                                        | 6.0     |
 | Framework       | Next.js (App Router, Turbopack dev)               | 16.2    |
@@ -47,10 +47,25 @@ pwa/src/context/
 ```
 
 `src/components/` holds presentational components only:
+
 - `ui/` — Shadcn primitives.
-- `erpify/` — project-specific components.
+- `erpify/` — entity-agnostic backoffice design-system primitives, barrel-exported from `@/components/erpify`.
 
 `src/lib/` is glue/utility only — never business logic.
+
+### Where shared code goes (decision rule)
+
+Cross-cutting code has several homes; pick by **purpose**, not just "is it reused". The same rule is mirrored in [`pwa/CLAUDE.md`](../pwa/CLAUDE.md).
+
+| Put it in…                                     | When it is…                                                                                                                                                                                               | Examples                                                                                    |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `context/shared/infrastructure/<Module>/`      | backed by a **domain port** / swappable adapter, or part of a port-backed module                                                                                                                          | `Notification/Toast`, `DateTimeProvider`, `HttpClient`, `Validation`, `DependencyInjection` |
+| `context/shared/infrastructure/ui/components/` | an **app-shell or landing/marketing** presentational component consumed directly by `app/` routes/layouts (its own visual language: motion buttons, cards, atomic-design `atoms`/`molecules`/`organisms`) | `Navbar`, `Footer`, `Logo`, `SidebarItem`, `StatCard`, `FeatureCard`                        |
+| `components/erpify/`                           | an **entity-agnostic backoffice design-system primitive**, reused across entity CRUD                                                                                                                      | `DataTable`, `AsyncBoundary`, `EmptyState`, `StatusBadge`, `Spinner`                        |
+| `components/ui/`                               | a raw **Shadcn** primitive                                                                                                                                                                                | `button`, `dialog`, `input`                                                                 |
+| `src/lib/`                                     | a **pure helper or generic hook** with no domain identity                                                                                                                                                 | `safeHref`, `useDebouncedValue`, `utils`                                                    |
+
+Two `Button`s exist on purpose: `components/ui/button` (Shadcn, backoffice surfaces) and `context/shared/infrastructure/ui/components/atoms/Button` (motion-based, landing surfaces). They are distinct design languages — use the one matching the surface; don't cross-import.
 
 The `Notification` module (`context/shared/{domain,infrastructure}/Notification/`)
 provides transient user feedback. Its first channel is **Toast**: the
@@ -61,11 +76,11 @@ and alternative adapters without renaming the port.
 
 ## Layer responsibilities
 
-| Layer | Contains | Must NOT depend on |
-|---|---|---|
-| `domain/` | Entities, value objects, repository / port **interfaces**, domain errors | React, Next, Inversify, fetch, third-party SDKs |
-| `application/` | Use cases, DTOs, orchestration | Infrastructure implementations (only their interfaces) |
-| `infrastructure/` | HTTP clients, Inversify bindings, Next-aware adapters, presentational hooks bridging React to use cases | — (outermost) |
+| Layer             | Contains                                                                                                | Must NOT depend on                                     |
+| ----------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `domain/`         | Entities, value objects, repository / port **interfaces**, domain errors                                | React, Next, Inversify, fetch, third-party SDKs        |
+| `application/`    | Use cases, DTOs, orchestration                                                                          | Infrastructure implementations (only their interfaces) |
+| `infrastructure/` | HTTP clients, Inversify bindings, Next-aware adapters, presentational hooks bridging React to use cases | — (outermost)                                          |
 
 ## Routing
 
@@ -99,13 +114,13 @@ The PWA consumes the API's [RFC 9457 Problem Details](./api-error-contract.md) c
 
 ## Testing strategy
 
-| Layer | Tool | Entry |
-|---|---|---|
-| Unit | **Vitest 4** (jsdom) | `pwa/vitest.config.ts`, run via `make pwa.test.unit` |
-| E2E | **Playwright 1.59** | `pwa/playwright.config.ts`, run via `make pwa.test.e2e` |
-| Watch | Vitest | `make pwa.test.unit.watch` |
-| Reports | Playwright HTML | `make pwa.test.e2e.reports` |
-| Lint / format | ESLint + Prettier | `make pwa.quality` (check), `make pwa.lint` (ESLint --fix), `make pwa.format` (Prettier --write) |
+| Layer         | Tool                 | Entry                                                                                            |
+| ------------- | -------------------- | ------------------------------------------------------------------------------------------------ |
+| Unit          | **Vitest 4** (jsdom) | `pwa/vitest.config.ts`, run via `make pwa.test.unit`                                             |
+| E2E           | **Playwright 1.59**  | `pwa/playwright.config.ts`, run via `make pwa.test.e2e`                                          |
+| Watch         | Vitest               | `make pwa.test.unit.watch`                                                                       |
+| Reports       | Playwright HTML      | `make pwa.test.e2e.reports`                                                                      |
+| Lint / format | ESLint + Prettier    | `make pwa.quality` (check), `make pwa.lint` (ESLint --fix), `make pwa.format` (Prettier --write) |
 
 `tests/` mirrors `src/`. Tests are colocated by bounded context.
 

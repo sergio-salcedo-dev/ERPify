@@ -7,9 +7,9 @@ import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvid
 import { CheckHealth } from "@/context/frontoffice/health/application/CheckHealth";
 import { motion } from "motion/react";
 import { Activity, LayoutDashboard } from "lucide-react";
-import { Navbar } from "@/context/shared/infrastructure/ui/components/organisms/Navbar";
-import { Footer } from "@/context/shared/infrastructure/ui/components/organisms/Footer";
-import { FeatureCard } from "@/context/shared/infrastructure/ui/components/molecules/FeatureCard";
+import { Navbar } from "@/app/_components/Navbar";
+import { Footer } from "@/app/_components/Footer";
+import { FeatureCard } from "@/app/_components/FeatureCard";
 
 export default function LandingPage() {
   const router = useRouter();
@@ -73,7 +73,7 @@ export default function LandingPage() {
               iconColor="text-blue-600"
               iconBg="bg-blue-50"
               buttonText="Go to BackOffice"
-              buttonVariant="slate"
+              buttonVariant="default"
               onClick={goToBackOffice}
               loading={loading}
             />
@@ -85,7 +85,7 @@ export default function LandingPage() {
               iconColor="text-emerald-600"
               iconBg="bg-emerald-50"
               buttonText="Check FrontOffice API health"
-              buttonVariant="emerald"
+              buttonVariant="secondary"
               onClick={checkHealth}
               loading={loading}
             >

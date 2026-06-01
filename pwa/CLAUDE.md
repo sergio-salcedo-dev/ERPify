@@ -1,6 +1,10 @@
 # pwa/CLAUDE.md — ERPify PWA (Next.js 16 App Router)
 
-PWA-scoped guidance. Root [`../CLAUDE.md`](../CLAUDE.md) is authoritative for monorepo conventions, the Docker stack, and the full `make` target list — this file only covers PWA specifics. Also consult [`AGENTS.md`](AGENTS.md) and [`../docs/rules/frontend.md`](../docs/rules/frontend.md).
+PWA-scoped guidance. Root [`../CLAUDE.md`](../CLAUDE.md) is authoritative for monorepo conventions, the Docker stack,
+and the full `make` target list — this file only covers PWA specifics. For UX, [`DESIGN.md`](DESIGN.md) is the
+authoritative source — the **enterprise-first UX philosophy & UI review mandate**, the design-system contract
+(tokens, composites, patterns), and the accessibility non-negotiables all live there.
+Also consult [`../docs/rules/frontend.md`](../docs/rules/frontend.md).
 
 ## Stack
 
@@ -16,9 +20,23 @@ PWA-scoped guidance. Root [`../CLAUDE.md`](../CLAUDE.md) is authoritative for mo
   - `domain/` — pure types, value objects, interfaces. **No** Next, Inversify, HTTP, or ORM imports.
   - `application/` — use cases / orchestration; depends only on `domain`.
   - `infrastructure/` — adapters (HTTP clients, storage, framework glue).
-- `src/context/shared/` — cross-cutting code. Don't scatter shared utilities elsewhere.
-- `src/components/` — reusable UI (Shadcn-based). `src/lib/` — framework glue.
+- `src/context/shared/` — cross-cutting **domain/application/infrastructure** code (ports + adapters). Presentation primitives and pure glue live in `src/components/` and `src/lib/` instead — see the decision rule below.
+- `src/components/` — reusable UI. `src/lib/` — framework glue.
 - `tests/` — mirrors `src/` structure.
+
+### Where shared code goes (decision rule)
+
+Several homes exist for cross-cutting code; pick by **purpose**, not just "is it reused":
+
+| Put it in…                                           | When it is…                                                                                                                                             | Examples                                                                                                |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `context/shared/infrastructure/<Module>/`            | backed by a **domain port** / swappable adapter, or part of a port-backed module                                                                        | `Notification/Toast`, `DateTimeProvider`, `HttpClient`, `Validation`, `DependencyInjection`             |
+| `app/_components/` (or a route's own `_components/`) | a **landing/marketing** presentational component (its own raw-palette + `motion/react` language) used only by its `app/` route — co-located, not shared | `Navbar`, `Footer`, `FeatureCard`                                                                       |
+| `components/erpify/`                                 | an **entity-agnostic backoffice / app-shell design-system primitive**, reused across surfaces, barrel-exported from `@/components/erpify`               | `DataTable`, `AsyncBoundary`, `EmptyState`, `StatusBadge`, `Spinner`, `Logo`, `SidebarItem`, `StatCard` |
+| `components/ui/`                                     | a raw **Shadcn** primitive                                                                                                                              | `button`, `dialog`, `input`                                                                             |
+| `src/lib/`                                           | a **pure helper or generic hook** with no domain identity                                                                                               | `safeHref`, `useDebouncedValue`, `utils`                                                                |
+
+Note: the back-office (token-driven Shadcn + `@/components/erpify`) and the landing/marketing surface (raw-palette + `motion/react`, under `app/_components/`) are two deliberate design languages — reach for the one matching the surface you're building, don't cross-import. App-shell primitives reused by both (e.g. `Logo`) live in `@/components/erpify`. The former `context/shared/infrastructure/ui/components/` folder was retired: app-shell primitives (`Logo`, `SidebarItem`, `StatCard`) moved to `@/components/erpify`, marketing components (`Navbar`, `Footer`, `FeatureCard`) to `app/_components/`, and `PlaceholderCard` was folded into `<EmptyState>` (via its new optional `icon` prop).
 
 ## Make targets (run from repo root)
 
@@ -94,9 +112,9 @@ attack surface. Treat the following as load-bearing:
 ## Shared building blocks (use these, don't reinvent)
 
 UI-level primitives live under `src/components/erpify/` and are exported from
-its barrel (`@/components/erpify`). Framework-agnostic helpers live under
-`src/lib/`. Reach for these from every entity instead of re-implementing them
-locally:
+its barrel (`@/components/erpify`). Framework glue and generic hooks with no
+domain identity (e.g. `safeHref`, `useDebouncedValue`) live under `src/lib/`.
+Reach for these from every entity instead of re-implementing them locally:
 
 - **Dates** — the `dateTimeProvider` singleton from
   `@/context/shared/infrastructure/DateTimeProvider`, typed as the
@@ -107,6 +125,7 @@ locally:
   on unparseable values so tables never show "Invalid Date". Use
   `formatToDisplay(date)` / `formatToDate(date)` for `Date` objects. Never
   call `new Date(...).toLocaleString()` directly in entity components.
+  For glanceable "2 days ago" timestamps use `dateTimeProvider.formatIsoToRelative(iso)` and pair it with the absolute value in a `title` tooltip; never compute relative time inline.
 - **Date filter inputs** — `<DateField>` from `@/components/erpify`. Renders
   the canonical `dd/mm/yyyy` text input with the right `pattern` /
   `inputMode` / `placeholder` / tooltip / `(dd/mm/yyyy)` label hint, and
@@ -221,6 +240,16 @@ locally:
   `@/components/ui/button` (the latter is `"use client"` and Next 16
   blocks server invocations of the cva helper). Import the `Button`
   component itself from `@/components/ui/button` as before.
+- **UUIDs** — generate every client-side identifier with `uuidV7()` from
+  `@/lib/uuidV7` (a thin wrapper over the `uuid` library). **Never call
+  `crypto.randomUUID()`** — it always returns a UUID **v4**, while the
+  whole stack is UUID **v7**: the API's persisted PKs and minted
+  `correlation-id` are v7 (its `CorrelationIdListener` strictly rejects
+  non-v7), and `ProblemDetails.instance` / `correlation-id` are typed as
+  v7. This matters wherever the UI fabricates a fallback `ProblemDetails`
+  (no response / non-ProblemDetails body). Keep the `uuid` import inside
+  `@/lib/uuidV7` only — don't scatter `import … from "uuid"` across
+  components.
 - **Form validation** — `Validator` / `ZodValidatorAdapter` / `useZodForm`
   from `@/context/shared/infrastructure/Validation`. Each entity declares
   its own schema in `src/context/<bounded-context>/<entity>/application/schemas/`
@@ -236,7 +265,8 @@ locally:
   `setError(field, { type: "server", message: violation.message })`.
 
 When you need a new cross-entity primitive, add it to `components/erpify/` (or
-`src/lib/` for a pure helper) and export it from the matching barrel.
+`src/lib/` for a pure helper or generic hook) and export it from the matching
+barrel.
 
 ## Test ID rules
 

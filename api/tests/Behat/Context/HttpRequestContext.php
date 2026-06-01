@@ -262,8 +262,11 @@ class HttpRequestContext extends AbstractContext
      * Sends a HTTP request with a some parameters.
      */
     #[Given('I send a :method request to :url with parameters and relative dates:')]
-    public function iSendARequestToWithParametersAndRelativeDates(string $method, string $url, TableNode $tableNode): void
-    {
+    public function iSendARequestToWithParametersAndRelativeDates(
+        string $method,
+        string $url,
+        TableNode $tableNode,
+    ): void {
         $this->iSendARequestToWithParameters($method, $url, $tableNode);
     }
 
@@ -273,8 +276,11 @@ class HttpRequestContext extends AbstractContext
      * @throws JsonException
      */
     #[Given('I send a :method request to :url using last response with body:')]
-    public function iSendARequestToWithParametersUsingLastResponse(string $method, string $url, PyStringNode $pyStringNode): void
-    {
+    public function iSendARequestToWithParametersUsingLastResponse(
+        string $method,
+        string $url,
+        PyStringNode $pyStringNode,
+    ): void {
         $lastResponse = JsonDecoder::decodeArray((string) $this->getLastResponse()->getContent())['data'];
 
         foreach (\explode('/', $url) as $value) {
@@ -304,14 +310,18 @@ class HttpRequestContext extends AbstractContext
 
         foreach (\explode('.', $node) as $segment) {
             if (!\is_array($value) || !\array_key_exists($segment, $value)) {
-                throw new UnexpectedValueException(\sprintf('JSON node "%s" not found in the previous response.', $node));
+                throw new UnexpectedValueException(
+                    \sprintf('JSON node "%s" not found in the previous response.', $node),
+                );
             }
 
             $value = $value[$segment];
         }
 
         if (!\is_scalar($value)) {
-            throw new UnexpectedValueException(\sprintf('JSON node "%s" is not a scalar (got %s).', $node, \get_debug_type($value)));
+            throw new UnexpectedValueException(
+                \sprintf('JSON node "%s" is not a scalar (got %s).', $node, \get_debug_type($value)),
+            );
         }
 
         $this->iSendARequestTo($method, \str_replace('{value}', \rawurlencode((string) $value), $url));

@@ -4,7 +4,14 @@ import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError"
 import { isProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { HttpStatus } from "@/context/shared/domain/types/http";
 
-const STUB_UUID = "00000000-0000-4000-8000-000000000000";
+// v7-shaped: ProblemDetails.instance / correlation-id are UUID v7, minted via @/lib/uuidV7.
+const { STUB_UUID } = vi.hoisted(() => ({
+  STUB_UUID: "00000000-0000-7000-8000-000000000000",
+}));
+
+vi.mock("@/lib/uuidV7", () => ({
+  uuidV7: () => STUB_UUID,
+}));
 
 function makeResponse(
   status: number,
@@ -23,16 +30,13 @@ function makeResponse(
 
 describe("FetchHttpClient", () => {
   let fetchSpy: MockInstance;
-  let randomUUIDSpy: MockInstance<() => `${string}-${string}-${string}-${string}-${string}`>;
 
   beforeEach(() => {
     fetchSpy = vi.spyOn(globalThis, "fetch");
-    randomUUIDSpy = vi.spyOn(crypto, "randomUUID").mockReturnValue(STUB_UUID);
   });
 
   afterEach(() => {
     fetchSpy.mockRestore();
-    randomUUIDSpy.mockRestore();
   });
 
   it("passes through an RFC 9457 problem body verbatim on 4xx", async () => {

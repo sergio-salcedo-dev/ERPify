@@ -7,7 +7,7 @@ import { container } from "@/context/shared/infrastructure/DependencyInjection/C
 import { DeleteBank } from "@/context/backoffice/bank/application/DeleteBank";
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
-import { ProblemDisplay } from "@/components/erpify";
+import { ProblemDisplay, Spinner } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -29,6 +29,14 @@ interface DeleteBankButtonProps {
   /** Custom trigger; defaults to a destructive button with a Trash icon. */
   trigger?: ReactElement;
   triggerTestId?: string;
+  /**
+   * Controlled open state. When provided, the dialog is parent-controlled and
+   * renders NO trigger of its own — used by the per-row `⋯` actions menu, where
+   * a menu item (not a button) opens the confirmation. Omit for the standalone
+   * uncontrolled button (detail page).
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export function DeleteBankButton({
@@ -37,11 +45,23 @@ export function DeleteBankButton({
   onDeleted,
   trigger,
   triggerTestId = "banks-detail__delete-button",
+  open: openProp,
+  onOpenChange,
 }: Readonly<DeleteBankButtonProps>) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const isControlled = openProp !== undefined;
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = isControlled ? openProp : internalOpen;
   const [submitting, setSubmitting] = useState(false);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
+
+  function setOpen(next: boolean): void {
+    if (isControlled) {
+      onOpenChange?.(next);
+    } else {
+      setInternalOpen(next);
+    }
+  }
 
   function handleOpenChange(next: boolean): void {
     if (next) {
@@ -91,7 +111,7 @@ export function DeleteBankButton({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger render={trigger ?? defaultTrigger} />
+      {isControlled ? null : <DialogTrigger render={trigger ?? defaultTrigger} />}
       <DialogContent data-testid="banks-detail__delete-dialog">
         <DialogHeader>
           <DialogTitle>Delete bank</DialogTitle>
@@ -122,11 +142,19 @@ export function DeleteBankButton({
             size="sm"
             onClick={handleConfirm}
             disabled={submitting}
+            data-icon={submitting ? "inline-start" : undefined}
             aria-label={`Confirm delete of bank ${name}`}
             title={`Confirm delete of bank ${name}`}
             data-testid="banks-detail__delete-confirm"
           >
-            {submitting ? "Deleting…" : "Delete"}
+            {submitting ? (
+              <>
+                <Spinner className="size-3.5" testId="banks-detail__delete-spinner" />
+                Deleting…
+              </>
+            ) : (
+              "Delete"
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -23,8 +23,10 @@ final readonly class StoredImageObjectWriter
     ) {
     }
 
-    public function storeFromUploadedFile(UploadedFile $uploadedFile, string $invalidImageFormField = 'stored_object'): StoredObjectWriteResult
-    {
+    public function storeFromUploadedFile(
+        UploadedFile $uploadedFile,
+        string $invalidImageFormField = 'stored_object',
+    ): StoredObjectWriteResult {
         try {
             $normalized = $this->imageNormalizer->normalize($uploadedFile);
         } catch (InvalidImageException $invalidImageException) {
