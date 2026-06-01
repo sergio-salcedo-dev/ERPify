@@ -40,7 +40,7 @@ describe("BanksListPage — retry on error", () => {
     fireEvent.click(retry);
 
     await waitFor(() => {
-      expect(screen.getByRole("cell", { name: "Acme Savings", exact: true })).toBeInTheDocument();
+      expect(screen.getByRole("cell", { name: "Acme Savings" })).toBeInTheDocument();
     });
     expect(searchRun).toHaveBeenCalledTimes(2);
   });
