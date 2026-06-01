@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
 import { Menu, X, User as UserIcon, Settings, LogOut, HelpCircle, Wrench } from "lucide-react";
 import Link from "next/link";
 import { Logo } from "@/components/erpify";
@@ -143,46 +142,39 @@ export const Navbar: React.FC<NavbarProps> = ({ onGetStarted }) => {
       </div>
 
       {/* Mobile Menu */}
-      <AnimatePresence>
-        {isMenuOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="navbar__mobile-menu md:hidden bg-white border-b border-slate-200 px-4 pt-2 pb-6 space-y-4"
-          >
-            {navLinks.map((link) => (
-              <a
-                key={link.name}
-                href={link.href}
-                data-testid={`${link.testId}--mobile`}
-                className="navbar__link block text-slate-600 font-medium"
-              >
-                {link.name}
-              </a>
-            ))}
-            {showDevTools ? (
-              <Link
-                href={Routes.DEV_TOOLS}
-                className="navbar__link navbar__link--dev-tools text-amber-700 hover:text-amber-900 font-medium inline-flex items-center gap-1.5"
-                title="Internal QA / engineering tools (dev/test only)"
-                data-testid="navbar__mobile-dev-tools-link"
-              >
-                <Wrench className="w-4 h-4" aria-hidden="true" />
-                Dev Tools
-              </Link>
-            ) : null}
-            <Button
-              onClick={onGetStarted}
-              size="lg"
-              className="navbar__button w-full rounded-xl"
-              data-testid="navbar__get-started--mobile"
+      {isMenuOpen && (
+        <div className="navbar__mobile-menu md:hidden bg-white border-b border-slate-200 px-4 pt-2 pb-6 space-y-4 animate-in fade-in-0 slide-in-from-top-2 duration-200">
+          {navLinks.map((link) => (
+            <a
+              key={link.name}
+              href={link.href}
+              data-testid={`${link.testId}--mobile`}
+              className="navbar__link block text-slate-600 font-medium"
             >
-              Get Started
-            </Button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              {link.name}
+            </a>
+          ))}
+          {showDevTools ? (
+            <Link
+              href={Routes.DEV_TOOLS}
+              className="navbar__link navbar__link--dev-tools text-amber-700 hover:text-amber-900 font-medium inline-flex items-center gap-1.5"
+              title="Internal QA / engineering tools (dev/test only)"
+              data-testid="navbar__mobile-dev-tools-link"
+            >
+              <Wrench className="w-4 h-4" aria-hidden="true" />
+              Dev Tools
+            </Link>
+          ) : null}
+          <Button
+            onClick={onGetStarted}
+            size="lg"
+            className="navbar__button w-full rounded-xl"
+            data-testid="navbar__get-started--mobile"
+          >
+            Get Started
+          </Button>
+        </div>
+      )}
     </nav>
   );
 };

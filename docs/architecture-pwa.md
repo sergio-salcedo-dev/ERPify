@@ -16,7 +16,7 @@ The `pwa/` deployable is a Next.js 16.2 (App Router) + React 19.2 + TypeScript 6
 | Component lib   | Shadcn                                            | 4.7     |
 | Headless UI     | @base-ui/react                                    | 1.4     |
 | Icons           | lucide-react                                      | 1.x     |
-| Animation       | motion                                            | 12      |
+| Animation       | tw-animate-css (+ CSS)                            | 1       |
 | Forms           | @hookform/resolvers                               | 5.x     |
 | DI              | Inversify (+ reflect-metadata)                    | 8.1     |
 | Class utilities | class-variance-authority, clsx, tailwind-merge    | —       |
@@ -57,15 +57,15 @@ pwa/src/context/
 
 Cross-cutting code has several homes; pick by **purpose**, not just "is it reused". The same rule is mirrored in [`pwa/CLAUDE.md`](../pwa/CLAUDE.md).
 
-| Put it in…                                     | When it is…                                                                                                                                                                                               | Examples                                                                                    |
-| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `context/shared/infrastructure/<Module>/`      | backed by a **domain port** / swappable adapter, or part of a port-backed module                                                                                                                          | `Notification/Toast`, `DateTimeProvider`, `HttpClient`, `Validation`, `DependencyInjection` |
-| `context/shared/infrastructure/ui/components/` | an **app-shell or landing/marketing** presentational component consumed directly by `app/` routes/layouts (its own visual language: motion buttons, cards, atomic-design `atoms`/`molecules`/`organisms`) | `Navbar`, `Footer`, `Logo`, `SidebarItem`, `StatCard`, `FeatureCard`                        |
-| `components/erpify/`                           | an **entity-agnostic backoffice design-system primitive**, reused across entity CRUD                                                                                                                      | `DataTable`, `AsyncBoundary`, `EmptyState`, `StatusBadge`, `Spinner`                        |
-| `components/ui/`                               | a raw **Shadcn** primitive                                                                                                                                                                                | `button`, `dialog`, `input`                                                                 |
-| `src/lib/`                                     | a **pure helper or generic hook** with no domain identity                                                                                                                                                 | `safeHref`, `useDebouncedValue`, `utils`                                                    |
+| Put it in… | When it is… | Examples |
+| --- | --- | --- |
+| `context/shared/infrastructure/<Module>/` | backed by a **domain port** / swappable adapter, or part of a port-backed module | `Notification/Toast`, `DateTimeProvider`, `HttpClient`, `Validation`, `DependencyInjection` |
+| `app/_components/` (or a route's own `_components/`) | a **landing/marketing** presentational component (its own raw-palette + `tw-animate-css` / CSS language) used only by its `app/` route — co-located, not shared | `Navbar`, `Footer`, `FeatureCard` |
+| `components/erpify/` | an **entity-agnostic backoffice / app-shell design-system primitive**, reused across surfaces, barrel-exported from `@/components/erpify` | `DataTable`, `AsyncBoundary`, `EmptyState`, `StatusBadge`, `Spinner`, `Logo`, `SidebarItem`, `StatCard` |
+| `components/ui/` | a raw **Shadcn** primitive | `button`, `dialog`, `input` |
+| `src/lib/` | a **pure helper or generic hook** with no domain identity | `safeHref`, `useDebouncedValue`, `utils` |
 
-Two `Button`s exist on purpose: `components/ui/button` (Shadcn, backoffice surfaces) and `context/shared/infrastructure/ui/components/atoms/Button` (motion-based, landing surfaces). They are distinct design languages — use the one matching the surface; don't cross-import.
+The back-office (token-driven Shadcn + `@/components/erpify`) and the landing/marketing surface (raw-palette + `tw-animate-css` / CSS, under `app/_components/`) are two deliberate design languages — use the one matching the surface; don't cross-import. App-shell primitives reused by both (e.g. `Logo`) live in `@/components/erpify`. The former `context/shared/infrastructure/ui/components/` folder (atomic-design `atoms`/`molecules`/`organisms`) was retired: app-shell primitives → `@/components/erpify`, marketing components → `app/_components/`.
 
 The `Notification` module (`context/shared/{domain,infrastructure}/Notification/`)
 provides transient user feedback. Its first channel is **Toast**: the

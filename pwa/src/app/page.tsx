@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
 import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
 import { CheckHealth } from "@/context/frontoffice/health/application/CheckHealth";
-import { motion } from "motion/react";
 import { Activity, LayoutDashboard } from "lucide-react";
 import { Navbar } from "@/app/_components/Navbar";
 import { Footer } from "@/app/_components/Footer";
@@ -47,22 +46,16 @@ export default function LandingPage() {
       <main className="landing-page__main flex-grow">
         <section className="landing-page__hero max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-24">
           <div className="landing-page__hero-content text-center mb-16">
-            <motion.h1
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="landing-page__title text-4xl md:text-6xl font-extrabold text-slate-900 mb-6 tracking-tight"
-            >
+            <h1 className="landing-page__title text-4xl md:text-6xl font-extrabold text-slate-900 mb-6 tracking-tight animate-in fade-in-0 slide-in-from-bottom-4 duration-700">
               Modern ERP for <span className="text-blue-600">Construction</span>
-            </motion.h1>
-            <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="landing-page__subtitle text-lg md:text-xl text-slate-600 max-w-2xl mx-auto"
+            </h1>
+            <p
+              className="landing-page__subtitle text-lg md:text-xl text-slate-600 max-w-2xl mx-auto animate-in fade-in-0 slide-in-from-bottom-4 duration-700"
+              style={{ animationDelay: "100ms", animationFillMode: "both" }}
             >
               Streamline your projects, manage your workforce, and track every brick with Erpify.
               The all-in-one solution for construction management.
-            </motion.p>
+            </p>
           </div>
 
           <div className="landing-page__features grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
@@ -90,14 +83,12 @@ export default function LandingPage() {
               loading={loading}
             >
               {healthStatus && (
-                <motion.div
+                <div
                   data-testid="frontoffice-health-status"
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  className="landing-page__health-status mt-6 p-4 bg-slate-50 rounded-xl text-sm font-mono text-slate-600 border border-slate-200 w-full"
+                  className="landing-page__health-status mt-6 p-4 bg-slate-50 rounded-xl text-sm font-mono text-slate-600 border border-slate-200 w-full animate-in fade-in-0 slide-in-from-top-1 duration-300"
                 >
                   {healthStatus}
-                </motion.div>
+                </div>
               )}
             </FeatureCard>
           </div>
