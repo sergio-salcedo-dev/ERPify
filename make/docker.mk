@@ -13,8 +13,13 @@ docker.up: ## Start stack detached, rebuild images (ENV-aware)
 docker.up.wait: ## Start stack detached with --wait health gate
 	$(DOCKER_COMPOSE) up --wait --build --detach
 
+# `up --wait` aborts if a container restarts once during the wait window. The php
+# service can flap during cold boot (composer install + migrations + dev worker),
+# so on failure we settle briefly and re-run --wait — already-up services just get
+# re-evaluated and pass once php is healthy. A second failure is a real fault.
 docker.up.wait.no-build: ## Start stack detached with --wait, skip rebuild (CI: images already loaded)
-	$(DOCKER_COMPOSE) up --wait --no-build --detach
+	$(DOCKER_COMPOSE) up --wait --no-build --detach \
+		|| { echo '[docker.up.wait.no-build] first --wait aborted (cold-boot restart); retrying once after settle...'; sleep 10; $(DOCKER_COMPOSE) up --wait --no-build --detach; }
 
 docker.build: ## Rebuild images (--pull --no-cache)
 	$(DOCKER_COMPOSE) build --pull --no-cache
