@@ -121,6 +121,7 @@ Reach for these from every entity instead of re-implementing them locally:
   on unparseable values so tables never show "Invalid Date". Use
   `formatToDisplay(date)` / `formatToDate(date)` for `Date` objects. Never
   call `new Date(...).toLocaleString()` directly in entity components.
+  For glanceable "2 days ago" timestamps use `dateTimeProvider.formatIsoToRelative(iso)` and pair it with the absolute value in a `title` tooltip; never compute relative time inline.
 - **Date filter inputs** — `<DateField>` from `@/components/erpify`. Renders
   the canonical `dd/mm/yyyy` text input with the right `pattern` /
   `inputMode` / `placeholder` / tooltip / `(dd/mm/yyyy)` label hint, and
