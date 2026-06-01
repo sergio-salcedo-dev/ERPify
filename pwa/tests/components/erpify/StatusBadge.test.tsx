@@ -25,4 +25,9 @@ describe("StatusBadge", () => {
     render(<StatusBadge variant="neutral" label="Draft" />);
     expect(screen.getByRole("status")).toHaveTextContent("Draft");
   });
+
+  it("forwards the testId prop to the rendered element", () => {
+    render(<StatusBadge variant="info" label="New" testId="x-badge" />);
+    expect(screen.getByTestId("x-badge")).toHaveTextContent("New");
+  });
 });

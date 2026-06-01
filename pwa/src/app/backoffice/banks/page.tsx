@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
@@ -19,6 +19,8 @@ import { BanksCards } from "./_components/BanksCards";
 import { BanksFilters } from "./_components/BanksFilters";
 import { BanksPagination } from "./_components/BanksPagination";
 import { BanksViewToggle, type BanksView } from "./_components/BanksViewToggle";
+import { BanksListSkeleton } from "./_components/BanksListSkeleton";
+import { BanksEmptyFiltered } from "./_components/BanksEmptyFiltered";
 import {
   DEFAULT_SORT,
   EMPTY_FILTER,
@@ -29,6 +31,8 @@ import {
 } from "./_lib/banksFilterSort";
 import { BANKS_PAGE_SIZE_DEFAULT, type BanksPageSize, paginate } from "./_lib/paginate";
 import { bankRoutes } from "./_lib/bankRoutes";
+import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
+import { countRecentlyCreated } from "./_lib/bankRecency";
 
 type State = ViewStatus;
 
@@ -70,32 +74,53 @@ export default function BanksListPage() {
     globalThis.localStorage.setItem(BANKS_VIEW_STORAGE_KEY, view);
   }, [view]);
 
+  const mountedRef = useRef(true);
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const useCase = container.get<SearchBanks>("BackOfficeSearchBanks");
-        const result = await useCase.run();
-        if (cancelled) return;
-        setBanks(result.banks);
-        setNextCursor(result.nextCursor);
-        setState(result.banks.length === 0 ? ViewStatus.EMPTY : ViewStatus.READY);
-      } catch (err) {
-        if (cancelled) return;
-        const fallbackDetail = err instanceof Error ? err.message : "Unknown error";
-        const nextProblem = err instanceof HttpError ? err.problem : genericProblem(fallbackDetail);
-        setProblem(nextProblem);
-        setState(ViewStatus.ERROR);
-      }
-    })();
+    mountedRef.current = true;
     return () => {
-      cancelled = true;
+      mountedRef.current = false;
     };
   }, []);
+
+  const loadBanks = useCallback(async () => {
+    setState(ViewStatus.LOADING);
+    setProblem(null);
+    try {
+      const useCase = container.get<SearchBanks>("BackOfficeSearchBanks");
+      const result = await useCase.run();
+      if (!mountedRef.current) return;
+      setBanks(result.banks);
+      setNextCursor(result.nextCursor);
+      setState(result.banks.length === 0 ? ViewStatus.EMPTY : ViewStatus.READY);
+    } catch (err) {
+      if (!mountedRef.current) return;
+      const fallbackDetail = err instanceof Error ? err.message : "Unknown error";
+      const nextProblem = err instanceof HttpError ? err.problem : genericProblem(fallbackDetail);
+      setProblem(nextProblem);
+      setState(ViewStatus.ERROR);
+    }
+  }, []);
+
+  useEffect(() => {
+    // loadBanks resets state to LOADING before its first await; that initial
+    // setState is intentional (it also drives the Retry path) and runs through
+    // a stable callback, so the cascading-render warning does not apply here.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadBanks();
+  }, [loadBanks]);
 
   const visibleBanks = useMemo(
     () => applySort(applyFilters(banks, filter), sort),
     [banks, filter, sort],
+  );
+
+  const recentCount = useMemo(
+    () =>
+      countRecentlyCreated(
+        banks.map((bank) => bank.createdAt),
+        dateTimeProvider,
+      ),
+    [banks],
   );
 
   // Reset page when filters, sort or pageSize change (adjusting state during render)
@@ -154,6 +179,12 @@ export default function BanksListPage() {
               data-testid="banks-list__total"
             >
               Total banks: <span className="text-foreground font-medium">{banks.length}</span>
+              {recentCount > 0 ? (
+                <>
+                  {" · "}
+                  <span className="text-foreground font-medium">{recentCount}</span> added this week
+                </>
+              ) : null}
             </p>
           ) : null}
         </div>
@@ -189,6 +220,22 @@ export default function BanksListPage() {
         state={state}
         data={banks}
         error={problem ?? undefined}
+        loading={<BanksListSkeleton view={view} rows={Math.min(pageSize, 8)} />}
+        errorAction={
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              loadBanks();
+            }}
+            title="Retry loading banks"
+            aria-label="Retry loading banks"
+            data-testid="banks-list__retry"
+          >
+            Retry
+          </Button>
+        }
         emptyVariant="first-run"
         emptyHeading="No banks yet"
         emptyDescription="Create the first bank to get started."
@@ -205,35 +252,7 @@ export default function BanksListPage() {
       >
         {() =>
           visibleBanks.length === 0 ? (
-            <section
-              className="banks-list__empty-filtered border-border rounded-md border p-8 text-center"
-              data-testid="banks-list__empty-filtered"
-            >
-              <h2
-                className="text-foreground text-base font-medium"
-                data-testid="banks-list__empty-filtered-heading"
-              >
-                No banks match your filters
-              </h2>
-              <p
-                className="text-muted-foreground mt-1 text-sm"
-                data-testid="banks-list__empty-filtered-description"
-              >
-                Adjust the filters or clear them to see the full list.
-              </p>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="mt-4"
-                onClick={resetFilters}
-                title="Clear all bank filters"
-                aria-label="Clear all bank filters"
-                data-testid="banks-list__reset-filters"
-              >
-                Reset filters
-              </Button>
-            </section>
+            <BanksEmptyFiltered onReset={resetFilters} />
           ) : (
             <>
               {view === "table" ? (

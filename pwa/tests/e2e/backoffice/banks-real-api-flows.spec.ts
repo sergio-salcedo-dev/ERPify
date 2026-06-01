@@ -3,6 +3,7 @@ import { VIEWPORT_DESKTOP } from "../constants";
 import {
   createApiContext,
   deleteBanksSafely,
+  filterByName,
   seedBanks,
   uniqueRunPrefix,
   type ApiBank,
@@ -77,7 +78,7 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
     // Narrow the client-side filter to test-owned rows. The filters panel
     // is collapsed by default, so reveal it before driving its inputs.
     await page.getByTestId("banks-filters__toggle").click();
-    await page.getByTestId("banks-filters__name").fill(runPrefix);
+    await filterByName(page, runPrefix);
 
     // Default sort is name ascending — first row = `<prefix> 001`.
     const firstSeeded = `${runPrefix} 001`;
@@ -103,7 +104,7 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
     const uniqueTail = target.shortName.slice(-4); // "-004"
 
     await page.getByTestId("banks-filters__toggle").click();
-    await page.getByTestId("banks-filters__name").fill(runPrefix);
+    await filterByName(page, runPrefix);
     await page.getByTestId("banks-filters__short-name").fill(uniqueTail);
 
     await expect(page.locator("tbody tr")).toHaveCount(1);
@@ -112,7 +113,7 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
 
     // Reset clears both filters and brings the seeded set back.
     await page.getByTestId("banks-filters__reset").click();
-    await page.getByTestId("banks-filters__name").fill(runPrefix);
+    await filterByName(page, runPrefix);
     await expect(page.locator("tbody tr")).toHaveCount(SEED_COUNT);
   });
 
@@ -120,7 +121,7 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
     await page.goto("/backoffice/banks");
     await expect(page.getByTestId("banks-list")).toHaveAttribute("data-state", "ready");
     await page.getByTestId("banks-filters__toggle").click();
-    await page.getByTestId("banks-filters__name").fill(runPrefix);
+    await filterByName(page, runPrefix);
     await page.getByTestId("banks-pagination__page-size").selectOption("50");
 
     const shortNameHeader = page.getByRole("columnheader", { name: "Short name", exact: true });
@@ -149,7 +150,9 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
     await page.goto("/backoffice/banks");
     await expect(page.getByTestId("banks-list")).toHaveAttribute("data-state", "ready");
     await page.getByTestId("banks-filters__toggle").click();
-    await page.getByTestId("banks-filters__name").fill(runPrefix);
+    // Wait for the debounced filter to apply before paginating — otherwise the
+    // late filter-change resets the page back to 1 mid-test (see filterByName).
+    await filterByName(page, runPrefix);
 
     // The smallest selectable page size is 25; with 30 seeded rows that
     // splits into 25 + 5.
@@ -234,7 +237,7 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
     // page 2 (default sort is name asc), so widen the window before locating.
     await page.getByTestId("banks-pagination__page-size").selectOption("50");
     await page.getByTestId("banks-filters__toggle").click();
-    await page.getByTestId("banks-filters__name").fill(runPrefix);
+    await filterByName(page, runPrefix);
 
     await page.getByTestId(`banks-table__edit-${id}`).click();
     await expect(page).toHaveURL(`/backoffice/banks/${id}/edit`);
@@ -262,7 +265,7 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
     // under the prefix, default page size 25, target row sorted last by name.
     await page.getByTestId("banks-pagination__page-size").selectOption("50");
     await page.getByTestId("banks-filters__toggle").click();
-    await page.getByTestId("banks-filters__name").fill(runPrefix);
+    await filterByName(page, runPrefix);
 
     await expect(page.getByTestId(`banks-table__row-${id}`)).toBeVisible();
     await page.getByTestId(`banks-table__delete-${id}`).click();

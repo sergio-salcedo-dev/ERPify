@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Pencil, Trash2 } from "lucide-react";
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
-import { CopyButton } from "@/components/erpify";
+import { CopyButton, MonogramAvatar, StatusBadge } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import {
@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
 import { safeHref } from "@/lib/safeHref";
 import { bankRoutes } from "../_lib/bankRoutes";
+import { isRecentlyCreated } from "../_lib/bankRecency";
 import { DeleteBankButton } from "./DeleteBankButton";
 
 interface BanksCardsProps {
@@ -43,22 +44,36 @@ export function BanksCards({ banks, onBankDeleted }: Readonly<BanksCardsProps>) 
           >
             <Card size="sm" className="banks-cards__card h-full">
               <CardHeader>
-                <CardTitle className="banks-cards__title min-w-0 break-words">
-                  <Link
-                    href={detailHref}
-                    className="banks-cards__name hover:underline focus-visible:underline focus-visible:outline-none"
-                    title={`View bank ${bank.name}`}
-                    data-testid={`banks-cards__name-${bank.id}`}
-                  >
-                    {bank.name}
-                  </Link>
-                </CardTitle>
-                <CardDescription
-                  className="banks-cards__shortname truncate font-mono text-xs uppercase"
-                  data-testid={`banks-cards__shortname-${bank.id}`}
-                >
-                  {bank.shortName}
-                </CardDescription>
+                <div className="banks-cards__identity flex min-w-0 items-center gap-2.5">
+                  <MonogramAvatar name={bank.name} testId={`banks-cards__avatar-${bank.id}`} />
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="banks-cards__title flex min-w-0 items-center gap-2">
+                      <Link
+                        href={detailHref}
+                        className="banks-cards__name min-w-0 truncate hover:underline focus-visible:underline focus-visible:outline-none"
+                        title={`View bank ${bank.name}`}
+                        data-testid={`banks-cards__name-${bank.id}`}
+                      >
+                        {bank.name}
+                      </Link>
+                      {isRecentlyCreated(bank.createdAt, dateTimeProvider) ? (
+                        <StatusBadge
+                          variant="info"
+                          label="New"
+                          className="banks-cards__new flex-none"
+                          testId={`banks-cards__new-${bank.id}`}
+                        />
+                      ) : null}
+                    </CardTitle>
+                    <CardDescription
+                      className="banks-cards__shortname truncate font-mono text-xs uppercase"
+                      title={bank.shortName}
+                      data-testid={`banks-cards__shortname-${bank.id}`}
+                    >
+                      {bank.shortName}
+                    </CardDescription>
+                  </div>
+                </div>
                 <CardAction>
                   <div className="banks-cards__actions flex items-center gap-1">
                     <CopyButton
@@ -107,16 +122,18 @@ export function BanksCards({ banks, onBankDeleted }: Readonly<BanksCardsProps>) 
                   <dt className="text-muted-foreground">Created</dt>
                   <dd
                     className="banks-cards__created text-foreground"
+                    title={dateTimeProvider.formatIsoToLocalDateTime(bank.createdAt)}
                     data-testid={`banks-cards__created-${bank.id}`}
                   >
-                    {dateTimeProvider.formatIsoToLocalDateTime(bank.createdAt)}
+                    {dateTimeProvider.formatIsoToRelative(bank.createdAt)}
                   </dd>
                   <dt className="text-muted-foreground">Updated</dt>
                   <dd
                     className="banks-cards__updated text-foreground"
+                    title={dateTimeProvider.formatIsoToLocalDateTime(bank.updatedAt)}
                     data-testid={`banks-cards__updated-${bank.id}`}
                   >
-                    {dateTimeProvider.formatIsoToLocalDateTime(bank.updatedAt)}
+                    {dateTimeProvider.formatIsoToRelative(bank.updatedAt)}
                   </dd>
                 </dl>
               </CardContent>

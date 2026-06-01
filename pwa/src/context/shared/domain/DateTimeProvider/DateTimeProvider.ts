@@ -30,6 +30,14 @@ export interface DateTimeProvider {
   /** Format a date as `dd/mm/yyyy` (no time component). */
   formatToDate(date: Date): string;
 
+  /**
+   * Human-readable distance between `date` and `baseDate` (defaults to
+   * "now"), e.g. "2 days ago", "in about 3 hours". Suffix/prefix included.
+   * Intended for low-precision, glanceable UI; pair it with the absolute
+   * timestamp in a `title` tooltip for the exact value.
+   */
+  formatToRelative(date: Date, baseDate?: Date): string;
+
   /** Parse an ISO 8601 / RFC 3339 string. Returns `null` for malformed input. */
   parseISO(value: string): Date | null;
 
@@ -82,6 +90,13 @@ export interface DateTimeProvider {
    * payload.
    */
   formatIsoToLocalDateTime(iso: string): string;
+
+  /**
+   * Render an ISO 8601 timestamp as a relative distance from now
+   * ("2 days ago"). Returns the raw input back when it is unparseable, so UI
+   * surfaces never display "Invalid Date".
+   */
+  formatIsoToRelative(iso: string): string;
 
   /** Lower-bound timestamp for a `dd/mm/yyyy` filter input (00:00:00.000). */
   parseDdMmYyyyToStartTimestamp(value: string): number | null;
