@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
@@ -71,28 +71,40 @@ export default function BanksListPage() {
     globalThis.localStorage.setItem(BANKS_VIEW_STORAGE_KEY, view);
   }, [view]);
 
+  const mountedRef = useRef(true);
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const useCase = container.get<SearchBanks>("BackOfficeSearchBanks");
-        const result = await useCase.run();
-        if (cancelled) return;
-        setBanks(result.banks);
-        setNextCursor(result.nextCursor);
-        setState(result.banks.length === 0 ? ViewStatus.EMPTY : ViewStatus.READY);
-      } catch (err) {
-        if (cancelled) return;
-        const fallbackDetail = err instanceof Error ? err.message : "Unknown error";
-        const nextProblem = err instanceof HttpError ? err.problem : genericProblem(fallbackDetail);
-        setProblem(nextProblem);
-        setState(ViewStatus.ERROR);
-      }
-    })();
+    mountedRef.current = true;
     return () => {
-      cancelled = true;
+      mountedRef.current = false;
     };
   }, []);
+
+  const loadBanks = useCallback(async () => {
+    setState(ViewStatus.LOADING);
+    setProblem(null);
+    try {
+      const useCase = container.get<SearchBanks>("BackOfficeSearchBanks");
+      const result = await useCase.run();
+      if (!mountedRef.current) return;
+      setBanks(result.banks);
+      setNextCursor(result.nextCursor);
+      setState(result.banks.length === 0 ? ViewStatus.EMPTY : ViewStatus.READY);
+    } catch (err) {
+      if (!mountedRef.current) return;
+      const fallbackDetail = err instanceof Error ? err.message : "Unknown error";
+      const nextProblem = err instanceof HttpError ? err.problem : genericProblem(fallbackDetail);
+      setProblem(nextProblem);
+      setState(ViewStatus.ERROR);
+    }
+  }, []);
+
+  useEffect(() => {
+    // loadBanks resets state to LOADING before its first await; that initial
+    // setState is intentional (it also drives the Retry path) and runs through
+    // a stable callback, so the cascading-render warning does not apply here.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadBanks();
+  }, [loadBanks]);
 
   const visibleBanks = useMemo(
     () => applySort(applyFilters(banks, filter), sort),
@@ -191,6 +203,21 @@ export default function BanksListPage() {
         data={banks}
         error={problem ?? undefined}
         loading={<BanksListSkeleton view={view} rows={Math.min(pageSize, 8)} />}
+        errorAction={
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              void loadBanks();
+            }}
+            title="Retry loading banks"
+            aria-label="Retry loading banks"
+            data-testid="banks-list__retry"
+          >
+            Retry
+          </Button>
+        }
         emptyVariant="first-run"
         emptyHeading="No banks yet"
         emptyDescription="Create the first bank to get started."
