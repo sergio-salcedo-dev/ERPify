@@ -1,5 +1,8 @@
 # Frontend Guidelines
 
+> **ERPify frontend work is governed by [`../../pwa/DESIGN.md`](../../pwa/DESIGN.md)** — the enterprise-first UX
+> philosophy, persona, UI review mandate, design-system contract (tokens, composites, patterns), and accessibility non-negotiables. That document is authoritative; the cross-project baseline below applies underneath it.
+
 ## HTML
 - Use semantic HTML5 elements
 - Ensure accessibility (ARIA labels, alt text, proper heading hierarchy)

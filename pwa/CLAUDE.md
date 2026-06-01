@@ -1,6 +1,10 @@
 # pwa/CLAUDE.md — ERPify PWA (Next.js 16 App Router)
 
-PWA-scoped guidance. Root [`../CLAUDE.md`](../CLAUDE.md) is authoritative for monorepo conventions, the Docker stack, and the full `make` target list — this file only covers PWA specifics. Also consult [`AGENTS.md`](AGENTS.md) and [`../docs/rules/frontend.md`](../docs/rules/frontend.md).
+PWA-scoped guidance. Root [`../CLAUDE.md`](../CLAUDE.md) is authoritative for monorepo conventions, the Docker stack,
+and the full `make` target list — this file only covers PWA specifics. For UX, [`DESIGN.md`](DESIGN.md) is the
+authoritative source — the **enterprise-first UX philosophy & UI review mandate**, the design-system contract
+(tokens, composites, patterns), and the accessibility non-negotiables all live there.
+Also consult [`../docs/rules/frontend.md`](../docs/rules/frontend.md).
 
 ## Stack
 

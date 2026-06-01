@@ -7,6 +7,60 @@ Lean implementation-facing reference for polishing the ERPify back-office PWA. D
 
 ---
 
+## Product context & enterprise-first UX philosophy
+
+ERPify is a **professional ERP/CRM for the construction industry** — a business application, **not** a marketing website. Its operators (construction company **owners, project managers, site managers, accountants, administrators, back-office staff**) spend **hours a day** inside it moving large volumes of operational data. Every design decision optimizes — in priority order — for:
+
+1. **Efficiency** — fewest steps to finish a task.
+2. **Information density** — see more per screen (the same "density is a feature" rule the Density table below enforces).
+3. **Fast scanning** of large datasets.
+4. **Data visibility** — the important business facts surface first.
+5. **Keyboard-driven workflows** (the keyboard contract in _Principles_ + _Accessibility_).
+6. **Bulk operations.**
+7. **Reduced click count.**
+8. **Predictable, consistent interactions.**
+
+**Prefer professional enterprise patterns over decorative design.** Benchmark quality against **Linear, GitHub, Stripe Dashboard, Vercel, and Notion** and adopt their _underlying usability_ — clear visual hierarchy, consistent spacing, high density, minimal visual noise, strong keyboard support, fast perceived performance, excellent accessibility. **Apply the principles; never copy the appearance.** (This system is Linear-_derived_, not a Linear clone — same discipline.)
+
+### Entity presentation
+
+Entity surfaces — **Customers, Suppliers, Companies, Contacts, Projects, Quotations, Invoices, Purchase Orders, Work Orders, Assets, Employees** — must let an operator **identify a record within milliseconds**:
+
+- Prioritize **recognition over decoration**; surface the single most important business fact first.
+- Make **status, ownership, and key metrics** immediately visible — status through `<StatusBadge>`, identity through `<MonogramAvatar>` + the record name.
+- Avoid excessive whitespace; support rapid scanning of large datasets.
+- Keep actions discoverable **without** clutter: frequent, non-destructive actions stay as direct per-row controls; destructive ones demote into the `⋯` overflow (see the _List view_ pattern).
+
+### Lists, tables, and cards — default preference
+
+**1. Data tables (`<DataTable>`) → 2. dense list views → 3. compact cards.** Avoid large marketing-style cards. When dozens–hundreds of records may exist, prefer a table or dense list with **sorting, filtering, bulk actions, row selection, and keyboard navigation**. Use cards only when they earn a genuine usability benefit (e.g. the responsive narrow-viewport view — see _Card readability over density_).
+
+### Interaction states (every interactive component)
+
+Define and visibly distinguish all of: **default · hover · focus-visible · active · selected · disabled · loading · error.** Affordances must be visually obvious, and **state is never carried by color alone** — always pair with icon, label, or position (an _Accessibility_ non-negotiable). Fetched surfaces route their loading / empty / error states through `<AsyncBoundary>`.
+
+### Responsive priority
+
+| Tier        | Role          | Posture                                                                                                      |
+| ----------- | ------------- | ------------------------------------------------------------------------------------------------------------ |
+| **Desktop** | **primary**   | Large datasets, multi-column layouts, power-user workflows, high-density display.                            |
+| **Tablet**  | **secondary** | Keep productivity-focused layouts; reduce density only when necessary.                                       |
+| **Mobile**  | **tertiary**  | Preserve essential workflows; **reconsider** hierarchy and actions — never just stack the desktop view down. |
+
+Exact thresholds live in the _Breakpoints_ table; the list/table → cards transition at `< 768 px` is the canonical example of "reconsider, don't stack."
+
+---
+
+## UI review mandate
+
+When analyzing, creating, or modifying **any** UI component, do **not** assume the current implementation is correct — **reconsider it from first principles** and propose structural improvements when warranted. Review every component against:
+
+> visual hierarchy · information architecture · information density · accessibility (**WCAG 2.2 AA minimum**) · keyboard navigation · focus management · responsive behavior · discoverability · error prevention · consistency with this design system.
+
+**When proposing UI improvements, deliver, in order:** (1) the UX issues, (2) why they matter, (3) a better structure, (4) the trade-offs, (5) accessibility implications, (6) responsive behavior, (7) keyboard workflows — each aligned with the enterprise-first philosophy above. The objective is software that feels **professional, efficient, scalable, and trustworthy** to people running complex operations every day.
+
+---
+
 ## Reconciliation notes (departures from prior project conventions)
 
 Three deliberate departures from the project's earlier defaults — load-bearing for the polish identity. Documented here so future readers don't undo them by accident.
@@ -566,7 +620,7 @@ A long-term goal is an ESLint rule that flags raw Shadcn primitive use where an 
 
 ## Provisional decisions to confirm
 
-- **Persona.** "Finance/operations back-office operator" pending confirmation. Token-only impact if changed.
+- **Persona.** Defined: construction-industry ERP/CRM operators — owners, project/site managers, accountants, administrators, back-office staff (see _Product context & enterprise-first UX philosophy_ above). Token-only impact if the segment is later narrowed.
 - **Brand hue.** Locked to Linear-derived indigo `#5e6ad2` / `#7170ff`. Token-only change if a stakeholder rebrands.
 - **Persistent sidebar collapse default.** Currently expanded; flip to collapsed if telemetry shows otherwise.
 - **Light-mode ramp tuning.** The light-mode neutrals (`#f7f8f8`, `#f3f4f5`, `#e9eaec`, `#dcdfe3`, `#bfc3ca`) are first-pass. Refine after the first feature surface ships and we see them in context.
