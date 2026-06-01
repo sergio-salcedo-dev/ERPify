@@ -10,6 +10,7 @@ use Erpify\Shared\Domain\Event\DomainEvent;
 use Erpify\Shared\Infrastructure\Persistence\DoctrineDomainEventStore;
 use Erpify\Shared\Infrastructure\Persistence\Entity\StoredDomainEvent;
 use Erpify\Shared\Infrastructure\Persistence\StoredDomainEventRepository;
+use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Uid\Uuid;
@@ -60,7 +61,7 @@ final class DoctrineDomainEventStoreTest extends TestCase
     private function domainEvent(string $aggregateId, string $eventId): DomainEvent
     {
         return new class ($aggregateId, $eventId, new DateTimeImmutable()) extends DomainEvent {
-            #[\Override]
+            #[Override]
             public static function eventName(): string
             {
                 return 'test.event.occurred';
@@ -69,7 +70,7 @@ final class DoctrineDomainEventStoreTest extends TestCase
             /**
              * @return array<string, mixed>
              */
-            #[\Override]
+            #[Override]
             public function toPrimitives(): array
             {
                 return ['aggregateId' => $this->aggregateId()];
