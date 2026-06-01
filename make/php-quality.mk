@@ -119,6 +119,22 @@ php.lint.error-contract: ## Error-contract drift gate
 
 php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.psalm.fix.all php.gherkin php.lint.doctrine php.lint.error-contract ## Full PHP lint sweep
 
+# Check-only sweep for CI / pre-push: the read-only subset of php.quality that is
+# currently green, fanned out in parallel. Two wins over php.quality:
+#   1. Gating — php.quality runs the fixers in APPLY mode (rector process,
+#      cs-fixer fix, phpcbf, psalm --alter), so in an ephemeral CI container it
+#      auto-fixes drift and exits 0; these check variants FAIL on drift instead.
+#   2. Parallel-safe — every prerequisite here is read-only (no src/ writes), so
+#      CI can fan them out with `make -j --output-sync=target` without racing.
+# php.lint.doctrine + php.lint.error-contract still need the running stack
+# (DB + console), which CI already has up from `docker.up.wait.no-build.api`.
+#
+# Deliberately EXCLUDES psalm and phpcs: main has a large un-baselined backlog
+# (psalm ~495 issues, phpcs lines >160) that php.quality masks via `psalm --alter`
+# / phpcbf-with-≤2-tolerance — both auto-fix-and-discard in CI and gate nothing.
+# Gating them needs a baseline / line cleanup first — tracked in issue #95.
+php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.gherkin php.lint.doctrine php.lint.error-contract ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
+
 .PHONY: php.stan php.stan.baseline \
         php.rector php.rector.dry-run \
         php.cs-fixer php.cs-fixer.dry-run \
@@ -128,4 +144,4 @@ php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.psalm.fix.all ph
         php.gherkin php.gherkin.rules \
         php.lint.doctrine php.lint.yaml \
         php.lint.error-contract \
-        php.quality
+        php.quality php.quality.dry-run
