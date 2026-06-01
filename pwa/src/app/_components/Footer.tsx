@@ -1,5 +1,5 @@
 import React from "react";
-import { Logo } from "../atoms/Logo";
+import { Logo } from "@/components/erpify";
 
 export const Footer: React.FC = () => {
   const footerLinks = [
