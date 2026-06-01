@@ -12,6 +12,7 @@ import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { CorrelationIdChip, EmptyState, ProblemDisplay } from "@/components/erpify";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
+import { uuidV7 } from "@/lib/uuidV7";
 import { safeHref } from "@/lib/safeHref";
 import { PersistenceAction, ViewStatus } from "@/context/shared/domain/types/status";
 import { HttpStatus } from "@/context/shared/domain/types/http";
@@ -26,8 +27,8 @@ function genericProblem(detail: string): ProblemDetails {
     title: "Unexpected error",
     status: 0,
     detail,
-    instance: crypto.randomUUID(),
-    "correlation-id": crypto.randomUUID(),
+    instance: uuidV7(),
+    "correlation-id": uuidV7(),
   };
 }
 

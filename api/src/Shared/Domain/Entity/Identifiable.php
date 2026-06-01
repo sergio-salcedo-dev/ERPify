@@ -6,16 +6,19 @@ namespace Erpify\Shared\Domain\Entity;
 
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
-use Symfony\Bridge\Doctrine\IdGenerator\UuidGenerator;
 use Symfony\Component\Serializer\Attribute as Serializer;
 use Symfony\Component\Validator\Constraints as Assert;
 
 trait Identifiable
 {
+    /**
+     * Doctrine "assigned" identifier: the application layer generates the id (UUID v7 via
+     * {@see \Erpify\Shared\Infrastructure\Uuid\SymfonyUuidGenerator}) and assigns it before persist.
+     * No {@see ORM\GeneratedValue} — Doctrine must not overwrite the app-assigned id (it previously
+     * minted a divergent v7 PK, breaking id-based domain-event consumers on creation).
+     */
     #[ORM\Id]
     #[ORM\Column(type: Types::GUID, unique: true)]
-    #[ORM\GeneratedValue(strategy: 'CUSTOM')]
-    #[ORM\CustomIdGenerator(class: UuidGenerator::class)]
     #[Assert\Uuid(strict: true)]
     #[Serializer\Groups(['identifiable'])]
     protected ?string $id = null;

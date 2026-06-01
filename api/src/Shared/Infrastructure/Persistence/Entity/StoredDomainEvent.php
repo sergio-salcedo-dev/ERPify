@@ -21,6 +21,7 @@ class StoredDomainEvent
      * @param array<string, mixed> $body
      */
     public function __construct(
+        string $id,
         #[ORM\Column(length: 190)]
         private string $name,
         #[ORM\Column(length: 36)]
@@ -32,6 +33,9 @@ class StoredDomainEvent
         #[ORM\Column(type: Types::JSON)]
         private array $body,
     ) {
+        // The id is no longer Doctrine-generated (the shared Identifiable trait dropped its
+        // CustomIdGenerator); the store must assign one so the row is never persisted without a PK.
+        $this->id = $id;
     }
 
     public function name(): string

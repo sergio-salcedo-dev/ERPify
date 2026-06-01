@@ -13,6 +13,6 @@ final class SymfonyUuidGenerator implements UuidGenerator
     #[Override]
     public static function generate(): string
     {
-        return Uuid::v4()->toRfc4122();
+        return Uuid::v7()->toRfc4122();
     }
 }

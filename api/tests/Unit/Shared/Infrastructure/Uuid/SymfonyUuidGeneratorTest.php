@@ -8,6 +8,7 @@ use Erpify\Shared\Infrastructure\Uuid\SymfonyUuidGenerator;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Uid\Uuid;
+use Symfony\Component\Uid\UuidV7;
 
 /**
  * @internal
@@ -29,5 +30,14 @@ final class SymfonyUuidGeneratorTest extends TestCase
         $second = SymfonyUuidGenerator::generate();
 
         $this->assertNotSame($first, $second);
+    }
+
+    public function testGeneratesTimeOrderedUuidV7(): void
+    {
+        // App-assigned ids are authoritative and must be UUID v7 so they stay time-ordered and match
+        // the persisted PKs (Doctrine no longer overwrites them). See spec-shared-aggregate-id-mismatch.
+        $value = SymfonyUuidGenerator::generate();
+
+        $this->assertInstanceOf(UuidV7::class, Uuid::fromString($value));
     }
 }
