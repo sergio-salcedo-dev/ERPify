@@ -68,7 +68,10 @@ final class BankRealtimePublisherHandlerTest extends TestCase
         ));
 
         $update = $this->capturedUpdate();
-        $this->assertSame([MercureBankTopic::COLLECTION, MercureBankTopic::forBank(self::BANK_ID)], $update->getTopics());
+        $this->assertSame(
+            [MercureBankTopic::COLLECTION, MercureBankTopic::forBank(self::BANK_ID)],
+            $update->getTopics(),
+        );
         $this->assertTrue($update->isPrivate());
         $this->assertStringContainsString('"type":"bank.updated"', $update->getData());
         $this->assertStringContainsString('"name":"Acme Renamed"', $update->getData());
@@ -79,7 +82,10 @@ final class BankRealtimePublisherHandlerTest extends TestCase
         $this->handler()->onBankDeleted(new BankDeletedDomainEvent(self::BANK_ID, 'event-id'));
 
         $update = $this->capturedUpdate();
-        $this->assertSame([MercureBankTopic::COLLECTION, MercureBankTopic::forBank(self::BANK_ID)], $update->getTopics());
+        $this->assertSame(
+            [MercureBankTopic::COLLECTION, MercureBankTopic::forBank(self::BANK_ID)],
+            $update->getTopics(),
+        );
         $this->assertTrue($update->isPrivate());
 
         $data = $update->getData();
