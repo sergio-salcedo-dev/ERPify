@@ -5,13 +5,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Pencil, Trash2 } from "lucide-react";
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
-import { CopyButton, DataTable } from "@/components/erpify";
+import { CopyButton, DataTable, MonogramAvatar, StatusBadge } from "@/components/erpify";
 import type { DataTableColumn, DataTableSort } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
 import { safeHref } from "@/lib/safeHref";
+import { isRecentlyCreated } from "../_lib/bankRecency";
 import { bankRoutes } from "../_lib/bankRoutes";
 import { DeleteBankButton } from "./DeleteBankButton";
 
@@ -77,13 +78,36 @@ function BanksActionsCell({ row, onBankDeleted }: Readonly<BanksActionsCellProps
 }
 
 const renderShortNameCell = (row: Bank) => (
-  <span className="block truncate" title={row.shortName}>
+  <span className="block truncate font-mono text-xs uppercase" title={row.shortName}>
     {row.shortName}
   </span>
 );
-const renderNameCell = (row: Bank) => row.name;
-const renderCreatedAtCell = (row: Bank) => dateTimeProvider.formatIsoToLocalDateTime(row.createdAt);
-const renderUpdatedAtCell = (row: Bank) => dateTimeProvider.formatIsoToLocalDateTime(row.updatedAt);
+
+const renderNameCell = (row: Bank) => (
+  <div className="banks-table__identity flex min-w-0 items-center gap-2.5">
+    <MonogramAvatar name={row.name} testId={`banks-table__avatar-${row.id}`} />
+    <span className="min-w-0 truncate">{row.name}</span>
+    {isRecentlyCreated(row.createdAt, dateTimeProvider) ? (
+      <StatusBadge
+        variant="info"
+        label="New"
+        className="banks-table__new flex-none"
+        testId={`banks-table__new-${row.id}`}
+      />
+    ) : null}
+  </div>
+);
+
+const renderRelativeCell = (iso: string, testId: string) => (
+  <span title={dateTimeProvider.formatIsoToLocalDateTime(iso)} data-testid={testId}>
+    {dateTimeProvider.formatIsoToRelative(iso)}
+  </span>
+);
+
+const renderCreatedAtCell = (row: Bank) =>
+  renderRelativeCell(row.createdAt, `banks-table__created-${row.id}`);
+const renderUpdatedAtCell = (row: Bank) =>
+  renderRelativeCell(row.updatedAt, `banks-table__updated-${row.id}`);
 
 function buildBanksColumns(onBankDeleted?: (id: string) => void): DataTableColumn<Bank>[] {
   const renderActionsCell = (row: Bank) => (
