@@ -86,7 +86,6 @@ parameters:
         # EntityRepository<T> class-string.
         - identifier: argument.type
           paths:
-              - ../../src/Backoffice/Bank/Domain/Entity/Bank.php
               - ../../src/Shared/Media/Domain/Entity/Media.php
 
         # Bank.nameNormalized: populated by the domain factory, read only by the Doctrine unique
