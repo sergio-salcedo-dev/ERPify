@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Bench\Shared\Infrastructure\Http\EventListener;
 
+use Override;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
@@ -75,6 +76,7 @@ final class ExceptionResponderBenchmarkTest extends WebTestCase
     /**
      * @SuppressWarnings("PHPMD.Superglobals")
      */
+    #[Override]
     protected function setUp(): void
     {
         parent::setUp();

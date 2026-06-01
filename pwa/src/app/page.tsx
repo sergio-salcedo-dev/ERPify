@@ -7,9 +7,9 @@ import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvid
 import { CheckHealth } from "@/context/frontoffice/health/application/CheckHealth";
 import { motion } from "motion/react";
 import { Activity, LayoutDashboard } from "lucide-react";
-import { Navbar } from "@/context/shared/infrastructure/ui/components/organisms/Navbar";
-import { Footer } from "@/context/shared/infrastructure/ui/components/organisms/Footer";
-import { FeatureCard } from "@/context/shared/infrastructure/ui/components/molecules/FeatureCard";
+import { Navbar } from "@/app/_components/Navbar";
+import { Footer } from "@/app/_components/Footer";
+import { FeatureCard } from "@/app/_components/FeatureCard";
 
 export default function LandingPage() {
   const router = useRouter();

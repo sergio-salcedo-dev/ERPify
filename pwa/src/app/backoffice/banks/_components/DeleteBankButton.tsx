@@ -29,6 +29,14 @@ interface DeleteBankButtonProps {
   /** Custom trigger; defaults to a destructive button with a Trash icon. */
   trigger?: ReactElement;
   triggerTestId?: string;
+  /**
+   * Controlled open state. When provided, the dialog is parent-controlled and
+   * renders NO trigger of its own — used by the per-row `⋯` actions menu, where
+   * a menu item (not a button) opens the confirmation. Omit for the standalone
+   * uncontrolled button (detail page).
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export function DeleteBankButton({
@@ -37,11 +45,23 @@ export function DeleteBankButton({
   onDeleted,
   trigger,
   triggerTestId = "banks-detail__delete-button",
+  open: openProp,
+  onOpenChange,
 }: Readonly<DeleteBankButtonProps>) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const isControlled = openProp !== undefined;
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = isControlled ? openProp : internalOpen;
   const [submitting, setSubmitting] = useState(false);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
+
+  function setOpen(next: boolean): void {
+    if (isControlled) {
+      onOpenChange?.(next);
+    } else {
+      setInternalOpen(next);
+    }
+  }
 
   function handleOpenChange(next: boolean): void {
     if (next) {
@@ -91,7 +111,7 @@ export function DeleteBankButton({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger render={trigger ?? defaultTrigger} />
+      {isControlled ? null : <DialogTrigger render={trigger ?? defaultTrigger} />}
       <DialogContent data-testid="banks-detail__delete-dialog">
         <DialogHeader>
           <DialogTitle>Delete bank</DialogTitle>

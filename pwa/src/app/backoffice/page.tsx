@@ -1,8 +1,7 @@
 "use client";
 
 import { Users, Building2, TrendingUp, Clock } from "lucide-react";
-import { StatCard } from "@/context/shared/infrastructure/ui/components/molecules/StatCard";
-import { PlaceholderCard } from "@/context/shared/infrastructure/ui/components/molecules/PlaceholderCard";
+import { EmptyState, StatCard } from "@/components/erpify";
 
 export default function BackOfficeDashboard() {
   const stats = [
@@ -58,15 +57,19 @@ export default function BackOfficeDashboard() {
 
       {/* Placeholder for more content */}
       <div className="dashboard__placeholders grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <PlaceholderCard
-          title="Project Timeline"
-          description="Detailed project tracking and Gantt charts will appear here."
+        <EmptyState
+          variant="first-run"
           icon={Building2}
+          heading="Project Timeline"
+          description="Detailed project tracking and Gantt charts will appear here."
+          className="dashboard__placeholder min-h-[280px]"
         />
-        <PlaceholderCard
-          title="Resource Allocation"
-          description="Manage your machinery and workforce distribution across sites."
+        <EmptyState
+          variant="first-run"
           icon={Users}
+          heading="Resource Allocation"
+          description="Manage your machinery and workforce distribution across sites."
+          className="dashboard__placeholder min-h-[280px]"
         />
       </div>
     </div>

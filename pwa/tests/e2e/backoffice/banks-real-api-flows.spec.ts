@@ -268,6 +268,8 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
     await filterByName(page, runPrefix);
 
     await expect(page.getByTestId(`banks-table__row-${id}`)).toBeVisible();
+    // Delete lives in the per-row overflow (⋯) menu.
+    await page.getByTestId(`banks-table__actions-${id}`).click();
     await page.getByTestId(`banks-table__delete-${id}`).click();
     await page.getByTestId("banks-detail__delete-confirm").click();
 

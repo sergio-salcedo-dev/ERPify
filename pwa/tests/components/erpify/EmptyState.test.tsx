@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { Building2 } from "lucide-react";
 import { EmptyState } from "@/components/erpify/EmptyState";
 
 describe("EmptyState", () => {
@@ -52,5 +53,15 @@ describe("EmptyState", () => {
     expect(path1).toBeTruthy();
     expect(path2).toBeTruthy();
     expect(path1).not.toEqual(path2);
+  });
+
+  it("lets a custom icon override the variant default", () => {
+    const { container: def } = render(
+      <EmptyState variant="first-run" heading="A" description="B" />,
+    );
+    const { container: custom } = render(
+      <EmptyState variant="first-run" heading="A" description="B" icon={Building2} />,
+    );
+    expect(def.querySelector("svg")?.innerHTML).not.toEqual(custom.querySelector("svg")?.innerHTML);
   });
 });

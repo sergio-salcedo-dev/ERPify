@@ -16,8 +16,7 @@ import {
   ChevronRight,
   Wrench,
 } from "lucide-react";
-import { Logo } from "@/context/shared/infrastructure/ui/components/atoms/Logo";
-import { SidebarItem } from "@/context/shared/infrastructure/ui/components/molecules/SidebarItem";
+import { Logo, SidebarItem } from "@/components/erpify";
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
 import { Routes } from "@/context/shared/domain/types/routes";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
