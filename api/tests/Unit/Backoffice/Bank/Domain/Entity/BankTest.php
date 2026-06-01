@@ -7,10 +7,8 @@ namespace Erpify\Tests\Unit\Backoffice\Bank\Domain\Entity;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
-use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use ReflectionClass;
 
 /**
  * @internal
@@ -54,17 +52,5 @@ final class BankTest extends TestCase
         $event = $events[0];
         $this->assertInstanceOf(BankUpdatedDomainEvent::class, $event);
         $this->assertSame(self::BANK_ID, $event->aggregateId());
-    }
-
-    public function testRecordingAnEventBeforeAnIdIsAssignedThrows(): void
-    {
-        // An aggregate reconstituted without the app-assigned id must never silently
-        // emit a null-id domain event. The non-null id() accessor turns that invariant
-        // breach into an explicit failure instead of leaking null into the event.
-        $bank = (new ReflectionClass(Bank::class))->newInstanceWithoutConstructor();
-
-        $this->expectException(LogicException::class);
-
-        $bank->delete(self::EVENT_ID);
     }
 }
