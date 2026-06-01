@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BrowserMercureSubscriber } from "@/context/shared/infrastructure/RealTime/BrowserMercureSubscriber";
 
-/** Minimal EventSource stand-in: captures the last instance and its handlers. */
+/** Opened EventSource stand-ins for the current test (reset in `beforeEach`). */
+const sources: FakeEventSource[] = [];
+const lastSource = (): FakeEventSource | undefined => sources.at(-1);
+
+/** Minimal EventSource stand-in: records itself and exposes its handlers. */
 class FakeEventSource {
-  static last: FakeEventSource | undefined;
   onmessage: ((event: MessageEvent<string>) => void) | null = null;
   onerror: ((event: Event) => void) | null = null;
   readonly url: string;
@@ -11,7 +14,7 @@ class FakeEventSource {
 
   constructor(url: string) {
     this.url = url;
-    FakeEventSource.last = this;
+    sources.push(this);
   }
 
   close(): void {
@@ -21,7 +24,7 @@ class FakeEventSource {
 
 describe("BrowserMercureSubscriber", () => {
   beforeEach(() => {
-    FakeEventSource.last = undefined;
+    sources.length = 0;
     vi.stubGlobal("EventSource", FakeEventSource);
   });
 
@@ -36,17 +39,17 @@ describe("BrowserMercureSubscriber", () => {
       () => {},
     );
 
-    expect(FakeEventSource.last?.url).toContain("topic=urn%3Aerpify%3Abackoffice%3Abanks");
+    expect(lastSource()?.url).toContain("topic=urn%3Aerpify%3Abackoffice%3Abanks");
 
     subscription.close();
-    expect(FakeEventSource.last?.closed).toBe(true);
+    expect(lastSource()?.closed).toBe(true);
   });
 
   it("delivers JSON-parsed message data to the handler", () => {
     const onMessage = vi.fn();
     new BrowserMercureSubscriber().subscribe(["urn:x"], onMessage);
 
-    FakeEventSource.last?.onmessage?.({
+    lastSource()?.onmessage?.({
       data: '{"type":"bank.deleted","id":"abc"}',
     } as MessageEvent<string>);
 
@@ -58,7 +61,7 @@ describe("BrowserMercureSubscriber", () => {
     new BrowserMercureSubscriber().subscribe(["urn:x"], onMessage);
 
     expect(() =>
-      FakeEventSource.last?.onmessage?.({ data: "not-json" } as MessageEvent<string>),
+      lastSource()?.onmessage?.({ data: "not-json" } as MessageEvent<string>),
     ).not.toThrow();
     expect(onMessage).not.toHaveBeenCalled();
   });
@@ -67,7 +70,7 @@ describe("BrowserMercureSubscriber", () => {
     const onError = vi.fn();
     new BrowserMercureSubscriber().subscribe(["urn:x"], () => {}, { onError });
 
-    FakeEventSource.last?.onerror?.(new Event("error"));
+    lastSource()?.onerror?.(new Event("error"));
 
     expect(onError).toHaveBeenCalledTimes(1);
   });
@@ -76,7 +79,7 @@ describe("BrowserMercureSubscriber", () => {
     const nowSpy = vi.spyOn(Date, "now").mockReturnValue(1_000_000);
     const onError = vi.fn();
     new BrowserMercureSubscriber().subscribe(["urn:x"], () => {}, { onError });
-    const source = FakeEventSource.last;
+    const source = lastSource();
 
     source?.onerror?.(new Event("error"));
     source?.onerror?.(new Event("error"));
@@ -91,7 +94,7 @@ describe("BrowserMercureSubscriber", () => {
 
   it("never refreshes when no onError handler is supplied", () => {
     new BrowserMercureSubscriber().subscribe(["urn:x"], () => {});
-    expect(() => FakeEventSource.last?.onerror?.(new Event("error"))).not.toThrow();
+    expect(() => lastSource()?.onerror?.(new Event("error"))).not.toThrow();
   });
 
   it("degrades to a no-op subscription when EventSource is unavailable", () => {
@@ -100,7 +103,7 @@ describe("BrowserMercureSubscriber", () => {
 
     const subscription = new BrowserMercureSubscriber().subscribe(["urn:x"], () => {}, { onError });
 
-    expect(FakeEventSource.last).toBeUndefined();
+    expect(lastSource()).toBeUndefined();
     expect(() => subscription.close()).not.toThrow();
     expect(onError).not.toHaveBeenCalled();
   });
