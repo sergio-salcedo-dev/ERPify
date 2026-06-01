@@ -1,5 +1,4 @@
 import React from "react";
-import { motion } from "motion/react";
 import { Loader2, LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { type ButtonVariantProps } from "@/components/ui/button-variants";
@@ -32,7 +31,7 @@ export const FeatureCard: React.FC<FeatureCardProps> = ({
   children,
 }) => {
   return (
-    <motion.div whileHover={{ scale: 1.02 }} className="feature-card w-full min-w-0">
+    <div className="feature-card w-full min-w-0 transition-transform duration-200 hover:scale-[1.02]">
       <Card className="feature-card__container w-full bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 flex flex-col items-center text-center overflow-hidden">
         <CardHeader className="feature-card__header flex flex-col items-center p-8 pb-0">
           <div className={cn("feature-card__icon-wrapper p-4 rounded-2xl mb-6", iconBg)}>
@@ -65,6 +64,6 @@ export const FeatureCard: React.FC<FeatureCardProps> = ({
           <div className="feature-card__extra-content w-full mt-4">{children}</div>
         </CardContent>
       </Card>
-    </motion.div>
+    </div>
   );
 };
