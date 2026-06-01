@@ -182,100 +182,106 @@ export function BanksFilters({
       <section
         id={panelId}
         aria-label="Bank filter fields"
-        hidden={!open}
-        className="banks-filters__panel border-border bg-muted/20 mt-3 rounded-md border p-3 sm:p-4"
+        aria-hidden={!open}
+        inert={!open ? true : undefined}
+        className="banks-filters__panel grid transition-[grid-template-rows] duration-200 ease-out"
+        style={{ gridTemplateRows: open ? "1fr" : "0fr" }}
         data-testid="banks-filters__panel"
       >
-        <div className="banks-filters__grid grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <FormField name="banks-filters-name" label="Name">
-            <Input
-              type="text"
-              value={nameInput}
-              onChange={updateText("name")}
-              placeholder="e.g. acme"
-              data-testid="banks-filters__name"
-            />
-          </FormField>
-          <FormField name="banks-filters-short-name" label="Short name">
-            <Input
-              type="text"
-              value={shortNameInput}
-              onChange={updateText("shortName")}
-              placeholder="e.g. ACM"
-              data-testid="banks-filters__short-name"
-            />
-          </FormField>
-          <DatePickerField
-            name="banks-filters-created-from"
-            label="Created from"
-            value={filter.createdFrom}
-            onChange={updateDate("createdFrom")}
-            max={filter.createdTo || undefined}
-            testId="banks-filters__created-from"
-          />
-          <DatePickerField
-            name="banks-filters-created-to"
-            label="Created to"
-            value={filter.createdTo}
-            onChange={updateDate("createdTo")}
-            min={filter.createdFrom || undefined}
-            testId="banks-filters__created-to"
-          />
-        </div>
+        <div className="banks-filters__panel-inner overflow-hidden">
+          <div className="banks-filters__panel-fields border-border bg-muted/20 mt-3 rounded-md border p-3 sm:p-4">
+            <div className="banks-filters__grid grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <FormField name="banks-filters-name" label="Name">
+                <Input
+                  type="text"
+                  value={nameInput}
+                  onChange={updateText("name")}
+                  placeholder="e.g. acme"
+                  data-testid="banks-filters__name"
+                />
+              </FormField>
+              <FormField name="banks-filters-short-name" label="Short name">
+                <Input
+                  type="text"
+                  value={shortNameInput}
+                  onChange={updateText("shortName")}
+                  placeholder="e.g. ACM"
+                  data-testid="banks-filters__short-name"
+                />
+              </FormField>
+              <DatePickerField
+                name="banks-filters-created-from"
+                label="Created from"
+                value={filter.createdFrom}
+                onChange={updateDate("createdFrom")}
+                max={filter.createdTo || undefined}
+                testId="banks-filters__created-from"
+              />
+              <DatePickerField
+                name="banks-filters-created-to"
+                label="Created to"
+                value={filter.createdTo}
+                onChange={updateDate("createdTo")}
+                min={filter.createdFrom || undefined}
+                testId="banks-filters__created-to"
+              />
+            </div>
 
-        <div
-          className="banks-filters__sort mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2"
-          data-testid="banks-filters__sort"
-        >
-          <FormField name="banks-filters-sort-by" label="Sort by">
-            <select
-              className={selectClassName}
-              value={sortColumnValue}
-              onChange={handleSortColumnChange}
-              aria-label="Sort by"
-              title="Sort by"
-              data-testid="banks-filters__sort-by"
+            <div
+              className="banks-filters__sort mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2"
+              data-testid="banks-filters__sort"
             >
-              <option value={NONE_SORT_VALUE}>None</option>
-              {BANKS_SORTABLE_COLUMNS.map((column) => (
-                <option key={column.id} value={column.id}>
-                  {column.label}
-                </option>
-              ))}
-            </select>
-          </FormField>
-          <FormField name="banks-filters-sort-direction" label="Direction">
-            <select
-              className={selectClassName}
-              value={sortDirectionValue}
-              onChange={handleSortDirectionChange}
-              disabled={sortDirectionDisabled}
-              aria-label="Sort direction"
-              title="Sort direction"
-              data-testid="banks-filters__sort-direction"
-            >
-              <option value={SortDirection.ASC}>Ascending</option>
-              <option value={SortDirection.DESC}>Descending</option>
-            </select>
-          </FormField>
-        </div>
+              <FormField name="banks-filters-sort-by" label="Sort by">
+                <select
+                  className={selectClassName}
+                  value={sortColumnValue}
+                  onChange={handleSortColumnChange}
+                  aria-label="Sort by"
+                  title="Sort by"
+                  data-testid="banks-filters__sort-by"
+                >
+                  <option value={NONE_SORT_VALUE}>None</option>
+                  {BANKS_SORTABLE_COLUMNS.map((column) => (
+                    <option key={column.id} value={column.id}>
+                      {column.label}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+              <FormField name="banks-filters-sort-direction" label="Direction">
+                <select
+                  className={selectClassName}
+                  value={sortDirectionValue}
+                  onChange={handleSortDirectionChange}
+                  disabled={sortDirectionDisabled}
+                  aria-label="Sort direction"
+                  title="Sort direction"
+                  data-testid="banks-filters__sort-direction"
+                >
+                  <option value={SortDirection.ASC}>Ascending</option>
+                  <option value={SortDirection.DESC}>Descending</option>
+                </select>
+              </FormField>
+            </div>
 
-        {canReset ? (
-          <div className="banks-filters__actions mt-3 flex justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={onReset}
-              aria-label="Reset filters and sort"
-              title="Reset filters and sort"
-              className="w-full sm:w-auto"
-              data-testid="banks-filters__reset"
-            >
-              Reset
-            </Button>
+            {canReset ? (
+              <div className="banks-filters__actions mt-3 flex justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={onReset}
+                  aria-label="Reset filters and sort"
+                  title="Reset filters and sort"
+                  className="w-full sm:w-auto"
+                  data-testid="banks-filters__reset"
+                >
+                  Reset
+                </Button>
+              </div>
+            ) : null}
           </div>
-        ) : null}
+        </div>
       </section>
     </section>
   );
