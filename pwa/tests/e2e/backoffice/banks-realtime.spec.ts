@@ -86,13 +86,7 @@ test.describe("BackOffice - Banks real-time sync via Mercure (real API)", () => 
     await api.dispose();
   });
 
-  // FIXME(fix/shared-aggregate-id-mismatch): blocked by a pre-existing bug, not by this
-  // feature. On CREATE the persisted entity id (Doctrine CustomIdGenerator -> UUID v7) differs
-  // from the id carried by BankCreatedDomainEvent (app-pre-generated UUID v4 in Bank::create via
-  // SymfonyUuidGenerator), so the Mercure payload's id never matches the row testid (real id) and
-  // the live row is never located. Update & delete are unaffected (they load the entity by its
-  // real id first) — those four tests pass. Re-enable once the id-mismatch fix lands and rebase.
-  test.fixme("list — a bank CREATED by another client appears live", async ({ page }) => {
+  test("list — a bank CREATED by another client appears live", async ({ page }) => {
     const connected = waitForMercureConnected(page);
     await openListFilteredByPrefix(page, runPrefix);
     await connected;

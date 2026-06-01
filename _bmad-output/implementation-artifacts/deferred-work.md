@@ -16,15 +16,18 @@ Collected during quick-dev. Not part of the current story's shippable scope.
   so the happy path is covered. If a TTL is later added to the cookie, add an
   `onerror` re-authorize hook in `BrowserMercureSubscriber` / `useBankRealtime`.
 - **E2E coverage (Playwright).** Added `pwa/tests/e2e/backoffice/banks-realtime.spec.ts`:
-  the API context plays "the other client", the browser observes live updates. 4/5 pass
-  (list+detail update/delete); the create-live test is `test.fixme()` — see next item.
-- **BLOCKER for create-live → `fix/shared-aggregate-id-mismatch` (must merge first).**
-  On CREATE the persisted entity id (Doctrine `CustomIdGenerator` → UUID v7) differs from
-  the id in `BankCreatedDomainEvent` (app-pre-generated UUID v4 via `SymfonyUuidGenerator`
-  in `Bank::create`), so the Mercure payload's id never matches the row keyed by the real
-  id. Pre-existing bug in the shared `Identifiable` trait; this feature is the first
-  id-matching consumer. Update/delete unaffected. Full analysis + chosen fix in that
-  worktree's `HANDOFF-aggregate-id-mismatch.md`. Re-enable the fixme test after it lands.
+  the API context plays "the other client", the browser observes live updates. All 5 pass
+  (list create/update/delete + detail update/delete) — the create-live test is now active
+  (see resolved blocker below).
+- **RESOLVED blocker for create-live → `fix/shared-aggregate-id-mismatch` (merged).**
+  On CREATE the persisted entity id used to differ from the id in `BankCreatedDomainEvent`
+  (Doctrine `CustomIdGenerator` → UUID v7 vs. app-pre-generated UUID v4 via
+  `SymfonyUuidGenerator` in `Bank::create`), so the Mercure payload's id never matched the
+  row keyed by the real id. The fix (`fix(app): make app-assigned uuid v7 authoritative
+  end-to-end`, commit `166a8a9`) makes the app-assigned UUID v7 the single source of truth
+  end-to-end — Doctrine no longer overwrites it at flush, so the create event's aggregate id
+  equals the persisted PK (locked by `BankCreateEventIdMatchesPersistedPkTest`). This branch
+  was rebased onto that fix and the `test.fixme()` re-enabled.
 - **Infra fix included here:** `compose.yaml` `messenger_worker` was missing
   `MERCURE_URL`/`MERCURE_JWT_SECRET`, so async Mercure publishes failed (`Failed to send an
   update`) in every environment. Added, mirroring the `php` service.
