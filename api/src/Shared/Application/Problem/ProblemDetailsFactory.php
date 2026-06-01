@@ -145,7 +145,17 @@ final readonly class ProblemDetailsFactory
         Response::HTTP_TOO_MANY_REQUESTS => 'rate-limited',
     ];
 
-    private const array RESERVED_KEYS = ['type', 'title', 'status', 'detail', 'instance', 'correlation-id', 'violations', 'debug', 'truncated'];
+    private const array RESERVED_KEYS = [
+        'type',
+        'title',
+        'status',
+        'detail',
+        'instance',
+        'correlation-id',
+        'violations',
+        'debug',
+        'truncated',
+    ];
 
     private const string DEBUG_MODE_FULL = 'full';
 
@@ -168,7 +178,8 @@ final readonly class ProblemDetailsFactory
      * grep by `instance` for the per-error correlation, `correlation_id` for the request trail,
      * and `original_type` for the dropped value's PHP shape.
      */
-    private const string SENTINEL_LOG_MESSAGE = 'DomainException context value substituted with unserializable sentinel.';
+    private const string SENTINEL_LOG_MESSAGE
+        = 'DomainException context value substituted with unserializable sentinel.';
 
     /**
      * hard upper bound on the JSON-encoded Problem Details body, in bytes.
@@ -208,6 +219,7 @@ final readonly class ProblemDetailsFactory
     /**
      * @SuppressWarnings("PHPMD.CyclomaticComplexity")
      * @SuppressWarnings("PHPMD.NPathComplexity")
+     * @SuppressWarnings("PHPMD.ExcessiveMethodLength")
      */
     public function fromThrowable(Throwable $throwable, string $correlationId, string $instance): ProblemDetails
     {
@@ -220,49 +232,82 @@ final readonly class ProblemDetailsFactory
         // identical (pinned by ConstantTimeAuthBranchingContractTest). Sharing a single
         // post-match wrap would let an attacker time-distinguish the 401/403 bridges.
         return match (true) {
-            $throwable instanceof DomainException => $this->applyBodyCap($this->withDebug(
-                $this->buildDomainExceptionResponse($throwable, $correlationId, $instance),
-                $debug,
-            )),
-            $validationException instanceof ValidationFailedException => $this->applyBodyCap($this->withDebug(new ProblemDetails(
-                type: 'validation-failed',
-                title: 'Validation failed.',
-                status: Response::HTTP_BAD_REQUEST,
-                detail: null,
-                instance: $instance,
-                correlationId: $correlationId,
-                extensions: ['violations' => $this->buildViolations($validationException->getViolations())],
-            ), $debug)),
-            $throwable instanceof AccessDeniedException => $this->applyBodyCap($this->withDebug($this->buildBridgeResponse(
-                type: 'forbidden',
-                status: Response::HTTP_FORBIDDEN,
-                title: '' !== $message ? $message : 'Access denied.',
-                correlationId: $correlationId,
-                instance: $instance,
-            ), $debug)),
-            $throwable instanceof AuthenticationException => $this->applyBodyCap($this->withDebug($this->buildBridgeResponse(
-                type: 'unauthenticated',
-                status: Response::HTTP_UNAUTHORIZED,
-                title: '' !== $message ? $message : 'Authentication required.',
-                correlationId: $correlationId,
-                instance: $instance,
-            ), $debug)),
-            $throwable instanceof HttpExceptionInterface => $this->applyBodyCap($this->withDebug($this->buildBridgeResponse(
-                type: self::HTTP_STATUS_TYPE_MAP[$throwable->getStatusCode()] ?? 'http-error',
-                status: $throwable->getStatusCode(),
-                title: '' !== $message ? $message : 'An HTTP error occurred.',
-                correlationId: $correlationId,
-                instance: $instance,
-            ), $debug)),
-            default => $this->applyBodyCap($this->withDebug(new ProblemDetails(
-                type: 'unhandled-exception',
-                title: $this->resolveUnhandledTitle($throwable),
-                status: Response::HTTP_INTERNAL_SERVER_ERROR,
-                detail: null,
-                instance: $instance,
-                correlationId: $correlationId,
-                extensions: [],
-            ), $debug)),
+            $throwable instanceof DomainException => $this->applyBodyCap(
+                $this->withDebug(
+                    $this->buildDomainExceptionResponse($throwable, $correlationId, $instance),
+                    $debug,
+                ),
+            ),
+            $validationException instanceof ValidationFailedException => $this->applyBodyCap(
+                $this->withDebug(
+                    new ProblemDetails(
+                        type: 'validation-failed',
+                        title: 'Validation failed.',
+                        status: Response::HTTP_BAD_REQUEST,
+                        detail: null,
+                        instance: $instance,
+                        correlationId: $correlationId,
+                        extensions: ['violations' => $this->buildViolations($validationException->getViolations())],
+                    ),
+                    $debug,
+                ),
+            ),
+            $throwable instanceof AccessDeniedException => $this->applyBodyCap(
+                $this->withDebug(
+                    $this->buildBridgeResponse(
+                        type: 'forbidden',
+                        status: Response::HTTP_FORBIDDEN,
+                        title: '' !== $message
+                            ? $message
+                            : 'Access denied.',
+                        correlationId: $correlationId,
+                        instance: $instance,
+                    ),
+                    $debug,
+                ),
+            ),
+            $throwable instanceof AuthenticationException => $this->applyBodyCap(
+                $this->withDebug(
+                    $this->buildBridgeResponse(
+                        type: 'unauthenticated',
+                        status: Response::HTTP_UNAUTHORIZED,
+                        title: '' !== $message
+                            ? $message
+                            : 'Authentication required.',
+                        correlationId: $correlationId,
+                        instance: $instance,
+                    ),
+                    $debug,
+                ),
+            ),
+            $throwable instanceof HttpExceptionInterface => $this->applyBodyCap(
+                $this->withDebug(
+                    $this->buildBridgeResponse(
+                        type: self::HTTP_STATUS_TYPE_MAP[$throwable->getStatusCode()] ?? 'http-error',
+                        status: $throwable->getStatusCode(),
+                        title: '' !== $message
+                            ? $message
+                            : 'An HTTP error occurred.',
+                        correlationId: $correlationId,
+                        instance: $instance,
+                    ),
+                    $debug,
+                ),
+            ),
+            default => $this->applyBodyCap(
+                $this->withDebug(
+                    new ProblemDetails(
+                        type: 'unhandled-exception',
+                        title: $this->resolveUnhandledTitle($throwable),
+                        status: Response::HTTP_INTERNAL_SERVER_ERROR,
+                        detail: null,
+                        instance: $instance,
+                        correlationId: $correlationId,
+                        extensions: [],
+                    ),
+                    $debug,
+                ),
+            ),
         };
     }
 
@@ -520,7 +565,13 @@ final readonly class ProblemDetailsFactory
      * Staging: 2-key map (`exception_class`, `message`) only — NO `file`, NO `line`, NO chain.
      * Prod (or unrecognised env): `null` — caller MUST NOT add a `debug` extension.
      *
-     * @return array{exception_class: string, message: string, file: string, line: int, previous_chain: list<array{exception_class: string, message: string, file: string, line: int}>}|array{exception_class: string, message: string}|null
+     * @return array{
+     *     exception_class: string,
+     *     message: string,
+     *     file: string,
+     *     line: int,
+     *     previous_chain: list<array{exception_class: string, message: string, file: string, line: int}>,
+     * }|array{exception_class: string, message: string}|null
      */
     private function buildDebugExtension(Throwable $e): ?array
     {
@@ -601,7 +652,13 @@ final readonly class ProblemDetailsFactory
      * is `null` (prod / unrecognised env), the base `ProblemDetails` is returned unchanged so
      * production bodies never carry a `debug` key.
      *
-     * @param array{exception_class: string, message: string, file: string, line: int, previous_chain: list<array{exception_class: string, message: string, file: string, line: int}>}|array{exception_class: string, message: string}|null $debug
+     * @param array{
+     *     exception_class: string,
+     *     message: string,
+     *     file: string,
+     *     line: int,
+     *     previous_chain: list<array{exception_class: string, message: string, file: string, line: int}>,
+     * }|array{exception_class: string, message: string}|null $debug
      */
     private function withDebug(ProblemDetails $base, ?array $debug): ProblemDetails
     {
@@ -691,7 +748,9 @@ final readonly class ProblemDetailsFactory
 
         $extensions = $problemDetails->extensions;
 
-        while (\strlen($this->encodeBody($core + $extensions + [self::TRUNCATED_MARKER_KEY => true])) > self::BODY_BYTE_CAP) {
+        while (
+            \strlen($this->encodeBody($core + $extensions + [self::TRUNCATED_MARKER_KEY => true])) > self::BODY_BYTE_CAP
+        ) {
             if ([] === $extensions) {
                 throw new ProblemBodyTooLargeException(\sprintf(
                     'Problem Details body exceeds %d-byte cap on the required core fields alone.',

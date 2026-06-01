@@ -129,11 +129,14 @@ php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.psalm.fix.all ph
 # php.lint.doctrine + php.lint.error-contract still need the running stack
 # (DB + console), which CI already has up from `docker.up.wait.no-build.api`.
 #
-# Deliberately EXCLUDES psalm and phpcs: main has a large un-baselined backlog
-# (psalm ~495 issues, phpcs lines >160) that php.quality masks via `psalm --alter`
-# / phpcbf-with-≤2-tolerance — both auto-fix-and-discard in CI and gate nothing.
-# Gating them needs a baseline / line cleanup first — tracked in issue #95.
-php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.gherkin php.lint.doctrine php.lint.error-contract ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
+# phpcs IS gated here via php.cs.dry-run: its line-length backlog was cleaned up
+# (all lines ≤120), so plain `phpcs` now FAILS on any new >120 (warning) / >160
+# (error) line instead of being masked by phpcbf's `exit ≤2` tolerance.
+#
+# Still EXCLUDES psalm: main has a large un-baselined backlog (~495 issues) that
+# php.quality masks via `psalm --alter` (auto-fix-and-discard in CI — gates
+# nothing). Gating it needs an errorBaseline first — tracked in issue #97.
+php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.doctrine php.lint.error-contract ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
 
 .PHONY: php.stan php.stan.baseline \
         php.rector php.rector.dry-run \
