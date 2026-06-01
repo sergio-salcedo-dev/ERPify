@@ -56,6 +56,7 @@ services:
       target: dev
       args:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-https://localhost}
+        NEXT_PUBLIC_APP_ENV: ${APP_ENV:-dev}
     volumes:
       - ./pwa:/app/pwa
       - pwa_node_modules:/app/pwa/node_modules
@@ -66,6 +67,7 @@ services:
       - pwa_next_e2e:/app/pwa/.next-e2e
     environment:
       NODE_ENV: development
+      NEXT_PUBLIC_APP_ENV: ${APP_ENV:-dev}
     healthcheck:
       test:
         [

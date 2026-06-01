@@ -47,6 +47,9 @@ RUN mkdir -p public
 ARG NEXT_PUBLIC_API_BASE_URL=https://localhost
 ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
 
+ARG NEXT_PUBLIC_APP_ENV=dev
+ENV NEXT_PUBLIC_APP_ENV=${NEXT_PUBLIC_APP_ENV}
+
 RUN npm run build
 
 # Production — copy standalone output (same idea as upstream `prod` stage)

@@ -65,6 +65,7 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-https://localhost}
+        NEXT_PUBLIC_APP_ENV: ${APP_ENV:-dev}
     environment:
       SYMFONY_INTERNAL_URL: http://php:80
     depends_on:
