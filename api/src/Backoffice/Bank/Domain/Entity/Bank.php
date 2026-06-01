@@ -9,6 +9,7 @@ use DateTimeInterface;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
+use Erpify\Backoffice\Bank\Domain\Event\BankDeletedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
 use Erpify\Shared\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Domain\ValueObject\NormalizedText;
@@ -159,5 +160,10 @@ class Bank extends AggregateRoot
             $this->storedObjectContentHash,
             $this->storedObjectMimeType,
         ));
+    }
+
+    public function delete(string $deleteEventId): void
+    {
+        $this->record(new BankDeletedDomainEvent($this->id, $deleteEventId));
     }
 }

@@ -31,6 +31,7 @@
     </ClassMustBeFinal>
     <PossiblyNullArgument>
       <code><![CDATA[$this->id]]></code>
+      <code><![CDATA[$this->id]]></code>
     </PossiblyNullArgument>
     <PossiblyUnusedMethod>
       <code><![CDATA[getName]]></code>
@@ -60,6 +61,11 @@
   <file src="../../src/Backoffice/Bank/Infrastructure/Controller/BankPutController.php">
     <UnusedClass>
       <code><![CDATA[BankPutController]]></code>
+    </UnusedClass>
+  </file>
+  <file src="../../src/Backoffice/Bank/Infrastructure/Controller/BankRealtimeAuthorizeController.php">
+    <UnusedClass>
+      <code><![CDATA[BankRealtimeAuthorizeController]]></code>
     </UnusedClass>
   </file>
   <file src="../../src/Backoffice/Bank/Infrastructure/Controller/BankSearchController.php">

@@ -28,6 +28,7 @@ import { ViewStatus } from "@/context/shared/domain/types/status";
 import { HttpStatus } from "@/context/shared/domain/types/http";
 import { bankRoutes } from "../_lib/bankRoutes";
 import { DeleteBankButton } from "../_components/DeleteBankButton";
+import { bankTopics, useBankRealtime } from "@/context/backoffice/bank/infrastructure/bankRealtime";
 
 type State = ViewStatus;
 
@@ -68,6 +69,22 @@ export default function BankDetailPage() {
     toastNotifier.success("Bank deleted", bank ? { description: bank.name } : undefined);
     router.push(bankRoutes.list);
   }
+
+  // Real-time sync from OTHER clients (Mercure): reflect remote edits live, and
+  // on a remote delete fall through to the same redirect-to-list flow as a local
+  // delete so the now-gone id never refetches into a "not found" flash.
+  useBankRealtime(id ? [bankTopics.detail(id)] : [], {
+    onUpdated: (incoming) => {
+      if (incoming.id === id) {
+        setBank(incoming);
+      }
+    },
+    onDeleted: (deletedId) => {
+      if (deletedId === id && !redirecting) {
+        handleDeleted();
+      }
+    },
+  });
 
   useEffect(() => {
     if (!id || redirecting) return;

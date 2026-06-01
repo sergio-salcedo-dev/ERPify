@@ -35,6 +35,7 @@ export const API_ENDPOINTS = {
       DETAILS: bankPath,
       UPDATE: bankPath,
       DELETE: bankPath,
+      REALTIME_AUTHORIZE: `${BACKOFFICE_PREFIX}/banks/realtime/authorize`,
     },
   },
   FRONTOFFICE: {
