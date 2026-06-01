@@ -147,7 +147,7 @@ final class BankRealtimePublisherHandlerTest extends TestCase
         $handler->onBankUpdated($event);
 
         $this->assertCount(2, $payloads);
-        $this->assertSame($payloads[0], $payloads[1]);
+        $this->assertCount(1, \array_unique($payloads), 're-handling must publish a byte-identical payload');
     }
 
     private function handler(): BankRealtimePublisherHandler
