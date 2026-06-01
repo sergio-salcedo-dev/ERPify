@@ -13,27 +13,22 @@ const CREATED = Bank.fromPrimitives({
   updatedAt: "2026-01-01T10:00:00Z",
 });
 
-const push = vi.fn();
-const refresh = vi.fn();
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push, refresh, back: vi.fn() }),
-}));
+const push = vi.hoisted(() => vi.fn());
+const refresh = vi.hoisted(() => vi.fn());
+vi.mock("next/navigation", async () => (await import("./_mocks")).routerMock({ push, refresh }));
 
-const createRun = vi.fn();
-const updateRun = vi.fn();
-vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", () => ({
-  container: {
-    get: (token: string) => {
-      if (token === "BackOfficeCreateBank") return { run: createRun };
-      if (token === "BackOfficeUpdateBank") return { run: updateRun };
-      throw new Error(`Unexpected DI token ${token}`);
-    },
-  },
-}));
+const createRun = vi.hoisted(() => vi.fn());
+const updateRun = vi.hoisted(() => vi.fn());
+vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", async () =>
+  (await import("./_mocks")).containerMock({
+    BackOfficeCreateBank: { run: createRun },
+    BackOfficeUpdateBank: { run: updateRun },
+  }),
+);
 
-vi.mock("@/context/shared/infrastructure/Notification/Toast", () => ({
-  toastNotifier: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
-}));
+vi.mock("@/context/shared/infrastructure/Notification/Toast", async () =>
+  (await import("./_mocks")).toastNotifierMock(),
+);
 
 describe("BankForm — feedback", () => {
   beforeEach(() => {

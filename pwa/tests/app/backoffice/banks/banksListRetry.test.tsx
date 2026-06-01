@@ -3,9 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import BanksListPage from "@/app/backoffice/banks/page";
 import { Bank } from "@/context/backoffice/bank/domain/Bank";
 
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), back: vi.fn() }),
-}));
+vi.mock("next/navigation", async () => (await import("./_mocks")).routerMock());
 
 const ACME = Bank.fromPrimitives({
   id: "11111111-1111-4111-8111-111111111111",
@@ -15,19 +13,14 @@ const ACME = Bank.fromPrimitives({
   updatedAt: "2026-04-15T14:30:00Z",
 });
 
-const searchRun = vi.fn();
-vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", () => ({
-  container: {
-    get: (token: string) => {
-      if (token === "BackOfficeSearchBanks") return { run: searchRun };
-      throw new Error(`Unexpected DI token ${token}`);
-    },
-  },
-}));
+const searchRun = vi.hoisted(() => vi.fn());
+vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", async () =>
+  (await import("./_mocks")).containerMock({ BackOfficeSearchBanks: { run: searchRun } }),
+);
 
-vi.mock("@/context/shared/infrastructure/Notification/Toast", () => ({
-  toastNotifier: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
-}));
+vi.mock("@/context/shared/infrastructure/Notification/Toast", async () =>
+  (await import("./_mocks")).toastNotifierMock(),
+);
 
 describe("BanksListPage — retry on error", () => {
   beforeEach(() => {

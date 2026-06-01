@@ -2,23 +2,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import BanksListPage from "@/app/backoffice/banks/page";
 
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), back: vi.fn() }),
-}));
+vi.mock("next/navigation", async () => (await import("./_mocks")).routerMock());
 
-const searchRun = vi.fn();
-vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", () => ({
-  container: {
-    get: (token: string) => {
-      if (token === "BackOfficeSearchBanks") return { run: searchRun };
-      throw new Error(`Unexpected DI token ${token}`);
-    },
-  },
-}));
+const searchRun = vi.hoisted(() => vi.fn());
+vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", async () =>
+  (await import("./_mocks")).containerMock({ BackOfficeSearchBanks: { run: searchRun } }),
+);
 
-vi.mock("@/context/shared/infrastructure/Notification/Toast", () => ({
-  toastNotifier: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
-}));
+vi.mock("@/context/shared/infrastructure/Notification/Toast", async () =>
+  (await import("./_mocks")).toastNotifierMock(),
+);
 
 describe("BanksListPage — loading skeleton", () => {
   beforeEach(() => {
