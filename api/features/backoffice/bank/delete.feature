@@ -11,9 +11,18 @@ Feature: Delete a bank
     {"name": "Bank To Delete", "shortName": "BTD"}
     """
     And the response status code should be 201
-#    When I send a DELETE request to "/backoffice/banks/{bankId}"
-#    Then the response status code should be 204
+    When I send a "DELETE" request to "/backoffice/banks/{value}" using the JSON node "data.id" from the previous response
+    Then the response status code should be 204
 
-#  Scenario: Delete a bank that does not exist returns 404
-#    When I send a DELETE request to "/backoffice/banks/00000000-0000-7000-8000-000000000000"
-#    Then the response status code should be 404
+  Scenario: Delete a bank that does not exist returns a 404 bank-not-found Problem Details body
+    When I send a "DELETE" request to "/backoffice/banks/2e6d865c-17b0-476a-85f2-037bf6d3b3dc"
+    Then the response status code should be 404
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
+    And the response should be in JSON
+    And the JSON node "type" should be equal to "bank-not-found"
+    And the JSON node "title" should be equal to "Bank with id <2e6d865c-17b0-476a-85f2-037bf6d3b3dc> not found."
+    And the JSON node "status" should be equal to the number 404
+    And the JSON node "bankId" should be equal to "2e6d865c-17b0-476a-85f2-037bf6d3b3dc"
+    And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
+    And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
