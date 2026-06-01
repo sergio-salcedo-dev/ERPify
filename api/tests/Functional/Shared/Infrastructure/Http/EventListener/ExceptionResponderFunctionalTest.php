@@ -43,7 +43,11 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
 
         $response = $kernelBrowser->getResponse();
 
-        $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND, $response->getStatusCode(), (string) $response->getContent());
+        $this->assertSame(
+            \Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND,
+            $response->getStatusCode(),
+            (string) $response->getContent(),
+        );
         $this->assertSame(self::PROBLEM_JSON_CONTENT_TYPE, $response->headers->get('Content-Type'));
 
         $cacheControl = $response->headers->get('Cache-Control');
@@ -55,7 +59,8 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         $this->assertSame(
             ['type', 'title', 'status', 'instance', 'correlation-id', 'bankId', 'debug'],
             \array_keys($body),
-            'Body key order must match the canonical contract (`type, title, status, [detail], instance, correlation-id, <extensions>`); '
+            'Body key order must match the canonical contract '
+            . '(`type, title, status, [detail], instance, correlation-id, <extensions>`); '
             . '`debug` is appended LAST in `<extensions>` for the `test` env.',
         );
         $this->assertBodyEquals('not-found', $body, 'type');
@@ -74,7 +79,11 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
 
         $response = $kernelBrowser->getResponse();
 
-        $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_INTERNAL_SERVER_ERROR, $response->getStatusCode(), (string) $response->getContent());
+        $this->assertSame(
+            \Symfony\Component\HttpFoundation\Response::HTTP_INTERNAL_SERVER_ERROR,
+            $response->getStatusCode(),
+            (string) $response->getContent(),
+        );
         $this->assertSame(self::PROBLEM_JSON_CONTENT_TYPE, $response->headers->get('Content-Type'));
 
         $body = $this->decodeBody($response->getContent());
@@ -127,7 +136,11 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         );
 
         $response = $kernelBrowser->getResponse();
-        $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND, $response->getStatusCode(), (string) $response->getContent());
+        $this->assertSame(
+            \Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND,
+            $response->getStatusCode(),
+            (string) $response->getContent(),
+        );
         $this->assertSame(self::PROBLEM_JSON_CONTENT_TYPE, $response->headers->get('Content-Type'));
 
         $headerValue = $response->headers->get('X-Correlation-Id');
@@ -154,7 +167,11 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         $kernelBrowser->request(Request::METHOD_GET, self::THROW_NOT_FOUND_URI);
 
         $response = $kernelBrowser->getResponse();
-        $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND, $response->getStatusCode(), (string) $response->getContent());
+        $this->assertSame(
+            \Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND,
+            $response->getStatusCode(),
+            (string) $response->getContent(),
+        );
 
         $headerValue = $response->headers->get('X-Correlation-Id');
         $this->assertIsString($headerValue);
@@ -243,7 +260,11 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         $kernelBrowser->request(Request::METHOD_GET, self::THROW_NOT_FOUND_URI);
 
         $response = $kernelBrowser->getResponse();
-        $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND, $response->getStatusCode(), (string) $response->getContent());
+        $this->assertSame(
+            \Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND,
+            $response->getStatusCode(),
+            (string) $response->getContent(),
+        );
 
         $logRecord = $this->singleLogRecord($bufferingLogger);
         $this->assertSame(LogLevel::WARNING, $logRecord['level']);
@@ -391,7 +412,11 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         $kernelBrowser->request(Request::METHOD_GET, self::THROW_RUNTIME_URI);
 
         $response = $kernelBrowser->getResponse();
-        $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_INTERNAL_SERVER_ERROR, $response->getStatusCode(), (string) $response->getContent());
+        $this->assertSame(
+            \Symfony\Component\HttpFoundation\Response::HTTP_INTERNAL_SERVER_ERROR,
+            $response->getStatusCode(),
+            (string) $response->getContent(),
+        );
 
         $body = $this->decodeBody($response->getContent());
 
@@ -454,7 +479,11 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         );
 
         $response = $kernelBrowser->getResponse();
-        $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND, $response->getStatusCode(), (string) $response->getContent());
+        $this->assertSame(
+            \Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND,
+            $response->getStatusCode(),
+            (string) $response->getContent(),
+        );
 
         // Light-touch sanity: with an allowed cross-origin set, Nelmio's response listener still
         // fires on the error response.
@@ -477,7 +506,11 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
 
         $response = $kernelBrowser->getResponse();
 
-        $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND, $response->getStatusCode(), (string) $response->getContent());
+        $this->assertSame(
+            \Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND,
+            $response->getStatusCode(),
+            (string) $response->getContent(),
+        );
         $this->assertSame(self::PROBLEM_JSON_CONTENT_TYPE, $response->headers->get('Content-Type'));
 
         $body = $this->decodeBody($response->getContent());
@@ -488,7 +521,11 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         $this->assertSame('kept', $body['safe_field']);
 
         $rawBody = (string) $response->getContent();
-        $this->assertStringNotContainsString('sensitive', $rawBody, 'denylisted values must not appear anywhere in the encoded body.');
+        $this->assertStringNotContainsString(
+            'sensitive',
+            $rawBody,
+            'denylisted values must not appear anywhere in the encoded body.',
+        );
     }
 
     /**
@@ -505,21 +542,41 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
 
         $response = $kernelBrowser->getResponse();
 
-        $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND, $response->getStatusCode(), (string) $response->getContent());
+        $this->assertSame(
+            \Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND,
+            $response->getStatusCode(),
+            (string) $response->getContent(),
+        );
         $this->assertSame(self::PROBLEM_JSON_CONTENT_TYPE, $response->headers->get('Content-Type'));
 
         $body = $this->decodeBody($response->getContent());
 
         $this->assertArrayHasKey('cb', $body);
         $this->assertArrayHasKey('proxy', $body);
-        $this->assertSame('[unserializable]', $body['cb'], 'Closure context value must be substituted with the literal sentinel.');
-        $this->assertSame('[unserializable]', $body['proxy'], 'stdClass context value must be substituted with the literal sentinel.');
+        $this->assertSame(
+            '[unserializable]',
+            $body['cb'],
+            'Closure context value must be substituted with the literal sentinel.',
+        );
+        $this->assertSame(
+            '[unserializable]',
+            $body['proxy'],
+            'stdClass context value must be substituted with the literal sentinel.',
+        );
         $this->assertArrayHasKey('safe_field', $body);
         $this->assertSame('kept', $body['safe_field'], 'Whitelisted scalar context values pass through unchanged.');
 
         $rawBody = (string) $response->getContent();
-        $this->assertStringNotContainsString('stdClass', $rawBody, 'Wire body must not leak the original PHP class name (class names live in logs only).');
-        $this->assertStringNotContainsString("\0", $rawBody, 'Wire body must not contain a NUL byte from anonymous-class FQCNs.');
+        $this->assertStringNotContainsString(
+            'stdClass',
+            $rawBody,
+            'Wire body must not leak the original PHP class name (class names live in logs only).',
+        );
+        $this->assertStringNotContainsString(
+            "\0",
+            $rawBody,
+            'Wire body must not contain a NUL byte from anonymous-class FQCNs.',
+        );
     }
 
     /**

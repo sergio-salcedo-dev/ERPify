@@ -1,7 +1,8 @@
 import React from "react";
 import { motion } from "motion/react";
-import { LucideIcon } from "lucide-react";
-import { Button } from "../atoms/Button";
+import { Loader2, LucideIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { type ButtonVariantProps } from "@/components/ui/button-variants";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
@@ -12,7 +13,7 @@ interface FeatureCardProps {
   iconColor: string;
   iconBg: string;
   buttonText: string;
-  buttonVariant?: "primary" | "secondary" | "outline" | "emerald" | "slate";
+  buttonVariant?: ButtonVariantProps["variant"];
   onClick: () => void;
   loading?: boolean;
   children?: React.ReactNode;
@@ -25,7 +26,7 @@ export const FeatureCard: React.FC<FeatureCardProps> = ({
   iconColor,
   iconBg,
   buttonText,
-  buttonVariant = "primary",
+  buttonVariant = "default",
   onClick,
   loading = false,
   children,
@@ -47,12 +48,19 @@ export const FeatureCard: React.FC<FeatureCardProps> = ({
         <CardContent className="feature-card__content w-full p-8 pt-6">
           <Button
             variant={buttonVariant}
-            size="xl"
+            size="lg"
             onClick={onClick}
-            loading={loading}
+            disabled={loading}
             className="feature-card__button w-full"
           >
-            {buttonText}
+            {loading ? (
+              <>
+                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                {buttonText}
+              </>
+            ) : (
+              buttonText
+            )}
           </Button>
           <div className="feature-card__extra-content w-full mt-4">{children}</div>
         </CardContent>

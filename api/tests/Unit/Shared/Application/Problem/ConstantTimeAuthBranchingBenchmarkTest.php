@@ -83,14 +83,16 @@ final class ConstantTimeAuthBranchingBenchmarkTest extends TestCase
     {
         $problemDetailsFactory = new ProblemDetailsFactory('prod', new NullLogger());
 
+        $unauth = new class ('', 'Unauthenticated.') extends DomainException implements Unauthenticated {
+        };
+
         /** @var array<string, Throwable> $cases */
         $cases = [
             '403 access-denied bridge' => new AccessDeniedException('Access denied.'),
             '401 authentication bridge' => new BadCredentialsException('Bad credentials.'),
             '403 forbidden marker' => new class ('', 'Forbidden.') extends DomainException implements Forbidden {
             },
-            '401 unauthenticated marker' => new class ('', 'Unauthenticated.') extends DomainException implements Unauthenticated {
-            },
+            '401 unauthenticated marker' => $unauth,
         ];
 
         // Warm-up: prime opcode / JIT caches per branch so the measurement window only

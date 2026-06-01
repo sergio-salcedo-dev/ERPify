@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Menu, X, User as UserIcon, Settings, LogOut, HelpCircle, Wrench } from "lucide-react";
 import Link from "next/link";
 import { Logo } from "../atoms/Logo";
-import { Button } from "../atoms/Button";
+import { Button } from "@/components/ui/button";
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
 import { Routes } from "@/context/shared/domain/types/routes";
 import {
@@ -120,7 +120,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onGetStarted }) => {
 
             <Button
               onClick={onGetStarted}
-              size="md"
+              size="default"
               className="navbar__button rounded-full"
               data-testid="navbar__get-started"
             >

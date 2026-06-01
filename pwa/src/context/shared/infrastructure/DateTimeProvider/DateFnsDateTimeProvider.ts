@@ -15,6 +15,7 @@ import {
   differenceInSeconds,
   endOfDay,
   format as dfFormat,
+  formatDistance,
   formatISO,
   isAfter,
   isBefore,
@@ -91,6 +92,12 @@ export class DateFnsDateTimeProvider implements DateTimeProvider {
   public formatToDate(date: Date): string {
     const p = DateFnsDateTimeProvider.toParts(DateFnsDateTimeProvider.DISPLAY_DATE_FORMATTER, date);
     return `${p.day}/${p.month}/${p.year}`;
+  }
+
+  public formatToRelative(date: Date, baseDate?: Date): string {
+    // No locale option: date-fns defaults to English ("about 3 hours ago").
+    // Display methods use es-ES via Intl; relative time is intentionally English.
+    return formatDistance(date, baseDate ?? this.now(), { addSuffix: true });
   }
 
   /**
@@ -190,6 +197,11 @@ export class DateFnsDateTimeProvider implements DateTimeProvider {
   public formatIsoToLocalDateTime(iso: string): string {
     const date = this.parseISO(iso);
     return date ? this.formatToDisplay(date) : iso;
+  }
+
+  public formatIsoToRelative(iso: string): string {
+    const date = this.parseISO(iso);
+    return date ? this.formatToRelative(date) : iso;
   }
 
   public parseDdMmYyyyToStartTimestamp(value: string): number | null {

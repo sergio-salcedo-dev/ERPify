@@ -76,7 +76,8 @@ final class ExceptionResponderTest extends TestCase
     public function testDomainExceptionMappedToProblemDetailsResponse(): void
     {
         $exceptionResponder = $this->makeListener();
-        $exception = new class ('', 'Bank not found', ['bankId' => '01JABC']) extends DomainException implements NotFound {
+        $bankContext = ['bankId' => '01JABC'];
+        $exception = new class ('', 'Bank not found', $bankContext) extends DomainException implements NotFound {
         };
         $exceptionEvent = $this->makeEvent('/api/v1/anything', $exception);
 
@@ -164,7 +165,11 @@ final class ExceptionResponderTest extends TestCase
 
         $response = $exceptionEvent->getResponse();
         $this->assertInstanceOf(Response::class, $response);
-        $this->assertSame(Response::HTTP_INTERNAL_SERVER_ERROR, $response->getStatusCode(), (string) $response->getContent());
+        $this->assertSame(
+            Response::HTTP_INTERNAL_SERVER_ERROR,
+            $response->getStatusCode(),
+            (string) $response->getContent(),
+        );
 
         $body = $this->decodeBody($response->getContent());
         $this->assertBodyEquals('unhandled-exception', $body, 'type');
@@ -185,7 +190,11 @@ final class ExceptionResponderTest extends TestCase
 
         $this->assertArrayHasKey('instance', $bodyA);
         $this->assertArrayHasKey('instance', $bodyB);
-        $this->assertNotSame($bodyA['instance'], $bodyB['instance'], 'Listener must mint a fresh `instance` UUIDv7 per error occurrence.');
+        $this->assertNotSame(
+            $bodyA['instance'],
+            $bodyB['instance'],
+            'Listener must mint a fresh `instance` UUIDv7 per error occurrence.',
+        );
         $this->assertBodyMatchesRegex(self::UUID_V7_REGEX, $bodyA, 'instance');
         $this->assertBodyMatchesRegex(self::UUID_V7_REGEX, $bodyB, 'instance');
     }
@@ -365,7 +374,17 @@ final class ExceptionResponderTest extends TestCase
         $looseContext = $context;
 
         $this->assertSame(
-            ['instance', 'correlation_id', 'type', 'status', 'exception_class', 'exception_category', 'exception_message', 'request_uri', 'request_method'],
+            [
+                'instance',
+                'correlation_id',
+                'type',
+                'status',
+                'exception_class',
+                'exception_category',
+                'exception_message',
+                'request_uri',
+                'request_method',
+            ],
             \array_keys($looseContext),
             'Context keys must appear in declaration order.',
         );
@@ -617,7 +636,9 @@ final class ExceptionResponderTest extends TestCase
     public function testListenerRegistrationAttributeIsKernelExceptionEvent(): void
     {
         $reflectionClass = new ReflectionClass(ExceptionResponder::class);
-        $attributes = $reflectionClass->getAttributes(\Symfony\Component\EventDispatcher\Attribute\AsEventListener::class);
+        $attributes = $reflectionClass->getAttributes(
+            \Symfony\Component\EventDispatcher\Attribute\AsEventListener::class,
+        );
 
         $this->assertCount(1, $attributes, 'ExceptionResponder must declare exactly one #[AsEventListener] attribute.');
 
@@ -708,7 +729,8 @@ final class ExceptionResponderTest extends TestCase
             logger: new NullLogger(),
             factoryLogger: $this->throwingLogger('factory boom'),
         );
-        $exception = new class ('', 'x', ['proxy' => static fn (): int => 1]) extends DomainException implements NotFound {
+        $contextProxy = ['proxy' => static fn (): int => 1];
+        $exception = new class ('', 'x', $contextProxy) extends DomainException implements NotFound {
         };
         $exceptionEvent = $this->makeEvent('/api/v1/anything', $exception);
 
@@ -716,7 +738,11 @@ final class ExceptionResponderTest extends TestCase
 
         $response = $exceptionEvent->getResponse();
         $this->assertInstanceOf(Response::class, $response);
-        $this->assertSame(Response::HTTP_INTERNAL_SERVER_ERROR, $response->getStatusCode(), (string) $response->getContent());
+        $this->assertSame(
+            Response::HTTP_INTERNAL_SERVER_ERROR,
+            $response->getStatusCode(),
+            (string) $response->getContent(),
+        );
 
         // Byte-for-byte equality — the body must be the literal constant, NOT
         // re-encoded JSON, so we are immune to key-order or whitespace drift.
@@ -738,7 +764,8 @@ final class ExceptionResponderTest extends TestCase
             logger: $bufferingLogger,
             factoryLogger: $this->throwingLogger('factory boom'),
         );
-        $exception = new class ('', 'x', ['proxy' => static fn (): int => 1]) extends DomainException implements NotFound {
+        $contextProxy = ['proxy' => static fn (): int => 1];
+        $exception = new class ('', 'x', $contextProxy) extends DomainException implements NotFound {
         };
         $exceptionEvent = $this->makeEvent('/api/v1/anything', $exception);
 
@@ -768,7 +795,8 @@ final class ExceptionResponderTest extends TestCase
             logger: $this->throwingLogger('listener logger boom'),
             factoryLogger: $this->throwingLogger('factory boom'),
         );
-        $exception = new class ('', 'x', ['proxy' => static fn (): int => 1]) extends DomainException implements NotFound {
+        $contextProxy = ['proxy' => static fn (): int => 1];
+        $exception = new class ('', 'x', $contextProxy) extends DomainException implements NotFound {
         };
         $exceptionEvent = $this->makeEvent('/api/v1/anything', $exception);
 
@@ -776,7 +804,11 @@ final class ExceptionResponderTest extends TestCase
 
         $response = $exceptionEvent->getResponse();
         $this->assertInstanceOf(Response::class, $response);
-        $this->assertSame(Response::HTTP_INTERNAL_SERVER_ERROR, $response->getStatusCode(), (string) $response->getContent());
+        $this->assertSame(
+            Response::HTTP_INTERNAL_SERVER_ERROR,
+            $response->getStatusCode(),
+            (string) $response->getContent(),
+        );
         $this->assertSame(
             '{"type":"internal-error","title":"Internal server error","status":500}',
             $response->getContent(),
@@ -830,7 +862,8 @@ final class ExceptionResponderTest extends TestCase
             logger: new NullLogger(),
             factoryLogger: $this->throwingLogger('factory boom'),
         );
-        $exception = new class ('', 'x', ['proxy' => static fn (): int => 1]) extends DomainException implements NotFound {
+        $contextProxy = ['proxy' => static fn (): int => 1];
+        $exception = new class ('', 'x', $contextProxy) extends DomainException implements NotFound {
         };
 
         $iterations = 1000;
@@ -977,9 +1010,23 @@ final class ExceptionResponderTest extends TestCase
         // PHPStan trusts the narrow @return shape for caller convenience; this loop ensures
         // a listener regression that drifted from the contract would surface as a test failure
         // (not just a PHPStan false-negative under treatPhpDocTypesAsCertain).
-        foreach (['instance', 'correlation_id', 'type', 'exception_class', 'exception_category', 'exception_message', 'request_uri', 'request_method'] as $stringKey) {
+        $stringKeys = [
+            'instance',
+            'correlation_id',
+            'type',
+            'exception_class',
+            'exception_category',
+            'exception_message',
+            'request_uri',
+            'request_method',
+        ];
+
+        foreach ($stringKeys as $stringKey) {
             $this->assertArrayHasKey($stringKey, $context);
-            $this->assertIsString($context[$stringKey], \sprintf('Context["%s"] must be a string per the log contract.', $stringKey));
+            $this->assertIsString(
+                $context[$stringKey],
+                \sprintf('Context["%s"] must be a string per the log contract.', $stringKey),
+            );
         }
 
         $this->assertArrayHasKey('status', $context);
@@ -1034,8 +1081,11 @@ final class ExceptionResponderTest extends TestCase
         $request = Request::create($path);
         $kernel = new class implements HttpKernelInterface {
             #[Override]
-            public function handle(Request $request, int $type = HttpKernelInterface::MAIN_REQUEST, bool $catch = true): Response
-            {
+            public function handle(
+                Request $request,
+                int $type = HttpKernelInterface::MAIN_REQUEST,
+                bool $catch = true,
+            ): Response {
                 throw new LogicException('Test kernel: handle() must not be called by the listener.');
             }
         };

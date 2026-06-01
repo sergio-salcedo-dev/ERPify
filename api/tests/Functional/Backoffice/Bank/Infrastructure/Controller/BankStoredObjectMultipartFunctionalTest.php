@@ -16,7 +16,8 @@ use Symfony\Component\HttpFoundation\Request;
 #[CoversNothing]
 final class BankStoredObjectMultipartFunctionalTest extends WebTestCase
 {
-    private const string MIN_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
+    private const string MIN_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5'
+        . '+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
 
     /**
      * @throws JsonException

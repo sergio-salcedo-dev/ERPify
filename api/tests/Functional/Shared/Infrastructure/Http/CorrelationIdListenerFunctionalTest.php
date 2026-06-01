@@ -155,7 +155,11 @@ final class CorrelationIdListenerFunctionalTest extends WebTestCase
         $kernelBrowser = self::createClient();
         $kernelBrowser->request(Request::METHOD_GET, '/api/v1/health');
 
-        $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_OK, $kernelBrowser->getResponse()->getStatusCode(), (string) $kernelBrowser->getResponse()->getContent());
+        $this->assertSame(
+            \Symfony\Component\HttpFoundation\Response::HTTP_OK,
+            $kernelBrowser->getResponse()->getStatusCode(),
+            (string) $kernelBrowser->getResponse()->getContent(),
+        );
         $headerValue = $kernelBrowser->getResponse()->headers->get(CorrelationIdListener::HEADER_NAME);
 
         $this->assertIsString($headerValue);
@@ -171,7 +175,11 @@ final class CorrelationIdListenerFunctionalTest extends WebTestCase
             server: ['HTTP_X_CORRELATION_ID' => self::VALID_UUID_V7],
         );
 
-        $this->assertSame(\Symfony\Component\HttpFoundation\Response::HTTP_OK, $kernelBrowser->getResponse()->getStatusCode(), (string) $kernelBrowser->getResponse()->getContent());
+        $this->assertSame(
+            \Symfony\Component\HttpFoundation\Response::HTTP_OK,
+            $kernelBrowser->getResponse()->getStatusCode(),
+            (string) $kernelBrowser->getResponse()->getContent(),
+        );
         $this->assertSame(
             self::VALID_UUID_V7,
             $kernelBrowser->getResponse()->headers->get(CorrelationIdListener::HEADER_NAME),
@@ -184,9 +192,12 @@ final class CorrelationIdListenerFunctionalTest extends WebTestCase
 
         $eventDispatcher = self::getContainer()->get('event_dispatcher');
         $this->assertInstanceOf(EventDispatcherInterface::class, $eventDispatcher);
-        $found = \array_find($eventDispatcher->getListeners(KernelEvents::RESPONSE), static fn ($candidate): bool => \is_array($candidate)
-        && ($candidate[0] ?? null) instanceof CorrelationIdListener
-        && ($candidate[1] ?? null) === 'onResponse');
+        $found = \array_find(
+            $eventDispatcher->getListeners(KernelEvents::RESPONSE),
+            static fn ($candidate): bool => \is_array($candidate)
+            && ($candidate[0] ?? null) instanceof CorrelationIdListener
+            && ($candidate[1] ?? null) === 'onResponse',
+        );
 
         $this->assertNotNull($found, 'CorrelationIdListener::onResponse must be registered on kernel.response.');
         \assert(\is_callable($found));

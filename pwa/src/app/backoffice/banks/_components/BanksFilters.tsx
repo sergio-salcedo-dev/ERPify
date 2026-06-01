@@ -1,6 +1,7 @@
 "use client";
 
-import { useId, useState, type ChangeEvent, type ReactNode } from "react";
+import { useEffect, useId, useState, type ChangeEvent, type ReactNode } from "react";
+import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import { SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,7 @@ interface BanksFiltersProps {
 }
 
 const NONE_SORT_VALUE = "__none__" as const;
+const FILTER_DEBOUNCE_MS = 300;
 
 export function BanksFilters({
   filter,
@@ -54,11 +56,61 @@ export function BanksFilters({
     defaultOpen ?? (hasActiveFilter(filter) || !isDefaultSort(sort)),
   );
 
+  // Local mirror of the text filters so typing stays instant while the
+  // (expensive) parent re-filter is debounced. Synced back down when the
+  // parent changes the filter externally (e.g. the Reset button).
+  //
+  // We use the React getDerivedState-during-render idiom: store the previous
+  // prop value as state, compare it to the new prop during render, and call
+  // setState inline (not in an effect) so no double-render or lint error occurs.
+  const [nameInput, setNameInput] = useState(filter.name);
+  const [shortNameInput, setShortNameInput] = useState(filter.shortName);
+  const [prevFilterName, setPrevFilterName] = useState(filter.name);
+  const [prevFilterShortName, setPrevFilterShortName] = useState(filter.shortName);
+
+  if (prevFilterName !== filter.name) {
+    setPrevFilterName(filter.name);
+    setNameInput(filter.name);
+  }
+  if (prevFilterShortName !== filter.shortName) {
+    setPrevFilterShortName(filter.shortName);
+    setShortNameInput(filter.shortName);
+  }
+
+  const debouncedName = useDebouncedValue(nameInput, FILTER_DEBOUNCE_MS);
+  const debouncedShortName = useDebouncedValue(shortNameInput, FILTER_DEBOUNCE_MS);
+
+  useEffect(() => {
+    if (debouncedName === filter.name && debouncedShortName === filter.shortName) {
+      return;
+    }
+    onFilterChange({ ...filter, name: debouncedName, shortName: debouncedShortName });
+    // We intentionally only react to the debounced values; `filter` is read
+    // as the latest closure value each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedName, debouncedShortName]);
+
   const updateText =
     (field: "name" | "shortName") =>
     (event: ChangeEvent<HTMLInputElement>): void => {
-      onFilterChange({ ...filter, [field]: event.target.value });
+      const next = event.target.value;
+      if (field === "name") {
+        setNameInput(next);
+      } else {
+        setShortNameInput(next);
+      }
     };
+
+  const handleReset = (): void => {
+    // Clear local input state too: relying on the parent→child sync alone
+    // misses the case where Reset fires before the debounce propagated the
+    // typed value (parent filter.name is still ""), which would otherwise
+    // leave the stale text in the box and let the pending debounce re-apply
+    // it. Clearing the local state here also cancels that pending timer.
+    setNameInput("");
+    setShortNameInput("");
+    onReset();
+  };
 
   const updateDate =
     (field: "createdFrom" | "createdTo") =>
@@ -138,103 +190,115 @@ export function BanksFilters({
         </Button>
       </div>
 
+      {/*
+        Animated expand/collapse via the grid-rows 0fr→1fr trick. INVARIANT:
+        keep all box-model (padding / border / margin) on `__panel-fields`,
+        never on this outer section or `__panel-inner`. The collapsed panel
+        must render at zero height so the e2e `toBeHidden()` assertions hold.
+      */}
       <section
         id={panelId}
         aria-label="Bank filter fields"
-        hidden={!open}
-        className="banks-filters__panel border-border bg-muted/20 mt-3 rounded-md border p-3 sm:p-4"
+        aria-hidden={!open}
+        inert={open ? undefined : true}
+        className="banks-filters__panel grid transition-[grid-template-rows] duration-200 ease-out"
+        style={{ gridTemplateRows: open ? "1fr" : "0fr" }}
         data-testid="banks-filters__panel"
       >
-        <div className="banks-filters__grid grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <FormField name="banks-filters-name" label="Name">
-            <Input
-              type="text"
-              value={filter.name}
-              onChange={updateText("name")}
-              placeholder="e.g. acme"
-              data-testid="banks-filters__name"
-            />
-          </FormField>
-          <FormField name="banks-filters-short-name" label="Short name">
-            <Input
-              type="text"
-              value={filter.shortName}
-              onChange={updateText("shortName")}
-              placeholder="e.g. ACM"
-              data-testid="banks-filters__short-name"
-            />
-          </FormField>
-          <DatePickerField
-            name="banks-filters-created-from"
-            label="Created from"
-            value={filter.createdFrom}
-            onChange={updateDate("createdFrom")}
-            max={filter.createdTo || undefined}
-            testId="banks-filters__created-from"
-          />
-          <DatePickerField
-            name="banks-filters-created-to"
-            label="Created to"
-            value={filter.createdTo}
-            onChange={updateDate("createdTo")}
-            min={filter.createdFrom || undefined}
-            testId="banks-filters__created-to"
-          />
-        </div>
+        <div className="banks-filters__panel-inner overflow-hidden">
+          <div className="banks-filters__panel-fields border-border bg-muted/20 mt-3 rounded-md border p-3 sm:p-4">
+            <div className="banks-filters__grid grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <FormField name="banks-filters-name" label="Name">
+                <Input
+                  type="text"
+                  value={nameInput}
+                  onChange={updateText("name")}
+                  placeholder="e.g. acme"
+                  data-testid="banks-filters__name"
+                />
+              </FormField>
+              <FormField name="banks-filters-short-name" label="Short name">
+                <Input
+                  type="text"
+                  value={shortNameInput}
+                  onChange={updateText("shortName")}
+                  placeholder="e.g. ACM"
+                  data-testid="banks-filters__short-name"
+                />
+              </FormField>
+              <DatePickerField
+                name="banks-filters-created-from"
+                label="Created from"
+                value={filter.createdFrom}
+                onChange={updateDate("createdFrom")}
+                max={filter.createdTo || undefined}
+                testId="banks-filters__created-from"
+              />
+              <DatePickerField
+                name="banks-filters-created-to"
+                label="Created to"
+                value={filter.createdTo}
+                onChange={updateDate("createdTo")}
+                min={filter.createdFrom || undefined}
+                testId="banks-filters__created-to"
+              />
+            </div>
 
-        <div
-          className="banks-filters__sort mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2"
-          data-testid="banks-filters__sort"
-        >
-          <FormField name="banks-filters-sort-by" label="Sort by">
-            <select
-              className={selectClassName}
-              value={sortColumnValue}
-              onChange={handleSortColumnChange}
-              aria-label="Sort by"
-              title="Sort by"
-              data-testid="banks-filters__sort-by"
+            <div
+              className="banks-filters__sort mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2"
+              data-testid="banks-filters__sort"
             >
-              <option value={NONE_SORT_VALUE}>None</option>
-              {BANKS_SORTABLE_COLUMNS.map((column) => (
-                <option key={column.id} value={column.id}>
-                  {column.label}
-                </option>
-              ))}
-            </select>
-          </FormField>
-          <FormField name="banks-filters-sort-direction" label="Direction">
-            <select
-              className={selectClassName}
-              value={sortDirectionValue}
-              onChange={handleSortDirectionChange}
-              disabled={sortDirectionDisabled}
-              aria-label="Sort direction"
-              title="Sort direction"
-              data-testid="banks-filters__sort-direction"
-            >
-              <option value={SortDirection.ASC}>Ascending</option>
-              <option value={SortDirection.DESC}>Descending</option>
-            </select>
-          </FormField>
-        </div>
+              <FormField name="banks-filters-sort-by" label="Sort by">
+                <select
+                  className={selectClassName}
+                  value={sortColumnValue}
+                  onChange={handleSortColumnChange}
+                  aria-label="Sort by"
+                  title="Sort by"
+                  data-testid="banks-filters__sort-by"
+                >
+                  <option value={NONE_SORT_VALUE}>None</option>
+                  {BANKS_SORTABLE_COLUMNS.map((column) => (
+                    <option key={column.id} value={column.id}>
+                      {column.label}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+              <FormField name="banks-filters-sort-direction" label="Direction">
+                <select
+                  className={selectClassName}
+                  value={sortDirectionValue}
+                  onChange={handleSortDirectionChange}
+                  disabled={sortDirectionDisabled}
+                  aria-label="Sort direction"
+                  title="Sort direction"
+                  data-testid="banks-filters__sort-direction"
+                >
+                  <option value={SortDirection.ASC}>Ascending</option>
+                  <option value={SortDirection.DESC}>Descending</option>
+                </select>
+              </FormField>
+            </div>
 
-        {canReset ? (
-          <div className="banks-filters__actions mt-3 flex justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={onReset}
-              aria-label="Reset filters and sort"
-              title="Reset filters and sort"
-              className="w-full sm:w-auto"
-              data-testid="banks-filters__reset"
-            >
-              Reset
-            </Button>
+            {canReset ? (
+              <div className="banks-filters__actions mt-3 flex justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleReset}
+                  aria-label="Reset filters and sort"
+                  title="Reset filters and sort"
+                  className="w-full sm:w-auto"
+                  data-testid="banks-filters__reset"
+                >
+                  Reset
+                </Button>
+              </div>
+            ) : null}
           </div>
-        ) : null}
+        </div>
       </section>
     </section>
   );

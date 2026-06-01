@@ -44,6 +44,14 @@ function fakeRequest(pathname: string): NextRequest {
   return { nextUrl: new URL(pathname, "https://localhost") } as unknown as NextRequest;
 }
 
+// `proxy` is typed against the real `NextResponse`, but the mock above
+// returns a `FakeNextResponse` whose `kind` / `destination` sentinels are
+// what we assert on. This bridges the static type to the mock's shape.
+type ProxyDecision = { kind: "next" | "rewrite"; destination?: URL };
+function runProxy(pathname: string): ProxyDecision {
+  return proxy(fakeRequest(pathname)) as unknown as ProxyDecision;
+}
+
 describe("isDevToolRoute", () => {
   it.each(DEV_TOOL_ROUTE_PREFIXES)("matches the bare prefix %s", (prefix) => {
     expect(isDevToolRoute(prefix)).toBe(true);
@@ -92,18 +100,18 @@ describe("proxy — dev-tools production short-circuit", () => {
     });
 
     it.each(DEV_TOOL_ROUTE_PREFIXES)("rewrites %s to a guaranteed 404", (prefix) => {
-      const result = proxy(fakeRequest(prefix));
+      const result = runProxy(prefix);
       expect(result.kind).toBe("rewrite");
       expect(result.destination?.pathname).toBe("/__erpify-dev-tools-disabled__");
     });
 
     it("rewrites nested dev-tool URLs as well", () => {
-      const result = proxy(fakeRequest("/dev-tools/anything/here"));
+      const result = runProxy("/dev-tools/anything/here");
       expect(result.kind).toBe("rewrite");
     });
 
     it("ignores non-dev paths", () => {
-      const result = proxy(fakeRequest("/backoffice/banks"));
+      const result = runProxy("/backoffice/banks");
       expect(result.kind).toBe("next");
     });
   });
@@ -117,7 +125,7 @@ describe("proxy — dev-tools production short-circuit", () => {
     });
 
     it.each(DEV_TOOL_ROUTE_PREFIXES)("lets %s pass through untouched", (prefix) => {
-      const result = proxy(fakeRequest(prefix));
+      const result = runProxy(prefix);
       expect(result.kind).toBe("next");
     });
   });
@@ -131,7 +139,7 @@ describe("proxy — dev-tools production short-circuit", () => {
     });
 
     it("lets dev URLs pass through (CI E2E uses /dev-throw)", () => {
-      const result = proxy(fakeRequest("/dev-throw"));
+      const result = runProxy("/dev-throw");
       expect(result.kind).toBe("next");
     });
   });

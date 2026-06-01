@@ -1,19 +1,27 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ChevronLeft, Pencil } from "lucide-react";
+import { ChevronLeft, Clock, Pencil, RefreshCw } from "lucide-react";
 import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
 import { FindBank } from "@/context/backoffice/bank/application/FindBank";
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
-import { CopyButton, CorrelationIdChip, EmptyState, ProblemDisplay } from "@/components/erpify";
+import {
+  CopyButton,
+  CorrelationIdChip,
+  EmptyState,
+  MonogramAvatar,
+  ProblemDisplay,
+  StatusBadge,
+} from "@/components/erpify";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 import { uuidV7 } from "@/lib/uuidV7";
 import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
+import { isRecentlyCreated } from "../_lib/bankRecency";
 import { safeHref } from "@/lib/safeHref";
 import { toastNotifier } from "@/context/shared/infrastructure/Notification/Toast";
 import { ViewStatus } from "@/context/shared/domain/types/status";
@@ -153,27 +161,38 @@ export default function BankDetailPage() {
             className="banks-detail__header flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
             data-testid="banks-detail__header"
           >
-            <div className="min-w-0">
-              <h1
-                className="text-foreground text-xl font-semibold tracking-tight break-words sm:text-2xl"
-                data-testid="banks-detail__name"
-              >
-                {bank.name}
-              </h1>
-              <p
-                className="text-muted-foreground mt-1 text-sm break-words"
-                data-testid="banks-detail__shortname"
-              >
-                {bank.shortName}
-              </p>
+            <div className="flex min-w-0 items-start gap-3">
+              <MonogramAvatar
+                name={bank.name}
+                className="size-11 text-base"
+                testId="banks-detail__avatar"
+              />
+              <div className="min-w-0">
+                <div className="flex min-w-0 items-center gap-2">
+                  <h1
+                    className="text-foreground text-xl font-semibold tracking-tight break-words sm:text-2xl"
+                    data-testid="banks-detail__name"
+                  >
+                    {bank.name}
+                  </h1>
+                  {isRecentlyCreated(bank.createdAt, dateTimeProvider) ? (
+                    <StatusBadge
+                      variant="info"
+                      label="New"
+                      className="banks-detail__new flex-none"
+                      testId="banks-detail__new-badge"
+                    />
+                  ) : null}
+                </div>
+                <p
+                  className="text-muted-foreground mt-1 font-mono text-sm uppercase break-words"
+                  data-testid="banks-detail__shortname"
+                >
+                  {bank.shortName}
+                </p>
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
-              <CopyButton
-                value={bank.id}
-                label="Copy bank ID"
-                title={`Copy bank ID ${bank.id}`}
-                testId="banks-detail__copy-id"
-              />
               <Link
                 href={safeHref(bankRoutes.edit(bank.id))}
                 className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
@@ -190,31 +209,53 @@ export default function BankDetailPage() {
           </header>
 
           <dl
-            className="banks-detail__meta border-border bg-card grid grid-cols-1 gap-4 rounded-lg border p-4 sm:grid-cols-2 xl:grid-cols-4"
+            className="banks-detail__meta border-border bg-card grid grid-cols-1 gap-4 rounded-lg border p-4 sm:grid-cols-2"
             data-testid="banks-detail__meta"
           >
             <Field label="Name" value={bank.name} testId="banks-detail__field-name" />
             <Field
               label="Short name"
               value={bank.shortName}
+              valueClassName="font-mono text-xs uppercase"
               testId="banks-detail__field-shortname"
             />
             <Field
               label="Created"
-              value={dateTimeProvider.formatIsoToLocalDateTime(bank.createdAt)}
+              value={dateTimeProvider.formatIsoToRelative(bank.createdAt)}
+              valueTitle={dateTimeProvider.formatIsoToLocalDateTime(bank.createdAt)}
+              icon={<Clock className="size-3.5" aria-hidden="true" />}
               testId="banks-detail__field-created"
             />
             <Field
               label="Updated"
-              value={dateTimeProvider.formatIsoToLocalDateTime(bank.updatedAt)}
+              value={dateTimeProvider.formatIsoToRelative(bank.updatedAt)}
+              valueTitle={dateTimeProvider.formatIsoToLocalDateTime(bank.updatedAt)}
+              icon={<RefreshCw className="size-3.5" aria-hidden="true" />}
               testId="banks-detail__field-updated"
             />
-            <Field
-              label="ID"
-              value={bank.id}
-              valueClassName="banks-detail__id break-all font-mono text-xs"
-              testId="banks-detail__id"
-            />
+            <div className="banks-detail__field sm:col-span-2">
+              <dt className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                Identifier
+              </dt>
+              <dd className="mt-1 flex items-center gap-2">
+                <span
+                  className="banks-detail__id text-foreground min-w-0 truncate font-mono text-xs"
+                  data-testid="banks-detail__id"
+                >
+                  {bank.id}
+                </span>
+                <CopyButton
+                  value={bank.id}
+                  iconOnly
+                  size="icon-sm"
+                  label="Copy ID"
+                  copiedLabel="ID copied"
+                  errorLabel="Copy failed"
+                  title={`Copy bank ID ${bank.id}`}
+                  testId="banks-detail__id-copy"
+                />
+              </dd>
+            </div>
           </dl>
         </>
       ) : null}
@@ -241,17 +282,28 @@ function Field({
   label,
   value,
   valueClassName,
+  valueTitle,
+  icon,
   testId,
 }: Readonly<{
   label: string;
   value: string;
   valueClassName?: string;
+  valueTitle?: string;
+  icon?: ReactNode;
   testId?: string;
 }>) {
   return (
     <div className="banks-detail__field">
-      <dt className="text-muted-foreground text-xs font-medium uppercase tracking-wide">{label}</dt>
-      <dd className={cn("text-foreground mt-1 text-sm", valueClassName)} data-testid={testId}>
+      <dt className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium tracking-wide uppercase">
+        {icon}
+        {label}
+      </dt>
+      <dd
+        className={cn("text-foreground mt-1 text-sm", valueClassName)}
+        title={valueTitle}
+        data-testid={testId}
+      >
         {value}
       </dd>
     </div>

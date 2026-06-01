@@ -34,12 +34,14 @@ interface StatusBadgeProps extends VariantProps<typeof statusVariants> {
   variant: StatusVariant;
   label: string;
   className?: string;
+  /** Optional test id passthrough (never hardcode in shared components). */
+  testId?: string;
 }
 
-export function StatusBadge({ variant, label, className }: Readonly<StatusBadgeProps>) {
+export function StatusBadge({ variant, label, className, testId }: Readonly<StatusBadgeProps>) {
   const Icon = iconByVariant[variant];
   return (
-    <output className={cn(statusVariants({ variant }), className)}>
+    <output className={cn(statusVariants({ variant }), className)} data-testid={testId}>
       <Icon className="size-3" aria-hidden="true" />
       {label}
     </output>
