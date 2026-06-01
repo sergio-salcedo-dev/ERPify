@@ -31,6 +31,8 @@ import {
 } from "./_lib/banksFilterSort";
 import { BANKS_PAGE_SIZE_DEFAULT, type BanksPageSize, paginate } from "./_lib/paginate";
 import { bankRoutes } from "./_lib/bankRoutes";
+import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
+import { countRecentlyCreated } from "./_lib/bankRecency";
 
 type State = ViewStatus;
 
@@ -112,6 +114,15 @@ export default function BanksListPage() {
     [banks, filter, sort],
   );
 
+  const recentCount = useMemo(
+    () =>
+      countRecentlyCreated(
+        banks.map((bank) => bank.createdAt),
+        dateTimeProvider,
+      ),
+    [banks],
+  );
+
   // Reset page when filters, sort or pageSize change (adjusting state during render)
   const [prevFilter, setPrevFilter] = useState(filter);
   const [prevSort, setPrevSort] = useState(sort);
@@ -168,6 +179,12 @@ export default function BanksListPage() {
               data-testid="banks-list__total"
             >
               Total banks: <span className="text-foreground font-medium">{banks.length}</span>
+              {recentCount > 0 ? (
+                <>
+                  {" · "}
+                  <span className="text-foreground font-medium">{recentCount}</span> added this week
+                </>
+              ) : null}
             </p>
           ) : null}
         </div>
