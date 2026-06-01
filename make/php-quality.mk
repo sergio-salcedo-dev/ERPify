@@ -52,7 +52,13 @@ PSALM_BIN = vendor/bin/psalm
 # Todo add to CLEANUP_ISSUES ,PossiblyUnusedMethod,ClassMustBeFinal,MissingParamType
 # Cleanup issues compatible with --alter
 #####CLEANUP_ISSUES = MissingOverrideAttribute,RedundantCast,RedundantCastGivenDocblockType,UnusedMethod,UnusedVariable,PossiblyUnusedProperty,UnnecessaryVarAnnotation
-CLEANUP_ISSUES = MissingOverrideAttribute,UnusedVariable,UnusedMethod,PossiblyUnusedProperty,UnnecessaryVarAnnotation
+# NB: `MissingOverrideAttribute` is intentionally excluded. Rector's
+# `NoSetupWithParentCallOverrideRector` (phpunitCodeQuality set) STRIPS `#[Override]`
+# from test setUp()/tearDown() that call parent::, while psalm --alter would re-ADD it
+# — a tug-of-war between the two analysers (same class of conflict as MissingParamType
+# below). Excluding it lets rector win; the residual `MissingOverrideAttribute` psalm
+# still reports on those methods is frozen in psalm-baseline.xml.
+CLEANUP_ISSUES = UnusedVariable,UnusedMethod,PossiblyUnusedProperty,UnnecessaryVarAnnotation
 # Typing issues compatible with --alter (Psalm will inject types based on its inference)
 #####TYPE_ISSUES = MissingParamType,MissingPropertyType,MissingReturnType,MissingClosureReturnType,InvalidReturnType,InvalidNullableReturnType,InvalidFalsableReturnType,MismatchingDocblockParamType
 # NB: `MissingParamType` is intentionally excluded. It is suppressed in psalm.xml,
