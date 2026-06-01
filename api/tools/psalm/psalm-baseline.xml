@@ -1,0 +1,1065 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<files psalm-version="6.16.1@f1f5de594dc76faf8784e02d3dc4716c91c6f6ac">
+  <file src="../../src/Backoffice/Bank/Application/BankCreator.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="../../src/Backoffice/Bank/Application/BankDeleter.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="../../src/Backoffice/Bank/Application/BankFinder.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="../../src/Backoffice/Bank/Application/BankSearcher.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="../../src/Backoffice/Bank/Application/BankUpdater.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="../../src/Backoffice/Bank/Domain/Entity/Bank.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[Bank]]></code>
+    </ClassMustBeFinal>
+    <PossiblyNullArgument>
+      <code><![CDATA[$this->id]]></code>
+    </PossiblyNullArgument>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[getName]]></code>
+      <code><![CDATA[getShortName]]></code>
+      <code><![CDATA[getStoredObjectByteSize]]></code>
+      <code><![CDATA[getStoredObjectKey]]></code>
+    </PossiblyUnusedMethod>
+    <UnusedProperty>
+      <code><![CDATA[$nameNormalized]]></code>
+    </UnusedProperty>
+  </file>
+  <file src="../../src/Backoffice/Bank/Infrastructure/Controller/BankDeleteController.php">
+    <UnusedClass>
+      <code><![CDATA[BankDeleteController]]></code>
+    </UnusedClass>
+  </file>
+  <file src="../../src/Backoffice/Bank/Infrastructure/Controller/BankGetController.php">
+    <UnusedClass>
+      <code><![CDATA[BankGetController]]></code>
+    </UnusedClass>
+  </file>
+  <file src="../../src/Backoffice/Bank/Infrastructure/Controller/BankPostController.php">
+    <UnusedClass>
+      <code><![CDATA[BankPostController]]></code>
+    </UnusedClass>
+  </file>
+  <file src="../../src/Backoffice/Bank/Infrastructure/Controller/BankPutController.php">
+    <UnusedClass>
+      <code><![CDATA[BankPutController]]></code>
+    </UnusedClass>
+  </file>
+  <file src="../../src/Backoffice/Bank/Infrastructure/Controller/BankSearchController.php">
+    <UnusedClass>
+      <code><![CDATA[BankSearchController]]></code>
+    </UnusedClass>
+  </file>
+  <file src="../../src/Backoffice/Bank/Infrastructure/Messenger/BankChangedNotifyEmailHandler.php">
+    <UnusedClass>
+      <code><![CDATA[BankChangedNotifyEmailHandler]]></code>
+    </UnusedClass>
+  </file>
+  <file src="../../src/Backoffice/Bank/Infrastructure/Persistence/BankStoredObjectRemoveListener.php">
+    <UnusedClass>
+      <code><![CDATA[BankStoredObjectRemoveListener]]></code>
+    </UnusedClass>
+  </file>
+  <file src="../../src/Backoffice/Bank/Infrastructure/Serializer/BankLogoUrlNormalizer.php">
+    <PossiblyNullArgument>
+      <code><![CDATA[$groups]]></code>
+    </PossiblyNullArgument>
+    <PossiblyUndefinedArrayOffset>
+      <code><![CDATA[$context['groups']]]></code>
+    </PossiblyUndefinedArrayOffset>
+    <UnusedClass>
+      <code><![CDATA[BankLogoUrlNormalizer]]></code>
+    </UnusedClass>
+  </file>
+  <file src="../../src/Backoffice/Bank/Infrastructure/Storage/BankStoredObjectReferenceInspector.php">
+    <UnusedClass>
+      <code><![CDATA[BankStoredObjectReferenceInspector]]></code>
+    </UnusedClass>
+  </file>
+  <file src="../../src/Backoffice/Health/Infrastructure/Controller/HealthController.php">
+    <UnusedClass>
+      <code><![CDATA[HealthController]]></code>
+    </UnusedClass>
+  </file>
+  <file src="../../src/Frontoffice/Health/Infrastructure/Controller/HealthController.php">
+    <UnusedClass>
+      <code><![CDATA[HealthController]]></code>
+    </UnusedClass>
+  </file>
+  <file src="../../src/Frontoffice/Mercure/Infrastructure/Controller/MercureBootstrapController.php">
+    <UnusedClass>
+      <code><![CDATA[MercureBootstrapController]]></code>
+    </UnusedClass>
+  </file>
+  <file src="../../src/Kernel.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[Kernel]]></code>
+    </ClassMustBeFinal>
+  </file>
+  <file src="../../src/Shared/Domain/Entity/Identifiable.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[setId]]></code>
+      <code><![CDATA[setId]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="../../src/Shared/Domain/Entity/Timestamped.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[getCreatedAt]]></code>
+      <code><![CDATA[getUpdatedAt]]></code>
+      <code><![CDATA[setCreatedAt]]></code>
+      <code><![CDATA[setUpdatedAt]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="../../src/Shared/Domain/Enum/Abstraction/HumanReadableIntEnumInterface.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[fromLabel]]></code>
+      <code><![CDATA[fromLabelOrFail]]></code>
+      <code><![CDATA[getLabel]]></code>
+      <code><![CDATA[getLabelOrFail]]></code>
+      <code><![CDATA[getLabels]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="../../src/Shared/Domain/Enum/Attribute/HumanReadableIntEnumValue.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[HumanReadableIntEnumValue]]></code>
+    </ClassMustBeFinal>
+    <UnusedClass>
+      <code><![CDATA[HumanReadableIntEnumValue]]></code>
+    </UnusedClass>
+  </file>
+  <file src="../../src/Shared/Guzzle/Enum/GuzzleContextTypeEnum.php">
+    <UnusedClass>
+      <code><![CDATA[GuzzleContextTypeEnum]]></code>
+    </UnusedClass>
+  </file>
+  <file src="../../src/Shared/Infrastructure/Mailer/PlainTextNotificationMailer.php">
+    <ArgumentTypeCoercion>
+      <code><![CDATA[\is_scalar($value) ? $value : \json_encode($value)]]></code>
+    </ArgumentTypeCoercion>
+    <UnusedClass>
+      <code><![CDATA[PlainTextNotificationMailer]]></code>
+    </UnusedClass>
+  </file>
+  <file src="../../src/Shared/Infrastructure/Messenger/PersistDomainEventMiddleware.php">
+    <UnusedClass>
+      <code><![CDATA[PersistDomainEventMiddleware]]></code>
+    </UnusedClass>
+  </file>
+  <file src="../../src/Shared/Infrastructure/Persistence/AbstractRepository.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[addWhereBetweenDates]]></code>
+      <code><![CDATA[addWhereInCaseInsensitive]]></code>
+    </PossiblyUnusedMethod>
+    <PossiblyUnusedReturnValue>
+      <code><![CDATA[QueryBuilder]]></code>
+      <code><![CDATA[QueryBuilder]]></code>
+    </PossiblyUnusedReturnValue>
+  </file>
+  <file src="../../src/Shared/Infrastructure/Persistence/AbstractSearchRepository.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+    <PossiblyUnusedReturnValue>
+      <code><![CDATA[QueryBuilder]]></code>
+    </PossiblyUnusedReturnValue>
+  </file>
+  <file src="../../src/Shared/Infrastructure/Persistence/DoctrineConnectionResetListener.php">
+    <UnusedClass>
+      <code><![CDATA[DoctrineConnectionResetListener]]></code>
+    </UnusedClass>
+  </file>
+  <file src="../../src/Shared/Infrastructure/Persistence/DoctrineDomainEventStore.php">
+    <UnusedClass>
+      <code><![CDATA[DoctrineDomainEventStore]]></code>
+    </UnusedClass>
+  </file>
+  <file src="../../src/Shared/Infrastructure/Persistence/DoctrineStoredDomainEventRepository.php">
+    <UnusedClass>
+      <code><![CDATA[DoctrineStoredDomainEventRepository]]></code>
+    </UnusedClass>
+  </file>
+  <file src="../../src/Shared/Infrastructure/Persistence/Entity/StoredDomainEvent.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[StoredDomainEvent]]></code>
+    </ClassMustBeFinal>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[aggregateId]]></code>
+      <code><![CDATA[body]]></code>
+      <code><![CDATA[eventId]]></code>
+      <code><![CDATA[name]]></code>
+      <code><![CDATA[occurredOn]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="../../src/Shared/Infrastructure/Persistence/PaginatorCursor.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[PaginatorCursor]]></code>
+    </ClassMustBeFinal>
+  </file>
+  <file src="../../src/Shared/Infrastructure/Persistence/PaginatorCursorFactory.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[PaginatorCursorFactory]]></code>
+    </ClassMustBeFinal>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="../../src/Shared/Infrastructure/Persistence/PaginatorCursorInterface.php">
+    <PossiblyUnusedReturnValue>
+      <code><![CDATA[self]]></code>
+      <code><![CDATA[self]]></code>
+      <code><![CDATA[self]]></code>
+      <code><![CDATA[self]]></code>
+    </PossiblyUnusedReturnValue>
+  </file>
+  <file src="../../src/Shared/Infrastructure/Persistence/QueryBuilderWithOptions.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[QueryBuilderWithOptions]]></code>
+    </ClassMustBeFinal>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[setOptions]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="../../src/Shared/Infrastructure/Serializer/JsonDecoder.php">
+    <UnusedClass>
+      <code><![CDATA[JsonDecoder]]></code>
+    </UnusedClass>
+  </file>
+  <file src="../../src/Shared/Media/Application/MediaRegistrar.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="../../src/Shared/Media/Domain/Entity/Media.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[Media]]></code>
+    </ClassMustBeFinal>
+    <InvalidArgument>
+      <code><![CDATA[MediaRepository::class]]></code>
+    </InvalidArgument>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[getDeletedAt]]></code>
+      <code><![CDATA[isActive]]></code>
+      <code><![CDATA[softDelete]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="../../src/Shared/Media/Domain/Exception/InvalidImageException.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[formField]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="../../src/Shared/Media/Infrastructure/Controller/MediaGetController.php">
+    <UnusedClass>
+      <code><![CDATA[MediaGetController]]></code>
+    </UnusedClass>
+  </file>
+  <file src="../../src/Shared/Media/Infrastructure/Http/ConfigurableMediaPublicUrlGenerator.php">
+    <UnusedClass>
+      <code><![CDATA[ConfigurableMediaPublicUrlGenerator]]></code>
+    </UnusedClass>
+  </file>
+  <file src="../../src/Shared/Media/Infrastructure/Image/InterventionImageNormalizer.php">
+    <UnusedClass>
+      <code><![CDATA[InterventionImageNormalizer]]></code>
+    </UnusedClass>
+  </file>
+  <file src="../../src/Shared/Media/Infrastructure/Persistence/PostgresMediaRepository.php">
+    <UnusedClass>
+      <code><![CDATA[PostgresMediaRepository]]></code>
+    </UnusedClass>
+  </file>
+  <file src="../../src/Shared/Storage/Application/StoredImageObjectWriter.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="../../src/Shared/Storage/Application/StoredObjectOrphanCleaner.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="../../src/Shared/Storage/Infrastructure/CompositeStoredObjectAccess.php">
+    <UnusedClass>
+      <code><![CDATA[CompositeStoredObjectAccess]]></code>
+    </UnusedClass>
+  </file>
+  <file src="../../src/Shared/Storage/Infrastructure/Controller/StoredObjectGetController.php">
+    <UnusedClass>
+      <code><![CDATA[StoredObjectGetController]]></code>
+    </UnusedClass>
+  </file>
+  <file src="../../src/Shared/Storage/Infrastructure/FlysystemObjectStorage.php">
+    <UnusedClass>
+      <code><![CDATA[FlysystemObjectStorage]]></code>
+    </UnusedClass>
+  </file>
+  <file src="../../src/Shared/Storage/Infrastructure/Http/ConfigurableStoredObjectPublicUrlGenerator.php">
+    <UnusedClass>
+      <code><![CDATA[ConfigurableStoredObjectPublicUrlGenerator]]></code>
+    </UnusedClass>
+  </file>
+  <file src="../../tests/Behat/Context/Abstraction/AbstractContext.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[getBundleDependencies]]></code>
+    </PossiblyUnusedMethod>
+    <UndefinedClass>
+      <code><![CDATA[Context]]></code>
+    </UndefinedClass>
+  </file>
+  <file src="../../tests/Behat/Context/DoctrineContext.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[DoctrineContext]]></code>
+    </ClassMustBeFinal>
+    <MissingDependency>
+      <code><![CDATA[AbstractContext]]></code>
+    </MissingDependency>
+    <PossiblyUnusedParam>
+      <code><![CDATA[$argumentName]]></code>
+      <code><![CDATA[$connectionName]]></code>
+      <code><![CDATA[$connectionName]]></code>
+      <code><![CDATA[$connectionName]]></code>
+      <code><![CDATA[$connectionName]]></code>
+      <code><![CDATA[$connectionName]]></code>
+      <code><![CDATA[$connectionName]]></code>
+      <code><![CDATA[$connectionName]]></code>
+      <code><![CDATA[$connectionName]]></code>
+      <code><![CDATA[$connectionName]]></code>
+      <code><![CDATA[$connectionName]]></code>
+      <code><![CDATA[$count]]></code>
+      <code><![CDATA[$count]]></code>
+      <code><![CDATA[$count]]></code>
+      <code><![CDATA[$count]]></code>
+      <code><![CDATA[$expectedValue]]></code>
+      <code><![CDATA[$needle]]></code>
+      <code><![CDATA[$needle]]></code>
+      <code><![CDATA[$needle]]></code>
+      <code><![CDATA[$number]]></code>
+      <code><![CDATA[$number]]></code>
+      <code><![CDATA[$number]]></code>
+      <code><![CDATA[$optionalConnectionNameFilter]]></code>
+      <code><![CDATA[$type]]></code>
+    </PossiblyUnusedParam>
+  </file>
+  <file src="../../tests/Behat/Context/EntityManagerContext.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[EntityManagerContext]]></code>
+    </ClassMustBeFinal>
+    <MissingDependency>
+      <code><![CDATA[AbstractContext]]></code>
+    </MissingDependency>
+    <PossiblyUnusedParam>
+      <code><![CDATA[$count]]></code>
+      <code><![CDATA[$count]]></code>
+      <code><![CDATA[$entityClass]]></code>
+      <code><![CDATA[$entityClass]]></code>
+      <code><![CDATA[$entityClass]]></code>
+      <code><![CDATA[$entityClass]]></code>
+      <code><![CDATA[$entityClass]]></code>
+      <code><![CDATA[$entityClass]]></code>
+      <code><![CDATA[$entityClass]]></code>
+      <code><![CDATA[$entityClass]]></code>
+      <code><![CDATA[$entityClass]]></code>
+      <code><![CDATA[$entityClass]]></code>
+      <code><![CDATA[$entityClass]]></code>
+      <code><![CDATA[$entityClass]]></code>
+      <code><![CDATA[$entityClass]]></code>
+      <code><![CDATA[$entityClass]]></code>
+      <code><![CDATA[$entityClass]]></code>
+      <code><![CDATA[$entityClass]]></code>
+      <code><![CDATA[$entityClass]]></code>
+      <code><![CDATA[$findByQueryString]]></code>
+      <code><![CDATA[$findByQueryString]]></code>
+      <code><![CDATA[$findByQueryString]]></code>
+      <code><![CDATA[$findByQueryString]]></code>
+      <code><![CDATA[$findByQueryString]]></code>
+      <code><![CDATA[$findByQueryString]]></code>
+      <code><![CDATA[$findByQueryString]]></code>
+      <code><![CDATA[$findByQueryString]]></code>
+      <code><![CDATA[$findByQueryString]]></code>
+      <code><![CDATA[$findByQueryString]]></code>
+      <code><![CDATA[$findByQueryString]]></code>
+      <code><![CDATA[$findByQueryString]]></code>
+      <code><![CDATA[$findByQueryString]]></code>
+      <code><![CDATA[$findByQueryString]]></code>
+      <code><![CDATA[$key]]></code>
+      <code><![CDATA[$key]]></code>
+      <code><![CDATA[$key]]></code>
+      <code><![CDATA[$property]]></code>
+      <code><![CDATA[$property]]></code>
+      <code><![CDATA[$property]]></code>
+      <code><![CDATA[$recordCount]]></code>
+      <code><![CDATA[$table]]></code>
+      <code><![CDATA[$table]]></code>
+      <code><![CDATA[$table]]></code>
+      <code><![CDATA[$table]]></code>
+      <code><![CDATA[$table]]></code>
+      <code><![CDATA[$table]]></code>
+      <code><![CDATA[$table]]></code>
+      <code><![CDATA[$updateQueryString]]></code>
+      <code><![CDATA[$updateQueryString]]></code>
+      <code><![CDATA[$value]]></code>
+    </PossiblyUnusedParam>
+  </file>
+  <file src="../../tests/Behat/Context/FixturesContext.php">
+    <UndefinedClass>
+      <code><![CDATA[Context]]></code>
+    </UndefinedClass>
+    <UnusedParam>
+      <code><![CDATA[$scope]]></code>
+    </UnusedParam>
+  </file>
+  <file src="../../tests/Behat/Context/HttpRequestContext.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[HttpRequestContext]]></code>
+    </ClassMustBeFinal>
+    <MissingDependency>
+      <code><![CDATA[AbstractContext]]></code>
+    </MissingDependency>
+    <PossiblyUnusedParam>
+      <code><![CDATA[$action]]></code>
+      <code><![CDATA[$baseUrl]]></code>
+      <code><![CDATA[$body]]></code>
+      <code><![CDATA[$body]]></code>
+      <code><![CDATA[$expression]]></code>
+      <code><![CDATA[$files]]></code>
+      <code><![CDATA[$method]]></code>
+      <code><![CDATA[$method]]></code>
+      <code><![CDATA[$method]]></code>
+      <code><![CDATA[$method]]></code>
+      <code><![CDATA[$method]]></code>
+      <code><![CDATA[$method]]></code>
+      <code><![CDATA[$method]]></code>
+      <code><![CDATA[$method]]></code>
+      <code><![CDATA[$name]]></code>
+      <code><![CDATA[$name]]></code>
+      <code><![CDATA[$node]]></code>
+      <code><![CDATA[$pyStringNode]]></code>
+      <code><![CDATA[$pyStringNode]]></code>
+      <code><![CDATA[$pyStringNode]]></code>
+      <code><![CDATA[$tableNode]]></code>
+      <code><![CDATA[$tableNode]]></code>
+      <code><![CDATA[$tableNode]]></code>
+      <code><![CDATA[$url]]></code>
+      <code><![CDATA[$url]]></code>
+      <code><![CDATA[$url]]></code>
+      <code><![CDATA[$url]]></code>
+      <code><![CDATA[$url]]></code>
+      <code><![CDATA[$url]]></code>
+      <code><![CDATA[$url]]></code>
+      <code><![CDATA[$url]]></code>
+      <code><![CDATA[$value]]></code>
+    </PossiblyUnusedParam>
+  </file>
+  <file src="../../tests/Behat/Context/HttpResponseContext.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[HttpResponseContext]]></code>
+    </ClassMustBeFinal>
+    <MissingDependency>
+      <code><![CDATA[AbstractContext]]></code>
+    </MissingDependency>
+    <PossiblyUnusedParam>
+      <code><![CDATA[$encoding]]></code>
+      <code><![CDATA[$expected]]></code>
+      <code><![CDATA[$expected]]></code>
+      <code><![CDATA[$name]]></code>
+      <code><![CDATA[$name]]></code>
+      <code><![CDATA[$name]]></code>
+      <code><![CDATA[$name]]></code>
+      <code><![CDATA[$name]]></code>
+      <code><![CDATA[$name]]></code>
+      <code><![CDATA[$name]]></code>
+      <code><![CDATA[$name]]></code>
+      <code><![CDATA[$pyStringNode]]></code>
+      <code><![CDATA[$regex]]></code>
+      <code><![CDATA[$regex]]></code>
+      <code><![CDATA[$responseCode]]></code>
+      <code><![CDATA[$responseCode]]></code>
+      <code><![CDATA[$value]]></code>
+      <code><![CDATA[$value]]></code>
+      <code><![CDATA[$value]]></code>
+      <code><![CDATA[$value]]></code>
+    </PossiblyUnusedParam>
+  </file>
+  <file src="../../tests/Behat/Context/Json/JsonErrorContext.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[JsonErrorContext]]></code>
+    </ClassMustBeFinal>
+    <MissingDependency>
+      <code><![CDATA[AbstractContext]]></code>
+    </MissingDependency>
+    <PossiblyUnusedParam>
+      <code><![CDATA[$array]]></code>
+      <code><![CDATA[$code]]></code>
+      <code><![CDATA[$code]]></code>
+      <code><![CDATA[$error]]></code>
+      <code><![CDATA[$errorCode]]></code>
+      <code><![CDATA[$field]]></code>
+      <code><![CDATA[$field]]></code>
+      <code><![CDATA[$field]]></code>
+      <code><![CDATA[$field]]></code>
+      <code><![CDATA[$message]]></code>
+      <code><![CDATA[$message]]></code>
+      <code><![CDATA[$message]]></code>
+      <code><![CDATA[$message]]></code>
+      <code><![CDATA[$message]]></code>
+    </PossiblyUnusedParam>
+  </file>
+  <file src="../../tests/Behat/Context/Json/JsonNodeContext.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[JsonNodeContext]]></code>
+    </ClassMustBeFinal>
+    <MissingDependency>
+      <code><![CDATA[AbstractContext]]></code>
+    </MissingDependency>
+    <PossiblyUnusedParam>
+      <code><![CDATA[$content]]></code>
+      <code><![CDATA[$count]]></code>
+      <code><![CDATA[$expected]]></code>
+      <code><![CDATA[$header]]></code>
+      <code><![CDATA[$node]]></code>
+      <code><![CDATA[$node]]></code>
+      <code><![CDATA[$node]]></code>
+      <code><![CDATA[$node]]></code>
+      <code><![CDATA[$node]]></code>
+      <code><![CDATA[$node]]></code>
+      <code><![CDATA[$node]]></code>
+      <code><![CDATA[$node]]></code>
+      <code><![CDATA[$node]]></code>
+      <code><![CDATA[$node]]></code>
+      <code><![CDATA[$node]]></code>
+      <code><![CDATA[$node]]></code>
+      <code><![CDATA[$node]]></code>
+      <code><![CDATA[$node]]></code>
+      <code><![CDATA[$node]]></code>
+      <code><![CDATA[$node]]></code>
+      <code><![CDATA[$nodeA]]></code>
+      <code><![CDATA[$nodeB]]></code>
+      <code><![CDATA[$number]]></code>
+      <code><![CDATA[$pattern]]></code>
+      <code><![CDATA[$tableNode]]></code>
+      <code><![CDATA[$tableNode]]></code>
+      <code><![CDATA[$tableNode]]></code>
+      <code><![CDATA[$text]]></code>
+      <code><![CDATA[$text]]></code>
+      <code><![CDATA[$text]]></code>
+      <code><![CDATA[$text]]></code>
+      <code><![CDATA[$text]]></code>
+    </PossiblyUnusedParam>
+  </file>
+  <file src="../../tests/Behat/Context/Json/JsonPathContext.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[JsonPathContext]]></code>
+    </ClassMustBeFinal>
+    <MissingDependency>
+      <code><![CDATA[AbstractContext]]></code>
+    </MissingDependency>
+    <PossiblyUnusedParam>
+      <code><![CDATA[$expected]]></code>
+      <code><![CDATA[$expected]]></code>
+      <code><![CDATA[$expected]]></code>
+      <code><![CDATA[$expected]]></code>
+      <code><![CDATA[$expected]]></code>
+      <code><![CDATA[$expected]]></code>
+      <code><![CDATA[$expected]]></code>
+      <code><![CDATA[$expectedCount]]></code>
+      <code><![CDATA[$expectedCount]]></code>
+      <code><![CDATA[$expectedJson]]></code>
+      <code><![CDATA[$expectedJson]]></code>
+      <code><![CDATA[$expectedJson]]></code>
+      <code><![CDATA[$nodeSelector]]></code>
+      <code><![CDATA[$nodeSelector]]></code>
+      <code><![CDATA[$nodeSelector]]></code>
+      <code><![CDATA[$nodeSelector]]></code>
+      <code><![CDATA[$nodeSelector]]></code>
+      <code><![CDATA[$nodeSelector]]></code>
+      <code><![CDATA[$nodeSelector]]></code>
+      <code><![CDATA[$nodeSelector]]></code>
+      <code><![CDATA[$nodeSelector]]></code>
+      <code><![CDATA[$nodeSelector]]></code>
+      <code><![CDATA[$nodeSelector]]></code>
+      <code><![CDATA[$nodeSelector]]></code>
+      <code><![CDATA[$nodeSelector]]></code>
+      <code><![CDATA[$operator]]></code>
+      <code><![CDATA[$operator]]></code>
+      <code><![CDATA[$value]]></code>
+      <code><![CDATA[$value]]></code>
+    </PossiblyUnusedParam>
+  </file>
+  <file src="../../tests/Behat/Context/Json/JsonSchemaContext.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[JsonSchemaContext]]></code>
+    </ClassMustBeFinal>
+    <MissingDependency>
+      <code><![CDATA[AbstractContext]]></code>
+    </MissingDependency>
+    <PossiblyUnusedParam>
+      <code><![CDATA[$dumpPath]]></code>
+      <code><![CDATA[$dumpPath]]></code>
+      <code><![CDATA[$filename]]></code>
+      <code><![CDATA[$filename]]></code>
+      <code><![CDATA[$filename]]></code>
+      <code><![CDATA[$pyStringNode]]></code>
+      <code><![CDATA[$pyStringNode]]></code>
+      <code><![CDATA[$schemaName]]></code>
+      <code><![CDATA[$schemaName]]></code>
+    </PossiblyUnusedParam>
+  </file>
+  <file src="../../tests/Behat/Context/RateLimitContext.php">
+    <MissingDependency>
+      <code><![CDATA[AbstractContext]]></code>
+    </MissingDependency>
+    <UndefinedClass>
+      <code><![CDATA[Context]]></code>
+    </UndefinedClass>
+    <UnusedParam>
+      <code><![CDATA[$clientIp]]></code>
+    </UnusedParam>
+  </file>
+  <file src="../../tests/Behat/Context/SqlQueryContext.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[SqlQueryContext]]></code>
+    </ClassMustBeFinal>
+    <MissingDependency>
+      <code><![CDATA[AbstractContext]]></code>
+    </MissingDependency>
+    <PossiblyUnusedParam>
+      <code><![CDATA[$message]]></code>
+      <code><![CDATA[$name]]></code>
+      <code><![CDATA[$query]]></code>
+      <code><![CDATA[$query]]></code>
+      <code><![CDATA[$recordCount]]></code>
+      <code><![CDATA[$string]]></code>
+      <code><![CDATA[$string]]></code>
+    </PossiblyUnusedParam>
+  </file>
+  <file src="../../tests/Behat/NodeModifier/Date/SimpleDateNodeModifier.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[SimpleDateNodeModifier]]></code>
+    </ClassMustBeFinal>
+  </file>
+  <file src="../../tests/Behat/NodeModifier/Format/JsonNodeModifier.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[JsonNodeModifier]]></code>
+    </ClassMustBeFinal>
+  </file>
+  <file src="../../tests/Behat/NodeModifier/Matching/OneOfNodeModifier.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[OneOfNodeModifier]]></code>
+    </ClassMustBeFinal>
+  </file>
+  <file src="../../tests/Behat/NodeModifier/Matching/RegexNodeModifier.php">
+    <ArgumentTypeCoercion>
+      <code><![CDATA[$expected]]></code>
+    </ArgumentTypeCoercion>
+    <ClassMustBeFinal>
+      <code><![CDATA[RegexNodeModifier]]></code>
+    </ClassMustBeFinal>
+  </file>
+  <file src="../../tests/Behat/NodeModifier/Matching/StringContainsNodeModifier.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[StringContainsNodeModifier]]></code>
+    </ClassMustBeFinal>
+  </file>
+  <file src="../../tests/Behat/NodeModifier/NodeModifierInterface.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[compare]]></code>
+      <code><![CDATA[getModifier]]></code>
+      <code><![CDATA[getPathCleaned]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="../../tests/Behat/NodeModifier/NodeModifierLocator.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[NodeModifierLocator]]></code>
+    </ClassMustBeFinal>
+  </file>
+  <file src="../../tests/Behat/NodeModifier/Numeric/AmountNodeModifier.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[AmountNodeModifier]]></code>
+    </ClassMustBeFinal>
+  </file>
+  <file src="../../tests/Behat/NodeModifier/Scalar/BackedEnumNodeModifier.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[BackedEnumNodeModifier]]></code>
+    </ClassMustBeFinal>
+    <InternalClass>
+      <code><![CDATA[new AssertionFailedError(\sprintf('Enum "%s" is not a BackedEnum', $classString))]]></code>
+      <code><![CDATA[new AssertionFailedError(\sprintf('Unknown enum "%s"', $classString))]]></code>
+      <code><![CDATA[new AssertionFailedError(\sprintf('Unknown value key "%s" for enum "%s"', $enumKey, $classString))]]></code>
+    </InternalClass>
+    <InternalMethod>
+      <code><![CDATA[new AssertionFailedError(\sprintf('Enum "%s" is not a BackedEnum', $classString))]]></code>
+      <code><![CDATA[new AssertionFailedError(\sprintf('Unknown enum "%s"', $classString))]]></code>
+      <code><![CDATA[new AssertionFailedError(\sprintf('Unknown value key "%s" for enum "%s"', $enumKey, $classString))]]></code>
+    </InternalMethod>
+  </file>
+  <file src="../../tests/Behat/NodeModifier/Scalar/BooleanNodeModifier.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[BooleanNodeModifier]]></code>
+    </ClassMustBeFinal>
+  </file>
+  <file src="../../tests/Behat/NodeModifier/Scalar/IntegerNodeModifier.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[IntegerNodeModifier]]></code>
+    </ClassMustBeFinal>
+  </file>
+  <file src="../../tests/Behat/NodeModifier/Scalar/NullNodeModifier.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[NullNodeModifier]]></code>
+    </ClassMustBeFinal>
+  </file>
+  <file src="../../tests/Behat/NodeModifier/Scalar/StringNodeModifier.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[StringNodeModifier]]></code>
+    </ClassMustBeFinal>
+  </file>
+  <file src="../../tests/Behat/NodeModifier/Security/PasswordVerifyNodeModifier.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[PasswordVerifyNodeModifier]]></code>
+    </ClassMustBeFinal>
+  </file>
+  <file src="../../tests/Behat/State/FixturesChangeTracker.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[hasChanged]]></code>
+      <code><![CDATA[reset]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="../../tests/Behat/State/HttpResponseContainer.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[HttpResponseContainer]]></code>
+    </ClassMustBeFinal>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[getResult]]></code>
+      <code><![CDATA[store]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="../../tests/Behat/Support/Json/Json.php">
+    <PossiblyNullArgument>
+      <code><![CDATA[$expression]]></code>
+    </PossiblyNullArgument>
+  </file>
+  <file src="../../tests/Behat/Support/Json/JsonInspector.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[JsonInspector]]></code>
+    </ClassMustBeFinal>
+    <PossiblyFalseArgument>
+      <code><![CDATA[$magicMethods]]></code>
+    </PossiblyFalseArgument>
+    <PossiblyInvalidArgument>
+      <code><![CDATA[$exception->getCode()]]></code>
+      <code><![CDATA[$expression]]></code>
+      <code><![CDATA[$throwException]]></code>
+    </PossiblyInvalidArgument>
+  </file>
+  <file src="../../tests/Behat/Support/Json/JsonSchema.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[JsonSchema]]></code>
+    </ClassMustBeFinal>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+    <PropertyTypeCoercion>
+      <code><![CDATA[$schemaStorage->resolveRef((string) $this->uri)]]></code>
+    </PropertyTypeCoercion>
+  </file>
+  <file src="../../tests/Behat/Support/PostProcess/ArrayToolTrait.php">
+    <PossiblyUnusedParam>
+      <code><![CDATA[$actual]]></code>
+      <code><![CDATA[$expected]]></code>
+      <code><![CDATA[$sort]]></code>
+    </PossiblyUnusedParam>
+  </file>
+  <file src="../../tests/Behat/Support/PostProcess/JsonPathToolTrait.php">
+    <PossiblyUnusedParam>
+      <code><![CDATA[$nodeSelector]]></code>
+    </PossiblyUnusedParam>
+  </file>
+  <file src="../../tests/Behat/Support/PostProcess/JsonToolTrait.php">
+    <PossiblyUnusedParam>
+      <code><![CDATA[$count]]></code>
+      <code><![CDATA[$expected]]></code>
+      <code><![CDATA[$expectedValue]]></code>
+      <code><![CDATA[$expectedValue]]></code>
+      <code><![CDATA[$json]]></code>
+      <code><![CDATA[$json]]></code>
+      <code><![CDATA[$json]]></code>
+      <code><![CDATA[$json]]></code>
+      <code><![CDATA[$json]]></code>
+      <code><![CDATA[$json]]></code>
+      <code><![CDATA[$json]]></code>
+      <code><![CDATA[$json]]></code>
+      <code><![CDATA[$json]]></code>
+      <code><![CDATA[$json]]></code>
+      <code><![CDATA[$json]]></code>
+      <code><![CDATA[$json]]></code>
+      <code><![CDATA[$json]]></code>
+      <code><![CDATA[$json]]></code>
+      <code><![CDATA[$json]]></code>
+      <code><![CDATA[$json]]></code>
+      <code><![CDATA[$json]]></code>
+      <code><![CDATA[$jsonSchema]]></code>
+      <code><![CDATA[$jsonSchema]]></code>
+      <code><![CDATA[$list]]></code>
+      <code><![CDATA[$pattern]]></code>
+      <code><![CDATA[$property]]></code>
+      <code><![CDATA[$property]]></code>
+      <code><![CDATA[$property]]></code>
+      <code><![CDATA[$property]]></code>
+      <code><![CDATA[$property]]></code>
+      <code><![CDATA[$property]]></code>
+      <code><![CDATA[$property]]></code>
+      <code><![CDATA[$property]]></code>
+      <code><![CDATA[$property]]></code>
+      <code><![CDATA[$property]]></code>
+      <code><![CDATA[$property]]></code>
+      <code><![CDATA[$property]]></code>
+      <code><![CDATA[$property]]></code>
+      <code><![CDATA[$property]]></code>
+      <code><![CDATA[$property]]></code>
+      <code><![CDATA[$text]]></code>
+      <code><![CDATA[$text]]></code>
+      <code><![CDATA[$type]]></code>
+    </PossiblyUnusedParam>
+  </file>
+  <file src="../../tests/Behat/Support/PostProcess/PropertyPostProcessTrait.php">
+    <PossiblyUnusedParam>
+      <code><![CDATA[$nodeModifierLocator]]></code>
+      <code><![CDATA[$property]]></code>
+      <code><![CDATA[$property]]></code>
+      <code><![CDATA[$property]]></code>
+      <code><![CDATA[$value]]></code>
+      <code><![CDATA[$value]]></code>
+    </PossiblyUnusedParam>
+  </file>
+  <file src="../../tests/Behat/Support/PostProcess/TableShouldMatchTrait.php">
+    <PossiblyUnusedParam>
+      <code><![CDATA[$entity]]></code>
+      <code><![CDATA[$table]]></code>
+    </PossiblyUnusedParam>
+  </file>
+  <file src="../../tests/Behat/Support/Tool/ArrayTools.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[ArrayTools]]></code>
+    </ClassMustBeFinal>
+  </file>
+  <file src="../../tests/Behat/Support/Tool/EntityManagerToolTrait.php">
+    <PossiblyUnusedParam>
+      <code><![CDATA[$actual]]></code>
+      <code><![CDATA[$attribute]]></code>
+      <code><![CDATA[$attribute]]></code>
+      <code><![CDATA[$count]]></code>
+      <code><![CDATA[$entityClass]]></code>
+      <code><![CDATA[$entityClass]]></code>
+      <code><![CDATA[$entityClass]]></code>
+      <code><![CDATA[$entityClass]]></code>
+      <code><![CDATA[$entityClass]]></code>
+      <code><![CDATA[$entityClass]]></code>
+      <code><![CDATA[$entityClass]]></code>
+      <code><![CDATA[$findBy]]></code>
+      <code><![CDATA[$findByCriteria]]></code>
+      <code><![CDATA[$findByQueryString]]></code>
+      <code><![CDATA[$findByQueryStringEntity]]></code>
+      <code><![CDATA[$toUpdate]]></code>
+      <code><![CDATA[$type]]></code>
+      <code><![CDATA[$value]]></code>
+    </PossiblyUnusedParam>
+  </file>
+  <file src="../../tests/Behat/Support/Transport/HttpResponse.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[HttpResponse]]></code>
+    </ClassMustBeFinal>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+      <code><![CDATA[getJson]]></code>
+      <code><![CDATA[getValue]]></code>
+      <code><![CDATA[update]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="../../tests/Bench/Shared/Infrastructure/Http/EventListener/ExceptionResponderBenchmarkTest.php">
+    <InvalidOperand>
+      <code><![CDATA[0.99 * self::MEASUREMENT_ITERATIONS]]></code>
+    </InvalidOperand>
+    <MissingOverrideAttribute>
+      <code><![CDATA[protected function setUp(): void]]></code>
+    </MissingOverrideAttribute>
+  </file>
+  <file src="../../tests/Doctrine/TestDebugDataHolder.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[TestDebugDataHolder]]></code>
+    </ClassMustBeFinal>
+    <InternalMethod>
+      <code><![CDATA[getParams]]></code>
+      <code><![CDATA[getSql]]></code>
+      <code><![CDATA[getTypes]]></code>
+    </InternalMethod>
+  </file>
+  <file src="../../tests/Functional/Backoffice/Bank/Infrastructure/Controller/BankLogoMultipartFunctionalTest.php">
+    <PossiblyFalseArgument>
+      <code><![CDATA[\base64_decode(self::MIN_PNG, true)]]></code>
+      <code><![CDATA[\base64_decode(self::MIN_PNG, true)]]></code>
+    </PossiblyFalseArgument>
+  </file>
+  <file src="../../tests/Functional/Backoffice/Bank/Infrastructure/Controller/BankStoredObjectMultipartFunctionalTest.php">
+    <PossiblyFalseArgument>
+      <code><![CDATA[\base64_decode(self::MIN_PNG, true)]]></code>
+    </PossiblyFalseArgument>
+  </file>
+  <file src="../../tests/Functional/Shared/Infrastructure/Http/EventListener/Fixtures/ForceHealthFailureSubscriber.php">
+    <LessSpecificImplementedReturnType>
+      <code><![CDATA[array<string, array<int, string|int>>]]></code>
+    </LessSpecificImplementedReturnType>
+  </file>
+  <file src="../../tests/Functional/Shared/Infrastructure/Http/EventListener/RateLimitListenerFunctionalTest.php">
+    <PossiblyUndefinedArrayOffset>
+      <code><![CDATA[$body['retryAfterSeconds']]]></code>
+    </PossiblyUndefinedArrayOffset>
+  </file>
+  <file src="../../tests/Functional/Shared/Infrastructure/Http/HealthEndpointsContractTest.php">
+    <LessSpecificReturnStatement>
+      <code><![CDATA[(object) ['$ref' => 'file://' . $resolvedPath]]]></code>
+    </LessSpecificReturnStatement>
+    <MoreSpecificReturnType>
+      <code><![CDATA[stdClass]]></code>
+    </MoreSpecificReturnType>
+  </file>
+  <file src="../../tests/Functional/Shared/Infrastructure/Http/ProblemDetailsApiSchemaSweepTest.php">
+    <LessSpecificReturnStatement>
+      <code><![CDATA[(object) ['$ref' => 'file://' . $resolvedPath]]]></code>
+    </LessSpecificReturnStatement>
+    <MoreSpecificReturnType>
+      <code><![CDATA[stdClass]]></code>
+    </MoreSpecificReturnType>
+    <PossiblyFalseOperand>
+      <code><![CDATA[\json_encode($validator->getErrors())]]></code>
+    </PossiblyFalseOperand>
+  </file>
+  <file src="../../tests/Unit/Doctrine/TestDebugDataHolderTest.php">
+    <InternalClass>
+      <code><![CDATA[new Query($sql)]]></code>
+    </InternalClass>
+    <InternalMethod>
+      <code><![CDATA[new Query($sql)]]></code>
+      <code><![CDATA[start]]></code>
+      <code><![CDATA[stop]]></code>
+    </InternalMethod>
+  </file>
+  <file src="../../tests/Unit/Shared/Application/Problem/BannedDoctrineApisTest.php">
+    <ArgumentTypeCoercion>
+      <code><![CDATA[$regex]]></code>
+    </ArgumentTypeCoercion>
+  </file>
+  <file src="../../tests/Unit/Shared/Application/Problem/ConstantTimeAuthBranchingBenchmarkTest.php">
+    <InvalidOperand>
+      <code><![CDATA[$max / $min]]></code>
+    </InvalidOperand>
+  </file>
+  <file src="../../tests/Unit/Shared/Application/Problem/ErrorContractGateTest.php">
+    <InternalMethod>
+      <code><![CDATA[addToAssertionCount]]></code>
+      <code><![CDATA[addToAssertionCount]]></code>
+    </InternalMethod>
+    <RedundantCondition>
+      <code><![CDATA[\is_resource($pipes[0])]]></code>
+      <code><![CDATA[\is_resource($pipes[1])]]></code>
+      <code><![CDATA[\is_resource($pipes[1])]]></code>
+      <code><![CDATA[\is_resource($pipes[2])]]></code>
+      <code><![CDATA[isset($pipes[0]) && \is_resource($pipes[0])]]></code>
+      <code><![CDATA[isset($pipes[1]) && \is_resource($pipes[1])]]></code>
+      <code><![CDATA[isset($pipes[1]) && \is_resource($pipes[1])]]></code>
+      <code><![CDATA[isset($pipes[2]) && \is_resource($pipes[2])]]></code>
+    </RedundantCondition>
+  </file>
+  <file src="../../tests/Unit/Shared/Application/Problem/LoggerInterfaceContractTest.php">
+    <ArgumentTypeCoercion>
+      <code><![CDATA[$regex]]></code>
+    </ArgumentTypeCoercion>
+  </file>
+  <file src="../../tests/Unit/Shared/Application/Problem/NoDatabaseDependenciesContractTest.php">
+    <ArgumentTypeCoercion>
+      <code><![CDATA[$needle]]></code>
+    </ArgumentTypeCoercion>
+  </file>
+  <file src="../../tests/Unit/Shared/Application/Problem/ProblemDetailsFactoryTest.php">
+    <MoreSpecificReturnType>
+      <code><![CDATA[iterable<string, array{0: non-empty-string}>]]></code>
+    </MoreSpecificReturnType>
+    <PossiblyFalseArgument>
+      <code><![CDATA[\json_encode($validator->getErrors())]]></code>
+    </PossiblyFalseArgument>
+    <UnusedParam>
+      <code><![CDATA[$expectedDefaultType]]></code>
+      <code><![CDATA[$expectedStatus]]></code>
+    </UnusedParam>
+  </file>
+  <file src="../../tests/Unit/Shared/Application/Problem/ProblemDetailsTest.php">
+    <LessSpecificReturnStatement>
+      <code><![CDATA[(object) ['$ref' => 'file://' . $resolvedPath]]]></code>
+    </LessSpecificReturnStatement>
+    <MoreSpecificReturnType>
+      <code><![CDATA[stdClass]]></code>
+    </MoreSpecificReturnType>
+    <PossiblyFalseArgument>
+      <code><![CDATA[\json_encode($errors)]]></code>
+    </PossiblyFalseArgument>
+    <UnusedFunctionCall>
+      <code><![CDATA[\json_encode]]></code>
+    </UnusedFunctionCall>
+  </file>
+  <file src="../../tests/Unit/Shared/Application/Problem/RedactionDenylistTest.php">
+    <MoreSpecificReturnType>
+      <code><![CDATA[iterable<string, array{0: non-empty-string}>]]></code>
+    </MoreSpecificReturnType>
+    <RedundantFunctionCall>
+      <code><![CDATA[\strtolower]]></code>
+    </RedundantFunctionCall>
+  </file>
+  <file src="../../tests/Unit/Shared/Domain/Exception/DomainExceptionTest.php">
+    <PossiblyFalseArgument>
+      <code><![CDATA[\class_implements($exception)]]></code>
+    </PossiblyFalseArgument>
+  </file>
+  <file src="../../tests/Unit/Shared/Infrastructure/Http/EventListener/ExceptionResponderTest.php">
+    <InvalidOperand>
+      <code><![CDATA[($elapsedNs / $iterations) / 1_000_000]]></code>
+    </InvalidOperand>
+    <LessSpecificReturnStatement>
+      <code><![CDATA[[
+            'level' => $level,
+            'message' => $message,
+            'context' => $context,
+        ]]]></code>
+    </LessSpecificReturnStatement>
+    <MoreSpecificReturnType>
+      <code><![CDATA[array{
+     *     level: string,
+     *     message: string,
+     *     context: array{
+     *         instance: string,
+     *         correlation_id: string,
+     *         type: string,
+     *         status: int,
+     *         exception_class: string,
+     *         exception_category: string,
+     *         exception_message: string,
+     *         request_uri: string,
+     *         request_method: string,
+     *     },
+     * }]]></code>
+    </MoreSpecificReturnType>
+  </file>
+</files>

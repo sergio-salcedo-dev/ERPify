@@ -9,6 +9,7 @@
     findUnusedCode="true"
     cacheDirectory="../../var/cache/psalm"
     autoloader="../../vendor/autoload.php"
+    errorBaseline="psalm-baseline.xml"
 >
     <projectFiles>
         <directory name="../../src" />
