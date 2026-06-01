@@ -73,7 +73,7 @@ export default function LandingPage() {
               iconColor="text-blue-600"
               iconBg="bg-blue-50"
               buttonText="Go to BackOffice"
-              buttonVariant="slate"
+              buttonVariant="default"
               onClick={goToBackOffice}
               loading={loading}
             />
@@ -85,7 +85,7 @@ export default function LandingPage() {
               iconColor="text-emerald-600"
               iconBg="bg-emerald-50"
               buttonText="Check FrontOffice API health"
-              buttonVariant="emerald"
+              buttonVariant="secondary"
               onClick={checkHealth}
               loading={loading}
             >
