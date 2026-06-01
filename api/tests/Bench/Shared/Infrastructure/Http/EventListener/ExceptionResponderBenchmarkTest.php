@@ -75,7 +75,6 @@ final class ExceptionResponderBenchmarkTest extends WebTestCase
     /**
      * @SuppressWarnings("PHPMD.Superglobals")
      */
-    #[\Override]
     protected function setUp(): void
     {
         parent::setUp();
