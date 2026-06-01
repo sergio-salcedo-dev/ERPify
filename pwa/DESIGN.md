@@ -95,6 +95,8 @@ Same in both modes. Adjusted-state values shift slightly for legibility.
 | `--color-accent-active` | `#5052c4`                       | Pressed / active surfaces                           |
 | `--color-security`      | `#7a7fad` (Security Lavender)   | Reserved for security UI (auth, audit, permissions) |
 
+> **Identity-monogram exception (sanctioned).** `<MonogramAvatar>` renders a record's initials in a brand-indigo tint (`bg-primary/10 text-primary`). This is a deliberate, documented exception to "indigo is interactive/CTA only": the tint reads as an **identity affordance**, not a decorative flourish and not a status signal. It is always `aria-hidden` and the record name is always rendered beside it, so color is never the sole signal. Neutral-tile fallback (`bg-muted text-muted-foreground border`) is the approved downgrade if this is ever revisited.
+
 ### Color — semantic signals (sparse use; ERP-defined statuses go through `<StatusBadge>`)
 
 | Token                    | Light               | Dark      | Use                            |

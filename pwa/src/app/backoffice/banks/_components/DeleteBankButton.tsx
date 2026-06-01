@@ -7,7 +7,7 @@ import { container } from "@/context/shared/infrastructure/DependencyInjection/C
 import { DeleteBank } from "@/context/backoffice/bank/application/DeleteBank";
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
-import { ProblemDisplay } from "@/components/erpify";
+import { ProblemDisplay, Spinner } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -122,11 +122,19 @@ export function DeleteBankButton({
             size="sm"
             onClick={handleConfirm}
             disabled={submitting}
+            data-icon={submitting ? "inline-start" : undefined}
             aria-label={`Confirm delete of bank ${name}`}
             title={`Confirm delete of bank ${name}`}
             data-testid="banks-detail__delete-confirm"
           >
-            {submitting ? "Deleting…" : "Delete"}
+            {submitting ? (
+              <>
+                <Spinner className="size-3.5" testId="banks-detail__delete-spinner" />
+                Deleting…
+              </>
+            ) : (
+              "Delete"
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

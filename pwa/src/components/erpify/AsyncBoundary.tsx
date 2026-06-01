@@ -31,6 +31,8 @@ interface AsyncBoundaryProps<TData> {
   emptyHeading?: string;
   emptyDescription?: string;
   emptyAction?: ReactNode;
+  /** Optional recovery action rendered below the error panel (e.g. Retry). */
+  errorAction?: ReactNode;
   /** Custom slots override the default rendering for each state. */
   idle?: ReactNode;
   loading?: ReactNode;
@@ -45,6 +47,7 @@ export function AsyncBoundary<TData>({
   emptyHeading = "Nothing here yet",
   emptyDescription = "There is nothing to show.",
   emptyAction,
+  errorAction,
   idle,
   loading,
   children,
@@ -70,7 +73,14 @@ export function AsyncBoundary<TData>({
   }
 
   if (state === ViewStatus.ERROR && error) {
-    return <ProblemDisplay problem={error} variant="panel" />;
+    return (
+      <div className="async-boundary__error space-y-4">
+        <ProblemDisplay problem={error} variant="panel" />
+        {errorAction ? (
+          <div className="async-boundary__error-action flex justify-center">{errorAction}</div>
+        ) : null}
+      </div>
+    );
   }
 
   if (state === ViewStatus.READY && data !== undefined) {

@@ -118,7 +118,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       await expect(page.getByTestId("banks-detail__shortname")).toHaveText(SAMPLE_BANK_A.shortName);
       await expect(page.getByTestId("banks-detail__edit-button")).toBeVisible();
       await expect(page.getByTestId("banks-detail__delete-button")).toBeVisible();
-      await expect(page.getByTestId("banks-detail__copy-id")).toBeVisible();
+      await expect(page.getByTestId("banks-detail__id-copy")).toBeVisible();
       await expect(page.getByTestId("banks-detail__id")).toHaveText(SAMPLE_BANK_A.id);
       await expect(page.getByTestId("banks-detail__field-name")).toHaveText(SAMPLE_BANK_A.name);
       await expect(page.getByTestId("banks-detail__field-shortname")).toHaveText(
@@ -140,11 +140,11 @@ test.describe("BackOffice - Banks CRUD", () => {
       await mockBanksApi(page, { get: "happy", bank: SAMPLE_BANK_A });
       await page.goto(`/backoffice/banks/${SAMPLE_BANK_A.id}`);
 
-      const copyBtn = page.getByTestId("banks-detail__copy-id");
+      const copyBtn = page.getByTestId("banks-detail__id-copy");
       await expect(copyBtn).toHaveAttribute("data-copy-status", "idle");
       await copyBtn.click();
       await expect(copyBtn).toHaveAttribute("data-copy-status", "copied");
-      await expect(copyBtn).toContainText("Copied");
+      await expect(copyBtn).toContainText("ID copied");
 
       const clipboardValue = await page.evaluate(() => navigator.clipboard.readText());
       expect(clipboardValue).toBe(SAMPLE_BANK_A.id);
