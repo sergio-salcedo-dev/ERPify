@@ -217,7 +217,14 @@ final readonly class RateLimitListener
     }
 
     /**
-     * @phpstan-assert-if-true array{limit: int, remaining: int, reset: int, retry_after: int, accepted: bool, key: string} $stored
+     * @phpstan-assert-if-true array{
+     *     limit: int,
+     *     remaining: int,
+     *     reset: int,
+     *     retry_after: int,
+     *     accepted: bool,
+     *     key: string,
+     * } $stored
      */
     private function hasExpectedSnapshotShape(mixed $stored): bool
     {

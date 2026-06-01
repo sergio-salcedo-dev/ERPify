@@ -147,7 +147,10 @@ class HttpResponseContext extends AbstractContext
         $response = $this->getLastResponse();
 
         $actual = $response->headers->get($name);
-        self::assertNotNull($actual, \sprintf("The header '%s' should be equal to '%s', but it is: '%s'", $name, $value, $actual));
+        self::assertNotNull(
+            $actual,
+            \sprintf("The header '%s' should be equal to '%s', but it is: '%s'", $name, $value, $actual),
+        );
         self::assertStringNotContainsStringIgnoringCase(
             $value,
             $actual,

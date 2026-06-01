@@ -128,8 +128,16 @@ final class ConstantTimeAuthBranchingContractTest extends TestCase
         // `new ProblemDetails(...)` on one side would be a regression — the shared helper is
         // the load-bearing pin that the two bridges produce structurally identical bodies
         // (no extensions, no debug threading other than `withDebug`) modulo type / status / title.
-        $accessDeniedFragment = $this->extractInstanceofBlock($fromThrowableSource, 'AccessDeniedException');
-        $authenticationFragment = $this->extractInstanceofBlock($fromThrowableSource, 'AuthenticationException');
+        //
+        // Fragments are whitespace-stripped so these pins are structural (same call sequence)
+        // rather than textual: the construction chain may be wrapped across lines to satisfy the
+        // 120-char line limit without weakening the invariant.
+        $accessDeniedFragment = $this->stripWhitespace(
+            $this->extractInstanceofBlock($fromThrowableSource, 'AccessDeniedException'),
+        );
+        $authenticationFragment = $this->stripWhitespace(
+            $this->extractInstanceofBlock($fromThrowableSource, 'AuthenticationException'),
+        );
 
         $this->assertStringContainsString(
             '$this->buildBridgeResponse(',
@@ -228,5 +236,16 @@ final class ConstantTimeAuthBranchingContractTest extends TestCase
         $window = \array_slice($lines, 0, 10);
 
         return \implode("\n", $window);
+    }
+
+    /**
+     * Strips all whitespace so the construction-shape pins compare the call sequence
+     * structurally, independent of any line wrapping / indentation introduced to keep the
+     * factory within the 120-char line limit. The invariant is "same call sequence", not
+     * "same byte layout".
+     */
+    private function stripWhitespace(string $source): string
+    {
+        return (string) \preg_replace('/\s+/', '', $source);
     }
 }

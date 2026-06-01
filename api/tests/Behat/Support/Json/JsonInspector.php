@@ -39,7 +39,11 @@ readonly class JsonInspector
         try {
             return $json->read($expression, $this->propertyAccessor);
         } catch (Exception $exception) {
-            throw new UnexpectedValueException(\sprintf("Failed to evaluate expression '%s'", $expression), $exception->getCode(), $exception);
+            throw new UnexpectedValueException(
+                \sprintf("Failed to evaluate expression '%s'", $expression),
+                $exception->getCode(),
+                $exception,
+            );
         }
     }
 

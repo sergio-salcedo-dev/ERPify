@@ -3,6 +3,7 @@ import { isProblemDetails, type ProblemDetails } from "../../domain/ProblemDetai
 import { HttpStatus } from "../../domain/types/http";
 import { API_ENDPOINTS } from "../api/ApiEndpoints";
 import { HttpError } from "./HttpError";
+import { uuidV7 } from "@/lib/uuidV7";
 
 export interface HttpClient {
   get<T>(url: string): Promise<T>;
@@ -155,8 +156,8 @@ export class FetchHttpClient implements HttpClient {
           type: "about:blank",
           title: `HTTP ${res.status}`,
           status: res.status,
-          instance: crypto.randomUUID(),
-          "correlation-id": res.headers.get("X-Correlation-Id") ?? crypto.randomUUID(),
+          instance: uuidV7(),
+          "correlation-id": res.headers.get("X-Correlation-Id") ?? uuidV7(),
         };
     return new HttpError(problem);
   }

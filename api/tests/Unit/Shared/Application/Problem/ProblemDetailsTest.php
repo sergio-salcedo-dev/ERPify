@@ -53,7 +53,8 @@ final class ProblemDetailsTest extends TestCase
         $this->assertSame(
             $expected,
             $array,
-            'When detail is null and extensions are empty, only the five remaining core fields must appear in spec order with their values.',
+            'When detail is null and extensions are empty, only the five remaining core fields must '
+            . 'appear in spec order with their values.',
         );
         $this->assertArrayNotHasKey('detail', $array);
     }
@@ -169,8 +170,16 @@ final class ProblemDetailsTest extends TestCase
         $json = \json_encode($problemDetails->toArray(), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
         $decoded = \json_decode($json, associative: true, flags: JSON_THROW_ON_ERROR);
 
-        $this->assertStringContainsString('Não encontrado — 資源未找到', $json, 'JSON_UNESCAPED_UNICODE must emit literal UTF-8.');
-        $this->assertStringNotContainsString('\u', $json, 'No \uXXXX escape sequences expected with JSON_UNESCAPED_UNICODE.');
+        $this->assertStringContainsString(
+            'Não encontrado — 資源未找到',
+            $json,
+            'JSON_UNESCAPED_UNICODE must emit literal UTF-8.',
+        );
+        $this->assertStringNotContainsString(
+            '\u',
+            $json,
+            'No \uXXXX escape sequences expected with JSON_UNESCAPED_UNICODE.',
+        );
         $this->assertIsArray($decoded);
         $this->assertArrayHasKey('title', $decoded);
         $this->assertSame('Não encontrado — 資源未找到', $decoded['title']);
@@ -286,7 +295,10 @@ final class ProblemDetailsTest extends TestCase
             $this->assertStringNotContainsString(
                 'use ' . $prefix,
                 $contents,
-                \sprintf('ProblemDetails.php must not import any %s symbol — wire shape stays framework-free.', $prefix),
+                \sprintf(
+                    'ProblemDetails.php must not import any %s symbol — wire shape stays framework-free.',
+                    $prefix,
+                ),
             );
         }
     }
