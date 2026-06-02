@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { RealtimeTransport } from "@/context/shared/domain/RealTime/RealtimeTransport";
 import {
   TelemetrySurface,
+  apiScope,
   realtimeScope,
   telemetryScope,
 } from "@/context/shared/domain/Observability/TelemetryScope";
@@ -18,6 +19,9 @@ describe("telemetryScope", () => {
     expect(telemetryScope(TelemetrySurface.ERROR, "segment")).toBe("error:segment");
     expect(telemetryScope(TelemetrySurface.ERROR, "root")).toBe("error:root");
     expect(telemetryScope(TelemetrySurface.REALTIME, "bank")).toBe("realtime:bank");
+    expect(telemetryScope(TelemetrySurface.API, "frontoffice-health")).toBe(
+      "api:frontoffice-health",
+    );
   });
 });
 
@@ -29,5 +33,12 @@ describe("realtimeScope", () => {
 
   it("tags a transport adapter by its transport name", () => {
     expect(realtimeScope(RealtimeTransport.MERCURE)).toBe("realtime:mercure");
+  });
+});
+
+describe("apiScope", () => {
+  it("prefixes the api surface for a backend call by endpoint / use-case", () => {
+    expect(apiScope("frontoffice-health")).toBe("api:frontoffice-health");
+    expect(apiScope("bank-search")).toBe("api:bank-search");
   });
 });
