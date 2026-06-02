@@ -7,7 +7,6 @@ import { container } from "@/context/shared/infrastructure/DependencyInjection/C
 import { CheckHealth } from "@/context/frontoffice/health/application/CheckHealth";
 import type { HealthCheck } from "@/context/frontoffice/health/domain/HealthCheck";
 import { Routes } from "@/context/shared/domain/types/routes";
-import { telemetry } from "@/context/shared/infrastructure/Observability";
 import { Navbar } from "@/app/_components/Navbar";
 import { Footer } from "@/app/_components/Footer";
 import { Button } from "@/components/ui/button";
@@ -29,10 +28,8 @@ export default function StatusPage() {
     try {
       const useCase = container.get<CheckHealth>("FrontOfficeCheckHealth");
       setResult(await useCase.run());
-    } catch (err) {
-      // Diagnostics for ops only — visible in dev/staging, silent in prod.
+    } catch {
       // The anonymous user sees the generic DISRUPTED banner, never the error.
-      telemetry.warn("FrontOffice health check failed", { scope: "status:health", cause: err });
       setResult(null);
       setFailed(true);
     } finally {
