@@ -15,6 +15,8 @@ export const Routes = {
   HOME: "/",
   /** Authenticated BackOffice root — every `/backoffice/*` path lives under this prefix. */
   BACKOFFICE: "/backoffice",
+  /** Public service status page (Atlassian-style). Unauthenticated, like {@link HOME}. */
+  STATUS: "/status",
   /**
    * Dev / QA tools hub. Cross-referenced from the frontoffice navbar
    * and the backoffice sidebar (and from inside the dev-tools module
