@@ -2,7 +2,7 @@ import React from "react";
 import { AlertTriangle, CheckCircle2, Loader2, XCircle, type LucideIcon } from "lucide-react";
 import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
 import { cn } from "@/lib/utils";
-import { SystemStatus, systemHeadline } from "./systemStatus";
+import { SystemStatus, systemHeadline } from "@/lib/systemStatus";
 
 interface StatusBannerProps {
   status: SystemStatus;

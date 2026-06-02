@@ -1,13 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { HealthCheck } from "@/context/frontoffice/health/domain/HealthCheck";
 import {
   SystemStatus,
   componentStatusLabel,
   deriveSystemStatus,
   systemHeadline,
-} from "@/app/status/_components/systemStatus";
+} from "@/lib/systemStatus";
 
-const okResult = new HealthCheck("ok", "Front office", "2026-06-02T10:00:00+02:00");
+const okResult = { status: "ok", datetime: "2026-06-02T10:00:00+02:00" };
 
 describe("deriveSystemStatus", () => {
   it("reports CHECKING while a check is in flight", () => {
@@ -39,7 +38,7 @@ describe("deriveSystemStatus", () => {
   });
 
   it("reports DEGRADED when the result status is not 'ok'", () => {
-    const degraded = new HealthCheck("degraded", "Front office", "2026-06-02T10:00:00+02:00");
+    const degraded = { status: "degraded", datetime: "2026-06-02T10:00:00+02:00" };
     expect(deriveSystemStatus({ checking: false, failed: false, result: degraded }).status).toBe(
       SystemStatus.DEGRADED,
     );
