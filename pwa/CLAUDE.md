@@ -218,9 +218,7 @@ Reach for these from every entity instead of re-implementing them locally:
   closed set (`TelemetrySurface` — `realtime`, `error`), `detail` is open. A new
   entity's feed is `realtimeScope("<entity>")` (transport-agnostic, owned by that
   context, no shared edit); a transport adapter tags itself with
-  `realtimeScope(RealtimeTransport.MERCURE)` (`RealtimeTransport` from
-  `@/context/shared/domain/RealTime/RealtimeTransport` already lists `kafka` /
-  `websocket` for when those land). The `Telemetry` port keeps `scope?: string`
+  `realtimeScope(RealtimeTransport.MERCURE)` . The `Telemetry` port keeps `scope?: string`
   on purpose — it's the transport-agnostic seam; the convention is enforced at
   construction (the builders + `useMercureRealtime`'s typed `scope`), not on the
   port.
