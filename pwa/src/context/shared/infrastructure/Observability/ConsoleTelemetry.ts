@@ -23,10 +23,10 @@ export class ConsoleTelemetry implements Telemetry {
       return;
     }
     const line = format(context?.scope, message);
-    if (context?.cause !== undefined) {
-      console.warn(line, context.cause);
-    } else {
+    if (context?.cause === undefined) {
       console.warn(line);
+    } else {
+      console.warn(line, context.cause);
     }
   }
 
@@ -35,10 +35,10 @@ export class ConsoleTelemetry implements Telemetry {
       return;
     }
     const line = format(context?.scope, message);
-    if (context?.cause !== undefined) {
-      console.error(line, context.cause);
-    } else {
+    if (context?.cause === undefined) {
       console.error(line);
+    } else {
+      console.error(line, context.cause);
     }
   }
 }
