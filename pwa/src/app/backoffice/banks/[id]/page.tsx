@@ -116,8 +116,11 @@ export default function BankDetailPage() {
       }
     },
     // On stream re-open after a drop, silently re-fetch this bank to reconcile an
-    // update/delete missed during the gap (Mercure has no replay).
-    onReconnect: () => void loadBank({ silent: true }),
+    // update/delete missed during the gap (Mercure has no replay). Fire-and-forget:
+    // a block body keeps the callback's `void` return so the promise isn't returned.
+    onReconnect: () => {
+      loadBank({ silent: true });
+    },
   });
 
   useEffect(() => {
@@ -125,8 +128,10 @@ export default function BankDetailPage() {
     // path), so it cannot cascade renders synchronously — the rule can't see
     // through the stable useCallback boundary. Mirrors the list page's loadBanks.
     let cancelled = false;
+    // Fire-and-forget: loadBank handles its own errors, so the floating promise is
+    // intentional (no active lint rule flags a bare statement; void would trip S3735).
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadBank({ isCancelled: () => cancelled });
+    loadBank({ isCancelled: () => cancelled });
     return () => {
       cancelled = true;
     };

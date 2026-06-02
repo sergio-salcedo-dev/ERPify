@@ -248,7 +248,11 @@ export default function BanksListPage() {
     },
     // On stream re-open after a drop, silently reconcile: events published during
     // the gap (Mercure has no replay) are otherwise lost and the list diverges.
-    onReconnect: () => void loadBanks({ silent: true }),
+    // Fire-and-forget: a block body keeps the callback's `void` return so the
+    // promise isn't returned (avoids S6544 without the S3735-tripping `void`).
+    onReconnect: () => {
+      loadBanks({ silent: true });
+    },
   });
 
   return (
