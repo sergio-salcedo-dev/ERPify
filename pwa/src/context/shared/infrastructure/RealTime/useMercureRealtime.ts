@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useEffectEvent } from "react";
+import type { TelemetryScope } from "@/context/shared/domain/Observability/TelemetryScope";
 import { telemetry } from "@/context/shared/infrastructure/Observability";
 import { mercureSubscriber } from "@/context/shared/infrastructure/RealTime/BrowserMercureSubscriber";
 
@@ -18,8 +19,11 @@ export interface UseMercureRealtimeOptions<E> {
    * Refetch here to reconcile updates missed during the reconnect gap.
    */
   onReconnect?: () => void;
-  /** Low-cardinality telemetry scope, e.g. "realtime:bank". */
-  scope: string;
+  /**
+   * Low-cardinality telemetry scope for this entity's feed, built with
+   * `realtimeScope(entity)` (e.g. `realtimeScope("bank")` → "realtime:bank").
+   */
+  scope: TelemetryScope;
 }
 
 async function authorize(authorizePath: string): Promise<void> {

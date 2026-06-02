@@ -1,6 +1,7 @@
 "use client";
 
 import { Bank, type BankPrimitives } from "@/context/backoffice/bank/domain/Bank";
+import { realtimeScope } from "@/context/shared/domain/Observability/TelemetryScope";
 import { API_ENDPOINTS } from "@/context/shared/infrastructure/api/ApiEndpoints";
 import { useMercureRealtime } from "@/context/shared/infrastructure/RealTime/useMercureRealtime";
 
@@ -86,6 +87,6 @@ export function useBankRealtime(topics: readonly string[], handlers: BankRealtim
       }
     },
     onReconnect: handlers.onReconnect,
-    scope: "realtime:bank",
+    scope: realtimeScope("bank"),
   });
 }

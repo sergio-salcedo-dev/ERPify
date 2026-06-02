@@ -3,8 +3,10 @@
 import { useEffect } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ErrorTelemetryScope } from "@/context/shared/error/domain/ErrorTelemetryScope";
 import { IconTone } from "@/context/shared/error/domain/IconTone";
 import { NodeEnv } from "@/context/shared/domain/types/nodeEnv";
+import { telemetry } from "@/context/shared/infrastructure/Observability";
 import { cn } from "@/lib/utils";
 import { ERROR_ACTION_BTN_CLASSES, ErrorActions } from "./ErrorActions";
 import { ErrorScreen } from "./ErrorScreen";
@@ -32,13 +34,13 @@ interface RootErrorBoundaryProps {
  */
 export function RootErrorBoundary({ error, reset }: Readonly<RootErrorBoundaryProps>) {
   useEffect(() => {
-    // Last-resort observability hook. The real adapter (Sentry, Datadog, …)
-    // must scrub PII / secrets before transmission and tolerate a partially-
-    // broken DOM. Never ship raw stack traces to a 3rd party from the browser
-    // without explicit consent.
-    if (process.env.NODE_ENV === NodeEnv.DEVELOPMENT) {
-      console.error("[global-error]", error);
-    }
+    // Last-resort observability hook, routed through the Telemetry port (a tiny
+    // sink-agnostic singleton — safe to call even with a partially-broken DOM).
+    // The console adapter owns env-gating (dev/staging on, prod silent) and a
+    // future Sentry/Datadog adapter, owning PII/secret scrubbing, slots in
+    // behind the same port. Independent of the browser redaction below, which
+    // keeps `error.message` out of the prod DOM.
+    telemetry.error("root layout crashed", { scope: ErrorTelemetryScope.ROOT, cause: error });
   }, [error]);
 
   const isDev = process.env.NODE_ENV === NodeEnv.DEVELOPMENT;

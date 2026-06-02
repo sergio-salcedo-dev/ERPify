@@ -205,8 +205,25 @@ Reach for these from every entity instead of re-implementing them locally:
   (`@/context/shared/infrastructure/RealTime/useMercureRealtime`): supply
   `{ topics, authorizePath, parse, onEvent, scope }` and authorize + subscribe +
   reconnect-reauth + failure telemetry are handled for you (see `useBankRealtime`
-  for the canonical wiring). Messages are plain strings; never pass secrets/PII in
-  `cause`.
+  for the canonical wiring). The Next.js error boundaries
+  (`SegmentErrorBoundary` / `RootErrorBoundary`) also report through it via
+  `telemetry.error` (scopes `error:segment` / `error:root`) instead of a bare
+  `console.error`, so prod stays silent and a future sink lights up with no
+  call-site changes; this is independent of the browser redaction that keeps
+  `error.message` out of the prod DOM. Messages are plain strings; never pass
+  secrets/PII in `cause`. **Scope tags** follow a `<surface>:<detail>` convention —
+  never hand-write the literal. Build them with `telemetryScope(surface, detail)` /
+  `realtimeScope(detail)` from
+  `@/context/shared/domain/Observability/TelemetryScope`: `surface` is a curated
+  closed set (`TelemetrySurface` — `realtime`, `error`), `detail` is open. A new
+  entity's feed is `realtimeScope("<entity>")` (transport-agnostic, owned by that
+  context, no shared edit); a transport adapter tags itself with
+  `realtimeScope(RealtimeTransport.MERCURE)` (`RealtimeTransport` from
+  `@/context/shared/domain/RealTime/RealtimeTransport` already lists `kafka` /
+  `websocket` for when those land). The `Telemetry` port keeps `scope?: string`
+  on purpose — it's the transport-agnostic seam; the convention is enforced at
+  construction (the builders + `useMercureRealtime`'s typed `scope`), not on the
+  port.
 - **Dev Tools module** — internal QA / engineering hub at
   `https://localhost/dev-tools`, gated behind
   `isDevToolsAvailable()` (`process.env.NODE_ENV !== NodeEnv.PRODUCTION`).

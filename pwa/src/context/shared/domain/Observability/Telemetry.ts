@@ -5,7 +5,13 @@
  * without touching call sites (mirrors `ToastNotifier` / `DateTimeProvider`).
  */
 export interface TelemetryContext {
-  /** Low-cardinality scope tag, e.g. "realtime:bank". */
+  /**
+   * Low-cardinality scope tag, e.g. "realtime:bank". Build it with
+   * `telemetryScope(...)` / `realtimeScope(...)` from `./TelemetryScope` so the
+   * `<surface>:<detail>` convention stays consistent. Kept as a plain `string`
+   * here so this port stays a transport-agnostic seam (Sentry/Datadog accept
+   * arbitrary tags); the convention is enforced at construction, not on the port.
+   */
   scope?: string;
   /** Triggering error / cause. Adapters serialize + scrub it; never assume PII-free. */
   cause?: unknown;

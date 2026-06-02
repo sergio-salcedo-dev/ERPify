@@ -1,8 +1,10 @@
+import { realtimeScope } from "@/context/shared/domain/Observability/TelemetryScope";
 import type {
   MercureSubscribeOptions,
   MercureSubscriber,
   MercureSubscription,
 } from "@/context/shared/domain/RealTime/MercureSubscriber";
+import { RealtimeTransport } from "@/context/shared/domain/RealTime/RealtimeTransport";
 import { telemetry } from "@/context/shared/infrastructure/Observability";
 
 /**
@@ -53,7 +55,10 @@ export class BrowserMercureSubscriber implements MercureSubscriber {
       } catch (error) {
         // Malformed payload — the next valid event reconciles state. Report for
         // diagnostics (never user-facing); shared across every entity's stream.
-        telemetry.warn("malformed realtime payload", { scope: "realtime:mercure", cause: error });
+        telemetry.warn("malformed realtime payload", {
+          scope: realtimeScope(RealtimeTransport.MERCURE),
+          cause: error,
+        });
       }
     };
 
