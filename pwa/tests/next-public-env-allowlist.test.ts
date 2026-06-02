@@ -52,7 +52,7 @@ const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]
 // unrelated names that merely embed the prefix (e.g. the Playwright-only
 // `PLAYWRIGHT_NEXT_PUBLIC_API_BASE_URL` override) are not mistaken for a public
 // var — those don't start with the prefix and Next.js never inlines them.
-const PUBLIC_ENV_RE = /(?<![A-Za-z0-9_])NEXT_PUBLIC_[A-Z0-9_]+/g;
+const PUBLIC_ENV_RE = /(?<!\w)NEXT_PUBLIC_[A-Z0-9_]+/g;
 
 /** Every `NEXT_PUBLIC_*` var name referenced in a blob of text. */
 function publicEnvNamesIn(content: string): string[] {
