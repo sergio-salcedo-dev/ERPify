@@ -55,6 +55,14 @@ export const Navbar: React.FC<NavbarProps> = ({ onGetStarted }) => {
               </a>
             ))}
 
+            <Link
+              href={Routes.STATUS}
+              className="navbar__link text-slate-600 hover:text-blue-600 font-medium transition-colors"
+              data-testid="navbar__link-status"
+            >
+              Status
+            </Link>
+
             {showDevTools ? (
               <Link
                 href={Routes.DEV_TOOLS}
@@ -154,6 +162,13 @@ export const Navbar: React.FC<NavbarProps> = ({ onGetStarted }) => {
               {link.name}
             </a>
           ))}
+          <Link
+            href={Routes.STATUS}
+            className="navbar__link block text-slate-600 font-medium"
+            data-testid="navbar__link-status--mobile"
+          >
+            Status
+          </Link>
           {showDevTools ? (
             <Link
               href={Routes.DEV_TOOLS}

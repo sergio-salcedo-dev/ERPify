@@ -1,5 +1,7 @@
 import React from "react";
+import Link from "next/link";
 import { Logo } from "@/components/erpify";
+import { Routes } from "@/context/shared/domain/types/routes";
 
 export const Footer: React.FC = () => {
   const footerLinks = [
@@ -26,6 +28,13 @@ export const Footer: React.FC = () => {
                 {link.name}
               </a>
             ))}
+            <Link
+              href={Routes.STATUS}
+              className="footer__link hover:text-primary"
+              data-testid="footer__link-status"
+            >
+              Status
+            </Link>
           </div>
           <p className="footer__copyright text-slate-400 text-sm">
             © 2026 Erpify SaaS. All rights reserved.
