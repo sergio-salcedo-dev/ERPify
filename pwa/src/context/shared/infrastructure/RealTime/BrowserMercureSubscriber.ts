@@ -75,6 +75,21 @@ export class BrowserMercureSubscriber implements MercureSubscriber {
       };
     }
 
+    const onReconnect = options?.onReconnect;
+    if (onReconnect) {
+      // EventSource fires `onopen` on every successful (re)connection. The first
+      // open is the initial subscribe — the caller already holds current data, so
+      // skip it; a later open means the stream dropped and recovered, and updates
+      // published during the gap were missed, so let the caller reconcile.
+      let opened = false;
+      source.onopen = (): void => {
+        if (opened) {
+          onReconnect();
+        }
+        opened = true;
+      };
+    }
+
     return { close: (): void => source.close() };
   }
 }
