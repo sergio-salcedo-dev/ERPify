@@ -99,4 +99,59 @@ describe("ThrottledTelemetry", () => {
 
     expect(inner.warn).toHaveBeenCalledTimes(1);
   });
+
+  it("re-emits at exactly windowMs (the suppression window is half-open: [0, windowMs))", () => {
+    const inner = fakeTelemetry();
+    const t = new ThrottledTelemetry(inner, 1000);
+
+    t.warn("boom", { scope: "s" }); // emit at t=0
+    vi.setSystemTime(1000); // exactly windowMs later
+    t.warn("boom", { scope: "s" });
+
+    expect(inner.warn).toHaveBeenCalledTimes(2);
+  });
+
+  it("uses a ~10s default window when none is supplied", () => {
+    const inner = fakeTelemetry();
+    const t = new ThrottledTelemetry(inner); // default 10_000ms
+
+    t.warn("boom", { scope: "s" });
+    vi.setSystemTime(9_999);
+    t.warn("boom", { scope: "s" }); // still inside the default window
+    expect(inner.warn).toHaveBeenCalledTimes(1);
+
+    vi.setSystemTime(10_000);
+    t.warn("boom", { scope: "s" }); // window elapsed
+    expect(inner.warn).toHaveBeenCalledTimes(2);
+  });
+
+  it("re-emits when the clock jumps backward instead of wedging the key silent", () => {
+    const inner = fakeTelemetry();
+    const t = new ThrottledTelemetry(inner, 1000);
+
+    vi.setSystemTime(10_000);
+    t.warn("boom", { scope: "s" }); // emit at t=10s
+    vi.setSystemTime(5_000); // NTP / sleep-wake steps the clock backward
+    t.warn("boom", { scope: "s" });
+
+    expect(inner.warn).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects a non-positive windowMs at construction", () => {
+    const inner = fakeTelemetry();
+
+    expect(() => new ThrottledTelemetry(inner, 0)).toThrow(RangeError);
+    expect(() => new ThrottledTelemetry(inner, -1)).toThrow(RangeError);
+  });
+
+  it("does not collide distinct (scope, message) tuples that would share a delimiter-joined key", () => {
+    const inner = fakeTelemetry();
+    const t = new ThrottledTelemetry(inner, 1000);
+
+    // Under a naive `${level}|${scope}|${message}` key both collapse to "warn|x|y|z".
+    t.warn("y|z", { scope: "x" });
+    t.warn("z", { scope: "x|y" });
+
+    expect(inner.warn).toHaveBeenCalledTimes(2);
+  });
 });

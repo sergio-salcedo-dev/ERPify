@@ -124,8 +124,24 @@ the `Telemetry` port. These land *with* the adapter:
   construction-time selection must preserve that seam or the per-call `vi.stubEnv` tests break.
 - **CSP `connect-src` widening.** `pwa/next.config.ts#headers()` must allow the ingest host
   (Sentry/Datadog DSN). Do **not** widen it before the host is known (security review item).
-- **DSN / client-token secrets.** `NEXT_PUBLIC_SENTRY_DSN` / `NEXT_PUBLIC_DATADOG_CLIENT_TOKEN`
-  placeholders are already documented (commented) in `pwa/.env.example`; wire real secret
-  handling + a `PRODUCTION_SECURITY_CHECKLIST.md` entry with the adapter.
+- **DSN / client-token secrets.** The future `NEXT_PUBLIC_SENTRY_DSN` / `NEXT_PUBLIC_DATADOG_CLIENT_TOKEN`
+  names are documented here only — deliberately kept out of `pwa/.env.example`, whose raw text the
+  `NEXT_PUBLIC_` allowlist guard (`tests/next-public-env-allowlist.test.ts`) scans and would fail the
+  build on. They reach `.env.example` + `ALLOWED_PUBLIC_ENV_VARS` together with the adapter; wire real
+  secret handling + a `PRODUCTION_SECURITY_CHECKLIST.md` entry then.
 - **`warn` / `error` → vendor severity mapping.** Trivial level map (`warn`→warning,
   `error`→error); belongs with the adapter.
+
+## Deferred from: code review of PR #120 (2026-06-03)
+
+Adversarial review (Blind Hunter / Edge Case Hunter / Acceptance Auditor) of `feat/pwa-telemetry-throttle`.
+The `decision-needed` and `patch` findings were applied live in the same PR; the one design-level item
+below is deferred.
+
+- **`ThrottledTelemetry` backing map is not actively evicted.** `record` keeps one `KeyState` per
+  (level, scope, message) key for the life of the singleton. Safe today — all telemetry call sites use
+  static-literal messages and a closed `TelemetrySurface` scope set, so cardinality is bounded — but the
+  bound is a call-site convention, not enforced in `ThrottledTelemetry`. The moment a future call site
+  interpolates a dynamic value into a `message`/`scope`, the map grows unbounded in long-lived tabs. Add
+  TTL/size-bounded eviction (or assert key cardinality) if/when a dynamic-keyed call site lands. Low.
+  (source: blind+edge)
