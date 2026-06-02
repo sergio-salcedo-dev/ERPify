@@ -49,7 +49,7 @@ export default function StatusPage() {
     // setState is intentional (it also drives the manual Retry path) and runs
     // through a stable callback, so the cascading-render warning does not apply.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void runCheck();
+    runCheck();
   }, [runCheck]);
 
   const view = deriveSystemStatus({ checking, failed, result });
@@ -93,7 +93,9 @@ export default function StatusPage() {
             <Button
               variant="ghost"
               size="lg"
-              onClick={() => void runCheck()}
+              onClick={() => {
+                runCheck();
+              }}
               disabled={checking}
               title="Re-check service status"
               aria-label="Refresh status"
