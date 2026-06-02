@@ -56,7 +56,7 @@ Full-stack targets (`make app.dev`, `make docker.up`, `make docker.down`, …) l
 ## Env
 
 - **Docker stack** (default): `NEXT_PUBLIC_API_BASE_URL=https://localhost`, `SYMFONY_INTERNAL_URL=http://php:80` (set in Compose).
-- `NEXT_PUBLIC_APP_ENV` (`dev` | `staging` | `prod`) — public, non-secret, baked at build (`pwa/Dockerfile` ARG fed from `${APP_ENV}` in Compose). Drives client telemetry verbosity; `NODE_ENV` can't distinguish staging from prod (the built image is always `production`).
+- `NEXT_PUBLIC_APP_ENV` (`dev` | `staging` | `prod`) — public, non-secret, baked at build (`pwa/Dockerfile` ARG fed from the same-named `NEXT_PUBLIC_APP_ENV` Compose build arg; set it per environment — `staging` on staging hosts enables console diagnostics, `prod` keeps them silent). Drives client telemetry verbosity; `NODE_ENV` can't distinguish staging from prod (the built image is always `production`).
 
 ## Rules that bite
 
