@@ -6,8 +6,10 @@
  *    deliberate edit to {@link TelemetrySurface}, which keeps scopes
  *    low-cardinality.
  *  - `detail` is **open**, owned by the caller: an entity name for a per-entity
- *    feed (`realtime:bank`, `realtime:invoice`) or a transport for a transport
- *    adapter (`realtime:mercure`). New entities therefore never touch this file.
+ *    feed (`realtime:bank`, `realtime:invoice`), a transport for a transport
+ *    adapter (`realtime:mercure`), or an endpoint / use-case for a backend call
+ *    (`api:frontoffice-health`, `api:bank-search`). New entities therefore never
+ *    touch this file.
  *
  * Build scopes with {@link telemetryScope} / {@link realtimeScope} instead of a
  * bare string literal so the `:` join and the surface enum live in one place
@@ -21,6 +23,8 @@ export const TelemetrySurface = {
   REALTIME: "realtime",
   /** Next.js error boundaries (`error.tsx` / `global-error.tsx`). */
   ERROR: "error",
+  /** Backend API calls over HTTP (health checks, entity fetches / mutations). */
+  API: "api",
 } as const;
 export type TelemetrySurface = (typeof TelemetrySurface)[keyof typeof TelemetrySurface];
 
@@ -42,4 +46,13 @@ export function telemetryScope(surface: TelemetrySurface, detail: string): Telem
  */
 export function realtimeScope(detail: string): TelemetryScope {
   return telemetryScope(TelemetrySurface.REALTIME, detail);
+}
+
+/**
+ * Convenience builder for the api surface, e.g. `apiScope("frontoffice-health")`
+ * → `"api:frontoffice-health"`. Tag a backend-call diagnostic by its logical
+ * endpoint / use-case (the entity or operation), never by the calling page.
+ */
+export function apiScope(detail: string): TelemetryScope {
+  return telemetryScope(TelemetrySurface.API, detail);
 }

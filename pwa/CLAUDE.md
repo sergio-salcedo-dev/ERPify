@@ -213,12 +213,14 @@ Reach for these from every entity instead of re-implementing them locally:
   `error.message` out of the prod DOM. Messages are plain strings; never pass
   secrets/PII in `cause`. **Scope tags** follow a `<surface>:<detail>` convention —
   never hand-write the literal. Build them with `telemetryScope(surface, detail)` /
-  `realtimeScope(detail)` from
+  `realtimeScope(detail)` / `apiScope(detail)` from
   `@/context/shared/domain/Observability/TelemetryScope`: `surface` is a curated
-  closed set (`TelemetrySurface` — `realtime`, `error`), `detail` is open. A new
+  closed set (`TelemetrySurface` — `realtime`, `error`, `api`), `detail` is open. A new
   entity's feed is `realtimeScope("<entity>")` (transport-agnostic, owned by that
   context, no shared edit); a transport adapter tags itself with
-  `realtimeScope(RealtimeTransport.MERCURE)` . The `Telemetry` port keeps `scope?: string`
+  `realtimeScope(RealtimeTransport.MERCURE)`; a backend-call diagnostic is
+  `apiScope("<endpoint-or-use-case>")` (e.g. `api:frontoffice-health`), tagged by
+  endpoint/use-case, never by the calling page. The `Telemetry` port keeps `scope?: string`
   on purpose — it's the transport-agnostic seam; the convention is enforced at
   construction (the builders + `useMercureRealtime`'s typed `scope`), not on the
   port.
