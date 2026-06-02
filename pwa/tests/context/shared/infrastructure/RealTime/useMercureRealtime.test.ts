@@ -135,4 +135,30 @@ describe("useMercureRealtime", () => {
     expect(warn).toHaveBeenCalledWith("unrecognized realtime payload", { scope: "realtime:test" });
     expect(onEvent).not.toHaveBeenCalled();
   });
+
+  it("invokes onReconnect when the subscriber reports a stream re-open", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 204 }));
+    let onReconnect: (() => void) | undefined;
+    vi.spyOn(mercureSubscriber, "subscribe").mockImplementation((_topics, _message, opts) => {
+      onReconnect = opts?.onReconnect;
+      return { close: () => {} };
+    });
+    const reconnect = vi.fn();
+
+    renderHook(() =>
+      useMercureRealtime<unknown>({
+        topics: ["urn:test:topic"],
+        authorizePath: "/api/v1/test/realtime/authorize",
+        parse: () => null,
+        onEvent: () => {},
+        onReconnect: reconnect,
+        scope: "realtime:test",
+      }),
+    );
+
+    await waitFor(() => expect(onReconnect).toBeDefined());
+    onReconnect?.();
+
+    expect(reconnect).toHaveBeenCalledTimes(1);
+  });
 });
