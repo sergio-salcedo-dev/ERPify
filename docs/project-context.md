@@ -157,7 +157,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 - **Next config**: `next.config.*` is Turbopack-aware. Webpack-only config blocks are silently ignored — don't assume they run in dev.
 - **Env**:
     - `NEXT_PUBLIC_*` is public. Anything else is server-only — never read it from a client component.
-    - API base URL: `NEXT_PUBLIC_SYMFONY_API_BASE_URL`. Internal SSR fetches: `SYMFONY_INTERNAL_URL`. See `docs/local-fullstack-traffic.md`.
+    - API base URL: `NEXT_PUBLIC_API_BASE_URL`. Internal SSR fetches: `SYMFONY_INTERNAL_URL`. See `docs/local-fullstack-traffic.md`.
 - **Images**: use `next/image` with explicit `width`/`height` or `fill`.
 - **Mercure (client)**: subscribe via EventSource to same-origin `/.well-known/mercure` — don't hardcode a cross-origin URL.
 

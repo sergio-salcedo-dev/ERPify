@@ -89,7 +89,7 @@ pwa/src/
 
 | Var                                | Scope           | Purpose                            |
 |------------------------------------|-----------------|------------------------------------|
-| `NEXT_PUBLIC_SYMFONY_API_BASE_URL` | Client + server | API base URL the browser uses      |
+| `NEXT_PUBLIC_API_BASE_URL` | Client + server | API base URL the browser uses      |
 | `SYMFONY_INTERNAL_URL`             | Server only     | URL used for SSR / RSC fetches     |
 | `NEXT_PUBLIC_*`                    | Public          | Must not contain secrets           |
 | Any other var                      | Server only     | Never read from a client component |

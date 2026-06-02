@@ -43,7 +43,7 @@ docker compose -f compose.yaml -f compose.prod.yaml up --wait --build --detach
    **`MERCURE_PUBLIC_URL`** must be a URL **browsers** can reach (typically `https://app.example.com/.well-known/mercure` when TLS terminates on the same host). Keep **`CADDY_MERCURE_JWT_SECRET`** (or equivalent publisher/subscriber keys) in sync with Caddy/Symfony config. See [secrets.md](../api/docs/production-ready/secrets.md). Step-by-step: [mercure-production-deployment.md](mercure-production-deployment.md); architecture: [mercure.md](mercure.md).
 
 5. **PWA ↔ API (same site)**
-   When the browser talks to the same host for pages and `/api`, set **`NEXT_PUBLIC_SYMFONY_API_BASE_URL`** at **image build time** to that public origin (e.g. `https://app.example.com`). See [pwa/docs/production-deployment.md](../pwa/docs/production-deployment.md).
+   When the browser talks to the same host for pages and `/api`, set **`NEXT_PUBLIC_API_BASE_URL`** at **image build time** to that public origin (e.g. `https://app.example.com`). See [pwa/docs/production-deployment.md](../pwa/docs/production-deployment.md).
 
 6. **`CORS_ALLOW_ORIGINS`**
    In `api/.env`, list **exact** allowed origins (comma-separated, no `*`). If the PWA is served from the same origin as the API (default Compose layout), include that origin. See `api/.env.example`.
@@ -144,7 +144,7 @@ See **[`scripts/deploy/README.md`](../scripts/deploy/README.md)** for full detai
 ## Smoke tests after go-live
 
 1. **`GET /api/v1/health`** (and backoffice health if you use it) over HTTPS.
-2. Load the PWA from the public URL; confirm **`NEXT_PUBLIC_SYMFONY_API_BASE_URL`** matches reality (no mixed content).
+2. Load the PWA from the public URL; confirm **`NEXT_PUBLIC_API_BASE_URL`** matches reality (no mixed content).
 3. Create or update a bank via the API; confirm a row in **`domain_event`** with name **`erpify.backoffice.bank.created`** or **`erpify.backoffice.bank.updated`**, and that the worker delivers mail (inbox or provider logs).
 4. **`docker compose … logs messenger_worker`** — no repeating fatal errors.
 5. **Object storage (if you use bank `stored_object` or similar):** confirm **`OBJECT_STORAGE_LOCAL_PATH`** is mounted and writable; upload once and **`GET /api/v1/stored-objects/{hash}`** returns **200** (see [object-storage.md](object-storage.md)).

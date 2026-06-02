@@ -74,3 +74,24 @@ spec's Review Findings section; the items below are the deferred (design-level /
 - **psalm baseline growth.** A 2nd `$this->id` `PossiblyNullArgument` entry was baselined rather than
   fixed. Consider a non-null id accessor on the aggregate (clears all create/rename/delete entries at
   once) to honor the no-paper-over rule — but it touches the pre-existing pattern, so out of PR #87 scope.
+
+## Deferred from: code review of 2026-06-02-pwa-client-telemetry-seam-design (2026-06-02)
+
+Adversarial review (Blind Hunter / Edge Case Hunter / Acceptance Auditor) of PR #113
+(`feat/pwa-client-telemetry-seam`, HEAD `584c087`). The `decision-needed` and `patch`
+items were handled live; the low-priority, follow-up-aligned items below are deferred.
+
+- **Malformed-payload telemetry has no throttle/dedup.** `BrowserMercureSubscriber.onmessage`
+  calls `telemetry.warn("malformed realtime payload", …)` once per bad event with no
+  rate-limit. A misconfigured hub or buggy publisher emitting high-frequency malformed
+  events floods the dev/staging console (prod stays silent). Add coalescing/rate-limiting
+  when the real Sentry/Datadog sink adapter lands — the spec already defers the sink +
+  PII scrubbing, and a console-only flood is low impact. Low. (source: edge)
+- **`ConsoleTelemetry` does not serialize/scrub `cause`.** The `Telemetry` port doc states
+  "Adapters serialize + scrub it; never assume PII-free", but `ConsoleTelemetry` forwards
+  `cause` verbatim to `console.warn`/`console.error`. No live leak today (the three call
+  sites pass a status-only `Error` or a JSON `SyntaxError`), and PII scrubbing is an
+  explicit spec non-goal deferred to the network-sink adapter — but the seam already
+  diverges from its own contract, so the future Sentry/Datadog adapter inherits a
+  misleading precedent. Honor the scrub when the real adapter lands, or soften the port
+  doc wording now. Low. (source: blind)

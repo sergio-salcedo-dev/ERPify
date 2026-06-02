@@ -25,7 +25,7 @@ export async function fetchFrankenPhpHotReloadSubscribeUrl(): Promise<string | n
   }
 
   const internal = process.env.SYMFONY_INTERNAL_URL;
-  const publicBase = process.env.NEXT_PUBLIC_SYMFONY_API_BASE_URL ?? "";
+  const publicBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
   if (!internal || !publicBase) {
     return null;
   }

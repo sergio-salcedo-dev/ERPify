@@ -3,15 +3,16 @@ import type {
   MercureSubscriber,
   MercureSubscription,
 } from "@/context/shared/domain/RealTime/MercureSubscriber";
+import { telemetry } from "@/context/shared/infrastructure/Observability";
 
 /**
  * Builds the same-origin Mercure hub URL. The PWA is served by FrankenPHP on the
  * same origin as the hub (`/.well-known/mercure`), so an empty API base resolves
  * to a relative URL against the current origin; an explicit
- * `NEXT_PUBLIC_SYMFONY_API_BASE_URL` is honoured when set.
+ * `NEXT_PUBLIC_API_BASE_URL` is honoured when set.
  */
 function mercureUrl(topics: readonly string[]): string {
-  const base = (process.env.NEXT_PUBLIC_SYMFONY_API_BASE_URL ?? "").replace(/\/$/, "");
+  const base = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
   const origin = globalThis.window?.location.origin ?? "http://localhost";
   const url = new URL(`${base}/.well-known/mercure`, origin);
   for (const topic of topics) {
@@ -49,8 +50,10 @@ export class BrowserMercureSubscriber implements MercureSubscriber {
     source.onmessage = (event: MessageEvent<string>): void => {
       try {
         onMessage(JSON.parse(event.data));
-      } catch {
-        // Ignore malformed payloads; the next valid event reconciles state.
+      } catch (error) {
+        // Malformed payload — the next valid event reconciles state. Report for
+        // diagnostics (never user-facing); shared across every entity's stream.
+        telemetry.warn("malformed realtime payload", { scope: "realtime:mercure", cause: error });
       }
     };
 

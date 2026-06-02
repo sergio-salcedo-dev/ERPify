@@ -65,7 +65,7 @@ you change anything here.
       cert from its own CA; clients import the root (see the runbook).
 - [ ] Public VPS: `CADDY_SERVER_EXTRA_DIRECTIVES` is **empty** and `SERVER_NAME`
       is the real domain, so Caddy uses automatic ACME — no overlay edits.
-- [ ] `NEXT_PUBLIC_SYMFONY_API_BASE_URL`, `DEFAULT_URI`, and `MERCURE_PUBLIC_URL`
+- [ ] `NEXT_PUBLIC_API_BASE_URL`, `DEFAULT_URI`, and `MERCURE_PUBLIC_URL`
       all match the served `https://$SERVER_NAME` origin.
 
 ## 6. App-layer (carried from `CLAUDE.md` security review)

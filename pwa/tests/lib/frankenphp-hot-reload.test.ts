@@ -35,18 +35,18 @@ describe("fetchFrankenPhpHotReloadSubscribeUrl", () => {
   it("returns null when internal or public base URL is missing", async () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("SYMFONY_INTERNAL_URL", "");
-    vi.stubEnv("NEXT_PUBLIC_SYMFONY_API_BASE_URL", "https://localhost");
+    vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "https://localhost");
     expect(await fetchFrankenPhpHotReloadSubscribeUrl()).toBeNull();
 
     vi.stubEnv("SYMFONY_INTERNAL_URL", "http://php:80");
-    vi.stubEnv("NEXT_PUBLIC_SYMFONY_API_BASE_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "");
     expect(await fetchFrankenPhpHotReloadSubscribeUrl()).toBeNull();
   });
 
   it("returns subscribe URL when API responds enabled", async () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("SYMFONY_INTERNAL_URL", "http://php:80");
-    vi.stubEnv("NEXT_PUBLIC_SYMFONY_API_BASE_URL", "https://localhost");
+    vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "https://localhost");
 
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
@@ -70,7 +70,7 @@ describe("fetchFrankenPhpHotReloadSubscribeUrl", () => {
   it("returns null when API responds disabled", async () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("SYMFONY_INTERNAL_URL", "http://php:80");
-    vi.stubEnv("NEXT_PUBLIC_SYMFONY_API_BASE_URL", "https://localhost");
+    vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "https://localhost");
 
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
