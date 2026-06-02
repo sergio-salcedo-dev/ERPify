@@ -79,6 +79,7 @@ parameters:
         - identifier: property.uninitialized
           paths:
               - ../../src/Backoffice/Bank/Domain/Entity/Bank.php
+              - ../../src/Backoffice/BankAccount/Domain/Entity/BankAccount.php
               - ../../src/Shared/Media/Domain/Entity/Media.php
 
         # Repository attribute points to a domain interface; the concrete Doctrine implementation
