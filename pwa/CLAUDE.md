@@ -200,7 +200,12 @@ Reach for these from every entity instead of re-implementing them locally:
   `telemetry.warn(message, { scope, cause })` / `.error(...)` for non-user-facing
   diagnostics. The console adapter emits only in `dev`/`staging` (gated by
   `NEXT_PUBLIC_APP_ENV`) and is silent in `prod`; future Sentry/Datadog adapters
-  slot in behind the same port with no call-site changes. Realtime hooks route
+  slot in behind the same port with no call-site changes. The singleton wraps the
+  adapter in `ThrottledTelemetry`, so a flood of identical diagnostics (same
+  level + scope + message) coalesces to one emit per window (a `(+N suppressed)`
+  suffix reports the tally) — no need to rate-limit at call sites. `cause` may carry
+  PII: a local adapter (console) forwards it as-is, but the future external sink
+  MUST serialize + scrub it (tracked in `deferred-work.md`). Realtime hooks route
   through it via `useMercureRealtime`
   (`@/context/shared/infrastructure/RealTime/useMercureRealtime`): supply
   `{ topics, authorizePath, parse, onEvent, scope }` and authorize + subscribe +

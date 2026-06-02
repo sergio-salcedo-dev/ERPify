@@ -13,7 +13,15 @@ export interface TelemetryContext {
    * arbitrary tags); the convention is enforced at construction, not on the port.
    */
   scope?: string;
-  /** Triggering error / cause. Adapters serialize + scrub it; never assume PII-free. */
+  /**
+   * Triggering error / cause. Never assume it is PII-free. The contract is
+   * adapter-dependent: a *local* adapter (the `console` one) may forward it
+   * as-is — the browser console is the developer's own machine, not a 3rd
+   * party — but any *external / network* adapter (Sentry / Datadog) MUST
+   * serialize and scrub it before transmission. That scrub is owned by the
+   * network adapter when it lands (see the deferred sink-adapter work), not by
+   * this port or the console.
+   */
   cause?: unknown;
 }
 
