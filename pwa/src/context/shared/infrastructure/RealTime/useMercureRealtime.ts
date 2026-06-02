@@ -63,9 +63,17 @@ export function useMercureRealtime<E>({
     // realtime failures (the seam is generic, so future entities may throw here).
     try {
       const event = parse(data);
-      if (event !== null) {
-        onEvent(event);
+      if (event === null) {
+        // A well-formed message the entity parser doesn't recognise (unknown
+        // type or a drifted payload shape) is unusable. Surface it for
+        // diagnostics instead of dropping it without a trace, so a producer/
+        // consumer contract drift is visible rather than silently stopping live
+        // updates. (Unparseable JSON is reported one layer down in
+        // BrowserMercureSubscriber.)
+        telemetry.warn("unrecognized realtime payload", { scope });
+        return;
       }
+      onEvent(event);
     } catch (error) {
       telemetry.warn("event dispatch failed", { scope, cause: error });
     }

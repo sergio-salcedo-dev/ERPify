@@ -108,4 +108,31 @@ describe("useMercureRealtime", () => {
       }),
     );
   });
+
+  it("reports an unrecognized payload through telemetry.warn without dispatching", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 204 }));
+    let onMessage: ((data: unknown) => void) | undefined;
+    vi.spyOn(mercureSubscriber, "subscribe").mockImplementation((_topics, message) => {
+      onMessage = message;
+      return { close: () => {} };
+    });
+    const warn = vi.spyOn(telemetry, "warn").mockImplementation(() => {});
+    const onEvent = vi.fn();
+
+    renderHook(() =>
+      useMercureRealtime<unknown>({
+        topics: ["urn:test:topic"],
+        authorizePath: "/api/v1/test/realtime/authorize",
+        parse: () => null, // never recognises the payload
+        onEvent,
+        scope: "realtime:test",
+      }),
+    );
+
+    await waitFor(() => expect(onMessage).toBeDefined());
+    onMessage?.({ type: "unknown" });
+
+    expect(warn).toHaveBeenCalledWith("unrecognized realtime payload", { scope: "realtime:test" });
+    expect(onEvent).not.toHaveBeenCalled();
+  });
 });
