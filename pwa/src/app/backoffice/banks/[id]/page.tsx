@@ -19,8 +19,7 @@ import {
 } from "@/components/erpify";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
-import { uuidV7 } from "@/lib/uuidV7";
-import { isUuid } from "@/lib/isUuid";
+import { isUuid, uuidV7 } from "@/lib/uuidV7";
 import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
 import { isRecentlyCreated } from "../_lib/bankRecency";
 import { safeHref } from "@/lib/safeHref";
