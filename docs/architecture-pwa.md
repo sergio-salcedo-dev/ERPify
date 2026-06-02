@@ -97,6 +97,7 @@ The `Observability` module provides a non-user-facing diagnostic channel for inf
 - Entry: `app/layout.tsx` (root layout) + `app/page.tsx` (root page).
 - `app/globals.css` holds Tailwind 4's CSS-first `@theme` / `@config` directives.
 - `app/backoffice/` is the backoffice route segment (e.g. `/backoffice/health`).
+- `app/status/` — public, unauthenticated service status page (Atlassian-style). Auto-runs the existing `FrontOfficeCheckHealth` use case on mount and renders an aggregate banner and per-component rows. Presentation components live in `app/status/_components/` in the marketing design language (raw Tailwind palette, not `@/components/erpify`). Linked from the navbar and footer. Distinct from the internal admin `app/backoffice/health/` page.
 
 ## Dependency injection
 

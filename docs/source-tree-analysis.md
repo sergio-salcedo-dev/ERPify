@@ -68,8 +68,9 @@ ERPify/
 │   │   │   ├── layout.tsx
 │   │   │   ├── page.tsx
 │   │   │   ├── globals.css         # Tailwind 4 CSS-first config (@theme / @config)
-│   │   │   └── backoffice/         # Backoffice route segment
-│   │   │       └── health/
+│   │   │   ├── backoffice/         # Backoffice route segment
+│   │   │   │   └── health/
+│   │   │   └── status/             # Public status page (Atlassian-style, reuses FrontOffice health use case)
 │   │   ├── components/
 │   │   │   ├── ui/                 # Shadcn primitives + shared UI
 │   │   │   └── erpify/             # Project-specific components
