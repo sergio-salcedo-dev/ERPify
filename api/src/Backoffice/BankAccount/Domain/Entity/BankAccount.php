@@ -8,6 +8,7 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountStatus;
+use Erpify\Backoffice\BankAccount\Domain\Enum\Currency;
 use Erpify\Shared\Domain\Aggregate\AggregateRoot;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Validator\Constraints as Assert;
@@ -41,10 +42,8 @@ class BankAccount extends AggregateRoot
     #[Assert\Length(max: 100)]
     private ?string $alias = null;
 
-    #[ORM\Column(length: 3)]
-    #[Assert\NotBlank]
-    #[Assert\Currency]
-    private string $currency;
+    #[ORM\Column(length: 3, enumType: Currency::class)]
+    private Currency $currency;
 
     #[ORM\Column(length: 11, nullable: true)]
     #[Assert\Bic(ibanPropertyPath: 'iban')]
@@ -59,7 +58,7 @@ class BankAccount extends AggregateRoot
         string $iban,
         string $holderName,
         ?string $alias = null,
-        string $currency = 'EUR',
+        Currency $currency = Currency::EUR,
         ?string $bic = null,
         BankAccountStatus $status = BankAccountStatus::ACTIVE,
     ): self {
@@ -96,7 +95,7 @@ class BankAccount extends AggregateRoot
         return $this->alias;
     }
 
-    public function getCurrency(): string
+    public function getCurrency(): Currency
     {
         return $this->currency;
     }
