@@ -73,6 +73,10 @@ you change anything here.
 - [ ] CORS allowlist not widened to wildcards; Mercure JWT secret rotation
       policy preserved.
 - [ ] Error responses follow RFC 9457 with no stack-trace leakage outside dev.
+- [ ] No secret hides behind a `NEXT_PUBLIC_*` name — those are inlined into the
+      browser bundle at build time. Only `NEXT_PUBLIC_API_BASE_URL` and
+      `NEXT_PUBLIC_APP_ENV` are allowed; the `pwa/tests/next-public-env-allowlist.test.ts`
+      guard (in `make pwa.test.unit`) fails the build on any other.
 - [ ] Migrations are reversible (`down()`); no PII/secrets seeded; no
       `DROP TABLE` outside an explicit destructive migration.
 - [ ] Messenger handlers idempotent (at-least-once delivery).
