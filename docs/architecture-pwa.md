@@ -59,7 +59,7 @@ Cross-cutting code has several homes; pick by **purpose**, not just "is it reuse
 
 | Put it in… | When it is… | Examples |
 | --- | --- | --- |
-| `context/shared/infrastructure/<Module>/` | backed by a **domain port** / swappable adapter, or part of a port-backed module | `Notification/Toast`, `DateTimeProvider`, `HttpClient`, `Validation`, `DependencyInjection` |
+| `context/shared/infrastructure/<Module>/` | backed by a **domain port** / swappable adapter, or part of a port-backed module | `Notification/Toast`, `DateTimeProvider`, `HttpClient`, `Validation`, `DependencyInjection`, `Observability/Telemetry` |
 | `app/_components/` (or a route's own `_components/`) | a **landing/marketing** presentational component (its own raw-palette + `tw-animate-css` / CSS language) used only by its `app/` route — co-located, not shared | `Navbar`, `Footer`, `FeatureCard` |
 | `components/erpify/` | an **entity-agnostic backoffice / app-shell design-system primitive**, reused across surfaces, barrel-exported from `@/components/erpify` | `DataTable`, `AsyncBoundary`, `EmptyState`, `StatusBadge`, `Spinner`, `Logo`, `SidebarItem`, `StatCard` |
 | `components/ui/` | a raw **Shadcn** primitive | `button`, `dialog`, `input` |
@@ -73,6 +73,15 @@ provides transient user feedback. Its first channel is **Toast**: the
 `SonnerToaster`, mounted once in the root layout) and the `toastNotifier`
 singleton. The naming leaves room for additional channels (`Banner`, `Push`)
 and alternative adapters without renaming the port.
+
+### Observability — Telemetry seam
+
+The `Observability` module provides a non-user-facing diagnostic channel for infrastructure failures (network errors, malformed payloads, authorization retries) that should never surface as UI toasts.
+
+- **Port** — [`Telemetry.ts`](../pwa/src/context/shared/domain/Observability/Telemetry.ts) declares `warn(message, ctx?)` / `error(message, ctx?)` with an optional `TelemetryContext { scope?, cause? }`. `Domain/` depends only on this interface.
+- **Adapter** — [`ConsoleTelemetry.ts`](../pwa/src/context/shared/infrastructure/Observability/ConsoleTelemetry.ts) implements the port; it emits to `console.warn` / `console.error` when `NEXT_PUBLIC_APP_ENV` is `dev` or `staging`, and is a no-op in `prod` (or unknown). `NODE_ENV` alone cannot distinguish staging from prod — both build images run in `production` mode — so `NEXT_PUBLIC_APP_ENV` is the correct gate.
+- **Singleton** — `telemetry` exported from `@/context/shared/infrastructure/Observability` (`index.ts`) is the only instance. Future Sentry or Datadog adapters replace the concrete class behind this singleton; no call sites change.
+- **Realtime integration** — [`useMercureRealtime.ts`](../pwa/src/context/shared/infrastructure/RealTime/useMercureRealtime.ts) is a generic hook that centralises Mercure authorize / subscribe / reconnect-reauth for all entity-specific realtime hooks. Entity hooks (e.g. [`bankRealtime.ts`](../pwa/src/context/backoffice/bank/infrastructure/bankRealtime.ts)) delegate to it by supplying `{ topics, authorizePath, parse, onEvent, scope }`. Failures that were previously swallowed silently — subscription skipped, cookie refresh failed, malformed payload — are now routed through `telemetry.warn` with the hook's `scope` for traceability.
 
 ## Layer responsibilities
 

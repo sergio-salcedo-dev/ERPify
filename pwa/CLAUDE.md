@@ -28,13 +28,13 @@ Also consult [`../docs/rules/frontend.md`](../docs/rules/frontend.md).
 
 Several homes exist for cross-cutting code; pick by **purpose**, not just "is it reused":
 
-| Put it in…                                           | When it is…                                                                                                                                                     | Examples                                                                                                |
-| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `context/shared/infrastructure/<Module>/`            | backed by a **domain port** / swappable adapter, or part of a port-backed module                                                                                | `Notification/Toast`, `DateTimeProvider`, `HttpClient`, `Validation`, `DependencyInjection`             |
-| `app/_components/` (or a route's own `_components/`) | a **landing/marketing** presentational component (its own raw-palette + `tw-animate-css` / CSS language) used only by its `app/` route — co-located, not shared | `Navbar`, `Footer`, `FeatureCard`                                                                       |
-| `components/erpify/`                                 | an **entity-agnostic backoffice / app-shell design-system primitive**, reused across surfaces, barrel-exported from `@/components/erpify`                       | `DataTable`, `AsyncBoundary`, `EmptyState`, `StatusBadge`, `Spinner`, `Logo`, `SidebarItem`, `StatCard` |
-| `components/ui/`                                     | a raw **Shadcn** primitive                                                                                                                                      | `button`, `dialog`, `input`                                                                             |
-| `src/lib/`                                           | a **pure helper or generic hook** with no domain identity                                                                                                       | `safeHref`, `useDebouncedValue`, `utils`                                                                |
+| Put it in…                                           | When it is…                                                                                                                                                     | Examples                                                                                                               |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `context/shared/infrastructure/<Module>/`            | backed by a **domain port** / swappable adapter, or part of a port-backed module                                                                                | `Notification/Toast`, `DateTimeProvider`, `HttpClient`, `Validation`, `DependencyInjection`, `Observability/Telemetry` |
+| `app/_components/` (or a route's own `_components/`) | a **landing/marketing** presentational component (its own raw-palette + `tw-animate-css` / CSS language) used only by its `app/` route — co-located, not shared | `Navbar`, `Footer`, `FeatureCard`                                                                                      |
+| `components/erpify/`                                 | an **entity-agnostic backoffice / app-shell design-system primitive**, reused across surfaces, barrel-exported from `@/components/erpify`                       | `DataTable`, `AsyncBoundary`, `EmptyState`, `StatusBadge`, `Spinner`, `Logo`, `SidebarItem`, `StatCard`                |
+| `components/ui/`                                     | a raw **Shadcn** primitive                                                                                                                                      | `button`, `dialog`, `input`                                                                                            |
+| `src/lib/`                                           | a **pure helper or generic hook** with no domain identity                                                                                                       | `safeHref`, `useDebouncedValue`, `utils`                                                                               |
 
 Note: the back-office (token-driven Shadcn + `@/components/erpify`) and the landing/marketing surface (raw-palette + `tw-animate-css` / CSS, under `app/_components/`) are two deliberate design languages — reach for the one matching the surface you're building, don't cross-import. App-shell primitives reused by both (e.g. `Logo`) live in `@/components/erpify`. The former `context/shared/infrastructure/ui/components/` folder was retired: app-shell primitives (`Logo`, `SidebarItem`, `StatCard`) moved to `@/components/erpify`, marketing components (`Navbar`, `Footer`, `FeatureCard`) to `app/_components/`, and `PlaceholderCard` was folded into `<EmptyState>` (via its new optional `icon` prop).
 
@@ -56,6 +56,7 @@ Full-stack targets (`make app.dev`, `make docker.up`, `make docker.down`, …) l
 ## Env
 
 - **Docker stack** (default): `NEXT_PUBLIC_API_BASE_URL=https://localhost`, `SYMFONY_INTERNAL_URL=http://php:80` (set in Compose).
+- `NEXT_PUBLIC_APP_ENV` (`dev` | `staging` | `prod`) — public, non-secret, baked at build (`pwa/Dockerfile` ARG fed from `${APP_ENV}` in Compose). Drives client telemetry verbosity; `NODE_ENV` can't distinguish staging from prod (the built image is always `production`).
 
 ## Rules that bite
 
@@ -193,6 +194,19 @@ Reach for these from every entity instead of re-implementing them locally:
   escaped text — never pass HTML. To swap libraries, replace the two Sonner
   files and the singleton; the port and call sites stay put. Future channels
   (`Banner`/`Push`) are siblings under `domain/Notification/`.
+- **Client telemetry** — `telemetry` from
+  `@/context/shared/infrastructure/Observability`, typed as the `Telemetry`
+  port (never the concrete `ConsoleTelemetry`). Call
+  `telemetry.warn(message, { scope, cause })` / `.error(...)` for non-user-facing
+  diagnostics. The console adapter emits only in `dev`/`staging` (gated by
+  `NEXT_PUBLIC_APP_ENV`) and is silent in `prod`; future Sentry/Datadog adapters
+  slot in behind the same port with no call-site changes. Realtime hooks route
+  through it via `useMercureRealtime`
+  (`@/context/shared/infrastructure/RealTime/useMercureRealtime`): supply
+  `{ topics, authorizePath, parse, onEvent, scope }` and authorize + subscribe +
+  reconnect-reauth + failure telemetry are handled for you (see `useBankRealtime`
+  for the canonical wiring). Messages are plain strings; never pass secrets/PII in
+  `cause`.
 - **Dev Tools module** — internal QA / engineering hub at
   `https://localhost/dev-tools`, gated behind
   `isDevToolsAvailable()` (`process.env.NODE_ENV !== NodeEnv.PRODUCTION`).
