@@ -29,7 +29,7 @@ trait HumanReadableIntEnumTrait
     }
 
     /**
-     * @return string[]|null[]
+     * @return array<int, string|null>
      */
     public static function getLabels(): array
     {
@@ -65,6 +65,11 @@ trait HumanReadableIntEnumTrait
         return $enum;
     }
 
+    /**
+     * @param array<array-key, string|null> $labels
+     *
+     * @return list<int|string>
+     */
     public static function getKeysFromValues(array $labels): array
     {
         $values = [];
@@ -78,55 +83,77 @@ trait HumanReadableIntEnumTrait
         return $values;
     }
 
+    /**
+     * @return array<int|string, self>
+     */
     public static function getValues(): array
     {
-        return \array_reduce(
-            self::cases(),
-            static function (array $values, $enum): array {
-                $values[$enum->value] = $enum;
+        $values = [];
 
-                return $values;
-            },
-            [],
-        );
+        foreach (self::cases() as $enum) {
+            $values[$enum->value] = $enum;
+        }
+
+        return $values;
     }
 
+    /**
+     * @param array<self> $inputLabels
+     *
+     * @return list<self>
+     */
     public static function getValuesNotIn(array $inputLabels): array
     {
         return \array_values(
             \array_filter(
                 static::cases(),
-                static fn ($enum): bool => !\in_array($enum, $inputLabels, true),
+                static fn (self $enum): bool => !\in_array($enum, $inputLabels, true),
             ),
         );
     }
 
     private function getEnumCaseAttribute(): ?HumanReadableIntEnumValue
     {
-        return static::enumValueAttributes()[$this] ?? null;
+        $attributes = static::enumValueAttributes();
+
+        return $attributes->offsetExists($this) ? $attributes[$this] : null;
     }
 
+    /**
+     * @return SplObjectStorage<HumanReadableIntEnumInterface, HumanReadableIntEnumValue>
+     */
     private static function enumValueAttributes(): SplObjectStorage
     {
-        static $attributes;
+        /** @var SplObjectStorage<HumanReadableIntEnumInterface, HumanReadableIntEnumValue>|null $cache */
+        static $cache;
 
-        if (!isset($attributes)) {
-            $attributes = new SplObjectStorage();
-
-            foreach ((new ReflectionEnum(static::class))->getCases() as $reflectionEnumUnitCase) {
-                $reflectionAttributes = $reflectionEnumUnitCase->getAttributes(
-                    HumanReadableIntEnumValue::class,
-                    ReflectionAttribute::IS_INSTANCEOF,
-                );
-
-                if ([] === $reflectionAttributes) {
-                    continue;
-                }
-
-                $attribute = $reflectionAttributes[0]->newInstance();
-                $attributes[$reflectionEnumUnitCase->getValue()] = $attribute;
-            }
+        if (null !== $cache) {
+            return $cache;
         }
+
+        /** @var SplObjectStorage<HumanReadableIntEnumInterface, HumanReadableIntEnumValue> $attributes */
+        $attributes = new SplObjectStorage();
+
+        foreach ((new ReflectionEnum(static::class))->getCases() as $reflectionEnumUnitCase) {
+            $reflectionAttributes = $reflectionEnumUnitCase->getAttributes(
+                HumanReadableIntEnumValue::class,
+                ReflectionAttribute::IS_INSTANCEOF,
+            );
+
+            if ([] === $reflectionAttributes) {
+                continue;
+            }
+
+            $case = $reflectionEnumUnitCase->getValue();
+
+            if (!$case instanceof HumanReadableIntEnumInterface) {
+                continue;
+            }
+
+            $attributes[$case] = $reflectionAttributes[0]->newInstance();
+        }
+
+        $cache = $attributes;
 
         return $attributes;
     }

@@ -41,10 +41,6 @@ parameters:
     reportPossiblyNonexistentConstantArrayOffset: true
 
     ignoreErrors:
-        # Trait is part of a reusable domain abstraction — will be consumed by enums implementing HumanReadableIntEnumInterface.
-        - identifier: trait.unused
-          path: ../../src/Shared/Domain/Enum/Abstraction/HumanReadableIntEnumTrait.php
-
         # Behat JSON/HTTP assertion helpers operate on decoded JSON and Mink responses — values are inherently `mixed`.
         - identifier: missingType.iterableValue
           paths:
