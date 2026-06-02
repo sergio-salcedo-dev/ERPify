@@ -129,11 +129,11 @@ export default defineConfig({
           env: {
             ...process.env,
             // Next dev for E2E must call the real API. These override pwa/.env.local (e.g. :8000).
-            // Set PLAYWRIGHT_SYMFONY_* only if your stack differs.
+            // Set the PLAYWRIGHT_* override vars only if your stack differs.
             SYMFONY_INTERNAL_URL:
               process.env.PLAYWRIGHT_SYMFONY_INTERNAL_URL ?? "https://localhost",
             NEXT_PUBLIC_API_BASE_URL:
-              process.env.PLAYWRIGHT_SYMFONY_API_BASE_URL ?? "https://localhost",
+              process.env.PLAYWRIGHT_NEXT_PUBLIC_API_BASE_URL ?? "https://localhost",
             // Isolate from the Docker pwa container's `.next/` (shared via the bind mount), whose
             // `.next/dev/lock` would otherwise collide with this host-spawned `next dev`.
             NEXT_DIST_DIR: process.env.NEXT_DIST_DIR ?? ".next-e2e",
