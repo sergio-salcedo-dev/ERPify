@@ -57,6 +57,7 @@ Full-stack targets (`make app.dev`, `make docker.up`, `make docker.down`, …) l
 
 - **Docker stack** (default): `NEXT_PUBLIC_API_BASE_URL=https://localhost`, `SYMFONY_INTERNAL_URL=http://php:80` (set in Compose).
 - `NEXT_PUBLIC_APP_ENV` (`dev` | `staging` | `prod`) — public, non-secret, baked at build (`pwa/Dockerfile` ARG fed from the same-named `NEXT_PUBLIC_APP_ENV` Compose build arg; set it per environment — `staging` on staging hosts enables console diagnostics, `prod` keeps them silent). Drives client telemetry verbosity; `NODE_ENV` can't distinguish staging from prod (the built image is always `production`).
+- **`NEXT_PUBLIC_*` is public by construction — allowlisted, never secret.** Next.js inlines every `process.env.NEXT_PUBLIC_FOO` literal into the browser bundle at build time, so any value behind the prefix ships to every visitor. The **only** permitted names are `NEXT_PUBLIC_API_BASE_URL` and `NEXT_PUBLIC_APP_ENV`. Adding another is a deliberate act: register it in `ALLOWED_PUBLIC_ENV_VARS` in [`tests/next-public-env-allowlist.test.ts`](tests/next-public-env-allowlist.test.ts), add it to this table, and confirm in review it carries no secret/credential/PII. A secret never gets the prefix — read it server-side only (`SYMFONY_INTERNAL_URL` is the pattern: no `NEXT_PUBLIC_`, SSR/route-handler only). The guard test fails the build (part of `make pwa.test.unit`) if any non-allowlisted `NEXT_PUBLIC_` name appears in `src/`, the `Dockerfile`, or `.env.example`.
 
 ## Rules that bite
 
