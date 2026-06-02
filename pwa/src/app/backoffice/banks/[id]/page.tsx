@@ -129,7 +129,7 @@ export default function BankDetailPage() {
     // through the stable useCallback boundary. Mirrors the list page's loadBanks.
     let cancelled = false;
     // Fire-and-forget: loadBank handles its own errors, so the floating promise is
-    // intentional (no active lint rule flags a bare statement; void would trip S3735).
+    // intentional.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadBank({ isCancelled: () => cancelled });
     return () => {
