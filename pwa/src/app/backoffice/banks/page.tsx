@@ -88,9 +88,14 @@ export default function BanksListPage() {
     };
   }, []);
 
-  const loadBanks = useCallback(async () => {
-    setState(ViewStatus.LOADING);
-    setProblem(null);
+  const loadBanks = useCallback(async (options?: { silent?: boolean }) => {
+    // A silent reconcile (e.g. after a realtime reconnect) refreshes in the
+    // background: no LOADING skeleton flash, and a transient failure leaves the
+    // current list in place instead of swapping in an error screen.
+    if (!options?.silent) {
+      setState(ViewStatus.LOADING);
+      setProblem(null);
+    }
     try {
       const useCase = container.get<SearchBanks>("BackOfficeSearchBanks");
       const result = await useCase.run();
@@ -99,7 +104,7 @@ export default function BanksListPage() {
       setNextCursor(result.nextCursor);
       setState(result.banks.length === 0 ? ViewStatus.EMPTY : ViewStatus.READY);
     } catch (err) {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || options?.silent) return;
       const fallbackDetail = err instanceof Error ? err.message : "Unknown error";
       const nextProblem = err instanceof HttpError ? err.problem : genericProblem(fallbackDetail);
       setProblem(nextProblem);
@@ -240,6 +245,13 @@ export default function BanksListPage() {
         next.delete(deletedId);
         return next;
       });
+    },
+    // On stream re-open after a drop, silently reconcile: events published during
+    // the gap (Mercure has no replay) are otherwise lost and the list diverges.
+    // Fire-and-forget: a block body keeps the callback's `void` return so the
+    // promise isn't returned (avoids S6544 without the S3735-tripping `void`).
+    onReconnect: () => {
+      loadBanks({ silent: true });
     },
   });
 

@@ -2,34 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
-import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
-import { CheckHealth } from "@/context/frontoffice/health/application/CheckHealth";
-import { Activity, LayoutDashboard } from "lucide-react";
+import { LayoutDashboard } from "lucide-react";
 import { Navbar } from "@/app/_components/Navbar";
 import { Footer } from "@/app/_components/Footer";
 import { FeatureCard } from "@/app/_components/FeatureCard";
 
 export default function LandingPage() {
   const router = useRouter();
-  const [healthStatus, setHealthStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-
-  const checkHealth = async () => {
-    setLoading(true);
-    try {
-      const useCase = container.get<CheckHealth>("FrontOfficeCheckHealth");
-      const result = await useCase.run();
-      setHealthStatus(
-        `Status: ${result.status} | Service: ${result.service} | Date: ${dateTimeProvider.formatIsoToLocalDateTime(result.datetime)}`,
-      );
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : "unknown error";
-      setHealthStatus(`Error checking health: ${detail}`);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const goToBackOffice = () => {
     setLoading(true);
@@ -58,7 +38,7 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="landing-page__features grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+          <div className="landing-page__features grid grid-cols-1 gap-8 max-w-md mx-auto">
             <FeatureCard
               title="Admin BackOffice"
               description="Access the powerful dashboard to manage your entire construction operation."
@@ -70,27 +50,6 @@ export default function LandingPage() {
               onClick={goToBackOffice}
               loading={loading}
             />
-
-            <FeatureCard
-              title="FrontOffice API"
-              description="Verify the status of our core services and ensure everything is running smoothly."
-              icon={Activity}
-              iconColor="text-emerald-600"
-              iconBg="bg-emerald-50"
-              buttonText="Check FrontOffice API health"
-              buttonVariant="secondary"
-              onClick={checkHealth}
-              loading={loading}
-            >
-              {healthStatus && (
-                <div
-                  data-testid="frontoffice-health-status"
-                  className="landing-page__health-status mt-6 p-4 bg-slate-50 rounded-xl text-sm font-mono text-slate-600 border border-slate-200 w-full animate-in fade-in-0 slide-in-from-top-1 duration-300"
-                >
-                  {healthStatus}
-                </div>
-              )}
-            </FeatureCard>
           </div>
         </section>
       </main>

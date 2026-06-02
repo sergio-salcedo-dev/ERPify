@@ -1,6 +1,7 @@
 "use client";
 
 import { Bank, type BankPrimitives } from "@/context/backoffice/bank/domain/Bank";
+import { realtimeScope } from "@/context/shared/domain/Observability/TelemetryScope";
 import { API_ENDPOINTS } from "@/context/shared/infrastructure/api/ApiEndpoints";
 import { useMercureRealtime } from "@/context/shared/infrastructure/RealTime/useMercureRealtime";
 
@@ -22,6 +23,11 @@ export interface BankRealtimeHandlers {
   onCreated?: (bank: Bank) => void;
   onUpdated?: (bank: Bank) => void;
   onDeleted?: (id: string) => void;
+  /**
+   * Called when the stream re-opens after a drop (never on the initial connect).
+   * Refetch the list / detail here to reconcile updates missed during the gap.
+   */
+  onReconnect?: () => void;
 }
 
 function isBankPrimitives(value: unknown): value is BankPrimitives {
@@ -80,6 +86,7 @@ export function useBankRealtime(topics: readonly string[], handlers: BankRealtim
         handlers.onDeleted?.(event.id);
       }
     },
-    scope: "realtime:bank",
+    onReconnect: handlers.onReconnect,
+    scope: realtimeScope("bank"),
   });
 }

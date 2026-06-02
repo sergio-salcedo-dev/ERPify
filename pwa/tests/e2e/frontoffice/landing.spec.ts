@@ -1,5 +1,4 @@
 import { test, expect } from "@playwright/test";
-import { expectFrontOfficeHealthOk } from "../helpers/health-assertions";
 
 test.describe("FrontOffice - Landing Page", () => {
   test.describe.configure({ mode: "parallel" });
@@ -19,11 +18,9 @@ test.describe("FrontOffice - Landing Page", () => {
     await expect(page).toHaveURL("/backoffice");
   });
 
-  test("runs frontoffice API health check", async ({ page }) => {
-    await page.getByRole("button", { name: "Check FrontOffice API health" }).click();
-    await expectFrontOfficeHealthOk(page);
-    await expect(page.getByTestId("frontoffice-health-status")).not.toContainText(
-      "Error checking health",
-    );
+  test("navigates to the public status page from the navbar", async ({ page }) => {
+    await page.getByTestId("navbar__link-status").click();
+    await expect(page).toHaveURL("/status");
+    await expect(page.getByRole("heading", { level: 1, name: /System Status/i })).toBeVisible();
   });
 });

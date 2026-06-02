@@ -1,8 +1,10 @@
+import { realtimeScope } from "@/context/shared/domain/Observability/TelemetryScope";
 import type {
   MercureSubscribeOptions,
   MercureSubscriber,
   MercureSubscription,
 } from "@/context/shared/domain/RealTime/MercureSubscriber";
+import { RealtimeTransport } from "@/context/shared/domain/RealTime/RealtimeTransport";
 import { telemetry } from "@/context/shared/infrastructure/Observability";
 
 /**
@@ -53,7 +55,10 @@ export class BrowserMercureSubscriber implements MercureSubscriber {
       } catch (error) {
         // Malformed payload — the next valid event reconciles state. Report for
         // diagnostics (never user-facing); shared across every entity's stream.
-        telemetry.warn("malformed realtime payload", { scope: "realtime:mercure", cause: error });
+        telemetry.warn("malformed realtime payload", {
+          scope: realtimeScope(RealtimeTransport.MERCURE),
+          cause: error,
+        });
       }
     };
 
@@ -72,6 +77,21 @@ export class BrowserMercureSubscriber implements MercureSubscriber {
         }
         lastReauthorizeAt = now;
         onError();
+      };
+    }
+
+    const onReconnect = options?.onReconnect;
+    if (onReconnect) {
+      // EventSource fires `onopen` on every successful (re)connection. The first
+      // open is the initial subscribe — the caller already holds current data, so
+      // skip it; a later open means the stream dropped and recovered, and updates
+      // published during the gap were missed, so let the caller reconcile.
+      let opened = false;
+      source.onopen = (): void => {
+        if (opened) {
+          onReconnect();
+        }
+        opened = true;
       };
     }
 
