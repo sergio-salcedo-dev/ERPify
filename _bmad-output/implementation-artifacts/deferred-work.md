@@ -57,23 +57,27 @@ spec's Review Findings section; the items below are the deferred (design-level /
 - **No event-id / `Last-Event-ID` replay.** Updates published during a reconnect gap are lost; the
   view can silently diverge from the DB with no resync. Either set stable `Update` ids + a Mercure
   history store, or refetch the list/detail once on (re)connect to reconcile.
-- **Producer-soft-null + consumer-strict = silent drop.** `bankPayload()` coerces missing fields to
-  `null`; the PWA `isBankPrimitives` rejects any `null`, dropping the event with no log. If the event
-  shape ever drifts, live updates vanish invisibly. Log on the producer or make the payload non-null.
+- **RESOLVED — Producer-soft-null + consumer-strict = silent drop.** Producer side: the exact realtime
+  payload contract is locked by `BankRealtimePublisherHandlerTest` (PR #107), so a `toPrimitives()` drift
+  fails CI instead of emitting a silent `null`. Consumer side: an unrecognised payload now routes through
+  `telemetry.warn("unrecognized realtime payload")` in `useMercureRealtime` (and malformed JSON one layer
+  down in `BrowserMercureSubscriber`) instead of being dropped without a trace.
 - **Cross-event-type redelivery resurrection.** A late at-least-once redelivery of a `created` after
   a `delete` re-inserts the row on every list viewer (client merges are duplicate-safe per-event-type
   but not across types/ordering). Narrow window; would need sequence/versioning to fully close.
 - **Cookie `SameSite=Strict` + cross-origin deployment.** The code supports a non-empty
   `NEXT_PUBLIC_SYMFONY_API_BASE_URL` (cross-origin), but a `SameSite=Strict` cookie is dropped on the
   cross-origin EventSource request, silently killing realtime. Untested. Default same-origin flow is fine.
-- **Handler test strength.** `BankRealtimePublisherHandlerTest` asserts on JSON substrings (mirrors the
-  existing demo-controller test), and idempotency / `?? null` paths and the `BankDeleter` dispatch are
-  not unit-asserted (the latter deferred to an un-diffed Behat `delete.feature` — spot-check it exists).
-- **`topicsKey` join("|") + unvalidated `id`.** The detail route `id` flows unvalidated into the topic
-  IRI and the `"|"`-joined effect key. Validate `id` as a UUID before subscribing (defense in depth).
-- **psalm baseline growth.** A 2nd `$this->id` `PossiblyNullArgument` entry was baselined rather than
-  fixed. Consider a non-null id accessor on the aggregate (clears all create/rename/delete entries at
-  once) to honor the no-paper-over rule — but it touches the pre-existing pattern, so out of PR #87 scope.
+- **RESOLVED — Handler test strength.** `BankRealtimePublisherHandlerTest` now decodes the payload and
+  asserts its exact shape + idempotency (PR #107); the `BankDeleter` dispatch is covered end-to-end by the
+  now-real Behat `delete.feature` (204 + 404, PR #108).
+- **RESOLVED — `topicsKey` join("|") + unvalidated `id`.** The `"|"`-join was replaced by delimiter-safe
+  JSON keying when the shared `useMercureRealtime` hook landed; the detail route `id` is now UUID-validated
+  (`isUuid` from `@/lib/isUuid`) before it flows into the topic IRI (defense in depth).
+- **RESOLVED (PR #110) — psalm baseline growth.** Both `$this->id` `PossiblyNullArgument` entries were
+  baselined rather than fixed. Fixed at the source: `AggregateRoot::id()` is a non-null accessor guarding
+  the "an identified aggregate always has its id" invariant; `Bank::rename()` / `delete()` use it, and the
+  two psalm-baseline entries plus the Bank `argument.type` phpstan ignore were removed.
 
 ## Deferred from: code review of 2026-06-02-pwa-client-telemetry-seam-design (2026-06-02)
 

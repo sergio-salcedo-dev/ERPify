@@ -19,7 +19,7 @@ import {
 } from "@/components/erpify";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
-import { uuidV7 } from "@/lib/uuidV7";
+import { isUuid, uuidV7 } from "@/lib/uuidV7";
 import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
 import { isRecentlyCreated } from "../_lib/bankRecency";
 import { safeHref } from "@/lib/safeHref";
@@ -73,7 +73,10 @@ export default function BankDetailPage() {
   // Real-time sync from OTHER clients (Mercure): reflect remote edits live, and
   // on a remote delete fall through to the same redirect-to-list flow as a local
   // delete so the now-gone id never refetches into a "not found" flash.
-  useBankRealtime(id ? [bankTopics.detail(id)] : [], {
+  // Validate the route id as a UUID before it flows into the Mercure topic IRI
+  // (defense in depth): a malformed id never opens a junk subscription, and the
+  // detail fetch below already rejects it with a 400/404.
+  useBankRealtime(id && isUuid(id) ? [bankTopics.detail(id)] : [], {
     onUpdated: (incoming) => {
       if (incoming.id === id) {
         setBank(incoming);
