@@ -48,17 +48,26 @@ export function useMercureRealtime<E>({
   scope,
 }: UseMercureRealtimeOptions<E>): void {
   // `topicsKey` keeps the EventSource open across unrelated re-renders; it
-  // changes exactly when the topic set changes (topic IRIs never contain "|").
-  const topicsKey = topics.join("|");
+  // changes exactly when the (blank-filtered) topic set changes. JSON keying is
+  // delimiter-safe — unlike a "|" join, a topic IRI may contain any character,
+  // and blank members never open a junk subscription.
+  const topicsKey = JSON.stringify(topics.map((topic) => topic.trim()).filter(Boolean));
 
   // Effect Events always see the latest `parse` / `onEvent` (and the `authorizePath`
   // / `scope` they close over) without being effect dependencies, so changing
   // handler identity each render never tears the stream — and `authorize(authorizePath)`
   // inside `refreshAuthorization` is never stale.
   const dispatch = useEffectEvent((data: unknown): void => {
-    const event = parse(data);
-    if (event !== null) {
-      onEvent(event);
+    // A throwing `parse` / `onEvent` must never escape the EventSource message
+    // handler as an unhandled error; route it through telemetry like the other
+    // realtime failures (the seam is generic, so future entities may throw here).
+    try {
+      const event = parse(data);
+      if (event !== null) {
+        onEvent(event);
+      }
+    } catch (error) {
+      telemetry.warn("event dispatch failed", { scope, cause: error });
     }
   });
 
@@ -70,11 +79,11 @@ export function useMercureRealtime<E>({
   });
 
   useEffect(() => {
-    if (!topicsKey || globalThis.window === undefined) {
+    const topicList = JSON.parse(topicsKey) as string[];
+    if (topicList.length === 0 || globalThis.window === undefined) {
       return;
     }
 
-    const topicList = topicsKey.split("|");
     let subscription: { close(): void } | undefined;
     let cancelled = false;
 
