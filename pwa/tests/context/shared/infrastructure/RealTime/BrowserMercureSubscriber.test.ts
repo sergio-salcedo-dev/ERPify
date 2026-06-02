@@ -9,6 +9,7 @@ const lastSource = (): FakeEventSource | undefined => sources.at(-1);
 class FakeEventSource {
   onmessage: ((event: MessageEvent<string>) => void) | null = null;
   onerror: ((event: Event) => void) | null = null;
+  onopen: ((event: Event) => void) | null = null;
   readonly url: string;
   closed = false;
 
@@ -95,6 +96,24 @@ describe("BrowserMercureSubscriber", () => {
   it("never refreshes when no onError handler is supplied", () => {
     new BrowserMercureSubscriber().subscribe(["urn:x"], () => {});
     expect(() => lastSource()?.onerror?.(new Event("error"))).not.toThrow();
+  });
+
+  it("skips the first open and invokes onReconnect on each later re-open", () => {
+    const onReconnect = vi.fn();
+    new BrowserMercureSubscriber().subscribe(["urn:x"], () => {}, { onReconnect });
+    const source = lastSource();
+
+    source?.onopen?.(new Event("open")); // initial connect — caller already has data
+    expect(onReconnect).not.toHaveBeenCalled();
+
+    source?.onopen?.(new Event("open")); // recovered after a drop
+    source?.onopen?.(new Event("open"));
+    expect(onReconnect).toHaveBeenCalledTimes(2);
+  });
+
+  it("wires no onopen handler when no onReconnect is supplied", () => {
+    new BrowserMercureSubscriber().subscribe(["urn:x"], () => {});
+    expect(lastSource()?.onopen).toBeNull();
   });
 
   it("degrades to a no-op subscription when EventSource is unavailable", () => {

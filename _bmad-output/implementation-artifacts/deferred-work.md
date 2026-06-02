@@ -54,9 +54,11 @@ spec's Review Findings section; the items below are the deferred (design-level /
   reconnect. Fixed upstream by the debounced (30s) `onError` → re-authorize hook in
   `BrowserMercureSubscriber` + `useBankRealtime`, covered by `BrowserMercureSubscriber.test.ts`.
   See the RESOLVED entry in the first section above.
-- **No event-id / `Last-Event-ID` replay.** Updates published during a reconnect gap are lost; the
-  view can silently diverge from the DB with no resync. Either set stable `Update` ids + a Mercure
-  history store, or refetch the list/detail once on (re)connect to reconcile.
+- **RESOLVED — No event-id / `Last-Event-ID` replay.** Updates published during a reconnect gap were
+  lost, so views could silently diverge from the DB. The realtime client now refetches on stream
+  re-open to reconcile: `onReconnect` flows `MercureSubscribeOptions` → `BrowserMercureSubscriber`
+  (skips the initial open) → `useMercureRealtime` → `useBankRealtime`, and the list/detail reconcile
+  *silently* (no skeleton flash, current view preserved on a transient failure).
 - **RESOLVED — Producer-soft-null + consumer-strict = silent drop.** Producer side: the exact realtime
   payload contract is locked by `BankRealtimePublisherHandlerTest` (PR #107), so a `toPrimitives()` drift
   fails CI instead of emitting a silent `null`. Consumer side: an unrecognised payload now routes through

@@ -13,6 +13,11 @@ export interface UseMercureRealtimeOptions<E> {
   parse: (data: unknown) => E | null;
   /** Invoked with each parsed event. Always sees the latest closure. */
   onEvent: (event: E) => void;
+  /**
+   * Invoked when the stream re-opens after a drop (never on the initial connect).
+   * Refetch here to reconcile updates missed during the reconnect gap.
+   */
+  onReconnect?: () => void;
   /** Low-cardinality telemetry scope, e.g. "realtime:bank". */
   scope: string;
 }
@@ -45,6 +50,7 @@ export function useMercureRealtime<E>({
   authorizePath,
   parse,
   onEvent,
+  onReconnect,
   scope,
 }: UseMercureRealtimeOptions<E>): void {
   // `topicsKey` keeps the EventSource open across unrelated re-renders; it
@@ -86,6 +92,12 @@ export function useMercureRealtime<E>({
     );
   });
 
+  const handleReconnect = useEffectEvent((): void => {
+    // Fires on stream re-open after a drop (never the first connect); the caller
+    // reconciles missed updates. Optional — a no-op when no `onReconnect` given.
+    onReconnect?.();
+  });
+
   useEffect(() => {
     const topicList = JSON.parse(topicsKey) as string[];
     if (topicList.length === 0 || globalThis.window === undefined) {
@@ -101,6 +113,7 @@ export function useMercureRealtime<E>({
         if (!cancelled) {
           subscription = mercureSubscriber.subscribe(topicList, (data) => dispatch(data), {
             onError: () => refreshAuthorization(),
+            onReconnect: () => handleReconnect(),
           });
         }
       } catch (error) {
