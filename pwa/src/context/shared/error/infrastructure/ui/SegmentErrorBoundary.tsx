@@ -4,8 +4,10 @@ import { useEffect } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { CopyButton } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
+import { ErrorTelemetryScope } from "@/context/shared/error/domain/ErrorTelemetryScope";
 import { IconTone } from "@/context/shared/error/domain/IconTone";
 import { NodeEnv } from "@/context/shared/domain/types/nodeEnv";
+import { telemetry } from "@/context/shared/infrastructure/Observability";
 import { cn } from "@/lib/utils";
 import { ERROR_ACTION_BTN_CLASSES, ErrorActions } from "./ErrorActions";
 import { ErrorScreen } from "./ErrorScreen";
@@ -35,13 +37,16 @@ interface SegmentErrorBoundaryProps {
  */
 export function SegmentErrorBoundary({ error, reset }: Readonly<SegmentErrorBoundaryProps>) {
   useEffect(() => {
-    // Placeholder hook for an external observability sink (Sentry, Datadog, …).
-    // The real adapter must scrub PII / secrets before transmission and run
-    // server-side where possible — never ship raw stack traces to a 3rd party
-    // from the browser without explicit consent.
-    if (process.env.NODE_ENV === NodeEnv.DEVELOPMENT) {
-      console.error("[error-boundary]", error);
-    }
+    // Route the caught render error through the Telemetry port (diagnostics,
+    // never user-facing). The console adapter owns env-gating — it emits in
+    // dev/staging and stays silent in prod — and a future Sentry/Datadog
+    // adapter slots in behind the same port, owning PII/secret scrubbing
+    // before any 3rd-party transmission. This is independent of the browser
+    // redaction below, which keeps `error.message` out of the prod DOM.
+    telemetry.error("segment error boundary caught", {
+      scope: ErrorTelemetryScope.SEGMENT,
+      cause: error,
+    });
   }, [error]);
 
   const isDev = process.env.NODE_ENV === NodeEnv.DEVELOPMENT;
