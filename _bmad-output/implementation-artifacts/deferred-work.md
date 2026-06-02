@@ -87,17 +87,61 @@ Adversarial review (Blind Hunter / Edge Case Hunter / Acceptance Auditor) of PR 
 (`feat/pwa-client-telemetry-seam`, HEAD `584c087`). The `decision-needed` and `patch`
 items were handled live; the low-priority, follow-up-aligned items below are deferred.
 
-- **Malformed-payload telemetry has no throttle/dedup.** `BrowserMercureSubscriber.onmessage`
-  calls `telemetry.warn("malformed realtime payload", …)` once per bad event with no
-  rate-limit. A misconfigured hub or buggy publisher emitting high-frequency malformed
-  events floods the dev/staging console (prod stays silent). Add coalescing/rate-limiting
-  when the real Sentry/Datadog sink adapter lands — the spec already defers the sink +
-  PII scrubbing, and a console-only flood is low impact. Low. (source: edge)
-- **`ConsoleTelemetry` does not serialize/scrub `cause`.** The `Telemetry` port doc states
-  "Adapters serialize + scrub it; never assume PII-free", but `ConsoleTelemetry` forwards
-  `cause` verbatim to `console.warn`/`console.error`. No live leak today (the three call
-  sites pass a status-only `Error` or a JSON `SyntaxError`), and PII scrubbing is an
-  explicit spec non-goal deferred to the network-sink adapter — but the seam already
-  diverges from its own contract, so the future Sentry/Datadog adapter inherits a
-  misleading precedent. Honor the scrub when the real adapter lands, or soften the port
-  doc wording now. Low. (source: blind)
+- **RESOLVED — Malformed-payload telemetry now coalesced.** `telemetry.warn("malformed
+  realtime payload", …)` (and every other call site) now routes through `ThrottledTelemetry`,
+  the wrapped singleton in `infrastructure/Observability/index.ts`: identical
+  (level, scope, message) diagnostics collapse to one emit per 10s window, and a
+  `(+N suppressed)` tally rides the next emit so nothing is silently dropped. A misbehaving
+  hub / buggy publisher can no longer flood the dev/staging console, and a metered
+  Sentry/Datadog sink is protected the same way once it lands. Covered by
+  `tests/context/shared/infrastructure/Observability/ThrottledTelemetry.test.ts`.
+- **RESOLVED — `cause` scrub-contract divergence.** The port doc previously claimed
+  "Adapters serialize + scrub it" while `ConsoleTelemetry` forwarded `cause` verbatim — a
+  contract the console adapter never honored. Resolved by making the contract honest in
+  `Telemetry.ts`: a *local* adapter (console) MAY forward `cause` as-is (the browser console
+  is the developer's own machine, not a 3rd party), while any *external/network* adapter
+  (Sentry/Datadog) MUST serialize + scrub before transmission — that scrub is owned by the
+  network adapter when it lands (see the sink-adapter prep section below). The console adapter
+  no longer diverges from its own contract.
+
+## Sentry/Datadog sink adapter — prep gaps (deferred until DSN/SDK chosen)
+
+Tracked here so the eventual `SentryTelemetry` / `DatadogTelemetry` drop-in is friction-free.
+Each is intentionally **not** built now (no DSN, no SDK, no second sink) — empty adapters or a
+single-branch factory today would be speculative. The seam is already swap-ready: one wrapped
+adapter in `pwa/src/context/shared/infrastructure/Observability/index.ts`, all call sites typed to
+the `Telemetry` port. These land *with* the adapter:
+
+- **`serializeCause()` / scrub helper.** A `domain/Observability` utility that normalizes an
+  unknown `cause` (name → message → stack → nested `cause` chain, size-bounded) and scrubs
+  PII/secrets before any external transmission. The console adapter keeps forwarding the raw
+  object for local debugging; the network adapter consumes this helper. (closes the scrub side
+  of the RESOLVED `cause` entry above)
+- **Adapter-selection factory.** Replace the hardcoded `new ThrottledTelemetry(new
+  ConsoleTelemetry())` with a `createTelemetry()` keyed on `NEXT_PUBLIC_APP_ENV` + DSN presence
+  (console in dev/staging; Sentry/Datadog — or a `CompositeTelemetry` fan-out — in prod). Caveat:
+  `ConsoleTelemetry` gates env at *call* time today (deliberately test-friendly); a
+  construction-time selection must preserve that seam or the per-call `vi.stubEnv` tests break.
+- **CSP `connect-src` widening.** `pwa/next.config.ts#headers()` must allow the ingest host
+  (Sentry/Datadog DSN). Do **not** widen it before the host is known (security review item).
+- **DSN / client-token secrets.** The future `NEXT_PUBLIC_SENTRY_DSN` / `NEXT_PUBLIC_DATADOG_CLIENT_TOKEN`
+  names are documented here only — deliberately kept out of `pwa/.env.example`, whose raw text the
+  `NEXT_PUBLIC_` allowlist guard (`tests/next-public-env-allowlist.test.ts`) scans and would fail the
+  build on. They reach `.env.example` + `ALLOWED_PUBLIC_ENV_VARS` together with the adapter; wire real
+  secret handling + a `PRODUCTION_SECURITY_CHECKLIST.md` entry then.
+- **`warn` / `error` → vendor severity mapping.** Trivial level map (`warn`→warning,
+  `error`→error); belongs with the adapter.
+
+## Deferred from: code review of PR #120 (2026-06-03)
+
+Adversarial review (Blind Hunter / Edge Case Hunter / Acceptance Auditor) of `feat/pwa-telemetry-throttle`.
+The `decision-needed` and `patch` findings were applied live in the same PR; the one design-level item
+below is deferred.
+
+- **`ThrottledTelemetry` backing map is not actively evicted.** `record` keeps one `KeyState` per
+  (level, scope, message) key for the life of the singleton. Safe today — all telemetry call sites use
+  static-literal messages and a closed `TelemetrySurface` scope set, so cardinality is bounded — but the
+  bound is a call-site convention, not enforced in `ThrottledTelemetry`. The moment a future call site
+  interpolates a dynamic value into a `message`/`scope`, the map grows unbounded in long-lived tabs. Add
+  TTL/size-bounded eviction (or assert key cardinality) if/when a dynamic-keyed call site lands. Low.
+  (source: blind+edge)
