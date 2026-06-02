@@ -17,7 +17,7 @@
  * at construction, not baked into the port.
  */
 export const TelemetrySurface = {
-  /** Live updates over a real-time transport (Mercure / Kafka / WebSocket). */
+  /** Live updates over a real-time transport (Mercure). */
   REALTIME: "realtime",
   /** Next.js error boundaries (`error.tsx` / `global-error.tsx`). */
   ERROR: "error",
