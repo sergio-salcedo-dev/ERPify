@@ -8,8 +8,8 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountStatus;
-use Erpify\Backoffice\BankAccount\Domain\Enum\Currency;
 use Erpify\Shared\Domain\Aggregate\AggregateRoot;
+use Erpify\Shared\Domain\Enum\Currency;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Validator\Constraints as Assert;
 

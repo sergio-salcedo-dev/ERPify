@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Backoffice\BankAccount\Domain\Enum;
+namespace Erpify\Shared\Domain\Enum;
 
 /**
  * ISO 4217 alphabetic currency codes. String-backed so the case value is the
- * canonical code persisted in the {@see BankAccount::$currency} column. Extend
- * with additional cases as new currencies are supported.
+ * canonical code persisted in money/currency columns. Extend with additional
+ * cases as new currencies are supported.
  */
 enum Currency: string
 {
