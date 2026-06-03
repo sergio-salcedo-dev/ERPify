@@ -11,11 +11,9 @@
 # LOCAL ONLY: these targets never touch the remote — `git worktree remove` and
 # `git branch -d/-D` are purely local; nothing pushes a branch deletion to origin.
 #
-# The stack teardown runs `env -u COMPOSE_PROJECT_NAME $(MAKE) -C <wt> ...`: the
-# parent make exports COMPOSE_PROJECT_NAME (= the *caller's* project, e.g. the
-# primary `erpify`), and config.mk's `?=` can't override an inherited value — so
-# without stripping it the sub-make would tear down the caller's stack, not the
-# worktree's. Unsetting it lets config.mk re-derive erpify-<slug> inside the tree.
+# Sub-make calls here (`$(MAKE) -C <wt> …`) re-derive their own erpify-<slug>
+# project on their own: config.mk hands COMPOSE_PROJECT_NAME to compose via `-p`
+# and does NOT export it, so a nested make never inherits the caller's project.
 #
 # worktree.create:  BRANCH=<branch> (required) is the new branch. A random 4-char
 #                   suffix is appended to BOTH the branch and the dir slug, so the
@@ -24,8 +22,8 @@
 #                   clash, and re-running never collides. BASE=<ref> is the start
 #                   point (default main); NAME=<dir-base> overrides the derived dir
 #                   slug (still suffixed); START=true also brings the new stack up
-#                   via app.dev (same env -u COMPOSE_PROJECT_NAME re-derivation as
-#                   the teardown above, so the sub-make builds its own project).
+#                   via app.dev (the sub-make re-derives its own erpify-<slug>
+#                   project — see config.mk on why it isn't inherited).
 #
 # worktree.remove / worktree.remove-all:
 # NAME=<dir|path>  selects the worktree (basename under .claude/worktrees/, or an
@@ -48,7 +46,7 @@ worktree.create: ## Create a worktree on a NEW branch BRANCH=<branch> (BASE=main
 	git -C "$$main" worktree add -b "$$branch" "$$path" "$$baseref" || { echo "✗ git worktree add failed"; exit 1; }; \
 	if [ "$(START)" = "true" ]; then \
 		echo "→ bringing up stack erpify-$$dir"; \
-		env -u COMPOSE_PROJECT_NAME $(MAKE) --no-print-directory -C "$$path" ENV=dev app.dev; \
+		$(MAKE) --no-print-directory -C "$$path" ENV=dev app.dev; \
 		echo "✓ worktree ready at $$path (branch $$branch, stack erpify-$$dir up)"; \
 	else \
 		echo "✓ created worktree $$path (branch $$branch)"; \
@@ -67,7 +65,7 @@ worktree.remove: ## Remove worktree NAME=<dir|path> + its stack/volumes + branch
 	branch="$$(git -C "$$main" worktree list --porcelain | awk -v p="$$wt" '$$1=="worktree"{w=$$2} $$1=="branch" && w==p {sub("refs/heads/","",$$2); print $$2}')"; \
 	if [ -d "$$wt" ]; then \
 		echo "→ tearing down stack for $$wt"; \
-		env -u COMPOSE_PROJECT_NAME $(MAKE) --no-print-directory -C "$$wt" ENV=dev docker.down.clean-volumes || true; \
+		$(MAKE) --no-print-directory -C "$$wt" ENV=dev docker.down.clean-volumes || true; \
 	fi; \
 	echo "→ removing worktree $$wt"; \
 	git -C "$$main" worktree remove $(if $(FORCE),--force ,)"$$wt" || { echo "✗ worktree has changes; re-run with FORCE=true to discard"; exit 1; }; \
