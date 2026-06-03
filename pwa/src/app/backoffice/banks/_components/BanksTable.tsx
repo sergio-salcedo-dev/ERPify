@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
-import { DataTable, MonogramAvatar, StatusBadge } from "@/components/erpify";
+import { DataTable, StatusBadge } from "@/components/erpify";
 import type { DataTableColumn, DataTableSelection, DataTableSort } from "@/components/erpify";
 import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
 import { safeHref } from "@/lib/safeHref";
@@ -27,7 +27,6 @@ const renderShortNameCell = (row: Bank) => (
 
 const renderNameCell = (row: Bank) => (
   <div className="banks-table__identity flex min-w-0 items-center gap-2.5">
-    <MonogramAvatar name={row.name} testId={`banks-table__avatar-${row.id}`} />
     <span className="min-w-0 truncate">{row.name}</span>
     {isRecentlyCreated(row.createdAt, dateTimeProvider) ? (
       <StatusBadge

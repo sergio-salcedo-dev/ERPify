@@ -1,76 +1,18 @@
-"use client";
-
-import { Users, Building2, TrendingUp, Clock } from "lucide-react";
-import { EmptyState, StatCard } from "@/components/erpify";
-
 export default function BackOfficeDashboard() {
-  const stats = [
-    {
-      name: "Active Projects",
-      value: "24",
-      icon: Building2,
-      color: "text-primary",
-      bg: "bg-primary/10",
-    },
-    {
-      name: "Total Workforce",
-      value: "156",
-      icon: Users,
-      color: "text-success",
-      bg: "bg-success/10",
-    },
-    {
-      name: "Revenue Growth",
-      value: "+12.5%",
-      icon: TrendingUp,
-      color: "text-warning",
-      bg: "bg-warning/10",
-    },
-    {
-      name: "Pending Tasks",
-      value: "48",
-      icon: Clock,
-      color: "text-destructive",
-      bg: "bg-destructive/10",
-    },
-  ];
-
   return (
-    <div className="dashboard space-y-10">
-      <header className="dashboard__header flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="dashboard__header-info">
-          <h1 className="dashboard__title text-foreground text-2xl font-semibold tracking-tight">
-            Dashboard
-          </h1>
-          <p className="dashboard__subtitle text-muted-foreground mt-1 text-sm">
-            Welcome back, Admin. Here&apos;s what&apos;s happening today.
-          </p>
-        </div>
-      </header>
+    <div className="dashboard">
+      <h1 className="dashboard__title text-foreground text-2xl font-semibold tracking-tight">
+        Dashboard
+      </h1>
 
-      {/* Stats Grid */}
-      <div className="dashboard__stats grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat, index) => (
-          <StatCard key={stat.name} {...stat} index={index} />
-        ))}
-      </div>
-
-      {/* Placeholder for more content */}
-      <div className="dashboard__placeholders grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <EmptyState
-          variant="first-run"
-          icon={Building2}
-          heading="Project Timeline"
-          description="Detailed project tracking and Gantt charts will appear here."
-          className="dashboard__placeholder min-h-[280px]"
-        />
-        <EmptyState
-          variant="first-run"
-          icon={Users}
-          heading="Resource Allocation"
-          description="Manage your machinery and workforce distribution across sites."
-          className="dashboard__placeholder min-h-[280px]"
-        />
+      <div className="dashboard__empty flex min-h-[60vh] flex-col items-center justify-center gap-2 text-center">
+        <p className="dashboard__empty-lead text-foreground text-base font-semibold">
+          No metrics to show yet
+        </p>
+        <p className="dashboard__empty-detail text-muted-foreground max-w-prose text-sm">
+          Operational figures — costs, profit, active projects — will appear here as you add data to
+          the system.
+        </p>
       </div>
     </div>
   );

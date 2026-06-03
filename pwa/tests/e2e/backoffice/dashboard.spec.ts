@@ -17,7 +17,7 @@ test.describe("BackOffice - Dashboard", () => {
 
   test("displays dashboard content", async ({ page }) => {
     await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
-    await expect(page.getByText("Welcome back, Admin")).toBeVisible();
+    await expect(page.getByText("No metrics to show yet")).toBeVisible();
   });
 
   test.describe("desktop", () => {

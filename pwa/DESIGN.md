@@ -27,7 +27,7 @@ ERPify is a **professional ERP/CRM for the construction industry** — a busines
 Entity surfaces — **Customers, Suppliers, Companies, Contacts, Projects, Quotations, Invoices, Purchase Orders, Work Orders, Assets, Employees** — must let an operator **identify a record within milliseconds**:
 
 - Prioritize **recognition over decoration**; surface the single most important business fact first.
-- Make **status, ownership, and key metrics** immediately visible — status through `<StatusBadge>`, identity through `<MonogramAvatar>` + the record name.
+- Make **status, ownership, and key metrics** immediately visible — status through `<StatusBadge>` and identity through the record name. The `<MonogramAvatar>` tint is optional, not prescribed (the bank surfaces render identity by name alone).
 - Avoid excessive whitespace; support rapid scanning of large datasets.
 - Keep actions discoverable **without** clutter: frequent, non-destructive actions stay as direct per-row controls; destructive ones demote into the `⋯` overflow (see the _List view_ pattern).
 
@@ -149,7 +149,7 @@ Same in both modes. Adjusted-state values shift slightly for legibility.
 | `--color-accent-active` | `#5052c4`                       | Pressed / active surfaces                           |
 | `--color-security`      | `#7a7fad` (Security Lavender)   | Reserved for security UI (auth, audit, permissions) |
 
-> **Identity-monogram exception (sanctioned).** `<MonogramAvatar>` renders a record's initials in a brand-indigo tint (`bg-primary/10 text-primary`). This is a deliberate, documented exception to "indigo is interactive/CTA only": the tint reads as an **identity affordance**, not a decorative flourish and not a status signal. It is always `aria-hidden` and the record name is always rendered beside it, so color is never the sole signal. Neutral-tile fallback (`bg-muted text-muted-foreground border`) is the approved downgrade if this is ever revisited.
+> **Identity-monogram exception (sanctioned).** `<MonogramAvatar>` renders a record's initials in a brand-indigo tint (`bg-primary/10 text-primary`). This is a deliberate, documented exception to "indigo is interactive/CTA only": the tint reads as an **identity affordance**, not a decorative flourish and not a status signal. It is always `aria-hidden` and the record name is always rendered beside it, so color is never the sole signal. Neutral-tile fallback (`bg-muted text-muted-foreground border`) is the approved downgrade if this is ever revisited. No surface uses it today — the bank surfaces dropped it as not adding value — but it stays available for entities where a monogram earns its place.
 
 ### Color — semantic signals (sparse use; ERP-defined statuses go through `<StatusBadge>`)
 

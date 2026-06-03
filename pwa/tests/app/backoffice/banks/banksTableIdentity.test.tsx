@@ -24,11 +24,6 @@ const OLD = Bank.fromPrimitives({
 });
 
 describe("BanksTable — identity cell", () => {
-  it("renders a monogram avatar in the name cell", () => {
-    render(<BanksTable banks={[RECENT]} />);
-    expect(screen.getByTestId(`banks-table__avatar-${RECENT.id}`)).toHaveTextContent("SB");
-  });
-
   it("shows a New badge for a recently created bank and not for an old one", () => {
     render(<BanksTable banks={[RECENT, OLD]} />);
     expect(screen.getByTestId(`banks-table__new-${RECENT.id}`)).toHaveTextContent("New");

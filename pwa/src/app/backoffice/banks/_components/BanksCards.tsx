@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
-import { MonogramAvatar, StatusBadge } from "@/components/erpify";
+import { StatusBadge } from "@/components/erpify";
 import {
   Card,
   CardAction,
@@ -70,11 +70,6 @@ export function BanksCards({
                       data-testid={`banks-cards__select-${bank.id}`}
                     />
                   ) : null}
-                  <MonogramAvatar
-                    name={bank.name}
-                    className="mt-0.5"
-                    testId={`banks-cards__avatar-${bank.id}`}
-                  />
                   <div className="min-w-0 flex-1 space-y-1">
                     <CardTitle className="banks-cards__title">
                       <Link
