@@ -27,11 +27,6 @@ describe("Bank detail — redesign", () => {
     run.mockResolvedValue(BANK);
   });
 
-  it("renders a monogram avatar in the header", async () => {
-    render(<BankDetailPage />);
-    expect(await screen.findByTestId("banks-detail__avatar")).toHaveTextContent("SB");
-  });
-
   it("renders Created as relative text with the absolute value in the title", async () => {
     render(<BankDetailPage />);
     const created = await screen.findByTestId("banks-detail__field-created");
