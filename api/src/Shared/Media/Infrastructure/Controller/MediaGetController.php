@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Media\Infrastructure\Controller;
 
+use Erpify\Shared\Infrastructure\Http\ContentAddressedHttpCache;
 use Erpify\Shared\Media\Domain\Entity\Media;
 use Erpify\Shared\Media\Domain\Repository\MediaRepository;
 use Symfony\Component\HttpFoundation\Request;
@@ -13,19 +14,20 @@ use Symfony\Component\Routing\Attribute\Route;
 #[Route('/media/{hash}', name: 'shared_media_get', requirements: ['hash' => '[a-f0-9]{64}'], methods: ['GET'])]
 final readonly class MediaGetController
 {
-    private const string CACHE_CONTROL = 'public, max-age=31536000, immutable';
-
     public function __construct(
         private MediaRepository $mediaRepository,
+        private ContentAddressedHttpCache $httpCache,
     ) {
     }
 
     public function __invoke(Request $request, string $hash): Response
     {
-        if ($this->ifNoneMatchEqualsHash($request, $hash) && $this->mediaRepository->existsActiveByContentHash($hash)) {
+        $notModified = $this->httpCache->isNotModified($request, $hash);
+
+        if ($notModified && $this->mediaRepository->existsActiveByContentHash($hash)) {
             $response = new Response();
             $response->setStatusCode(Response::HTTP_NOT_MODIFIED);
-            $this->applyCacheAndSecurityHeaders($response, $hash);
+            $this->httpCache->applyHeaders($response, $hash);
 
             return $response;
         }
@@ -39,31 +41,9 @@ final readonly class MediaGetController
         $response = new Response($media->getRawBytes());
         $response->headers->set('Content-Type', $media->getMimeType());
         $response->headers->set('Content-Length', (string) $media->getByteSize());
-        $this->applyCacheAndSecurityHeaders($response, $hash);
+
+        $this->httpCache->applyHeaders($response, $hash);
 
         return $response;
-    }
-
-    private function applyCacheAndSecurityHeaders(Response $response, string $hash): void
-    {
-        $response->setPublic();
-        $response->headers->set('Cache-Control', self::CACHE_CONTROL);
-        $response->setEtag($hash);
-        $response->headers->set('X-Content-Type-Options', 'nosniff');
-    }
-
-    private function ifNoneMatchEqualsHash(Request $request, string $hash): bool
-    {
-        $header = $request->headers->get('If-None-Match');
-
-        if (null === $header || '' === $header) {
-            return false;
-        }
-
-        if (\array_any($request->getETags(), static fn ($tag): bool => $tag === $hash)) {
-            return true;
-        }
-
-        return \str_contains($header, $hash);
     }
 }
