@@ -26,10 +26,20 @@
 #                   project — see config.mk on why it isn't inherited).
 #
 # worktree.remove / worktree.remove-all:
-# NAME=<dir|path>  selects the worktree (basename under .claude/worktrees/, or an
-#                  absolute path). FORCE=true discards a dirty worktree and deletes
-#                  a not-fully-merged branch (squash-merged branches look unmerged
+# NAME=<dir|path|branch>  selects the worktree (basename under .claude/worktrees/,
+#                  or an absolute path). When no worktree matches but NAME is a
+#                  local branch, the recipe falls back to deleting just that
+#                  branch — covers the half-cleaned state where a previous run
+#                  already removed the worktree but kept the squash-merged
+#                  branch. FORCE=true discards a dirty worktree and deletes a
+#                  not-fully-merged branch (squash-merged branches look unmerged
 #                  to git, so the common merged-PR case needs FORCE=true).
+#
+# Stale dirs: when a worktree's directory was deleted out-of-band (e.g. an agent
+# `rm -rf`), its stack can't be torn down via `$(MAKE) -C <dir>`. The recipe then
+# re-derives the erpify-<slug> project from the dir basename (same slug rule as
+# config.mk) and runs `docker compose -p erpify-<slug> down --volumes` from the
+# main checkout so the orphaned containers/volumes don't leak.
 
 ## —— Worktrees ————————————————————————————————————————————————————————————
 
@@ -56,23 +66,36 @@ worktree.create: ## Create a worktree on a NEW branch BRANCH=<branch> (BASE=main
 worktree.list: ## List worktrees (NAME = dir name or path for worktree.remove)
 	@git -C "$(PROJECT_ROOT)" worktree list
 
-worktree.remove: ## Remove worktree NAME=<dir|path> + its stack/volumes + branch; FORCE=true drops dirty/unmerged (destructive)
-	@if [ -z "$(NAME)" ]; then echo "✗ NAME=<worktree-dir-or-path> required (see 'make worktree.list')"; exit 1; fi
+worktree.remove: ## Remove worktree NAME=<dir|path|branch> + its stack/volumes + branch; FORCE=true drops dirty/unmerged (destructive)
+	@if [ -z "$(NAME)" ]; then echo "✗ NAME=<worktree-dir-path-or-branch> required (see 'make worktree.list')"; exit 1; fi
 	@main="$$(git -C "$(PROJECT_ROOT)" worktree list --porcelain | awk '/^worktree /{print $$2; exit}')"; \
 	wt="$$(git -C "$$main" worktree list --porcelain | awk -v t='$(NAME)' '$$1=="worktree"{p=$$2; b=p; sub(/.*\//,"",b); if (p==t || b==t){print p; exit}}')"; \
-	if [ -z "$$wt" ]; then echo "✗ no worktree matches NAME=$(NAME) (see 'make worktree.list')"; exit 1; fi; \
+	if [ -z "$$wt" ]; then \
+		if [ "$(NAME)" = "main" ]; then echo "✗ refusing to delete branch 'main'"; exit 1; fi; \
+		if git -C "$$main" show-ref --verify --quiet 'refs/heads/$(NAME)'; then \
+			echo "→ no worktree matches NAME=$(NAME); deleting the leftover branch"; \
+			git -C "$$main" branch $(if $(FORCE),-D,-d) '$(NAME)' && echo "✓ deleted branch $(NAME)" \
+				|| { echo "• branch '$(NAME)' kept — squash-merged branches look unmerged to git; re-run with FORCE=true"; exit 1; }; \
+			exit 0; \
+		fi; \
+		echo "✗ no worktree or local branch matches NAME=$(NAME) (see 'make worktree.list')"; exit 1; \
+	fi; \
 	if [ "$$wt" = "$$main" ]; then echo "✗ refusing to remove the main worktree ($$main)"; exit 1; fi; \
 	branch="$$(git -C "$$main" worktree list --porcelain | awk -v p="$$wt" '$$1=="worktree"{w=$$2} $$1=="branch" && w==p {sub("refs/heads/","",$$2); print $$2}')"; \
 	if [ -d "$$wt" ]; then \
 		echo "→ tearing down stack for $$wt"; \
 		$(MAKE) --no-print-directory -C "$$wt" ENV=dev docker.down.clean-volumes || true; \
+	else \
+		slug="$$(printf '%s' "$$(basename "$$wt")" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9' '-' | sed -E 's/^-+|-+$$//g')"; \
+		echo "→ worktree dir is gone; tearing down stack erpify-$$slug by project name"; \
+		(cd "$$main" && docker compose -p "erpify-$$slug" -f compose.yaml -f compose.dev.yaml down --remove-orphans --volumes) || true; \
 	fi; \
 	echo "→ removing worktree $$wt"; \
 	git -C "$$main" worktree remove $(if $(FORCE),--force ,)"$$wt" || { echo "✗ worktree has changes; re-run with FORCE=true to discard"; exit 1; }; \
 	git -C "$$main" worktree prune; \
 	if [ -n "$$branch" ]; then \
 		git -C "$$main" branch $(if $(FORCE),-D,-d) "$$branch" && echo "✓ deleted branch $$branch" \
-			|| echo "• branch '$$branch' kept (not fully merged; re-run with FORCE=true to delete)"; \
+			|| echo "• branch '$$branch' kept (squash-merged looks unmerged) — delete with 'make worktree.remove NAME=$$branch FORCE=true'"; \
 	fi
 
 worktree.remove-all: ## Remove ALL linked worktrees + their stacks/volumes + branches; FORCE=true drops dirty/unmerged (destructive)
