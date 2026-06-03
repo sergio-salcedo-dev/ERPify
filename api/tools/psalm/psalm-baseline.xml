@@ -34,10 +34,8 @@
       <code><![CDATA[getShortName]]></code>
       <code><![CDATA[getStoredObjectByteSize]]></code>
       <code><![CDATA[getStoredObjectKey]]></code>
+      <code><![CDATA[validateNormalizedNameLength]]></code>
     </PossiblyUnusedMethod>
-    <UnusedProperty>
-      <code><![CDATA[$nameNormalized]]></code>
-    </UnusedProperty>
   </file>
   <file src="../../src/Backoffice/Bank/Infrastructure/Controller/BankDeleteController.php">
     <UnusedClass>
