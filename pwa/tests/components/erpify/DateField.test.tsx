@@ -17,7 +17,7 @@ describe("DateField", () => {
     expect(input).toHaveAttribute("type", "text");
     expect(input).toHaveAttribute("placeholder", "dd/mm/yyyy");
     expect(input).toHaveAttribute("pattern", String.raw`\d{2}/\d{2}/\d{4}`);
-    expect(input).toHaveAttribute("maxlength", "10");
+    expect(input).not.toHaveAttribute("maxlength");
     expect(input).toHaveAttribute("inputmode", "numeric");
     expect(input).toHaveAttribute("title", expect.stringContaining("dd/mm/yyyy"));
   });

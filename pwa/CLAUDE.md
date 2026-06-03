@@ -65,6 +65,7 @@ Full-stack targets (`make app.dev`, `make docker.up`, `make docker.down`, …) l
 - New bounded contexts follow the `domain`/`application`/`infrastructure` split — don't flatten into `src/app/` or `src/lib/`.
 - Prefer functional components + hooks; strict TS types (no `any` unless justified).
 - BEM class names — `.card__header--highlighted`, not arbitrary utility clusters that escape the component.
+- **No `maxLength` on inputs — never silently truncate typed/pasted text.** The HTML attribute cuts user input with zero feedback (a 300-char paste becomes a saved 255-char name). Declare the limit in the entity's Zod schema (`.max()`) so the user sees the same "must not exceed" error the API returns; the server validates it anyway. Enforced by an ESLint `no-restricted-syntax` ban on the `maxLength` JSX attribute in `eslint.config.mjs`.
 - **No linter-narration comments.** Never add a comment whose only purpose is to justify a construct against a lint/Sonar rule ID — e.g. `// block body avoids S6544/S3735`, `// void would trip S3735`. Make the linters pass and let the code stand; if a non-obvious pattern needs a note, state the _intent_ ("fire-and-forget", "stable callback — no cascade") and don't name rules. The only allowed rule-referencing comment is the load-bearing `// eslint-disable-next-line <rule>` directive (it actually suppresses, so it earns its place).
 
 ## Security review (mandatory on every change)

@@ -50,6 +50,14 @@ const eslintConfig = [
       ],
       "@typescript-eslint/no-explicit-any": "error",
       "no-console": ["warn", { allow: ["warn", "error"] }],
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "JSXAttribute[name.name='maxLength']",
+          message:
+            "maxLength silently truncates typed/pasted input. Enforce the limit in the entity's Zod schema (.max()) so the user sees the 'must not exceed' error instead.",
+        },
+      ],
       "react/react-in-jsx-scope": "off", // Next.js doesn't need it
       "react/prop-types": "off", // Using TS
     },

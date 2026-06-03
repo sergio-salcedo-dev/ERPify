@@ -191,6 +191,22 @@ test.describe("BackOffice - Banks CRUD", () => {
       // Form keeps state — short name input retains the user value.
       await expect(page.getByTestId("bank-form__short-name")).toHaveValue("XYZ");
     });
+
+    test("rejects an over-long name with a visible field error instead of silently truncating", async ({
+      page,
+    }) => {
+      await mockBanksApi(page, { create: "validation-error" });
+      await page.goto("/backoffice/banks/new");
+
+      const overlong = "x".repeat(300);
+      await page.getByTestId("bank-form__name").fill(overlong);
+      await page.getByTestId("bank-form__short-name").fill("ACME");
+      await page.getByTestId("bank-form__submit").click();
+
+      await expect(page.getByText("The name must not exceed 255 characters.")).toBeVisible();
+      // The input keeps everything the user entered — no silent cut at 255.
+      await expect(page.getByTestId("bank-form__name")).toHaveValue(overlong);
+    });
   });
 
   test.describe("edit", () => {
