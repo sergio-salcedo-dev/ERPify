@@ -54,6 +54,12 @@ vi.mock("@/context/shared/infrastructure/Notification/Toast", () => ({
   toastNotifier: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
 }));
 
+// Neutralise the Mercure subscription: these tests exercise local deletes, and
+// the live hook's fetch/EventSource churn otherwise flakes under parallel load.
+vi.mock("@/context/backoffice/bank/infrastructure/bankRealtime", async () =>
+  (await import("./_mocks")).bankRealtimeMock(),
+);
+
 describe("BanksListPage — delete UX", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -96,5 +102,21 @@ describe("BanksListPage — delete UX", () => {
     // React portal; the row must NOT treat it as an activation and push the
     // detail route for the bank we just removed.
     expect(push).not.toHaveBeenCalledWith(`/backoffice/banks/${ACME.id}`);
+  });
+
+  it("shows the first-run empty state, not the filtered-to-zero state, after deleting the last bank", async () => {
+    searchRun.mockResolvedValue({ banks: [ACME], nextCursor: undefined });
+    render(<BanksListPage />);
+    expect(await screen.findByTestId(`banks-table__row-${ACME.id}`)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId(`banks-table__actions-${ACME.id}`));
+    fireEvent.click(await screen.findByTestId(`banks-table__delete-${ACME.id}`));
+    fireEvent.click(await screen.findByTestId("banks-detail__delete-confirm"));
+
+    // No banks remain and no filter is active, so the list must read as the
+    // first-run empty state — never the "No banks match your filters" panel,
+    // which only makes sense while banks exist behind an active filter.
+    expect(await screen.findByRole("heading", { name: "No banks yet" })).toBeInTheDocument();
+    expect(screen.queryByTestId("banks-list__empty-filtered")).toBeNull();
   });
 });
