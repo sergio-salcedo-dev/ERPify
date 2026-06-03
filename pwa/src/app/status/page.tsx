@@ -56,7 +56,7 @@ export default function StatusPage() {
 
   return (
     <div className="status-page flex min-h-screen flex-col bg-slate-50 font-sans">
-      <Navbar onGetStarted={() => router.push(Routes.BACKOFFICE)} />
+      <Navbar goToBackoffice={() => router.push(Routes.BACKOFFICE)} />
 
       <main className="status-page__main flex-grow">
         <section className="status-page__content mx-auto max-w-3xl px-4 py-12 sm:px-6 md:py-20 lg:px-8">
