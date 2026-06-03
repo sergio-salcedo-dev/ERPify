@@ -42,6 +42,8 @@ make ci                             # Full CI (ci.quality + ci.test).
 
 **Per-worktree stacks — isolated, no collision with `main`.** You can bring a worktree's stack up without touching the primary checkout's. `make/config.mk` derives `COMPOSE_PROJECT_NAME` from the checkout automatically: the primary keeps the bare `erpify` (fixed ports `80/443/15432/8025`, volumes untouched); a linked worktree under `.claude/worktrees/` gets `erpify-<dir-slug>` and, in dev, publishes host ports ephemerally (`0` → a random free port) so it never collides with `main` or other worktrees. Run `make app.dev` / `make docker.up` from inside the worktree — `make` targets then exec into *that* stack (so checks/tests see the worktree's code). Worktree stacks are driven via `docker compose exec` and the internal network (`MINK_BASE_URL`, pwa→php), not fixed host ports — so the random ports don't matter for the checks/tests a worktree runs.
 
+**Tearing a worktree down.** `make worktree.remove NAME=<dir>` removes one (its isolated `erpify-<slug>` stack + volumes, the worktree, then its branch); `make worktree.remove-all` clears every linked worktree. Both are **local only** — nothing is pushed to the remote. `FORCE=true` discards a dirty worktree and deletes a not-fully-merged branch (a squash-merged branch looks unmerged to git, so the merged-PR case needs `FORCE=true`). `make worktree.list` shows the `NAME` values.
+
 **Browsing a worktree's UI (on demand).** The default is browse-from-`main`. When you do need a worktree's UI in the browser, opt that run into a fixed, non-colliding port instead of adding any new tooling — every `*_PORT` is `?=`, so a value you pass wins over the ephemeral `0`:
 
 ```bash
