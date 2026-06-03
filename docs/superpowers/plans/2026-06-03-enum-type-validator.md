@@ -372,36 +372,17 @@ final class EnumTypeValidator extends ConstraintValidator
 Run: `make php.unit c='--filter EnumTypeValidatorTest'`
 Expected: PASS (10 tests / OK).
 
-- [ ] **Step 7: Static analysis on the new files**
+- [ ] **Step 7: Wire the constraint into `BankAccount` (so the whole tree resolves)**
 
-Run: `make php.stan` then `make php.psalm`
-Expected: no errors reported for the new `Validator/` files or the test. Fix anything reported before continuing (both must be clean — they narrow types differently).
+`BankAccount.php` in the working tree already carries `#[EnumType(Currency::class)]` and `#[EnumType(BankAccountStatus::class)]` but no import — so `make php.stan` fails tree-wide until this is fixed. This step must land in the same task/commit as the constraint. Apply three edits to `api/src/Backoffice/BankAccount/Domain/Entity/BankAccount.php`:
 
-- [ ] **Step 8: Commit (checkpoint — confirm per Commit policy)**
-
-```bash
-git add api/src/Shared/Infrastructure/Validator/ \
-        api/tests/Unit/Shared/Infrastructure/Validator/
-git commit -m "feat(shared): add EnumType validation constraint"
-```
-
----
-
-## Task 2: Finish `BankAccount` + migration
-
-**Files:**
-- Modify: `api/src/Backoffice/BankAccount/Domain/Entity/BankAccount.php`
-- Modify: `api/migrations/2026/Version20260602120000.php:19`
-
-- [ ] **Step 1: Add the import and fix the attributes in `BankAccount.php`**
-
-Add this `use` line in the import block (alphabetical order — after `Erpify\Shared\Domain\Enum\Currency;`, before the `Symfony\…` group):
+1. Add the import in the `use` block (alphabetical — after `Erpify\Shared\Domain\Enum\Currency;`, before the `Symfony\…` group):
 
 ```php
 use Erpify\Shared\Infrastructure\Validator\EnumType;
 ```
 
-Replace the malformed/over-wrapped class attribute:
+2. Collapse the over-wrapped class attribute back to one line. Replace:
 
 ```php
 #[UniqueEntity(
@@ -410,13 +391,13 @@ Replace the malformed/over-wrapped class attribute:
 ]
 ```
 
-with the single correct form:
+with:
 
 ```php
 #[UniqueEntity(fields: ['iban'], message: 'This IBAN is already in use.')]
 ```
 
-Restore the explicit join column on the `$bank` property (re-adds the `nullable: false` the working tree had silently dropped, matching `#[Assert\NotNull]` and the migration's `bank_id UUID NOT NULL`). Change:
+3. Restore the explicit join column on `$bank` (re-adds `nullable: false`, matching `#[Assert\NotNull]` and the migration's `bank_id UUID NOT NULL`). Replace:
 
 ```php
     #[ORM\ManyToOne(targetEntity: Bank::class)]
@@ -425,7 +406,7 @@ Restore the explicit join column on the `$bank` property (re-adds the `nullable:
     private Bank $bank;
 ```
 
-to:
+with:
 
 ```php
     #[ORM\ManyToOne(targetEntity: Bank::class)]
@@ -434,13 +415,36 @@ to:
     private Bank $bank;
 ```
 
-Leave the existing `#[EnumType(Currency::class)]` and `#[EnumType(BankAccountStatus::class)]` on the `currency`/`status` properties as-is — they now resolve to the new constraint.
+Leave the existing `#[EnumType(...)]` attributes and the `Types::SMALLINT` mapping as-is.
 
-- [ ] **Step 2: Edit the branch-only migration `INT` → `SMALLINT`**
+- [ ] **Step 8: Static analysis — whole tree green**
+
+Run: `make php.stan` then `make php.psalm`
+Expected: no errors anywhere — the new `Validator/` files, the test, and `BankAccount.php` all resolve. Both must be clean (they narrow types differently). Fix anything reported before continuing.
+
+- [ ] **Step 9: Commit (checkpoint — confirm per Commit policy)**
+
+```bash
+git add api/src/Shared/Infrastructure/Validator/ \
+        api/tests/Unit/Shared/Infrastructure/Validator/ \
+        api/src/Backoffice/BankAccount/Domain/Entity/BankAccount.php
+git commit -m "feat(backoffice): add EnumType constraint and apply to bank account"
+```
+
+---
+
+## Task 2: Migrate `status` to `SMALLINT`
+
+**Files:**
+- Modify: `api/migrations/2026/Version20260602120000.php:19`
+
+The `BankAccount` entity already maps `status` as `Types::SMALLINT` (committed in Task 1); this task brings the branch-only migration and the dev DB in line.
+
+- [ ] **Step 1: Edit the branch-only migration `INT` → `SMALLINT`**
 
 In `api/migrations/2026/Version20260602120000.php` line 19, inside the `CREATE TABLE bank_account (...)` SQL, change `status INT NOT NULL` to `status SMALLINT NOT NULL`. Leave every other column and the `down()` (`DROP TABLE`) untouched. (This migration is unmerged/branch-only, so in-place editing is allowed.)
 
-- [ ] **Step 3: Rebuild the dev DB from migrations and validate the mapping**
+- [ ] **Step 2: Rebuild the dev DB from migrations and validate the mapping**
 
 The dev DB currently has `status` as `integer`; re-apply the edited CREATE migration by resetting (destructive to the **dev** DB only — drops, migrates, reloads fixtures):
 
@@ -448,22 +452,16 @@ Run: `make db.reset`
 Then: `make db.validate`
 Expected: `[OK] The mapping files are correct.` and `[OK] The database schema is in sync with the mapping files.`
 
-- [ ] **Step 4: Confirm there is no remaining schema drift**
+- [ ] **Step 3: Confirm there is no remaining schema drift**
 
 Run: `make db.diff`
 Expected: `No changes detected in your mapping information.` (If instead it generates a migration file, the entity and migration disagree — delete the generated file, reconcile, and re-run.)
 
-- [ ] **Step 5: Static analysis on the entity**
-
-Run: `make php.stan` then `make php.psalm`
-Expected: no errors for `BankAccount.php`. Fix anything reported.
-
-- [ ] **Step 6: Commit (checkpoint — confirm per Commit policy)**
+- [ ] **Step 4: Commit (checkpoint — confirm per Commit policy)**
 
 ```bash
-git add api/src/Backoffice/BankAccount/Domain/Entity/BankAccount.php \
-        api/migrations/2026/Version20260602120000.php
-git commit -m "feat(backoffice): validate bank account enums and store status as smallint"
+git add api/migrations/2026/Version20260602120000.php
+git commit -m "feat(backoffice): store bank account status as smallint"
 ```
 
 ---
