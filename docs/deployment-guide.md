@@ -38,7 +38,7 @@ Defined in `compose.prod.yaml` on top of the base stack:
 - `CADDY_MERCURE_JWT_SECRET`
 - `POSTGRES_PASSWORD`
 
-Plus SMTP credentials and the `SERVER_NAME` / `NEXT_PUBLIC_SYMFONY_API_BASE_URL`
+Plus SMTP credentials and the `SERVER_NAME` / `NEXT_PUBLIC_API_BASE_URL`
 origin for the deployment host.
 
 Secrets are delivered through a **gitignored root `.env.prod.local`** (copy from

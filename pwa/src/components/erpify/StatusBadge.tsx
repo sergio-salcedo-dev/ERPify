@@ -2,7 +2,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { AlertTriangle, CheckCircle2, Circle, Info, XCircle, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type StatusVariant = "success" | "warning" | "danger" | "info" | "neutral";
+export type StatusBadgeVariant = "success" | "warning" | "danger" | "info" | "neutral";
 
 const statusVariants = cva(
   "inline-flex h-5 items-center gap-1 rounded-full border px-2 text-xs font-medium",
@@ -22,7 +22,7 @@ const statusVariants = cva(
   },
 );
 
-const iconByVariant: Record<StatusVariant, LucideIcon> = {
+const iconByVariant: Record<StatusBadgeVariant, LucideIcon> = {
   success: CheckCircle2,
   warning: AlertTriangle,
   danger: XCircle,
@@ -31,7 +31,7 @@ const iconByVariant: Record<StatusVariant, LucideIcon> = {
 };
 
 interface StatusBadgeProps extends VariantProps<typeof statusVariants> {
-  variant: StatusVariant;
+  variant: StatusBadgeVariant;
   label: string;
   className?: string;
   /** Optional test id passthrough (never hardcode in shared components). */

@@ -55,7 +55,8 @@ services:
       context: ./pwa
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_SYMFONY_API_BASE_URL: ${NEXT_PUBLIC_SYMFONY_API_BASE_URL:?NEXT_PUBLIC_SYMFONY_API_BASE_URL is required in prod}
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:?NEXT_PUBLIC_API_BASE_URL is required in prod}
+        NEXT_PUBLIC_APP_ENV: ${NEXT_PUBLIC_APP_ENV:-prod}
     security_opt:
       - no-new-privileges:true
     cap_drop:

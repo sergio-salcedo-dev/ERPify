@@ -9,13 +9,13 @@ Step-by-step guidance for deploying the monorepo safely. For a shorter checklist
 3. Run the stack on a **private network**; expose **`php`** (FrankenPHP on **80/443**) or place a load balancer in front with **TLS**.
 4. Set **CORS** on the API to the **exact** public origin(s) (`CORS_ALLOW_ORIGINS` — comma-separated, no `*`).
 5. Set PWA **server** env **`SYMFONY_INTERNAL_URL`** to an internal URL the Next server can reach (e.g. **`http://php:80`** in Compose).
-6. At **image build** time, set **`NEXT_PUBLIC_SYMFONY_API_BASE_URL`** to the same **public** origin users use in the browser (same-host **`https://app.example.com`** avoids mixed content).
+6. At **image build** time, set **`NEXT_PUBLIC_API_BASE_URL`** to the same **public** origin users use in the browser (same-host **`https://app.example.com`** avoids mixed content).
 7. Smoke-test: PWA loads, **`/api/v1/health`** returns Symfony JSON, HTTPS valid.
 
 ## Secrets and configuration
 
 - Store `APP_SECRET`, database URLs, Mercure JWT material, and third-party keys in a secret manager (Kubernetes Secrets, AWS Secrets Manager, Vault, etc.).
-- **`NEXT_PUBLIC_SYMFONY_API_BASE_URL`** — public origin for **browser** `fetch` (paths like **`/api/v1/...`**). With the default Docker layout this is the **FrankenPHP** host (e.g. **`https://app.example.com`**). Must be **HTTPS** if the page is **HTTPS**.
+- **`NEXT_PUBLIC_API_BASE_URL`** — public origin for **browser** `fetch` (paths like **`/api/v1/...`**). With the default Docker layout this is the **FrankenPHP** host (e.g. **`https://app.example.com`**). Must be **HTTPS** if the page is **HTTPS**.
 - **`SYMFONY_INTERNAL_URL`** — **server-only**; base URL for server-side fetches (e.g. **`http://php:80`** in Compose).
 - Rotate credentials on a schedule; do not use default passwords from compose examples on the public internet.
 
@@ -34,7 +34,7 @@ Step-by-step guidance for deploying the monorepo safely. For a shorter checklist
 ## Next.js PWA
 
 - Run with **`NODE_ENV=production`**. The **`pwa`** image listens on **3000** internally only; browsers hit **`php`** on **443** (or your LB).
-- Align **`NEXT_PUBLIC_SYMFONY_API_BASE_URL`** (build arg) with the public site URL and **CORS** when origins differ.
+- Align **`NEXT_PUBLIC_API_BASE_URL`** (build arg) with the public site URL and **CORS** when origins differ.
 
 ## Docker / images
 

@@ -26,7 +26,6 @@ test.describe("BackOffice - Dashboard", () => {
     test("reaches health check via Administration sidebar", async ({ page }) => {
       await navigateToHealthViaSidebarDesktop(page);
       await expect(page).toHaveURL("/backoffice/health");
-      await page.getByRole("button", { name: "Run Health Check" }).click();
       await expectBackOfficeHealthOk(page);
     });
 
@@ -45,7 +44,6 @@ test.describe("BackOffice - Dashboard", () => {
     test("reaches health check via mobile menu", async ({ page }) => {
       await navigateToHealthViaSidebarMobile(page);
       await expect(page).toHaveURL("/backoffice/health");
-      await page.getByRole("button", { name: "Run Health Check" }).click();
       await expectBackOfficeHealthOk(page);
     });
 

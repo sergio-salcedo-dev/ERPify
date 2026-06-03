@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ChevronLeft, Clock, Pencil, RefreshCw } from "lucide-react";
@@ -19,7 +19,7 @@ import {
 } from "@/components/erpify";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
-import { uuidV7 } from "@/lib/uuidV7";
+import { isUuid, uuidV7 } from "@/lib/uuidV7";
 import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
 import { isRecentlyCreated } from "../_lib/bankRecency";
 import { safeHref } from "@/lib/safeHref";
@@ -70,34 +70,20 @@ export default function BankDetailPage() {
     router.push(bankRoutes.list);
   }
 
-  // Real-time sync from OTHER clients (Mercure): reflect remote edits live, and
-  // on a remote delete fall through to the same redirect-to-list flow as a local
-  // delete so the now-gone id never refetches into a "not found" flash.
-  useBankRealtime(id ? [bankTopics.detail(id)] : [], {
-    onUpdated: (incoming) => {
-      if (incoming.id === id) {
-        setBank(incoming);
-      }
-    },
-    onDeleted: (deletedId) => {
-      if (deletedId === id && !redirecting) {
-        handleDeleted();
-      }
-    },
-  });
-
-  useEffect(() => {
-    if (!id || redirecting) return;
-    let cancelled = false;
-    (async () => {
+  // Loads the bank by id. `silent` skips the LOADING flash and keeps the current
+  // bank on a transient failure (used for the realtime reconnect reconcile);
+  // `isCancelled` lets a superseded load (id changed mid-flight) drop its result.
+  const loadBank = useCallback(
+    async (options?: { silent?: boolean; isCancelled?: () => boolean }): Promise<void> => {
+      if (!id || redirecting) return;
       try {
         const useCase = container.get<FindBank>("BackOfficeFindBank");
         const result = await useCase.run(id);
-        if (cancelled) return;
+        if (options?.isCancelled?.()) return;
         setBank(result);
         setState(ViewStatus.READY);
       } catch (err) {
-        if (cancelled) return;
+        if (options?.isCancelled?.() || options?.silent) return;
         if (err instanceof HttpError) {
           setProblem(err.problem);
           setState(
@@ -108,11 +94,48 @@ export default function BankDetailPage() {
         setProblem(genericProblem(err instanceof Error ? err.message : "Unknown error"));
         setState(ViewStatus.ERROR);
       }
-    })();
+    },
+    [id, redirecting],
+  );
+
+  // Real-time sync from OTHER clients (Mercure): reflect remote edits live, and
+  // on a remote delete fall through to the same redirect-to-list flow as a local
+  // delete so the now-gone id never refetches into a "not found" flash.
+  // Validate the route id as a UUID before it flows into the Mercure topic IRI
+  // (defense in depth): a malformed id never opens a junk subscription, and the
+  // detail fetch below already rejects it with a 400/404.
+  useBankRealtime(id && isUuid(id) ? [bankTopics.detail(id)] : [], {
+    onUpdated: (incoming) => {
+      if (incoming.id === id) {
+        setBank(incoming);
+      }
+    },
+    onDeleted: (deletedId) => {
+      if (deletedId === id && !redirecting) {
+        handleDeleted();
+      }
+    },
+    // On stream re-open after a drop, silently re-fetch this bank to reconcile an
+    // update/delete missed during the gap (Mercure has no replay). Fire-and-forget:
+    // a block body keeps the callback's `void` return so the promise isn't returned.
+    onReconnect: () => {
+      loadBank({ silent: true });
+    },
+  });
+
+  useEffect(() => {
+    // loadBank only setState()s after an `await` (or not at all on the guard
+    // path), so it cannot cascade renders synchronously — the rule can't see
+    // through the stable useCallback boundary. Mirrors the list page's loadBanks.
+    let cancelled = false;
+    // Fire-and-forget: loadBank handles its own errors, so the floating promise is
+    // intentional.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadBank({ isCancelled: () => cancelled });
     return () => {
       cancelled = true;
     };
-  }, [id, redirecting]);
+  }, [loadBank]);
 
   return (
     <div

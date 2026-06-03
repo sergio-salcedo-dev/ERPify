@@ -16,6 +16,14 @@ export interface MercureSubscribeOptions {
    * receiving updates instead of silently going stale.
    */
   onError?: () => void;
+  /**
+   * Invoked when the stream re-opens after a drop — i.e. on every successful
+   * (re)connection *except the first*. The transport reconnects on its own and
+   * any updates published during the gap are lost, so this lets the caller
+   * refetch to reconcile the view with the source of truth. It never fires on the
+   * initial connection (the caller already holds fresh data then).
+   */
+  onReconnect?: () => void;
 }
 
 export interface MercureSubscriber {

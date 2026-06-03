@@ -24,6 +24,6 @@ final class AggregateRootTest extends TestCase
 
         $this->expectException(LogicException::class);
 
-        $aggregate->readId();
+        $aggregate->exerciseIdGuard();
     }
 }

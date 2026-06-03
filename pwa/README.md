@@ -13,7 +13,7 @@ Next.js **App Router** app. In the **default Docker stack**, the browser uses **
 2. Copy [`.env.example`](.env.example) to **`.env.local`** when you need overrides.
 3. **Against Docker (full stack on host 80/443)**
    From repo root: **`make docker.up.wait`** (or **`make app.dev`** for down → install → up --wait → fix ownership).
-   Use **`NEXT_PUBLIC_SYMFONY_API_BASE_URL=https://localhost`** (or **`http://localhost`**) so the browser matches the page origin. **`SYMFONY_INTERNAL_URL=http://php:80`** is set in Compose for the **pwa** container.
+   Use **`NEXT_PUBLIC_API_BASE_URL=https://localhost`** (or **`http://localhost`**) so the browser matches the page origin. **`SYMFONY_INTERNAL_URL=http://php:80`** is set in Compose for the **pwa** container.
 
 ## Scripts
 

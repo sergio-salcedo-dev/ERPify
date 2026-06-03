@@ -24,7 +24,7 @@ On a VPS with a real domain:
 3. **Secrets / origins** in `.env.prod.local` (freshly generated, never reused
    from the LAN box):
    - `SERVER_NAME=your.domain`
-   - `NEXT_PUBLIC_SYMFONY_API_BASE_URL=https://your.domain`
+   - `NEXT_PUBLIC_API_BASE_URL=https://your.domain`
    - **Clear** `CADDY_SERVER_EXTRA_DIRECTIVES=` (empty) so Caddy switches from
      `tls internal` to automatic **ACME** — a publicly-trusted cert, so clients
      import **no** CA.

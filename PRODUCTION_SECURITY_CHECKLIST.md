@@ -65,7 +65,7 @@ you change anything here.
       cert from its own CA; clients import the root (see the runbook).
 - [ ] Public VPS: `CADDY_SERVER_EXTRA_DIRECTIVES` is **empty** and `SERVER_NAME`
       is the real domain, so Caddy uses automatic ACME — no overlay edits.
-- [ ] `NEXT_PUBLIC_SYMFONY_API_BASE_URL`, `DEFAULT_URI`, and `MERCURE_PUBLIC_URL`
+- [ ] `NEXT_PUBLIC_API_BASE_URL`, `DEFAULT_URI`, and `MERCURE_PUBLIC_URL`
       all match the served `https://$SERVER_NAME` origin.
 
 ## 6. App-layer (carried from `CLAUDE.md` security review)
@@ -73,6 +73,10 @@ you change anything here.
 - [ ] CORS allowlist not widened to wildcards; Mercure JWT secret rotation
       policy preserved.
 - [ ] Error responses follow RFC 9457 with no stack-trace leakage outside dev.
+- [ ] No secret hides behind a `NEXT_PUBLIC_*` name — those are inlined into the
+      browser bundle at build time. Only `NEXT_PUBLIC_API_BASE_URL` and
+      `NEXT_PUBLIC_APP_ENV` are allowed; the `pwa/tests/next-public-env-allowlist.test.ts`
+      guard (in `make pwa.test.unit`) fails the build on any other.
 - [ ] Migrations are reversible (`down()`); no PII/secrets seeded; no
       `DROP TABLE` outside an explicit destructive migration.
 - [ ] Messenger handlers idempotent (at-least-once delivery).

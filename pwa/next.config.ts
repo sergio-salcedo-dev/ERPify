@@ -52,11 +52,11 @@ const nextConfig: NextConfig = {
     // - `'unsafe-eval'` is required by Next/Turbopack in development for HMR
     //   only; it is dropped in production builds.
     // - `connect-src` allows the Symfony API origin via
-    //   `NEXT_PUBLIC_SYMFONY_API_BASE_URL`. Same-origin (`'self'`) covers the
+    //   `NEXT_PUBLIC_API_BASE_URL`. Same-origin (`'self'`) covers the
     //   default Docker stack where FrankenPHP serves /api on the same host.
     const isProd = process.env.NODE_ENV === "production";
     const apiOrigin = (() => {
-      const raw = process.env.NEXT_PUBLIC_SYMFONY_API_BASE_URL?.trim();
+      const raw = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
       if (!raw) return "";
       try {
         const u = new URL(raw);

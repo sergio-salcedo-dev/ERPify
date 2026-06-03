@@ -21,8 +21,14 @@ final class IdlessAggregateStub extends AggregateRoot
         return new self();
     }
 
-    public function readId(): string
+    /**
+     * Invokes the protected non-null id() guard so a test can assert it rejects an
+     * unidentified aggregate. Returns nothing on purpose: the guard throws before any id
+     * exists, so a never-consumed string return would only read as dead code to static
+     * analysis (psalm PossiblyUnusedReturnValue).
+     */
+    public function exerciseIdGuard(): void
     {
-        return $this->id();
+        $this->id();
     }
 }
