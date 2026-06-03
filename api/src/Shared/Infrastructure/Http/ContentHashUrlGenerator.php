@@ -25,25 +25,26 @@ final readonly class ContentHashUrlGenerator
     }
 
     /**
-     * @param string $routeName  Route serving the resource from this origin
-     * @param string $pathPrefix Leading path segment of the public URL, e.g. "/api/v1/media/"
+     * @param string $routeName Route serving the resource from this origin; its path is the single
+     *                          source of truth for the public URL (no hand-maintained prefix literal)
      */
-    public function generate(string $contentHash, string $routeName, string $pathPrefix): string
+    public function generate(string $contentHash, string $routeName): string
     {
         $base = \trim($this->publicBaseUrl);
+        $parameters = ['hash' => $contentHash];
 
         if ('' !== $base) {
-            return \rtrim($base, '/') . $pathPrefix . $contentHash;
+            return \rtrim($base, '/') . $this->urlGenerator->generate($routeName, $parameters);
         }
 
         if ($this->requestStack->getCurrentRequest() instanceof Request) {
             return $this->urlGenerator->generate(
                 $routeName,
-                ['hash' => $contentHash],
+                $parameters,
                 UrlGeneratorInterface::ABSOLUTE_URL,
             );
         }
 
-        return $pathPrefix . $contentHash;
+        return $this->urlGenerator->generate($routeName, $parameters);
     }
 }

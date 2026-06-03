@@ -20,6 +20,6 @@ final readonly class ConfigurableMediaPublicUrlGenerator implements MediaPublicU
     #[Override]
     public function urlForContentHash(string $contentHash): string
     {
-        return $this->urlGenerator->generate($contentHash, 'shared_media_get', '/api/v1/media/');
+        return $this->urlGenerator->generate($contentHash, 'shared_media_get');
     }
 }

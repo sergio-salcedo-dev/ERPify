@@ -20,6 +20,6 @@ final readonly class ConfigurableStoredObjectPublicUrlGenerator implements Store
     #[Override]
     public function urlForContentHash(string $contentHash): string
     {
-        return $this->urlGenerator->generate($contentHash, 'shared_stored_object_get', '/api/v1/stored-objects/');
+        return $this->urlGenerator->generate($contentHash, 'shared_stored_object_get');
     }
 }
