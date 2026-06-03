@@ -95,6 +95,21 @@
       <code><![CDATA[BankStoredObjectReferenceInspector]]></code>
     </UnusedClass>
   </file>
+  <file src="../../src/Backoffice/BankAccount/Domain/Entity/BankAccount.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[BankAccount]]></code>
+    </ClassMustBeFinal>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[create]]></code>
+      <code><![CDATA[getAlias]]></code>
+      <code><![CDATA[getBank]]></code>
+      <code><![CDATA[getBic]]></code>
+      <code><![CDATA[getCurrency]]></code>
+      <code><![CDATA[getHolderName]]></code>
+      <code><![CDATA[getIban]]></code>
+      <code><![CDATA[getStatus]]></code>
+    </PossiblyUnusedMethod>
+  </file>
   <file src="../../src/Backoffice/Health/Infrastructure/Controller/HealthController.php">
     <UnusedClass>
       <code><![CDATA[HealthController]]></code>
@@ -131,20 +146,27 @@
   </file>
   <file src="../../src/Shared/Domain/Enum/Abstraction/HumanReadableIntEnumInterface.php">
     <PossiblyUnusedMethod>
-      <code><![CDATA[fromLabel]]></code>
       <code><![CDATA[fromLabelOrFail]]></code>
-      <code><![CDATA[getLabel]]></code>
       <code><![CDATA[getLabelOrFail]]></code>
-      <code><![CDATA[getLabels]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="../../src/Shared/Domain/Enum/Abstraction/HumanReadableIntEnumTrait.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[getKeysFromValues]]></code>
+      <code><![CDATA[getKeysFromValues]]></code>
+      <code><![CDATA[getValues]]></code>
+      <code><![CDATA[getValues]]></code>
+      <code><![CDATA[getValuesNotIn]]></code>
+      <code><![CDATA[getValuesNotIn]]></code>
     </PossiblyUnusedMethod>
   </file>
   <file src="../../src/Shared/Domain/Enum/Attribute/HumanReadableIntEnumValue.php">
     <ClassMustBeFinal>
       <code><![CDATA[HumanReadableIntEnumValue]]></code>
     </ClassMustBeFinal>
-    <UnusedClass>
-      <code><![CDATA[HumanReadableIntEnumValue]]></code>
-    </UnusedClass>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
   </file>
   <file src="../../src/Shared/Guzzle/Enum/GuzzleContextTypeEnum.php">
     <UnusedClass>

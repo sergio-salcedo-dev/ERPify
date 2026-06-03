@@ -10,6 +10,7 @@ use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountStatus;
 use Erpify\Shared\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Domain\Enum\Currency;
+use Erpify\Shared\Infrastructure\Validator\EnumType;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Validator\Constraints as Assert;
 
@@ -23,17 +24,7 @@ class BankAccount extends AggregateRoot
     #[Assert\NotNull]
     private Bank $bank;
 
-    /**
-     * Stored canonicalized: upper-case, no whitespace (see {@see canonicalizeIban()}). The unique
-     * column is compared directly — no separate normalized half needed.
-     */
-    #[ORM\Column(length: 34, unique: true)]
-    #[Assert\NotBlank]
-    #[Assert\Iban]
-    #[Assert\Length(max: 34)]
-    private string $iban;
-
-    #[ORM\Column(name: 'holder_name', length: 255)]
+    #[ORM\Column(length: 255)]
     #[Assert\NotBlank]
     #[Assert\Length(max: 255)]
     private string $holderName;
@@ -42,24 +33,41 @@ class BankAccount extends AggregateRoot
     #[Assert\Length(max: 100)]
     private ?string $alias = null;
 
-    #[ORM\Column(length: 3, enumType: Currency::class)]
-    private Currency $currency;
+    /**
+     * Stored canonicalized: upper-case, no whitespace (see {@see canonicalizeIban()}). The unique
+     * column is compared directly — no separate normalized half needed.
+     *
+     * IBANs are ASCII-only by specification (ISO 13616). An IBAN is composed of:
+     * - 2-letter ISO country code (A–Z)
+     * - 2 check digits (0–9)
+     * - BBAN — alphanumeric, A–Z / 0–9
+     */
+    #[ORM\Column(length: 34, unique: true)]
+    #[Assert\NotBlank]
+    #[Assert\Iban]
+    #[Assert\Length(max: 34)]
+    private string $iban;
 
     #[ORM\Column(length: 11, nullable: true)]
     #[Assert\Bic(ibanPropertyPath: 'iban')]
     private ?string $bic = null;
 
-    #[ORM\Column(type: Types::INTEGER, enumType: BankAccountStatus::class)]
+    #[ORM\Column(length: 3, enumType: Currency::class)]
+    #[EnumType(Currency::class)]
+    private Currency $currency;
+
+    #[ORM\Column(type: Types::SMALLINT, enumType: BankAccountStatus::class)]
+    #[EnumType(BankAccountStatus::class)]
     private BankAccountStatus $status;
 
     public static function create(
         string $id,
         Bank $bank,
-        string $iban,
         string $holderName,
+        string $iban,
+        ?string $bic = null,
         ?string $alias = null,
         Currency $currency = Currency::EUR,
-        ?string $bic = null,
         BankAccountStatus $status = BankAccountStatus::ACTIVE,
     ): self {
         $bankAccount = new self();
