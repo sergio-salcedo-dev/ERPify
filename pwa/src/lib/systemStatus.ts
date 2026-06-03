@@ -1,4 +1,4 @@
-/** Aggregate UI status for the status pages (Atlassian-style). */
+/** Aggregate UI status for the status pages. */
 export const SystemStatus = {
   CHECKING: "checking",
   OPERATIONAL: "operational",

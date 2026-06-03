@@ -54,9 +54,6 @@ export default function HealthPage() {
   }, []);
 
   useEffect(() => {
-    // runCheck resets checking/problem before its first await; that initial
-    // setState is intentional (it also drives the manual Refresh path) and runs
-    // through a stable callback, so the cascading-render warning does not apply.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     runCheck();
   }, [runCheck]);
