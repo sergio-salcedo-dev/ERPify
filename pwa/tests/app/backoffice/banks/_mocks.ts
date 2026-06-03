@@ -1,4 +1,5 @@
 import { vi } from "vitest";
+import type { BankRealtimeHandlers } from "@/context/backoffice/bank/infrastructure/bankRealtime";
 
 /**
  * Shared `vi.mock` factories for the banks test suite. Each test still declares
@@ -45,5 +46,25 @@ export function containerMock(handlers: Record<string, RunStub>) {
 export function toastNotifierMock() {
   return {
     toastNotifier: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
+  };
+}
+
+/**
+ * `bankRealtime` mock that keeps the REAL `bankTopics` (so the topic IRI can
+ * never drift from production) and replaces only `useBankRealtime`. Pass a
+ * `capture` callback to grab the handlers and drive Mercure events directly from
+ * a test; omit it to neutralise the subscription entirely.
+ */
+export async function bankRealtimeMock(capture?: (handlers: BankRealtimeHandlers) => void) {
+  const actual = await vi.importActual<
+    typeof import("@/context/backoffice/bank/infrastructure/bankRealtime")
+  >("@/context/backoffice/bank/infrastructure/bankRealtime");
+  return {
+    ...actual,
+    useBankRealtime: capture
+      ? (_topics: readonly string[], handlers: BankRealtimeHandlers): void => {
+          capture(handlers);
+        }
+      : vi.fn(),
   };
 }
