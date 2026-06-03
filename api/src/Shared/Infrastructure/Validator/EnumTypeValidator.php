@@ -22,7 +22,7 @@ final class EnumTypeValidator extends ConstraintValidator
         }
 
         // @phpstan-ignore function.alreadyNarrowedType (runtime guard for callers bypassing the PHPDoc type)
-        if (!is_a($constraint->enumClass, BackedEnum::class, true)) {
+        if (!\is_a($constraint->enumClass, BackedEnum::class, true)) {
             throw new ConstraintDefinitionException(\sprintf(
                 'The "enumClass" option of the %s constraint must be a backed enum, "%s" given.',
                 $constraint::class,
@@ -35,7 +35,7 @@ final class EnumTypeValidator extends ConstraintValidator
         }
 
         $isAllowedCase = $value instanceof BackedEnum
-            && is_a($value, $constraint->enumClass)
+            && \is_a($value, $constraint->enumClass)
             && ([] === $constraint->cases || \in_array($value, $constraint->cases, true));
 
         if ($isAllowedCase) {
@@ -45,7 +45,8 @@ final class EnumTypeValidator extends ConstraintValidator
         $this->context
             ->buildViolation($constraint->message)
             ->setParameter('{{ choices }}', $this->formatChoices($constraint))
-            ->addViolation();
+            ->addViolation()
+        ;
     }
 
     private function formatChoices(EnumType $constraint): string
@@ -56,7 +57,7 @@ final class EnumTypeValidator extends ConstraintValidator
 
         $enumClass = $constraint->enumClass;
 
-        if (is_a($enumClass, HumanReadableIntEnumInterface::class, true)) {
+        if (\is_a($enumClass, HumanReadableIntEnumInterface::class, true)) {
             // Whole-enum listing: silently drop label-less cases. (A subset, by contrast,
             // names every requested case — see labelsFromCases() falling back to the value.)
             return $this->formatValues($this->withoutNulls($enumClass::getLabels()));

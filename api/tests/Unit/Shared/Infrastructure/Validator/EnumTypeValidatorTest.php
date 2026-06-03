@@ -4,15 +4,18 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Infrastructure\Validator;
 
+use BackedEnum;
 use Erpify\Shared\Infrastructure\Validator\EnumType;
 use Erpify\Shared\Infrastructure\Validator\EnumTypeValidator;
 use Erpify\Tests\Unit\Shared\Infrastructure\Validator\Fixtures\FixtureLabeledEnum;
 use Erpify\Tests\Unit\Shared\Infrastructure\Validator\Fixtures\FixtureStringEnum;
 use Override;
+use PHPUnit\Framework\Attributes\DataProvider;
+use stdClass;
 use Symfony\Component\Validator\Constraints\NotBlank;
+use Symfony\Component\Validator\ConstraintValidatorInterface;
 use Symfony\Component\Validator\Exception\ConstraintDefinitionException;
 use Symfony\Component\Validator\Exception\UnexpectedTypeException;
-use Symfony\Component\Validator\ConstraintValidatorInterface;
 use Symfony\Component\Validator\Test\ConstraintValidatorTestCase;
 
 /**
@@ -20,100 +23,78 @@ use Symfony\Component\Validator\Test\ConstraintValidatorTestCase;
  *
  * @extends ConstraintValidatorTestCase<EnumTypeValidator>
  */
+#[\PHPUnit\Framework\Attributes\CoversNothing]
 final class EnumTypeValidatorTest extends ConstraintValidatorTestCase
 {
     private const string MESSAGE = 'The value you selected is not a valid choice.';
 
-    public function testValidEnumInstancePasses(): void
+    #[DataProvider('provideAcceptsValidValuesCases')]
+    public function testAcceptsValidValues(mixed $value, EnumType $constraint): void
     {
-        $this->validator->validate(FixtureStringEnum::A, new EnumType(FixtureStringEnum::class));
+        $this->validator->validate($value, $constraint);
 
         $this->assertNoViolation();
     }
 
-    public function testNullWithAllowNullPasses(): void
+    /**
+     * @return iterable<string, array{0: mixed, 1: EnumType}>
+     */
+    public static function provideAcceptsValidValuesCases(): iterable
     {
-        $this->validator->validate(null, new EnumType(FixtureStringEnum::class, allowNull: true));
-
-        $this->assertNoViolation();
-    }
-
-    public function testNullWithoutAllowNullRaisesViolation(): void
-    {
-        $this->validator->validate(null, new EnumType(FixtureStringEnum::class));
-
-        $this->buildViolation(self::MESSAGE)
-            ->setParameter('{{ choices }}', '"a", "b", "c"')
-            ->assertRaised();
-    }
-
-    public function testRawScalarRaisesViolation(): void
-    {
-        $this->validator->validate('a', new EnumType(FixtureStringEnum::class));
-
-        $this->buildViolation(self::MESSAGE)
-            ->setParameter('{{ choices }}', '"a", "b", "c"')
-            ->assertRaised();
-    }
-
-    public function testDifferentEnumInstanceRaisesViolation(): void
-    {
-        $this->validator->validate(FixtureLabeledEnum::ONE, new EnumType(FixtureStringEnum::class));
-
-        $this->buildViolation(self::MESSAGE)
-            ->setParameter('{{ choices }}', '"a", "b", "c"')
-            ->assertRaised();
-    }
-
-    public function testValueInSubsetPasses(): void
-    {
-        $this->validator->validate(
+        yield 'enum instance' => [FixtureStringEnum::A, new EnumType(FixtureStringEnum::class)];
+        yield 'null when allowNull' => [null, new EnumType(FixtureStringEnum::class, allowNull: true)];
+        yield 'instance within subset' => [
             FixtureStringEnum::A,
             new EnumType(FixtureStringEnum::class, cases: [FixtureStringEnum::A, FixtureStringEnum::B]),
-        );
-
-        $this->assertNoViolation();
+        ];
     }
 
-    public function testValidEnumOutsideSubsetRaisesViolation(): void
+    #[DataProvider('provideRejectsInvalidValuesCases')]
+    public function testRejectsInvalidValues(mixed $value, EnumType $constraint, string $expectedChoices): void
     {
-        $this->validator->validate(
+        $this->validator->validate($value, $constraint);
+
+        $this->buildViolation(self::MESSAGE)
+            ->setParameter('{{ choices }}', $expectedChoices)
+            ->assertRaised()
+        ;
+    }
+
+    /**
+     * @return iterable<string, array{0: mixed, 1: EnumType, 2: string}>
+     */
+    public static function provideRejectsInvalidValuesCases(): iterable
+    {
+        yield 'null without allowNull' => [null, new EnumType(FixtureStringEnum::class), '"a", "b", "c"'];
+        yield 'raw backing scalar' => ['a', new EnumType(FixtureStringEnum::class), '"a", "b", "c"'];
+        yield 'instance of another enum' => [
+            FixtureLabeledEnum::ONE,
+            new EnumType(FixtureStringEnum::class),
+            '"a", "b", "c"',
+        ];
+        yield 'valid case outside subset' => [
             FixtureStringEnum::C,
             new EnumType(FixtureStringEnum::class, cases: [FixtureStringEnum::A, FixtureStringEnum::B]),
-        );
-
-        $this->buildViolation(self::MESSAGE)
-            ->setParameter('{{ choices }}', '"a", "b"')
-            ->assertRaised();
-    }
-
-    public function testChoicesUseLabelsForHumanReadableEnum(): void
-    {
-        $this->validator->validate('nope', new EnumType(FixtureLabeledEnum::class));
-
-        $this->buildViolation(self::MESSAGE)
-            ->setParameter('{{ choices }}', '"one", "two", "three"')
-            ->assertRaised();
-    }
-
-    public function testChoicesForHumanReadableSubsetUseLabelsAndFallBackToValue(): void
-    {
-        // FOUR has no label, so the subset listing falls back to its backing value.
-        $this->validator->validate(
+            '"a", "b"',
+        ];
+        yield 'human-readable labels listed' => [
+            'nope',
+            new EnumType(FixtureLabeledEnum::class),
+            '"one", "two", "three"',
+        ];
+        // FOUR has no label, so a human-readable subset falls back to its backing value.
+        yield 'human-readable subset with value fallback' => [
             FixtureLabeledEnum::THREE,
             new EnumType(FixtureLabeledEnum::class, cases: [FixtureLabeledEnum::ONE, FixtureLabeledEnum::FOUR]),
-        );
-
-        $this->buildViolation(self::MESSAGE)
-            ->setParameter('{{ choices }}', '"one", "4"')
-            ->assertRaised();
+            '"one", "4"',
+        ];
     }
 
     public function testInvalidEnumClassRaisesConstraintDefinitionException(): void
     {
-        /** @var class-string<\BackedEnum> $notAnEnum -- deliberately wrong to exercise the guard */
+        /** @var class-string<BackedEnum> $notAnEnum -- deliberately wrong to exercise the guard */
         // @phpstan-ignore varTag.nativeType (intentionally wrong type to exercise the runtime guard)
-        $notAnEnum = \stdClass::class;
+        $notAnEnum = stdClass::class;
 
         $this->expectException(ConstraintDefinitionException::class);
 

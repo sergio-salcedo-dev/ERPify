@@ -23,6 +23,8 @@ final class EnumType extends Constraint
     /**
      * @param class-string<BackedEnum> $enumClass
      * @param list<BackedEnum>         $cases     optional subset; empty means the whole enum is allowed
+     *
+     * @SuppressWarnings("PHPMD.BooleanArgumentFlag")
      */
     #[HasNamedArguments]
     public function __construct(
