@@ -82,11 +82,10 @@ final class EnumTypeValidatorTest extends ConstraintValidatorTestCase
             new EnumType(FixtureLabeledEnum::class),
             '"one", "two", "three"',
         ];
-        // FOUR has no label, so a human-readable subset falls back to its backing value.
-        yield 'human-readable subset with value fallback' => [
+        yield 'human-readable subset lists labels' => [
             FixtureLabeledEnum::THREE,
-            new EnumType(FixtureLabeledEnum::class, cases: [FixtureLabeledEnum::ONE, FixtureLabeledEnum::FOUR]),
-            '"one", "4"',
+            new EnumType(FixtureLabeledEnum::class, cases: [FixtureLabeledEnum::ONE, FixtureLabeledEnum::TWO]),
+            '"one", "two"',
         ];
     }
 

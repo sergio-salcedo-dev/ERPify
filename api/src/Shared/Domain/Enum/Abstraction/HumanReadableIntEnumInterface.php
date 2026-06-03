@@ -8,11 +8,9 @@ use BackedEnum;
 
 interface HumanReadableIntEnumInterface extends BackedEnum
 {
-    public function getLabel(): ?string;
+    public function getLabel(): string;
 
-    public function getLabelOrFail(): string;
-
-    /** @return array<int, string|null> */
+    /** @return list<string> */
     public static function getLabels(): array;
 
     public static function fromLabel(string $label): ?self;

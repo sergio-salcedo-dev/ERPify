@@ -10,7 +10,7 @@ use Attribute;
 readonly class HumanReadableIntEnumValue
 {
     public function __construct(
-        public ?string $label = null,
+        public string $label,
     ) {
     }
 }

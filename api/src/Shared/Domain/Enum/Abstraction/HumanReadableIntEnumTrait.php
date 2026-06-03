@@ -12,30 +12,19 @@ use SplObjectStorage;
 
 trait HumanReadableIntEnumTrait
 {
-    public function getLabel(): ?string
+    public function getLabel(): string
     {
-        return $this->getEnumCaseAttribute()?->label;
-    }
-
-    public function getLabelOrFail(): string
-    {
-        $label = $this->getEnumCaseAttribute()?->label;
-
-        if (null === $label) {
-            throw new InvalidArgumentException(\sprintf('Label not found for enum case %s', $this->name));
-        }
-
-        return $label;
+        return $this->getEnumCaseAttribute()->label;
     }
 
     /**
-     * @return array<int, string|null>
+     * @return list<string>
      */
     public static function getLabels(): array
     {
         return \array_map(
-            static fn (?HumanReadableIntEnumInterface $intEnum): ?string => $intEnum?->getLabel(),
-            \iterator_to_array(self::enumValueAttributes()),
+            static fn (self $enum): string => $enum->getLabel(),
+            self::cases(),
         );
     }
 
@@ -112,11 +101,9 @@ trait HumanReadableIntEnumTrait
         );
     }
 
-    private function getEnumCaseAttribute(): ?HumanReadableIntEnumValue
+    private function getEnumCaseAttribute(): HumanReadableIntEnumValue
     {
-        $attributes = static::enumValueAttributes();
-
-        return $attributes->offsetExists($this) ? $attributes[$this] : null;
+        return static::enumValueAttributes()[$this];
     }
 
     /**
@@ -141,7 +128,12 @@ trait HumanReadableIntEnumTrait
             );
 
             if ([] === $reflectionAttributes) {
-                continue;
+                throw new InvalidArgumentException(\sprintf(
+                    'Enum case %s::%s is missing the required #[%s] attribute.',
+                    static::class,
+                    $reflectionEnumUnitCase->getName(),
+                    HumanReadableIntEnumValue::class,
+                ));
             }
 
             $case = $reflectionEnumUnitCase->getValue();
