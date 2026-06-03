@@ -66,10 +66,8 @@ export default function HealthPage() {
   return (
     <div className="health-page space-y-8">
       <header className="health-page__header flex flex-col gap-1">
-        <h1 className="text-foreground text-2xl font-semibold tracking-tight">System Health</h1>
-        <p className="text-muted-foreground text-sm">
-          Live availability of your BackOffice API services.
-        </p>
+        <h1 className="text-foreground text-2xl font-semibold tracking-tight">Service Health</h1>
+        <p className="text-muted-foreground text-sm">Live health of your back-office services.</p>
       </header>
 
       <section className="health-page__status bg-card border-border space-y-6 rounded-lg border p-6">
