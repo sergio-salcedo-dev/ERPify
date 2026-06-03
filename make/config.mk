@@ -58,7 +58,13 @@ ifeq ($(IS_LINKED_WORKTREE),true)
 else
   COMPOSE_PROJECT_NAME ?= erpify
 endif
-export COMPOSE_PROJECT_NAME
+# Deliberately NOT exported — it is handed to compose via `-p` in DOCKER_COMPOSE
+# below. Exporting it would leak into nested `make` calls ($(MAKE) -C <worktree>):
+# the child inherits it as an env var, `?=` can't override an env-origin value, and
+# the child would act on the *caller's* project instead of re-deriving its own
+# erpify-<slug>. A deliberate override still wins — a shell `export
+# COMPOSE_PROJECT_NAME=…` is a real env var (inherited by children) and a
+# command-line assignment rides MAKEFLAGS; both are read here and forwarded by `-p`.
 
 # —— Compose overlay by ENV ————————————————————————————————————————————————
 # dev      : compose.yaml + compose.dev.yaml
@@ -84,7 +90,7 @@ else
   ENV_FILE_ARGS :=
 endif
 
-DOCKER_COMPOSE := cd $(PROJECT_ROOT) && docker compose $(ENV_FILE_ARGS) $(COMPOSE_FILES)
+DOCKER_COMPOSE := cd $(PROJECT_ROOT) && docker compose -p $(COMPOSE_PROJECT_NAME) $(ENV_FILE_ARGS) $(COMPOSE_FILES)
 DOCKER_COMPOSE_EXEC := $(DOCKER_COMPOSE) exec
 
 # —— PHP exec helpers ——————————————————————————————————————————————————————
