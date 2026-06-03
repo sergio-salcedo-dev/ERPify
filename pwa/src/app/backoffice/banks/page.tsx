@@ -88,6 +88,8 @@ export default function BanksListPage() {
     };
   }, []);
 
+  const reloadingRef = useRef(false);
+
   const loadBanks = useCallback(async (options?: { silent?: boolean }) => {
     // A silent reconcile (e.g. after a realtime reconnect) refreshes in the
     // background: no LOADING skeleton flash, and a transient failure leaves the
@@ -96,6 +98,7 @@ export default function BanksListPage() {
       setState(ViewStatus.LOADING);
       setProblem(null);
     }
+    reloadingRef.current = true;
     try {
       const useCase = container.get<SearchBanks>("BackOfficeSearchBanks");
       const result = await useCase.run();
@@ -109,6 +112,8 @@ export default function BanksListPage() {
       const nextProblem = err instanceof HttpError ? err.problem : genericProblem(fallbackDetail);
       setProblem(nextProblem);
       setState(ViewStatus.ERROR);
+    } finally {
+      reloadingRef.current = false;
     }
   }, []);
 
@@ -238,8 +243,10 @@ export default function BanksListPage() {
   // means that error is likely stale. Reconcile with a full silent reload rather
   // than trusting the delta: Mercure has no replay, so the events seen so far are
   // only a partial slice — promoting them to READY would render an incomplete list.
+  // A reload already in flight wins, so a burst of deltas coalesces into a single
+  // reconcile instead of launching one overlapping silent reload per event.
   const reconcileAfterErroredLoad = (): void => {
-    if (state === ViewStatus.ERROR) {
+    if (state === ViewStatus.ERROR && !reloadingRef.current) {
       loadBanks({ silent: true });
     }
   };

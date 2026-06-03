@@ -56,10 +56,9 @@ vi.mock("@/context/shared/infrastructure/Notification/Toast", () => ({
 
 // Neutralise the Mercure subscription: these tests exercise local deletes, and
 // the live hook's fetch/EventSource churn otherwise flakes under parallel load.
-vi.mock("@/context/backoffice/bank/infrastructure/bankRealtime", () => ({
-  bankTopics: { collection: "urn:erpify:backoffice:banks" },
-  useBankRealtime: vi.fn(),
-}));
+vi.mock("@/context/backoffice/bank/infrastructure/bankRealtime", async () =>
+  (await import("./_mocks")).bankRealtimeMock(),
+);
 
 describe("BanksListPage — delete UX", () => {
   beforeEach(() => {

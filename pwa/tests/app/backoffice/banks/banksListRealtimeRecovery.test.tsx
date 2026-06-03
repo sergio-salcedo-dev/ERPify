@@ -37,20 +37,28 @@ vi.mock("@/context/shared/infrastructure/Notification/Toast", async () =>
   (await import("./_mocks")).toastNotifierMock(),
 );
 
-// Capture the realtime handlers so the test can drive a Mercure event directly,
-// without standing up an EventSource.
-const realtime = vi.hoisted(() => ({ onCreated: undefined as ((bank: Bank) => void) | undefined }));
-vi.mock("@/context/backoffice/bank/infrastructure/bankRealtime", () => ({
-  bankTopics: { collection: "urn:erpify:backoffice:banks" },
-  useBankRealtime: (_topics: readonly string[], handlers: { onCreated?: (bank: Bank) => void }) => {
-    realtime.onCreated = handlers.onCreated;
-  },
+// Capture the realtime handlers so the test can drive Mercure events directly,
+// without standing up an EventSource. The mock keeps the real `bankTopics` (so
+// the topic IRI can't drift from production) and replaces only the hook.
+const realtime = vi.hoisted(() => ({
+  onCreated: undefined as ((bank: Bank) => void) | undefined,
+  onUpdated: undefined as ((bank: Bank) => void) | undefined,
+  onDeleted: undefined as ((id: string) => void) | undefined,
 }));
+vi.mock("@/context/backoffice/bank/infrastructure/bankRealtime", async () =>
+  (await import("./_mocks")).bankRealtimeMock((handlers) => {
+    realtime.onCreated = handlers.onCreated;
+    realtime.onUpdated = handlers.onUpdated;
+    realtime.onDeleted = handlers.onDeleted;
+  }),
+);
 
 describe("BanksListPage — realtime recovery from an errored load", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     realtime.onCreated = undefined;
+    realtime.onUpdated = undefined;
+    realtime.onDeleted = undefined;
   });
 
   it("silently reloads the full list when a bank arrives over Mercure while the load is errored", async () => {
@@ -75,6 +83,73 @@ describe("BanksListPage — realtime recovery from an errored load", () => {
     // ACME was never in the delta — its presence proves the complete list was
     // reloaded rather than the partial Mercure delta being shown.
     expect(screen.getByRole("cell", { name: "Beta Bank" })).toBeInTheDocument();
+    expect(searchRun).toHaveBeenCalledTimes(2);
+    expect(screen.queryByTestId("banks-list__retry")).toBeNull();
+  });
+
+  it("silently reloads the full list when an updated-bank delta arrives while errored", async () => {
+    searchRun
+      .mockRejectedValueOnce(new Error("network down"))
+      .mockResolvedValueOnce({ banks: [ACME, BETA], nextCursor: undefined });
+
+    render(<BanksListPage />);
+
+    await screen.findByTestId("banks-list__retry");
+    expect(searchRun).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      realtime.onUpdated?.(BETA);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("cell", { name: "Acme Savings" })).toBeInTheDocument();
+    });
+    expect(searchRun).toHaveBeenCalledTimes(2);
+    expect(screen.queryByTestId("banks-list__retry")).toBeNull();
+  });
+
+  it("silently reloads the full list when a deleted-bank delta arrives while errored", async () => {
+    searchRun
+      .mockRejectedValueOnce(new Error("network down"))
+      .mockResolvedValueOnce({ banks: [ACME], nextCursor: undefined });
+
+    render(<BanksListPage />);
+
+    await screen.findByTestId("banks-list__retry");
+    expect(searchRun).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      realtime.onDeleted?.(BETA.id);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("cell", { name: "Acme Savings" })).toBeInTheDocument();
+    });
+    expect(searchRun).toHaveBeenCalledTimes(2);
+    expect(screen.queryByTestId("banks-list__retry")).toBeNull();
+  });
+
+  it("coalesces a burst of deltas while errored into a single silent reload", async () => {
+    searchRun
+      .mockRejectedValueOnce(new Error("network down"))
+      .mockResolvedValueOnce({ banks: [ACME, BETA], nextCursor: undefined });
+
+    render(<BanksListPage />);
+
+    await screen.findByTestId("banks-list__retry");
+    expect(searchRun).toHaveBeenCalledTimes(1);
+
+    // Three deltas land before the first reconcile reload resolves; the in-flight
+    // guard must collapse them into ONE silent reload, not three overlapping ones.
+    act(() => {
+      realtime.onCreated?.(BETA);
+      realtime.onUpdated?.(BETA);
+      realtime.onDeleted?.(ACME.id);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("cell", { name: "Acme Savings" })).toBeInTheDocument();
+    });
     expect(searchRun).toHaveBeenCalledTimes(2);
     expect(screen.queryByTestId("banks-list__retry")).toBeNull();
   });
