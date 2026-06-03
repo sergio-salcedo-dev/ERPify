@@ -13,7 +13,6 @@ import {
   CopyButton,
   CorrelationIdChip,
   EmptyState,
-  MonogramAvatar,
   ProblemDisplay,
   StatusBadge,
 } from "@/components/erpify";
@@ -202,11 +201,6 @@ export default function BankDetailPage() {
             data-testid="banks-detail__header"
           >
             <div className="flex min-w-0 items-start gap-3">
-              <MonogramAvatar
-                name={bank.name}
-                className="size-11 text-base"
-                testId="banks-detail__avatar"
-              />
               <div className="min-w-0">
                 <div className="flex min-w-0 items-center gap-2">
                   <h1

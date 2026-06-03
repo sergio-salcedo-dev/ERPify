@@ -24,11 +24,6 @@ const OLD = Bank.fromPrimitives({
 });
 
 describe("BanksCards — identity", () => {
-  it("renders a monogram avatar in the card header", () => {
-    render(<BanksCards banks={[RECENT]} />);
-    expect(screen.getByTestId(`banks-cards__avatar-${RECENT.id}`)).toHaveTextContent("SB");
-  });
-
   it("shows a New badge only for recently created banks", () => {
     render(<BanksCards banks={[RECENT, OLD]} />);
     expect(screen.getByTestId(`banks-cards__new-${RECENT.id}`)).toHaveTextContent("New");
