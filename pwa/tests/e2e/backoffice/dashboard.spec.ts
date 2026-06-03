@@ -33,7 +33,7 @@ test.describe("BackOffice - Dashboard", () => {
       await logoutViaSidebarDesktop(page);
       await expect(page).toHaveURL("/");
       await expect(
-        page.getByRole("heading", { level: 1, name: /Modern ERP for Construction/i }),
+        page.getByRole("heading", { level: 1, name: /ERP for Construction/i }),
       ).toBeVisible();
     });
   });
@@ -51,7 +51,7 @@ test.describe("BackOffice - Dashboard", () => {
       await logoutViaSidebarMobile(page);
       await expect(page).toHaveURL("/");
       await expect(
-        page.getByRole("heading", { level: 1, name: /Modern ERP for Construction/i }),
+        page.getByRole("heading", { level: 1, name: /ERP for Construction/i }),
       ).toBeVisible();
     });
   });
