@@ -102,7 +102,7 @@ export default function BanksListPage() {
       if (!mountedRef.current) return;
       setBanks(result.banks);
       setNextCursor(result.nextCursor);
-      setState(result.banks.length === 0 ? ViewStatus.EMPTY : ViewStatus.READY);
+      setState(ViewStatus.READY);
     } catch (err) {
       if (!mountedRef.current || options?.silent) return;
       const fallbackDetail = err instanceof Error ? err.message : "Unknown error";
@@ -124,6 +124,17 @@ export default function BanksListPage() {
     () => applySort(applyFilters(banks, filter), sort),
     [banks, filter, sort],
   );
+
+  // `state` tracks only the load lifecycle (loading / ready / error). Whether a
+  // settled list reads as first-run empty or ready is purely a function of how
+  // many banks remain, so derive it instead of caching a flag that goes stale
+  // when a delete empties the list — otherwise the now-empty list keeps its
+  // stale "ready" state and falls through to the filtered-to-zero panel even
+  // with no active filter.
+  const boundaryState = useMemo<State>(() => {
+    if (state === ViewStatus.LOADING || state === ViewStatus.ERROR) return state;
+    return banks.length === 0 ? ViewStatus.EMPTY : ViewStatus.READY;
+  }, [state, banks.length]);
 
   const recentCount = useMemo(
     () =>
@@ -230,7 +241,6 @@ export default function BanksListPage() {
   useBankRealtime([bankTopics.collection], {
     onCreated: (incoming) => {
       setBanks((prev) => (prev.some((b) => b.id === incoming.id) ? prev : [incoming, ...prev]));
-      setState((prev) => (prev === ViewStatus.EMPTY ? ViewStatus.READY : prev));
     },
     onUpdated: (incoming) => {
       setBanks((prev) => prev.map((b) => (b.id === incoming.id ? incoming : b)));
@@ -259,7 +269,7 @@ export default function BanksListPage() {
     <div
       className="banks-list mx-auto w-full max-w-screen-2xl space-y-4 sm:space-y-6 2xl:max-w-[120rem]"
       data-testid="banks-list"
-      data-state={state}
+      data-state={boundaryState}
     >
       <header
         className="banks-list__header flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
@@ -275,7 +285,7 @@ export default function BanksListPage() {
           <p className="text-muted-foreground mt-1 text-sm" data-testid="banks-list__subtitle">
             Manage the banks available in the back office.
           </p>
-          {state === ViewStatus.READY ? (
+          {boundaryState === ViewStatus.READY ? (
             <p
               className="banks-list__total text-muted-foreground mt-1 text-xs"
               data-testid="banks-list__total"
@@ -303,7 +313,7 @@ export default function BanksListPage() {
         </Link>
       </header>
 
-      {state === ViewStatus.READY ? (
+      {boundaryState === ViewStatus.READY ? (
         <BanksFilters
           filter={filter}
           onFilterChange={setFilter}
@@ -318,7 +328,7 @@ export default function BanksListPage() {
         />
       ) : null}
 
-      {state === ViewStatus.READY && selectedIds.size > 0 ? (
+      {boundaryState === ViewStatus.READY && selectedIds.size > 0 ? (
         <BanksBulkBar
           count={selectedIds.size}
           onClear={clearSelection}
@@ -327,7 +337,7 @@ export default function BanksListPage() {
       ) : null}
 
       <AsyncBoundary
-        state={state}
+        state={boundaryState}
         data={banks}
         error={problem ?? undefined}
         loading={<BanksListSkeleton view={view} rows={Math.min(pageSize, 8)} />}
