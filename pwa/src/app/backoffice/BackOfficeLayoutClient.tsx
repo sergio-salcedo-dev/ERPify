@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   LucideIcon,
@@ -12,15 +12,20 @@ import {
   Bell,
   Activity,
   Building2,
-  ChevronLeft,
-  ChevronRight,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Search,
   Wrench,
 } from "lucide-react";
 import { Logo, SidebarItem } from "@/components/erpify";
+import { Button } from "@/components/ui/button";
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
 import { Routes } from "@/context/shared/domain/types/routes";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { bankRoutes } from "./banks/_lib/bankRoutes";
+import { sectionTitleFor } from "./_lib/sectionTitle";
+
+const SIDEBAR_STORAGE_KEY = "erpify:sidebar-open";
 
 interface NavSubItem {
   name: string;
@@ -46,9 +51,30 @@ export default function BackOfficeLayoutClient({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isCompact, setIsCompact] = useState(false);
+  const [isCompact, setIsCompact] = useState(() => {
+    if (globalThis.window === undefined) return false;
+    const stored = globalThis.localStorage.getItem(SIDEBAR_STORAGE_KEY);
+    return stored === null ? false : stored !== "1";
+  });
   const router = useRouter();
   const pathname = usePathname();
+  const sectionTitle = sectionTitleFor(pathname);
+
+  useEffect(() => {
+    if (globalThis.window === undefined) return;
+    globalThis.localStorage.setItem(SIDEBAR_STORAGE_KEY, isCompact ? "0" : "1");
+  }, [isCompact]);
+
+  useEffect(() => {
+    function handleKey(event: KeyboardEvent): void {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "b") {
+        event.preventDefault();
+        setIsCompact((compact) => !compact);
+      }
+    }
+    globalThis.addEventListener("keydown", handleKey);
+    return () => globalThis.removeEventListener("keydown", handleKey);
+  }, []);
 
   const menuGroups: NavGroup[] = [
     {
@@ -123,13 +149,21 @@ export default function BackOfficeLayoutClient({
 
   return (
     <div className="bo-layout min-h-screen bg-background flex font-sans">
+      <a
+        href="#main-content"
+        className="bo-layout__skip-link bg-primary text-primary-foreground sr-only z-50 px-3 py-2 focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:rounded-md"
+      >
+        Skip to main content
+      </a>
+
       {/* Sidebar Desktop */}
       <aside
+        data-sidebar-open={!isCompact}
         className={`bo-layout__sidebar hidden md:flex flex-col bg-card border-r border-border sticky top-0 h-screen shadow-sm transition-all duration-300 ${
           isCompact ? "w-20" : "w-64"
         }`}
       >
-        <div className="bo-layout__sidebar-header flex items-center justify-between border-b border-border h-16 px-4">
+        <div className="bo-layout__sidebar-header flex items-center border-b border-border h-16 px-4">
           {!isCompact && (
             <Logo
               href="/backoffice"
@@ -150,30 +184,13 @@ export default function BackOfficeLayoutClient({
               iconClassName="bo-layout__logo-icon"
             />
           )}
-          <button
-            onClick={() => setIsCompact(!isCompact)}
-            className={`bo-layout__compact-toggle p-1.5 rounded-lg hover:bg-accent text-muted-foreground transition-colors ${
-              isCompact ? "hidden" : ""
-            }`}
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
         </div>
-
-        {isCompact && (
-          <button
-            onClick={() => setIsCompact(false)}
-            className="bo-layout__expand-toggle mx-auto mt-4 p-2 rounded-lg hover:bg-accent text-muted-foreground"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
-        )}
 
         <nav className="bo-layout__sidebar-nav flex-grow p-3 space-y-6 overflow-y-auto">
           {menuGroups.map((group) => (
             <div key={group.label} className="bo-layout__nav-group space-y-1">
               {!isCompact && (
-                <p className="bo-layout__nav-label text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-3 mb-2">
+                <p className="bo-layout__nav-label text-[10px] font-semibold text-muted-foreground uppercase tracking-widest px-3 mb-2">
                   {group.label}
                 </p>
               )}
@@ -193,7 +210,7 @@ export default function BackOfficeLayoutClient({
         {/* User Profile at bottom */}
         <div className="bo-layout__footer p-3 border-t border-border">
           {!isCompact && (
-            <p className="bo-layout__nav-label text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-3 mb-2">
+            <p className="bo-layout__nav-label text-[10px] font-semibold text-muted-foreground uppercase tracking-widest px-3 mb-2">
               Account
             </p>
           )}
@@ -243,7 +260,7 @@ export default function BackOfficeLayoutClient({
             <nav className="bo-layout__sidebar-mobile-nav p-4 space-y-6 overflow-y-auto h-[calc(100vh-64px)]">
               {menuGroups.map((group) => (
                 <div key={group.label} className="bo-layout__mobile-group space-y-1">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-4 mb-2">
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest px-4 mb-2">
                     {group.label}
                   </p>
                   {group.items.map((item) => (
@@ -252,7 +269,7 @@ export default function BackOfficeLayoutClient({
                         onClick={() => handleNavigation(item.path)}
                         title={item.name}
                         data-testid={item.testId ? `${item.testId}--mobile` : undefined}
-                        className={`bo-layout__sidebar-mobile-link w-full flex items-center gap-3 p-3 rounded-xl font-bold transition-all ${
+                        className={`bo-layout__sidebar-mobile-link w-full flex items-center gap-3 p-3 rounded-md font-semibold transition-all ${
                           pathname === item.path
                             ? "bg-primary/15 text-primary"
                             : "text-muted-foreground hover:bg-accent"
@@ -269,7 +286,7 @@ export default function BackOfficeLayoutClient({
                               onClick={navigateTo(subItem.path)}
                               title={subItem.name}
                               data-testid={subItem.testId ? `${subItem.testId}--mobile` : undefined}
-                              className={`w-full flex items-center gap-2.5 p-2 rounded-lg text-xs font-bold transition-all ${
+                              className={`w-full flex items-center gap-2.5 p-2 rounded-md text-xs font-semibold transition-all ${
                                 pathname === subItem.path
                                   ? "text-primary bg-primary/10"
                                   : "text-muted-foreground hover:bg-accent"
@@ -287,14 +304,14 @@ export default function BackOfficeLayoutClient({
               ))}
 
               <div className="bo-layout__mobile-group space-y-1 pt-4 border-t border-border">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-4 mb-2">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest px-4 mb-2">
                   Account
                 </p>
                 <div className="bo-layout__sidebar-mobile-item-wrapper">
                   <button
                     onClick={() => handleNavigation(userProfileItem.path)}
                     title={userProfileItem.name}
-                    className={`bo-layout__sidebar-mobile-link w-full flex items-center gap-3 p-3 rounded-xl font-bold transition-all ${
+                    className={`bo-layout__sidebar-mobile-link w-full flex items-center gap-3 p-3 rounded-md font-semibold transition-all ${
                       pathname === userProfileItem.path
                         ? "bg-primary/15 text-primary"
                         : "text-muted-foreground hover:bg-accent"
@@ -309,7 +326,7 @@ export default function BackOfficeLayoutClient({
                         key={subItem.name}
                         onClick={() => handleNavigation(subItem.path)}
                         title={subItem.name}
-                        className={`w-full flex items-center gap-2.5 p-2 rounded-lg text-xs font-bold transition-all ${
+                        className={`w-full flex items-center gap-2.5 p-2 rounded-md text-xs font-semibold transition-all ${
                           pathname === subItem.path
                             ? "text-primary bg-primary/10"
                             : "text-muted-foreground hover:bg-accent"
@@ -327,10 +344,83 @@ export default function BackOfficeLayoutClient({
         </Sheet>
       </div>
 
-      {/* Main Content */}
-      <main className="bo-layout__main flex-grow md:pt-0 pt-14 overflow-auto">
-        <div className="bo-layout__content max-w-6xl mx-auto p-4 md:p-8">{children}</div>
-      </main>
+      {/* Main column: desktop top bar + scrollable content */}
+      <div className="bo-layout__column flex min-w-0 flex-1 flex-col">
+        <header className="bo-layout__topbar hidden md:flex items-center gap-3 bg-card border-b border-border h-16 px-4">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={isCompact ? "Expand sidebar" : "Collapse sidebar"}
+            aria-expanded={!isCompact}
+            title={isCompact ? "Expand sidebar (Ctrl/Cmd+B)" : "Collapse sidebar (Ctrl/Cmd+B)"}
+            data-testid="bo-layout__topbar-toggle"
+            onClick={() => setIsCompact((compact) => !compact)}
+            className="bo-layout__topbar-toggle"
+          >
+            {isCompact ? (
+              <PanelLeftOpen className="size-4" aria-hidden />
+            ) : (
+              <PanelLeftClose className="size-4" aria-hidden />
+            )}
+            <span className="sr-only">{isCompact ? "Expand sidebar" : "Collapse sidebar"}</span>
+          </Button>
+
+          <span
+            data-testid="bo-layout__topbar-title"
+            className="bo-layout__topbar-title text-foreground text-sm font-semibold truncate"
+          >
+            {sectionTitle}
+          </span>
+
+          <div className="bo-layout__topbar-actions ml-auto flex items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Search"
+              title="Search"
+              data-testid="bo-layout__topbar-search"
+              className="bo-layout__topbar-search"
+            >
+              <Search className="size-4" aria-hidden />
+              <span className="sr-only">Search</span>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Notifications"
+              title="Notifications"
+              data-testid="bo-layout__topbar-notifications"
+              className="bo-layout__topbar-notifications relative"
+            >
+              <Bell className="size-4" aria-hidden />
+              <span
+                className="bo-layout__topbar-badge absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary"
+                aria-hidden
+              />
+              <span className="sr-only">Notifications</span>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Account"
+              title="Account"
+              data-testid="bo-layout__topbar-account"
+              className="bo-layout__topbar-account"
+            >
+              <User className="size-4" aria-hidden />
+              <span className="sr-only">Account</span>
+            </Button>
+          </div>
+        </header>
+
+        <main id="main-content" className="bo-layout__main flex-grow pt-14 md:pt-0 overflow-auto">
+          <div className="bo-layout__content max-w-6xl mx-auto p-4 md:p-8">{children}</div>
+        </main>
+      </div>
     </div>
   );
 }
