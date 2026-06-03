@@ -234,6 +234,16 @@ export default function BanksListPage() {
     }
   };
 
+  // A realtime delta arriving while the list still shows a failed-load error
+  // means that error is likely stale. Reconcile with a full silent reload rather
+  // than trusting the delta: Mercure has no replay, so the events seen so far are
+  // only a partial slice — promoting them to READY would render an incomplete list.
+  const reconcileAfterErroredLoad = (): void => {
+    if (state === ViewStatus.ERROR) {
+      loadBanks({ silent: true });
+    }
+  };
+
   // Real-time sync of changes made by OTHER clients (Mercure). These reconcile
   // state silently (no toast): the acting user already got their own feedback,
   // and passive viewers shouldn't be spammed. Merges are id-keyed so duplicate
@@ -241,9 +251,11 @@ export default function BanksListPage() {
   useBankRealtime([bankTopics.collection], {
     onCreated: (incoming) => {
       setBanks((prev) => (prev.some((b) => b.id === incoming.id) ? prev : [incoming, ...prev]));
+      reconcileAfterErroredLoad();
     },
     onUpdated: (incoming) => {
       setBanks((prev) => prev.map((b) => (b.id === incoming.id ? incoming : b)));
+      reconcileAfterErroredLoad();
     },
     onDeleted: (deletedId) => {
       setBanks((prev) => prev.filter((b) => b.id !== deletedId));
@@ -255,6 +267,7 @@ export default function BanksListPage() {
         next.delete(deletedId);
         return next;
       });
+      reconcileAfterErroredLoad();
     },
     // On stream re-open after a drop, silently reconcile: events published during
     // the gap (Mercure has no replay) are otherwise lost and the list diverges.
