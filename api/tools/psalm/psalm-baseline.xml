@@ -325,11 +325,6 @@
       <code><![CDATA[CompositeStoredObjectAccess]]></code>
     </UnusedClass>
   </file>
-  <file src="../../src/Shared/Storage/Infrastructure/Controller/StoredObjectGetController.php">
-    <UnusedClass>
-      <code><![CDATA[StoredObjectGetController]]></code>
-    </UnusedClass>
-  </file>
   <file src="../../src/Shared/Storage/Infrastructure/FlysystemObjectStorage.php">
     <UnusedClass>
       <code><![CDATA[FlysystemObjectStorage]]></code>
