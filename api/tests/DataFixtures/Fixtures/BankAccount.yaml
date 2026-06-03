@@ -1,0 +1,15 @@
+Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount:
+    bank_account_01:
+        __factory:
+            Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount::create:
+                - '33333333-3333-7000-8000-000000000001'
+                - '@bank_01'
+                - 'Globex Corporation'
+                - 'DE89370400440532013000'
+    bank_account_02:
+        __factory:
+            Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount::create:
+                - '33333333-3333-7000-8000-000000000002'
+                - '@bank_02'
+                - 'Initech LLC'
+                - 'FR1420041010050500013M02606'
