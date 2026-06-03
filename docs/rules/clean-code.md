@@ -39,6 +39,8 @@
 
 ## Comments
 - Code should be self-explanatory; comments should explain "why", not "what"
+- A comment must earn its place: never add decorative/flavor notes (e.g. "Atlassian-style"), and never restate what a name, type, or signature already says
+- Don't narrate a suppressed linter rule in prose — leave only the bare `// eslint-disable-next-line <rule>` directive, and never `// NOSONAR` (fix the code or accept the finding in Sonar)
 - Remove commented-out code before committing
 - Use comments for complex business logic or non-obvious decisions
 - Keep comments up-to-date with code changes
