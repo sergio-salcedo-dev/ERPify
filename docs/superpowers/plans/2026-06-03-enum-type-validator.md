@@ -427,9 +427,15 @@ Expected: no errors anywhere — the new `Validator/` files, the test, and `Bank
 ```bash
 git add api/src/Shared/Infrastructure/Validator/ \
         api/tests/Unit/Shared/Infrastructure/Validator/ \
-        api/src/Backoffice/BankAccount/Domain/Entity/BankAccount.php
+        api/src/Backoffice/BankAccount/Domain/Entity/BankAccount.php \
+        api/src/Shared/Domain/Enum/Currency.php
 git commit -m "feat(backoffice): add EnumType constraint and apply to bank account"
 ```
+
+> `Currency.php` is already trimmed to `EUR` in the working tree (part of the
+> finish-entity scope; no code/fixtures reference the removed cases). It is a
+> validated enum, so it ships with this commit. Do **not** stage
+> `api/config/reference.php` (auto-generated) or anything else.
 
 ---
 
