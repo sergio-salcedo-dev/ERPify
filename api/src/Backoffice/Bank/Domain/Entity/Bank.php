@@ -18,6 +18,7 @@ use Erpify\Shared\Storage\Domain\StoredObject;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'bank')]
@@ -25,13 +26,21 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[UniqueEntity(fields: ['shortName'], message: 'This short name is already in use.')]
 class Bank extends AggregateRoot
 {
-    #[ORM\Column(length: 255)]
+    /**
+     * Validation limit for the bank name. It matches the default `VARCHAR(255)`
+     * length of the `name` / `nameNormalized` columns, so an over-long
+     * normalized name is rejected as a clean violation instead of overflowing
+     * the column at INSERT time.
+     */
+    private const int MAX_NAME_LENGTH = 255;
+
+    #[ORM\Column]
     #[Assert\NotBlank]
-    #[Assert\Length(max: 255)]
+    #[Assert\Length(max: self::MAX_NAME_LENGTH)]
     #[Groups(['bank:get', 'bank:search'])]
     private string $name;
 
-    #[ORM\Column(length: 255, unique: true)]
+    #[ORM\Column(unique: true)]
     private string $nameNormalized;
 
     /**
@@ -165,5 +174,33 @@ class Bank extends AggregateRoot
     public function delete(string $deleteEventId): void
     {
         $this->record(new BankDeletedDomainEvent($this->id(), $deleteEventId));
+    }
+
+    /**
+     * The unique `nameNormalized` column stores the accent-folded, lower-cased
+     * form of the name (e.g. "Æ" -> "ae", "ß" -> "ss"), which can be longer than
+     * what the user typed. The {@see Assert\Length} on `$name` only bounds the raw
+     * value, so a name within the limit can still fold to an over-long normalized
+     * twin and overflow the column. Reject it here as a clean violation on `name`
+     * rather than letting the INSERT raise a database "value too long" 500. Skip
+     * when the raw name already breached the limit so a single over-long name
+     * yields one violation, not two.
+     */
+    #[Assert\Callback]
+    public function validateNormalizedNameLength(ExecutionContextInterface $context): void
+    {
+        if (\mb_strlen($this->name) > self::MAX_NAME_LENGTH) {
+            return;
+        }
+
+        if (\mb_strlen($this->nameNormalized) <= self::MAX_NAME_LENGTH) {
+            return;
+        }
+
+        $context->buildViolation('The name must not exceed {{ limit }} characters.')
+            ->setParameter('{{ limit }}', (string) self::MAX_NAME_LENGTH)
+            ->atPath('name')
+            ->addViolation()
+        ;
     }
 }

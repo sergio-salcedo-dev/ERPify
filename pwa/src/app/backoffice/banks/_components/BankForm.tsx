@@ -142,7 +142,6 @@ export function BankForm({ mode, initial }: Readonly<BankFormProps>) {
       >
         <Input
           {...register("name")}
-          maxLength={255}
           autoComplete="off"
           autoFocus={mode === PersistenceAction.CREATING}
           data-testid="bank-form__name"
@@ -158,7 +157,6 @@ export function BankForm({ mode, initial }: Readonly<BankFormProps>) {
       >
         <Input
           {...register("shortName")}
-          maxLength={50}
           autoComplete="off"
           style={{ textTransform: "uppercase" }}
           data-testid="bank-form__short-name"

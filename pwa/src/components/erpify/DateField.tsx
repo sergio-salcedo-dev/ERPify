@@ -7,7 +7,6 @@ import { FormField } from "./FormField";
 
 export const DD_MM_YYYY_PLACEHOLDER = "dd/mm/yyyy";
 export const DD_MM_YYYY_PATTERN = String.raw`\d{2}/\d{2}/\d{4}`;
-export const DD_MM_YYYY_MAX_LENGTH = 10;
 export const DD_MM_YYYY_TITLE = "Date format dd/mm/yyyy, e.g. 15/04/2026";
 
 export interface DateFieldProps {
@@ -81,7 +80,6 @@ export function DateField({
         onChange={handleChange}
         placeholder={placeholder}
         pattern={DD_MM_YYYY_PATTERN}
-        maxLength={DD_MM_YYYY_MAX_LENGTH}
         autoComplete={autoComplete}
         title={title}
         className={className}

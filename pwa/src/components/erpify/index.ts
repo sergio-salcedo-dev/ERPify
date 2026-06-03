@@ -6,7 +6,6 @@ export type { CopyButtonProps, CopyButtonStatus } from "./CopyButton";
 export { CorrelationIdChip } from "./CorrelationIdChip";
 export {
   DateField,
-  DD_MM_YYYY_MAX_LENGTH,
   DD_MM_YYYY_PATTERN,
   DD_MM_YYYY_PLACEHOLDER,
   DD_MM_YYYY_TITLE,
