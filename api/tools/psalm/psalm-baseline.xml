@@ -147,15 +147,20 @@
   <file src="../../src/Shared/Domain/Enum/Abstraction/HumanReadableIntEnumInterface.php">
     <PossiblyUnusedMethod>
       <code><![CDATA[fromLabelOrFail]]></code>
-      <code><![CDATA[getLabelOrFail]]></code>
     </PossiblyUnusedMethod>
   </file>
   <file src="../../src/Shared/Domain/Enum/Abstraction/HumanReadableIntEnumTrait.php">
     <PossiblyUnusedMethod>
       <code><![CDATA[getKeysFromValues]]></code>
       <code><![CDATA[getKeysFromValues]]></code>
+      <code><![CDATA[getKeysFromValues]]></code>
+      <code><![CDATA[getKeysFromValues]]></code>
       <code><![CDATA[getValues]]></code>
       <code><![CDATA[getValues]]></code>
+      <code><![CDATA[getValues]]></code>
+      <code><![CDATA[getValues]]></code>
+      <code><![CDATA[getValuesNotIn]]></code>
+      <code><![CDATA[getValuesNotIn]]></code>
       <code><![CDATA[getValuesNotIn]]></code>
       <code><![CDATA[getValuesNotIn]]></code>
     </PossiblyUnusedMethod>
