@@ -28,3 +28,4 @@ export { ProblemDisplay } from "./ProblemDisplay";
 export { RecordSheet } from "./RecordSheet";
 export { Spinner } from "./Spinner";
 export { StatusBadge } from "./StatusBadge";
+export type { StatusBadgeVariant } from "./StatusBadge";

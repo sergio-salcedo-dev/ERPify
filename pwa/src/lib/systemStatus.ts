@@ -1,6 +1,4 @@
-import type { HealthCheck } from "@/context/frontoffice/health/domain/HealthCheck";
-
-/** Aggregate UI status for the public status page (Atlassian-style). */
+/** Aggregate UI status for the status pages. */
 export const SystemStatus = {
   CHECKING: "checking",
   OPERATIONAL: "operational",
@@ -9,13 +7,19 @@ export const SystemStatus = {
 } as const;
 export type SystemStatus = (typeof SystemStatus)[keyof typeof SystemStatus];
 
+/** Minimal health snapshot the derivation needs — any `HealthCheck` satisfies it. */
+export interface HealthSnapshot {
+  status: string;
+  datetime: string;
+}
+
 export interface SystemStatusInput {
   /** A health check is in flight. */
   checking: boolean;
   /** The last check threw (transport / HTTP error). */
   failed: boolean;
-  /** The last successful health check, or null when none yet / failed. */
-  result: HealthCheck | null;
+  /** The last successful health snapshot, or null when none yet / failed. */
+  result: HealthSnapshot | null;
 }
 
 export interface SystemStatusView {

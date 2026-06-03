@@ -4,9 +4,9 @@ import { clickUntilVisible } from "./click-until-visible";
 export async function navigateToHealthViaSidebarDesktop(page: Page): Promise<void> {
   await clickUntilVisible(
     page.getByRole("button", { name: "Administration" }),
-    page.getByRole("button", { name: "Health" }),
+    page.getByRole("button", { name: "Service Health" }),
   );
-  await page.getByRole("button", { name: "Health" }).click();
+  await page.getByRole("button", { name: "Service Health" }).click();
 }
 
 export async function navigateToHealthViaSidebarMobile(page: Page): Promise<void> {
@@ -14,7 +14,7 @@ export async function navigateToHealthViaSidebarMobile(page: Page): Promise<void
     page.getByRole("button", { name: "Open navigation menu" }),
     page.getByRole("dialog"),
   );
-  await page.getByRole("button", { name: "Health" }).click();
+  await page.getByRole("button", { name: "Service Health" }).click();
 }
 
 export async function logoutViaSidebarDesktop(page: Page): Promise<void> {

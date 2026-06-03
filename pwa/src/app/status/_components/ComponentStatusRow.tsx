@@ -1,6 +1,6 @@
 import React from "react";
 import { cn } from "@/lib/utils";
-import { SystemStatus, componentStatusLabel } from "./systemStatus";
+import { SystemStatus, componentStatusLabel } from "@/lib/systemStatus";
 
 interface ComponentStatusRowProps {
   name: string;

@@ -66,7 +66,7 @@ export default function BackOfficeLayoutClient({
           name: "Administration",
           icon: SettingsIcon,
           path: "/backoffice/administration",
-          subItems: [{ name: "Health", path: "/backoffice/health", icon: Activity }],
+          subItems: [{ name: "Service Health", path: "/backoffice/health", icon: Activity }],
         },
       ],
     },
