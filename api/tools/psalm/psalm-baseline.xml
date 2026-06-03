@@ -178,6 +178,11 @@
       <code><![CDATA[GuzzleContextTypeEnum]]></code>
     </UnusedClass>
   </file>
+  <file src="../../src/Shared/Infrastructure/Http/ContentHashUrlGenerator.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
   <file src="../../src/Shared/Infrastructure/Mailer/PlainTextNotificationMailer.php">
     <ArgumentTypeCoercion>
       <code><![CDATA[\is_scalar($value) ? $value : \json_encode($value)]]></code>
