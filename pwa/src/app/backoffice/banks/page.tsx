@@ -88,6 +88,8 @@ export default function BanksListPage() {
     };
   }, []);
 
+  const reloadingRef = useRef(false);
+
   const loadBanks = useCallback(async (options?: { silent?: boolean }) => {
     // A silent reconcile (e.g. after a realtime reconnect) refreshes in the
     // background: no LOADING skeleton flash, and a transient failure leaves the
@@ -96,19 +98,22 @@ export default function BanksListPage() {
       setState(ViewStatus.LOADING);
       setProblem(null);
     }
+    reloadingRef.current = true;
     try {
       const useCase = container.get<SearchBanks>("BackOfficeSearchBanks");
       const result = await useCase.run();
       if (!mountedRef.current) return;
       setBanks(result.banks);
       setNextCursor(result.nextCursor);
-      setState(result.banks.length === 0 ? ViewStatus.EMPTY : ViewStatus.READY);
+      setState(ViewStatus.READY);
     } catch (err) {
       if (!mountedRef.current || options?.silent) return;
       const fallbackDetail = err instanceof Error ? err.message : "Unknown error";
       const nextProblem = err instanceof HttpError ? err.problem : genericProblem(fallbackDetail);
       setProblem(nextProblem);
       setState(ViewStatus.ERROR);
+    } finally {
+      reloadingRef.current = false;
     }
   }, []);
 
@@ -124,6 +129,17 @@ export default function BanksListPage() {
     () => applySort(applyFilters(banks, filter), sort),
     [banks, filter, sort],
   );
+
+  // `state` tracks only the load lifecycle (loading / ready / error). Whether a
+  // settled list reads as first-run empty or ready is purely a function of how
+  // many banks remain, so derive it instead of caching a flag that goes stale
+  // when a delete empties the list — otherwise the now-empty list keeps its
+  // stale "ready" state and falls through to the filtered-to-zero panel even
+  // with no active filter.
+  const boundaryState = useMemo<State>(() => {
+    if (state === ViewStatus.LOADING || state === ViewStatus.ERROR) return state;
+    return banks.length === 0 ? ViewStatus.EMPTY : ViewStatus.READY;
+  }, [state, banks.length]);
 
   const recentCount = useMemo(
     () =>
@@ -223,6 +239,18 @@ export default function BanksListPage() {
     }
   };
 
+  // A realtime delta arriving while the list still shows a failed-load error
+  // means that error is likely stale. Reconcile with a full silent reload rather
+  // than trusting the delta: Mercure has no replay, so the events seen so far are
+  // only a partial slice — promoting them to READY would render an incomplete list.
+  // A reload already in flight wins, so a burst of deltas coalesces into a single
+  // reconcile instead of launching one overlapping silent reload per event.
+  const reconcileAfterErroredLoad = (): void => {
+    if (state === ViewStatus.ERROR && !reloadingRef.current) {
+      loadBanks({ silent: true });
+    }
+  };
+
   // Real-time sync of changes made by OTHER clients (Mercure). These reconcile
   // state silently (no toast): the acting user already got their own feedback,
   // and passive viewers shouldn't be spammed. Merges are id-keyed so duplicate
@@ -230,10 +258,11 @@ export default function BanksListPage() {
   useBankRealtime([bankTopics.collection], {
     onCreated: (incoming) => {
       setBanks((prev) => (prev.some((b) => b.id === incoming.id) ? prev : [incoming, ...prev]));
-      setState((prev) => (prev === ViewStatus.EMPTY ? ViewStatus.READY : prev));
+      reconcileAfterErroredLoad();
     },
     onUpdated: (incoming) => {
       setBanks((prev) => prev.map((b) => (b.id === incoming.id ? incoming : b)));
+      reconcileAfterErroredLoad();
     },
     onDeleted: (deletedId) => {
       setBanks((prev) => prev.filter((b) => b.id !== deletedId));
@@ -245,6 +274,7 @@ export default function BanksListPage() {
         next.delete(deletedId);
         return next;
       });
+      reconcileAfterErroredLoad();
     },
     // On stream re-open after a drop, silently reconcile: events published during
     // the gap (Mercure has no replay) are otherwise lost and the list diverges.
@@ -259,7 +289,7 @@ export default function BanksListPage() {
     <div
       className="banks-list mx-auto w-full max-w-screen-2xl space-y-4 sm:space-y-6 2xl:max-w-[120rem]"
       data-testid="banks-list"
-      data-state={state}
+      data-state={boundaryState}
     >
       <header
         className="banks-list__header flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
@@ -275,7 +305,7 @@ export default function BanksListPage() {
           <p className="text-muted-foreground mt-1 text-sm" data-testid="banks-list__subtitle">
             Manage the banks available in the back office.
           </p>
-          {state === ViewStatus.READY ? (
+          {boundaryState === ViewStatus.READY ? (
             <p
               className="banks-list__total text-muted-foreground mt-1 text-xs"
               data-testid="banks-list__total"
@@ -303,7 +333,7 @@ export default function BanksListPage() {
         </Link>
       </header>
 
-      {state === ViewStatus.READY ? (
+      {boundaryState === ViewStatus.READY ? (
         <BanksFilters
           filter={filter}
           onFilterChange={setFilter}
@@ -318,7 +348,7 @@ export default function BanksListPage() {
         />
       ) : null}
 
-      {state === ViewStatus.READY && selectedIds.size > 0 ? (
+      {boundaryState === ViewStatus.READY && selectedIds.size > 0 ? (
         <BanksBulkBar
           count={selectedIds.size}
           onClear={clearSelection}
@@ -327,7 +357,7 @@ export default function BanksListPage() {
       ) : null}
 
       <AsyncBoundary
-        state={state}
+        state={boundaryState}
         data={banks}
         error={problem ?? undefined}
         loading={<BanksListSkeleton view={view} rows={Math.min(pageSize, 8)} />}

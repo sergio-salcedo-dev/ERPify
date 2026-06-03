@@ -90,3 +90,5 @@ pnpm-debug.log*
 # Claude Code worktrees (transient, machine-local)
 /.claude/worktrees/
 /.superpowers/brainstorm/
+
+/images/
