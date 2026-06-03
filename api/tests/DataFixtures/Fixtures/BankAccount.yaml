@@ -1,0 +1,19 @@
+Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount:
+    bank_account_globex_corporation:
+        __factory:
+            Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount::create:
+                - '33333333-3333-7000-8000-000000000001'
+                - '@bank_jpmorgan_chase'
+                - 'Globex Corporation'
+                - 'DE89370400440532013000'
+                - 'DEUTDEFFXXX'
+                - 'Globex Treasury'
+                - !php/enum Erpify\Shared\Domain\Enum\Currency::EUR
+                - !php/enum Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountStatus::INACTIVE
+    bank_account_initech_llc:
+        __factory:
+            Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount::create:
+                - '33333333-3333-7000-8000-000000000002'
+                - '@bank_of_america'
+                - 'Initech LLC'
+                - 'FR1420041010050500013M02606'
