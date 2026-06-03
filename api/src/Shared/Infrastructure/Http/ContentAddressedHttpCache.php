@@ -19,6 +19,7 @@ final readonly class ContentAddressedHttpCache
     {
         $response->setPublic();
         $response->headers->set('Cache-Control', self::CACHE_CONTROL);
+
         $response->setEtag($hash);
         $response->headers->set('X-Content-Type-Options', 'nosniff');
     }
