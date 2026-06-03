@@ -72,10 +72,10 @@ parameters:
 
         # Doctrine entities: typed properties are populated by the ORM hydrator (or the static factory)
         # rather than the constructor, so PHPStan's checkUninitializedProperties can't see them.
+        # BankAccount is excluded: its private constructor initializes every property.
         - identifier: property.uninitialized
           paths:
               - ../../src/Backoffice/Bank/Domain/Entity/Bank.php
-              - ../../src/Backoffice/BankAccount/Domain/Entity/BankAccount.php
               - ../../src/Shared/Media/Domain/Entity/Media.php
 
         # Repository attribute points to a domain interface; the concrete Doctrine implementation
