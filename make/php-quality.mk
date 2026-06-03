@@ -132,7 +132,7 @@ php.lint.error-contract: ## Error-contract drift gate
 
 ## —— Aggregates ——————————————————————————————————————————————————————————
 
-php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.psalm.fix.all php.gherkin php.lint.doctrine php.lint.error-contract ## Full PHP lint sweep
+php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.psalm.fix.all php.gherkin php.lint.doctrine php.lint.error-contract php.psalm ## Full PHP lint sweep
 
 # Check-only sweep for CI / pre-push: the read-only subset of php.quality that is
 # currently green, fanned out in parallel. Two wins over php.quality:
