@@ -1,8 +1,6 @@
 import React from "react";
-import { StatusBadge } from "@/components/erpify";
+import { StatusBadge, type StatusBadgeVariant } from "@/components/erpify";
 import { SystemStatus, componentStatusLabel } from "@/lib/systemStatus";
-
-type StatusBadgeVariant = "success" | "warning" | "danger" | "info" | "neutral";
 
 const BADGE_VARIANT: Record<SystemStatus, StatusBadgeVariant> = {
   [SystemStatus.CHECKING]: "neutral",
