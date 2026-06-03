@@ -64,7 +64,7 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
         onClick={handleItemClick}
         title={name}
         data-testid={testId}
-        className={`sidebar-item w-full flex items-center justify-between p-2.5 rounded-xl font-semibold transition-all group ${
+        className={`sidebar-item w-full flex items-center justify-between p-2.5 rounded-md font-semibold transition-all group ${
           isActive
             ? "sidebar-item--active bg-primary/15 text-primary shadow-sm"
             : "text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -102,7 +102,7 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
                 onClick={() => onClick(subItem.path)}
                 title={subItem.name}
                 data-testid={subItem.testId}
-                className={`sidebar-item__sub-item w-full flex items-center gap-2.5 p-2 rounded-lg text-xs font-medium transition-all ${
+                className={`sidebar-item__sub-item w-full flex items-center gap-2.5 p-2 rounded-md text-xs font-medium transition-all ${
                   isSubActive
                     ? "text-primary bg-primary/10"
                     : "text-muted-foreground hover:bg-accent hover:text-foreground"
