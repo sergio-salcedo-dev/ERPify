@@ -24,4 +24,8 @@ enum FixtureLabeledEnum: int implements HumanReadableIntEnumInterface
 
     #[HumanReadableIntEnumValue(label: 'three')]
     case THREE = 3;
+
+    // Intentionally label-less: exercises the null-label fallbacks
+    // (dropped in whole-enum listings, replaced by the backing value in subsets).
+    case FOUR = 4;
 }

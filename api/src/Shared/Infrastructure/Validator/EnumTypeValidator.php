@@ -57,7 +57,9 @@ final class EnumTypeValidator extends ConstraintValidator
         $enumClass = $constraint->enumClass;
 
         if (is_a($enumClass, HumanReadableIntEnumInterface::class, true)) {
-            return $this->formatValues($this->compact($enumClass::getLabels()));
+            // Whole-enum listing: silently drop label-less cases. (A subset, by contrast,
+            // names every requested case — see labelsFromCases() falling back to the value.)
+            return $this->formatValues($this->withoutNulls($enumClass::getLabels()));
         }
 
         return $this->formatValues(\array_map(
@@ -89,7 +91,7 @@ final class EnumTypeValidator extends ConstraintValidator
      *
      * @return list<string>
      */
-    private function compact(array $labels): array
+    private function withoutNulls(array $labels): array
     {
         return \array_values(\array_filter($labels, static fn (?string $label): bool => null !== $label));
     }

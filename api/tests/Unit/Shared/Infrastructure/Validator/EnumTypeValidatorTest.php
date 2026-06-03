@@ -96,6 +96,19 @@ final class EnumTypeValidatorTest extends ConstraintValidatorTestCase
             ->assertRaised();
     }
 
+    public function testChoicesForHumanReadableSubsetUseLabelsAndFallBackToValue(): void
+    {
+        // FOUR has no label, so the subset listing falls back to its backing value.
+        $this->validator->validate(
+            FixtureLabeledEnum::THREE,
+            new EnumType(FixtureLabeledEnum::class, cases: [FixtureLabeledEnum::ONE, FixtureLabeledEnum::FOUR]),
+        );
+
+        $this->buildViolation(self::MESSAGE)
+            ->setParameter('{{ choices }}', '"one", "4"')
+            ->assertRaised();
+    }
+
     public function testInvalidEnumClassRaisesConstraintDefinitionException(): void
     {
         /** @var class-string<\BackedEnum> $notAnEnum -- deliberately wrong to exercise the guard */
