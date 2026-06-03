@@ -1,8 +1,7 @@
 Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount:
-    # Fully populated: every create() argument set explicitly, including the
-    # optional bic/alias and the currency/status enums (resolved via Alice's
-    # <( … )> PHP expression). status is non-default on purpose to prove the
-    # enum argument is honoured end to end.
+    # Every create() argument set explicitly, including the optional bic/alias
+    # and the currency/status enums. status is non-default to confirm the enum
+    # argument reaches the column rather than the create() default.
     bank_account_globex_corporation:
         __factory:
             Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount::create:
@@ -12,8 +11,8 @@ Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount:
                 - 'DE89370400440532013000'
                 - 'DEUTDEFFXXX'
                 - 'Globex Treasury'
-                - '<(\Erpify\Shared\Domain\Enum\Currency::EUR)>'
-                - '<(\Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountStatus::INACTIVE)>'
+                - !php/enum Erpify\Shared\Domain\Enum\Currency::EUR
+                - !php/enum Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountStatus::INACTIVE
     # Minimal: only the required arguments; bic/alias stay null and
     # currency/status fall back to the create() defaults (EUR / ACTIVE).
     bank_account_initech_llc:
