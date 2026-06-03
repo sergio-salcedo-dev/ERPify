@@ -9,12 +9,12 @@ test.describe("FrontOffice - Landing Page", () => {
 
   test("displays hero heading", async ({ page }) => {
     await expect(
-      page.getByRole("heading", { level: 1, name: /Modern ERP for Construction/i }),
+      page.getByRole("heading", { level: 1, name: /ERP for Construction/i }),
     ).toBeVisible();
   });
 
   test("navigates to backoffice from primary CTA", async ({ page }) => {
-    await page.getByRole("button", { name: "Go to BackOffice" }).click();
+    await page.getByTestId("navbar__go-to-backoffice-button").click();
     await expect(page).toHaveURL("/backoffice");
   });
 
