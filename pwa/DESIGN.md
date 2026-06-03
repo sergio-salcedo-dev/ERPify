@@ -379,8 +379,9 @@ Exported from the same `@/components/erpify` barrel. Not part of the "mandatory 
 - **`<CopyButton value testId>`** — canonical copy-to-clipboard control. Owns the success/error feedback flip, the icon swap, the `sr-only` fallback, and the async-clipboard → `execCommand` degradation path. Never trusts the value as HTML. `<CorrelationIdChip>` builds on it; entity components must use it instead of calling `navigator.clipboard.writeText` directly.
 - **`<DateField testId>`** — the canonical `dd/mm/yyyy` text input: correct `pattern` / `inputMode` / `placeholder` / tooltip and the `(dd/mm/yyyy)` label hint, exported alongside the `DD_MM_YYYY_*` constants. Pairs with the `dateTimeProvider.parseDdMmYyyyToStartTimestamp` / `parseDdMmYyyyToEndTimestamp` methods (from `@/context/shared/infrastructure/DateTimeProvider`) for inclusive filter bounds.
 - **`<DatePickerField>`** — wraps the **native** `<input type="date">` (`yyyy-mm-dd`) inside `<FormField>`, with `min` / `max` bounds and `violations[]` wiring. Zero added dependency — distinct from the deferred third-party date-picker _library_ (see "Out of scope"); use it where a native picker is acceptable and `<DateField>`'s free-text `dd/mm/yyyy` is not.
+- **`<ThemeToggle testId>`** — the canonical light → dark → system switch. Cycles the active mode via `next-themes` (`useTheme`), shows the current theme's `Sun` / `Moon` / `Monitor` icon, and names the next action in `title` / `aria-label` (with an `sr-only` fallback). It only flips the mode — see "Theming & mode activation" below for the wiring it relies on.
 
-All three take a `testId` prop rather than hardcoding a `data-testid` (per the PWA test-id uniqueness contract).
+All four take a `testId` prop rather than hardcoding a `data-testid` (per the PWA test-id uniqueness contract).
 
 ---
 
@@ -503,6 +504,10 @@ Every API non-2xx response returns:
 - Build on `#f7f8f8` canvas with `#ffffff` cards and `#f3f4f5` panels.
 - Use sRGB neutral borders (`#dcdfe3` default; `#bfc3ca` strong).
 - Use faint drop shadows for resting and elevated surfaces; surface stepping is also valid.
+
+### Theming & mode activation
+
+Both modes are authored as tokens in `globals.css` (`:root` light + `.dark`, each carrying `color-scheme`). The mode is selected at runtime by `next-themes`, mounted once in `app/layout.tsx` (`attribute="class"`, `defaultTheme=system`, `enableSystem`, `disableTransitionOnChange`, `storageKey="erpify:theme"`) with `suppressHydrationWarning` on `<html>`. It adds/removes the `.dark` class on `<html>` — components keep consuming the same semantic aliases, so no component changes per mode. First visit follows the OS via `prefers-color-scheme`; an explicit `<ThemeToggle>` choice persists and overrides the OS. The mode strings flow through the `Theme` constant (`@/context/shared/domain/types/theme`); never hard-code `"light"` / `"dark"` / `"system"` in TS/TSX. The marketing/landing surface uses its own raw palette and is not themed.
 
 ### Never
 

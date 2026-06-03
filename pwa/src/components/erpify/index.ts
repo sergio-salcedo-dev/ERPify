@@ -28,3 +28,5 @@ export { RecordSheet } from "./RecordSheet";
 export { Spinner } from "./Spinner";
 export { StatusBadge } from "./StatusBadge";
 export type { StatusBadgeVariant } from "./StatusBadge";
+export { ThemeToggle } from "./ThemeToggle";
+export type { ThemeToggleProps } from "./ThemeToggle";

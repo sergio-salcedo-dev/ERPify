@@ -273,7 +273,24 @@ Reach for these from every entity instead of re-implementing them locally:
   code (error pages, navigation guards, fallbacks); use `Routes` from
   `@/context/shared/domain/types/routes`. Entity-scoped paths
   (`/backoffice/banks/${id}`) stay next to the use case that builds
-  them.
+  them. Likewise never compare against the literal `"light"` /
+  `"dark"` / `"system"`; use `Theme` from
+  `@/context/shared/domain/types/theme`.
+- **Theme / dark mode** — `<ThemeToggle testId>` from
+  `@/components/erpify` cycles light → dark → system via `next-themes`
+  (`useTheme`), showing the current theme's `Sun`/`Moon`/`Monitor` icon
+  and describing the next action in `title` / `aria-label` (with an
+  `sr-only` fallback). `next-themes` adds/removes the `.dark` class on
+  `<html>` — the existing `globals.css` dark tokens do the rest; no new
+  tokens. The provider is mounted once in `app/layout.tsx` via the thin
+  `"use client"` wrapper `@/lib/ThemeProvider` (`attribute="class"`,
+  `defaultTheme={Theme.SYSTEM}`, `enableSystem`,
+  `disableTransitionOnChange`) with `suppressHydrationWarning` on
+  `<html>`. The chosen theme persists under the `THEME_STORAGE_KEY`
+  (`erpify:theme`, mirroring `erpify:sidebar-open`); both the key and
+  the `Theme` constants live in `@/context/shared/domain/types/theme`.
+  Don't hand-write an anti-FOUC `<script>` — next-themes injects it
+  (covered by the existing `script-src 'unsafe-inline'` CSP).
 - **`buttonVariants` import path** — import from
   `@/components/ui/button-variants`, never from
   `@/components/ui/button` (the latter is `"use client"` and Next 16
