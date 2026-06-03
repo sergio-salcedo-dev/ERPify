@@ -33,7 +33,9 @@ describe("SystemStatusBanner", () => {
   });
 
   it("shows a disruption message and no datetime when disrupted", () => {
-    render(<SystemStatusBanner status={SystemStatus.DISRUPTED} datetime={null} testId="x-banner" />);
+    render(
+      <SystemStatusBanner status={SystemStatus.DISRUPTED} datetime={null} testId="x-banner" />,
+    );
     const banner = screen.getByTestId("x-banner");
     expect(banner).toHaveTextContent("Service Disruption");
     expect(banner).toHaveTextContent(/trouble reaching this service/i);

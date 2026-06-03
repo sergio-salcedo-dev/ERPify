@@ -12,9 +12,11 @@ export async function expectStatusPageOperational(page: Page): Promise<void> {
 }
 
 export async function expectBackOfficeHealthOk(page: Page): Promise<void> {
-  const status = page.getByTestId("backoffice-health-status");
-  await expect(status).toBeVisible({ timeout: HEALTH_CHECK_TIMEOUT_MS });
-  await expect(status).toContainText(/Status:\s*ok/i);
-  await expect(status).toContainText(/Service:\s*Back office/i);
-  await expect(status).toContainText(/Date:/i);
+  const banner = page.getByTestId("backoffice-health__banner");
+  await expect(banner).toBeVisible({ timeout: HEALTH_CHECK_TIMEOUT_MS });
+  await expect(banner).toContainText(/All Systems Operational/i);
+
+  const component = page.getByTestId("backoffice-health__component-backoffice");
+  await expect(component).toContainText(/BackOffice API/i);
+  await expect(component).toContainText(/Operational/i);
 }
