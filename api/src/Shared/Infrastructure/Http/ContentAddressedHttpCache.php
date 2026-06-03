@@ -19,23 +19,25 @@ final readonly class ContentAddressedHttpCache
     {
         $response->setPublic();
         $response->headers->set('Cache-Control', self::CACHE_CONTROL);
-
         $response->setEtag($hash);
         $response->headers->set('X-Content-Type-Options', 'nosniff');
     }
 
     public function isNotModified(Request $request, string $hash): bool
     {
-        $header = $request->headers->get('If-None-Match');
+        $etags = \array_filter($request->getETags(), \is_string(...));
 
-        if (null === $header || '' === $header) {
+        if ([] === $etags) {
             return false;
         }
 
-        if (\array_any($request->getETags(), static fn ($tag): bool => $tag === $hash)) {
+        if (\in_array('*', $etags, true)) {
             return true;
         }
 
-        return \str_contains($header, $hash);
+        // Match the hash against its valid If-None-Match forms: strong, weak (W/"…"), and unquoted.
+        $matchingEtags = [\sprintf('"%s"', $hash), \sprintf('W/"%s"', $hash), $hash];
+
+        return [] !== \array_intersect($matchingEtags, $etags);
     }
 }
