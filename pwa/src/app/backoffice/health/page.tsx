@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
 import { CheckHealth } from "@/context/backoffice/health/application/CheckHealth";
@@ -33,14 +33,18 @@ export default function HealthPage() {
   const [result, setResult] = useState<HealthCheck | null>(null);
   const [checking, setChecking] = useState(true);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
+  const mountedRef = useRef(true);
 
   const runCheck = useCallback(async () => {
     setChecking(true);
     setProblem(null);
     try {
       const useCase = container.get<CheckHealth>("BackOfficeCheckHealth");
-      setResult(await useCase.run());
+      const next = await useCase.run();
+      if (!mountedRef.current) return;
+      setResult(next);
     } catch (err) {
+      if (!mountedRef.current) return;
       const detail = err instanceof Error ? err.message : "Unknown error";
       telemetry.warn("BackOffice health check failed", {
         scope: apiScope("backoffice-health"),
@@ -49,13 +53,17 @@ export default function HealthPage() {
       setResult(null);
       setProblem(err instanceof HttpError ? err.problem : transportFailureProblem(detail));
     } finally {
-      setChecking(false);
+      if (mountedRef.current) setChecking(false);
     }
   }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     runCheck();
+    return () => {
+      mountedRef.current = false;
+    };
   }, [runCheck]);
 
   const view = deriveSystemStatus({ checking, failed: problem !== null, result });
@@ -98,7 +106,7 @@ export default function HealthPage() {
             }}
             disabled={checking}
             title="Re-check service status"
-            aria-label="Refresh status"
+            aria-label="Refresh"
             data-testid="backoffice-health__refresh"
           >
             <RefreshCw className={`size-4 ${checking ? "animate-spin" : ""}`} aria-hidden="true" />

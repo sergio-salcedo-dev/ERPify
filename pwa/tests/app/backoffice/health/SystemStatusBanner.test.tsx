@@ -32,6 +32,20 @@ describe("SystemStatusBanner", () => {
     expect(screen.getByTestId("x-banner")).toHaveAttribute("aria-busy", "false");
   });
 
+  it("shows the partial-disruption headline and an 'as of' subline when degraded", () => {
+    render(
+      <SystemStatusBanner
+        status={SystemStatus.DEGRADED}
+        datetime="2026-06-02T10:00:00+02:00"
+        testId="x-banner"
+      />,
+    );
+    const banner = screen.getByTestId("x-banner");
+    expect(banner).toHaveTextContent("Partial Service Disruption");
+    expect(banner).toHaveTextContent(/as of/i);
+    expect(banner).not.toHaveTextContent(/trouble reaching this service/i);
+  });
+
   it("shows a disruption message and no datetime when disrupted", () => {
     render(
       <SystemStatusBanner status={SystemStatus.DISRUPTED} datetime={null} testId="x-banner" />,
