@@ -32,6 +32,8 @@ export interface DataTableColumn<T> {
   /** Apply tabular-nums (typical for numeric columns). */
   numeric?: boolean;
   className?: string;
+  /** Width budget applied to the matching `<col>` when the table uses fixed layout. */
+  colClassName?: string;
 }
 
 export interface DataTableSort {
@@ -68,6 +70,13 @@ interface DataTableProps<T> {
   rowTestId?: (row: T) => string;
   /** Optional data-testid on the surrounding wrapper (forwarded to the bordered `<div>`). */
   testId?: string;
+  /**
+   * Opt into `table-layout: fixed`. When set, a `<colgroup>` is emitted so each
+   * column's `colClassName` width budget governs layout deterministically (and
+   * cell `truncate` finally takes effect). Omit it for the byte-identical
+   * auto-layout default.
+   */
+  layout?: "fixed";
 }
 
 const ROW_HEIGHTS = {
@@ -299,6 +308,7 @@ export function DataTable<T>({
   className,
   rowTestId,
   testId,
+  layout,
 }: Readonly<DataTableProps<T>>) {
   const tableId = useId();
   const [focusedRow, setFocusedRow] = useState(0);
@@ -406,10 +416,18 @@ export function DataTable<T>({
       <table
         id={tableId}
         role="table"
-        className="w-full border-collapse text-sm"
+        className={cn("w-full border-collapse text-sm", layout === "fixed" && "table-fixed")}
         data-density={density}
       >
         <caption className="sr-only">{caption}</caption>
+        {layout === "fixed" ? (
+          <colgroup>
+            {showSelectionColumn ? <col className="w-10" /> : null}
+            {columns.map((col) => (
+              <col key={col.id} className={col.colClassName} />
+            ))}
+          </colgroup>
+        ) : null}
         <thead className="bg-muted/40 sticky top-0">
           <tr className={cn("border-border border-b", HEADER_HEIGHTS[density])}>
             {showSelectionColumn && selection ? (

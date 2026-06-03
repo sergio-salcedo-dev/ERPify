@@ -204,7 +204,7 @@ export default function BankDetailPage() {
               <div className="min-w-0">
                 <div className="flex min-w-0 items-center gap-2">
                   <h1
-                    className="text-foreground text-xl font-semibold tracking-tight break-words sm:text-2xl"
+                    className="text-foreground line-clamp-2 min-w-0 text-xl font-semibold tracking-tight break-words sm:text-2xl"
                     data-testid="banks-detail__name"
                   >
                     {bank.name}

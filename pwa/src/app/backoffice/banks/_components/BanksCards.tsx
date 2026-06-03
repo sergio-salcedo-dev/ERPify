@@ -33,7 +33,7 @@ export function BanksCards({
 }: Readonly<BanksCardsProps>) {
   return (
     <ul
-      className="banks-cards grid list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
+      className="banks-cards grid list-none auto-rows-fr grid-cols-1 gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
       data-testid="banks-cards"
     >
       {banks.map((bank) => {
@@ -42,7 +42,7 @@ export function BanksCards({
         return (
           <li
             key={bank.id}
-            className="banks-cards__item"
+            className="banks-cards__item h-full"
             data-testid={`banks-cards__item-${bank.id}`}
           >
             {/*
@@ -54,7 +54,7 @@ export function BanksCards({
             <Card
               size="sm"
               className={cn(
-                "banks-cards__card relative h-full transition-shadow hover:shadow-elevation-1 hover:ring-foreground/20",
+                "banks-cards__card relative flex h-full flex-col transition-shadow hover:shadow-elevation-1 hover:ring-foreground/20",
                 selected && "ring-2 ring-primary",
               )}
             >
@@ -72,9 +72,10 @@ export function BanksCards({
                   ) : null}
                   <div className="min-w-0 flex-1 space-y-1">
                     <CardTitle className="banks-cards__title">
+                      {/* min-h reserves exactly 2 clamped lines: 2 × leading-[1.35] = 2.7em */}
                       <Link
                         href={detailHref}
-                        className="banks-cards__name font-semibold text-foreground [overflow-wrap:anywhere] hover:underline focus-visible:underline focus-visible:outline-none after:absolute after:inset-0"
+                        className="banks-cards__name line-clamp-2 min-h-[2.7em] leading-[1.35] font-semibold text-foreground [overflow-wrap:anywhere] hover:underline focus-visible:underline focus-visible:outline-none after:absolute after:inset-0"
                         title={`View bank ${bank.name}`}
                         data-testid={`banks-cards__name-${bank.id}`}
                       >
@@ -82,7 +83,7 @@ export function BanksCards({
                       </Link>
                     </CardTitle>
                     <CardDescription
-                      className="banks-cards__shortname font-mono text-xs uppercase [overflow-wrap:anywhere]"
+                      className="banks-cards__shortname block truncate font-mono text-xs uppercase"
                       title={bank.shortName}
                       data-testid={`banks-cards__shortname-${bank.id}`}
                     >
@@ -108,7 +109,7 @@ export function BanksCards({
                   />
                 </CardAction>
               </CardHeader>
-              <CardContent>
+              <CardContent className="mt-auto">
                 <dl className="banks-cards__meta grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs tabular-nums">
                   <dt className="text-muted-foreground">Updated</dt>
                   <dd

@@ -287,7 +287,7 @@ export default function BanksListPage() {
 
   return (
     <div
-      className="banks-list mx-auto w-full max-w-screen-2xl space-y-4 sm:space-y-6 2xl:max-w-[120rem]"
+      className="banks-list mx-auto w-full max-w-[90rem] space-y-4 sm:space-y-6"
       data-testid="banks-list"
       data-state={boundaryState}
     >

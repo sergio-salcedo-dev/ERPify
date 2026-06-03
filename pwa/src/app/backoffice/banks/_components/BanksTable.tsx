@@ -70,7 +70,8 @@ function buildBanksColumns(onBankDeleted?: (id: string) => void): DataTableColum
       header: "Short name",
       sortable: true,
       cell: renderShortNameCell,
-      className: "max-w-[8rem] truncate",
+      className: "truncate",
+      colClassName: "w-28",
     },
     {
       id: "name",
@@ -85,6 +86,7 @@ function buildBanksColumns(onBankDeleted?: (id: string) => void): DataTableColum
       sortable: true,
       cell: renderCreatedAtCell,
       className: "banks-table__col--md hidden md:table-cell",
+      colClassName: "w-32 max-md:hidden",
     },
     {
       id: "updatedAt",
@@ -92,12 +94,14 @@ function buildBanksColumns(onBankDeleted?: (id: string) => void): DataTableColum
       sortable: true,
       cell: renderUpdatedAtCell,
       className: "banks-table__col--lg hidden lg:table-cell",
+      colClassName: "w-32 max-lg:hidden",
     },
     {
       id: "actions",
       header: "Actions",
       align: "right",
-      className: "banks-table__col--actions w-[1%] whitespace-nowrap",
+      className: "banks-table__col--actions",
+      colClassName: "w-28",
       cell: renderActionsCell,
     },
   ];
@@ -128,7 +132,8 @@ export function BanksTable({
         onRowActivate={(row) => router.push(safeHref(bankRoutes.detail(row.id)))}
         rowTestId={(row) => `banks-table__row-${row.id}`}
         testId="banks-table__inner"
-        className="banks-table__inner"
+        layout="fixed"
+        className="banks-table__inner min-w-[48rem]"
       />
     </div>
   );
