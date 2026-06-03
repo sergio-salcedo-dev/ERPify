@@ -4,42 +4,22 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Storage\Infrastructure\Http;
 
+use Erpify\Shared\Infrastructure\Http\ContentHashUrlGenerator;
 use Erpify\Shared\Storage\Application\Port\StoredObjectPublicUrlGenerator;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
-use Symfony\Component\DependencyInjection\Attribute\Autowire;
-use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpFoundation\RequestStack;
-use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 #[AsAlias(StoredObjectPublicUrlGenerator::class)]
 final readonly class ConfigurableStoredObjectPublicUrlGenerator implements StoredObjectPublicUrlGenerator
 {
     public function __construct(
-        private UrlGeneratorInterface $urlGenerator,
-        private RequestStack $requestStack,
-        #[Autowire('%env(MEDIA_PUBLIC_BASE_URL)%')]
-        private string $mediaPublicBaseUrl,
+        private ContentHashUrlGenerator $urlGenerator,
     ) {
     }
 
     #[Override]
     public function urlForContentHash(string $contentHash): string
     {
-        $base = \trim($this->mediaPublicBaseUrl);
-
-        if ('' !== $base) {
-            return \rtrim($base, '/') . '/api/v1/stored-objects/' . $contentHash;
-        }
-
-        if ($this->requestStack->getCurrentRequest() instanceof Request) {
-            return $this->urlGenerator->generate(
-                'shared_stored_object_get',
-                ['hash' => $contentHash],
-                UrlGeneratorInterface::ABSOLUTE_URL,
-            );
-        }
-
-        return '/api/v1/stored-objects/' . $contentHash;
+        return $this->urlGenerator->generate($contentHash, 'shared_stored_object_get');
     }
 }
