@@ -62,3 +62,32 @@ describe("BanksFilters — toolbar search", () => {
     expect(screen.getByTestId("banks-filters__panel")).toHaveAttribute("aria-hidden", "false");
   });
 });
+
+describe("BanksFilters — '/' shortcut", () => {
+  it("focuses the toolbar search when '/' is pressed on the page", () => {
+    renderFilters();
+    fireEvent.keyDown(document.body, { key: "/" });
+    expect(screen.getByTestId("banks-filters__name")).toHaveFocus();
+  });
+
+  it("stays inert while the user is typing in another field", () => {
+    renderFilters({ defaultOpen: true });
+    const shortName = screen.getByTestId("banks-filters__short-name");
+    shortName.focus();
+    fireEvent.keyDown(shortName, { key: "/" });
+    expect(shortName).toHaveFocus();
+  });
+
+  it("stays inert when the keypress originates inside a dialog", () => {
+    renderFilters();
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", "dialog");
+    const button = document.createElement("button");
+    dialog.appendChild(button);
+    document.body.appendChild(dialog);
+    button.focus();
+    fireEvent.keyDown(button, { key: "/" });
+    expect(screen.getByTestId("banks-filters__name")).not.toHaveFocus();
+    dialog.remove();
+  });
+});
