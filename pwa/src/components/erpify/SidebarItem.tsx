@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { LucideIcon, ChevronRight, ChevronDown } from "lucide-react";
 
@@ -24,7 +24,7 @@ interface SidebarItemProps {
   testId?: string;
 }
 
-export const SidebarItem: React.FC<SidebarItemProps> = ({
+export function SidebarItem({
   name,
   icon: Icon,
   path,
@@ -33,7 +33,7 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
   subItems,
   isCompact = false,
   testId,
-}) => {
+}: SidebarItemProps) {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
 
@@ -117,4 +117,4 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
       )}
     </div>
   );
-};
+}

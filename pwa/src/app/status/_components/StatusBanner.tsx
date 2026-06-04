@@ -1,4 +1,3 @@
-import React from "react";
 import { SystemStatus } from "@/lib/systemStatus";
 import { StatusBannerView, type BannerTheme } from "@/components/status/StatusBannerView";
 
@@ -30,6 +29,6 @@ const MARKETING_THEME: BannerTheme = {
   sublineClassName: "text-muted-foreground",
 };
 
-export const StatusBanner: React.FC<StatusBannerProps> = (props) => (
-  <StatusBannerView {...props} theme={MARKETING_THEME} />
-);
+export function StatusBanner(props: StatusBannerProps) {
+  return <StatusBannerView {...props} theme={MARKETING_THEME} />;
+}

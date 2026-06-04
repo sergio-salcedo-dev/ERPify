@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 import { LucideIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -14,14 +13,7 @@ interface StatCardProps {
   index: number;
 }
 
-export const StatCard: React.FC<StatCardProps> = ({
-  name,
-  value,
-  icon: Icon,
-  color,
-  bg,
-  index,
-}) => {
+export function StatCard({ name, value, icon: Icon, color, bg, index }: StatCardProps) {
   return (
     <div
       className="stat-card animate-in fade-in-0 slide-in-from-bottom-4 duration-500"
@@ -40,4 +32,4 @@ export const StatCard: React.FC<StatCardProps> = ({
       </Card>
     </div>
   );
-};
+}

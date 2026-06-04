@@ -1,4 +1,3 @@
-import React from "react";
 import { AlertTriangle, CheckCircle2, Loader2, XCircle, type LucideIcon } from "lucide-react";
 import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
 import { cn } from "@/lib/utils";
@@ -37,12 +36,7 @@ function subline(status: SystemStatus, datetime: string | null): string | null {
   return null;
 }
 
-export const StatusBannerView: React.FC<StatusBannerViewProps> = ({
-  status,
-  datetime,
-  theme,
-  testId,
-}) => {
+export function StatusBannerView({ status, datetime, theme, testId }: StatusBannerViewProps) {
   const Icon = ICONS[status];
   const [iconClassName, containerClassName] = theme.palette[status];
   const note = subline(status, datetime);
@@ -79,4 +73,4 @@ export const StatusBannerView: React.FC<StatusBannerViewProps> = ({
       </div>
     </div>
   );
-};
+}
