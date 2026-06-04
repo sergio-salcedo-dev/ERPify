@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\Bank\Domain\Repository;
 
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
-use Erpify\Shared\Domain\Search\PaginatedResult;
-use Erpify\Shared\Domain\Search\SearchCriteria;
 
+/**
+ * Aggregate-lifecycle port backed by the system of record. The content-hash
+ * queries feed stored-object orphan cleanup and must never be served from an
+ * eventually-consistent read model — search lives on {@see BankSearchRepository}.
+ */
 interface BankRepository
 {
     public function save(Bank $bank): void;
@@ -15,9 +18,6 @@ interface BankRepository
     public function remove(Bank $bank): void;
 
     public function findById(string $id): ?Bank;
-
-    /** @return PaginatedResult<Bank> */
-    public function search(SearchCriteria $criteria): PaginatedResult;
 
     public function countBanksWithStoredObjectContentHash(string $contentHash): int;
 

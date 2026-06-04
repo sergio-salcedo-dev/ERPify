@@ -12,7 +12,7 @@ Replace `Bank`/`bank` with the new entity:
 
 1. **Domain criteria** — `src/<Office>/<Entity>/Domain/Search/<Entity>SearchCriteria.php` extending `Erpify\Shared\Domain\Search\SearchCriteria`. Add only the entity-specific filter properties.
 2. **Application DTO** — `src/<Office>/<Entity>/Application/Http/<Entity>SearchQuery.php` extending `Erpify\Shared\Application\Http\Search\SearchQuery`. Decorate filter properties with `#[Assert\…]`. Override `toCriteria(): <Entity>SearchCriteria`.
-3. **Domain repository** — `<Entity>Repository::search(SearchCriteria $criteria): PaginatedResult<<Entity>>`. Concrete repo asserts the concrete subtype inside `getSearchQueryBuilder`.
+3. **Domain search repository** — `<Entity>SearchRepository::search(SearchCriteria $criteria): PaginatedResult<<Entity>>`, a read-side port separate from the aggregate-lifecycle `<Entity>Repository` (ISP — a future search provider implements only this one). Concrete repo asserts the concrete subtype inside `getSearchQueryBuilder`.
 4. **Application searcher** — `<Entity>Searcher` is a thin wrapper that calls `$query->toCriteria()` and forwards to the repo.
 5. **Controller** — extend `Erpify\Shared\Infrastructure\Http\Controller\AbstractSearchController` and use `#[MapQueryString] <Entity>SearchQuery $query = new <Entity>SearchQuery()`:
 
