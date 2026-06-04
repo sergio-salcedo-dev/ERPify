@@ -22,7 +22,9 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  */
 #[AsAlias(BankRepository::class)]
 #[AsAlias(BankSearchRepository::class)]
-final class DoctrineBankRepository extends AbstractDoctrineSearchRepository implements BankRepository, BankSearchRepository
+final class DoctrineBankRepository extends AbstractDoctrineSearchRepository implements
+    BankRepository,
+    BankSearchRepository
 {
     #[Override]
     public function save(Bank $bank): void
