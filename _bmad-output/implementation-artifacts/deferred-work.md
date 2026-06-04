@@ -2,6 +2,17 @@
 
 Collected during quick-dev. Not part of the current story's shippable scope.
 
+## Deferred from: review de spec-pwa-banks-delete-persistent-error (2026-06-04)
+
+- **Resurrección por snapshot obsoleto en el rollback parcial del bulk delete**
+  (`pwa/src/app/backoffice/banks/page.tsx`, `runBulkDelete`): si Mercure borra una fila
+  seleccionada durante la ventana probe/delete Y el DELETE de esa fila falla con ≠404
+  (500/red), la restauración desde `snapshot` (capturado al crear el handler) puede
+  resucitar una fila que otro cliente ya eliminó, hasta el siguiente reconcile. Forma
+  pre-existente del rollback optimista (el snapshot-restore ya existía); intersección
+  extremadamente estrecha y autocurable en el siguiente evento/reconnect de Mercure.
+  Posible fix: validar la restauración contra un re-probe o contra el estado post-evento.
+
 ## Deferred from: spec errores de mutación persistentes — borrado (2026-06-04, segunda sesión UX)
 
 Split por presupuesto de spec (elección de Sergio: A+B juntos, C diferido). El spec en curso

@@ -2,7 +2,7 @@
 title: 'PWA: error de mutación persistente en borrado de bancos (single + masivo)'
 type: 'feature'
 created: '2026-06-04'
-status: 'in-progress'
+status: 'done'
 baseline_commit: '693e63a'
 worktree: 'nuevo desde main (petición explícita) — make worktree.create BRANCH=feat/pwa-banks-delete-persistent-error'
 context:
@@ -65,17 +65,17 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] Worktree: `make worktree.create BRANCH=feat/pwa-banks-delete-persistent-error START=true` — todo lo siguiente dentro del worktree.
-- [ ] `pwa/src/components/erpify/MutationError.tsx` — NUEVO: compone `ProblemDisplay` + dismiss × + botonera de copia (mensaje · type+status · JSON; correlation-id ya en chip) + `tabIndex={-1}` con foco al montar + slot de acción de recuperación; BEM `.mutation-error*`.
-- [ ] `pwa/tests/components/erpify/MutationError.test.tsx` — NUEVO: matriz de copia (incl. paridad debug/prod), dismiss, foco, acción tipada, casos de la I/O Matrix a nivel componente.
-- [ ] `DeleteBankButton.tsx` — quitar ProblemDisplay del dialog; al fallar: cerrar + `onError(problem)`; toast transitorio "Couldn't delete bank — see error details".
-- [ ] `BankRowActions.tsx` — propagar `onError`.
-- [ ] `banks/page.tsx` — estado de error por origen + `MutationError` sobre la vista activa; recuperación 404→Refresh list (refetch existente); bulk: pre-check `FindBank` (fail-open ≠404), nada-se-borra con algún 404, rollback parcial restaurando fila y selección, focos según matriz.
-- [ ] `BanksBulkBar.tsx` — cierre al fallar; foco al Delete tras refresh con selección > 0.
-- [ ] `banks/[id]/page.tsx` — `MutationError` bajo H1; Refresh → `loadBank()`.
-- [ ] Tests listados en Code Map — actualizar al contrato nuevo (el dialog ya nunca muestra problems).
-- [ ] `pwa/e2e/banks-delete-preconditions.spec.ts` — NUEVO (API mockeada): single 404→Refresh→foco vecina; single 409 persiste/copiable/sin acción; bulk pre-check 404→nada borrado→Refresh→recuento; bulk parcial→filas+selección restauradas.
-- [ ] `error-gallery/page.tsx` — caso `MutationError`.
+- [x] Worktree: `make worktree.create BRANCH=feat/pwa-banks-delete-persistent-error START=true` — todo lo siguiente dentro del worktree.
+- [x] `pwa/src/components/erpify/MutationError.tsx` — NUEVO: compone `ProblemDisplay` + dismiss × + botonera de copia (mensaje · type+status · JSON; correlation-id ya en chip) + `tabIndex={-1}` con foco al montar + slot de acción de recuperación; BEM `.mutation-error*`.
+- [x] `pwa/tests/components/erpify/MutationError.test.tsx` — NUEVO: matriz de copia (incl. paridad debug/prod), dismiss, foco, acción tipada, casos de la I/O Matrix a nivel componente.
+- [x] `DeleteBankButton.tsx` — quitar ProblemDisplay del dialog; al fallar: cerrar + `onError(problem)`; toast transitorio "Couldn't delete bank — see error details".
+- [x] `BankRowActions.tsx` — propagar `onError`.
+- [x] `banks/page.tsx` — estado de error por origen + `MutationError` sobre la vista activa; recuperación 404→Refresh list (refetch existente); bulk: pre-check `FindBank` (fail-open ≠404), nada-se-borra con algún 404, rollback parcial restaurando fila y selección, focos según matriz.
+- [x] `BanksBulkBar.tsx` — cierre al fallar; foco al Delete tras refresh con selección > 0.
+- [x] `banks/[id]/page.tsx` — `MutationError` bajo H1; Refresh → `loadBank()`.
+- [x] Tests listados en Code Map — actualizar al contrato nuevo (el dialog ya nunca muestra problems).
+- [x] `pwa/e2e/banks-delete-preconditions.spec.ts` — NUEVO (API mockeada): single 404→Refresh→foco vecina; single 409 persiste/copiable/sin acción; bulk pre-check 404→nada borrado→Refresh→recuento; bulk parcial→filas+selección restauradas.
+- [x] `error-gallery/page.tsx` — caso `MutationError`.
 
 **Acceptance Criteria:**
 - Given cualquier fallo de borrado, when el dialog estaba abierto, then se cierra solo y ningún problem se renderiza jamás dentro de un dialog.
@@ -99,3 +99,92 @@ context:
 
 **Manual checks (if no CLI):**
 - En dev: borrar banco con cuentas desde lista, tarjetas y detalle → el 409 permanece legible, copiable y capturable; × lo cierra.
+
+## Suggested Review Order
+
+**La superficie persistente (punto de entrada)**
+
+- Wrapper que compone ProblemDisplay: dismiss, botonera de copia y contrato de foco
+  [`MutationError.tsx:39`](../../.claude/worktrees/pwa-banks-delete-persistent-error-es2n/pwa/src/components/erpify/MutationError.tsx#L39)
+
+- Paridad render↔copia: el JSON copiado omite `debug` en build prod
+  [`MutationError.tsx:129`](../../.claude/worktrees/pwa-banks-delete-persistent-error-es2n/pwa/src/components/erpify/MutationError.tsx#L129)
+
+- Único cambio en la base compuesta: `isProductionEnv` pasa a exportado
+  [`ProblemDisplay.tsx:111`](../../.claude/worktrees/pwa-banks-delete-persistent-error-es2n/pwa/src/components/erpify/ProblemDisplay.tsx#L111)
+
+**El dialog deja de alojar errores**
+
+- `onError` requerido: el compilador fuerza que todo consumidor ancle el error
+  [`DeleteBankButton.tsx:35`](../../.claude/worktrees/pwa-banks-delete-persistent-error-es2n/pwa/src/app/backoffice/banks/_components/DeleteBankButton.tsx#L35)
+
+- Al fallar: cierra, delega el problem y deja solo el toast-puntero
+  [`DeleteBankButton.tsx:90`](../../.claude/worktrees/pwa-banks-delete-persistent-error-es2n/pwa/src/app/backoffice/banks/_components/DeleteBankButton.tsx#L90)
+
+**Orquestación en la lista**
+
+- Un error por origen: problem + fila culpable + scope single/bulk
+  [`page.tsx:81`](../../.claude/worktrees/pwa-banks-delete-persistent-error-es2n/pwa/src/app/backoffice/banks/page.tsx#L81)
+
+- Recuperación tipada: solo `bank-not-found` obtiene Refresh list
+  [`page.tsx:501`](../../.claude/worktrees/pwa-banks-delete-persistent-error-es2n/pwa/src/app/backoffice/banks/page.tsx#L501)
+
+- Refresh: foco precomputado a la vecina (single) o diferido a la barra (bulk) + anuncio
+  [`page.tsx:257`](../../.claude/worktrees/pwa-banks-delete-persistent-error-es2n/pwa/src/app/backoffice/banks/page.tsx#L257)
+
+- Pre-check pesimista: un 404 aborta el lote entero antes de mutar (contrato)
+  [`page.tsx:393`](../../.claude/worktrees/pwa-banks-delete-persistent-error-es2n/pwa/src/app/backoffice/banks/page.tsx#L393)
+
+- Rollback parcial: 404 no resucita; el resto restaura fila Y selección
+  [`page.tsx:429`](../../.claude/worktrees/pwa-banks-delete-persistent-error-es2n/pwa/src/app/backoffice/banks/page.tsx#L429)
+
+- Guard de reentrada: la barra sigue montada durante las sondas
+  [`page.tsx:375`](../../.claude/worktrees/pwa-banks-delete-persistent-error-es2n/pwa/src/app/backoffice/banks/page.tsx#L375)
+
+- Recálculo de selección en cada reload (cierra el hueco de phantom-ids)
+  [`page.tsx:140`](../../.claude/worktrees/pwa-banks-delete-persistent-error-es2n/pwa/src/app/backoffice/banks/page.tsx#L140)
+
+- Seam de foco: fila visible (offsetParent) con fallback al contenedor — bugfix pre-existente
+  [`page.tsx:290`](../../.claude/worktrees/pwa-banks-delete-persistent-error-es2n/pwa/src/app/backoffice/banks/page.tsx#L290)
+
+- Render anclado sobre la vista activa, fuera del AsyncBoundary (sobrevive refetch)
+  [`page.tsx:616`](../../.claude/worktrees/pwa-banks-delete-persistent-error-es2n/pwa/src/app/backoffice/banks/page.tsx#L616)
+
+**Detalle**
+
+- Error bajo el H1; Refresh re-fetch → EmptyState not-found existente
+  [`[id]/page.tsx:280`](../../.claude/worktrees/pwa-banks-delete-persistent-error-es2n/pwa/src/app/backoffice/banks/[id]/page.tsx#L280)
+
+- Foco post-refresh al CTA not-found (o contenedor) — nunca a `<body>`
+  [`[id]/page.tsx:142`](../../.claude/worktrees/pwa-banks-delete-persistent-error-es2n/pwa/src/app/backoffice/banks/[id]/page.tsx#L142)
+
+**Threading y contrato de tipos**
+
+- La fila culpable viaja con el problem hacia la página
+  [`BankRowActions.tsx:124`](../../.claude/worktrees/pwa-banks-delete-persistent-error-es2n/pwa/src/app/backoffice/banks/_components/BankRowActions.tsx#L124)
+
+- Types RFC 9457 del wire como constantes de dominio (sin magic strings)
+  [`BankProblemType.ts:1`](../../.claude/worktrees/pwa-banks-delete-persistent-error-es2n/pwa/src/context/backoffice/bank/domain/BankProblemType.ts#L1)
+
+- La regla revocada de pwa/CLAUDE.md reescrita al patrón nuevo
+  [`pwa/CLAUDE.md:1`](../../.claude/worktrees/pwa-banks-delete-persistent-error-es2n/pwa/CLAUDE.md#L1)
+
+**Periferia: tests y herramientas**
+
+- Matriz del componente: copia, foco, dismiss, paridad debug/prod
+  [`MutationError.test.tsx:1`](../../.claude/worktrees/pwa-banks-delete-persistent-error-es2n/pwa/tests/components/erpify/MutationError.test.tsx#L1)
+
+- Flujos de fallo single (409 sin acción, 404→Refresh→foco, sustitución, Mercure-survival)
+  [`bankListDelete.test.tsx:127`](../../.claude/worktrees/pwa-banks-delete-persistent-error-es2n/pwa/tests/app/backoffice/banks/bankListDelete.test.tsx#L127)
+
+- Bulk: pre-check, fail-open, no-resurrección, selección restaurada
+  [`banksBulkActions.test.tsx:99`](../../.claude/worktrees/pwa-banks-delete-persistent-error-es2n/pwa/tests/app/backoffice/banks/banksBulkActions.test.tsx#L99)
+
+- e2e del contrato completo (API mockeada) + navegación no arrastra el error
+  [`banks-delete-preconditions.spec.ts:1`](../../.claude/worktrees/pwa-banks-delete-persistent-error-es2n/pwa/tests/e2e/backoffice/banks-delete-preconditions.spec.ts#L1)
+
+- Fixture e2e: 409 `in-use`, GETs obsoletos por-id, extensiones
+  [`banks-api.ts:88`](../../.claude/worktrees/pwa-banks-delete-persistent-error-es2n/pwa/tests/e2e/fixtures/banks-api.ts#L88)
+
+- Caso de galería (island cliente, `focusOnMount={false}`)
+  [`MutationErrorDemo.tsx:1`](../../.claude/worktrees/pwa-banks-delete-persistent-error-es2n/pwa/src/app/dev-tools/error-gallery/MutationErrorDemo.tsx#L1)
