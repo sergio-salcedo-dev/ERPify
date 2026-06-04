@@ -424,7 +424,7 @@ export default function BackOfficeLayoutClient({
         </header>
 
         <main id="main-content" className="bo-layout__main flex-grow pt-14 md:pt-0 overflow-auto">
-          <div className="bo-layout__content max-w-6xl mx-auto p-4 md:p-8">{children}</div>
+          <div className="bo-layout__content mx-auto p-4 md:p-8">{children}</div>
         </main>
       </div>
     </div>
