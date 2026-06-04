@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\Bank\Application;
 
+use Erpify\Backoffice\Bank\Application\Http\BankPutPayload;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Exception\BankNotFoundException;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
@@ -28,11 +29,11 @@ final readonly class BankUpdater
      * @throws ValidationFailedException
      * @throws ExceptionInterface
      */
-    public function update(string $id, string $name, string $shortName): Bank
+    public function update(string $id, BankPutPayload $payload): Bank
     {
         $bank = $this->bankFinder->find($id);
 
-        $bank->rename(SymfonyUuidGenerator::generate(), $name, $shortName);
+        $bank->rename(SymfonyUuidGenerator::generate(), $payload->name, $payload->shortName);
 
         $this->validator->ensure($bank);
 

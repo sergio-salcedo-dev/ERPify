@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\Bank\Infrastructure\Controller;
 
 use Erpify\Backoffice\Bank\Application\BankUpdater;
-use Erpify\Backoffice\Bank\Infrastructure\Request\BankPutPayload;
+use Erpify\Backoffice\Bank\Application\Http\BankPutPayload;
 use Erpify\Shared\Application\UseCase\Result;
 use Erpify\Shared\Infrastructure\Http\Responder\ResponderInterface;
 use Erpify\Shared\Infrastructure\Serializer\ResourceNormalizer;
@@ -29,7 +29,7 @@ final readonly class BankPutController
      */
     public function __invoke(string $id, #[MapRequestPayload] BankPutPayload $input): Response
     {
-        $bank = $this->bankUpdater->update($id, $input->name, $input->shortName);
+        $bank = $this->bankUpdater->update($id, $input);
 
         $data = $this->resourceNormalizer->toArray(
             $bank,

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\Bank\Infrastructure\Controller;
 
 use Erpify\Backoffice\Bank\Application\BankCreator;
-use Erpify\Backoffice\Bank\Infrastructure\Request\BankPostPayload;
+use Erpify\Backoffice\Bank\Application\Http\BankPostPayload;
 use Erpify\Shared\Application\UseCase\Result;
 use Erpify\Shared\Application\Validation\Validator;
 use Erpify\Shared\Infrastructure\Http\Responder\ResponderInterface;
@@ -42,7 +42,7 @@ final readonly class BankPostController
         $this->assertValidUpload($image);
         $this->assertValidUpload($storedObject);
 
-        $bank = $this->bankCreator->create($input->name, $input->shortName, $image, $storedObject);
+        $bank = $this->bankCreator->create($input, $image, $storedObject);
 
         $data = $this->resourceNormalizer->toArray(
             $bank,
