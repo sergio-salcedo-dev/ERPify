@@ -5,16 +5,6 @@
       <code><![CDATA[__construct]]></code>
     </PossiblyUnusedMethod>
   </file>
-  <file src="../../src/Backoffice/Bank/Application/BankDeleter.php">
-    <PossiblyUnusedMethod>
-      <code><![CDATA[__construct]]></code>
-    </PossiblyUnusedMethod>
-  </file>
-  <file src="../../src/Backoffice/Bank/Application/BankFinder.php">
-    <PossiblyUnusedMethod>
-      <code><![CDATA[__construct]]></code>
-    </PossiblyUnusedMethod>
-  </file>
   <file src="../../src/Backoffice/Bank/Application/BankSearcher.php">
     <PossiblyUnusedMethod>
       <code><![CDATA[__construct]]></code>
@@ -112,6 +102,11 @@
       <code><![CDATA[getIban]]></code>
       <code><![CDATA[getStatus]]></code>
     </PossiblyUnusedMethod>
+  </file>
+  <file src="../../src/Backoffice/BankAccount/Infrastructure/Persistence/Doctrine/DoctrineBankAccountRepository.php">
+    <UnusedClass>
+      <code><![CDATA[DoctrineBankAccountRepository]]></code>
+    </UnusedClass>
   </file>
   <file src="../../src/Backoffice/Health/Infrastructure/Controller/HealthController.php">
     <UnusedClass>
@@ -217,6 +212,14 @@
       <code><![CDATA[QueryBuilder]]></code>
     </PossiblyUnusedReturnValue>
   </file>
+  <file src="../../src/Shared/Infrastructure/Persistence/Doctrine/QueryBuilderWithOptions.php">
+    <ClassMustBeFinal>
+      <code><![CDATA[QueryBuilderWithOptions]]></code>
+    </ClassMustBeFinal>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[setOptions]]></code>
+    </PossiblyUnusedMethod>
+  </file>
   <file src="../../src/Shared/Infrastructure/Persistence/DoctrineConnectionResetListener.php">
     <UnusedClass>
       <code><![CDATA[DoctrineConnectionResetListener]]></code>
@@ -256,14 +259,6 @@
       <code><![CDATA[self]]></code>
       <code><![CDATA[self]]></code>
     </PossiblyUnusedReturnValue>
-  </file>
-  <file src="../../src/Shared/Infrastructure/Persistence/Doctrine/QueryBuilderWithOptions.php">
-    <ClassMustBeFinal>
-      <code><![CDATA[QueryBuilderWithOptions]]></code>
-    </ClassMustBeFinal>
-    <PossiblyUnusedMethod>
-      <code><![CDATA[setOptions]]></code>
-    </PossiblyUnusedMethod>
   </file>
   <file src="../../src/Shared/Infrastructure/Serializer/JsonDecoder.php">
     <UnusedClass>

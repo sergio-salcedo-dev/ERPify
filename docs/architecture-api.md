@@ -94,6 +94,8 @@ Pipeline:
 
 Symfony framework exceptions are bridged: `ValidationFailedException` → 400 with structured `violations[]` (unwrapped from `getPrevious()` when wrapped by `RequestPayloadValueResolver`); `AccessDeniedException` → 403 / `forbidden`; `AuthenticationException` → 401 / `unauthenticated`; `HttpExceptionInterface` honoured; anything else → 500 / `unhandled-exception`.
 
+Referential-integrity invariant — **deleting a `Bank` still referenced by any `bank_account` row is rejected with 409 `bank-in-use`** (`Conflict` marker; extensions `bankId` + `accountCount`). `BankDeleter` counts the referencing accounts through the `Backoffice/BankAccount` count port and throws `BankInUseException` *before* mutating the aggregate or dispatching its deletion event, so a rejected delete leaves both bank and accounts intact.
+
 Full reference (mapping table, header rules, observability, code map, test surface): [`api-error-contract.md`](./api-error-contract.md).
 
 ## Async & messaging
