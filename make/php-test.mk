@@ -3,20 +3,19 @@
 # =============================================================================
 
 # Target names match CI (.github/workflows/ci.yml):
-#   php.unit / php.unit.install / php.behat / php.behat.install / php.test
+#   php.unit / php.behat / php.behat.install / php.test
 
-.PHONY: php.unit php.unit.install \
+.PHONY: php.unit \
 		php.behat php.behat.install \
 		php.test \
 		php.bench
 
 ## —— PHP Unit ——
 
+# PHPUnit runs from the app vendor (bin/phpunit) — no separate tools tree to
+# install (api/tools/phpunit holds only bootstrap.php + phpunit.dist.xml).
 php.unit: ## PHPUnit; pass c='…' for extra args (e.g. c='--filter SomeTest')
 	@$(PHP_TEST) bin/phpunit $(c)
-
-php.unit.install: ## Install PHPUnit tooling (api/tools/phpunit)
-	@$(COMPOSER) phpunit-tools-install
 
 ## —— Behat ——
 
