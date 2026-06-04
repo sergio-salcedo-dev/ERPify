@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>UX Design Validation: ERPify — Backoffice listas de entidades</title>
+<style>
+  :root {
+    --bg: #fafaf9;
+    --surface: #ffffff;
+    --border: #e7e5e4;
+    --text: #1c1917;
+    --muted: #78716c;
+
+    --verdict-strong: #16a34a;
+    --verdict-adequate: #65a30d;
+    --verdict-thin: #d97706;
+    --verdict-broken: #dc2626;
+
+    --sev-low: #64748b;
+    --sev-medium: #ca8a04;
+    --sev-high: #ea580c;
+    --sev-critical: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    font-size: 15px;
+  }
+  .container { max-width: 960px; margin: 0 auto; padding: 32px 24px 64px; }
+
+  header.report-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+  }
+  .title h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  .title .subtitle { color: var(--muted); font-size: 13px; margin-top: 4px; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+
+  .synthesis {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--muted);
+    border-radius: 8px;
+    padding: 18px 22px;
+    margin-bottom: 24px;
+    font-size: 15.5px;
+  }
+  .synthesis p { margin: 0 0 10px; }
+  .synthesis p:last-child { margin-bottom: 0; }
+
+  .dimension-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .dim-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .dim-card .dim-name { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .dim-card .dim-verdict { font-size: 14px; font-weight: 600; }
+
+  section.dimension, section.reviewer-section { margin-bottom: 14px; }
+  section.dimension details, section.reviewer-section details {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  section summary {
+    padding: 14px 20px;
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  section summary::-webkit-details-marker { display: none; }
+  section summary::before {
+    content: "▸";
+    display: inline-block;
+    color: var(--muted);
+    transition: transform 0.15s ease;
+  }
+  section details[open] summary::before { transform: rotate(90deg); }
+  section summary h2 {
+    display: inline;
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    flex: 1;
+  }
+  .verdict-pill {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: white;
+  }
+  .verdict-strong { background: var(--verdict-strong); }
+  .verdict-adequate { background: var(--verdict-adequate); }
+  .verdict-thin { background: var(--verdict-thin); }
+  .verdict-broken { background: var(--verdict-broken); }
+
+  .dim-body { padding: 4px 20px 18px; }
+  .dim-judgment { color: var(--text); font-size: 14.5px; }
+  .dim-judgment p { margin: 0 0 10px; }
+
+  .findings-list { padding: 0 20px 4px; }
+  article.finding {
+    padding: 14px 0;
+    border-top: 1px solid var(--border);
+  }
+  article.finding:first-child { border-top: none; }
+  article.finding header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .badge {
+    font-size: 10.5px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    line-height: 1.4;
+  }
+  .badge-sev-low { background: rgba(100, 116, 139, 0.12); color: var(--sev-low); }
+  .badge-sev-medium { background: rgba(202, 138, 4, 0.14); color: var(--sev-medium); }
+  .badge-sev-high { background: rgba(234, 88, 12, 0.14); color: var(--sev-high); }
+  .badge-sev-critical { background: rgba(220, 38, 38, 0.14); color: var(--sev-critical); }
+  .finding-title { margin: 0; font-size: 15px; font-weight: 500; flex: 1; min-width: 200px; }
+  .finding-location { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; color: var(--muted); }
+  .finding-note, .finding-fix { margin-top: 6px; font-size: 14px; }
+  .finding-fix strong { color: var(--muted); font-weight: 500; }
+  .resolved { color: var(--verdict-strong); font-weight: 600; }
+
+  .reviewer-source {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  .mechanical {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-top: 24px;
+    font-size: 14px;
+  }
+  .mechanical h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .mechanical ul { margin: 0; padding-left: 20px; }
+  .mechanical li { margin-bottom: 4px; color: var(--text); }
+
+  footer.report-footer {
+    margin-top: 40px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  footer .meta { display: flex; gap: 24px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+  <div class="container">
+
+    <header class="report-header">
+      <div class="title">
+        <h1>ERPify — Backoffice listas de entidades — UX Design Validation Report</h1>
+        <div class="subtitle">_bmad-output/planning-artifacts/ux-designs/ux-ERPify-2026-06-03/{DESIGN.md, EXPERIENCE.md}</div>
+      </div>
+    </header>
+
+    <div class="synthesis">
+      <p>El par de spines es un contrato sólido y extraíble: cada hallazgo del audit tiene respuesta nombrada, los presupuestos de contención son números (no prosa), los flujos tienen protagonista/clímax/fallo, y la disciplina de herencia (Shadcn + <code>--erpify-*</code>) está bien declarada. Lo que impedía el "strong" limpio era un puñado de roturas mecánicas de referencia y un hueco real: cinco componentes con reglas conductuales sin spec visual.</p>
+      <p>La lente de accesibilidad desplazó el cuadro de forma material: el contrato de contención es sano y la mayoría de afirmaciones AA verifican por cálculo, pero las spines heredaban en silencio <strong>dos defectos de contraste bloqueantes</strong> del StatusBadge "conservado" (etiqueta 2.19–3.90:1 vs 4.5:1 requerido; dot success 2.54:1 vs 3:1), más cuatro huecos de especificación de severidad alta (tooltip sin ruta touch, tri-state sin camino de implementación, foco tras mutaciones sin destino, tabIndex condicional anti-patrón).</p>
+      <p class="resolved">Resolución: los 2 critical, los 7 high y los medium/low de arreglo directo fueron resueltos en spines y companions en este mismo Finalize (2026-06-03). Quedan como seguimiento los low aceptados (contrato de teclado de la vista apilada &lt;md; verificación del reduced-motion real de Sonner).</p>
+    </div>
+
+    <div class="dimension-summary">
+      <div class="dim-card"><div class="dim-name">Flow coverage</div><div class="dim-verdict" style="color: var(--verdict-strong)">strong</div></div>
+      <div class="dim-card"><div class="dim-name">Token completeness</div><div class="dim-verdict" style="color: var(--verdict-adequate)">adequate</div></div>
+      <div class="dim-card"><div class="dim-name">Component coverage</div><div class="dim-verdict" style="color: var(--verdict-thin)">thin</div></div>
+      <div class="dim-card"><div class="dim-name">State coverage</div><div class="dim-verdict" style="color: var(--verdict-strong)">strong</div></div>
+      <div class="dim-card"><div class="dim-name">Visual reference coverage</div><div class="dim-verdict" style="color: var(--verdict-strong)">strong</div></div>
+      <div class="dim-card"><div class="dim-name">Bloat &amp; overspecification</div><div class="dim-verdict" style="color: var(--verdict-strong)">strong</div></div>
+      <div class="dim-card"><div class="dim-name">Inheritance discipline</div><div class="dim-verdict" style="color: var(--verdict-adequate)">adequate</div></div>
+      <div class="dim-card"><div class="dim-name">Shape fit</div><div class="dim-verdict" style="color: var(--verdict-strong)">strong</div></div>
+    </div>
+
+    <section class="dimension">
+      <details>
+        <summary><h2>1. Flow coverage</h2><span class="verdict-pill verdict-strong">strong</span></summary>
+        <div class="dim-body"><div class="dim-judgment">
+          <p>Cada entregable del intake aparece como sección dedicada o tabla. Los dos Key Flows tienen protagonista nombrado (Marta, contable; Andrés, back-office), pasos numerados, clímax explícito y ruta de fallo.</p>
+        </div></div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-low">low</span><h3 class="finding-title">Sin flujo de crear/editar pese a estar en la IA</h3><span class="finding-location">EXPERIENCE.md § Key Flows</span></header>
+            <div class="finding-note">Operaciones masivas y teclado cubiertos por los dos flujos; faltaba cerrar el lazo de creación.</div>
+            <div class="finding-fix"><strong>Fix:</strong> nota añadida — crear/editar hereda el contrato del formulario sin delta; el lazo termina en el toast clamp-2. <span class="resolved">RESUELTO</span></div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary><h2>2. Token completeness</h2><span class="verdict-pill verdict-adequate">adequate</span></summary>
+        <div class="dim-body"><div class="dim-judgment">
+          <p>Colores funcionales nuevos con hex; herencia <code>--erpify-*</code> declarada y nombrada; diferido de dark mode explícito en frontmatter (no critical). Contrastes estructurales declarados.</p>
+        </div></div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-high">high</span><h3 class="finding-title">`colors.meta-text-rule` no resolvía (clave raíz citada como colors.*)</h3><span class="finding-location">DESIGN.md frontmatter</span></header>
+            <div class="finding-note">Tres menciones inconsistentes (raíz vs <code>colors.</code>).</div>
+            <div class="finding-fix"><strong>Fix:</strong> movida bajo <code>colors:</code> y las tres menciones unificadas a <code>{colors.meta-text-rule}</code>. <span class="resolved">RESUELTO</span></div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">`focusRing` mezcla CSS crudo con nombre de token</h3><span class="finding-location">DESIGN.md components.table-row</span></header>
+            <div class="finding-note">Herencia nombrada válida, pero un resolver mecánico no la flattenará.</div>
+            <div class="finding-fix"><strong>Fix:</strong> documentado como CSS literal intencional con nota de re-validación de contraste. <span class="resolved">RESUELTO</span></div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details open>
+        <summary><h2>3. Component coverage</h2><span class="verdict-pill verdict-thin">thin</span></summary>
+        <div class="dim-body"><div class="dim-judgment">
+          <p>DESIGN.md cubría table, table-row, entity-card, status-badge, row-action-button, tooltip-full-value y Toast con reglas reales. El hueco estaba en sentido inverso: conducta sin visual.</p>
+        </div></div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-high">high</span><h3 class="finding-title">Cinco componentes con fila conductual sin spec visual</h3><span class="finding-location">Barra de selección · Toggle densidad · Toggle de vista · Filtros · Confirm destructivo</span></header>
+            <div class="finding-note">Un consumidor de UI no sabía su anatomía, color ni tamaño desde DESIGN.md.</div>
+            <div class="finding-fix"><strong>Fix:</strong> filas añadidas a DESIGN.md.Components (+ token <code>bulk-bar</code>), declarando herencia Shadcn sin delta donde aplica. <span class="resolved">RESUELTO</span></div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">"Celda truncable" sin nombre homónimo en DESIGN; StatusBadge sin fila conductual en EXPERIENCE</h3><span class="finding-location">ambas spines</span></header>
+            <div class="finding-note">Disciplina de nombre-idéntico entre spines incumplida en dos casos.</div>
+            <div class="finding-fix"><strong>Fix:</strong> fila <code>truncated-cell</code> en DESIGN + fila conductual de StatusBadge (presentacional) en EXPERIENCE. <span class="resolved">RESUELTO</span></div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary><h2>4. State coverage</h2><span class="verdict-pill verdict-strong">strong</span></summary>
+        <div class="dim-body"><div class="dim-judgment">
+          <p>Todas las superficies de la IA con sus estados (carga fría, vacíos, selección, borrado optimista, obsoleto-en-confirm, error, realtime, truncado). Offline defendiblemente fuera de alcance.</p>
+        </div></div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-low">low</span><h3 class="finding-title">Permiso-denegado y skeleton de tarjetas sin nombrar</h3><span class="finding-location">EXPERIENCE.md § State Patterns</span></header>
+            <div class="finding-fix"><strong>Fix:</strong> fila de "silencio consciente" para permisos por rol + nota del skeleton de tarjetas (auto-rows-fr, 2 líneas reservadas). <span class="resolved">RESUELTO</span></div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary><h2>5. Visual reference coverage</h2><span class="verdict-pill verdict-strong">strong</span></summary>
+        <div class="dim-body"><div class="dim-judgment">
+          <p>Imports mapeados captura-a-hallazgo vía el audit; spines-ganan declarado. Tras el gate: mocks promovidos a <code>mockups/</code> y enlazados inline desde ambas spines (IA y Components).</p>
+        </div></div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary><h2>6. Bloat &amp; overspecification</h2><span class="verdict-pill verdict-strong">strong</span></summary>
+        <div class="dim-body"><div class="dim-judgment">
+          <p>Los presupuestos de píxel no son sobreespecificación: son el corazón del rediseño y contrato testeable. Las secciones inventadas (Estrategia de texto largo, Jerarquía de entidad) son entregables explícitos del intake.</p>
+        </div></div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary><h2>7. Inheritance discipline</h2><span class="verdict-pill verdict-adequate">adequate</span></summary>
+        <div class="dim-body"><div class="dim-judgment">
+          <p>Sources resolubles y verbatim; glosario de presupuestos idéntico entre spines.</p>
+        </div></div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-high">high</span><h3 class="finding-title">`{design: components.table}` — sintaxis de referencia no estándar</h3><span class="finding-location">EXPERIENCE.md § Component Patterns</span></header>
+            <div class="finding-note">Única cross-ref con prefijo tipado del par.</div>
+            <div class="finding-fix"><strong>Fix:</strong> normalizada a <code>{components.table}</code>. <span class="resolved">RESUELTO</span></div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary><h2>8. Shape fit</h2><span class="verdict-pill verdict-strong">strong</span></summary>
+        <div class="dim-body"><div class="dim-judgment">
+          <p>DESIGN.md en orden canónico exacto; EXPERIENCE.md con todos los defaults y las required-when-applicable disparadas (Inspiration, Responsive). Vercel quedaba sin ubicar → línea añadida (Geist + sobriedad monocroma). <span class="resolved">RESUELTO</span></p>
+        </div></div>
+      </details>
+    </section>
+
+    <section class="reviewer-section">
+      <details open>
+        <summary><h2>Accessibility review (WCAG 2.2 AA, adversarial)</h2><span class="reviewer-source">review-accessibility.md</span></summary>
+        <div class="dim-body"><div class="dim-judgment">
+          <p><strong>Conditional pass</strong> con dos defectos de contraste bloqueantes heredados en silencio. Ratios calculados con la fórmula de luminancia relativa, no estimados. Verifica como correctas: suelo <code>text-muted</code> (5.77:1 en las cuatro superficies), truncate/clamp conservan el string en el árbol de accesibilidad, 28/32px pasan 2.5.8, <code>aria-live="polite"</code> es la urgencia correcta, semántica conservada de DataTable. Corrige dos premisas del encargo: 2.4.13 Focus Appearance es AAA (no AA) y los ratios autodeclarados del doc eran honestos.</p>
+        </div></div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-critical">critical</span><h3 class="finding-title">C1 — Etiqueta del StatusBadge heredado falla 1.4.3 (2.19–3.90:1 vs 4.5:1)</h3><span class="finding-location">DESIGN.md status-badge · "conservado"</span></header>
+            <div class="finding-note">Texto coloreado de 11px sobre tinte del mismo matiz al 15%; success 2.19:1, warning 2.72:1. Peor sobre la fila seleccionada.</div>
+            <div class="finding-fix"><strong>Fix:</strong> cláusula de contraste — etiqueta SIEMPRE neutra (<code>labelColor: --erpify-text-muted</code>), matiz solo en el dot. <span class="resolved">RESUELTO</span></div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-critical">critical</span><h3 class="finding-title">C2 — Dot de estado de 6px falla 1.4.11 (success 2.54:1, warning 3.19:1 vs 3:1)</h3><span class="finding-location">DESIGN.md status-badge.dotSize</span></header>
+            <div class="finding-fix"><strong>Fix:</strong> tokens <code>status-dot-success #0f7a5a</code> / <code>status-dot-warning #b45309</code> validados ≥3:1 sobre blanco y tinte de selección; mocks parcheados. <span class="resolved">RESUELTO</span></div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-high">high</span><h3 class="finding-title">H1 — Tooltip-si-truncado: sin ruta de acceso en touch; config Radix sin fijar (1.4.13)</h3><span class="finding-location">EXPERIENCE.md § Estrategia de texto largo</span></header>
+            <div class="finding-note">Radix Tooltip no abre con tap y su delay default es 700ms; la primitiva ni siquiera está instalada en el repo.</div>
+            <div class="finding-fix"><strong>Fix:</strong> ruta touch declarada (detalle a un tap, por diseño); <code>delayDuration 200ms</code> + <code>disableHoverableContent={false}</code> fijados; prerequisito documentado. <span class="resolved">RESUELTO</span></div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-high">high</span><h3 class="finding-title">H2 — Tri-state `aria-checked="mixed"` sin camino de implementación (4.1.2)</h3><span class="finding-location">EXPERIENCE.md § Accessibility Floor</span></header>
+            <div class="finding-fix"><strong>Fix:</strong> receta <code>.indeterminate</code> vía ref (o Radix Checkbox) + criterio de aceptación. <span class="resolved">RESUELTO</span></div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-high">high</span><h3 class="finding-title">H3 — Destino del foco tras borrado optimista / "Refresh list" sin especificar (2.4.3)</h3><span class="finding-location">EXPERIENCE.md § State Patterns · Key Flow 2</span></header>
+            <div class="finding-fix"><strong>Fix:</strong> regla de gestión de foco añadida al Accessibility Floor + receta. <span class="resolved">RESUELTO</span></div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-high">high</span><h3 class="finding-title">H4 — `tabIndex` condicional en spans truncados: tab order dependiente de viewport (2.4.3/4.1.2)</h3><span class="finding-location">implementation-tailwind.md §5</span></header>
+            <div class="finding-fix"><strong>Fix:</strong> el tooltip se dispara por foco de FILA (único tab stop); spans sin tabIndex; receta reescrita. <span class="resolved">RESUELTO</span></div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">M1–M4 — focus ring de margen justo · reduced-motion incompleto · guardrail del H1 · live region</h3><span class="finding-location">varios</span></header>
+            <div class="finding-note">M1 pasa AA (3.38:1 mínimo) — guardia añadida; M2 sombra scroll-driven gateada a <code>no-preference</code>; M3 "prohibido truncar en JS"; M4 región montada siempre + anuncios coalescidos.</div>
+            <div class="finding-fix"><strong>Fix:</strong> los cuatro especificados en spine/receta. <span class="resolved">RESUELTO</span> (verificación de Sonner queda como follow-up)</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-low">low</span><h3 class="finding-title">L1–L3 — claim hover/selected sobreafirmado · teclado de vista apilada &lt;md · precedencia de Esc</h3><span class="finding-location">varios</span></header>
+            <div class="finding-fix"><strong>Fix:</strong> L1 y L3 resueltos en spine; L2 aceptado como follow-up marcado. </div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <div class="mechanical">
+      <h3>Mechanical notes</h3>
+      <ul>
+        <li>Cross-ref <code>colors.meta-text-rule</code> rota → movida bajo <code>colors:</code> y unificada. <span class="resolved">RESUELTO</span></li>
+        <li><code>{design: components.table}</code> → <code>{components.table}</code>. <span class="resolved">RESUELTO</span></li>
+        <li>Artefacto de codificación <code>�</code> en Voice and Tone → sustituido. <span class="resolved">RESUELTO</span></li>
+        <li>Vercel (referencia declarada) sin ubicar en Inspiration → línea añadida. <span class="resolved">RESUELTO</span></li>
+        <li><code>name</code> no idéntico entre spines — intencional (EXPERIENCE acota el alcance); aceptado.</li>
+        <li>Dark mode diferido declarado en frontmatter — no es omisión.</li>
+      </ul>
+    </div>
+
+    <footer class="report-footer">
+      <div class="meta">
+        <span>Rubric: review-rubric.md · Accessibility: review-accessibility.md</span>
+        <span>Generated: 2026-06-03T21:34:24+02:00</span>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

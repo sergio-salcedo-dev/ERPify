@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Banks — cards view · ERPify Backoffice key screen</title>
+<style>
+/*
+  ============================================================================
+  KEY SCREEN — Banks list, CARDS view (3-col desktop grid)
+  ----------------------------------------------------------------------------
+  Spine sections this mock illustrates (spine wins on any conflict):
+    EXPERIENCE.md
+      · "Component Patterns" rows: Tarjeta de entidad, Toggle de vista,
+        Toggle densidad, Filtros, Celda truncable (clamp-2 variant on title)
+      · "Wireframe — tarjeta de entidad" — composed 1:1 (equal heights,
+        fixed regions: code+actions / title clamp-2 reserved-height /
+        status / footer meta anchored)
+      · "Estrategia de texto largo" — clamp 2 lines on card title; full value
+        via tooltip-if-truncated + detail page
+      · "State Patterns": selección activa (ring + checkbox), hover (shadow-1)
+      · "Voice and Tone" — "Updated 2m ago"
+      · IA: "tarjetas opt-in, nunca default"; view toggle shown on "cards"
+    DESIGN.md (frontmatter budgets — contract, not suggestion)
+      · components.entity-card: minWidth 280 (card-min-w) · radius 8 (rounded.card)
+        · titleLines 2 · equalHeights true
+      · typography.card-title: 14px semibold, lineHeight 1.35, clamp 2
+      · components.status-badge 20h/6dot/11px
+      · components.row-action-button 28 compact / 16 icon
+      · colors: surface-row-hover #f3f4f5 · surface-row-selected #eef0fb ·
+        brand #5e6ad2 (selection ring) · meta floor #62666d
+      · spacing.list-max-w 1440
+  Grid: repeat(auto-fill, minmax(280px, 1fr)) + auto-rows-fr → identical heights.
+  Hard renderer rules: CSS inline, system fonts, no JS, no network, offline.
+  ============================================================================
+*/
+
+:root {
+  --bg: #f7f8f8;
+  --bg-muted: #f3f4f5;        /* surface-row-hover */
+  --bg-elevated: #ffffff;
+  --card-selected: #eef0fb;   /* surface-row-selected (tint) */
+  --text: #08090a;
+  --text-muted: #62666d;
+  --border: #dcdfe3;
+  --border-subtle: #eef0f2;
+  --brand: #5e6ad2;
+  --focus-ring: #7170ff;
+  --success: #10b981;
+  --danger: #dc2626;
+  --r-row: 6px;
+  --r-card: 8px;
+  --shadow-1: 0 2px 6px -1px rgba(8, 9, 10, .10), 0 1px 2px rgba(8, 9, 10, .06);
+  --shadow-2: 0 4px 12px -2px rgba(8, 9, 10, .10), 0 2px 4px -2px rgba(8, 9, 10, .06);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: #e3e5e8;
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- realistic browser chrome ---- */
+.browser {
+  max-width: 1680px;
+  margin: 24px auto;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 16px 40px -12px rgba(8, 9, 10, .28);
+}
+.browser__bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #eceef1;
+  border-bottom: 1px solid var(--border);
+}
+.browser__dots { display: flex; gap: 7px; }
+.browser__dot { width: 12px; height: 12px; border-radius: 9999px; background: #cfd3d8; }
+.browser__dot--r { background: #ff5f57; }
+.browser__dot--y { background: #febc2e; }
+.browser__dot--g { background: #28c840; }
+.browser__url {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+.browser__lock { color: var(--success); font-size: 11px; }
+.browser__url b { color: var(--text); font-weight: 500; }
+
+/* ---- viewport / page ---- */
+.viewport { background: var(--bg); padding: 28px 24px 40px; }
+.page { max-width: 1440px; margin: 0 auto; }   /* list-max-w */
+
+/* ---- toolbar (same as table screen, view toggle on 'cards') ---- */
+.toolbar {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.toolbar__titles { flex: 1; min-width: 0; }
+.toolbar__h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.toolbar__sub {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.toolbar__actions { display: flex; align-items: center; gap: 8px; }
+
+.seg {
+  display: inline-flex;
+  padding: 2px;
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--r-row);
+}
+.seg__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 26px;
+  border: 0;
+  background: transparent;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.seg__btn--active {
+  background: var(--bg-elevated);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(8, 9, 10, .12);
+}
+.seg__btn svg { width: 15px; height: 15px; }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 11px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-row);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.btn svg { width: 15px; height: 15px; }
+.btn--primary {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+.btn__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 9999px;
+}
+
+.density {
+  display: inline-flex;
+  padding: 2px;
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--r-row);
+  font-size: 12px;
+}
+.density__btn {
+  border: 0;
+  background: transparent;
+  border-radius: 4px;
+  height: 26px;
+  padding: 0 9px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-weight: 500;
+}
+.density__btn--active {
+  background: var(--bg-elevated);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(8, 9, 10, .12);
+}
+
+/* ---- cards grid ---- */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);   /* desktop 3-col; spec: auto-fill minmax(280,1fr) */
+  grid-auto-rows: 1fr;                      /* equal heights by construction */
+  gap: 14px;
+}
+
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 280px;                         /* card-min-w */
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  padding: 12px 14px 0;
+}
+
+/* region 1 — code + checkbox + actions (fixed height) */
+.card__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+}
+.card__check {
+  width: 15px; height: 15px;
+  border-radius: 4px;
+  border: 1.5px solid #b7bcc4;
+  background: var(--bg-elevated);
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 2;
+}
+.card__check--on {
+  background: var(--brand);
+  border-color: var(--brand);
+}
+.card__check--on::after {
+  content: "";
+  position: absolute;
+  left: 4px; top: 1px;
+  width: 4px; height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.card__code {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.card__actions {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  flex: 0 0 auto;
+  z-index: 2;
+}
+.iconbtn {
+  width: 28px; height: 28px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; background: transparent; border-radius: var(--r-row);
+  color: var(--text-muted); cursor: pointer;
+}
+.iconbtn svg { width: 16px; height: 16px; }
+.iconbtn:hover { background: rgba(8, 9, 10, .06); color: var(--text); }
+.reveal { visibility: hidden; }
+
+/* region 2 — title clamp 2, reserved height = 2 lines always */
+.card__title {
+  margin: 8px 0 0;
+  font-size: 14px;                          /* card-title */
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: calc(2 * 14px * 1.35);        /* reserve 2 lines even when 1 */
+}
+.card__title a { color: inherit; text-decoration: none; }
+
+/* region 3 — status badge (fixed) */
+.card__status { margin-top: 10px; }
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 20px;
+  padding: 0 9px 0 8px;
+  border-radius: 9999px;
+  background: var(--bg-muted);
+  border: 1px solid var(--border-subtle);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+}
+.dot { width: 6px; height: 6px; border-radius: 9999px; }
+.dot--success { background: #0f7a5a; } /* status-dot-success: ≥3:1 (gate C2); el semántico #10b981 falla */
+.dot--brand { background: var(--brand); }
+
+/* region 4 — footer meta anchored to bottom, with border-top */
+.card__footer {
+  margin-top: 12px;
+  margin-left: -14px;
+  margin-right: -14px;
+  padding: 9px 14px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* clickable overlay (whole card → detail), beneath checkbox/actions */
+.card__overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-card);
+  z-index: 1;
+}
+
+/* ---- card states ---- */
+.card--selected {
+  border-color: transparent;
+  background: var(--card-selected);
+  box-shadow: 0 0 0 2px var(--brand);       /* ring 2px brand */
+}
+.card--hover {
+  border-color: var(--border);
+  box-shadow: var(--shadow-1);              /* subtle shadow on hover */
+}
+.card--hover .reveal { visibility: visible; }
+
+/* ---- pagination footer ---- */
+.pager {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 0 2px;
+}
+.pager__perpage {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 28px; padding: 0 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  border-radius: var(--r-row);
+  font-size: 12px; color: var(--text-muted);
+}
+.pager__spacer { flex: 1; }
+.pager__nav { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); }
+.pager__btn {
+  width: 26px; height: 26px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  border-radius: var(--r-row);
+  color: var(--text-muted);
+}
+.pager__page { color: var(--text); font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="browser">
+  <div class="browser__bar">
+    <div class="browser__dots">
+      <span class="browser__dot browser__dot--r"></span>
+      <span class="browser__dot browser__dot--y"></span>
+      <span class="browser__dot browser__dot--g"></span>
+    </div>
+    <div class="browser__url">
+      <span class="browser__lock">&#128274;</span>
+      <span>https://erpify.local/<b>backoffice/banks</b></span>
+    </div>
+  </div>
+
+  <div class="viewport">
+    <div class="page">
+
+      <!-- toolbar (same as table screen; view toggle on 'cards') -->
+      <div class="toolbar">
+        <div class="toolbar__titles">
+          <h1 class="toolbar__h1">Banks</h1>
+          <p class="toolbar__sub">Manage the banks available in the back office. &middot; Total: 1,204</p>
+        </div>
+        <div class="toolbar__actions">
+          <div class="seg" role="group" aria-label="View">
+            <button class="seg__btn" aria-pressed="false" aria-label="Table view">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            </button>
+            <button class="seg__btn seg__btn--active" aria-pressed="true" aria-label="Cards view">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            </button>
+          </div>
+          <button class="btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.5 10 19 14 21 14 12.5 22 3"/></svg>
+            Filters
+            <span class="btn__badge">1</span>
+          </button>
+          <button class="btn btn--primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New bank
+          </button>
+          <div class="density" role="group" aria-label="Density">
+            <button class="density__btn density__btn--active" aria-pressed="true">Compact</button>
+            <button class="density__btn" aria-pressed="false">Comfortable</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- cards grid -->
+      <div class="grid">
+
+        <!-- card 1: selected (ring + checkbox marked) -->
+        <div class="card card--selected" aria-selected="true">
+          <a class="card__overlay" href="#" aria-label="Open Banco Bilbao Vizcaya Argentaria, S.A."></a>
+          <div class="card__top">
+            <span class="card__check card__check--on" aria-label="Select"></span>
+            <span class="card__code">BBVA</span>
+            <span class="card__actions">
+              <button class="iconbtn reveal" aria-label="Copy ID"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+              <button class="iconbtn reveal" aria-label="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+              <button class="iconbtn" aria-label="More"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>
+            </span>
+          </div>
+          <h2 class="card__title">Banco Bilbao Vizcaya Argentaria, S.A.</h2>
+          <div class="card__status"><span class="badge"><span class="dot dot--success"></span>Active</span></div>
+          <div class="card__footer">Updated 3d ago</div>
+        </div>
+
+        <!-- card 2: hover (subtle shadow + actions visible) -->
+        <div class="card card--hover">
+          <a class="card__overlay" href="#" aria-label="Open Banco Santander, S.A."></a>
+          <div class="card__top">
+            <span class="card__check" aria-label="Select"></span>
+            <span class="card__code">SANT</span>
+            <span class="card__actions">
+              <button class="iconbtn reveal" aria-label="Copy ID"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+              <button class="iconbtn reveal" aria-label="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+              <button class="iconbtn" aria-label="More"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>
+            </span>
+          </div>
+          <h2 class="card__title">Banco Santander, S.A.</h2>
+          <div class="card__status"><span class="badge"><span class="dot dot--success"></span>Active</span></div>
+          <div class="card__footer">Updated 1d ago</div>
+        </div>
+
+        <!-- card 3: the 255-char stress case — clamp 2 lines + ellipsis -->
+        <div class="card">
+          <a class="card__overlay" href="#" aria-label="Open long-named bank"></a>
+          <div class="card__top">
+            <span class="card__check" aria-label="Select"></span>
+            <span class="card__code">BCCLEVSAU2026X</span>
+            <span class="card__actions">
+              <button class="iconbtn" aria-label="More"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>
+            </span>
+          </div>
+          <h2 class="card__title">Banco Cooperativo de Crédito para la Construcción, Obra Civil y Promoción Inmobiliaria del Levante y Sureste Peninsular, Sociedad Anónima Unipersonal — Departamento de Cuentas de Proyecto y Avales para Certificaciones de Obra Pública (Delegación de Valencia y Castellón)</h2>
+          <div class="card__status"><span class="badge"><span class="dot dot--brand"></span>New</span></div>
+          <div class="card__footer">Updated 2m ago</div>
+        </div>
+
+        <!-- card 4 -->
+        <div class="card">
+          <a class="card__overlay" href="#" aria-label="Open CaixaBank, S.A."></a>
+          <div class="card__top">
+            <span class="card__check" aria-label="Select"></span>
+            <span class="card__code">CAIXA</span>
+            <span class="card__actions">
+              <button class="iconbtn" aria-label="More"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>
+            </span>
+          </div>
+          <h2 class="card__title">CaixaBank, S.A.</h2>
+          <div class="card__status"><span class="badge"><span class="dot dot--success"></span>Active</span></div>
+          <div class="card__footer">Updated 5d ago</div>
+        </div>
+
+        <!-- card 5 -->
+        <div class="card">
+          <a class="card__overlay" href="#" aria-label="Open Banco Sabadell — Cuentas de Obra"></a>
+          <div class="card__top">
+            <span class="card__check" aria-label="Select"></span>
+            <span class="card__code">BSAB</span>
+            <span class="card__actions">
+              <button class="iconbtn" aria-label="More"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>
+            </span>
+          </div>
+          <h2 class="card__title">Banco Sabadell — Cuentas de Obra</h2>
+          <div class="card__status"><span class="badge"><span class="dot dot--success"></span>Active</span></div>
+          <div class="card__footer">Updated 2w ago</div>
+        </div>
+
+        <!-- card 6 -->
+        <div class="card">
+          <a class="card__overlay" href="#" aria-label="Open Kutxabank, S.A."></a>
+          <div class="card__top">
+            <span class="card__check" aria-label="Select"></span>
+            <span class="card__code">KUTXA</span>
+            <span class="card__actions">
+              <button class="iconbtn" aria-label="More"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>
+            </span>
+          </div>
+          <h2 class="card__title">Kutxabank, S.A.</h2>
+          <div class="card__status"><span class="badge"><span class="dot dot--brand"></span>New</span></div>
+          <div class="card__footer">Updated 7m ago</div>
+        </div>
+
+      </div>
+
+      <!-- pagination -->
+      <div class="pager">
+        <span class="pager__perpage">25 per page
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </span>
+        <span class="pager__spacer"></span>
+        <span class="pager__nav">
+          <span class="pager__btn" aria-label="Previous page"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></span>
+          <span>Page <span class="pager__page">1</span> of 49</span>
+          <span class="pager__btn" aria-label="Next page"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></span>
+        </span>
+      </div>
+
+    </div>
+  </div>
+</div>
+</body>
+</html>

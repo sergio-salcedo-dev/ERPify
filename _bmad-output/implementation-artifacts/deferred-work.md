@@ -2,6 +2,78 @@
 
 Collected during quick-dev. Not part of the current story's shippable scope.
 
+## Deferred from: spec errores de mutación persistentes — borrado (2026-06-04, segunda sesión UX)
+
+Split por presupuesto de spec (elección de Sergio: A+B juntos, C diferido). El spec en curso
+cubre el componente de error persistente + flujos de borrado single y masivo. Queda diferido:
+
+- **C) Formularios crear/editar (`BankForm`)**: los errores de guardado adoptan la superficie
+  persistente transversal (sobre el formulario) — dismiss ×, sustitución por reintento,
+  limpieza en éxito, copia (mensaje · type+status · correlation id · JSON íntegro), campos
+  según wire (`debug` env-aware). Hoy `BankForm` ya renderiza `ProblemDisplay` inline; el
+  delta es adoptar el componente/semántica persistente que A define (reutilizar su API, no
+  duplicar). Contrato: sección «Errores de mutación — superficie persistente» de
+  `_bmad-output/planning-artifacts/ux-designs/ux-ERPify-2026-06-03/EXPERIENCE.md`.
+
+## Deferred from: spec split de precondiciones de borrado (2026-06-04)
+
+El trabajo "confirm destructivo con precondición fallida" se partió por presupuesto de
+spec: **Spec A (API, `spec-api-bank-in-use-409.md`) va primero**; el objetivo PWA queda
+aquí para derivar su spec inmediatamente después. Decisiones ya clarificadas con Sergio
+(NO re-preguntar):
+
+> **⚠️ SUPERSEDIDO PARCIALMENTE (2026-06-04, sesión UX «errores de mutación persistentes», post-merge de PR #144).**
+> El contrato cambió: el patrón confirm-con-error-embebido queda REVOCADO. Antes de derivar
+> el spec PWA, leer la sección «Errores de mutación — superficie persistente» de
+> `_bmad-output/planning-artifacts/ux-designs/ux-ERPify-2026-06-03/EXPERIENCE.md` — la spine gana.
+> La frase de la PR #144 («Spec B se deriva de deferred-work.md … sin re-preguntas») es registro
+> histórico: ya no es cierta tal cual. Triage de las decisiones de abajo:
+>
+> - **SOBREVIVE:** recuperación tipada por `problem.type`; prohibido sintetizar problems
+>   client-side; type `bank-in-use` como contrato; pre-check masivo de existencia (fail-open
+>   si la sonda falla ≠ 404); rollback parcial que restaura fila **y selección**; detalle tras
+>   Refresh → `ViewStatus.NOT_FOUND` → EmptyState not-found; «deshabilitar/desmontar nunca
+>   deja el foco en `<body>`».
+> - **REVOCADO:** `ProblemDisplay`/problem verbatim **dentro del dialog**; «Delete deshabilitado
+>   + Refresh list» en el dialog; «el dialog permanece abierto» en masivo; foco al Delete
+>   rehabilitado del dialog; toast como única superficie del error en lista/tarjetas.
+> - **REUBICADO:** el error y la acción de recuperación viven en la superficie persistente
+>   contextual al origen (sobre tabla/grid; bajo H1 en detalle; sobre el form); el confirm se
+>   cierra solo al fallar y el foco va al error; el toast queda como señal transitoria
+>   complementaria. Ciclo de vida: dismiss explícito o sustitución por reintento; éxito limpia.
+>   Copia: mensaje, type+status, correlation id, JSON íntegro (campos según wire — `debug`
+>   env-aware).
+> - **Los tests/e2e descritos abajo deben re-derivarse** contra el contrato nuevo (p. ej.
+>   «single 404→Refresh→foco vecina» pasa a «404→error persistente→Refresh→foco según spine»).
+
+- **Recuperación tipada por `problem.type`** en el dialog de borrado (`DeleteBankButton`,
+  `BanksBulkBar`): `bank-not-found` → Delete deshabilitado + acción "Refresh list" (en
+  detalle: "Refresh"); `bank-in-use` (el type lo fija Spec A — contrato) → deshabilitado +
+  problem verbatim SIN Refresh (la recuperación vive fuera). Prohibido sintetizar problems
+  client-side.
+- **Single desde lista tras Refresh:** fila y dialog se desmontan juntos; foco a la fila
+  vecina (seam `pendingFocusIdRef` de page.tsx:185-217) + anuncio en live region. El
+  "dialog permanece abierto" del contrato lo realiza el caso masivo.
+- **Detalle tras Refresh:** `loadBank()` → `ViewStatus.NOT_FOUND` → EmptyState not-found
+  con "Back to banks" (ya existente, [id]/page.tsx:75-94).
+- **Masivo:** confirm pesimista con **pre-check de existencia** (sondas `FindBank`
+  allSettled por id seleccionado; error de sonda ≠ 404 → fail-open al intento); algún 404
+  → nada se borra, problem de la sonda embebido, disable + Refresh list; tras refresh:
+  selección recalculada (23→22), frase re-derivada, Delete rehabilitado **con foco**;
+  selección a 0 → bar+dialog desaparecen, foco al contenedor + anuncio.
+- **Rollback parcial post-intento:** rechazos 404 NO resucitan la fila (ya no existe);
+  el resto restaura fila **y selección** (flujo 2: "selección intacta para reintentar" —
+  hoy page.tsx:279 la vacía y no la repone) + toast RFC 9457.
+- **Focos:** deshabilitar nunca deja el foco en `<body>` — mover a la acción de
+  recuperación o al `ProblemDisplay` (`tabIndex={-1}`); refresh-ok → Delete; fallo
+  persiste → ProblemDisplay; cerrar → invocador (default Base UI).
+- **Tests:** ampliar `bankListDelete` / `banksBulkActions` / `bankDetailDelete` +
+  DeleteBankButton (mocks `_mocks.ts`, container con `FindBank`); e2e nuevo
+  `banks-delete-preconditions.spec.ts` (API mockeada): single 404→Refresh→foco vecina;
+  bulk 23→pre-check→Refresh→22→"22 banks deleted"; 409 sin Refresh.
+- Fuera de alcance entonces y ahora: UI de cuentas asociadas, Shift-range, `/`,
+  "List updated", peek.
+
 ## UX entity-list redesign — plan executed in a single PR (#137, 2026-06-04)
 
 Source contract: `_bmad-output/planning-artifacts/ux-designs/ux-ERPify-2026-06-03/`
@@ -237,3 +309,21 @@ Patch findings were applied live in the same change; one design-level item defer
   and `/status` surfaces were migrated to ERPify tokens (dark-aware by construction) and `ThemeToggle`
   mounted in the Navbar, so the marketing surface now follows the chosen theme instead of fighting it.
   (source: edge E9)
+
+## Deferred from: spec-api-domain-event-id-generation review (2026-06-04)
+
+Adversarial review (Blind Hunter / Edge Case Hunter / Acceptance Auditor) of
+`chore/api-domain-event-id-generation-vjpc`. Patch findings were applied live; the items below are deferred.
+
+- **No `UNIQUE(event_id)` on `domain_event` — double-append writes duplicate audit rows.** If the same
+  event object reaches `DoctrineDomainEventStore::append()` twice (sync persist + app-level bus retry),
+  two rows share one `event_id`, eroding its dedupe value. Pre-existing (caller-minted ids had the same
+  exposure); schema change was out of scope for the eventId refactor ("Never: no cambiar el esquema de
+  `domain_event`"). Scope: migration adding a unique index + idempotent upsert/ignore in `append()`.
+  Low-medium. (source: edge, spec-api-domain-event-id-generation)
+- **Two UUID-generation entry points with overlapping responsibility.** `Shared/Domain/Uuid/Uuid::generate()`
+  (domain events) and `Shared/Infrastructure/Uuid/SymfonyUuidGenerator::generate()` (entity PKs via
+  `BankCreator`, `DoctrineDomainEventStore` row ids, `MediaRegistrar`) now coexist doing the same v7 mint.
+  Entity-PK generation was explicitly out of scope. Scope: route PK minting through the domain `Uuid`
+  (or grow it into the planned UUID value-object base) and retire `SymfonyUuidGenerator` + its static
+  `UuidGenerator` port. Low. (source: blind, spec-api-domain-event-id-generation)
