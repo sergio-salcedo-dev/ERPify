@@ -114,6 +114,7 @@ describe("countPanelFilters", () => {
 
   it("treats whitespace-only values as inactive", () => {
     expect(countPanelFilters({ ...EMPTY_FILTER, shortName: "  " })).toBe(0);
+    expect(countPanelFilters({ ...EMPTY_FILTER, createdFrom: " " })).toBe(0);
   });
 });
 
