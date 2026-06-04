@@ -29,7 +29,7 @@ API-scoped guidance. Root [`../CLAUDE.md`](../CLAUDE.md) is authoritative for mo
 
 ## Layer rules (load-bearing)
 
-Dependencies point inward toward `Domain/`. **No** Symfony/Doctrine/HTTP/Messenger imports inside `Domain/` — put adapters in `Infrastructure/` and orchestration in `Application/`. Domain entities and value objects are pure PHP + interfaces. Documented exception: entities may carry passive metadata attributes (`#[ORM]`, `#[Assert]`, `#[Groups]`) — see [`../docs/rules/architecture.md`](../docs/rules/architecture.md).
+Dependencies point inward toward `Domain/`. **No** Symfony/Doctrine/HTTP/Messenger imports inside `Domain/` — put adapters in `Infrastructure/` and orchestration in `Application/`. Domain entities and value objects are pure PHP + interfaces. Documented exceptions: entities may carry passive metadata attributes (`#[ORM]`, `#[Assert]`, `#[Groups]`), and `Domain/` may import `symfony/uid` as a UUID value-object library (`Shared/Domain/Uuid/`) — see [`../docs/rules/architecture.md`](../docs/rules/architecture.md).
 
 -   `Domain/` — entities, value objects, domain events, repository **interfaces**, domain services.
 -   `Application/` — use cases / command + query handlers, DTOs, transaction boundaries. Orchestrates domain; consumes repository interfaces.
@@ -39,7 +39,7 @@ New bounded contexts/modules follow the same three-layer split. Cross-context ca
 
 ## Rules that bite
 
--   **Never** put Symfony services, HTTP concerns, or Messenger handlers inside `Domain/`. Entities are attribute-mapped in place (`#[ORM\…]`) under the passive-metadata exception in [`../docs/rules/architecture.md`](../docs/rules/architecture.md) — behavioral framework code stays out.
+-   **Never** put Symfony services, HTTP concerns, or Messenger handlers inside `Domain/`. Entities are attribute-mapped in place (`#[ORM\…]`) under the passive-metadata exception, and `symfony/uid` is permitted in `Domain/Uuid/` as a value-object library — both documented in [`../docs/rules/architecture.md`](../docs/rules/architecture.md). Behavioral framework code stays out.
 -   **Never** hand-edit a migration that has already been applied. Generate a new one with `make db.diff`.
 -   **Don't skip** `make php.quality` locally — CI runs it and the fixers (`cs-fixer`, `psalm.fix.*`) mutate files, so running them first keeps diffs clean.
 -   Add async jobs via Messenger buses; don't spawn processes or inline long work in request handlers. See [`docs/architecture-api.md`](../docs/architecture-api.md) for the audit table + domain-event flow.

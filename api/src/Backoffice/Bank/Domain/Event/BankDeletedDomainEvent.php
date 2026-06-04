@@ -12,12 +12,10 @@ final class BankDeletedDomainEvent extends DomainEvent
 {
     public function __construct(
         string $bankId,
-        string $eventId,
         ?DateTimeImmutable $occurredOn = null,
     ) {
         parent::__construct(
             $bankId,
-            $eventId,
             $occurredOn ?? self::now(),
         );
     }

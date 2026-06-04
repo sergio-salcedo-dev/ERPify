@@ -46,7 +46,6 @@ final readonly class BankCreator
 
         $bank = Bank::create(
             SymfonyUuidGenerator::generate(),
-            SymfonyUuidGenerator::generate(),
             $payload->name,
             $payload->shortName,
             $logo,

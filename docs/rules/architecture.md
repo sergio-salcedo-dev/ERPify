@@ -36,6 +36,14 @@ The prohibition stays absolute for **behavioral** framework code in `Domain/`: n
 no `EntityManagerInterface`, no `HttpException`, no Messenger envelopes, no service or HTTP calls.
 Example: `api/src/Backoffice/Bank/Domain/Entity/Bank.php`.
 
+#### Documented exception — symfony/uid value objects in Domain
+
+`Domain/` MAY import `symfony/uid` as an identity / value-object library. Rationale: it is a leaf
+component with no coupling to the framework runtime, and it is the best primitive for creating and
+validating UUIDs across versions (v4, v7). The prohibition stays absolute for **behavioral** framework
+code in `Domain/`: this exception covers only `symfony/uid`, not `Erpify\Shared\Infrastructure\…` or any
+other framework service. Example: `api/src/Shared/Domain/Uuid/Uuid.php`.
+
 ### Application Layer
 - Contains use cases and application services
 - Depends only on Domain layer

@@ -143,7 +143,7 @@ final class BankDeleterTest extends TestCase
 
     private function makeBank(): Bank
     {
-        $bank = Bank::create(self::BANK_ID, 'create-event-id', 'Acme Savings', 'ACME');
+        $bank = Bank::create(self::BANK_ID, 'Acme Savings', 'ACME');
         // Drain the creation event so only a deletion can surface on the bus.
         $bank->pullDomainEvents();
 
