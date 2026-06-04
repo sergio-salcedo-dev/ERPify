@@ -11,6 +11,7 @@ import { SortDirection } from "@/context/shared/domain/types/sorting";
 import {
   BANKS_SORTABLE_COLUMNS,
   countPanelFilters,
+  hasActiveFilter,
   hasActivePanelFilter,
   isDefaultSort,
   type BanksFilter,
@@ -161,7 +162,9 @@ export function BanksFilters({
   const activeCount = countPanelFilters(filter);
   const hasActive = activeCount > 0;
   const sortDrift = !isDefaultSort(sort);
-  const canReset = hasActive || sortDrift;
+  // Reset clears the toolbar name search too, so its visibility must track
+  // ALL filters — not just the panel-only count behind the badge.
+  const canReset = hasActiveFilter(filter) || sortDrift;
   const toggleLabel = hasActive ? `Filters, ${activeCount} active` : "Filters";
 
   const sortColumnValue = sort?.columnId ?? NONE_SORT_VALUE;

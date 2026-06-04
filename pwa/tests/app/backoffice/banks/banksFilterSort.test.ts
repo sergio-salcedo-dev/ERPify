@@ -7,6 +7,7 @@ import {
   applyFilters,
   applySort,
   countPanelFilters,
+  hasActiveFilter,
   hasActivePanelFilter,
   isDefaultSort,
   type BanksFilter,
@@ -122,6 +123,18 @@ describe("hasActivePanelFilter", () => {
   it("is false when only the toolbar search (name) is set", () => {
     expect(hasActivePanelFilter({ ...EMPTY_FILTER, name: "acme" })).toBe(false);
     expect(hasActivePanelFilter({ ...EMPTY_FILTER, createdFrom: "2026-01-01" })).toBe(true);
+  });
+});
+
+describe("hasActiveFilter", () => {
+  it("is true for the toolbar search (name) as well as panel fields", () => {
+    expect(hasActiveFilter(EMPTY_FILTER)).toBe(false);
+    expect(hasActiveFilter({ ...EMPTY_FILTER, name: "acme" })).toBe(true);
+    expect(hasActiveFilter({ ...EMPTY_FILTER, shortName: "ACM" })).toBe(true);
+  });
+
+  it("treats a whitespace-only name as inactive", () => {
+    expect(hasActiveFilter({ ...EMPTY_FILTER, name: "  " })).toBe(false);
   });
 });
 

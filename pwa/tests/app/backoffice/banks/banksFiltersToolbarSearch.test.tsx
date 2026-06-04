@@ -61,6 +61,11 @@ describe("BanksFilters — toolbar search", () => {
     expect(screen.getByTestId("banks-filters__count")).toHaveTextContent("1");
     expect(screen.getByTestId("banks-filters__panel")).toHaveAttribute("aria-hidden", "false");
   });
+
+  it("renders the Reset button when only the name search is active (Reset clears name too)", () => {
+    renderFilters({ filter: { ...EMPTY_FILTER, name: "acme" }, defaultOpen: true });
+    expect(screen.getByTestId("banks-filters__reset")).toBeInTheDocument();
+  });
 });
 
 describe("BanksFilters — '/' shortcut", () => {

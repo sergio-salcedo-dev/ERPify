@@ -58,6 +58,17 @@ export function hasActivePanelFilter(filter: BanksFilter): boolean {
   return countPanelFilters(filter) > 0;
 }
 
+/**
+ * True when ANY filter is populated — the toolbar name search included.
+ * Drives the Reset button: Reset clears `name` too (state is shared, only
+ * its placement moved to the toolbar), so it must be reachable when the
+ * search is the only active filter. The badge keeps using the panel-only
+ * count above.
+ */
+export function hasActiveFilter(filter: BanksFilter): boolean {
+  return Boolean(filter.name.trim()) || hasActivePanelFilter(filter);
+}
+
 function containsCi(haystack: string, needle: string): boolean {
   if (!needle) return true;
   return haystack.toLowerCase().includes(needle.toLowerCase());
