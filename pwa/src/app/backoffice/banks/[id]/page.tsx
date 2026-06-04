@@ -1,21 +1,24 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ChevronLeft, Clock, Pencil, RefreshCw } from "lucide-react";
 import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
 import { FindBank } from "@/context/backoffice/bank/application/FindBank";
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
+import { BankProblemType } from "@/context/backoffice/bank/domain/BankProblemType";
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import {
   CopyButton,
   CorrelationIdChip,
   EmptyState,
+  MutationError,
   ProblemDisplay,
   StatusBadge,
 } from "@/components/erpify";
+import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 import { isUuid, uuidV7 } from "@/lib/uuidV7";
@@ -31,6 +34,9 @@ import { bankTopics, useBankRealtime } from "@/context/backoffice/bank/infrastru
 
 type State = ViewStatus;
 
+/** Single source — the stale-delete Refresh focuses this CTA once the not-found state lands. */
+const BACK_TO_LIST_TESTID = "banks-detail__back-to-list";
+
 function genericProblem(detail: string): ProblemDetails {
   return {
     type: "about:blank",
@@ -42,6 +48,13 @@ function genericProblem(detail: string): ProblemDetails {
   };
 }
 
+// Validate the route id as a UUID before it flows into the Mercure topic IRI
+// (defense in depth): a malformed id never opens a junk subscription, and the
+// detail fetch already rejects it with a 400/404.
+function detailTopics(id: string): string[] {
+  return id && isUuid(id) ? [bankTopics.detail(id)] : [];
+}
+
 export default function BankDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -49,6 +62,14 @@ export default function BankDetailPage() {
   const [state, setState] = useState<State>(ViewStatus.LOADING);
   const [bank, setBank] = useState<Bank | null>(null);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
+  // Persistent error of the delete mutation (the dialog closes itself on
+  // failure; the problem lands here, under the H1).
+  const [deleteProblem, setDeleteProblem] = useState<ProblemDetails | null>(null);
+  // Armed by the error surface's Refresh: once the re-fetch settles, focus
+  // the not-found CTA (the expected landing) or fall back to the page
+  // container — dismissing the surface must never strand focus on <body>.
+  const containerRef = useRef<HTMLDivElement>(null);
+  const pendingRefreshFocusRef = useRef(false);
   // Set once a delete succeeds: suppress the detail UI (so the now-deleted id
   // never refetches into a "Bank not found" flash) while we redirect cleanly
   // to the list, where the success toast lands.
@@ -61,10 +82,12 @@ export default function BankDetailPage() {
     setState(ViewStatus.LOADING);
     setBank(null);
     setProblem(null);
+    setDeleteProblem(null);
   }
 
   function handleDeleted(): void {
     setRedirecting(true);
+    setDeleteProblem(null);
     toastNotifier.success("Bank deleted", bank ? { description: bank.name } : undefined);
     router.push(bankRoutes.list);
   }
@@ -100,10 +123,7 @@ export default function BankDetailPage() {
   // Real-time sync from OTHER clients (Mercure): reflect remote edits live, and
   // on a remote delete fall through to the same redirect-to-list flow as a local
   // delete so the now-gone id never refetches into a "not found" flash.
-  // Validate the route id as a UUID before it flows into the Mercure topic IRI
-  // (defense in depth): a malformed id never opens a junk subscription, and the
-  // detail fetch below already rejects it with a 400/404.
-  useBankRealtime(id && isUuid(id) ? [bankTopics.detail(id)] : [], {
+  useBankRealtime(detailTopics(id), {
     onUpdated: (incoming) => {
       if (incoming.id === id) {
         setBank(incoming);
@@ -123,6 +143,15 @@ export default function BankDetailPage() {
   });
 
   useEffect(() => {
+    if (!pendingRefreshFocusRef.current || state === ViewStatus.LOADING) return;
+    pendingRefreshFocusRef.current = false;
+    const backToList = globalThis.document.querySelector<HTMLElement>(
+      `[data-testid="${BACK_TO_LIST_TESTID}"]`,
+    );
+    (backToList ?? containerRef.current)?.focus();
+  }, [state, bank]);
+
+  useEffect(() => {
     // loadBank only setState()s after an `await` (or not at all on the guard
     // path), so it cannot cascade renders synchronously — the rule can't see
     // through the stable useCallback boundary. Mirrors the list page's loadBanks.
@@ -138,7 +167,9 @@ export default function BankDetailPage() {
 
   return (
     <div
-      className="banks-detail mx-auto w-full max-w-screen-2xl space-y-4 sm:space-y-6 2xl:max-w-[120rem]"
+      ref={containerRef}
+      tabIndex={-1}
+      className="banks-detail mx-auto w-full max-w-screen-2xl space-y-4 outline-none sm:space-y-6 2xl:max-w-[120rem]"
       data-testid="banks-detail"
       data-state={state}
     >
@@ -178,7 +209,7 @@ export default function BankDetailPage() {
                 <Link
                   href={bankRoutes.list}
                   className={cn(buttonVariants())}
-                  data-testid="banks-detail__back-to-list"
+                  data-testid={BACK_TO_LIST_TESTID}
                 >
                   Back to banks
                 </Link>
@@ -241,9 +272,29 @@ export default function BankDetailPage() {
                 <Pencil className="size-3.5" aria-hidden="true" />
                 Edit
               </Link>
-              <DeleteBankButton id={bank.id} name={bank.name} onDeleted={handleDeleted} />
+              <DeleteBankButton
+                id={bank.id}
+                name={bank.name}
+                onDeleted={handleDeleted}
+                onError={setDeleteProblem}
+              />
             </div>
           </header>
+
+          {deleteProblem ? (
+            <DeleteErrorPanel
+              problem={deleteProblem}
+              onDismiss={() => setDeleteProblem(null)}
+              onRefresh={() => {
+                // A stale 404 heals by re-fetching: the load lands on the
+                // not-found empty state with "Back to banks".
+                setDeleteProblem(null);
+                pendingRefreshFocusRef.current = true;
+                // Fire-and-forget: loadBank handles its own errors.
+                loadBank();
+              }}
+            />
+          ) : null}
 
           <dl
             className="banks-detail__meta border-border bg-card grid grid-cols-1 gap-4 rounded-lg border p-4 sm:grid-cols-2"
@@ -297,6 +348,39 @@ export default function BankDetailPage() {
         </>
       ) : null}
     </div>
+  );
+}
+
+function DeleteErrorPanel({
+  problem,
+  onDismiss,
+  onRefresh,
+}: Readonly<{
+  problem: ProblemDetails;
+  onDismiss: () => void;
+  onRefresh: () => void;
+}>) {
+  return (
+    <MutationError
+      problem={problem}
+      onDismiss={onDismiss}
+      action={
+        problem.type === BankProblemType.NOT_FOUND ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onRefresh}
+            aria-label="Refresh"
+            title="Refresh this bank"
+            data-testid="banks-detail__delete-error-refresh"
+          >
+            Refresh
+          </Button>
+        ) : undefined
+      }
+      testId="banks-detail__delete-error"
+    />
   );
 }
 

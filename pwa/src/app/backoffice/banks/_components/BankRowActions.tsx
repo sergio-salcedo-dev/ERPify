@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { safeHref } from "@/lib/safeHref";
+import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { bankRoutes } from "../_lib/bankRoutes";
 import { DeleteBankButton } from "./DeleteBankButton";
 
@@ -41,6 +42,8 @@ interface BankRowActionsProps {
   /** Hover/focus reveal scope for Copy/Edit; `⋯` is always visible. */
   reveal?: BankRowActionsReveal;
   onBankDeleted?: (id: string) => void;
+  /** Failed delete → the page anchors the problem in its persistent error surface. */
+  onBankDeleteFailed: (id: string, problem: ProblemDetails) => void;
   className?: string;
 }
 
@@ -58,6 +61,7 @@ export function BankRowActions({
   surface,
   reveal = "none",
   onBankDeleted,
+  onBankDeleteFailed,
   className,
 }: Readonly<BankRowActionsProps>) {
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -117,6 +121,7 @@ export function BankRowActions({
         id={id}
         name={name}
         onDeleted={onBankDeleted}
+        onError={(problem) => onBankDeleteFailed(id, problem)}
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
       />

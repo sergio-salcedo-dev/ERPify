@@ -10,14 +10,18 @@ const ID = "11111111-1111-4111-8111-111111111111";
 
 describe("BankRowActions", () => {
   it("renders copy and edit as direct controls plus an overflow trigger", () => {
-    render(<BankRowActions id={ID} name="Acme Savings" surface="table" />);
+    render(
+      <BankRowActions id={ID} name="Acme Savings" surface="table" onBankDeleteFailed={vi.fn()} />,
+    );
     expect(screen.getByTestId(`banks-table__copy-${ID}`)).toBeInTheDocument();
     expect(screen.getByTestId(`banks-table__edit-${ID}`)).toBeInTheDocument();
     expect(screen.getByTestId(`banks-table__actions-${ID}`)).toBeInTheDocument();
   });
 
   it("points Edit at the bank edit route", () => {
-    render(<BankRowActions id={ID} name="Acme Savings" surface="cards" />);
+    render(
+      <BankRowActions id={ID} name="Acme Savings" surface="cards" onBankDeleteFailed={vi.fn()} />,
+    );
     expect(screen.getByTestId(`banks-cards__edit-${ID}`)).toHaveAttribute(
       "href",
       `/backoffice/banks/${ID}/edit`,
@@ -25,7 +29,9 @@ describe("BankRowActions", () => {
   });
 
   it("keeps Delete behind the overflow menu until it is opened", async () => {
-    render(<BankRowActions id={ID} name="Acme Savings" surface="cards" />);
+    render(
+      <BankRowActions id={ID} name="Acme Savings" surface="cards" onBankDeleteFailed={vi.fn()} />,
+    );
     expect(screen.queryByTestId(`banks-cards__delete-${ID}`)).toBeNull();
 
     fireEvent.click(screen.getByTestId(`banks-cards__actions-${ID}`));
@@ -34,7 +40,9 @@ describe("BankRowActions", () => {
   });
 
   it("opens the confirmation dialog from the Delete menu item", async () => {
-    render(<BankRowActions id={ID} name="Acme Savings" surface="cards" />);
+    render(
+      <BankRowActions id={ID} name="Acme Savings" surface="cards" onBankDeleteFailed={vi.fn()} />,
+    );
 
     fireEvent.click(screen.getByTestId(`banks-cards__actions-${ID}`));
     fireEvent.click(await screen.findByTestId(`banks-cards__delete-${ID}`));

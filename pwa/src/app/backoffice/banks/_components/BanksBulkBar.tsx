@@ -25,6 +25,9 @@ interface BanksBulkBarProps {
 /** How many selected names the confirm dialog spells out before "+N more". */
 const CONFIRM_NAMES_SHOWN = 3;
 
+/** Single source for the Delete trigger's testid — the page focuses it after a bulk-error refresh. */
+export const BULK_DELETE_TESTID = "banks-list__bulk-delete";
+
 /**
  * Floating selection bar pinned to the bottom of the content column while
  * banks are selected; it settles after the pagination row at scroll end, so
@@ -84,7 +87,7 @@ export function BanksBulkBar({
                 data-icon="inline-start"
                 aria-label={`Delete ${count} ${noun}`}
                 title={`Delete ${count} ${noun}`}
-                data-testid="banks-list__bulk-delete"
+                data-testid={BULK_DELETE_TESTID}
               >
                 <Trash2 className="size-3.5" aria-hidden="true" />
                 Delete

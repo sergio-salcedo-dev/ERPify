@@ -25,13 +25,13 @@ const OLD = Bank.fromPrimitives({
 
 describe("BanksTable — identity cell", () => {
   it("shows a New badge for a recently created bank and not for an old one", () => {
-    render(<BanksTable banks={[RECENT, OLD]} />);
+    render(<BanksTable onBankDeleteFailed={() => {}} banks={[RECENT, OLD]} />);
     expect(screen.getByTestId(`banks-table__new-${RECENT.id}`)).toHaveTextContent("New");
     expect(screen.queryByTestId(`banks-table__new-${OLD.id}`)).toBeNull();
   });
 
   it("renders the created cell as relative text with the absolute value in the title", () => {
-    render(<BanksTable banks={[OLD]} />);
+    render(<BanksTable onBankDeleteFailed={() => {}} banks={[OLD]} />);
     const cell = screen.getByTestId(`banks-table__created-${OLD.id}`);
     expect(cell.textContent).toMatch(/ago$/);
     // Absolute dd/mm/yyyy value lives in the tooltip.
