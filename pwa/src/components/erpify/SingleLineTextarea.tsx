@@ -8,8 +8,10 @@ interface SingleLineTextareaProps extends Omit<React.ComponentProps<"textarea">,
   ref?: Ref<HTMLTextAreaElement>;
 }
 
+// Collapses each whitespace run containing a newline to a single space. The
+// single-quantifier match keeps the regex linear — no backtracking ambiguity.
 function collapseNewlines(value: string): string {
-  return value.replace(/\s*\n+\s*/g, " ");
+  return value.replace(/\s+/g, (run) => (run.includes("\n") ? " " : run));
 }
 
 /**
