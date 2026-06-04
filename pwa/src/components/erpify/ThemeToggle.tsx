@@ -82,8 +82,8 @@ export function ThemeToggle({ testId, className }: Readonly<ThemeToggleProps>) {
       aria-label={label}
       title={label}
       data-testid={testId}
-      // Dispatch-time read: rapid or pre-hydration clicks advance from the real
-      // active theme, and an unknown stored value recovers to a valid one.
+      // Updater form: next-themes hands the updater the theme active at
+      // dispatch, so an unknown stored value recovers to a valid one on click.
       onClick={() => setTheme((active) => NEXT_THEME[isTheme(active) ? active : Theme.SYSTEM])}
       className={cn("theme-toggle", className)}
     >
