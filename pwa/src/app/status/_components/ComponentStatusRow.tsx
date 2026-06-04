@@ -9,26 +9,26 @@ interface ComponentStatusRowProps {
 }
 
 const DOT_CLASSNAME: Record<SystemStatus, string> = {
-  [SystemStatus.CHECKING]: "bg-slate-400",
-  [SystemStatus.OPERATIONAL]: "bg-emerald-500",
-  [SystemStatus.DEGRADED]: "bg-amber-500",
-  [SystemStatus.DISRUPTED]: "bg-rose-500",
+  [SystemStatus.CHECKING]: "bg-muted-foreground",
+  [SystemStatus.OPERATIONAL]: "bg-success",
+  [SystemStatus.DEGRADED]: "bg-warning",
+  [SystemStatus.DISRUPTED]: "bg-destructive",
 };
 
 const LABEL_CLASSNAME: Record<SystemStatus, string> = {
-  [SystemStatus.CHECKING]: "text-slate-500",
-  [SystemStatus.OPERATIONAL]: "text-emerald-700",
-  [SystemStatus.DEGRADED]: "text-amber-700",
-  [SystemStatus.DISRUPTED]: "text-rose-700",
+  [SystemStatus.CHECKING]: "text-muted-foreground",
+  [SystemStatus.OPERATIONAL]: "text-success",
+  [SystemStatus.DEGRADED]: "text-warning",
+  [SystemStatus.DISRUPTED]: "text-danger-strong",
 };
 
 export const ComponentStatusRow: React.FC<ComponentStatusRowProps> = ({ name, status, testId }) => {
   return (
     <div
       data-testid={testId}
-      className="component-status-row flex items-center justify-between border-b border-slate-100 py-4 last:border-b-0"
+      className="component-status-row flex items-center justify-between border-b border-border py-4 last:border-b-0"
     >
-      <span className="component-status-row__name font-medium text-slate-700">{name}</span>
+      <span className="component-status-row__name font-medium text-foreground">{name}</span>
       <span
         className={cn(
           "component-status-row__status flex items-center gap-2 text-sm font-medium",

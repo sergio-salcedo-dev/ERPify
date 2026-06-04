@@ -4,6 +4,8 @@ import "./globals.css";
 import { Geist, Geist_Mono } from "next/font/google";
 import { fetchFrankenPhpHotReloadSubscribeUrl } from "@/lib/frankenphp-hot-reload";
 import { cn } from "@/lib/utils";
+import { ThemeProvider } from "@/lib/ThemeProvider";
+import { Theme, THEME_STORAGE_KEY } from "@/context/shared/domain/types/theme";
 import { SonnerToaster } from "@/context/shared/infrastructure/Notification/Toast/SonnerToaster";
 import Script from "next/script";
 
@@ -31,7 +33,11 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const frankenHotReloadUrl = await fetchFrankenPhpHotReloadSubscribeUrl();
 
   return (
-    <html lang="en" className={cn("font-sans", geistSans.variable, geistMono.variable)}>
+    <html
+      lang="en"
+      className={cn("font-sans", geistSans.variable, geistMono.variable)}
+      suppressHydrationWarning
+    >
       <head>
         {frankenHotReloadUrl ? (
           <>
@@ -46,8 +52,16 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         ) : null}
       </head>
       <body suppressHydrationWarning>
-        {children}
-        <SonnerToaster />
+        <ThemeProvider
+          attribute="class"
+          defaultTheme={Theme.SYSTEM}
+          enableSystem
+          storageKey={THEME_STORAGE_KEY}
+          disableTransitionOnChange
+        >
+          {children}
+          <SonnerToaster />
+        </ThemeProvider>
       </body>
     </html>
   );

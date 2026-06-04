@@ -28,6 +28,12 @@ function makeResponse(
   });
 }
 
+function urlOf(input: RequestInfo | URL): string {
+  if (typeof input === "string") return input;
+  if (input instanceof URL) return input.toString();
+  return input.url;
+}
+
 describe("FetchHttpClient", () => {
   let fetchSpy: MockInstance;
 
@@ -129,5 +135,39 @@ describe("FetchHttpClient", () => {
       expect(httpError.problem["correlation-id"]).toBe(STUB_UUID);
       expect(httpError.problem.status).toBe(HttpStatus.BAD_GATEWAY);
     }
+  });
+
+  describe("browser base URL (same-origin by default)", () => {
+    const ORIGINAL_API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+    afterEach(() => {
+      if (ORIGINAL_API_BASE === undefined) {
+        delete process.env.NEXT_PUBLIC_API_BASE_URL;
+      } else {
+        process.env.NEXT_PUBLIC_API_BASE_URL = ORIGINAL_API_BASE;
+      }
+    });
+
+    it("issues a relative request when NEXT_PUBLIC_API_BASE_URL is unset", async () => {
+      delete process.env.NEXT_PUBLIC_API_BASE_URL;
+      fetchSpy.mockResolvedValueOnce(makeResponse(HttpStatus.OK, { data: [] }));
+
+      const client = new FetchHttpClient();
+      await client.get("/api/v1/backoffice/banks");
+
+      const [input] = fetchSpy.mock.calls[0] as [RequestInfo | URL];
+      expect(urlOf(input)).toBe("/api/v1/backoffice/banks");
+    });
+
+    it("uses the absolute base when NEXT_PUBLIC_API_BASE_URL is set", async () => {
+      process.env.NEXT_PUBLIC_API_BASE_URL = "https://api.example.com";
+      fetchSpy.mockResolvedValueOnce(makeResponse(HttpStatus.OK, { data: [] }));
+
+      const client = new FetchHttpClient();
+      await client.get("/api/v1/backoffice/banks");
+
+      const [input] = fetchSpy.mock.calls[0] as [RequestInfo | URL];
+      expect(urlOf(input)).toBe("https://api.example.com/api/v1/backoffice/banks");
+    });
   });
 });

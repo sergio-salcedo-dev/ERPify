@@ -1,7 +1,7 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Menu, X, Wrench } from "lucide-react";
 import Link from "next/link";
-import { Logo } from "@/components/erpify";
+import { Logo, ThemeToggle } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
 import { Routes } from "@/context/shared/domain/types/routes";
@@ -10,12 +10,12 @@ interface NavbarProps {
   goToBackoffice: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ goToBackoffice }) => {
+export function Navbar({ goToBackoffice }: Readonly<NavbarProps>) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const showDevTools = isDevToolsAvailable();
 
   return (
-    <nav className="navbar bg-white border-b border-slate-200 sticky top-0 z-50">
+    <nav className="navbar bg-card border-b border-border sticky top-0 z-50">
       <div className="navbar__container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="navbar__inner flex justify-between h-16 items-center">
           <Logo
@@ -31,7 +31,7 @@ export const Navbar: React.FC<NavbarProps> = ({ goToBackoffice }) => {
           <div className="navbar__menu hidden md:flex items-center space-x-8">
             <Link
               href={Routes.STATUS}
-              className="navbar__link text-slate-600 hover:text-blue-600 font-medium transition-colors"
+              className="navbar__link text-muted-foreground hover:text-primary font-medium transition-colors"
               data-testid="navbar__link-status"
             >
               Status
@@ -40,7 +40,7 @@ export const Navbar: React.FC<NavbarProps> = ({ goToBackoffice }) => {
             {showDevTools ? (
               <Link
                 href={Routes.DEV_TOOLS}
-                className="navbar__link navbar__link--dev-tools text-amber-700 hover:text-amber-900 font-medium transition-colors inline-flex items-center gap-1.5"
+                className="navbar__link navbar__link--dev-tools text-warning hover:text-warning/80 font-medium transition-colors inline-flex items-center gap-1.5"
                 title="Internal QA / engineering tools (dev/test only)"
                 data-testid="navbar__dev-tools-link"
               >
@@ -48,6 +48,8 @@ export const Navbar: React.FC<NavbarProps> = ({ goToBackoffice }) => {
                 Dev Tools
               </Link>
             ) : null}
+
+            <ThemeToggle testId="navbar__theme" className="navbar__theme" />
 
             <Button
               onClick={goToBackoffice}
@@ -60,10 +62,11 @@ export const Navbar: React.FC<NavbarProps> = ({ goToBackoffice }) => {
           </div>
 
           {/* Mobile Menu Button */}
-          <div className="navbar__mobile-toggle md:hidden">
+          <div className="navbar__mobile-toggle md:hidden flex items-center gap-1">
+            <ThemeToggle testId="navbar__theme--mobile" className="navbar__theme--mobile" />
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="p-2 text-slate-600"
+              className="p-2 text-muted-foreground"
               aria-label={isMenuOpen ? "Close navigation menu" : "Open navigation menu"}
               data-testid="navbar__mobile-menu-toggle"
             >
@@ -75,10 +78,10 @@ export const Navbar: React.FC<NavbarProps> = ({ goToBackoffice }) => {
 
       {/* Mobile Menu */}
       {isMenuOpen && (
-        <div className="navbar__mobile-menu md:hidden bg-white border-b border-slate-200 px-4 pt-2 pb-6 space-y-4 animate-in fade-in-0 slide-in-from-top-2 duration-200">
+        <div className="navbar__mobile-menu md:hidden bg-card border-b border-border px-4 pt-2 pb-6 space-y-4 animate-in fade-in-0 slide-in-from-top-2 duration-200">
           <Link
             href={Routes.STATUS}
-            className="navbar__link block text-slate-600 font-medium"
+            className="navbar__link block text-muted-foreground font-medium"
             data-testid="navbar__link-status--mobile"
           >
             Status
@@ -86,7 +89,7 @@ export const Navbar: React.FC<NavbarProps> = ({ goToBackoffice }) => {
           {showDevTools ? (
             <Link
               href={Routes.DEV_TOOLS}
-              className="navbar__link navbar__link--dev-tools text-amber-700 hover:text-amber-900 font-medium inline-flex items-center gap-1.5"
+              className="navbar__link navbar__link--dev-tools text-warning hover:text-warning/80 font-medium inline-flex items-center gap-1.5"
               title="Internal QA / engineering tools (dev/test only)"
               data-testid="navbar__mobile-dev-tools-link"
             >
@@ -106,4 +109,4 @@ export const Navbar: React.FC<NavbarProps> = ({ goToBackoffice }) => {
       )}
     </nav>
   );
-};
+}

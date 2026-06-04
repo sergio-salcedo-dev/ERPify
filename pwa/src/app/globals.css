@@ -53,6 +53,7 @@
   --color-success-strong: var(--erpify-success-strong);
   --color-warning: var(--erpify-warning);
   --color-danger: var(--erpify-danger);
+  --color-danger-strong: var(--erpify-danger-strong);
 
   --color-overlay: var(--erpify-overlay);
 
@@ -126,6 +127,8 @@
  * Light mode — canonical
  * ============================================================ */
 :root {
+  color-scheme: light;
+
   /* Surface ramp */
   --erpify-bg: #f7f8f8;
   --erpify-bg-muted: #f3f4f5;
@@ -158,6 +161,10 @@
   --erpify-success-strong: #27a644;
   --erpify-warning: #d97706;
   --erpify-danger: #dc2626;
+  /* Text-grade danger: same hue as --erpify-danger in light (AA on light
+   * surfaces already); diverges in dark, where one value cannot serve both
+   * "AA text on surfaces" and "AA surface under white text". */
+  --erpify-danger-strong: #dc2626;
 
   /* Overlay */
   --erpify-overlay: rgba(8, 9, 10, 0.45);
@@ -214,27 +221,31 @@
 }
 
 /* ============================================================
- * Dark mode — Linear-similar
+ * Dark mode — elevated SaaS grey band (GitHub dark-dimmed / Stripe)
  * ============================================================ */
 .dark {
-  /* Surface ramp — Linear hex values */
-  --erpify-bg: #08090a; /* Marketing Black */
-  --erpify-bg-muted: #0f1011; /* Panel Dark */
-  --erpify-bg-subtle: #191a1b; /* Level 3 Surface */
-  --erpify-bg-elevated: #28282c; /* Secondary Surface */
+  color-scheme: dark;
 
-  /* Text ramp */
-  --erpify-text: #f7f8f8;
-  --erpify-text-muted: #d0d6e0;
-  --erpify-text-subtle: #8a8f98;
-  --erpify-text-faint: #62666d;
+  /* Surface ramp — comfortable SaaS band #16–#2b (benchmark GitHub
+   * dark-dimmed #22272e + Stripe #14171d). The v1 near-black #08090a was
+   * Linear's MARKETING black, not its app surface — too harsh as a canvas. */
+  --erpify-bg: #16181d; /* Canvas */
+  --erpify-bg-muted: #1c1f25; /* Panel */
+  --erpify-bg-subtle: #22262e; /* Level 3 surface */
+  --erpify-bg-elevated: #2b303a; /* Elevated / card surface */
+
+  /* Text ramp — AA (≥4.5:1) for primary + secondary across the ramp */
+  --erpify-text: #edeef0;
+  --erpify-text-muted: #b4bac4;
+  --erpify-text-subtle: #8b919e;
+  --erpify-text-faint: #646b78;
   --erpify-text-on-accent: #ffffff;
 
-  /* Borders — semi-transparent white per Linear treatment */
+  /* Borders — semi-transparent white, bumped to read against lighter surfaces */
   --erpify-border-subtle: rgba(255, 255, 255, 0.05);
-  --erpify-border: rgba(255, 255, 255, 0.08);
-  --erpify-border-strong: #23252a;
-  --erpify-line-tint: #141516;
+  --erpify-border: rgba(255, 255, 255, 0.09);
+  --erpify-border-strong: rgba(255, 255, 255, 0.15);
+  --erpify-line-tint: #191c22; /* sits between bg and bg-muted */
 
   /* Brand / accent — same as light, with hover/active inverted for dark */
   --erpify-brand: #5e6ad2;
@@ -249,6 +260,9 @@
   --erpify-success-strong: #27a644;
   --erpify-warning: #f59e0b;
   --erpify-danger: #e5484d;
+  /* Readable danger text on every dark surface (≥4.6:1 on bg-elevated);
+   * --erpify-danger stays the fill/graphic shade (white-text buttons). */
+  --erpify-danger-strong: #f87171;
 
   /* Overlay */
   --erpify-overlay: rgba(0, 0, 0, 0.85);

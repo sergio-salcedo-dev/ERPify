@@ -18,7 +18,15 @@ function trimBase(url: string): string {
 
 function browserApiBase(): string {
   const v = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
-  return trimBase(v || "https://localhost");
+  // why: same-origin by default. A hardcoded https://localhost broke any
+  // deployment on a non-default port (e.g. worktree stacks on :8443) because
+  // the CSP connect-src only allows 'self' — the cross-origin fetch was
+  // blocked and banks/health never loaded. A relative base ("") is correct by
+  // construction same-origin (FrankenPHP serves /api on the same origin), and
+  // mirrors what BrowserMercureSubscriber / frankenphp-hot-reload already do.
+  // NEXT_PUBLIC_API_BASE_URL remains the explicit cross-origin override (the
+  // CSP already emits that origin in connect-src when the var is set).
+  return trimBase(v || "");
 }
 
 function serverApiBase(): string {
@@ -26,7 +34,11 @@ function serverApiBase(): string {
   if (internal) {
     return trimBase(internal);
   }
-  return browserApiBase();
+  const browser = browserApiBase();
+  // The server path cannot issue a relative request — there is no document
+  // origin during SSR / route handlers. Keep an absolute fallback when neither
+  // SYMFONY_INTERNAL_URL nor the public override is set.
+  return browser || "https://localhost";
 }
 
 @injectable()
