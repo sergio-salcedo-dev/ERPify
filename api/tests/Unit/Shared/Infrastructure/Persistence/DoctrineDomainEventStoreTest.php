@@ -36,7 +36,8 @@ final class DoctrineDomainEventStoreTest extends TestCase
 
         $store = new DoctrineDomainEventStore($repository, $this->noopValidator());
 
-        $store->append($this->domainEvent('aggregate-id', 'event-id'));
+        $event = $this->domainEvent('aggregate-id');
+        $store->append($event);
 
         $this->assertInstanceOf(StoredDomainEvent::class, $captured);
 
@@ -46,7 +47,10 @@ final class DoctrineDomainEventStoreTest extends TestCase
         $this->assertInstanceOf(UuidV7::class, Uuid::fromString($id));
 
         $this->assertSame('aggregate-id', $captured->aggregateId());
-        $this->assertSame('event-id', $captured->eventId());
+
+        // The persisted event_id is the id the event minted in its constructor, carried through unchanged.
+        $this->assertSame($event->eventId(), $captured->eventId());
+        $this->assertInstanceOf(UuidV7::class, Uuid::fromString($captured->eventId()));
         $this->assertSame('test.event.occurred', $captured->name());
     }
 
@@ -58,9 +62,9 @@ final class DoctrineDomainEventStoreTest extends TestCase
         return new Validator($inner);
     }
 
-    private function domainEvent(string $aggregateId, string $eventId): DomainEvent
+    private function domainEvent(string $aggregateId): DomainEvent
     {
-        return new class ($aggregateId, $eventId, new DateTimeImmutable()) extends DomainEvent {
+        return new class ($aggregateId, new DateTimeImmutable()) extends DomainEvent {
             #[Override]
             public static function eventName(): string
             {

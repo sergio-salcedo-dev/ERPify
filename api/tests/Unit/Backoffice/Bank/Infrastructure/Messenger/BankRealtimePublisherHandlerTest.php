@@ -40,7 +40,6 @@ final class BankRealtimePublisherHandlerTest extends TestCase
         // leaves the handler — only the five public bank fields ship.
         $this->handler()->onBankCreated(new BankCreatedDomainEvent(
             self::BANK_ID,
-            'event-id',
             'Acme Savings',
             'ACME',
             self::CREATED_AT,
@@ -70,7 +69,6 @@ final class BankRealtimePublisherHandlerTest extends TestCase
     {
         $this->handler()->onBankUpdated(new BankUpdatedDomainEvent(
             self::BANK_ID,
-            'event-id',
             'Acme Renamed',
             'ACME',
             self::CREATED_AT,
@@ -101,7 +99,7 @@ final class BankRealtimePublisherHandlerTest extends TestCase
 
     public function testPublishesDeletedWithIdOnlyToCollectionAndPerBankTopics(): void
     {
-        $this->handler()->onBankDeleted(new BankDeletedDomainEvent(self::BANK_ID, 'event-id'));
+        $this->handler()->onBankDeleted(new BankDeletedDomainEvent(self::BANK_ID));
 
         $update = $this->capturedUpdate();
         $this->assertSame(
@@ -136,7 +134,6 @@ final class BankRealtimePublisherHandlerTest extends TestCase
         $handler = new BankRealtimePublisherHandler($hub);
         $event = new BankUpdatedDomainEvent(
             self::BANK_ID,
-            'event-id',
             'Acme Savings',
             'ACME',
             self::CREATED_AT,

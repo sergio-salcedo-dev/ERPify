@@ -39,18 +39,22 @@ final class BankCreateEventIdMatchesPersistedPkTest extends KernelTestCase
 
         try {
             $id = SymfonyUuidGenerator::generate();
-            $createEventId = SymfonyUuidGenerator::generate();
 
             // Suffix name/short-name with the id so the row is unique regardless of any seeded fixtures.
             $suffix = \strtoupper(\substr(\str_replace('-', '', $id), 0, 8));
 
-            $bank = Bank::create($id, $createEventId, 'Round Trip Savings ' . $suffix, 'RTS' . $suffix);
+            $bank = Bank::create($id, 'Round Trip Savings ' . $suffix, 'RTS' . $suffix);
 
             $events = $bank->pullDomainEvents();
             $this->assertCount(1, $events);
             $createEvent = $events[0];
             $this->assertInstanceOf(BankCreatedDomainEvent::class, $createEvent);
             $eventAggregateId = $createEvent->aggregateId();
+
+            // The event id is now minted inside the event constructor (no longer passed in); it must be
+            // a valid UUID v7 distinct from the aggregate id it carries.
+            $this->assertInstanceOf(UuidV7::class, Uuid::fromString($createEvent->eventId()));
+            $this->assertNotSame($eventAggregateId, $createEvent->eventId());
 
             $entityManager->persist($bank);
             $entityManager->flush();

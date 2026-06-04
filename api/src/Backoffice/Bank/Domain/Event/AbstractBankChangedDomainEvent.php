@@ -16,7 +16,6 @@ abstract class AbstractBankChangedDomainEvent extends DomainEvent
 {
     public function __construct(
         string $bankId,
-        string $eventId,
         private readonly string $name,
         private readonly string $shortName,
         private readonly string $createdAt,
@@ -29,7 +28,6 @@ abstract class AbstractBankChangedDomainEvent extends DomainEvent
     ) {
         parent::__construct(
             $bankId,
-            $eventId,
             $occurredOn ?? self::now(),
         );
     }

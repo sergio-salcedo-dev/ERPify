@@ -18,16 +18,14 @@ final class BankTest extends TestCase
 {
     private const string BANK_ID = '0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c';
 
-    private const string EVENT_ID = '0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2d';
-
-    public function testCreateRecordsCreatedEventWhoseIdEqualsTheEntityId(): void
+    public function testCreateRecordsCreatedEventWhoseAggregateIdEqualsTheEntityId(): void
     {
-        // Domain-level invariant: the create event carries the same id as the entity. (The persist-time
+        // Domain-level invariant: the create event's aggregate id is the entity id. (The persist-time
         // divergence the fix removes is locked separately by IdentifiableAssignedIdentifierTest, which
         // asserts Doctrine no longer overwrites this id at flush.)
         $id = self::BANK_ID;
 
-        $bank = Bank::create($id, self::EVENT_ID, 'Acme Savings', 'ACME');
+        $bank = Bank::create($id, 'Acme Savings', 'ACME');
 
         $this->assertSame($id, $bank->getId());
 
@@ -39,12 +37,12 @@ final class BankTest extends TestCase
         $this->assertSame($bank->getId(), $event->aggregateId());
     }
 
-    public function testRenameRecordsUpdatedEventWhoseIdEqualsTheEntityId(): void
+    public function testRenameRecordsUpdatedEventWhoseAggregateIdEqualsTheEntityId(): void
     {
-        $bank = Bank::create(self::BANK_ID, self::EVENT_ID, 'Acme Savings', 'ACME');
+        $bank = Bank::create(self::BANK_ID, 'Acme Savings', 'ACME');
         $bank->pullDomainEvents(); // drain the creation event
 
-        $bank->rename(self::EVENT_ID, 'Acme Renamed', 'ACME');
+        $bank->rename('Acme Renamed', 'ACME');
 
         $events = $bank->pullDomainEvents();
         $this->assertCount(1, $events);

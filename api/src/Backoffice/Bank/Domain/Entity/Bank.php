@@ -75,7 +75,6 @@ class Bank extends AggregateRoot
 
     public static function create(
         string $id,
-        string $createEventId,
         string $name,
         string $shortName,
         ?Media $media = null,
@@ -98,7 +97,6 @@ class Bank extends AggregateRoot
 
         $bank->record(new BankCreatedDomainEvent(
             $id,
-            $createEventId,
             $bank->name,
             $bank->shortName,
             $createdAt,
@@ -147,7 +145,7 @@ class Bank extends AggregateRoot
         return $this->storedObjectContentHash;
     }
 
-    public function rename(string $updateEventId, string $name, string $shortName): void
+    public function rename(string $name, string $shortName): void
     {
         $normalizedText = NormalizedText::from($name);
 
@@ -159,7 +157,6 @@ class Bank extends AggregateRoot
 
         $this->record(new BankUpdatedDomainEvent(
             $this->id(),
-            $updateEventId,
             $this->name,
             $this->shortName,
             $this->createdAt->format(DateTimeInterface::ATOM),
@@ -171,9 +168,9 @@ class Bank extends AggregateRoot
         ));
     }
 
-    public function delete(string $deleteEventId): void
+    public function delete(): void
     {
-        $this->record(new BankDeletedDomainEvent($this->id(), $deleteEventId));
+        $this->record(new BankDeletedDomainEvent($this->id()));
     }
 
     /**

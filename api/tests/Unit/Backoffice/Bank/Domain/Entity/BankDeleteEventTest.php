@@ -19,11 +19,11 @@ final class BankDeleteEventTest extends TestCase
 
     public function testDeleteRecordsBankDeletedDomainEventForThisAggregate(): void
     {
-        $bank = Bank::create(self::BANK_ID, 'create-event-id', 'Acme Savings', 'ACME');
+        $bank = Bank::create(self::BANK_ID, 'Acme Savings', 'ACME');
         // Drain the creation event so we assert only on the deletion.
         $bank->pullDomainEvents();
 
-        $bank->delete('delete-event-id');
+        $bank->delete();
 
         $events = $bank->pullDomainEvents();
 

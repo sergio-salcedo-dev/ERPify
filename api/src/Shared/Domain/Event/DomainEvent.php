@@ -5,17 +5,20 @@ declare(strict_types=1);
 namespace Erpify\Shared\Domain\Event;
 
 use DateTimeImmutable;
+use Erpify\Shared\Domain\Uuid\Uuid;
 
 /**
  * Base type for domain events dispatched on the application bus.
  */
 abstract class DomainEvent
 {
+    private readonly string $eventId;
+
     public function __construct(
         private readonly string $aggregateId,
-        private readonly string $eventId,
         private readonly DateTimeImmutable $occurredOn,
     ) {
+        $this->eventId = Uuid::generate();
     }
 
     abstract public static function eventName(): string;

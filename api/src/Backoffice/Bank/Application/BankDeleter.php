@@ -9,7 +9,6 @@ use Erpify\Backoffice\Bank\Domain\Exception\BankInUseException;
 use Erpify\Backoffice\Bank\Domain\Exception\BankNotFoundException;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository;
-use Erpify\Shared\Infrastructure\Uuid\SymfonyUuidGenerator;
 use Symfony\Component\Messenger\Exception\ExceptionInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Validator\Exception\ValidationFailedException;
@@ -40,7 +39,7 @@ final readonly class BankDeleter
             throw BankInUseException::withAccountCount($id, $accountCount);
         }
 
-        $bank->delete(SymfonyUuidGenerator::generate());
+        $bank->delete();
 
         // Pull events before removal so the aggregate is still intact when captured.
         $domainEvents = $bank->pullDomainEvents();

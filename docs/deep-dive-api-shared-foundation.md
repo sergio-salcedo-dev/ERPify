@@ -134,7 +134,7 @@ api/src/Shared/
 - **LOC:** 16 — `Attribute::TARGET_CLASS_CONSTANT` marker carrying a `?string $label`.
 
 #### `api/src/Shared/Domain/Event/DomainEvent.php`
-- **LOC:** 47 — abstract base. Constructor takes `aggregateId`, `eventId`, `occurredOn` (all readonly). Abstract: `static eventName(): string`, `toPrimitives(): array`. Helper: `protected static now(): DateTimeImmutable`.
+- **LOC:** 50 — abstract base. Constructor takes `aggregateId`, `occurredOn` (readonly); `eventId` is no longer a parameter — it is minted in the constructor via `Shared/Domain/Uuid/Uuid::generate()` (UUID v7). Abstract: `static eventName(): string`, `toPrimitives(): array`. Helper: `protected static now(): DateTimeImmutable`.
 - **Subclassed by:** `Backoffice/Bank/Domain/Event/BankCreatedDomainEvent`, `BankUpdatedDomainEvent` (and any future events).
 
 #### `api/src/Shared/Domain/Exception/DomainException.php`
