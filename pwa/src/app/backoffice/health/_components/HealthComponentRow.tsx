@@ -14,7 +14,7 @@ interface HealthComponentRowProps {
   testId?: string;
 }
 
-export function HealthComponentRow({ name, status, testId }: HealthComponentRowProps) {
+export function HealthComponentRow({ name, status, testId }: Readonly<HealthComponentRowProps>) {
   return (
     <div
       data-testid={testId}

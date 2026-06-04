@@ -36,7 +36,12 @@ function subline(status: SystemStatus, datetime: string | null): string | null {
   return null;
 }
 
-export function StatusBannerView({ status, datetime, theme, testId }: StatusBannerViewProps) {
+export function StatusBannerView({
+  status,
+  datetime,
+  theme,
+  testId,
+}: Readonly<StatusBannerViewProps>) {
   const Icon = ICONS[status];
   const [iconClassName, containerClassName] = theme.palette[status];
   const note = subline(status, datetime);

@@ -33,7 +33,7 @@ export function SidebarItem({
   subItems,
   isCompact = false,
   testId,
-}: SidebarItemProps) {
+}: Readonly<SidebarItemProps>) {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
 

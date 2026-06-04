@@ -13,7 +13,7 @@ interface StatCardProps {
   index: number;
 }
 
-export function StatCard({ name, value, icon: Icon, color, bg, index }: StatCardProps) {
+export function StatCard({ name, value, icon: Icon, color, bg, index }: Readonly<StatCardProps>) {
   return (
     <div
       className="stat-card animate-in fade-in-0 slide-in-from-bottom-4 duration-500"

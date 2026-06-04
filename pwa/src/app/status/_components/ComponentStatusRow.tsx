@@ -21,7 +21,7 @@ const LABEL_CLASSNAME: Record<SystemStatus, string> = {
   [SystemStatus.DISRUPTED]: "text-danger-strong",
 };
 
-export function ComponentStatusRow({ name, status, testId }: ComponentStatusRowProps) {
+export function ComponentStatusRow({ name, status, testId }: Readonly<ComponentStatusRowProps>) {
   return (
     <div
       data-testid={testId}

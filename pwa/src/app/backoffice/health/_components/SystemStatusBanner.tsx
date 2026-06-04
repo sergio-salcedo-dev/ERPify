@@ -26,6 +26,6 @@ const BACKOFFICE_THEME: BannerTheme = {
   sublineClassName: "text-muted-foreground",
 };
 
-export function SystemStatusBanner(props: SystemStatusBannerProps) {
+export function SystemStatusBanner(props: Readonly<SystemStatusBannerProps>) {
   return <StatusBannerView {...props} theme={BACKOFFICE_THEME} />;
 }

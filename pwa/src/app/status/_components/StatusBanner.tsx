@@ -29,6 +29,6 @@ const MARKETING_THEME: BannerTheme = {
   sublineClassName: "text-muted-foreground",
 };
 
-export function StatusBanner(props: StatusBannerProps) {
+export function StatusBanner(props: Readonly<StatusBannerProps>) {
   return <StatusBannerView {...props} theme={MARKETING_THEME} />;
 }

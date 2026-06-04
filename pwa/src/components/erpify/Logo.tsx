@@ -35,7 +35,7 @@ export function Logo({
   iconClassName,
   textClassName,
   testId,
-}: LogoProps) {
+}: Readonly<LogoProps>) {
   const sizes = sizeClasses[size];
 
   const icon =
