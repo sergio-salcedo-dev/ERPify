@@ -24,16 +24,18 @@ interface BanksFiltersProps {
   onSortChange: (next: BanksSort) => void;
   onReset: () => void;
   /**
-   * Initial open state. When omitted the panel starts collapsed if no filters
-   * are active and the sort is at its default — so a user landing on the page
-   * with pre-set panel filters / sort (the name search is always visible and never forces the panel open) (e.g. from future URL state) sees them
-   * immediately.
+   * Initial open state. When omitted the panel starts collapsed if no panel
+   * filters are active and the sort is at its default — so a user landing on
+   * the page with pre-set panel filters / sort (e.g. from future URL state)
+   * sees them immediately. The name search is always visible and never forces
+   * the panel open.
    */
   defaultOpen?: boolean;
   /**
    * Optional control rendered on the leading edge of the toolbar (left on
    * tablet/desktop, below the full-width Filters button on mobile). The banks
-   * list passes its view/density toggles here; they share the toolbar row with the always-visible name search and the Filters button from `sm` up.
+   * list passes its view/density toggles here; they share the toolbar row
+   * with the always-visible name search and the Filters button from `sm` up.
    */
   leading?: ReactNode;
 }
@@ -162,7 +164,7 @@ export function BanksFilters({
             {leading}
           </div>
         ) : null}
-        <div className="banks-filters__search relative order-1 w-full sm:order-2 sm:w-64">
+        <div className="banks-filters__search relative order-1 w-full sm:order-2 sm:w-64 sm:self-center">
           <Search
             className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2"
             aria-hidden="true"

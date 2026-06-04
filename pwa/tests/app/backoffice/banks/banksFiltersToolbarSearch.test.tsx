@@ -27,13 +27,15 @@ describe("BanksFilters — toolbar search", () => {
   });
 
   it("renders the name search in the toolbar, outside the collapsible panel", () => {
-    renderFilters();
+    const { container } = renderFilters();
     const search = screen.getByTestId("banks-filters__name");
     const panel = screen.getByTestId("banks-filters__panel");
     // Panel starts collapsed (no active panel filters) yet the search is live.
     expect(panel).toHaveAttribute("aria-hidden", "true");
     expect(panel.contains(search)).toBe(false);
     expect(search).not.toHaveAttribute("disabled");
+    const toolbar = container.querySelector(".banks-filters__toolbar");
+    expect(toolbar?.contains(search)).toBe(true);
   });
 
   it("debounces typed text into filter.name", () => {
