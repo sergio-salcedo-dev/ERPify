@@ -34,44 +34,44 @@ class Bank extends AggregateRoot
      */
     private const int MAX_NAME_LENGTH = 255;
 
-    #[ORM\Column]
-    #[Assert\NotBlank]
-    #[Assert\Length(max: self::MAX_NAME_LENGTH)]
-    #[Groups(['bank:get', 'bank:search'])]
-    private string $name;
+    private function __construct(
+        string $id,
+        #[ORM\Column]
+        #[Assert\NotBlank]
+        #[Assert\Length(max: self::MAX_NAME_LENGTH)]
+        #[Groups(['bank:get', 'bank:search'])]
+        private string $name,
+        #[ORM\Column(unique: true)]
+        private string $nameNormalized,
+        /**
+         * Stored canonicalized: upper-case ASCII (no diacritics) via
+         * {@see NormalizedText::toAsciiUpper()}. Comparisons / uniqueness use
+         * the raw column directly — no separate normalized half needed.
+         */
+        #[ORM\Column(length: 50, unique: true)]
+        #[Assert\NotBlank]
+        #[Assert\Length(max: 50)]
+        #[Groups(['bank:get', 'bank:search'])]
+        private string $shortName,
+        #[ORM\ManyToOne(targetEntity: Media::class, cascade: ['persist'])]
+        #[ORM\JoinColumn(name: 'logo_media_id', referencedColumnName: 'id', nullable: true)]
+        private ?Media $media,
+        /**
+         * {@see \Erpify\Shared\Storage\Domain\ContentAddressableObjectKey} path (distinct from BYTEA {@see $logo}).
+         */
+        #[ORM\Column(name: 'stored_object_key', length: 512, nullable: true)]
+        private ?string $storedObjectKey,
+        #[ORM\Column(name: 'stored_object_mime_type', length: 64, nullable: true)]
+        private ?string $storedObjectMimeType,
+        #[ORM\Column(name: 'stored_object_byte_size', type: Types::INTEGER, nullable: true)]
+        private ?int $storedObjectByteSize,
+        #[ORM\Column(name: 'stored_object_content_hash', length: 64, nullable: true)]
+        private ?string $storedObjectContentHash,
+    ) {
+        parent::__construct();
 
-    #[ORM\Column(unique: true)]
-    private string $nameNormalized;
-
-    /**
-     * Stored canonicalized: upper-case ASCII (no diacritics) via
-     * {@see NormalizedText::toAsciiUpper()}. Comparisons / uniqueness use
-     * the raw column directly — no separate normalized half needed.
-     */
-    #[ORM\Column(length: 50, unique: true)]
-    #[Assert\NotBlank]
-    #[Assert\Length(max: 50)]
-    #[Groups(['bank:get', 'bank:search'])]
-    private string $shortName;
-
-    #[ORM\ManyToOne(targetEntity: Media::class, cascade: ['persist'])]
-    #[ORM\JoinColumn(name: 'logo_media_id', referencedColumnName: 'id', nullable: true)]
-    private ?Media $media = null;
-
-    /**
-     * {@see \Erpify\Shared\Storage\Domain\ContentAddressableObjectKey} path (distinct from BYTEA {@see $logo}).
-     */
-    #[ORM\Column(name: 'stored_object_key', length: 512, nullable: true)]
-    private ?string $storedObjectKey = null;
-
-    #[ORM\Column(name: 'stored_object_mime_type', length: 64, nullable: true)]
-    private ?string $storedObjectMimeType = null;
-
-    #[ORM\Column(name: 'stored_object_byte_size', type: Types::INTEGER, nullable: true)]
-    private ?int $storedObjectByteSize = null;
-
-    #[ORM\Column(name: 'stored_object_content_hash', length: 64, nullable: true)]
-    private ?string $storedObjectContentHash = null;
+        $this->id = $id;
+    }
 
     public static function create(
         string $id,
@@ -82,16 +82,17 @@ class Bank extends AggregateRoot
     ): self {
         $normalizedText = NormalizedText::from($name);
 
-        $bank = new self();
-        $bank->id = $id;
-        $bank->name = $normalizedText->display;
-        $bank->nameNormalized = $normalizedText->normalized;
-        $bank->shortName = NormalizedText::toAsciiUpper($shortName);
-        $bank->media = $media;
-        $bank->storedObjectKey = $storedObject?->objectKey;
-        $bank->storedObjectMimeType = $storedObject?->mimeType;
-        $bank->storedObjectByteSize = $storedObject?->byteSize;
-        $bank->storedObjectContentHash = $storedObject?->contentHash;
+        $bank = new self(
+            $id,
+            $normalizedText->display,
+            $normalizedText->normalized,
+            NormalizedText::toAsciiUpper($shortName),
+            $media,
+            $storedObject?->objectKey,
+            $storedObject?->mimeType,
+            $storedObject?->byteSize,
+            $storedObject?->contentHash,
+        );
 
         $createdAt = $bank->createdAt->format(DateTimeInterface::ATOM);
 
