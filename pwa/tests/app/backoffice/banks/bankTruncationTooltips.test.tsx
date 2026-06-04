@@ -39,6 +39,16 @@ describe("Bank short-name truncation", () => {
     expect(el).toHaveClass("truncate");
   });
 
+  it("card short-name sits above the card-wide navigation overlay so hover can open its tooltip", () => {
+    render(<BanksCards banks={[LONG]} />);
+    const el = screen.getByTestId(`banks-cards__shortname-${LONG.id}`);
+    expect(el).toHaveClass("relative", "z-10");
+    // The overlay owner must not gain a competing z-index, or it would
+    // re-cover the short-name and silently kill the tooltip again.
+    const title = screen.getByTestId(`banks-cards__name-${LONG.id}`);
+    expect(title.className).not.toMatch(/\bz-\d/);
+  });
+
   it("table name cell keeps the full 255-char value in the DOM", () => {
     const name = "N".repeat(255);
     const longest = Bank.fromPrimitives({
