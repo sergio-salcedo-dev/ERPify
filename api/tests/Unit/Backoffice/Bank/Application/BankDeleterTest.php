@@ -73,6 +73,7 @@ final class BankDeleterTest extends TestCase
         }
 
         $this->assertFalse($bankRepository->removeCalled);
+        $this->assertSame([], $bankRepository->saved);
         $this->assertSame([], $messageBus->dispatchedMessages);
     }
 
