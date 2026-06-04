@@ -170,4 +170,64 @@ describe("FetchHttpClient", () => {
       expect(urlOf(input)).toBe("https://api.example.com/api/v1/backoffice/banks");
     });
   });
+
+  describe("server base URL (absolute by construction)", () => {
+    const ORIGINAL_API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+    const ORIGINAL_INTERNAL = process.env.SYMFONY_INTERNAL_URL;
+
+    beforeEach(() => {
+      // SSR path: the constructor branches on `globalThis.window === undefined`.
+      vi.stubGlobal("window", undefined);
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      if (ORIGINAL_API_BASE === undefined) {
+        delete process.env.NEXT_PUBLIC_API_BASE_URL;
+      } else {
+        process.env.NEXT_PUBLIC_API_BASE_URL = ORIGINAL_API_BASE;
+      }
+      if (ORIGINAL_INTERNAL === undefined) {
+        delete process.env.SYMFONY_INTERNAL_URL;
+      } else {
+        process.env.SYMFONY_INTERNAL_URL = ORIGINAL_INTERNAL;
+      }
+    });
+
+    it("prefers SYMFONY_INTERNAL_URL and trims its trailing slash", async () => {
+      process.env.SYMFONY_INTERNAL_URL = "http://php:80/";
+      process.env.NEXT_PUBLIC_API_BASE_URL = "https://api.example.com";
+      fetchSpy.mockResolvedValueOnce(makeResponse(HttpStatus.OK, { data: [] }));
+
+      const client = new FetchHttpClient();
+      await client.get("/api/v1/backoffice/banks");
+
+      const [input] = fetchSpy.mock.calls[0] as [RequestInfo | URL];
+      expect(urlOf(input)).toBe("http://php:80/api/v1/backoffice/banks");
+    });
+
+    it("falls back to the public override when SYMFONY_INTERNAL_URL is unset", async () => {
+      delete process.env.SYMFONY_INTERNAL_URL;
+      process.env.NEXT_PUBLIC_API_BASE_URL = "https://api.example.com";
+      fetchSpy.mockResolvedValueOnce(makeResponse(HttpStatus.OK, { data: [] }));
+
+      const client = new FetchHttpClient();
+      await client.get("/api/v1/backoffice/banks");
+
+      const [input] = fetchSpy.mock.calls[0] as [RequestInfo | URL];
+      expect(urlOf(input)).toBe("https://api.example.com/api/v1/backoffice/banks");
+    });
+
+    it("falls back to an absolute https://localhost when no env var is set", async () => {
+      delete process.env.SYMFONY_INTERNAL_URL;
+      delete process.env.NEXT_PUBLIC_API_BASE_URL;
+      fetchSpy.mockResolvedValueOnce(makeResponse(HttpStatus.OK, { data: [] }));
+
+      const client = new FetchHttpClient();
+      await client.get("/api/v1/backoffice/banks");
+
+      const [input] = fetchSpy.mock.calls[0] as [RequestInfo | URL];
+      expect(urlOf(input)).toBe("https://localhost/api/v1/backoffice/banks");
+    });
+  });
 });
