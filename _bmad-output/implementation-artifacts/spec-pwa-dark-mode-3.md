@@ -2,7 +2,7 @@
 title: 'Dark mode v3 — navy slate + acento azul mode-aware (sustituye el índigo)'
 type: 'feature'
 created: '2026-06-04'
-status: 'approved'
+status: 'done'
 context: ['spec-pwa-dark-mode-2.md']
 baseline_commit: '385d032'
 ---
@@ -54,12 +54,12 @@ baseline_commit: '385d032'
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `globals.css` `.dark` -- surface ramp: bg `#11151f`, muted `#161b29`, subtle `#1d2433`, elevated `#242e42`; texto `#e7eaf3` / `#aeb6cb` / `#8590a8` / faint `#66708a`; borders `rgba(165,180,220,.07/.12/.20)`; line-tint `#141828`; overlay y shadows v2 intactos -- ramp navy con jerarquía
-- [ ] `globals.css` accent ambos modos -- light: brand/accent `#2f5cd9`, hover `#4a73e8`, active `#2450b8`, focus-ring `#2f5cd9`, security `#7589ad`, chart-3 `#2f5cd9`; dark: brand `#3760e6`, accent `#6c9bff`, hover `#87adff`, active `#5586f2`, focus-ring `#6c9bff`, security `#7589ad`, chart-3 `#6c9bff` -- índigo eliminado del sistema
-- [ ] `theme.spec.ts` (frontoffice) -- canvas assertion `#11151f` -- candado anti-reversión
-- [ ] `DESIGN.md` -- tablas + nota mode-aware + purga de referencias índigo/Linear en la sección de color -- docs fieles al sistema
-- [ ] `pwa/CLAUDE.md` -- revisar bullet theming -- coherencia
-- [ ] Verificación visual -- stack del worktree + playwright-cli: backoffice banks, landing, `/status` en dark; light sin regresión de neutrales; capturas para el PR -- evidencia
+- [x] `globals.css` `.dark` -- surface ramp: bg `#11151f`, muted `#161b29`, subtle `#1d2433`, elevated `#242e42`; texto `#e7eaf3` / `#aeb6cb` / `#8590a8` / faint `#66708a`; borders `rgba(165,180,220,.07/.12/.20)`; line-tint `#141828`; overlay y shadows v2 intactos -- ramp navy con jerarquía
+- [x] `globals.css` accent ambos modos -- light: brand/accent `#2f5cd9`, hover `#4a73e8`, active `#2450b8`, focus-ring `#2f5cd9`, security `#7589ad`, chart-3 `#2f5cd9`; dark: brand `#3760e6`, accent `#6c9bff`, hover `#87adff`, active `#5586f2`, focus-ring `#6c9bff`, security `#7589ad`, chart-3 `#6c9bff` -- índigo eliminado del sistema
+- [x] `theme.spec.ts` (frontoffice) -- canvas assertion `#11151f` -- candado anti-reversión
+- [x] `DESIGN.md` -- tablas + nota mode-aware + purga de referencias índigo/Linear en la sección de color -- docs fieles al sistema
+- [x] `pwa/CLAUDE.md` -- revisar bullet theming -- coherencia
+- [x] Verificación visual -- stack del worktree + playwright-cli: backoffice banks, landing, `/status` en dark; light sin regresión de neutrales; capturas para el PR -- evidencia
 
 **Acceptance Criteria:**
 - Given dark activo, when navego backoffice/landing/`/status`, then todas las superficies son del ramp navy, los links/active usan `#6c9bff` y no queda ningún `#5e6ad2`/`#7170ff` computado.
