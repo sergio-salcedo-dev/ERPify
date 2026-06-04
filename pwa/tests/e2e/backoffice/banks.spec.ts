@@ -279,18 +279,24 @@ test.describe("BackOffice - Banks CRUD", () => {
       await expect(page.getByText(SAMPLE_BANK_A.name)).toBeVisible();
     });
 
-    test("shows ProblemDisplay inside the dialog when DELETE returns 404", async ({ page }) => {
+    test("a failed DELETE lands in the persistent error surface, never inside the dialog", async ({
+      page,
+    }) => {
       await mockBanksApi(page, { get: "happy", delete: "not-found", bank: SAMPLE_BANK_A });
       await page.goto(`/backoffice/banks/${SAMPLE_BANK_A.id}`);
 
       await page.getByTestId("banks-detail__delete-button").click();
       await page.getByTestId("banks-detail__delete-confirm").click();
 
-      // User stays on the detail page (URL unchanged).
+      // User stays on the detail page (URL unchanged); the dialog closed itself
+      // and the problem persists under the header (UX contract 2026-06-04).
       await expect(page).toHaveURL(`/backoffice/banks/${SAMPLE_BANK_A.id}`);
-      await expect(
-        page.getByRole("alert").getByRole("heading", { name: "Bank not found." }),
-      ).toBeVisible();
+      await expect(page.getByTestId("banks-detail__delete-dialog")).toBeHidden();
+      const surface = page.getByTestId("banks-detail__delete-error");
+      await expect(surface).toBeVisible();
+      await expect(surface).toContainText("Bank not found.");
+      // The stale 404 carries its typed recovery action.
+      await expect(page.getByTestId("banks-detail__delete-error-refresh")).toBeVisible();
     });
   });
 

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
+import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { StatusBadge, TruncatedText } from "@/components/erpify";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,6 +17,7 @@ import { BankRowActions } from "./BankRowActions";
 interface BanksCardsProps {
   banks: Bank[];
   onBankDeleted?: (id: string) => void;
+  onBankDeleteFailed: (id: string, problem: ProblemDetails) => void;
   selectedIds?: ReadonlySet<string>;
   onToggleSelect?: (id: string) => void;
   density?: "compact" | "comfortable";
@@ -54,6 +56,7 @@ function BankCardName({ bank, detailHref }: Readonly<{ bank: Bank; detailHref: s
 export function BanksCards({
   banks,
   onBankDeleted,
+  onBankDeleteFailed,
   selectedIds,
   onToggleSelect,
   density = "compact",
@@ -111,6 +114,7 @@ export function BanksCards({
                   surface="cards"
                   reveal="card"
                   onBankDeleted={onBankDeleted}
+                  onBankDeleteFailed={onBankDeleteFailed}
                   className="banks-cards__actions relative z-10 ml-auto"
                 />
               </div>

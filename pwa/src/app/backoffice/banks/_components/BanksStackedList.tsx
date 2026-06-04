@@ -3,6 +3,7 @@
 import { useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
+import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { StatusBadge, TruncatedText } from "@/components/erpify";
 import { cn } from "@/lib/utils";
 import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
@@ -15,6 +16,7 @@ import { BankRowActions } from "./BankRowActions";
 interface BanksStackedListProps {
   banks: Bank[];
   onBankDeleted?: (id: string) => void;
+  onBankDeleteFailed: (id: string, problem: ProblemDetails) => void;
   selectedIds?: ReadonlySet<string>;
   onToggleSelect?: (id: string) => void;
   density?: "compact" | "comfortable";
@@ -45,6 +47,7 @@ function isFromInteractiveControl(target: EventTarget | null, row: Element): boo
 export function BanksStackedList({
   banks,
   onBankDeleted,
+  onBankDeleteFailed,
   selectedIds,
   onToggleSelect,
   density = "compact",
@@ -147,6 +150,7 @@ export function BanksStackedList({
               name={bank.name}
               surface="stacked"
               onBankDeleted={onBankDeleted}
+              onBankDeleteFailed={onBankDeleteFailed}
               className="flex-none"
             />
           </li>

@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import BanksListPage from "@/app/backoffice/banks/page";
 import { Bank } from "@/context/backoffice/bank/domain/Bank";
+import type { BankRealtimeHandlers } from "@/context/backoffice/bank/infrastructure/bankRealtime";
+import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
+import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
 import { toastNotifier } from "@/context/shared/infrastructure/Notification/Toast";
 
 /**
@@ -54,10 +57,14 @@ vi.mock("@/context/shared/infrastructure/Notification/Toast", () => ({
   toastNotifier: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
 }));
 
-// Neutralise the Mercure subscription: these tests exercise local deletes, and
-// the live hook's fetch/EventSource churn otherwise flakes under parallel load.
+// Replace the Mercure subscription (the live hook's fetch/EventSource churn
+// flakes under parallel load) while capturing the handlers, so tests can
+// drive realtime deltas directly.
+let realtimeHandlers: BankRealtimeHandlers | undefined;
 vi.mock("@/context/backoffice/bank/infrastructure/bankRealtime", async () =>
-  (await import("./_mocks")).bankRealtimeMock(),
+  (await import("./_mocks")).bankRealtimeMock((handlers) => {
+    realtimeHandlers = handlers;
+  }),
 );
 
 describe("BanksListPage — delete UX", () => {
@@ -118,5 +125,131 @@ describe("BanksListPage — delete UX", () => {
     // which only makes sense while banks exist behind an active filter.
     expect(await screen.findByRole("heading", { name: "No banks yet" })).toBeInTheDocument();
     expect(screen.queryByTestId("banks-list__empty-filtered")).toBeNull();
+  });
+});
+
+const IN_USE_PROBLEM: ProblemDetails = {
+  type: "bank-in-use",
+  title: "Bank cannot be deleted: 3 associated bank accounts",
+  status: 409,
+  detail: "Remove or reassign the associated bank accounts first.",
+  instance: "01926e7e-7b8a-7c4e-9f31-000000000409",
+  "correlation-id": "01926e7e-7b8a-7c4e-9f30-000000000409",
+  bankId: ACME.id,
+  accountCount: 3,
+};
+
+const STALE_PROBLEM: ProblemDetails = {
+  type: "bank-not-found",
+  title: "Bank not found",
+  status: 404,
+  instance: "01926e7e-7b8a-7c4e-9f31-000000000404",
+  "correlation-id": "01926e7e-7b8a-7c4e-9f30-000000000404",
+};
+
+describe("BanksListPage — failed delete lands in the persistent error surface", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    searchRun.mockResolvedValue({ banks: [ACME, BETA], nextCursor: undefined });
+  });
+
+  async function confirmDeleteOf(id: string): Promise<void> {
+    fireEvent.click(screen.getByTestId(`banks-table__actions-${id}`));
+    fireEvent.click(await screen.findByTestId(`banks-table__delete-${id}`));
+    fireEvent.click(await screen.findByTestId("banks-detail__delete-confirm"));
+  }
+
+  it("409 bank-in-use: the dialog closes, the error persists above the list with no recovery action, the row stays", async () => {
+    deleteRun.mockRejectedValue(new HttpError(IN_USE_PROBLEM));
+    render(<BanksListPage />);
+    await screen.findByTestId(`banks-table__row-${ACME.id}`);
+
+    await confirmDeleteOf(ACME.id);
+
+    const surface = await screen.findByTestId("banks-list__delete-error");
+    // Verbatim problem, never inside the dialog.
+    expect(screen.queryByTestId("banks-detail__delete-dialog")).toBeNull();
+    expect(surface).toHaveTextContent(IN_USE_PROBLEM.title);
+    expect(screen.getByTestId("problem-display__type")).toHaveTextContent("bank-in-use");
+    // 409 carries no recovery action — recovery lives outside the list.
+    expect(screen.queryByTestId("banks-list__delete-error-refresh")).toBeNull();
+    // Copy affordances are present; the row was never removed.
+    expect(screen.getByTestId("banks-list__delete-error__copy-json")).toBeInTheDocument();
+    expect(screen.getByTestId(`banks-table__row-${ACME.id}`)).toBeInTheDocument();
+    // The toast is only a transient pointer to the persistent surface.
+    expect(toastNotifier.error).toHaveBeenCalledWith("Couldn't delete bank — see error details");
+    // The surface owns focus so the closing dialog never strands it on <body>.
+    expect(surface).toHaveFocus();
+  });
+
+  it("404 stale row: Refresh list clears the error, drops the row, and focuses its neighbor", async () => {
+    deleteRun.mockRejectedValue(new HttpError(STALE_PROBLEM));
+    render(<BanksListPage />);
+    await screen.findByTestId(`banks-table__row-${ACME.id}`);
+
+    await confirmDeleteOf(ACME.id);
+
+    await screen.findByTestId("banks-list__delete-error");
+    searchRun.mockResolvedValue({ banks: [BETA], nextCursor: undefined });
+
+    fireEvent.click(screen.getByTestId("banks-list__delete-error-refresh"));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("banks-list__delete-error")).toBeNull();
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId(`banks-table__row-${ACME.id}`)).toBeNull();
+    });
+    // jsdom renders both responsive surfaces (CSS hiding doesn't apply), and
+    // the focus seam targets the first match in document order — the stacked
+    // row. Either surface's row counts as the neighbor receiving focus.
+    await waitFor(() => {
+      const focused = document.activeElement?.getAttribute("data-testid");
+      expect([`banks-table__row-${BETA.id}`, `banks-stacked__row-${BETA.id}`]).toContain(focused);
+    });
+    // A single-row refresh changes no selection count, so the outcome is
+    // announced through the dedicated polite region.
+    await waitFor(() => {
+      expect(screen.getByTestId("banks-list__refresh-status")).toHaveTextContent("List refreshed");
+    });
+  });
+
+  it("survives realtime deltas and silent refetches — only dismiss/retry/success close it locally", async () => {
+    deleteRun.mockRejectedValue(new HttpError(IN_USE_PROBLEM));
+    render(<BanksListPage />);
+    await screen.findByTestId(`banks-table__row-${ACME.id}`);
+
+    await confirmDeleteOf(ACME.id);
+    await screen.findByTestId("banks-list__delete-error");
+
+    // A Mercure delta reconciles the list (another client deleted BETA)…
+    act(() => {
+      realtimeHandlers?.onDeleted?.(BETA.id);
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId(`banks-table__row-${BETA.id}`)).toBeNull();
+    });
+    // …and the persistent error is still exactly where the user left it.
+    expect(screen.getByTestId("banks-list__delete-error")).toBeInTheDocument();
+    expect(screen.getByTestId("problem-display__type")).toHaveTextContent("bank-in-use");
+  });
+
+  it("dismisses with × and is replaced (not stacked) by the next attempt's failure", async () => {
+    deleteRun.mockRejectedValue(new HttpError(IN_USE_PROBLEM));
+    render(<BanksListPage />);
+    await screen.findByTestId(`banks-table__row-${ACME.id}`);
+
+    await confirmDeleteOf(ACME.id);
+    await screen.findByTestId("banks-list__delete-error");
+
+    fireEvent.click(screen.getByTestId("banks-list__delete-error__dismiss"));
+    expect(screen.queryByTestId("banks-list__delete-error")).toBeNull();
+
+    deleteRun.mockRejectedValue(new HttpError(STALE_PROBLEM));
+    await confirmDeleteOf(BETA.id);
+
+    const surfaces = await screen.findAllByTestId("banks-list__delete-error");
+    expect(surfaces).toHaveLength(1);
+    expect(surfaces[0]).toHaveTextContent(STALE_PROBLEM.title);
   });
 });

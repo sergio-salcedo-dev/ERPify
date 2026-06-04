@@ -108,7 +108,7 @@ function isProblemDebug(value: unknown): value is ProblemDebug {
   );
 }
 
-const isProductionEnv = (): boolean => process.env.NODE_ENV === NodeEnv.PRODUCTION;
+export const isProductionEnv = (): boolean => process.env.NODE_ENV === NodeEnv.PRODUCTION;
 
 interface DebugSectionProps {
   debug: ProblemDebug;

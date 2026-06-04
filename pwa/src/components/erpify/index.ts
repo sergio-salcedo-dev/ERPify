@@ -22,6 +22,7 @@ export { FormField, useFormField } from "./FormField";
 export { Logo } from "./Logo";
 export type { LogoProps, LogoSize, LogoVariant } from "./Logo";
 export { MonogramAvatar } from "./MonogramAvatar";
+export { MutationError } from "./MutationError";
 export { SidebarItem } from "./SidebarItem";
 export { SingleLineTextarea } from "./SingleLineTextarea";
 export { StatCard } from "./StatCard";

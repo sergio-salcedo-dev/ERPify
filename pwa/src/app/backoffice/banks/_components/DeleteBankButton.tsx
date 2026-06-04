@@ -7,7 +7,8 @@ import { container } from "@/context/shared/infrastructure/DependencyInjection/C
 import { DeleteBank } from "@/context/backoffice/bank/application/DeleteBank";
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
-import { ProblemDisplay, Spinner } from "@/components/erpify";
+import { toastNotifier } from "@/context/shared/infrastructure/Notification/Toast";
+import { Spinner } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -26,6 +27,12 @@ interface DeleteBankButtonProps {
   name: string;
   /** When provided, runs after a successful delete instead of redirecting to the list. */
   onDeleted?: (id: string) => void;
+  /**
+   * Runs when the delete fails. The dialog closes itself and the owner surfaces
+   * the problem in a persistent `<MutationError>` anchored to the mutation's
+   * origin — errors never render inside the dialog (UX contract 2026-06-04).
+   */
+  onError: (problem: ProblemDetails) => void;
   /** Custom trigger; defaults to a destructive button with a Trash icon. */
   trigger?: ReactElement;
   triggerTestId?: string;
@@ -43,6 +50,7 @@ export function DeleteBankButton({
   id,
   name,
   onDeleted,
+  onError,
   trigger,
   triggerTestId = "banks-detail__delete-button",
   open: openProp,
@@ -53,7 +61,6 @@ export function DeleteBankButton({
   const [internalOpen, setInternalOpen] = useState(false);
   const open = isControlled ? openProp : internalOpen;
   const [submitting, setSubmitting] = useState(false);
-  const [problem, setProblem] = useState<ProblemDetails | null>(null);
 
   function setOpen(next: boolean): void {
     if (isControlled) {
@@ -63,17 +70,9 @@ export function DeleteBankButton({
     }
   }
 
-  function handleOpenChange(next: boolean): void {
-    if (next) {
-      setProblem(null);
-    }
-    setOpen(next);
-  }
-
   async function handleConfirm(): Promise<void> {
     if (submitting) return;
     setSubmitting(true);
-    setProblem(null);
     try {
       const useCase = container.get<DeleteBank>("BackOfficeDeleteBank");
       await useCase.run(id);
@@ -86,7 +85,11 @@ export function DeleteBankButton({
       router.refresh();
     } catch (err) {
       if (err instanceof HttpError) {
-        setProblem(err.problem);
+        // The error never lives in the dialog: close it, hand the problem to
+        // the owner's persistent surface, and point at it with a transient toast.
+        setOpen(false);
+        onError(err.problem);
+        toastNotifier.error("Couldn't delete bank — see error details");
         return;
       }
       throw err;
@@ -110,7 +113,7 @@ export function DeleteBankButton({
   );
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={setOpen}>
       {isControlled ? null : <DialogTrigger render={trigger ?? defaultTrigger} />}
       <DialogContent data-testid="banks-detail__delete-dialog">
         <DialogHeader>
@@ -120,8 +123,6 @@ export function DeleteBankButton({
             cannot be undone.
           </DialogDescription>
         </DialogHeader>
-
-        {problem ? <ProblemDisplay problem={problem} variant="inline" /> : null}
 
         <DialogFooter>
           <DialogClose

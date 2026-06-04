@@ -6,14 +6,18 @@ import { Plus } from "lucide-react";
 import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
 import { SearchBanks } from "@/context/backoffice/bank/application/SearchBanks";
 import { DeleteBank } from "@/context/backoffice/bank/application/DeleteBank";
+import { FindBank } from "@/context/backoffice/bank/application/FindBank";
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
+import { BankProblemType } from "@/context/backoffice/bank/domain/BankProblemType";
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
 import { toastNotifier } from "@/context/shared/infrastructure/Notification/Toast";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
+import { HttpStatus } from "@/context/shared/domain/types/http";
 import {
   AsyncBoundary,
   DensityToggle,
   LIST_DENSITY_STORAGE_KEY,
+  MutationError,
   SelectionMode,
   isListDensity,
 } from "@/components/erpify";
@@ -31,7 +35,7 @@ import { BanksPagination } from "./_components/BanksPagination";
 import { BanksViewToggle, type BanksView } from "./_components/BanksViewToggle";
 import { BanksListSkeleton } from "./_components/BanksListSkeleton";
 import { BanksEmptyFiltered } from "./_components/BanksEmptyFiltered";
-import { BanksBulkBar } from "./_components/BanksBulkBar";
+import { BULK_DELETE_TESTID, BanksBulkBar } from "./_components/BanksBulkBar";
 import {
   DEFAULT_SORT,
   EMPTY_FILTER,
@@ -68,6 +72,22 @@ function genericProblem(detail: string): ProblemDetails {
   };
 }
 
+/**
+ * Persistent delete-error state for this page (one error per mutation origin):
+ * a new attempt's failure replaces it, a success clears it, a dismiss closes
+ * it. `bankId` is the row whose delete failed (drives neighbor focus after a
+ * stale-404 refresh); `scope` decides where focus lands after recovery.
+ */
+interface DeleteErrorState {
+  problem: ProblemDetails;
+  bankId: string;
+  scope: "single" | "bulk";
+}
+
+function isNotFoundError(reason: unknown): boolean {
+  return reason instanceof HttpError && reason.problem.status === HttpStatus.NOT_FOUND;
+}
+
 export default function BanksListPage() {
   const [state, setState] = useState<State>(ViewStatus.LOADING);
   const [banks, setBanks] = useState<Bank[]>([]);
@@ -78,6 +98,7 @@ export default function BanksListPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<BanksPageSize>(BANKS_PAGE_SIZE_DEFAULT);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [deleteError, setDeleteError] = useState<DeleteErrorState | null>(null);
   // Hydration-safe persisted preferences: SSR and first client paint always
   // render the defaults; the stored values apply after hydration.
   const [view, setView] = useStoredPreference<BanksView>(
@@ -116,6 +137,14 @@ export default function BanksListPage() {
       if (!mountedRef.current) return;
       setBanks(result.banks);
       setNextCursor(result.nextCursor);
+      // A reload recalculates the selection: ids that no longer exist on the
+      // server would otherwise survive as phantoms inflating the bulk count.
+      setSelectedIds((prev) => {
+        if (prev.size === 0) return prev;
+        const live = new Set(result.banks.map((bank) => bank.id));
+        const next = new Set([...prev].filter((id) => live.has(id)));
+        return next.size === prev.size ? prev : next;
+      });
       setState(ViewStatus.READY);
     } catch (err) {
       if (!mountedRef.current || options?.silent) return;
@@ -193,6 +222,7 @@ export default function BanksListPage() {
     // vanished with no acknowledgement.
     const deleted = banks.find((bank) => bank.id === id);
     toastNotifier.success("Bank deleted", deleted ? { description: deleted.name } : undefined);
+    setDeleteError(null);
     const index = paged.rows.findIndex((bank) => bank.id === id);
     const neighbor = index === -1 ? undefined : (paged.rows[index + 1] ?? paged.rows[index - 1]);
     pendingFocusIdRef.current = neighbor && neighbor.id !== id ? neighbor.id : null;
@@ -205,15 +235,66 @@ export default function BanksListPage() {
     });
   };
 
+  // A failed single delete: the dialog has already closed itself; anchor the
+  // problem in the persistent surface above the list (one error per origin —
+  // a newer failure replaces it).
+  const handleBankDeleteFailed = useCallback((id: string, problem: ProblemDetails): void => {
+    setDeleteError({ problem, bankId: id, scope: "single" });
+  }, []);
+
+  // Focus target once a bulk-error "Refresh list" settles: the bulk bar's
+  // Delete when a selection survives, the list container otherwise.
+  const pendingBulkFocusRef = useRef(false);
+  const listContainerRef = useRef<HTMLDivElement>(null);
+
+  // Announces list-level outcomes that change no selection count (e.g. a
+  // stale-404 refresh). Always mounted, like the selection region.
+  const [refreshAnnouncement, setRefreshAnnouncement] = useState("");
+
+  // Typed recovery for the persistent delete error: a stale 404 heals with a
+  // refresh; `bank-in-use` (and unmapped types) gets no action — recovery
+  // lives outside the list.
+  const handleDeleteErrorRefresh = async (): Promise<void> => {
+    const current = deleteError;
+    if (!current) return;
+    if (current.scope === "single") {
+      // The stale row disappears with the refresh; focus its neighbor.
+      const index = paged.rows.findIndex((bank) => bank.id === current.bankId);
+      const neighbor = index === -1 ? undefined : (paged.rows[index + 1] ?? paged.rows[index - 1]);
+      pendingFocusIdRef.current = neighbor && neighbor.id !== current.bankId ? neighbor.id : null;
+    } else {
+      pendingBulkFocusRef.current = true;
+    }
+    setDeleteError(null);
+    setRefreshAnnouncement("");
+    await loadBanks();
+    if (current.scope === "single") {
+      // The bulk path announces through the selection region (its count
+      // changes); a single-row refresh changes no count, so announce here.
+      setRefreshAnnouncement("List refreshed");
+    }
+  };
+
   useEffect(() => {
     const id = pendingFocusIdRef.current;
     if (!id) return;
     pendingFocusIdRef.current = null;
     const escaped = globalThis.CSS.escape(id);
-    const row = globalThis.document.querySelector<HTMLElement>(
+    const rows = globalThis.document.querySelectorAll<HTMLElement>(
       `[data-testid="banks-table__row-${escaped}"], [data-testid="banks-stacked__row-${escaped}"]`,
     );
-    row?.focus();
+    // Both responsive surfaces render the row; the breakpoint hides one with
+    // display:none and focus() on a hidden node is a silent no-op — target the
+    // visible one (offsetParent is null while hidden; jsdom falls back to the
+    // first match).
+    const row = [...rows].find((el) => el.offsetParent !== null) ?? rows[0];
+    if (row) {
+      row.focus();
+    } else {
+      // The precomputed neighbor can vanish with a refresh (re-pagination,
+      // concurrent deletes) — never strand focus on <body>.
+      listContainerRef.current?.focus();
+    }
   }, [banks]);
 
   const toggleSelect = useCallback((id: string): void => {
@@ -233,7 +314,6 @@ export default function BanksListPage() {
   // Esc clears the selection — but only when no transient layer is open:
   // tooltips stop propagation when they consume Esc, and dialogs/menus live
   // in portals outside this subtree, so their Esc never reaches here.
-  const listContainerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = listContainerRef.current;
     if (!el) return;
@@ -244,6 +324,25 @@ export default function BanksListPage() {
     el.addEventListener("keydown", handleKeyDown);
     return () => el.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  useEffect(() => {
+    if (!pendingBulkFocusRef.current) return;
+    if (state === ViewStatus.ERROR) {
+      // The refresh itself failed — disarm so a later unrelated reload
+      // doesn't steal focus out of nowhere.
+      pendingBulkFocusRef.current = false;
+      return;
+    }
+    if (state !== ViewStatus.READY) return;
+    pendingBulkFocusRef.current = false;
+    if (selectedIds.size > 0) {
+      globalThis.document
+        .querySelector<HTMLElement>(`[data-testid="${BULK_DELETE_TESTID}"]`)
+        ?.focus();
+    } else {
+      listContainerRef.current?.focus();
+    }
+  }, [state, selectedIds, banks]);
 
   // Selection announcements: the polite region is ALWAYS mounted (a region
   // born with its first message is missed by screen readers) and rapid
@@ -266,13 +365,45 @@ export default function BanksListPage() {
     [selectedIds],
   );
 
-  // Bulk delete is OPTIMISTIC (a documented exception to the pessimistic-by-
-  // default rule): the selected rows vanish immediately, then any failures are
-  // restored and reported. Single-row delete stays pessimistic (its dialog
-  // keeps the error inline).
+  // Bulk delete: a pessimistic existence pre-check guards the optimistic
+  // attempt — any stale id aborts before mutating anything; probe failures
+  // other than 404 fail open to the attempt. After the attempt, 404
+  // rejections do NOT resurrect rows (the bank is already gone) while other
+  // failures restore the row AND its selection so the user retries without
+  // re-picking. Failures land in the persistent error surface; the toast is
+  // only a transient pointer.
+  const bulkDeleteInFlightRef = useRef(false);
   const handleBulkDelete = async (): Promise<void> => {
+    // The bulk bar stays mounted during the probe window — guard re-entry.
+    if (bulkDeleteInFlightRef.current) return;
     const ids = [...selectedIds].filter((id) => banks.some((bank) => bank.id === id));
     if (ids.length === 0) return;
+    bulkDeleteInFlightRef.current = true;
+    try {
+      await runBulkDelete(ids);
+    } finally {
+      bulkDeleteInFlightRef.current = false;
+    }
+  };
+
+  const runBulkDelete = async (ids: string[]): Promise<void> => {
+    const findBank = container.get<FindBank>("BackOfficeFindBank");
+    const probes = await Promise.allSettled(ids.map((id) => findBank.run(id)));
+    if (!mountedRef.current) return;
+    const staleIndex = probes.findIndex(
+      (probe) => probe.status === "rejected" && isNotFoundError(probe.reason),
+    );
+    if (staleIndex !== -1) {
+      const stale = probes[staleIndex] as PromiseRejectedResult;
+      setDeleteError({
+        problem: (stale.reason as HttpError).problem,
+        bankId: ids[staleIndex],
+        scope: "bulk",
+      });
+      toastNotifier.error("Couldn't delete banks — see error details");
+      return;
+    }
+
     const snapshot = banks;
     const removing = new Set(ids);
     setBanks((prev) => prev.filter((bank) => !removing.has(bank.id)));
@@ -282,22 +413,42 @@ export default function BanksListPage() {
     const results = await Promise.allSettled(ids.map((id) => useCase.run(id)));
     if (!mountedRef.current) return;
 
-    const failed = ids.filter((_, index) => results[index].status === "rejected");
-    const succeeded = ids.length - failed.length;
+    const rejections = ids.flatMap((id, index) => {
+      const result = results[index];
+      return result.status === "rejected" ? [{ id, reason: result.reason as unknown }] : [];
+    });
+    const succeeded = ids.length - rejections.length;
     if (succeeded > 0) {
       toastNotifier.success(`${succeeded} ${succeeded === 1 ? "bank" : "banks"} deleted`);
     }
-    if (failed.length > 0) {
-      const failedSet = new Set(failed);
-      const restored = snapshot.filter((bank) => failedSet.has(bank.id));
+    if (rejections.length === 0) {
+      setDeleteError(null);
+      return;
+    }
+    // A 404 rejection means the bank was already gone: don't resurrect it.
+    const restorable = new Set(
+      rejections.filter(({ reason }) => !isNotFoundError(reason)).map(({ id }) => id),
+    );
+    if (restorable.size > 0) {
+      const restored = snapshot.filter((bank) => restorable.has(bank.id));
       setBanks((prev) => {
         const present = new Set(prev.map((bank) => bank.id));
         return [...prev, ...restored.filter((bank) => !present.has(bank.id))];
       });
-      toastNotifier.error("Some banks could not be deleted", {
-        description: `${failed.length} of ${ids.length} could not be deleted.`,
-      });
+      setSelectedIds((prev) => new Set([...prev, ...restorable]));
     }
+    const first = rejections[0];
+    setDeleteError({
+      problem:
+        first.reason instanceof HttpError
+          ? first.reason.problem
+          : genericProblem(first.reason instanceof Error ? first.reason.message : "Unknown error"),
+      bankId: first.id,
+      scope: "bulk",
+    });
+    toastNotifier.error("Some banks could not be deleted", {
+      description: `${rejections.length} of ${ids.length} could not be deleted. See error details.`,
+    });
   };
 
   // A realtime delta arriving while the list still shows a failed-load error
@@ -345,10 +496,31 @@ export default function BanksListPage() {
     },
   });
 
+  // Typed recovery: only a stale `bank-not-found` heals from here. The
+  // refresh recalculates the selection and re-derives the confirm phrase.
+  const deleteRecoveryAction =
+    deleteError?.problem.type === BankProblemType.NOT_FOUND ? (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => {
+          // Fire-and-forget: the handler resolves all errors internally.
+          handleDeleteErrorRefresh();
+        }}
+        aria-label="Refresh list"
+        title="Refresh the banks list"
+        data-testid="banks-list__delete-error-refresh"
+      >
+        Refresh list
+      </Button>
+    ) : undefined;
+
   return (
     <div
       ref={listContainerRef}
-      className="banks-list mx-auto w-full max-w-[90rem] space-y-4 sm:space-y-6"
+      tabIndex={-1}
+      className="banks-list mx-auto w-full max-w-[90rem] space-y-4 outline-none sm:space-y-6"
       data-testid="banks-list"
       data-state={boundaryState}
     >
@@ -359,6 +531,14 @@ export default function BanksListPage() {
         data-testid="banks-list__selection-status"
       >
         {selectionAnnouncement}
+      </p>
+      <p
+        className="sr-only"
+        role="status"
+        aria-live="polite"
+        data-testid="banks-list__refresh-status"
+      >
+        {refreshAnnouncement}
       </p>
       <header
         className="banks-list__header flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
@@ -424,6 +604,15 @@ export default function BanksListPage() {
         />
       ) : null}
 
+      {deleteError ? (
+        <MutationError
+          problem={deleteError.problem}
+          onDismiss={() => setDeleteError(null)}
+          action={deleteRecoveryAction}
+          testId="banks-list__delete-error"
+        />
+      ) : null}
+
       <AsyncBoundary
         state={boundaryState}
         data={banks}
@@ -470,6 +659,7 @@ export default function BanksListPage() {
                   <BanksStackedList
                     banks={paged.rows}
                     onBankDeleted={handleBankDeleted}
+                    onBankDeleteFailed={handleBankDeleteFailed}
                     selectedIds={selectedIds}
                     onToggleSelect={toggleSelect}
                     density={density}
@@ -481,6 +671,7 @@ export default function BanksListPage() {
                       sort={sort}
                       onSortChange={setSort}
                       onBankDeleted={handleBankDeleted}
+                      onBankDeleteFailed={handleBankDeleteFailed}
                       selection={tableSelection}
                       density={density}
                     />
@@ -490,6 +681,7 @@ export default function BanksListPage() {
                 <BanksCards
                   banks={paged.rows}
                   onBankDeleted={handleBankDeleted}
+                  onBankDeleteFailed={handleBankDeleteFailed}
                   selectedIds={selectedIds}
                   onToggleSelect={toggleSelect}
                   density={density}

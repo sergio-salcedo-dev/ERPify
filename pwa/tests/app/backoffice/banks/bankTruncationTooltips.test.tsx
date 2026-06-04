@@ -25,14 +25,14 @@ const LONG = Bank.fromPrimitives({
  */
 describe("Bank short-name truncation", () => {
   it("table code cell keeps the full value in the DOM, truncating via CSS only", () => {
-    render(<BanksTable banks={[LONG]} />);
+    render(<BanksTable onBankDeleteFailed={() => {}} banks={[LONG]} />);
     const el = screen.getByText("VERYLONGSHORTNAMEVALUE");
     expect(el).not.toHaveAttribute("title");
     expect(el).toHaveClass("truncate");
   });
 
   it("card short-name keeps the full value in the DOM, truncating via CSS only", () => {
-    render(<BanksCards banks={[LONG]} />);
+    render(<BanksCards onBankDeleteFailed={() => {}} banks={[LONG]} />);
     const el = screen.getByTestId(`banks-cards__shortname-${LONG.id}`);
     expect(el).toHaveTextContent("VERYLONGSHORTNAMEVALUE");
     expect(el).not.toHaveAttribute("title");
@@ -48,7 +48,7 @@ describe("Bank short-name truncation", () => {
       createdAt: "2026-01-01T10:00:00Z",
       updatedAt: "2026-01-01T10:00:00Z",
     });
-    render(<BanksTable banks={[longest]} />);
+    render(<BanksTable onBankDeleteFailed={() => {}} banks={[longest]} />);
     expect(screen.getByText(name)).toBeInTheDocument();
   });
 });

@@ -14,6 +14,7 @@ import { Routes } from "@/context/shared/domain/types/routes";
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
+import { MutationErrorDemo } from "./MutationErrorDemo";
 
 interface RouteCase {
   label: string;
@@ -301,6 +302,30 @@ export default function DevErrorGalleryPage() {
                 <ProblemDisplay problem={fixture.problem} variant="panel" />
               </article>
             ))}
+          </div>
+        </section>
+
+        <section className="error-gallery__mutation-error mt-12">
+          <h2 className="text-foreground text-lg font-semibold tracking-tight sm:text-xl">
+            Persistent <code className="font-mono text-base">&lt;MutationError&gt;</code> surface
+          </h2>
+          <p className="text-muted-foreground mt-1 text-sm">
+            The surface a failed mutation anchors next to its origin (above the list, under the
+            detail H1): dismissible, copyable (message · code · full JSON), with the typed recovery
+            action slot. Shown here with the <code className="font-mono text-xs">bank-in-use</code>{" "}
+            409 — which carries no recovery action by contract.
+          </p>
+          <div className="mt-4">
+            <MutationErrorDemo
+              problem={makeProblem({
+                type: "bank-in-use",
+                title: "Bank cannot be deleted: 12 associated bank accounts",
+                status: 409,
+                detail: "Remove or reassign the associated bank accounts first.",
+                bankId: "01926e7e-7b8a-7c4e-9f31-b1c2d3e4f5a6",
+                accountCount: 12,
+              })}
+            />
           </div>
         </section>
 

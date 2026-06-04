@@ -27,7 +27,7 @@ const BANKS = [
 
 describe("BanksStackedList — mobile keyboard contract", () => {
   it("each row-card is a single roving tab stop in visual order", () => {
-    render(<BanksStackedList banks={BANKS} />);
+    render(<BanksStackedList onBankDeleteFailed={() => {}} banks={BANKS} />);
     const first = screen.getByTestId(`banks-stacked__row-${BANKS[0].id}`);
     const second = screen.getByTestId(`banks-stacked__row-${BANKS[1].id}`);
     expect(first).toHaveAttribute("tabindex", "0");
@@ -35,7 +35,7 @@ describe("BanksStackedList — mobile keyboard contract", () => {
   });
 
   it("ArrowDown moves focus to the next row; Enter opens the detail", () => {
-    render(<BanksStackedList banks={BANKS} />);
+    render(<BanksStackedList onBankDeleteFailed={() => {}} banks={BANKS} />);
     const first = screen.getByTestId(`banks-stacked__row-${BANKS[0].id}`);
     const second = screen.getByTestId(`banks-stacked__row-${BANKS[1].id}`);
 
@@ -50,7 +50,12 @@ describe("BanksStackedList — mobile keyboard contract", () => {
   it("Space toggles selection and the checkbox is always visible", () => {
     const onToggleSelect = vi.fn();
     render(
-      <BanksStackedList banks={BANKS} selectedIds={new Set()} onToggleSelect={onToggleSelect} />,
+      <BanksStackedList
+        onBankDeleteFailed={() => {}}
+        banks={BANKS}
+        selectedIds={new Set()}
+        onToggleSelect={onToggleSelect}
+      />,
     );
     const first = screen.getByTestId(`banks-stacked__row-${BANKS[0].id}`);
     fireEvent.keyDown(first, { key: " " });
