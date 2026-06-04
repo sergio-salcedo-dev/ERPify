@@ -117,8 +117,8 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 - **Routing**: attribute-only (`#[Route]`) on controllers. No YAML route files in `src/`. Group controllers per bounded context under `Backoffice/` or `Frontoffice/`.
 - **Controllers**: thin. Extend `AbstractController`; delegate to an Application-layer use case. Return via `$this->json(...)` so Serializer groups apply — do **not** hand-roll `new JsonResponse(json_encode(...))`.
 - **DI**: autowiring + autoconfiguration default. Register explicit services in `services.yaml` only when autowiring can't resolve (tagged iterators, multiple implementations, factories). Bind domain interfaces to infra implementations via `_defaults` + `bind:` or `instanceof`.
-- **No framework types in `Domain/`**: no `Request`, `Response`, `EntityManagerInterface`, `SerializerInterface`, `HttpException`, Symfony validator constraints, Doctrine annotations. Those belong in `Application/` (orchestration) or `Infrastructure/` (adapters).
-- **Validation**: Symfony Validator attributes on DTOs in `Application/` or request-layer DTOs — not on domain entities.
+- **No behavioral framework types in `Domain/`**: no `Request`, `Response`, `EntityManagerInterface`, `SerializerInterface`, `HttpException`. Those belong in `Application/` (orchestration) or `Infrastructure/` (adapters). Documented exception: entities may carry passive metadata attributes (`#[ORM]`, `#[Assert]`, `#[Groups]`) — see [`rules/architecture.md`](./rules/architecture.md).
+- **Validation**: Symfony Validator attributes on request DTOs in `Application/Http` (enforced by `#[MapRequestPayload]` / `#[MapQueryString]` at mapping time) **and** on domain entities as invariants, enforced by the shared `Validator::ensure(...)` before save.
 - **Serialization**: use Serializer groups (`#[Groups]`) on DTOs; never expose domain entities directly over HTTP.
 - **Messenger**:
     - Commands/queries/events implement marker interfaces from `Shared/` — do **not** couple handlers to `Symfony\Messenger\*` envelopes in domain code.

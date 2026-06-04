@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\Bank\Application;
 
+use Erpify\Backoffice\Bank\Application\Http\BankPostPayload;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Shared\Application\Validation\Validator;
@@ -27,8 +28,7 @@ final readonly class BankCreator
     }
 
     public function create(
-        string $name,
-        string $shortName,
+        BankPostPayload $payload,
         ?UploadedFile $logoFile = null,
         ?UploadedFile $storedObjectFile = null,
     ): Bank {
@@ -47,8 +47,8 @@ final readonly class BankCreator
         $bank = Bank::create(
             SymfonyUuidGenerator::generate(),
             SymfonyUuidGenerator::generate(),
-            $name,
-            $shortName,
+            $payload->name,
+            $payload->shortName,
             $logo,
             $storedObject,
         );

@@ -1,4 +1,3 @@
-import React from "react";
 import { cn } from "@/lib/utils";
 import { SystemStatus, componentStatusLabel } from "@/lib/systemStatus";
 
@@ -22,7 +21,7 @@ const LABEL_CLASSNAME: Record<SystemStatus, string> = {
   [SystemStatus.DISRUPTED]: "text-danger-strong",
 };
 
-export const ComponentStatusRow: React.FC<ComponentStatusRowProps> = ({ name, status, testId }) => {
+export function ComponentStatusRow({ name, status, testId }: Readonly<ComponentStatusRowProps>) {
   return (
     <div
       data-testid={testId}
@@ -43,4 +42,4 @@ export const ComponentStatusRow: React.FC<ComponentStatusRowProps> = ({ name, st
       </span>
     </div>
   );
-};
+}

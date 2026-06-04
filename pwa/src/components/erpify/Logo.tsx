@@ -1,4 +1,3 @@
-import React from "react";
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -27,7 +26,7 @@ const sizeClasses: Record<LogoSize, { icon: string; text: string; badge: string;
   lg: { icon: "size-6", text: "text-2xl", badge: "p-2 rounded-lg", gap: "gap-2" },
 };
 
-export const Logo: React.FC<LogoProps> = ({
+export function Logo({
   href,
   size = "md",
   variant = "plain",
@@ -36,7 +35,7 @@ export const Logo: React.FC<LogoProps> = ({
   iconClassName,
   textClassName,
   testId,
-}) => {
+}: Readonly<LogoProps>) {
   const sizes = sizeClasses[size];
 
   const icon =
@@ -99,4 +98,4 @@ export const Logo: React.FC<LogoProps> = ({
       {wordmark}
     </span>
   );
-};
+}

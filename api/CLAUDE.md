@@ -29,7 +29,7 @@ API-scoped guidance. Root [`../CLAUDE.md`](../CLAUDE.md) is authoritative for mo
 
 ## Layer rules (load-bearing)
 
-Dependencies point inward toward `Domain/`. **No** Symfony/Doctrine/HTTP/Messenger imports inside `Domain/` — put adapters in `Infrastructure/` and orchestration in `Application/`. Domain entities and value objects are pure PHP + interfaces.
+Dependencies point inward toward `Domain/`. **No** Symfony/Doctrine/HTTP/Messenger imports inside `Domain/` — put adapters in `Infrastructure/` and orchestration in `Application/`. Domain entities and value objects are pure PHP + interfaces. Documented exception: entities may carry passive metadata attributes (`#[ORM]`, `#[Assert]`, `#[Groups]`) — see [`../docs/rules/architecture.md`](../docs/rules/architecture.md).
 
 -   `Domain/` — entities, value objects, domain events, repository **interfaces**, domain services.
 -   `Application/` — use cases / command + query handlers, DTOs, transaction boundaries. Orchestrates domain; consumes repository interfaces.
@@ -39,7 +39,7 @@ New bounded contexts/modules follow the same three-layer split. Cross-context ca
 
 ## Rules that bite
 
--   **Never** put Doctrine annotations/attributes, Symfony services, HTTP concerns, or Messenger handlers inside `Domain/`. Map entities via XML/attributes in `Infrastructure/Persistence/` or via separate mapping files.
+-   **Never** put Symfony services, HTTP concerns, or Messenger handlers inside `Domain/`. Entities are attribute-mapped in place (`#[ORM\…]`) under the passive-metadata exception in [`../docs/rules/architecture.md`](../docs/rules/architecture.md) — behavioral framework code stays out.
 -   **Never** hand-edit a migration that has already been applied. Generate a new one with `make db.diff`.
 -   **Don't skip** `make php.quality` locally — CI runs it and the fixers (`cs-fixer`, `psalm.fix.*`) mutate files, so running them first keeps diffs clean.
 -   Add async jobs via Messenger buses; don't spawn processes or inline long work in request handlers. See [`docs/architecture-api.md`](../docs/architecture-api.md) for the audit table + domain-event flow.
@@ -54,7 +54,7 @@ For API changes specifically, walk these before pushing:
 
 -   Doctrine queries are parameterised (`:placeholder` / query-builder bindings); no `${…}` interpolation reaching SQL/DQL.
 -   New controllers / handlers declare a Security voter or `IsGranted`, or document why they are public.
--   Request DTOs carry `#[Assert\…]` constraints and pass through `ValidatorHelper` before any domain call. Validate UUIDs are UUIDs.
+-   Request DTOs carry `#[Assert\…]` constraints, enforced by `#[MapRequestPayload]` / `#[MapQueryString]` at mapping time; other inputs (route ids, uploads) go through the shared `Validator::ensure()` before any domain call. Validate UUIDs are UUIDs.
 -   Serializer groups never expose audit fields (`id`, `createdAt`, `updatedAt`, internal flags) to client-supplied payloads.
 -   Errors follow RFC 9457 Problem Details; no stack traces or DB strings leak outside `dev`.
 -   `.env*.local` and other secret files are NOT in the diff.

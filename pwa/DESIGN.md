@@ -3,7 +3,7 @@
 Lean implementation-facing reference for polishing the ERPify back-office PWA. Day-to-day artifact for engineers; full design spec lives at `_bmad-output/planning-artifacts/ux-design-specification.md`.
 
 > **Status:** v1, brownfield-safe, applied iteratively. Tokens land first; components consume tokens; composites wrap Shadcn primitives. No big-bang rewrite.
-> **Inspiration:** Linear's restraint principles and palette discipline, applied to an ERP back-office that runs **light-mode by default**. Dark mode is a fully supported variant on the elevated SaaS grey band (GitHub dark-dimmed / Stripe).
+> **Inspiration:** Linear's restraint principles and palette discipline, applied to an ERP back-office that runs **light-mode by default**. Dark mode is a fully supported variant on a navy-slate band (GitHub-dimmed undertone / Stripe-Vercel navy).
 
 ---
 
@@ -66,14 +66,14 @@ When analyzing, creating, or modifying **any** UI component, do **not** assume t
 Three deliberate departures from the project's earlier defaults — load-bearing for the polish identity. Documented here so future readers don't undo them by accident.
 
 1. **Geist + Geist Mono via `next/font/google` is the only typeface dependency.** Self-hosted, zero CLS, no third-party network call. The earlier "no web fonts in v1" rule is superseded — Geist is Vercel's default for new Next.js projects and ships as the typography baseline. Geist Mono replaces the substitute-for-Berkeley-Mono concern in one decision.
-2. **Light mode is the canonical default.** Most ERP back-office operators work in light all day. Light mode uses conventional sRGB neutrals + drop shadows. Dark mode ships fully wired with an **elevated SaaS grey treatment**: `#16181d` canvas (GitHub-dimmed/Stripe band — see _Dark mode specifically_), semi-transparent white borders, white-opacity elevation stepping, brand indigo accent.
-3. **Brand color is Linear-derived indigo `#5e6ad2` / `#7170ff`.** It is the only chromatic hue in the system and is the same in both modes.
+2. **Light mode is the canonical default.** Most ERP back-office operators work in light all day. Light mode uses conventional sRGB neutrals + drop shadows. Dark mode ships fully wired with a **navy-slate treatment**: `#11151f` canvas (see _Dark mode specifically_), semi-transparent blue-white borders, luminance elevation stepping, blue accent.
+3. **Brand color is the blue family (~hue 225°), mode-aware.** It is the only chromatic hue in the system; values diverge per mode for AA (`#2f5cd9` light, `#6c9bff`/`#3760e6` dark) — see _Color — brand and accent_.
 
 ---
 
 ## TL;DR — what this system is
 
-- **Light-mode default, elevated-grey dark mode.** Light is the canonical authoring environment. Dark mode is the GitHub-dimmed/Stripe-band variant for operators who prefer it.
+- **Light-mode default, navy-slate dark mode.** Light is the canonical authoring environment. Dark mode is the navy-slate band variant for operators who prefer it.
 - **Geist + Geist Mono.** Loaded via `next/font/google`. Three weights: `400` reading, `500` emphasis, `600` strong emphasis. No OpenType feature toggling.
 - **Tokens-first.** Every color, type size, radius, and elevation lives as a CSS variable in `src/app/globals.css` `@theme`. Light and dark share the same alias contract. (Spacing rides Tailwind's default scale; motion is reduced-at-root but durations aren't yet tokenized — see those sections.)
 - **Shadcn primitives are unforked.** ERPify-specific composites live in `src/components/erpify/` and wrap Shadcn primitives via slots and `cn()`.
@@ -81,19 +81,19 @@ Three deliberate departures from the project's earlier defaults — load-bearing
 - **Four-state async surfaces are mandatory.** Every fetched surface wraps in `<AsyncBoundary>` with explicit idle / loading / empty / error.
 - **Pessimistic-by-default UI.** No optimistic flashes. Errors stay where the action was attempted. Data is preserved across failed submits.
 - **Keyboard-first.** Every primary task is completable without a mouse. Focus rings are always visible, in both modes.
-- **Brand indigo, used with intent.** Primary action and active state only. Everything else is grayscale.
+- **Brand blue, used with intent.** Primary action and active state only. Everything else is grayscale.
 
 ---
 
 ## Principles (the system enforces these)
 
 1. **Honest over delightful.** No optimistic theater, no swallowed errors, no celebratory copy.
-2. **Quiet by default, loud only on signal.** Color, motion, and emphasis are reserved tokens — they carry meaning when they appear. Brand indigo is the _only_ chromatic color in the system; everything else is grayscale.
+2. **Quiet by default, loud only on signal.** Color, motion, and emphasis are reserved tokens — they carry meaning when they appear. Brand blue is the _only_ chromatic color in the system; everything else is grayscale.
 3. **Density is a feature.** Compact is default; comfortable is opt-in.
 4. **Keyboard is the canonical input.** First-class, never a fallback.
 5. **One way to do each thing.** Single skeleton pattern, single error pattern, single empty pattern, single primary-action color.
 6. **Brownfield-safe iteration.** Every token and primitive can be applied to one component at a time without breaking the rest.
-7. **Mode-aware elevation.** Light mode uses conventional surface stepping + faint drop shadows. Dark mode uses Linear's white-opacity stepping; drop shadows are reserved for floating affordances.
+7. **Mode-aware elevation.** Light mode uses conventional surface stepping + faint drop shadows. Dark mode uses luminance stepping; drop shadows are reserved for floating affordances.
 
 ---
 
@@ -101,55 +101,55 @@ Three deliberate departures from the project's earlier defaults — load-bearing
 
 All tokens live in `src/app/globals.css`. The wiring is three layers, top to bottom:
 
-1. **Raw ramp values** are authored as `--erpify-*` custom properties in `:root` (light, canonical) and `.dark` (elevated SaaS grey). This is the only place a hex value appears, and the only place light/dark diverge.
+1. **Raw ramp values** are authored as `--erpify-*` custom properties in `:root` (light, canonical) and `.dark` (navy slate). This is the only place a hex value appears, and the only place light/dark diverge.
 2. **`@theme inline {}`** re-exports them as the semantic `--color-*` aliases this document names (`--color-bg → var(--erpify-bg)`, etc.) **and** maps the Shadcn-named tokens (`--background`, `--primary`, `--card`, …) onto the same ramp so unforked Shadcn primitives work without edits.
 3. **Components consume the aliases** — never the raw `--erpify-*` ramp, never a literal hex.
 
 Hex values are authored directly — Tailwind 4 accepts hex, sRGB, and oklch interchangeably.
 
-> **Alias-name caveat.** Two semantic names collide with Shadcn's own theme keys, so the ERPify alias carries a `-default` suffix in `@theme`: the brand violet is **`--color-accent-default`** (`--color-accent` is Shadcn's, mapped to `--color-bg-subtle`) and the default border is **`--color-border-default`** (`--color-border` is Shadcn's, same value). The tables below use the short conceptual names; reach for the `-default` alias when consuming the CSS variable directly.
+> **Alias-name caveat.** Two semantic names collide with Shadcn's own theme keys, so the ERPify alias carries a `-default` suffix in `@theme`: the brand blue is **`--color-accent-default`** (`--color-accent` is Shadcn's, mapped to `--color-bg-subtle`) and the default border is **`--color-border-default`** (`--color-border` is Shadcn's, same value). The tables below use the short conceptual names; reach for the `-default` alias when consuming the CSS variable directly.
 
 ### Color — surface ramp
 
-| Token                 | Light (canonical) | Dark (elevated SaaS grey)  | Use                             |
+| Token                 | Light (canonical) | Dark (navy slate)          | Use                             |
 | --------------------- | ----------------- | -------------------------- | ------------------------------- |
-| `--color-bg`          | `#f7f8f8`         | `#16181d` (Canvas)         | Page / canvas background        |
-| `--color-bg-muted`    | `#f3f4f5`         | `#1c1f25` (Panel)          | Sidebar, panel background       |
-| `--color-bg-subtle`   | `#e9eaec`         | `#22262e` (Subtle Surface) | Hover surface, subtle fill      |
-| `--color-bg-elevated` | `#ffffff`         | `#2b303a` (Elevated)       | Card, dropdown, popover, dialog |
+| `--color-bg`          | `#f7f8f8`         | `#11151f` (Canvas)         | Page / canvas background        |
+| `--color-bg-muted`    | `#f3f4f5`         | `#161b29` (Panel)          | Sidebar, panel background       |
+| `--color-bg-subtle`   | `#e9eaec`         | `#1d2433` (Subtle Surface) | Hover surface, subtle fill      |
+| `--color-bg-elevated` | `#ffffff`         | `#242e42` (Elevated)       | Card, dropdown, popover, dialog |
 
 ### Color — text ramp
 
 | Token                    | Light (canonical) | Dark      | Use                           |
 | ------------------------ | ----------------- | --------- | ----------------------------- |
-| `--color-text`           | `#08090a`         | `#edeef0` | Body — never pure white/black |
-| `--color-text-muted`     | `#62666d`         | `#b4bac4` | Secondary body, descriptions  |
-| `--color-text-subtle`    | `#8a8f98`         | `#8b919e` | Placeholders, metadata        |
-| `--color-text-faint`     | `#9ea2a8`         | `#646b78` | Timestamps, disabled-ish      |
-| `--color-text-on-accent` | `#ffffff`         | `#ffffff` | Text on brand-indigo surfaces |
+| `--color-text`           | `#08090a`         | `#e7eaf3` | Body — never pure white/black |
+| `--color-text-muted`     | `#62666d`         | `#aeb6cb` | Secondary body, descriptions  |
+| `--color-text-subtle`    | `#8a8f98`         | `#8590a8` | Placeholders, metadata        |
+| `--color-text-faint`     | `#9ea2a8`         | `#66708a` | Timestamps, disabled-ish      |
+| `--color-text-on-accent` | `#ffffff`         | `#ffffff` | Text on brand-blue surfaces   |
 
 ### Color — borders
 
 | Token                   | Light (canonical) | Dark                     | Use                                           |
 | ----------------------- | ----------------- | ------------------------ | --------------------------------------------- |
-| `--color-border-subtle` | `#eef0f2`         | `rgba(255,255,255,0.05)` | Faintest divider                              |
-| `--color-border`        | `#dcdfe3`         | `rgba(255,255,255,0.09)` | Default border for cards, inputs, code blocks |
-| `--color-border-strong` | `#bfc3ca`         | `rgba(255,255,255,0.15)` | Emphasized divider                            |
-| `--color-line-tint`     | `#f3f4f5`         | `#191c22`                | Whisper-line dividers between rows            |
+| `--color-border-subtle` | `#eef0f2`         | `rgba(165,180,220,0.07)` | Faintest divider                              |
+| `--color-border`        | `#dcdfe3`         | `rgba(165,180,220,0.12)` | Default border for cards, inputs, code blocks |
+| `--color-border-strong` | `#bfc3ca`         | `rgba(165,180,220,0.20)` | Emphasized divider                            |
+| `--color-line-tint`     | `#f3f4f5`         | `#141828`                | Whisper-line dividers between rows            |
 
 ### Color — brand and accent (the only chromatic hue in the system)
 
-Same in both modes. Adjusted-state values shift slightly for legibility.
+Mode-aware: one value cannot be link-AA on both white and navy (the former indigo accent computed 3.44:1 on dark `bg-elevated`). Names stay identical; values flip in `.dark` like every other ramp.
 
-| Token                   | Value                           | Use                                                 |
-| ----------------------- | ------------------------------- | --------------------------------------------------- |
-| `--color-brand`         | `#5e6ad2` (Linear Brand Indigo) | Primary CTA background, brand mark                  |
-| `--color-accent`        | `#7170ff` (Accent Violet)       | Links, active state, selected item, focus accent    |
-| `--color-accent-hover`  | `#828fff`                       | Hover for accent surfaces                           |
-| `--color-accent-active` | `#5052c4`                       | Pressed / active surfaces                           |
-| `--color-security`      | `#7a7fad` (Security Lavender)   | Reserved for security UI (auth, audit, permissions) |
+| Token                   | Light     | Dark      | Use                                                 |
+| ----------------------- | --------- | --------- | --------------------------------------------------- |
+| `--color-brand`         | `#2f5cd9` | `#3760e6` | Primary CTA background, brand mark                  |
+| `--color-accent`        | `#2f5cd9` | `#6c9bff` | Links, active state, selected item, focus accent    |
+| `--color-accent-hover`  | `#4a73e8` | `#87adff` | Hover for accent surfaces                           |
+| `--color-accent-active` | `#2450b8` | `#5586f2` | Pressed / active surfaces                           |
+| `--color-security`      | `#7589ad` | `#7589ad` | Reserved for security UI (auth, audit, permissions) |
 
-> **Identity-monogram exception (sanctioned).** `<MonogramAvatar>` renders a record's initials in a brand-indigo tint (`bg-primary/10 text-primary`). This is a deliberate, documented exception to "indigo is interactive/CTA only": the tint reads as an **identity affordance**, not a decorative flourish and not a status signal. It is always `aria-hidden` and the record name is always rendered beside it, so color is never the sole signal. Neutral-tile fallback (`bg-muted text-muted-foreground border`) is the approved downgrade if this is ever revisited. No surface uses it today — the bank surfaces dropped it as not adding value — but it stays available for entities where a monogram earns its place.
+> **Identity-monogram exception (sanctioned).** `<MonogramAvatar>` renders a record's initials in a brand-blue tint (`bg-primary/10 text-primary`). This is a deliberate, documented exception to "brand blue is interactive/CTA only": the tint reads as an **identity affordance**, not a decorative flourish and not a status signal. It is always `aria-hidden` and the record name is always rendered beside it, so color is never the sole signal. Neutral-tile fallback (`bg-muted text-muted-foreground border`) is the approved downgrade if this is ever revisited. No surface uses it today — the bank surfaces dropped it as not adding value — but it stays available for entities where a monogram earns its place.
 
 ### Color — semantic signals (sparse use; ERP-defined statuses go through `<StatusBadge>`)
 
@@ -166,7 +166,7 @@ Same in both modes. Adjusted-state values shift slightly for legibility.
 | Token                | Light               | Dark               | Use                                          |
 | -------------------- | ------------------- | ------------------ | -------------------------------------------- |
 | `--color-overlay`    | `rgba(8,9,10,0.45)` | `rgba(0,0,0,0.85)` | Modal backdrop                               |
-| `--color-focus-ring` | `#7170ff`           | `#7170ff`          | 2 px focus ring on every interactive element |
+| `--color-focus-ring` | `#2f5cd9`           | `#6c9bff`          | 2 px focus ring on every interactive element |
 
 ### Typography
 
@@ -277,15 +277,15 @@ Two systems, one for each mode. Both are token-driven; components do not branch 
 | 5     | Shadow: `0 16px 32px -8px rgba(8,9,10,0.12)`               | Dialogs, command palette               |
 | Focus | `0 0 0 2px --color-focus-ring`, offset 2 px                | Keyboard focus on interactive elements |
 
-#### Dark mode (Linear-similar) — luminance stepping, not drop shadow
+#### Dark mode (navy slate) — luminance stepping, not drop shadow
 
 On dark surfaces, traditional shadows (dark-on-dark) read as nothing. Linear conveys depth by **stepping the surface's white opacity upward** as elevation rises. Drop shadows are reserved for floating elements and even there are very low-opacity multi-layer stacks.
 
 | Level   | Treatment                                                                                                                                                             | Use                                    |
 | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| 0       | `--color-bg` (`#08090a`), no shadow                                                                                                                                   | Page canvas                            |
-| 1       | `--color-bg-muted` (`#0f1011`)                                                                                                                                        | Toolbar, sidebar                       |
-| 2       | `--color-bg-subtle` (`#191a1b`) + `1px solid --color-border`                                                                                                          | Cards, inputs                          |
+| 0       | `--color-bg` (`#11151f`), no shadow                                                                                                                                   | Page canvas                            |
+| 1       | `--color-bg-muted` (`#161b29`)                                                                                                                                        | Toolbar, sidebar                       |
+| 2       | `--color-bg-subtle` (`#1d2433`) + `1px solid --color-border`                                                                                                          | Cards, inputs                          |
 | 2-inset | `box-shadow: inset 0 0 12px 0 rgba(0,0,0,0.2)`                                                                                                                        | Recessed panels, code blocks           |
 | 3       | Border-as-shadow: `box-shadow: 0 0 0 1px rgba(0,0,0,0.2)`                                                                                                             | Subtle ring around hovered elements    |
 | 4       | Multi-layer: `0 2px 4px rgba(0,0,0,0.4)`                                                                                                                              | Dropdowns, floating affordances        |
@@ -405,7 +405,7 @@ All four take a `testId` prop rather than hardcoding a `data-testid` (per the PW
 - **Containment over wrapping (the long-text contract).** Every externally-sourced text lives in an explicit space budget: table cells truncate to **one line**, card titles clamp to **two lines with the height always reserved**, the toast description clamps to two. The truncation is CSS-only — the full string always stays in the DOM and the accessibility tree. Access to the full value: `<TruncatedText>` mounts a tooltip **only when the text actually truncates** (hover of the text, keyboard focus of the row; Esc dismisses with precedence over selection-clearing; no tooltip on touch — the detail page, one tap away, is the declared route). The **detail page H1 is the canonical home: it shows the entire name, unclamped**.
 - **Equal card heights by construction.** `auto-rows-fr` + `h-full flex-col` + `mt-auto` footer; fixed card regions top-to-bottom: controls (always-visible checkbox + mono code + actions) / full-width clamped title / status / meta footer. Controls and data never share a row.
 - **Status region.** Status (including the recency badge) renders in its own table column / card region — **never inline with the name** and never between the name and the actions.
-- **Recency ("New").** Signalled with the `success` (emerald) `<StatusBadge>` — never the brand-indigo `info` variant, which is reserved for interactive accents (the "indigo is interactive-only" rule; the monogram tint is the only sanctioned exception). Non-recent records read `Active` (neutral) so the status region is never empty.
+- **Recency ("New").** Signalled with the `success` (emerald) `<StatusBadge>` — never the brand-blue `info` variant, which is reserved for interactive accents (the "brand blue is interactive-only" rule; the monogram tint is the only sanctioned exception). Non-recent records read `Active` (neutral) so the status region is never empty.
 - **Bulk selection.** Multi-select checkboxes (table via `<DataTable selection>`, cards via a per-card always-visible checkbox) drive a selection action bar; an always-mounted polite live region announces coalesced selection counts, and the bulk-delete confirm names the first selected records (clamped) + "+N more". Selection persists across pagination; `Esc` clears it only when no transient layer (tooltip/menu/dialog) is open.
 - Mobile (`< md`): filters in a sheet; the table view renders as **stacked card-rows** (code + truncated name + badge + always-visible controls) with zero horizontal scroll; each row-card is a single roving tab stop with the table's keyboard semantics (`↑↓` move, `Enter` opens, `Space` selects).
 
@@ -480,7 +480,7 @@ Every API non-2xx response returns:
 - Form labels are mandatory and visible. No placeholder-as-label.
 - `aria-live` regions: `polite` for ambient + validation; `assertive` for action errors and system alerts.
 - Skip-to-content link in `<AppShell>`.
-- **Primary text is `#08090a` (light) / `#edeef0` (dark)** — never pure black or pure white. Pure values cause eye strain over a workday.
+- **Primary text is `#08090a` (light) / `#e7eaf3` (dark)** — never pure black or pure white. Pure values cause eye strain over a workday.
 
 ---
 
@@ -491,16 +491,16 @@ Every API non-2xx response returns:
 - Use Geist for sans, Geist Mono for mono. Loaded via `next/font/google`.
 - Use weight 500 as the default emphasis weight.
 - Apply aggressive negative letter-spacing at display sizes (-1.584 px at 72 px, scaling down).
-- Reserve brand indigo (`#5e6ad2` / `#7170ff`) for primary CTAs and interactive accents only.
-- Use `#08090a` (light) / `#edeef0` (dark) for primary text — never pure black/white.
+- Reserve the brand blue (`#2f5cd9` light / `#6c9bff` dark) for primary CTAs and interactive accents only.
+- Use `#08090a` (light) / `#e7eaf3` (dark) for primary text — never pure black/white.
 - Color is never the sole signal — always pair with icon, label, or position.
 
 ### Dark mode specifically
 
-- Build on an **elevated SaaS grey band**, not marketing near-black: `#16181d` canvas, `#1c1f25` panels, `#22262e` subtle, `#2b303a` elevated/cards. Benchmark: GitHub _dark dimmed_ (`#22272e`) — GitHub authored it precisely because its near-black default felt harsh — plus Stripe (`#14171d`) and Notion (`#191919`) confirm the comfortable `#14`–`#22` band. The v1 `#08090a` was Linear's _marketing_ black, not its app surface. A cool undertone (B > R) seats the indigo accent.
-- Text ramp: `#edeef0` primary, `#b4bac4` secondary, `#8b919e` subtle, `#646b78` faint — primary + secondary clear AA (≥ 4.5:1) across all four surfaces. **Subtle and faint are not body-copy tiers**: subtle is AA on canvas/panels but ~4.2:1 on `bg-elevated` (labels/tertiary only there), faint is sub-AA by design (disabled/decorative only).
+- Build on a **navy-slate band**, keeping v2's comfortable luminance: `#11151f` canvas, `#161b29` panels, `#1d2433` subtle, `#242e42` elevated/cards. The navy undertone (B > G > R) gives surfaces the separation the v2 neutral grey lacked; the band itself (GitHub-dimmed / Stripe / Notion `#14`–`#22`) is unchanged — the v1 `#08090a` remains off-limits as marketing black.
+- Text ramp: `#e7eaf3` primary, `#aeb6cb` secondary, `#8590a8` subtle, `#66708a` faint — primary + secondary clear AA (≥ 4.5:1) across all four surfaces. **Subtle and faint are not body-copy tiers**: subtle is AA on canvas/panels but ~4.2:1 on `bg-elevated` (labels/tertiary only there), faint is sub-AA by design (disabled/decorative only).
 - Semantic colors as _text_ need the `-strong` variants in dark: one token cannot be both AA text on `bg-elevated` and an AA fill under white text (e.g. destructive buttons). Use `text-danger-strong` for danger text; `--color-danger` remains the fill/graphic shade.
-- Use semi-transparent white borders (`rgba(255,255,255,0.05)` subtle → `0.09` default → `0.15` strong) so they read against the lighter surfaces — not solid dark borders.
+- Use semi-transparent blue-white borders (`rgba(165,180,220,0.07)` subtle → `0.12` default → `0.20` strong) so they read against the lighter surfaces — not solid dark borders.
 - Keep ghost button backgrounds nearly transparent: `rgba(255,255,255,0.02–0.05)`.
 - Convey elevation via background luminance stepping; reserve drop shadows for floating elements.
 
@@ -518,7 +518,7 @@ Both modes are authored as tokens in `globals.css` (`:root` light + `.dark`, eac
 
 - Pure white (`#ffffff`) as primary body text.
 - Pure black (`#000000`) as primary body text.
-- Brand indigo applied decoratively. CTA / interactive only.
+- Brand blue applied decoratively. CTA / interactive only.
 - Positive letter-spacing at display sizes.
 - Weight 700+ — the system maxes at 600.
 - Warm colors in UI chrome.
@@ -631,7 +631,7 @@ A long-term goal is an ESLint rule that flags raw Shadcn primitive use where an 
 ## Provisional decisions to confirm
 
 - **Persona.** Defined: construction-industry ERP/CRM operators — owners, project/site managers, accountants, administrators, back-office staff (see _Product context & enterprise-first UX philosophy_ above). Token-only impact if the segment is later narrowed.
-- **Brand hue.** Locked to Linear-derived indigo `#5e6ad2` / `#7170ff`. Token-only change if a stakeholder rebrands.
+- **Brand hue.** Blue family (~hue 225°), mode-aware (`#2f5cd9` light / `#6c9bff` dark). Token-only change if a stakeholder rebrands.
 - **Persistent sidebar collapse default.** Currently expanded; flip to collapsed if telemetry shows otherwise.
 - **Light-mode ramp tuning.** The light-mode neutrals (`#f7f8f8`, `#f3f4f5`, `#e9eaec`, `#dcdfe3`, `#bfc3ca`) are first-pass. Refine after the first feature surface ships and we see them in context.
 - **`--color-warning` light value `#d97706`** is provisional; pick a final low-chroma amber when the first warning surface ships.

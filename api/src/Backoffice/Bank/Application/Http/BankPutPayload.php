@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Backoffice\Bank\Infrastructure\Request;
+namespace Erpify\Backoffice\Bank\Application\Http;
 
 use Symfony\Component\Validator\Constraints as Assert;
 
