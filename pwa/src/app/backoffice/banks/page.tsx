@@ -438,11 +438,10 @@ export default function BanksListPage() {
       setSelectedIds((prev) => new Set([...prev, ...restorable]));
     }
     const first = rejections[0];
+    const fallbackDetail = first.reason instanceof Error ? first.reason.message : "Unknown error";
     setDeleteError({
       problem:
-        first.reason instanceof HttpError
-          ? first.reason.problem
-          : genericProblem(first.reason instanceof Error ? first.reason.message : "Unknown error"),
+        first.reason instanceof HttpError ? first.reason.problem : genericProblem(fallbackDetail),
       bankId: first.id,
       scope: "bulk",
     });

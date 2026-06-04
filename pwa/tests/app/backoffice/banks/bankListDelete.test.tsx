@@ -78,9 +78,7 @@ describe("BanksListPage — delete UX", () => {
     render(<BanksListPage />);
     expect(await screen.findByTestId(`banks-table__row-${ACME.id}`)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId(`banks-table__actions-${ACME.id}`));
-    fireEvent.click(await screen.findByTestId(`banks-table__delete-${ACME.id}`));
-    fireEvent.click(await screen.findByTestId("banks-detail__delete-confirm"));
+    await confirmDeleteOf(ACME.id);
 
     await waitFor(() => {
       expect(toastNotifier.success).toHaveBeenCalledWith("Bank deleted", {
@@ -98,9 +96,7 @@ describe("BanksListPage — delete UX", () => {
     render(<BanksListPage />);
     expect(await screen.findByTestId(`banks-table__row-${ACME.id}`)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId(`banks-table__actions-${ACME.id}`));
-    fireEvent.click(await screen.findByTestId(`banks-table__delete-${ACME.id}`));
-    fireEvent.click(await screen.findByTestId("banks-detail__delete-confirm"));
+    await confirmDeleteOf(ACME.id);
 
     await waitFor(() => {
       expect(deleteRun).toHaveBeenCalledWith(ACME.id);
@@ -116,9 +112,7 @@ describe("BanksListPage — delete UX", () => {
     render(<BanksListPage />);
     expect(await screen.findByTestId(`banks-table__row-${ACME.id}`)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId(`banks-table__actions-${ACME.id}`));
-    fireEvent.click(await screen.findByTestId(`banks-table__delete-${ACME.id}`));
-    fireEvent.click(await screen.findByTestId("banks-detail__delete-confirm"));
+    await confirmDeleteOf(ACME.id);
 
     // No banks remain and no filter is active, so the list must read as the
     // first-run empty state — never the "No banks match your filters" panel,
@@ -147,17 +141,32 @@ const STALE_PROBLEM: ProblemDetails = {
   "correlation-id": "01926e7e-7b8a-7c4e-9f30-000000000404",
 };
 
+// The row menu is a Radix dropdown rendered through a portal: under jsdom
+// churn a just-opened menu can close again before its items render, so the
+// OPEN is retried (never the assertions — those stay single-shot).
+async function openDeleteItem(id: string): Promise<HTMLElement> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    fireEvent.click(screen.getByTestId(`banks-table__actions-${id}`));
+    try {
+      return await screen.findByTestId(`banks-table__delete-${id}`);
+    } catch {
+      // The item never rendered — the open lost the race; re-open the menu.
+    }
+  }
+  fireEvent.click(screen.getByTestId(`banks-table__actions-${id}`));
+  return screen.findByTestId(`banks-table__delete-${id}`);
+}
+
+async function confirmDeleteOf(id: string): Promise<void> {
+  fireEvent.click(await openDeleteItem(id));
+  fireEvent.click(await screen.findByTestId("banks-detail__delete-confirm"));
+}
+
 describe("BanksListPage — failed delete lands in the persistent error surface", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     searchRun.mockResolvedValue({ banks: [ACME, BETA], nextCursor: undefined });
   });
-
-  async function confirmDeleteOf(id: string): Promise<void> {
-    fireEvent.click(screen.getByTestId(`banks-table__actions-${id}`));
-    fireEvent.click(await screen.findByTestId(`banks-table__delete-${id}`));
-    fireEvent.click(await screen.findByTestId("banks-detail__delete-confirm"));
-  }
 
   it("409 bank-in-use: the dialog closes, the error persists above the list with no recovery action, the row stays", async () => {
     deleteRun.mockRejectedValue(new HttpError(IN_USE_PROBLEM));
@@ -204,7 +213,8 @@ describe("BanksListPage — failed delete lands in the persistent error surface"
     // the focus seam targets the first match in document order — the stacked
     // row. Either surface's row counts as the neighbor receiving focus.
     await waitFor(() => {
-      const focused = document.activeElement?.getAttribute("data-testid");
+      const active = document.activeElement;
+      const focused = active instanceof HTMLElement ? active.dataset.testid : undefined;
       expect([`banks-table__row-${BETA.id}`, `banks-stacked__row-${BETA.id}`]).toContain(focused);
     });
     // A single-row refresh changes no selection count, so the outcome is

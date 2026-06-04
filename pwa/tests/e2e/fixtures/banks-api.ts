@@ -118,7 +118,7 @@ function problemBody(
     "correlation-id": correlationId,
     ...(overrides.detail === undefined ? {} : { detail: overrides.detail }),
     ...(overrides.violations ? { violations: overrides.violations } : {}),
-    ...(overrides.extensions ?? {}),
+    ...overrides.extensions,
   };
 }
 

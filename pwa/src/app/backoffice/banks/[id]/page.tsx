@@ -48,6 +48,13 @@ function genericProblem(detail: string): ProblemDetails {
   };
 }
 
+// Validate the route id as a UUID before it flows into the Mercure topic IRI
+// (defense in depth): a malformed id never opens a junk subscription, and the
+// detail fetch already rejects it with a 400/404.
+function detailTopics(id: string): string[] {
+  return id && isUuid(id) ? [bankTopics.detail(id)] : [];
+}
+
 export default function BankDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -116,10 +123,7 @@ export default function BankDetailPage() {
   // Real-time sync from OTHER clients (Mercure): reflect remote edits live, and
   // on a remote delete fall through to the same redirect-to-list flow as a local
   // delete so the now-gone id never refetches into a "not found" flash.
-  // Validate the route id as a UUID before it flows into the Mercure topic IRI
-  // (defense in depth): a malformed id never opens a junk subscription, and the
-  // detail fetch below already rejects it with a 400/404.
-  useBankRealtime(id && isUuid(id) ? [bankTopics.detail(id)] : [], {
+  useBankRealtime(detailTopics(id), {
     onUpdated: (incoming) => {
       if (incoming.id === id) {
         setBank(incoming);
@@ -278,32 +282,17 @@ export default function BankDetailPage() {
           </header>
 
           {deleteProblem ? (
-            <MutationError
+            <DeleteErrorPanel
               problem={deleteProblem}
               onDismiss={() => setDeleteProblem(null)}
-              action={
-                deleteProblem.type === BankProblemType.NOT_FOUND ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      // A stale 404 heals by re-fetching: the load lands on the
-                      // not-found empty state with "Back to banks".
-                      setDeleteProblem(null);
-                      pendingRefreshFocusRef.current = true;
-                      // Fire-and-forget: loadBank handles its own errors.
-                      loadBank();
-                    }}
-                    aria-label="Refresh"
-                    title="Refresh this bank"
-                    data-testid="banks-detail__delete-error-refresh"
-                  >
-                    Refresh
-                  </Button>
-                ) : undefined
-              }
-              testId="banks-detail__delete-error"
+              onRefresh={() => {
+                // A stale 404 heals by re-fetching: the load lands on the
+                // not-found empty state with "Back to banks".
+                setDeleteProblem(null);
+                pendingRefreshFocusRef.current = true;
+                // Fire-and-forget: loadBank handles its own errors.
+                loadBank();
+              }}
             />
           ) : null}
 
@@ -359,6 +348,39 @@ export default function BankDetailPage() {
         </>
       ) : null}
     </div>
+  );
+}
+
+function DeleteErrorPanel({
+  problem,
+  onDismiss,
+  onRefresh,
+}: Readonly<{
+  problem: ProblemDetails;
+  onDismiss: () => void;
+  onRefresh: () => void;
+}>) {
+  return (
+    <MutationError
+      problem={problem}
+      onDismiss={onDismiss}
+      action={
+        problem.type === BankProblemType.NOT_FOUND ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onRefresh}
+            aria-label="Refresh"
+            title="Refresh this bank"
+            data-testid="banks-detail__delete-error-refresh"
+          >
+            Refresh
+          </Button>
+        ) : undefined
+      }
+      testId="banks-detail__delete-error"
+    />
   );
 }
 
