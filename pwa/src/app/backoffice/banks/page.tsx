@@ -348,10 +348,7 @@ export default function BanksListPage() {
   return (
     <div
       ref={listContainerRef}
-      className={cn(
-        "banks-list mx-auto w-full max-w-[90rem] space-y-4 sm:space-y-6",
-        selectedIds.size > 0 && "pb-24",
-      )}
+      className="banks-list mx-auto w-full max-w-[90rem] space-y-4 sm:space-y-6"
       data-testid="banks-list"
       data-state={boundaryState}
     >
@@ -424,15 +421,6 @@ export default function BanksListPage() {
               </div>
             ) : undefined
           }
-        />
-      ) : null}
-
-      {boundaryState === ViewStatus.READY && selectedIds.size > 0 ? (
-        <BanksBulkBar
-          count={selectedIds.size}
-          names={banks.filter((bank) => selectedIds.has(bank.id)).map((bank) => bank.name)}
-          onClear={clearSelection}
-          onConfirmDelete={handleBulkDelete}
         />
       ) : null}
 
@@ -524,6 +512,15 @@ export default function BanksListPage() {
           )
         }
       </AsyncBoundary>
+
+      {boundaryState === ViewStatus.READY && selectedIds.size > 0 ? (
+        <BanksBulkBar
+          count={selectedIds.size}
+          names={banks.filter((bank) => selectedIds.has(bank.id)).map((bank) => bank.name)}
+          onClear={clearSelection}
+          onConfirmDelete={handleBulkDelete}
+        />
+      ) : null}
     </div>
   );
 }

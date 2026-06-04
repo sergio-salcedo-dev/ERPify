@@ -26,12 +26,12 @@ interface BanksBulkBarProps {
 const CONFIRM_NAMES_SHOWN = 3;
 
 /**
- * Floating bottom-center selection bar, shown once one or more banks are
- * selected; the page reserves bottom clearance so it never covers the
- * pagination row. Hosts the bulk-delete confirmation (irreversible action →
- * dialog, never a bare button) and a Clear affordance. Bulk delete is
- * optimistic with rollback (handled by the page); the confirmation here is
- * the deliberate friction before that.
+ * Floating selection bar pinned to the bottom of the content column while
+ * banks are selected; it settles after the pagination row at scroll end, so
+ * nothing is ever permanently covered. Hosts the bulk-delete confirmation
+ * (irreversible action → dialog, never a bare button) and a Clear affordance.
+ * Bulk delete is optimistic with rollback (handled by the page); the
+ * confirmation here is the deliberate friction before that.
  */
 export function BanksBulkBar({
   count,
@@ -52,7 +52,7 @@ export function BanksBulkBar({
 
   return (
     <section
-      className="banks-list__bulk-bar border-border bg-card shadow-elevation-4 fixed bottom-6 left-1/2 z-50 flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center gap-3 rounded-xl border px-4 py-2 sm:flex-nowrap"
+      className="banks-list__bulk-bar border-border bg-card shadow-elevation-4 sticky bottom-6 z-30 mx-auto flex w-max max-w-[calc(100vw-2rem)] flex-wrap items-center gap-3 rounded-xl border px-4 py-2 sm:flex-nowrap"
       aria-label="Bulk actions"
       data-testid="banks-list__bulk-bar"
     >
