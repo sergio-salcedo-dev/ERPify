@@ -179,7 +179,7 @@
   --erpify-status-dot-success: #0f7a5a;
   --erpify-status-dot-warning: #b45309;
   /* Selected row/card tint — brand at ~8% over white */
-  --erpify-row-selected: #eef0fb;
+  --erpify-row-selected: #eef2fc;
 
   /* Overlay */
   --erpify-overlay: rgba(8, 9, 10, 0.45);
@@ -284,8 +284,8 @@
   /* Status-dot fills — the bright semantics already clear 3:1 on dark surfaces */
   --erpify-status-dot-success: #10b981;
   --erpify-status-dot-warning: #f59e0b;
-  /* Selected row/card tint — brand at low alpha over panel dark */
-  --erpify-row-selected: #16182b;
+  /* Selected row/card tint — brand at ~10% over the navy canvas */
+  --erpify-row-selected: #151d33;
 
   /* Overlay */
   --erpify-overlay: rgba(0, 0, 0, 0.85);

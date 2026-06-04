@@ -69,7 +69,7 @@ baseline_commit: '385d032'
 
 ## Spec Change Log
 
-_(vacío)_
+- 2026-06-04 — Owner aprueba (rebase sobre el rediseño entity-list de `main`) re-derivar el token nuevo `--erpify-row-selected` desde la marca v3: light `#eef0fb` → `#eef2fc` (brand `#2f5cd9` al ~8% sobre blanco), dark `#16182b` → `#151d33` (brand `#3760e6` al ~10% sobre el canvas navy). Motivo: el valor de `main` derivaba de la marca índigo y del ramp gris v2 retirados; el contrato documentado del token («brand-derived») exige re-derivación. Verificado: dots `#0f7a5a`/`#b45309` ≥3:1 sobre el nuevo tint light (4.74/4.48), semantics dark ≥3:1 sobre el dark (6.59/7.79). Excepción puntual al «Always: en light solo cambia la familia accent (7 valores)» — un octavo valor light, brand-derived, introducido por `main` después del baseline.
 
 ## Design Notes
 
