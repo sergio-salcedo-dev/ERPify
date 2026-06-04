@@ -170,6 +170,57 @@ test.describe("BackOffice - Banks long-name containment (real API)", () => {
     await expect(toastDescription).toBeVisible();
     await expect(toastDescription).toHaveClass(/line-clamp-2/);
   });
+
+  test("toolbar search, '/' shortcut and sticky bulk bar", async ({ page }) => {
+    // Navigate directly (not via gotoFilteredList) so the panel starts closed.
+    await page.goto("/backoffice/banks");
+    await expect(page.getByTestId("banks-list")).toHaveAttribute("data-state", "ready");
+
+    // Search is reachable without opening the filters panel.
+    await expect(page.getByTestId("banks-filters__name")).toBeVisible();
+    await expect(page.getByTestId("banks-filters__panel")).toBeHidden();
+
+    // '/' focuses the search from the page body.
+    await page.locator("body").press("/");
+    await expect(page.getByTestId("banks-filters__name")).toBeFocused();
+    // '/' typed while the search has focus must NOT be swallowed (guard works):
+    await page.keyboard.type("/");
+    await expect(page.getByTestId("banks-filters__name")).toHaveValue("/");
+    await page.getByTestId("banks-filters__name").clear();
+
+    // Narrow to the seeded rows so the row locator is deterministic.
+    await page.getByTestId("banks-filters__name").fill(runPrefix);
+    // Wait for the 300ms debounce to flush before asserting on rows.
+    await page.waitForTimeout(400);
+
+    // Selecting a row shows the bulk bar pinned within the content column.
+    const firstRow = page.locator('[data-testid^="banks-table__row-"]').first();
+    await firstRow.locator("input[type=checkbox]").check();
+    const bar = page.getByTestId("banks-list__bulk-bar");
+    await expect(bar).toBeVisible();
+
+    // The bar centers on the content column, not the viewport: its horizontal
+    // center must match the banks-list container's center (±2px), which differs
+    // from the viewport center whenever the sidebar is open.
+    const barBox = await bar.boundingBox();
+    const listBox = await page.getByTestId("banks-list").boundingBox();
+    expect(barBox).not.toBeNull();
+    expect(listBox).not.toBeNull();
+    if (barBox && listBox) {
+      const barCenter = barBox.x + barBox.width / 2;
+      const listCenter = listBox.x + listBox.width / 2;
+      expect(Math.abs(barCenter - listCenter)).toBeLessThanOrEqual(2);
+    }
+
+    // Pagination stays reachable (bar settles after it at scroll end).
+    await expect(page.getByTestId("banks-pagination__page-size")).toBeVisible();
+
+    // Esc clears the selection and the bar unmounts.
+    // Focus is on the checkbox (inside banks-list) from the .check() call above,
+    // so the keydown event bubbles to the list container's Esc handler.
+    await page.keyboard.press("Escape");
+    await expect(bar).toBeHidden();
+  });
 });
 
 test.describe("BackOffice - Banks stacked mobile rows (real API)", () => {
