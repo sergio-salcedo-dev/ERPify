@@ -42,6 +42,11 @@ describe("TruncatedText", () => {
     render(
       <TooltipProvider>
         <table>
+          <thead>
+            <tr>
+              <th scope="col">Name</th>
+            </tr>
+          </thead>
           <tbody>
             <tr tabIndex={0} data-testid="row">
               <td>
@@ -66,6 +71,11 @@ describe("TruncatedText", () => {
     render(
       <TooltipProvider>
         <table>
+          <thead>
+            <tr>
+              <th scope="col">Name</th>
+            </tr>
+          </thead>
           <tbody>
             <tr tabIndex={0}>
               <td>

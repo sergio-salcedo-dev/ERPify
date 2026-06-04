@@ -22,7 +22,7 @@ export function useIsTruncated<T extends HTMLElement>(value: string) {
     if (!el) return;
     const check = (): void => {
       const current = ref.current;
-      if (!current || !current.isConnected) return;
+      if (!current?.isConnected) return;
       setTruncated(
         current.scrollWidth > current.clientWidth || current.scrollHeight > current.clientHeight,
       );

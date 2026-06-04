@@ -15,9 +15,15 @@ import "reflect-metadata";
 // tests that need a truncated state mock the hook or set scroll/client
 // dimensions explicitly.
 class ResizeObserverStub {
-  observe(): void {}
-  unobserve(): void {}
-  disconnect(): void {}
+  observe(): void {
+    // intentionally empty — jsdom has no layout, so there is nothing to observe
+  }
+  unobserve(): void {
+    // intentionally empty — nothing was observed
+  }
+  disconnect(): void {
+    // intentionally empty — nothing was observed
+  }
 }
 globalThis.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObserver;
 

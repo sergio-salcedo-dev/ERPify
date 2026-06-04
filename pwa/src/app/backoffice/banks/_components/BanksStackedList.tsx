@@ -36,6 +36,11 @@ function isFromInteractiveControl(target: EventTarget | null, row: Element): boo
  * a single roving tab stop; ↑/↓ move, Enter opens the detail, Space toggles
  * selection. Checkbox and actions are always visible (coarse pointers have no
  * hover).
+ *
+ * The list keeps native ul/li semantics on purpose: ARIA listbox/option would
+ * forbid the interactive checkbox and row actions inside each row, and the
+ * always-visible checkbox already conveys selection state — mirroring the
+ * desktop table's focusable-row pattern.
  */
 export function BanksStackedList({
   banks,
@@ -87,9 +92,7 @@ export function BanksStackedList({
 
   return (
     <ul
-      role="listbox"
       aria-label="Banks"
-      aria-multiselectable={onToggleSelect ? true : undefined}
       className={cn("banks-stacked flex list-none flex-col gap-2 p-0", className)}
       data-testid="banks-stacked"
     >
@@ -102,8 +105,6 @@ export function BanksStackedList({
             ref={(el) => {
               rowRefs.current[index] = el;
             }}
-            role="option"
-            aria-selected={selected}
             tabIndex={focusedRow === index ? 0 : -1}
             onFocus={() => setFocusedRow(index)}
             onKeyDown={(event) => handleKeyDown(event, bank, index)}
