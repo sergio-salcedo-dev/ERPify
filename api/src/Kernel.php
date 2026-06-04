@@ -33,7 +33,9 @@ class Kernel extends BaseKernel
      * @SuppressWarnings("PHPMD.UnusedPrivateMethod")
      *
      * This method is called indirectly, invoked by MicroKernelTrait::registerContainerConfiguration
-     * via the trait alias.
+     * via the trait alias — PHPStan can't see that call site through the alias either.
+     *
+     * @phpstan-ignore method.unused (invoked via the trait alias)
      */
     private function configureContainer(ContainerConfigurator $container): void
     {

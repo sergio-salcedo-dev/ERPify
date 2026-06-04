@@ -10,6 +10,7 @@ use Doctrine\ORM\Mapping as ORM;
 use Erpify\Shared\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Media\Domain\Repository\MediaRepository;
 
+// @phpstan-ignore argument.type (repositoryClass is the domain interface; the Doctrine implementation is wired via DI)
 #[ORM\Entity(repositoryClass: MediaRepository::class)]
 #[ORM\Table(name: 'media')]
 class Media extends AggregateRoot
@@ -70,6 +71,7 @@ class Media extends AggregateRoot
             $this->rawBytes = false !== $contents ? $contents : '';
         }
 
+        // @phpstan-ignore return.type (BLOB hydrates to string|resource; narrowed to string above)
         return $this->rawBytes;
     }
 
