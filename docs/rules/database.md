@@ -27,6 +27,22 @@
 - Handle database errors gracefully
 - Use appropriate isolation levels for transactions
 
+## Deletion policy (hard delete by default)
+- **Hard delete (`DELETE`) is the default.** GDPR's right to erasure (Art. 17) must always be
+  satisfiable: any row that may carry personal data (uploads, free text, contact details) must be
+  physically removable. A soft delete keeps the bytes and silently breaks that guarantee — `media`
+  learned this and dropped its `deleted_at` column.
+- **Model business lifecycle as explicit domain state, not as soft delete.** "Archived",
+  "deactivated", "cancelled" are domain concepts with their own invariants and behavior — put them
+  on the aggregate as a status, not in a generic `deleted_at` flag.
+- **Soft delete is not an audit trail.** History is covered by the domain-event audit table — see
+  [`../architecture-api.md`](../architecture-api.md).
+- **Soft delete is allowed only when ALL of these hold** (justify it in the PR description):
+  1. A legal/accounting retention duty applies to the row itself, and the audit table cannot satisfy it.
+  2. The row holds no personal data — or a scheduled purge job enforces a bounded retention window.
+  3. The `deleted_at IS NULL` filter is explicit in every repository query — no global/magic ORM filters.
+  4. Unique constraints account for it (PostgreSQL partial unique indexes: `… WHERE deleted_at IS NULL`).
+
 ## Identifiers (UUID v7, app-assigned)
 - **All entity ids are UUID v7**, generated in the application layer (`SymfonyUuidGenerator::generate()`
   on the API; the `uuidV7()` helper on the PWA). v7 keeps ids time-ordered for index locality and lets

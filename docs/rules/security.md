@@ -58,6 +58,7 @@ Before ANY commit, I MUST perform security checks on all changed files:
 - [ ] Database initialization scripts use parameterized queries
 - [ ] User permissions are properly configured
 - [ ] No sensitive data in seed files
+- [ ] Deletes are hard deletes — soft delete only under the documented exceptions in [`database.md`](database.md) (GDPR erasure must stay satisfiable)
 
 #### Docker Files
 - [ ] Base images are from trusted sources

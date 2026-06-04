@@ -282,11 +282,6 @@
     <InvalidArgument>
       <code><![CDATA[MediaRepository::class]]></code>
     </InvalidArgument>
-    <PossiblyUnusedMethod>
-      <code><![CDATA[getDeletedAt]]></code>
-      <code><![CDATA[isActive]]></code>
-      <code><![CDATA[softDelete]]></code>
-    </PossiblyUnusedMethod>
   </file>
   <file src="../../src/Shared/Media/Domain/Exception/InvalidImageException.php">
     <PossiblyUnusedMethod>

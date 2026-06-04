@@ -24,7 +24,7 @@ final readonly class MediaGetController
     {
         $notModified = $this->httpCache->isNotModified($request, $hash);
 
-        if ($notModified && $this->mediaRepository->existsActiveByContentHash($hash)) {
+        if ($notModified && $this->mediaRepository->existsByContentHash($hash)) {
             $response = new Response();
             $response->setStatusCode(Response::HTTP_NOT_MODIFIED);
             $this->httpCache->applyHeaders($response, $hash);
@@ -32,7 +32,7 @@ final readonly class MediaGetController
             return $response;
         }
 
-        $media = $this->mediaRepository->findActiveByContentHash($hash);
+        $media = $this->mediaRepository->findByContentHash($hash);
 
         if (!$media instanceof Media) {
             return new Response('Not Found', Response::HTTP_NOT_FOUND);

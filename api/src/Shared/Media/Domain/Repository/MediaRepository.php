@@ -10,7 +10,7 @@ interface MediaRepository
 {
     public function save(Media $media): void;
 
-    public function findActiveByContentHash(string $contentHash): ?Media;
+    public function findByContentHash(string $contentHash): ?Media;
 
-    public function existsActiveByContentHash(string $contentHash): bool;
+    public function existsByContentHash(string $contentHash): bool;
 }

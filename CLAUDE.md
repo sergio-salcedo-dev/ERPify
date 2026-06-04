@@ -154,7 +154,9 @@ For each diffed file, walk this checklist:
   Mercure JWT secret rotation policy is preserved.
 - **Migrations & data** — never seed PII or secrets; never
   `DROP TABLE` outside an explicit destructive migration; the `down()`
-  method is reversible.
+  method is reversible. Hard delete is the default — soft delete only
+  under the exceptions in [`docs/rules/database.md`](docs/rules/database.md)
+  (GDPR erasure must stay satisfiable).
 - **Domain events / Messenger** — handlers are idempotent; transports
   authenticated; payloads scrubbed of secrets.
 

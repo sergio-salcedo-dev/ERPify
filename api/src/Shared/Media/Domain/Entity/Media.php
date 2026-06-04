@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Media\Domain\Entity;
 
-use DateTimeImmutable;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Erpify\Shared\Domain\Aggregate\AggregateRoot;
@@ -15,13 +14,6 @@ use Erpify\Shared\Media\Domain\Repository\MediaRepository;
 #[ORM\Table(name: 'media')]
 class Media extends AggregateRoot
 {
-    /**
-     * Lifecycle state, not a construction input: always null on creation,
-     * set only via {@see softDelete()}.
-     */
-    #[ORM\Column(name: 'deleted_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
-    private ?DateTimeImmutable $deletedAt = null;
-
     private function __construct(
         string $id,
         #[ORM\Column(name: 'content_hash', length: 64)]
@@ -73,21 +65,5 @@ class Media extends AggregateRoot
 
         // @phpstan-ignore return.type (BLOB hydrates to string|resource; narrowed to string above)
         return $this->rawBytes;
-    }
-
-    public function getDeletedAt(): ?DateTimeImmutable
-    {
-        return $this->deletedAt;
-    }
-
-    public function isActive(): bool
-    {
-        return !$this->deletedAt instanceof DateTimeImmutable;
-    }
-
-    public function softDelete(): void
-    {
-        $this->deletedAt = new DateTimeImmutable();
-        $this->updatedAt = $this->deletedAt;
     }
 }

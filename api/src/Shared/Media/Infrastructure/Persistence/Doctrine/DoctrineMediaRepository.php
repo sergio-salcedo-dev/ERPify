@@ -30,12 +30,11 @@ final class DoctrineMediaRepository extends ServiceEntityRepository implements M
     }
 
     #[Override]
-    public function findActiveByContentHash(string $contentHash): ?Media
+    public function findByContentHash(string $contentHash): ?Media
     {
         /** @var Media|null */
         return $this->createQueryBuilder('m')
             ->where('m.contentHash = :h')
-            ->andWhere('m.deletedAt IS NULL')
             ->setParameter('h', $contentHash)
             ->getQuery()
             ->getOneOrNullResult()
@@ -43,12 +42,11 @@ final class DoctrineMediaRepository extends ServiceEntityRepository implements M
     }
 
     #[Override]
-    public function existsActiveByContentHash(string $contentHash): bool
+    public function existsByContentHash(string $contentHash): bool
     {
         $row = $this->createQueryBuilder('m')
             ->select('m.id')
             ->where('m.contentHash = :h')
-            ->andWhere('m.deletedAt IS NULL')
             ->setParameter('h', $contentHash)
             ->setMaxResults(1)
             ->getQuery()
