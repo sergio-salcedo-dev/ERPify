@@ -17,26 +17,26 @@ const LONG = Bank.fromPrimitives({
 
 describe("BanksCards — layout", () => {
   it("clamps the name to two lines via CSS while keeping the full text in the DOM", () => {
-    render(<BanksCards banks={[LONG]} />);
+    render(<BanksCards onBankDeleteFailed={() => {}} banks={[LONG]} />);
     const name = screen.getByTestId(`banks-cards__name-${LONG.id}`);
     expect(name).toHaveTextContent("Banco Nacional de Comercio Exterior");
     expect(name.className).toContain("line-clamp-2");
   });
 
   it("truncates the short name to one line via CSS while keeping the full text in the DOM", () => {
-    render(<BanksCards banks={[LONG]} />);
+    render(<BanksCards onBankDeleteFailed={() => {}} banks={[LONG]} />);
     const shortName = screen.getByTestId(`banks-cards__shortname-${LONG.id}`);
     expect(shortName).toHaveTextContent("BNCEMX0001LONGUNBROKENCODE");
     expect(shortName.className).toContain("truncate");
   });
 
   it("drops the redundant footer view-details link (whole card navigates)", () => {
-    render(<BanksCards banks={[LONG]} />);
+    render(<BanksCards onBankDeleteFailed={() => {}} banks={[LONG]} />);
     expect(screen.queryByTestId(`banks-cards__view-${LONG.id}`)).toBeNull();
   });
 
   it("exposes copy and edit controls plus an overflow actions trigger per card", () => {
-    render(<BanksCards banks={[LONG]} />);
+    render(<BanksCards onBankDeleteFailed={() => {}} banks={[LONG]} />);
     expect(screen.getByTestId(`banks-cards__copy-${LONG.id}`)).toBeInTheDocument();
     expect(screen.getByTestId(`banks-cards__edit-${LONG.id}`)).toBeInTheDocument();
     expect(screen.getByTestId(`banks-cards__actions-${LONG.id}`)).toBeInTheDocument();

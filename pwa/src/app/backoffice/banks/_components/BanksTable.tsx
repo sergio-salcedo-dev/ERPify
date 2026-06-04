@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
+import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { DataTable, StatusBadge, TruncatedText } from "@/components/erpify";
 import type { DataTableColumn, DataTableSelection, DataTableSort } from "@/components/erpify";
 import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
@@ -16,6 +17,7 @@ interface BanksTableProps {
   sort?: DataTableSort | null;
   onSortChange?: (sort: DataTableSort | null) => void;
   onBankDeleted?: (id: string) => void;
+  onBankDeleteFailed: (id: string, problem: ProblemDetails) => void;
   selection?: DataTableSelection;
   density?: "compact" | "comfortable";
 }
@@ -55,7 +57,10 @@ const renderCreatedAtCell = (row: Bank) =>
 const renderUpdatedAtCell = (row: Bank) =>
   renderRelativeCell(row.updatedAt, `banks-table__updated-${row.id}`);
 
-function buildBanksColumns(onBankDeleted?: (id: string) => void): DataTableColumn<Bank>[] {
+function buildBanksColumns(
+  onBankDeleteFailed: (id: string, problem: ProblemDetails) => void,
+  onBankDeleted?: (id: string) => void,
+): DataTableColumn<Bank>[] {
   const renderActionsCell = (row: Bank) => (
     <BankRowActions
       id={row.id}
@@ -63,6 +68,7 @@ function buildBanksColumns(onBankDeleted?: (id: string) => void): DataTableColum
       surface="table"
       reveal="row"
       onBankDeleted={onBankDeleted}
+      onBankDeleteFailed={onBankDeleteFailed}
       className="justify-end"
     />
   );
@@ -121,12 +127,16 @@ export function BanksTable({
   sort,
   onSortChange,
   onBankDeleted,
+  onBankDeleteFailed,
   selection,
   density = "compact",
 }: Readonly<BanksTableProps>) {
   const router = useRouter();
 
-  const columns = useMemo(() => buildBanksColumns(onBankDeleted), [onBankDeleted]);
+  const columns = useMemo(
+    () => buildBanksColumns(onBankDeleteFailed, onBankDeleted),
+    [onBankDeleteFailed, onBankDeleted],
+  );
 
   return (
     <div

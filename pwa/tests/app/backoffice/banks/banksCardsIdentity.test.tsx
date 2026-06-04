@@ -25,7 +25,7 @@ const OLD = Bank.fromPrimitives({
 
 describe("BanksCards — identity", () => {
   it("shows a New badge in the status region only for recently created banks", () => {
-    render(<BanksCards banks={[RECENT, OLD]} />);
+    render(<BanksCards onBankDeleteFailed={() => {}} banks={[RECENT, OLD]} />);
     expect(screen.getByTestId(`banks-cards__new-${RECENT.id}`)).toHaveTextContent("New");
     expect(screen.queryByTestId(`banks-cards__new-${OLD.id}`)).toBeNull();
     // Non-recent banks read as Active — the status region is never empty.
@@ -33,7 +33,7 @@ describe("BanksCards — identity", () => {
   });
 
   it("renders updated as relative text with the absolute value in the title; created lives in the detail", () => {
-    render(<BanksCards banks={[OLD]} />);
+    render(<BanksCards onBankDeleteFailed={() => {}} banks={[OLD]} />);
     const updated = screen.getByTestId(`banks-cards__updated-${OLD.id}`);
     expect(updated.textContent).toMatch(/ago$/);
     expect(updated).toHaveAttribute("title", expect.stringContaining("2020"));
@@ -42,7 +42,14 @@ describe("BanksCards — identity", () => {
   });
 
   it("keeps the always-visible selection checkbox out of the data rows", () => {
-    render(<BanksCards banks={[OLD]} selectedIds={new Set()} onToggleSelect={() => {}} />);
+    render(
+      <BanksCards
+        onBankDeleteFailed={() => {}}
+        banks={[OLD]}
+        selectedIds={new Set()}
+        onToggleSelect={() => {}}
+      />,
+    );
     const checkbox = screen.getByTestId(`banks-cards__select-${OLD.id}`);
     // Always visible: no hover-reveal opacity classes on the checkbox.
     expect(checkbox.className).not.toContain("opacity-0");

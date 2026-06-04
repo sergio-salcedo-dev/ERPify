@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import BankDetailPage from "@/app/backoffice/banks/[id]/page";
 import { Bank } from "@/context/backoffice/bank/domain/Bank";
+import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
+import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
 import { toastNotifier } from "@/context/shared/infrastructure/Notification/Toast";
 
 /**
@@ -79,5 +81,68 @@ describe("BankDetailPage — delete UX", () => {
     // FindBank fetch for the deleted id and flashed the not-found state.
     expect(refresh).not.toHaveBeenCalled();
     expect(screen.queryByTestId("banks-detail__not-found")).toBeNull();
+  });
+});
+
+const IN_USE_PROBLEM: ProblemDetails = {
+  type: "bank-in-use",
+  title: "Bank cannot be deleted: 3 associated bank accounts",
+  status: 409,
+  detail: "Remove or reassign the associated bank accounts first.",
+  instance: "01926e7e-7b8a-7c4e-9f31-000000000409",
+  "correlation-id": "01926e7e-7b8a-7c4e-9f30-000000000409",
+  bankId: BANK.id,
+  accountCount: 3,
+};
+
+const STALE_PROBLEM: ProblemDetails = {
+  type: "bank-not-found",
+  title: "Bank not found",
+  status: 404,
+  instance: "01926e7e-7b8a-7c4e-9f31-000000000404",
+  "correlation-id": "01926e7e-7b8a-7c4e-9f30-000000000404",
+};
+
+describe("BankDetailPage — failed delete lands in the persistent error surface", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    findRun.mockResolvedValue(BANK);
+  });
+
+  it("409 bank-in-use: the dialog closes, the error persists under the header with no recovery action", async () => {
+    deleteRun.mockRejectedValue(new HttpError(IN_USE_PROBLEM));
+    render(<BankDetailPage />);
+    await screen.findByTestId("banks-detail__name");
+
+    fireEvent.click(screen.getByTestId("banks-detail__delete-button"));
+    fireEvent.click(await screen.findByTestId("banks-detail__delete-confirm"));
+
+    const surface = await screen.findByTestId("banks-detail__delete-error");
+    expect(screen.queryByTestId("banks-detail__delete-dialog")).toBeNull();
+    expect(surface).toHaveTextContent(IN_USE_PROBLEM.title);
+    expect(screen.queryByTestId("banks-detail__delete-error-refresh")).toBeNull();
+    expect(surface).toHaveFocus();
+    // The detail stays put: no redirect, no success toast.
+    expect(push).not.toHaveBeenCalled();
+    expect(toastNotifier.success).not.toHaveBeenCalled();
+    expect(toastNotifier.error).toHaveBeenCalledWith("Couldn't delete bank — see error details");
+  });
+
+  it("404 stale: Refresh re-fetches and lands on the not-found empty state", async () => {
+    deleteRun.mockRejectedValue(new HttpError(STALE_PROBLEM));
+    render(<BankDetailPage />);
+    await screen.findByTestId("banks-detail__name");
+
+    fireEvent.click(screen.getByTestId("banks-detail__delete-button"));
+    fireEvent.click(await screen.findByTestId("banks-detail__delete-confirm"));
+
+    await screen.findByTestId("banks-detail__delete-error");
+    findRun.mockRejectedValue(new HttpError(STALE_PROBLEM));
+
+    fireEvent.click(screen.getByTestId("banks-detail__delete-error-refresh"));
+
+    expect(await screen.findByTestId("banks-detail__not-found")).toBeInTheDocument();
+    expect(screen.queryByTestId("banks-detail__delete-error")).toBeNull();
+    expect(screen.getByTestId("banks-detail__back-to-list")).toBeInTheDocument();
   });
 });

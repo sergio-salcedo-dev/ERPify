@@ -16,6 +16,10 @@ vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", () => (
   },
 }));
 
+vi.mock("@/context/shared/infrastructure/Notification/Toast", () => ({
+  toastNotifier: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
+}));
+
 describe("DeleteBankButton — spinner", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -29,7 +33,9 @@ describe("DeleteBankButton — spinner", () => {
       }),
     );
     const onDeleted = vi.fn();
-    render(<DeleteBankButton id="abc" name="Acme Savings" onDeleted={onDeleted} />);
+    render(
+      <DeleteBankButton id="abc" name="Acme Savings" onDeleted={onDeleted} onError={vi.fn()} />,
+    );
 
     fireEvent.click(screen.getByTestId("banks-detail__delete-button"));
     fireEvent.click(screen.getByTestId("banks-detail__delete-confirm"));

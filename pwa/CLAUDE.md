@@ -406,5 +406,16 @@ of the following:
   disabled control is still discovered by assistive tech and adds noise.
 
 For destructive actions also wire the user through a confirmation dialog
-(`Dialog.*` from `@/components/ui/dialog`) and surface API failures inside the
-dialog via `<ProblemDisplay variant="inline" />` — never silently dismiss them.
+(`Dialog.*` from `@/components/ui/dialog`). When the mutation fails, the
+dialog **closes itself** and the failure surfaces in a persistent
+`<MutationError>` from `@/components/erpify`, anchored to the mutation's
+origin (above the list/grid, under the detail H1, above the form) — never
+inside the dialog, and never a toast alone (the error toast is only a
+transient pointer to the persistent surface). The surface receives focus,
+stays until dismissed / replaced by a retry / cleared by a success, and lets
+the user copy the message, the `type · status` code, the correlation id, and
+the full problem JSON (in production builds the copied JSON omits `debug`,
+mirroring the render). Typed recovery actions go in its `action` slot (e.g.
+`bank-not-found` → "Refresh list"; `bank-in-use` → none). Never silently
+dismiss failures, and never synthesize problem payloads client-side. Contract:
+EXPERIENCE.md § «Errores de mutación — superficie persistente» (2026-06-04).

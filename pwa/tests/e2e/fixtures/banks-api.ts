@@ -68,7 +68,7 @@ export type ListScenario = "happy" | "empty" | "server-error";
 export type GetScenario = "happy" | "not-found" | "server-error";
 export type CreateScenario = "happy" | "validation-error";
 export type UpdateScenario = "happy" | "validation-error";
-export type DeleteScenario = "happy" | "not-found";
+export type DeleteScenario = "happy" | "not-found" | "in-use";
 
 export interface BanksApiScenario {
   list?: ListScenario;
@@ -82,6 +82,10 @@ export interface BanksApiScenario {
   list_banks?: BankFixture[];
   /** When set, the happy list response carries `meta.nextCursor`. */
   list_next_cursor?: string;
+  /** Ids whose GET/{id} answers 404 `bank-not-found` (stale rows for the bulk pre-check). */
+  stale_ids?: string[];
+  /** Ids whose DELETE answers 409 `bank-in-use` regardless of `scenario.delete`. */
+  delete_in_use_ids?: string[];
 }
 
 const LIST_PATH = /\/api\/v1\/backoffice\/banks(\?.*)?$/;
@@ -95,6 +99,8 @@ interface ProblemViolationFixture {
 interface ProblemBodyOverrides {
   detail?: string;
   violations?: ProblemViolationFixture[];
+  /** Type-specific RFC 9457 extension members (e.g. `bankId`, `accountCount`). */
+  extensions?: Record<string, unknown>;
 }
 
 function problemBody(
@@ -112,7 +118,24 @@ function problemBody(
     "correlation-id": correlationId,
     ...(overrides.detail === undefined ? {} : { detail: overrides.detail }),
     ...(overrides.violations ? { violations: overrides.violations } : {}),
+    ...overrides.extensions,
   };
+}
+
+function inUseProblem(route: Route, bankId: string): Promise<void> {
+  const correlationId = "01H-delete-409";
+  return fulfillProblem(
+    route,
+    409,
+    problemBody(
+      "bank-in-use",
+      "Bank cannot be deleted: 3 associated bank accounts",
+      409,
+      correlationId,
+      { extensions: { bankId, accountCount: 3 } },
+    ),
+    correlationId,
+  );
 }
 
 async function fulfillJson(route: Route, status: number, body: unknown): Promise<void> {
@@ -219,7 +242,19 @@ export async function mockBanksApi(page: Page, scenario: BanksApiScenario): Prom
     async (route) => {
       const method = route.request().method();
 
+      const itemId = new URL(route.request().url()).pathname.split("/").pop() ?? "";
+
       if (method === "GET") {
+        if (scenario.stale_ids?.includes(itemId)) {
+          const correlationId = "01H-get-stale-404";
+          await fulfillProblem(
+            route,
+            404,
+            problemBody("bank-not-found", "Bank not found", 404, correlationId),
+            correlationId,
+          );
+          return;
+        }
         switch (scenario.get) {
           case "not-found": {
             const correlationId = "01H-get-404";
@@ -275,6 +310,10 @@ export async function mockBanksApi(page: Page, scenario: BanksApiScenario): Prom
       }
 
       if (method === "DELETE") {
+        if (scenario.delete_in_use_ids?.includes(itemId)) {
+          await inUseProblem(route, itemId);
+          return;
+        }
         switch (scenario.delete) {
           case "not-found": {
             const correlationId = "01H-delete-404";
@@ -286,6 +325,9 @@ export async function mockBanksApi(page: Page, scenario: BanksApiScenario): Prom
             );
             return;
           }
+          case "in-use":
+            await inUseProblem(route, itemId);
+            return;
           case "happy":
           default:
             await route.fulfill({ status: 204 });
