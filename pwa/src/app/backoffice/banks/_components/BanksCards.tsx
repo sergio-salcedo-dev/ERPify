@@ -78,9 +78,9 @@ export function BanksCards({
              * checkbox + mono code + actions, (2) full-width title with a
              * reserved 2-line clamp, (3) status, (4) meta footer anchored to
              * the bottom. Controls and data never share a row. `relative`
-             * anchors the title link's stretched overlay; checkbox and
-             * actions sit at `z-10` above it so their controls stay
-             * clickable.
+             * anchors the title link's stretched overlay; checkbox, code and
+             * actions sit at `z-10` above it so the controls stay clickable
+             * and the code's full-value tooltip can receive hover.
              */}
             <Card
               size={density === "comfortable" ? "default" : "sm"}
@@ -100,9 +100,17 @@ export function BanksCards({
                     data-testid={`banks-cards__select-${bank.id}`}
                   />
                 ) : null}
+                {/*
+                 * `relative z-10` lifts the code above the overlay so hover
+                 * can open its tooltip (unlike the table cell, which has no
+                 * overlay and must not gain a z-index). Focus stays
+                 * hover-only: the card's tab stop is the title link, which
+                 * owns the name tooltip.
+                 */}
                 <TruncatedText
                   value={bank.shortName}
-                  className="banks-cards__shortname font-mono text-xs font-medium uppercase"
+                  className="banks-cards__shortname relative z-10 font-mono text-xs font-medium uppercase"
+                  openOnRowFocus={false}
                   testId={`banks-cards__shortname-${bank.id}`}
                 />
                 <BankRowActions
