@@ -424,15 +424,6 @@ export default function BanksListPage() {
         />
       ) : null}
 
-      {boundaryState === ViewStatus.READY && selectedIds.size > 0 ? (
-        <BanksBulkBar
-          count={selectedIds.size}
-          names={banks.filter((bank) => selectedIds.has(bank.id)).map((bank) => bank.name)}
-          onClear={clearSelection}
-          onConfirmDelete={handleBulkDelete}
-        />
-      ) : null}
-
       <AsyncBoundary
         state={boundaryState}
         data={banks}
@@ -521,6 +512,15 @@ export default function BanksListPage() {
           )
         }
       </AsyncBoundary>
+
+      {boundaryState === ViewStatus.READY && selectedIds.size > 0 ? (
+        <BanksBulkBar
+          count={selectedIds.size}
+          names={banks.filter((bank) => selectedIds.has(bank.id)).map((bank) => bank.name)}
+          onClear={clearSelection}
+          onConfirmDelete={handleBulkDelete}
+        />
+      ) : null}
     </div>
   );
 }

@@ -13,6 +13,7 @@ export const KeyboardKey = {
   ARROW_DOWN: "ArrowDown",
   ENTER: "Enter",
   ESCAPE: "Escape",
+  SLASH: "/",
   SPACE: " ",
 } as const;
 export type KeyboardKey = (typeof KeyboardKey)[keyof typeof KeyboardKey];

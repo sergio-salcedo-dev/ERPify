@@ -39,23 +39,34 @@ export const EMPTY_FILTER: BanksFilter = {
   createdTo: "",
 };
 
-export function hasActiveFilter(filter: BanksFilter): boolean {
-  return countActiveFilters(filter) > 0;
-}
-
 /**
- * Number of populated fields in the filter — used by the "Filters (n)" toggle
- * badge so the user can tell at a glance how many filters are active when the
- * panel is collapsed. Whitespace-only values count as inactive (mirrors
- * `hasActiveFilter` and `applyFilters`).
+ * Number of populated fields among the panel-hosted filters (short name +
+ * created range). The name search lives in the always-visible toolbar, so the
+ * "Filters (n)" badge and the auto-open heuristic only count what a collapsed
+ * panel would otherwise hide. Whitespace-only values count as inactive
+ * (mirrors `applyFilters`).
  */
-export function countActiveFilters(filter: BanksFilter): number {
+export function countPanelFilters(filter: BanksFilter): number {
   let count = 0;
-  if (filter.name.trim()) count += 1;
   if (filter.shortName.trim()) count += 1;
   if (filter.createdFrom.trim()) count += 1;
   if (filter.createdTo.trim()) count += 1;
   return count;
+}
+
+export function hasActivePanelFilter(filter: BanksFilter): boolean {
+  return countPanelFilters(filter) > 0;
+}
+
+/**
+ * True when ANY filter is populated — the toolbar name search included.
+ * Drives the Reset button: Reset clears `name` too (state is shared, only
+ * its placement moved to the toolbar), so it must be reachable when the
+ * search is the only active filter. The badge keeps using the panel-only
+ * count above.
+ */
+export function hasActiveFilter(filter: BanksFilter): boolean {
+  return Boolean(filter.name.trim()) || hasActivePanelFilter(filter);
 }
 
 function containsCi(haystack: string, needle: string): boolean {

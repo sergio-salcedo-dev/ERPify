@@ -425,7 +425,12 @@ export default function BackOfficeLayoutClient({
             </div>
           </header>
 
-          <main id="main-content" className="bo-layout__main flex-grow pt-14 md:pt-0 overflow-auto">
+          {/* No overflow on <main>: the window is the scroll container (the
+              column grows with content), and an overflow value here would
+              re-scope every descendant `position: sticky` to a scrollport
+              that never scrolls — breaking e.g. the banks bulk bar. Wide
+              content (tables) brings its own overflow-x wrapper. */}
+          <main id="main-content" className="bo-layout__main flex-grow pt-14 md:pt-0">
             <div className="bo-layout__content mx-auto p-4 md:p-8">{children}</div>
           </main>
         </div>
