@@ -1,4 +1,3 @@
-import React from "react";
 import { StatusBadge, type StatusBadgeVariant } from "@/components/erpify";
 import { SystemStatus, componentStatusLabel } from "@/lib/systemStatus";
 
@@ -15,7 +14,7 @@ interface HealthComponentRowProps {
   testId?: string;
 }
 
-export const HealthComponentRow: React.FC<HealthComponentRowProps> = ({ name, status, testId }) => {
+export function HealthComponentRow({ name, status, testId }: Readonly<HealthComponentRowProps>) {
   return (
     <div
       data-testid={testId}
@@ -25,4 +24,4 @@ export const HealthComponentRow: React.FC<HealthComponentRowProps> = ({ name, st
       <StatusBadge variant={BADGE_VARIANT[status]} label={componentStatusLabel(status)} />
     </div>
   );
-};
+}
