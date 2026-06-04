@@ -23,7 +23,9 @@ export function useIsTruncated<T extends HTMLElement>(value: string) {
     const check = (): void => {
       const current = ref.current;
       if (!current || !current.isConnected) return;
-      setTruncated(current.scrollWidth > current.clientWidth || current.scrollHeight > current.clientHeight);
+      setTruncated(
+        current.scrollWidth > current.clientWidth || current.scrollHeight > current.clientHeight,
+      );
     };
     check();
     const observer = new ResizeObserver(check);

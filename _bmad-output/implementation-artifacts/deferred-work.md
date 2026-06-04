@@ -2,6 +2,49 @@
 
 Collected during quick-dev. Not part of the current story's shippable scope.
 
+## UX entity-list redesign — plan executed in a single PR (#137, 2026-06-04)
+
+Source contract: `_bmad-output/planning-artifacts/ux-designs/ux-ERPify-2026-06-03/`
+(`DESIGN.md` + `EXPERIENCE.md`, updated 2026-06-04 — spines win on conflict). The
+original split (PR 1 contención + deferred PRs 2–6) was collapsed into PR #137 by
+direct instruction; everything below shipped there:
+
+- **PR 2 — contraste:** StatusBadge dot-first (etiqueta neutra + dots
+  `--erpify-status-dot-*` oscurecidos, C1/C2); tokens light + dark.
+- **PR 3 — tooltip-si-truncado:** `components/ui/tooltip.tsx` (Base UI),
+  `TooltipProvider delay=200` en el layout, `useIsTruncated` + `TruncatedText`
+  (hover de celda + foco de FILA vía `focusScopeSelector`, sin tabIndex en spans;
+  `openOnRowFocus` en una sola celda por fila; Esc con precedencia sobre
+  limpiar-selección), `title=` retirado de celdas truncadas.
+- **PR 4 — densidad + sticky:** `useStoredPreference` (hydration-safe, arregla
+  también el mismatch del skeleton), `DensityToggle` + clave compartida
+  `erpify.list.density`, sombra scroll-driven gated `prefers-reduced-motion`.
+- **PR 5 — jerarquía + selección:** Code → Name → Status → Updated (lg+) →
+  Created (xl+) → Actions; badge "New"/"Active" en columna/región Status (nunca
+  inline con el nombre); ⋯ siempre visible + Copy/Edit reveal; live region
+  siempre montada con anuncios coalescidos; tri-state `aria-checked="mixed"`
+  page-scoped; foco a la fila vecina tras borrado optimista; Esc limpia
+  selección sólo sin capa transitoria; confirm masivo lista 3 nombres + "+N".
+- **PR 6 — e2e de regresión:** `banks-containment.spec.ts` (alturas constantes,
+  tooltips por hover/foco, precedencia de Esc, mixed, H1 íntegro, contador
+  n/255 + toast clamp, stacked móvil sin scroll horizontal).
+- **Decisiones del update 2026-06-04 (revisión de Sergio sobre PR #137):**
+  detalle H1 íntegro sin clamp; badge a la región de estado; tarjeta con
+  regiones de controles/datos y checkbox SIEMPRE visible; Name del formulario
+  como `SingleLineTextarea` auto-grow + contador n/255; vista apilada `< md`
+  (`BanksStackedList`) con contrato de teclado de la tabla.
+- **Follow-ups del gate cerrados:** contrato de teclado de la vista apilada
+  (fijado en spine e implementado); reduced-motion de Sonner (el colapso global
+  de `globals.css` ya anula sus animaciones — verificado).
+- **Código-review PR1 cerrado aquí:** comentario lint-narration de
+  `banks/page.tsx` reescrito a intención; hydration mismatch del
+  skeleton/vista resuelto por `useStoredPreference`.
+
+Still deferred from the UX contract (consciously): RecordSheet peek (`o`, v2
+opcional), selección por rango Shift+↑/↓ `[ASSUMPTION]`, y la conducta del
+confirm con precondición fallida (Delete deshabilitado + "Refresh list") que
+pertenece al flujo de `fix/pwa-bank-delete-flash`.
+
 ## From: spec-banks-mercure-realtime (2026-06-01, step-04 review)
 
 - **Authorize endpoint AuthN/AuthZ.** `BankRealtimeAuthorizeController`

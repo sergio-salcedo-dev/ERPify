@@ -513,7 +513,11 @@ interface SelectAllCheckboxProps {
  * `aria-checked="mixed"` when the DOM `indeterminate` property is set — it is
  * not derivable from `checked`, hence the ref + effect.
  */
-function SelectAllCheckbox({ allSelected, someSelected, onChange }: Readonly<SelectAllCheckboxProps>) {
+function SelectAllCheckbox({
+  allSelected,
+  someSelected,
+  onChange,
+}: Readonly<SelectAllCheckboxProps>) {
   const ref = useRef<HTMLInputElement>(null);
 
   useEffect(() => {

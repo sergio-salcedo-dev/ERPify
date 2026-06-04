@@ -18,8 +18,8 @@ function forceTruncation(): void {
 }
 
 function resetDimensions(): void {
-  delete (HTMLElement.prototype as Record<string, unknown>)["scrollWidth" as never];
-  delete (HTMLElement.prototype as Record<string, unknown>)["clientWidth" as never];
+  Reflect.deleteProperty(HTMLElement.prototype, "scrollWidth");
+  Reflect.deleteProperty(HTMLElement.prototype, "clientWidth");
 }
 
 afterEach(resetDimensions);

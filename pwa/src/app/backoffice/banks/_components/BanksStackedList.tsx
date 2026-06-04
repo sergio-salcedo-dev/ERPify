@@ -131,7 +131,9 @@ export function BanksStackedList({
                 <span className="banks-stacked__code text-muted-foreground max-w-24 flex-none truncate font-mono text-xs font-medium uppercase">
                   {bank.shortName}
                 </span>
-                {recent ? <StatusBadge variant="success" label="New" className="flex-none" /> : null}
+                {recent ? (
+                  <StatusBadge variant="success" label="New" className="flex-none" />
+                ) : null}
               </div>
               <TruncatedText
                 value={bank.name}

@@ -26,7 +26,11 @@ describe("BankForm — name length counter", () => {
     render(
       <BankForm
         mode={PersistenceAction.UPDATING}
-        initial={{ id: "55555555-5555-4555-8555-555555555555", name: "N".repeat(255), shortName: "NB" }}
+        initial={{
+          id: "55555555-5555-4555-8555-555555555555",
+          name: "N".repeat(255),
+          shortName: "NB",
+        }}
       />,
     );
     const field = screen.getByTestId("bank-form__name");

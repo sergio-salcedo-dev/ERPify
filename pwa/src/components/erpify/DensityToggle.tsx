@@ -36,11 +36,7 @@ const OPTIONS: readonly DensityOption[] = [
  * type size never does. The chosen mode persists per user via
  * `useStoredPreference(LIST_DENSITY_STORAGE_KEY, …)`.
  */
-export function DensityToggle({
-  density,
-  onDensityChange,
-  testId,
-}: Readonly<DensityToggleProps>) {
+export function DensityToggle({ density, onDensityChange, testId }: Readonly<DensityToggleProps>) {
   return (
     <div
       role="group"
