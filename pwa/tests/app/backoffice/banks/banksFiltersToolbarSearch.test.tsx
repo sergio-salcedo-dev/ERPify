@@ -85,9 +85,12 @@ describe("BanksFilters — '/' shortcut", () => {
     const button = document.createElement("button");
     dialog.appendChild(button);
     document.body.appendChild(dialog);
-    button.focus();
-    fireEvent.keyDown(button, { key: "/" });
-    expect(screen.getByTestId("banks-filters__name")).not.toHaveFocus();
-    dialog.remove();
+    try {
+      button.focus();
+      fireEvent.keyDown(button, { key: "/" });
+      expect(screen.getByTestId("banks-filters__name")).not.toHaveFocus();
+    } finally {
+      dialog.remove();
+    }
   });
 });

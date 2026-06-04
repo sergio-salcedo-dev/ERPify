@@ -348,7 +348,10 @@ export default function BanksListPage() {
   return (
     <div
       ref={listContainerRef}
-      className="banks-list mx-auto w-full max-w-[90rem] space-y-4 sm:space-y-6"
+      className={cn(
+        "banks-list mx-auto w-full max-w-[90rem] space-y-4 sm:space-y-6",
+        selectedIds.size > 0 && "pb-24",
+      )}
       data-testid="banks-list"
       data-state={boundaryState}
     >

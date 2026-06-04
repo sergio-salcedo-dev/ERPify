@@ -113,4 +113,21 @@ describe("BanksListPage — bulk actions", () => {
     await waitFor(() => expect(screen.queryByTestId("banks-list__bulk-bar")).toBeNull());
     expect(deleteRun).not.toHaveBeenCalled();
   });
+
+  it("floats the bulk bar and reserves bottom clearance while a selection exists", async () => {
+    render(<BanksListPage />);
+    await screen.findByTestId(`banks-table__row-${ACME.id}`);
+    fireEvent.click(screen.getByLabelText(`Select row ${ACME.id}`));
+
+    const bar = await screen.findByTestId("banks-list__bulk-bar");
+    expect(bar.className).toContain("fixed");
+    expect(bar.className).toContain("bottom-6");
+    expect(screen.getByTestId("banks-list").className).toContain("pb-24");
+
+    fireEvent.click(screen.getByTestId("banks-list__bulk-clear"));
+    await waitFor(() => {
+      expect(screen.queryByTestId("banks-list__bulk-bar")).not.toBeInTheDocument();
+    });
+    expect(screen.getByTestId("banks-list").className).not.toContain("pb-24");
+  });
 });
