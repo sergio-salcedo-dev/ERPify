@@ -99,7 +99,12 @@ direct instruction; everything below shipped there:
   selección sólo sin capa transitoria; confirm masivo lista 3 nombres + "+N".
 - **PR 6 — e2e de regresión:** `banks-containment.spec.ts` (alturas constantes,
   tooltips por hover/foco, precedencia de Esc, mixed, H1 íntegro, contador
-  n/255 + toast clamp, stacked móvil sin scroll horizontal).
+  n/255 + toast clamp, stacked móvil sin scroll horizontal). Añadir (review de
+  `fix/pwa-banks-cards-shortname-tooltip`, 2026-06-04): hover sobre el
+  shortName de tarjeta abre su tooltip (el test jsdom solo fija las clases
+  `relative z-10`, no el hit-testing real) y el trade-off aceptado de que el
+  click sobre el shortName de tarjeta NO navega al detalle (el resto de la
+  tarjeta sí) — ninguno de los dos es verificable en jsdom.
 - **Decisiones del update 2026-06-04 (revisión de Sergio sobre PR #137):**
   detalle H1 íntegro sin clamp; badge a la región de estado; tarjeta con
   regiones de controles/datos y checkbox SIEMPRE visible; Name del formulario
