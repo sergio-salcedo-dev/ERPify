@@ -34,11 +34,24 @@ Current: `BanksBulkBar` renders an inline `bg-card border rounded-lg p-2` row be
 
 Target: same component and behavior, repositioned as a floating affordance:
 
-- Wrapper: `fixed bottom-6 left-1/2 -translate-x-1/2 z-50` (below dialogs/toasts in stacking, above content).
+> **Superseded during execution (2026-06-04):** the original `fixed bottom-6
+> left-1/2 -translate-x-1/2 z-50` + conditional list-container padding
+> approach centered the bar on the **viewport**, not the sidebar-offset
+> content column (review finding, commit `bca87e7`). Shipped instead:
+> `sticky bottom-6 z-30 mx-auto`, rendered as the **last child** of the
+> `banks-list` container (after pagination). The bar pins to the bottom of
+> the content column while the list scrolls and settles after the pagination
+> row at scroll end — so no clearance padding is needed and nothing is ever
+> permanently covered. This required removing a vestigial `overflow-auto`
+> from the app-shell `<main>` (it re-scoped descendant `position: sticky` to
+> a scrollport that never scrolls). The bullets below record the shipped
+> contract.
+
+- Wrapper: `sticky bottom-6 z-30 mx-auto w-max max-w-[calc(100vw-2rem)]` (under the z-50 portal layers; centered on the content column by construction).
 - Surface: `bg-card border border-border rounded-xl shadow-elevation-4 px-4 py-2` — token white-elevated in light; in dark the same tokens yield the navy-slate elevated surface (drop shadow acceptable: floating affordances are the sanctioned exception in dark).
 - Contents unchanged: "N selected" count, **Clear**, **Delete** (destructive variant) with the existing confirmation dialog (named records + "+N more", inline `ProblemDisplay` on failure, optimistic bulk delete with rollback).
-- The always-mounted polite live region for coalesced selection counts stays as-is; `Esc` clears selection under the existing transient-layer precedence rules.
-- **Clearance:** while the bar is mounted, the list container gets bottom padding (≈ `pb-20`) so the pagination row is never obscured. No other layout shift.
+- The always-mounted polite live region for coalesced selection counts stays as-is; `Esc` clears selection under the existing transient-layer precedence rules (the bar stays inside the `banks-list` container, so the container-level Esc handler still covers it).
+- **No clearance needed:** the bar occupies real flow space after the pagination row, so pagination is never permanently obscured and the layout never shifts on selection.
 - Reduced motion: no entry animation beyond what tokens already allow (instant mount is acceptable; if a transition is added it must collapse under `prefers-reduced-motion`, which `globals.css` already enforces globally).
 
 ### 3. Explicitly rejected from the mock (speculative — do not implement)
@@ -55,7 +68,8 @@ Target: same component and behavior, repositioned as a floating affordance:
 | --- | --- |
 | `pwa/src/app/backoffice/banks/_components/BanksFilters.tsx` | Toolbar row gains the search input; name field removed from panel; badge count excludes `name`. |
 | `pwa/src/app/backoffice/banks/_components/BanksBulkBar.tsx` | Positioning/surface classes; no behavioral change. |
-| `pwa/src/app/backoffice/banks/page.tsx` | Bulk-bar mount point (floating, conditional bottom padding on the list container). |
+| `pwa/src/app/backoffice/banks/page.tsx` | Bulk-bar mount point moved to the end of the `banks-list` container (sticky; no clearance padding). |
+| `pwa/src/app/backoffice/BackOfficeLayoutClient.tsx` | Vestigial `overflow-auto` removed from `<main>` so descendant `position: sticky` tracks the window scrollport (see supersession note above). |
 | Tests under `pwa/tests/` mirroring the above | Updated/added (below). |
 
 No new dependencies. No new tokens (everything maps to existing aliases). No Inversify changes. Entity template note: this toolbar + floating-bar arrangement becomes part of the phase-C replicable entity pattern.

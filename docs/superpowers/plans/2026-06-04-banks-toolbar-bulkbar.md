@@ -408,6 +408,16 @@ git commit -m "feat(pwa): wire the documented '/' shortcut to the banks toolbar 
 
 ### Task 4: Floating bulk-action bar + clearance
 
+> **Superseded during execution (2026-06-04):** review of the first
+> implementation found that `fixed left-1/2` centers on the viewport, not the
+> sidebar-offset content column. Shipped instead (commit `bca87e7`):
+> `sticky bottom-6 z-30 mx-auto` with the bar moved to the end of the
+> `banks-list` container — no `pb-24` clearance needed — plus removal of the
+> vestigial `overflow-auto` on the app-shell `<main>` (commit `7543f34`)
+> which otherwise re-scoped sticky to a never-scrolling scrollport. The steps
+> below are the original plan, kept for the execution record; the spec doc
+> carries the shipped contract.
+
 **Files:**
 - Modify: `pwa/src/app/backoffice/banks/_components/BanksBulkBar.tsx:52-57`
 - Modify: `pwa/src/app/backoffice/banks/page.tsx:349-354`
