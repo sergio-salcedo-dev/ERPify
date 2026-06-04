@@ -72,9 +72,14 @@
       <code><![CDATA[BankChangedNotifyEmailHandler]]></code>
     </UnusedClass>
   </file>
-  <file src="../../src/Backoffice/Bank/Infrastructure/Persistence/BankStoredObjectRemoveListener.php">
+  <file src="../../src/Backoffice/Bank/Infrastructure/Persistence/Doctrine/BankStoredObjectRemoveListener.php">
     <UnusedClass>
       <code><![CDATA[BankStoredObjectRemoveListener]]></code>
+    </UnusedClass>
+  </file>
+  <file src="../../src/Backoffice/Bank/Infrastructure/Persistence/Doctrine/DoctrineBankRepository.php">
+    <UnusedClass>
+      <code><![CDATA[DoctrineBankRepository]]></code>
     </UnusedClass>
   </file>
   <file src="../../src/Backoffice/Bank/Infrastructure/Serializer/BankLogoUrlNormalizer.php">
@@ -194,7 +199,7 @@
       <code><![CDATA[PersistDomainEventMiddleware]]></code>
     </UnusedClass>
   </file>
-  <file src="../../src/Shared/Infrastructure/Persistence/AbstractRepository.php">
+  <file src="../../src/Shared/Infrastructure/Persistence/Doctrine/AbstractDoctrineRepository.php">
     <PossiblyUnusedMethod>
       <code><![CDATA[addWhereBetweenDates]]></code>
       <code><![CDATA[addWhereInCaseInsensitive]]></code>
@@ -204,7 +209,7 @@
       <code><![CDATA[QueryBuilder]]></code>
     </PossiblyUnusedReturnValue>
   </file>
-  <file src="../../src/Shared/Infrastructure/Persistence/AbstractSearchRepository.php">
+  <file src="../../src/Shared/Infrastructure/Persistence/Doctrine/AbstractDoctrineSearchRepository.php">
     <PossiblyUnusedMethod>
       <code><![CDATA[__construct]]></code>
     </PossiblyUnusedMethod>
@@ -252,7 +257,7 @@
       <code><![CDATA[self]]></code>
     </PossiblyUnusedReturnValue>
   </file>
-  <file src="../../src/Shared/Infrastructure/Persistence/QueryBuilderWithOptions.php">
+  <file src="../../src/Shared/Infrastructure/Persistence/Doctrine/QueryBuilderWithOptions.php">
     <ClassMustBeFinal>
       <code><![CDATA[QueryBuilderWithOptions]]></code>
     </ClassMustBeFinal>
@@ -303,9 +308,9 @@
       <code><![CDATA[InterventionImageNormalizer]]></code>
     </UnusedClass>
   </file>
-  <file src="../../src/Shared/Media/Infrastructure/Persistence/PostgresMediaRepository.php">
+  <file src="../../src/Shared/Media/Infrastructure/Persistence/Doctrine/DoctrineMediaRepository.php">
     <UnusedClass>
-      <code><![CDATA[PostgresMediaRepository]]></code>
+      <code><![CDATA[DoctrineMediaRepository]]></code>
     </UnusedClass>
   </file>
   <file src="../../src/Shared/Storage/Application/StoredImageObjectWriter.php">

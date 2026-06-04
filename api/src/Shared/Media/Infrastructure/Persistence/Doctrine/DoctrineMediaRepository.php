@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Shared\Media\Infrastructure\Persistence;
+namespace Erpify\Shared\Media\Infrastructure\Persistence\Doctrine;
 
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
@@ -15,7 +15,7 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  * @extends \Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository<\Erpify\Shared\Media\Domain\Entity\Media>
  */
 #[AsAlias(MediaRepository::class)]
-final class PostgresMediaRepository extends ServiceEntityRepository implements MediaRepository
+final class DoctrineMediaRepository extends ServiceEntityRepository implements MediaRepository
 {
     public function __construct(ManagerRegistry $registry)
     {
