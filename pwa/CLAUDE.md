@@ -281,8 +281,14 @@ Reach for these from every entity instead of re-implementing them locally:
   (`useTheme`), showing the current theme's `Sun`/`Moon`/`Monitor` icon
   and describing the next action in `title` / `aria-label` (with an
   `sr-only` fallback). `next-themes` adds/removes the `.dark` class on
-  `<html>` — the existing `globals.css` dark tokens do the rest; no new
-  tokens. The provider is mounted once in `app/layout.tsx` via the thin
+  `<html>` — the `globals.css` tokens do the rest (semantic colors used
+  _as text_ take the `-strong` variants in dark, e.g. `text-danger-strong`
+  — see `DESIGN.md`). It is mounted in the back-office top bar
+  (`testId="bo-layout__topbar-theme"` / mobile
+  `bo-layout__header-mobile-theme`) **and** in the frontoffice landing
+  `<Navbar>` (`testId="navbar__theme"` / mobile `navbar__theme--mobile`)
+  — the landing + `/status` are token-driven, so dark mode now covers the
+  whole surface, not just the back office. The provider is mounted once in `app/layout.tsx` via the thin
   `"use client"` wrapper `@/lib/ThemeProvider` (`attribute="class"`,
   `defaultTheme={Theme.SYSTEM}`, `enableSystem`,
   `disableTransitionOnChange`) with `suppressHydrationWarning` on

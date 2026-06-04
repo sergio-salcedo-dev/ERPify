@@ -55,16 +55,16 @@ export default function StatusPage() {
   const view = deriveSystemStatus({ checking, failed, result });
 
   return (
-    <div className="status-page flex min-h-screen flex-col bg-slate-50 font-sans">
+    <div className="status-page flex min-h-screen flex-col bg-background font-sans">
       <Navbar goToBackoffice={() => router.push(Routes.BACKOFFICE)} />
 
       <main className="status-page__main flex-grow">
         <section className="status-page__content mx-auto max-w-3xl px-4 py-12 sm:px-6 md:py-20 lg:px-8">
           <header className="status-page__header mb-8 text-center">
-            <h1 className="status-page__title text-3xl font-extrabold tracking-tight text-slate-900 md:text-4xl">
+            <h1 className="status-page__title text-3xl font-extrabold tracking-tight text-foreground md:text-4xl">
               System Status
             </h1>
-            <p className="status-page__subtitle mt-3 text-slate-600">
+            <p className="status-page__subtitle mt-3 text-muted-foreground">
               Live availability of Erpify services.
             </p>
           </header>
@@ -75,8 +75,8 @@ export default function StatusPage() {
             testId="status-page__banner"
           />
 
-          <div className="status-page__components mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="status-page__components-title mb-2 text-sm font-semibold tracking-wide text-slate-500 uppercase">
+          <div className="status-page__components mt-8 rounded-2xl border border-border bg-card p-6 shadow-sm">
+            <h2 className="status-page__components-title mb-2 text-sm font-semibold tracking-wide text-muted-foreground uppercase">
               Components
             </h2>
             {MONITORED_COMPONENTS.map((component) => (

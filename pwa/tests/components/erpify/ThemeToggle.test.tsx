@@ -19,7 +19,11 @@ const NEXT_ACTION_LABEL: Record<Theme, string> = {
  */
 function installMatchMedia(): (osDark: boolean) => void {
   let osDark = false;
-  const listeners = new Set<(event: MediaQueryListEvent) => void>();
+  // Store the wide `EventListener` type so it stays assignable to the real
+  // MediaQueryList.addEventListener signature — no cast needed on add/delete.
+  // A MediaQueryListEvent is an Event, so the dispatch loop below invokes each
+  // listener with a structurally-valid argument.
+  const listeners = new Set<EventListener>();
 
   const mql: MediaQueryList = {
     get matches() {
@@ -28,16 +32,16 @@ function installMatchMedia(): (osDark: boolean) => void {
     media: "(prefers-color-scheme: dark)",
     onchange: null,
     addEventListener: (_type: string, listener: EventListener) => {
-      listeners.add(listener as (event: MediaQueryListEvent) => void);
+      listeners.add(listener);
     },
     removeEventListener: (_type: string, listener: EventListener) => {
-      listeners.delete(listener as (event: MediaQueryListEvent) => void);
+      listeners.delete(listener);
     },
     addListener: (listener) => {
-      if (listener) listeners.add(listener as (event: MediaQueryListEvent) => void);
+      if (listener) listeners.add(listener as EventListener);
     },
     removeListener: (listener) => {
-      if (listener) listeners.delete(listener as (event: MediaQueryListEvent) => void);
+      if (listener) listeners.delete(listener as EventListener);
     },
     dispatchEvent: () => true,
   };

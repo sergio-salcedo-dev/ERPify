@@ -1,9 +1,8 @@
-import React from "react";
 import Link from "next/link";
 import { Logo } from "@/components/erpify";
 import { Routes } from "@/context/shared/domain/types/routes";
 
-export const Footer: React.FC = () => {
+export function Footer() {
   const footerLinks = [
     { name: "Privacy Policy", href: "#" },
     { name: "Terms of Service", href: "#" },
@@ -11,7 +10,7 @@ export const Footer: React.FC = () => {
   ];
 
   return (
-    <footer className="footer bg-white border-t border-slate-200 py-12">
+    <footer className="footer bg-card border-t border-border py-12">
       <div className="footer__container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="footer__inner flex flex-col md:flex-row justify-between items-center gap-8">
           <Logo
@@ -22,7 +21,7 @@ export const Footer: React.FC = () => {
             iconClassName="footer__logo-icon"
             textClassName="footer__logo-text"
           />
-          <div className="footer__links flex space-x-6 text-slate-500 font-medium">
+          <div className="footer__links flex space-x-6 text-muted-foreground font-medium">
             {footerLinks.map((link) => (
               <a key={link.name} href={link.href} className="footer__link hover:text-primary">
                 {link.name}
@@ -36,11 +35,11 @@ export const Footer: React.FC = () => {
               Status
             </Link>
           </div>
-          <p className="footer__copyright text-slate-400 text-sm">
+          <p className="footer__copyright text-muted-foreground text-sm">
             © 2026 Erpify SaaS. All rights reserved.
           </p>
         </div>
       </div>
     </footer>
   );
-};
+}

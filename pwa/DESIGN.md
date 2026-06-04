@@ -3,7 +3,7 @@
 Lean implementation-facing reference for polishing the ERPify back-office PWA. Day-to-day artifact for engineers; full design spec lives at `_bmad-output/planning-artifacts/ux-design-specification.md`.
 
 > **Status:** v1, brownfield-safe, applied iteratively. Tokens land first; components consume tokens; composites wrap Shadcn primitives. No big-bang rewrite.
-> **Inspiration:** Linear's restraint principles, palette discipline, and dark-mode treatment, applied to an ERP back-office that runs **light-mode by default**. Dark mode is a fully supported Linear-similar variant.
+> **Inspiration:** Linear's restraint principles and palette discipline, applied to an ERP back-office that runs **light-mode by default**. Dark mode is a fully supported variant on the elevated SaaS grey band (GitHub dark-dimmed / Stripe).
 
 ---
 
@@ -66,14 +66,14 @@ When analyzing, creating, or modifying **any** UI component, do **not** assume t
 Three deliberate departures from the project's earlier defaults — load-bearing for the polish identity. Documented here so future readers don't undo them by accident.
 
 1. **Geist + Geist Mono via `next/font/google` is the only typeface dependency.** Self-hosted, zero CLS, no third-party network call. The earlier "no web fonts in v1" rule is superseded — Geist is Vercel's default for new Next.js projects and ships as the typography baseline. Geist Mono replaces the substitute-for-Berkeley-Mono concern in one decision.
-2. **Light mode is the canonical default.** Most ERP back-office operators work in light all day. Light mode uses conventional sRGB neutrals + drop shadows. Dark mode ships fully wired with **Linear-similar treatment**: near-black canvas (`#08090a`), semi-transparent white borders, white-opacity elevation stepping, brand indigo accent.
+2. **Light mode is the canonical default.** Most ERP back-office operators work in light all day. Light mode uses conventional sRGB neutrals + drop shadows. Dark mode ships fully wired with an **elevated SaaS grey treatment**: `#16181d` canvas (GitHub-dimmed/Stripe band — see _Dark mode specifically_), semi-transparent white borders, white-opacity elevation stepping, brand indigo accent.
 3. **Brand color is Linear-derived indigo `#5e6ad2` / `#7170ff`.** It is the only chromatic hue in the system and is the same in both modes.
 
 ---
 
 ## TL;DR — what this system is
 
-- **Light-mode default, Linear-similar dark mode.** Light is the canonical authoring environment. Dark mode is the Linear-treatment variant for operators who prefer it.
+- **Light-mode default, elevated-grey dark mode.** Light is the canonical authoring environment. Dark mode is the GitHub-dimmed/Stripe-band variant for operators who prefer it.
 - **Geist + Geist Mono.** Loaded via `next/font/google`. Three weights: `400` reading, `500` emphasis, `600` strong emphasis. No OpenType feature toggling.
 - **Tokens-first.** Every color, type size, radius, and elevation lives as a CSS variable in `src/app/globals.css` `@theme`. Light and dark share the same alias contract. (Spacing rides Tailwind's default scale; motion is reduced-at-root but durations aren't yet tokenized — see those sections.)
 - **Shadcn primitives are unforked.** ERPify-specific composites live in `src/components/erpify/` and wrap Shadcn primitives via slots and `cn()`.
@@ -101,31 +101,31 @@ Three deliberate departures from the project's earlier defaults — load-bearing
 
 All tokens live in `src/app/globals.css`. The wiring is three layers, top to bottom:
 
-1. **Raw ramp values** are authored as `--erpify-*` custom properties in `:root` (light, canonical) and `.dark` (Linear-similar). This is the only place a hex value appears, and the only place light/dark diverge.
+1. **Raw ramp values** are authored as `--erpify-*` custom properties in `:root` (light, canonical) and `.dark` (elevated SaaS grey). This is the only place a hex value appears, and the only place light/dark diverge.
 2. **`@theme inline {}`** re-exports them as the semantic `--color-*` aliases this document names (`--color-bg → var(--erpify-bg)`, etc.) **and** maps the Shadcn-named tokens (`--background`, `--primary`, `--card`, …) onto the same ramp so unforked Shadcn primitives work without edits.
 3. **Components consume the aliases** — never the raw `--erpify-*` ramp, never a literal hex.
 
-Linear's hex values are authored directly — Tailwind 4 accepts hex, sRGB, and oklch interchangeably.
+Hex values are authored directly — Tailwind 4 accepts hex, sRGB, and oklch interchangeably.
 
 > **Alias-name caveat.** Two semantic names collide with Shadcn's own theme keys, so the ERPify alias carries a `-default` suffix in `@theme`: the brand violet is **`--color-accent-default`** (`--color-accent` is Shadcn's, mapped to `--color-bg-subtle`) and the default border is **`--color-border-default`** (`--color-border` is Shadcn's, same value). The tables below use the short conceptual names; reach for the `-default` alias when consuming the CSS variable directly.
 
 ### Color — surface ramp
 
-| Token                 | Light (canonical) | Dark (Linear-similar)         | Use                             |
-| --------------------- | ----------------- | ----------------------------- | ------------------------------- |
-| `--color-bg`          | `#f7f8f8`         | `#08090a` (Marketing Black)   | Page / canvas background        |
-| `--color-bg-muted`    | `#f3f4f5`         | `#0f1011` (Panel Dark)        | Sidebar, panel background       |
-| `--color-bg-subtle`   | `#e9eaec`         | `#191a1b` (Level 3 Surface)   | Hover surface, subtle fill      |
-| `--color-bg-elevated` | `#ffffff`         | `#28282c` (Secondary Surface) | Card, dropdown, popover, dialog |
+| Token                 | Light (canonical) | Dark (elevated SaaS grey)  | Use                             |
+| --------------------- | ----------------- | -------------------------- | ------------------------------- |
+| `--color-bg`          | `#f7f8f8`         | `#16181d` (Canvas)         | Page / canvas background        |
+| `--color-bg-muted`    | `#f3f4f5`         | `#1c1f25` (Panel)          | Sidebar, panel background       |
+| `--color-bg-subtle`   | `#e9eaec`         | `#22262e` (Subtle Surface) | Hover surface, subtle fill      |
+| `--color-bg-elevated` | `#ffffff`         | `#2b303a` (Elevated)       | Card, dropdown, popover, dialog |
 
 ### Color — text ramp
 
 | Token                    | Light (canonical) | Dark      | Use                           |
 | ------------------------ | ----------------- | --------- | ----------------------------- |
-| `--color-text`           | `#08090a`         | `#f7f8f8` | Body — never pure white/black |
-| `--color-text-muted`     | `#62666d`         | `#d0d6e0` | Secondary body, descriptions  |
-| `--color-text-subtle`    | `#8a8f98`         | `#8a8f98` | Placeholders, metadata        |
-| `--color-text-faint`     | `#9ea2a8`         | `#62666d` | Timestamps, disabled-ish      |
+| `--color-text`           | `#08090a`         | `#edeef0` | Body — never pure white/black |
+| `--color-text-muted`     | `#62666d`         | `#b4bac4` | Secondary body, descriptions  |
+| `--color-text-subtle`    | `#8a8f98`         | `#8b919e` | Placeholders, metadata        |
+| `--color-text-faint`     | `#9ea2a8`         | `#646b78` | Timestamps, disabled-ish      |
 | `--color-text-on-accent` | `#ffffff`         | `#ffffff` | Text on brand-indigo surfaces |
 
 ### Color — borders
@@ -133,9 +133,9 @@ Linear's hex values are authored directly — Tailwind 4 accepts hex, sRGB, and 
 | Token                   | Light (canonical) | Dark                     | Use                                           |
 | ----------------------- | ----------------- | ------------------------ | --------------------------------------------- |
 | `--color-border-subtle` | `#eef0f2`         | `rgba(255,255,255,0.05)` | Faintest divider                              |
-| `--color-border`        | `#dcdfe3`         | `rgba(255,255,255,0.08)` | Default border for cards, inputs, code blocks |
-| `--color-border-strong` | `#bfc3ca`         | `#23252a`                | Emphasized divider                            |
-| `--color-line-tint`     | `#f3f4f5`         | `#141516`                | Whisper-line dividers between rows            |
+| `--color-border`        | `#dcdfe3`         | `rgba(255,255,255,0.09)` | Default border for cards, inputs, code blocks |
+| `--color-border-strong` | `#bfc3ca`         | `rgba(255,255,255,0.15)` | Emphasized divider                            |
+| `--color-line-tint`     | `#f3f4f5`         | `#191c22`                | Whisper-line dividers between rows            |
 
 ### Color — brand and accent (the only chromatic hue in the system)
 
@@ -153,12 +153,13 @@ Same in both modes. Adjusted-state values shift slightly for legibility.
 
 ### Color — semantic signals (sparse use; ERP-defined statuses go through `<StatusBadge>`)
 
-| Token                    | Light               | Dark      | Use                            |
-| ------------------------ | ------------------- | --------- | ------------------------------ |
-| `--color-success`        | `#10b981` (Emerald) | `#10b981` | Pill, complete state           |
-| `--color-success-strong` | `#27a644`           | `#27a644` | Active / in-progress dot       |
-| `--color-warning`        | `#d97706`           | `#f59e0b` | Warning surfaces               |
-| `--color-danger`         | `#dc2626`           | `#e5484d` | Destructive action, error icon |
+| Token                    | Light               | Dark      | Use                                                                                                                           |
+| ------------------------ | ------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `--color-success`        | `#10b981` (Emerald) | `#10b981` | Pill, complete state                                                                                                          |
+| `--color-success-strong` | `#27a644`           | `#27a644` | Active / in-progress dot                                                                                                      |
+| `--color-warning`        | `#d97706`           | `#f59e0b` | Warning surfaces                                                                                                              |
+| `--color-danger`         | `#dc2626`           | `#e5484d` | Destructive action, error icon                                                                                                |
+| `--color-danger-strong`  | `#dc2626`           | `#f87171` | Danger as readable _text_ on dark surfaces (≥ 4.6:1 on `bg-elevated`); `--color-danger` stays the fill shade under white text |
 
 ### Color — overlay and focus
 
@@ -477,7 +478,7 @@ Every API non-2xx response returns:
 - Form labels are mandatory and visible. No placeholder-as-label.
 - `aria-live` regions: `polite` for ambient + validation; `assertive` for action errors and system alerts.
 - Skip-to-content link in `<AppShell>`.
-- **Primary text is `#08090a` (light) / `#f7f8f8` (dark)** — never pure black or pure white. Pure values cause eye strain over a workday.
+- **Primary text is `#08090a` (light) / `#edeef0` (dark)** — never pure black or pure white. Pure values cause eye strain over a workday.
 
 ---
 
@@ -489,13 +490,15 @@ Every API non-2xx response returns:
 - Use weight 500 as the default emphasis weight.
 - Apply aggressive negative letter-spacing at display sizes (-1.584 px at 72 px, scaling down).
 - Reserve brand indigo (`#5e6ad2` / `#7170ff`) for primary CTAs and interactive accents only.
-- Use `#08090a` (light) / `#f7f8f8` (dark) for primary text — never pure black/white.
+- Use `#08090a` (light) / `#edeef0` (dark) for primary text — never pure black/white.
 - Color is never the sole signal — always pair with icon, label, or position.
 
 ### Dark mode specifically
 
-- Build on near-black backgrounds: `#08090a` canvas, `#0f1011` panels, `#191a1b` elevated.
-- Use semi-transparent white borders (`rgba(255,255,255,0.05)` to `0.08`) — not solid dark borders.
+- Build on an **elevated SaaS grey band**, not marketing near-black: `#16181d` canvas, `#1c1f25` panels, `#22262e` subtle, `#2b303a` elevated/cards. Benchmark: GitHub _dark dimmed_ (`#22272e`) — GitHub authored it precisely because its near-black default felt harsh — plus Stripe (`#14171d`) and Notion (`#191919`) confirm the comfortable `#14`–`#22` band. The v1 `#08090a` was Linear's _marketing_ black, not its app surface. A cool undertone (B > R) seats the indigo accent.
+- Text ramp: `#edeef0` primary, `#b4bac4` secondary, `#8b919e` subtle, `#646b78` faint — primary + secondary clear AA (≥ 4.5:1) across all four surfaces. **Subtle and faint are not body-copy tiers**: subtle is AA on canvas/panels but ~4.2:1 on `bg-elevated` (labels/tertiary only there), faint is sub-AA by design (disabled/decorative only).
+- Semantic colors as _text_ need the `-strong` variants in dark: one token cannot be both AA text on `bg-elevated` and an AA fill under white text (e.g. destructive buttons). Use `text-danger-strong` for danger text; `--color-danger` remains the fill/graphic shade.
+- Use semi-transparent white borders (`rgba(255,255,255,0.05)` subtle → `0.09` default → `0.15` strong) so they read against the lighter surfaces — not solid dark borders.
 - Keep ghost button backgrounds nearly transparent: `rgba(255,255,255,0.02–0.05)`.
 - Convey elevation via background luminance stepping; reserve drop shadows for floating elements.
 
@@ -507,7 +510,7 @@ Every API non-2xx response returns:
 
 ### Theming & mode activation
 
-Both modes are authored as tokens in `globals.css` (`:root` light + `.dark`, each carrying `color-scheme`). The mode is selected at runtime by `next-themes`, mounted once in `app/layout.tsx` (`attribute="class"`, `defaultTheme=system`, `enableSystem`, `disableTransitionOnChange`, `storageKey="erpify:theme"`) with `suppressHydrationWarning` on `<html>`. It adds/removes the `.dark` class on `<html>` — components keep consuming the same semantic aliases, so no component changes per mode. First visit follows the OS via `prefers-color-scheme`; an explicit `<ThemeToggle>` choice persists and overrides the OS. The mode strings flow through the `Theme` constant (`@/context/shared/domain/types/theme`); never hard-code `"light"` / `"dark"` / `"system"` in TS/TSX. The marketing/landing surface uses its own raw palette and is not themed.
+Both modes are authored as tokens in `globals.css` (`:root` light + `.dark`, each carrying `color-scheme`). The mode is selected at runtime by `next-themes`, mounted once in `app/layout.tsx` (`attribute="class"`, `defaultTheme=system`, `enableSystem`, `disableTransitionOnChange`, `storageKey="erpify:theme"`) with `suppressHydrationWarning` on `<html>`. It adds/removes the `.dark` class on `<html>` — components keep consuming the same semantic aliases, so no component changes per mode. First visit follows the OS via `prefers-color-scheme`; an explicit `<ThemeToggle>` choice persists and overrides the OS. The mode strings flow through the `Theme` constant (`@/context/shared/domain/types/theme`); never hard-code `"light"` / `"dark"` / `"system"` in TS/TSX. The frontoffice landing + `/status` are **token-driven and themed** (they consume `bg-background` / `text-foreground` / `text-muted-foreground` / the semantic success/warning/danger tokens, and mount `<ThemeToggle>` in the `<Navbar>`), so dark mode covers the whole product surface, not just the back office. The landing keeps its own composition language (`tw-animate-css` entrances, raw layout utilities) — only its colours are tokenised.
 
 ### Never
 
