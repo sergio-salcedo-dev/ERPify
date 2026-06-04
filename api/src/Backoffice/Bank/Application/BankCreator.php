@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\Bank\Application;
 
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
-use Erpify\Backoffice\Bank\Infrastructure\Persistence\PostgresBankRepository;
+use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Shared\Application\Validation\Validator;
 use Erpify\Shared\Infrastructure\Uuid\SymfonyUuidGenerator;
 use Erpify\Shared\Media\Application\MediaRegistrar;
@@ -18,7 +18,7 @@ use Symfony\Component\Messenger\MessageBusInterface;
 final readonly class BankCreator
 {
     public function __construct(
-        private PostgresBankRepository $postgresBankRepository,
+        private BankRepository $bankRepository,
         private MessageBusInterface $messageBus,
         private MediaRegistrar $mediaRegistrar,
         private StoredImageObjectWriter $storedImageObjectWriter,
@@ -55,7 +55,7 @@ final readonly class BankCreator
 
         $this->validator->ensure($bank);
 
-        $this->postgresBankRepository->save($bank);
+        $this->bankRepository->save($bank);
 
         foreach ($bank->pullDomainEvents() as $domainEvent) {
             $this->messageBus->dispatch($domainEvent);

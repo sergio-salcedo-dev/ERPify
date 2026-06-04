@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Shared\Infrastructure\Persistence;
+namespace Erpify\Shared\Infrastructure\Persistence\Doctrine;
 
 enum PaginatorOption: string
 {

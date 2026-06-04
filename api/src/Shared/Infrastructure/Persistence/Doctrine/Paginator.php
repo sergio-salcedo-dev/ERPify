@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Shared\Infrastructure\Persistence;
+namespace Erpify\Shared\Infrastructure\Persistence\Doctrine;
 
 use ArrayIterator;
 use DateTimeImmutable;
@@ -14,6 +14,8 @@ use Doctrine\ORM\QueryBuilder;
 use Doctrine\ORM\Tools\Pagination\Paginator as DoctrinePaginator;
 use Erpify\Shared\Domain\Search\PaginatedResult;
 use Erpify\Shared\Domain\Search\PaginationMode;
+use Erpify\Shared\Infrastructure\Persistence\PaginatorCursorInterface;
+use Erpify\Shared\Infrastructure\Persistence\SortDirection;
 use Exception;
 use InvalidArgumentException;
 use Iterator;

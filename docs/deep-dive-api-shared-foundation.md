@@ -51,7 +51,7 @@ api/src/Shared/
 #### `api/src/Shared/Application/Http/Search/SearchQuery.php`
 - **LOC:** 57 — **Type:** HTTP-boundary `readonly` DTO; `MAX_PAGE = 10_000`, `MAX_LIMIT = 1_000`.
 - **Exports:** Constructor with `#[Assert\*]` constraints on `cursor`/`page`/`limit`/`paginationMode`/`ids`; `toCriteria(): SearchCriteria`.
-- **Used by:** `Backoffice/Bank/Application/BankSearcher`, `Backoffice/Bank/Infrastructure/Controller/BankSearchController` (binds via `#[MapQueryString]`), `Infrastructure/Persistence/AbstractSearchRepository`.
+- **Used by:** `Backoffice/Bank/Application/BankSearcher`, `Backoffice/Bank/Infrastructure/Controller/BankSearchController` (binds via `#[MapQueryString]`), `Infrastructure/Persistence/Doctrine/AbstractDoctrineSearchRepository`.
 - **Contributor note:** Subclass per entity to add domain-specific filters and override `toCriteria()`. Validation failures bubble to `ValidationFailedException` → `ProblemDetailsFactory` → 400.
 - **Verification:** `api/tests/Unit/Shared/Application/Http/Search/SearchQueryTest.php`.
 
@@ -205,11 +205,11 @@ api/src/Shared/
 - **LOC:** 35 — registered first in `messenger.bus.default.middleware` (see `api/config/packages/messenger.yaml`). Runs **before** `SendMessageMiddleware` so the audit row is committed even if transport enqueue throws.
 - Dispatches via the `DomainEventStore` port (alias → `DoctrineDomainEventStore`).
 
-#### `api/src/Shared/Infrastructure/Persistence/AbstractRepository.php`
+#### `api/src/Shared/Infrastructure/Persistence/Doctrine/AbstractDoctrineRepository.php`
 - **LOC:** 215 — extends Doctrine's `ServiceEntityRepository<T>`. `createQueryBuilder()` is overridden to return `QueryBuilderWithOptions` (load-bearing for the paginator).
-- WHERE-helper APIs: `addWhereIn`, `addWhereInCaseInsensitive`, `addWhereIdsIn`, `addWhereBetweenDates`, `addWhereBetweenValues`. Parameter naming uses `md5($qb->getDQL())` + a counter to keep parameter names deterministic across repeated executions (prevents Doctrine SQL-cache disk explosion — comment at lines 202–204).
+- WHERE-helper APIs: `addWhereIn`, `addWhereInCaseInsensitive`, `addWhereIdsIn`, `addWhereBetweenDates`, `addWhereBetweenValues`. Parameter naming uses `xxh128($qb->getDQL())` + a counter to keep parameter names deterministic across repeated executions (prevents Doctrine SQL-cache disk explosion — comment at lines 202–204).
 
-#### `api/src/Shared/Infrastructure/Persistence/AbstractSearchRepository.php`
+#### `api/src/Shared/Infrastructure/Persistence/Doctrine/AbstractDoctrineSearchRepository.php`
 - **LOC:** 133 — generic `<T>`. Bridges `SearchCriteria` → `Paginator<T>`. Two notable optimizations:
   1. **Composite-PK guard** (lines 73–79): if the entity has a composite key and the QueryBuilder has no non-root SELECT, disables `FETCH_JOIN_COLLECTION` to prevent cartesian-row count inflation.
   2. **Default order-by** (`createdAt ASC`) injected when the criteria don't supply one (preserves cursor stability).
@@ -226,7 +226,7 @@ api/src/Shared/
 #### `api/src/Shared/Infrastructure/Persistence/Entity/StoredDomainEvent.php`
 - **LOC:** 36 — ORM entity for the `domain_event` audit table. Uses `Identifiable` trait (UUID PK). Indexes on `aggregateId`, `name`. `body` is JSON. **Immutable** (write-once audit row).
 
-#### `api/src/Shared/Infrastructure/Persistence/Paginator.php`
+#### `api/src/Shared/Infrastructure/Persistence/Doctrine/Paginator.php`
 - **LOC:** 417 — port of `chiliz/doctrine-bundle` Paginator; **the most algorithmically dense file in `Shared/`**. Implements `PaginatedResult<T>` and `IteratorAggregate`.
 - Cursor WHERE optimization: walks order-by columns in **reverse**, building OR/AND chains comparing column values against `$cursor->getLastItem()` / `getFirstItem()` with operators chosen by sort direction × page direction. Skips `OFFSET` when cursor is present.
 - `ORDER_BY_IDENTIFIER_PATTERN` regex restricts column names to safe DQL identifiers (`alias.field` / `field`, underscores allowed) — protects the cursor-WHERE generator from injection.
@@ -234,14 +234,17 @@ api/src/Shared/
 - DETAILED mode triggers a separate `COUNT(*)` query (with `ORDER BY` reset).
 - DateTime fields are extracted to ISO-8601 UTC for cursor serialization stability.
 
-#### `api/src/Shared/Infrastructure/Persistence/PaginatorCursor.php` · `PaginatorCursorInterface.php` · `PaginatorCursorFactory.php` · `PaginatorOption.php`
-- 68 + 35 + 138 + 17 LOC.
+#### `api/src/Shared/Infrastructure/Persistence/PaginatorCursor.php` · `PaginatorCursorInterface.php` · `PaginatorCursorFactory.php`
+- 68 + 35 + 138 LOC.
 - `PaginatorCursorFactory` serializes/deserializes cursors as `base64(gzip(json)).hmacSha256` using `%kernel.secret%` as the HMAC key. Hard limits: `MAX_DECOMPRESSED_BYTES = 65_536` (gzip-bomb defense), constant-time `hash_equals` on signature compare. Bad signature / bad gzip / bad JSON → empty cursor (silent fail; client retries from page 1).
+
+#### `api/src/Shared/Infrastructure/Persistence/Doctrine/QueryBuilderWithOptions.php` · `PaginatorOption.php`
+- 37 + 17 LOC.
+- `QueryBuilderWithOptions` extends Doctrine's `QueryBuilder` and carries an options bag — that's what lets `Paginator` discover `FETCH_JOIN_COLLECTION` / `ENABLE_CURSOR_PAGINATION` / `PAGINATION_MODE` without a wider `QueryBuilder` API.
 - `PaginatorOption` enum: `FETCH_JOIN_COLLECTION`, `ENABLE_CURSOR_PAGINATION`, `PAGINATION_MODE`.
 
-#### `api/src/Shared/Infrastructure/Persistence/QueryBuilderWithOptions.php` · `QueryParam.php` · `SortDirection.php` · `StoredDomainEventRepository.php`
-- 37 + 20 + 11 + 18 LOC.
-- `QueryBuilderWithOptions` extends Doctrine's `QueryBuilder` and carries an options bag — that's what lets `Paginator` discover `FETCH_JOIN_COLLECTION` / `ENABLE_CURSOR_PAGINATION` / `PAGINATION_MODE` without a wider `QueryBuilder` API.
+#### `api/src/Shared/Infrastructure/Persistence/QueryParam.php` · `SortDirection.php` · `StoredDomainEventRepository.php`
+- 20 + 11 + 18 LOC.
 - `QueryParam` enum names the standard URL parameters (`IDS`, `CREATED_AT`, `UPDATED_AT`, `PAGE`, `CURSOR`, `PAGINATION_MODE`, `SORT`, `DIRECTION`, `LIMIT`, `FROM`, `TO`).
 
 #### `api/src/Shared/Infrastructure/Serializer/JsonDecoder.php` · `ResourceNormalizer.php`
@@ -297,7 +300,7 @@ api/src/Shared/
   6. SHA-256 over finalized bytes.
 - **Determinism is non-negotiable** — encoder settings must stay fixed or deduplication breaks across versions.
 
-#### `api/src/Shared/Media/Infrastructure/Persistence/PostgresMediaRepository.php`
+#### `api/src/Shared/Media/Infrastructure/Persistence/Doctrine/DoctrineMediaRepository.php`
 - **LOC:** 62 — extends `ServiceEntityRepository<Media>`. Standard Doctrine; both finder methods filter `deletedAt IS NULL`. `existsActiveByContentHash` uses `SELECT id … LIMIT 1` for cheap existence.
 
 ---
@@ -409,13 +412,13 @@ SearchQuery (Application/Http/Search)            ← HTTP boundary; #[MapQuerySt
 SearchCriteria (Domain/Search)                   ← cursor | page | limit | mode | ids
     │
     ▼
-AbstractSearchRepository::getPaginatedResults()  ← extracts mode, calls subclass
+AbstractDoctrineSearchRepository::getPaginatedResults()  ← extracts mode, calls subclass
     │ getSearchQueryBuilder(criteria)
     ▼
 QueryBuilderWithOptions (Doctrine subclass)      ← carries PaginatorOption flags
     │
     ▼
-AbstractSearchRepository::getQueryBuilderPaginatedResults()
+AbstractDoctrineSearchRepository::getQueryBuilderPaginatedResults()
     ├─ PaginatorCursorFactory::createFromString()  ← HMAC verify + gunzip + json_decode
     ├─ Composite-PK detection → flips FETCH_JOIN_COLLECTION
     └─ new Paginator<T>(qb, cursor, idFields, options, page, maxPerPage)
@@ -432,7 +435,7 @@ AbstractSearchController::buildResponse()
     └─ PaginatorCursorFactory::toString()        ← json + gzip + base64 + HMAC
 ```
 
-Bounded-context call sites observed today: `Backoffice/Bank/Infrastructure/Persistence/PostgresBankRepository`, `Backoffice/Bank/Infrastructure/Controller/BankSearchController`, `Backoffice/Bank/Application/BankSearcher`.
+Bounded-context call sites observed today: `Backoffice/Bank/Infrastructure/Persistence/Doctrine/DoctrineBankRepository`, `Backoffice/Bank/Infrastructure/Controller/BankSearchController`, `Backoffice/Bank/Application/BankSearcher`.
 
 ---
 
@@ -530,7 +533,7 @@ StoredObjectOrphanCleaner::cleanupAfterRemoval($hash)
 - `Domain/Uuid/UuidGenerator.php`.
 - `Domain/Enum/Attribute/HumanReadableIntEnumValue.php`.
 - `Application/UseCase/Result.php`, `Application/Problem/RedactionDenylist.php`.
-- `Infrastructure/Persistence/QueryParam.php`, `SortDirection.php`, `PaginatorOption.php`, `QueryBuilderWithOptions.php`.
+- `Infrastructure/Persistence/QueryParam.php`, `SortDirection.php`; `Infrastructure/Persistence/Doctrine/PaginatorOption.php`, `QueryBuilderWithOptions.php`.
 - `Storage/Domain/ContentAddressableObjectKey.php`.
 - `Guzzle/Enum/GuzzleContextTypeEnum.php` (no callers either).
 
@@ -548,12 +551,12 @@ StoredObjectOrphanCleaner::cleanupAfterRemoval($hash)
 | Other `Domain/` (`Aggregate/`, `Event/`, `Search/`, `Enum/`, `Uuid/`) | **none** | indirect via Bank context tests | — |
 | `Infrastructure/Http/` | `CorrelationIdListenerTest`, `ExceptionResponderTest`, `ProblemDetailsResponderTest`, `JsonResponderTest` | `CorrelationIdListenerFunctionalTest`, `ExceptionResponderFunctionalTest` (with 14 fixture controllers under `Fixtures/`), `ExceptionResponderListenerPriorityTest`, `HealthEndpointsContractTest`, `ProblemDetailsApiSchemaSweepTest` | `ConstantTimeAuthBranchingBenchmarkTest` (also under Unit tree; opt-in via `RUN_BENCHMARKS=1`) |
 | `Infrastructure/Serializer/` · `Infrastructure/Uuid/` | 1 each | — | — |
-| `Infrastructure/Persistence/` (Paginator, AbstractRepository, AbstractSearchRepository, cursor factory) | **none in Shared/** | indirect via Bank context | — |
+| `Infrastructure/Persistence/` (Paginator, AbstractDoctrineRepository, AbstractDoctrineSearchRepository, cursor factory) | **none in Shared/** | indirect via Bank context | — |
 | `Media/` | **none** | covered indirectly by `Backoffice/Bank/.../BankLogoMultipartFunctionalTest` | — |
 | `Storage/` | **none** | **none** | — |
 
 **Gaps worth surfacing:**
-- Persistence pagination internals (`Paginator`, `PaginatorCursorFactory`, `AbstractSearchRepository`, `AbstractRepository` parameter-naming) are tested only through bounded-context integration tests today. Consider `tests/Unit/Shared/Infrastructure/Persistence/` to lock cursor round-trip + cursor-WHERE generation + composite-PK guard explicitly.
+- Persistence pagination internals (`Paginator`, `PaginatorCursorFactory`, `AbstractDoctrineSearchRepository`, `AbstractDoctrineRepository` parameter-naming) are tested only through bounded-context integration tests today. Consider `tests/Unit/Shared/Infrastructure/Persistence/` to lock cursor round-trip + cursor-WHERE generation + composite-PK guard explicitly.
 - Image normalizer (`InterventionImageNormalizer`) has no tests — and it owns determinism guarantees for content-hash dedup. Add unit tests covering MIME allowlist, scaling math, transcode quality, and SHA-256 stability.
 - Storage subtree has zero direct tests (Flysystem adapter, content-key value object, composite access, orphan cleaner). Orphan cleanup is the highest-risk untested path.
 
@@ -601,7 +604,7 @@ StoredObjectOrphanCleaner::cleanupAfterRemoval($hash)
 ### Adding a new bounded context that uses `Shared/`
 1. Mirror `Backoffice/Bank/` layering: `Domain/{Aggregate,Event,Exception,Repository,Search}` framework-free; `Application/` use cases + DTOs; `Infrastructure/` Doctrine + HTTP + Messenger.
 2. Domain exceptions extend `DomainException` and implement zero or more markers from `Domain/Exception/` — first marker in the implements clause wins for status mapping.
-3. Search repository extends `AbstractSearchRepository<T>`; entity-specific `SearchQuery` extends `Application/Http/Search/SearchQuery` and overrides `toCriteria()`.
+3. Search repository extends `AbstractDoctrineSearchRepository<T>`; entity-specific `SearchQuery` extends `Application/Http/Search/SearchQuery` and overrides `toCriteria()`.
 4. If the new context stores objects in Flysystem, implement `StoredObjectReferenceInspector` and tag it `stored_object.reference_inspector`. Wire `StoredObjectOrphanCleaner::cleanupAfterRemoval()` from a domain-event handler when references are dropped.
 5. New domain events: subclass `DomainEvent`, override `eventName()` (kebab-case identifier) and `toPrimitives()`. Audit persistence is automatic via `PersistDomainEventMiddleware`.
 
@@ -635,7 +638,7 @@ StoredObjectOrphanCleaner::cleanupAfterRemoval($hash)
 | Map an exception to a new HTTP status | `Application/Problem/ProblemDetailsFactory.php` (`MARKER_STATUS_MAP`)                                                                                                                  |
 | Add a sensitive key to denylist       | `Application/Problem/RedactionDenylist.php` + `RedactionDenylistTest`                                                                                                                  |
 | Customize debug payload per env       | `ProblemDetailsFactory::resolveDebugMode()` + `buildDebugExtension()`                                                                                                                  |
-| Build a search endpoint               | `Application/Http/Search/SearchQuery` (subclass) + `Infrastructure/Persistence/AbstractSearchRepository` (extend) + `Infrastructure/Http/Controller/AbstractSearchController` (extend) |
+| Build a search endpoint               | `Application/Http/Search/SearchQuery` (subclass) + `Infrastructure/Persistence/Doctrine/AbstractDoctrineSearchRepository` (extend) + `Infrastructure/Http/Controller/AbstractSearchController` (extend) |
 | Add a domain event                    | `Domain/Event/DomainEvent` (subclass) — audit persistence is wired                                                                                                                     |
 | Send an email                         | `Application/Mailer/NotificationMailer` (port) — already has plain-text adapter                                                                                                        |
 | Store a small image (BYTEA)           | `Media/Application/MediaRegistrar`                                                                                                                                                     |

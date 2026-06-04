@@ -2,23 +2,27 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Shared\Infrastructure\Persistence;
+namespace Erpify\Shared\Infrastructure\Persistence\Doctrine;
 
 use Doctrine\ORM\Query\Expr\Select;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 use Erpify\Shared\Domain\Search\PaginationMode;
 use Erpify\Shared\Domain\Search\SearchCriteria;
+use Erpify\Shared\Infrastructure\Persistence\PaginatorCursorFactory;
+use Erpify\Shared\Infrastructure\Persistence\PaginatorCursorInterface;
+use Erpify\Shared\Infrastructure\Persistence\QueryParam;
+use Erpify\Shared\Infrastructure\Persistence\SortDirection;
 use LogicException;
 
 /**
  * @template T of object
  *
- * @extends AbstractRepository<T>
+ * @extends AbstractDoctrineRepository<T>
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
-abstract class AbstractSearchRepository extends AbstractRepository
+abstract class AbstractDoctrineSearchRepository extends AbstractDoctrineRepository
 {
     public function __construct(
         ManagerRegistry $registry,
