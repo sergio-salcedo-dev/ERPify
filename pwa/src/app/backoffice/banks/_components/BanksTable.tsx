@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
-import { DataTable, StatusBadge } from "@/components/erpify";
+import { DataTable, StatusBadge, TruncatedText } from "@/components/erpify";
 import type { DataTableColumn, DataTableSelection, DataTableSort } from "@/components/erpify";
 import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
 import { safeHref } from "@/lib/safeHref";
@@ -17,27 +17,28 @@ interface BanksTableProps {
   onSortChange?: (sort: DataTableSort | null) => void;
   onBankDeleted?: (id: string) => void;
   selection?: DataTableSelection;
+  density?: "compact" | "comfortable";
 }
 
-const renderShortNameCell = (row: Bank) => (
-  <span className="block truncate font-mono text-xs uppercase" title={row.shortName}>
-    {row.shortName}
-  </span>
+const renderCodeCell = (row: Bank) => (
+  <TruncatedText
+    value={row.shortName}
+    className="font-mono text-xs font-medium uppercase"
+    openOnRowFocus={false}
+  />
 );
 
-const renderNameCell = (row: Bank) => (
-  <div className="banks-table__identity flex min-w-0 items-center gap-2.5">
-    <span className="min-w-0 truncate">{row.name}</span>
-    {isRecentlyCreated(row.createdAt, dateTimeProvider) ? (
-      <StatusBadge
-        variant="success"
-        label="New"
-        className="banks-table__new flex-none"
-        testId={`banks-table__new-${row.id}`}
-      />
-    ) : null}
-  </div>
-);
+const renderNameCell = (row: Bank) => <TruncatedText value={row.name} />;
+
+// Banks carry no domain status field; the list-level status is recency: a
+// recently-created bank reads "New", everything else "Active". The badge
+// lives in this dedicated column — never inline with the name.
+const renderStatusCell = (row: Bank) =>
+  isRecentlyCreated(row.createdAt, dateTimeProvider) ? (
+    <StatusBadge variant="success" label="New" testId={`banks-table__new-${row.id}`} />
+  ) : (
+    <StatusBadge variant="neutral" label="Active" />
+  );
 
 const renderRelativeCell = (iso: string, testId: string) => (
   <span
@@ -60,6 +61,7 @@ function buildBanksColumns(onBankDeleted?: (id: string) => void): DataTableColum
       id={row.id}
       name={row.name}
       surface="table"
+      reveal="row"
       onBankDeleted={onBankDeleted}
       className="justify-end"
     />
@@ -67,10 +69,11 @@ function buildBanksColumns(onBankDeleted?: (id: string) => void): DataTableColum
   return [
     {
       id: "shortName",
-      header: "Short name",
+      header: "Code",
       sortable: true,
-      cell: renderShortNameCell,
-      className: "max-w-[8rem] truncate",
+      cell: renderCodeCell,
+      className: "min-w-0",
+      colClassName: "w-28",
     },
     {
       id: "name",
@@ -80,11 +83,11 @@ function buildBanksColumns(onBankDeleted?: (id: string) => void): DataTableColum
       className: "min-w-0",
     },
     {
-      id: "createdAt",
-      header: "Created",
-      sortable: true,
-      cell: renderCreatedAtCell,
-      className: "banks-table__col--md hidden md:table-cell",
+      id: "status",
+      header: "Status",
+      cell: renderStatusCell,
+      className: "whitespace-nowrap",
+      colClassName: "w-24",
     },
     {
       id: "updatedAt",
@@ -92,12 +95,22 @@ function buildBanksColumns(onBankDeleted?: (id: string) => void): DataTableColum
       sortable: true,
       cell: renderUpdatedAtCell,
       className: "banks-table__col--lg hidden lg:table-cell",
+      colClassName: "w-32 max-lg:hidden",
+    },
+    {
+      id: "createdAt",
+      header: "Created",
+      sortable: true,
+      cell: renderCreatedAtCell,
+      className: "banks-table__col--xl hidden xl:table-cell",
+      colClassName: "w-32 max-xl:hidden",
     },
     {
       id: "actions",
       header: "Actions",
       align: "right",
-      className: "banks-table__col--actions w-[1%] whitespace-nowrap",
+      className: "banks-table__col--actions",
+      colClassName: "w-28",
       cell: renderActionsCell,
     },
   ];
@@ -109,26 +122,31 @@ export function BanksTable({
   onSortChange,
   onBankDeleted,
   selection,
+  density = "compact",
 }: Readonly<BanksTableProps>) {
   const router = useRouter();
 
   const columns = useMemo(() => buildBanksColumns(onBankDeleted), [onBankDeleted]);
 
   return (
-    <div className="banks-table overflow-x-auto sm:mx-0" data-testid="banks-table">
+    <div
+      className="banks-table overflow-x-auto sm:mx-0 lg:overflow-x-visible"
+      data-testid="banks-table"
+    >
       <DataTable
         columns={columns}
         data={banks}
         rowKey={(row) => row.id}
         caption="Backoffice banks"
-        density="compact"
+        density={density}
         sort={sort ?? undefined}
         onSortChange={onSortChange}
         selection={selection}
         onRowActivate={(row) => router.push(safeHref(bankRoutes.detail(row.id)))}
         rowTestId={(row) => `banks-table__row-${row.id}`}
         testId="banks-table__inner"
-        className="banks-table__inner"
+        layout="fixed"
+        className="banks-table__inner min-w-[44rem]"
       />
     </div>
   );

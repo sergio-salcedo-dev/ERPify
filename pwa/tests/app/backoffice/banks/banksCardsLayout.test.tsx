@@ -16,18 +16,18 @@ const LONG = Bank.fromPrimitives({
 });
 
 describe("BanksCards — layout", () => {
-  it("renders the full name without truncation so long names stay readable", () => {
+  it("clamps the name to two lines via CSS while keeping the full text in the DOM", () => {
     render(<BanksCards banks={[LONG]} />);
     const name = screen.getByTestId(`banks-cards__name-${LONG.id}`);
     expect(name).toHaveTextContent("Banco Nacional de Comercio Exterior");
-    expect(name.className).not.toContain("truncate");
+    expect(name.className).toContain("line-clamp-2");
   });
 
-  it("renders the full short name without truncation", () => {
+  it("truncates the short name to one line via CSS while keeping the full text in the DOM", () => {
     render(<BanksCards banks={[LONG]} />);
     const shortName = screen.getByTestId(`banks-cards__shortname-${LONG.id}`);
     expect(shortName).toHaveTextContent("BNCEMX0001LONGUNBROKENCODE");
-    expect(shortName.className).not.toContain("truncate");
+    expect(shortName.className).toContain("truncate");
   });
 
   it("drops the redundant footer view-details link (whole card navigates)", () => {

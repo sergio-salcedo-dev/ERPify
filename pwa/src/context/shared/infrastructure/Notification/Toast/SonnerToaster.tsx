@@ -30,8 +30,14 @@ const MAX_VISIBLE_TOASTS = 6;
  *   default of 3 so a burst of deletions stays legible.
  * - `richColors` — Sonner's built-in tonal styling per level (success/error/info/warning).
  * - `closeButton` — Sonner renders it with an accessible name ("Close toast").
+ * - `toastOptions.classNames.description` — clamps the description to 2 lines so a
+ *   long value (e.g. a 255-char bank name) can never inflate the toast; the full
+ *   value lives on the entity's detail page, a tap away. A caller's `toastOptions`
+ *   is merged (its `classNames` one level deep) rather than replaced, so the clamp
+ *   survives by default; only an explicit `classNames.description` overrides it —
+ *   the caller spread sits after the default on purpose.
  */
-export function SonnerToaster(props: Readonly<ToasterProps>) {
+export function SonnerToaster({ toastOptions, ...props }: Readonly<ToasterProps>) {
   return (
     <Toaster
       position="top-center"
@@ -39,6 +45,10 @@ export function SonnerToaster(props: Readonly<ToasterProps>) {
       visibleToasts={MAX_VISIBLE_TOASTS}
       richColors
       closeButton
+      toastOptions={{
+        ...toastOptions,
+        classNames: { description: "line-clamp-2 break-words", ...toastOptions?.classNames },
+      }}
       {...props}
     />
   );

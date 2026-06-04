@@ -10,8 +10,14 @@ import type { Bank } from "@/context/backoffice/bank/domain/Bank";
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
 import { toastNotifier } from "@/context/shared/infrastructure/Notification/Toast";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
-import { AsyncBoundary, SelectionMode } from "@/components/erpify";
-import type { DataTableSelection } from "@/components/erpify";
+import {
+  AsyncBoundary,
+  DensityToggle,
+  LIST_DENSITY_STORAGE_KEY,
+  SelectionMode,
+  isListDensity,
+} from "@/components/erpify";
+import type { DataTableSelection, ListDensity } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
@@ -19,6 +25,7 @@ import { uuidV7 } from "@/lib/uuidV7";
 import { ViewStatus } from "@/context/shared/domain/types/status";
 import { BanksTable } from "./_components/BanksTable";
 import { BanksCards } from "./_components/BanksCards";
+import { BanksStackedList } from "./_components/BanksStackedList";
 import { BanksFilters } from "./_components/BanksFilters";
 import { BanksPagination } from "./_components/BanksPagination";
 import { BanksViewToggle, type BanksView } from "./_components/BanksViewToggle";
@@ -38,6 +45,8 @@ import { bankRoutes } from "./_lib/bankRoutes";
 import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
 import { countRecentlyCreated } from "./_lib/bankRecency";
 import { bankTopics, useBankRealtime } from "@/context/backoffice/bank/infrastructure/bankRealtime";
+import { useStoredPreference } from "@/lib/useStoredPreference";
+import { KeyboardKey } from "@/context/shared/domain/types/keyboard";
 
 type State = ViewStatus;
 
@@ -69,16 +78,18 @@ export default function BanksListPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<BanksPageSize>(BANKS_PAGE_SIZE_DEFAULT);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
-  const [view, setView] = useState<BanksView>(() => {
-    if (globalThis.window === undefined) return DEFAULT_VIEW;
-    const stored = globalThis.localStorage.getItem(BANKS_VIEW_STORAGE_KEY);
-    return isBanksView(stored) ? stored : DEFAULT_VIEW;
-  });
-
-  useEffect(() => {
-    if (globalThis.window === undefined) return;
-    globalThis.localStorage.setItem(BANKS_VIEW_STORAGE_KEY, view);
-  }, [view]);
+  // Hydration-safe persisted preferences: SSR and first client paint always
+  // render the defaults; the stored values apply after hydration.
+  const [view, setView] = useStoredPreference<BanksView>(
+    BANKS_VIEW_STORAGE_KEY,
+    DEFAULT_VIEW,
+    isBanksView,
+  );
+  const [density, setDensity] = useStoredPreference<ListDensity>(
+    LIST_DENSITY_STORAGE_KEY,
+    "compact",
+    isListDensity,
+  );
 
   const mountedRef = useRef(true);
   useEffect(() => {
@@ -171,12 +182,20 @@ export default function BanksListPage() {
     setSort(DEFAULT_SORT);
   };
 
+  // After an optimistic delete removes the active row, focus moves to the
+  // next row (previous if it was the last) instead of falling back to <body>;
+  // the always-mounted live region announces the selection change separately.
+  const pendingFocusIdRef = useRef<string | null>(null);
+
   const handleBankDeleted = (id: string): void => {
     // Mirror the detail view's feedback: confirm the deletion with a toast.
     // The list stays put (no redirect), so without this the row simply
     // vanished with no acknowledgement.
     const deleted = banks.find((bank) => bank.id === id);
     toastNotifier.success("Bank deleted", deleted ? { description: deleted.name } : undefined);
+    const index = paged.rows.findIndex((bank) => bank.id === id);
+    const neighbor = index === -1 ? undefined : (paged.rows[index + 1] ?? paged.rows[index - 1]);
+    pendingFocusIdRef.current = neighbor && neighbor.id !== id ? neighbor.id : null;
     setBanks((prev) => prev.filter((bank) => bank.id !== id));
     setSelectedIds((prev) => {
       if (!prev.has(id)) return prev;
@@ -185,6 +204,17 @@ export default function BanksListPage() {
       return next;
     });
   };
+
+  useEffect(() => {
+    const id = pendingFocusIdRef.current;
+    if (!id) return;
+    pendingFocusIdRef.current = null;
+    const escaped = globalThis.CSS.escape(id);
+    const row = globalThis.document.querySelector<HTMLElement>(
+      `[data-testid="banks-table__row-${escaped}"], [data-testid="banks-stacked__row-${escaped}"]`,
+    );
+    row?.focus();
+  }, [banks]);
 
   const toggleSelect = useCallback((id: string): void => {
     setSelectedIds((prev) => {
@@ -199,6 +229,37 @@ export default function BanksListPage() {
   }, []);
 
   const clearSelection = useCallback((): void => setSelectedIds(new Set()), []);
+
+  // Esc clears the selection — but only when no transient layer is open:
+  // tooltips stop propagation when they consume Esc, and dialogs/menus live
+  // in portals outside this subtree, so their Esc never reaches here.
+  const listContainerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = listContainerRef.current;
+    if (!el) return;
+    const handleKeyDown = (event: globalThis.KeyboardEvent): void => {
+      if (event.key !== KeyboardKey.ESCAPE || event.defaultPrevented) return;
+      setSelectedIds((prev) => (prev.size > 0 ? new Set<string>() : prev));
+    };
+    el.addEventListener("keydown", handleKeyDown);
+    return () => el.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Selection announcements: the polite region is ALWAYS mounted (a region
+  // born with its first message is missed by screen readers) and rapid
+  // changes — e.g. range selection — coalesce into the final count.
+  const [selectionAnnouncement, setSelectionAnnouncement] = useState("");
+  const prevSelectionCountRef = useRef(0);
+  useEffect(() => {
+    const count = selectedIds.size;
+    const previous = prevSelectionCountRef.current;
+    prevSelectionCountRef.current = count;
+    if (count === previous) return;
+    const timer = setTimeout(() => {
+      setSelectionAnnouncement(count === 0 ? "Selection cleared" : `${count} selected`);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [selectedIds]);
 
   const tableSelection = useMemo<DataTableSelection>(
     () => ({ mode: SelectionMode.MULTI, selected: selectedIds, onChange: setSelectedIds }),
@@ -278,8 +339,7 @@ export default function BanksListPage() {
     },
     // On stream re-open after a drop, silently reconcile: events published during
     // the gap (Mercure has no replay) are otherwise lost and the list diverges.
-    // Fire-and-forget: a block body keeps the callback's `void` return so the
-    // promise isn't returned (avoids S6544 without the S3735-tripping `void`).
+    // Fire-and-forget: loadBanks handles its own errors.
     onReconnect: () => {
       loadBanks({ silent: true });
     },
@@ -287,10 +347,19 @@ export default function BanksListPage() {
 
   return (
     <div
-      className="banks-list mx-auto w-full max-w-screen-2xl space-y-4 sm:space-y-6 2xl:max-w-[120rem]"
+      ref={listContainerRef}
+      className="banks-list mx-auto w-full max-w-[90rem] space-y-4 sm:space-y-6"
       data-testid="banks-list"
       data-state={boundaryState}
     >
+      <p
+        className="sr-only"
+        role="status"
+        aria-live="polite"
+        data-testid="banks-list__selection-status"
+      >
+        {selectionAnnouncement}
+      </p>
       <header
         className="banks-list__header flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
         data-testid="banks-list__header"
@@ -342,7 +411,14 @@ export default function BanksListPage() {
           onReset={resetFilters}
           leading={
             visibleBanks.length > 0 ? (
-              <BanksViewToggle view={view} onViewChange={setView} />
+              <div className="banks-list__display-toggles flex items-center gap-2">
+                <BanksViewToggle view={view} onViewChange={setView} />
+                <DensityToggle
+                  density={density}
+                  onDensityChange={setDensity}
+                  testId="banks-list__density-toggle"
+                />
+              </div>
             ) : undefined
           }
         />
@@ -351,6 +427,7 @@ export default function BanksListPage() {
       {boundaryState === ViewStatus.READY && selectedIds.size > 0 ? (
         <BanksBulkBar
           count={selectedIds.size}
+          names={banks.filter((bank) => selectedIds.has(bank.id)).map((bank) => bank.name)}
           onClear={clearSelection}
           onConfirmDelete={handleBulkDelete}
         />
@@ -396,19 +473,35 @@ export default function BanksListPage() {
           ) : (
             <>
               {view === "table" ? (
-                <BanksTable
-                  banks={paged.rows}
-                  sort={sort}
-                  onSortChange={setSort}
-                  onBankDeleted={handleBankDeleted}
-                  selection={tableSelection}
-                />
+                <>
+                  {/* Below md the table becomes stacked card-rows — zero
+                      horizontal scroll on mobile; same data, same paging. */}
+                  <BanksStackedList
+                    banks={paged.rows}
+                    onBankDeleted={handleBankDeleted}
+                    selectedIds={selectedIds}
+                    onToggleSelect={toggleSelect}
+                    density={density}
+                    className="md:hidden"
+                  />
+                  <div className="hidden md:block">
+                    <BanksTable
+                      banks={paged.rows}
+                      sort={sort}
+                      onSortChange={setSort}
+                      onBankDeleted={handleBankDeleted}
+                      selection={tableSelection}
+                      density={density}
+                    />
+                  </div>
+                </>
               ) : (
                 <BanksCards
                   banks={paged.rows}
                   onBankDeleted={handleBankDeleted}
                   selectedIds={selectedIds}
                   onToggleSelect={toggleSelect}
+                  density={density}
                 />
               )}
               <BanksPagination

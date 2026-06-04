@@ -202,13 +202,22 @@ export default function BankDetailPage() {
           >
             <div className="flex min-w-0 items-start gap-3">
               <div className="min-w-0">
-                <div className="flex min-w-0 items-center gap-2">
-                  <h1
-                    className="text-foreground text-xl font-semibold tracking-tight break-words sm:text-2xl"
-                    data-testid="banks-detail__name"
+                {/* The detail page is the canonical home of the full value:
+                    the title wraps the whole name, however many lines it
+                    takes — no clamp here by contract. */}
+                <h1
+                  className="text-foreground min-w-0 text-xl font-semibold tracking-tight break-words sm:text-2xl"
+                  data-testid="banks-detail__name"
+                >
+                  {bank.name}
+                </h1>
+                <div className="mt-1 flex min-w-0 items-center gap-2">
+                  <p
+                    className="text-muted-foreground font-mono text-sm uppercase break-words"
+                    data-testid="banks-detail__shortname"
                   >
-                    {bank.name}
-                  </h1>
+                    {bank.shortName}
+                  </p>
                   {isRecentlyCreated(bank.createdAt, dateTimeProvider) ? (
                     <StatusBadge
                       variant="success"
@@ -218,12 +227,6 @@ export default function BankDetailPage() {
                     />
                   ) : null}
                 </div>
-                <p
-                  className="text-muted-foreground mt-1 font-mono text-sm uppercase break-words"
-                  data-testid="banks-detail__shortname"
-                >
-                  {bank.shortName}
-                </p>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">

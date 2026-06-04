@@ -247,4 +247,37 @@ describe("DataTable", () => {
     fireEvent.keyDown(firstRow, { key: "Enter" });
     expect(onRowActivate).toHaveBeenCalledWith(banks[0]);
   });
+
+  it("emits a fixed-layout colgroup with one col per column plus the selection col", () => {
+    const budgetColumns: DataTableColumn<Bank>[] = [
+      { id: "name", header: "Name", cell: (r) => r.name },
+      { id: "iban", header: "IBAN", cell: (r) => r.iban, colClassName: "w-32" },
+    ];
+    const { container } = render(
+      <DataTable
+        columns={budgetColumns}
+        data={banks}
+        rowKey={(r) => r.id}
+        caption="Banks"
+        layout="fixed"
+        selection={{ mode: "multi", selected: new Set(), onChange: vi.fn() }}
+      />,
+    );
+    const table = screen.getByRole("table");
+    expect(table.className).toContain("table-fixed");
+    const colgroup = container.querySelector("colgroup");
+    expect(colgroup).not.toBeNull();
+    const cols = colgroup?.querySelectorAll("col") ?? [];
+    expect(cols).toHaveLength(budgetColumns.length + 1);
+    expect(cols[0]?.className).toContain("w-10");
+    expect(cols[2]?.className).toContain("w-32");
+  });
+
+  it("renders no colgroup and no table-fixed when layout is not set", () => {
+    const { container } = render(
+      <DataTable columns={columns} data={banks} rowKey={(r) => r.id} caption="Banks" />,
+    );
+    expect(screen.getByRole("table").className).not.toContain("table-fixed");
+    expect(container.querySelector("colgroup")).toBeNull();
+  });
 });

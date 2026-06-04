@@ -171,6 +171,7 @@ test.describe("BackOffice - Banks CRUD", () => {
     test("creates a bank and navigates to the detail page", async ({ page }) => {
       await mockBanksApi(page, { create: "happy", get: "happy", bank: SAMPLE_BANK_A });
       await page.goto("/backoffice/banks/new");
+      await expect(page.getByTestId("bank-form")).toHaveAttribute("data-hydrated", "true");
 
       await page.getByTestId("bank-form__name").fill(SAMPLE_BANK_A.name);
       await page.getByTestId("bank-form__short-name").fill(SAMPLE_BANK_A.shortName);
@@ -183,6 +184,7 @@ test.describe("BackOffice - Banks CRUD", () => {
     test("surfaces validation-failed violations as field-level errors", async ({ page }) => {
       await mockBanksApi(page, { create: "validation-error" });
       await page.goto("/backoffice/banks/new");
+      await expect(page.getByTestId("bank-form")).toHaveAttribute("data-hydrated", "true");
 
       await page.getByTestId("bank-form__short-name").fill("XYZ");
       await page.getByTestId("bank-form__submit").click();
@@ -197,6 +199,7 @@ test.describe("BackOffice - Banks CRUD", () => {
     }) => {
       await mockBanksApi(page, { create: "validation-error" });
       await page.goto("/backoffice/banks/new");
+      await expect(page.getByTestId("bank-form")).toHaveAttribute("data-hydrated", "true");
 
       const overlong = "x".repeat(300);
       await page.getByTestId("bank-form__name").fill(overlong);
@@ -213,6 +216,7 @@ test.describe("BackOffice - Banks CRUD", () => {
     test("updates a bank and navigates to the detail page", async ({ page }) => {
       await mockBanksApi(page, { get: "happy", update: "happy", bank: SAMPLE_BANK_A });
       await page.goto(`/backoffice/banks/${SAMPLE_BANK_A.id}/edit`);
+      await expect(page.getByTestId("bank-form")).toHaveAttribute("data-hydrated", "true");
 
       await page.getByTestId("bank-form__name").fill("Acme Savings (renamed)");
       await page.getByTestId("bank-form__submit").click();
@@ -223,6 +227,7 @@ test.describe("BackOffice - Banks CRUD", () => {
     test("surfaces validation-failed violations on update", async ({ page }) => {
       await mockBanksApi(page, { get: "happy", update: "validation-error", bank: SAMPLE_BANK_A });
       await page.goto(`/backoffice/banks/${SAMPLE_BANK_A.id}/edit`);
+      await expect(page.getByTestId("bank-form")).toHaveAttribute("data-hydrated", "true");
 
       const overlong = "x".repeat(60);
       await page.getByTestId("bank-form__short-name").fill(overlong);
@@ -1005,22 +1010,25 @@ test.describe("BackOffice - Banks CRUD", () => {
   test.describe("responsive", () => {
     test.use({ viewport: VIEWPORT_MOBILE });
 
-    test("on mobile, Created and Updated columns are hidden but actions remain reachable", async ({
+    test("on mobile, the table becomes stacked rows with always-visible actions and no horizontal scroll", async ({
       page,
     }) => {
       await mockBanksApi(page, { list: "happy" });
       await page.goto("/backoffice/banks");
 
-      await expect(
-        page.getByRole("columnheader", { name: "Short name", exact: true }),
-      ).toBeVisible();
-      await expect(page.getByRole("columnheader", { name: "Name", exact: true })).toBeVisible();
-      await expect(page.getByRole("columnheader", { name: "Actions", exact: true })).toBeVisible();
-      await expect(page.getByRole("columnheader", { name: "Created", exact: true })).toBeHidden();
-      await expect(page.getByRole("columnheader", { name: "Updated", exact: true })).toBeHidden();
+      // Below md the table view renders as stacked card-rows — the
+      // horizontal-scroll table is hidden entirely.
+      await expect(page.getByTestId(`banks-stacked__row-${SAMPLE_BANK_A.id}`)).toBeVisible();
+      await expect(page.getByTestId("banks-table__inner")).toBeHidden();
 
-      await expect(page.getByTestId(`banks-table__edit-${SAMPLE_BANK_A.id}`)).toBeVisible();
-      await expect(page.getByTestId(`banks-table__actions-${SAMPLE_BANK_A.id}`)).toBeVisible();
+      // Touch surfaces always see the controls (no hover affordance).
+      await expect(page.getByTestId(`banks-stacked__edit-${SAMPLE_BANK_A.id}`)).toBeVisible();
+      await expect(page.getByTestId(`banks-stacked__actions-${SAMPLE_BANK_A.id}`)).toBeVisible();
+
+      const hasHorizontalScroll = await page.evaluate(
+        () => document.documentElement.scrollWidth > window.innerWidth,
+      );
+      expect(hasHorizontalScroll).toBe(false);
     });
 
     test("on mobile, the Filters toggle is full-width, opens the panel, and exposes the count badge", async ({

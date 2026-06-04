@@ -55,6 +55,13 @@
   --color-danger: var(--erpify-danger);
   --color-danger-strong: var(--erpify-danger-strong);
 
+  /* Status-dot fills — darkened so the 6px dot clears WCAG 1.4.11 (≥3:1)
+   * over white and over the selected-row tint; the semantic tones above stay
+   * for large text / icons / actions. */
+  --color-status-dot-success: var(--erpify-status-dot-success);
+  --color-status-dot-warning: var(--erpify-status-dot-warning);
+  --color-row-selected: var(--erpify-row-selected);
+
   --color-overlay: var(--erpify-overlay);
 
   /* Shadcn-named tokens — preserved so primitives work unchanged */
@@ -166,6 +173,12 @@
    * "AA text on surfaces" and "AA surface under white text". */
   --erpify-danger-strong: #dc2626;
 
+  /* Status-dot fills (≥3:1 over white and over --erpify-row-selected) */
+  --erpify-status-dot-success: #0f7a5a;
+  --erpify-status-dot-warning: #b45309;
+  /* Selected row/card tint — brand at ~8% over white */
+  --erpify-row-selected: #eef0fb;
+
   /* Overlay */
   --erpify-overlay: rgba(8, 9, 10, 0.45);
 
@@ -264,6 +277,12 @@
    * --erpify-danger stays the fill/graphic shade (white-text buttons). */
   --erpify-danger-strong: #f87171;
 
+  /* Status-dot fills — the bright semantics already clear 3:1 on dark surfaces */
+  --erpify-status-dot-success: #10b981;
+  --erpify-status-dot-warning: #f59e0b;
+  /* Selected row/card tint — brand at low alpha over panel dark */
+  --erpify-row-selected: #16182b;
+
   /* Overlay */
   --erpify-overlay: rgba(0, 0, 0, 0.85);
 
@@ -311,6 +330,25 @@
   --sidebar-accent-foreground: var(--erpify-text);
   --sidebar-border: var(--erpify-border);
   --sidebar-ring: var(--erpify-focus-ring);
+}
+
+/* Sticky table header: shadow appears only once content has scrolled under
+ * it ("there is content above" signal). Scroll-driven animation — no JS;
+ * browsers without support simply never show the shadow, and reduced-motion
+ * users never get a scroll-linked effect (gate below). */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: scroll()) {
+    .erpify-table__head {
+      animation: erpify-table-head-shadow linear both;
+      animation-timeline: scroll();
+      animation-range: 0 24px;
+    }
+    @keyframes erpify-table-head-shadow {
+      to {
+        box-shadow: var(--erpify-shadow-2);
+      }
+    }
+  }
 }
 
 /* prefers-reduced-motion: collapse motion at the root */

@@ -9,11 +9,18 @@ describe("StatusBadge", () => {
     expect(badge).toHaveTextContent("Active");
   });
 
-  it("renders an aria-hidden icon alongside the label", () => {
+  it("renders an aria-hidden status dot alongside the label", () => {
     const { container } = render(<StatusBadge variant="warning" label="Pending" />);
-    const svg = container.querySelector("svg");
-    expect(svg).toBeTruthy();
-    expect(svg).toHaveAttribute("aria-hidden", "true");
+    const dot = container.querySelector("span[aria-hidden='true']");
+    expect(dot).toBeTruthy();
+    expect(dot).toHaveClass("bg-status-dot-warning");
+  });
+
+  it("keeps the label neutral — hue lives only in the dot", () => {
+    render(<StatusBadge variant="success" label="New" testId="badge" />);
+    const badge = screen.getByTestId("badge");
+    expect(badge).toHaveClass("text-muted-foreground");
+    expect(badge.className).not.toContain("text-success");
   });
 
   it("never relies on color alone — the label is always rendered", () => {

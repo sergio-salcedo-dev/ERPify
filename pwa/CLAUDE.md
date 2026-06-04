@@ -144,6 +144,31 @@ Reach for these from every entity instead of re-implementing them locally:
 - **Tables / boundaries / sheets** — `<DataTable>`, `<AsyncBoundary>`,
   `<RecordSheet>`, `<EmptyState>`, `<FormField>`, `<ProblemDisplay>`,
   `<StatusBadge>`, `<CorrelationIdChip>`, `<AppShell>`.
+- **Long-text containment** — `<TruncatedText value lines testId>` from
+  `@/components/erpify`: CSS-only truncate/clamp (the full string always
+  stays in the DOM and the accessibility tree) plus a full-value tooltip
+  mounted **only when the text actually truncates** — opens on hover and on
+  keyboard focus of the enclosing row (`focusScopeSelector`, default `tr`;
+  exactly one cell per row sets `openOnRowFocus`); Esc dismisses with
+  precedence over outer Esc handlers. Built on `components/ui/tooltip.tsx`
+  (Base UI; `<TooltipProvider delay={200}>` is mounted in the back-office
+  layout) and `useIsTruncated` from `@/lib/useIsTruncated`. Never reach for
+  `title=` on truncated cells; timestamps and other non-truncating hints may
+  keep `title`.
+- **Single-line auto-grow field** — `<SingleLineTextarea>` from
+  `@/components/erpify`: an input-styled textarea that grows with its value
+  so the user can always read everything they typed; Enter submits the
+  enclosing form, pasted newlines collapse to a space, never `maxLength`
+  (limits live in the Zod schema). Use it for any long single-line domain
+  value (names, titles).
+- **List display preferences** — `<DensityToggle>` (compact 36px /
+  comfortable 44px; padding changes, type size never does) +
+  `useStoredPreference(key, fallback, isValid)` from
+  `@/lib/useStoredPreference` (hydration-safe localStorage preference:
+  SSR/first paint render the fallback, the stored value applies after
+  hydration — reading localStorage during the initial render causes React
+  hydration mismatches). The density key is shared across entity lists:
+  `LIST_DENSITY_STORAGE_KEY` from `@/components/erpify`.
 - **Error module** — every Next.js error surface (`not-found.tsx`,
   `error.tsx`, `global-error.tsx`, the Next 15+ `forbidden.tsx` /
   `unauthorized.tsx` convention files, plus the navigable

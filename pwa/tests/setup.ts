@@ -10,6 +10,23 @@ import "reflect-metadata";
 //
 // On Node 20/22/24 (CI + .nvmrc): no stub, vitest copies jsdom's storage as
 // usual; this block resolves to the same Storage instance, so it's a no-op.
+// jsdom ships no ResizeObserver; `useIsTruncated` (tooltip-if-truncated)
+// observes cell spans with it. A no-op stub keeps components mountable —
+// tests that need a truncated state mock the hook or set scroll/client
+// dimensions explicitly.
+class ResizeObserverStub {
+  observe(): void {
+    // intentionally empty — jsdom has no layout, so there is nothing to observe
+  }
+  unobserve(): void {
+    // intentionally empty — nothing was observed
+  }
+  disconnect(): void {
+    // intentionally empty — nothing was observed
+  }
+}
+globalThis.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObserver;
+
 type WithJSDOM = typeof globalThis & { jsdom?: { window: Window } };
 const dom = (globalThis as WithJSDOM).jsdom;
 if (dom?.window) {

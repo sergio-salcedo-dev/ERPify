@@ -17,13 +17,29 @@ import { safeHref } from "@/lib/safeHref";
 import { bankRoutes } from "../_lib/bankRoutes";
 import { DeleteBankButton } from "./DeleteBankButton";
 
-type BankRowActionsSurface = "table" | "cards";
+type BankRowActionsSurface = "table" | "cards" | "stacked";
+
+/**
+ * Static class map per reveal scope — Tailwind cannot build variants from
+ * template literals. Copy/Edit stay hidden at rest and reveal on hover or
+ * focus-within of the enclosing row/card; coarse pointers always see them
+ * (a hover affordance does not exist on touch).
+ */
+const REVEAL_CLASS = {
+  row: "flex items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100",
+  card: "flex items-center gap-0.5 opacity-0 transition-opacity group-hover/card:opacity-100 group-focus-within/card:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100",
+  none: "flex items-center gap-0.5",
+} as const;
+
+type BankRowActionsReveal = keyof typeof REVEAL_CLASS;
 
 interface BankRowActionsProps {
   id: string;
   name: string;
   /** Drives the testid prefix (`banks-table__…` / `banks-cards__…`). */
   surface: BankRowActionsSurface;
+  /** Hover/focus reveal scope for Copy/Edit; `⋯` is always visible. */
+  reveal?: BankRowActionsReveal;
   onBankDeleted?: (id: string) => void;
   className?: string;
 }
@@ -40,6 +56,7 @@ export function BankRowActions({
   id,
   name,
   surface,
+  reveal = "none",
   onBankDeleted,
   className,
 }: Readonly<BankRowActionsProps>) {
@@ -48,26 +65,28 @@ export function BankRowActions({
 
   return (
     <div className={cn("banks-row-actions flex items-center gap-0.5", className)}>
-      <CopyButton
-        value={id}
-        iconOnly
-        size="icon-sm"
-        label="Copy ID"
-        copiedLabel="ID copied"
-        errorLabel="Copy failed"
-        title={`Copy bank ${name} ID`}
-        testId={`${prefix}__copy-${id}`}
-      />
-      <Link
-        href={safeHref(bankRoutes.edit(id))}
-        className={cn(buttonVariants({ variant: "ghost", size: "icon-sm" }))}
-        aria-label="Edit"
-        title={`Edit bank ${name}`}
-        data-testid={`${prefix}__edit-${id}`}
-      >
-        <Pencil className="size-3.5" aria-hidden="true" />
-        <span className="sr-only">Edit</span>
-      </Link>
+      <span className={cn("banks-row-actions__reveal", REVEAL_CLASS[reveal])}>
+        <CopyButton
+          value={id}
+          iconOnly
+          size="icon-sm"
+          label="Copy ID"
+          copiedLabel="ID copied"
+          errorLabel="Copy failed"
+          title={`Copy bank ${name} ID`}
+          testId={`${prefix}__copy-${id}`}
+        />
+        <Link
+          href={safeHref(bankRoutes.edit(id))}
+          className={cn(buttonVariants({ variant: "ghost", size: "icon-sm" }))}
+          aria-label="Edit"
+          title={`Edit bank ${name}`}
+          data-testid={`${prefix}__edit-${id}`}
+        >
+          <Pencil className="size-3.5" aria-hidden="true" />
+          <span className="sr-only">Edit</span>
+        </Link>
+      </span>
       <DropdownMenu>
         <DropdownMenuTrigger
           render={

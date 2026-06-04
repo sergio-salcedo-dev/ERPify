@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
@@ -10,11 +10,12 @@ import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError"
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { useZodForm } from "@/context/shared/infrastructure/Validation";
 import {
+  BANK_NAME_MAX_LENGTH,
   BankSchema,
   type BankFormValues,
 } from "@/context/backoffice/bank/application/schemas/BankSchema";
 import { PersistenceAction } from "@/context/shared/domain/types/status";
-import { FormField, ProblemDisplay, Spinner } from "@/components/erpify";
+import { FormField, ProblemDisplay, SingleLineTextarea, Spinner } from "@/components/erpify";
 import { toastNotifier } from "@/context/shared/infrastructure/Notification/Toast";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
@@ -38,6 +39,9 @@ interface BankFormProps {
   initial?: BankFormInitial;
 }
 
+/** The n/255 counter appears once the name reaches 80% of the limit. */
+const NAME_COUNTER_THRESHOLD = Math.floor(BANK_NAME_MAX_LENGTH * 0.8);
+
 const BANK_FIELD_NAMES = ["name", "shortName"] as const;
 type BankFieldName = (typeof BANK_FIELD_NAMES)[number];
 
@@ -49,10 +53,20 @@ export function BankForm({ mode, initial }: Readonly<BankFormProps>) {
   const router = useRouter();
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
 
+  // Hydration marker: until React attaches the submit handler, a click on
+  // the submit button performs a NATIVE GET submission that leaks the form
+  // values into the URL. The attribute lets QA (and any automation) wait for
+  // the wired form instead of racing it.
+  const formRef = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    formRef.current?.setAttribute("data-hydrated", "true");
+  }, []);
+
   const {
     register,
     handleSubmit,
     setError,
+    watch,
     formState: { errors, isSubmitting },
   } = useZodForm<BankFormValues>(BankSchema, {
     defaultValues: {
@@ -62,6 +76,7 @@ export function BankForm({ mode, initial }: Readonly<BankFormProps>) {
   });
 
   const submitting = isSubmitting;
+  const nameLength = (watch("name") ?? "").length;
 
   const handleHttpError = (err: HttpError) => {
     if (err.problem.status !== HttpStatus.BAD_REQUEST || !err.problem.violations) {
@@ -124,6 +139,7 @@ export function BankForm({ mode, initial }: Readonly<BankFormProps>) {
 
   return (
     <form
+      ref={formRef}
       onSubmit={onSubmit}
       className="bank-form border-border bg-card space-y-4 rounded-lg border p-4"
       data-testid="bank-form"
@@ -140,13 +156,21 @@ export function BankForm({ mode, initial }: Readonly<BankFormProps>) {
           'Must be unique. Casing and accents are ignored — e.g. "BBVA" collides with "bbva", and "Sociedad Anónima" collides with "Sociedad Anonima".'
         }
       >
-        <Input
+        <SingleLineTextarea
           {...register("name")}
           autoComplete="off"
           autoFocus={mode === PersistenceAction.CREATING}
           data-testid="bank-form__name"
         />
       </FormField>
+      {nameLength >= NAME_COUNTER_THRESHOLD ? (
+        <p
+          className="bank-form__name-counter text-muted-foreground -mt-3 text-right text-xs tabular-nums"
+          data-testid="bank-form__name-counter"
+        >
+          {nameLength}/{BANK_NAME_MAX_LENGTH}
+        </p>
+      ) : null}
 
       <FormField
         name="shortName"
