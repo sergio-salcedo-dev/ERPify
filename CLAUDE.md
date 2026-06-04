@@ -71,7 +71,7 @@ Browser → FrankenPHP :80/:443 ──┬─ /api/*                 → Symfony 
 
 Full request-routing diagram and host/container trade-offs in [`docs/integration-architecture.md`](docs/integration-architecture.md).
 
-Both sides follow **DDD + Hexagonal / Clean Architecture**, with dependencies pointing inward. **Do not** import frameworks (Symfony, Doctrine, Next, Inversify, HTTP clients, ORM) inside `Domain/` — adapters go in `Infrastructure/`, orchestration in `Application/`. Full rule set: `docs/rules/*.md` (architecture, clean-code, database, frontend, php-standards, security, solid-principles, testing).
+Both sides follow **DDD + Hexagonal / Clean Architecture**, with dependencies pointing inward. **Do not** import frameworks (Symfony, Doctrine, Next, Inversify, HTTP clients, ORM) inside `Domain/` — adapters go in `Infrastructure/`, orchestration in `Application/`. Documented exception: API domain entities may carry passive metadata attributes (`#[ORM]`, `#[Assert]`, `#[Groups]`) — see [`docs/rules/architecture.md`](docs/rules/architecture.md). Full rule set: `docs/rules/*.md` (architecture, clean-code, database, frontend, php-standards, security, solid-principles, testing).
 
 ---
 
@@ -135,7 +135,9 @@ For each diffed file, walk this checklist:
   declares the security voter or `IsGranted` it expects; absence is a
   conscious public route, called out in the PR.
 - **Input validation** — every DTO carries Symfony Validator constraints
-  (`#[Assert\…]`); requests pass through `ValidatorHelper` before any
+  (`#[Assert\…]`), enforced by `#[MapRequestPayload]` / `#[MapQueryString]`
+  at mapping time; other inputs (route ids, uploads) go through the shared
+  `Validator::ensure()` (`Shared/Application/Validation`) before any
   domain call. Validate IDs are UUIDs, not arbitrary strings.
 - **Mass assignment / hidden fields** — entity setters / serializer
   groups never expose audit fields (`createdAt`, `updatedAt`, `id`) to

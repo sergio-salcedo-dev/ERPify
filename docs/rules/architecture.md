@@ -26,6 +26,16 @@ The application follows Clean Architecture with these layers:
 - No dependencies on other layers
 - Pure business rules and value objects
 
+#### Documented exception — passive metadata attributes on entities
+
+Domain entities and aggregates MAY carry framework **metadata attributes**: `#[ORM\…]` mapping,
+`#[Assert\…]` constraints (including `UniqueEntity` and `#[Assert\Callback]` hooks), and serializer
+`#[Groups]`. Rationale: one source of truth for persistence shape and invariants, enforced via the
+shared `Validator::ensure($entity)` right before save; `UniqueEntity` inherently needs the database.
+The prohibition stays absolute for **behavioral** framework code in `Domain/`: no `Request`/`Response`,
+no `EntityManagerInterface`, no `HttpException`, no Messenger envelopes, no service or HTTP calls.
+Example: `api/src/Backoffice/Bank/Domain/Entity/Bank.php`.
+
 ### Application Layer
 - Contains use cases and application services
 - Depends only on Domain layer
