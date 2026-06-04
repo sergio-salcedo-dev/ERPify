@@ -7,6 +7,7 @@ namespace Erpify\Backoffice\Bank\Infrastructure\Persistence\Doctrine;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Backoffice\Bank\Domain\Repository\BankSearchRepository;
+use Erpify\Backoffice\Bank\Domain\Repository\BankStoredObjectQueries;
 use Erpify\Backoffice\Bank\Domain\Search\BankSearchCriteria;
 use Erpify\Shared\Domain\Search\PaginatedResult;
 use Erpify\Shared\Domain\Search\SearchCriteria;
@@ -22,9 +23,11 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  */
 #[AsAlias(BankRepository::class)]
 #[AsAlias(BankSearchRepository::class)]
+#[AsAlias(BankStoredObjectQueries::class)]
 final class DoctrineBankRepository extends AbstractDoctrineSearchRepository implements
     BankRepository,
-    BankSearchRepository
+    BankSearchRepository,
+    BankStoredObjectQueries
 {
     #[Override]
     public function save(Bank $bank): void

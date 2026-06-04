@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\Bank\Infrastructure\Storage;
 
-use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
+use Erpify\Backoffice\Bank\Domain\Repository\BankStoredObjectQueries;
 use Erpify\Shared\Storage\Application\Port\StoredObjectReferenceInspector;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AutoconfigureTag;
@@ -13,19 +13,19 @@ use Symfony\Component\DependencyInjection\Attribute\AutoconfigureTag;
 final readonly class BankStoredObjectReferenceInspector implements StoredObjectReferenceInspector
 {
     public function __construct(
-        private BankRepository $bankRepository,
+        private BankStoredObjectQueries $bankStoredObjectQueries,
     ) {
     }
 
     #[Override]
     public function countReferencesToContentHash(string $contentHash): int
     {
-        return $this->bankRepository->countBanksWithStoredObjectContentHash($contentHash);
+        return $this->bankStoredObjectQueries->countBanksWithStoredObjectContentHash($contentHash);
     }
 
     #[Override]
     public function findMimeTypeForContentHash(string $contentHash): ?string
     {
-        return $this->bankRepository->findStoredObjectMimeTypeByContentHash($contentHash);
+        return $this->bankStoredObjectQueries->findStoredObjectMimeTypeByContentHash($contentHash);
     }
 }

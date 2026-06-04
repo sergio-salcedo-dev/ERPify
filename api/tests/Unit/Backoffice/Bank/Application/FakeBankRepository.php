@@ -10,8 +10,8 @@ use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Override;
 
 /**
- * In-memory {@see BankRepository} that records whether the aggregate was removed,
- * so a test can assert {@see \Erpify\Backoffice\Bank\Application\BankDeleter} mutates
+ * In-memory {@see BankRepository} that records every mutation, so a test can
+ * assert {@see \Erpify\Backoffice\Bank\Application\BankDeleter} mutates
  * nothing when the bank is still in use.
  *
  * When `$removeFailure` is given, `remove()` throws it instead of completing — the DB
@@ -23,6 +23,9 @@ final class FakeBankRepository implements BankRepository
 {
     public bool $removeCalled = false;
 
+    /** @var list<Bank> */
+    public array $saved = [];
+
     public function __construct(
         private readonly ?Bank $bank = null,
         private readonly ?ForeignKeyConstraintViolationException $removeFailure = null,
@@ -32,6 +35,7 @@ final class FakeBankRepository implements BankRepository
     #[Override]
     public function save(Bank $bank): void
     {
+        $this->saved[] = $bank;
     }
 
     #[Override]
@@ -48,17 +52,5 @@ final class FakeBankRepository implements BankRepository
     public function findById(string $id): ?Bank
     {
         return $this->bank;
-    }
-
-    #[Override]
-    public function countBanksWithStoredObjectContentHash(string $contentHash): int
-    {
-        return 0;
-    }
-
-    #[Override]
-    public function findStoredObjectMimeTypeByContentHash(string $contentHash): ?string
-    {
-        return null;
     }
 }
