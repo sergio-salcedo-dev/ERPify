@@ -6,8 +6,8 @@ import {
   EMPTY_FILTER,
   applyFilters,
   applySort,
-  countActiveFilters,
-  hasActiveFilter,
+  countPanelFilters,
+  hasActivePanelFilter,
   isDefaultSort,
   type BanksFilter,
 } from "@/app/backoffice/banks/_lib/banksFilterSort";
@@ -97,77 +97,30 @@ describe("isDefaultSort", () => {
   });
 });
 
-describe("countActiveFilters", () => {
-  it("returns 0 on the empty filter", () => {
-    expect(countActiveFilters(EMPTY_FILTER)).toBe(0);
-  });
-
-  it("counts each populated field once", () => {
-    expect(countActiveFilters({ ...EMPTY_FILTER, name: "x" })).toBe(1);
-    expect(countActiveFilters({ ...EMPTY_FILTER, name: "x", shortName: "y" })).toBe(2);
+describe("countPanelFilters", () => {
+  it("counts only the panel-hosted fields (short name + created range)", () => {
+    expect(countPanelFilters(EMPTY_FILTER)).toBe(0);
+    expect(countPanelFilters({ ...EMPTY_FILTER, name: "acme" })).toBe(0);
+    expect(countPanelFilters({ ...EMPTY_FILTER, shortName: "ACM" })).toBe(1);
     expect(
-      countActiveFilters({
+      countPanelFilters({
         ...EMPTY_FILTER,
-        name: "x",
-        shortName: "y",
+        shortName: "ACM",
         createdFrom: "2026-01-01",
+        createdTo: "2026-02-01",
       }),
     ).toBe(3);
-    expect(
-      countActiveFilters({
-        name: "x",
-        shortName: "y",
-        createdFrom: "2026-01-01",
-        createdTo: "2026-12-31",
-      }),
-    ).toBe(4);
   });
 
-  it("treats whitespace-only fields as inactive", () => {
-    expect(
-      countActiveFilters({
-        name: "   ",
-        shortName: "  ",
-        createdFrom: " ",
-        createdTo: " ",
-      }),
-    ).toBe(0);
-  });
-
-  it("agrees with hasActiveFilter for the boundary case", () => {
-    const cases: BanksFilter[] = [
-      EMPTY_FILTER,
-      { ...EMPTY_FILTER, name: "x" },
-      { ...EMPTY_FILTER, createdFrom: " " },
-    ];
-    for (const filter of cases) {
-      expect(hasActiveFilter(filter)).toBe(countActiveFilters(filter) > 0);
-    }
+  it("treats whitespace-only values as inactive", () => {
+    expect(countPanelFilters({ ...EMPTY_FILTER, shortName: "  " })).toBe(0);
   });
 });
 
-describe("hasActiveFilter", () => {
-  it("returns false on the empty filter", () => {
-    expect(hasActiveFilter(EMPTY_FILTER)).toBe(false);
-  });
-
-  it("returns true when any field is non-empty", () => {
-    expect(hasActiveFilter({ ...EMPTY_FILTER, name: "x" })).toBe(true);
-    expect(hasActiveFilter({ ...EMPTY_FILTER, shortName: "x" })).toBe(true);
-    expect(hasActiveFilter({ ...EMPTY_FILTER, createdFrom: "2026-01-01" })).toBe(true);
-    expect(hasActiveFilter({ ...EMPTY_FILTER, createdTo: "2026-01-01" })).toBe(true);
-  });
-
-  it("treats whitespace-only fields as inactive", () => {
-    expect(
-      hasActiveFilter({
-        ...EMPTY_FILTER,
-        name: "   ",
-        shortName: "  ",
-        createdFrom: " ",
-        createdTo: " ",
-      }),
-    ).toBe(false);
+describe("hasActivePanelFilter", () => {
+  it("is false when only the toolbar search (name) is set", () => {
+    expect(hasActivePanelFilter({ ...EMPTY_FILTER, name: "acme" })).toBe(false);
+    expect(hasActivePanelFilter({ ...EMPTY_FILTER, createdFrom: "2026-01-01" })).toBe(true);
   });
 });
 

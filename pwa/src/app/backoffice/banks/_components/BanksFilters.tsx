@@ -9,8 +9,8 @@ import { DatePickerField, FormField } from "@/components/erpify";
 import { SortDirection } from "@/context/shared/domain/types/sorting";
 import {
   BANKS_SORTABLE_COLUMNS,
-  countActiveFilters,
-  hasActiveFilter,
+  countPanelFilters,
+  hasActivePanelFilter,
   isDefaultSort,
   type BanksFilter,
   type BanksSort,
@@ -53,7 +53,7 @@ export function BanksFilters({
 }: Readonly<BanksFiltersProps>) {
   const panelId = useId();
   const [open, setOpen] = useState<boolean>(
-    defaultOpen ?? (hasActiveFilter(filter) || !isDefaultSort(sort)),
+    defaultOpen ?? (hasActivePanelFilter(filter) || !isDefaultSort(sort)),
   );
 
   // Local mirror of the text filters so typing stays instant while the
@@ -133,7 +133,7 @@ export function BanksFilters({
     onSortChange({ ...sort, direction: event.target.value as SortDirection });
   };
 
-  const activeCount = countActiveFilters(filter);
+  const activeCount = countPanelFilters(filter);
   const hasActive = activeCount > 0;
   const sortDrift = !isDefaultSort(sort);
   const canReset = hasActive || sortDrift;
