@@ -349,19 +349,20 @@ test.describe("BackOffice - Banks CRUD", () => {
       await page.getByTestId("banks-filters__toggle").click();
       await expect(page.getByTestId("banks-filters__count")).toHaveCount(0);
 
+      // Name is a toolbar search — it is NOT counted in the panel badge.
       await page.getByTestId("banks-filters__name").fill("bank");
-      await expect(page.getByTestId("banks-filters__count")).toHaveText("1");
+      await expect(page.getByTestId("banks-filters__count")).toHaveCount(0);
 
       await page.getByTestId("banks-filters__short-name").fill("cos");
-      await expect(page.getByTestId("banks-filters__count")).toHaveText("2");
+      await expect(page.getByTestId("banks-filters__count")).toHaveText("1");
 
       await page.getByTestId("banks-filters__created-from").fill("2026-01-01");
-      await expect(page.getByTestId("banks-filters__count")).toHaveText("3");
+      await expect(page.getByTestId("banks-filters__count")).toHaveText("2");
 
       // Badge persists when the panel is collapsed — that's the whole point.
       await page.getByTestId("banks-filters__toggle").click();
       await expect(page.getByTestId("banks-filters__panel")).toBeHidden();
-      await expect(page.getByTestId("banks-filters__count")).toHaveText("3");
+      await expect(page.getByTestId("banks-filters__count")).toHaveText("2");
     });
 
     test("filters by name case-insensitively, leaves the URL unchanged, and resets via the button", async ({
@@ -1051,7 +1052,9 @@ test.describe("BackOffice - Banks CRUD", () => {
       await toggle.click();
       await expect(page.getByTestId("banks-filters__panel")).toBeVisible();
 
-      await page.getByTestId("banks-filters__name").fill("acme");
+      // Name is a toolbar search — it does NOT contribute to the panel badge.
+      // Use a panel field (short name) to verify the badge and reset button.
+      await page.getByTestId("banks-filters__short-name").fill("acm");
       await expect(page.getByTestId("banks-filters__count")).toHaveText("1");
       await expect(page.getByTestId("banks-filters__reset")).toBeVisible();
     });

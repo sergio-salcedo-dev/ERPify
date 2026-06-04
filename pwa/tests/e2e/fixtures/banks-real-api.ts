@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { expect, request, type APIRequestContext, type Page } from "@playwright/test";
+import { request, type APIRequestContext, type Page } from "@playwright/test";
 
 /**
  * Real-API helpers for the Banks E2E suite that exercises the live Symfony
@@ -114,14 +114,17 @@ export async function seedBanks(
  * filters-to-isolate its seeded rows and then immediately paginates would
  * otherwise have the late filter-change yank it back to page 1 mid-assertion.
  *
- * The active-filter badge (`banks-filters__count`) renders only once the
- * parent `filter` prop updates, so it is the canonical "debounce has flushed"
- * signal — and unlike row counts it is independent of how many unrelated banks
- * the shared dev DB already holds. The filter panel must already be open.
+ * The name search is always visible in the toolbar (not panel-gated). Because
+ * name is excluded from `countPanelFilters`, filling it alone does NOT render
+ * the `banks-filters__count` badge, so we can no longer use the badge as the
+ * "debounce has flushed" signal. Instead we wait 400ms — slightly longer than
+ * the 300ms debounce — so the applied filter has settled before the caller
+ * continues. The name input does NOT need the panel to be open first.
  */
 export async function filterByName(page: Page, value: string): Promise<void> {
   await page.getByTestId("banks-filters__name").fill(value);
-  await expect(page.getByTestId("banks-filters__count")).toBeVisible();
+  // Wait for the 300ms debounce to flush + a small buffer.
+  await page.waitForTimeout(400);
 }
 
 /**
