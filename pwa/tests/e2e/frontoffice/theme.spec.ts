@@ -2,11 +2,11 @@ import { test, expect } from "@playwright/test";
 import { VIEWPORT_DESKTOP } from "../constants";
 
 /**
- * Canonical dark canvas: `--erpify-bg` (#16181d) as the browser computes it.
- * Asserting the exact token value guards the v2 "elevated SaaS grey" ramp —
- * a silent revert to the v1 near-black (#08090a) fails this spec.
+ * Canonical dark canvas: `--erpify-bg` (#11151f) as the browser computes it.
+ * Asserting the exact token value guards the v3 navy-slate ramp — a silent
+ * revert to the v2 grey (#16181d) or the v1 near-black (#08090a) fails this spec.
  */
-const DARK_CANVAS_RGB = "rgb(22, 24, 29)";
+const DARK_CANVAS_RGB = "rgb(17, 21, 31)";
 
 test.describe("FrontOffice - Landing theme toggle", () => {
   test.describe.configure({ mode: "parallel" });

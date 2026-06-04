@@ -5,7 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * ERPify Design Tokens — v1 (light-mode canonical, Linear-similar dark mode).
+ * ERPify Design Tokens — v3 (light-mode canonical, navy-slate dark mode).
  * Canonical reference: pwa/DESIGN.md
  * Full spec: _bmad-output/planning-artifacts/ux-design-specification.md
  *
@@ -15,7 +15,7 @@
  *   - Shadcn-named tokens (--background, --primary, …) are mapped to ERPify
  *     aliases so existing primitives keep working unchanged.
  *   - @theme inline exposes everything as Tailwind utilities.
- *   - Linear-derived hex values authored directly. Tailwind 4 accepts them.
+ *   - Hex values authored directly. Tailwind 4 accepts them.
  *   - Geist + Geist Mono via next/font/google (wired in layout.tsx).
  */
 
@@ -155,13 +155,15 @@
   --erpify-border-strong: #bfc3ca;
   --erpify-line-tint: #f3f4f5;
 
-  /* Brand and accent (same in both modes; adjusted-state shifts slightly) */
-  --erpify-brand: #5e6ad2;
-  --erpify-accent: #7170ff;
-  --erpify-accent-hover: #828fff;
-  --erpify-accent-active: #5052c4;
-  --erpify-security: #7a7fad;
-  --erpify-focus-ring: #7170ff;
+  /* Brand and accent — blue family (~hue 225°), mode-aware values: one value
+   * cannot be link-AA on both white and navy (the v2 indigo was 3.44:1 on
+   * dark bg-elevated). Dark gets brighter accents, light gets deeper ones. */
+  --erpify-brand: #2f5cd9;
+  --erpify-accent: #2f5cd9;
+  --erpify-accent-hover: #4a73e8;
+  --erpify-accent-active: #2450b8;
+  --erpify-security: #7589ad;
+  --erpify-focus-ring: #2f5cd9;
 
   /* Semantic signals */
   --erpify-success: #10b981;
@@ -211,13 +213,13 @@
   --ring: var(--erpify-focus-ring);
 
   /*
-   * Chart palette: deferred. v1 keeps a neutral ramp consistent with
-   * "one-accent" restraint. Categorical chart polish is not in v1 scope
-   * — see DESIGN.md "Out of scope (v1)".
+   * Chart palette: deferred. Keeps a neutral ramp consistent with
+   * "one-accent" restraint. Categorical chart polish is out of scope
+   * for now — see DESIGN.md "Out of scope (v1)".
    */
   --chart-1: #bfc3ca;
   --chart-2: #8a8f98;
-  --chart-3: #5e6ad2;
+  --chart-3: #2f5cd9;
   --chart-4: #62666d;
   --chart-5: #28282c;
 
@@ -234,39 +236,41 @@
 }
 
 /* ============================================================
- * Dark mode — elevated SaaS grey band (GitHub dark-dimmed / Stripe)
+ * Dark mode — navy slate band (v3: v2's comfortable luminance, navy undertone)
  * ============================================================ */
 .dark {
   color-scheme: dark;
 
-  /* Surface ramp — comfortable SaaS band #16–#2b (benchmark GitHub
-   * dark-dimmed #22272e + Stripe #14171d). The v1 near-black #08090a was
-   * Linear's MARKETING black, not its app surface — too harsh as a canvas. */
-  --erpify-bg: #16181d; /* Canvas */
-  --erpify-bg-muted: #1c1f25; /* Panel */
-  --erpify-bg-subtle: #22262e; /* Level 3 surface */
-  --erpify-bg-elevated: #2b303a; /* Elevated / card surface */
+  /* Surface ramp — keeps v2's comfortable SaaS luminance band but with a
+   * navy undertone (B > G > R) so surfaces separate with character instead
+   * of reading as flat neutral grey. Benchmark: GitHub-dimmed undertone,
+   * Stripe/Vercel navy band. v2 grey ramp was #16181d–#2b303a. */
+  --erpify-bg: #11151f; /* Canvas */
+  --erpify-bg-muted: #161b29; /* Panel */
+  --erpify-bg-subtle: #1d2433; /* Level 3 surface */
+  --erpify-bg-elevated: #242e42; /* Elevated / card surface */
 
   /* Text ramp — AA (≥4.5:1) for primary + secondary across the ramp */
-  --erpify-text: #edeef0;
-  --erpify-text-muted: #b4bac4;
-  --erpify-text-subtle: #8b919e;
-  --erpify-text-faint: #646b78;
+  --erpify-text: #e7eaf3;
+  --erpify-text-muted: #aeb6cb;
+  --erpify-text-subtle: #8590a8;
+  --erpify-text-faint: #66708a;
   --erpify-text-on-accent: #ffffff;
 
-  /* Borders — semi-transparent white, bumped to read against lighter surfaces */
-  --erpify-border-subtle: rgba(255, 255, 255, 0.05);
-  --erpify-border: rgba(255, 255, 255, 0.09);
-  --erpify-border-strong: rgba(255, 255, 255, 0.15);
-  --erpify-line-tint: #191c22; /* sits between bg and bg-muted */
+  /* Borders — semi-transparent blue-white so dividers share the navy undertone */
+  --erpify-border-subtle: rgba(165, 180, 220, 0.07);
+  --erpify-border: rgba(165, 180, 220, 0.12);
+  --erpify-border-strong: rgba(165, 180, 220, 0.2);
+  --erpify-line-tint: #141828; /* sits between bg and bg-muted */
 
-  /* Brand / accent — same as light, with hover/active inverted for dark */
-  --erpify-brand: #5e6ad2;
-  --erpify-accent: #7170ff;
-  --erpify-accent-hover: #828fff;
-  --erpify-accent-active: #5052c4;
-  --erpify-security: #7a7fad;
-  --erpify-focus-ring: #7170ff;
+  /* Brand / accent — blue family, dark-mode shades (links/active need a
+   * lighter blue to stay AA on navy; buttons keep white-text AA at #3760e6) */
+  --erpify-brand: #3760e6;
+  --erpify-accent: #6c9bff;
+  --erpify-accent-hover: #87adff;
+  --erpify-accent-active: #5586f2;
+  --erpify-security: #7589ad;
+  --erpify-focus-ring: #6c9bff;
 
   /* Semantic signals — slightly brighter danger for dark legibility */
   --erpify-success: #10b981;
@@ -318,7 +322,7 @@
 
   --chart-1: #23252a;
   --chart-2: #62666d;
-  --chart-3: #7170ff;
+  --chart-3: #6c9bff;
   --chart-4: #d0d6e0;
   --chart-5: #f7f8f8;
 
