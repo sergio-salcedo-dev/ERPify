@@ -11,12 +11,15 @@ import { z } from "zod";
  * so the same UI test assertions cover both client- and server-side
  * surfacing.
  */
+/** Mirror of the API's `#[Assert\Length(max: 255)]` on Bank::name. */
+export const BANK_NAME_MAX_LENGTH = 255;
+
 export const BankSchema = z.object({
   name: z
     .string({ error: "The name field is required." })
     .trim()
     .min(1, "The name field is required.")
-    .max(255, "The name must not exceed 255 characters."),
+    .max(BANK_NAME_MAX_LENGTH, "The name must not exceed 255 characters."),
   shortName: z
     .string({ error: "The shortName field is required." })
     .trim()

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useIsTruncated } from "@/lib/useIsTruncated";
 import { cn } from "@/lib/utils";
@@ -23,6 +23,13 @@ export interface TruncatedTextProps {
    * viewport-dependent tab stops.
    */
   focusScopeSelector?: string;
+  /**
+   * Whether keyboard focus of the scope opens this tooltip. Exactly ONE cell
+   * per row should opt in (the primary identity — usually Name); a row with
+   * several truncated cells would otherwise pop several tooltips at once.
+   * Hover per cell is unaffected.
+   */
+  openOnRowFocus?: boolean;
   testId?: string;
 }
 
@@ -42,11 +49,23 @@ export function TruncatedText({
   lines = 1,
   className,
   focusScopeSelector = "tr",
+  openOnRowFocus = true,
   testId,
 }: Readonly<TruncatedTextProps>) {
   const { ref, truncated } = useIsTruncated<HTMLSpanElement>(value);
   const [hoverOpen, setHoverOpen] = useState(false);
   const [focusOpen, setFocusOpen] = useState(false);
+  // A CONTROLLED Base UI tooltip must know which trigger anchors it —
+  // without the explicit trigger/root id pairing, hover never reaches
+  // onOpenChange and the popup has no anchor to position against.
+  const triggerId = useId();
+
+  // Mirror of the open state for the native Esc listener below — a stale
+  // closure over `hoverOpen`/`focusOpen` would mis-route the precedence.
+  const openRef = useRef(false);
+  useEffect(() => {
+    openRef.current = hoverOpen || focusOpen;
+  });
 
   useEffect(() => {
     const el = ref.current;
@@ -64,21 +83,28 @@ export function TruncatedText({
         setFocusOpen(false);
       }
     };
+    // Esc precedence: when this tooltip is open, Esc dismisses it and stops
+    // right there — an open transient layer must never leak the keypress to
+    // outer handlers (e.g. the list's clear-selection).
     const handleKeyDown = (event: globalThis.KeyboardEvent): void => {
-      if (event.key === KeyboardKey.ESCAPE) {
+      if (event.key === KeyboardKey.ESCAPE && openRef.current) {
+        event.stopPropagation();
         setFocusOpen(false);
+        setHoverOpen(false);
       }
     };
 
-    scope.addEventListener("focusin", handleFocusIn);
-    scope.addEventListener("focusout", handleFocusOut);
+    if (openOnRowFocus) {
+      scope.addEventListener("focusin", handleFocusIn);
+      scope.addEventListener("focusout", handleFocusOut);
+    }
     scope.addEventListener("keydown", handleKeyDown);
     return () => {
       scope.removeEventListener("focusin", handleFocusIn);
       scope.removeEventListener("focusout", handleFocusOut);
       scope.removeEventListener("keydown", handleKeyDown);
     };
-  }, [ref, truncated, focusScopeSelector]);
+  }, [ref, truncated, focusScopeSelector, openOnRowFocus]);
 
   const text = (
     <span ref={ref} className={cn("block", CLAMP_CLASS[lines], className)} data-testid={testId}>
@@ -91,12 +117,13 @@ export function TruncatedText({
   return (
     <Tooltip
       open={hoverOpen || focusOpen}
+      triggerId={triggerId}
       onOpenChange={(next) => {
         setHoverOpen(next);
         if (!next) setFocusOpen(false);
       }}
     >
-      <TooltipTrigger render={text} />
+      <TooltipTrigger id={triggerId} render={text} />
       <TooltipContent className="max-h-28 max-w-[360px] overflow-y-auto break-words whitespace-pre-wrap">
         {value}
       </TooltipContent>

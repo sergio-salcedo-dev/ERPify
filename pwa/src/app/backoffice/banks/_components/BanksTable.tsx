@@ -21,7 +21,11 @@ interface BanksTableProps {
 }
 
 const renderCodeCell = (row: Bank) => (
-  <TruncatedText value={row.shortName} className="font-mono text-xs font-medium uppercase" />
+  <TruncatedText
+    value={row.shortName}
+    className="font-mono text-xs font-medium uppercase"
+    openOnRowFocus={false}
+  />
 );
 
 const renderNameCell = (row: Bank) => <TruncatedText value={row.name} />;

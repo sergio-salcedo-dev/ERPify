@@ -23,6 +23,7 @@ export { Logo } from "./Logo";
 export type { LogoProps, LogoSize, LogoVariant } from "./Logo";
 export { MonogramAvatar } from "./MonogramAvatar";
 export { SidebarItem } from "./SidebarItem";
+export { SingleLineTextarea } from "./SingleLineTextarea";
 export { StatCard } from "./StatCard";
 export { initials } from "./initials";
 export { ProblemDisplay } from "./ProblemDisplay";

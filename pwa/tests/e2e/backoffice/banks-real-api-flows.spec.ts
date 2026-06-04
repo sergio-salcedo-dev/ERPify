@@ -124,7 +124,7 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
     await filterByName(page, runPrefix);
     await page.getByTestId("banks-pagination__page-size").selectOption("50");
 
-    const shortNameHeader = page.getByRole("columnheader", { name: "Short name", exact: true });
+    const shortNameHeader = page.getByRole("columnheader", { name: "Code", exact: true });
     const shortNameSortButton = shortNameHeader.getByRole("button");
 
     const firstShort = seeded[0].shortName;
