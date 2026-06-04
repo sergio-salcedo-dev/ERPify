@@ -14,21 +14,29 @@ use Erpify\Shared\Media\Domain\Repository\MediaRepository;
 #[ORM\Table(name: 'media')]
 class Media extends AggregateRoot
 {
-    #[ORM\Column(name: 'content_hash', length: 64)]
-    private string $contentHash;
-
-    #[ORM\Column(name: 'mime_type', length: 64)]
-    private string $mimeType;
-
-    #[ORM\Column(name: 'byte_size', type: Types::INTEGER)]
-    private int $byteSize;
-
-    /** @var resource|string */
-    #[ORM\Column(name: 'raw_bytes', type: Types::BLOB)]
-    private mixed $rawBytes;
-
+    /**
+     * Lifecycle state, not a construction input: always null on creation,
+     * set only via {@see softDelete()}.
+     */
     #[ORM\Column(name: 'deleted_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
     private ?DateTimeImmutable $deletedAt = null;
+
+    private function __construct(
+        string $id,
+        #[ORM\Column(name: 'content_hash', length: 64)]
+        private string $contentHash,
+        #[ORM\Column(name: 'mime_type', length: 64)]
+        private string $mimeType,
+        #[ORM\Column(name: 'byte_size', type: Types::INTEGER)]
+        private int $byteSize,
+        /** @var resource|string */
+        #[ORM\Column(name: 'raw_bytes', type: Types::BLOB)]
+        private mixed $rawBytes,
+    ) {
+        parent::__construct();
+
+        $this->id = $id;
+    }
 
     public static function create(
         string $id,
@@ -37,14 +45,7 @@ class Media extends AggregateRoot
         int $byteSize,
         string $rawBytes,
     ): self {
-        $media = new self();
-        $media->id = $id;
-        $media->contentHash = $contentHash;
-        $media->mimeType = $mimeType;
-        $media->byteSize = $byteSize;
-        $media->rawBytes = $rawBytes;
-
-        return $media;
+        return new self($id, $contentHash, $mimeType, $byteSize, $rawBytes);
     }
 
     public function getContentHash(): string

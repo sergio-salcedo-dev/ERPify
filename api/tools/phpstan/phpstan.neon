@@ -70,13 +70,6 @@ parameters:
         - identifier: assign.propertyType
           path: ../../tests/Behat/Support/Json/JsonSchema.php
 
-        # Doctrine entities: typed properties are populated by the ORM hydrator (or the static factory)
-        # rather than the constructor, so PHPStan's checkUninitializedProperties can't see them.
-        # BankAccount and Bank are excluded: their private constructors initialize every property.
-        - identifier: property.uninitialized
-          paths:
-              - ../../src/Shared/Media/Domain/Entity/Media.php
-
         # Repository attribute points to a domain interface; the concrete Doctrine implementation
         # is wired via DI. Doctrine accepts this at runtime but PHPStan's stubs require a concrete
         # EntityRepository<T> class-string.
@@ -86,8 +79,6 @@ parameters:
 
         # Doctrine BLOB columns hydrate to either string or stream resource depending on driver/platform;
         # the runtime narrowing in getRawBytes() is intentional.
-        - identifier: property.unusedType
-          path: ../../src/Shared/Media/Domain/Entity/Media.php
         - identifier: return.type
           path: ../../src/Shared/Media/Domain/Entity/Media.php
 
