@@ -2,11 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Shared\Infrastructure\Persistence;
+namespace Erpify\Shared\Infrastructure\Persistence\Doctrine;
 
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
+use Erpify\Shared\Infrastructure\Persistence\QueryParam;
 use Override;
 
 /**
@@ -14,7 +15,7 @@ use Override;
  *
  * @extends ServiceEntityRepository<T>
  */
-abstract class AbstractRepository extends ServiceEntityRepository
+abstract class AbstractDoctrineRepository extends ServiceEntityRepository
 {
     final public const int MAX_LIMIT = 1_000;
 

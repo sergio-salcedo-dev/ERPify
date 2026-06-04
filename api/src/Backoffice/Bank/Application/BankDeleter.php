@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\Bank\Application;
 
-use Erpify\Backoffice\Bank\Infrastructure\Persistence\PostgresBankRepository;
+use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Shared\Infrastructure\Uuid\SymfonyUuidGenerator;
 use Symfony\Component\Messenger\Exception\ExceptionInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
@@ -12,7 +12,7 @@ use Symfony\Component\Messenger\MessageBusInterface;
 final readonly class BankDeleter
 {
     public function __construct(
-        private PostgresBankRepository $postgresBankRepository,
+        private BankRepository $bankRepository,
         private BankFinder $bankFinder,
         private MessageBusInterface $messageBus,
     ) {
@@ -30,7 +30,7 @@ final readonly class BankDeleter
         // Pull events before removal so the aggregate is still intact when captured.
         $domainEvents = $bank->pullDomainEvents();
 
-        $this->postgresBankRepository->remove($bank);
+        $this->bankRepository->remove($bank);
 
         foreach ($domainEvents as $domainEvent) {
             $this->messageBus->dispatch($domainEvent);

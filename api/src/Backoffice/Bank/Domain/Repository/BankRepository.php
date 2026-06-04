@@ -10,6 +10,10 @@ use Erpify\Shared\Domain\Search\SearchCriteria;
 
 interface BankRepository
 {
+    public function save(Bank $bank): void;
+
+    public function remove(Bank $bank): void;
+
     public function findById(string $id): ?Bank;
 
     /** @return PaginatedResult<Bank> */

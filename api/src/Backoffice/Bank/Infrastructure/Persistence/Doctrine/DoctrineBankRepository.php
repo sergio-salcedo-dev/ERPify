@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Backoffice\Bank\Infrastructure\Persistence;
+namespace Erpify\Backoffice\Bank\Infrastructure\Persistence\Doctrine;
 
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
@@ -10,23 +10,25 @@ use Erpify\Backoffice\Bank\Domain\Search\BankSearchCriteria;
 use Erpify\Shared\Domain\Search\PaginatedResult;
 use Erpify\Shared\Domain\Search\SearchCriteria;
 use Erpify\Shared\Domain\ValueObject\NormalizedText;
-use Erpify\Shared\Infrastructure\Persistence\AbstractSearchRepository;
-use Erpify\Shared\Infrastructure\Persistence\QueryBuilderWithOptions;
+use Erpify\Shared\Infrastructure\Persistence\Doctrine\AbstractDoctrineSearchRepository;
+use Erpify\Shared\Infrastructure\Persistence\Doctrine\QueryBuilderWithOptions;
 use InvalidArgumentException;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
 /**
- * @extends AbstractSearchRepository<Bank>
+ * @extends AbstractDoctrineSearchRepository<Bank>
  */
 #[AsAlias(BankRepository::class)]
-final class PostgresBankRepository extends AbstractSearchRepository implements BankRepository
+final class DoctrineBankRepository extends AbstractDoctrineSearchRepository implements BankRepository
 {
+    #[Override]
     public function save(Bank $bank): void
     {
         $this->persistAndFlush($bank);
     }
 
+    #[Override]
     public function remove(Bank $bank): void
     {
         $this->removeAndFlush($bank);

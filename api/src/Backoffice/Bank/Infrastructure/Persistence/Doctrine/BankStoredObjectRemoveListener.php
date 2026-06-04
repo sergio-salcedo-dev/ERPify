@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Backoffice\Bank\Infrastructure\Persistence;
+namespace Erpify\Backoffice\Bank\Infrastructure\Persistence\Doctrine;
 
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsEntityListener;
 use Doctrine\ORM\Events;
