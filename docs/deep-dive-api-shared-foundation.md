@@ -268,20 +268,20 @@ api/src/Shared/
 - **LOC:** 15 — `final readonly` DTO: `bytes`, `mimeType`, `contentHash`. Hash is computed **after** transcoding/scaling — premature hashing breaks deduplication.
 
 #### `api/src/Shared/Media/Application/MediaRegistrar.php`
-- **LOC:** 43 — orchestrates `UploadedFile → ImageNormalizer → MediaRepository → Media`. Deduplicates by content hash via `findActiveByContentHash()` before creating a new aggregate (idempotent).
+- **LOC:** 43 — orchestrates `UploadedFile → ImageNormalizer → MediaRepository → Media`. Deduplicates by content hash via `findByContentHash()` before creating a new aggregate (idempotent).
 
 #### `api/src/Shared/Media/Application/Port/ImageNormalizer.php` · `MediaPublicUrlGenerator.php`
 - 13 + 13 LOC ports. URL generator returns either an absolute URL (when `MEDIA_PUBLIC_BASE_URL` is set) or a relative path; **not stored on the entity** so swapping CDNs requires no migration.
 
 #### `api/src/Shared/Media/Domain/Entity/Media.php`
-- **LOC:** 90 — extends `AggregateRoot`. Doctrine columns: `content_hash` (64-char SHA256), `mime_type`, `byte_size`, `raw_bytes` (BLOB), `deleted_at` (soft delete). `getRawBytes()` handles Doctrine's resource/string polymorphism for BLOB reads. Lifecycle: `isActive()` checks `deletedAt === null`; `softDelete()` sets it.
+- **LOC:** 69 — extends `AggregateRoot`. Doctrine columns: `content_hash` (64-char SHA256), `mime_type`, `byte_size`, `raw_bytes` (BLOB). `getRawBytes()` handles Doctrine's resource/string polymorphism for BLOB reads. No soft delete — media is hard-deleted per the deletion policy in [`rules/database.md`](rules/database.md) (GDPR erasure).
 - **Note:** Raw bytes live in PostgreSQL — small media only. Larger payloads belong on the Storage/Flysystem path.
 
 #### `api/src/Shared/Media/Domain/Exception/InvalidImageException.php`
 - **LOC:** 29 — extends `DomainException` and implements `InvariantViolation` → 422. Carries `formField` in `context` so API responses can pinpoint the offending input.
 
 #### `api/src/Shared/Media/Domain/Repository/MediaRepository.php`
-- **LOC:** 16 — interface: `save()`, `findActiveByContentHash()`, `existsActiveByContentHash()`. **No delete method** — deletion is via `Media::softDelete()`.
+- **LOC:** 16 — interface: `save()`, `findByContentHash()`, `existsByContentHash()`. **No delete method** — no deletion use case exists yet; any future one is a hard `DELETE` (see [`rules/database.md`](rules/database.md)).
 
 #### `api/src/Shared/Media/Infrastructure/Controller/MediaGetController.php`
 - **LOC:** 69 — `#[Route('/media/{hash}', requirements: ['hash' => '[a-f0-9]{64}'])]`.
@@ -301,7 +301,7 @@ api/src/Shared/
 - **Determinism is non-negotiable** — encoder settings must stay fixed or deduplication breaks across versions.
 
 #### `api/src/Shared/Media/Infrastructure/Persistence/Doctrine/DoctrineMediaRepository.php`
-- **LOC:** 62 — extends `ServiceEntityRepository<Media>`. Standard Doctrine; both finder methods filter `deletedAt IS NULL`. `existsActiveByContentHash` uses `SELECT id … LIMIT 1` for cheap existence.
+- **LOC:** 58 — extends `ServiceEntityRepository<Media>`. Standard Doctrine. `existsByContentHash` uses `SELECT id … LIMIT 1` for cheap existence.
 
 ---
 

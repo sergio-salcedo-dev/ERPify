@@ -24,7 +24,7 @@ final readonly class MediaRegistrar
     {
         $normalizedImage = $this->imageNormalizer->normalize($uploadedFile);
 
-        $existing = $this->mediaRepository->findActiveByContentHash($normalizedImage->contentHash);
+        $existing = $this->mediaRepository->findByContentHash($normalizedImage->contentHash);
 
         if ($existing instanceof Media) {
             return $existing;
