@@ -12,6 +12,7 @@ export const KeyboardKey = {
   ARROW_UP: "ArrowUp",
   ARROW_DOWN: "ArrowDown",
   ENTER: "Enter",
+  ESCAPE: "Escape",
   SPACE: " ",
 } as const;
 export type KeyboardKey = (typeof KeyboardKey)[keyof typeof KeyboardKey];

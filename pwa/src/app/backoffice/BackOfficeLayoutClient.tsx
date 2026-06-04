@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
 import { Routes } from "@/context/shared/domain/types/routes";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { bankRoutes } from "./banks/_lib/bankRoutes";
 import { sectionTitleFor } from "./_lib/sectionTitle";
 
@@ -148,7 +149,8 @@ export default function BackOfficeLayoutClient({
   };
 
   return (
-    <div className="bo-layout min-h-screen bg-background flex font-sans">
+    <TooltipProvider>
+      <div className="bo-layout min-h-screen bg-background flex font-sans">
       <a
         href="#main-content"
         className="bo-layout__skip-link bg-primary text-primary-foreground sr-only z-50 px-3 py-2 focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:rounded-md"
@@ -423,10 +425,14 @@ export default function BackOfficeLayoutClient({
           </div>
         </header>
 
-        <main id="main-content" className="bo-layout__main flex-grow pt-14 md:pt-0 overflow-auto">
-          <div className="bo-layout__content mx-auto p-4 md:p-8">{children}</div>
-        </main>
+          <main
+            id="main-content"
+            className="bo-layout__main flex-grow pt-14 md:pt-0 overflow-auto"
+          >
+            <div className="bo-layout__content mx-auto p-4 md:p-8">{children}</div>
+          </main>
+        </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 }

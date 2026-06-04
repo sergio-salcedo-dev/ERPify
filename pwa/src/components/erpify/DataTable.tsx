@@ -2,6 +2,7 @@
 
 import {
   useCallback,
+  useEffect,
   useId,
   useRef,
   useState,
@@ -271,10 +272,10 @@ function DataTableRow<T>({
       onFocus={() => setFocusedRow(index)}
       data-testid={rowTestId?.(row)}
       className={cn(
-        "border-border focus-visible:ring-ring border-b transition-colors focus-visible:ring-2 focus-visible:outline-none",
+        "group/row border-border focus-visible:ring-ring border-b transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:outline-none motion-reduce:transition-none",
         ROW_HEIGHTS[density],
-        interactive && "hover:bg-muted/30 cursor-pointer",
-        isSelected && "bg-accent/40",
+        interactive && "hover:bg-muted cursor-pointer",
+        isSelected && "bg-row-selected",
       )}
     >
       {showSelectionColumn && selection ? (
@@ -332,11 +333,17 @@ export function DataTable<T>({
 
   const handleSelectAll = useCallback(() => {
     if (selection?.mode !== SelectionMode.MULTI) return;
-    if (selection.selected.size === data.length) {
-      selection.onChange(new Set());
+    // Page-scoped toggle: a selection that survives pagination keeps its
+    // off-page ids either way.
+    const pageIds = data.map(rowKey);
+    const next = new Set(selection.selected);
+    const allOnPage = pageIds.length > 0 && pageIds.every((id) => next.has(id));
+    if (allOnPage) {
+      for (const id of pageIds) next.delete(id);
     } else {
-      selection.onChange(new Set(data.map(rowKey)));
+      for (const id of pageIds) next.add(id);
     }
+    selection.onChange(next);
   }, [selection, data, rowKey]);
 
   const handleRowSelect = useCallback(
@@ -402,17 +409,18 @@ export function DataTable<T>({
   }
 
   const showSelectionColumn = selection != null && selection.mode !== SelectionMode.NONE;
-  const allSelected =
-    selection?.mode === SelectionMode.MULTI &&
-    data.length > 0 &&
-    selection.selected.size === data.length;
+  // Count against the rows on THIS page: a selection that survives pagination
+  // may hold ids that are not currently rendered.
+  const selectedOnPage =
+    selection?.mode === SelectionMode.MULTI
+      ? data.filter((row) => selection.selected.has(rowKey(row))).length
+      : 0;
+  const allSelected = data.length > 0 && selectedOnPage === data.length;
+  const someSelected = selectedOnPage > 0 && !allSelected;
   const interactive = Boolean(onRowActivate || selection);
 
   return (
-    <div
-      className={cn("border-border overflow-hidden rounded-md border", className)}
-      data-testid={testId}
-    >
+    <div className={cn("border-border rounded-md border", className)} data-testid={testId}>
       <table
         id={tableId}
         role="table"
@@ -428,17 +436,15 @@ export function DataTable<T>({
             ))}
           </colgroup>
         ) : null}
-        <thead className="bg-muted/40 sticky top-0">
+        <thead className="erpify-table__head bg-background sticky top-0 z-10">
           <tr className={cn("border-border border-b", HEADER_HEIGHTS[density])}>
             {showSelectionColumn && selection ? (
               <th scope="col" className="w-10 px-3 text-left">
                 {selection.mode === SelectionMode.MULTI ? (
-                  <input
-                    type="checkbox"
-                    aria-label="Select all rows"
-                    checked={allSelected}
+                  <SelectAllCheckbox
+                    allSelected={allSelected}
+                    someSelected={someSelected}
                     onChange={handleSelectAll}
-                    className="border-border accent-primary size-4 cursor-pointer rounded"
                   />
                 ) : null}
               </th>
@@ -493,6 +499,38 @@ export function DataTable<T>({
         </tbody>
       </table>
     </div>
+  );
+}
+
+interface SelectAllCheckboxProps {
+  allSelected: boolean;
+  someSelected: boolean;
+  onChange: () => void;
+}
+
+/**
+ * Header select-all with a real tri-state: the native checkbox only exposes
+ * `aria-checked="mixed"` when the DOM `indeterminate` property is set — it is
+ * not derivable from `checked`, hence the ref + effect.
+ */
+function SelectAllCheckbox({ allSelected, someSelected, onChange }: Readonly<SelectAllCheckboxProps>) {
+  const ref = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.indeterminate = someSelected;
+    }
+  }, [someSelected]);
+
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      aria-label="Select all rows"
+      checked={allSelected}
+      onChange={onChange}
+      className="border-border accent-primary size-4 cursor-pointer rounded"
+    />
   );
 }
 

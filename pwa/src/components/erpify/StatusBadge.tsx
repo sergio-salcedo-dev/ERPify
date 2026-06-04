@@ -1,36 +1,31 @@
 import { cva, type VariantProps } from "class-variance-authority";
-import { AlertTriangle, CheckCircle2, Circle, Info, XCircle, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type StatusBadgeVariant = "success" | "warning" | "danger" | "info" | "neutral";
 
-const statusVariants = cva(
-  "inline-flex h-5 items-center gap-1 rounded-full border px-2 text-xs font-medium",
-  {
-    variants: {
-      variant: {
-        success: "border-transparent bg-success/15 text-success",
-        warning: "border-transparent bg-warning/15 text-warning",
-        danger: "bg-destructive/15 text-destructive border-transparent",
-        info: "bg-primary/15 text-primary border-transparent",
-        neutral: "border-border text-muted-foreground bg-transparent",
-      },
-    },
-    defaultVariants: {
-      variant: "neutral",
+/**
+ * Dot-first anatomy: the label is always neutral (text-muted-foreground,
+ * ≥4.5:1 over white and over the selected-row tint) and the hue lives only in
+ * the 6px dot. The previous tinted-text-on-tinted-bg anatomy measured
+ * 2.19–3.90:1 and failed WCAG 1.4.3; success/warning dots use the darkened
+ * --erpify-status-dot-* fills to clear 1.4.11 (≥3:1).
+ */
+const dotVariants = cva("size-1.5 flex-none rounded-full", {
+  variants: {
+    variant: {
+      success: "bg-status-dot-success",
+      warning: "bg-status-dot-warning",
+      danger: "bg-danger",
+      info: "bg-brand",
+      neutral: "bg-text-subtle",
     },
   },
-);
+  defaultVariants: {
+    variant: "neutral",
+  },
+});
 
-const iconByVariant: Record<StatusBadgeVariant, LucideIcon> = {
-  success: CheckCircle2,
-  warning: AlertTriangle,
-  danger: XCircle,
-  info: Info,
-  neutral: Circle,
-};
-
-interface StatusBadgeProps extends VariantProps<typeof statusVariants> {
+interface StatusBadgeProps extends VariantProps<typeof dotVariants> {
   variant: StatusBadgeVariant;
   label: string;
   className?: string;
@@ -39,10 +34,15 @@ interface StatusBadgeProps extends VariantProps<typeof statusVariants> {
 }
 
 export function StatusBadge({ variant, label, className, testId }: Readonly<StatusBadgeProps>) {
-  const Icon = iconByVariant[variant];
   return (
-    <output className={cn(statusVariants({ variant }), className)} data-testid={testId}>
-      <Icon className="size-3" aria-hidden="true" />
+    <output
+      className={cn(
+        "status-badge bg-muted text-muted-foreground inline-flex h-5 items-center gap-1.5 rounded-full px-2 text-2xs font-medium",
+        className,
+      )}
+      data-testid={testId}
+    >
+      <span className={dotVariants({ variant })} aria-hidden="true" />
       {label}
     </output>
   );
