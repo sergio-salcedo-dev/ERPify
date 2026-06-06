@@ -14,7 +14,7 @@ import { telemetry } from "@/context/shared/infrastructure/Observability";
  * `NEXT_PUBLIC_API_BASE_URL` is honoured when set.
  */
 function mercureUrl(topics: readonly string[]): string {
-  const base = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
+  const base = (process.env.NEXT_PUBLIC_API_BASE_URL?.trim() ?? "").replace(/\/$/, "");
   const origin = globalThis.window?.location.origin ?? "http://localhost";
   const url = new URL(`${base}/.well-known/mercure`, origin);
   for (const topic of topics) {

@@ -92,7 +92,7 @@ export function SegmentErrorBoundary({ error, reset }: Readonly<SegmentErrorBoun
                 size="xs"
                 variant="ghost"
                 iconOnly
-                className="error-page__digest-copy data-[copy-status=copied]:[&_svg]:text-success"
+                className="error-page__digest-copy data-[copy-status=copied]:[&_svg]:text-success-strong"
                 testId="error-page__digest-copy"
               />
             </div>

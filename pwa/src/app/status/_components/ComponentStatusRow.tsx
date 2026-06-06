@@ -16,8 +16,8 @@ const DOT_CLASSNAME: Record<SystemStatus, string> = {
 
 const LABEL_CLASSNAME: Record<SystemStatus, string> = {
   [SystemStatus.CHECKING]: "text-muted-foreground",
-  [SystemStatus.OPERATIONAL]: "text-success",
-  [SystemStatus.DEGRADED]: "text-warning",
+  [SystemStatus.OPERATIONAL]: "text-success-strong",
+  [SystemStatus.DEGRADED]: "text-warning-strong",
   [SystemStatus.DISRUPTED]: "text-danger-strong",
 };
 

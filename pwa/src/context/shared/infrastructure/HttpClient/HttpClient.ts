@@ -35,10 +35,20 @@ function serverApiBase(): string {
     return trimBase(internal);
   }
   const browser = browserApiBase();
+  if (browser) {
+    return browser;
+  }
   // The server path cannot issue a relative request — there is no document
-  // origin during SSR / route handlers. Keep an absolute fallback when neither
-  // SYMFONY_INTERNAL_URL nor the public override is set.
-  return browser || "https://localhost";
+  // origin during SSR / route handlers. Rather than silently targeting
+  // https://localhost:443 (which a worktree/staging stack never serves), fail
+  // fast and name the two env vars an operator can set. This throws only on an
+  // actual server-side fetch with both unset — never at module-init — so the
+  // singleton constructed by the DI container still boots.
+  throw new Error(
+    "Cannot resolve a server-side API base URL: set SYMFONY_INTERNAL_URL " +
+      "(internal SSR target, e.g. http://php:80) or NEXT_PUBLIC_API_BASE_URL " +
+      "(public override). Neither is set.",
+  );
 }
 
 @injectable()
@@ -86,12 +96,6 @@ export class MockHttpClient implements HttpClient {
 
 @injectable()
 export class FetchHttpClient implements HttpClient {
-  private readonly baseUrl: string;
-
-  constructor() {
-    this.baseUrl = globalThis.window === undefined ? serverApiBase() : browserApiBase();
-  }
-
   async get<T>(url: string): Promise<T> {
     const res = await fetch(this.resolveUrl(url), {
       headers: { Accept: "application/json" },
@@ -156,8 +160,12 @@ export class FetchHttpClient implements HttpClient {
   }
 
   private resolveUrl(url: string): string {
+    // Resolved per call, not in the constructor: the singleton may be built at
+    // module-init (no request scope) while the browser/server distinction and
+    // the fail-fast env check must only run when an actual fetch is issued.
+    const baseUrl = globalThis.window === undefined ? serverApiBase() : browserApiBase();
     const path = url.startsWith("/") ? url : `/${url}`;
-    return `${this.baseUrl}${path}`;
+    return `${baseUrl}${path}`;
   }
 
   private async toHttpError(res: Response): Promise<HttpError> {

@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 const iconToneClasses: Record<IconTone, { wrap: string; icon: string }> = {
   [IconTone.PRIMARY]: { wrap: "bg-primary/10", icon: "text-primary" },
   [IconTone.DESTRUCTIVE]: { wrap: "bg-destructive/10", icon: "text-destructive" },
-  [IconTone.WARNING]: { wrap: "bg-warning/10", icon: "text-warning" },
+  [IconTone.WARNING]: { wrap: "bg-warning/10", icon: "text-warning-strong" },
   [IconTone.MUTED]: { wrap: "bg-muted", icon: "text-muted-foreground" },
 };
 

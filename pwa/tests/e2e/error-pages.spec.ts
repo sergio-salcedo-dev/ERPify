@@ -230,7 +230,7 @@ test.describe("Error pages — 500 boundary (error.tsx)", () => {
 
     // The CopyButton flips its `data-copy-status` to `copied` while the
     // success cue is on screen — that's also what turns the check icon
-    // green via the Tailwind `data-[copy-status=copied]:[&_svg]:text-success`
+    // green via the Tailwind `data-[copy-status=copied]:[&_svg]:text-success-strong`
     // override.
     await expect(copyButton).toHaveAttribute("data-copy-status", "copied");
 

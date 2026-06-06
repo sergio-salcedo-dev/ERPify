@@ -41,7 +41,7 @@ const TONE_CLASSES: Record<ProblemTone, ToneClasses> = {
   warning: {
     surface: "border-warning/30 bg-warning/5",
     icon: "text-warning",
-    badge: "bg-warning/10 text-warning",
+    badge: "bg-warning/10 text-warning-strong",
     rule: "border-warning/15",
   },
 };

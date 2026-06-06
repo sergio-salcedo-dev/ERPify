@@ -40,7 +40,7 @@ export function Navbar({ goToBackoffice }: Readonly<NavbarProps>) {
             {showDevTools ? (
               <Link
                 href={Routes.DEV_TOOLS}
-                className="navbar__link navbar__link--dev-tools text-warning hover:text-warning/80 font-medium transition-colors inline-flex items-center gap-1.5"
+                className="navbar__link navbar__link--dev-tools text-warning-strong hover:text-warning-strong/80 font-medium transition-colors inline-flex items-center gap-1.5"
                 title="Internal QA / engineering tools (dev/test only)"
                 data-testid="navbar__dev-tools-link"
               >
@@ -89,7 +89,7 @@ export function Navbar({ goToBackoffice }: Readonly<NavbarProps>) {
           {showDevTools ? (
             <Link
               href={Routes.DEV_TOOLS}
-              className="navbar__link navbar__link--dev-tools text-warning hover:text-warning/80 font-medium inline-flex items-center gap-1.5"
+              className="navbar__link navbar__link--dev-tools text-warning-strong hover:text-warning-strong/80 font-medium inline-flex items-center gap-1.5"
               title="Internal QA / engineering tools (dev/test only)"
               data-testid="navbar__mobile-dev-tools-link"
             >

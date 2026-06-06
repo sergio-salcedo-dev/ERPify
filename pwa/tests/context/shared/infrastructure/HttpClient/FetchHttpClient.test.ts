@@ -218,8 +218,8 @@ describe("FetchHttpClient", () => {
       expect(urlOf(input)).toBe("https://api.example.com/api/v1/backoffice/banks");
     });
 
-    it("falls back to an absolute https://localhost when no env var is set", async () => {
-      delete process.env.SYMFONY_INTERNAL_URL;
+    it("trims a padded SYMFONY_INTERNAL_URL before issuing the request", async () => {
+      process.env.SYMFONY_INTERNAL_URL = " http://php:80 ";
       delete process.env.NEXT_PUBLIC_API_BASE_URL;
       fetchSpy.mockResolvedValueOnce(makeResponse(HttpStatus.OK, { data: [] }));
 
@@ -227,7 +227,28 @@ describe("FetchHttpClient", () => {
       await client.get("/api/v1/backoffice/banks");
 
       const [input] = fetchSpy.mock.calls[0] as [RequestInfo | URL];
-      expect(urlOf(input)).toBe("https://localhost/api/v1/backoffice/banks");
+      expect(urlOf(input)).toBe("http://php:80/api/v1/backoffice/banks");
+    });
+
+    it("throws a descriptive error naming both env vars when neither is set", async () => {
+      delete process.env.SYMFONY_INTERNAL_URL;
+      delete process.env.NEXT_PUBLIC_API_BASE_URL;
+
+      const client = new FetchHttpClient();
+
+      await expect(client.get("/api/v1/backoffice/banks")).rejects.toThrow(
+        /SYMFONY_INTERNAL_URL.*NEXT_PUBLIC_API_BASE_URL/s,
+      );
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("does not throw at construction when neither env var is set (lazy resolution)", () => {
+      delete process.env.SYMFONY_INTERNAL_URL;
+      delete process.env.NEXT_PUBLIC_API_BASE_URL;
+
+      // The DI container builds this singleton at module-init, where there is no
+      // request scope — construction must stay side-effect-free.
+      expect(() => new FetchHttpClient()).not.toThrow();
     });
   });
 });
