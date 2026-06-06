@@ -40,7 +40,7 @@ describe("Bank short-name truncation", () => {
   });
 
   it("card short-name sits above the card-wide navigation overlay so hover can open its tooltip", () => {
-    render(<BanksCards banks={[LONG]} />);
+    render(<BanksCards onBankDeleteFailed={() => {}} banks={[LONG]} />);
     const el = screen.getByTestId(`banks-cards__shortname-${LONG.id}`);
     expect(el).toHaveClass("relative", "z-10");
     // The overlay owner must not gain a competing z-index, or it would
