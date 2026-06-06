@@ -112,6 +112,11 @@ function computeTabIndex(interactive: boolean, isFocused: boolean): number | und
   return isFocused ? 0 : -1;
 }
 
+/** Focus target for ArrowDown / ArrowUp row navigation, clamped to the page. */
+function arrowTargetIndex(key: string, index: number, lastIndex: number): number {
+  return key === KeyboardKey.ARROW_DOWN ? Math.min(index + 1, lastIndex) : Math.max(index - 1, 0);
+}
+
 function alignClass(align: DataTableColumn<unknown>["align"]): string | undefined {
   if (align === "right") return "text-right";
   if (align === "center") return "text-center";
@@ -430,23 +435,11 @@ export function DataTable<T>({
       // A key pressed while an in-row control (action button, link, checkbox)
       // is focused belongs to that control, not the row.
       if (isFromInteractiveControl(event.target, event.currentTarget)) return;
-      const canRange = selection?.mode === SelectionMode.MULTI;
-      if (event.key === KeyboardKey.ARROW_DOWN) {
+      if (event.key === KeyboardKey.ARROW_DOWN || event.key === KeyboardKey.ARROW_UP) {
         event.preventDefault();
-        const next = Math.min(index + 1, data.length - 1);
-        if (event.shiftKey && canRange) {
-          extendRange(index, next);
-        } else {
-          resetRange();
-        }
-        setFocusedRow(next);
-        rowRefs.current[next]?.focus();
-        return;
-      }
-      if (event.key === KeyboardKey.ARROW_UP) {
-        event.preventDefault();
-        const next = Math.max(index - 1, 0);
-        if (event.shiftKey && canRange) {
+        const next = arrowTargetIndex(event.key, index, data.length - 1);
+        // Shift extends the range (multi-select only); a plain move ends it.
+        if (event.shiftKey && selection?.mode === SelectionMode.MULTI) {
           extendRange(index, next);
         } else {
           resetRange();
