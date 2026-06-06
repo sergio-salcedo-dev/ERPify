@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Shared\Persistence;
 
+use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Shared\Application\DomainEvent\DomainEventStore;
@@ -44,19 +45,33 @@ final class DomainEventStoreIdempotencyTest extends KernelTestCase
             $event = new BankCreatedDomainEvent($bankId, 'Idempotent Bank', 'IDEM', $now, $now);
 
             $store->append($event);
-            $store->append($event);
-
-            $rowCount = $connection->fetchOne(
-                'SELECT COUNT(*) FROM domain_event WHERE event_id = :eventId',
-                ['eventId' => $event->eventId()],
+            $this->assertSame(
+                1,
+                $this->countRowsForEventId($connection, $event->eventId()),
+                'first append must write exactly one row',
             );
-            $this->assertIsNumeric($rowCount);
 
-            $this->assertSame(1, (int) $rowCount);
+            $store->append($event);
+            $this->assertSame(
+                1,
+                $this->countRowsForEventId($connection, $event->eventId()),
+                'second append must be a no-op, not a second insert nor a failed one',
+            );
         } finally {
             if ($connection->isTransactionActive()) {
                 $connection->rollBack();
             }
         }
+    }
+
+    private function countRowsForEventId(Connection $connection, string $eventId): int
+    {
+        $rowCount = $connection->fetchOne(
+            'SELECT COUNT(*) FROM domain_event WHERE event_id = :eventId',
+            ['eventId' => $eventId],
+        );
+        $this->assertIsNumeric($rowCount);
+
+        return (int) $rowCount;
     }
 }

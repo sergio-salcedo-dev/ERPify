@@ -26,6 +26,10 @@ final class DoctrineStoredDomainEventRepository extends ServiceEntityRepository 
      * Idempotent DBAL insert: a redelivered event (same event_id) is a no-op via ON CONFLICT, so
      * at-least-once redelivery cannot duplicate audit rows. DBAL (not persist+flush) is deliberate —
      * a unique violation surfacing through flush would close the EntityManager mid-request.
+     *
+     * Non-obvious contract: this bypasses the EntityManager entirely. The entity is never managed
+     * nor flushed, so callers must not expect it in the unit of work afterwards (no dirty tracking,
+     * no identity map, no cascade) — its only effect is the row written by this statement.
      */
     #[Override]
     public function save(StoredDomainEvent $storedDomainEvent): void
@@ -43,6 +47,7 @@ final class DoctrineStoredDomainEventRepository extends ServiceEntityRepository 
                 'body' => $storedDomainEvent->body(),
             ],
             [
+                'id' => Types::GUID,
                 'occurredOn' => Types::DATETIME_IMMUTABLE,
                 'body' => Types::JSON,
             ],
