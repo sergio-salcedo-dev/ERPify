@@ -2,23 +2,6 @@
 
 Collected during quick-dev. Not part of the current story's shippable scope.
 
-## UX entity-list redesign — restos del contrato (2026-06-04)
-
-Source contract: `_bmad-output/planning-artifacts/ux-designs/ux-ERPify-2026-06-03/`
-(`DESIGN.md` + `EXPERIENCE.md` — borrados del working tree el 2026-06-06, recuperables
-del historial git). El plan completo se envió en PR #137 y follow-ups (#144, #150,
-#151, #155, #157). Queda pendiente del contrato, conscientemente:
-
-- **e2e tooltip de tarjeta (review de `fix/pwa-banks-cards-shortname-tooltip`,
-  2026-06-04):** hover sobre el shortName de tarjeta abre su tooltip (el test jsdom
-  solo fija las clases `relative z-10`, no el hit-testing real) y el trade-off
-  aceptado de que el click sobre el shortName de tarjeta NO navega al detalle (el
-  resto de la tarjeta sí) — ninguno de los dos es verificable en jsdom. Sigue sin
-  cubrirse en `banks-containment.spec.ts`.
-- **RecordSheet peek (`o`, v2 opcional):** el componente `RecordSheet.tsx` existe
-  con unit test pero no está cableado en ninguna página.
-- **Selección por rango Shift+↑/↓** `[ASSUMPTION]`.
-
 ## From: spec-banks-mercure-realtime (2026-06-01, step-04 review)
 
 - **Authorize endpoint AuthN/AuthZ.** `BankRealtimeAuthorizeController`
@@ -38,12 +21,6 @@ spec's Review Findings section; the items below are the deferred (design-level /
   exposure vs. the already-public bank REST API, but the in-code "no data leak" framing is
   optimistic. Gate the controller and narrow granted topics per user/role when backoffice auth
   arrives (already noted above).
-- **Cross-event-type redelivery resurrection.** A late at-least-once redelivery of a `created` after
-  a `delete` re-inserts the row on every list viewer (client merges are duplicate-safe per-event-type
-  but not across types/ordering). Narrow window; would need sequence/versioning to fully close.
-- **Cookie `SameSite=Strict` + cross-origin deployment.** The code supports a non-empty
-  `NEXT_PUBLIC_SYMFONY_API_BASE_URL` (cross-origin), but a `SameSite=Strict` cookie is dropped on the
-  cross-origin EventSource request, silently killing realtime. Untested. Default same-origin flow is fine.
 
 ## Sentry/Datadog sink adapter — prep gaps (deferred until DSN/SDK chosen)
 
@@ -86,30 +63,3 @@ below is deferred.
   interpolates a dynamic value into a `message`/`scope`, the map grows unbounded in long-lived tabs. Add
   TTL/size-bounded eviction (or assert key cardinality) if/when a dynamic-keyed call site lands. Low.
   (source: blind+edge)
-
-## Deferred from: spec-pwa-banks-bulk-restore-stale-snapshot review (2026-06-06)
-
-Adversarial review (Blind Hunter / Edge Case Hunter / Acceptance Auditor) of the re-probe-validated
-bulk-delete restore. The patch finding (call-count assertions) was applied live; the item below is deferred.
-
-- **Ventana residual (escala microtarea) en la restauración validada del bulk delete.**
-  (`pwa/src/app/backoffice/banks/page.tsx`, `runBulkDelete`): el re-probe cierra la ventana original
-  (round-trips completos de probe/delete), pero un `onDeleted` de Mercure procesado entre la
-  resolución del re-probe y el `setBanks` síncrono aún puede resucitar la fila — y re-añadir su
-  selección — hasta el siguiente reconcile. Cerrarla del todo exigiría trackear los ids borrados por
-  Mercure durante la ventana del bulk, descartado conscientemente en el spec (Never: refs acoplados
-  al handler realtime). Magnitud: microtarea vs. los round-trips de antes; autocurable en el
-  siguiente evento/reconnect. Low. (source: blind+edge, spec-pwa-banks-bulk-restore-stale-snapshot)
-
-## Deferred from: spec-pr-158-sonar-dup-density review (2026-06-06)
-
-Dedup CPD del PR #158: solo se refactorizaron los dos specs implicados en los bloques que Sonar
-marcó como código nuevo. Queda pendiente, conscientemente fuera del alcance del PR:
-
-- **Barrido suite-wide de fixtures/factorías en los specs de banks.** Ocho specs más bajo
-  `pwa/tests/app/backoffice/banks/` (p. ej. `bankDetailDelete.test.tsx`, `bankEditStaleBank.test.tsx`,
-  `banksListRetry.test.tsx`, `deleteBankButtonSpinner.test.tsx`) siguen re-declarando las fixtures
-  ACME/BETA ahora canónicas en `_fixtures.ts`, y `bankListDelete.test.tsx` conserva sus factorías
-  `vi.mock` artesanales en lugar de las de `_mocks.ts` (`routerMock`/`containerMock`/
-  `toastNotifierMock`). Código viejo — Sonar no lo cuenta en el PR; deduplicarlo es higiene, no gate.
-  Low. (source: adversarial review, spec-pr-158-sonar-dup-density)

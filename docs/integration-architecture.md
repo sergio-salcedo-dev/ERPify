@@ -56,6 +56,23 @@ browser → localhost ──▶│     FrankenPHP (Caddy)      │
 | 9 | Symfony → Mercure Hub | Publish | HTTP + JWT | Server-side publish; topics scoped per bounded context. |
 | 10 | Symfony → Browser/PWA | Error contract | HTTP (`application/problem+json`) | All `/api/*` non-2xx responses are RFC 9457 Problem Details with stable `type`, per-request `correlation-id`, per-error `instance`. PWA routes UI by `type` only. See [`api-error-contract.md`](./api-error-contract.md). |
 
+## Realtime (Mercure): same-origin requirement
+
+The Mercure subscriber authorization cookie minted by the `authorize` endpoint
+(integration point 3) is `SameSite=Strict` by design — the strongest CSRF
+posture, and the `symfony/mercure` default, deliberately **not** overridden.
+Realtime therefore **requires the PWA and the API to share one public origin**,
+which is exactly the designed FrankenPHP topology above: one Caddy fronts both
+the HTML and `/api/*`, so the browser treats every Mercure request as same-site
+and sends the Strict cookie.
+
+A cross-origin deployment — PWA origin ≠ the origin of
+`NEXT_PUBLIC_API_BASE_URL` — silently breaks the `EventSource` subscription: the
+Strict cookie is never sent cross-site, so the hub rejects the connection with
+no visible error. That layout is **unsupported**. Supporting it would be a
+deliberate future deployment feature (`SameSite=None` cookie + hub CORS with
+credentials), not a config tweak.
+
 ## Authentication / authorization flow
 
 _(Quick scan — not read from source. Cross-check against `api/src/**` controllers and Symfony security config before relying on details.)_

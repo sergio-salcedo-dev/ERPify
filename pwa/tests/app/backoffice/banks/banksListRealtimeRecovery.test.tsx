@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import BanksListPage from "@/app/backoffice/banks/page";
-import { Bank } from "@/context/backoffice/bank/domain/Bank";
+import type { Bank } from "@/context/backoffice/bank/domain/Bank";
+import { ACME, BETA } from "./_fixtures";
 
 /**
  * When the initial list load fails the page shows the error boundary. A bank
@@ -12,21 +13,6 @@ import { Bank } from "@/context/backoffice/bank/domain/Bank";
  */
 
 vi.mock("next/navigation", async () => (await import("./_mocks")).routerMock());
-
-const ACME = Bank.fromPrimitives({
-  id: "11111111-1111-4111-8111-111111111111",
-  name: "Acme Savings",
-  shortName: "ACME",
-  createdAt: "2026-01-01T10:00:00Z",
-  updatedAt: "2026-04-15T14:30:00Z",
-});
-const BETA = Bank.fromPrimitives({
-  id: "22222222-2222-4222-8222-222222222222",
-  name: "Beta Bank",
-  shortName: "BETA",
-  createdAt: "2026-01-02T10:00:00Z",
-  updatedAt: "2026-04-16T14:30:00Z",
-});
 
 const searchRun = vi.hoisted(() => vi.fn());
 vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", async () =>

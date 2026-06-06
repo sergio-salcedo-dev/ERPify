@@ -4,14 +4,10 @@ import { BankForm } from "@/app/backoffice/banks/_components/BankForm";
 import { Bank } from "@/context/backoffice/bank/domain/Bank";
 import { PersistenceAction } from "@/context/shared/domain/types/status";
 import { toastNotifier } from "@/context/shared/infrastructure/Notification/Toast";
+import { ACME } from "./_fixtures";
 
-const CREATED = Bank.fromPrimitives({
-  id: "11111111-1111-4111-8111-111111111111",
-  name: "Acme Savings",
-  shortName: "ACME",
-  createdAt: "2026-01-01T10:00:00Z",
-  updatedAt: "2026-01-01T10:00:00Z",
-});
+// Same bank as ACME but freshly created, so updatedAt collapses onto createdAt.
+const CREATED = Bank.fromPrimitives({ ...ACME, updatedAt: ACME.createdAt });
 
 const mocks = await vi.hoisted(async () => (await import("./_mocks")).bankFormMocks());
 vi.mock("next/navigation", () => mocks.navigation);

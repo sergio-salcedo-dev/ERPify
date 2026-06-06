@@ -19,6 +19,8 @@ interface RecordSheetProps {
   dirty?: boolean;
   /** Confirmation message — shown when dirty && attempting to close. */
   confirmCloseMessage?: string;
+  /** Consumer-supplied test id for the popup — never hardcoded here. */
+  testId?: string;
   className?: string;
 }
 
@@ -32,6 +34,7 @@ export function RecordSheet({
   footer,
   dirty = false,
   confirmCloseMessage = "Discard unsaved changes?",
+  testId,
   className,
 }: Readonly<RecordSheetProps>) {
   function handleOpenChange(next: boolean): void {
@@ -56,6 +59,7 @@ export function RecordSheet({
           data-slot="record-sheet"
           data-variant={variant}
           data-side={variant === "drawer" ? "right" : undefined}
+          data-testid={testId}
           className={cn(popupClasses, className)}
         >
           <header className="border-border flex shrink-0 items-start gap-3 border-b p-4">

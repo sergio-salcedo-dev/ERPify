@@ -18,6 +18,7 @@ import {
   DensityToggle,
   LIST_DENSITY_STORAGE_KEY,
   MutationError,
+  RecordSheet,
   SelectionMode,
   isListDensity,
 } from "@/components/erpify";
@@ -25,6 +26,7 @@ import type { DataTableSelection, ListDensity } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
+import { safeHref } from "@/lib/safeHref";
 import { uuidV7 } from "@/lib/uuidV7";
 import { ViewStatus } from "@/context/shared/domain/types/status";
 import { BanksTable } from "./_components/BanksTable";
@@ -122,6 +124,20 @@ export default function BanksListPage() {
 
   const reloadingRef = useRef(false);
 
+  // Tombstones: ids this client has seen deleted (own deletes, bulk successes,
+  // or Mercure `deleted` events) since the last successful load. Consulted by
+  // `onCreated` (a late at-least-once redelivery of `created` after a delete
+  // must not resurrect the row) and by the bulk restore (a row deleted remotely
+  // during the re-probe window stays gone). Pruned on every successful
+  // `loadBanks` — the server list is authoritative, so the set stays bounded
+  // without a TTL — except while a bulk delete is in flight: a reconnect
+  // reload completing inside the re-probe window must not wipe the tombstones
+  // the restore is about to consult. UUID v7 ids ⇒ no false positives. A ref,
+  // not state: reads and writes never need a re-render.
+  const deletedIdsRef = useRef<Set<string>>(new Set());
+  // The bulk bar stays mounted during the probe window — also guards re-entry.
+  const bulkDeleteInFlightRef = useRef(false);
+
   const loadBanks = useCallback(async (options?: { silent?: boolean }) => {
     // A silent reconcile (e.g. after a realtime reconnect) refreshes in the
     // background: no LOADING skeleton flash, and a transient failure leaves the
@@ -135,6 +151,9 @@ export default function BanksListPage() {
       const useCase = container.get<SearchBanks>("BackOfficeSearchBanks");
       const result = await useCase.run();
       if (!mountedRef.current) return;
+      if (!bulkDeleteInFlightRef.current) {
+        deletedIdsRef.current = new Set();
+      }
       setBanks(result.banks);
       setNextCursor(result.nextCursor);
       // A reload recalculates the selection: ids that no longer exist on the
@@ -217,6 +236,7 @@ export default function BanksListPage() {
   const pendingFocusIdRef = useRef<string | null>(null);
 
   const handleBankDeleted = (id: string): void => {
+    deletedIdsRef.current.add(id);
     // Mirror the detail view's feedback: confirm the deletion with a toast.
     // The list stays put (no redirect), so without this the row simply
     // vanished with no acknowledgement.
@@ -365,6 +385,24 @@ export default function BanksListPage() {
     [selectedIds],
   );
 
+  // Record peek (`o` on a focused row): a lightweight drawer with the five
+  // fields already in memory — no fetch. On Esc/close Base UI returns focus to
+  // the row that opened it.
+  const [peekId, setPeekId] = useState<string | null>(null);
+  const peekBank = useMemo(() => banks.find((bank) => bank.id === peekId) ?? null, [banks, peekId]);
+  const handleBankPeek = useCallback((id: string): void => setPeekId(id), []);
+
+  // A peeked row deleted meanwhile (locally or via Mercure) already unmounts
+  // the drawer (peekBank derives from `banks`); clearing the id keeps it from
+  // reopening if the id ever reappears (e.g. a stale reconcile). The opening
+  // row is gone too, so land focus on the list container — never <body>.
+  useEffect(() => {
+    if (peekId === null || banks.some((bank) => bank.id === peekId)) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPeekId(null);
+    listContainerRef.current?.focus();
+  }, [banks, peekId]);
+
   // Bulk delete: a pessimistic existence pre-check guards the optimistic
   // attempt — any stale id aborts before mutating anything; probe failures
   // other than 404 fail open to the attempt. After the attempt the failures
@@ -377,7 +415,6 @@ export default function BanksListPage() {
   // not re-selected, while a re-probe failure other than 404 fails open to the
   // restore (mirroring the pre-check). The restored row comes from the
   // snapshot, never from the re-probe body.
-  const bulkDeleteInFlightRef = useRef(false);
   const handleBulkDelete = async (): Promise<void> => {
     // The bulk bar stays mounted during the probe window — guard re-entry.
     if (bulkDeleteInFlightRef.current) return;
@@ -420,6 +457,7 @@ export default function BanksListPage() {
 
     const rejections = ids.flatMap((id, index) => {
       const result = results[index];
+      if (result.status === "fulfilled") deletedIdsRef.current.add(id);
       return result.status === "rejected" ? [{ id, reason: result.reason as unknown }] : [];
     });
     const succeeded = ids.length - rejections.length;
@@ -461,6 +499,11 @@ export default function BanksListPage() {
         return reprobe.status === "fulfilled" || !isNotFoundError(reprobe.reason);
       }),
     );
+    // A server-confirmed deletion outranks the fail-open restore: a Mercure
+    // `deleted` processed during the re-probe window tombstones the id, so the
+    // row is neither resurrected nor re-selected even if its re-probe read a
+    // stale "exists".
+    for (const id of deletedIdsRef.current) confirmed.delete(id);
     if (confirmed.size === 0) return;
     // Restore from the snapshot, never from the re-probe body — the probe is
     // only an existence gate.
@@ -490,7 +533,12 @@ export default function BanksListPage() {
   // at-least-once deliveries are no-ops.
   useBankRealtime([bankTopics.collection], {
     onCreated: (incoming) => {
-      setBanks((prev) => (prev.some((b) => b.id === incoming.id) ? prev : [incoming, ...prev]));
+      // A late at-least-once redelivery of `created` after a delete must not
+      // resurrect the row — the tombstone outlives the event until the next
+      // successful load reconciles with the server.
+      if (!deletedIdsRef.current.has(incoming.id)) {
+        setBanks((prev) => (prev.some((b) => b.id === incoming.id) ? prev : [incoming, ...prev]));
+      }
       reconcileAfterErroredLoad();
     },
     onUpdated: (incoming) => {
@@ -498,6 +546,7 @@ export default function BanksListPage() {
       reconcileAfterErroredLoad();
     },
     onDeleted: (deletedId) => {
+      deletedIdsRef.current.add(deletedId);
       setBanks((prev) => prev.filter((b) => b.id !== deletedId));
       // Mirror the local-delete pruning so a remote delete of a selected row
       // doesn't leave a phantom id inflating the bulk-selection count.
@@ -683,6 +732,8 @@ export default function BanksListPage() {
                     onBankDeleteFailed={handleBankDeleteFailed}
                     selectedIds={selectedIds}
                     onToggleSelect={toggleSelect}
+                    onSelectionChange={setSelectedIds}
+                    onBankPeek={handleBankPeek}
                     density={density}
                     className="md:hidden"
                   />
@@ -694,6 +745,7 @@ export default function BanksListPage() {
                       onBankDeleted={handleBankDeleted}
                       onBankDeleteFailed={handleBankDeleteFailed}
                       selection={tableSelection}
+                      onBankPeek={handleBankPeek}
                       density={density}
                     />
                   </div>
@@ -733,6 +785,62 @@ export default function BanksListPage() {
           onClear={clearSelection}
           onConfirmDelete={handleBulkDelete}
         />
+      ) : null}
+
+      {peekBank ? (
+        <RecordSheet
+          open
+          onOpenChange={(open) => {
+            if (!open) setPeekId(null);
+          }}
+          title={peekBank.name}
+          subtitle={peekBank.shortName}
+          testId="banks-list__peek"
+          footer={
+            <Link
+              href={safeHref(bankRoutes.detail(peekBank.id))}
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+              aria-label="Open detail"
+              title={`Open ${peekBank.name}`}
+              data-testid="banks-peek__detail-link"
+            >
+              Open detail
+            </Link>
+          }
+        >
+          <dl className="banks-peek space-y-3 text-sm">
+            <div className="banks-peek__field">
+              <dt className="text-muted-foreground text-xs font-medium uppercase">Id</dt>
+              <dd className="mt-0.5 font-mono text-xs break-all" data-testid="banks-peek__id">
+                {peekBank.id}
+              </dd>
+            </div>
+            <div className="banks-peek__field">
+              <dt className="text-muted-foreground text-xs font-medium uppercase">Name</dt>
+              <dd className="mt-0.5" data-testid="banks-peek__name">
+                {peekBank.name}
+              </dd>
+            </div>
+            <div className="banks-peek__field">
+              <dt className="text-muted-foreground text-xs font-medium uppercase">Short name</dt>
+              <dd className="mt-0.5 font-mono uppercase" data-testid="banks-peek__shortname">
+                {peekBank.shortName}
+              </dd>
+            </div>
+            <div className="banks-peek__field">
+              <dt className="text-muted-foreground text-xs font-medium uppercase">Created</dt>
+              <dd className="mt-0.5" data-testid="banks-peek__created-at">
+                {dateTimeProvider.formatIsoToLocalDateTime(peekBank.createdAt)}
+              </dd>
+            </div>
+            <div className="banks-peek__field">
+              <dt className="text-muted-foreground text-xs font-medium uppercase">Updated</dt>
+              <dd className="mt-0.5" data-testid="banks-peek__updated-at">
+                {dateTimeProvider.formatIsoToLocalDateTime(peekBank.updatedAt)}
+              </dd>
+            </div>
+          </dl>
+        </RecordSheet>
       ) : null}
     </div>
   );

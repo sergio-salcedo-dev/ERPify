@@ -92,3 +92,40 @@ export async function bankRealtimeMock(capture?: (handlers: BankRealtimeHandlers
       : vi.fn(),
   };
 }
+
+/**
+ * Complete mock kit for `BanksListPage` specs: each field named after a module
+ * is the ready-made `vi.mock` FACTORY for it (navigation, DI container wired to
+ * the search/delete/find use cases, toast, `bankRealtime`), alongside the spies
+ * they resolve to. The page's realtime handlers land on `realtime.handlers`, so
+ * specs can drive Mercure events directly (reset it in `beforeEach`). Build the
+ * kit inside `vi.hoisted` and hand each factory to the matching `vi.mock`:
+ *
+ * ```ts
+ * const mocks = await vi.hoisted(async () => (await import("./_mocks")).banksListPageMocks());
+ * vi.mock("next/navigation", mocks.navigation);
+ * vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", mocks.container);
+ * vi.mock("@/context/shared/infrastructure/Notification/Toast", mocks.toast);
+ * vi.mock("@/context/backoffice/bank/infrastructure/bankRealtime", mocks.bankRealtime);
+ * ```
+ */
+export function banksListPageMocks() {
+  const spies = { searchRun: vi.fn(), deleteRun: vi.fn(), findRun: vi.fn() };
+  const realtime: { handlers: BankRealtimeHandlers | undefined } = { handlers: undefined };
+  return {
+    ...spies,
+    realtime,
+    navigation: () => routerMock(),
+    container: () =>
+      containerMock({
+        BackOfficeSearchBanks: { run: spies.searchRun },
+        BackOfficeDeleteBank: { run: spies.deleteRun },
+        BackOfficeFindBank: { run: spies.findRun },
+      }),
+    toast: () => toastNotifierMock(),
+    bankRealtime: () =>
+      bankRealtimeMock((handlers) => {
+        realtime.handlers = handlers;
+      }),
+  };
+}

@@ -13,6 +13,7 @@ export const KeyboardKey = {
   ARROW_DOWN: "ArrowDown",
   ENTER: "Enter",
   ESCAPE: "Escape",
+  O: "o",
   SLASH: "/",
   SPACE: " ",
 } as const;

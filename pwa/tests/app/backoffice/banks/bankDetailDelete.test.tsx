@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import BankDetailPage from "@/app/backoffice/banks/[id]/page";
-import { Bank } from "@/context/backoffice/bank/domain/Bank";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
 import { toastNotifier } from "@/context/shared/infrastructure/Notification/Toast";
+import { ACME as BANK } from "./_fixtures";
 
 /**
  * deleting a  bank from its detail page must redirect cleanly to the list and surface a
@@ -12,38 +12,25 @@ import { toastNotifier } from "@/context/shared/infrastructure/Notification/Toas
  * navigation settles.
  */
 
-const BANK = Bank.fromPrimitives({
-  id: "11111111-1111-4111-8111-111111111111",
-  name: "Acme Savings",
-  shortName: "ACME",
-  createdAt: "2026-01-01T10:00:00Z",
-  updatedAt: "2026-04-15T14:30:00Z",
-});
-
-const push = vi.fn();
-const refresh = vi.fn();
-
-vi.mock("next/navigation", () => ({
-  useParams: () => ({ id: BANK.id }),
-  useRouter: () => ({ push, refresh, back: vi.fn() }),
+const push = vi.hoisted(() => vi.fn());
+const refresh = vi.hoisted(() => vi.fn());
+vi.mock("next/navigation", async () => ({
+  ...(await import("./_mocks")).routerMock({ push, refresh }),
+  useParams: () => ({ id: "11111111-1111-4111-8111-111111111111" }),
 }));
 
-const findRun = vi.fn();
-const deleteRun = vi.fn();
+const findRun = vi.hoisted(() => vi.fn());
+const deleteRun = vi.hoisted(() => vi.fn());
+vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", async () =>
+  (await import("./_mocks")).containerMock({
+    BackOfficeFindBank: { run: findRun },
+    BackOfficeDeleteBank: { run: deleteRun },
+  }),
+);
 
-vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", () => ({
-  container: {
-    get: (token: string) => {
-      if (token === "BackOfficeFindBank") return { run: findRun };
-      if (token === "BackOfficeDeleteBank") return { run: deleteRun };
-      throw new Error(`Unexpected DI token ${token}`);
-    },
-  },
-}));
-
-vi.mock("@/context/shared/infrastructure/Notification/Toast", () => ({
-  toastNotifier: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
-}));
+vi.mock("@/context/shared/infrastructure/Notification/Toast", async () =>
+  (await import("./_mocks")).toastNotifierMock(),
+);
 
 describe("BankDetailPage — delete UX", () => {
   beforeEach(() => {

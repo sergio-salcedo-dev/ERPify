@@ -19,6 +19,7 @@ interface BanksTableProps {
   onBankDeleted?: (id: string) => void;
   onBankDeleteFailed: (id: string, problem: ProblemDetails) => void;
   selection?: DataTableSelection;
+  onBankPeek?: (id: string) => void;
   density?: "compact" | "comfortable";
 }
 
@@ -129,6 +130,7 @@ export function BanksTable({
   onBankDeleted,
   onBankDeleteFailed,
   selection,
+  onBankPeek,
   density = "compact",
 }: Readonly<BanksTableProps>) {
   const router = useRouter();
@@ -153,6 +155,7 @@ export function BanksTable({
         onSortChange={onSortChange}
         selection={selection}
         onRowActivate={(row) => router.push(safeHref(bankRoutes.detail(row.id)))}
+        onRowPeek={onBankPeek}
         rowTestId={(row) => `banks-table__row-${row.id}`}
         testId="banks-table__inner"
         layout="fixed"
