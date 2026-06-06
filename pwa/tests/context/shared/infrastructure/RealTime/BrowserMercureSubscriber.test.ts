@@ -1,5 +1,10 @@
+import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BrowserMercureSubscriber } from "@/context/shared/infrastructure/RealTime/BrowserMercureSubscriber";
+import {
+  BrowserMercureSubscriber,
+  mercureSubscriber,
+} from "@/context/shared/infrastructure/RealTime/BrowserMercureSubscriber";
+import { useMercureRealtime } from "@/context/shared/infrastructure/RealTime/useMercureRealtime";
 
 /** Opened EventSource stand-ins for the current test (reset in `beforeEach`). */
 const sources: FakeEventSource[] = [];
@@ -125,5 +130,52 @@ describe("BrowserMercureSubscriber", () => {
     expect(lastSource()).toBeUndefined();
     expect(() => subscription.close()).not.toThrow();
     expect(onError).not.toHaveBeenCalled();
+  });
+
+  describe("padded NEXT_PUBLIC_API_BASE_URL", () => {
+    const ORIGINAL_API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+    afterEach(() => {
+      if (ORIGINAL_API_BASE === undefined) {
+        delete process.env.NEXT_PUBLIC_API_BASE_URL;
+      } else {
+        process.env.NEXT_PUBLIC_API_BASE_URL = ORIGINAL_API_BASE;
+      }
+    });
+
+    it("resolves the identical origin for the EventSource and the authorize fetch", async () => {
+      // A padded value reproduces the bug: without .trim(), the trailing space
+      // survives into `new URL(base + path)` right after the host (the parser
+      // only strips leading/trailing input whitespace), so the URL throws
+      // ("Invalid URL") and the EventSource diverges from the trimmed fetch
+      // path. Both builders must trim and land on the same origin.
+      process.env.NEXT_PUBLIC_API_BASE_URL = " https://x ";
+
+      // EventSource side.
+      new BrowserMercureSubscriber().subscribe(["urn:erpify:test"], () => {});
+      const eventSourceOrigin = new URL(lastSource()!.url).origin;
+
+      // Authorize fetch side (built by `useMercureRealtime`).
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 204 });
+      vi.stubGlobal("fetch", fetchMock);
+      vi.spyOn(mercureSubscriber, "subscribe").mockReturnValue({ close: () => {} });
+
+      renderHook(() =>
+        useMercureRealtime<unknown>({
+          topics: ["urn:erpify:test"],
+          authorizePath: "/api/v1/test/realtime/authorize",
+          parse: () => null,
+          onEvent: () => {},
+          scope: "realtime:test",
+        }),
+      );
+
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      const [fetchInput] = fetchMock.mock.calls[0] as [URL];
+      const fetchOrigin = fetchInput.origin;
+
+      expect(eventSourceOrigin).toBe("https://x");
+      expect(fetchOrigin).toBe(eventSourceOrigin);
+    });
   });
 });

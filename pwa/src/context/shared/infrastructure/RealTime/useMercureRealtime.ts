@@ -30,7 +30,7 @@ async function authorize(authorizePath: string): Promise<void> {
   // Resolve an absolute URL against the current origin so `fetch` behaves like
   // the EventSource subscription (a bare relative path is unparseable outside a
   // browser, e.g. under test/SSR).
-  const base = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
+  const base = (process.env.NEXT_PUBLIC_API_BASE_URL?.trim() ?? "").replace(/\/$/, "");
   const origin = globalThis.window?.location.origin ?? "http://localhost";
   const url = new URL(`${base}${authorizePath}`, origin);
   const response = await fetch(url, { credentials: "include", cache: "no-store" });

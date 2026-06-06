@@ -21,8 +21,8 @@ export function DevToolsMenu() {
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
         <header className="dev-tools__header border-warning/40 bg-warning/10 mb-8 rounded-md border p-4 sm:p-5">
           <div className="dev-tools__header-row flex items-center gap-2">
-            <Wrench className="text-warning size-4 sm:size-5" aria-hidden="true" />
-            <p className="text-warning text-xs font-semibold tracking-wider uppercase">
+            <Wrench className="text-warning-strong size-4 sm:size-5" aria-hidden="true" />
+            <p className="text-warning-strong text-xs font-semibold tracking-wider uppercase">
               Dev / test only
             </p>
           </div>
