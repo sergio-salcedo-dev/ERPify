@@ -1,0 +1,493 @@
+{
+  "info": {
+    "name": "ERPify API",
+    "description": "API HTTP de ERPify (Symfony 8 sobre FrankenPHP).\n\n**Entorno de desarrollo:** `base_url = https://localhost` (checkout principal, puertos fijos 80/443). El certificado TLS de dev es local: desactiva *SSL certificate verification* en Postman (Settings → General) o instala la CA de Caddy.\n\n- Todas las respuestas son JSON; los errores siguen RFC 9457 (`application/problem+json`).\n- Rutas bajo `/api/v1` (frontoffice/shared) y `/api/v1/backoffice` (backoffice).\n- Las carpetas espejan los bounded contexts de `api/src/` (Backoffice, Frontoffice, Shared).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://localhost",
+      "type": "string",
+      "description": "Base URL del stack de desarrollo (FrankenPHP, checkout principal)"
+    }
+  ],
+  "item": [
+    {
+      "name": "Backoffice",
+      "description": "Bounded contexts de backoffice — prefijo /api/v1/backoffice",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/backoffice/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "backoffice",
+                "health"
+              ]
+            },
+            "description": "Health check del contexto backoffice."
+          },
+          "response": []
+        },
+        {
+          "name": "Banks",
+          "description": "Contexto Banks (Backoffice/Bank)",
+          "item": [
+            {
+              "name": "Search banks",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/backoffice/banks?page=1&limit=100&paginationMode=light",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "backoffice",
+                    "banks"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1",
+                      "description": "Página (paginación offset)"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "100",
+                      "description": "Máx. 1000 (default 1000)"
+                    },
+                    {
+                      "key": "paginationMode",
+                      "value": "light",
+                      "description": "light | detailed"
+                    },
+                    {
+                      "key": "cursor",
+                      "value": "",
+                      "description": "Cursor opaco para paginación por cursor (excluyente con page)",
+                      "disabled": true
+                    },
+                    {
+                      "key": "ids[]",
+                      "value": "",
+                      "description": "Filtro por UUIDs (repetible)",
+                      "disabled": true
+                    },
+                    {
+                      "key": "names[]",
+                      "value": "",
+                      "description": "Filtro por nombres, máx. 255 chars (repetible)",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "Búsqueda paginada de bancos. Grupos de serialización: identifiable, timestamped, bank:search."
+              },
+              "response": []
+            },
+            {
+              "name": "Get bank",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/backoffice/banks/:id",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "backoffice",
+                    "banks",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "",
+                      "description": "UUID del banco"
+                    }
+                  ]
+                },
+                "description": "Detalle de un banco por UUID. 404 (application/problem+json) si no existe."
+              },
+              "response": []
+            },
+            {
+              "name": "Create bank",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Test Bank\",\n  \"shortName\": \"TB\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/v1/backoffice/banks",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "backoffice",
+                    "banks"
+                  ]
+                },
+                "description": "Crea un banco. `name` ≤ 255 chars, `shortName` ≤ 50 chars; ambos obligatorios. 201 al crear, 400 con violations si falla la validación. Acepta JSON o form."
+              },
+              "response": []
+            },
+            {
+              "name": "Update bank",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Test Bank (renamed)\",\n  \"shortName\": \"TBR\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/v1/backoffice/banks/:id",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "backoffice",
+                    "banks",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "",
+                      "description": "UUID del banco"
+                    }
+                  ]
+                },
+                "description": "Actualiza un banco. Mismas reglas de validación que el POST."
+              },
+              "response": []
+            },
+            {
+              "name": "Delete bank",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/backoffice/banks/:id",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "backoffice",
+                    "banks",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "",
+                      "description": "UUID del banco"
+                    }
+                  ]
+                },
+                "description": "Elimina un banco por UUID (hard delete)."
+              },
+              "response": []
+            },
+            {
+              "name": "Realtime authorize (Mercure cookie)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/backoffice/banks/realtime/authorize",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "backoffice",
+                    "banks",
+                    "realtime",
+                    "authorize"
+                  ]
+                },
+                "description": "Devuelve 204 y setea la cookie de autorización Mercure para los topics de bancos (colección + detalle)."
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Frontoffice",
+      "description": "Bounded contexts de frontoffice — prefijo /api/v1",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "health"
+              ]
+            },
+            "description": "Health check del contexto frontoffice."
+          },
+          "response": []
+        },
+        {
+          "name": "Mercure",
+          "description": "Contexto Mercure (Frontoffice/Mercure)",
+          "item": [
+            {
+              "name": "Mercure bootstrap",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/mercure/bootstrap",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "mercure",
+                    "bootstrap"
+                  ]
+                },
+                "description": "Bootstrap de la suscripción Mercure para el frontoffice."
+              },
+              "response": []
+            },
+            {
+              "name": "Mercure publish demo (solo dev)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/mercure/publish-demo",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "mercure",
+                    "publish-demo"
+                  ]
+                },
+                "description": "Publica un update de demo en el hub Mercure. Sin body. **404 fuera del entorno dev.**"
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Dev",
+          "description": "Contexto Dev (Frontoffice/Dev) — solo entorno dev",
+          "item": [
+            {
+              "name": "FrankenPHP hot reload (solo dev)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/dev/frankenphp-hot-reload",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "dev",
+                    "frankenphp-hot-reload"
+                  ]
+                },
+                "description": "Endpoint de hot-reload de FrankenPHP. Solo disponible en dev."
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Shared",
+      "description": "Contextos compartidos (Shared/Media, Shared/Storage) — prefijo /api/v1",
+      "item": [
+        {
+          "name": "Media",
+          "description": "Contexto Media (Shared/Media)",
+          "item": [
+            {
+              "name": "Get media by hash",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/media/:hash",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "media",
+                    ":hash"
+                  ],
+                  "variable": [
+                    {
+                      "key": "hash",
+                      "value": "",
+                      "description": "SHA-256 del contenido (64 hex)"
+                    }
+                  ]
+                },
+                "description": "Sirve un media direccionado por contenido. `hash` debe cumplir `[a-f0-9]{64}`."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Storage",
+          "description": "Contexto Storage (Shared/Storage)",
+          "item": [
+            {
+              "name": "Get stored object by hash",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/stored-objects/:hash",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "stored-objects",
+                    ":hash"
+                  ],
+                  "variable": [
+                    {
+                      "key": "hash",
+                      "value": "",
+                      "description": "SHA-256 del contenido (64 hex)"
+                    }
+                  ]
+                },
+                "description": "Sirve un objeto almacenado direccionado por contenido (cache HTTP content-addressed, soporta 304). `hash` debe cumplir `[a-f0-9]{64}`."
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
