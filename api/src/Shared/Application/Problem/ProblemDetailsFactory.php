@@ -8,6 +8,7 @@ use Erpify\Shared\Domain\Exception\Conflict;
 use Erpify\Shared\Domain\Exception\DomainException;
 use Erpify\Shared\Domain\Exception\Forbidden;
 use Erpify\Shared\Domain\Exception\InvalidInput;
+use Erpify\Shared\Domain\Exception\InvalidSearchCriteria;
 use Erpify\Shared\Domain\Exception\InvariantViolation;
 use Erpify\Shared\Domain\Exception\NotFound;
 use Erpify\Shared\Domain\Exception\RateLimited;
@@ -116,6 +117,7 @@ final readonly class ProblemDetailsFactory
         InvariantViolation::class => Response::HTTP_UNPROCESSABLE_ENTITY,
         InvalidInput::class => Response::HTTP_BAD_REQUEST,
         RateLimited::class => Response::HTTP_TOO_MANY_REQUESTS,
+        InvalidSearchCriteria::class => Response::HTTP_BAD_REQUEST,
     ];
 
     private const array MARKER_DEFAULT_TYPE_MAP = [
@@ -126,6 +128,7 @@ final readonly class ProblemDetailsFactory
         InvariantViolation::class => 'invariant-violation',
         InvalidInput::class => 'invalid-input',
         RateLimited::class => 'rate-limited',
+        InvalidSearchCriteria::class => 'invalid-search-criteria',
     ];
 
     /**
@@ -396,10 +399,9 @@ final readonly class ProblemDetailsFactory
     }
 
     /**
-     * Walks `$throwable->getPrevious()` looking for an instance of `$class`. Mirrors
-     * `SearchExceptionListener::findInChain` so the new ValidationFailedException branch
-     * also unwraps Symfony's `RequestPayloadValueResolver` HttpException(422) wrapper
-     * (used by `#[MapRequestPayload]` / `#[MapQueryString]` on non-search routes).
+     * Walks `$throwable->getPrevious()` looking for an instance of `$class` so the
+     * ValidationFailedException branch also unwraps Symfony's `RequestPayloadValueResolver`
+     * HttpException(422) wrapper (used by `#[MapRequestPayload]` / `#[MapQueryString]`).
      *
      * Cycle-safe via the same `\spl_object_id` seen-set guard {@see walkPreviousChain} uses
      * — a malformed chain (or a buggy rewrap that reuses a previous instance) MUST NOT

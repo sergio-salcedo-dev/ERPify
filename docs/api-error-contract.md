@@ -42,18 +42,21 @@ Encoding: `\json_encode($problemDetails->toArray(), JSON_UNESCAPED_UNICODE | JSO
 
 ## Marker interface → HTTP status table
 
-The mapping is the constant `ProblemDetailsFactory::MARKER_STATUS_MAP` (see [`api/src/Shared/Application/Problem/ProblemDetailsFactory.php`](../api/src/Shared/Application/Problem/ProblemDetailsFactory.php) lines 111–119). The default `type` per marker is `MARKER_DEFAULT_TYPE_MAP` (lines 121–129). **Do not duplicate the values here — this table is a navigation aid; the source is the constant** (NFR25).
+The mapping is the constant `ProblemDetailsFactory::MARKER_STATUS_MAP` (see [`api/src/Shared/Application/Problem/ProblemDetailsFactory.php`](../api/src/Shared/Application/Problem/ProblemDetailsFactory.php) lines 112–121). The default `type` per marker is `MARKER_DEFAULT_TYPE_MAP` (lines 123–132). **Do not duplicate the values here — this table is a navigation aid; the source is the constant** (NFR25).
 
-| Marker (`api/src/Shared/Domain/Exception/`) | HTTP status | Default `type`        |
-|---------------------------------------------|-------------|-----------------------|
-| `NotFound`                                  | 404         | `not-found`           |
-| `Conflict`                                  | 409         | `conflict`            |
-| `Forbidden`                                 | 403         | `forbidden`           |
-| `Unauthenticated`                           | 401         | `unauthenticated`     |
-| `InvariantViolation`                        | 422         | `invariant-violation` |
-| `InvalidInput`                              | 400         | `invalid-input`       |
-| `RateLimited`                               | 429         | `rate-limited`        |
-| Plain `DomainException` (no marker)         | 500         | `domain-error`        |
+| Marker (`api/src/Shared/Domain/Exception/`) | HTTP status | Default `type`           |
+|---------------------------------------------|-------------|--------------------------|
+| `NotFound`                                  | 404         | `not-found`              |
+| `Conflict`                                  | 409         | `conflict`               |
+| `Forbidden`                                 | 403         | `forbidden`              |
+| `Unauthenticated`                           | 401         | `unauthenticated`        |
+| `InvariantViolation`                        | 422         | `invariant-violation`    |
+| `InvalidInput`                              | 400         | `invalid-input`          |
+| `RateLimited`                               | 429         | `rate-limited`           |
+| `InvalidSearchCriteria`                     | 400         | `invalid-search-criteria` |
+| Plain `DomainException` (no marker)         | 500         | `domain-error`           |
+
+`InvalidSearchCriteria` covers semantically invalid search filters (unknown/un-filterable field, operator not allowed for the field). Its concrete exceptions live under `api/src/Shared/Domain/Search/Exception/` (`UnknownSearchField` → `unknown-search-field`, `UnsupportedSearchOperator` → `unsupported-search-operator`) and are thrown by the shared filter applier. Note 400 is intentionally shared with `InvalidInput`: the Symfony framework bridge (`HTTP_STATUS_TYPE_MAP`) keeps the generic `invalid-input` for status-only sources; the specific marker travels only on `DomainException` instances.
 
 Marker resolution honours implements-clause order, intersected with the canonical marker list (`firstMatchingMarker`, lines 352–364). Subclasses may override `DomainException::type()` to return a more specific opaque identifier. Markers are framework-free — no HTTP / ORM / transport imports allowed inside `Shared/Domain/Exception/`.
 
@@ -243,9 +246,8 @@ Grep by `instance` for the single failure entry; grep by `correlation_id` for th
 | `ExceptionResponder::__invoke`      | `kernel.exception` | 16       | `/api/*` only      |
 | `RateLimitListener::onResponse`     | `kernel.response`  | -128     | `/api/*` only      |
 | `CorrelationIdListener::onResponse` | `kernel.response`  | -1024    | all main responses |
-| `SearchExceptionListener` (legacy)  | `kernel.exception` | 32       | search routes      |
 
-`ExceptionResponder` checks `$event->hasResponse()` first — if a higher-priority listener (e.g. `SearchExceptionListener`) already produced a response, it leaves it alone and does **not** log. Listener priority ordering vs. Nelmio CORS is pinned by (`ExceptionResponderListenerPriorityTest`).
+`ExceptionResponder` checks `$event->hasResponse()` first — if a higher-priority listener already produced a response, it leaves it alone and does **not** log. Listener priority ordering vs. Nelmio CORS is pinned by (`ExceptionResponderListenerPriorityTest`).
 
 ## Rate limiting (per-IP)
 
