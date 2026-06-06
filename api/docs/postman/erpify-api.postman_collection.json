@@ -1,0 +1,276 @@
+{
+  "info": {
+    "name": "ERPify API",
+    "description": "ERPify HTTP API (Symfony 8 on FrankenPHP).\n\n**Development environment:** `base_url = https://localhost` (primary checkout, fixed ports 80/443). The dev TLS certificate is local: disable *SSL certificate verification* in Postman (Settings → General) or trust Caddy's local CA.\n\n- All responses are JSON; errors follow RFC 9457 (`application/problem+json`).\n- Routes live under `/api/v1` (frontoffice/shared) and `/api/v1/backoffice` (backoffice).\n- Folders mirror the bounded contexts under `api/src/` (Backoffice, Frontoffice, Shared).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://localhost",
+      "type": "string",
+      "description": "Base URL of the development stack (FrankenPHP, primary checkout)"
+    }
+  ],
+  "item": [
+    {
+      "name": "Backoffice",
+      "description": "Backoffice bounded contexts — prefix /api/v1/backoffice",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/backoffice/health",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "backoffice", "health"]
+            },
+            "description": "Health check for the backoffice context."
+          },
+          "response": []
+        },
+        {
+          "name": "Banks",
+          "description": "Banks context (Backoffice/Bank)",
+          "item": [
+            {
+              "name": "Search banks",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Accept", "value": "application/json" }],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/backoffice/banks?page=1&limit=100&paginationMode=light",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "backoffice", "banks"],
+                  "query": [
+                    { "key": "page", "value": "1", "description": "Page (offset pagination)" },
+                    { "key": "limit", "value": "100", "description": "Max 1000 (default 1000)" },
+                    { "key": "paginationMode", "value": "light", "description": "light | detailed" },
+                    { "key": "cursor", "value": "", "description": "Opaque cursor for cursor-based pagination (mutually exclusive with page)", "disabled": true },
+                    { "key": "ids[]", "value": "", "description": "Filter by UUIDs (repeatable)", "disabled": true },
+                    { "key": "names[]", "value": "", "description": "Filter by names, max 255 chars (repeatable)", "disabled": true }
+                  ]
+                },
+                "description": "Paginated bank search. Serialization groups: identifiable, timestamped, bank:search."
+              },
+              "response": []
+            },
+            {
+              "name": "Get bank",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Accept", "value": "application/json" }],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/backoffice/banks/:id",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "backoffice", "banks", ":id"],
+                  "variable": [{ "key": "id", "value": "", "description": "Bank UUID" }]
+                },
+                "description": "Bank detail by UUID. 404 (application/problem+json) when it does not exist."
+              },
+              "response": []
+            },
+            {
+              "name": "Create bank",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Accept", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Test Bank\",\n  \"shortName\": \"TB\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/v1/backoffice/banks",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "backoffice", "banks"]
+                },
+                "description": "Creates a bank. `name` ≤ 255 chars, `shortName` ≤ 50 chars; both required. 201 on creation, 400 with violations on validation failure. Accepts JSON or form."
+              },
+              "response": []
+            },
+            {
+              "name": "Update bank",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Accept", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Test Bank (renamed)\",\n  \"shortName\": \"TBR\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/v1/backoffice/banks/:id",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "backoffice", "banks", ":id"],
+                  "variable": [{ "key": "id", "value": "", "description": "Bank UUID" }]
+                },
+                "description": "Updates a bank. Same validation rules as the POST."
+              },
+              "response": []
+            },
+            {
+              "name": "Delete bank",
+              "request": {
+                "method": "DELETE",
+                "header": [{ "key": "Accept", "value": "application/json" }],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/backoffice/banks/:id",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "backoffice", "banks", ":id"],
+                  "variable": [{ "key": "id", "value": "", "description": "Bank UUID" }]
+                },
+                "description": "Deletes a bank by UUID (hard delete)."
+              },
+              "response": []
+            },
+            {
+              "name": "Realtime authorize (Mercure cookie)",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Accept", "value": "application/json" }],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/backoffice/banks/realtime/authorize",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "backoffice", "banks", "realtime", "authorize"]
+                },
+                "description": "Returns 204 and sets the Mercure authorization cookie for the bank topics (collection + detail)."
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Frontoffice",
+      "description": "Frontoffice bounded contexts — prefix /api/v1",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/health",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "health"]
+            },
+            "description": "Health check for the frontoffice context."
+          },
+          "response": []
+        },
+        {
+          "name": "Mercure",
+          "description": "Mercure context (Frontoffice/Mercure)",
+          "item": [
+            {
+              "name": "Mercure bootstrap",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Accept", "value": "application/json" }],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/mercure/bootstrap",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "mercure", "bootstrap"]
+                },
+                "description": "Bootstraps the Mercure subscription for the frontoffice."
+              },
+              "response": []
+            },
+            {
+              "name": "Mercure publish demo (dev only)",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Accept", "value": "application/json" }],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/mercure/publish-demo",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "mercure", "publish-demo"]
+                },
+                "description": "Publishes a demo update to the Mercure hub. No body. **404 outside the dev environment.**"
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Dev",
+          "description": "Dev context (Frontoffice/Dev) — dev environment only",
+          "item": [
+            {
+              "name": "FrankenPHP hot reload (dev only)",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Accept", "value": "application/json" }],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/dev/frankenphp-hot-reload",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "dev", "frankenphp-hot-reload"]
+                },
+                "description": "FrankenPHP hot-reload endpoint. Only available in dev."
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Shared",
+      "description": "Shared contexts (Shared/Media, Shared/Storage) — prefix /api/v1",
+      "item": [
+        {
+          "name": "Media",
+          "description": "Media context (Shared/Media)",
+          "item": [
+            {
+              "name": "Get media by hash",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/media/:hash",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "media", ":hash"],
+                  "variable": [{ "key": "hash", "value": "", "description": "Content SHA-256 (64 hex chars)" }]
+                },
+                "description": "Serves a content-addressed media object. `hash` must match `[a-f0-9]{64}`."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Storage",
+          "description": "Storage context (Shared/Storage)",
+          "item": [
+            {
+              "name": "Get stored object by hash",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/stored-objects/:hash",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "stored-objects", ":hash"],
+                  "variable": [{ "key": "hash", "value": "", "description": "Content SHA-256 (64 hex chars)" }]
+                },
+                "description": "Serves a content-addressed stored object (content-addressed HTTP cache, supports 304). `hash` must match `[a-f0-9]{64}`."
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
