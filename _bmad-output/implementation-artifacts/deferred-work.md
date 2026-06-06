@@ -64,12 +64,26 @@ below is deferred.
   TTL/size-bounded eviction (or assert key cardinality) if/when a dynamic-keyed call site lands. Low.
   (source: blind+edge)
 
-## From: spec-pwa-typesafe-enum-mappings (2026-06-06, step-04 review)
+## Project-wide `tsc --noEmit` gate (re-deferred 2026-06-07)
 
-- **Pre-existing type error in `pwa/tests/app/backoffice/banks/bankTruncationTooltips.test.tsx:43`.**
-  `npx tsc --noEmit` fails with TS2741: the test renders `<BanksCards banks={…} />` without the
-  required `onBankDeleteFailed` prop. Present on clean `main` (verified at `794c5b8`) — invisible to
-  CI because `next build` excludes `tests/` from its typecheck and Vitest does not typecheck. The
-  test passes at runtime. Fix is one line (pass a no-op `onBankDeleteFailed`); consider also adding a
-  project-wide `tsc --noEmit` gate so `tests/` type errors fail CI. (source: tsc gate during
-  verification; confirmed by edge-case hunter)
+Carried over from spec-pwa-typesafe-enum-mappings (step-04 review). The TS2741 that surfaced it
+(`bankTruncationTooltips.test.tsx` rendering `<BanksCards>` without `onBankDeleteFailed`) is fixed,
+but the structural gap remains: `next build` typechecks the whole tree yet drops diagnostics from
+files matching `*.test.*` / `*.spec.*` / `__tests__/` / `__mocks__/` (Next's `runTypeCheck`
+filename filter — fixtures/helpers under `tests/` ARE still gated), and Vitest does not typecheck
+at all, so type errors in spec/test-named files are invisible to CI. Decide whether to add an
+`npm run typecheck` (`tsc --noEmit`) script + make target wired into `pwa.quality` / CI. Notes for
+the implementer: `pwa/tsconfig.json` sets `incremental: true` and the dev container can leave a
+root-owned `tsconfig.tsbuildinfo` on the host (the primary checkout has one today), so host runs
+may hit EACCES — pass `--incremental false` (or run in the container). Tree verified clean at
+`42d47b6` (`npx tsc --noEmit --incremental false` exits 0); re-verify at gate-add time.
+
+## From: code review of fix/pwa-e2e-tooltip-and-test-types (2026-06-07)
+
+- **E2E shortName assertions normalize with `.toLocaleUpperCase()`, not the API's rule.**
+  `banks-real-api.spec.ts` and `banks-real-api-flows.spec.ts` pre-empt the API's canonicalization
+  by upcasing the raw seeded input; the API's `NormalizedText::toAsciiUpper` also strips
+  diacritics (`Any-Latin; Latin-ASCII; Upper()`). They only stay green because their seeded
+  inputs are diacritic-free ASCII. Pre-existing; if a non-ASCII shortName is ever seeded, assert
+  against the API-returned value instead (the pattern `banks-containment.spec.ts` now uses). Low.
+  (source: adversarial review)

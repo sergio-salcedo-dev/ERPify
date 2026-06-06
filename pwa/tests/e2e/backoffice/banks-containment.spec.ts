@@ -150,7 +150,10 @@ test.describe("BackOffice - Banks long-name containment (real API)", () => {
     await shortName.hover();
     const tooltip = page.locator('[data-slot="tooltip-content"]');
     await expect(tooltip).toBeVisible();
-    await expect(tooltip).toHaveText(cardShortName);
+    // The API canonicalizes short codes to ASCII uppercase on create
+    // (NormalizedText::toAsciiUpper), so assert the persisted value it
+    // returned — not the raw mixed-case input.
+    await expect(tooltip).toHaveText(cardBank.shortName);
   });
 
   test("cards: clicking the shortName does not navigate, but clicking the card title does", async ({
