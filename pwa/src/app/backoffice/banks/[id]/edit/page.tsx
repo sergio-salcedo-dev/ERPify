@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
@@ -21,6 +21,9 @@ import { BankForm } from "../../_components/BankForm";
 
 type State = ViewStatus;
 
+/** Single source — the form's stale-404 Refresh focuses this CTA once not-found lands. */
+const BACK_TO_LIST_TESTID = "banks-edit__back-to-list";
+
 function genericProblem(detail: string): ProblemDetails {
   return {
     type: "about:blank",
@@ -38,6 +41,15 @@ export default function EditBankPage() {
   const [state, setState] = useState<State>(ViewStatus.LOADING);
   const [bank, setBank] = useState<Bank | null>(null);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
+  // Bumped by the form's "Refresh" recovery action (stale 404). Re-runs the
+  // load so a bank deleted in parallel lands on the not-found empty state.
+  const [reloadToken, setReloadToken] = useState(0);
+  // Armed when the refresh is form-initiated: once the reload settles, focus
+  // the "Back to banks" CTA — or the page container when the landing has no
+  // CTA (error/ready) — so unmounting the form never strands focus on <body>
+  // (mirrors the detail page's pendingRefreshFocusRef pattern).
+  const pendingRefreshFocusRef = useRef(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   // Reset state when ID changes to avoid synchronous setState in useEffect
   const [prevId, setPrevId] = useState(id);
@@ -74,11 +86,22 @@ export default function EditBankPage() {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, reloadToken]);
+
+  useEffect(() => {
+    if (!pendingRefreshFocusRef.current || state === ViewStatus.LOADING) return;
+    pendingRefreshFocusRef.current = false;
+    const backToList = globalThis.document.querySelector<HTMLElement>(
+      `[data-testid='${BACK_TO_LIST_TESTID}']`,
+    );
+    (backToList ?? containerRef.current)?.focus();
+  }, [state, bank]);
 
   return (
     <div
-      className="banks-edit mx-auto w-full max-w-screen-md space-y-4 sm:space-y-6"
+      ref={containerRef}
+      tabIndex={-1}
+      className="banks-edit mx-auto w-full max-w-screen-md space-y-4 outline-none sm:space-y-6"
       data-testid="banks-edit"
       data-state={state}
     >
@@ -107,7 +130,7 @@ export default function EditBankPage() {
                 <Link
                   href={bankRoutes.list}
                   className={cn(buttonVariants())}
-                  data-testid="banks-edit__back-to-list"
+                  data-testid={BACK_TO_LIST_TESTID}
                 >
                   Back to banks
                 </Link>
@@ -144,6 +167,10 @@ export default function EditBankPage() {
             key={bank.id}
             mode={PersistenceAction.UPDATING}
             initial={{ id: bank.id, name: bank.name, shortName: bank.shortName }}
+            onStaleBank={() => {
+              pendingRefreshFocusRef.current = true;
+              setReloadToken((token) => token + 1);
+            }}
           />
         </>
       ) : null}

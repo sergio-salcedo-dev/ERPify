@@ -15,7 +15,8 @@ import {
   type BankFormValues,
 } from "@/context/backoffice/bank/application/schemas/BankSchema";
 import { PersistenceAction } from "@/context/shared/domain/types/status";
-import { FormField, ProblemDisplay, SingleLineTextarea, Spinner } from "@/components/erpify";
+import { FormField, MutationError, SingleLineTextarea, Spinner } from "@/components/erpify";
+import { BankProblemType } from "@/context/backoffice/bank/domain/BankProblemType";
 import { toastNotifier } from "@/context/shared/infrastructure/Notification/Toast";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
@@ -37,6 +38,12 @@ interface BankFormInitial {
 interface BankFormProps {
   mode: BankFormMode;
   initial?: BankFormInitial;
+  /**
+   * Edit-only recovery hook for a stale 404 (`bank-not-found`): the surface's
+   * "Refresh" action calls this so the owning page can re-run its load and land
+   * on the not-found empty state. Create mode never wires it.
+   */
+  onStaleBank?: () => void;
 }
 
 /** The n/255 counter appears once the name reaches 80% of the limit. */
@@ -49,7 +56,7 @@ function isBankFieldName(value: string): value is BankFieldName {
   return (BANK_FIELD_NAMES as readonly string[]).includes(value);
 }
 
-export function BankForm({ mode, initial }: Readonly<BankFormProps>) {
+export function BankForm({ mode, initial, onStaleBank }: Readonly<BankFormProps>) {
   const router = useRouter();
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
 
@@ -98,15 +105,22 @@ export function BankForm({ mode, initial }: Readonly<BankFormProps>) {
     }
     if (!mappedAny || unmappedExist) {
       setProblem(err.problem);
+      return;
     }
+    // Every violation landed on a field: the outcome is fully represented in
+    // the form, so any previously persistent surface must not survive it.
+    setProblem(null);
   };
 
   const onSubmit = handleSubmit(async (values) => {
-    setProblem(null);
+    // No eager clear here: a previous error stays visible while the retry is in
+    // flight and is replaced only at the outcome — an explicit clear on
+    // success, a new failure through `setProblem`.
     try {
       if (mode === PersistenceAction.CREATING) {
         const useCase = container.get<CreateBank>("BackOfficeCreateBank");
         const created = await useCase.run(values);
+        setProblem(null);
         toastNotifier.success("Bank created", { description: created.name });
         router.push(safeHref(bankRoutes.detail(created.id)));
         router.refresh();
@@ -119,6 +133,7 @@ export function BankForm({ mode, initial }: Readonly<BankFormProps>) {
 
       const useCase = container.get<UpdateBank>("BackOfficeUpdateBank");
       const updated = await useCase.run(initial.id, values);
+      setProblem(null);
       toastNotifier.success("Changes saved", { description: updated.name });
       router.push(safeHref(bankRoutes.detail(updated.id)));
       router.refresh();
@@ -137,6 +152,24 @@ export function BankForm({ mode, initial }: Readonly<BankFormProps>) {
   const isCreating = mode === PersistenceAction.CREATING;
   const submitLabelIdle = isCreating ? "Create bank" : "Save changes";
 
+  // Typed recovery lives here (bank-specific component): a stale 404 on an edit
+  // heals by re-running the page load via `onStaleBank`. Create mode never
+  // offers a recovery action, whatever the problem type.
+  const recoveryAction =
+    !isCreating && problem?.type === BankProblemType.NOT_FOUND && onStaleBank ? (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={onStaleBank}
+        aria-label="Refresh"
+        title="Refresh this bank"
+        data-testid="bank-form__mutation-error-refresh"
+      >
+        Refresh
+      </Button>
+    ) : undefined;
+
   return (
     <form
       ref={formRef}
@@ -145,7 +178,14 @@ export function BankForm({ mode, initial }: Readonly<BankFormProps>) {
       data-testid="bank-form"
       noValidate
     >
-      {problem ? <ProblemDisplay problem={problem} variant="inline" /> : null}
+      {problem ? (
+        <MutationError
+          problem={problem}
+          onDismiss={() => setProblem(null)}
+          action={recoveryAction}
+          testId="bank-form__mutation-error"
+        />
+      ) : null}
 
       <FormField
         name="name"
