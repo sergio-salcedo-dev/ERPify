@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
-import { Sun, Moon, Monitor } from "lucide-react";
+import { Sun, Moon, Monitor, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Theme } from "@/context/shared/domain/types/theme";
 import { cn } from "@/lib/utils";
@@ -32,11 +32,11 @@ const NEXT_THEME: Record<Theme, Theme> = {
   [Theme.SYSTEM]: Theme.LIGHT,
 };
 
-const ICON_FOR_THEME = {
+const ICON_FOR_THEME: Record<Theme, LucideIcon> = {
   [Theme.LIGHT]: Sun,
   [Theme.DARK]: Moon,
   [Theme.SYSTEM]: Monitor,
-} as const;
+};
 
 const NEXT_ACTION_LABEL: Record<Theme, string> = {
   [Theme.LIGHT]: "Switch to dark theme",

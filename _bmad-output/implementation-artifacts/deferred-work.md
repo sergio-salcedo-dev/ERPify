@@ -63,3 +63,13 @@ below is deferred.
   interpolates a dynamic value into a `message`/`scope`, the map grows unbounded in long-lived tabs. Add
   TTL/size-bounded eviction (or assert key cardinality) if/when a dynamic-keyed call site lands. Low.
   (source: blind+edge)
+
+## From: spec-pwa-typesafe-enum-mappings (2026-06-06, step-04 review)
+
+- **Pre-existing type error in `pwa/tests/app/backoffice/banks/bankTruncationTooltips.test.tsx:43`.**
+  `npx tsc --noEmit` fails with TS2741: the test renders `<BanksCards banks={…} />` without the
+  required `onBankDeleteFailed` prop. Present on clean `main` (verified at `794c5b8`) — invisible to
+  CI because `next build` excludes `tests/` from its typecheck and Vitest does not typecheck. The
+  test passes at runtime. Fix is one line (pass a no-op `onBankDeleteFailed`); consider also adding a
+  project-wide `tsc --noEmit` gate so `tests/` type errors fail CI. (source: tsc gate during
+  verification; confirmed by edge-case hunter)

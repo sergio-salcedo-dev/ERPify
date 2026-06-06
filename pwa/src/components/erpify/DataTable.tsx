@@ -14,6 +14,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SortDirection } from "@/context/shared/domain/types/sorting";
 import { KeyboardKey } from "@/context/shared/domain/types/keyboard";
+import type { ListDensity } from "./DensityToggle";
 
 export const SelectionMode = {
   NONE: "none",
@@ -52,7 +53,7 @@ interface DataTableProps<T> {
   columns: DataTableColumn<T>[];
   data: readonly T[];
   rowKey: (row: T) => string;
-  density?: "compact" | "comfortable";
+  density?: ListDensity;
   sort?: DataTableSort;
   onSortChange?: (sort: DataTableSort | null) => void;
   selection?: DataTableSelection;
@@ -85,15 +86,15 @@ interface DataTableProps<T> {
   layout?: "fixed";
 }
 
-const ROW_HEIGHTS = {
+const ROW_HEIGHTS: Record<ListDensity, string> = {
   compact: "h-9",
   comfortable: "h-11",
-} as const;
+};
 
-const HEADER_HEIGHTS = {
+const HEADER_HEIGHTS: Record<ListDensity, string> = {
   compact: "h-9",
   comfortable: "h-10",
-} as const;
+};
 
 type AriaSort = "ascending" | "descending" | "none" | undefined;
 
@@ -236,7 +237,7 @@ interface DataTableRowProps<T> {
   row: T;
   rowId: string;
   index: number;
-  density: "compact" | "comfortable";
+  density: ListDensity;
   columns: DataTableColumn<T>[];
   selection?: DataTableSelection;
   isSelected: boolean;
