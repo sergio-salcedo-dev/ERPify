@@ -17,6 +17,7 @@ Feature: Health endpoints conform to the RFC 9457 contract retroactively
     And the header "Content-Type" should be equal to "application/problem+json"
     And the JSON node "type" should be equal to "unhandled-exception"
     And the JSON node "status" should be equal to "500"
+    And 0 requests got executed across all doctrine connections
 
   Scenario: Frontoffice health failure path produces a conforming Problem Details 500
     Given I add "Accept" header equal to "application/json"
@@ -25,6 +26,7 @@ Feature: Health endpoints conform to the RFC 9457 contract retroactively
     And the header "Content-Type" should be equal to "application/problem+json"
     And the JSON node "type" should be equal to "unhandled-exception"
     And the JSON node "status" should be equal to "500"
+    And 0 requests got executed across all doctrine connections
 
   Scenario: Backoffice health happy path is unchanged
     Given I add "Accept" header equal to "application/json"
@@ -32,6 +34,7 @@ Feature: Health endpoints conform to the RFC 9457 contract retroactively
     Then the response status code should be 200
     And the JSON node "data.status" should be equal to "ok"
     And the JSON node "data.service" should be equal to "Back office"
+    And 0 requests got executed across all doctrine connections
 
   Scenario: Frontoffice health happy path is unchanged
     Given I add "Accept" header equal to "application/json"
@@ -39,3 +42,4 @@ Feature: Health endpoints conform to the RFC 9457 contract retroactively
     Then the response status code should be 200
     And the JSON node "data.status" should be equal to "ok"
     And the JSON node "data.service" should be equal to "Front office"
+    And 0 requests got executed across all doctrine connections

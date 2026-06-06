@@ -19,6 +19,7 @@ Feature: Anonymous API rate limiting
     And the header "X-RateLimit-Reset" should exist
     # Retry-After only ships on the rejected path (RFC 9110 §10.2.3).
     And the header "Retry-After" should not exist
+    And 0 requests got executed across all doctrine connections
 
   Scenario: Request past the budget returns RFC 9457 429 with Retry-After
     Given the anonymous API rate-limit budget is exhausted for client "127.0.0.1"
@@ -44,3 +45,4 @@ Feature: Anonymous API rate limiting
     And the JSON node "retryAfterSeconds" should exist
     And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
     And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
+    And 0 requests got executed across all doctrine connections

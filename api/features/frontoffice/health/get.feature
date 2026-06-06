@@ -12,3 +12,4 @@ Feature: Frontoffice application health
     And the JSON node "data.status" should be equal to "ok"
     And the JSON node "data.service" should be equal to "Front office"
     And the JSON node "data.datetime" should not be null
+    And 0 requests got executed across all doctrine connections

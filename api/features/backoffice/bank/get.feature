@@ -14,6 +14,7 @@ Feature: Get banks
     And the JSON node "data.updatedAt" should not be null
     And the JSON node "data.logoUrl" should be null
     And the JSON node "data.storedObjectUrl" should be null
+    And 1 request got executed only for doctrine connection "default"
 
   Scenario Outline: Get a bank with an invalid id returns a 400 validation-failed Problem Details body
     When I send a "GET" request to "/backoffice/banks/<bankId>"
@@ -31,6 +32,7 @@ Feature: Get banks
     And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
     And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
     And the JSON node "debug" should have 5 elements
+    And 0 requests got executed across all doctrine connections
     Examples:
       | bankId      | errorMessage                    |
       | null        | This value is not a valid UUID. |
@@ -54,3 +56,4 @@ Feature: Get banks
     And the JSON node "debug.file" should exist
     And the JSON node "debug.line" should exist
     And the JSON node "debug.previous_chain" should exist
+    And 1 request got executed only for doctrine connection "default"

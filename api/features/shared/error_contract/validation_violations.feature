@@ -34,6 +34,7 @@ Feature: ValidationFailedException surfaces as a 400 Problem Details with a stru
     And the JSON node "violations[2].code" should be equal to "ea4e51d1-3342-48bd-87f1-9e672cd90cad"
     And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
     And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
+    And 0 requests got executed across all doctrine connections
 
   Scenario: ValidationFailedException with no violations still produces a conforming 400 body with an empty violations array
     When I send a "GET" request to "http://localhost/api/test/_throw-validation-empty"
@@ -51,6 +52,7 @@ Feature: ValidationFailedException surfaces as a 400 Problem Details with a stru
     # is not expressible here. The unit test layer covers the JSON-array shape end-to-end.
     And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
     And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
+    And 0 requests got executed across all doctrine connections
 
   Scenario: ValidationFailedException violation entries omit invalid value and root from the wire body
     When I send a "GET" request to "http://localhost/api/test/_throw-validation-with-sensitive-payload"
@@ -67,6 +69,7 @@ Feature: ValidationFailedException surfaces as a 400 Problem Details with a stru
     And the response should not contain "parameters"
     And the response should not contain "cause"
     And the response should not contain "constraint"
+    And 0 requests got executed across all doctrine connections
 
   Scenario: ValidationFailedException violation entries serialize message verbatim, never the template form
     When I send a "GET" request to "http://localhost/api/test/_throw-validation-template"
@@ -76,6 +79,7 @@ Feature: ValidationFailedException surfaces as a 400 Problem Details with a stru
     And the JSON node "violations[0].field" should be equal to "age"
     And the JSON node "violations[0].message" should be equal to "This value should be greater than or equal to 18."
     And the response should not contain "{{ limit }}"
+    And 0 requests got executed across all doctrine connections
 
   Scenario: ValidationFailedException violation entries are reachable via JSON path under violations[N]
     When I send a "GET" request to "http://localhost/api/test/_throw-validation"
@@ -88,6 +92,7 @@ Feature: ValidationFailedException surfaces as a 400 Problem Details with a stru
     And the response should contain "name"
     And the response should contain "This value should not be blank."
     And the response should contain "c1051bb4-d103-4f74-8988-acbcafc7fdc3"
+    And 0 requests got executed across all doctrine connections
 
   Scenario: ValidationFailedException is distinct from DomainException implementing InvariantViolation
     When I send a "GET" request to "http://localhost/api/test/_throw-invariant-violation"
@@ -97,3 +102,4 @@ Feature: ValidationFailedException surfaces as a 400 Problem Details with a stru
     And the JSON node "status" should be equal to the number 422
     And the JSON node "title" should be equal to "Account already settled"
     And the JSON node "violations" should not exist
+    And 0 requests got executed across all doctrine connections

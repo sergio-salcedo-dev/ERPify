@@ -18,3 +18,4 @@ Feature: Redaction denylist strips sensitive context keys from error bodies
     And the JSON node "password" should not exist
     And the JSON node "token" should not exist
     And the response should not contain "sensitive"
+    And 0 requests got executed across all doctrine connections
