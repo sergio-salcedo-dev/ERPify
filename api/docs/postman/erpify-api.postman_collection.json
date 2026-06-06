@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "ERPify API",
-    "description": "API HTTP de ERPify (Symfony 8 sobre FrankenPHP).\n\n**Entorno de desarrollo:** `base_url = https://localhost` (checkout principal, puertos fijos 80/443). El certificado TLS de dev es local: desactiva *SSL certificate verification* en Postman (Settings → General) o instala la CA de Caddy.\n\n- Todas las respuestas son JSON; los errores siguen RFC 9457 (`application/problem+json`).\n- Rutas bajo `/api/v1` (frontoffice/shared) y `/api/v1/backoffice` (backoffice).\n- Las carpetas espejan los bounded contexts de `api/src/` (Backoffice, Frontoffice, Shared).",
+    "description": "ERPify HTTP API (Symfony 8 on FrankenPHP).\n\n**Development environment:** `base_url = https://localhost` (primary checkout, fixed ports 80/443). The dev TLS certificate is local: disable *SSL certificate verification* in Postman (Settings → General) or trust Caddy's local CA.\n\n- All responses are JSON; errors follow RFC 9457 (`application/problem+json`).\n- Routes live under `/api/v1` (frontoffice/shared) and `/api/v1/backoffice` (backoffice).\n- Folders mirror the bounded contexts under `api/src/` (Backoffice, Frontoffice, Shared).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -9,102 +9,51 @@
       "key": "base_url",
       "value": "https://localhost",
       "type": "string",
-      "description": "Base URL del stack de desarrollo (FrankenPHP, checkout principal)"
+      "description": "Base URL of the development stack (FrankenPHP, primary checkout)"
     }
   ],
   "item": [
     {
       "name": "Backoffice",
-      "description": "Bounded contexts de backoffice — prefijo /api/v1/backoffice",
+      "description": "Backoffice bounded contexts — prefix /api/v1/backoffice",
       "item": [
         {
           "name": "Health",
           "request": {
             "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
+            "header": [{ "key": "Accept", "value": "application/json" }],
             "url": {
               "raw": "{{base_url}}/api/v1/backoffice/health",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "backoffice",
-                "health"
-              ]
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "backoffice", "health"]
             },
-            "description": "Health check del contexto backoffice."
+            "description": "Health check for the backoffice context."
           },
           "response": []
         },
         {
           "name": "Banks",
-          "description": "Contexto Banks (Backoffice/Bank)",
+          "description": "Banks context (Backoffice/Bank)",
           "item": [
             {
               "name": "Search banks",
               "request": {
                 "method": "GET",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "application/json"
-                  }
-                ],
+                "header": [{ "key": "Accept", "value": "application/json" }],
                 "url": {
                   "raw": "{{base_url}}/api/v1/backoffice/banks?page=1&limit=100&paginationMode=light",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "api",
-                    "v1",
-                    "backoffice",
-                    "banks"
-                  ],
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "backoffice", "banks"],
                   "query": [
-                    {
-                      "key": "page",
-                      "value": "1",
-                      "description": "Página (paginación offset)"
-                    },
-                    {
-                      "key": "limit",
-                      "value": "100",
-                      "description": "Máx. 1000 (default 1000)"
-                    },
-                    {
-                      "key": "paginationMode",
-                      "value": "light",
-                      "description": "light | detailed"
-                    },
-                    {
-                      "key": "cursor",
-                      "value": "",
-                      "description": "Cursor opaco para paginación por cursor (excluyente con page)",
-                      "disabled": true
-                    },
-                    {
-                      "key": "ids[]",
-                      "value": "",
-                      "description": "Filtro por UUIDs (repetible)",
-                      "disabled": true
-                    },
-                    {
-                      "key": "names[]",
-                      "value": "",
-                      "description": "Filtro por nombres, máx. 255 chars (repetible)",
-                      "disabled": true
-                    }
+                    { "key": "page", "value": "1", "description": "Page (offset pagination)" },
+                    { "key": "limit", "value": "100", "description": "Max 1000 (default 1000)" },
+                    { "key": "paginationMode", "value": "light", "description": "light | detailed" },
+                    { "key": "cursor", "value": "", "description": "Opaque cursor for cursor-based pagination (mutually exclusive with page)", "disabled": true },
+                    { "key": "ids[]", "value": "", "description": "Filter by UUIDs (repeatable)", "disabled": true },
+                    { "key": "names[]", "value": "", "description": "Filter by names, max 255 chars (repeatable)", "disabled": true }
                   ]
                 },
-                "description": "Búsqueda paginada de bancos. Grupos de serialización: identifiable, timestamped, bank:search."
+                "description": "Paginated bank search. Serialization groups: identifiable, timestamped, bank:search."
               },
               "response": []
             },
@@ -112,33 +61,14 @@
               "name": "Get bank",
               "request": {
                 "method": "GET",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "application/json"
-                  }
-                ],
+                "header": [{ "key": "Accept", "value": "application/json" }],
                 "url": {
                   "raw": "{{base_url}}/api/v1/backoffice/banks/:id",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "api",
-                    "v1",
-                    "backoffice",
-                    "banks",
-                    ":id"
-                  ],
-                  "variable": [
-                    {
-                      "key": "id",
-                      "value": "",
-                      "description": "UUID del banco"
-                    }
-                  ]
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "backoffice", "banks", ":id"],
+                  "variable": [{ "key": "id", "value": "", "description": "Bank UUID" }]
                 },
-                "description": "Detalle de un banco por UUID. 404 (application/problem+json) si no existe."
+                "description": "Bank detail by UUID. 404 (application/problem+json) when it does not exist."
               },
               "response": []
             },
@@ -147,37 +77,20 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "Accept",
-                    "value": "application/json"
-                  }
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Accept", "value": "application/json" }
                 ],
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"name\": \"Test Bank\",\n  \"shortName\": \"TB\"\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
+                  "options": { "raw": { "language": "json" } }
                 },
                 "url": {
                   "raw": "{{base_url}}/api/v1/backoffice/banks",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "api",
-                    "v1",
-                    "backoffice",
-                    "banks"
-                  ]
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "backoffice", "banks"]
                 },
-                "description": "Crea un banco. `name` ≤ 255 chars, `shortName` ≤ 50 chars; ambos obligatorios. 201 al crear, 400 con violations si falla la validación. Acepta JSON o form."
+                "description": "Creates a bank. `name` ≤ 255 chars, `shortName` ≤ 50 chars; both required. 201 on creation, 400 with violations on validation failure. Accepts JSON or form."
               },
               "response": []
             },
@@ -186,45 +99,21 @@
               "request": {
                 "method": "PUT",
                 "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "Accept",
-                    "value": "application/json"
-                  }
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Accept", "value": "application/json" }
                 ],
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"name\": \"Test Bank (renamed)\",\n  \"shortName\": \"TBR\"\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
+                  "options": { "raw": { "language": "json" } }
                 },
                 "url": {
                   "raw": "{{base_url}}/api/v1/backoffice/banks/:id",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "api",
-                    "v1",
-                    "backoffice",
-                    "banks",
-                    ":id"
-                  ],
-                  "variable": [
-                    {
-                      "key": "id",
-                      "value": "",
-                      "description": "UUID del banco"
-                    }
-                  ]
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "backoffice", "banks", ":id"],
+                  "variable": [{ "key": "id", "value": "", "description": "Bank UUID" }]
                 },
-                "description": "Actualiza un banco. Mismas reglas de validación que el POST."
+                "description": "Updates a bank. Same validation rules as the POST."
               },
               "response": []
             },
@@ -232,33 +121,14 @@
               "name": "Delete bank",
               "request": {
                 "method": "DELETE",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "application/json"
-                  }
-                ],
+                "header": [{ "key": "Accept", "value": "application/json" }],
                 "url": {
                   "raw": "{{base_url}}/api/v1/backoffice/banks/:id",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "api",
-                    "v1",
-                    "backoffice",
-                    "banks",
-                    ":id"
-                  ],
-                  "variable": [
-                    {
-                      "key": "id",
-                      "value": "",
-                      "description": "UUID del banco"
-                    }
-                  ]
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "backoffice", "banks", ":id"],
+                  "variable": [{ "key": "id", "value": "", "description": "Bank UUID" }]
                 },
-                "description": "Elimina un banco por UUID (hard delete)."
+                "description": "Deletes a bank by UUID (hard delete)."
               },
               "response": []
             },
@@ -266,27 +136,13 @@
               "name": "Realtime authorize (Mercure cookie)",
               "request": {
                 "method": "GET",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "application/json"
-                  }
-                ],
+                "header": [{ "key": "Accept", "value": "application/json" }],
                 "url": {
                   "raw": "{{base_url}}/api/v1/backoffice/banks/realtime/authorize",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "api",
-                    "v1",
-                    "backoffice",
-                    "banks",
-                    "realtime",
-                    "authorize"
-                  ]
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "backoffice", "banks", "realtime", "authorize"]
                 },
-                "description": "Devuelve 204 y setea la cookie de autorización Mercure para los topics de bancos (colección + detalle)."
+                "description": "Returns 204 and sets the Mercure authorization cookie for the bank topics (collection + detail)."
               },
               "response": []
             }
@@ -296,86 +152,51 @@
     },
     {
       "name": "Frontoffice",
-      "description": "Bounded contexts de frontoffice — prefijo /api/v1",
+      "description": "Frontoffice bounded contexts — prefix /api/v1",
       "item": [
         {
           "name": "Health",
           "request": {
             "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
+            "header": [{ "key": "Accept", "value": "application/json" }],
             "url": {
               "raw": "{{base_url}}/api/v1/health",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "health"
-              ]
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "health"]
             },
-            "description": "Health check del contexto frontoffice."
+            "description": "Health check for the frontoffice context."
           },
           "response": []
         },
         {
           "name": "Mercure",
-          "description": "Contexto Mercure (Frontoffice/Mercure)",
+          "description": "Mercure context (Frontoffice/Mercure)",
           "item": [
             {
               "name": "Mercure bootstrap",
               "request": {
                 "method": "GET",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "application/json"
-                  }
-                ],
+                "header": [{ "key": "Accept", "value": "application/json" }],
                 "url": {
                   "raw": "{{base_url}}/api/v1/mercure/bootstrap",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "api",
-                    "v1",
-                    "mercure",
-                    "bootstrap"
-                  ]
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "mercure", "bootstrap"]
                 },
-                "description": "Bootstrap de la suscripción Mercure para el frontoffice."
+                "description": "Bootstraps the Mercure subscription for the frontoffice."
               },
               "response": []
             },
             {
-              "name": "Mercure publish demo (solo dev)",
+              "name": "Mercure publish demo (dev only)",
               "request": {
                 "method": "POST",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "application/json"
-                  }
-                ],
+                "header": [{ "key": "Accept", "value": "application/json" }],
                 "url": {
                   "raw": "{{base_url}}/api/v1/mercure/publish-demo",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "api",
-                    "v1",
-                    "mercure",
-                    "publish-demo"
-                  ]
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "mercure", "publish-demo"]
                 },
-                "description": "Publica un update de demo en el hub Mercure. Sin body. **404 fuera del entorno dev.**"
+                "description": "Publishes a demo update to the Mercure hub. No body. **404 outside the dev environment.**"
               },
               "response": []
             }
@@ -383,31 +204,19 @@
         },
         {
           "name": "Dev",
-          "description": "Contexto Dev (Frontoffice/Dev) — solo entorno dev",
+          "description": "Dev context (Frontoffice/Dev) — dev environment only",
           "item": [
             {
-              "name": "FrankenPHP hot reload (solo dev)",
+              "name": "FrankenPHP hot reload (dev only)",
               "request": {
                 "method": "GET",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "application/json"
-                  }
-                ],
+                "header": [{ "key": "Accept", "value": "application/json" }],
                 "url": {
                   "raw": "{{base_url}}/api/v1/dev/frankenphp-hot-reload",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "api",
-                    "v1",
-                    "dev",
-                    "frankenphp-hot-reload"
-                  ]
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "dev", "frankenphp-hot-reload"]
                 },
-                "description": "Endpoint de hot-reload de FrankenPHP. Solo disponible en dev."
+                "description": "FrankenPHP hot-reload endpoint. Only available in dev."
               },
               "response": []
             }
@@ -417,11 +226,11 @@
     },
     {
       "name": "Shared",
-      "description": "Contextos compartidos (Shared/Media, Shared/Storage) — prefijo /api/v1",
+      "description": "Shared contexts (Shared/Media, Shared/Storage) — prefix /api/v1",
       "item": [
         {
           "name": "Media",
-          "description": "Contexto Media (Shared/Media)",
+          "description": "Media context (Shared/Media)",
           "item": [
             {
               "name": "Get media by hash",
@@ -430,24 +239,11 @@
                 "header": [],
                 "url": {
                   "raw": "{{base_url}}/api/v1/media/:hash",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "api",
-                    "v1",
-                    "media",
-                    ":hash"
-                  ],
-                  "variable": [
-                    {
-                      "key": "hash",
-                      "value": "",
-                      "description": "SHA-256 del contenido (64 hex)"
-                    }
-                  ]
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "media", ":hash"],
+                  "variable": [{ "key": "hash", "value": "", "description": "Content SHA-256 (64 hex chars)" }]
                 },
-                "description": "Sirve un media direccionado por contenido. `hash` debe cumplir `[a-f0-9]{64}`."
+                "description": "Serves a content-addressed media object. `hash` must match `[a-f0-9]{64}`."
               },
               "response": []
             }
@@ -455,7 +251,7 @@
         },
         {
           "name": "Storage",
-          "description": "Contexto Storage (Shared/Storage)",
+          "description": "Storage context (Shared/Storage)",
           "item": [
             {
               "name": "Get stored object by hash",
@@ -464,24 +260,11 @@
                 "header": [],
                 "url": {
                   "raw": "{{base_url}}/api/v1/stored-objects/:hash",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "api",
-                    "v1",
-                    "stored-objects",
-                    ":hash"
-                  ],
-                  "variable": [
-                    {
-                      "key": "hash",
-                      "value": "",
-                      "description": "SHA-256 del contenido (64 hex)"
-                    }
-                  ]
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "stored-objects", ":hash"],
+                  "variable": [{ "key": "hash", "value": "", "description": "Content SHA-256 (64 hex chars)" }]
                 },
-                "description": "Sirve un objeto almacenado direccionado por contenido (cache HTTP content-addressed, soporta 304). `hash` debe cumplir `[a-f0-9]{64}`."
+                "description": "Serves a content-addressed stored object (content-addressed HTTP cache, supports 304). `hash` must match `[a-f0-9]{64}`."
               },
               "response": []
             }
