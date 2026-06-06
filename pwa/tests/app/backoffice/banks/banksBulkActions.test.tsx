@@ -142,6 +142,75 @@ describe("BanksListPage — bulk actions", () => {
     expect(screen.queryByTestId("banks-list__bulk-bar")).toBeNull();
   });
 
+  it("does not resurrect a row whose re-probe 404s (deleted remotely mid-flight)", async () => {
+    deleteRun.mockImplementation((id: string) => {
+      if (id === BETA.id) return Promise.reject(new Error("boom"));
+      return Promise.resolve(undefined);
+    });
+    // Pre-check (1st call per id) resolves; the re-probe (2nd call) for BETA
+    // 404s — another client deleted it during the probe/delete window.
+    const findCalls = new Map<string, number>();
+    findRun.mockImplementation((id: string) => {
+      const count = (findCalls.get(id) ?? 0) + 1;
+      findCalls.set(id, count);
+      if (id === BETA.id && count >= 2) return Promise.reject(new HttpError(STALE_PROBLEM));
+      return Promise.resolve(id === ACME.id ? ACME : BETA);
+    });
+    render(<BanksListPage />);
+    await screen.findByTestId(`banks-table__row-${ACME.id}`);
+
+    fireEvent.click(screen.getByLabelText(`Select row ${ACME.id}`));
+    fireEvent.click(screen.getByLabelText(`Select row ${BETA.id}`));
+    fireEvent.click(screen.getByTestId("banks-list__bulk-delete"));
+    fireEvent.click(await screen.findByTestId("banks-list__bulk-delete-confirm"));
+
+    // The error surface still reports the failure.
+    await screen.findByTestId("banks-list__delete-error");
+    // ACME deleted; BETA confirmed gone by the re-probe — not resurrected.
+    expect(screen.queryByTestId(`banks-table__row-${ACME.id}`)).toBeNull();
+    expect(screen.queryByTestId(`banks-table__row-${BETA.id}`)).toBeNull();
+    // Selection was not re-added, so no bulk bar.
+    expect(screen.queryByTestId("banks-list__bulk-bar")).toBeNull();
+    expect(toastNotifier.error).toHaveBeenCalledWith("Some banks could not be deleted", {
+      description: "1 of 2 could not be deleted. See error details.",
+    });
+    // Only BETA was re-probed: 2 pre-checks + 1 re-probe — a successful
+    // delete (ACME) never triggers one.
+    expect(findRun).toHaveBeenCalledTimes(3);
+  });
+
+  it("fails open to the snapshot restore when the re-probe errors with something other than 404", async () => {
+    deleteRun.mockImplementation((id: string) => {
+      if (id === BETA.id) return Promise.reject(new Error("boom"));
+      return Promise.resolve(undefined);
+    });
+    // Pre-check resolves; the re-probe for BETA errors with a non-404 — fail
+    // open to the snapshot restore.
+    const findCalls = new Map<string, number>();
+    findRun.mockImplementation((id: string) => {
+      const count = (findCalls.get(id) ?? 0) + 1;
+      findCalls.set(id, count);
+      if (id === BETA.id && count >= 2) return Promise.reject(new Error("probe blip"));
+      return Promise.resolve(id === ACME.id ? ACME : BETA);
+    });
+    render(<BanksListPage />);
+    await screen.findByTestId(`banks-table__row-${ACME.id}`);
+
+    fireEvent.click(screen.getByLabelText(`Select row ${ACME.id}`));
+    fireEvent.click(screen.getByLabelText(`Select row ${BETA.id}`));
+    fireEvent.click(screen.getByTestId("banks-list__bulk-delete"));
+    fireEvent.click(await screen.findByTestId("banks-list__bulk-delete-confirm"));
+
+    // ACME stays gone; BETA is restored from the snapshot (fail-open).
+    await waitFor(() => {
+      expect(screen.queryByTestId(`banks-table__row-${ACME.id}`)).toBeNull();
+    });
+    expect(await screen.findByTestId(`banks-table__row-${BETA.id}`)).toBeInTheDocument();
+    expect(await screen.findByTestId("banks-list__bulk-count")).toHaveTextContent("1 selected");
+    // Only BETA was re-probed: 2 pre-checks + 1 re-probe.
+    expect(findRun).toHaveBeenCalledTimes(3);
+  });
+
   it("aborts the whole bulk when the pre-check finds a stale id: nothing is deleted, Refresh recalculates", async () => {
     findRun.mockImplementation((id: string) => {
       if (id === BETA.id) return Promise.reject(new HttpError(STALE_PROBLEM));

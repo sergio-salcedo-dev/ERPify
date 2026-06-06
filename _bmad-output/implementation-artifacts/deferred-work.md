@@ -2,17 +2,6 @@
 
 Collected during quick-dev. Not part of the current story's shippable scope.
 
-## Deferred from: review de spec-pwa-banks-delete-persistent-error (2026-06-04)
-
-- **Resurrección por snapshot obsoleto en el rollback parcial del bulk delete**
-  (`pwa/src/app/backoffice/banks/page.tsx`, `runBulkDelete`): si Mercure borra una fila
-  seleccionada durante la ventana probe/delete Y el DELETE de esa fila falla con ≠404
-  (500/red), la restauración desde `snapshot` (capturado al crear el handler) puede
-  resucitar una fila que otro cliente ya eliminó, hasta el siguiente reconcile. Forma
-  pre-existente del rollback optimista (el snapshot-restore ya existía); intersección
-  extremadamente estrecha y autocurable en el siguiente evento/reconnect de Mercure.
-  Posible fix: validar la restauración contra un re-probe o contra el estado post-evento.
-
 ## UX entity-list redesign — restos del contrato (2026-06-04)
 
 Source contract: `_bmad-output/planning-artifacts/ux-designs/ux-ERPify-2026-06-03/`
@@ -151,3 +140,17 @@ Adversarial review (Blind Hunter / Edge Case Hunter / Acceptance Auditor) of
   Entity-PK generation was explicitly out of scope. Scope: route PK minting through the domain `Uuid`
   (or grow it into the planned UUID value-object base) and retire `SymfonyUuidGenerator` + its static
   `UuidGenerator` port. Low. (source: blind, spec-api-domain-event-id-generation)
+
+## Deferred from: spec-pwa-banks-bulk-restore-stale-snapshot review (2026-06-06)
+
+Adversarial review (Blind Hunter / Edge Case Hunter / Acceptance Auditor) of the re-probe-validated
+bulk-delete restore. The patch finding (call-count assertions) was applied live; the item below is deferred.
+
+- **Ventana residual (escala microtarea) en la restauración validada del bulk delete.**
+  (`pwa/src/app/backoffice/banks/page.tsx`, `runBulkDelete`): el re-probe cierra la ventana original
+  (round-trips completos de probe/delete), pero un `onDeleted` de Mercure procesado entre la
+  resolución del re-probe y el `setBanks` síncrono aún puede resucitar la fila — y re-añadir su
+  selección — hasta el siguiente reconcile. Cerrarla del todo exigiría trackear los ids borrados por
+  Mercure durante la ventana del bulk, descartado conscientemente en el spec (Never: refs acoplados
+  al handler realtime). Magnitud: microtarea vs. los round-trips de antes; autocurable en el
+  siguiente evento/reconnect. Low. (source: blind+edge, spec-pwa-banks-bulk-restore-stale-snapshot)
