@@ -34,7 +34,7 @@ describe("BanksStackedList — mobile keyboard contract", () => {
     expect(second).toHaveAttribute("tabindex", "-1");
   });
 
-  it("ArrowDown moves focus to the next row; Enter opens the detail", () => {
+  it("ArrowDown moves focus to the next row; the row link opens the detail", () => {
     render(<BanksStackedList onBankDeleteFailed={() => {}} banks={BANKS} />);
     const first = screen.getByTestId(`banks-stacked__row-${BANKS[0].id}`);
     const second = screen.getByTestId(`banks-stacked__row-${BANKS[1].id}`);
@@ -43,8 +43,8 @@ describe("BanksStackedList — mobile keyboard contract", () => {
     fireEvent.keyDown(first, { key: "ArrowDown" });
     expect(second).toHaveFocus();
 
-    fireEvent.keyDown(second, { key: "Enter" });
-    expect(push).toHaveBeenCalledWith(`/backoffice/banks/${BANKS[1].id}`);
+    // The roving tab stop is a real link — Enter is native activation.
+    expect(second).toHaveAttribute("href", `/backoffice/banks/${BANKS[1].id}`);
   });
 
   it("Space toggles selection and the checkbox is always visible", () => {

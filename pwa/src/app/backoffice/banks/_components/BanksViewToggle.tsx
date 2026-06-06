@@ -24,11 +24,9 @@ const OPTIONS: readonly ViewOption[] = [
 
 export function BanksViewToggle({ view, onViewChange }: Readonly<BanksViewToggleProps>) {
   return (
-    // This is a presentational toggle of icon buttons (not form controls), so
-    // <fieldset> would be inappropriate. role="group" + aria-label gives
-    // assistive tech the correct semantics here.
-    <div
-      role="group"
+    // <fieldset> groups the option buttons natively (implicit group role) —
+    // no ARIA role needed (same call as DensityToggle).
+    <fieldset
       aria-label="Banks view"
       className="banks-view-toggle inline-flex items-center gap-1 rounded-md border border-border bg-card p-0.5"
       data-testid="banks-list__view-toggle"
@@ -56,6 +54,6 @@ export function BanksViewToggle({ view, onViewChange }: Readonly<BanksViewToggle
           </Button>
         );
       })}
-    </div>
+    </fieldset>
   );
 }
