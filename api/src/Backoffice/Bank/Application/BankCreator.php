@@ -8,7 +8,7 @@ use Erpify\Backoffice\Bank\Application\Http\BankPostPayload;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Shared\Application\Validation\Validator;
-use Erpify\Shared\Infrastructure\Uuid\SymfonyUuidGenerator;
+use Erpify\Shared\Domain\Uuid\Uuid;
 use Erpify\Shared\Media\Application\MediaRegistrar;
 use Erpify\Shared\Storage\Application\Dto\StoredObjectWriteResult;
 use Erpify\Shared\Storage\Application\StoredImageObjectWriter;
@@ -45,7 +45,7 @@ final readonly class BankCreator
             : null;
 
         $bank = Bank::create(
-            SymfonyUuidGenerator::generate(),
+            Uuid::generate(),
             $payload->name,
             $payload->shortName,
             $logo,

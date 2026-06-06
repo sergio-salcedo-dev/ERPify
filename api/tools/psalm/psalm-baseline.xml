@@ -239,10 +239,6 @@
     <ClassMustBeFinal>
       <code><![CDATA[StoredDomainEvent]]></code>
     </ClassMustBeFinal>
-    <PossiblyUnusedMethod>
-      <code><![CDATA[body]]></code>
-      <code><![CDATA[occurredOn]]></code>
-    </PossiblyUnusedMethod>
   </file>
   <file src="../../src/Shared/Infrastructure/Persistence/PaginatorCursor.php">
     <ClassMustBeFinal>

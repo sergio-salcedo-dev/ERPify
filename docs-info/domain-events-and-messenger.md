@@ -11,6 +11,8 @@ This document describes how ERPify records **domain events** in PostgreSQL and p
 
 Without a running **`messenger_worker`** (or another consumer using the same queue), HTTP responses still succeed and **audit rows are still written**; only the **email** stays queued in `messenger_messages`.
 
+**Idempotent audit append.** `domain_event` has a unique index on **`event_id`** (`domain_event_event_id_uniq`), and `DoctrineStoredDomainEventRepository::save()` inserts via **`INSERT … ON CONFLICT (event_id) DO NOTHING`**. A redelivered event (Messenger's at-least-once semantics, or a sync persist racing an app-level bus retry) is therefore a silent no-op rather than a duplicate row — `event_id` stays a reliable dedupe key. The insert is plain DBAL (not `persist()` + `flush()`) on purpose: a unique violation surfacing through `flush()` would close the EntityManager mid-request, and `PersistDomainEventMiddleware` runs synchronously before the HTTP response.
+
 ## Workflow (high level)
 
 ```mermaid

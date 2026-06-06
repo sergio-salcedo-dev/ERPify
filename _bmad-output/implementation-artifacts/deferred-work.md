@@ -133,21 +133,3 @@ iteration on PR #136. Patch findings were applied live; the items below are defe
   EventSource not). Pre-existing divergence in `BrowserMercureSubscriber.ts:17` /
   `useMercureRealtime.ts:33`, untouched by the v2 same-origin fix. One-line alignment when those
   files are next edited. Low. (source: edge, spec-pwa-dark-mode-2)
-
-## Deferred from: spec-api-domain-event-id-generation review (2026-06-04)
-
-Adversarial review (Blind Hunter / Edge Case Hunter / Acceptance Auditor) of
-`chore/api-domain-event-id-generation-vjpc`. Patch findings were applied live; the items below are deferred.
-
-- **No `UNIQUE(event_id)` on `domain_event` — double-append writes duplicate audit rows.** If the same
-  event object reaches `DoctrineDomainEventStore::append()` twice (sync persist + app-level bus retry),
-  two rows share one `event_id`, eroding its dedupe value. Pre-existing (caller-minted ids had the same
-  exposure); schema change was out of scope for the eventId refactor ("Never: no cambiar el esquema de
-  `domain_event`"). Scope: migration adding a unique index + idempotent upsert/ignore in `append()`.
-  Low-medium. (source: edge, spec-api-domain-event-id-generation)
-- **Two UUID-generation entry points with overlapping responsibility.** `Shared/Domain/Uuid/Uuid::generate()`
-  (domain events) and `Shared/Infrastructure/Uuid/SymfonyUuidGenerator::generate()` (entity PKs via
-  `BankCreator`, `DoctrineDomainEventStore` row ids, `MediaRegistrar`) now coexist doing the same v7 mint.
-  Entity-PK generation was explicitly out of scope. Scope: route PK minting through the domain `Uuid`
-  (or grow it into the planned UUID value-object base) and retire `SymfonyUuidGenerator` + its static
-  `UuidGenerator` port. Low. (source: blind, spec-api-domain-event-id-generation)

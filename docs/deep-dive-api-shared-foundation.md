@@ -105,7 +105,7 @@ api/src/Shared/
 
 ---
 
-### Subtree: `Domain/` (21 files)
+### Subtree: `Domain/` (20 files)
 
 > **Framework-purity rule** (per `CLAUDE.md`): no Symfony / Doctrine / HTTP imports inside `Domain/`. Two violations exist (`Identifiable.php`, `Timestamped.php`); see Known issues.
 
@@ -157,12 +157,12 @@ api/src/Shared/
 #### `api/src/Shared/Domain/Search/SearchCursor.php`
 - **LOC:** 25 — read-only domain interface. `getCurrentPage(): ?int`, `getCount(): ?int`, `getFirstItem(): array`, `getLastItem(): array`. Mutable infrastructure interface (`PaginatorCursorInterface`) extends this.
 
-#### `api/src/Shared/Domain/Uuid/UuidGenerator.php`
-- **LOC:** 10 — `interface { static generate(): string; }`. Implementation lives in `Infrastructure/Uuid/SymfonyUuidGenerator` (UUIDv4); `CorrelationIdListener` and `ExceptionResponder` use `Symfony\Uid\Uuid::v7()` directly when timestamp ordering matters.
+#### `api/src/Shared/Domain/Uuid/Uuid.php`
+- **LOC:** 23 — non-final value-object base. Static `generate(): string` returns a UUID **v7** RFC 4122 string via `Symfony\Uid\Uuid::v7()`. The single mint for entity PKs (`BankCreator`, `MediaRegistrar`, `DoctrineDomainEventStore` row ids) and domain-event `eventId`s; `CorrelationIdListener` and `ExceptionResponder` use `Symfony\Uid\Uuid::v7()` directly when they need the raw uid object. Built on `symfony/uid` under the documented `Domain/` layer exception (UUID value-object library).
 
 ---
 
-### Subtree: `Infrastructure/` (26 files)
+### Subtree: `Infrastructure/` (25 files)
 
 > Largest subtree by far; the HTTP error-pipeline files here are the most load-bearing files in `Shared/`.
 
@@ -218,13 +218,13 @@ api/src/Shared/
 - **LOC:** 48 — `#[When(env: 'dev')] #[When(env: 'test')]`, `kernel.request` priority 256. Closes all DB connections at the start of each main request so the FrankenPHP worker doesn't hold stale handles across Behat's `DROP/CREATE DATABASE` cycle. **Not loaded in prod.**
 
 #### `api/src/Shared/Infrastructure/Persistence/DoctrineDomainEventStore.php`
-- **LOC:** 38 — `#[AsAlias(DomainEventStore::class)]`. Constructs `StoredDomainEvent` from `DomainEvent::toPrimitives()` and saves via `StoredDomainEventRepository`.
+- **LOC:** 38 — `#[AsAlias(DomainEventStore::class)]`. Mints the row PK via `Domain/Uuid/Uuid::generate()` (v7), constructs `StoredDomainEvent` from `DomainEvent::toPrimitives()`, validates it, and saves via `StoredDomainEventRepository`.
 
 #### `api/src/Shared/Infrastructure/Persistence/DoctrineStoredDomainEventRepository.php`
-- **LOC:** 30 — write-side only (`save()` persists + flushes).
+- **LOC:** 50 — write-side only. `save()` runs an idempotent DBAL `INSERT … ON CONFLICT (event_id) DO NOTHING` (not `persist()` + `flush()`) so a redelivered event is a no-op rather than a duplicate audit row, and a unique violation never closes the EntityManager mid-request. Backed by the `domain_event_event_id_uniq` index.
 
 #### `api/src/Shared/Infrastructure/Persistence/Entity/StoredDomainEvent.php`
-- **LOC:** 36 — ORM entity for the `domain_event` audit table. Uses `Identifiable` trait (UUID PK). Indexes on `aggregateId`, `name`. `body` is JSON. **Immutable** (write-once audit row).
+- **LOC:** 37 — ORM entity for the `domain_event` audit table. Uses `Identifiable` trait (UUID PK). Indexes on `aggregateId`, `name`; **unique** index on `eventId` (`domain_event_event_id_uniq`) backing the idempotent append. `body` is JSON. **Immutable** (write-once audit row).
 
 #### `api/src/Shared/Infrastructure/Persistence/Doctrine/Paginator.php`
 - **LOC:** 417 — port of `chiliz/doctrine-bundle` Paginator; **the most algorithmically dense file in `Shared/`**. Implements `PaginatedResult<T>` and `IteratorAggregate`.
@@ -252,11 +252,6 @@ api/src/Shared/
 - `JsonDecoder::decodeArray()` / `decodeResponse()` use `JSON_THROW_ON_ERROR` and assert `is_array()` — refuses scalar/object/null payloads.
 - `ResourceNormalizer::toArray()` wraps Symfony Serializer, normalizes `ArrayObject` → array, throws `UnexpectedValueException` on non-array results.
 - **Verification:** `ResourceNormalizerTest`.
-
-#### `api/src/Shared/Infrastructure/Uuid/SymfonyUuidGenerator.php`
-- **LOC:** 18 — implements `Domain/Uuid/UuidGenerator` via `Symfony\Uid\Uuid::v4()`.
-- **Note:** Uses **v4 (random)**. The HTTP error pipeline uses `Uuid::v7()` directly for time-ordered IDs (`correlation-id`, `instance`).
-- **Verification:** `SymfonyUuidGeneratorTest`.
 
 ---
 
@@ -530,7 +525,7 @@ StoredObjectOrphanCleaner::cleanupAfterRemoval($hash)
 - All seven empty marker interfaces under `Domain/Exception/`.
 - `Domain/Aggregate/AggregateRoot.php` (depends only on `DateTimeImmutable` + `DomainEvent` + the two leaky traits).
 - `Domain/Search/SearchCursor.php`, `PaginationMode.php`.
-- `Domain/Uuid/UuidGenerator.php`.
+- `Domain/Uuid/Uuid.php`.
 - `Domain/Enum/Attribute/HumanReadableIntEnumValue.php`.
 - `Application/UseCase/Result.php`, `Application/Problem/RedactionDenylist.php`.
 - `Infrastructure/Persistence/QueryParam.php`, `SortDirection.php`; `Infrastructure/Persistence/Doctrine/PaginatorOption.php`, `QueryBuilderWithOptions.php`.
@@ -586,7 +581,7 @@ StoredObjectOrphanCleaner::cleanupAfterRemoval($hash)
 
 5. **Two near-identical URL generators** (`Configurable{Media,StoredObject}PublicUrlGenerator`). Three resolution branches duplicated. Extract a base class or trait if a third URL generator joins.
 
-6. **`Symfony/Uid` v4 vs v7 inconsistency.** `Domain/Uuid/UuidGenerator` (port) → `Infrastructure/Uuid/SymfonyUuidGenerator` (v4). HTTP error pipeline uses `Uuid::v7()` directly. Not wrong, but a contributor adding a new caller could pick the wrong one. Consider a v7-specific port or a clearer naming scheme.
+6. **UUID minting is consolidated on `Domain/Uuid/Uuid::generate()` (v7).** Entity PKs and domain-event `eventId`s now share the one v7 mint; the former `Infrastructure/Uuid/SymfonyUuidGenerator` adapter and its `Domain/Uuid/UuidGenerator` port were retired. The HTTP error pipeline still uses `Symfony\Uid\Uuid::v7()` directly when it needs the raw uid object.
 
 ---
 
