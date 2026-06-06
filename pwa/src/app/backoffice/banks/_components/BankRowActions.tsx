@@ -26,13 +26,13 @@ type BankRowActionsSurface = "table" | "cards" | "stacked";
  * focus-within of the enclosing row/card; coarse pointers always see them
  * (a hover affordance does not exist on touch).
  */
-const REVEAL_CLASS = {
+type BankRowActionsReveal = "row" | "card" | "none";
+
+const REVEAL_CLASS: Record<BankRowActionsReveal, string> = {
   row: "flex items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100",
   card: "flex items-center gap-0.5 opacity-0 transition-opacity group-hover/card:opacity-100 group-focus-within/card:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100",
   none: "flex items-center gap-0.5",
-} as const;
-
-type BankRowActionsReveal = keyof typeof REVEAL_CLASS;
+};
 
 interface BankRowActionsProps {
   id: string;

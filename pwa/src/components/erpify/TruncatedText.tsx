@@ -6,10 +6,10 @@ import { useIsTruncated } from "@/lib/useIsTruncated";
 import { cn } from "@/lib/utils";
 import { KeyboardKey } from "@/context/shared/domain/types/keyboard";
 
-// Static class map — Tailwind cannot generate classes from template literals.
-const CLAMP_CLASS = { 1: "truncate", 2: "line-clamp-2" } as const;
+export type TruncatedTextLines = 1 | 2;
 
-export type TruncatedTextLines = keyof typeof CLAMP_CLASS;
+// Static class map — Tailwind cannot generate classes from template literals.
+const CLAMP_CLASS: Record<TruncatedTextLines, string> = { 1: "truncate", 2: "line-clamp-2" };
 
 export interface TruncatedTextProps {
   value: string;
