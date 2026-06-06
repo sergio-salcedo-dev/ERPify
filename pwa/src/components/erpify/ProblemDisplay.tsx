@@ -278,9 +278,9 @@ export function ProblemDisplay({
 
       {debug ? <DebugSection debug={debug} rule={tone.rule} /> : null}
 
-      <footer className="problem-display__footer flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center">
-        <CorrelationIdChip id={problem["correlation-id"]} label="Error ID:" />
-        {action ? <div className="problem-display__action">{action}</div> : null}
+      <footer className="problem-display__footer flex flex-col items-start justify-between gap-x-4 gap-y-2 sm:flex-row sm:items-center">
+        <CorrelationIdChip id={problem["correlation-id"]} label="Error ID:" className="min-w-0" />
+        {action ? <div className="problem-display__action shrink-0">{action}</div> : null}
       </footer>
     </section>
   );

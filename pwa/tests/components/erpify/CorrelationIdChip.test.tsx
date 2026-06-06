@@ -34,7 +34,10 @@ describe("CorrelationIdChip", () => {
 
   it("renders the optional label prefix when supplied", () => {
     render(<CorrelationIdChip id="abcdef0123456789" label="Error ID:" />);
-    expect(screen.getByRole("button")).toHaveTextContent("Error ID:");
+    // The label reads as muted prose alongside — not inside — the copy token,
+    // so the copy control's accessible name stays the id alone.
+    expect(screen.getByText("Error ID:")).toBeInTheDocument();
+    expect(screen.getByRole("button")).toHaveAccessibleName("Copy correlation ID abcdef0123456789");
   });
 
   it("does not truncate when the ID is short enough", () => {
