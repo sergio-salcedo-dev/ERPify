@@ -367,11 +367,16 @@ export default function BanksListPage() {
 
   // Bulk delete: a pessimistic existence pre-check guards the optimistic
   // attempt — any stale id aborts before mutating anything; probe failures
-  // other than 404 fail open to the attempt. After the attempt, 404
-  // rejections do NOT resurrect rows (the bank is already gone) while other
-  // failures restore the row AND its selection so the user retries without
-  // re-picking. Failures land in the persistent error surface; the toast is
-  // only a transient pointer.
+  // other than 404 fail open to the attempt. After the attempt the failures
+  // land in the persistent error surface (the toast is only a transient
+  // pointer), both raised before any restoration so degraded-network feedback
+  // never waits on a round-trip. 404 rejections do NOT resurrect rows (the
+  // bank is already gone); other failures restore the row AND its selection,
+  // but only after a re-probe confirms the bank still exists — a re-probe 404
+  // means another client deleted it mid-flight, so the row stays gone and is
+  // not re-selected, while a re-probe failure other than 404 fails open to the
+  // restore (mirroring the pre-check). The restored row comes from the
+  // snapshot, never from the re-probe body.
   const bulkDeleteInFlightRef = useRef(false);
   const handleBulkDelete = async (): Promise<void> => {
     // The bulk bar stays mounted during the probe window — guard re-entry.
@@ -425,18 +430,8 @@ export default function BanksListPage() {
       setDeleteError(null);
       return;
     }
-    // A 404 rejection means the bank was already gone: don't resurrect it.
-    const restorable = new Set(
-      rejections.filter(({ reason }) => !isNotFoundError(reason)).map(({ id }) => id),
-    );
-    if (restorable.size > 0) {
-      const restored = snapshot.filter((bank) => restorable.has(bank.id));
-      setBanks((prev) => {
-        const present = new Set(prev.map((bank) => bank.id));
-        return [...prev, ...restored.filter((bank) => !present.has(bank.id))];
-      });
-      setSelectedIds((prev) => new Set([...prev, ...restorable]));
-    }
+    // Surface the failure first: the re-probe round-trip below only delays the
+    // rows' reappearance, never the user's error feedback.
     const first = rejections[0];
     const fallbackDetail = first.reason instanceof Error ? first.reason.message : "Unknown error";
     setDeleteError({
@@ -448,6 +443,33 @@ export default function BanksListPage() {
     toastNotifier.error("Some banks could not be deleted", {
       description: `${rejections.length} of ${ids.length} could not be deleted. See error details.`,
     });
+
+    // A 404 rejection means the bank was already gone: don't even re-probe it.
+    const restorableIds = rejections
+      .filter(({ reason }) => !isNotFoundError(reason))
+      .map(({ id }) => id);
+    if (restorableIds.length === 0) return;
+    // Validate each candidate against the server before resurrecting it: a row
+    // another client deleted mid-flight is confirmed gone and must NOT be
+    // restored or re-selected. A re-probe rejected with 404 confirms the
+    // deletion; any other re-probe failure fails open to the restore.
+    const reprobes = await Promise.allSettled(restorableIds.map((id) => findBank.run(id)));
+    if (!mountedRef.current) return;
+    const confirmed = new Set(
+      restorableIds.filter((_, index) => {
+        const reprobe = reprobes[index];
+        return reprobe.status === "fulfilled" || !isNotFoundError(reprobe.reason);
+      }),
+    );
+    if (confirmed.size === 0) return;
+    // Restore from the snapshot, never from the re-probe body — the probe is
+    // only an existence gate.
+    const restored = snapshot.filter((bank) => confirmed.has(bank.id));
+    setBanks((prev) => {
+      const present = new Set(prev.map((bank) => bank.id));
+      return [...prev, ...restored.filter((bank) => !present.has(bank.id))];
+    });
+    setSelectedIds((prev) => new Set([...prev, ...confirmed]));
   };
 
   // A realtime delta arriving while the list still shows a failed-load error
