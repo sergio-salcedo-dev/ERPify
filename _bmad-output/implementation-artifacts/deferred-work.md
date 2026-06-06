@@ -154,3 +154,16 @@ bulk-delete restore. The patch finding (call-count assertions) was applied live;
   Mercure durante la ventana del bulk, descartado conscientemente en el spec (Never: refs acoplados
   al handler realtime). Magnitud: microtarea vs. los round-trips de antes; autocurable en el
   siguiente evento/reconnect. Low. (source: blind+edge, spec-pwa-banks-bulk-restore-stale-snapshot)
+
+## Deferred from: spec-pr-158-sonar-dup-density review (2026-06-06)
+
+Dedup CPD del PR #158: solo se refactorizaron los dos specs implicados en los bloques que Sonar
+marcó como código nuevo. Queda pendiente, conscientemente fuera del alcance del PR:
+
+- **Barrido suite-wide de fixtures/factorías en los specs de banks.** Ocho specs más bajo
+  `pwa/tests/app/backoffice/banks/` (p. ej. `bankDetailDelete.test.tsx`, `bankEditStaleBank.test.tsx`,
+  `banksListRetry.test.tsx`, `deleteBankButtonSpinner.test.tsx`) siguen re-declarando las fixtures
+  ACME/BETA ahora canónicas en `_fixtures.ts`, y `bankListDelete.test.tsx` conserva sus factorías
+  `vi.mock` artesanales en lugar de las de `_mocks.ts` (`routerMock`/`containerMock`/
+  `toastNotifierMock`). Código viejo — Sonar no lo cuenta en el PR; deduplicarlo es higiene, no gate.
+  Low. (source: adversarial review, spec-pr-158-sonar-dup-density)
