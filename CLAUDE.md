@@ -187,6 +187,12 @@ Do not spawn subagents for tasks that share state mid-flight — e.g. two agents
 
 ## Conventions
 
+### Protected `main` (hard rule for agents)
+
+- **Never force-push `main`** — no `git push --force` / `--force-with-lease` / `--force-if-includes` to `main`, ever.
+- **Never merge into `main` without explicit permission from the user** — neither a local `git merge`/`git rebase` onto `main` nor merging a PR (web UI, `gh pr merge`, MCP). Prepare the branch/PR and stop; the user decides the merge.
+- Permission is per-merge: approval for one PR/branch does not carry over to the next.
+
 ### Branch naming
 
 | Type    | Format                  | Base                  |
