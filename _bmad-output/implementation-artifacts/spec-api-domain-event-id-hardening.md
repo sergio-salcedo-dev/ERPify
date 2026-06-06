@@ -84,6 +84,8 @@ context:
 
 - **2026-06-06 — review pass 1 (Acceptance Auditor):** el AC/comando de verificación "0 referencias a `SymfonyUuidGenerator|UuidGenerator` en `api/`, `docs/`, `docs-info/`" era literalmente insatisfacible: 2 hits preexistentes nombran la clase third-party `Symfony\Bridge\Doctrine\IdGenerator\UuidGenerator` y 1 hit es la propia nota de retirada. Se acotó el AC y el grep a `api/src`+`api/tests` con caveat de docs. Estado malo evitado: un AC imposible de cumplir que forzaría tocar líneas de docs ajenas al scope. KEEP: el código no cambió — la implementación era correcta; solo se corrigió el contrato de verificación. Los patches del review (guard `abortIf` de cuerpos divergentes en la migración, binding `Types::GUID` del `id`, test reforzado con aserción tras cada append, docblock de contrato en `save()`) van en el commit `6aa2517`.
 
+- **2026-06-06 — ampliación de scope dirigida por Sergio:** `Uuid` pasa a `abstract class` ya en este PR (era "kept non-final" para el futuro). Decisión de diseño acordada: `generate()` se mantiene como mint estático que devuelve `string` (sin late static binding ni `generate(): static`); los UUID value objects futuros serán clases hijas explícitas que extienden la base. Sin impacto en call sites: las llamadas estáticas sobre una clase abstracta son legales y la clase nunca se instancia (verificado — los `new Uuid()` de `ValidatorTest` son la constraint de Symfony Validator).
+
 ## Design Notes
 
 - `ON CONFLICT` atómico en DBAL y **no** try/catch del `flush()`: una violación en flush cierra el EntityManager y rompería el resto de la request (`PersistDomainEventMiddleware` corre síncrono pre-respuesta).

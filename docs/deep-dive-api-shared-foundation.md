@@ -158,7 +158,7 @@ api/src/Shared/
 - **LOC:** 25 — read-only domain interface. `getCurrentPage(): ?int`, `getCount(): ?int`, `getFirstItem(): array`, `getLastItem(): array`. Mutable infrastructure interface (`PaginatorCursorInterface`) extends this.
 
 #### `api/src/Shared/Domain/Uuid/Uuid.php`
-- **LOC:** 23 — non-final value-object base. Static `generate(): string` returns a UUID **v7** RFC 4122 string via `Symfony\Uid\Uuid::v7()`. The single mint for entity PKs (`BankCreator`, `MediaRegistrar`, `DoctrineDomainEventStore` row ids) and domain-event `eventId`s; `CorrelationIdListener` and `ExceptionResponder` use `Symfony\Uid\Uuid::v7()` directly when they need the raw uid object. Built on `symfony/uid` under the documented `Domain/` layer exception (UUID value-object library).
+- **LOC:** 23 — abstract value-object base. Static `generate(): string` returns a UUID **v7** RFC 4122 string via `Symfony\Uid\Uuid::v7()`. The single mint for entity PKs (`BankCreator`, `MediaRegistrar`, `DoctrineDomainEventStore` row ids) and domain-event `eventId`s; `CorrelationIdListener` and `ExceptionResponder` use `Symfony\Uid\Uuid::v7()` directly when they need the raw uid object. Built on `symfony/uid` under the documented `Domain/` layer exception (UUID value-object library).
 
 ---
 

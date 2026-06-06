@@ -171,11 +171,6 @@
       <code><![CDATA[__construct]]></code>
     </PossiblyUnusedMethod>
   </file>
-  <file src="../../src/Shared/Domain/Uuid/Uuid.php">
-    <ClassMustBeFinal>
-      <code><![CDATA[Uuid]]></code>
-    </ClassMustBeFinal>
-  </file>
   <file src="../../src/Shared/Guzzle/Enum/GuzzleContextTypeEnum.php">
     <UnusedClass>
       <code><![CDATA[GuzzleContextTypeEnum]]></code>
