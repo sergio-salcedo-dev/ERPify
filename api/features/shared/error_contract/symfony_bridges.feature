@@ -25,6 +25,7 @@ Feature: Symfony framework exceptions surface through the RFC 9457 error contrac
     And the JSON node "title" should be equal to "Access denied to bank."
     And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
     And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
+    And 0 requests got executed across all doctrine connections
 
   Scenario: Symfony UnauthorizedHttpException is mapped to a 401 unauthenticated Problem Details body
     When I send a "GET" request to "http://localhost/api/test/_throw-http-401"
@@ -37,6 +38,7 @@ Feature: Symfony framework exceptions surface through the RFC 9457 error contrac
     And the JSON node "title" should be equal to "Token expired."
     And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
     And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
+    And 0 requests got executed across all doctrine connections
 
   Scenario: Symfony HttpException with an unmapped status code falls back to the generic http-error type
     When I send a "GET" request to "http://localhost/api/test/_throw-http-410"
@@ -48,6 +50,7 @@ Feature: Symfony framework exceptions surface through the RFC 9457 error contrac
     And the JSON node "title" should be equal to "Resource gone."
     And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
     And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
+    And 0 requests got executed across all doctrine connections
 
   Scenario: Security Core AccessDeniedException (unwrapped) is mapped to forbidden
     When I send a "GET" request to "http://localhost/api/test/_throw-security-access-denied"
@@ -59,6 +62,7 @@ Feature: Symfony framework exceptions surface through the RFC 9457 error contrac
     And the JSON node "title" should be equal to "Forbidden."
     And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
     And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
+    And 0 requests got executed across all doctrine connections
 
   Scenario: Security Core AuthenticationException (unwrapped) is mapped to unauthenticated
     When I send a "GET" request to "http://localhost/api/test/_throw-security-authentication"
@@ -70,6 +74,7 @@ Feature: Symfony framework exceptions surface through the RFC 9457 error contrac
     And the JSON node "title" should be equal to "Bad credentials."
     And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
     And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
+    And 0 requests got executed across all doctrine connections
 
   Scenario: An unhandled RuntimeException still maps to the generic 500 unhandled-exception type
     When I send a "GET" request to "http://localhost/api/test/_throw-runtime"
@@ -81,3 +86,4 @@ Feature: Symfony framework exceptions surface through the RFC 9457 error contrac
     And the JSON node "title" should be equal to "boom"
     And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
     And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
+    And 0 requests got executed across all doctrine connections

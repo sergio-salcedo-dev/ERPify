@@ -71,7 +71,7 @@
         },
         "scenario-size":{
             "enabled":true,
-            "maxSteps":20
+            "maxSteps":21
         },
         "scenarios-per-file":{
             "enabled":true,

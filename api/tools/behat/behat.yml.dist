@@ -17,9 +17,13 @@ default:
                 - '%paths.base%/../../features/frontoffice'
                 - '%paths.base%/../../features/shared'
             contexts:
+                # Registration order = BeforeScenario hook order. FixturesContext
+                # must run BEFORE DoctrineContext so the per-suite fixture load /
+                # per-feature restore happens first and the stats reset wipes it —
+                # otherwise the first scenario of a run measures fixture queries.
+                - Erpify\Tests\Behat\Context\FixturesContext
                 - Erpify\Tests\Behat\Context\DoctrineContext
                 - Erpify\Tests\Behat\Context\EntityManagerContext
-                - Erpify\Tests\Behat\Context\FixturesContext
                 - Erpify\Tests\Behat\Context\HttpRequestContext:
                       baseUrl: '/api/v1'
                 - Erpify\Tests\Behat\Context\HttpResponseContext:

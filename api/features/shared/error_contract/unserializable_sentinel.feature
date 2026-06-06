@@ -20,3 +20,4 @@ Feature: Unserializable sentinel substitutes non-whitelisted context values
     And the JSON node "cb" should be equal to "[unserializable]"
     And the JSON node "safe_field" should be equal to "kept"
     And the response should not contain "stdClass"
+    And 0 requests got executed across all doctrine connections
