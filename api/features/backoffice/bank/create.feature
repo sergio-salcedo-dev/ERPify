@@ -21,6 +21,7 @@ Feature: Create a bank
 #    And the last bank created notification email should mention event "erpify.backoffice.bank.created"
     And the response should contain "Test Bank"
     And the response should contain "TB"
+    And 6 requests got executed only for doctrine connection "default"
 
   Scenario: Fail to create a bank with missing fields
     When I send a POST request to "/backoffice/banks" with body:
@@ -28,6 +29,7 @@ Feature: Create a bank
     {"name": "Incomplete Bank"}
     """
     Then the response status code should be 400
+    And 0 requests got executed across all doctrine connections
 
   Scenario: Fail to create a bank whose name only differs in case from an existing one
     When I send a POST request to "/backoffice/banks" with body:
@@ -37,6 +39,7 @@ Feature: Create a bank
     Then the response status code should be 400
     And the JSON node "type" should be equal to "validation-failed"
     And the JSON node "violations[0].field" should be equal to "name"
+    And 2 requests got executed only for doctrine connection "default"
 
   Scenario: Fail to create a bank whose short name only differs in case from an existing one
     When I send a POST request to "/backoffice/banks" with body:
@@ -46,6 +49,7 @@ Feature: Create a bank
     Then the response status code should be 400
     And the JSON node "type" should be equal to "validation-failed"
     And the JSON node "violations[0].field" should be equal to "shortName"
+    And 2 requests got executed only for doctrine connection "default"
 
   Scenario: Fail to create a bank whose name only differs in diacritics from an existing one
     When I send a POST request to "/backoffice/banks" with body:
@@ -55,3 +59,4 @@ Feature: Create a bank
     Then the response status code should be 400
     And the JSON node "type" should be equal to "validation-failed"
     And the JSON node "violations[0].field" should be equal to "name"
+    And 2 requests got executed only for doctrine connection "default"

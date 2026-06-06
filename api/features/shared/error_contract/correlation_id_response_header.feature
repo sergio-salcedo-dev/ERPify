@@ -15,24 +15,28 @@ Feature: X-Correlation-Id response header on every API response
     When I send a "GET" request to "/health"
     Then the response status code should be 200
     And the header "X-Correlation-Id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/"
+    And 0 requests got executed across all doctrine connections
 
   Scenario: A 4xx response carries a freshly-minted X-Correlation-Id header
     When I send a "GET" request to "http://localhost/api/test/_throw-not-found"
     Then the response status code should be 404
     And the header "Content-Type" should be equal to "application/problem+json"
     And the header "X-Correlation-Id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/"
+    And 0 requests got executed across all doctrine connections
 
   Scenario: A valid inbound X-Correlation-Id header is echoed verbatim on a 2xx
     Given I add "X-Correlation-Id" header equal to "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c"
     When I send a "GET" request to "/health"
     Then the response status code should be 200
     And the header "X-Correlation-Id" should be equal to "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c"
+    And 0 requests got executed across all doctrine connections
 
   Scenario: A valid inbound X-Correlation-Id header is echoed verbatim on a 4xx
     Given I add "X-Correlation-Id" header equal to "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c"
     When I send a "GET" request to "http://localhost/api/test/_throw-not-found"
     Then the response status code should be 404
     And the header "X-Correlation-Id" should be equal to "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c"
+    And 0 requests got executed across all doctrine connections
 
   Scenario: A malformed inbound X-Correlation-Id header is replaced with a freshly-minted UUIDv7
     Given I add "X-Correlation-Id" header equal to "not-a-uuid"
@@ -40,6 +44,7 @@ Feature: X-Correlation-Id response header on every API response
     Then the response status code should be 200
     And the header "X-Correlation-Id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/"
     And the header "X-Correlation-Id" should not be equal to "not-a-uuid"
+    And 0 requests got executed across all doctrine connections
 
   Scenario: An uppercase well-formed UUIDv7 inbound header is replaced with a fresh lowercase UUIDv7
     Given I add "X-Correlation-Id" header equal to "0190E9C2-7B5A-7D40-9C8F-2F9B5D3E1A2C"
@@ -47,3 +52,4 @@ Feature: X-Correlation-Id response header on every API response
     Then the response status code should be 200
     And the header "X-Correlation-Id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/"
     And the header "X-Correlation-Id" should not be equal to "0190E9C2-7B5A-7D40-9C8F-2F9B5D3E1A2C"
+    And 0 requests got executed across all doctrine connections

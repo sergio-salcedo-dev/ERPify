@@ -13,6 +13,7 @@ Feature: Delete a bank
     And the response status code should be 201
     When I send a "DELETE" request to "/backoffice/banks/{value}" using the JSON node "data.id" from the previous response
     Then the response status code should be 204
+    And 12 requests got executed only for doctrine connection "default"
 
   Scenario: Delete a bank that does not exist returns a 404 bank-not-found Problem Details body
     When I send a "DELETE" request to "/backoffice/banks/2e6d865c-17b0-476a-85f2-037bf6d3b3dc"
@@ -26,6 +27,7 @@ Feature: Delete a bank
     And the JSON node "bankId" should be equal to "2e6d865c-17b0-476a-85f2-037bf6d3b3dc"
     And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
     And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
+    And 1 request got executed only for doctrine connection "default"
 
   Scenario: Delete a bank referenced by accounts returns a 409 bank-in-use Problem Details body
     Given I reload the fixtures
@@ -45,3 +47,4 @@ Feature: Delete a bank
     And the JSON node "accountCount" should be equal to the number 1
     And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
     And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
+    And 4 requests got executed only for doctrine connection "default"

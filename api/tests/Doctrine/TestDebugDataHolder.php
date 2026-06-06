@@ -169,7 +169,7 @@ class TestDebugDataHolder extends DebugDataHolder
         return \str_starts_with($class, 'Behat')
             || \str_starts_with($class, 'PHPUnit')
             || \str_starts_with($class, 'Symfony')
-            || \str_contains($class, 'OptimizedLoadingFixturesContext');
+            || \str_contains($class, 'FixturesContext');
     }
 
     private function hasAppSuffix(string $class): bool
