@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import BanksListPage from "@/app/backoffice/banks/page";
-import { Bank } from "@/context/backoffice/bank/domain/Bank";
 import type { BankRealtimeHandlers } from "@/context/backoffice/bank/infrastructure/bankRealtime";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
 import { toastNotifier } from "@/context/shared/infrastructure/Notification/Toast";
+import { ACME, BETA } from "./_fixtures";
 
 /**
  * Counterpart to `bankDetailDelete.test.tsx`: deleting a bank from the LIST
@@ -17,21 +17,6 @@ import { toastNotifier } from "@/context/shared/infrastructure/Notification/Toas
  * just-deleted bank's detail page (HTTP 404). These tests lock both halves:
  * the toast fires AND no detail navigation happens.
  */
-
-const ACME = Bank.fromPrimitives({
-  id: "11111111-1111-4111-8111-111111111111",
-  name: "Acme Savings",
-  shortName: "ACME",
-  createdAt: "2026-01-01T10:00:00Z",
-  updatedAt: "2026-04-15T14:30:00Z",
-});
-const BETA = Bank.fromPrimitives({
-  id: "22222222-2222-4222-8222-222222222222",
-  name: "Beta Bank",
-  shortName: "BETA",
-  createdAt: "2026-01-02T10:00:00Z",
-  updatedAt: "2026-04-16T14:30:00Z",
-});
 
 const push = vi.fn();
 const refresh = vi.fn();
