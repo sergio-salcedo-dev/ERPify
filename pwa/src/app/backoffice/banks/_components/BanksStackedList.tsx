@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useRef, useState, type KeyboardEvent } from "react";
+import Link from "next/link";
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { StatusBadge, TruncatedText } from "@/components/erpify";
@@ -23,15 +23,6 @@ interface BanksStackedListProps {
   className?: string;
 }
 
-const INTERACTIVE_DESCENDANT_SELECTOR =
-  "a[href], button, input, select, textarea, [role='button'], [role='link'], [role='menuitem'], [role='checkbox']";
-
-function isFromInteractiveControl(target: EventTarget | null, row: Element): boolean {
-  if (!(target instanceof Element) || target === row) return false;
-  const control = target.closest(INTERACTIVE_DESCENDANT_SELECTOR);
-  return control != null && !control.contains(row);
-}
-
 /**
  * Below `md` the table becomes this stack of card-rows — horizontal scroll is
  * zero-scan on mobile. Keyboard contract mirrors the table: each row-card is
@@ -39,10 +30,11 @@ function isFromInteractiveControl(target: EventTarget | null, row: Element): boo
  * selection. Checkbox and actions are always visible (coarse pointers have no
  * hover).
  *
- * The list keeps native ul/li semantics on purpose: ARIA listbox/option would
- * forbid the interactive checkbox and row actions inside each row, and the
- * always-visible checkbox already conveys selection state — mirroring the
- * desktop table's focusable-row pattern.
+ * The list keeps native ul/li semantics, and interactivity lives on real
+ * controls: the roving tab stop is the bank-name link, stretched over the
+ * whole card (::after overlay) so any click opens the detail — Enter is
+ * native link activation. The checkbox, the row actions, and the truncated
+ * name sit above the overlay (relative z-10) as independent pointer targets.
  */
 export function BanksStackedList({
   banks,
@@ -53,16 +45,14 @@ export function BanksStackedList({
   density = "compact",
   className,
 }: Readonly<BanksStackedListProps>) {
-  const router = useRouter();
   const [focusedRow, setFocusedRow] = useState(0);
-  const rowRefs = useRef<Array<HTMLLIElement | null>>([]);
+  const rowRefs = useRef<Array<HTMLAnchorElement | null>>([]);
 
-  const openDetail = (bank: Bank): void => {
-    router.push(safeHref(bankRoutes.detail(bank.id)));
-  };
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLLIElement>, bank: Bank, index: number): void => {
-    if (isFromInteractiveControl(event.target, event.currentTarget)) return;
+  const handleKeyDown = (
+    event: KeyboardEvent<HTMLAnchorElement>,
+    bank: Bank,
+    index: number,
+  ): void => {
     if (event.key === KeyboardKey.ARROW_DOWN) {
       event.preventDefault();
       const next = Math.min(index + 1, banks.length - 1);
@@ -77,20 +67,10 @@ export function BanksStackedList({
       rowRefs.current[next]?.focus();
       return;
     }
-    if (event.key === KeyboardKey.ENTER) {
-      event.preventDefault();
-      openDetail(bank);
-      return;
-    }
     if (event.key === KeyboardKey.SPACE && onToggleSelect) {
       event.preventDefault();
       onToggleSelect(bank.id);
     }
-  };
-
-  const handleClick = (event: MouseEvent<HTMLLIElement>, bank: Bank): void => {
-    if (isFromInteractiveControl(event.target, event.currentTarget)) return;
-    openDetail(bank);
   };
 
   return (
@@ -105,17 +85,8 @@ export function BanksStackedList({
         return (
           <li
             key={bank.id}
-            ref={(el) => {
-              rowRefs.current[index] = el;
-            }}
-            tabIndex={focusedRow === index ? 0 : -1}
-            onFocus={() => setFocusedRow(index)}
-            onKeyDown={(event) => handleKeyDown(event, bank, index)}
-            onClick={(event) => handleClick(event, bank)}
-            data-stacked-row
-            data-testid={`banks-stacked__row-${bank.id}`}
             className={cn(
-              "banks-stacked__row border-border bg-card focus-visible:ring-ring hover:bg-muted flex cursor-pointer items-center gap-3 rounded-md border transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:outline-none motion-reduce:transition-none",
+              "banks-stacked__row border-border bg-card hover:bg-muted relative flex items-center gap-3 rounded-md border transition-colors motion-reduce:transition-none",
               density === "comfortable" ? "p-3" : "p-2",
               selected && "bg-row-selected",
             )}
@@ -126,7 +97,7 @@ export function BanksStackedList({
                 aria-label={`Select bank ${bank.name}`}
                 checked={selected}
                 onChange={() => onToggleSelect(bank.id)}
-                className="banks-stacked__select accent-primary border-border size-4 flex-none cursor-pointer rounded"
+                className="banks-stacked__select accent-primary border-border relative z-10 size-4 flex-none cursor-pointer rounded"
                 data-testid={`banks-stacked__select-${bank.id}`}
               />
             ) : null}
@@ -139,11 +110,24 @@ export function BanksStackedList({
                   <StatusBadge variant="success" label="New" className="flex-none" />
                 ) : null}
               </div>
-              <TruncatedText
-                value={bank.name}
-                className="banks-stacked__name mt-0.5 text-sm font-medium"
-                focusScopeSelector="[data-stacked-row]"
-              />
+              <Link
+                ref={(el) => {
+                  rowRefs.current[index] = el;
+                }}
+                href={safeHref(bankRoutes.detail(bank.id))}
+                tabIndex={focusedRow === index ? 0 : -1}
+                onFocus={() => setFocusedRow(index)}
+                onKeyDown={(event) => handleKeyDown(event, bank, index)}
+                data-stacked-row
+                data-testid={`banks-stacked__row-${bank.id}`}
+                className="banks-stacked__link focus-visible:after:ring-ring block min-w-0 after:absolute after:inset-0 after:rounded-md focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset"
+              >
+                <TruncatedText
+                  value={bank.name}
+                  className="banks-stacked__name relative z-10 mt-0.5 text-sm font-medium"
+                  focusScopeSelector="[data-stacked-row]"
+                />
+              </Link>
             </div>
             <BankRowActions
               id={bank.id}
@@ -151,7 +135,7 @@ export function BanksStackedList({
               surface="stacked"
               onBankDeleted={onBankDeleted}
               onBankDeleteFailed={onBankDeleteFailed}
-              className="flex-none"
+              className="relative z-10 flex-none"
             />
           </li>
         );
