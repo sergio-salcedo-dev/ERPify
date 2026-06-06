@@ -66,8 +66,8 @@ export function makeBanks(count: number): BankFixture[] {
 
 export type ListScenario = "happy" | "empty" | "server-error";
 export type GetScenario = "happy" | "not-found" | "server-error";
-export type CreateScenario = "happy" | "validation-error";
-export type UpdateScenario = "happy" | "validation-error";
+export type CreateScenario = "happy" | "validation-error" | "server-error";
+export type UpdateScenario = "happy" | "validation-error" | "not-found";
 export type DeleteScenario = "happy" | "not-found" | "in-use";
 
 export interface BanksApiScenario {
@@ -226,6 +226,18 @@ export async function mockBanksApi(page: Page, scenario: BanksApiScenario): Prom
             );
             return;
           }
+          case "server-error": {
+            const correlationId = "01H-create-error";
+            await fulfillProblem(
+              route,
+              500,
+              problemBody("unhandled-exception", "Something went wrong.", 500, correlationId, {
+                detail: "The bank could not be created.",
+              }),
+              correlationId,
+            );
+            return;
+          }
           case "happy":
           default:
             await fulfillJson(route, 201, { data: bank });
@@ -297,6 +309,18 @@ export async function mockBanksApi(page: Page, scenario: BanksApiScenario): Prom
                     message: "The shortName must not exceed 50 characters.",
                   },
                 ],
+              }),
+              correlationId,
+            );
+            return;
+          }
+          case "not-found": {
+            const correlationId = "01H-update-404";
+            await fulfillProblem(
+              route,
+              404,
+              problemBody("bank-not-found", "Bank not found.", 404, correlationId, {
+                detail: "It may have been deleted.",
               }),
               correlationId,
             );

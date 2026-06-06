@@ -50,6 +50,30 @@ export function toastNotifierMock() {
 }
 
 /**
+ * Complete mock kit for `BankForm` specs: the navigation, DI-container
+ * (create + update use cases) and toast module substitutes, plus the spies
+ * they are wired to. Build it inside `vi.hoisted` and hand each module to the
+ * matching `vi.mock`:
+ *
+ * ```ts
+ * const mocks = await vi.hoisted(async () => (await import("./_mocks")).bankFormMocks());
+ * vi.mock("next/navigation", () => mocks.navigation);
+ * ```
+ */
+export function bankFormMocks() {
+  const spies = { push: vi.fn(), refresh: vi.fn(), createRun: vi.fn(), updateRun: vi.fn() };
+  return {
+    ...spies,
+    navigation: routerMock(spies),
+    container: containerMock({
+      BackOfficeCreateBank: { run: spies.createRun },
+      BackOfficeUpdateBank: { run: spies.updateRun },
+    }),
+    toast: toastNotifierMock(),
+  };
+}
+
+/**
  * `bankRealtime` mock that keeps the REAL `bankTopics` (so the topic IRI can
  * never drift from production) and replaces only `useBankRealtime`. Pass a
  * `capture` callback to grab the handlers and drive Mercure events directly from
