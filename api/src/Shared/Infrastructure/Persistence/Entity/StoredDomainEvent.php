@@ -13,6 +13,7 @@ use Erpify\Shared\Domain\Entity\Identifiable;
 #[ORM\Table(name: 'domain_event')]
 #[ORM\Index(name: 'domain_event_aggregate_id_idx', fields: ['aggregateId'])]
 #[ORM\Index(name: 'domain_event_name_idx', fields: ['name'])]
+#[ORM\UniqueConstraint(name: 'domain_event_event_id_uniq', fields: ['eventId'])]
 class StoredDomainEvent
 {
     use Identifiable;
