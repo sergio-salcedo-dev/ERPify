@@ -24,6 +24,11 @@
 #                   slug (still suffixed); START=true also brings the new stack up
 #                   via app.dev (the sub-make re-derives its own erpify-<slug>
 #                   project — see config.mk on why it isn't inherited).
+#                   After checkout the recipe seeds the worktree's .claude/skills/
+#                   with the bmad-* skills from its own tracked .agent/skills/
+#                   copy: .claude/skills/bmad-*/ is gitignored, so a fresh
+#                   checkout lacks it and /bmad-* slash commands would otherwise
+#                   be "Unknown command" inside the worktree.
 #
 # worktree.remove / worktree.remove-all:
 # NAME=<dir|path|branch>  selects the worktree (basename under .claude/worktrees/,
@@ -54,6 +59,11 @@ worktree.create: ## Create a worktree on a NEW branch BRANCH=<branch> (BASE=main
 	baseref='$(if $(BASE),$(BASE),main)'; \
 	echo "→ creating worktree $$path on new branch $$branch (from $$baseref)"; \
 	git -C "$$main" worktree add -b "$$branch" "$$path" "$$baseref" || { echo "✗ git worktree add failed"; exit 1; }; \
+	if ls -d "$$path"/.agent/skills/bmad-*/ >/dev/null 2>&1; then \
+		mkdir -p "$$path/.claude/skills"; \
+		cp -a "$$path"/.agent/skills/bmad-*/ "$$path/.claude/skills/"; \
+		echo "→ seeded .claude/skills/bmad-* from tracked .agent/skills (gitignored, missing from checkout)"; \
+	fi; \
 	if [ "$(START)" = "true" ]; then \
 		echo "→ bringing up stack erpify-$$dir"; \
 		$(MAKE) --no-print-directory -C "$$path" ENV=dev app.dev; \
