@@ -16,22 +16,12 @@ const UPDATED = Bank.fromPrimitives({
 
 const INITIAL = { id: UPDATED.id, name: "Acme Savings", shortName: "ACME" };
 
-const push = vi.hoisted(() => vi.fn());
-const refresh = vi.hoisted(() => vi.fn());
-vi.mock("next/navigation", async () => (await import("./_mocks")).routerMock({ push, refresh }));
+const mocks = await vi.hoisted(async () => (await import("./_mocks")).bankFormMocks());
+vi.mock("next/navigation", () => mocks.navigation);
+vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", () => mocks.container);
+vi.mock("@/context/shared/infrastructure/Notification/Toast", () => mocks.toast);
 
-const createRun = vi.hoisted(() => vi.fn());
-const updateRun = vi.hoisted(() => vi.fn());
-vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", async () =>
-  (await import("./_mocks")).containerMock({
-    BackOfficeCreateBank: { run: createRun },
-    BackOfficeUpdateBank: { run: updateRun },
-  }),
-);
-
-vi.mock("@/context/shared/infrastructure/Notification/Toast", async () =>
-  (await import("./_mocks")).toastNotifierMock(),
-);
+const { push, createRun, updateRun } = mocks;
 
 function problem(overrides: Partial<ProblemDetails> = {}): ProblemDetails {
   return {
