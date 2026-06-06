@@ -89,7 +89,7 @@ baseline_commit: '70751ad9c74f20422bce77a3eaa755ac3cec82a0'
 - **Rango Shift:** semántica estándar (Explorer): baseline capturada al fijar ancla; cada pulsación recalcula `baseline ∪ rango[ancla..foco]` — contraer no destruye selección previa ajena al rango. El anuncio aria ya coalescea (`page.tsx` L349-361).
 - **Flake conocido:** el test «success toast» de `bankListDelete` flakea ~40% bajo carga de CPU en main limpio — no bisecar el diff por él.
 - **Implementación (2026-06-06):** `RecordSheet` ganó el prop opcional `testId` (previsto en el Code Map); `BanksStackedList` ganó `onSelectionChange?: (ids: Set<string>) => void` para aplicar `baseline ∪ rango` (dentro de «handlers y props opcionales» — sin refactor estructural). El retorno de foco a la fila al cerrar con Esc lo da Base UI por defecto (restaura el foco previo a la apertura) — verificado por test, sin código propio. El drawer deriva su banco de `banks`, así que un borrado (local o remoto) durante el peek lo cierra solo.
-- **Rebase pendiente:** `main` (PR #160) eliminó la sección event-id-generation de `deferred-work.md` después del baseline `70751ad`; este branch la conserva intacta por el Never del spec — el rebase pre-PR reconciliará ambas eliminaciones (no solapan).
+- **Rebase (hecho, 2026-06-06):** `main` (PR #160) eliminó la sección event-id-generation de `deferred-work.md` después del baseline `70751ad`; este branch la conservó intacta por el Never del spec. El rebase pre-PR produjo un conflicto de eliminaciones adyacentes, resuelto aplicando ambas: post-rebase quedan **4** secciones `##` (las 5 conservadas del spec menos event-id-generation, retirada por `main`). El AC «5 secciones» se validó contra el baseline antes del rebase.
 
 ## Review Findings
 
@@ -171,7 +171,7 @@ Step-04 (2026-06-06): tres revisores adversariales (blind / edge-case / acceptan
 **Commands:**
 - `make pwa.test.unit` — expected: verde (módulos banks completos, incl. nuevos tests).
 - `make pwa.quality` — expected: ESLint + Prettier limpios.
-- `grep -c "^## " _bmad-output/implementation-artifacts/deferred-work.md` — expected: 5 secciones restantes.
+- `grep -c "^## " _bmad-output/implementation-artifacts/deferred-work.md` — expected: 5 secciones restantes (4 tras el rebase sobre `main`, que retiró event-id-generation vía PR #160 — ver Design Notes).
 
 **Manual checks (if no CLI):**
 - E2E nuevos: revisar en CI (sin browsers locales); opcional verificación manual con playwright-cli + Chrome del sistema.
