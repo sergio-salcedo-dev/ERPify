@@ -11,7 +11,7 @@ use Doctrine\ORM\EntityRepository;
 use Doctrine\ORM\Mapping\ClassMetadata;
 use Doctrine\ORM\QueryBuilder;
 use Erpify\Shared\Domain\Entity\Timestamped;
-use Erpify\Shared\Domain\Enum\Abstraction\HumanReadableIntEnumInterface;
+use Erpify\Tests\Behat\Support\Tool\TypeHint\TypeHintValueResolver;
 use ReflectionException;
 use ReflectionNamedType;
 use ReflectionProperty;
@@ -23,10 +23,6 @@ use TypeError;
  *
  * Consuming contexts must expose `$entityManager` (EntityManagerInterface),
  * `$entityNamespace` (?string) and `$propertyAccessor` (PropertyAccessorInterface).
- *
- * @SuppressWarnings("PHPMD.TooManyMethods")
- * @SuppressWarnings("PHPMD.TooManyPublicMethods")
- * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 trait EntityManagerToolTrait
 {
@@ -66,6 +62,7 @@ trait EntityManagerToolTrait
         \parse_str($findByQueryString, $findBy);
 
         $resolved = [];
+        $typeHintResolver = new TypeHintValueResolver();
 
         foreach ($findBy as $key => $value) {
             $field = (string) $key;
@@ -90,41 +87,10 @@ trait EntityManagerToolTrait
                 }
             }
 
-            $resolved[$field] = $this->handleQueryStringTypeHinting($value, $type);
+            $resolved[$field] = $typeHintResolver->resolve($value, $type);
         }
 
         return $resolved;
-    }
-
-    /**
-     * @SuppressWarnings("PHPMD.EmptyCatchBlock")
-     * @SuppressWarnings("PHPMD.CyclomaticComplexity")
-     */
-    public function handleQueryStringTypeHinting(mixed $value, ?string $type = null): mixed
-    {
-        if ('null' === $value) {
-            return null;
-        }
-
-        if (null !== $type && \is_a($type, HumanReadableIntEnumInterface::class, true)) {
-            return $this->resolveEnumValue($value, $type);
-        }
-
-        if (\is_string($type) && \class_exists($type)) {
-            try {
-                $value = new $type($value);
-            } catch (Throwable) {
-                // Type may not accept this constructor signature; fall back to the raw value.
-            }
-        }
-
-        if ('date' === $type) {
-            \assert(\is_scalar($value));
-
-            return new DateTime((string) $value);
-        }
-
-        return $value;
     }
 
     /**
@@ -215,30 +181,6 @@ trait EntityManagerToolTrait
 
         /** @var class-string<object> $fqcn */
         return $fqcn;
-    }
-
-    /**
-     * Resolves an enum value (or list of enum labels) for {@see handleQueryStringTypeHinting},
-     * extracted to keep the parent under the S1142 return budget.
-     *
-     * @param class-string<HumanReadableIntEnumInterface> $type
-     */
-    private function resolveEnumValue(mixed $value, string $type): mixed
-    {
-        if (\is_array($value)) {
-            $resolved = [];
-
-            foreach ($value as $index => $label) {
-                \assert(\is_string($label));
-                $resolved[$index] = $type::fromLabel($label) ?? $label;
-            }
-
-            return $resolved;
-        }
-
-        \assert(\is_string($value));
-
-        return $type::fromLabel($value) ?? $value;
     }
 
     /**

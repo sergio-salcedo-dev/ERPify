@@ -38,11 +38,9 @@ const OPTIONS: readonly DensityOption[] = [
  */
 export function DensityToggle({ density, onDensityChange, testId }: Readonly<DensityToggleProps>) {
   return (
-    // This is a presentational toggle of icon buttons (not form controls), so
-    // <fieldset> would be inappropriate. role="group" + aria-label gives
-    // assistive tech the correct semantics here (same call as BanksViewToggle).
-    <div
-      role="group"
+    // <fieldset> groups the option buttons natively (implicit group role) —
+    // no ARIA role needed.
+    <fieldset
       aria-label="List density"
       className="density-toggle border-border bg-card inline-flex items-center gap-1 rounded-md border p-0.5"
       data-testid={testId}
@@ -70,6 +68,6 @@ export function DensityToggle({ density, onDensityChange, testId }: Readonly<Den
           </Button>
         );
       })}
-    </div>
+    </fieldset>
   );
 }
