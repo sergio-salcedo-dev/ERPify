@@ -9,8 +9,11 @@ use Doctrine\ORM\Mapping as ORM;
 use Erpify\Shared\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Media\Domain\Repository\MediaRepository;
 
-// @phpstan-ignore argument.type
-// (repositoryClass is the domain interface; the concrete repository implementation is wired via DI)
+/**
+ * (repositoryClass is the domain interface; the concrete repository implementation is wired via DI).
+ *
+ * @phpstan-ignore argument.type
+ */
 #[ORM\Entity(repositoryClass: MediaRepository::class)]
 #[ORM\Table(name: 'media')]
 class Media extends AggregateRoot
