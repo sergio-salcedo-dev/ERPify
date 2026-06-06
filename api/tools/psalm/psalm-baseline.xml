@@ -894,8 +894,6 @@
       <code><![CDATA[$findByQueryString]]></code>
       <code><![CDATA[$findByQueryStringEntity]]></code>
       <code><![CDATA[$toUpdate]]></code>
-      <code><![CDATA[$type]]></code>
-      <code><![CDATA[$value]]></code>
     </PossiblyUnusedParam>
   </file>
   <file src="../../tests/Behat/Support/Transport/HttpResponse.php">
