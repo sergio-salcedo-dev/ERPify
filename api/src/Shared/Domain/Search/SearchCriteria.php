@@ -18,6 +18,7 @@ readonly class SearchCriteria
         public int $limit = self::MAX_LIMIT,
         public PaginationMode $paginationMode = PaginationMode::LIGHT,
         public ?array $ids = null,
+        public Filters $filters = new Filters(),
     ) {
     }
 }
