@@ -22,7 +22,7 @@ const BACKOFFICE_THEME: BannerTheme = {
       "bg-warning/10 border-warning/30 text-foreground",
     ],
     [SystemStatus.DISRUPTED]: [
-      "text-destructive",
+      "text-danger-strong",
       "bg-destructive/10 border-destructive/30 text-foreground",
     ],
   },

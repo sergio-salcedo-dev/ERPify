@@ -72,6 +72,12 @@ context: []
 
 ## Spec Change Log
 
+- 2026-06-06 — Finding de la review cerrado en la propia PR (en vez de diferirse):
+  `SystemStatusBanner` DISRUPTED alineado de `text-destructive` a `text-danger-strong` bajo la
+  convención «semántico como texto ⇒ `-strong`»; la sección
+  `## Deferred from: spec-pwa-dark-mode-2-deferred review (2026-06-06)` se elimina de
+  `deferred-work.md`.
+
 ## Design Notes
 
 - **Fail-fast lazy vs derive-from-request:** `FetchHttpClient` es singleton de module-init (sin request scope → `headers()` lanza); `HttpClient.ts` entra en el bundle cliente (import estático de `next/headers` rompe el build); y derivar el target del `Host` entrante es input no confiable dirigiendo un fetch server-side (checklist de seguridad). Hoy ninguna página fetchea server-side → guard puro sin regresión.
@@ -110,7 +116,8 @@ context: []
 - Tema marketing del banner `/status`: solo la primera entrada (texto) de cada tupla migra.
   [`StatusBanner.tsx:19`](../../pwa/src/app/status/_components/StatusBanner.tsx#L19)
 
-- Tema gemelo del backoffice, mismo patrón.
+- Tema gemelo del backoffice, mismo patrón — incluye el cierre del finding de la review:
+  DISRUPTED alineado de `text-destructive` a `text-danger-strong`, igualando al banner marketing.
   [`SystemStatusBanner.tsx:16`](../../pwa/src/app/backoffice/health/_components/SystemStatusBanner.tsx#L16)
 
 - Caso matizado: solo el `text-warning` del badge migra; `icon:` y `bg-warning/10` quedan (grado-gráfico).
@@ -152,8 +159,9 @@ context: []
 - Tabla de señales semánticas + convención «semántico como texto ⇒ `-strong`» simétrica light/dark.
   [`DESIGN.md:159`](../../pwa/DESIGN.md#L159)
 
-- Las dos secciones dark-mode-2 cerradas se eliminan; nueva entrada deferred (divergencia DISRUPTED entre banners) de la review de esta spec.
-  [`deferred-work.md:119`](deferred-work.md#L119)
+- Las dos secciones dark-mode-2 cerradas se eliminan; la divergencia DISRUPTED que detectó la
+  review de esta spec se corrigió en la propia PR, así que no queda nueva entrada deferred.
+  [`deferred-work.md`](deferred-work.md)
 
 **Tests (periferia)**
 

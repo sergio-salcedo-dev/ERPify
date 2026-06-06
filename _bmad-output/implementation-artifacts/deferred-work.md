@@ -131,16 +131,3 @@ marcó como código nuevo. Queda pendiente, conscientemente fuera del alcance de
   `vi.mock` artesanales en lugar de las de `_mocks.ts` (`routerMock`/`containerMock`/
   `toastNotifierMock`). Código viejo — Sonar no lo cuenta en el PR; deduplicarlo es higiene, no gate.
   Low. (source: adversarial review, spec-pr-158-sonar-dup-density)
-
-## Deferred from: spec-pwa-dark-mode-2-deferred review (2026-06-06)
-
-Adversarial review (Blind Hunter / Edge Case Hunter / Acceptance Auditor) of
-`fix/pwa-dark-mode-2-deferred-cetb`. Patch findings were applied live; the item below is deferred.
-
-- **`DISRUPTED` danger token diverges between sibling banner themes.** `SystemStatusBanner.tsx`
-  (backoffice) styles the disrupted state with `text-destructive` while `StatusBanner.tsx` (marketing)
-  uses `text-danger-strong` — two different tokens for the identical semantic state in two theme maps
-  that are otherwise edited in lockstep. Pre-existing (this spec only touched the OPERATIONAL/DEGRADED
-  rows); under the now-documented «semantic-as-text ⇒ `-strong`» convention, `text-destructive` is the
-  non-conforming one. Scope: align `SystemStatusBanner`'s DISRUPTED entry to `text-danger-strong` (or
-  document why backoffice deliberately differs). Low. (source: blind, spec-pwa-dark-mode-2-deferred)
