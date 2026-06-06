@@ -13,10 +13,16 @@ const BACKOFFICE_THEME: BannerTheme = {
       "text-muted-foreground",
       "bg-muted/50 border-border text-muted-foreground",
     ],
-    [SystemStatus.OPERATIONAL]: ["text-success", "bg-success/10 border-success/30 text-foreground"],
-    [SystemStatus.DEGRADED]: ["text-warning", "bg-warning/10 border-warning/30 text-foreground"],
+    [SystemStatus.OPERATIONAL]: [
+      "text-success-strong",
+      "bg-success/10 border-success/30 text-foreground",
+    ],
+    [SystemStatus.DEGRADED]: [
+      "text-warning-strong",
+      "bg-warning/10 border-warning/30 text-foreground",
+    ],
     [SystemStatus.DISRUPTED]: [
-      "text-destructive",
+      "text-danger-strong",
       "bg-destructive/10 border-destructive/30 text-foreground",
     ],
   },

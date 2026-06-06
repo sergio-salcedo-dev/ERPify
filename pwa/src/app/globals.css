@@ -52,6 +52,7 @@
   --color-success: var(--erpify-success);
   --color-success-strong: var(--erpify-success-strong);
   --color-warning: var(--erpify-warning);
+  --color-warning-strong: var(--erpify-warning-strong);
   --color-danger: var(--erpify-danger);
   --color-danger-strong: var(--erpify-danger-strong);
 
@@ -167,8 +168,14 @@
 
   /* Semantic signals */
   --erpify-success: #10b981;
-  --erpify-success-strong: #27a644;
+  /* Text-grade success/warning: AA (≥4.5:1) on the light surfaces
+   * (#fff, #f7f8f8, #f3f4f5, #e9eaec, #eef2fc) where semantic words render
+   * as visible text. Same hex family as the status-dot fills below by design,
+   * but independent tokens (graphic-grade 3:1 vs text-grade 4.5:1) — do not
+   * alias. The base --erpify-success/-warning stay the fill/graphic shade. */
+  --erpify-success-strong: #0f7a5a;
   --erpify-warning: #d97706;
+  --erpify-warning-strong: #b45309;
   --erpify-danger: #dc2626;
   /* Text-grade danger: same hue as --erpify-danger in light (AA on light
    * surfaces already); diverges in dark, where one value cannot serve both
@@ -274,8 +281,12 @@
 
   /* Semantic signals — slightly brighter danger for dark legibility */
   --erpify-success: #10b981;
-  --erpify-success-strong: #27a644;
+  /* Text-grade success/warning: in dark the -strong value equals the base, so
+   * migrating text call sites to the -strong variants is pixel-identical here
+   * (the base tones already clear AA on the dark surfaces). */
+  --erpify-success-strong: #10b981;
   --erpify-warning: #f59e0b;
+  --erpify-warning-strong: #f59e0b;
   --erpify-danger: #e5484d;
   /* Readable danger text on every dark surface (≥4.6:1 on bg-elevated);
    * --erpify-danger stays the fill/graphic shade (white-text buttons). */

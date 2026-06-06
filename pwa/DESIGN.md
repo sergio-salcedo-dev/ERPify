@@ -155,11 +155,14 @@ Mode-aware: one value cannot be link-AA on both white and navy (the former indig
 
 | Token                    | Light               | Dark      | Use                                                                                                                           |
 | ------------------------ | ------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `--color-success`        | `#10b981` (Emerald) | `#10b981` | Pill, complete state                                                                                                          |
-| `--color-success-strong` | `#27a644`           | `#27a644` | Active / in-progress dot                                                                                                      |
-| `--color-warning`        | `#d97706`           | `#f59e0b` | Warning surfaces                                                                                                              |
+| `--color-success`        | `#10b981` (Emerald) | `#10b981` | Fill / graphic shade (pill, complete state, dot)                                                                              |
+| `--color-success-strong` | `#0f7a5a`           | `#10b981` | Success as readable _text_ / informative icon (AA ≥ 4.5:1 on light surfaces; equals the base in dark)                         |
+| `--color-warning`        | `#d97706`           | `#f59e0b` | Fill / graphic shade (warning surfaces, dot)                                                                                  |
+| `--color-warning-strong` | `#b45309`           | `#f59e0b` | Warning as readable _text_ / informative icon (AA ≥ 4.5:1 on light surfaces; equals the base in dark)                         |
 | `--color-danger`         | `#dc2626`           | `#e5484d` | Destructive action, error icon                                                                                                |
 | `--color-danger-strong`  | `#dc2626`           | `#f87171` | Danger as readable _text_ on dark surfaces (≥ 4.6:1 on `bg-elevated`); `--color-danger` stays the fill shade under white text |
+
+> **Convention — semantic-as-text ⇒ `-strong`.** When a success/warning/danger token colors **visible text or an informative icon**, use the `-strong` variant; when it colors a **fill, dot, border or other graphic** (`bg-success/10`, `bg-warning`, `border-warning/30`, the `--color-status-dot-*` tokens), keep the base token. The rule is now **symmetric in light and dark**: in light, `-strong` is the darker AA-text shade (`#0f7a5a` / `#b45309`, ≥ 4.5:1 on `#fff`, `#f7f8f8`, `#f3f4f5`, `#e9eaec`, `#eef2fc`); in dark, `-strong` equals the base (the bright tones already clear AA on the navy surfaces), so migrating a text call site is pixel-identical there. The status-dot fills (`--color-status-dot-*`) share the light `-strong` hex by design but stay **separate tokens** (graphic-grade 3:1 vs text-grade 4.5:1) — do not alias one to the other.
 
 ### Color — overlay and focus
 

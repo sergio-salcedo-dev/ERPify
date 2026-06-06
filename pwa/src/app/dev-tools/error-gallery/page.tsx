@@ -224,7 +224,7 @@ export default function DevErrorGalleryPage() {
     <div className="error-gallery bg-background min-h-screen" data-testid="error-gallery">
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
         <header className="error-gallery__header border-warning/40 bg-warning/10 mb-8 rounded-md border p-4 sm:p-5">
-          <p className="text-warning text-xs font-semibold tracking-wider uppercase">
+          <p className="text-warning-strong text-xs font-semibold tracking-wider uppercase">
             Dev / test only · linked from{" "}
             <Link
               href={Routes.DEV_TOOLS}

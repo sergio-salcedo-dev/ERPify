@@ -87,42 +87,6 @@ below is deferred.
   TTL/size-bounded eviction (or assert key cardinality) if/when a dynamic-keyed call site lands. Low.
   (source: blind+edge)
 
-## Deferred from: code review of spec-pwa-dark-mode-2 (2026-06-04, full-PR pass)
-
-Second adversarial pass over the **complete** PR #136 diff (`main...fdc5b65`, v1+v2 together), with
-live verification against the worktree stack on `:8443` (banks 200 same-origin + clean console,
-landing/`/status` dark, toggle cycle + persistence).
-
-- **SSR fallback `https://localhost` has no port — fails on worktree stacks without
-  `SYMFONY_INTERNAL_URL` propagated to the pwa container.** `serverApiBase()` falls back to the
-  literal when both `SYMFONY_INTERNAL_URL` and `NEXT_PUBLIC_API_BASE_URL` are unset, pointing SSR
-  fetches at `:443` — the same failure mode the PR fixed browser-side, persisting server-side on
-  incomplete env config. Pre-existing (the literal lived in `browserApiBase()` on `main`); in
-  Docker/prod both vars are set. Guard: guarantee `SYMFONY_INTERNAL_URL` in every stack overlay, or
-  derive host:port from the incoming request. Low. (source: edge,
-  `HttpClient.ts:41`)
-
-## Deferred from: spec-pwa-dark-mode-2 review (2026-06-04)
-
-Adversarial review (Blind Hunter / Edge Case Hunter / Acceptance Auditor) of the dark-mode v2
-iteration on PR #136. Patch findings were applied live; the items below are deferred.
-
-- **Light-mode semantic tokens as visible text are sub-AA design-system-wide.** `text-success`
-  (`#10b981`, ~2.5:1) and `text-warning` (`#d97706`, ~3.2:1) on light surfaces fail WCAG AA for
-  text, and this is the *established convention* across `StatusBadge`, `SystemStatusBanner`,
-  `ProblemDisplay` and now the `/status` page (pre-existing; the v2 migration matched it). The
-  dark-mode side was fixed in-PR via `--erpify-danger-strong` (`text-danger-strong`); the proper
-  light-mode fix needs AA-safe text variants (darkened `-strong` values or new `-text` tokens) in
-  the **light** block — that trips the v2 spec's "tokens del modo claro" Ask-First gate, so it is
-  an owner decision. Scope: pick AA-safe light text values for success/warning (danger already
-  passes at `#dc2626`), sweep the call sites, and verify `StatusBadge` tinted-pill variants.
-  Medium. (source: edge+auditor, spec-pwa-dark-mode-2)
-- **`mercureUrl()` does not `.trim()` `NEXT_PUBLIC_API_BASE_URL` while `browserApiBase()` does.**
-  A whitespace-padded value makes fetch and EventSource resolve different origins (fetch trimmed,
-  EventSource not). Pre-existing divergence in `BrowserMercureSubscriber.ts:17` /
-  `useMercureRealtime.ts:33`, untouched by the v2 same-origin fix. One-line alignment when those
-  files are next edited. Low. (source: edge, spec-pwa-dark-mode-2)
-
 ## Deferred from: spec-pwa-banks-bulk-restore-stale-snapshot review (2026-06-06)
 
 Adversarial review (Blind Hunter / Edge Case Hunter / Acceptance Auditor) of the re-probe-validated
