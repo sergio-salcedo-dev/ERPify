@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import BanksListPage from "@/app/backoffice/banks/page";
-import type { BankRealtimeHandlers } from "@/context/backoffice/bank/infrastructure/bankRealtime";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
 import { ACME, BETA } from "./_fixtures";
+import { renderWithRows } from "./_render";
 
 /**
  * Record peek: `o` on a focused row opens a RecordSheet drawer with the five
@@ -12,34 +11,20 @@ import { ACME, BETA } from "./_fixtures";
  * stacked list) share the contract.
  */
 
-vi.mock("next/navigation", async () => (await import("./_mocks")).routerMock());
+// `realtime.handlers` lets tests delete the peeked row from under the open drawer.
+const mocks = await vi.hoisted(async () => (await import("./_mocks")).banksListPageMocks());
 
-const searchRun = vi.hoisted(() => vi.fn());
-vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", async () =>
-  (await import("./_mocks")).containerMock({ BackOfficeSearchBanks: { run: searchRun } }),
-);
+vi.mock("next/navigation", mocks.navigation);
+vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", mocks.container);
+vi.mock("@/context/shared/infrastructure/Notification/Toast", mocks.toast);
+vi.mock("@/context/backoffice/bank/infrastructure/bankRealtime", mocks.bankRealtime);
 
-vi.mock("@/context/shared/infrastructure/Notification/Toast", async () =>
-  (await import("./_mocks")).toastNotifierMock(),
-);
-
-// Captured so tests can delete the peeked row from under the open drawer.
-let realtimeHandlers: BankRealtimeHandlers | undefined;
-vi.mock("@/context/backoffice/bank/infrastructure/bankRealtime", async () =>
-  (await import("./_mocks")).bankRealtimeMock((handlers) => {
-    realtimeHandlers = handlers;
-  }),
-);
-
-async function renderWithRows(): Promise<void> {
-  render(<BanksListPage />);
-  await screen.findByTestId(`banks-table__row-${ACME.id}`);
-}
+const { searchRun, realtime } = mocks;
 
 describe("BanksListPage — record peek (`o`)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    realtimeHandlers = undefined;
+    realtime.handlers = undefined;
     searchRun.mockResolvedValue({ banks: [ACME, BETA], nextCursor: undefined });
   });
 
@@ -96,7 +81,7 @@ describe("BanksListPage — record peek (`o`)", () => {
     fireEvent.keyDown(row, { key: "o" });
     await screen.findByTestId("banks-list__peek");
 
-    act(() => realtimeHandlers?.onDeleted?.(ACME.id));
+    act(() => realtime.handlers?.onDeleted?.(ACME.id));
 
     await waitFor(() => {
       expect(screen.queryByTestId("banks-list__peek")).toBeNull();

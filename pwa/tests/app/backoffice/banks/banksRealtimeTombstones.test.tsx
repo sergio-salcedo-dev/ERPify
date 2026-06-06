@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import BanksListPage from "@/app/backoffice/banks/page";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
-import type { BankRealtimeHandlers } from "@/context/backoffice/bank/infrastructure/bankRealtime";
 import { ACME, BETA } from "./_fixtures";
+import { renderWithRows } from "./_render";
 
 /**
  * Tombstones close the two row-resurrection windows: a late at-least-once
@@ -12,36 +11,16 @@ import { ACME, BETA } from "./_fixtures";
  * set — the server list is authoritative.
  */
 
-vi.mock("next/navigation", async () => (await import("./_mocks")).routerMock());
+// The Mercure subscription is replaced while `realtime.handlers` captures the
+// handlers, so tests can drive realtime deltas directly.
+const mocks = await vi.hoisted(async () => (await import("./_mocks")).banksListPageMocks());
 
-const searchRun = vi.hoisted(() => vi.fn());
-const deleteRun = vi.hoisted(() => vi.fn());
-const findRun = vi.hoisted(() => vi.fn());
-vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", async () =>
-  (await import("./_mocks")).containerMock({
-    BackOfficeSearchBanks: { run: searchRun },
-    BackOfficeDeleteBank: { run: deleteRun },
-    BackOfficeFindBank: { run: findRun },
-  }),
-);
+vi.mock("next/navigation", mocks.navigation);
+vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", mocks.container);
+vi.mock("@/context/shared/infrastructure/Notification/Toast", mocks.toast);
+vi.mock("@/context/backoffice/bank/infrastructure/bankRealtime", mocks.bankRealtime);
 
-vi.mock("@/context/shared/infrastructure/Notification/Toast", async () =>
-  (await import("./_mocks")).toastNotifierMock(),
-);
-
-// Replace the Mercure subscription while capturing the handlers, so tests can
-// drive realtime deltas directly.
-let realtimeHandlers: BankRealtimeHandlers | undefined;
-vi.mock("@/context/backoffice/bank/infrastructure/bankRealtime", async () =>
-  (await import("./_mocks")).bankRealtimeMock((handlers) => {
-    realtimeHandlers = handlers;
-  }),
-);
-
-async function renderWithRows(): Promise<void> {
-  render(<BanksListPage />);
-  await screen.findByTestId(`banks-table__row-${ACME.id}`);
-}
+const { searchRun, deleteRun, findRun, realtime } = mocks;
 
 function selectRows(...banks: Bank[]): void {
   for (const bank of banks) {
@@ -57,7 +36,7 @@ async function confirmBulkDelete(): Promise<void> {
 describe("BanksListPage — deleted-id tombstones", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    realtimeHandlers = undefined;
+    realtime.handlers = undefined;
     searchRun.mockResolvedValue({ banks: [ACME, BETA], nextCursor: undefined });
     deleteRun.mockResolvedValue(undefined);
     findRun.mockImplementation((id: string) => Promise.resolve(id === ACME.id ? ACME : BETA));
@@ -66,14 +45,14 @@ describe("BanksListPage — deleted-id tombstones", () => {
   it("does not resurrect a deleted row on a late `created` redelivery", async () => {
     await renderWithRows();
 
-    act(() => realtimeHandlers?.onDeleted?.(ACME.id));
+    act(() => realtime.handlers?.onDeleted?.(ACME.id));
     await waitFor(() => {
       expect(screen.queryByTestId(`banks-table__row-${ACME.id}`)).toBeNull();
     });
 
     // At-least-once redelivery of the original `created` arrives after the
     // delete — the tombstone keeps the row gone.
-    act(() => realtimeHandlers?.onCreated?.(ACME));
+    act(() => realtime.handlers?.onCreated?.(ACME));
 
     expect(screen.queryByTestId(`banks-table__row-${ACME.id}`)).toBeNull();
     expect(screen.getByTestId(`banks-table__row-${BETA.id}`)).toBeInTheDocument();
@@ -82,7 +61,7 @@ describe("BanksListPage — deleted-id tombstones", () => {
   it("prunes the tombstones on a successful reload — the server list wins", async () => {
     await renderWithRows();
 
-    act(() => realtimeHandlers?.onDeleted?.(ACME.id));
+    act(() => realtime.handlers?.onDeleted?.(ACME.id));
     await waitFor(() => {
       expect(screen.queryByTestId(`banks-table__row-${ACME.id}`)).toBeNull();
     });
@@ -90,14 +69,14 @@ describe("BanksListPage — deleted-id tombstones", () => {
     // A reconnect reconciles with the server (which no longer lists ACME) and
     // empties the tombstone set.
     searchRun.mockResolvedValue({ banks: [BETA], nextCursor: undefined });
-    act(() => realtimeHandlers?.onReconnect?.());
+    act(() => realtime.handlers?.onReconnect?.());
     await waitFor(() => {
       expect(searchRun).toHaveBeenCalledTimes(2);
     });
 
     // ACME is genuinely re-created later: with the tombstone pruned, the
     // `created` event inserts it again.
-    act(() => realtimeHandlers?.onCreated?.(ACME));
+    act(() => realtime.handlers?.onCreated?.(ACME));
 
     expect(await screen.findByTestId(`banks-table__row-${ACME.id}`)).toBeInTheDocument();
   });
@@ -132,7 +111,7 @@ describe("BanksListPage — deleted-id tombstones", () => {
     });
 
     // Another client's delete is confirmed by the server mid-window…
-    act(() => realtimeHandlers?.onDeleted?.(BETA.id));
+    act(() => realtime.handlers?.onDeleted?.(BETA.id));
     // …then the stale re-probe resolves claiming the bank still exists.
     await act(async () => {
       resolveReprobe?.(BETA);

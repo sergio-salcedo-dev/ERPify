@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import BanksListPage from "@/app/backoffice/banks/page";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { Bank } from "@/context/backoffice/bank/domain/Bank";
-import type { BankRealtimeHandlers } from "@/context/backoffice/bank/infrastructure/bankRealtime";
 import { ACME, BETA } from "./_fixtures";
+import { renderWithRows } from "./_render";
 
 /**
  * Shift+↑/↓ range selection (Explorer semantics): the first press anchors on
@@ -11,25 +10,6 @@ import { ACME, BETA } from "./_fixtures";
  * recomputes `baseline ∪ range[anchor..focus]`, so contracting deselects only
  * what the range itself added. Any non-shift movement resets the anchor.
  */
-
-vi.mock("next/navigation", async () => (await import("./_mocks")).routerMock());
-
-const searchRun = vi.hoisted(() => vi.fn());
-vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", async () =>
-  (await import("./_mocks")).containerMock({ BackOfficeSearchBanks: { run: searchRun } }),
-);
-
-vi.mock("@/context/shared/infrastructure/Notification/Toast", async () =>
-  (await import("./_mocks")).toastNotifierMock(),
-);
-
-// Captured so tests can shrink the list from under an armed range anchor.
-let realtimeHandlers: BankRealtimeHandlers | undefined;
-vi.mock("@/context/backoffice/bank/infrastructure/bankRealtime", async () =>
-  (await import("./_mocks")).bankRealtimeMock((handlers) => {
-    realtimeHandlers = handlers;
-  }),
-);
 
 // Third row so ranges can grow and contract around a midpoint.
 const GAMMA = Bank.fromPrimitives({
@@ -41,10 +21,15 @@ const GAMMA = Bank.fromPrimitives({
 
 const ROWS = [ACME, BETA, GAMMA];
 
-async function renderWithRows(): Promise<void> {
-  render(<BanksListPage />);
-  await screen.findByTestId(`banks-table__row-${ACME.id}`);
-}
+// `realtime.handlers` lets tests shrink the list from under an armed range anchor.
+const mocks = await vi.hoisted(async () => (await import("./_mocks")).banksListPageMocks());
+
+vi.mock("next/navigation", mocks.navigation);
+vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", mocks.container);
+vi.mock("@/context/shared/infrastructure/Notification/Toast", mocks.toast);
+vi.mock("@/context/backoffice/bank/infrastructure/bankRealtime", mocks.bankRealtime);
+
+const { searchRun, realtime } = mocks;
 
 function tableRow(bank: Bank): HTMLElement {
   return screen.getByTestId(`banks-table__row-${bank.id}`);
@@ -63,7 +48,7 @@ async function expectSelectionCount(count: number): Promise<void> {
 describe("BanksListPage — Shift+Arrow range selection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    realtimeHandlers = undefined;
+    realtime.handlers = undefined;
     searchRun.mockResolvedValue({ banks: ROWS, nextCursor: undefined });
   });
 
@@ -159,7 +144,7 @@ describe("BanksListPage — Shift+Arrow range selection", () => {
     // An unselected row is deleted remotely: the slice shrinks to 2 rows while
     // the cached anchor still points at index 2 and the selection set keeps
     // its identity (nothing to prune).
-    act(() => realtimeHandlers?.onDeleted?.(ACME.id));
+    act(() => realtime.handlers?.onDeleted?.(ACME.id));
     await waitFor(() => {
       expect(screen.queryByTestId(`banks-table__row-${ACME.id}`)).toBeNull();
     });
