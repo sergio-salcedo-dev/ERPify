@@ -7,7 +7,7 @@ namespace Erpify\Tests\Functional\Backoffice\Bank;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
-use Erpify\Shared\Infrastructure\Uuid\SymfonyUuidGenerator;
+use Erpify\Shared\Domain\Uuid\Uuid as DomainUuid;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Uid\Uuid;
@@ -38,7 +38,7 @@ final class BankCreateEventIdMatchesPersistedPkTest extends KernelTestCase
         $connection->beginTransaction();
 
         try {
-            $id = SymfonyUuidGenerator::generate();
+            $id = DomainUuid::generate();
 
             // Suffix name/short-name with the id so the row is unique regardless of any seeded fixtures.
             $suffix = \strtoupper(\substr(\str_replace('-', '', $id), 0, 8));

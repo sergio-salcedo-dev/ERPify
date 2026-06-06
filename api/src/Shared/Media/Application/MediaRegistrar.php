@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Shared\Media\Application;
 
 use Erpify\Shared\Application\Validation\Validator;
-use Erpify\Shared\Infrastructure\Uuid\SymfonyUuidGenerator;
+use Erpify\Shared\Domain\Uuid\Uuid;
 use Erpify\Shared\Media\Application\Port\ImageNormalizer;
 use Erpify\Shared\Media\Domain\Entity\Media;
 use Erpify\Shared\Media\Domain\Repository\MediaRepository;
@@ -31,7 +31,7 @@ final readonly class MediaRegistrar
         }
 
         $media = Media::create(
-            SymfonyUuidGenerator::generate(),
+            Uuid::generate(),
             $normalizedImage->contentHash,
             $normalizedImage->mimeType,
             \strlen($normalizedImage->bytes),
