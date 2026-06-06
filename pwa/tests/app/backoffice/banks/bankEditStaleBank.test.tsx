@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import EditBankPage from "@/app/backoffice/banks/[id]/edit/page";
-import { Bank } from "@/context/backoffice/bank/domain/Bank";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
+import { ACME as BANK } from "./_fixtures";
 
 /**
  * Editing a bank that a colleague deleted in parallel: the PUT answers 404
@@ -12,19 +12,11 @@ import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError"
  * state with focus on its "Back to banks" CTA (never <body>).
  */
 
-const BANK = Bank.fromPrimitives({
-  id: "11111111-1111-4111-8111-111111111111",
-  name: "Acme Savings",
-  shortName: "ACME",
-  createdAt: "2026-01-01T10:00:00Z",
-  updatedAt: "2026-04-15T14:30:00Z",
-});
-
 const push = vi.hoisted(() => vi.fn());
 const refresh = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", async () => ({
   ...(await import("./_mocks")).routerMock({ push, refresh }),
-  useParams: () => ({ id: BANK.id }),
+  useParams: () => ({ id: "11111111-1111-4111-8111-111111111111" }),
 }));
 
 const findRun = vi.hoisted(() => vi.fn());

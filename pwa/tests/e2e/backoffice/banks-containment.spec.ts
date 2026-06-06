@@ -32,8 +32,15 @@ test.describe("BackOffice - Banks long-name containment (real API)", () => {
   let api: APIRequestContext;
   let longBank: ApiBank;
   let shortBank: ApiBank;
+  // A bank whose 50-char shortName is guaranteed to overflow the narrow card
+  // code column, so the card shortName tooltip mounts deterministically
+  // regardless of viewport width.
+  let cardBank: ApiBank;
 
   const longName = (): string => longBank.name;
+  // Pad the 50-char API limit with the run prefix so the value stays unique
+  // within the run AND wide enough to truncate the mono card-code column.
+  const cardShortName = `${runPrefix}-CARD-${"X".repeat(50)}`.slice(0, 50);
 
   async function gotoFilteredList(page: Page): Promise<void> {
     await page.goto("/backoffice/banks");
@@ -49,7 +56,8 @@ test.describe("BackOffice - Banks long-name containment (real API)", () => {
       `${runPrefix}-LONG`.slice(0, 50),
     );
     shortBank = await createBank(api, `${runPrefix} Tiny`, `${runPrefix}-TINY`.slice(0, 50));
-    trackedIds.push(longBank.id, shortBank.id);
+    cardBank = await createBank(api, `${runPrefix} Card`, cardShortName);
+    trackedIds.push(longBank.id, shortBank.id, cardBank.id);
   });
 
   test.afterAll(async () => {
@@ -129,6 +137,42 @@ test.describe("BackOffice - Banks long-name containment (real API)", () => {
 
     // CSS-only clamp: the full 255-char value stays in the DOM.
     await expect(page.getByTestId(`banks-cards__name-${longBank.id}`)).toHaveText(longName());
+  });
+
+  test("cards: hovering the truncated shortName reveals the full-value tooltip", async ({
+    page,
+  }) => {
+    await gotoFilteredList(page);
+    await page.getByTestId("banks-list__view-toggle-cards").click();
+    await expect(page.getByTestId(`banks-cards__item-${cardBank.id}`)).toBeVisible();
+
+    const shortName = page.getByTestId(`banks-cards__shortname-${cardBank.id}`);
+    await shortName.hover();
+    const tooltip = page.locator('[data-slot="tooltip-content"]');
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip).toHaveText(cardShortName);
+  });
+
+  test("cards: clicking the shortName does not navigate, but clicking the card title does", async ({
+    page,
+  }) => {
+    await gotoFilteredList(page);
+    await page.getByTestId("banks-list__view-toggle-cards").click();
+    const card = page.getByTestId(`banks-cards__item-${cardBank.id}`);
+    await expect(card).toBeVisible();
+
+    // The shortName sits at z-10 ABOVE the title's stretched-link overlay, so a
+    // click on it is deliberately swallowed — the list must stay put. Assert
+    // both the URL (still the list route) and the list root (still mounted)
+    // once the click settles.
+    await card.getByTestId(`banks-cards__shortname-${cardBank.id}`).click();
+    await expect(page.getByTestId("banks-list")).toBeVisible();
+    await expect(page).toHaveURL(/\/backoffice\/banks$/);
+
+    // The title link carries the overlay, so a click anywhere on it (and on the
+    // rest of the card outside the z-10 controls) navigates to the detail.
+    await card.getByTestId(`banks-cards__name-${cardBank.id}`).click();
+    await page.waitForURL(new RegExp(`/backoffice/banks/${cardBank.id}$`));
   });
 
   test("detail H1 shows the entire 255-char name without visual truncation", async ({ page }) => {

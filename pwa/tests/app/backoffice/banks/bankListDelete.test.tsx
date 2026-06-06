@@ -18,29 +18,22 @@ import { ACME, BETA } from "./_fixtures";
  * the toast fires AND no detail navigation happens.
  */
 
-const push = vi.fn();
-const refresh = vi.fn();
+const push = vi.hoisted(() => vi.fn());
+const refresh = vi.hoisted(() => vi.fn());
+vi.mock("next/navigation", async () => (await import("./_mocks")).routerMock({ push, refresh }));
 
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push, refresh, back: vi.fn() }),
-}));
+const searchRun = vi.hoisted(() => vi.fn());
+const deleteRun = vi.hoisted(() => vi.fn());
+vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", async () =>
+  (await import("./_mocks")).containerMock({
+    BackOfficeSearchBanks: { run: searchRun },
+    BackOfficeDeleteBank: { run: deleteRun },
+  }),
+);
 
-const searchRun = vi.fn();
-const deleteRun = vi.fn();
-
-vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", () => ({
-  container: {
-    get: (token: string) => {
-      if (token === "BackOfficeSearchBanks") return { run: searchRun };
-      if (token === "BackOfficeDeleteBank") return { run: deleteRun };
-      throw new Error(`Unexpected DI token ${token}`);
-    },
-  },
-}));
-
-vi.mock("@/context/shared/infrastructure/Notification/Toast", () => ({
-  toastNotifier: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
-}));
+vi.mock("@/context/shared/infrastructure/Notification/Toast", async () =>
+  (await import("./_mocks")).toastNotifierMock(),
+);
 
 // Replace the Mercure subscription (the live hook's fetch/EventSource churn
 // flakes under parallel load) while capturing the handlers, so tests can
