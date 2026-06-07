@@ -69,7 +69,9 @@ FROM frankenphp_base AS frankenphp_dev
 
 ENV APP_ENV=dev
 ENV XDEBUG_MODE=off
-ENV FRANKENPHP_WORKER_CONFIG=watch
+# Scoped: a bare `watch` recursively watches the whole CWD (/app/api) including var/,
+# whose cache churn during test runs can crash the watcher (→ core dump + restart).
+ENV FRANKENPHP_WORKER_CONFIG="watch /app/api/src/**/*.php"
 
 # dev dependencies
 RUN <<-EOF

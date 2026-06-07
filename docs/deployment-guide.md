@@ -57,6 +57,9 @@ make prod.env.check
   the minimum, and carries parametrizable CPU/memory ceilings.
 - Postgres is on an `internal` `backend` network with **no published host port**.
 - `pwa` runs with a read-only root filesystem.
+- `php` and `messenger_worker` disable core dumps (`ulimits.core: 0` in the base
+  `compose.yaml`, all environments) — a crashing FrankenPHP otherwise dumps a
+  ~1 GB core file into `/app/api` (bind-mounted into the repo tree in dev).
 - TLS: a non-public host uses `CADDY_SERVER_EXTRA_DIRECTIVES=tls internal`
   (Caddy's own CA); a public domain clears it for automatic ACME — same overlay.
 

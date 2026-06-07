@@ -36,7 +36,10 @@ describe("ApiBankRepository.search", () => {
 
     const page = await new ApiBankRepository(httpClient).search();
 
-    expect(httpClient.get).toHaveBeenCalledWith(API_ENDPOINTS.BACKOFFICE.BANKS.LIST);
+    expect(httpClient.get).toHaveBeenCalledWith(
+      API_ENDPOINTS.BACKOFFICE.BANKS.LIST,
+      expect.any(Function),
+    );
     expect(page.banks).toHaveLength(1);
     expect(page.banks[0]).toBeInstanceOf(Bank);
     expect(page.banks[0].name).toBe("Acme Savings");
@@ -59,5 +62,54 @@ describe("ApiBankRepository.search", () => {
 
     expect(page.banks).toEqual([]);
     expect(page.nextCursor).toBeUndefined();
+  });
+});
+
+describe("ApiBankRepository response guards", () => {
+  const searchEnvelope = {
+    data: [primitives],
+    pagination: { cursor: "cursor-1", hasMorePages: true },
+  };
+
+  it("passes a search guard that accepts the flat envelope and rejects drifted shapes", async () => {
+    const httpClient = httpClientReturning(searchEnvelope);
+    await new ApiBankRepository(httpClient).search();
+
+    const [, guard] = vi.mocked(httpClient.get).mock.calls[0];
+    if (!guard) throw new Error("expected search() to pass a response guard");
+
+    expect(guard(searchEnvelope)).toBe(true);
+    expect(guard({ data: [primitives] })).toBe(false); // pagination missing
+    expect(guard({ data: null, pagination: searchEnvelope.pagination })).toBe(false);
+    expect(guard({ data: [{ id: 1 }], pagination: searchEnvelope.pagination })).toBe(false);
+    expect(guard({ data: { nested: [primitives] }, pagination: {} })).toBe(false); // old nested shape
+    expect(guard(undefined)).toBe(false);
+  });
+
+  it("passes a single-envelope guard to find, create and update", async () => {
+    const httpClient: HttpClient = {
+      get: vi.fn().mockResolvedValue({ data: primitives }),
+      post: vi.fn().mockResolvedValue({ data: primitives }),
+      put: vi.fn().mockResolvedValue({ data: primitives }),
+      delete: vi.fn(),
+    };
+    const repository = new ApiBankRepository(httpClient);
+    const input = { name: primitives.name, shortName: primitives.shortName };
+
+    await repository.find(primitives.id);
+    await repository.create(input);
+    await repository.update(primitives.id, input);
+
+    for (const guard of [
+      vi.mocked(httpClient.get).mock.calls[0][1],
+      vi.mocked(httpClient.post).mock.calls[0][2],
+      vi.mocked(httpClient.put).mock.calls[0][2],
+    ]) {
+      if (!guard) throw new Error("expected a single-envelope response guard");
+      expect(guard({ data: primitives })).toBe(true);
+      expect(guard(primitives)).toBe(false); // unwrapped payload
+      expect(guard({ data: { ...primitives, id: 42 } })).toBe(false);
+      expect(guard(null)).toBe(false);
+    }
   });
 });

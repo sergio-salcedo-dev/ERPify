@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
-import { FetchHttpClient } from "@/context/shared/infrastructure/HttpClient/HttpClient";
+import {
+  FetchHttpClient,
+  MALFORMED_RESPONSE_ENVELOPE,
+} from "@/context/shared/infrastructure/HttpClient/HttpClient";
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
 import { isProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { HttpStatus } from "@/context/shared/domain/types/http";
@@ -135,6 +138,96 @@ describe("FetchHttpClient", () => {
       expect(httpError.problem["correlation-id"]).toBe(STUB_UUID);
       expect(httpError.problem.status).toBe(HttpStatus.BAD_GATEWAY);
     }
+  });
+
+  describe("response envelope validation (ResponseGuard)", () => {
+    interface Envelope {
+      data: string[];
+    }
+
+    const isEnvelope = (body: unknown): body is Envelope =>
+      typeof body === "object" && body !== null && Array.isArray((body as Envelope).data);
+
+    it("returns the body when the guard accepts it", async () => {
+      fetchSpy.mockResolvedValueOnce(makeResponse(HttpStatus.OK, { data: ["a"] }));
+
+      const client = new FetchHttpClient();
+      const body = await client.get("/api/v1/backoffice/banks", isEnvelope);
+
+      expect(body).toEqual({ data: ["a"] });
+    });
+
+    it("throws a typed malformed-envelope HttpError when a 2xx body fails the guard", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        makeResponse(
+          HttpStatus.OK,
+          { data: null },
+          { headers: { "X-Correlation-Id": "01H-correlation-from-header" } },
+        ),
+      );
+
+      const client = new FetchHttpClient();
+
+      try {
+        await client.get("/api/v1/backoffice/banks", isEnvelope);
+        throw new Error("expected HttpError");
+      } catch (err) {
+        expect(err).toBeInstanceOf(HttpError);
+        const httpError = err as HttpError;
+        expect(httpError.problem.type).toBe(MALFORMED_RESPONSE_ENVELOPE);
+        expect(httpError.problem.status).toBe(HttpStatus.OK);
+        expect(httpError.problem.detail).toContain("/api/v1/backoffice/banks");
+        expect(httpError.problem.instance).toBe(STUB_UUID);
+        expect(httpError.problem["correlation-id"]).toBe("01H-correlation-from-header");
+        expect(isProblemDetails(httpError.problem)).toBe(true);
+      }
+    });
+
+    it("treats a non-JSON 2xx body as a malformed envelope when a guard is provided", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        new Response("<html>maintenance</html>", {
+          status: HttpStatus.OK,
+          headers: { "Content-Type": "text/html" },
+        }),
+      );
+
+      const client = new FetchHttpClient();
+
+      await expect(client.get("/api/v1/backoffice/banks", isEnvelope)).rejects.toMatchObject({
+        problem: { type: MALFORMED_RESPONSE_ENVELOPE },
+      });
+    });
+
+    it("guards POST and PUT bodies through the same seam", async () => {
+      fetchSpy.mockResolvedValueOnce(makeResponse(HttpStatus.CREATED, { wrong: true }));
+
+      const client = new FetchHttpClient();
+
+      await expect(
+        client.post("/api/v1/backoffice/banks", { name: "Acme" }, isEnvelope),
+      ).rejects.toMatchObject({
+        problem: { type: MALFORMED_RESPONSE_ENVELOPE, status: HttpStatus.CREATED },
+      });
+    });
+
+    it("rejects a guarded 204 as a malformed envelope (a guard means a body is expected)", async () => {
+      fetchSpy.mockResolvedValueOnce(makeResponse(HttpStatus.NO_CONTENT, undefined));
+
+      const client = new FetchHttpClient();
+
+      await expect(client.get("/api/v1/backoffice/banks", isEnvelope)).rejects.toMatchObject({
+        problem: { type: MALFORMED_RESPONSE_ENVELOPE, status: HttpStatus.NO_CONTENT },
+      });
+    });
+
+    it("keeps the blind passthrough when no guard is supplied", async () => {
+      fetchSpy.mockResolvedValueOnce(makeResponse(HttpStatus.OK, { anything: "goes" }));
+
+      const client = new FetchHttpClient();
+      const body = await client.get<{ anything: string }>("/api/v1/backoffice/banks");
+
+      expect(body).toEqual({ anything: "goes" });
+    });
   });
 
   describe("browser base URL (same-origin by default)", () => {
