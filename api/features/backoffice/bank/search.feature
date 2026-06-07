@@ -178,7 +178,7 @@ Feature: Search banks
   # The boundary scenario pins real behaviour under PHP's default max_input_vars=1000:
   # the effective wire limit is min(caps, max_input_vars, URL length).
   Scenario: Generic in filter at the values cap stays within max_input_vars
-    When I send a "GET" request to "/backoffice/banks" with a "name" in-filter of 100 generated values plus value "BBVA"
+    When I send a "GET" request to "/backoffice/banks" with a "name" in-filter of 100 values, the last being "BBVA"
     Then the response status code should be 200
     And the JSON node "data.items" should have 1 elements
     And 2 requests got executed only for doctrine connection "default"
