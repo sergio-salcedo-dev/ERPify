@@ -282,24 +282,33 @@ final class FilterApplierTest extends KernelTestCase
 
     public function testMalformedUuidOnUuidRequiringFieldIsRejected(): void
     {
-        $this->expectException(InvalidSearchValue::class);
+        try {
+            $this->filterApplier->apply(
+                $this->bankQueryBuilder(),
+                Filters::fromList([Filter::eq('id', 'not-a-uuid')]),
+                $this->bankFieldMap(),
+            );
 
-        $this->filterApplier->apply(
-            $this->bankQueryBuilder(),
-            Filters::fromList([Filter::eq('id', 'not-a-uuid')]),
-            $this->bankFieldMap(),
-        );
+            $this->fail('Expected InvalidSearchValue to be thrown.');
+        } catch (InvalidSearchValue $invalidSearchValue) {
+            // Context carries the public field and the 0-based offending position — never the value.
+            $this->assertSame(['field' => 'id', 'position' => 0], $invalidSearchValue->context());
+        }
     }
 
-    public function testMalformedUuidInListOnUuidRequiringFieldIsRejected(): void
+    public function testMalformedUuidInListOnUuidRequiringFieldIsRejectedWithItsPosition(): void
     {
-        $this->expectException(InvalidSearchValue::class);
+        try {
+            $this->filterApplier->apply(
+                $this->bankQueryBuilder(),
+                Filters::fromList([Filter::in('id', [Uuid::generate(), 'not-a-uuid'])]),
+                $this->bankFieldMap(),
+            );
 
-        $this->filterApplier->apply(
-            $this->bankQueryBuilder(),
-            Filters::fromList([Filter::in('id', [Uuid::generate(), 'not-a-uuid'])]),
-            $this->bankFieldMap(),
-        );
+            $this->fail('Expected InvalidSearchValue to be thrown.');
+        } catch (InvalidSearchValue $invalidSearchValue) {
+            $this->assertSame(['field' => 'id', 'position' => 1], $invalidSearchValue->context());
+        }
     }
 
     public function testValidUuidOnUuidRequiringFieldIsBoundWithoutError(): void

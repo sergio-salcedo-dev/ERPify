@@ -20,37 +20,12 @@ Feature: Search banks
     And the JSON node "data.pagination.cursor" should not be null
     And 2 requests got executed only for doctrine connection "default"
 
-  Scenario: Search a bank by a valid id that does not exist returns no results
-    When I send a "GET" request to "/backoffice/banks?ids[]=2e6d865c-17b0-476a-85f2-037bf6d3b3dc"
+  Scenario: Filtering by a valid id that does not exist returns no results
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=id&filters[0][operator]=in&filters[0][value][]=2e6d865c-17b0-476a-85f2-037bf6d3b3dc"
     Then the response status code should be 200
     And the JSON node "data.items" should have 0 elements
     And the JSON node "data.pagination" should exist
     And 1 request got executed only for doctrine connection "default"
-
-  Scenario: Search a bank by names in array form returns matching results case-insensitively
-    When I send a "GET" request to "/backoffice/banks?names[]=BBVA"
-    Then the response status code should be 200
-    And the JSON node "data.items" should have 1 elements
-    And the JSON node "data.pagination" should exist
-    And 2 requests got executed only for doctrine connection "default"
-
-  Scenario: Search a bank by names ignores diacritics
-    When I send a "GET" request to "/backoffice/banks?names[]=Sociedad%20Anonima"
-    Then the response status code should be 200
-    And the JSON node "data.items" should have 1 elements
-    And 2 requests got executed only for doctrine connection "default"
-
-  Scenario: Search a bank by an invalid id returns a 400 validation-failed Problem Details body
-    When I send a "GET" request to "/backoffice/banks?ids[]=invalid"
-    Then the response status code should be 400
-    And the header "Content-Type" should be equal to "application/problem+json"
-    And the response should be in JSON
-    And the JSON node "type" should be equal to "validation-failed"
-    And the JSON node "status" should be equal to the number 400
-    And the JSON node "title" should be equal to "Validation failed."
-    And the JSON node "violations[0].field" should be equal to "ids[0]"
-    And the JSON node "violations[0].message" should contain "valid"
-    And 0 requests got executed across all doctrine connections
 
   Scenario: Unknown pagination mode returns 400
     When I send a "GET" request to "/backoffice/banks?paginationMode=unknownPaginationMode"
@@ -142,8 +117,8 @@ Feature: Search banks
     And the JSON node "data.pagination.hasMorePages" should be true
     And 3 requests got executed only for doctrine connection "default"
 
-  # Generic filters[N][field|operator|value] contract (story 1.4, expand phase) — the legacy
-  # names[]/ids[] params keep working through their current path; both coexist.
+  # Generic filters[N][field|operator|value] contract — the single filtering vocabulary. The
+  # legacy names[]/ids[] params were retired before any production deployment (story 1.5).
   Scenario: Generic eq filter matches a bank case-insensitively
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=eq&filters[0][value]=BBVA"
     Then the response status code should be 200
@@ -233,4 +208,50 @@ Feature: Search banks
     Then the response status code should be 400
     And the header "Content-Type" should be equal to "application/problem+json"
     And the JSON node "type" should be equal to "invalid-search-value"
+    And the JSON node "field" should be equal to "id"
+    And the JSON node "position" should be equal to the number 0
     And 0 requests got executed across all doctrine connections
+
+  # Exact-id pins (story 1.5): result identity — not just counts — plus multi-filter AND
+  # composition for the single filtering vocabulary.
+  Scenario: Generic in filter over name pins the exact bank id
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=in&filters[0][value][]=BBVA"
+    Then the response status code should be 200
+    And the JSON node "data.items" should have 1 elements
+    And the JSON node "data.items[0].id" should be equal to "11111111-1111-7000-8000-000000000020"
+    And 2 requests got executed only for doctrine connection "default"
+
+  Scenario: Generic in filter over name ignores diacritics in the search values
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=in&filters[0][value][]=Sociedad%20Anonima"
+    Then the response status code should be 200
+    And the JSON node "data.items" should have 1 elements
+    And the JSON node "data.items[0].id" should be equal to "11111111-1111-7000-8000-000000000031"
+    And 2 requests got executed only for doctrine connection "default"
+
+  Scenario: Generic in filter over id pins the exact bank id
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=id&filters[0][operator]=in&filters[0][value][]=11111111-1111-7000-8000-000000000020"
+    Then the response status code should be 200
+    And the JSON node "data.items" should have 1 elements
+    And the JSON node "data.items[0].id" should be equal to "11111111-1111-7000-8000-000000000020"
+    And 2 requests got executed only for doctrine connection "default"
+
+  Scenario: Two generic filters on the same field compose with AND
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=in&filters[0][value][]=Banco%20Santander&filters[1][field]=name&filters[1][operator]=contains&filters[1][value]=banc"
+    Then the response status code should be 200
+    And the JSON node "data.items" should have 1 elements
+    And the JSON node "data.items[0].id" should be equal to "11111111-1111-7000-8000-000000000019"
+    And 2 requests got executed only for doctrine connection "default"
+
+  Scenario: Disjoint generic filters compose with AND into an empty result
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=in&filters[0][value][]=BBVA&filters[1][field]=name&filters[1][operator]=contains&filters[1][value]=banc"
+    Then the response status code should be 200
+    And the JSON node "data.items" should have 0 elements
+    And 1 request got executed only for doctrine connection "default"
+
+  # The retired legacy params are plain unknown query params now: ignored like any other,
+  # never an error, never a filter.
+  Scenario: Retired legacy filter params are ignored as unknown query params
+    When I send a "GET" request to "/backoffice/banks?names[]=BBVA&ids[]=11111111-1111-7000-8000-000000000020"
+    Then the response status code should be 200
+    And the JSON node "data.items" should have 31 elements
+    And 2 requests got executed only for doctrine connection "default"

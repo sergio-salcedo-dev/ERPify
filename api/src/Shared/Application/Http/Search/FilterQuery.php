@@ -23,8 +23,8 @@ final readonly class FilterQuery
 {
     public const int MAX_IN_VALUES = 100;
 
-    // Mirrors the legacy names[] Assert\Length cap so the generic contract keeps the same
-    // per-value bound the ad hoc params always had.
+    // Mirrors the searchable columns' VARCHAR(255) bound: a longer value could never match,
+    // so it is rejected at mapping time instead of travelling to the database.
     private const int MAX_VALUE_LENGTH = 255;
 
     /**

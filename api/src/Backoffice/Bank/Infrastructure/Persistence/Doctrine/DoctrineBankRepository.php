@@ -9,11 +9,9 @@ use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Backoffice\Bank\Domain\Repository\BankSearchRepository;
 use Erpify\Backoffice\Bank\Domain\Repository\BankStoredObjectQueries;
-use Erpify\Backoffice\Bank\Domain\Search\BankSearchCriteria;
 use Erpify\Shared\Domain\Search\FilterOperator;
 use Erpify\Shared\Domain\Search\PaginatedResult;
 use Erpify\Shared\Domain\Search\SearchCriteria;
-use Erpify\Shared\Domain\ValueObject\NormalizedText;
 use Erpify\Shared\Infrastructure\Persistence\Doctrine\AbstractDoctrineSearchRepository;
 use Erpify\Shared\Infrastructure\Persistence\Doctrine\QueryBuilderWithOptions;
 use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\FieldMapping;
@@ -21,7 +19,6 @@ use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\FilterApplier;
 use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\NormalizedTextFieldNormalizer;
 use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\SearchFieldMap;
 use Erpify\Shared\Infrastructure\Persistence\PaginatorCursorFactory;
-use InvalidArgumentException;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
@@ -74,27 +71,9 @@ final class DoctrineBankRepository extends AbstractDoctrineSearchRepository impl
     #[Override]
     public function getSearchQueryBuilder(SearchCriteria $criteria): QueryBuilderWithOptions
     {
-        if (!$criteria instanceof BankSearchCriteria) {
-            throw new InvalidArgumentException(
-                'Invalid criteria type. Expected BankSearchCriteria, got ' . $criteria::class . ' instead.',
-            );
-        }
-
+        // No ad hoc filtering here (D8): all filters — legacy params included — arrive as
+        // criteria->filters and are applied by the shared seam against searchFieldMap().
         $queryBuilderWithOptions = $this->createQueryBuilder('b');
-
-        $this->addWhereIdsIn($queryBuilderWithOptions, alias: 'b', ids: $criteria->ids ?? []);
-
-        $normalizedNames = \array_map(
-            NormalizedText::normalize(...),
-            $criteria->names ?? [],
-        );
-
-        $this->addWhereIn(
-            $queryBuilderWithOptions,
-            alias: 'b',
-            field: 'nameNormalized',
-            values: $normalizedNames,
-        );
 
         $this->addOrderByFromQueryParams(
             $queryBuilderWithOptions,

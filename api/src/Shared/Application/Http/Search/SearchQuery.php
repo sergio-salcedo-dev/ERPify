@@ -20,19 +20,19 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
  * to a 400 `validation-failed` Problem Details body via
  * {@see \Erpify\Shared\Infrastructure\Http\EventListener\ExceptionResponder}.
  *
- * Per-entity DTOs extend this and add filter properties; they should
- * override `toCriteria()` to return their concrete `SearchCriteria` subtype.
+ * Filtering is expressed exclusively through the generic `filters[]` grammar
+ * ({@see FilterQuery}) resolved against each repository's field map — search
+ * endpoints share this single DTO instead of subclassing it.
  */
-readonly class SearchQuery
+final readonly class SearchQuery
 {
-    final public const int MAX_PAGE = 10_000;
+    public const int MAX_PAGE = 10_000;
 
-    final public const int MAX_LIMIT = 1_000;
+    public const int MAX_LIMIT = 1_000;
 
-    final public const int MAX_FILTERS = 20;
+    public const int MAX_FILTERS = 20;
 
     /**
-     * @param list<string>|null       $ids
      * @param array<int, FilterQuery> $filters pre-validation the wire can deliver sparse
      *                                         indexes; the callback below rejects anything
      *                                         that is not a contiguous list from 0 (D1)
@@ -47,8 +47,6 @@ readonly class SearchQuery
         #[Assert\LessThanOrEqual(self::MAX_LIMIT)]
         public ?int $limit = self::MAX_LIMIT,
         public PaginationMode $paginationMode = PaginationMode::LIGHT,
-        #[Assert\All([new Assert\Uuid(strict: true)])]
-        public ?array $ids = null,
         #[Assert\Valid]
         #[Assert\Count(max: self::MAX_FILTERS)]
         public array $filters = [],
@@ -75,12 +73,11 @@ readonly class SearchQuery
             page: $this->page ?? 1,
             limit: $this->limit ?? self::MAX_LIMIT,
             paginationMode: $this->paginationMode,
-            ids: $this->ids,
             filters: $this->domainFilters(),
         );
     }
 
-    final protected function domainFilters(): Filters
+    private function domainFilters(): Filters
     {
         return Filters::fromList(\array_values(\array_map(
             static fn (FilterQuery $filterQuery): Filter => $filterQuery->toFilter(),

@@ -14,19 +14,20 @@ use Erpify\Shared\Domain\Exception\InvalidSearchCriteria;
  * {@see InvalidSearchCriteria} marker so the Problem Details pipeline maps it to HTTP 400
  * with no extra wiring.
  *
- * Only the public field name travels in `context` — never the offending value, keeping the
- * error payload free of arbitrary client input.
+ * Only the public field name and the 0-based position of the offending value travel in
+ * `context` — never the value itself, keeping the error payload free of arbitrary client
+ * input while staying debuggable for long `in` lists.
  */
 final class InvalidSearchValue extends DomainException implements InvalidSearchCriteria
 {
     public const string TYPE = 'invalid-search-value';
 
-    public static function notAUuid(string $field): self
+    public static function notAUuid(string $field, int $position): self
     {
         return new self(
             type: self::TYPE,
             title: 'Search value must be a valid UUID.',
-            context: ['field' => $field],
+            context: ['field' => $field, 'position' => $position],
         );
     }
 }

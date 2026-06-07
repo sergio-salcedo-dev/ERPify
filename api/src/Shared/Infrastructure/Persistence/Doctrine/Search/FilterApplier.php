@@ -59,9 +59,9 @@ final readonly class FilterApplier
     {
         $values = \is_array($filter->value) ? $filter->value : [$filter->value];
 
-        foreach ($values as $value) {
+        foreach ($values as $position => $value) {
             if (!Uuid::isValid($value)) {
-                throw InvalidSearchValue::notAUuid($filter->field);
+                throw InvalidSearchValue::notAUuid($filter->field, $position);
             }
         }
     }

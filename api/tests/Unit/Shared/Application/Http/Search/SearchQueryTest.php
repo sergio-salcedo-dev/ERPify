@@ -48,7 +48,7 @@ final class SearchQueryTest extends TestCase
             page: 2,
             limit: 50,
             paginationMode: PaginationMode::DETAILED,
-            ids: ['11111111-1111-7000-8000-000000000001'],
+            filters: [new FilterQuery('name', FilterOperator::Eq, 'BBVA')],
         );
 
         $this->assertCount(0, $this->validator->validate($searchQuery));
@@ -86,11 +86,6 @@ final class SearchQueryTest extends TestCase
         yield 'limit zero' => [new SearchQuery(limit: 0), ['limit']];
         yield 'limit over cap' => [new SearchQuery(limit: SearchQuery::MAX_LIMIT + 1), ['limit']];
         yield 'cursor too long' => [new SearchQuery(cursor: \str_repeat('a', 8193)), ['cursor']];
-        yield 'invalid uuid in ids' => [new SearchQuery(ids: ['not-a-uuid']), ['ids[0]']];
-        yield 'mixed valid and invalid uuid in ids' => [
-            new SearchQuery(ids: ['11111111-1111-7000-8000-000000000001', 'bad']),
-            ['ids[1]'],
-        ];
     }
 
     public function testToCriteriaProducesEquivalentDomainValueObject(): void
@@ -100,7 +95,6 @@ final class SearchQueryTest extends TestCase
             page: 3,
             limit: 25,
             paginationMode: PaginationMode::DETAILED,
-            ids: ['11111111-1111-7000-8000-000000000001'],
         );
 
         $searchCriteria = $searchQuery->toCriteria();
@@ -109,7 +103,6 @@ final class SearchQueryTest extends TestCase
         $this->assertSame(3, $searchCriteria->page);
         $this->assertSame(25, $searchCriteria->limit);
         $this->assertSame(PaginationMode::DETAILED, $searchCriteria->paginationMode);
-        $this->assertSame(['11111111-1111-7000-8000-000000000001'], $searchCriteria->ids);
     }
 
     public function testToCriteriaPropagatesMaxLimit(): void
@@ -120,7 +113,6 @@ final class SearchQueryTest extends TestCase
         $this->assertSame(1, $searchCriteria->page);
         $this->assertSame(SearchQuery::MAX_LIMIT, $searchCriteria->limit);
         $this->assertSame(PaginationMode::LIGHT, $searchCriteria->paginationMode);
-        $this->assertNull($searchCriteria->ids);
     }
 
     public function testFiltersDefaultToEmptyDomainCollection(): void

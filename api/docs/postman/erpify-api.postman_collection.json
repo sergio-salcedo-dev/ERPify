@@ -49,8 +49,6 @@
                     { "key": "limit", "value": "100", "description": "Max 1000 (default 1000)" },
                     { "key": "paginationMode", "value": "light", "description": "light | detailed" },
                     { "key": "cursor", "value": "", "description": "Opaque cursor for cursor-based pagination (mutually exclusive with page)", "disabled": true },
-                    { "key": "ids[]", "value": "", "description": "Filter by UUIDs (repeatable)", "disabled": true },
-                    { "key": "names[]", "value": "", "description": "Filter by names, max 255 chars (repeatable)", "disabled": true },
                     { "key": "filters[0][field]", "value": "name", "description": "Generic filter: public field name (allow-listed for banks: name, id)", "disabled": true },
                     { "key": "filters[0][operator]", "value": "contains", "description": "eq | in | contains (strictly lowercase); id allows only eq/in", "disabled": true },
                     { "key": "filters[0][value]", "value": "banc", "description": "Scalar value for eq/contains (max 255 chars); for in use filters[0][value][] (repeatable, max 100 values). Max 20 filters, indexes contiguous from 0; effective wire limit is min(caps, max_input_vars=1000, URL length)", "disabled": true }

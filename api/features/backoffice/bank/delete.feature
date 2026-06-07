@@ -31,7 +31,7 @@ Feature: Delete a bank
 
   Scenario: Delete a bank referenced by accounts returns a 409 bank-in-use Problem Details body
     Given I reload the fixtures
-    And I send a "GET" request to "/backoffice/banks?names[]=JPMorgan%20Chase"
+    And I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=in&filters[0][value][]=JPMorgan%20Chase"
     And the response status code should be 200
     And the JSON node "data.items" should have 1 elements
     And the JSON node "data.items[0].id" should be equal to "11111111-1111-7000-8000-000000000001"

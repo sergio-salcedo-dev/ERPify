@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\Bank\Infrastructure\Controller;
 
 use Erpify\Backoffice\Bank\Application\BankSearcher;
-use Erpify\Backoffice\Bank\Application\Http\BankSearchQuery;
+use Erpify\Shared\Application\Http\Search\SearchQuery;
 use Erpify\Shared\Infrastructure\Http\Controller\AbstractSearchController;
 use Erpify\Shared\Infrastructure\Http\Responder\ResponderInterface;
 use Erpify\Shared\Infrastructure\Persistence\PaginatorCursorFactory;
@@ -34,10 +34,10 @@ final readonly class BankSearchController extends AbstractSearchController
      */
     public function __invoke(
         #[MapQueryString]
-        BankSearchQuery $query = new BankSearchQuery(),
+        SearchQuery $query = new SearchQuery(),
     ): Response {
         return $this->buildResponse(
-            paginatedResult: $this->bankSearcher->search($query),
+            paginatedResult: $this->bankSearcher->search($query->toCriteria()),
             serializerGroups: [
                 'identifiable',
                 'timestamped',
