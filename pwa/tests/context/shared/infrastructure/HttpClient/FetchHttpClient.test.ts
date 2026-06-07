@@ -210,6 +210,16 @@ describe("FetchHttpClient", () => {
       });
     });
 
+    it("rejects a guarded 204 as a malformed envelope (a guard means a body is expected)", async () => {
+      fetchSpy.mockResolvedValueOnce(makeResponse(HttpStatus.NO_CONTENT, undefined));
+
+      const client = new FetchHttpClient();
+
+      await expect(client.get("/api/v1/backoffice/banks", isEnvelope)).rejects.toMatchObject({
+        problem: { type: MALFORMED_RESPONSE_ENVELOPE, status: HttpStatus.NO_CONTENT },
+      });
+    });
+
     it("keeps the blind passthrough when no guard is supplied", async () => {
       fetchSpy.mockResolvedValueOnce(makeResponse(HttpStatus.OK, { anything: "goes" }));
 

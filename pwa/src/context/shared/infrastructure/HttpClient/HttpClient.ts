@@ -59,7 +59,9 @@ function serverApiBase(): string {
 
 @injectable()
 export class MockHttpClient implements HttpClient {
-  async get<T>(url: string): Promise<T> {
+  // why: the mock returns surface-specific fake bodies, so it deliberately
+  // ignores response guards — enforcing real envelopes is FetchHttpClient's job.
+  async get<T>(url: string, _validate?: ResponseGuard<T>): Promise<T> {
     return new Promise((resolve) => {
       setTimeout(() => {
         if (url.includes(API_ENDPOINTS.FRONTOFFICE.HEALTH)) {
@@ -87,11 +89,11 @@ export class MockHttpClient implements HttpClient {
     });
   }
 
-  async post<TBody, T>(_url: string, _body: TBody): Promise<T> {
+  async post<TBody, T>(_url: string, _body: TBody, _validate?: ResponseGuard<T>): Promise<T> {
     return {} as T;
   }
 
-  async put<TBody, T>(_url: string, _body: TBody): Promise<T> {
+  async put<TBody, T>(_url: string, _body: TBody, _validate?: ResponseGuard<T>): Promise<T> {
     return {} as T;
   }
 
@@ -112,7 +114,10 @@ export class FetchHttpClient implements HttpClient {
       throw await this.toHttpError(res);
     }
 
-    if (res.status === HttpStatus.NO_CONTENT) {
+    // A guarded caller expects a body of shape T — a 204 is shape drift too, so
+    // only the guard-less path short-circuits; parseBody turns the empty body
+    // into the typed malformed-envelope error.
+    if (res.status === HttpStatus.NO_CONTENT && !validate) {
       return undefined as T;
     }
 
@@ -159,7 +164,7 @@ export class FetchHttpClient implements HttpClient {
       throw await this.toHttpError(res);
     }
 
-    if (res.status === HttpStatus.NO_CONTENT) {
+    if (res.status === HttpStatus.NO_CONTENT && !validate) {
       return undefined as T;
     }
 
