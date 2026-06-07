@@ -71,8 +71,8 @@ final class DoctrineBankRepository extends AbstractDoctrineSearchRepository impl
     #[Override]
     public function getSearchQueryBuilder(SearchCriteria $criteria): QueryBuilderWithOptions
     {
-        // No ad hoc filtering here (D8): all filters — legacy params included — arrive as
-        // criteria->filters and are applied by the shared seam against searchFieldMap().
+        // No ad hoc filtering here: all filtering arrives as criteria->filters and is
+        // applied by the shared seam against searchFieldMap().
         $queryBuilderWithOptions = $this->createQueryBuilder('b');
 
         $this->addOrderByFromQueryParams(
