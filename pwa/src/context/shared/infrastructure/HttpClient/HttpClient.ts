@@ -5,10 +5,16 @@ import { API_ENDPOINTS } from "../api/ApiEndpoints";
 import { HttpError } from "./HttpError";
 import { uuidV7 } from "@/lib/uuidV7";
 
+/** Runtime shape check applied to a 2xx JSON body at the HTTP boundary. */
+export type ResponseGuard<T> = (body: unknown) => body is T;
+
+/** `ProblemDetails.type` minted when a 2xx body fails its {@link ResponseGuard}. */
+export const MALFORMED_RESPONSE_ENVELOPE = "malformed-response-envelope";
+
 export interface HttpClient {
-  get<T>(url: string): Promise<T>;
-  post<TBody, T>(url: string, body: TBody): Promise<T>;
-  put<TBody, T>(url: string, body: TBody): Promise<T>;
+  get<T>(url: string, validate?: ResponseGuard<T>): Promise<T>;
+  post<TBody, T>(url: string, body: TBody, validate?: ResponseGuard<T>): Promise<T>;
+  put<TBody, T>(url: string, body: TBody, validate?: ResponseGuard<T>): Promise<T>;
   delete(url: string): Promise<void>;
 }
 
@@ -96,7 +102,7 @@ export class MockHttpClient implements HttpClient {
 
 @injectable()
 export class FetchHttpClient implements HttpClient {
-  async get<T>(url: string): Promise<T> {
+  async get<T>(url: string, validate?: ResponseGuard<T>): Promise<T> {
     const res = await fetch(this.resolveUrl(url), {
       headers: { Accept: "application/json" },
       cache: "no-store",
@@ -110,15 +116,15 @@ export class FetchHttpClient implements HttpClient {
       return undefined as T;
     }
 
-    return (await res.json()) as T;
+    return this.parseBody<T>(res, url, validate);
   }
 
-  async post<TBody, T>(url: string, body: TBody): Promise<T> {
-    return this.sendWithBody<TBody, T>("POST", url, body);
+  async post<TBody, T>(url: string, body: TBody, validate?: ResponseGuard<T>): Promise<T> {
+    return this.sendWithBody<TBody, T>("POST", url, body, validate);
   }
 
-  async put<TBody, T>(url: string, body: TBody): Promise<T> {
-    return this.sendWithBody<TBody, T>("PUT", url, body);
+  async put<TBody, T>(url: string, body: TBody, validate?: ResponseGuard<T>): Promise<T> {
+    return this.sendWithBody<TBody, T>("PUT", url, body, validate);
   }
 
   async delete(url: string): Promise<void> {
@@ -137,6 +143,7 @@ export class FetchHttpClient implements HttpClient {
     method: "POST" | "PUT",
     url: string,
     body: TBody,
+    validate?: ResponseGuard<T>,
   ): Promise<T> {
     const res = await fetch(this.resolveUrl(url), {
       method,
@@ -156,7 +163,30 @@ export class FetchHttpClient implements HttpClient {
       return undefined as T;
     }
 
-    return (await res.json()) as T;
+    return this.parseBody<T>(res, url, validate);
+  }
+
+  // why: a 2xx whose body drifted from the expected envelope must surface as a
+  // typed boundary error here, not as a TypeError deep inside a mapper (e.g. a
+  // stale browser bundle fetching a newer, reshaped API response).
+  private async parseBody<T>(res: Response, url: string, validate?: ResponseGuard<T>): Promise<T> {
+    if (!validate) {
+      return (await res.json()) as T;
+    }
+
+    const parsed: unknown = await res.json().catch(() => undefined);
+    if (!validate(parsed)) {
+      throw new HttpError({
+        type: MALFORMED_RESPONSE_ENVELOPE,
+        title: "API response did not match the expected shape",
+        status: res.status,
+        detail: `Unexpected response body shape for ${url}`,
+        instance: uuidV7(),
+        "correlation-id": res.headers.get("X-Correlation-Id") ?? uuidV7(),
+      });
+    }
+
+    return parsed;
   }
 
   private resolveUrl(url: string): string {
