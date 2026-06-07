@@ -45,8 +45,7 @@ abstract readonly class AbstractSearchController
             ['groups' => $serializerGroups],
         );
 
-        return $this->responder->respond(Result::ok([
-            'items' => $items,
+        return $this->responder->respond(Result::ok($items, [
             'pagination' => [
                 'currentPage' => $paginatedResult->getCurrentPage(),
                 'pageCount' => $paginatedResult->getPageCount(),

@@ -31,6 +31,40 @@ final class JsonResponderTest extends TestCase
         );
     }
 
+    /** @throws JsonException */
+    public function testMetaKeysBecomeTopLevelSiblingsOfData(): void
+    {
+        $response = (new JsonResponder())->respond(Result::ok(
+            [['id' => 'abc']],
+            ['pagination' => ['currentPage' => 1, 'hasMorePages' => false]],
+        ));
+
+        $this->assertSame(
+            [
+                'data' => [['id' => 'abc']],
+                'pagination' => ['currentPage' => 1, 'hasMorePages' => false],
+            ],
+            \json_decode((string) $response->getContent(), true, 512, JSON_THROW_ON_ERROR),
+        );
+    }
+
+    /** @throws JsonException */
+    public function testPayloadWinsWhenMetaCarriesADataKey(): void
+    {
+        $response = (new JsonResponder())->respond(Result::ok(
+            [['id' => 'abc']],
+            ['data' => 'must-not-clobber-the-payload', 'pagination' => ['currentPage' => 1]],
+        ));
+
+        $this->assertSame(
+            [
+                'data' => [['id' => 'abc']],
+                'pagination' => ['currentPage' => 1],
+            ],
+            \json_decode((string) $response->getContent(), true, 512, JSON_THROW_ON_ERROR),
+        );
+    }
+
     public function testNoContentProducesEmpty204Body(): void
     {
         $response = (new JsonResponder())->respond(Result::noContent());

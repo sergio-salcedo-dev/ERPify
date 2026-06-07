@@ -6,38 +6,38 @@ Feature: Search banks
   Scenario: List all banks
     When I send a "GET" request to "/backoffice/banks"
     Then the response status code should be 200
-    And the JSON node "data.items" should have 31 elements
-    And the JSON nodes matching "data.items[*]" should have 5 children
-    And the JSON nodes matching "data.items[*].id" should exist
-    And the JSON nodes matching "data.items[*].name" should exist
-    And the JSON nodes matching "data.items[*].shortName" should exist
-    And the JSON nodes matching "data.items[*].createdAt" should exist
-    And the JSON nodes matching "data.items[*].updatedAt" should exist
-    And the JSON node "data.pagination" should have 5 elements
-    And the JSON node "data.pagination.currentPage" should be equal to the number 1
-    And the JSON node "data.pagination.pageCount" should be null
-    And the JSON node "data.pagination.hasMorePages" should be false
-    And the JSON node "data.pagination.cursor" should not be null
+    And the JSON node "data" should have 31 elements
+    And the JSON nodes matching "data[*]" should have 5 children
+    And the JSON nodes matching "data[*].id" should exist
+    And the JSON nodes matching "data[*].name" should exist
+    And the JSON nodes matching "data[*].shortName" should exist
+    And the JSON nodes matching "data[*].createdAt" should exist
+    And the JSON nodes matching "data[*].updatedAt" should exist
+    And the JSON node "pagination" should have 5 elements
+    And the JSON node "pagination.currentPage" should be equal to the number 1
+    And the JSON node "pagination.pageCount" should be null
+    And the JSON node "pagination.hasMorePages" should be false
+    And the JSON node "pagination.cursor" should not be null
     And 2 requests got executed only for doctrine connection "default"
 
   Scenario: Search a bank by a valid id that does not exist returns no results
     When I send a "GET" request to "/backoffice/banks?ids[]=2e6d865c-17b0-476a-85f2-037bf6d3b3dc"
     Then the response status code should be 200
-    And the JSON node "data.items" should have 0 elements
-    And the JSON node "data.pagination" should exist
+    And the JSON node "data" should have 0 elements
+    And the JSON node "pagination" should exist
     And 1 request got executed only for doctrine connection "default"
 
   Scenario: Search a bank by names in array form returns matching results case-insensitively
     When I send a "GET" request to "/backoffice/banks?names[]=BBVA"
     Then the response status code should be 200
-    And the JSON node "data.items" should have 1 elements
-    And the JSON node "data.pagination" should exist
+    And the JSON node "data" should have 1 elements
+    And the JSON node "pagination" should exist
     And 2 requests got executed only for doctrine connection "default"
 
   Scenario: Search a bank by names ignores diacritics
     When I send a "GET" request to "/backoffice/banks?names[]=Sociedad%20Anonima"
     Then the response status code should be 200
-    And the JSON node "data.items" should have 1 elements
+    And the JSON node "data" should have 1 elements
     And 2 requests got executed only for doctrine connection "default"
 
   Scenario: Search a bank by an invalid id returns a 400 validation-failed Problem Details body
@@ -95,49 +95,49 @@ Feature: Search banks
   Scenario: Light pagination mode emits a cursor and skips pageCount on page one
     When I send a "GET" request to "/backoffice/banks?paginationMode=light&limit=5"
     Then the response status code should be 200
-    And the JSON node "data.items" should have 5 elements
-    And the JSON node "data.pagination.currentPage" should be equal to the number 1
-    And the JSON node "data.pagination.pageCount" should be null
-    And the JSON node "data.pagination.hasMorePages" should be true
-    And the JSON node "data.pagination.cursor" should not be null
+    And the JSON node "data" should have 5 elements
+    And the JSON node "pagination.currentPage" should be equal to the number 1
+    And the JSON node "pagination.pageCount" should be null
+    And the JSON node "pagination.hasMorePages" should be true
+    And the JSON node "pagination.cursor" should not be null
     And 2 requests got executed only for doctrine connection "default"
 
   Scenario: Light pagination mode follows the cursor to the next page
     Given I send a "GET" request to "/backoffice/banks?paginationMode=light&limit=5"
-    And I send a "GET" request to "/backoffice/banks?paginationMode=light&limit=5&page=2&cursor={value}" using the JSON node "data.pagination.cursor" from the previous response
+    And I send a "GET" request to "/backoffice/banks?paginationMode=light&limit=5&page=2&cursor={value}" using the JSON node "pagination.cursor" from the previous response
     Then the response status code should be 200
-    And the JSON node "data.items" should have 5 elements
-    And the JSON node "data.pagination.currentPage" should be equal to the number 2
-    And the JSON node "data.pagination.pageCount" should be null
-    And the JSON node "data.pagination.hasMorePages" should be true
-    And the JSON node "data.pagination.cursor" should not be null
+    And the JSON node "data" should have 5 elements
+    And the JSON node "pagination.currentPage" should be equal to the number 2
+    And the JSON node "pagination.pageCount" should be null
+    And the JSON node "pagination.hasMorePages" should be true
+    And the JSON node "pagination.cursor" should not be null
     And 4 requests got executed only for doctrine connection "default"
 
   Scenario: Detailed pagination mode follows the cursor to the next page
     Given I send a "GET" request to "/backoffice/banks?paginationMode=detailed&limit=5"
-    And I send a "GET" request to "/backoffice/banks?paginationMode=detailed&limit=5&page=2&cursor={value}" using the JSON node "data.pagination.cursor" from the previous response
+    And I send a "GET" request to "/backoffice/banks?paginationMode=detailed&limit=5&page=2&cursor={value}" using the JSON node "pagination.cursor" from the previous response
     Then the response status code should be 200
-    And the JSON node "data.items" should have 5 elements
-    And the JSON node "data.pagination.currentPage" should be equal to the number 2
-    And the JSON node "data.pagination.pageCount" should be equal to the number 7
-    And the JSON node "data.pagination.hasMorePages" should be true
-    And the JSON node "data.pagination.cursor" should not be null
+    And the JSON node "data" should have 5 elements
+    And the JSON node "pagination.currentPage" should be equal to the number 2
+    And the JSON node "pagination.pageCount" should be equal to the number 7
+    And the JSON node "pagination.hasMorePages" should be true
+    And the JSON node "pagination.cursor" should not be null
     And 5 requests got executed only for doctrine connection "default"
 
   Scenario: Detailed pagination mode exposes total counts on a full first page
     When I send a "GET" request to "/backoffice/banks?paginationMode=detailed&limit=1000"
     Then the response status code should be 200
-    And the JSON node "data.items" should have 31 elements
-    And the JSON node "data.pagination.currentPage" should be equal to the number 1
-    And the JSON node "data.pagination.pageCount" should be equal to the number 1
-    And the JSON node "data.pagination.hasMorePages" should be false
+    And the JSON node "data" should have 31 elements
+    And the JSON node "pagination.currentPage" should be equal to the number 1
+    And the JSON node "pagination.pageCount" should be equal to the number 1
+    And the JSON node "pagination.hasMorePages" should be false
     And 2 requests got executed only for doctrine connection "default"
 
   Scenario: Detailed pagination mode runs the COUNT query when the page does not fit
     When I send a "GET" request to "/backoffice/banks?paginationMode=detailed&limit=10"
     Then the response status code should be 200
-    And the JSON node "data.items" should have 10 elements
-    And the JSON node "data.pagination.currentPage" should be equal to the number 1
-    And the JSON node "data.pagination.pageCount" should be equal to the number 4
-    And the JSON node "data.pagination.hasMorePages" should be true
+    And the JSON node "data" should have 10 elements
+    And the JSON node "pagination.currentPage" should be equal to the number 1
+    And the JSON node "pagination.pageCount" should be equal to the number 4
+    And the JSON node "pagination.hasMorePages" should be true
     And 3 requests got executed only for doctrine connection "default"

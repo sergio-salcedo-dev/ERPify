@@ -184,10 +184,8 @@ export async function mockBanksApi(page: Page, scenario: BanksApiScenario): Prom
         switch (scenario.list) {
           case "empty":
             await fulfillJson(route, 200, {
-              data: {
-                items: [],
-                pagination: { ...pagination, count: 0, hasMorePages: false },
-              },
+              data: [],
+              pagination: { ...pagination, count: 0, hasMorePages: false },
             });
             return;
           case "server-error": {
@@ -203,10 +201,8 @@ export async function mockBanksApi(page: Page, scenario: BanksApiScenario): Prom
           case "happy":
           default:
             await fulfillJson(route, 200, {
-              data: {
-                items: listBanks,
-                pagination,
-              },
+              data: listBanks,
+              pagination,
             });
             return;
         }

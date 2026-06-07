@@ -273,6 +273,10 @@ class HttpRequestContext extends AbstractContext
     /**
      * Then a new request using content of the previous one.
      *
+     * The `:key` placeholders are looked up in the previous response's `data` node, which must
+     * be an associative object (single resource) — not the list-shaped search envelope where
+     * `data` is an array.
+     *
      * @throws JsonException
      */
     #[Given('I send a :method request to :url using last response with body:')]
@@ -298,7 +302,7 @@ class HttpRequestContext extends AbstractContext
      * resource ids, or any other value embedded in the previous response.
      *
      * Example: `When I send a "GET" request to "/backoffice/banks?cursor={value}"
-     *           using the JSON node "data.pagination.cursor" from the previous response`
+     *           using the JSON node "pagination.cursor" from the previous response`
      *
      * @throws JsonException
      */
