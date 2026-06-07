@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Erpify\Shared\Infrastructure\Persistence\Doctrine\Search;
 
 use Doctrine\ORM\QueryBuilder;
+use Erpify\Shared\Domain\Search\Exception\InvalidSearchValue;
 use Erpify\Shared\Domain\Search\Exception\UnknownSearchField;
 use Erpify\Shared\Domain\Search\Exception\UnsupportedSearchOperator;
 use Erpify\Shared\Domain\Search\Filter;
 use Erpify\Shared\Domain\Search\FilterOperator;
 use Erpify\Shared\Domain\Search\Filters;
 use InvalidArgumentException;
+use Symfony\Component\Uid\Uuid;
 
 /**
  * Translates domain {@see Filters} into `andWhere` conditions with bound parameters, governed
@@ -40,7 +42,27 @@ final readonly class FilterApplier
                 throw UnsupportedSearchOperator::forField($filter->field, $filter->operator);
             }
 
+            if ($mapping->requiresUuidValues) {
+                $this->ensureUuidValues($filter);
+            }
+
             $this->applyFilter($queryBuilder, $mapping, $filter);
+        }
+    }
+
+    /**
+     * Pre-validates values bound against UUID columns: Postgres rejects a malformed uuid with
+     * 22P02 at execution time, which would surface as a 500 — but a bad uuid is client input,
+     * so it must be a 400 from the invalid-search-criteria family instead.
+     */
+    private function ensureUuidValues(Filter $filter): void
+    {
+        $values = \is_array($filter->value) ? $filter->value : [$filter->value];
+
+        foreach ($values as $value) {
+            if (!Uuid::isValid($value)) {
+                throw InvalidSearchValue::notAUuid($filter->field);
+            }
         }
     }
 

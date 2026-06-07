@@ -4,22 +4,31 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\Bank\Infrastructure\Persistence\Doctrine;
 
+use Doctrine\Persistence\ManagerRegistry;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Backoffice\Bank\Domain\Repository\BankSearchRepository;
 use Erpify\Backoffice\Bank\Domain\Repository\BankStoredObjectQueries;
 use Erpify\Backoffice\Bank\Domain\Search\BankSearchCriteria;
+use Erpify\Shared\Domain\Search\FilterOperator;
 use Erpify\Shared\Domain\Search\PaginatedResult;
 use Erpify\Shared\Domain\Search\SearchCriteria;
 use Erpify\Shared\Domain\ValueObject\NormalizedText;
 use Erpify\Shared\Infrastructure\Persistence\Doctrine\AbstractDoctrineSearchRepository;
 use Erpify\Shared\Infrastructure\Persistence\Doctrine\QueryBuilderWithOptions;
+use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\FieldMapping;
+use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\FilterApplier;
+use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\NormalizedTextFieldNormalizer;
+use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\SearchFieldMap;
+use Erpify\Shared\Infrastructure\Persistence\PaginatorCursorFactory;
 use InvalidArgumentException;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
 /**
  * @extends AbstractDoctrineSearchRepository<Bank>
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[AsAlias(BankRepository::class)]
 #[AsAlias(BankSearchRepository::class)]
@@ -29,6 +38,15 @@ final class DoctrineBankRepository extends AbstractDoctrineSearchRepository impl
     BankSearchRepository,
     BankStoredObjectQueries
 {
+    public function __construct(
+        ManagerRegistry $registry,
+        PaginatorCursorFactory $paginatorCursorFactory,
+        FilterApplier $filterApplier,
+        private readonly NormalizedTextFieldNormalizer $normalizedText,
+    ) {
+        parent::__construct($registry, $paginatorCursorFactory, $filterApplier);
+    }
+
     #[Override]
     public function save(Bank $bank): void
     {
@@ -88,6 +106,20 @@ final class DoctrineBankRepository extends AbstractDoctrineSearchRepository impl
         $this->addLimit($queryBuilderWithOptions, $criteria->limit);
 
         return $queryBuilderWithOptions;
+    }
+
+    #[Override]
+    protected function searchFieldMap(): SearchFieldMap
+    {
+        return new SearchFieldMap([
+            'name' => new FieldMapping('b.nameNormalized', $this->normalizedText),
+            // No contains on id: a LIKE over a UUID column breaks at the SQL level.
+            'id' => new FieldMapping(
+                'b.id',
+                operators: [FilterOperator::Eq, FilterOperator::In],
+                requiresUuidValues: true,
+            ),
+        ]);
     }
 
     #[Override]

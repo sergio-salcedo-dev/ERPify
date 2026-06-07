@@ -141,3 +141,96 @@ Feature: Search banks
     And the JSON node "data.pagination.pageCount" should be equal to the number 4
     And the JSON node "data.pagination.hasMorePages" should be true
     And 3 requests got executed only for doctrine connection "default"
+
+  # Generic filters[N][field|operator|value] contract (story 1.4, expand phase) — the legacy
+  # names[]/ids[] params keep working through their current path; both coexist.
+  Scenario: Generic eq filter matches a bank case-insensitively
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=eq&filters[0][value]=BBVA"
+    Then the response status code should be 200
+    And the JSON node "data.items" should have 1 elements
+    And the JSON node "data.pagination" should exist
+    And 2 requests got executed only for doctrine connection "default"
+
+  Scenario: Generic in filter matches several banks
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=in&filters[0][value][]=BBVA&filters[0][value][]=CaixaBank"
+    Then the response status code should be 200
+    And the JSON node "data.items" should have 2 elements
+    And 2 requests got executed only for doctrine connection "default"
+
+  Scenario: Generic contains filter matches banks by substring
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=contains&filters[0][value]=banc"
+    Then the response status code should be 200
+    And the JSON node "data.items" should have 2 elements
+    And 2 requests got executed only for doctrine connection "default"
+
+  Scenario: Generic contains filter ignores diacritics in the search value
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=contains&filters[0][value]=G%C3%A9n%C3%A9rale"
+    Then the response status code should be 200
+    And the JSON node "data.items" should have 1 elements
+    And 2 requests got executed only for doctrine connection "default"
+
+  Scenario: Generic id filter accepts the in operator with a bound uuid
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=id&filters[0][operator]=in&filters[0][value][]=11111111-1111-7000-8000-000000000020"
+    Then the response status code should be 200
+    And the JSON node "data.items" should have 1 elements
+    And 2 requests got executed only for doctrine connection "default"
+
+  # The boundary scenario pins real behaviour under PHP's default max_input_vars=1000:
+  # the effective wire limit is min(caps, max_input_vars, URL length).
+  Scenario: Generic in filter at the values cap stays within max_input_vars
+    When I send a "GET" request to "/backoffice/banks" with a "name" in-filter of 100 generated values plus value "BBVA"
+    Then the response status code should be 200
+    And the JSON node "data.items" should have 1 elements
+    And 2 requests got executed only for doctrine connection "default"
+
+  # Semantic 400s come from the applier (invalid-search-criteria family) and abort before
+  # any SQL executes; shortName is a real column but NOT in the allow-list on purpose.
+  Scenario: Generic filter on a field outside the allow-list returns a 400 unknown-search-field Problem Details body
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=shortName&filters[0][operator]=eq&filters[0][value]=BBVA"
+    Then the response status code should be 400
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the response should be in JSON
+    And the JSON node "type" should be equal to "unknown-search-field"
+    And the JSON node "status" should be equal to the number 400
+    And 0 requests got executed across all doctrine connections
+
+  Scenario: Generic filter with an operator the field does not allow returns a 400 unsupported-search-operator Problem Details body
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=id&filters[0][operator]=contains&filters[0][value]=1111"
+    Then the response status code should be 400
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the JSON node "type" should be equal to "unsupported-search-operator"
+    And 0 requests got executed across all doctrine connections
+
+  # Shape 400s come from mapping (validation-failed + violations[]); operator tokens are
+  # strictly lowercase — the enum backing string IS the wire contract.
+  Scenario Outline: Invalid generic filter operator returns 400
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=<operator>&filters[0][value]=x"
+    Then the response status code should be 400
+    And 0 requests got executed across all doctrine connections
+    Examples:
+      | operator |
+      | like     |
+      | EQ       |
+      | IN       |
+
+  Scenario: Generic in filter with a scalar value returns a 400 validation-failed Problem Details body
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=in&filters[0][value]=BBVA"
+    Then the response status code should be 400
+    And the JSON node "type" should be equal to "validation-failed"
+    And the JSON node "violations[0].field" should be equal to "filters[0].value"
+    And 0 requests got executed across all doctrine connections
+
+  Scenario: Generic eq filter with a list value returns a 400 validation-failed Problem Details body
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=eq&filters[0][value][]=BBVA"
+    Then the response status code should be 400
+    And the JSON node "type" should be equal to "validation-failed"
+    And 0 requests got executed across all doctrine connections
+
+  # A malformed uuid bound against the UUID column must surface as input error, never as a
+  # Postgres 22P02 turned 500 — the field map marks id as requiresUuidValues.
+  Scenario: Generic id filter with a malformed uuid returns a 400 invalid-search-value Problem Details body
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=id&filters[0][operator]=eq&filters[0][value]=not-a-uuid"
+    Then the response status code should be 400
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the JSON node "type" should be equal to "invalid-search-value"
+    And 0 requests got executed across all doctrine connections

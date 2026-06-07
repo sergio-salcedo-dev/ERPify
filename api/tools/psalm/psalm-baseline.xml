@@ -128,6 +128,16 @@
       <code><![CDATA[Kernel]]></code>
     </ClassMustBeFinal>
   </file>
+  <file src="../../src/Shared/Application/Http/Search/FilterQuery.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[validateValueShape]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="../../src/Shared/Application/Http/Search/SearchQuery.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[validateFilterIndexes]]></code>
+    </PossiblyUnusedMethod>
+  </file>
   <file src="../../src/Shared/Domain/Entity/Identifiable.php">
     <PossiblyUnusedMethod>
       <code><![CDATA[setId]]></code>
@@ -205,9 +215,6 @@
     </PossiblyUnusedReturnValue>
   </file>
   <file src="../../src/Shared/Infrastructure/Persistence/Doctrine/AbstractDoctrineSearchRepository.php">
-    <PossiblyUnusedMethod>
-      <code><![CDATA[__construct]]></code>
-    </PossiblyUnusedMethod>
     <PossiblyUnusedReturnValue>
       <code><![CDATA[QueryBuilder]]></code>
     </PossiblyUnusedReturnValue>
@@ -446,8 +453,11 @@
       <code><![CDATA[$baseUrl]]></code>
       <code><![CDATA[$body]]></code>
       <code><![CDATA[$body]]></code>
+      <code><![CDATA[$count]]></code>
       <code><![CDATA[$expression]]></code>
+      <code><![CDATA[$field]]></code>
       <code><![CDATA[$files]]></code>
+      <code><![CDATA[$method]]></code>
       <code><![CDATA[$method]]></code>
       <code><![CDATA[$method]]></code>
       <code><![CDATA[$method]]></code>
@@ -462,9 +472,11 @@
       <code><![CDATA[$pyStringNode]]></code>
       <code><![CDATA[$pyStringNode]]></code>
       <code><![CDATA[$pyStringNode]]></code>
+      <code><![CDATA[$real]]></code>
       <code><![CDATA[$tableNode]]></code>
       <code><![CDATA[$tableNode]]></code>
       <code><![CDATA[$tableNode]]></code>
+      <code><![CDATA[$url]]></code>
       <code><![CDATA[$url]]></code>
       <code><![CDATA[$url]]></code>
       <code><![CDATA[$url]]></code>

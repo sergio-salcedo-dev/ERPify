@@ -7,6 +7,7 @@ namespace Erpify\Tests\Functional\Shared\Persistence;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
+use Erpify\Shared\Domain\Search\Exception\InvalidSearchValue;
 use Erpify\Shared\Domain\Search\Exception\UnknownSearchField;
 use Erpify\Shared\Domain\Search\Exception\UnsupportedSearchOperator;
 use Erpify\Shared\Domain\Search\Filter;
@@ -279,6 +280,41 @@ final class FilterApplierTest extends KernelTestCase
         );
     }
 
+    public function testMalformedUuidOnUuidRequiringFieldIsRejected(): void
+    {
+        $this->expectException(InvalidSearchValue::class);
+
+        $this->filterApplier->apply(
+            $this->bankQueryBuilder(),
+            Filters::fromList([Filter::eq('id', 'not-a-uuid')]),
+            $this->bankFieldMap(),
+        );
+    }
+
+    public function testMalformedUuidInListOnUuidRequiringFieldIsRejected(): void
+    {
+        $this->expectException(InvalidSearchValue::class);
+
+        $this->filterApplier->apply(
+            $this->bankQueryBuilder(),
+            Filters::fromList([Filter::in('id', [Uuid::generate(), 'not-a-uuid'])]),
+            $this->bankFieldMap(),
+        );
+    }
+
+    public function testValidUuidOnUuidRequiringFieldIsBoundWithoutError(): void
+    {
+        $queryBuilder = $this->bankQueryBuilder();
+
+        $this->filterApplier->apply(
+            $queryBuilder,
+            Filters::fromList([Filter::eq('id', Uuid::generate())]),
+            $this->bankFieldMap(),
+        );
+
+        $this->assertCount(1, $queryBuilder->getParameters());
+    }
+
     public function testEmptyInListIsRejectedAsProgrammerError(): void
     {
         $this->expectException(InvalidArgumentException::class);
@@ -350,7 +386,11 @@ final class FilterApplierTest extends KernelTestCase
         return new SearchFieldMap([
             'name' => new FieldMapping('b.nameNormalized', new NormalizedTextFieldNormalizer()),
             'shortName' => new FieldMapping('b.shortName'),
-            'id' => new FieldMapping('b.id', operators: [FilterOperator::Eq, FilterOperator::In]),
+            'id' => new FieldMapping(
+                'b.id',
+                operators: [FilterOperator::Eq, FilterOperator::In],
+                requiresUuidValues: true,
+            ),
         ]);
     }
 

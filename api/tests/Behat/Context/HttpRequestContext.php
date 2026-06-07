@@ -197,6 +197,35 @@ class HttpRequestContext extends AbstractContext
     }
 
     /**
+     * Builds a `filters[0][...]` generic in-filter of N generated values plus one real value,
+     * so boundary scenarios (e.g. 1 in-filter × 100 values) do not need a kilometre-long
+     * literal URL in the feature file.
+     */
+    #[Given('I send a :method request to :url with a :field in-filter of :count generated values plus value :real')]
+    public function iSendARequestToWithAGeneratedInFilter(
+        string $method,
+        string $url,
+        string $field,
+        int $count,
+        string $real,
+    ): void {
+        $queryParts = [
+            'filters[0][field]=' . \rawurlencode($field),
+            'filters[0][operator]=in',
+        ];
+
+        for ($i = 1; $i < $count; ++$i) {
+            $queryParts[] = 'filters[0][value][]=' . \rawurlencode(\sprintf('generated-%03d', $i));
+        }
+
+        $queryParts[] = 'filters[0][value][]=' . \rawurlencode($real);
+
+        $separator = \str_contains($url, '?') ? '&' : '?';
+
+        $this->iSendARequestTo($method, $url . $separator . \implode('&', $queryParts));
+    }
+
+    /**
      * Sends an HTTP request with a body.
      */
     #[Given('I send a :method request to :url with body:')]

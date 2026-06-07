@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Application\Http\Search;
 
+use Erpify\Shared\Application\Http\Search\FilterQuery;
 use Erpify\Shared\Application\Http\Search\SearchQuery;
+use Erpify\Shared\Domain\Search\Filter;
+use Erpify\Shared\Domain\Search\FilterOperator;
 use Erpify\Shared\Domain\Search\PaginationMode;
 use Generator;
 use Override;
@@ -16,6 +19,8 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 /**
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods")
  */
 #[CoversClass(SearchQuery::class)]
 final class SearchQueryTest extends TestCase
@@ -116,5 +121,84 @@ final class SearchQueryTest extends TestCase
         $this->assertSame(SearchQuery::MAX_LIMIT, $searchCriteria->limit);
         $this->assertSame(PaginationMode::LIGHT, $searchCriteria->paginationMode);
         $this->assertNull($searchCriteria->ids);
+    }
+
+    public function testFiltersDefaultToEmptyDomainCollection(): void
+    {
+        $this->assertTrue((new SearchQuery())->toCriteria()->filters->isEmpty());
+    }
+
+    public function testValidFiltersPassValidation(): void
+    {
+        $searchQuery = new SearchQuery(filters: [
+            new FilterQuery('name', FilterOperator::Contains, 'banc'),
+            new FilterQuery('id', FilterOperator::In, ['11111111-1111-7000-8000-000000000001']),
+        ]);
+
+        $this->assertCount(0, $this->validator->validate($searchQuery));
+    }
+
+    public function testNestedFilterViolationsCascadeWithIndexedPaths(): void
+    {
+        $searchQuery = new SearchQuery(filters: [
+            new FilterQuery('name', FilterOperator::In, 'not-a-list'),
+        ]);
+
+        $actualPaths = [];
+
+        foreach ($this->validator->validate($searchQuery) as $constraintViolationList) {
+            $actualPaths[] = $constraintViolationList->getPropertyPath();
+        }
+
+        $this->assertContains('filters[0].value', $actualPaths);
+    }
+
+    public function testFiltersOverCapAreRejected(): void
+    {
+        $searchQuery = new SearchQuery(filters: \array_fill(
+            0,
+            SearchQuery::MAX_FILTERS + 1,
+            new FilterQuery('name', FilterOperator::Eq, 'x'),
+        ));
+
+        $actualPaths = [];
+
+        foreach ($this->validator->validate($searchQuery) as $constraintViolationList) {
+            $actualPaths[] = $constraintViolationList->getPropertyPath();
+        }
+
+        $this->assertContains('filters', $actualPaths);
+    }
+
+    public function testNonContiguousFilterIndexesAreRejected(): void
+    {
+        $searchQuery = new SearchQuery(filters: [1 => new FilterQuery('name', FilterOperator::Eq, 'x')]);
+
+        $actualPaths = [];
+
+        foreach ($this->validator->validate($searchQuery) as $constraintViolationList) {
+            $actualPaths[] = $constraintViolationList->getPropertyPath();
+        }
+
+        $this->assertContains('filters', $actualPaths);
+    }
+
+    public function testToCriteriaTranslatesFiltersToDomain(): void
+    {
+        $searchQuery = new SearchQuery(filters: [
+            new FilterQuery('name', FilterOperator::Contains, 'banc'),
+            new FilterQuery('id', FilterOperator::In, ['a', 'b']),
+        ]);
+
+        $this->assertSame(
+            [
+                ['name', FilterOperator::Contains, 'banc'],
+                ['id', FilterOperator::In, ['a', 'b']],
+            ],
+            \array_map(
+                static fn (Filter $filter): array => [$filter->field, $filter->operator, $filter->value],
+                $searchQuery->toCriteria()->filters->all(),
+            ),
+        );
     }
 }

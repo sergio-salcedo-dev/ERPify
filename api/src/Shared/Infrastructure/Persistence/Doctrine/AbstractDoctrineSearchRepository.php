@@ -9,6 +9,8 @@ use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 use Erpify\Shared\Domain\Search\PaginationMode;
 use Erpify\Shared\Domain\Search\SearchCriteria;
+use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\FilterApplier;
+use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\SearchFieldMap;
 use Erpify\Shared\Infrastructure\Persistence\PaginatorCursorFactory;
 use Erpify\Shared\Infrastructure\Persistence\PaginatorCursorInterface;
 use Erpify\Shared\Infrastructure\Persistence\QueryParam;
@@ -27,16 +29,24 @@ abstract class AbstractDoctrineSearchRepository extends AbstractDoctrineReposito
     public function __construct(
         ManagerRegistry $registry,
         private readonly PaginatorCursorFactory $paginatorCursorFactory,
+        private readonly FilterApplier $filterApplier,
     ) {
         parent::__construct($registry);
     }
 
     /**
+     * Generic filters are auto-applied here, between the repository-authored query builder and
+     * pagination — repositories only declare their allow-list via {@see SearchFieldMap()} and
+     * never invoke the applier themselves. `getQueryBuilderPaginatedResults()` stays outside
+     * the seam on purpose (callers passing an arbitrary query builder own its conditions).
+     *
      * @return Paginator<T>
      */
     public function getPaginatedResults(SearchCriteria $criteria): Paginator
     {
         $queryBuilder = $this->getSearchQueryBuilder($criteria);
+
+        $this->filterApplier->apply($queryBuilder, $criteria->filters, $this->searchFieldMap());
 
         return $this->getQueryBuilderPaginatedResults(
             $queryBuilder,
@@ -45,6 +55,13 @@ abstract class AbstractDoctrineSearchRepository extends AbstractDoctrineReposito
             $criteria->paginationMode,
         );
     }
+
+    /**
+     * Mandatory allow-list of publicly filterable fields for this repository. Return
+     * `new SearchFieldMap([])` to expose no filterable field at all — anything outside the
+     * map is rejected with a 400 by the applier.
+     */
+    abstract protected function searchFieldMap(): SearchFieldMap;
 
     /**
      * @return Paginator<T>
