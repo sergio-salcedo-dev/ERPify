@@ -1,0 +1,59 @@
+# generated: 2026-06-07 00:19:52
+# last_updated: 2026-06-07 17:58:52
+# project: ERPify
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts
+
+# DEFINICIONES DE ESTADO:
+# =======================
+# Estado de épica:
+#   - backlog: Épica aún no iniciada
+#   - in-progress: Épica en desarrollo activo
+#   - done: Todas las historias de la épica completadas
+#
+# Transiciones de estado de épica:
+#   - backlog → in-progress: Automática al crear la primera historia (vía create-story)
+#   - in-progress → done: Manual cuando todas las historias alcanzan 'done'
+#
+# Estado de historia:
+#   - backlog: La historia solo existe en el fichero de épicas
+#   - ready-for-dev: Fichero de historia creado en la carpeta de historias
+#   - in-progress: Desarrollador trabajando activamente en la implementación
+#   - review: Lista para revisión de código (vía workflow code-review del Dev)
+#   - done: Historia completada
+#
+# Estado de retrospectiva:
+#   - optional: Puede realizarse pero no es obligatoria
+#   - done: Retrospectiva realizada
+#
+# NOTAS DE WORKFLOW:
+# ==================
+# - La épica pasa a 'in-progress' automáticamente al crear su primera historia
+# - Las historias pueden trabajarse en paralelo si la capacidad del equipo lo permite
+# - El desarrollador suele crear la siguiente historia tras cerrar la anterior en 'done' para incorporar aprendizajes
+# - El Dev mueve la historia a 'review' y luego ejecuta code-review (contexto fresco, LLM distinto recomendado)
+
+generated: 2026-06-07 00:19:52
+last_updated: 2026-06-07 17:58:52
+project: ERPify
+project_key: NOKEY
+tracking_system: file-system
+story_location: "{project-root}/_bmad-output/implementation-artifacts"
+
+development_status:
+  # Epic 1: Búsqueda filtrable genérica en la API (Bank como piloto) — fases 0+1
+  epic-1: in-progress
+  1-1-vocabulario-de-filtros-en-el-dominio-compartido: done
+  1-2-errores-de-busqueda-invalida-en-el-pipeline-rfc-9457: done
+  1-3-applier-de-filtros-sobre-querybuilder-con-allow-list-obligatoria: done
+  1-4-contrato-generico-filters-expuesto-en-el-endpoint-de-banks: done
+  1-5-camino-unico-legacy-filters-en-bank-d8: done
+  1-6-receta-de-generalizacion-y-cierre-documental: backlog
+  epic-1-retrospective: optional
+
+  # Epic 2: Filtrado server-driven en la PWA — fase 2
+  epic-2: backlog
+  2-1-vocabulario-y-builder-de-filtros-compartido-en-la-pwa: backlog
+  2-2-lista-de-banks-filtrada-server-driven: backlog
+  epic-2-retrospective: optional
