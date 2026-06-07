@@ -198,7 +198,7 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
 
   test("create — happy path lands on the detail page with the new bank", async ({ page }) => {
     const createName = `${runPrefix} INLINE`;
-    const createShortName = `${runPrefix.slice(-40)}-INL`.slice(0, 50).toLocaleUpperCase();
+    const createShortNameInput = `${runPrefix.slice(-40)}-INL`.slice(0, 50);
 
     await page.goto("/backoffice/banks");
     await expect(page.getByTestId("banks-list")).toHaveAttribute("data-state", "ready");
@@ -207,7 +207,7 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
     await expect(page).toHaveURL(/\/backoffice\/banks\/new$/);
 
     await page.getByTestId("bank-form__name").fill(createName);
-    await page.getByTestId("bank-form__short-name").fill(createShortName);
+    await page.getByTestId("bank-form__short-name").fill(createShortNameInput);
     await page.getByTestId("bank-form__submit").click();
 
     await expect(page).toHaveURL(/\/backoffice\/banks\/[0-9a-f-]{36}$/);
@@ -215,14 +215,18 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
     createdId = detailURL.pathname.split("/").pop()!;
     trackedIds.push(createdId);
 
-    await expect(page.getByTestId("banks-detail")).toHaveAttribute("data-state", "ready");
-    await expect(page.getByTestId("banks-detail__name")).toHaveText(createName);
-    await expect(page.getByTestId("banks-detail__shortname")).toHaveText(createShortName);
-    await expect(page.getByTestId("banks-detail__id")).toHaveText(createdId);
-
-    // Confirm the API agrees the bank exists.
+    // Confirm the API agrees the bank exists, and assert the short name against
+    // the persisted value it returns — the API canonicalizes on create
+    // (NormalizedText::toAsciiUpper: uppercase + diacritic stripping), which a
+    // local toLocaleUpperCase() does not reproduce.
     const probe = await api.get(`/api/v1/backoffice/banks/${createdId}`);
     expect(probe.ok()).toBe(true);
+    const { data: createdBank } = (await probe.json()) as { data: ApiBank };
+
+    await expect(page.getByTestId("banks-detail")).toHaveAttribute("data-state", "ready");
+    await expect(page.getByTestId("banks-detail__name")).toHaveText(createName);
+    await expect(page.getByTestId("banks-detail__shortname")).toHaveText(createdBank.shortName);
+    await expect(page.getByTestId("banks-detail__id")).toHaveText(createdId);
   });
 
   test("update — inline row edit renames the created bank", async ({ page }) => {
