@@ -77,13 +77,3 @@ the implementer: `pwa/tsconfig.json` sets `incremental: true` and the dev contai
 root-owned `tsconfig.tsbuildinfo` on the host (the primary checkout has one today), so host runs
 may hit EACCES — pass `--incremental false` (or run in the container). Tree verified clean at
 `42d47b6` (`npx tsc --noEmit --incremental false` exits 0); re-verify at gate-add time.
-
-## From: code review of fix/pwa-e2e-tooltip-and-test-types (2026-06-07)
-
-- **E2E shortName assertions normalize with `.toLocaleUpperCase()`, not the API's rule.**
-  `banks-real-api.spec.ts` and `banks-real-api-flows.spec.ts` pre-empt the API's canonicalization
-  by upcasing the raw seeded input; the API's `NormalizedText::toAsciiUpper` also strips
-  diacritics (`Any-Latin; Latin-ASCII; Upper()`). They only stay green because their seeded
-  inputs are diacritic-free ASCII. Pre-existing; if a non-ASCII shortName is ever seeded, assert
-  against the API-returned value instead (the pattern `banks-containment.spec.ts` now uses). Low.
-  (source: adversarial review)
