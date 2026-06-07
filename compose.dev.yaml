@@ -30,8 +30,12 @@ services:
       # CI sets these to "" (see ci.yml) to avoid cold-boot worker reloads, but `:-`
       # would treat "" as unset and re-apply the defaults. Unset (local dev) still
       # falls back to the watch/hot_reload defaults below.
+      # hot_reload MUST stay scoped too: bare `hot_reload` watches all of /app/api
+      # (./**/*.{php,yaml,...}) and the var/cache/test rename storm during in-container
+      # test runs crashes the watcher — frankenphp (PID 1) then core-dumps and restarts.
+      # No brace-globs here: compose's ${VAR-default} ends at the first `}`.
       FRANKENPHP_WORKER_CONFIG: "${FRANKENPHP_WORKER_CONFIG-watch /app/api/src/**/*.php}"
-      FRANKENPHP_SITE_CONFIG: "${FRANKENPHP_SITE_CONFIG-hot_reload}"
+      FRANKENPHP_SITE_CONFIG: "${FRANKENPHP_SITE_CONFIG-hot_reload /app/api/src/**/*.php /app/api/config/**/*.yaml /app/api/config/**/*.php}"
       MERCURE_EXTRA_DIRECTIVES: demo
       XDEBUG_MODE: "${XDEBUG_MODE:-off}"
       PHP_IDE_CONFIG: "serverName=${PHP_IDE_SERVER_NAME:-dev}"
