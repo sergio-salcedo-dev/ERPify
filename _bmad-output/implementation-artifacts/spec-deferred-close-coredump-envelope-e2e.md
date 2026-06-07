@@ -2,7 +2,7 @@
 title: 'Cierre de 3 items diferidos: core dump FrankenPHP, guard de envelope PWA, aserciones e2e shortName'
 type: 'chore' # feature | bugfix | refactor | chore
 created: '2026-06-07'
-status: 'in-progress' # draft | ready-for-dev | in-progress | in-review | done
+status: 'done' # draft | ready-for-dev | in-progress | in-review | done
 baseline_commit: '32954eeddb1c495c1f94ee56892f38581ccea827'
 context: []
 ---
@@ -90,3 +90,52 @@ context: []
 **Manual checks (if no CLI):**
 - Hot-reload de dev sigue funcionando tras escopar `hot_reload` (editar un PHP en `src/` y ver el reload)
 - `git status` del worktree no incluye `api/config/reference.php`
+
+## Suggested Review Order
+
+**Guard de envelope en la frontera HTTP (la pieza de diseño)**
+
+- La costura: `ResponseGuard<T>` opcional en el contrato `HttpClient`; opt-in, sin romper call sites
+  [`HttpClient.ts:9`](../../pwa/src/context/shared/infrastructure/HttpClient/HttpClient.ts#L9)
+
+- `parseBody`: guard rechazado → `HttpError` tipado (`malformed-response-envelope`), mismo molde que `toHttpError`
+  [`HttpClient.ts:177`](../../pwa/src/context/shared/infrastructure/HttpClient/HttpClient.ts#L177)
+
+- Guards manuales del repo (patrón `isProblemDetails`, sin zod) aplicados en los 4 métodos
+  [`ApiBankRepository.ts:34`](../../pwa/src/context/backoffice/bank/infrastructure/ApiBankRepository.ts#L34)
+
+**Core dump de FrankenPHP (infra)**
+
+- Causa raíz: `hot_reload` sin escopar vigilaba todo `/app/api`; ahora `src/` + `config/` (sin brace-globs — `${VAR-default}` corta en la primera `}`)
+  [`compose.dev.yaml:38`](../../compose.dev.yaml#L38)
+
+- Cinturón y tirantes: `ulimits.core: 0` en `php` y `messenger_worker`, todos los entornos
+  [`compose.yaml:8`](../../compose.yaml#L8)
+
+- Default de imagen alineado: el `watch` pelado del stage dev también queda escopado
+  [`Dockerfile:74`](../../api/Dockerfile#L74)
+
+- Guardarraíl final: `api/core.*` gitignorado
+  [`.gitignore:36`](../../api/.gitignore#L36)
+
+**Aserciones e2e contra el valor canónico de la API**
+
+- El probe GET devuelve el `shortName` persistido (`toAsciiUpper`); la aserción deja de aproximar con `toLocaleUpperCase()`
+  [`banks-real-api.spec.ts:151`](../../pwa/tests/e2e/backoffice/banks-real-api.spec.ts#L151)
+
+- Mismo patrón en el flujo inline (reutiliza el probe que ya existía)
+  [`banks-real-api-flows.spec.ts:224`](../../pwa/tests/e2e/backoffice/banks-real-api-flows.spec.ts#L224)
+
+**Periféricos**
+
+- Matriz I/O del guard: malformado, no-JSON, 204-con-guard, passthrough sin guard
+  [`FetchHttpClient.test.ts:143`](../../pwa/tests/context/shared/infrastructure/HttpClient/FetchHttpClient.test.ts#L143)
+
+- Los guards reales verificados a través de la costura pública del mock
+  [`ApiBankRepository.test.ts:68`](../../pwa/tests/context/backoffice/bank/infrastructure/ApiBankRepository.test.ts#L68)
+
+- Gotcha documentado (quickref) y nota de hardening (deployment guide)
+  [`claude-code-quickref.md:223`](../../docs/claude-code-quickref.md#L223)
+
+- Cierre documental: las 3 secciones eliminadas de deferred-work
+  [`deferred-work.md:1`](deferred-work.md#L1)
