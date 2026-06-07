@@ -18,6 +18,8 @@ use Erpify\Shared\Domain\Exception\NotFound;
 use Erpify\Shared\Domain\Exception\RateLimited;
 use Erpify\Shared\Domain\Exception\Unauthenticated;
 use Erpify\Shared\Domain\Search\Exception\UnknownSearchField;
+use Erpify\Shared\Domain\Search\Exception\UnsupportedSearchOperator;
+use Erpify\Shared\Domain\Search\FilterOperator;
 use JsonSchema\Validator as JsonSchemaValidator;
 use JsonSerializable;
 use LogicException;
@@ -985,6 +987,21 @@ final class ProblemDetailsFactoryTest extends TestCase
         $this->assertSame(400, $problemDetails->status);
         $this->assertSame('unknown-search-field', $problemDetails->type);
         $this->assertSame(['field' => 'shoeSize'], $problemDetails->extensions);
+    }
+
+    public function testUnsupportedSearchOperatorMapsTo400WithItsExplicitType(): void
+    {
+        $problemDetails = $this->factoryFor()->fromThrowable(
+            UnsupportedSearchOperator::forField('id', FilterOperator::Contains),
+            self::CID,
+            self::INSTANCE,
+        );
+
+        // Mirror of the UnknownSearchField pin — also proves the two-key context
+        // (field + wire operator token) survives the whitelist into extensions.
+        $this->assertSame(400, $problemDetails->status);
+        $this->assertSame('unsupported-search-operator', $problemDetails->type);
+        $this->assertSame(['field' => 'id', 'operator' => 'contains'], $problemDetails->extensions);
     }
 
     public function testRuntimeExceptionStillFallsThroughToUnhandledException(): void
