@@ -5,12 +5,10 @@ import { Bank, type BankPrimitives } from "../domain/Bank";
 import type { BankInput, BankRepository, BankSearchPage } from "../domain/BankRepository";
 
 interface BankSearchResponse {
-  data: {
-    items: BankPrimitives[];
-    pagination: {
-      cursor: string;
-      hasMorePages: boolean;
-    };
+  data: BankPrimitives[];
+  pagination: {
+    cursor: string;
+    hasMorePages: boolean;
   };
 }
 
@@ -27,10 +25,8 @@ export class ApiBankRepository implements BankRepository {
       API_ENDPOINTS.BACKOFFICE.BANKS.LIST,
     );
     return {
-      banks: response.data.items.map(Bank.fromPrimitives),
-      nextCursor: response.data.pagination.hasMorePages
-        ? response.data.pagination.cursor
-        : undefined,
+      banks: response.data.map(Bank.fromPrimitives),
+      nextCursor: response.pagination.hasMorePages ? response.pagination.cursor : undefined,
     };
   }
 
