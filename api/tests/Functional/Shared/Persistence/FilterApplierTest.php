@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Shared\Persistence;
 
-use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
@@ -29,7 +28,7 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  * operator, CONTAINS escapes LIKE wildcards, and the mandatory `SearchFieldMap` allow-list
  * rejects unmapped fields and disallowed operators.
  *
- * Each test runs inside a transaction that is always rolled back — the suite has no DAMA
+ * Tests that persist rows run inside {@see inRolledBackTransaction} — the suite has no DAMA
  * auto-rollback and shares the dev database connection, so rows carry per-test unique
  * suffixes and assertions never count whole tables.
  *
@@ -46,8 +45,6 @@ final class FilterApplierTest extends KernelTestCase
 {
     private EntityManagerInterface $entityManager;
 
-    private Connection $connection;
-
     private FilterApplier $filterApplier;
 
     #[Override]
@@ -59,147 +56,148 @@ final class FilterApplierTest extends KernelTestCase
         $this->assertInstanceOf(EntityManagerInterface::class, $entityManager);
 
         $this->entityManager = $entityManager;
-        $this->connection = $entityManager->getConnection();
-        $this->connection->beginTransaction();
-
         $this->filterApplier = new FilterApplier();
-    }
-
-    #[Override]
-    protected function tearDown(): void
-    {
-        if ($this->connection->isTransactionActive()) {
-            $this->connection->rollBack();
-        }
-
-        parent::tearDown();
     }
 
     public function testEqWithNormalizerMatchesCaseAndDiacriticInsensitively(): void
     {
-        $suffix = $this->uniqueSuffix();
-        $bank = $this->createBank('Bánçó Ñandú ' . $suffix, 'BNE' . $suffix);
+        $this->inRolledBackTransaction(function (): void {
+            $suffix = $this->uniqueSuffix();
+            $bank = $this->createBank('Bánçó Ñandú ' . $suffix, 'BNE' . $suffix);
 
-        $queryBuilder = $this->bankQueryBuilder();
-        $this->filterApplier->apply(
-            $queryBuilder,
-            Filters::fromList([Filter::eq('name', '  BÁNÇÓ ñandú ' . $suffix . '  ')]),
-            $this->bankFieldMap(),
-        );
+            $queryBuilder = $this->bankQueryBuilder();
+            $this->filterApplier->apply(
+                $queryBuilder,
+                Filters::fromList([Filter::eq('name', '  BÁNÇÓ ñandú ' . $suffix . '  ')]),
+                $this->bankFieldMap(),
+            );
 
-        $this->assertSame([$bank->getId()], $this->resultIds($queryBuilder));
+            $this->assertSame([$bank->getId()], $this->resultIds($queryBuilder));
+        });
     }
 
     public function testInWithNormalizerAppliesNormalizationToEachItem(): void
     {
-        $suffixOne = $this->uniqueSuffix();
-        $suffixTwo = $this->uniqueSuffix();
-        $suffixThree = $this->uniqueSuffix();
-        $bankOne = $this->createBank('Bánçó Úno ' . $suffixOne, 'BNI' . $suffixOne);
-        $bankTwo = $this->createBank('Banco Dos ' . $suffixTwo, 'BNI' . $suffixTwo);
-        $this->createBank('Banco Tres ' . $suffixThree, 'BNI' . $suffixThree);
+        $this->inRolledBackTransaction(function (): void {
+            $suffixOne = $this->uniqueSuffix();
+            $suffixTwo = $this->uniqueSuffix();
+            $suffixThree = $this->uniqueSuffix();
+            $bankOne = $this->createBank('Bánçó Úno ' . $suffixOne, 'BNI' . $suffixOne);
+            $bankTwo = $this->createBank('Banco Dos ' . $suffixTwo, 'BNI' . $suffixTwo);
+            $this->createBank('Banco Tres ' . $suffixThree, 'BNI' . $suffixThree);
 
-        $queryBuilder = $this->bankQueryBuilder();
-        $this->filterApplier->apply(
-            $queryBuilder,
-            Filters::fromList([
-                Filter::in('name', ['BÁNÇÓ ÚNO ' . $suffixOne, 'banco dos ' . $suffixTwo]),
-            ]),
-            $this->bankFieldMap(),
-        );
+            $queryBuilder = $this->bankQueryBuilder();
+            $this->filterApplier->apply(
+                $queryBuilder,
+                Filters::fromList([
+                    Filter::in('name', ['BÁNÇÓ ÚNO ' . $suffixOne, 'banco dos ' . $suffixTwo]),
+                ]),
+                $this->bankFieldMap(),
+            );
 
-        $this->assertEqualsCanonicalizing(
-            [$bankOne->getId(), $bankTwo->getId()],
-            $this->resultIds($queryBuilder),
-        );
+            $this->assertEqualsCanonicalizing(
+                [$bankOne->getId(), $bankTwo->getId()],
+                $this->resultIds($queryBuilder),
+            );
+        });
     }
 
     public function testContainsWithNormalizerFindsDiacriticTerm(): void
     {
-        $suffix = $this->uniqueSuffix();
-        $bank = $this->createBank('Bánçó Ñandú ' . $suffix, 'BNC' . $suffix);
+        $this->inRolledBackTransaction(function (): void {
+            $suffix = $this->uniqueSuffix();
+            $bank = $this->createBank('Bánçó Ñandú ' . $suffix, 'BNC' . $suffix);
 
-        $queryBuilder = $this->bankQueryBuilder();
-        $this->filterApplier->apply(
-            $queryBuilder,
-            Filters::fromList([Filter::contains('name', 'ÑANDÚ ' . $suffix)]),
-            $this->bankFieldMap(),
-        );
+            $queryBuilder = $this->bankQueryBuilder();
+            $this->filterApplier->apply(
+                $queryBuilder,
+                Filters::fromList([Filter::contains('name', 'ÑANDÚ ' . $suffix)]),
+                $this->bankFieldMap(),
+            );
 
-        $this->assertSame([$bank->getId()], $this->resultIds($queryBuilder));
+            $this->assertSame([$bank->getId()], $this->resultIds($queryBuilder));
+        });
     }
 
     public function testContainsWithoutNormalizerFallsBackToCaseInsensitiveLike(): void
     {
-        $suffix = $this->uniqueSuffix();
-        $bank = $this->createBank('Banco Fallback ' . $suffix, 'BNF' . $suffix);
+        $this->inRolledBackTransaction(function (): void {
+            $suffix = $this->uniqueSuffix();
+            $bank = $this->createBank('Banco Fallback ' . $suffix, 'BNF' . $suffix);
 
-        $queryBuilder = $this->bankQueryBuilder();
-        $this->filterApplier->apply(
-            $queryBuilder,
-            Filters::fromList([Filter::contains('shortName', 'bnf' . \strtolower($suffix))]),
-            $this->bankFieldMap(),
-        );
+            $queryBuilder = $this->bankQueryBuilder();
+            $this->filterApplier->apply(
+                $queryBuilder,
+                Filters::fromList([Filter::contains('shortName', 'bnf' . \strtolower($suffix))]),
+                $this->bankFieldMap(),
+            );
 
-        $this->assertSame([$bank->getId()], $this->resultIds($queryBuilder));
+            $this->assertSame([$bank->getId()], $this->resultIds($queryBuilder));
+        });
     }
 
     public function testContainsEscapesPercentWildcard(): void
     {
-        $suffixLiteral = $this->uniqueSuffix();
-        $suffixDecoy = $this->uniqueSuffix();
-        $literal = $this->createBank('Banco 100% Legal ' . $suffixLiteral, 'BNP' . $suffixLiteral);
-        $decoy = $this->createBank('Banco 100x Legal ' . $suffixDecoy, 'BNP' . $suffixDecoy);
+        $this->inRolledBackTransaction(function (): void {
+            $suffixLiteral = $this->uniqueSuffix();
+            $suffixDecoy = $this->uniqueSuffix();
+            $literal = $this->createBank('Banco 100% Legal ' . $suffixLiteral, 'BNP' . $suffixLiteral);
+            $decoy = $this->createBank('Banco 100x Legal ' . $suffixDecoy, 'BNP' . $suffixDecoy);
 
-        $queryBuilder = $this->bankQueryBuilder();
-        $this->filterApplier->apply(
-            $queryBuilder,
-            Filters::fromList([Filter::contains('name', '100% Legal')]),
-            $this->bankFieldMap(),
-        );
+            $queryBuilder = $this->bankQueryBuilder();
+            $this->filterApplier->apply(
+                $queryBuilder,
+                Filters::fromList([Filter::contains('name', '100% Legal')]),
+                $this->bankFieldMap(),
+            );
 
-        $resultIds = $this->resultIds($queryBuilder);
-        $this->assertContains($literal->getId(), $resultIds);
-        $this->assertNotContains($decoy->getId(), $resultIds);
+            $resultIds = $this->resultIds($queryBuilder);
+            $this->assertContains($literal->getId(), $resultIds);
+            $this->assertNotContains($decoy->getId(), $resultIds);
+        });
     }
 
     public function testContainsEscapesUnderscoreWildcard(): void
     {
-        $suffixLiteral = $this->uniqueSuffix();
-        $suffixDecoy = $this->uniqueSuffix();
-        $literal = $this->createBank('Plan a_b ' . $suffixLiteral, 'BNL' . $suffixLiteral);
-        $decoy = $this->createBank('Plan axb ' . $suffixDecoy, 'BNL' . $suffixDecoy);
+        $this->inRolledBackTransaction(function (): void {
+            $suffixLiteral = $this->uniqueSuffix();
+            $suffixDecoy = $this->uniqueSuffix();
+            $literal = $this->createBank('Plan a_b ' . $suffixLiteral, 'BNL' . $suffixLiteral);
+            $decoy = $this->createBank('Plan axb ' . $suffixDecoy, 'BNL' . $suffixDecoy);
 
-        $queryBuilder = $this->bankQueryBuilder();
-        $this->filterApplier->apply(
-            $queryBuilder,
-            Filters::fromList([Filter::contains('name', 'a_b')]),
-            $this->bankFieldMap(),
-        );
+            $queryBuilder = $this->bankQueryBuilder();
+            $this->filterApplier->apply(
+                $queryBuilder,
+                Filters::fromList([Filter::contains('name', 'a_b')]),
+                $this->bankFieldMap(),
+            );
 
-        $resultIds = $this->resultIds($queryBuilder);
-        $this->assertContains($literal->getId(), $resultIds);
-        $this->assertNotContains($decoy->getId(), $resultIds);
+            $resultIds = $this->resultIds($queryBuilder);
+            $this->assertContains($literal->getId(), $resultIds);
+            $this->assertNotContains($decoy->getId(), $resultIds);
+        });
     }
 
     public function testSameFieldFiltersComposeWithAnd(): void
     {
-        $token = \strtolower($this->uniqueSuffix());
-        $match = $this->createBank('Alfa ' . $token . ' Norte', 'BNA' . $this->uniqueSuffix());
-        $this->createBank('Alfa ' . $token . ' Sur', 'BNA' . $this->uniqueSuffix());
-        $this->createBank('Beta ' . $token . ' Norte', 'BNA' . $this->uniqueSuffix());
+        $this->inRolledBackTransaction(function (): void {
+            $token = \strtolower($this->uniqueSuffix());
+            $match = $this->createBank('Alfa ' . $token . ' Norte', 'BNA' . $this->uniqueSuffix());
+            $this->createBank('Alfa ' . $token . ' Sur', 'BNA' . $this->uniqueSuffix());
+            $this->createBank('Beta ' . $token . ' Norte', 'BNA' . $this->uniqueSuffix());
 
-        $queryBuilder = $this->bankQueryBuilder();
-        $this->filterApplier->apply(
-            $queryBuilder,
-            Filters::fromList([
-                Filter::contains('name', 'alfa ' . $token),
-                Filter::contains('name', 'norte'),
-            ]),
-            $this->bankFieldMap(),
-        );
+            $queryBuilder = $this->bankQueryBuilder();
+            $this->filterApplier->apply(
+                $queryBuilder,
+                Filters::fromList([
+                    Filter::contains('name', 'alfa ' . $token),
+                    Filter::contains('name', 'norte'),
+                ]),
+                $this->bankFieldMap(),
+            );
 
-        $this->assertSame([$match->getId()], $this->resultIds($queryBuilder));
+            $this->assertSame([$match->getId()], $this->resultIds($queryBuilder));
+        });
     }
 
     public function testValuesAreBoundNeverInterpolated(): void
@@ -278,6 +276,28 @@ final class FilterApplierTest extends KernelTestCase
             Filters::fromList([Filter::contains('name', '   ')]),
             $this->bankFieldMap(),
         );
+    }
+
+    /**
+     * Runs the test body inside a transaction that is always rolled back, so persisted rows
+     * never leak into the shared dev database. Deliberately not a tearDown() override —
+     * rector and Psalm disagree on #[Override] for hooks with parent calls; a helper avoids
+     * the override entirely.
+     *
+     * @param callable(): void $testBody
+     */
+    private function inRolledBackTransaction(callable $testBody): void
+    {
+        $connection = $this->entityManager->getConnection();
+        $connection->beginTransaction();
+
+        try {
+            $testBody();
+        } finally {
+            if ($connection->isTransactionActive()) {
+                $connection->rollBack();
+            }
+        }
     }
 
     private function bankFieldMap(): SearchFieldMap
