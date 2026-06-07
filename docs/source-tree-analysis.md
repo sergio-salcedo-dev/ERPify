@@ -140,6 +140,7 @@ All browser traffic terminates at **FrankenPHP on `localhost`**. `/` is reverse-
 | `api/src/Shared/Domain/Exception/`                           | Marker interfaces + `DomainException` base — see [`api-error-contract.md`](./api-error-contract.md) |
 | `api/src/Shared/Application/Problem/`                        | `ProblemDetails` VO + `ProblemDetailsFactory` (single throwable→wire mapping site)                  |
 | `api/src/Shared/Infrastructure/Http/`                        | `CorrelationIdListener`, `ProblemDetailsResponder`, `EventListener/ExceptionResponder`              |
+| `api/src/Shared/Infrastructure/Persistence/Doctrine/Search/` | `FilterApplier` + `SearchFieldMap` — shared search-filter plumbing (mandatory allow-list)           |
 | `api/src/*/Application/`                                     | Use cases, DTOs, orchestration                                                                      |
 | `api/src/*/Infrastructure/`                                  | Doctrine, HTTP, Messenger adapters                                                                  |
 | `api/config/packages/`                                       | All bundle config (Doctrine, Messenger, Mercure, …)                                                 |

@@ -9,6 +9,7 @@ use Rector\Naming\Rector\ClassMethod\RenameParamToMatchTypeRector;
 use Rector\Naming\Rector\ClassMethod\RenameVariableToMatchNewTypeRector;
 use Rector\Php83\Rector\Class_\ReadOnlyAnonymousClassRector;
 use Rector\Php84\Rector\MethodCall\NewMethodCallWithoutParenthesesRector;
+use Rector\PHPUnit\CodeQuality\Rector\ClassMethod\NoSetupWithParentCallOverrideRector;
 
 return RectorConfig::configure()
     ->withPaths([
@@ -58,6 +59,10 @@ return RectorConfig::configure()
         // Do not simplify (new Class())->method()
         NewMethodCallWithoutParenthesesRector::class,
         RenameParamToMatchTypeRector::class,
+        // Strips #[Override] from setUp()/tearDown() that call their parent, while Psalm's
+        // MissingOverrideAttribute (error level) demands the attribute back — skip the rule
+        // so the two gates stop fighting over the same line.
+        NoSetupWithParentCallOverrideRector::class,
         // PDepend (bundled by phpmd 2.15) cannot parse `new readonly class` —
         // keep the explicit `readonly` on the inner property in the affected
         // file instead, so `make php.md` does not abort on a parser error.
