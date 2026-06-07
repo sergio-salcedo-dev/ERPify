@@ -67,7 +67,7 @@ final readonly class FilterApplier
     {
         return [
             \sprintf('%s = :%s', $mapping->dqlPath, $parameterName),
-            $this->normalize($mapping, $this->scalarValue($filter)),
+            $this->normalizedNotBlank($mapping, $this->scalarValue($filter), $filter->operator),
         ];
     }
 
@@ -87,7 +87,10 @@ final readonly class FilterApplier
 
         return [
             \sprintf('%s IN (:%s)', $mapping->dqlPath, $parameterName),
-            \array_map(fn (string $value): string => $this->normalize($mapping, $value), $values),
+            \array_map(
+                fn (string $value): string => $this->normalizedNotBlank($mapping, $value, $filter->operator),
+                $values,
+            ),
         ];
     }
 
@@ -96,13 +99,7 @@ final readonly class FilterApplier
      */
     private function containsCondition(FieldMapping $mapping, Filter $filter, string $parameterName): array
     {
-        $value = $this->normalize($mapping, $this->scalarValue($filter));
-
-        if ('' === \trim($value)) {
-            // Unreachable from the wire (shape validation rejects blank values in mapping):
-            // `LIKE '%%'` would silently match every row, so fail loudly instead.
-            throw new InvalidArgumentException('CONTAINS filter value must not normalize to an empty string.');
-        }
+        $value = $this->normalizedNotBlank($mapping, $this->scalarValue($filter), $filter->operator);
 
         $pattern = '%' . $this->escapeLikeWildcards($value) . '%';
 
@@ -113,9 +110,23 @@ final readonly class FilterApplier
         return [\sprintf('%s LIKE :%s', $mapping->dqlPath, $parameterName), $pattern];
     }
 
-    private function normalize(FieldMapping $mapping, string $value): string
+    /**
+     * Normalizes the value with the field's normalizer and rejects results that are blank.
+     * Unreachable from the wire (shape validation rejects blank values in mapping), so a blank
+     * here is a programmer error: CONTAINS would degenerate into a match-everything `LIKE '%%'`,
+     * EQ and IN into a meaningless empty-string predicate. Fail loudly instead.
+     */
+    private function normalizedNotBlank(FieldMapping $mapping, string $value, FilterOperator $operator): string
     {
-        return $mapping->normalizer?->normalize($value) ?? $value;
+        $normalized = $mapping->normalizer?->normalize($value) ?? $value;
+
+        if ('' === \trim($normalized)) {
+            throw new InvalidArgumentException(
+                \sprintf('%s filter value must not normalize to an empty string.', $operator->name),
+            );
+        }
+
+        return $normalized;
     }
 
     private function scalarValue(Filter $filter): string

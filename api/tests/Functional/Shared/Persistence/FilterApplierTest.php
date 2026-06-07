@@ -178,6 +178,29 @@ final class FilterApplierTest extends KernelTestCase
         });
     }
 
+    public function testContainsEscapesBackslash(): void
+    {
+        $this->inRolledBackTransaction(function (): void {
+            $suffixLiteral = $this->uniqueSuffix();
+            $suffixDecoy = $this->uniqueSuffix();
+            $literal = $this->createBank('Ruta a\b ' . $suffixLiteral, 'BNB' . $suffixLiteral);
+            // Unescaped '\b' in a LIKE pattern means literal 'b', so broken escaping would
+            // match 'ab' while missing the row that actually contains 'a\b'.
+            $decoy = $this->createBank('Ruta ab ' . $suffixDecoy, 'BNB' . $suffixDecoy);
+
+            $queryBuilder = $this->bankQueryBuilder();
+            $this->filterApplier->apply(
+                $queryBuilder,
+                Filters::fromList([Filter::contains('name', 'a\b')]),
+                $this->bankFieldMap(),
+            );
+
+            $resultIds = $this->resultIds($queryBuilder);
+            $this->assertContains($literal->getId(), $resultIds);
+            $this->assertNotContains($decoy->getId(), $resultIds);
+        });
+    }
+
     public function testSameFieldFiltersComposeWithAnd(): void
     {
         $this->inRolledBackTransaction(function (): void {
@@ -274,6 +297,28 @@ final class FilterApplierTest extends KernelTestCase
         $this->filterApplier->apply(
             $this->bankQueryBuilder(),
             Filters::fromList([Filter::contains('name', '   ')]),
+            $this->bankFieldMap(),
+        );
+    }
+
+    public function testEqValueNormalizingToEmptyIsRejectedAsProgrammerError(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        $this->filterApplier->apply(
+            $this->bankQueryBuilder(),
+            Filters::fromList([Filter::eq('name', '   ')]),
+            $this->bankFieldMap(),
+        );
+    }
+
+    public function testInItemNormalizingToEmptyIsRejectedAsProgrammerError(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        $this->filterApplier->apply(
+            $this->bankQueryBuilder(),
+            Filters::fromList([Filter::in('name', ['Banco Válido', '   '])]),
             $this->bankFieldMap(),
         );
     }
