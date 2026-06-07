@@ -40,6 +40,20 @@ final class ResultTest extends TestCase
         yield 'null' => [['key' => null]];
     }
 
+    public function testOkCarriesTopLevelMeta(): void
+    {
+        $meta = ['pagination' => ['currentPage' => 1]];
+
+        $this->assertSame($meta, Result::ok(['key' => 'value'], $meta)->meta);
+    }
+
+    public function testMetaDefaultsToEmpty(): void
+    {
+        $this->assertSame([], Result::ok(['key' => 'value'])->meta);
+        $this->assertSame([], Result::created(['key' => 'value'])->meta);
+        $this->assertSame([], Result::noContent()->meta);
+    }
+
     public function testNoContentProducesNullPayload(): void
     {
         $this->assertResultMatches(Result::noContent(), null, Result::STATUS_NO_CONTENT);

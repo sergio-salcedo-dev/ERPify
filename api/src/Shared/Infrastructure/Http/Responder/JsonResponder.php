@@ -18,6 +18,6 @@ final class JsonResponder implements ResponderInterface
             return new Response(status: $result->status);
         }
 
-        return new JsonResponse(['data' => $result->data], $result->status);
+        return new JsonResponse(['data' => $result->data] + $result->meta, $result->status);
     }
 }
