@@ -15,6 +15,16 @@
       <code><![CDATA[__construct]]></code>
     </PossiblyUnusedMethod>
   </file>
+  <file src="../../src/Backoffice/Bank/Application/Command/CreateBankCommand.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="../../src/Backoffice/Bank/Application/Command/UpdateBankCommand.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
   <file src="../../src/Backoffice/Bank/Domain/Entity/Bank.php">
     <ClassMustBeFinal>
       <code><![CDATA[Bank]]></code>
