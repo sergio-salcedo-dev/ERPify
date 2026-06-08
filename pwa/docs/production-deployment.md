@@ -15,7 +15,7 @@ Step-by-step guidance for deploying the monorepo safely. For a shorter checklist
 ## Secrets and configuration
 
 - Store `APP_SECRET`, database URLs, Mercure JWT material, and third-party keys in a secret manager (Kubernetes Secrets, AWS Secrets Manager, Vault, etc.).
-- **`NEXT_PUBLIC_API_BASE_URL`** — public origin for **browser** `fetch` (paths like **`/api/v1/...`**). With the default Docker layout this is the **FrankenPHP** host (e.g. **`https://app.example.com`**). Must be **HTTPS** if the page is **HTTPS**.
+- **`NEXT_PUBLIC_API_BASE_URL`** — public origin for **browser** `fetch` (paths like **`/api/v1/...`**). With the default Docker layout this is the **FrankenPHP** host (e.g. **`https://app.example.com`**). Must be **HTTPS** if the page is **HTTPS**. **Must share the page origin** for Mercure realtime to work: the subscriber authorization cookie is `SameSite=Strict`, so a cross-origin API base URL silently kills the `EventSource` subscription (the cookie is never sent cross-site). See [Realtime (Mercure): same-origin requirement](../../docs/integration-architecture.md#realtime-mercure-same-origin-requirement).
 - **`SYMFONY_INTERNAL_URL`** — **server-only**; base URL for server-side fetches (e.g. **`http://php:80`** in Compose).
 - Rotate credentials on a schedule; do not use default passwords from compose examples on the public internet.
 

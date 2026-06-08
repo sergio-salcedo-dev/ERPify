@@ -14,6 +14,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SortDirection } from "@/context/shared/domain/types/sorting";
 import { KeyboardKey } from "@/context/shared/domain/types/keyboard";
+import type { ListDensity } from "./DensityToggle";
 
 export const SelectionMode = {
   NONE: "none",
@@ -52,11 +53,16 @@ interface DataTableProps<T> {
   columns: DataTableColumn<T>[];
   data: readonly T[];
   rowKey: (row: T) => string;
-  density?: "compact" | "comfortable";
+  density?: ListDensity;
   sort?: DataTableSort;
   onSortChange?: (sort: DataTableSort | null) => void;
   selection?: DataTableSelection;
   onRowActivate?: (row: T) => void;
+  /**
+   * Fired when `o` is pressed on a focused row — opens a lightweight peek of
+   * the row's in-memory fields without navigating. Only wired when provided.
+   */
+  onRowPeek?: (rowId: string) => void;
   /** Caption announced by screen readers; required for a11y. */
   caption: string;
   /** Rendered when data is empty. */
@@ -80,15 +86,15 @@ interface DataTableProps<T> {
   layout?: "fixed";
 }
 
-const ROW_HEIGHTS = {
+const ROW_HEIGHTS: Record<ListDensity, string> = {
   compact: "h-9",
   comfortable: "h-11",
-} as const;
+};
 
-const HEADER_HEIGHTS = {
+const HEADER_HEIGHTS: Record<ListDensity, string> = {
   compact: "h-9",
   comfortable: "h-10",
-} as const;
+};
 
 type AriaSort = "ascending" | "descending" | "none" | undefined;
 
@@ -105,6 +111,11 @@ function computeAriaSort(
 function computeTabIndex(interactive: boolean, isFocused: boolean): number | undefined {
   if (!interactive) return undefined;
   return isFocused ? 0 : -1;
+}
+
+/** Focus target for ArrowDown / ArrowUp row navigation, clamped to the page. */
+function arrowTargetIndex(key: string, index: number, lastIndex: number): number {
+  return key === KeyboardKey.ARROW_DOWN ? Math.min(index + 1, lastIndex) : Math.max(index - 1, 0);
 }
 
 function alignClass(align: DataTableColumn<unknown>["align"]): string | undefined {
@@ -226,7 +237,7 @@ interface DataTableRowProps<T> {
   row: T;
   rowId: string;
   index: number;
-  density: "compact" | "comfortable";
+  density: ListDensity;
   columns: DataTableColumn<T>[];
   selection?: DataTableSelection;
   isSelected: boolean;
@@ -304,6 +315,7 @@ export function DataTable<T>({
   onSortChange,
   selection,
   onRowActivate,
+  onRowPeek,
   caption,
   emptyState,
   className,
@@ -314,6 +326,33 @@ export function DataTable<T>({
   const tableId = useId();
   const [focusedRow, setFocusedRow] = useState(0);
   const rowRefs = useRef<Array<HTMLTableRowElement | null>>([]);
+  // Explorer-style range selection (Shift+Arrow): `anchor` is the row the range
+  // pivots on and `baseline` is the selection snapshot taken at the first
+  // Shift+Arrow press. Each subsequent press recomputes `baseline ∪ range`, so
+  // contracting only ever deselects what the range itself added — never the
+  // pre-existing baseline. Both reset to null on any non-shift navigation or
+  // toggle, re-armed lazily on the next Shift+Arrow.
+  const rangeRef = useRef<{ anchor: number; baseline: ReadonlySet<string> } | null>(null);
+  const rangeEmittedRef = useRef<ReadonlySet<string> | null>(null);
+  const resetRange = useCallback(() => {
+    rangeRef.current = null;
+  }, []);
+
+  // The cached anchor indexes into `data`: any external mutation of the row
+  // slice (pagination, filtering, realtime deletes) invalidates it. Reset so
+  // the next Shift+Arrow re-arms on fresh indices instead of selecting the
+  // wrong rows — or walking past the end of a shrunk list.
+  useEffect(() => {
+    rangeRef.current = null;
+  }, [data]);
+
+  // An external selection change (bulk-bar Clear, remote pruning) also ends
+  // the range; only the set extendRange itself emitted keeps the anchor alive.
+  useEffect(() => {
+    if (selection?.selected !== rangeEmittedRef.current) {
+      rangeRef.current = null;
+    }
+  }, [selection?.selected]);
 
   const handleHeaderSort = useCallback(
     (columnId: string) => {
@@ -333,6 +372,7 @@ export function DataTable<T>({
 
   const handleSelectAll = useCallback(() => {
     if (selection?.mode !== SelectionMode.MULTI) return;
+    rangeRef.current = null;
     // Page-scoped toggle: a selection that survives pagination keeps its
     // off-page ids either way.
     const pageIds = data.map(rowKey);
@@ -349,6 +389,8 @@ export function DataTable<T>({
   const handleRowSelect = useCallback(
     (id: string) => {
       if (!selection || selection.mode === SelectionMode.NONE) return;
+      // A direct toggle (checkbox click / Space) ends any in-progress range.
+      rangeRef.current = null;
       if (selection.mode === SelectionMode.SINGLE) {
         selection.onChange(new Set([id]));
         return;
@@ -364,27 +406,61 @@ export function DataTable<T>({
     [selection],
   );
 
+  // Multi-select only: extend the range from the anchor to `toIndex`, applying
+  // `baseline ∪ range`. Arming the anchor/baseline lazily on the first press
+  // keeps the snapshot honest — it captures whatever was selected right before
+  // the range started.
+  const extendRange = useCallback(
+    (fromIndex: number, toIndex: number) => {
+      if (selection?.mode !== SelectionMode.MULTI) return;
+      if (rangeRef.current === null) {
+        rangeRef.current = { anchor: fromIndex, baseline: new Set(selection.selected) };
+      }
+      const { anchor, baseline } = rangeRef.current;
+      const lo = Math.min(anchor, toIndex);
+      const hi = Math.max(anchor, toIndex);
+      const next = new Set(baseline);
+      // Resolve ids from `data`, not the DOM refs, so the range is correct even
+      // before the focus move repaints.
+      for (let i = lo; i <= hi; i++) {
+        next.add(rowKey(data[i]));
+      }
+      rangeEmittedRef.current = next;
+      selection.onChange(next);
+    },
+    [selection, rowKey, data],
+  );
+
   const handleRowKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTableRowElement>, row: T, index: number) => {
       // A key pressed while an in-row control (action button, link, checkbox)
       // is focused belongs to that control, not the row.
       if (isFromInteractiveControl(event.target, event.currentTarget)) return;
-      if (event.key === KeyboardKey.ARROW_DOWN) {
+      if (event.key === KeyboardKey.ARROW_DOWN || event.key === KeyboardKey.ARROW_UP) {
         event.preventDefault();
-        const next = Math.min(index + 1, data.length - 1);
+        const next = arrowTargetIndex(event.key, index, data.length - 1);
+        // Shift extends the range (multi-select only); a plain move ends it.
+        if (event.shiftKey && selection?.mode === SelectionMode.MULTI) {
+          extendRange(index, next);
+        } else {
+          resetRange();
+        }
         setFocusedRow(next);
         rowRefs.current[next]?.focus();
         return;
       }
-      if (event.key === KeyboardKey.ARROW_UP) {
+      // Case-insensitive so CapsLock can't disable the peek; Shift stays
+      // reserved for range selection.
+      if (event.key.toLowerCase() === KeyboardKey.O && !event.shiftKey && onRowPeek) {
+        // Prevent native typeahead / scroll side effects before peeking.
         event.preventDefault();
-        const next = Math.max(index - 1, 0);
-        setFocusedRow(next);
-        rowRefs.current[next]?.focus();
+        resetRange();
+        onRowPeek(rowKey(row));
         return;
       }
       if (event.key === KeyboardKey.ENTER) {
         event.preventDefault();
+        resetRange();
         onRowActivate?.(row);
         return;
       }
@@ -394,10 +470,11 @@ export function DataTable<T>({
         selection.mode !== SelectionMode.NONE
       ) {
         event.preventDefault();
+        resetRange();
         handleRowSelect(rowKey(row));
       }
     },
-    [data.length, onRowActivate, selection, handleRowSelect, rowKey],
+    [data, onRowActivate, onRowPeek, selection, handleRowSelect, rowKey, extendRange, resetRange],
   );
 
   const registerRowRef = useCallback((index: number, el: HTMLTableRowElement | null) => {

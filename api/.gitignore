@@ -32,3 +32,9 @@ phpstan.neon
 # Generated taint-analysis report (make php.psalm.taint)
 /tools/psalm/*.sarif
 ###< vimeo/psalm ###
+
+###> core dumps ###
+# FrankenPHP (PID 1) dumps land in the bind-mounted /app/api if core dumps slip past
+# the compose `ulimits` guard. Never commit them.
+/core.*
+###< core dumps ###

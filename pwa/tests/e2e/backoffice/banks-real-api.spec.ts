@@ -128,14 +128,14 @@ test.describe("BackOffice - Banks CRUD (real API)", () => {
     // Create — drive the UI form against the real POST endpoint.
     // -----------------------------------------------------------------
     const createName = `${runPrefix} CRUD`;
-    const createShortName = `${runPrefix.slice(-40)}-CRUD`.slice(0, 50).toLocaleUpperCase();
+    const createShortNameInput = `${runPrefix.slice(-40)}-CRUD`.slice(0, 50);
     const updatedName = `${createName} (renamed)`;
 
     await page.getByTestId("banks-list__new-button").click();
     await expect(page).toHaveURL(/\/backoffice\/banks\/new$/);
 
     await page.getByTestId("bank-form__name").fill(createName);
-    await page.getByTestId("bank-form__short-name").fill(createShortName);
+    await page.getByTestId("bank-form__short-name").fill(createShortNameInput);
     await page.getByTestId("bank-form__submit").click();
 
     // The detail page lives at /backoffice/banks/<uuid>. Capture the id so
@@ -145,9 +145,16 @@ test.describe("BackOffice - Banks CRUD (real API)", () => {
     const createdId = detailURL.pathname.split("/").pop()!;
     trackedIds.push(createdId);
 
+    // The API canonicalizes short codes on create (NormalizedText::toAsciiUpper —
+    // uppercase + diacritic stripping), so assert the persisted value it returns,
+    // not a local toLocaleUpperCase() approximation of that rule.
+    const createdProbe = await api.get(`/api/v1/backoffice/banks/${createdId}`);
+    expect(createdProbe.ok()).toBe(true);
+    const { data: createdBank } = (await createdProbe.json()) as { data: ApiBank };
+
     await expect(page.getByTestId("banks-detail")).toHaveAttribute("data-state", "ready");
     await expect(page.getByTestId("banks-detail__name")).toHaveText(createName);
-    await expect(page.getByTestId("banks-detail__shortname")).toHaveText(createShortName);
+    await expect(page.getByTestId("banks-detail__shortname")).toHaveText(createdBank.shortName);
     await expect(page.getByTestId("banks-detail__id")).toHaveText(createdId);
 
     // -----------------------------------------------------------------

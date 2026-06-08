@@ -6,25 +6,25 @@ Feature: Search banks
   Scenario: List all banks
     When I send a "GET" request to "/backoffice/banks"
     Then the response status code should be 200
-    And the JSON node "data.items" should have 31 elements
-    And the JSON nodes matching "data.items[*]" should have 5 children
-    And the JSON nodes matching "data.items[*].id" should exist
-    And the JSON nodes matching "data.items[*].name" should exist
-    And the JSON nodes matching "data.items[*].shortName" should exist
-    And the JSON nodes matching "data.items[*].createdAt" should exist
-    And the JSON nodes matching "data.items[*].updatedAt" should exist
-    And the JSON node "data.pagination" should have 5 elements
-    And the JSON node "data.pagination.currentPage" should be equal to the number 1
-    And the JSON node "data.pagination.pageCount" should be null
-    And the JSON node "data.pagination.hasMorePages" should be false
-    And the JSON node "data.pagination.cursor" should not be null
+    And the JSON node "data" should have 31 elements
+    And the JSON nodes matching "data[*]" should have 5 children
+    And the JSON nodes matching "data[*].id" should exist
+    And the JSON nodes matching "data[*].name" should exist
+    And the JSON nodes matching "data[*].shortName" should exist
+    And the JSON nodes matching "data[*].createdAt" should exist
+    And the JSON nodes matching "data[*].updatedAt" should exist
+    And the JSON node "pagination" should have 5 elements
+    And the JSON node "pagination.currentPage" should be equal to the number 1
+    And the JSON node "pagination.pageCount" should be null
+    And the JSON node "pagination.hasMorePages" should be false
+    And the JSON node "pagination.cursor" should not be null
     And 2 requests got executed only for doctrine connection "default"
 
   Scenario: Filtering by a valid id that does not exist returns no results
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=id&filters[0][operator]=in&filters[0][value][]=2e6d865c-17b0-476a-85f2-037bf6d3b3dc"
     Then the response status code should be 200
-    And the JSON node "data.items" should have 0 elements
-    And the JSON node "data.pagination" should exist
+    And the JSON node "data" should have 0 elements
+    And the JSON node "pagination" should exist
     And 1 request got executed only for doctrine connection "default"
 
   Scenario: Unknown pagination mode returns 400
@@ -70,51 +70,51 @@ Feature: Search banks
   Scenario: Light pagination mode emits a cursor and skips pageCount on page one
     When I send a "GET" request to "/backoffice/banks?paginationMode=light&limit=5"
     Then the response status code should be 200
-    And the JSON node "data.items" should have 5 elements
-    And the JSON node "data.pagination.currentPage" should be equal to the number 1
-    And the JSON node "data.pagination.pageCount" should be null
-    And the JSON node "data.pagination.hasMorePages" should be true
-    And the JSON node "data.pagination.cursor" should not be null
+    And the JSON node "data" should have 5 elements
+    And the JSON node "pagination.currentPage" should be equal to the number 1
+    And the JSON node "pagination.pageCount" should be null
+    And the JSON node "pagination.hasMorePages" should be true
+    And the JSON node "pagination.cursor" should not be null
     And 2 requests got executed only for doctrine connection "default"
 
   Scenario: Light pagination mode follows the cursor to the next page
     Given I send a "GET" request to "/backoffice/banks?paginationMode=light&limit=5"
-    And I send a "GET" request to "/backoffice/banks?paginationMode=light&limit=5&page=2&cursor={value}" using the JSON node "data.pagination.cursor" from the previous response
+    And I send a "GET" request to "/backoffice/banks?paginationMode=light&limit=5&page=2&cursor={value}" using the JSON node "pagination.cursor" from the previous response
     Then the response status code should be 200
-    And the JSON node "data.items" should have 5 elements
-    And the JSON node "data.pagination.currentPage" should be equal to the number 2
-    And the JSON node "data.pagination.pageCount" should be null
-    And the JSON node "data.pagination.hasMorePages" should be true
-    And the JSON node "data.pagination.cursor" should not be null
+    And the JSON node "data" should have 5 elements
+    And the JSON node "pagination.currentPage" should be equal to the number 2
+    And the JSON node "pagination.pageCount" should be null
+    And the JSON node "pagination.hasMorePages" should be true
+    And the JSON node "pagination.cursor" should not be null
     And 4 requests got executed only for doctrine connection "default"
 
   Scenario: Detailed pagination mode follows the cursor to the next page
     Given I send a "GET" request to "/backoffice/banks?paginationMode=detailed&limit=5"
-    And I send a "GET" request to "/backoffice/banks?paginationMode=detailed&limit=5&page=2&cursor={value}" using the JSON node "data.pagination.cursor" from the previous response
+    And I send a "GET" request to "/backoffice/banks?paginationMode=detailed&limit=5&page=2&cursor={value}" using the JSON node "pagination.cursor" from the previous response
     Then the response status code should be 200
-    And the JSON node "data.items" should have 5 elements
-    And the JSON node "data.pagination.currentPage" should be equal to the number 2
-    And the JSON node "data.pagination.pageCount" should be equal to the number 7
-    And the JSON node "data.pagination.hasMorePages" should be true
-    And the JSON node "data.pagination.cursor" should not be null
+    And the JSON node "data" should have 5 elements
+    And the JSON node "pagination.currentPage" should be equal to the number 2
+    And the JSON node "pagination.pageCount" should be equal to the number 7
+    And the JSON node "pagination.hasMorePages" should be true
+    And the JSON node "pagination.cursor" should not be null
     And 5 requests got executed only for doctrine connection "default"
 
   Scenario: Detailed pagination mode exposes total counts on a full first page
     When I send a "GET" request to "/backoffice/banks?paginationMode=detailed&limit=1000"
     Then the response status code should be 200
-    And the JSON node "data.items" should have 31 elements
-    And the JSON node "data.pagination.currentPage" should be equal to the number 1
-    And the JSON node "data.pagination.pageCount" should be equal to the number 1
-    And the JSON node "data.pagination.hasMorePages" should be false
+    And the JSON node "data" should have 31 elements
+    And the JSON node "pagination.currentPage" should be equal to the number 1
+    And the JSON node "pagination.pageCount" should be equal to the number 1
+    And the JSON node "pagination.hasMorePages" should be false
     And 2 requests got executed only for doctrine connection "default"
 
   Scenario: Detailed pagination mode runs the COUNT query when the page does not fit
     When I send a "GET" request to "/backoffice/banks?paginationMode=detailed&limit=10"
     Then the response status code should be 200
-    And the JSON node "data.items" should have 10 elements
-    And the JSON node "data.pagination.currentPage" should be equal to the number 1
-    And the JSON node "data.pagination.pageCount" should be equal to the number 4
-    And the JSON node "data.pagination.hasMorePages" should be true
+    And the JSON node "data" should have 10 elements
+    And the JSON node "pagination.currentPage" should be equal to the number 1
+    And the JSON node "pagination.pageCount" should be equal to the number 4
+    And the JSON node "pagination.hasMorePages" should be true
     And 3 requests got executed only for doctrine connection "default"
 
   # Generic filters[N][field|operator|value] contract — the single filtering vocabulary. The
@@ -122,32 +122,32 @@ Feature: Search banks
   Scenario: Generic eq filter matches a bank case-insensitively
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=eq&filters[0][value]=BBVA"
     Then the response status code should be 200
-    And the JSON node "data.items" should have 1 elements
-    And the JSON node "data.pagination" should exist
+    And the JSON node "data" should have 1 elements
+    And the JSON node "pagination" should exist
     And 2 requests got executed only for doctrine connection "default"
 
   Scenario: Generic in filter matches several banks
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=in&filters[0][value][]=BBVA&filters[0][value][]=CaixaBank"
     Then the response status code should be 200
-    And the JSON node "data.items" should have 2 elements
+    And the JSON node "data" should have 2 elements
     And 2 requests got executed only for doctrine connection "default"
 
   Scenario: Generic contains filter matches banks by substring
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=contains&filters[0][value]=banc"
     Then the response status code should be 200
-    And the JSON node "data.items" should have 2 elements
+    And the JSON node "data" should have 2 elements
     And 2 requests got executed only for doctrine connection "default"
 
   Scenario: Generic contains filter ignores diacritics in the search value
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=contains&filters[0][value]=G%C3%A9n%C3%A9rale"
     Then the response status code should be 200
-    And the JSON node "data.items" should have 1 elements
+    And the JSON node "data" should have 1 elements
     And 2 requests got executed only for doctrine connection "default"
 
   Scenario: Generic id filter accepts the in operator with a bound uuid
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=id&filters[0][operator]=in&filters[0][value][]=11111111-1111-7000-8000-000000000020"
     Then the response status code should be 200
-    And the JSON node "data.items" should have 1 elements
+    And the JSON node "data" should have 1 elements
     And 2 requests got executed only for doctrine connection "default"
 
   # The boundary scenario pins real behaviour under PHP's default max_input_vars=1000:
@@ -155,7 +155,7 @@ Feature: Search banks
   Scenario: Generic in filter at the values cap stays within max_input_vars
     When I send a "GET" request to "/backoffice/banks" with a "name" in-filter of 100 values, the last being "BBVA"
     Then the response status code should be 200
-    And the JSON node "data.items" should have 1 elements
+    And the JSON node "data" should have 1 elements
     And 2 requests got executed only for doctrine connection "default"
 
   # Semantic 400s come from the applier (invalid-search-criteria family) and abort before
@@ -217,35 +217,35 @@ Feature: Search banks
   Scenario: Generic in filter over name pins the exact bank id
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=in&filters[0][value][]=BBVA"
     Then the response status code should be 200
-    And the JSON node "data.items" should have 1 elements
-    And the JSON node "data.items[0].id" should be equal to "11111111-1111-7000-8000-000000000020"
+    And the JSON node "data" should have 1 elements
+    And the JSON node "data[0].id" should be equal to "11111111-1111-7000-8000-000000000020"
     And 2 requests got executed only for doctrine connection "default"
 
   Scenario: Generic in filter over name ignores diacritics in the search values
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=in&filters[0][value][]=Sociedad%20Anonima"
     Then the response status code should be 200
-    And the JSON node "data.items" should have 1 elements
-    And the JSON node "data.items[0].id" should be equal to "11111111-1111-7000-8000-000000000031"
+    And the JSON node "data" should have 1 elements
+    And the JSON node "data[0].id" should be equal to "11111111-1111-7000-8000-000000000031"
     And 2 requests got executed only for doctrine connection "default"
 
   Scenario: Generic in filter over id pins the exact bank id
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=id&filters[0][operator]=in&filters[0][value][]=11111111-1111-7000-8000-000000000020"
     Then the response status code should be 200
-    And the JSON node "data.items" should have 1 elements
-    And the JSON node "data.items[0].id" should be equal to "11111111-1111-7000-8000-000000000020"
+    And the JSON node "data" should have 1 elements
+    And the JSON node "data[0].id" should be equal to "11111111-1111-7000-8000-000000000020"
     And 2 requests got executed only for doctrine connection "default"
 
   Scenario: Two generic filters on the same field compose with AND
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=in&filters[0][value][]=Banco%20Santander&filters[1][field]=name&filters[1][operator]=contains&filters[1][value]=banc"
     Then the response status code should be 200
-    And the JSON node "data.items" should have 1 elements
-    And the JSON node "data.items[0].id" should be equal to "11111111-1111-7000-8000-000000000019"
+    And the JSON node "data" should have 1 elements
+    And the JSON node "data[0].id" should be equal to "11111111-1111-7000-8000-000000000019"
     And 2 requests got executed only for doctrine connection "default"
 
   Scenario: Disjoint generic filters compose with AND into an empty result
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=in&filters[0][value][]=BBVA&filters[1][field]=name&filters[1][operator]=contains&filters[1][value]=banc"
     Then the response status code should be 200
-    And the JSON node "data.items" should have 0 elements
+    And the JSON node "data" should have 0 elements
     And 1 request got executed only for doctrine connection "default"
 
   # The retired legacy params are plain unknown query params now: ignored like any other,
@@ -253,5 +253,5 @@ Feature: Search banks
   Scenario: Retired legacy filter params are ignored as unknown query params
     When I send a "GET" request to "/backoffice/banks?names[]=BBVA&ids[]=11111111-1111-7000-8000-000000000020"
     Then the response status code should be 200
-    And the JSON node "data.items" should have 31 elements
+    And the JSON node "data" should have 31 elements
     And 2 requests got executed only for doctrine connection "default"
