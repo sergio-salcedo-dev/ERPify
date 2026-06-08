@@ -55,7 +55,7 @@ development_status:
   epic-1-retrospective: optional
 
   # Epic 2: Filtrado server-driven en la PWA — fase 2
-  epic-2: backlog
-  2-1-vocabulario-y-builder-de-filtros-compartido-en-la-pwa: backlog
+  epic-2: in-progress
+  2-1-vocabulario-y-builder-de-filtros-compartido-en-la-pwa: review
   2-2-lista-de-banks-filtrada-server-driven: backlog
   epic-2-retrospective: optional
