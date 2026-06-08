@@ -50,6 +50,7 @@ Note: the back-office (token-driven Shadcn + `@/components/erpify`) and the land
   - E2E sharding: `CI_SHARD=N CI_TOTAL_SHARDS=M make pwa.test.e2e`.
 - `make pwa.quality` — ESLint + Prettier check. Fixers: `pwa.lint` (ESLint --fix), `pwa.format` (Prettier --write).
 - `make pwa.clean.all` — remove `node_modules`, `.next` (destructive).
+- `make pwa.chown.next` — reclaim ownership of root-owned `pwa/.next` / `.next-e2e` for the host user (sudo, dev/test only). Use this — **not** the destructive `pwa.clean.sudo` — when `make pwa.dev` fails with `EACCES … pwa/.next/trace`: a worktree/container stack wrote the bind mount as `root`, so the host Turbopack can't write `.next/trace`. It preserves the build cache.
 
 Full-stack targets (`make app.dev`, `make docker.up`, `make docker.down`, …) live in the root `Makefile` — see root `CLAUDE.md`.
 
