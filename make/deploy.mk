@@ -10,7 +10,7 @@
 
 # Keys that MUST be set (non-empty, no CHANGE_ME placeholder) before the prod
 # stack can start. Kept in sync with .env.prod.example.
-PROD_REQUIRED_KEYS := APP_SECRET POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB CADDY_MERCURE_JWT_SECRET SERVER_NAME NEXT_PUBLIC_API_BASE_URL
+PROD_REQUIRED_KEYS := APP_SECRET POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB CADDY_MERCURE_JWT_SECRET SERVER_NAME NEXT_PUBLIC_API_BASE_URL SENTRY_DSN SENTRY_TRACES_SAMPLE_RATE
 
 prod.env.check: ## Validate .env.prod.local holds every required prod secret (fails on missing file / unset / placeholder)
 	@file="$(PROJECT_ROOT)/$(PROD_ENV_FILE)"; \

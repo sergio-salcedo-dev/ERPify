@@ -25,10 +25,11 @@ you change anything here.
 - [ ] `POSTGRES_PASSWORD` is URL-safe — generate with `openssl rand -hex`, not
       `-base64`. It is interpolated raw into `DATABASE_URL`, so `/` `+` `=` from
       base64 corrupt the DSN (`MalformedDsnException`, php boot fails).
-- [ ] `SENTRY_DSN` (optional — error/perf monitoring) is injected via real env
-      only, never committed; empty leaves the SDK inert. Provisioned through the
-      Sentry MCP (`.mcp.json`). The same value is set identically on the test
-      machine and the VPS. Not a fail-to-start secret.
+- [ ] `SENTRY_DSN` (+ `SENTRY_TRACES_SAMPLE_RATE`) is set in `.env.prod.local`,
+      never committed — provisioned through the Sentry MCP (`.mcp.json`). Both are
+      **required** in prod (in `make prod.env.check` and guarded by `${VAR:?}` in
+      `compose.prod.yaml`): the deploy aborts by name if either is missing, on the
+      test machine and the VPS alike.
 
 ## 2. No weak fallbacks
 

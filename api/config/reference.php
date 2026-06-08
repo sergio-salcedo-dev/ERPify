@@ -1344,6 +1344,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         mercure?: MercureConfig,
  *         flysystem?: FlysystemConfig,
  *         monolog?: MonologConfig,
+ *         sentry?: SentryConfig,
  *     },
  *     "when@prod"?: array{
  *         imports?: ImportsConfig,

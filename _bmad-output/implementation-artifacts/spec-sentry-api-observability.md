@@ -103,7 +103,16 @@ Findings from Blind/Edge/Acceptance reviewers, all classified `patch` (no intent
 - **Honoured spec `ignore_exceptions: NotFoundHttpException`** (was using only Flex's `FatalError` defaults) and set `register_error_listener: true` explicitly.
 - **Doc/claim accuracy:** reworded `api-error-contract.md` ("could be extended to drop `domain_error`" — not shipped) and narrowed the `PRODUCTION_SECURITY_CHECKLIST.md` claim to the scrubber's real scope (extra/request/query_string; breadcrumbs + exception messages out of scope).
 - **Added `SentryEventScrubberTest`** (4 cases: nested extra, nested request data, raw query_string, no-context passthrough).
-- KEEP: the prod-only bundle gating, the listener-driven (not Monolog) capture path, and the `RedactionDenylist` reuse — all confirmed correct by reviewers; preserve on any re-derivation.
+- KEEP: the listener-driven (not Monolog) capture path and the `RedactionDenylist` reuse — confirmed correct by reviewers; preserve on any re-derivation.
+
+### Post-review refinements (user request, 2026-06-08)
+
+Frozen-intent renegotiation by the human, after the deploy wiring landed:
+
+- **Sentry env vars delivered through the prod deploy.** `SENTRY_DSN` / `SENTRY_TRACES_SAMPLE_RATE` wired into `php` + `messenger_worker` in `compose.prod.yaml` (read from `.env.prod.local`), so `make deploy.local` carries them to the test machine and the VPS.
+- **Required in prod.** Both added to `make prod.env.check`'s `PROD_REQUIRED_KEYS` and guarded by `${VAR:?}` in `compose.prod.yaml` — a prod stand-up aborts by name if either is missing (supersedes the earlier "optional / not a fail-to-start" framing).
+- **`SENTRY_ENVIRONMENT` dropped.** Replaced the `%env(default:kernel.environment:SENTRY_ENVIRONMENT)%` fallback with plain `%kernel.environment%` — one fewer var; events tag as `dev` / `prod` automatically.
+- **Sentry enabled in dev (not test).** Bundle is now `['dev' => true, 'prod' => true]` and `sentry.yaml` has a `when@dev` block (errors only, no tracing). Gated by `SENTRY_DSN`: empty in dev → inert; a developer opts in via `api/.env.local`. This relaxes the original frozen "dev and test send zero events" boundary **for dev** (human-approved); **test** still never loads the SDK, so the test suite is untouched (540 tests green). KEEP: test exclusion — re-enabling Sentry in test risks the listener-priority assertions.
 
 ## Design Notes
 

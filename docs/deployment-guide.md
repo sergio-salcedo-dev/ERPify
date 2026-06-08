@@ -53,30 +53,35 @@ make prod.env.check
 
 ## Observability (Sentry)
 
-Error + performance monitoring for the API. **Optional and prod-only**: the
-`SentryBundle` is registered for `prod` alone, so dev/test never load the SDK,
-and an empty `SENTRY_DSN` keeps it inert until a real DSN is injected. The same
-config runs identically on the test machine and the VPS — only the injected env
-differs.
+Error + performance monitoring for the API. The `SentryBundle` loads in **dev and
+prod** (never `test`). It is gated by `SENTRY_DSN`:
 
-The three vars are wired into the `php` and `messenger_worker` services in
+- **dev** — empty by default → inert. Set `SENTRY_DSN` in `api/.env.local`
+  (gitignored) to watch your own errors while developing; events are tagged
+  environment `dev`. Errors only, no performance tracing.
+- **prod** (test machine + VPS, identical config) — a real `SENTRY_DSN` is
+  **required**, with performance tracing.
+
+The prod vars are wired into the `php` and `messenger_worker` services in
 `compose.prod.yaml` (read from `.env.prod.local` via `--env-file`), so a normal
-`make deploy.local` carries them to the containers — on both the test machine and
-the VPS. They are **optional** (not in `make prod.env.check`'s required keys): an
-empty DSN just keeps the SDK inert, so a Sentry-less stand-up still works.
+`make deploy.local` carries them to the containers. `SENTRY_DSN` and
+`SENTRY_TRACES_SAMPLE_RATE` are **required** — they are in `make prod.env.check`'s
+keys and guarded by `${VAR:?}` in `compose.prod.yaml`, so a prod stand-up **aborts
+by name** if either is missing.
 
-To enable Sentry on a host:
+To stand up a prod host:
 
 1. Provision the org/project and obtain the DSN via the **Sentry MCP**
    (`.mcp.json`, remote OAuth).
 2. Set in the host's gitignored `.env.prod.local` (template:
    [`../.env.prod.example`](../.env.prod.example)):
-   - `SENTRY_DSN` — the project DSN (empty = disabled).
-   - `SENTRY_TRACES_SAMPLE_RATE` — performance sampling; `0.2` in prod, `0` off.
-   - `SENTRY_ENVIRONMENT` — optional tag to separate surfaces
-     (e.g. `test-machine` vs `production`); empty falls back to `APP_ENV`.
+   - `SENTRY_DSN` — the project DSN (**required**).
+   - `SENTRY_TRACES_SAMPLE_RATE` — performance sampling, **required**; `0.2` in
+     prod, `0` to disable tracing while keeping error capture.
 3. `make deploy.local` (first stand-up) or `make docker.up ENV=prod` (restart)
-   picks them up.
+   picks them up; `make prod.env.check` validates them first.
+
+The Sentry `environment` tag is just `APP_ENV` (`dev` / `prod`) — no extra var.
 
 `send_default_pii: false` + the `SentryEventScrubber` `before_send` keep
 PII/secrets off events (see [`../PRODUCTION_SECURITY_CHECKLIST.md`](../PRODUCTION_SECURITY_CHECKLIST.md)).

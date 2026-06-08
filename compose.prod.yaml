@@ -33,12 +33,12 @@ services:
       CADDY_SERVER_EXTRA_DIRECTIVES: ${CADDY_SERVER_EXTRA_DIRECTIVES-tls internal}
       DEFAULT_URI: ${DEFAULT_URI:-https://${SERVER_NAME:?SERVER_NAME is required in prod}}
       MERCURE_PUBLIC_URL: ${MERCURE_PUBLIC_URL:-https://${SERVER_NAME:?SERVER_NAME is required in prod}/.well-known/mercure}
-      # Sentry (error + performance monitoring). Optional — an empty DSN leaves
-      # the prod-only SDK inert. Set these in .env.prod.local on the test machine
-      # and the VPS to enable it (DSN from the Sentry MCP; rate ~0.2).
-      SENTRY_DSN: ${SENTRY_DSN:-}
-      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0}
-      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
+      # Sentry (error + performance monitoring) — REQUIRED in prod (test machine
+      # and VPS). Set both in .env.prod.local (DSN from the Sentry MCP; rate ~0.2);
+      # `make prod.env.check` and the `:?` guards abort the deploy if either is
+      # missing. The Sentry "environment" tag is just APP_ENV (= prod).
+      SENTRY_DSN: ${SENTRY_DSN:?SENTRY_DSN is required in prod}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:?SENTRY_TRACES_SAMPLE_RATE is required in prod}
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -134,10 +134,9 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required in prod}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in prod}@database:5432/${POSTGRES_DB:?POSTGRES_DB is required in prod}?serverVersion=${POSTGRES_VERSION:-18}&charset=${POSTGRES_CHARSET:-utf8}
       # null mailer by default so an unset DSN can't break the worker boot.
       MAILER_DSN: ${MAILER_DSN:-null://null}
-      # Sentry captures async handler failures too (same optional gating as php).
-      SENTRY_DSN: ${SENTRY_DSN:-}
-      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0}
-      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
+      # Sentry captures async handler failures too (same required gating as php).
+      SENTRY_DSN: ${SENTRY_DSN:?SENTRY_DSN is required in prod}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:?SENTRY_TRACES_SAMPLE_RATE is required in prod}
     security_opt:
       - no-new-privileges:true
     cap_drop:

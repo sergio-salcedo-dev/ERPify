@@ -1,26 +1,42 @@
-# Sentry is registered prod-only (see config/bundles.php), so dev and test never
-# load the SDK and can emit nothing — the strongest possible env gate. In prod
-# (the test machine and the VPS, both APP_ENV=prod) the DSN is the second gate:
-# an empty SENTRY_DSN leaves the SDK inert until a real DSN is injected.
+# Sentry loads in dev and prod only (see config/bundles.php) — the test suite
+# never touches it. Gating is by SENTRY_DSN:
+#   - dev: empty by default → the SDK is inert. Set SENTRY_DSN in api/.env.local
+#     (gitignored) to watch your own errors while developing; events are tagged
+#     environment "dev" in Sentry, so they never mix with prod.
+#   - prod (test machine + VPS): a real SENTRY_DSN is REQUIRED — the deploy
+#     (make prod.env.check + compose `:?`) aborts without it.
+#
+# `environment` is just %kernel.environment% (= APP_ENV: "dev" / "prod"), so no
+# extra env var is needed to tell the surfaces apart.
 #
 # Unhandled exceptions are captured by the bundle's kernel.exception listener
-# (register_error_listener defaults to true) with their full throwable + stack
-# trace, independently of — and without disturbing — the RFC 9457
-# ExceptionResponder. We deliberately do NOT also wire the Monolog Sentry handler
-# (kept commented in config/packages/monolog.yaml): ExceptionResponder's single
-# PSR-3 log line carries no throwable, so the listener path yields far richer
-# events and avoids double-reporting the same error.
+# (register_error_listener, full throwable + stack), independently of — and
+# without disturbing — the RFC 9457 ExceptionResponder. We deliberately do NOT
+# wire the Monolog Sentry handler (kept commented in config/packages/monolog.yaml):
+# ExceptionResponder's single PSR-3 log line carries no throwable, so the listener
+# path yields richer events and avoids double-reporting.
+
+# Dev: errors only (no performance tracing / Messenger noise), opt-in via DSN.
+when@dev:
+    sentry:
+        dsn: '%env(SENTRY_DSN)%'
+        register_error_listener: true
+        options:
+            environment: '%kernel.environment%'
+            send_default_pii: false
+            before_send: 'Erpify\Shared\Infrastructure\Monitoring\SentryEventScrubber'
+            ignore_exceptions:
+                - 'Symfony\Component\ErrorHandler\Error\FatalError'
+                - 'Symfony\Component\Debug\Exception\FatalErrorException'
+                - 'Symfony\Component\HttpKernel\Exception\NotFoundHttpException'
+
+# Prod: full monitoring — errors + performance tracing + Messenger capture.
 when@prod:
     sentry:
         dsn: '%env(SENTRY_DSN)%'
-        # Capture unhandled throwables from kernel.exception (default true; explicit
-        # for clarity). This — not the Monolog handler — is the capture path.
         register_error_listener: true
         options:
-            # Distinguishes prod surfaces in Sentry (e.g. "test-machine" vs
-            # "production"); falls back to the Symfony env when SENTRY_ENVIRONMENT
-            # is unset/empty.
-            environment: '%env(default:kernel.environment:SENTRY_ENVIRONMENT)%'
+            environment: '%kernel.environment%'
             # Performance tracing. 0 = no transactions sent; prod injects ~0.2.
             # `float:default::` coalesces an empty/unset value to null → 0.0. The
             # order matters: a bare `float:` of an empty string throws and would
