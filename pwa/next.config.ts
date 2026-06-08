@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -186,4 +187,15 @@ const nextConfig: NextConfig = {
   // },
 };
 
-export default nextConfig;
+// Wrap with Sentry. Events are routed through a same-origin tunnel
+// (`/monitoring`) so the locked-down CSP `connect-src 'self'` covers them with
+// no widening, and ad-blockers can't drop them. Source-map upload is disabled
+// (no `authToken`/`org`/`project`) — readable prod stack traces are deferred
+// (see deferred-work.md); maps are never shipped to the browser.
+export default withSentryConfig(nextConfig, {
+  tunnelRoute: "/monitoring",
+  silent: !process.env.CI,
+  sourcemaps: {
+    disable: true,
+  },
+});

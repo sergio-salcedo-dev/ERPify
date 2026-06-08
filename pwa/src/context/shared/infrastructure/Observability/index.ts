@@ -1,18 +1,36 @@
 import type { Telemetry } from "@/context/shared/domain/Observability/Telemetry";
+import { CompositeTelemetry } from "./CompositeTelemetry";
 import { ConsoleTelemetry } from "./ConsoleTelemetry";
+import { SentryTelemetry } from "./SentryTelemetry";
 import { ThrottledTelemetry } from "./ThrottledTelemetry";
 
 /**
- * Default {@link Telemetry} for the application. Consumers MUST type the import
- * as the `Telemetry` port, never the concrete adapter, so Sentry / Datadog can
- * be swapped in without churn (mirrors `toastNotifier` / `dateTimeProvider`).
+ * Builds the application's default {@link Telemetry}. Consumers MUST type the
+ * import as the `Telemetry` port, never a concrete adapter, so sinks can be
+ * swapped without churn (mirrors `toastNotifier` / `dateTimeProvider`).
  *
- * Wrapped in {@link ThrottledTelemetry} so a flood of identical diagnostics (a
- * misbehaving hub, a render loop) coalesces to one emit per window — protecting
- * the console today and a metered Sentry / Datadog sink tomorrow. To add that
- * sink later, swap the wrapped `ConsoleTelemetry` (or fan out via a composite);
- * the throttle and every call site stay put.
+ * Composition:
+ * - The console adapter is always present — it self-gates to dev/staging at
+ *   call time, so per-call `vi.stubEnv` tests stay valid (this selection is at
+ *   construction; the console's own env gate is left untouched).
+ * - The Sentry adapter is added only when `NEXT_PUBLIC_SENTRY_DSN` is set, so
+ *   tests and bare checkouts never emit to Sentry. Datadog will slot in as one
+ *   more {@link CompositeTelemetry} entry behind the same kind of gate.
+ * - The composite is wrapped in {@link ThrottledTelemetry} so a flood of
+ *   identical diagnostics coalesces to one emit per window before reaching ANY
+ *   sink — protecting the console and metered Sentry/Datadog quota alike.
  */
-export const telemetry: Telemetry = new ThrottledTelemetry(new ConsoleTelemetry());
+export function createTelemetry(): Telemetry {
+  const sinks: Telemetry[] = [new ConsoleTelemetry()];
+
+  // Trim so a whitespace-only DSN doesn't add the sink (parity with sentryInitOptions).
+  if (process.env.NEXT_PUBLIC_SENTRY_DSN?.trim()) {
+    sinks.push(new SentryTelemetry());
+  }
+
+  return new ThrottledTelemetry(new CompositeTelemetry(sinks));
+}
+
+export const telemetry: Telemetry = createTelemetry();
 
 export type { Telemetry, TelemetryContext } from "@/context/shared/domain/Observability/Telemetry";
