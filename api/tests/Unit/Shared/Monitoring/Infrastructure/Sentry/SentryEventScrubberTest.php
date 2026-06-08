@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Tests\Unit\Shared\Infrastructure\Monitoring;
+namespace Erpify\Tests\Unit\Shared\Monitoring\Infrastructure\Sentry;
 
-use Erpify\Shared\Infrastructure\Monitoring\SentryEventScrubber;
+use Erpify\Shared\Monitoring\Infrastructure\Sentry\SentryEventScrubber;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Sentry\Event;

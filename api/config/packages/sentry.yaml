@@ -24,7 +24,7 @@ when@dev:
         options:
             environment: '%kernel.environment%'
             send_default_pii: false
-            before_send: 'Erpify\Shared\Infrastructure\Monitoring\SentryEventScrubber'
+            before_send: 'Erpify\Shared\Monitoring\Infrastructure\Sentry\SentryEventScrubber'
             ignore_exceptions:
                 - 'Symfony\Component\ErrorHandler\Error\FatalError'
                 - 'Symfony\Component\Debug\Exception\FatalErrorException'
@@ -46,7 +46,7 @@ when@prod:
             # Never attach request headers, cookies, IP or the authenticated user.
             send_default_pii: false
             # Defense-in-depth scrub of denylisted keys, parity with RFC 9457.
-            before_send: 'Erpify\Shared\Infrastructure\Monitoring\SentryEventScrubber'
+            before_send: 'Erpify\Shared\Monitoring\Infrastructure\Sentry\SentryEventScrubber'
             ignore_exceptions:
                 - 'Symfony\Component\ErrorHandler\Error\FatalError'
                 - 'Symfony\Component\Debug\Exception\FatalErrorException'

@@ -81,7 +81,7 @@ sampling, no keeping the interesting ones.
 ### Option B — drop in `before_send` (flexible, where sampling lives)
 
 Re-add the `?EventHint $hint` arg to
-[`SentryEventScrubber`](../api/src/Shared/Infrastructure/Monitoring/SentryEventScrubber.php)
+[`SentryEventScrubber`](../api/src/Shared/Monitoring/Infrastructure/Sentry/SentryEventScrubber.php)
 (the cs-fixer removed it as unused); `EventHint::$exception` is the original
 throwable:
 

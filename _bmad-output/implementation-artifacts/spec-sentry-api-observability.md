@@ -56,7 +56,7 @@ context:
 - `api/composer.json` / `api/config/bundles.php` — add `sentry/sentry-symfony` (^5.10) + register `SentryBundle` (`all`). Flex may do both.
 - `api/config/packages/sentry.yaml` — NEW; SDK config (dsn, tracing, messenger, before_send).
 - `api/config/packages/monolog.yaml` — prepared Sentry block commented at lines 67–82 under `when@prod`; uncomment.
-- `api/src/Shared/Infrastructure/Monitoring/SentryEventScrubber.php` — NEW; `before_send` callback (Infrastructure).
+- `api/src/Shared/Monitoring/Infrastructure/Sentry/SentryEventScrubber.php` — NEW; `before_send` callback (Infrastructure).
 - `api/src/Shared/Application/Problem/RedactionDenylist.php` — existing denylist to reuse for scrubbing.
 - `api/src/Shared/Infrastructure/Http/EventListener/ExceptionResponder.php` — RFC 9457 listener (do NOT modify; reference only for priority ordering).
 - `api/.env`, `api/.env.example` — env var declarations.
@@ -69,7 +69,7 @@ context:
 - [x] `.mcp.json` — add `"sentry": { "type": "http", "url": "https://mcp.sentry.dev/mcp" }` to `mcpServers` — repo-level Sentry MCP via remote OAuth, no secret on disk.
 - [x] `api/composer.json` — `make composer c='req sentry/sentry-symfony'` — install SDK; let Flex register `SentryBundle` in `bundles.php` (verify `['all' => true]`).
 - [x] `api/config/packages/sentry.yaml` — create: `dsn: '%env(SENTRY_DSN)%'`, `register_error_listener: true`, `options.environment: '%kernel.environment%'`, `options.traces_sample_rate: '%env(float:SENTRY_TRACES_SAMPLE_RATE)%'`, `options.send_default_pii: false`, `options.before_send` → scrubber service id, `messenger: { enabled: true, capture_soft_fails: true }` with per-message context isolation, `tracing: { dbal: { enabled: true }, http_client: { enabled: true } }`. Ignore `NotFoundHttpException`.
-- [x] `api/src/Shared/Infrastructure/Monitoring/SentryEventScrubber.php` — implement `__invoke(\Sentry\Event $event, ?\Sentry\EventHint $hint): ?\Sentry\Event`; strip request/extra/user keys matching `RedactionDenylist`. Autowire; reference its service id from `sentry.yaml`.
+- [x] `api/src/Shared/Monitoring/Infrastructure/Sentry/SentryEventScrubber.php` — implement `__invoke(\Sentry\Event $event, ?\Sentry\EventHint $hint): ?\Sentry\Event`; strip request/extra/user keys matching `RedactionDenylist`. Autowire; reference its service id from `sentry.yaml`.
 - [~] `api/config/packages/monolog.yaml` — DELIBERATELY NOT done (left commented). Capture is listener-driven (`register_error_listener`, full throwable + stack); the Monolog handler would only see `ExceptionResponder`'s contextless PSR-3 line and risk double-reporting. See Spec Change Log.
 - [x] `api/.env` — add `SENTRY_DSN=` (empty) and `SENTRY_TRACES_SAMPLE_RATE=0` as all-env defaults so dev/test are inert.
 - [x] `api/.env.example` — document `SENTRY_DSN` (server-only, populated only in prod) and `SENTRY_TRACES_SAMPLE_RATE` (≈0.2 in prod, 0 elsewhere); note the MCP-provisioned project.
@@ -113,6 +113,7 @@ Frozen-intent renegotiation by the human, after the deploy wiring landed:
 - **Required in prod.** Both added to `make prod.env.check`'s `PROD_REQUIRED_KEYS` and guarded by `${VAR:?}` in `compose.prod.yaml` — a prod stand-up aborts by name if either is missing (supersedes the earlier "optional / not a fail-to-start" framing).
 - **`SENTRY_ENVIRONMENT` dropped.** Replaced the `%env(default:kernel.environment:SENTRY_ENVIRONMENT)%` fallback with plain `%kernel.environment%` — one fewer var; events tag as `dev` / `prod` automatically.
 - **Sentry enabled in dev (not test).** Bundle is now `['dev' => true, 'prod' => true]` and `sentry.yaml` has a `when@dev` block (errors only, no tracing). Gated by `SENTRY_DSN`: empty in dev → inert; a developer opts in via `api/.env.local`. This relaxes the original frozen "dev and test send zero events" boundary **for dev** (human-approved); **test** still never loads the SDK, so the test suite is untouched (540 tests green). KEEP: test exclusion — re-enabling Sentry in test risks the listener-priority assertions.
+- **Relocated to a `Shared/Monitoring` module (architecture review with Winston).** Ahead of the next task (adding Datadog as APM **and** an interchangeable telemetry sink), the scrubber moved from `Shared/Infrastructure/Monitoring/` to **`Shared/Monitoring/Infrastructure/Sentry/SentryEventScrubber.php`** (module-first, like `Media`/`Storage`; vendor under the layer, not above — the future `Telemetry` port is vendor-agnostic). Test + `before_send` service id + doc links updated. The port (`Monitoring/Domain/Telemetry`) and the `SentryTelemetry`/`DatadogTelemetry`/`CompositeTelemetry` adapters are **deliberately NOT created yet** — `DatadogTelemetry` needs the `dd-trace` SDK (would break the build) and the others have no callers (dead code / lint failure); they land in the Datadog task, designing the port with its real consumers.
 
 ## Design Notes
 
@@ -150,11 +151,11 @@ Frozen-intent renegotiation by the human, after the deploy wiring landed:
 **PII scrubbing (highest-risk logic)**
 
 - `before_send` entry: scrubs `extra`, request sub-arrays, and the raw `query_string`.
-  [`SentryEventScrubber.php:45`](../../api/src/Shared/Infrastructure/Monitoring/SentryEventScrubber.php#L45)
+  [`SentryEventScrubber.php:45`](../../api/src/Shared/Monitoring/Infrastructure/Sentry/SentryEventScrubber.php#L45)
 - Raw `query_string` is a string, not an array — parse/scrub/re-encode so `?token=` can't leak.
-  [`SentryEventScrubber.php:63`](../../api/src/Shared/Infrastructure/Monitoring/SentryEventScrubber.php#L63)
+  [`SentryEventScrubber.php:63`](../../api/src/Shared/Monitoring/Infrastructure/Sentry/SentryEventScrubber.php#L63)
 - Recursive strip at every depth, reusing the RFC 9457 `RedactionDenylist`.
-  [`SentryEventScrubber.php:81`](../../api/src/Shared/Infrastructure/Monitoring/SentryEventScrubber.php#L81)
+  [`SentryEventScrubber.php:81`](../../api/src/Shared/Monitoring/Infrastructure/Sentry/SentryEventScrubber.php#L81)
 
 **Coexistence with the RFC 9457 pipeline**
 
@@ -171,4 +172,4 @@ Frozen-intent renegotiation by the human, after the deploy wiring landed:
 **Tests (peripheral)**
 
 - Scrubber cases: nested request data and raw query-string leak paths.
-  [`SentryEventScrubberTest.php:32`](../../api/tests/Unit/Shared/Infrastructure/Monitoring/SentryEventScrubberTest.php#L32)
+  [`SentryEventScrubberTest.php:32`](../../api/tests/Unit/Shared/Monitoring/Infrastructure/Sentry/SentryEventScrubberTest.php#L32)

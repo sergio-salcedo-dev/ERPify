@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Shared\Infrastructure\Monitoring;
+namespace Erpify\Shared\Monitoring\Infrastructure\Sentry;
 
 use Erpify\Shared\Application\Problem\RedactionDenylist;
 use Sentry\Event;
@@ -27,9 +27,11 @@ use Sentry\Event;
  * ({@see \Erpify\Shared\Application\Problem\ProblemDetailsFactory}) keeps scrub
  * parity between the HTTP error body and the Sentry event.
  *
- * Wired in `config/packages/sentry.yaml` under `options.before_send` (a service
- * reference resolved by the SentryBundle). The bundle is registered `prod`-only,
- * so this runs only where events are actually transmitted.
+ * Lives under the `Shared/Monitoring` module: vendor-specific glue (`Sentry/`)
+ * inside `Infrastructure/`, alongside the future `SentryTelemetry` adapter. Wired
+ * in `config/packages/sentry.yaml` under `options.before_send` (a service
+ * reference resolved by the SentryBundle). The bundle loads in dev + prod (not
+ * test), so this runs only where events are actually transmitted.
  *
  * @api Consumed by the SentryBundle via a container reference (the `before_send`
  *      string in sentry.yaml), which static analysis cannot trace — so it is an
