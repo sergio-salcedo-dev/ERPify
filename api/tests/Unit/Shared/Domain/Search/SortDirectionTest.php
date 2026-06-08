@@ -21,31 +21,31 @@ final class SortDirectionTest extends TestCase
      * in as a plain `string`, so `from()` is a real runtime lookup (not a
      * constant-folded literal) and the assertion genuinely guards the mapping.
      */
-    #[DataProvider('wireTokens')]
+    #[DataProvider('provideEachWireTokenMapsToItsCaseCases')]
     public function testEachWireTokenMapsToItsCase(string $token, SortDirection $expected): void
     {
-        self::assertSame($expected, SortDirection::from($token));
+        $this->assertSame($expected, SortDirection::from($token));
     }
 
     /**
      * @return iterable<string, array{string, SortDirection}>
      */
-    public static function wireTokens(): iterable
+    public static function provideEachWireTokenMapsToItsCaseCases(): iterable
     {
         yield 'asc' => ['ASC', SortDirection::ASC];
         yield 'desc' => ['DESC', SortDirection::DESC];
     }
 
-    #[DataProvider('lowercaseTokens')]
+    #[DataProvider('provideLowercaseFilterOperatorCasingIsNotASortDirectionCases')]
     public function testLowercaseFilterOperatorCasingIsNotASortDirection(string $token): void
     {
-        self::assertNull(SortDirection::tryFrom($token));
+        $this->assertNotInstanceOf(SortDirection::class, SortDirection::tryFrom($token));
     }
 
     /**
      * @return iterable<string, array{string}>
      */
-    public static function lowercaseTokens(): iterable
+    public static function provideLowercaseFilterOperatorCasingIsNotASortDirectionCases(): iterable
     {
         yield 'asc' => ['asc'];
         yield 'desc' => ['desc'];

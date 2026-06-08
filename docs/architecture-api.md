@@ -93,7 +93,7 @@ query string
   → #[MapQueryString] SearchQuery        (Application/Http/Search; base DTO, final, shape-validated)
   → $query->toCriteria()                 (controller)
   → SearchCriteria(+Filters)             (Domain/Search; framework-free, final)
-  → <Entity>Searcher::search(criteria)
+  → <Entity>Searcher::search(criteria)   (bank wraps it in Application/Query/SearchBanksQuery — CQRS read-side)
   → AbstractDoctrineSearchRepository::getPaginatedResults()
        ├─ getSearchQueryBuilder(criteria)                                   (per-repo joins; order resolved via sortFieldMap())
        ├─ FilterApplier::apply(qb, criteria->filters, searchFieldMap())     (allow-list + bound params)
@@ -115,7 +115,7 @@ Filters are never validated in controllers or use cases.
 
 1. The entity's search repository already extends `AbstractDoctrineSearchRepository` (true for any paginated read endpoint). Implement the mandatory `searchFieldMap(): SearchFieldMap`, mapping each public field to a `FieldMapping(dqlPath, normalizer?, operators?, requiresUuidValues?, requiresDateTimeValues?)`. Return `new SearchFieldMap([])` to expose nothing filterable.
 2. Implement the mandatory `sortFieldMap(): SortFieldMap` (sibling abstract method) — the allow-list of publicly **sortable** fields (public name → DQL path) for `sort`/`direction`. Map a public name to an index-backed expression (NFR4); return `new SortFieldMap([])` to expose nothing sortable. Filtering and sorting are independent allow-lists.
-3. Add the thin `<Entity>Searcher` and the `<Entity>SearchController` — both consume the **base** `SearchQuery`/`SearchCriteria` directly (`$query->toCriteria()`); no per-entity DTO or criteria.
+3. Add the thin `<Entity>Searcher` and the `<Entity>SearchController` — both build on the **base** `SearchQuery`/`SearchCriteria` (`$query->toCriteria()`); no per-entity **HTTP** DTO and no `SearchQuery`/`SearchCriteria` subclass (both `final`). Optionally, a context can mirror its write side for CQRS symmetry by wrapping the criteria in an application-layer `Application/Query/<Entity>SearchQuery` — the read-side counterpart of `Application/Command/<Verb><Entity>Command` — that its `<Entity>Searcher` handles; **bank** does this with `SearchBanksQuery`. It is a per-context choice, not required by the generic mechanism (FR7's ≤ 2 classes is the searcher + controller).
 4. That is the whole cost: filtering, ordering, validation, error mapping, and pagination are inherited. The step-by-step controller skeleton is in [`../api/docs/adding-endpoints.md`](../api/docs/adding-endpoints.md#skeleton).
 
 Canonical `searchFieldMap()` (from `DoctrineBankRepository`, the pilot):

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\Bank\Infrastructure\Controller;
 
 use Erpify\Backoffice\Bank\Application\BankSearcher;
+use Erpify\Backoffice\Bank\Application\Query\SearchBanksQuery;
 use Erpify\Shared\Application\Http\Search\SearchQuery;
 use Erpify\Shared\Infrastructure\Http\Controller\AbstractSearchController;
 use Erpify\Shared\Infrastructure\Http\Responder\ResponderInterface;
@@ -37,7 +38,7 @@ final readonly class BankSearchController extends AbstractSearchController
         SearchQuery $query = new SearchQuery(),
     ): Response {
         return $this->buildResponse(
-            paginatedResult: $this->bankSearcher->search($query->toCriteria()),
+            paginatedResult: $this->bankSearcher->search(new SearchBanksQuery($query->toCriteria())),
             serializerGroups: [
                 'identifiable',
                 'timestamped',
