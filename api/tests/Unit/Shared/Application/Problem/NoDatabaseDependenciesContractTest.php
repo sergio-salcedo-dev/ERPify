@@ -51,7 +51,7 @@ final class NoDatabaseDependenciesContractTest extends TestCase
     {
         $banned = [];
 
-        if (\interface_exists(Connection::class) || \class_exists(Connection::class)) {
+        if (\class_exists(Connection::class)) {
             $banned[] = Connection::class;
         }
 
