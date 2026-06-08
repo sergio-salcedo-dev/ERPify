@@ -29,7 +29,7 @@ final readonly class BankPutController
      */
     public function __invoke(string $id, #[MapRequestPayload] UpdateBankRequest $bankRequest): Response
     {
-        $bank = $this->bankUpdater->update($id, $bankRequest);
+        $bank = $this->bankUpdater->update($id, $bankRequest->toCommand());
 
         $data = $this->resourceNormalizer->toArray(
             $bank,

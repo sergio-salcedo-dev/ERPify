@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\Bank\Application;
 
-use Erpify\Backoffice\Bank\Application\Http\CreateBankRequest;
+use Erpify\Backoffice\Bank\Application\Command\CreateBankCommand;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Shared\Application\Validation\Validator;
@@ -28,7 +28,7 @@ final readonly class BankCreator
     }
 
     public function create(
-        CreateBankRequest $bankRequest,
+        CreateBankCommand $command,
         ?UploadedFile $logoFile = null,
         ?UploadedFile $storedObjectFile = null,
     ): Bank {
@@ -46,8 +46,8 @@ final readonly class BankCreator
 
         $newBank = Bank::create(
             Uuid::generate(),
-            $bankRequest->name,
-            $bankRequest->shortName,
+            $command->name,
+            $command->shortName,
             $logo,
             $storedObject,
         );

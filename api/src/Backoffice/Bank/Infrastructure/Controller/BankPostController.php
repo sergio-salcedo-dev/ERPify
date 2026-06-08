@@ -42,7 +42,7 @@ final readonly class BankPostController
         $this->assertValidUpload($image);
         $this->assertValidUpload($storedObject);
 
-        $bank = $this->bankCreator->create($bankRequest, $image, $storedObject);
+        $bank = $this->bankCreator->create($bankRequest->toCommand(), $image, $storedObject);
 
         $data = $this->resourceNormalizer->toArray(
             $bank,

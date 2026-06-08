@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\Bank\Application\Http;
 
+use Erpify\Backoffice\Bank\Application\Command\UpdateBankCommand;
 use Symfony\Component\Validator\Constraints as Assert;
 
 final readonly class UpdateBankRequest
@@ -16,5 +17,10 @@ final readonly class UpdateBankRequest
         #[Assert\Length(max: 50, maxMessage: 'The shortName must not exceed {{ limit }} characters.')]
         public string $shortName = '',
     ) {
+    }
+
+    public function toCommand(): UpdateBankCommand
+    {
+        return new UpdateBankCommand($this->name, $this->shortName);
     }
 }
