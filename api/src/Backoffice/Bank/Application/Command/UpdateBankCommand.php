@@ -4,18 +4,26 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\Bank\Application\Command;
 
+use Symfony\Component\Validator\Constraints as Assert;
+
 /**
- * Delivery-neutral input for {@see \Erpify\Backoffice\Bank\Application\BankUpdater}.
+ * Input command for {@see \Erpify\Backoffice\Bank\Application\BankUpdater}.
  *
- * HTTP adapters build it via UpdateBankRequest::toCommand(); a future console
- * command (or CQRS command-bus message) constructs it directly. Carries no
- * framework/HTTP concern — invariants are enforced on the Bank entity.
+ * HTTP maps it from the request body via #[MapRequestPayload]; a console
+ * command (or CQRS command bus) builds it directly with `new`. The #[Assert]
+ * attributes are passive validation metadata, enforced at the HTTP boundary
+ * and re-checkable via Validator::ensure() for non-HTTP callers; Bank entity
+ * invariants are the final guard.
  */
 final readonly class UpdateBankCommand
 {
     public function __construct(
-        public string $name,
-        public string $shortName,
+        #[Assert\NotBlank(message: 'The name field is required.')]
+        #[Assert\Length(max: 255, maxMessage: 'The name must not exceed {{ limit }} characters.')]
+        public string $name = '',
+        #[Assert\NotBlank(message: 'The shortName field is required.')]
+        #[Assert\Length(max: 50, maxMessage: 'The shortName must not exceed {{ limit }} characters.')]
+        public string $shortName = '',
     ) {
     }
 }

@@ -28,11 +28,11 @@ final readonly class BankUpdater
      * @throws ValidationFailedException
      * @throws ExceptionInterface
      */
-    public function update(string $id, UpdateBankCommand $command): Bank
+    public function update(string $id, UpdateBankCommand $bankCommand): Bank
     {
         $bank = $this->bankFinder->find($id);
 
-        $bank->rename($command->name, $command->shortName);
+        $bank->rename($bankCommand->name, $bankCommand->shortName);
 
         $this->validator->ensure($bank);
 

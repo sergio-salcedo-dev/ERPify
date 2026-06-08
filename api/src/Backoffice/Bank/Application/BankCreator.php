@@ -28,7 +28,7 @@ final readonly class BankCreator
     }
 
     public function create(
-        CreateBankCommand $command,
+        CreateBankCommand $bankCommand,
         ?UploadedFile $logoFile = null,
         ?UploadedFile $storedObjectFile = null,
     ): Bank {
@@ -46,8 +46,8 @@ final readonly class BankCreator
 
         $newBank = Bank::create(
             Uuid::generate(),
-            $command->name,
-            $command->shortName,
+            $bankCommand->name,
+            $bankCommand->shortName,
             $logo,
             $storedObject,
         );
