@@ -59,15 +59,27 @@ and an empty `SENTRY_DSN` keeps it inert until a real DSN is injected. The same
 config runs identically on the test machine and the VPS — only the injected env
 differs.
 
-- Provision the org/projects and obtain the DSN via the **Sentry MCP**
-  (`.mcp.json`, remote OAuth).
-- Inject through real env (e.g. `.env.prod.local`), never committed:
-  - `SENTRY_DSN` — the project DSN (empty = disabled).
-  - `SENTRY_TRACES_SAMPLE_RATE` — performance sampling; `~0.2` in prod, `0` off.
-  - `SENTRY_ENVIRONMENT` — optional tag to separate surfaces
-    (e.g. `test-machine` vs `production`); empty falls back to `APP_ENV`.
-- `send_default_pii: false` + the `SentryEventScrubber` `before_send` keep
-  PII/secrets off events (see [`../PRODUCTION_SECURITY_CHECKLIST.md`](../PRODUCTION_SECURITY_CHECKLIST.md)).
+The three vars are wired into the `php` and `messenger_worker` services in
+`compose.prod.yaml` (read from `.env.prod.local` via `--env-file`), so a normal
+`make deploy.local` carries them to the containers — on both the test machine and
+the VPS. They are **optional** (not in `make prod.env.check`'s required keys): an
+empty DSN just keeps the SDK inert, so a Sentry-less stand-up still works.
+
+To enable Sentry on a host:
+
+1. Provision the org/project and obtain the DSN via the **Sentry MCP**
+   (`.mcp.json`, remote OAuth).
+2. Set in the host's gitignored `.env.prod.local` (template:
+   [`../.env.prod.example`](../.env.prod.example)):
+   - `SENTRY_DSN` — the project DSN (empty = disabled).
+   - `SENTRY_TRACES_SAMPLE_RATE` — performance sampling; `0.2` in prod, `0` off.
+   - `SENTRY_ENVIRONMENT` — optional tag to separate surfaces
+     (e.g. `test-machine` vs `production`); empty falls back to `APP_ENV`.
+3. `make deploy.local` (first stand-up) or `make docker.up ENV=prod` (restart)
+   picks them up.
+
+`send_default_pii: false` + the `SentryEventScrubber` `before_send` keep
+PII/secrets off events (see [`../PRODUCTION_SECURITY_CHECKLIST.md`](../PRODUCTION_SECURITY_CHECKLIST.md)).
 
 ## Prod hardening (compose.prod.yaml)
 

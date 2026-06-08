@@ -30,6 +30,10 @@ On a VPS with a real domain:
      import **no** CA.
    - For real outbound mail, set a real `MAILER_DSN=` (the default `null://null`
      silently discards mail) and `MAILER_FROM` / `DEFAULT_NOTIFICATION_EMAIL`.
+   - To enable **Sentry**, set `SENTRY_DSN=` (from the Sentry MCP) and
+     `SENTRY_TRACES_SAMPLE_RATE=0.2`; optionally `SENTRY_ENVIRONMENT=production`
+     to tell the VPS apart from the test machine. Empty DSN = inert. The vars are
+     already wired into `compose.prod.yaml` (see [`deployment-guide.md`](deployment-guide.md)).
    - Optionally tune the `*_CPU_LIMIT` / `*_MEM_LIMIT` knobs to the VPS size.
 4. **Deploy:** `make deploy.local` (or
    `ENV=prod make docker.up.wait && ENV=prod make db.migrate`). No compose edits
