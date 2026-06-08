@@ -6,6 +6,7 @@ namespace Erpify\Tests\Unit\Shared\Domain\Search;
 
 use Erpify\Shared\Domain\Search\SortDirection;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -14,16 +15,39 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(SortDirection::class)]
 final class SortDirectionTest extends TestCase
 {
-    public function testWireTokensAreTheUpperCaseBackingValues(): void
+    /**
+     * The wire contract is the uppercase backing value (`direction=ASC|DESC`),
+     * deliberately distinct from the lowercase filter operators. The token comes
+     * in as a plain `string`, so `from()` is a real runtime lookup (not a
+     * constant-folded literal) and the assertion genuinely guards the mapping.
+     */
+    #[DataProvider('wireTokens')]
+    public function testEachWireTokenMapsToItsCase(string $token, SortDirection $expected): void
     {
-        // Runtime-derived pin (array_map over cases() widens the type, so PHPStan does not
-        // constant-fold the comparison the way it would on a direct ::ASC->value literal).
-        // The wire contract is the uppercase backing value — `direction=ASC|DESC` — which is
-        // deliberately distinct from the lowercase filter operators and rejected at mapping
-        // when it falls outside the enum.
-        $this->assertSame(['ASC', 'DESC'], \array_map(
-            static fn (SortDirection $direction): string => $direction->value,
-            SortDirection::cases(),
-        ));
+        self::assertSame($expected, SortDirection::from($token));
+    }
+
+    /**
+     * @return iterable<string, array{string, SortDirection}>
+     */
+    public static function wireTokens(): iterable
+    {
+        yield 'asc' => ['ASC', SortDirection::ASC];
+        yield 'desc' => ['DESC', SortDirection::DESC];
+    }
+
+    #[DataProvider('lowercaseTokens')]
+    public function testLowercaseFilterOperatorCasingIsNotASortDirection(string $token): void
+    {
+        self::assertNull(SortDirection::tryFrom($token));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function lowercaseTokens(): iterable
+    {
+        yield 'asc' => ['asc'];
+        yield 'desc' => ['desc'];
     }
 }

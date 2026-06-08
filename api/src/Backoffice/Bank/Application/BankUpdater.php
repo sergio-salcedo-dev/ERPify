@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\Bank\Application;
 
-use Erpify\Backoffice\Bank\Application\Http\BankPutPayload;
+use Erpify\Backoffice\Bank\Application\Command\UpdateBankCommand;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Exception\BankNotFoundException;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
@@ -28,11 +28,11 @@ final readonly class BankUpdater
      * @throws ValidationFailedException
      * @throws ExceptionInterface
      */
-    public function update(string $id, BankPutPayload $payload): Bank
+    public function update(string $id, UpdateBankCommand $bankCommand): Bank
     {
         $bank = $this->bankFinder->find($id);
 
-        $bank->rename($payload->name, $payload->shortName);
+        $bank->rename($bankCommand->name, $bankCommand->shortName);
 
         $this->validator->ensure($bank);
 
