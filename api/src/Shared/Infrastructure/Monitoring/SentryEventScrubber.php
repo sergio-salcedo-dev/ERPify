@@ -60,7 +60,11 @@ final class SentryEventScrubber
             // `query_string` is a raw "a=b&c=d" string in the SDK, not an array,
             // so it bypasses the loop above — parse it so denylisted params
             // (?token=…, ?password=…) are stripped before transmission.
-            if (isset($request['query_string']) && \is_string($request['query_string']) && '' !== $request['query_string']) {
+            if (
+                isset($request['query_string'])
+                && \is_string($request['query_string'])
+                && '' !== $request['query_string']
+            ) {
                 \parse_str($request['query_string'], $params);
                 $request['query_string'] = \http_build_query($this->scrub($params));
             }
