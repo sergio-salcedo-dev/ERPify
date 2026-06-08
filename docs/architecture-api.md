@@ -95,25 +95,28 @@ query string
   → SearchCriteria(+Filters)             (Domain/Search; framework-free, final)
   → <Entity>Searcher::search(criteria)
   → AbstractDoctrineSearchRepository::getPaginatedResults()
-       ├─ getSearchQueryBuilder(criteria)                                   (per-repo joins/order, intact)
+       ├─ getSearchQueryBuilder(criteria)                                   (per-repo joins; order resolved via sortFieldMap())
        ├─ FilterApplier::apply(qb, criteria->filters, searchFieldMap())     (allow-list + bound params)
        └─ Paginator                                                         (keyset/HMAC cursor, intact)
 ```
 
 `FilterApplier` (`Shared/Infrastructure/Persistence/Doctrine/Search/`) only ever adds `andWhere` + bound parameters (hashed `xxh128` naming); it is invoked **exclusively** by the base repository's `getPaginatedResults()`. `SearchFieldMap` is built **exclusively** inside each concrete repository's `searchFieldMap()` — the allow-list lives with the schema knowledge, never in Application. `Domain/Search` carries only the **public** field name; the DQL path is resolved in Infrastructure.
 
+**Ordering** follows the same allow-list discipline. `SearchQuery`/`SearchCriteria` also carry `sort` (public field name) + `direction` (`SortDirection` enum, uppercase `ASC`/`DESC` wire tokens). The base repository's `addOrderByFromQueryParams()` resolves a client `sort` against the repository's `sortFieldMap()` (a `SortFieldMap`: public name → DQL path, sibling of `SearchFieldMap`) or throws `UnknownSortField` (400) — the client value is **never** interpolated into DQL raw. Without `sort` the default order is `createdAt` ASC; sorting and filtering are independent allow-lists. Expose only index-backed columns (NFR4).
+
 **Two validation layers** (pinned — never duplicated elsewhere):
 
 - **Shape** — unknown operator token, `value`/operator mismatch, caps exceeded, non-contiguous indexes → fail at `#[MapQueryString]` mapping → 400 `validation-failed` with `violations[]`.
-- **Semantics** — field outside the allow-list (`unknown-search-field`), operator not allowed for the field (`unsupported-search-operator`), value not matching the field's required format such as a malformed UUID (`invalid-search-value`) → fail in `FilterApplier` → 400 from the `invalid-search-criteria` marker family. See the marker row in [`api-error-contract.md`](./api-error-contract.md).
+- **Semantics** — field outside the filter allow-list (`unknown-search-field`), operator not allowed for the field (`unsupported-search-operator`), value not matching the field's required format such as a malformed UUID (`invalid-search-value`) → fail in `FilterApplier`; an order field outside the sort allow-list (`unknown-sort-field`) → fails in the base repository while building the query. Both → 400 from the `invalid-search-criteria` marker family. A bad `direction` (outside the enum) is instead a shape 400 `validation-failed` at mapping. See the marker row in [`api-error-contract.md`](./api-error-contract.md).
 
 Filters are never validated in controllers or use cases.
 
 **Recipe — add a filterable list** (FR7: ≤ 2 new classes + 1 field map, zero files in `Shared/`):
 
 1. The entity's search repository already extends `AbstractDoctrineSearchRepository` (true for any paginated read endpoint). Implement the mandatory `searchFieldMap(): SearchFieldMap`, mapping each public field to a `FieldMapping(dqlPath, normalizer?, operators?, requiresUuidValues?, requiresDateTimeValues?)`. Return `new SearchFieldMap([])` to expose nothing filterable.
-2. Add the thin `<Entity>Searcher` and the `<Entity>SearchController` — both consume the **base** `SearchQuery`/`SearchCriteria` directly (`$query->toCriteria()`); no per-entity DTO or criteria.
-3. That is the whole cost: filtering, validation, error mapping, and pagination are inherited. The step-by-step controller skeleton is in [`../api/docs/adding-endpoints.md`](../api/docs/adding-endpoints.md#skeleton).
+2. Implement the mandatory `sortFieldMap(): SortFieldMap` (sibling abstract method) — the allow-list of publicly **sortable** fields (public name → DQL path) for `sort`/`direction`. Map a public name to an index-backed expression (NFR4); return `new SortFieldMap([])` to expose nothing sortable. Filtering and sorting are independent allow-lists.
+3. Add the thin `<Entity>Searcher` and the `<Entity>SearchController` — both consume the **base** `SearchQuery`/`SearchCriteria` directly (`$query->toCriteria()`); no per-entity DTO or criteria.
+4. That is the whole cost: filtering, ordering, validation, error mapping, and pagination are inherited. The step-by-step controller skeleton is in [`../api/docs/adding-endpoints.md`](../api/docs/adding-endpoints.md#skeleton).
 
 Canonical `searchFieldMap()` (from `DoctrineBankRepository`, the pilot):
 
@@ -143,6 +146,24 @@ protected function searchFieldMap(): SearchFieldMap
 
 `requiresDateTimeValues: true` is the temporal sibling: it marks a `timestamp` column so each range bound is parsed as an RFC 3339 / ISO-8601 datetime — the offset form `2026-01-01T00:00:00+00:00` (`+`-encoded as `%2B` on the wire) or the `Z` form, with optional fractional seconds, so the JS `toISOString()` output is accepted as-is; lax/relative forms and out-of-range offsets are rejected — normalized to UTC, and bound as a typed `datetime_immutable` parameter (a raw string against a timestamp column has no Postgres operator → a 500; a malformed bound becomes a 400 `invalid-search-value`). It is likewise incompatible with `contains` (a `LIKE` over a timestamp column breaks at the SQL level), so a datetime-backed field lists only range operators. There is deliberately **no `between`**: a closed range is two filters on the same field (`gte` + `lte`), which already compose with AND — adding a redundant operator would violate NFR1/YAGNI. Index every range-filterable column at the entity's `#[ORM\Table]` level (NFR4) — never on the shared `Timestamped` trait, which would index every timestamped entity.
 
+Canonical `sortFieldMap()` (from the same pilot) — name → DQL path only; no operators or normalizers, since ordering needs neither:
+
+```php
+protected function sortFieldMap(): SortFieldMap
+{
+    // Each path is btree-indexed (NFR4). `name` sorts by the accent-folded, lower-cased
+    // nameNormalized (case/diacritic-insensitive, matching the displayed order); `id` is not sortable.
+    return new SortFieldMap([
+        'name' => 'b.nameNormalized',
+        'shortName' => 'b.shortName',
+        'createdAt' => 'b.createdAt',
+        'updatedAt' => 'b.updatedAt',
+    ]);
+}
+```
+
+When the order column is not the displayed one (here `name` → `nameNormalized`), the entity needs a plain read accessor for it (e.g. `getNameNormalized()`) — the keyset paginator reads each order-by column from the result entity to build the cursor. Keep it out of the serializer groups so it does not leak into the payload.
+
 **Anti-patterns (forbidden):**
 
 - ❌ `EntityRepository::matching()` / `Collections\Criteria` on the read-path.
@@ -150,7 +171,9 @@ protected function searchFieldMap(): SearchFieldMap
 - ❌ Invoking `FilterApplier` from a controller, use case, or concrete repository — only the base repository calls it.
 - ❌ Validating filters in a controller or use case (duplicates the pinned layers).
 - ❌ Manual `JsonResponse` for filter errors (bypasses the RFC 9457 pipeline).
-- ❌ Subclassing `SearchQuery`/`SearchCriteria` or adding per-entity wire params — both are `final` on purpose; new filterable fields go through `searchFieldMap()`.
+- ❌ Interpolating a client `sort` into DQL (`ORDER BY $alias.$sort`) — the order field **must** be resolved through `sortFieldMap()`; an un-mapped value is a 400 `unknown-sort-field`, never raw SQL.
+- ❌ Exposing a non-indexed column as sortable (filesort → NFR4 regression), or sorting by a field with no read accessor (the keyset cursor cannot extract it).
+- ❌ Subclassing `SearchQuery`/`SearchCriteria` or adding per-entity wire params — both are `final` on purpose; new filterable fields go through `searchFieldMap()`, new sortable fields through `sortFieldMap()`.
 
 ## Error contract (RFC 9457 Problem Details)
 

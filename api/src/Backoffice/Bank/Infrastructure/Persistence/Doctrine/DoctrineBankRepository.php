@@ -19,6 +19,7 @@ use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\FieldMapping;
 use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\FilterApplier;
 use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\NormalizedTextFieldNormalizer;
 use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\SearchFieldMap;
+use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\SortFieldMap;
 use Erpify\Shared\Infrastructure\Persistence\PaginatorCursorFactory;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
@@ -80,8 +81,8 @@ final class DoctrineBankRepository extends AbstractDoctrineSearchRepository impl
         $this->addOrderByFromQueryParams(
             $queryBuilderWithOptions,
             alias: 'b',
-            orderByField: null,
-            direction: null,
+            orderByField: $criteria->sort,
+            direction: $criteria->direction,
         );
 
         $this->addLimit($queryBuilderWithOptions, $criteria->limit);
@@ -110,6 +111,21 @@ final class DoctrineBankRepository extends AbstractDoctrineSearchRepository impl
             // `timestamped` group keys (createdAt/updatedAt), never the DQL paths.
             'createdAt' => new FieldMapping('b.createdAt', operators: $rangeOperators, requiresDateTimeValues: true),
             'updatedAt' => new FieldMapping('b.updatedAt', operators: $rangeOperators, requiresDateTimeValues: true),
+        ]);
+    }
+
+    #[Override]
+    protected function sortFieldMap(): SortFieldMap
+    {
+        // The 4 fields the list can order by, each backed by a btree index (NFR4): name sorts by
+        // the accent-folded lower-cased nameNormalized (UNIQUE index, case/diacritic-insensitive,
+        // matching the list's expected alphabetical order); shortName by its UNIQUE column;
+        // createdAt/updatedAt by their idx_bank_* indexes. `id` is deliberately not sortable.
+        return new SortFieldMap([
+            'name' => 'b.nameNormalized',
+            'shortName' => 'b.shortName',
+            'createdAt' => 'b.createdAt',
+            'updatedAt' => 'b.updatedAt',
         ]);
     }
 

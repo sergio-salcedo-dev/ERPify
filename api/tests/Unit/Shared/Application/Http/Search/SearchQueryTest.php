@@ -9,6 +9,7 @@ use Erpify\Shared\Application\Http\Search\SearchQuery;
 use Erpify\Shared\Domain\Search\Filter;
 use Erpify\Shared\Domain\Search\FilterOperator;
 use Erpify\Shared\Domain\Search\PaginationMode;
+use Erpify\Shared\Domain\Search\SortDirection;
 use Generator;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -49,6 +50,8 @@ final class SearchQueryTest extends TestCase
             limit: 50,
             paginationMode: PaginationMode::DETAILED,
             filters: [new FilterQuery('name', FilterOperator::Eq, 'BBVA')],
+            sort: 'name',
+            direction: SortDirection::DESC,
         );
 
         $this->assertCount(0, $this->validator->validate($searchQuery));
@@ -86,6 +89,7 @@ final class SearchQueryTest extends TestCase
         yield 'limit zero' => [new SearchQuery(limit: 0), ['limit']];
         yield 'limit over cap' => [new SearchQuery(limit: SearchQuery::MAX_LIMIT + 1), ['limit']];
         yield 'cursor too long' => [new SearchQuery(cursor: \str_repeat('a', 8193)), ['cursor']];
+        yield 'sort too long' => [new SearchQuery(sort: \str_repeat('a', 65)), ['sort']];
     }
 
     public function testToCriteriaProducesEquivalentDomainValueObject(): void
@@ -95,6 +99,8 @@ final class SearchQueryTest extends TestCase
             page: 3,
             limit: 25,
             paginationMode: PaginationMode::DETAILED,
+            sort: 'shortName',
+            direction: SortDirection::DESC,
         );
 
         $searchCriteria = $searchQuery->toCriteria();
@@ -103,6 +109,8 @@ final class SearchQueryTest extends TestCase
         $this->assertSame(3, $searchCriteria->page);
         $this->assertSame(25, $searchCriteria->limit);
         $this->assertSame(PaginationMode::DETAILED, $searchCriteria->paginationMode);
+        $this->assertSame('shortName', $searchCriteria->sort);
+        $this->assertSame(SortDirection::DESC, $searchCriteria->direction);
     }
 
     public function testToCriteriaPropagatesMaxLimit(): void
@@ -113,6 +121,8 @@ final class SearchQueryTest extends TestCase
         $this->assertSame(1, $searchCriteria->page);
         $this->assertSame(SearchQuery::MAX_LIMIT, $searchCriteria->limit);
         $this->assertSame(PaginationMode::LIGHT, $searchCriteria->paginationMode);
+        $this->assertNull($searchCriteria->sort);
+        $this->assertNotInstanceOf(SortDirection::class, $searchCriteria->direction);
     }
 
     public function testFiltersDefaultToEmptyDomainCollection(): void

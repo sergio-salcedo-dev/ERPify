@@ -120,6 +120,16 @@ class Bank extends AggregateRoot
         return $this->name;
     }
 
+    /**
+     * Read accessor for the accent-folded, lower-cased name. Carries no serializer group, so it
+     * stays out of the HTTP payload; it exists so the keyset paginator can read the order-by
+     * column when the list is sorted by `name` (which maps to the indexed `nameNormalized`).
+     */
+    public function getNameNormalized(): string
+    {
+        return $this->nameNormalized;
+    }
+
     public function getShortName(): string
     {
         return $this->shortName;

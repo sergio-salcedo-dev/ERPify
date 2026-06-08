@@ -8,6 +8,7 @@ use Erpify\Shared\Domain\Search\Filter;
 use Erpify\Shared\Domain\Search\Filters;
 use Erpify\Shared\Domain\Search\PaginationMode;
 use Erpify\Shared\Domain\Search\SearchCriteria;
+use Erpify\Shared\Domain\Search\SortDirection;
 use Symfony\Component\Validator\Constraints as Assert;
 use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
@@ -32,6 +33,8 @@ final readonly class SearchQuery
 
     public const int MAX_FILTERS = 20;
 
+    public const int MAX_SORT_LENGTH = 64;
+
     /**
      * @param array<int, FilterQuery> $filters pre-validation the wire can deliver sparse
      *                                         indexes; the callback below rejects anything
@@ -50,6 +53,12 @@ final readonly class SearchQuery
         #[Assert\Valid]
         #[Assert\Count(max: self::MAX_FILTERS)]
         public array $filters = [],
+        // The semantic allow-list of sortable fields lives in each repository's SortFieldMap
+        // (a 400 unknown-sort-field for anything outside it). The length cap is only a cheap
+        // shape guard so an absurd value never reaches that lookup.
+        #[Assert\Length(max: self::MAX_SORT_LENGTH)]
+        public ?string $sort = null,
+        public ?SortDirection $direction = null,
     ) {
     }
 
@@ -74,6 +83,8 @@ final readonly class SearchQuery
             limit: $this->limit ?? self::MAX_LIMIT,
             paginationMode: $this->paginationMode,
             filters: $this->domainFilters(),
+            sort: $this->sort,
+            direction: $this->direction,
         );
     }
 

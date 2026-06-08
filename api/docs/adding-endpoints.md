@@ -13,7 +13,8 @@ Replace `Bank`/`bank` with the new entity:
 1. **Domain search repository** — `<Entity>SearchRepository::search(SearchCriteria $criteria): PaginatedResult<<Entity>>`, a read-side port separate from the aggregate-lifecycle `<Entity>Repository` (ISP — a future search provider implements only this one).
 2. **Application searcher** — `<Entity>Searcher` is a thin wrapper receiving the base `SearchCriteria` (the controller calls `$query->toCriteria()`) and forwarding to the repo.
 3. **Search field map** — every search repository extends `AbstractDoctrineSearchRepository` and MUST implement `searchFieldMap(): SearchFieldMap` (abstract): the mandatory allow-list of publicly filterable fields for the generic `filters[]` contract (see below). Return `new SearchFieldMap([])` to expose no filterable field. Mark mappings over UUID columns with `requiresUuidValues: true` so malformed values surface as a 400 instead of a Postgres error; it is incompatible with the `contains` operator (a partial value can never be a valid UUID), so restrict `operators` to eq/in — the `FieldMapping` constructor rejects the combination. Mark mappings over timestamp columns with `requiresDateTimeValues: true` and list only the range operators (`gt`/`gte`/`lt`/`lte`): bounds are then parsed as RFC 3339 datetimes (offset or `Z` form, optional fractional seconds), normalized to UTC, and bound as a typed parameter (it is likewise incompatible with `contains`).
-4. **Controller** — extend `Erpify\Shared\Infrastructure\Http\Controller\AbstractSearchController` and map the shared base DTO directly — search endpoints do not subclass it; filtering is expressed exclusively through the generic `filters[]` grammar:
+4. **Sort field map** — the same repository MUST also implement `sortFieldMap(): SortFieldMap` (abstract, sibling of `searchFieldMap()`): the allow-list of publicly **sortable** fields for the `sort`/`direction` params (public name → DQL path; see "Ordering" below). Return `new SortFieldMap([])` to expose no sortable field. Filtering and sorting are independent allow-lists — a field can be one without the other. Keep only index-backed columns sortable (NFR4); map a public name to an indexed expression when needed (e.g. `name` → `b.nameNormalized` for case/diacritic-insensitive ordering). A client `sort` is resolved through this map or rejected with a 400 — it is never interpolated into DQL raw.
+5. **Controller** — extend `Erpify\Shared\Infrastructure\Http\Controller\AbstractSearchController` and map the shared base DTO directly — search endpoints do not subclass it; filtering is expressed exclusively through the generic `filters[]` grammar:
 
 ```php
 #[Route('/<entities>', name: '<office>_<entity>_search', methods: ['GET'])]
@@ -54,6 +55,20 @@ GET /api/v1/backoffice/banks?filters[0][field]=createdAt&filters[0][operator]=gt
 - **Effective limit** — the wire bounds requests before the caps do: the real ceiling is `min(caps, max_input_vars, URL length)`. The PHP container runs the default `max_input_vars = 1000` (each `filters[...]` pair counts as one input var) and typical URL limits (~8 KB) bite even earlier for long values.
 - **Error layers** — shape problems (unknown operator token, value/operator mismatch such as a list value for a range operator, caps, indexes) fail in mapping as 400 `validation-failed` with `violations[]`; semantic problems (field outside the repository's allow-list → `unknown-search-field`, operator not allowed for the field → `unsupported-search-operator`, value not matching the field's required format such as a malformed UUID or datetime → `invalid-search-value`) fail in the filter applier as 400s from the `invalid-search-criteria` family. Never validate filters in controllers or use cases.
 - **No filters** — an absent or empty `filters` produces no filtering (it is not an error). Several filters on the same field compose with AND.
+
+### Ordering (`sort` / `direction`)
+
+The shared `SearchQuery` also carries server-side ordering — no per-entity code beyond the repository's `sortFieldMap()`:
+
+```text
+GET /api/v1/backoffice/banks?sort=name&direction=DESC
+```
+
+- **Params** — `sort` is the PUBLIC field name; `direction` is the `SortDirection` enum with wire tokens `ASC` / `DESC` (UPPER-CASE — the enum backing string IS the contract, deliberately distinct from the lowercase filter operators). Both are optional; `sort` is capped at 64 chars as a shape guard.
+- **Allow-list** — `sort` is resolved against the repository's `sortFieldMap()` (public name → DQL path) and is NEVER interpolated into DQL raw. On `banks`: `name` (→ the indexed, accent-folded `nameNormalized`, so ordering is case/diacritic-insensitive — the same order the list shows), `shortName`, `createdAt`, `updatedAt`. `id` and other columns are deliberately not sortable.
+- **Default** — without `sort` the order is `createdAt` ASC, with `id` as the keyset tiebreak (unchanged — fully backward compatible). This differs from the PWA's client-side default (`name` ASC); a server-driven list must send `sort=name&direction=ASC` explicitly.
+- **Error layers** — a `direction` outside the enum (or array form) is a 400 `validation-failed` at mapping (exactly like an unknown `paginationMode`); a `sort` outside the allow-list is a 400 `unknown-sort-field` (the `invalid-search-criteria` family), raised before any SQL runs.
+- **Indexes (NFR4)** — only index-backed columns are exposed as sortable, so ordering never degrades to a filesort. Changing `sort` invalidates a keyset cursor (the cursor encodes the order columns); the paginator degrades gracefully to offset.
 
 ### Conventions that bite
 

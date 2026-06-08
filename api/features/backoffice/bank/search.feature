@@ -360,3 +360,71 @@ Feature: Search banks
     Then the response status code should be 400
     And the JSON node "type" should be equal to "validation-failed"
     And 0 requests got executed across all doctrine connections
+
+  # Story 1.8: server-side ordering. `sort` resolves against the repository's sort allow-list
+  # (name/shortName/createdAt/updatedAt → b.*), never interpolated raw into DQL; `direction` is the
+  # SortDirection enum with uppercase wire tokens (ASC/DESC), distinct from the lowercase operators.
+  # Order-correctness is pinned on fields with distinct values per bank: name orders by the
+  # accent-folded lower-cased nameNormalized, shortName by its upper-case column. data[0].id under
+  # limit=1 proves both the field resolution and the direction.
+  Scenario Outline: Sorting by a distinct-valued field orders the list by that field
+    When I send a "GET" request to "/backoffice/banks?sort=<field>&direction=<direction>&limit=1"
+    Then the response status code should be 200
+    And the JSON node "data" should have 1 elements
+    And the JSON node "data[0].id" should be equal to "<id>"
+    And 2 requests got executed only for doctrine connection "default"
+    Examples:
+      | field     | direction | id                                   |
+      | name      | ASC       | 11111111-1111-7000-8000-000000000022 |
+      | name      | DESC      | 11111111-1111-7000-8000-000000000003 |
+      | shortName | ASC       | 11111111-1111-7000-8000-000000000016 |
+      | shortName | DESC      | 11111111-1111-7000-8000-000000000003 |
+
+  # createdAt/updatedAt are allow-listed and index-backed (NFR4), but the Alice fixtures are created
+  # within the same instant, so ordering by them ties and the id ASC tiebreak (added by the
+  # Paginator) decides — there is no date order to pin. These scenarios prove the temporal fields
+  # are accepted (never a 400 unknown-sort-field) and the indexed query executes in both directions.
+  Scenario Outline: Sorting by an allow-listed temporal field executes in both directions
+    When I send a "GET" request to "/backoffice/banks?sort=<field>&direction=<direction>"
+    Then the response status code should be 200
+    And the JSON node "data" should have 31 elements
+    And 2 requests got executed only for doctrine connection "default"
+    Examples:
+      | field     | direction |
+      | createdAt | ASC       |
+      | createdAt | DESC      |
+      | updatedAt | ASC       |
+      | updatedAt | DESC      |
+
+  # Semantic 400: a sort field outside the allow-list is rejected before any SQL runs (the field
+  # is never interpolated into DQL). Reuses the InvalidSearchCriteria family → unknown-sort-field.
+  Scenario: Sorting by a field outside the sort allow-list returns 400 unknown-sort-field
+    When I send a "GET" request to "/backoffice/banks?sort=id&direction=ASC"
+    Then the response status code should be 400
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the JSON node "type" should be equal to "unknown-sort-field"
+    And the JSON node "status" should be equal to the number 400
+    And 0 requests got executed across all doctrine connections
+
+  # Shape 400: an invalid direction is caught at mapping by the enum (validation-failed), exactly
+  # like an unknown paginationMode — no new code, the #[MapQueryString] + enum type provides it.
+  Scenario: An invalid sort direction returns 400 validation-failed
+    When I send a "GET" request to "/backoffice/banks?sort=name&direction=sideways"
+    Then the response status code should be 400
+    And the JSON node "type" should be equal to "validation-failed"
+    And 0 requests got executed across all doctrine connections
+
+  # Lowercase direction tokens are not the enum backing values (ASC/DESC); rejected at mapping.
+  Scenario: A lowercase sort direction returns 400 validation-failed
+    When I send a "GET" request to "/backoffice/banks?sort=name&direction=asc"
+    Then the response status code should be 400
+    And the JSON node "type" should be equal to "validation-failed"
+    And 0 requests got executed across all doctrine connections
+
+  # Without sort the default order is unchanged (createdAt asc, id tiebreak) — full backward compat.
+  Scenario: Without an explicit sort the default order is unchanged
+    When I send a "GET" request to "/backoffice/banks?limit=1"
+    Then the response status code should be 200
+    And the JSON node "data" should have 1 elements
+    And the JSON node "data[0].id" should be equal to "11111111-1111-7000-8000-000000000001"
+    And 2 requests got executed only for doctrine connection "default"

@@ -21,6 +21,7 @@
     </ClassMustBeFinal>
     <PossiblyUnusedMethod>
       <code><![CDATA[getName]]></code>
+      <code><![CDATA[getNameNormalized]]></code>
       <code><![CDATA[getShortName]]></code>
       <code><![CDATA[getStoredObjectByteSize]]></code>
       <code><![CDATA[getStoredObjectKey]]></code>
