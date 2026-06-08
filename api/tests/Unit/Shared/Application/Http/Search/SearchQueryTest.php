@@ -113,6 +113,15 @@ final class SearchQueryTest extends TestCase
         $this->assertSame(SortDirection::DESC, $searchCriteria->direction);
     }
 
+    public function testToCriteriaNormalizesAnEmptySortToNoOrdering(): void
+    {
+        // An empty `sort=` on the wire is "no sort", not an unknown field — it must not reach the
+        // repository's allow-list lookup (which would 400); the criteria carries null instead.
+        $searchCriteria = (new SearchQuery(sort: ''))->toCriteria();
+
+        $this->assertNull($searchCriteria->sort);
+    }
+
     public function testToCriteriaPropagatesMaxLimit(): void
     {
         $searchCriteria = (new SearchQuery())->toCriteria();

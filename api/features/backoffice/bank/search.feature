@@ -428,3 +428,34 @@ Feature: Search banks
     And the JSON node "data" should have 1 elements
     And the JSON node "data[0].id" should be equal to "11111111-1111-7000-8000-000000000001"
     And 2 requests got executed only for doctrine connection "default"
+
+  # Story 1.8 code-review (P1): `direction` is a nullable enum (?SortDirection), but an array form is
+  # still a type mismatch at mapping → 400 validation-failed, exactly like the non-nullable
+  # paginationMode[]. Pinned so a nullable-coercion regression (array silently → null → default
+  # direction) is caught.
+  Scenario: An array-form sort direction returns 400 validation-failed
+    When I send a "GET" request to "/backoffice/banks?sort=name&direction[]=ASC"
+    Then the response status code should be 400
+    And the JSON node "type" should be equal to "validation-failed"
+    And 0 requests got executed across all doctrine connections
+
+  # Story 1.8 code-review (P2): a SQL/DQL-injection-shaped sort is just another value outside the sort
+  # allow-list — resolved through sortFieldMap() to null → 400 unknown-sort-field before any SQL runs,
+  # never interpolated into DQL. Adversarial regression guard for the "client sort is never
+  # interpolated" invariant. The value decodes to `createdAt); DROP TABLE bank; --`.
+  Scenario: An injection-shaped sort value is rejected before any SQL runs
+    When I send a "GET" request to "/backoffice/banks?sort=createdAt%29%3B%20DROP%20TABLE%20bank%3B%20--&direction=ASC"
+    Then the response status code should be 400
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the JSON node "type" should be equal to "unknown-sort-field"
+    And 0 requests got executed across all doctrine connections
+
+  # Story 1.8 code-review (P4): an empty sort= on the wire means "no sort" — SearchQuery::toCriteria()
+  # coalesces '' → null, so it falls back to the default order (createdAt asc, id tiebreak) instead of a
+  # 400 unknown-sort-field.
+  Scenario: An empty sort parameter falls back to the default order
+    When I send a "GET" request to "/backoffice/banks?sort=&limit=1"
+    Then the response status code should be 200
+    And the JSON node "data" should have 1 elements
+    And the JSON node "data[0].id" should be equal to "11111111-1111-7000-8000-000000000001"
+    And 2 requests got executed only for doctrine connection "default"

@@ -83,7 +83,9 @@ final readonly class SearchQuery
             limit: $this->limit ?? self::MAX_LIMIT,
             paginationMode: $this->paginationMode,
             filters: $this->domainFilters(),
-            sort: $this->sort,
+            // An empty `sort=` on the wire means "no sort" → the default order, not a 400
+            // unknown-sort-field; the criteria never carries a meaningless empty field name.
+            sort: '' === $this->sort ? null : $this->sort,
             direction: $this->direction,
         );
     }

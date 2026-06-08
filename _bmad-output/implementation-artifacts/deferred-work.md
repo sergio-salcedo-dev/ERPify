@@ -128,3 +128,17 @@ below are deferred — programmer-error guards in `FieldMapping`, not reachable 
   both-true combination (a value cannot be both a UUID and a datetime); such a field would run UUID
   pre-validation then datetime parsing and reject every value. Programmer error only, not reachable
   from the wire. Add a mutual-exclusion guard in the `FieldMapping` constructor. Low. (source: edge)
+
+## Deferred from: code review of 1-8-orden-server-side-en-el-contrato-de-busqueda (2026-06-08)
+
+Adversarial review (Blind Hunter / Edge Case Hunter / Acceptance Auditor) of server-side `sort`/`direction`
+on `e0d8794..5d36330`. The `decision-needed` and `patch` findings are tracked in the story's Review Findings
+section; the one item below is deferred.
+
+- **Cursor keyset + `sort` change has no e2e coverage.** When a client changes `sort` while carrying a
+  keyset cursor, the cursor (which encodes the previous order columns) no longer matches and the paginator
+  degrades to offset. The degradation mechanism is verified to exist (`Paginator::buildCursorWhere` returns
+  `null` when an order column is absent from the cursor → offset fallback), but no Behat scenario exercises
+  the cursor→offset jump on a `sort` switch. The consumer-side contract (the PWA must discard the cursor on
+  sort change — the learned debounce+pagination race rule) lands in Story 2.2; pin the server-side jump there
+  alongside it. Low. (source: blind)

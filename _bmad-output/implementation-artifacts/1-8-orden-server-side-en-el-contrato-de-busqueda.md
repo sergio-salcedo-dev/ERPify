@@ -18,7 +18,7 @@ note_scope: >-
 
 # Story 1.8: Orden server-side en el contrato de búsqueda
 
-Status: review
+Status: done
 
 _Ultimate context engine analysis completed — guía exhaustiva creada contra el estado real verificado de la rama `feat/shared-search-filters-aj0w` @ e0d8794 (2026-06-08)._
 
@@ -93,7 +93,26 @@ so that la PWA resuelva la ordenación en el servidor, consistente con la pagina
 
 ### Review Findings
 
-_(Vacío — se rellena durante code-review.)_
+Code-review adversarial (Blind Hunter / Edge Case Hunter / Acceptance Auditor) sobre `e0d8794..5d36330`, 2026-06-08. Acceptance Auditor confirma los 4 AC y las decisiones pineadas satisfechos; las desviaciones documentadas (`getNameNormalized()`, escenarios temporales createdAt/updatedAt, `direction=asc` extra) son sólidas. Resumen del triaje: 2 decision-needed, 3 patch, 1 defer, 6 dismissed.
+
+**Decision-needed (resueltas 2026-06-08 por Sergio → patch):**
+
+- [x] [Review][Decision] Contrato ante `sort=""` (vacío) → **Resuelto: coalescer `''`→`null`** (tratar vacío como ausente → orden por defecto, no 400). Genera el patch **P4**. (source: edge)
+- [x] [Review][Decision] `direction` sin `sort` → **Resuelto: documentar el comportamiento actual** (`direction` aplica al campo por defecto `createdAt`; no se ignora ni se rechaza). Genera el patch **P5** (solo docs). (source: blind+edge+auditor)
+
+**Patch (aplicados y verificados 2026-06-08; gates verdes: php.stan, php.quality EXIT=0, php.unit 661, php.behat 116):**
+
+- [x] [Review][Patch] (P1) Pineada la forma array `direction[]=ASC` → 400 `validation-failed` [api/features/backoffice/bank/search.feature] — escenario Behat verde: el enum nullable SÍ rechaza la forma array en mapping (la sospecha de coerción silenciosa array→null queda descartada y pineada). (source: edge)
+- [x] [Review][Patch] (P2) Escenario adversarial de inyección por `sort` → 400 `unknown-sort-field`, 0 queries [api/features/backoffice/bank/search.feature] — valor con forma `createdAt); DROP TABLE bank; --` resuelto a null por la allow-list antes de SQL; verde. (source: blind)
+- [x] [Review][Patch] (P3) `assertNotInstanceOf` vs `assertNull` — **no aplicado: el toolchain lo impone.** Cambié a `assertNull(...->direction)` pero Rector (en `php.quality`) lo reescribe automáticamente a `assertNotInstanceOf(SortDirection::class, ...)` para el caso enum (mismo comportamiento que el Debug Log original). Se mantiene la forma actual; caveat previsto materializado. PHPStan acepta ambas. (source: blind)
+- [x] [Review][Patch] (P4, de Decision 1) `SearchQuery::toCriteria()` coalesce `'' → null` [api/src/Shared/Application/Http/Search/SearchQuery.php] — `?sort=` cae ahora en el orden por defecto (no 400). Cubierto por `testToCriteriaNormalizesAnEmptySortToNoOrdering` (unit) + escenario Behat (200 + orden por defecto). Verde. (Elegida la normalización en el borde HTTP en vez del seam: el `SearchCriteria` nunca transporta un nombre de campo vacío sin sentido.)
+- [x] [Review][Patch] (P5, de Decision 2, solo docs) Documentado que `direction` sin `sort` aplica al campo por defecto y que `sort=` vacío → orden por defecto [docs/architecture-api.md, api/docs/adding-endpoints.md].
+
+**Defer:**
+
+- [x] [Review][Defer] Cursor keyset + cambio de `sort` sin test e2e [api/features/backoffice/bank/search.feature] — deferred → Story 2.2 (PWA descarta el cursor al cambiar orden). La degradación a offset ya está verificada en el `Paginator` (`buildCursorWhere` devuelve null si falta la columna del cursor); falta solo la cobertura e2e del salto cursor→offset al cambiar `sort`. (source: blind)
+
+**Dismissed (6, no persistidos):** (1) Blind **High** «keyset no determinista por columnas que empatan» — falso positivo: `Paginator.php:187-189` añade siempre `id ASC` como desempate, también en el camino de sort de cliente; (2) «name/shortName sin desempate único» — mismo mecanismo + columnas UNIQUE; (3) «extracción de cursor de `getNameNormalized()` no verificada» — `Paginator.php:391-405` lee por PropertyAccess y los 4 paths tienen accessor; (4) ids de fixtures «frágiles» — convención Behat ya establecida en el repo; (5) asimetría `MAX_SORT_LENGTH` vs `direction` — `direction` está acotado por el enum en mapping; (6) evidencia `EXPLAIN ANALYZE` «solo documental» — aceptable por la estrategia de testing de la propia historia (índices verificados estructuralmente).
 
 ## Dev Notes
 
