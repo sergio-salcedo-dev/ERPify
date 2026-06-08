@@ -132,7 +132,7 @@ protected function searchFieldMap(): SearchFieldMap
 }
 ```
 
-A field's `FieldNormalizer` applies across **all** its operators (so `eq`/`in`/`contains` share normalization); `requiresUuidValues: true` pre-validates UUID format → a 400 `invalid-search-value` (carrying `{field, position}`, never the value) instead of a Postgres 22P02 500, and is rejected at construction if combined with `contains`.
+`operators` defaults to all three (`eq`/`in`/`contains`); restrict it (as `id` does) whenever an operator would break at the SQL level. A field's `FieldNormalizer` applies across **all** its allowed operators (so they share normalization); `requiresUuidValues: true` pre-validates UUID format → a 400 `invalid-search-value` (carrying `{field, position}`, never the value) instead of a Postgres 22P02 500. Because the default set includes `contains` — which a UUID column can never satisfy — a UUID-backed field **must** restrict `operators` to exclude it (the example pins `[Eq, In]`); that combination is otherwise rejected at construction.
 
 **Anti-patterns (forbidden):**
 
