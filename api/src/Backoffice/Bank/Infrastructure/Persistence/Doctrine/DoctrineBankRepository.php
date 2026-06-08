@@ -14,6 +14,7 @@ use Erpify\Shared\Domain\Search\PaginatedResult;
 use Erpify\Shared\Domain\Search\SearchCriteria;
 use Erpify\Shared\Infrastructure\Persistence\Doctrine\AbstractDoctrineSearchRepository;
 use Erpify\Shared\Infrastructure\Persistence\Doctrine\QueryBuilderWithOptions;
+use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\AsciiUpperTextFieldNormalizer;
 use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\FieldMapping;
 use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\FilterApplier;
 use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\NormalizedTextFieldNormalizer;
@@ -40,6 +41,7 @@ final class DoctrineBankRepository extends AbstractDoctrineSearchRepository impl
         PaginatorCursorFactory $paginatorCursorFactory,
         FilterApplier $filterApplier,
         private readonly NormalizedTextFieldNormalizer $normalizedText,
+        private readonly AsciiUpperTextFieldNormalizer $asciiUpperText,
     ) {
         parent::__construct($registry, $paginatorCursorFactory, $filterApplier);
     }
@@ -90,14 +92,24 @@ final class DoctrineBankRepository extends AbstractDoctrineSearchRepository impl
     #[Override]
     protected function searchFieldMap(): SearchFieldMap
     {
+        $rangeOperators = [FilterOperator::Gt, FilterOperator::Gte, FilterOperator::Lt, FilterOperator::Lte];
+
         return new SearchFieldMap([
             'name' => new FieldMapping('b.nameNormalized', $this->normalizedText),
+            // shortName is stored upper-case ASCII, so its normalizer upper-cases the search
+            // value (the lower-casing name normalizer would never match). Default operators:
+            // eq/in/contains.
+            'shortName' => new FieldMapping('b.shortName', $this->asciiUpperText),
             // No contains on id: a LIKE over a UUID column breaks at the SQL level.
             'id' => new FieldMapping(
                 'b.id',
                 operators: [FilterOperator::Eq, FilterOperator::In],
                 requiresUuidValues: true,
             ),
+            // Timestamp columns: range-only. The public names are the serialized
+            // `timestamped` group keys (createdAt/updatedAt), never the DQL paths.
+            'createdAt' => new FieldMapping('b.createdAt', operators: $rangeOperators, requiresDateTimeValues: true),
+            'updatedAt' => new FieldMapping('b.updatedAt', operators: $rangeOperators, requiresDateTimeValues: true),
         ]);
     }
 

@@ -22,6 +22,10 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'bank')]
+// btree indexes for the temporal range filters (story 1.7). Declared here at the Bank table
+// level, never on the shared Timestamped trait, so only this entity pays for the indexes.
+#[ORM\Index(name: 'idx_bank_created_at', columns: ['created_at'])]
+#[ORM\Index(name: 'idx_bank_updated_at', columns: ['updated_at'])]
 #[UniqueEntity(fields: ['nameNormalized'], message: 'This bank name is already in use.', errorPath: 'name')]
 #[UniqueEntity(fields: ['shortName'], message: 'This short name is already in use.')]
 class Bank extends AggregateRoot

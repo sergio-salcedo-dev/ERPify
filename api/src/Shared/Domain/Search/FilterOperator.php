@@ -18,4 +18,12 @@ enum FilterOperator: string
     case In = 'in';
 
     case Contains = 'contains';
+
+    case Gt = 'gt';
+
+    case Gte = 'gte';
+
+    case Lt = 'lt';
+
+    case Lte = 'lte';
 }

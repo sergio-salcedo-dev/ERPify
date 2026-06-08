@@ -10,7 +10,7 @@ namespace Erpify\Shared\Domain\Search;
  * paths is Infrastructure's monopoly via the per-repository field map).
  *
  * The named constructors fix the value shape per operator: scalar for
- * eq/contains, list for in.
+ * eq/contains and the temporal range operators (gt/gte/lt/lte), list for in.
  */
 final readonly class Filter
 {
@@ -40,5 +40,25 @@ final readonly class Filter
     public static function contains(string $field, string $value): self
     {
         return new self($field, FilterOperator::Contains, $value);
+    }
+
+    public static function gt(string $field, string $value): self
+    {
+        return new self($field, FilterOperator::Gt, $value);
+    }
+
+    public static function gte(string $field, string $value): self
+    {
+        return new self($field, FilterOperator::Gte, $value);
+    }
+
+    public static function lt(string $field, string $value): self
+    {
+        return new self($field, FilterOperator::Lt, $value);
+    }
+
+    public static function lte(string $field, string $value): self
+    {
+        return new self($field, FilterOperator::Lte, $value);
     }
 }

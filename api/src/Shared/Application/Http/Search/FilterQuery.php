@@ -47,7 +47,12 @@ final readonly class FilterQuery
     public function validateValueShape(ExecutionContextInterface $context): void
     {
         match ($this->operator) {
-            FilterOperator::Eq, FilterOperator::Contains => $this->validateScalarValue($context),
+            FilterOperator::Eq,
+            FilterOperator::Contains,
+            FilterOperator::Gt,
+            FilterOperator::Gte,
+            FilterOperator::Lt,
+            FilterOperator::Lte => $this->validateScalarValue($context),
             FilterOperator::In => $this->validateListValue($context),
             null => null, // NotNull on $operator already reports it.
         };
@@ -58,6 +63,10 @@ final readonly class FilterQuery
         return match ($this->operator) {
             FilterOperator::Eq => Filter::eq($this->field, $this->scalarValue()),
             FilterOperator::Contains => Filter::contains($this->field, $this->scalarValue()),
+            FilterOperator::Gt => Filter::gt($this->field, $this->scalarValue()),
+            FilterOperator::Gte => Filter::gte($this->field, $this->scalarValue()),
+            FilterOperator::Lt => Filter::lt($this->field, $this->scalarValue()),
+            FilterOperator::Lte => Filter::lte($this->field, $this->scalarValue()),
             FilterOperator::In => Filter::in($this->field, $this->listValue()),
             null => throw new LogicException('Cannot convert a FilterQuery without operator to a Filter.'),
         };

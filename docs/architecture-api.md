@@ -84,7 +84,7 @@ Cross-context calls go through **published Application services** or **domain ev
 
 ## Filterable search (generic `filters[]` contract)
 
-Every search endpoint accepts the same generic filter grammar — there is no per-entity filter code beyond the repository's allow-list. A request filters with `filters[N][field|operator|value]`; the operator tokens are `eq`, `in`, `contains` (lowercase — the `FilterOperator` enum backing string **is** the wire contract). Full wire grammar, caps, and the per-request walkthrough live in [`../api/docs/adding-endpoints.md`](../api/docs/adding-endpoints.md#generic-filters-wire-contract); this section is the architectural source of truth for the pattern.
+Every search endpoint accepts the same generic filter grammar — there is no per-entity filter code beyond the repository's allow-list. A request filters with `filters[N][field|operator|value]`; the operator tokens are `eq`, `in`, `contains` and the temporal range operators `gt`, `gte`, `lt`, `lte` (lowercase — the `FilterOperator` enum backing string **is** the wire contract). Full wire grammar, caps, and the per-request walkthrough live in [`../api/docs/adding-endpoints.md`](../api/docs/adding-endpoints.md#generic-filters-wire-contract); this section is the architectural source of truth for the pattern.
 
 **Read-path flow** (the seam auto-applies filtering — repositories never call the applier):
 
@@ -111,7 +111,7 @@ Filters are never validated in controllers or use cases.
 
 **Recipe — add a filterable list** (FR7: ≤ 2 new classes + 1 field map, zero files in `Shared/`):
 
-1. The entity's search repository already extends `AbstractDoctrineSearchRepository` (true for any paginated read endpoint). Implement the mandatory `searchFieldMap(): SearchFieldMap`, mapping each public field to a `FieldMapping(dqlPath, normalizer?, operators?, requiresUuidValues?)`. Return `new SearchFieldMap([])` to expose nothing filterable.
+1. The entity's search repository already extends `AbstractDoctrineSearchRepository` (true for any paginated read endpoint). Implement the mandatory `searchFieldMap(): SearchFieldMap`, mapping each public field to a `FieldMapping(dqlPath, normalizer?, operators?, requiresUuidValues?, requiresDateTimeValues?)`. Return `new SearchFieldMap([])` to expose nothing filterable.
 2. Add the thin `<Entity>Searcher` and the `<Entity>SearchController` — both consume the **base** `SearchQuery`/`SearchCriteria` directly (`$query->toCriteria()`); no per-entity DTO or criteria.
 3. That is the whole cost: filtering, validation, error mapping, and pagination are inherited. The step-by-step controller skeleton is in [`../api/docs/adding-endpoints.md`](../api/docs/adding-endpoints.md#skeleton).
 
@@ -120,19 +120,28 @@ Canonical `searchFieldMap()` (from `DoctrineBankRepository`, the pilot):
 ```php
 protected function searchFieldMap(): SearchFieldMap
 {
+    $range = [FilterOperator::Gt, FilterOperator::Gte, FilterOperator::Lt, FilterOperator::Lte];
+
     return new SearchFieldMap([
         'name' => new FieldMapping('b.nameNormalized', $this->normalizedText),
+        // shortName is stored upper-case ASCII, so its normalizer upper-cases the value.
+        'shortName' => new FieldMapping('b.shortName', $this->asciiUpperText),
         // No contains on id: a LIKE over a UUID column breaks at the SQL level.
         'id' => new FieldMapping(
             'b.id',
             operators: [FilterOperator::Eq, FilterOperator::In],
             requiresUuidValues: true,
         ),
+        // Timestamp columns: range-only. Public names are the serialized `timestamped` keys.
+        'createdAt' => new FieldMapping('b.createdAt', operators: $range, requiresDateTimeValues: true),
+        'updatedAt' => new FieldMapping('b.updatedAt', operators: $range, requiresDateTimeValues: true),
     ]);
 }
 ```
 
-`operators` defaults to all three (`eq`/`in`/`contains`); restrict it (as `id` does) whenever an operator would break at the SQL level. A field's `FieldNormalizer` applies across **all** its allowed operators (so they share normalization); `requiresUuidValues: true` pre-validates UUID format → a 400 `invalid-search-value` (carrying `{field, position}`, never the value) instead of a Postgres 22P02 500. Because the default set includes `contains` — which a UUID column can never satisfy — a UUID-backed field **must** restrict `operators` to exclude it (the example pins `[Eq, In]`); that combination is otherwise rejected at construction.
+`operators` defaults to all three (`eq`/`in`/`contains`); restrict it (as `id` does) whenever an operator would break at the SQL level, or widen it to the temporal range set (`gt`/`gte`/`lt`/`lte`) for timestamp-backed fields. A field's `FieldNormalizer` applies across **all** its allowed operators (so they share normalization); `requiresUuidValues: true` pre-validates UUID format → a 400 `invalid-search-value` (carrying `{field, position}`, never the value) instead of a Postgres 22P02 500. Because the default set includes `contains` — which a UUID column can never satisfy — a UUID-backed field **must** restrict `operators` to exclude it (the example pins `[Eq, In]`); that combination is otherwise rejected at construction.
+
+`requiresDateTimeValues: true` is the temporal sibling: it marks a `timestamp` column so each range bound is parsed as an RFC 3339 / ISO-8601 datetime — the offset form `2026-01-01T00:00:00+00:00` (`+`-encoded as `%2B` on the wire) or the `Z` form, with optional fractional seconds, so the JS `toISOString()` output is accepted as-is; lax/relative forms and out-of-range offsets are rejected — normalized to UTC, and bound as a typed `datetime_immutable` parameter (a raw string against a timestamp column has no Postgres operator → a 500; a malformed bound becomes a 400 `invalid-search-value`). It is likewise incompatible with `contains` (a `LIKE` over a timestamp column breaks at the SQL level), so a datetime-backed field lists only range operators. There is deliberately **no `between`**: a closed range is two filters on the same field (`gte` + `lte`), which already compose with AND — adding a redundant operator would violate NFR1/YAGNI. Index every range-filterable column at the entity's `#[ORM\Table]` level (NFR4) — never on the shared `Timestamped` trait, which would index every timestamped entity.
 
 **Anti-patterns (forbidden):**
 

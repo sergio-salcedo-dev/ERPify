@@ -106,3 +106,25 @@ may hit EACCES — pass `--incremental false` (or run in the container). Tree ve
   inputs are diacritic-free ASCII. Pre-existing; if a non-ASCII shortName is ever seeded, assert
   against the API-returned value instead (the pattern `banks-containment.spec.ts` now uses). Low.
   (source: adversarial review)
+
+## Deferred from: code review of epics.md story 1.7 (2026-06-08)
+
+Adversarial review (Blind Hunter / Edge Case Hunter / Acceptance Auditor) of the temporal-range +
+`shortName` implementation. The `decision-needed` and `patch` findings (incl. a critical null-byte
+→ 500 and the missing `shortName` half of AC3) were applied live; the two defense-in-depth items
+below are deferred — programmer-error guards in `FieldMapping`, not reachable from the wire on `banks`.
+
+- **A `requiresDateTimeValues` field that also allowed `eq`/`in` would bind an untyped string → 500.**
+  `FilterApplier::eqCondition`/`inCondition` pass a `null` Doctrine type; only `rangeCondition`
+  binds a typed `datetime_immutable`. The `FieldMapping` constructor forbids `contains` on a
+  datetime field but not `eq`/`in`, so a future map declaring
+  `new FieldMapping('b.createdAt', operators: [Eq, In], requiresDateTimeValues: true)` would send a
+  raw string against a `timestamp` column → Postgres 22007 → 500. Not reachable today: `banks` wires
+  only the four range operators onto its datetime fields. Harden by typing the eq/in binding for
+  datetime fields, or rejecting that combination at construction. Low. (source: edge)
+
+- **`requiresUuidValues` + `requiresDateTimeValues` both `true` is unguarded.** The constructor
+  validates each flag against `contains` independently but never forbids the contradictory
+  both-true combination (a value cannot be both a UUID and a datetime); such a field would run UUID
+  pre-validation then datetime parsing and reject every value. Programmer error only, not reachable
+  from the wire. Add a mutual-exclusion guard in the `FieldMapping` constructor. Low. (source: edge)

@@ -29,6 +29,10 @@ final class FilterOperatorTest extends TestCase
         yield 'eq' => [FilterOperator::Eq, 'eq'];
         yield 'in' => [FilterOperator::In, 'in'];
         yield 'contains' => [FilterOperator::Contains, 'contains'];
+        yield 'gt' => [FilterOperator::Gt, 'gt'];
+        yield 'gte' => [FilterOperator::Gte, 'gte'];
+        yield 'lt' => [FilterOperator::Lt, 'lt'];
+        yield 'lte' => [FilterOperator::Lte, 'lte'];
     }
 
     public function testEveryOperatorIsPinnedByAWireToken(): void

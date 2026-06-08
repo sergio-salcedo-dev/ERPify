@@ -159,9 +159,9 @@ Feature: Search banks
     And 2 requests got executed only for doctrine connection "default"
 
   # Semantic 400s come from the applier (invalid-search-criteria family) and abort before
-  # any SQL executes; shortName is a real column but NOT in the allow-list on purpose.
+  # any SQL executes; storedObjectKey is a real column but NOT in the allow-list on purpose.
   Scenario: Generic filter on a field outside the allow-list returns a 400 unknown-search-field Problem Details body
-    When I send a "GET" request to "/backoffice/banks?filters[0][field]=shortName&filters[0][operator]=eq&filters[0][value]=BBVA"
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=storedObjectKey&filters[0][operator]=eq&filters[0][value]=BBVA"
     Then the response status code should be 400
     And the header "Content-Type" should be equal to "application/problem+json"
     And the response should be in JSON
@@ -255,3 +255,108 @@ Feature: Search banks
     Then the response status code should be 200
     And the JSON node "data" should have 31 elements
     And 2 requests got executed only for doctrine connection "default"
+
+  # Story 1.7: shortName is filterable (eq/in/contains). The column is stored upper-case ASCII
+  # via NormalizedText::toAsciiUpper, and the field normalizer applies the same rule to the
+  # search value, so matching is case-insensitive by construction (lowercase input matches).
+  Scenario: Generic eq filter over shortName matches case-insensitively
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=shortName&filters[0][operator]=eq&filters[0][value]=bbva"
+    Then the response status code should be 200
+    And the JSON node "data" should have 1 elements
+    And the JSON node "data[0].id" should be equal to "11111111-1111-7000-8000-000000000020"
+    And 2 requests got executed only for doctrine connection "default"
+
+  Scenario: Generic in filter over shortName matches several banks case-insensitively
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=shortName&filters[0][operator]=in&filters[0][value][]=bbva&filters[0][value][]=san"
+    Then the response status code should be 200
+    And the JSON node "data" should have 2 elements
+    And 2 requests got executed only for doctrine connection "default"
+
+  Scenario: Generic contains filter over shortName matches by substring case-insensitively
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=shortName&filters[0][operator]=contains&filters[0][value]=bbv"
+    Then the response status code should be 200
+    And the JSON node "data" should have 1 elements
+    And the JSON node "data[0].id" should be equal to "11111111-1111-7000-8000-000000000020"
+    And 2 requests got executed only for doctrine connection "default"
+
+  # Story 1.7: temporal range operators (gt/gte/lt/lte) over createdAt/updatedAt. Fixtures are
+  # created at load time, so bounds use a far past/future to keep counts deterministic. The "+"
+  # in the offset is URL-encoded as %2B. Range is allow-listed ONLY on createdAt/updatedAt.
+  Scenario: Generic gte range filter over createdAt returns banks created on or after a past bound
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=createdAt&filters[0][operator]=gte&filters[0][value]=2000-01-01T00:00:00%2B00:00"
+    Then the response status code should be 200
+    And the JSON node "data" should have 31 elements
+    And 2 requests got executed only for doctrine connection "default"
+
+  Scenario: Generic lt range filter over updatedAt returns banks updated before a future bound
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=updatedAt&filters[0][operator]=lt&filters[0][value]=2100-01-01T00:00:00%2B00:00"
+    Then the response status code should be 200
+    And the JSON node "data" should have 31 elements
+    And 2 requests got executed only for doctrine connection "default"
+
+  Scenario: Generic gt range filter over createdAt with a future bound returns no results
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=createdAt&filters[0][operator]=gt&filters[0][value]=2100-01-01T00:00:00%2B00:00"
+    Then the response status code should be 200
+    And the JSON node "data" should have 0 elements
+    And 1 request got executed only for doctrine connection "default"
+
+  # The negative twin of the "all 31" sanity checks above: a past upper bound proves lte
+  # actually constrains. A filter that ignored the bound would still return all 31, so this
+  # scenario fails on a no-op range filter where the "all 31" ones would not.
+  Scenario: Generic lte range filter over createdAt with a past bound returns no results
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=createdAt&filters[0][operator]=lte&filters[0][value]=2000-01-01T00:00:00%2B00:00"
+    Then the response status code should be 200
+    And the JSON node "data" should have 0 elements
+    And 1 request got executed only for doctrine connection "default"
+
+  # The canonical JS Date.prototype.toISOString() form (fractional seconds + Z) is accepted as
+  # a first-class bound, not only the +00:00 offset form.
+  Scenario: Generic gte range filter accepts the JS toISOString datetime form
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=createdAt&filters[0][operator]=gte&filters[0][value]=2000-01-01T00:00:00.000Z"
+    Then the response status code should be 200
+    And the JSON node "data" should have 31 elements
+    And 2 requests got executed only for doctrine connection "default"
+
+  # An out-of-range UTC offset (beyond UTC+14/-12) is malformed input: rejected as a 400
+  # invalid-search-value before any SQL runs, never silently shifted past a real timezone.
+  Scenario: A range filter with an out-of-range UTC offset returns 400 invalid-search-value
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=createdAt&filters[0][operator]=gte&filters[0][value]=2026-01-01T00:00:00%2B25:00"
+    Then the response status code should be 400
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the JSON node "type" should be equal to "invalid-search-value"
+    And 0 requests got executed across all doctrine connections
+
+  # gte+lte over the same field compose with AND into a closed range — the documented
+  # equivalent of a (deliberately absent) "between" operator.
+  Scenario: A closed date range composes gte and lte with AND
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=createdAt&filters[0][operator]=gte&filters[0][value]=2000-01-01T00:00:00%2B00:00&filters[1][field]=createdAt&filters[1][operator]=lte&filters[1][value]=2100-01-01T00:00:00%2B00:00"
+    Then the response status code should be 200
+    And the JSON node "data" should have 31 elements
+    And 2 requests got executed only for doctrine connection "default"
+
+  # name lists default operators (eq/in/contains) only; a range operator is not allow-listed,
+  # so the applier rejects it semantically before any SQL runs.
+  Scenario: A range operator on a field that does not allow it returns 400 unsupported-search-operator
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=gt&filters[0][value]=x"
+    Then the response status code should be 400
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the JSON node "type" should be equal to "unsupported-search-operator"
+    And 0 requests got executed across all doctrine connections
+
+  # A malformed datetime is client input: it must surface as 400 invalid-search-value, never as
+  # a Postgres 22007/22008 turned 500. The applier rejects it before any SQL runs.
+  Scenario: A malformed datetime on a range filter returns 400 invalid-search-value
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=createdAt&filters[0][operator]=gte&filters[0][value]=not-a-date"
+    Then the response status code should be 400
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the JSON node "type" should be equal to "invalid-search-value"
+    And the JSON node "field" should be equal to "createdAt"
+    And the JSON node "position" should be equal to the number 0
+    And 0 requests got executed across all doctrine connections
+
+  # Range operators are scalar: a list value is a shape error caught at mapping (validation-failed).
+  Scenario: A range operator with a list value returns 400 validation-failed
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=createdAt&filters[0][operator]=gt&filters[0][value][]=2026-01-01T00:00:00%2B00:00"
+    Then the response status code should be 400
+    And the JSON node "type" should be equal to "validation-failed"
+    And 0 requests got executed across all doctrine connections

@@ -321,20 +321,20 @@ So that la PWA pueda mover TODO su filtrado actual al servidor sin perder el fil
 **Acceptance Criteria:**
 
 **Given** el enum `FilterOperator` (`Erpify\Shared\Domain\Search`)
-**When** gana los operadores de comparación `Gte = 'gte'` y `Lte = 'lte'`
-**Then** son escalares (un solo `value`, como `eq`/`contains`) y dos sobre el mismo campo componen con AND (límite inferior + superior = rango cerrado inclusivo)
+**When** gana los operadores de comparación `Gt = 'gt'`, `Gte = 'gte'`, `Lt = 'lt'` y `Lte = 'lte'`
+**Then** son escalares (un solo `value`, como `eq`/`contains`) y dos sobre el mismo campo componen con AND (p. ej. `gte` + `lte` = rango cerrado inclusivo)
 **And** el vocabulario sigue sin dependencias externas (NFR1) y los tests unitarios puros cubren sus valores wire.
 
 **Given** `FilterApplier` y `FieldMapping`
-**When** procesa `gte`/`lte`
-**Then** genera `path >= :param` / `path <= :param` bindeado (nunca interpolación de `field`/`value`), con el naming hasheado `xxh128` heredado
+**When** procesa `gt`/`gte`/`lt`/`lte`
+**Then** genera `path > / >= / < / <= :param` bindeado (nunca interpolación de `field`/`value`), con el naming hasheado `xxh128` heredado
 **And** un `FieldMapping` solo admite los operadores de comparación en los campos que los declaran; el resto lanza `UnsupportedSearchOperator`
-**And** siguiendo el precedente `requiresUuidValues`, `createdAt` pre-valida que el `value` sea una fecha/datetime parseable y rechaza el resto como 400 (nunca un 22007/500 de Postgres).
+**And** siguiendo el precedente `requiresUuidValues`, `createdAt` pre-valida que el `value` sea una fecha/datetime RFC 3339 parseable (forma con offset o `Z`, con segundos fraccionarios opcionales como el `toISOString()` de JS; offset fuera de rango rechazado) y rechaza el resto como 400 (nunca un 22007/500 de Postgres).
 
 **Given** el `searchFieldMap()` de `DoctrineBankRepository`
 **When** gana las entradas `shortName` y `createdAt`
 **Then** `shortName` → `b.shortName` con un `FieldNormalizer` ASCII-UPPER nuevo (envuelve `NormalizedText::toAsciiUpper`) — la columna se persiste en mayúsculas ASCII, así que el `NormalizedTextFieldNormalizer` lower existente NUNCA casaría — admitiendo `eq`/`in`/`contains`
-**And** `createdAt` → `b.createdAt` admitiendo solo `gte`/`lte` (jamás `contains`)
+**And** `createdAt`/`updatedAt` → `b.createdAt`/`b.updatedAt` admitiendo los operadores de rango `gt`/`gte`/`lt`/`lte` (jamás `contains`)
 **And** `name`/`id` permanecen idénticos (cero regresión del contrato de #180).
 
 **Given** la equivalencia con el filtrado client-side actual de la PWA (`banksFilterSort.ts`)

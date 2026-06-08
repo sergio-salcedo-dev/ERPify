@@ -55,4 +55,37 @@ final class FieldMappingTest extends TestCase
         $this->assertTrue($mapping->allows(FilterOperator::In));
         $this->assertTrue($mapping->allows(FilterOperator::Contains));
     }
+
+    public function testDateTimeFieldRejectsContainsAmongExplicitOperators(): void
+    {
+        $this->expectException(LogicException::class);
+
+        new FieldMapping(
+            'b.createdAt',
+            operators: [FilterOperator::Gte, FilterOperator::Contains],
+            requiresDateTimeValues: true,
+        );
+    }
+
+    public function testDateTimeFieldRejectsDefaultOperatorsBecauseTheyIncludeContains(): void
+    {
+        $this->expectException(LogicException::class);
+
+        new FieldMapping('b.createdAt', requiresDateTimeValues: true);
+    }
+
+    public function testDateTimeFieldAllowsRangeOperators(): void
+    {
+        $mapping = new FieldMapping(
+            'b.createdAt',
+            operators: [FilterOperator::Gt, FilterOperator::Gte, FilterOperator::Lt, FilterOperator::Lte],
+            requiresDateTimeValues: true,
+        );
+
+        $this->assertTrue($mapping->allows(FilterOperator::Gt));
+        $this->assertTrue($mapping->allows(FilterOperator::Gte));
+        $this->assertTrue($mapping->allows(FilterOperator::Lt));
+        $this->assertTrue($mapping->allows(FilterOperator::Lte));
+        $this->assertFalse($mapping->allows(FilterOperator::Eq));
+    }
 }

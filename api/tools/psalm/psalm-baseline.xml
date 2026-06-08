@@ -148,8 +148,6 @@
     <PossiblyUnusedMethod>
       <code><![CDATA[getCreatedAt]]></code>
       <code><![CDATA[getUpdatedAt]]></code>
-      <code><![CDATA[setCreatedAt]]></code>
-      <code><![CDATA[setUpdatedAt]]></code>
     </PossiblyUnusedMethod>
   </file>
   <file src="../../src/Shared/Domain/Enum/Abstraction/HumanReadableIntEnumInterface.php">

@@ -50,6 +50,14 @@ final class FilterQueryTest extends TestCase
             new FilterQuery('name', FilterOperator::In, \array_fill(0, FilterQuery::MAX_IN_VALUES, 'v')),
         ];
         yield 'scalar at max length' => [new FilterQuery('name', FilterOperator::Eq, \str_repeat('a', 255))];
+        yield 'gt with scalar value' => [new FilterQuery('createdAt', FilterOperator::Gt, '2026-01-01T00:00:00+00:00')];
+        yield 'gte with scalar value' => [
+            new FilterQuery('createdAt', FilterOperator::Gte, '2026-01-01T00:00:00+00:00'),
+        ];
+        yield 'lt with scalar value' => [new FilterQuery('createdAt', FilterOperator::Lt, '2026-01-01T00:00:00+00:00')];
+        yield 'lte with scalar value' => [
+            new FilterQuery('updatedAt', FilterOperator::Lte, '2026-01-01T00:00:00+00:00'),
+        ];
     }
 
     /**
@@ -101,6 +109,15 @@ final class FilterQueryTest extends TestCase
             new FilterQuery('name', FilterOperator::In, [\str_repeat('a', 256)]),
             ['value[0]'],
         ];
+        yield 'gt with list value' => [
+            new FilterQuery('createdAt', FilterOperator::Gt, ['2026-01-01T00:00:00+00:00']),
+            ['value'],
+        ];
+        yield 'lte with list value' => [
+            new FilterQuery('createdAt', FilterOperator::Lte, ['2026-01-01T00:00:00+00:00']),
+            ['value'],
+        ];
+        yield 'gte with blank value' => [new FilterQuery('createdAt', FilterOperator::Gte, '   '), ['value']];
     }
 
     /**
@@ -135,6 +152,12 @@ final class FilterQueryTest extends TestCase
             FilterOperator::In,
             ['a', 'b'],
         ];
+
+        $bound = '2026-01-01T00:00:00+00:00';
+        yield 'gt' => [new FilterQuery('createdAt', FilterOperator::Gt, $bound), FilterOperator::Gt, $bound];
+        yield 'gte' => [new FilterQuery('createdAt', FilterOperator::Gte, $bound), FilterOperator::Gte, $bound];
+        yield 'lt' => [new FilterQuery('createdAt', FilterOperator::Lt, $bound), FilterOperator::Lt, $bound];
+        yield 'lte' => [new FilterQuery('updatedAt', FilterOperator::Lte, $bound), FilterOperator::Lte, $bound];
     }
 
     public function testToFilterWithoutOperatorFailsLoudly(): void
