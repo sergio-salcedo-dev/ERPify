@@ -4,7 +4,7 @@ Patterns for adding HTTP endpoints to the API. Each section covers one endpoint 
 
 ## Search endpoints
 
-The search-endpoint boundary is centralized — the shared `SearchQuery` DTO + the shared `SearchCriteria` + one ~12-line controller per entity. See [`../../_bmad-output/planning-artifacts/adr-2026-04-29-search-controller-boundary.md`](../../_bmad-output/planning-artifacts/adr-2026-04-29-search-controller-boundary.md) for the original design (its per-entity DTO/criteria subclasses were since retired in favour of the generic `filters[]` contract) and `Bank` for the canonical pilot.
+The search-endpoint boundary is centralized — the shared `SearchQuery` DTO + the shared `SearchCriteria` + one ~12-line controller per entity. The original design (`adr-2026-04-29-search-controller-boundary.md`, recoverable from git history) used per-entity DTO/criteria subclasses; those were retired in favour of the generic `filters[]` contract. The architectural pattern and the "add a filterable list" recipe now live in [`../../docs/architecture-api.md`](../../docs/architecture-api.md#filterable-search-generic-filters-contract); `Bank` is the canonical pilot.
 
 ### Skeleton
 

@@ -82,6 +82,67 @@ Cross-context calls go through **published Application services** or **domain ev
 - Public health endpoints exposed from `Frontoffice/Health/` and `Backoffice/Health/`.
 - Search endpoints share plumbing in `Shared/Application/Http/Search/` and `Shared/Infrastructure/Http/Controller/AbstractSearchController.php`.
 
+## Filterable search (generic `filters[]` contract)
+
+Every search endpoint accepts the same generic filter grammar — there is no per-entity filter code beyond the repository's allow-list. A request filters with `filters[N][field|operator|value]`; the operator tokens are `eq`, `in`, `contains` (lowercase — the `FilterOperator` enum backing string **is** the wire contract). Full wire grammar, caps, and the per-request walkthrough live in [`../api/docs/adding-endpoints.md`](../api/docs/adding-endpoints.md#generic-filters-wire-contract); this section is the architectural source of truth for the pattern.
+
+**Read-path flow** (the seam auto-applies filtering — repositories never call the applier):
+
+```text
+query string
+  → #[MapQueryString] SearchQuery        (Application/Http/Search; base DTO, final, shape-validated)
+  → $query->toCriteria()                 (controller)
+  → SearchCriteria(+Filters)             (Domain/Search; framework-free, final)
+  → <Entity>Searcher::search(criteria)
+  → AbstractDoctrineSearchRepository::getPaginatedResults()
+       ├─ getSearchQueryBuilder(criteria)                                   (per-repo joins/order, intact)
+       ├─ FilterApplier::apply(qb, criteria->filters, searchFieldMap())     (allow-list + bound params)
+       └─ Paginator                                                         (keyset/HMAC cursor, intact)
+```
+
+`FilterApplier` (`Shared/Infrastructure/Persistence/Doctrine/Search/`) only ever adds `andWhere` + bound parameters (hashed `xxh128` naming); it is invoked **exclusively** by the base repository's `getPaginatedResults()`. `SearchFieldMap` is built **exclusively** inside each concrete repository's `searchFieldMap()` — the allow-list lives with the schema knowledge, never in Application. `Domain/Search` carries only the **public** field name; the DQL path is resolved in Infrastructure.
+
+**Two validation layers** (pinned — never duplicated elsewhere):
+
+- **Shape** — unknown operator token, `value`/operator mismatch, caps exceeded, non-contiguous indexes → fail at `#[MapQueryString]` mapping → 400 `validation-failed` with `violations[]`.
+- **Semantics** — field outside the allow-list (`unknown-search-field`), operator not allowed for the field (`unsupported-search-operator`), value not matching the field's required format such as a malformed UUID (`invalid-search-value`) → fail in `FilterApplier` → 400 from the `invalid-search-criteria` marker family. See the marker row in [`api-error-contract.md`](./api-error-contract.md).
+
+Filters are never validated in controllers or use cases.
+
+**Recipe — add a filterable list** (FR7: ≤ 2 new classes + 1 field map, zero files in `Shared/`):
+
+1. The entity's search repository already extends `AbstractDoctrineSearchRepository` (true for any paginated read endpoint). Implement the mandatory `searchFieldMap(): SearchFieldMap`, mapping each public field to a `FieldMapping(dqlPath, normalizer?, operators?, requiresUuidValues?)`. Return `new SearchFieldMap([])` to expose nothing filterable.
+2. Add the thin `<Entity>Searcher` and the `<Entity>SearchController` — both consume the **base** `SearchQuery`/`SearchCriteria` directly (`$query->toCriteria()`); no per-entity DTO or criteria.
+3. That is the whole cost: filtering, validation, error mapping, and pagination are inherited. The step-by-step controller skeleton is in [`../api/docs/adding-endpoints.md`](../api/docs/adding-endpoints.md#skeleton).
+
+Canonical `searchFieldMap()` (from `DoctrineBankRepository`, the pilot):
+
+```php
+protected function searchFieldMap(): SearchFieldMap
+{
+    return new SearchFieldMap([
+        'name' => new FieldMapping('b.nameNormalized', $this->normalizedText),
+        // No contains on id: a LIKE over a UUID column breaks at the SQL level.
+        'id' => new FieldMapping(
+            'b.id',
+            operators: [FilterOperator::Eq, FilterOperator::In],
+            requiresUuidValues: true,
+        ),
+    ]);
+}
+```
+
+A field's `FieldNormalizer` applies across **all** its operators (so `eq`/`in`/`contains` share normalization); `requiresUuidValues: true` pre-validates UUID format → a 400 `invalid-search-value` (carrying `{field, position}`, never the value) instead of a Postgres 22P02 500, and is rejected at construction if combined with `contains`.
+
+**Anti-patterns (forbidden):**
+
+- ❌ `EntityRepository::matching()` / `Collections\Criteria` on the read-path.
+- ❌ Ad-hoc filtering in repositories (`addWhereIn` for an already-mappable field) — filtering enters **only** through the seam.
+- ❌ Invoking `FilterApplier` from a controller, use case, or concrete repository — only the base repository calls it.
+- ❌ Validating filters in a controller or use case (duplicates the pinned layers).
+- ❌ Manual `JsonResponse` for filter errors (bypasses the RFC 9457 pipeline).
+- ❌ Subclassing `SearchQuery`/`SearchCriteria` or adding per-entity wire params — both are `final` on purpose; new filterable fields go through `searchFieldMap()`.
+
 ## Error contract (RFC 9457 Problem Details)
 
 Every non-2xx response from `/api/*` carries a uniform [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) Problem Details body (`Content-Type: application/problem+json`, `Cache-Control: no-store`) with deterministic key order: `type, title, status, detail?, instance, correlation-id, <extensions>`. Domain exceptions tag themselves with marker interfaces (`NotFound`, `Conflict`, `Forbidden`, `Unauthenticated`, `InvariantViolation`, `InvalidInput`, `RateLimited`) and a single mapping site resolves each to its HTTP status — no controller-level catch blocks, no per-route error wiring.
