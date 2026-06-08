@@ -50,6 +50,8 @@ development_status:
   1-4-contrato-generico-filters-expuesto-en-el-endpoint-de-banks: done
   1-5-camino-unico-legacy-filters-en-bank-d8: done
   1-6-receta-de-generalizacion-y-cierre-documental: done
+  1-7-operador-de-rango-y-campos-shortname-createdat-filtrables-en-bank: backlog
+  1-8-orden-server-side-en-el-contrato-de-busqueda: backlog
   epic-1-retrospective: optional
 
   # Epic 2: Filtrado server-driven en la PWA — fase 2

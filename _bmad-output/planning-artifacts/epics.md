@@ -113,7 +113,7 @@ Los usuarios de la PWA filtran la lista de banks contra el servidor (deja de fil
 
 ## Epic 1: Búsqueda filtrable genérica en la API (Bank como piloto)
 
-Cualquier consumidor de la API puede filtrar la lista de banks con el contrato genérico `filters[N][field/operator/value]` — validado, seguro (allow-list por construcción) y con errores 400 RFC 9457 — mientras los parámetros legacy `names[]`/`ids[]` siguen funcionando idénticos. El mecanismo queda listo para que cualquier lista futura sea filtrable con ≤ 2 clases + 1 field map (receta documentada). Historias 1.1–1.3 = fase 0 (núcleo, inalcanzable desde HTTP); historias 1.4–1.6 = fase 1 (expand del Parallel Change).
+Cualquier consumidor de la API puede filtrar la lista de banks con el contrato genérico `filters[N][field/operator/value]` — validado, seguro (allow-list por construcción) y con errores 400 RFC 9457 — mientras los parámetros legacy `names[]`/`ids[]` siguen funcionando idénticos. El mecanismo queda listo para que cualquier lista futura sea filtrable con ≤ 2 clases + 1 field map (receta documentada). Historias 1.1–1.3 = fase 0 (núcleo, inalcanzable desde HTTP); historias 1.4–1.6 = fase 1 (expand del Parallel Change); historias 1.7–1.8 = extensión de cobertura del contrato (shortName, rango de fechas, orden), prerequisito de la Epic 2.
 
 ### Story 1.1: Vocabulario de filtros en el dominio compartido
 
@@ -305,9 +305,82 @@ So that la siguiente entidad use el mecanismo sin modificar `Shared/` (≤ 2 cla
 **When** se cierra la decisión del research
 **Then** se retira del working tree (nunca se committea).
 
+> **Nota de decisión (2026-06-08, Sergio):** durante la planificación de la Epic 2 se detectó que el
+> contrato entregado por #180 (allow-list `name`/`id`, operadores `eq`/`in`/`contains`, sin `sort` en
+> `SearchQuery`/`SearchCriteria`) NO cubre todo el filtrado que la PWA ya ofrece client-side: `shortName`,
+> rango de `createdAt` y ordenación. Mover el filtrado a server-side (Epic 2) sin estas extensiones
+> **perdería funcionalidad existente**. Las historias 1.7 y 1.8 cierran ese hueco en la capa API,
+> reusando el seam genérico (≤ 2 clases + 1 field map), y son **prerequisito de la Story 2.2**.
+
+### Story 1.7: Operador de rango y campos `shortName`/`createdAt` filtrables en Bank
+
+As a consumidor de la API de banks,
+I want filtrar por `shortName` (contains/eq/in) y por rango de `createdAt` (operadores de comparación),
+So that la PWA pueda mover TODO su filtrado actual al servidor sin perder el filtro de nombre corto ni el de fechas.
+
+**Acceptance Criteria:**
+
+**Given** el enum `FilterOperator` (`Erpify\Shared\Domain\Search`)
+**When** gana los operadores de comparación `Gte = 'gte'` y `Lte = 'lte'`
+**Then** son escalares (un solo `value`, como `eq`/`contains`) y dos sobre el mismo campo componen con AND (límite inferior + superior = rango cerrado inclusivo)
+**And** el vocabulario sigue sin dependencias externas (NFR1) y los tests unitarios puros cubren sus valores wire.
+
+**Given** `FilterApplier` y `FieldMapping`
+**When** procesa `gte`/`lte`
+**Then** genera `path >= :param` / `path <= :param` bindeado (nunca interpolación de `field`/`value`), con el naming hasheado `xxh128` heredado
+**And** un `FieldMapping` solo admite los operadores de comparación en los campos que los declaran; el resto lanza `UnsupportedSearchOperator`
+**And** siguiendo el precedente `requiresUuidValues`, `createdAt` pre-valida que el `value` sea una fecha/datetime parseable y rechaza el resto como 400 (nunca un 22007/500 de Postgres).
+
+**Given** el `searchFieldMap()` de `DoctrineBankRepository`
+**When** gana las entradas `shortName` y `createdAt`
+**Then** `shortName` → `b.shortName` con un `FieldNormalizer` ASCII-UPPER nuevo (envuelve `NormalizedText::toAsciiUpper`) — la columna se persiste en mayúsculas ASCII, así que el `NormalizedTextFieldNormalizer` lower existente NUNCA casaría — admitiendo `eq`/`in`/`contains`
+**And** `createdAt` → `b.createdAt` admitiendo solo `gte`/`lte` (jamás `contains`)
+**And** `name`/`id` permanecen idénticos (cero regresión del contrato de #180).
+
+**Given** la equivalencia con el filtrado client-side actual de la PWA (`banksFilterSort.ts`)
+**When** se comparan resultados
+**Then** `filters[shortName][contains]` reproduce el `containsCi` actual (case-insensitive) y `filters[createdAt][gte]`+`[lte]` reproduce el rango inclusivo `createdFrom`/`createdTo`
+**And** todo campo del map sigue respaldado por índice — índice sobre `created_at` creado vía `make db.diff` si falta (NFR4, verificación `EXPLAIN ANALYZE`).
+
+**Given** `api/features/backoffice/bank/search.feature` (extendido, nunca feature paralela)
+**When** corre Behat
+**Then** cubre `shortName` (contains/eq/in con casing), rango `createdAt` (gte, lte, ambos), 400 por operador de comparación sobre campo no autorizado, y los escenarios existentes siguen en verde
+**And** `make php.stan` + `make php.psalm` + `make php.quality` + `make php.behat` en verde
+**And** `api/docs/` documenta los operadores `gte`/`lte` y los campos nuevos (regla de docs por PR).
+
+### Story 1.8: Orden server-side en el contrato de búsqueda
+
+As a consumidor de la API de banks,
+I want pedir el orden de la lista por un campo permitido y una dirección (`sort`/`direction`),
+So that la PWA resuelva la ordenación en el servidor, consistente con la paginación y el filtrado.
+
+**Acceptance Criteria:**
+
+**Given** el DTO `SearchQuery` y la clase `SearchCriteria` (hoy sin `sort`)
+**When** ganan `sort` (string opcional) y `direction` (`SortDirection` opcional)
+**Then** `sort` ausente → el orden por defecto actual (`createdAt` ASC de `addOrderByFromQueryParams`) no cambia (retrocompatibilidad total)
+**And** `SearchQuery` valida `direction` contra el enum `SortDirection` en mapping (400 `validation-failed` si no)
+**And** `toCriteria()` los traslada a `SearchCriteria`.
+
+**Given** que `addOrderByFromQueryParams` interpola el campo en DQL (`sprintf('%s.%s', alias, sort)`)
+**When** llega un `sort` de cliente
+**Then** se valida contra una allow-list de campos ordenables por repositorio (análoga a `searchFieldMap`; el `sort` crudo NUNCA llega a DQL — vector de inyección)
+**And** un `sort` fuera de la allow-list lanza `InvalidSearchCriteria` (reusa el marker existente → 400), nunca un 500.
+
+**Given** `DoctrineBankRepository::getSearchQueryBuilder` (hoy pasa `orderByField: null`)
+**When** propaga `criteria->sort`/`direction` a `addOrderByFromQueryParams`
+**Then** Bank declara su allow-list de orden `{ shortName, name, createdAt, updatedAt }` (los 4 sortable que la PWA ya ofrece)
+**And** todo campo de orden respaldado por índice (NFR4).
+
+**Given** la suite Behat extendida
+**When** corre
+**Then** cubre orden por cada campo permitido (asc/desc), 400 por campo de orden no permitido, y el caso default sin `sort`
+**And** `make php.stan` + `make php.psalm` + `make php.quality` + `make php.behat` en verde
+**And** `api/docs/` documenta `sort`/`direction` y la allow-list de orden.
+
 ## Epic 2: Filtrado server-driven en la PWA
 
-Los usuarios de la PWA filtran la lista de banks contra el servidor (deja de filtrarse client-side), a través del builder TS compartido que serializa la gramática exacta del contrato — reutilizable por toda lista futura. El cursor se descarta al cambiar cualquier filtro. Fase 2 (migrate del Parallel Change); consume el contrato entregado por la Epic 1.
+Los usuarios de la PWA filtran la lista de banks contra el servidor (deja de filtrarse client-side), a través del builder TS compartido que serializa la gramática exacta del contrato — reutilizable por toda lista futura. El cursor se descarta al cambiar cualquier filtro. Fase 2 (migrate del Parallel Change); consume el contrato entregado por la Epic 1. **Depende de las historias 1.7 y 1.8** (extensión del contrato API): sin ellas la migración perdería los filtros `shortName`/rango de fechas y la ordenación que la PWA ofrece hoy client-side.
 
 ### Story 2.1: Vocabulario y builder de filtros compartido en la PWA
 
@@ -319,7 +392,7 @@ So that toda lista presente y futura componga filtros server-side sin duplicar s
 
 **Given** `pwa/src/context/shared/domain/Search/`
 **When** se crean `Filter.ts` e `index.ts`
-**Then** `FilterOperator` se define como union type + const (`'eq' | 'in' | 'contains'`) — nunca TS `enum`
+**Then** `FilterOperator` se define como union type + const (`'eq' | 'in' | 'contains' | 'gte' | 'lte'`, en paridad con el enum PHP tras la Story 1.7) — nunca TS `enum`
 **And** solo named exports (regla de `src/context/**`)
 **And** los subdirectorios siguen la convención PascalCase con `index.ts` de los siblings existentes.
 
@@ -351,9 +424,14 @@ So that los resultados sean consistentes con la paginación y escalen con el vol
 **Then** el cursor actual se descarta (regla aprendida del race debounce+paginación de banks)
 **And** el cursor permanece opaco — nunca se interpreta ni se fabrica client-side.
 
+**Given** el contrato extendido por las historias 1.7 (filtro `shortName` + rango `createdAt`) y 1.8 (orden server-side)
+**When** se migra el filtrado y la ordenación de banks al servidor
+**Then** TODA capacidad actual se preserva sin pérdida: búsqueda por `name`, filtro `shortName`, rango `createdFrom`/`createdTo` y orden por `shortName`/`name`/`createdAt`/`updatedAt`
+**And** `applyFilters`/`applySort` de `banksFilterSort.ts` se eliminan solo porque su equivalente server-side ya existe (1.7/1.8 son prerequisito duro de esta historia).
+
 **Given** la UI existente de la lista de banks
 **When** se completa la migración
-**Then** no hay cambios visuales — solo cambia el origen del filtrado
+**Then** no hay cambios visuales — solo cambia el origen del filtrado y la ordenación
 **And** los tests unit y e2e existentes se adaptan y pasan (mockear el hook realtime donde aplique el flake conocido; esperar el badge de filtro activo antes de paginar en e2e).
 
 **Given** las obligaciones documentales de la fase 2
