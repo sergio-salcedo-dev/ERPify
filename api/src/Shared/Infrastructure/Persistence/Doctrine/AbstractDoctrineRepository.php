@@ -65,29 +65,6 @@ abstract class AbstractDoctrineRepository extends ServiceEntityRepository
     }
 
     /** @param array<mixed> $values */
-    protected function addWhereIn(
-        QueryBuilder $queryBuilder,
-        string $alias,
-        string $field,
-        array $values,
-    ): QueryBuilder {
-        if ([] === $values) {
-            return $queryBuilder;
-        }
-
-        $values = $this->sanitizeArray($values);
-
-        if ([] === $values) {
-            return $queryBuilder;
-        }
-
-        $paramName = $this->generateUniqueParameter($queryBuilder, $values);
-        $where = \sprintf('%s.%s IN (:%s)', $alias, $field, $paramName);
-
-        return $queryBuilder->andWhere($where);
-    }
-
-    /** @param array<mixed> $values */
     protected function addWhereInCaseInsensitive(
         QueryBuilder $queryBuilder,
         string $alias,
@@ -113,15 +90,6 @@ abstract class AbstractDoctrineRepository extends ServiceEntityRepository
         $where = \sprintf('LOWER(%s.%s) IN (:%s)', $alias, $field, $paramName);
 
         return $queryBuilder->andWhere($where);
-    }
-
-    /** @param array<mixed> $ids */
-    protected function addWhereIdsIn(
-        QueryBuilder|QueryBuilderWithOptions $queryBuilder,
-        string $alias,
-        array $ids,
-    ): QueryBuilder {
-        return $this->addWhereIn($queryBuilder, alias: $alias, field: 'id', values: $ids);
     }
 
     /** @param array<string, mixed> $values */
