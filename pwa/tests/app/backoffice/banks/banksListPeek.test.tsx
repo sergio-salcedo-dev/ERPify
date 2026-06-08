@@ -81,6 +81,9 @@ describe("BanksListPage — record peek (`o`)", () => {
     fireEvent.keyDown(row, { key: "o" });
     await screen.findByTestId("banks-list__peek");
 
+    // The remote delete reconciles via a silent refetch (server-driven), so the
+    // server now lists everything except ACME.
+    searchRun.mockResolvedValue({ banks: [BETA], nextCursor: undefined });
     act(() => realtime.handlers?.onDeleted?.(ACME.id));
 
     await waitFor(() => {

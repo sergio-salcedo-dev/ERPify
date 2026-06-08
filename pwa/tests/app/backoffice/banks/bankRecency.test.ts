@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { DateTimeProvider } from "@/context/shared/domain/DateTimeProvider/DateTimeProvider";
 import { DateFnsDateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider/DateFnsDateTimeProvider";
-import { countRecentlyCreated, isRecentlyCreated } from "@/app/backoffice/banks/_lib/bankRecency";
+import { isRecentlyCreated } from "@/app/backoffice/banks/_lib/bankRecency";
 
 // A provider whose "now" is pinned, so the test is deterministic.
 function providerWithNow(nowIso: string): DateTimeProvider {
@@ -37,18 +37,5 @@ describe("isRecentlyCreated", () => {
   it("honours a custom window", () => {
     const provider = providerWithNow(NOW);
     expect(isRecentlyCreated("2026-05-20T12:00:00.000Z", provider, 30)).toBe(true);
-  });
-});
-
-describe("countRecentlyCreated", () => {
-  it("counts only the timestamps within the window", () => {
-    const provider = providerWithNow(NOW);
-    const isos = [
-      "2026-05-29T12:00:00.000Z", // within 7d
-      "2026-05-31T12:00:00.000Z", // within 7d
-      "2026-04-01T12:00:00.000Z", // older
-      "not-a-date", // unparseable
-    ];
-    expect(countRecentlyCreated(isos, provider)).toBe(2);
   });
 });

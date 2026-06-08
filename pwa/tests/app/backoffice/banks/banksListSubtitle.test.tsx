@@ -32,13 +32,21 @@ describe("Banks list — header total", () => {
     vi.clearAllMocks();
   });
 
-  it("shows the total count and how many were added in the recency window", async () => {
-    run.mockResolvedValue({ banks: [RECENT, OLD], nextCursor: undefined });
+  it("shows the server-reported total count (detailed pagination)", async () => {
+    // The total comes from the server's detailed `count`, not the loaded page
+    // length — it reflects every bank matching the active filters.
+    run.mockResolvedValue({
+      banks: [RECENT, OLD],
+      cursor: "c1",
+      currentPage: 1,
+      hasMorePages: true,
+      totalCount: 137,
+    });
     render(<BanksListPage />);
     const total = await screen.findByTestId("banks-list__total");
     await waitFor(() => {
-      expect(total.textContent).toContain("2");
-      expect(total.textContent).toContain("1 added this week");
+      expect(total.textContent).toContain("137");
     });
+    expect(total.textContent).not.toContain("added this week");
   });
 });

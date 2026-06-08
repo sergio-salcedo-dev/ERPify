@@ -141,9 +141,10 @@ describe("BanksListPage — Shift+Arrow range selection", () => {
     fireEvent.keyDown(tableRow(GAMMA), { key: "ArrowUp", shiftKey: true });
     await expectSelectionCount(2);
 
-    // An unselected row is deleted remotely: the slice shrinks to 2 rows while
-    // the cached anchor still points at index 2 and the selection set keeps
-    // its identity (nothing to prune).
+    // An unselected row is deleted remotely: the silent refetch returns the
+    // shrunk list (2 rows) while the cached anchor still points at index 2 and
+    // the selection set keeps its identity (nothing to prune).
+    searchRun.mockResolvedValue({ banks: [BETA, GAMMA], nextCursor: undefined });
     act(() => realtime.handlers?.onDeleted?.(ACME.id));
     await waitFor(() => {
       expect(screen.queryByTestId(`banks-table__row-${ACME.id}`)).toBeNull();

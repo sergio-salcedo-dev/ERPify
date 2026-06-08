@@ -210,7 +210,9 @@ describe("BanksListPage — failed delete lands in the persistent error surface"
     await confirmDeleteOf(ACME.id);
     await screen.findByTestId("banks-list__delete-error");
 
-    // A Mercure delta reconciles the list (another client deleted BETA)…
+    // A Mercure delta reconciles the list (another client deleted BETA): the
+    // silent refetch returns the list without BETA.
+    searchRun.mockResolvedValue({ banks: [ACME], nextCursor: undefined });
     act(() => {
       realtimeHandlers?.onDeleted?.(BETA.id);
     });
