@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\Bank\Infrastructure\Controller;
 
 use Erpify\Backoffice\Bank\Application\BankCreator;
-use Erpify\Backoffice\Bank\Application\Http\BankPostPayload;
+use Erpify\Backoffice\Bank\Application\Http\CreateBankRequest;
 use Erpify\Shared\Application\UseCase\Result;
 use Erpify\Shared\Application\Validation\Validator;
 use Erpify\Shared\Infrastructure\Http\Responder\ResponderInterface;
@@ -33,7 +33,7 @@ final readonly class BankPostController
 
     public function __invoke(
         #[MapRequestPayload(acceptFormat: ['json', 'form'])]
-        BankPostPayload $input,
+        CreateBankRequest $bankRequest,
         #[MapUploadedFile(name: 'image')]
         ?UploadedFile $image = null,
         #[MapUploadedFile(name: 'storedObject')]
@@ -42,7 +42,7 @@ final readonly class BankPostController
         $this->assertValidUpload($image);
         $this->assertValidUpload($storedObject);
 
-        $bank = $this->bankCreator->create($input, $image, $storedObject);
+        $bank = $this->bankCreator->create($bankRequest, $image, $storedObject);
 
         $data = $this->resourceNormalizer->toArray(
             $bank,

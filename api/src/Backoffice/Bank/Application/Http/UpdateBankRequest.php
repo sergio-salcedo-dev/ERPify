@@ -6,7 +6,7 @@ namespace Erpify\Backoffice\Bank\Application\Http;
 
 use Symfony\Component\Validator\Constraints as Assert;
 
-final class BankPutPayload
+final class UpdateBankRequest
 {
     #[Assert\NotBlank(message: 'The name field is required.')]
     #[Assert\Length(max: 255, maxMessage: 'The name must not exceed {{ limit }} characters.')]

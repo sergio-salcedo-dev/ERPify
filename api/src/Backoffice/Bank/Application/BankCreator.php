@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\Bank\Application;
 
-use Erpify\Backoffice\Bank\Application\Http\BankPostPayload;
+use Erpify\Backoffice\Bank\Application\Http\CreateBankRequest;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Shared\Application\Validation\Validator;
@@ -28,7 +28,7 @@ final readonly class BankCreator
     }
 
     public function create(
-        BankPostPayload $payload,
+        CreateBankRequest $bankRequest,
         ?UploadedFile $logoFile = null,
         ?UploadedFile $storedObjectFile = null,
     ): Bank {
@@ -44,22 +44,22 @@ final readonly class BankCreator
             ? $this->mediaRegistrar->registerFromUploadedFile($logoFile)
             : null;
 
-        $bank = Bank::create(
+        $newBank = Bank::create(
             Uuid::generate(),
-            $payload->name,
-            $payload->shortName,
+            $bankRequest->name,
+            $bankRequest->shortName,
             $logo,
             $storedObject,
         );
 
-        $this->validator->ensure($bank);
+        $this->validator->ensure($newBank);
 
-        $this->bankRepository->save($bank);
+        $this->bankRepository->save($newBank);
 
-        foreach ($bank->pullDomainEvents() as $domainEvent) {
+        foreach ($newBank->pullDomainEvents() as $domainEvent) {
             $this->messageBus->dispatch($domainEvent);
         }
 
-        return $bank;
+        return $newBank;
     }
 }
