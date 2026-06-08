@@ -42,6 +42,7 @@
 - **[architecture-pwa.md](./architecture-pwa.md)** — PWA layering, Next.js, Inversify DI, testing
 - **[integration-architecture.md](./integration-architecture.md)** — How API and PWA share `localhost`
 - **[api-error-contract.md](./api-error-contract.md)** — RFC 9457 Problem Details: marker→status map, correlation-id, instance UUIDv7, logging tiers, `exception_category` SRE taxonomy
+- **[sentry-domain-error-filtering.md](./sentry-domain-error-filtering.md)** — deferred: drop/sample `domain_error` noise in Sentry (`ignore_exceptions` vs `before_send`), with the trade-off
 
 ### Deep-Dive Documentation
 
