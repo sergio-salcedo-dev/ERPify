@@ -25,6 +25,10 @@ you change anything here.
 - [ ] `POSTGRES_PASSWORD` is URL-safe — generate with `openssl rand -hex`, not
       `-base64`. It is interpolated raw into `DATABASE_URL`, so `/` `+` `=` from
       base64 corrupt the DSN (`MalformedDsnException`, php boot fails).
+- [ ] `SENTRY_DSN` (optional — error/perf monitoring) is injected via real env
+      only, never committed; empty leaves the SDK inert. Provisioned through the
+      Sentry MCP (`.mcp.json`). The same value is set identically on the test
+      machine and the VPS. Not a fail-to-start secret.
 
 ## 2. No weak fallbacks
 
@@ -73,6 +77,11 @@ you change anything here.
 - [ ] CORS allowlist not widened to wildcards; Mercure JWT secret rotation
       policy preserved.
 - [ ] Error responses follow RFC 9457 with no stack-trace leakage outside dev.
+- [ ] Sentry runs with `send_default_pii: false` (no headers/cookies/IP/user by
+      default) plus the `SentryEventScrubber` `before_send`, which recursively
+      strips the RFC 9457 denylist keys from event `extra`, the `request`
+      sub-arrays and `query_string`. Secret-bearing keys outside the denylist,
+      breadcrumbs and exception messages are out of that scope.
 - [ ] No secret hides behind a `NEXT_PUBLIC_*` name — those are inlined into the
       browser bundle at build time. Only `NEXT_PUBLIC_API_BASE_URL` and
       `NEXT_PUBLIC_APP_ENV` are allowed; the `pwa/tests/next-public-env-allowlist.test.ts`

@@ -51,6 +51,24 @@ name — never a weak fallback. Validate before deploying:
 make prod.env.check
 ```
 
+## Observability (Sentry)
+
+Error + performance monitoring for the API. **Optional and prod-only**: the
+`SentryBundle` is registered for `prod` alone, so dev/test never load the SDK,
+and an empty `SENTRY_DSN` keeps it inert until a real DSN is injected. The same
+config runs identically on the test machine and the VPS — only the injected env
+differs.
+
+- Provision the org/projects and obtain the DSN via the **Sentry MCP**
+  (`.mcp.json`, remote OAuth).
+- Inject through real env (e.g. `.env.prod.local`), never committed:
+  - `SENTRY_DSN` — the project DSN (empty = disabled).
+  - `SENTRY_TRACES_SAMPLE_RATE` — performance sampling; `~0.2` in prod, `0` off.
+  - `SENTRY_ENVIRONMENT` — optional tag to separate surfaces
+    (e.g. `test-machine` vs `production`); empty falls back to `APP_ENV`.
+- `send_default_pii: false` + the `SentryEventScrubber` `before_send` keep
+  PII/secrets off events (see [`../PRODUCTION_SECURITY_CHECKLIST.md`](../PRODUCTION_SECURITY_CHECKLIST.md)).
+
 ## Prod hardening (compose.prod.yaml)
 
 - Every service runs `no-new-privileges`, drops all Linux caps and re-adds only
