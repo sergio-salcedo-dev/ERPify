@@ -49,7 +49,7 @@ development_status:
   1-3-applier-de-filtros-sobre-querybuilder-con-allow-list-obligatoria: done
   1-4-contrato-generico-filters-expuesto-en-el-endpoint-de-banks: done
   1-5-camino-unico-legacy-filters-en-bank-d8: done
-  1-6-receta-de-generalizacion-y-cierre-documental: review
+  1-6-receta-de-generalizacion-y-cierre-documental: done
   epic-1-retrospective: optional
 
   # Epic 2: Filtrado server-driven en la PWA — fase 2

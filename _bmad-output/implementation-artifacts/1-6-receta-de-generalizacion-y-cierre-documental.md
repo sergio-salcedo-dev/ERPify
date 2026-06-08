@@ -4,7 +4,7 @@ baseline_commit: ef8a8d8f3f29a96d6de79a8cccbd692732d3ef34
 
 # Story 1.6: Receta de generalización y cierre documental
 
-Status: review
+Status: done
 
 _Ultimate context engine analysis completed — comprehensive developer guide created (2026-06-07)._
 
@@ -325,3 +325,17 @@ Cambios en el checkout principal (fuera de git, no commiteables):
   source-tree; deep-dive 5+1 flecos; adding-endpoints enlace al ADR). `php-criteria-main/` retirado y
   `.gitignore` revertido, ambos con confirmación explícita del usuario. Greps de verificación en verde
   (0 referencias pre-pivote), enlaces y anchors resueltos. Status → review.
+
+## Review Findings (code review — 2026-06-08)
+
+Revisión adversarial en 3 capas (Blind Hunter solo-diff / Edge Case Hunter / Acceptance Auditor, Opus 4.8).
+Las dos capas con acceso al código de la rama verificaron que los docs son **fieles al código**: ejemplo
+`searchFieldMap()` byte-a-byte vs `DoctrineBankRepository`, firma de `FieldMapping`, backing values del enum
+`FilterOperator` (`eq`/`in`/`contains`), read-path (`getPaginatedResults` → `getSearchQueryBuilder` →
+`FilterApplier::apply` → paginar), caps (`MAX_FILTERS = 20`), split de validación, anchors/enlaces relativos,
+greps de la Task 5 en verde, File List exacta y cero scope creep (sin tocar `api-error-contract.md`).
+18 sospechas del Blind Hunter (sin acceso al código) resultaron falsos positivos (anchors correctos, rutas
+correctas, LOC correctos, ADR recuperable de git, `❌` es estilo de casa ya presente en los docs) y se
+desestiman.
+
+- [x] [Review][Patch] Aclarar que el set de operadores por defecto de `FieldMapping` es `eq`/`in`/`contains` [docs/architecture-api.md — sección "Filterable search (generic filters[] contract)", párrafo del normalizer] — la receta muestra el campo UUID `id` con `operators: [Eq, In]` y la prosa dice que `requiresUuidValues: true` "is rejected at construction if combined with contains", pero NO indica que el set por defecto sean los tres operadores. Un autor que añada un campo UUID nuevo y omita `operators:` chocará con un `LogicException` en construcción (el default incluye `Contains`, verificado en `FieldMapping.php:31`). Fix: una cláusula breve — el default son los tres; los campos UUID deben restringir operadores (como hace el ejemplo).
