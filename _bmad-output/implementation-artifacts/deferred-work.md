@@ -24,6 +24,13 @@ spec's Review Findings section; the items below are the deferred (design-level /
 
 ## Sentry/Datadog sink adapter — prep gaps (deferred until DSN/SDK chosen)
 
+> **Update (2026-06-08):** Sentry is now chosen (SaaS). The **API** half shipped on
+> branch `feat/shared-sentry` (spec `spec-sentry-api-observability.md`): `sentry/sentry-symfony`,
+> prod-only bundle, env-gated DSN, repo Sentry MCP in `.mcp.json`. The **PWA** half below is the
+> next spec on the same branch — `@sentry/nextjs` framework integration (instrumentation, source
+> maps, CSP/`tunnelRoute`) **plus** the `SentryTelemetry` port adapter + `createTelemetry()` factory
+> described here. Use `tunnelRoute` to avoid widening the CSP `connect-src`.
+
 Tracked here so the eventual `SentryTelemetry` / `DatadogTelemetry` drop-in is friction-free.
 Each is intentionally **not** built now (no DSN, no SDK, no second sink) — empty adapters or a
 single-branch factory today would be speculative. The seam is already swap-ready: one wrapped
@@ -77,3 +84,20 @@ the implementer: `pwa/tsconfig.json` sets `incremental: true` and the dev contai
 root-owned `tsconfig.tsbuildinfo` on the host (the primary checkout has one today), so host runs
 may hit EACCES — pass `--incremental false` (or run in the container). Tree verified clean at
 `42d47b6` (`npx tsc --noEmit --incremental false` exits 0); re-verify at gate-add time.
+
+## Deferred from: code review of spec-sentry-api-observability (2026-06-08, step-04)
+
+Surfaced by the adversarial review of the API Sentry integration; both are real but lower-priority
+and intentionally out of the shipped scope (the live PII vectors — `query_string`, nested bodies,
+the boot crash — were patched in-loop).
+
+- **Broaden `RedactionDenylist` for secret-bearing custom headers.** `send_default_pii: false` already
+  filters the 5 SDK defaults (`Authorization`, `Cookie`, `Set-Cookie`, `X-Forwarded-For`, `X-Real-IP`),
+  and the scrubber strips the 7 denylist keys. Custom auth headers outside both — `X-Api-Key`,
+  `X-Auth-Token`, `Proxy-Authorization`, `Api-Key` — are not scrubbed. Low risk today (the API has no
+  custom auth headers yet). When auth lands, add these to `RedactionDenylist::KEYS` **with their four
+  casing test rows each** (the enum's own contract, enforced by `RedactionDenylistTest`).
+- **Scrub Sentry breadcrumbs.** DBAL and HTTP-client tracing breadcrumbs can carry secrets (an outbound
+  URL with a token in its query, a SQL string). The `before_send` scrubber only walks event `extra` +
+  `request`, not `$event->getBreadcrumbs()`. Add a breadcrumb pass (walk each breadcrumb's metadata
+  through the denylist) if/when breadcrumb content proves sensitive in practice.

@@ -14,6 +14,7 @@ $bundles = [
     Symfony\Bundle\MercureBundle\MercureBundle::class => ['all' => true],
     League\FlysystemBundle\FlysystemBundle::class => ['all' => true],
     Symfony\Bundle\MonologBundle\MonologBundle::class => ['all' => true],
+    Sentry\SentryBundle\SentryBundle::class => ['dev' => true, 'prod' => true],
 ];
 
 // friends-of-behat/symfony-extension ships only in the isolated tools/behat/vendor

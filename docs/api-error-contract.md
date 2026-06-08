@@ -230,7 +230,7 @@ exception_category=runtime_error AND status >= 500    → PagerDuty warning
 exception_category=domain_error                       → log only
 ```
 
-When the Sentry handler in `monolog.yaml` is uncommented, the field arrives in the event's `extra` automatically (PSR-3 context flows through Monolog's processors), so a Sentry `before_send` filter can sample `domain_error` to 0% without any custom code.
+Unhandled exceptions reach Sentry through the **SentryBundle `kernel.exception` listener** (loaded in dev + prod, not test — see [`sentry.yaml`](../api/config/packages/sentry.yaml)), which captures the raw throwable with its full stack trace at priority `128`, ahead of and without disturbing `ExceptionResponder` (priority `16`, which still builds the response since Sentry sets none). `exception_category` is queryable in Sentry too (and the [`SentryEventScrubber`](../api/src/Shared/Monitoring/Infrastructure/Sentry/SentryEventScrubber.php) `before_send` callback — which today only scrubs PII — could be extended to drop `domain_error` events). The Monolog Sentry handler (kept commented in `monolog.yaml`) is a deliberate non-default: `ExceptionResponder`'s single PSR-3 line carries no throwable, so the listener path yields richer events and avoids double-reporting.
 
 Grep by `instance` for the single failure entry; grep by `correlation_id` for the full request trail; filter by `exception_category` to separate platform-broken from triage-normal.
 
@@ -244,6 +244,9 @@ Grep by `instance` for the single failure entry; grep by `correlation_id` for th
 | `RateLimitListener::onResponse`     | `kernel.response`  | -128     | `/api/*` only      |
 | `CorrelationIdListener::onResponse` | `kernel.response`  | -1024    | all main responses |
 | `SearchExceptionListener` (legacy)  | `kernel.exception` | 32       | search routes      |
+| `SentryBundle\…\ErrorListener`      | `kernel.exception` | 128      | dev + prod         |
+
+The Sentry `ErrorListener` (dev + prod, not test) runs first at `128` but only *captures* the throwable — it sets no response, so `ExceptionResponder` (16) still builds the RFC 9457 body unchanged.
 
 `ExceptionResponder` checks `$event->hasResponse()` first — if a higher-priority listener (e.g. `SearchExceptionListener`) already produced a response, it leaves it alone and does **not** log. Listener priority ordering vs. Nelmio CORS is pinned by (`ExceptionResponderListenerPriorityTest`).
 
