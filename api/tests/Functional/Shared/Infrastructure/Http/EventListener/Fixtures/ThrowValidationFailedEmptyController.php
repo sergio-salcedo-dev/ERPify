@@ -11,7 +11,7 @@ use Symfony\Component\Validator\Exception\ValidationFailedException;
 /**
  * Test-only controller that throws a `ValidationFailedException` carrying an EMPTY violation
  * list. Pins the empty-list contract: body still has `type: 'validation-failed'`,
- * `status: 400`, and a `violations` extension whose value is an empty JSON array.
+ * `status: 422`, and a `violations` extension whose value is an empty JSON array.
  */
 final class ThrowValidationFailedEmptyController
 {

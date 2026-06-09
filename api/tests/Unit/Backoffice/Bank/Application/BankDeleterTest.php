@@ -10,10 +10,8 @@ use Erpify\Backoffice\Bank\Application\BankFinder;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Event\BankDeletedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Exception\BankInUseException;
-use Erpify\Shared\Application\Validation\Validator;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\Validator\Validation;
 
 /**
  * @internal
@@ -122,11 +120,9 @@ final class BankDeleterTest extends TestCase
         ?RecordingMessageBus $messageBus = null,
         ?int $recount = null,
     ): BankDeleter {
-        $validator = new Validator(Validation::createValidator());
-
         return new BankDeleter(
             $bankRepository,
-            new BankFinder($bankRepository, $validator),
+            new BankFinder($bankRepository),
             new FakeBankAccountRepository($accountCount, $recount),
             $messageBus ?? new RecordingMessageBus(),
         );

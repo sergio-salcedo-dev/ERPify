@@ -973,7 +973,7 @@ final class ProblemDetailsFactoryTest extends TestCase
     /**
      * @SuppressWarnings("PHPMD.ExcessiveMethodLength")
      */
-    public function testValidationFailedExceptionMapsTo400ValidationFailedWithViolations(): void
+    public function testValidationFailedExceptionMapsTo422ValidationFailedWithViolations(): void
     {
         $constraintViolationList = new ConstraintViolationList([
             new ConstraintViolation(
@@ -1015,7 +1015,7 @@ final class ProblemDetailsFactoryTest extends TestCase
 
         $problemDetails = $this->factoryFor()->fromThrowable($validationFailedException, self::CID, self::INSTANCE);
 
-        $this->assertSame(400, $problemDetails->status);
+        $this->assertSame(422, $problemDetails->status);
         $this->assertSame('validation-failed', $problemDetails->type);
         $this->assertSame('Validation failed.', $problemDetails->title);
         $this->assertNull($problemDetails->detail);
@@ -1448,7 +1448,7 @@ final class ProblemDetailsFactoryTest extends TestCase
         $problemDetails = $this->factoryFor()->fromThrowable($httpException, self::CID, self::INSTANCE);
 
         $this->assertSame('validation-failed', $problemDetails->type);
-        $this->assertSame(400, $problemDetails->status);
+        $this->assertSame(422, $problemDetails->status);
         $this->assertSame('Validation failed.', $problemDetails->title);
         $this->assertNull($problemDetails->detail);
         $this->assertArrayHasKey('violations', $problemDetails->extensions);
@@ -2246,7 +2246,7 @@ final class ProblemDetailsFactoryTest extends TestCase
         // instance / correlation-id.
         $this->assertSame('validation-failed', $problemDetails->type);
         $this->assertSame('Validation failed.', $problemDetails->title);
-        $this->assertSame(400, $problemDetails->status);
+        $this->assertSame(422, $problemDetails->status);
         $this->assertNull($problemDetails->detail);
         $this->assertSame(self::INSTANCE, $problemDetails->instance);
         $this->assertSame(self::CID, $problemDetails->correlationId);

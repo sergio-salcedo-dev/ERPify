@@ -136,9 +136,14 @@ For each diffed file, walk this checklist:
   conscious public route, called out in the PR.
 - **Input validation** — every DTO carries Symfony Validator constraints
   (`#[Assert\…]`), enforced by `#[MapRequestPayload]` / `#[MapQueryString]`
-  at mapping time; other inputs (route ids, uploads) go through the shared
-  `Validator::ensure()` (`Shared/Application/Validation`) before any
-  domain call. Validate IDs are UUIDs, not arbitrary strings.
+  at mapping time (failures → 422 `validation-failed`); other inputs
+  (uploads, non-id scalars) go through the shared `Validator::ensure()`
+  (`Shared/Application/Validation`) before any domain call. Route-id UUIDs
+  are guarded by the domain primitive `Uuid::ensure()`
+  (`Shared/Domain/Uuid/Uuid`), which throws `InvalidUuidException`
+  (400 `invalid-uuid`) before any repository lookup — a malformed id is a
+  request-target error, distinct from a valid-but-absent id (404). Validate
+  IDs are UUIDs, not arbitrary strings.
 - **Mass assignment / hidden fields** — entity setters / serializer
   groups never expose audit fields (`createdAt`, `updatedAt`, `id`) to
   client-supplied payloads.
