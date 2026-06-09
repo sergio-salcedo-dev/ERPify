@@ -44,7 +44,7 @@ final readonly class FilterApplier
      */
     private const array SUPPORTED_DATE_TIME_FORMATS = [
         DateTimeInterface::ATOM,
-        'Y-m-d\TH:i:s.vP',
+        DateTimeInterface::RFC3339_EXTENDED,
         'Y-m-d\TH:i:s.uP',
     ];
 
