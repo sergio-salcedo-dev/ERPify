@@ -91,6 +91,13 @@ final class FilterQueryTest extends TestCase
         yield 'eq with list value' => [new FilterQuery('name', FilterOperator::Eq, ['x']), ['value']];
         yield 'contains with list value' => [new FilterQuery('name', FilterOperator::Contains, ['x']), ['value']];
         yield 'eq with blank value' => [new FilterQuery('name', FilterOperator::Eq, '   '), ['value']];
+        // Unicode-whitespace-only values survive ASCII trim() but the field normalizer folds
+        // them to blank downstream; they must be rejected at mapping, not 500 in the applier.
+        yield 'eq with non-breaking-space value' => [new FilterQuery('name', FilterOperator::Eq, "\u{00A0}"), ['value']];
+        yield 'contains with ideographic-space value' => [
+            new FilterQuery('name', FilterOperator::Contains, "\u{3000}"),
+            ['value'],
+        ];
         yield 'contains with blank value' => [new FilterQuery('name', FilterOperator::Contains, ''), ['value']];
         yield 'scalar over max length' => [
             new FilterQuery('name', FilterOperator::Eq, \str_repeat('a', 256)),
@@ -104,6 +111,10 @@ final class FilterQueryTest extends TestCase
             ['value'],
         ];
         yield 'in with blank item' => [new FilterQuery('name', FilterOperator::In, ['ok', '   ']), ['value[1]']];
+        yield 'in with non-breaking-space item' => [
+            new FilterQuery('name', FilterOperator::In, ['ok', "\u{00A0}"]),
+            ['value[1]'],
+        ];
         yield 'in with non-string item' => [new FilterQuery('name', FilterOperator::In, [['nested']]), ['value[0]']];
         yield 'in with item over max length' => [
             new FilterQuery('name', FilterOperator::In, [\str_repeat('a', 256)]),

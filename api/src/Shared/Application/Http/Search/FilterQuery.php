@@ -83,7 +83,11 @@ final readonly class FilterQuery
             return;
         }
 
-        if ('' === \trim($this->value)) {
+        // mb_trim (not trim): a value made only of Unicode whitespace — a non-breaking space
+        // (U+00A0), an ideographic space (U+3000) — survives ASCII trim() but the field's
+        // normalizer folds it to a blank ASCII string downstream, where the applier raises an
+        // InvalidArgumentException (a 500) on what is in fact client input. Reject it here.
+        if ('' === \mb_trim($this->value)) {
             $context->buildViolation('This value should not be blank.')
                 ->atPath('value')
                 ->addViolation()
@@ -144,7 +148,10 @@ final readonly class FilterQuery
             return;
         }
 
-        if ('' === \trim($item)) {
+        // mb_trim, not trim: Unicode-whitespace-only items (NBSP, ideographic space) must be
+        // rejected here too, or the normalizer folds them to blank and the applier 500s on a
+        // wire-reachable IN item. Mirrors validateScalarValue().
+        if ('' === \mb_trim($item)) {
             $context->buildViolation('This value should not be blank.')->atPath($path)->addViolation();
 
             return;
