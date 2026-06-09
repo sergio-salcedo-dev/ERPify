@@ -35,7 +35,15 @@ if [ "$1" = 'frankenphp' ] || [ "$1" = 'php' ] || [ "$1" = 'bin/console' ]; then
 	if grep -q ^DATABASE_URL= .env; then
 		echo 'Waiting for database to be ready...'
 		ATTEMPTS_LEFT_TO_REACH_DATABASE=60
-		until [ $ATTEMPTS_LEFT_TO_REACH_DATABASE -eq 0 ] || DATABASE_ERROR=$(php bin/console dbal:run-sql -q "SELECT 1" 2>&1); do
+		# SENTRY_DSN= makes the SDK inert for THIS probe only. The retry loop boots the
+		# full Symfony kernel each second, and until the `database` host resolves and
+		# accepts connections every failed `SELECT 1` is captured by the bundle's error
+		# listener — a flood of expected "could not translate host name" / connection
+		# events on every container boot (cold `make app.dev`, deploy, worktree up).
+		# These are liveness-probe failures, not application errors; suppressing them
+		# here (in dev AND prod) costs no real error fidelity — a database that never
+		# comes up still fails the loop, prints the error, and `exit 1`s the container.
+		until [ $ATTEMPTS_LEFT_TO_REACH_DATABASE -eq 0 ] || DATABASE_ERROR=$(SENTRY_DSN= php bin/console dbal:run-sql -q "SELECT 1" 2>&1); do
 			if [ $? -eq 255 ]; then
 				# If the Doctrine command exits with 255, an unrecoverable error occurred
 				ATTEMPTS_LEFT_TO_REACH_DATABASE=0
