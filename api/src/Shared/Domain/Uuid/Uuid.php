@@ -19,4 +19,21 @@ abstract class Uuid
     {
         return SymfonyUuid::v7()->toRfc4122();
     }
+
+    /**
+     * Guards that `$value` is a well-formed RFC 4122 UUID, throwing the domain
+     * {@see InvalidUuidException} (mapped to 400 `invalid-input`) otherwise.
+     *
+     * Validates format, not version: any RFC 4122 UUID is accepted — minting
+     * stays v7 (see {@see Uuid::generate()}), but identifiers received from the
+     * outside are only required to be well-formed.
+     *
+     * @throws InvalidUuidException
+     */
+    public static function ensure(string $value): void
+    {
+        if (!SymfonyUuid::isValid($value)) {
+            throw new InvalidUuidException();
+        }
+    }
 }
