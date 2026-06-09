@@ -67,4 +67,34 @@ describe("scrubDeep", () => {
     expect(serialized).toContain("[depth-limited]");
     expect(serialized).not.toContain("leak");
   });
+
+  it("returns a sentinel when the node budget (1000) is exceeded", () => {
+    const wide: Record<string, unknown> = {};
+    for (let i = 0; i < 1001; i += 1) {
+      wide[`k${i}`] = { password: "p" };
+    }
+    const scrubbed = scrubDeep(wide) as Record<string, unknown>;
+    // Some keys will be scrubbed, but eventually it hits the node cap.
+    expect(JSON.stringify(scrubbed)).toContain("[depth-limited]");
+  });
+
+  it("passes through Dates, Maps, and Sets untouched instead of destroying them", () => {
+    const now = new Date();
+    const map = new Map([["a", 1]]);
+    const set = new Set([1]);
+    const input = { now, map, set };
+
+    const scrubbed = scrubDeep(input) as typeof input;
+    expect(scrubbed.now).toBe(now);
+    expect(scrubbed.map).toBe(map);
+    expect(scrubbed.set).toBe(set);
+  });
+
+  it("passes through custom class instances untouched", () => {
+    class User {
+      constructor(public name: string) {}
+    }
+    const user = new User("Alice");
+    expect(scrubDeep(user)).toBe(user);
+  });
 });

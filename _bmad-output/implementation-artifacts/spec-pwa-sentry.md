@@ -196,3 +196,17 @@ dev/prod project-slug split at build time (the DSN alone selects the project).
   [`next-public-env-allowlist.test.ts:47`](../../pwa/tests/next-public-env-allowlist.test.ts#L47)
 - Vitest stub alias (unit tests don't load the heavy real SDK).
   [`vitest.config.ts:21`](../../pwa/vitest.config.ts#L21)
+
+### Review Findings (2026-06-09)
+
+- [x] [Review][Patch] Potential CPU jank from massive object scrubbing [pwa/src/context/shared/domain/Observability/redaction.ts]
+- [x] [Review][Patch] `CompositeTelemetry` swallows sink exceptions [pwa/src/context/shared/infrastructure/Observability/CompositeTelemetry.ts]
+- [x] [Review][Patch] Hardcoded truncation limits in `serializeCause` [pwa/src/context/shared/domain/Observability/serializeCause.ts]
+- [x] [Review][Patch] Weak DSN presence check [pwa/src/context/shared/infrastructure/Observability/index.ts]
+- [x] [Review][Patch] `scrubDeep` destroys `Date`, `Map`, `Set` [pwa/src/context/shared/domain/Observability/redaction.ts]
+- [x] [Review][Patch] URL Hash Leakage [pwa/src/context/shared/infrastructure/Observability/scrubSentryEvent.ts]
+- [x] [Review][Patch] Stringified Body Bypass [pwa/src/context/shared/infrastructure/Observability/scrubSentryEvent.ts]
+- [x] [Review][Defer] Denylist too narrow (Parity with API) — deferred, pre-existing
+- [x] [Review][Defer] Public `/monitoring` tunnel lacks rate limiting — deferred, pre-existing
+- [x] [Review][Defer] Non-secret PII not scrubbed (Parity with API) — deferred, pre-existing
+- [x] [Review][Defer] `sentryNextjs.ts` stub maintenance liability — deferred, pre-existing

@@ -25,8 +25,11 @@ export class CompositeTelemetry implements Telemetry {
     for (const sink of this.sinks) {
       try {
         emit(sink);
-      } catch {
-        // A failing sink must not suppress the others or reach the caller.
+      } catch (error) {
+        // A failing sink must not suppress the others or reach the caller, but
+        // we log it to the console so the failure is visible to developers.
+        // eslint-disable-next-line no-console
+        console.error("Telemetry sink failed:", error);
       }
     }
   }
