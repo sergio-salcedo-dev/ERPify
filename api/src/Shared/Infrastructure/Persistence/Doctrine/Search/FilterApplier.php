@@ -15,8 +15,8 @@ use Erpify\Shared\Domain\Search\Exception\UnsupportedSearchOperator;
 use Erpify\Shared\Domain\Search\Filter;
 use Erpify\Shared\Domain\Search\FilterOperator;
 use Erpify\Shared\Domain\Search\Filters;
+use Erpify\Shared\Domain\Uuid\Uuid;
 use InvalidArgumentException;
-use Symfony\Component\Uid\Uuid;
 use ValueError;
 
 /**
