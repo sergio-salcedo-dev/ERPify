@@ -28,7 +28,7 @@ Feature: Doctrine query stats on bank CRUD
     And a request contains "SELECT" across all doctrine connections
     And 1 request got executed only for doctrine connection "default"
 
-  Scenario: Validation rejection emits no Doctrine queries
+  Scenario: Malformed id rejection emits no Doctrine queries
     When I send a "GET" request to "/backoffice/banks/invalidUuid"
     Then the response status code should be 400
     And 0 requests got executed across all doctrine connections
