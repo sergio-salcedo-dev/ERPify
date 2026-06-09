@@ -25,7 +25,7 @@ export function createTelemetry(): Telemetry {
 
   const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN?.trim();
   // Strengthen validation: a valid Sentry DSN must be a URL starting with https://
-  if (dsn && dsn.startsWith("https://")) {
+  if (dsn?.startsWith("https://")) {
     sinks.push(new SentryTelemetry());
   }
 
