@@ -176,11 +176,11 @@ Feature: Search banks
     And the JSON node "type" should be equal to "unsupported-search-operator"
     And 0 requests got executed across all doctrine connections
 
-  # Shape 400s come from mapping (validation-failed + violations[]); operator tokens are
+  # Shape 422s come from mapping (validation-failed + violations[]); operator tokens are
   # strictly lowercase — the enum backing string IS the wire contract.
-  Scenario Outline: Invalid generic filter operator returns 400
+  Scenario Outline: Invalid generic filter operator returns 422
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=<operator>&filters[0][value]=x"
-    Then the response status code should be 400
+    Then the response status code should be 422
     And 0 requests got executed across all doctrine connections
     Examples:
       | operator |
@@ -188,16 +188,16 @@ Feature: Search banks
       | EQ       |
       | IN       |
 
-  Scenario: Generic in filter with a scalar value returns a 400 validation-failed Problem Details body
+  Scenario: Generic in filter with a scalar value returns a 422 validation-failed Problem Details body
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=in&filters[0][value]=BBVA"
-    Then the response status code should be 400
+    Then the response status code should be 422
     And the JSON node "type" should be equal to "validation-failed"
     And the JSON node "violations[0].field" should be equal to "filters[0].value"
     And 0 requests got executed across all doctrine connections
 
-  Scenario: Generic eq filter with a list value returns a 400 validation-failed Problem Details body
+  Scenario: Generic eq filter with a list value returns a 422 validation-failed Problem Details body
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=eq&filters[0][value][]=BBVA"
-    Then the response status code should be 400
+    Then the response status code should be 422
     And the JSON node "type" should be equal to "validation-failed"
     And 0 requests got executed across all doctrine connections
 
@@ -355,9 +355,9 @@ Feature: Search banks
     And 0 requests got executed across all doctrine connections
 
   # Range operators are scalar: a list value is a shape error caught at mapping (validation-failed).
-  Scenario: A range operator with a list value returns 400 validation-failed
+  Scenario: A range operator with a list value returns 422 validation-failed
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=createdAt&filters[0][operator]=gt&filters[0][value][]=2026-01-01T00:00:00%2B00:00"
-    Then the response status code should be 400
+    Then the response status code should be 422
     And the JSON node "type" should be equal to "validation-failed"
     And 0 requests got executed across all doctrine connections
 
@@ -406,18 +406,18 @@ Feature: Search banks
     And the JSON node "status" should be equal to the number 400
     And 0 requests got executed across all doctrine connections
 
-  # Shape 400: an invalid direction is caught at mapping by the enum (validation-failed), exactly
+  # Shape 422: an invalid direction is caught at mapping by the enum (validation-failed), exactly
   # like an unknown paginationMode — no new code, the #[MapQueryString] + enum type provides it.
-  Scenario: An invalid sort direction returns 400 validation-failed
+  Scenario: An invalid sort direction returns 422 validation-failed
     When I send a "GET" request to "/backoffice/banks?sort=name&direction=sideways"
-    Then the response status code should be 400
+    Then the response status code should be 422
     And the JSON node "type" should be equal to "validation-failed"
     And 0 requests got executed across all doctrine connections
 
   # Lowercase direction tokens are not the enum backing values (ASC/DESC); rejected at mapping.
-  Scenario: A lowercase sort direction returns 400 validation-failed
+  Scenario: A lowercase sort direction returns 422 validation-failed
     When I send a "GET" request to "/backoffice/banks?sort=name&direction=asc"
-    Then the response status code should be 400
+    Then the response status code should be 422
     And the JSON node "type" should be equal to "validation-failed"
     And 0 requests got executed across all doctrine connections
 
@@ -430,12 +430,12 @@ Feature: Search banks
     And 2 requests got executed only for doctrine connection "default"
 
   # Story 1.8 code-review (P1): `direction` is a nullable enum (?SortDirection), but an array form is
-  # still a type mismatch at mapping → 400 validation-failed, exactly like the non-nullable
+  # still a type mismatch at mapping → 422 validation-failed, exactly like the non-nullable
   # paginationMode[]. Pinned so a nullable-coercion regression (array silently → null → default
   # direction) is caught.
-  Scenario: An array-form sort direction returns 400 validation-failed
+  Scenario: An array-form sort direction returns 422 validation-failed
     When I send a "GET" request to "/backoffice/banks?sort=name&direction[]=ASC"
-    Then the response status code should be 400
+    Then the response status code should be 422
     And the JSON node "type" should be equal to "validation-failed"
     And 0 requests got executed across all doctrine connections
 
