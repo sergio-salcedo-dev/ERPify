@@ -46,7 +46,7 @@ final class BankLogoUrlNormalizer implements NormalizerInterface, NormalizerAwar
 
         $groups = \is_array($context['groups'] ?? null) ? $context['groups'] : [];
 
-        if ($data instanceof Bank && \in_array('bank:read:urls', $groups, true)) {
+        if ($data instanceof Bank && \in_array(Bank::GROUP_READ_URLS, $groups, true)) {
             $logo = $data->getLogo();
             $normalizedData['logoUrl'] = $logo instanceof Media
                 ? $this->mediaPublicUrlGenerator->urlForContentHash($logo->getContentHash())
@@ -66,7 +66,7 @@ final class BankLogoUrlNormalizer implements NormalizerInterface, NormalizerAwar
         $groups = \is_array($context['groups'] ?? null) ? $context['groups'] : [];
 
         return $data instanceof Bank
-            && \in_array('bank:read:urls', $groups, true)
+            && \in_array(Bank::GROUP_READ_URLS, $groups, true)
             && !isset($context[self::MARK]);
     }
 

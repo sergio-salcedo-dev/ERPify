@@ -14,8 +14,6 @@ final readonly class Result
 {
     public const int STATUS_OK = 200;
 
-    public const int STATUS_CREATED = 201;
-
     public const int STATUS_NO_CONTENT = 204;
 
     /**
@@ -37,12 +35,6 @@ final readonly class Result
     public static function ok(array $data, array $meta = []): self
     {
         return new self($data, self::STATUS_OK, $meta);
-    }
-
-    /** @param array<int|string, mixed> $data */
-    public static function created(array $data): self
-    {
-        return new self($data, self::STATUS_CREATED);
     }
 
     public static function noContent(): self

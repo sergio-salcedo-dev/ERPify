@@ -2,6 +2,20 @@
 
 Patterns for adding HTTP endpoints to the API. Each section covers one endpoint shape; more will be added as new boundaries are standardized (create / update / delete / detail / etc.).
 
+## Route naming convention
+
+Route names follow `<office>_<entity>_<action>` — **entity-first, then an intent verb, never the HTTP method**. The HTTP method is already declared in `methods: [...]`, so repeating it in the name (`_post`, `_put`) is redundant and less expressive; the intent verb instead mirrors the application-layer use-case vocabulary (`BankCreator` / `CreateBankCommand`, `BankUpdater` / `UpdateBankCommand`). Entity-first keeps every route for an entity clustered together in `debug:router`, logs, and traces.
+
+| Operation                 | HTTP                           | Route name suffix |
+|---------------------------|--------------------------------|-------------------|
+| Paginated collection read | `GET /<entities>`              | `_search`         |
+| Single-resource read      | `GET /<entities>/{id}`         | `_get`            |
+| Create                    | `POST /<entities>`             | `_create`         |
+| Update                    | `PUT`/`PATCH /<entities>/{id}` | `_update`         |
+| Delete                    | `DELETE /<entities>/{id}`      | `_delete`         |
+
+`Bank` is the canonical reference: `backoffice_bank_search` / `_get` / `_create` / `_update` / `_delete`. Route names are server-internal identifiers (clients call by path, not by name), so renaming one has zero client blast radius — but keep the suffix vocabulary stable, because operators key off suffixes like `_search` for logs / metrics / tracing.
+
 ## Search endpoints
 
 The search-endpoint boundary is centralized — the shared `SearchQuery` DTO + the shared `SearchCriteria` + one ~12-line controller per entity. The original design (`adr-2026-04-29-search-controller-boundary.md`, recoverable from git history) used per-entity DTO/criteria subclasses; those were retired in favour of the generic `filters[]` contract. The architectural pattern and the "add a filterable list" recipe now live in [`../../docs/architecture-api.md`](../../docs/architecture-api.md#filterable-search-generic-filters-contract); `Bank` is the canonical pilot.

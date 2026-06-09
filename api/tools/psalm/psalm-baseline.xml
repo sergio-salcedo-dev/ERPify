@@ -26,9 +26,6 @@
     </PossiblyUnusedMethod>
   </file>
   <file src="../../src/Backoffice/Bank/Domain/Entity/Bank.php">
-    <ClassMustBeFinal>
-      <code><![CDATA[Bank]]></code>
-    </ClassMustBeFinal>
     <PossiblyUnusedMethod>
       <code><![CDATA[getName]]></code>
       <code><![CDATA[getNameNormalized]]></code>
@@ -100,9 +97,6 @@
     </UnusedClass>
   </file>
   <file src="../../src/Backoffice/BankAccount/Domain/Entity/BankAccount.php">
-    <ClassMustBeFinal>
-      <code><![CDATA[BankAccount]]></code>
-    </ClassMustBeFinal>
     <PossiblyUnusedMethod>
       <code><![CDATA[create]]></code>
       <code><![CDATA[getAlias]]></code>
@@ -200,6 +194,16 @@
       <code><![CDATA[__construct]]></code>
     </PossiblyUnusedMethod>
   </file>
+  <file src="../../src/Shared/Infrastructure/Http/Responder/ResourceResponder.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="../../src/Shared/Infrastructure/Http/Responder/SearchResponder.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
   <file src="../../src/Shared/Infrastructure/Mailer/PlainTextNotificationMailer.php">
     <ArgumentTypeCoercion>
       <code><![CDATA[\is_scalar($value) ? $value : \json_encode($value)]]></code>
@@ -245,11 +249,6 @@
       <code><![CDATA[DoctrineStoredDomainEventRepository]]></code>
     </UnusedClass>
   </file>
-  <file src="../../src/Shared/Infrastructure/Persistence/Entity/StoredDomainEvent.php">
-    <ClassMustBeFinal>
-      <code><![CDATA[StoredDomainEvent]]></code>
-    </ClassMustBeFinal>
-  </file>
   <file src="../../src/Shared/Infrastructure/Persistence/PaginatorCursor.php">
     <ClassMustBeFinal>
       <code><![CDATA[PaginatorCursor]]></code>
@@ -282,9 +281,6 @@
     </PossiblyUnusedMethod>
   </file>
   <file src="../../src/Shared/Media/Domain/Entity/Media.php">
-    <ClassMustBeFinal>
-      <code><![CDATA[Media]]></code>
-    </ClassMustBeFinal>
     <InvalidArgument>
       <code><![CDATA[MediaRepository::class]]></code>
     </InvalidArgument>

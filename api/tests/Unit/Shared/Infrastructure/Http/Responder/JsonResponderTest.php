@@ -76,7 +76,7 @@ final class JsonResponderTest extends TestCase
     /** @throws JsonException */
     public function testCreatedResultPropagates201(): void
     {
-        $response = (new JsonResponder())->respond(Result::created(['id' => 'abc']));
+        $response = (new JsonResponder())->respond(new Result(['id' => 'abc'], Response::HTTP_CREATED));
 
         $this->assertSame(Response::HTTP_CREATED, $response->getStatusCode(), (string) $response->getContent());
         $this->assertSame(

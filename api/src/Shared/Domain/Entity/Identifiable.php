@@ -11,6 +11,9 @@ use Symfony\Component\Validator\Constraints as Assert;
 
 trait Identifiable
 {
+    /** Serialization group exposing the resource identifier. */
+    final public const string GROUP_IDENTIFIABLE = 'identifiable';
+
     /**
      * Doctrine "assigned" identifier: the application layer generates the id (UUID v7 via
      * {@see \Erpify\Shared\Domain\Uuid\Uuid::generate()}) and assigns it before persist.
@@ -20,7 +23,7 @@ trait Identifiable
     #[ORM\Id]
     #[ORM\Column(type: Types::GUID, unique: true)]
     #[Assert\Uuid(strict: true)]
-    #[Serializer\Groups(['identifiable'])]
+    #[Serializer\Groups([self::GROUP_IDENTIFIABLE])]
     protected ?string $id = null;
 
     public function getId(): ?string

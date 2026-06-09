@@ -6,10 +6,9 @@ namespace Erpify\Backoffice\Bank\Infrastructure\Controller;
 
 use Erpify\Backoffice\Bank\Application\BankCreator;
 use Erpify\Backoffice\Bank\Application\Command\CreateBankCommand;
-use Erpify\Shared\Application\UseCase\Result;
+use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Shared\Application\Validation\Validator;
-use Erpify\Shared\Infrastructure\Http\Responder\ResponderInterface;
-use Erpify\Shared\Infrastructure\Serializer\ResourceNormalizer;
+use Erpify\Shared\Infrastructure\Http\Responder\ResourceResponder;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\Response;
@@ -18,14 +17,13 @@ use Symfony\Component\HttpKernel\Attribute\MapUploadedFile;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Validator\Constraints\File;
 
-#[Route('/banks', name: 'backoffice_bank_post', methods: ['POST'])]
+#[Route('/banks', name: 'backoffice_bank_create', methods: ['POST'])]
 final readonly class BankPostController
 {
     public function __construct(
         private BankCreator $bankCreator,
-        private ResourceNormalizer $resourceNormalizer,
+        private ResourceResponder $resourceResponder,
         private Validator $validator,
-        private ResponderInterface $responder,
         #[Autowire('%erpify.media.max_upload_bytes%')]
         private string $maxUploadSize,
     ) {
@@ -44,12 +42,11 @@ final readonly class BankPostController
 
         $bank = $this->bankCreator->create($bankCommand, $image, $storedObject);
 
-        $data = $this->resourceNormalizer->toArray(
+        return $this->resourceResponder->respond(
             $bank,
-            ['identifiable', 'timestamped', 'bank:get', 'bank:read:urls'],
+            [Bank::GROUP_IDENTIFIABLE, Bank::GROUP_TIMESTAMPED, Bank::GROUP_DETAIL, Bank::GROUP_READ_URLS],
+            Response::HTTP_CREATED,
         );
-
-        return $this->responder->respond(Result::created($data));
     }
 
     private function assertValidUpload(?UploadedFile $file): void

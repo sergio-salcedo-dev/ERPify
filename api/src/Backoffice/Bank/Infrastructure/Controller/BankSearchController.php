@@ -6,27 +6,22 @@ namespace Erpify\Backoffice\Bank\Infrastructure\Controller;
 
 use Erpify\Backoffice\Bank\Application\BankSearcher;
 use Erpify\Backoffice\Bank\Application\Query\SearchBanksQuery;
+use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Shared\Application\Http\Search\SearchQuery;
-use Erpify\Shared\Infrastructure\Http\Controller\AbstractSearchController;
-use Erpify\Shared\Infrastructure\Http\Responder\ResponderInterface;
-use Erpify\Shared\Infrastructure\Persistence\PaginatorCursorFactory;
+use Erpify\Shared\Infrastructure\Http\Responder\SearchResponder;
 use JsonException;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapQueryString;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Serializer\Exception\ExceptionInterface;
-use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 
 #[Route('/banks', name: 'backoffice_bank_search', methods: ['GET'])]
-final readonly class BankSearchController extends AbstractSearchController
+final readonly class BankSearchController
 {
     public function __construct(
         private BankSearcher $bankSearcher,
-        NormalizerInterface $normalizer,
-        ResponderInterface $responder,
-        PaginatorCursorFactory $paginatorCursorFactory,
+        private SearchResponder $searchResponder,
     ) {
-        parent::__construct($normalizer, $responder, $paginatorCursorFactory);
     }
 
     /**
@@ -37,12 +32,12 @@ final readonly class BankSearchController extends AbstractSearchController
         #[MapQueryString]
         SearchQuery $query = new SearchQuery(),
     ): Response {
-        return $this->buildResponse(
-            paginatedResult: $this->bankSearcher->search(new SearchBanksQuery($query->toCriteria())),
-            serializerGroups: [
-                'identifiable',
-                'timestamped',
-                'bank:search',
+        return $this->searchResponder->respond(
+            $this->bankSearcher->search(new SearchBanksQuery($query->toCriteria())),
+            [
+                Bank::GROUP_IDENTIFIABLE,
+                Bank::GROUP_TIMESTAMPED,
+                Bank::GROUP_LIST,
             ],
         );
     }

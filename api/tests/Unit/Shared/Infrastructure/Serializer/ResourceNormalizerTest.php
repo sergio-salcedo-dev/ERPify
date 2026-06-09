@@ -27,7 +27,7 @@ final class ResourceNormalizerTest extends TestCase
         $innerNormalizer
             ->expects($this->once())
             ->method('normalize')
-            ->with($resource, 'json', ['groups' => ['identifiable', 'bank:get']])
+            ->with($resource, 'json', ['groups' => ['identifiable', 'bank:detail']])
             ->willReturn($expected)
         ;
 
@@ -35,7 +35,7 @@ final class ResourceNormalizerTest extends TestCase
 
         $this->assertSame(
             $expected,
-            $resourceNormalizer->toArray($resource, ['identifiable', 'bank:get']),
+            $resourceNormalizer->toArray($resource, ['identifiable', 'bank:detail']),
         );
     }
 

@@ -17,7 +17,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\Entity]
 #[ORM\Table(name: 'bank_account')]
 #[UniqueEntity(fields: ['iban'], message: 'This IBAN is already in use.')]
-class BankAccount extends AggregateRoot
+final class BankAccount extends AggregateRoot
 {
     private function __construct(
         string $id,

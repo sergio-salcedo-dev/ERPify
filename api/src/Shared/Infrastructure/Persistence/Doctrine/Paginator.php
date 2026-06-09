@@ -167,6 +167,12 @@ final class Paginator implements PaginatedResult
     }
 
     #[Override]
+    public function getCount(): ?int
+    {
+        return $this->paginatorCursor->getCount();
+    }
+
+    #[Override]
     public function getCursor(): PaginatorCursorInterface
     {
         return $this->paginatorCursor;

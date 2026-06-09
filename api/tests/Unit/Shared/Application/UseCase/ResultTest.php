@@ -19,17 +19,16 @@ final class ResultTest extends TestCase
     /**
      * @param array<string, mixed> $payload
      */
-    #[DataProvider('provideOkAndCreatedFactoriesCarryPayloadCases')]
-    public function testOkAndCreatedFactoriesCarryPayload(array $payload): void
+    #[DataProvider('provideOkFactoryCarriesPayloadCases')]
+    public function testOkFactoryCarriesPayload(array $payload): void
     {
         $this->assertResultMatches(Result::ok($payload), $payload, Result::STATUS_OK);
-        $this->assertResultMatches(Result::created($payload), $payload, Result::STATUS_CREATED);
     }
 
     /**
      * @return Generator<string, array{array<string, mixed>}>
      */
-    public static function provideOkAndCreatedFactoriesCarryPayloadCases(): iterable
+    public static function provideOkFactoryCarriesPayloadCases(): iterable
     {
         yield 'array' => [['key' => ['nested' => 'value']]];
         yield 'string' => [['key' => 'hello']];
@@ -50,7 +49,6 @@ final class ResultTest extends TestCase
     public function testMetaDefaultsToEmpty(): void
     {
         $this->assertSame([], Result::ok(['key' => 'value'])->meta);
-        $this->assertSame([], Result::created(['key' => 'value'])->meta);
         $this->assertSame([], Result::noContent()->meta);
     }
 
