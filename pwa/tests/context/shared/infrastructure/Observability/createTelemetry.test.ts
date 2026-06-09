@@ -39,6 +39,11 @@ describe("createTelemetry sink selection", () => {
     expect(captureMessage).not.toHaveBeenCalled();
   });
 
+  it("does NOT add the Sentry sink for a malformed (non-https) DSN", () => {
+    emitErrorWithDsn("key@o0.ingest.de.sentry.io/1");
+    expect(captureMessage).not.toHaveBeenCalled();
+  });
+
   it("adds the Sentry sink when a DSN is configured", () => {
     emitErrorWithDsn("https://key@o0.ingest.de.sentry.io/1");
     expect(captureMessage).toHaveBeenCalledWith("boom", "error");

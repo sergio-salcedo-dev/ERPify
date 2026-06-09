@@ -106,6 +106,13 @@ the boot crash — were patched in-loop).
   URL with a token in its query, a SQL string). The `before_send` scrubber only walks event `extra` +
   `request`, not `$event->getBreadcrumbs()`. Add a breadcrumb pass (walk each breadcrumb's metadata
   through the denylist) if/when breadcrumb content proves sensitive in practice.
+
+## Deferred from: code review of spec-pwa-sentry.md (2026-06-09)
+
+- **Denylist too narrow (Parity with API).** The `REDACTION_DENYLIST` uses exact, case-insensitive matches. Variations like `user_password` or `new_token` are not caught. Deferred to maintain parity with the API's current implementation.
+- **Public `/monitoring` tunnel lacks rate limiting.** The Caddyfile unconditionally routes `/monitoring*` to Next.js. Potential DoS vector if not rate-limited at the infrastructure or application layer.
+- **Non-secret PII not scrubbed (Parity with API).** Common PII like `email`, `phone_number`, and `address` are not in the current denylist. Sentry receives this data by default if present in request surfaces.
+- **`sentryNextjs.ts` stub maintenance liability.** The manual unit-test stub for the Sentry SDK is a maintenance risk; no automated guard ensures it matches the actual SDK export surface.
 ## Deferred from: code review of spec-pwa-sentry (2026-06-08, step-04)
 
 Adversarial review (Blind Hunter / Edge Case Hunter / Acceptance Auditor) of `feat/pwa-sentry-eocz`.

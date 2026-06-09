@@ -25,8 +25,11 @@ export class CompositeTelemetry implements Telemetry {
     for (const sink of this.sinks) {
       try {
         emit(sink);
-      } catch {
+      } catch (error) {
         // A failing sink must not suppress the others or reach the caller.
+        // We log the meta-failure to the console so it's visible during
+        // development/debugging; this is a last-resort visibility channel.
+        console.error("Telemetry composite: sink failed to emit diagnostic", error);
       }
     }
   }

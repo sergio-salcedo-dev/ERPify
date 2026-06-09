@@ -23,8 +23,9 @@ import { ThrottledTelemetry } from "./ThrottledTelemetry";
 export function createTelemetry(): Telemetry {
   const sinks: Telemetry[] = [new ConsoleTelemetry()];
 
-  // Trim so a whitespace-only DSN doesn't add the sink (parity with sentryInitOptions).
-  if (process.env.NEXT_PUBLIC_SENTRY_DSN?.trim()) {
+  const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN?.trim();
+  // Strengthen validation: a valid Sentry DSN must be a URL starting with https://
+  if (dsn && dsn.startsWith("https://")) {
     sinks.push(new SentryTelemetry());
   }
 

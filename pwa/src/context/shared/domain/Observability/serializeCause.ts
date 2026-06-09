@@ -1,8 +1,8 @@
 import { scrubDeep } from "./redaction";
 
-const MAX_MESSAGE_CHARS = 1024;
-const MAX_STACK_CHARS = 4096;
-const MAX_CAUSE_CHAIN = 5;
+export const MAX_MESSAGE_CHARS = 1024;
+export const MAX_STACK_CHARS = 4096;
+export const MAX_CAUSE_CHAIN = 5;
 
 /**
  * Plain, transmittable shape of an arbitrary `cause`. Either an Error-derived
@@ -15,6 +15,12 @@ export interface SerializedCause {
   stack?: string;
   cause?: SerializedCause;
   value?: unknown;
+}
+
+export interface SerializationOptions {
+  maxMessageChars?: number;
+  maxStackChars?: number;
+  maxCauseChain?: number;
 }
 
 function truncate(text: string, max: number): string {
@@ -32,21 +38,31 @@ function truncate(text: string, max: number): string {
  * text is forwarded as-is (only key-named fields are scrubbed) — matching the
  * API scrubber, where free-text exception messages are out of redaction scope.
  */
-export function serializeCause(cause: unknown, chainDepth = 0): SerializedCause | undefined {
+export function serializeCause(
+  cause: unknown,
+  chainDepth = 0,
+  options?: SerializationOptions,
+): SerializedCause | undefined {
   if (cause === undefined || cause === null) {
     return undefined;
   }
 
+  const {
+    maxMessageChars = MAX_MESSAGE_CHARS,
+    maxStackChars = MAX_STACK_CHARS,
+    maxCauseChain = MAX_CAUSE_CHAIN,
+  } = options ?? {};
+
   if (cause instanceof Error) {
     const serialized: SerializedCause = {
       name: cause.name,
-      message: truncate(cause.message, MAX_MESSAGE_CHARS),
+      message: truncate(cause.message, maxMessageChars),
     };
     if (typeof cause.stack === "string") {
-      serialized.stack = truncate(cause.stack, MAX_STACK_CHARS);
+      serialized.stack = truncate(cause.stack, maxStackChars);
     }
-    if (cause.cause !== undefined && cause.cause !== null && chainDepth < MAX_CAUSE_CHAIN) {
-      serialized.cause = serializeCause(cause.cause, chainDepth + 1);
+    if (cause.cause !== undefined && cause.cause !== null && chainDepth < maxCauseChain) {
+      serialized.cause = serializeCause(cause.cause, chainDepth + 1, options);
     }
     return serialized;
   }
