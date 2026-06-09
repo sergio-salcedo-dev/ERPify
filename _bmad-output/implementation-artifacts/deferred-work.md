@@ -22,20 +22,25 @@ spec's Review Findings section; the items below are the deferred (design-level /
   optimistic. Gate the controller and narrow granted topics per user/role when backoffice auth
   arrives (already noted above).
 
-## Sentry/Datadog sink adapter — prep gaps (deferred until DSN/SDK chosen)
+## Sentry/Datadog sink adapter — prep gaps
 
-> **Update (2026-06-08):** Sentry is now chosen (SaaS). The **API** half shipped on
-> branch `feat/shared-sentry` (spec `spec-sentry-api-observability.md`): `sentry/sentry-symfony`,
-> prod-only bundle, env-gated DSN, repo Sentry MCP in `.mcp.json`. The **PWA** half below is the
-> next spec on the same branch — `@sentry/nextjs` framework integration (instrumentation, source
-> maps, CSP/`tunnelRoute`) **plus** the `SentryTelemetry` port adapter + `createTelemetry()` factory
-> described here. Use `tunnelRoute` to avoid widening the CSP `connect-src`.
+**UPDATE (2026-06-08, spec-pwa-sentry):** the **Sentry** sink shipped. `serializeCause()` +
+recursive scrub (`domain/Observability/{serializeCause,redaction}.ts`), the `createTelemetry()`
+factory (DSN-gated `SentryTelemetry` fanned out via `CompositeTelemetry`, preserving the
+console's call-time env gate), and the `warn`/`error` → Sentry severity map are all DONE. The
+SDK uses the same-origin `/monitoring` **tunnel**, so the **CSP `connect-src` widening below is
+NO LONGER required for Sentry** — it only resurfaces if Datadog uses direct ingest. What remains
+deferred:
 
-Tracked here so the eventual `SentryTelemetry` / `DatadogTelemetry` drop-in is friction-free.
-Each is intentionally **not** built now (no DSN, no SDK, no second sink) — empty adapters or a
-single-branch factory today would be speculative. The seam is already swap-ready: one wrapped
-adapter in `pwa/src/context/shared/infrastructure/Observability/index.ts`, all call sites typed to
-the `Telemetry` port. These land *with* the adapter:
+- **Datadog sink (next task).** Add `DatadogTelemetry` as a second `CompositeTelemetry` entry +
+  its `NEXT_PUBLIC_DATADOG_CLIENT_TOKEN` (allowlist + `.env.example` + `pwa/CLAUDE.md` table) and
+  `DATADOG_API_KEY` (server-only secret). Reuse `serializeCause` / `redaction` as-is.
+- **Sentry source-map upload.** `SENTRY_AUTH_TOKEN` (server-only build/CI secret) + flip
+  `next.config.ts` `withSentryConfig` `sourcemaps.disable` off + `org`/`project` slugs (differ per
+  env: `erpify-pwa-dev` / `erpify-pwa-prod`) + a `PRODUCTION_SECURITY_CHECKLIST.md` entry. Until
+  then prod stack traces are minified.
+
+Historical prep notes (most now satisfied by the Sentry work; kept for the Datadog drop-in):
 
 - **`serializeCause()` / scrub helper.** A `domain/Observability` utility that normalizes an
   unknown `cause` (name → message → stack → nested `cause` chain, size-bounded) and scrubs
@@ -185,3 +190,29 @@ above under the original implementation note.
   the rollback on the missing one. The indexes are perf-only (NFR4) and have no behavior-test coverage —
   a forgotten migration fails no test. Add `IF EXISTS` (and consider a `doctrine:schema:validate` gate)
   if migration reversibility under partial application becomes a concern. Low.
+
+## Deferred from: code review of spec-pwa-sentry.md (2026-06-09)
+
+- **Denylist too narrow (Parity with API).** The `REDACTION_DENYLIST` uses exact, case-insensitive matches. Variations like `user_password` or `new_token` are not caught. Deferred to maintain parity with the API's current implementation.
+- **Public `/monitoring` tunnel lacks rate limiting.** The Caddyfile unconditionally routes `/monitoring*` to Next.js. Potential DoS vector if not rate-limited at the infrastructure or application layer.
+- **Non-secret PII not scrubbed (Parity with API).** Common PII like `email`, `phone_number`, and `address` are not in the current denylist. Sentry receives this data by default if present in request surfaces.
+- **`sentryNextjs.ts` stub maintenance liability.** The manual unit-test stub for the Sentry SDK is a maintenance risk; no automated guard ensures it matches the actual SDK export surface.
+## Deferred from: code review of spec-pwa-sentry (2026-06-08, step-04)
+
+Adversarial review (Blind Hunter / Edge Case Hunter / Acceptance Auditor) of `feat/pwa-sentry-eocz`.
+The load-bearing findings (whitespace-DSN gate, breadcrumbs/user/url-query + transaction-event scrub,
+depth-cap secret passthrough, `{value:{value}}` double-wrap) were fixed live in the same change.
+These low-severity items are deferred:
+
+- **Sentry test-stub parity guard.** `pwa/tests/stubs/sentryNextjs.ts` (aliased in `vitest.config.ts`)
+  can silently diverge from the real `@sentry/nextjs` export surface — a new named import used in `src/`
+  that the stub lacks would be `undefined` at unit-test runtime while passing. Add a guard test asserting
+  the stub's exported names ⊇ the SDK named imports referenced under `src/`. Low.
+- **`scrubDeep` / `serializeCause` node-count budget.** Both are depth-bounded but have no node/key
+  budget, so a very large *shallow* non-Error cause (e.g. 100k keys) is walked in full and attached to
+  the event. Sentry bounds payload size itself, so this is bounded in practice; add an explicit node cap
+  if a high-cardinality cause ever lands. Low.
+- **Tunnel-abuse note.** `tunnelRoute: "/monitoring"` is a same-origin POST relay to Sentry ingest — an
+  accepted Sentry tradeoff (anyone can POST events, bounded by Sentry-side rate limits). No app/route
+  collision today (verified vs `proxy.ts` matcher + `app/`). Revisit (rate-limit the route) only if quota
+  abuse is observed. Low.

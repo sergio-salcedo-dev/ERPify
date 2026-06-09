@@ -72,6 +72,10 @@ services:
     environment:
       NODE_ENV: development
       NEXT_PUBLIC_APP_ENV: ${NEXT_PUBLIC_APP_ENV:-dev}
+      # NEXT_PUBLIC_SENTRY_DSN is intentionally NOT set here: `next dev` reads it
+      # from pwa/.env.local (the natural dev source). Setting it in compose with an
+      # empty default would shadow .env.local (Next won't override a set env var),
+      # leaving the SDK inert. Prod bakes it via the Dockerfile build arg instead.
     healthcheck:
       test:
         [

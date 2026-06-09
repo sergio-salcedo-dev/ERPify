@@ -42,6 +42,9 @@ import { describe, expect, it } from "vitest";
 const ALLOWED_PUBLIC_ENV_VARS = new Set<string>([
   "NEXT_PUBLIC_API_BASE_URL",
   "NEXT_PUBLIC_APP_ENV",
+  // Sentry DSN — write-only, browser-embeddable identifier (the SDK runs
+  // client-side). Not a secret; see pwa/CLAUDE.md's NEXT_PUBLIC_ table.
+  "NEXT_PUBLIC_SENTRY_DSN",
 ]);
 
 const PWA_ROOT = path.resolve(__dirname, "..");
@@ -148,10 +151,11 @@ describe("NEXT_PUBLIC_* env allowlist", () => {
     });
   });
 
-  it("allowlist contains exactly the two known-public vars (changing it is a conscious edit)", () => {
+  it("allowlist contains exactly the known-public vars (changing it is a conscious edit)", () => {
     expect([...ALLOWED_PUBLIC_ENV_VARS].sort((a, b) => a.localeCompare(b))).toEqual([
       "NEXT_PUBLIC_API_BASE_URL",
       "NEXT_PUBLIC_APP_ENV",
+      "NEXT_PUBLIC_SENTRY_DSN",
     ]);
   });
 });

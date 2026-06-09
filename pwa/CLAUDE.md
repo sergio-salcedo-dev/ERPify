@@ -58,7 +58,8 @@ Full-stack targets (`make app.dev`, `make docker.up`, `make docker.down`, …) l
 
 - **Docker stack** (default): `NEXT_PUBLIC_API_BASE_URL=https://localhost`, `SYMFONY_INTERNAL_URL=http://php:80` (set in Compose).
 - `NEXT_PUBLIC_APP_ENV` (`dev` | `staging` | `prod`) — public, non-secret, baked at build (`pwa/Dockerfile` ARG fed from the same-named `NEXT_PUBLIC_APP_ENV` Compose build arg; set it per environment — `staging` on staging hosts enables console diagnostics, `prod` keeps them silent). Drives client telemetry verbosity; `NODE_ENV` can't distinguish staging from prod (the built image is always `production`).
-- **`NEXT_PUBLIC_*` is public by construction — allowlisted, never secret.** Next.js inlines every `process.env.NEXT_PUBLIC_FOO` literal into the browser bundle at build time, so any value behind the prefix ships to every visitor. The **only** permitted names are `NEXT_PUBLIC_API_BASE_URL` and `NEXT_PUBLIC_APP_ENV`. Adding another is a deliberate act: register it in `ALLOWED_PUBLIC_ENV_VARS` in [`tests/next-public-env-allowlist.test.ts`](tests/next-public-env-allowlist.test.ts), add it to this table, and confirm in review it carries no secret/credential/PII. A secret never gets the prefix — read it server-side only (`SYMFONY_INTERNAL_URL` is the pattern: no `NEXT_PUBLIC_`, SSR/route-handler only). The guard test fails the build (part of `make pwa.test.unit`) if any non-allowlisted `NEXT_PUBLIC_` name appears in `src/`, the `Dockerfile`, or `.env.example`.
+- `NEXT_PUBLIC_SENTRY_DSN` — public, non-secret (write-only, browser-embeddable Sentry ingest key), baked per environment image (`pwa/Dockerfile` ARG; `erpify-pwa-dev` DSN locally, `erpify-pwa-prod` in prod where it is **required**). Empty keeps the SDK fully inert. Events route through the same-origin `/monitoring` tunnel (so the CSP `connect-src` stays untouched). The real Sentry secret is `SENTRY_AUTH_TOKEN` (source-map upload — deferred, never `NEXT_PUBLIC_`).
+- **`NEXT_PUBLIC_*` is public by construction — allowlisted, never secret.** Next.js inlines every `process.env.NEXT_PUBLIC_FOO` literal into the browser bundle at build time, so any value behind the prefix ships to every visitor. The **only** permitted names are `NEXT_PUBLIC_API_BASE_URL`, `NEXT_PUBLIC_APP_ENV`, and `NEXT_PUBLIC_SENTRY_DSN`. Adding another is a deliberate act: register it in `ALLOWED_PUBLIC_ENV_VARS` in [`tests/next-public-env-allowlist.test.ts`](tests/next-public-env-allowlist.test.ts), add it to this table, and confirm in review it carries no secret/credential/PII. A secret never gets the prefix — read it server-side only (`SYMFONY_INTERNAL_URL` is the pattern: no `NEXT_PUBLIC_`, SSR/route-handler only). The guard test fails the build (part of `make pwa.test.unit`) if any non-allowlisted `NEXT_PUBLIC_` name appears in `src/`, the `Dockerfile`, or `.env.example`.
 
 ## Rules that bite
 
@@ -228,13 +229,17 @@ Reach for these from every entity instead of re-implementing them locally:
   port (never the concrete `ConsoleTelemetry`). Call
   `telemetry.warn(message, { scope, cause })` / `.error(...)` for non-user-facing
   diagnostics. The console adapter emits only in `dev`/`staging` (gated by
-  `NEXT_PUBLIC_APP_ENV`) and is silent in `prod`; future Sentry/Datadog adapters
-  slot in behind the same port with no call-site changes. The singleton wraps the
-  adapter in `ThrottledTelemetry`, so a flood of identical diagnostics (same
-  level + scope + message) coalesces to one emit per window (a `(+N suppressed)`
-  suffix reports the tally) — no need to rate-limit at call sites. `cause` may carry
-  PII: a local adapter (console) forwards it as-is, but the future external sink
-  MUST serialize + scrub it (tracked in `deferred-work.md`). Realtime hooks route
+  `NEXT_PUBLIC_APP_ENV`) and is silent in `prod`. The **Sentry adapter**
+  (`SentryTelemetry`) is added behind the same port via `createTelemetry()`
+  whenever `NEXT_PUBLIC_SENTRY_DSN` is set, fanned out alongside the console by
+  `CompositeTelemetry` (Datadog will slot in as one more entry). The singleton
+  wraps the composite in `ThrottledTelemetry`, so a flood of identical
+  diagnostics (same level + scope + message) coalesces to one emit per window (a
+  `(+N suppressed)` suffix reports the tally) before reaching ANY sink — no need
+  to rate-limit at call sites. `cause` may carry PII: the console adapter
+  forwards it as-is (local), but the Sentry adapter serializes + scrubs it via
+  `serializeCause` (denylist parity with the API), and the SDK's `beforeSend`
+  (`scrubSentryEvent`) scrubs every event with `sendDefaultPii: false`. Realtime hooks route
   through it via `useMercureRealtime`
   (`@/context/shared/infrastructure/RealTime/useMercureRealtime`): supply
   `{ topics, authorizePath, parse, onEvent, scope }` and authorize + subscribe +
@@ -242,8 +247,9 @@ Reach for these from every entity instead of re-implementing them locally:
   for the canonical wiring). The Next.js error boundaries
   (`SegmentErrorBoundary` / `RootErrorBoundary`) also report through it via
   `telemetry.error` (scopes `error:segment` / `error:root`) instead of a bare
-  `console.error`, so prod stays silent and a future sink lights up with no
-  call-site changes; this is independent of the browser redaction that keeps
+  `console.error`, so prod stays silent on the console while the Sentry sink
+  captures them (the SDK's own global handlers can't see boundary-swallowed
+  render errors); this is independent of the browser redaction that keeps
   `error.message` out of the prod DOM. Messages are plain strings; never pass
   secrets/PII in `cause`. **Scope tags** follow a `<surface>:<detail>` convention —
   never hand-write the literal. Build them with `telemetryScope(surface, detail)` /

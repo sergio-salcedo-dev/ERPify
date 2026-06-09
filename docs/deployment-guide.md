@@ -41,6 +41,16 @@ Defined in `compose.prod.yaml` on top of the base stack:
 Plus SMTP credentials and the `SERVER_NAME` / `NEXT_PUBLIC_API_BASE_URL`
 origin for the deployment host.
 
+The PWA prod image additionally **requires** `NEXT_PUBLIC_SENTRY_DSN` (the
+`erpify-pwa-prod` project's DSN — Sentry → Settings → Client Keys (DSN)); the
+`pwa` build aborts without it (`compose.prod.yaml` declares it `${VAR:?…}`). It
+is **not a secret** — a write-only, browser-embeddable identifier baked into the
+client bundle, with errors routed through the same-origin `/monitoring` tunnel
+(no CSP `connect-src` widening). Dev uses the `erpify-pwa-dev` DSN, set in
+`pwa/.env.local` (empty keeps the SDK inert). Source-map upload is **not** wired
+yet, so prod stack traces stay minified (the `SENTRY_AUTH_TOKEN` secret is
+deferred — see `_bmad-output/implementation-artifacts/deferred-work.md`).
+
 Secrets are delivered through a **gitignored root `.env.prod.local`** (copy from
 [`../.env.prod.example`](../.env.prod.example)), loaded via `--env-file` for
 `ENV=prod|staging` (wired in `make/config.mk`). The prod overlay declares each
