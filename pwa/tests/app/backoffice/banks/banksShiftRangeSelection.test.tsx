@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { Bank } from "@/context/backoffice/bank/domain/Bank";
-import { ACME, BETA } from "./_fixtures";
+import { ACME, BETA, searchPage } from "./_fixtures";
 import { renderWithRows } from "./_render";
 
 /**
@@ -49,7 +49,7 @@ describe("BanksListPage — Shift+Arrow range selection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     realtime.handlers = undefined;
-    searchRun.mockResolvedValue({ banks: ROWS, nextCursor: undefined });
+    searchRun.mockResolvedValue(searchPage(ROWS));
   });
 
   it("anchors on the focused row and extends the range with each Shift+ArrowDown", async () => {
@@ -144,7 +144,7 @@ describe("BanksListPage — Shift+Arrow range selection", () => {
     // An unselected row is deleted remotely: the silent refetch returns the
     // shrunk list (2 rows) while the cached anchor still points at index 2 and
     // the selection set keeps its identity (nothing to prune).
-    searchRun.mockResolvedValue({ banks: [BETA, GAMMA], nextCursor: undefined });
+    searchRun.mockResolvedValue(searchPage([BETA, GAMMA]));
     act(() => realtime.handlers?.onDeleted?.(ACME.id));
     await waitFor(() => {
       expect(screen.queryByTestId(`banks-table__row-${ACME.id}`)).toBeNull();

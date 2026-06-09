@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import BanksListPage from "@/app/backoffice/banks/page";
-import { ACME } from "./_fixtures";
+import { ACME, searchPage } from "./_fixtures";
 
 vi.mock("next/navigation", async () => (await import("./_mocks")).routerMock());
 
@@ -22,7 +22,7 @@ describe("BanksListPage — retry on error", () => {
   it("re-runs the search when Retry is clicked after an error", async () => {
     searchRun
       .mockRejectedValueOnce(new Error("network down"))
-      .mockResolvedValueOnce({ banks: [ACME], nextCursor: undefined });
+      .mockResolvedValueOnce(searchPage([ACME]));
 
     render(<BanksListPage />);
 

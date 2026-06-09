@@ -1,4 +1,21 @@
 import { Bank } from "@/context/backoffice/bank/domain/Bank";
+import type { BankSearchPage } from "@/context/backoffice/bank/domain/BankRepository";
+
+/**
+ * Builds a `BankSearchPage` in the shape `BackOfficeSearchBanks.run` resolves to
+ * under the server-driven contract. Defaults to a complete single page (page 1,
+ * no further pages, total = the row count); pass `overrides` to vary any field.
+ */
+export function searchPage(banks: Bank[], overrides: Partial<BankSearchPage> = {}): BankSearchPage {
+  return {
+    banks,
+    cursor: "",
+    currentPage: 1,
+    hasMorePages: false,
+    totalCount: banks.length,
+    ...overrides,
+  };
+}
 
 /**
  * Canonical bank pair for the banks list specs. Shared so every spec

@@ -38,6 +38,13 @@ describe("toBankFilters", () => {
   it("omits an incomplete (unparseable) date value", () => {
     expect(toBankFilters({ ...EMPTY_FILTER, createdFrom: "2026-01" })).toEqual([]);
   });
+
+  it("omits an impossible calendar date instead of rolling it over", () => {
+    // `2026-02-31` is well-formed `yyyy-mm-dd` but not a real day; it must drop
+    // out as "no bound" rather than silently rolling forward to early March.
+    expect(toBankFilters({ ...EMPTY_FILTER, createdFrom: "2026-02-31" })).toEqual([]);
+    expect(toBankFilters({ ...EMPTY_FILTER, createdTo: "2026-02-31" })).toEqual([]);
+  });
 });
 
 describe("toBankSort", () => {

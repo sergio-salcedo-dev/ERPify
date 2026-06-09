@@ -6,10 +6,10 @@ Filterable lists resolve filtering, sorting, and pagination on the **server**, t
 
 ## Building blocks
 
-| Piece | Location | Role |
-| --- | --- | --- |
-| `Filter` / `FilterOperator` | `context/shared/domain/Search/` | Typed, framework-free filter vocabulary. `FilterOperator` is a union + const (`eq \| in \| contains \| gte \| lte`) — never a TS `enum`. `Filter` is a discriminated union: scalar ops carry `value: string`, `in` carries `value: string[]`. |
-| `buildSearchParams(filters)` | `context/shared/infrastructure/Search/` | Serializes `Filter[]` → `URLSearchParams` in the exact wire grammar. Scalar → `filters[N][value]`; `in` → repeated `filters[N][value][]`. Empty list → no params. Composable with sort/pagination params. |
+| Piece                        | Location                                | Role                                                                                                                                                                                                                                          |
+| ---------------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Filter` / `FilterOperator`  | `context/shared/domain/Search/`         | Typed, framework-free filter vocabulary. `FilterOperator` is a union + const (`eq \| in \| contains \| gte \| lte`) — never a TS `enum`. `Filter` is a discriminated union: scalar ops carry `value: string`, `in` carries `value: string[]`. |
+| `buildSearchParams(filters)` | `context/shared/infrastructure/Search/` | Serializes `Filter[]` → `URLSearchParams` in the exact wire grammar. Scalar → `filters[N][value]`; `in` → repeated `filters[N][value][]`. Empty list → no params. Composable with sort/pagination params.                                     |
 
 ## Recipe: make a list filterable
 

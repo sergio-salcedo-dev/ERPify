@@ -233,6 +233,19 @@ export default function BanksListPage() {
     setPage(1);
   }
 
+  // Stepping off the end of the list — the last row on a page beyond the first
+  // was deleted (optimistically or via a reconcile) — would otherwise strand the
+  // user on an empty page rendered as the first-run "No banks yet" state, with no
+  // Prev control to escape. Fall back one page so they land on real rows (or, at
+  // page 1, the genuine empty state). Page numbers only ever decrease here, so it
+  // settles in at most a few hops; loadBanks (page in deps) refetches each step.
+  useEffect(() => {
+    if (state === ViewStatus.READY && banks.length === 0 && page > 1) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPage((current) => Math.max(1, current - 1));
+    }
+  }, [state, banks.length, page]);
+
   const resetFilters = (): void => {
     setFilter(EMPTY_FILTER);
     setSort(DEFAULT_SORT);

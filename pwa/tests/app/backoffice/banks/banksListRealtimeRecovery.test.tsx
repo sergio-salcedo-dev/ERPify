@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import BanksListPage from "@/app/backoffice/banks/page";
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
-import { ACME, BETA } from "./_fixtures";
+import { ACME, BETA, searchPage } from "./_fixtures";
 
 /**
  * When the initial list load fails the page shows the error boundary. A bank
@@ -50,7 +50,7 @@ describe("BanksListPage — realtime recovery from an errored load", () => {
   it("silently reloads the full list when a bank arrives over Mercure while the load is errored", async () => {
     searchRun
       .mockRejectedValueOnce(new Error("network down"))
-      .mockResolvedValueOnce({ banks: [ACME, BETA], nextCursor: undefined });
+      .mockResolvedValueOnce(searchPage([ACME, BETA]));
 
     render(<BanksListPage />);
 
@@ -76,7 +76,7 @@ describe("BanksListPage — realtime recovery from an errored load", () => {
   it("silently reloads the full list when an updated-bank delta arrives while errored", async () => {
     searchRun
       .mockRejectedValueOnce(new Error("network down"))
-      .mockResolvedValueOnce({ banks: [ACME, BETA], nextCursor: undefined });
+      .mockResolvedValueOnce(searchPage([ACME, BETA]));
 
     render(<BanksListPage />);
 
@@ -97,7 +97,7 @@ describe("BanksListPage — realtime recovery from an errored load", () => {
   it("silently reloads the full list when a deleted-bank delta arrives while errored", async () => {
     searchRun
       .mockRejectedValueOnce(new Error("network down"))
-      .mockResolvedValueOnce({ banks: [ACME], nextCursor: undefined });
+      .mockResolvedValueOnce(searchPage([ACME]));
 
     render(<BanksListPage />);
 
@@ -118,7 +118,7 @@ describe("BanksListPage — realtime recovery from an errored load", () => {
   it("coalesces a burst of deltas while errored into a single silent reload", async () => {
     searchRun
       .mockRejectedValueOnce(new Error("network down"))
-      .mockResolvedValueOnce({ banks: [ACME, BETA], nextCursor: undefined });
+      .mockResolvedValueOnce(searchPage([ACME, BETA]));
 
     render(<BanksListPage />);
 

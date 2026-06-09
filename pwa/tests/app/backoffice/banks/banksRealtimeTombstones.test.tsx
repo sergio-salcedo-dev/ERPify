@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
-import { ACME, BETA } from "./_fixtures";
+import { ACME, BETA, searchPage } from "./_fixtures";
 import { renderWithRows } from "./_render";
 
 /**
@@ -38,7 +38,7 @@ describe("BanksListPage — deleted-id tombstones", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     realtime.handlers = undefined;
-    searchRun.mockResolvedValue({ banks: [ACME, BETA], nextCursor: undefined });
+    searchRun.mockResolvedValue(searchPage([ACME, BETA]));
     deleteRun.mockResolvedValue(undefined);
     findRun.mockImplementation((id: string) => Promise.resolve(id === ACME.id ? ACME : BETA));
   });
@@ -49,7 +49,7 @@ describe("BanksListPage — deleted-id tombstones", () => {
 
     // The server now lists everything except ACME; the Mercure `deleted` triggers
     // a silent refetch that reflects it (no in-memory merge / resurrection).
-    searchRun.mockResolvedValue({ banks: [BETA], nextCursor: undefined });
+    searchRun.mockResolvedValue(searchPage([BETA]));
     act(() => realtime.handlers?.onDeleted?.(ACME.id));
 
     await waitFor(() => {

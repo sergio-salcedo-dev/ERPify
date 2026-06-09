@@ -839,21 +839,6 @@ test.describe("BackOffice - Banks CRUD", () => {
       await expect(page.getByTestId("banks-pagination__prev")).toBeHidden();
       await expect(page.getByTestId("banks-pagination__next")).toBeHidden();
     });
-
-    test("nextCursor notice text mentions pagination too", async ({ page }) => {
-      await mockBanksApi(page, {
-        list: "happy",
-        list_banks: makeBanks(60),
-        list_next_cursor: "next-page-cursor",
-      });
-      await page.goto("/backoffice/banks");
-
-      await expect(
-        page.getByText(
-          "More banks available. Filters, sort, and pagination apply only to this page.",
-        ),
-      ).toBeVisible();
-    });
   });
 
   test.describe("view toggle (table vs cards)", () => {
