@@ -123,6 +123,10 @@ Three reviewers (blind / edge-case / acceptance). No `intent_gap`/`bad_spec` —
 
 `reject` (verified non-issues): `silent: !process.env.CI` is the documented Sentry default; `environment` is never undefined (Next inlines `NEXT_PUBLIC_*` server-side at build; Dockerfile defaults `dev`); `/monitoring` has no route collision; unconditional `withSentryConfig` is an accepted build-time limitation. `defer` → `deferred-work.md` (stub-parity guard, node-count budget, tunnel-abuse note). The `error` non-Error path uses `captureMessage(message, "error")` (a clean Sentry title) rather than the spec task's literal `captureException(new Error(message))` — deliberate as-built; still tags scope + attaches the scrubbed cause, satisfying the I/O matrix.
 
+### 2026-06-09 — dev-DSN wiring fix (post-merge-prep verification)
+
+End-to-end verification (real `erpify-pwa-dev` DSN in `pwa/.env.local`, `/dev-throw` → event `ERPIFY-PWA-DEV-1` captured) exposed that `compose.dev.yaml` set `NEXT_PUBLIC_SENTRY_DSN: ${…:-}` (empty) in the pwa `environment`/`args`, which shadowed `.env.local` — Next won't override an already-set env var, so the dev SDK stayed inert. Fix: removed both lines; `next dev` now reads the dev DSN from `pwa/.env.local` (the natural source). Prod is unaffected (bakes via the Dockerfile build arg + `compose.prod.yaml`).
+
 ## Design Notes
 
 Two capture layers, both required: (1) SDK auto-capture for *unhandled* client/server
