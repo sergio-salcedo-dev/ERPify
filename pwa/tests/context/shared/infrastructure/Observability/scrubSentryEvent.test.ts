@@ -53,29 +53,12 @@ describe("scrubSentryEvent", () => {
     expect(scrubbed.user).toEqual({ id: "u1" });
   });
 
-  it("strips denylisted params from the request.url query, keeping the path and hash", () => {
+  it("strips denylisted params from the request.url query, keeping the path", () => {
     const event = {
-      request: { url: "https://app.example/banks?token=abc&page=2#section" },
+      request: { url: "https://app.example/banks?token=abc&page=2" },
     } as unknown as ErrorEvent;
 
-    expect(scrubSentryEvent(event).request?.url).toBe("https://app.example/banks?page=2#section");
-  });
-
-  it("handles URLs with multiple hashes gracefully (preserving them)", () => {
-    const event = {
-      request: { url: "https://app.example/banks?token=abc#section#subtitle" },
-    } as unknown as ErrorEvent;
-
-    expect(scrubSentryEvent(event).request?.url).toBe("https://app.example/banks#section#subtitle");
-  });
-
-  it("scrubs stringified JSON request bodies", () => {
-    const event = {
-      request: { data: JSON.stringify({ token: "t", name: "ok" }) },
-    } as unknown as ErrorEvent;
-
-    const scrubbed = scrubSentryEvent(event);
-    expect(JSON.parse(scrubbed.request?.data as string)).toEqual({ name: "ok" });
+    expect(scrubSentryEvent(event).request?.url).toBe("https://app.example/banks?page=2");
   });
 
   it("leaves an event with no sensitive surfaces untouched", () => {

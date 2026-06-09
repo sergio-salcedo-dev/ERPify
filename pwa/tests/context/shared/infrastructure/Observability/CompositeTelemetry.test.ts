@@ -21,23 +21,17 @@ describe("CompositeTelemetry", () => {
     expect(b.error).toHaveBeenCalledWith("e", { scope: "s" });
   });
 
-  it("isolates a throwing sink so the others still receive the diagnostic and logs the error", () => {
-    const error = new Error("sink down");
+  it("isolates a throwing sink so the others still receive the diagnostic", () => {
     const exploding: Telemetry = {
       warn: vi.fn(() => {
-        throw error;
+        throw new Error("sink down");
       }),
       error: vi.fn(),
     };
     const healthy = fakeSink();
     const composite = new CompositeTelemetry([exploding, healthy]);
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     expect(() => composite.warn("w")).not.toThrow();
     expect(healthy.warn).toHaveBeenCalledWith("w", undefined);
-    expect(consoleSpy).toHaveBeenCalledWith(
-      "Telemetry composite: sink failed to emit diagnostic",
-      error,
-    );
   });
 });

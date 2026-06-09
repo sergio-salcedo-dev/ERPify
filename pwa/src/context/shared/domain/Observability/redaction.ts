@@ -23,8 +23,6 @@ const DENIED = new Set<string>(REDACTION_DENYLIST.map((key) => key.toLowerCase()
 
 /** Bounds recursion against pathological / cyclic structures. */
 const MAX_DEPTH = 8;
-/** Bounds the total work per scrub to prevent blocking the main thread. */
-const MAX_NODES = 1000;
 
 /** True when a key name is denylisted (exact match, case-insensitive ASCII). */
 export function isDenylistedKey(key: string): boolean {
@@ -35,42 +33,22 @@ export function isDenylistedKey(key: string): boolean {
  * Recursively strips denylisted keys from a value at every depth — unlike the
  * API enum's single-level `filter`, because captured payloads nest (a request
  * body's `user.password`). Arrays are walked element-wise; primitives and
- * non-plain objects (Date, Map, Set, custom classes) pass through untouched.
- *
- * Depth-bounded (MAX_DEPTH) and node-bounded (MAX_NODES) so a cyclic or
- * massive object can never loop forever or block the main thread.
+ * non-plain objects pass through untouched. Depth-bounded so a cyclic object
+ * can never loop forever.
  */
-export function scrubDeep(value: unknown, depth = 0, state?: { nodes: number }): unknown {
-  const actualState = state ?? { nodes: 0 };
-  actualState.nodes += 1;
-
+export function scrubDeep(value: unknown, depth = 0): unknown {
   if (value === null || typeof value !== "object") {
     return value;
   }
-
-  // At the depth or node cap, return a sentinel rather than the raw object:
-  // returning the value verbatim would let a denylisted key sitting past the
-  // limit ride out unscrubbed, breaking the strip guarantee.
-  if (depth >= MAX_DEPTH || actualState.nodes >= MAX_NODES) {
+  // At the depth cap return a sentinel rather than the raw object: returning the
+  // value verbatim would let a denylisted key sitting past MAX_DEPTH ride out
+  // unscrubbed, breaking the strip guarantee (and is also the cyclic-structure stop).
+  if (depth >= MAX_DEPTH) {
     return "[depth-limited]";
   }
 
-  // Pass through common non-plain objects that shouldn't be recursed into.
-  // scrubDeep only aims to redact keys from plain objects and arrays.
-  if (value instanceof Date || value instanceof Map || value instanceof Set) {
-    return value;
-  }
-
-  // If it's a non-plain object (has a custom constructor other than Object),
-  // pass it through untouched to avoid accidentally breaking class instances.
-  // Objects with no prototype (constructor is undefined) are treated as plain.
-  const ctor = (value as Record<string, unknown>).constructor;
-  if (ctor && ctor !== Object && !Array.isArray(value)) {
-    return value;
-  }
-
   if (Array.isArray(value)) {
-    return value.map((item) => scrubDeep(item, depth + 1, actualState));
+    return value.map((item) => scrubDeep(item, depth + 1));
   }
 
   const scrubbed: Record<string, unknown> = {};
@@ -78,7 +56,7 @@ export function scrubDeep(value: unknown, depth = 0, state?: { nodes: number }):
     if (isDenylistedKey(key)) {
       continue;
     }
-    scrubbed[key] = scrubDeep(nested, depth + 1, actualState);
+    scrubbed[key] = scrubDeep(nested, depth + 1);
   }
   return scrubbed;
 }

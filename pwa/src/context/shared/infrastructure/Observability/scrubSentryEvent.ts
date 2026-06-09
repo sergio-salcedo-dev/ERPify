@@ -45,42 +45,20 @@ export function scrubSentryEvent<E extends Event>(event: E): E {
  * are parsed param-by-param).
  */
 function scrubRequest(request: NonNullable<Event["request"]>): void {
-  const { data, headers, cookies, query_string: qs, url } = request;
-
-  if (data) {
-    if (typeof data === "object") {
-      request.data = scrubDeep(data);
-    } else if (typeof data === "string" && data.startsWith("{")) {
-      request.data = tryScrubJson(data);
-    }
+  if (request.data && typeof request.data === "object") {
+    request.data = scrubDeep(request.data);
   }
-
-  if (headers) {
-    request.headers = scrubDeep(headers) as Record<string, string>;
+  if (request.headers) {
+    request.headers = scrubDeep(request.headers) as Record<string, string>;
   }
-
-  if (cookies) {
-    request.cookies = scrubDeep(cookies) as Record<string, string>;
+  if (request.cookies) {
+    request.cookies = scrubDeep(request.cookies) as Record<string, string>;
   }
-
-  if (typeof qs === "string" && qs !== "") {
-    request.query_string = scrubQueryString(qs);
+  if (typeof request.query_string === "string" && request.query_string !== "") {
+    request.query_string = scrubQueryString(request.query_string);
   }
-
-  if (typeof url === "string") {
-    request.url = scrubUrl(url);
-  }
-}
-
-/** Attempt to scrub stringified JSON bodies which would otherwise bypass redaction. */
-function tryScrubJson(data: string): string {
-  try {
-    const parsed = JSON.parse(data);
-    return JSON.stringify(scrubDeep(parsed));
-  } catch (error) {
-    // Fall back to original if not valid JSON; we do not log here to avoid
-    // noise on every non-JSON POST body (e.g. form-data).
-    return data;
+  if (typeof request.url === "string" && request.url.includes("?")) {
+    request.url = scrubUrlQuery(request.url);
   }
 }
 
@@ -96,22 +74,13 @@ function scrubQueryString(queryString: string): string {
   return scrubbed.toString();
 }
 
-/** Strips denylisted params from a URL's query, preserving the path and hash. */
-function scrubUrl(url: string): string {
-  const hashStart = url.indexOf("#");
-  const pathAndQuery = hashStart === -1 ? url : url.slice(0, hashStart);
-  const hash = hashStart === -1 ? "" : url.slice(hashStart);
-
-  const queryStart = pathAndQuery.indexOf("?");
+/** Strips denylisted params from the query of a (possibly relative) URL, keeping the path. */
+function scrubUrlQuery(url: string): string {
+  const queryStart = url.indexOf("?");
   if (queryStart === -1) {
-    return pathAndQuery + hash;
+    return url;
   }
-
-  const path = pathAndQuery.slice(0, queryStart);
-  const query = pathAndQuery.slice(queryStart + 1);
-
-  const scrubbedQuery = scrubQueryString(query);
-  const result = scrubbedQuery === "" ? path : `${path}?${scrubbedQuery}`;
-
-  return result + hash;
+  const base = url.slice(0, queryStart);
+  const scrubbed = scrubQueryString(url.slice(queryStart + 1));
+  return scrubbed === "" ? base : `${base}?${scrubbed}`;
 }
