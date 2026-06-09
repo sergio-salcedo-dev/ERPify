@@ -214,8 +214,8 @@ export async function mockBanksApi(page: Page, scenario: BanksApiScenario): Prom
             const correlationId = "01H-create-validation";
             await fulfillProblem(
               route,
-              400,
-              problemBody("validation-failed", "Validation failed.", 400, correlationId, {
+              422,
+              problemBody("validation-failed", "Validation failed.", 422, correlationId, {
                 violations: [{ field: "name", message: "The name field is required." }],
               }),
               correlationId,
@@ -297,8 +297,8 @@ export async function mockBanksApi(page: Page, scenario: BanksApiScenario): Prom
             const correlationId = "01H-update-validation";
             await fulfillProblem(
               route,
-              400,
-              problemBody("validation-failed", "Validation failed.", 400, correlationId, {
+              422,
+              problemBody("validation-failed", "Validation failed.", 422, correlationId, {
                 violations: [
                   {
                     field: "shortName",

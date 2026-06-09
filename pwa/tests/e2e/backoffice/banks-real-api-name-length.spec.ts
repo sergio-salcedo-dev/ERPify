@@ -62,14 +62,14 @@ test.describe("BackOffice - Bank name length validation (real API)", () => {
       headers: { "Content-Type": "application/json" },
     });
 
-    expect(response.status()).toBe(400);
+    expect(response.status()).toBe(422);
     const body = (await response.json()) as ProblemResponse;
     expect(body.violations).toContainEqual(
       expect.objectContaining({ field: "name", message: NAME_TOO_LONG_MESSAGE }),
     );
   });
 
-  test("rejects a name whose accent-folded form overflows the column with a 400, not a 500", async () => {
+  test("rejects a name whose accent-folded form overflows the column with a 422, not a 500", async () => {
     const response = await api.post(BANKS_PATH, {
       data: {
         name: "Æ".repeat(200),
@@ -78,7 +78,7 @@ test.describe("BackOffice - Bank name length validation (real API)", () => {
       headers: { "Content-Type": "application/json" },
     });
 
-    expect(response.status()).toBe(400);
+    expect(response.status()).toBe(422);
     const body = (await response.json()) as ProblemResponse;
     expect(body.violations).toContainEqual(
       expect.objectContaining({ field: "name", message: NAME_TOO_LONG_MESSAGE }),
