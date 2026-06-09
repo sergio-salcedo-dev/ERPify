@@ -86,6 +86,42 @@ The Sentry `environment` tag is just `APP_ENV` (`dev` / `prod`) — no extra var
 `send_default_pii: false` + the `SentryEventScrubber` `before_send` keep
 PII/secrets off events (see [`../PRODUCTION_SECURITY_CHECKLIST.md`](../PRODUCTION_SECURITY_CHECKLIST.md)).
 
+### Performance tracing & the messenger worker (important gotcha)
+
+Sentry performance tracing treats both an **HTTP request** and a **console command
+execution** as a *transaction*. That second one is a trap for this stack.
+
+The SentryBundle's `TracingConsoleListener` opens **one** transaction when a console
+command starts (`ConsoleCommandEvent`) and closes it on terminate. But the
+`messenger_worker` runs:
+
+```
+php bin/console messenger:consume async --time-limit=3600 …
+```
+
+So with tracing on, that single `messenger:consume` run becomes **one transaction
+spanning up to an hour**, which:
+
+- is useless as an APM transaction (it's the whole consume loop, not a unit of work), and
+- **accumulates spans in memory for the life of the worker** → memory growth in the
+  long-lived FrankenPHP/worker process.
+
+It fires at **any** non-zero sample rate — dev at `1.0` *and* prod at `~0.2` (sampled
+20% of the time). The fix is the bundle's native exclusion, set in both `when@dev`
+and `when@prod` of [`../api/config/packages/sentry.yaml`](../api/config/packages/sentry.yaml):
+
+```yaml
+tracing:
+    console:
+        excluded_commands:
+            - 'messenger:consume'   # matches $command->getName(); worker never opens a transaction
+```
+
+This leaves only real HTTP requests traced. **Dev** traces at `traces_sample_rate: 1.0`
+(100% — cheap locally, full DB/HTTP waterfall, N+1 visible) opt-in via the
+`SENTRY_DSN` in `api/.env.local`; **prod** stays at `~0.2`. If you add a *new*
+long-running console command, exclude it here too.
+
 ## Prod hardening (compose.prod.yaml)
 
 - Every service runs `no-new-privileges`, drops all Linux caps and re-adds only

@@ -16,19 +16,38 @@
 # ExceptionResponder's single PSR-3 log line carries no throwable, so the listener
 # path yields richer events and avoids double-reporting.
 
-# Dev: errors only (no performance tracing / Messenger noise), opt-in via DSN.
+# Dev: errors + 100% performance tracing (local profiling — N+1, slow queries,
+# external-call latency), opt-in via DSN. The long-running messenger:consume worker
+# is EXCLUDED from tracing (see the `console.excluded_commands` note below).
 when@dev:
     sentry:
         dsn: '%env(SENTRY_DSN)%'
         register_error_listener: true
         options:
             environment: '%kernel.environment%'
+            # 100% of requests/commands traced — cheap locally, full DB/HTTP waterfall.
+            traces_sample_rate: 1.0
             send_default_pii: false
             before_send: 'Erpify\Shared\Monitoring\Infrastructure\Sentry\SentryEventScrubber'
             ignore_exceptions:
                 - 'Symfony\Component\ErrorHandler\Error\FatalError'
                 - 'Symfony\Component\Debug\Exception\FatalErrorException'
                 - 'Symfony\Component\HttpKernel\Exception\NotFoundHttpException'
+        tracing:
+            enabled: true
+            dbal:
+                enabled: true
+            http_client:
+                enabled: true
+            # THE WORKER GOTCHA: the SentryBundle's TracingConsoleListener wraps a
+            # whole console command in ONE transaction (start on ConsoleCommandEvent,
+            # end on terminate). `messenger:consume` runs for --time-limit seconds, so
+            # at any rate > 0 it becomes a single giant, useless transaction that also
+            # accumulates spans in the long-lived worker process (memory growth).
+            # Excluding it leaves only real HTTP requests traced. See docs/deployment-guide.md.
+            console:
+                excluded_commands:
+                    - 'messenger:consume'
 
 # Prod: full monitoring — errors + performance tracing + Messenger capture.
 when@prod:
@@ -66,3 +85,9 @@ when@prod:
                 enabled: true
             http_client:
                 enabled: true
+            # Exclude the long-running messenger:consume worker from tracing — same
+            # gotcha as dev (one giant transaction + worker memory growth). At prod's
+            # 0.2 rate it would still be sampled 20% of the time. See docs/deployment-guide.md.
+            console:
+                excluded_commands:
+                    - 'messenger:consume'

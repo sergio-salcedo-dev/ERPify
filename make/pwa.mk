@@ -18,7 +18,7 @@
         pwa.quality.dry-run pwa.quality \
         pwa.lint.dry-run pwa.lint pwa.format.dry-run pwa.format \
         pwa.test pwa.test.unit pwa.test.unit.watch pwa.test.e2e pwa.test.e2e.reports npm.dev.e2e \
-        pwa.util.extract.testids pwa.clean.soft pwa.clean.all pwa.clean.sudo
+        pwa.util.extract.testids pwa.chown.next pwa.clean.soft pwa.clean.all pwa.clean.sudo
 
 ## —— PWA install / dev / build ——
 
@@ -108,6 +108,20 @@ pwa.test: pwa.test.unit pwa.test.e2e ## Full PWA test suite (Vitest + Playwright
 
 pwa.util.extract.testids: ## Extract data-testid attributes
 	@./scripts/extract-testids.sh pwa/reports/data-testid/testids.txt pwa/src
+
+## —— PWA ownership ——
+
+# The host `pwa.dev` (Turbopack on :80) writes .next/trace on the host tree.
+# A root-owned pwa/.next — left by a container/worktree stack writing the bind
+# mount as root — makes that write fail with EACCES. This reclaims ownership of
+# .next / .next-e2e for the host user WITHOUT deleting the build cache (unlike
+# pwa.clean.sudo). Mirrors sf.chown.var. No-op'd dirs are skipped.
+pwa.chown.next: ## Reclaim ownership of root-owned pwa/.next + .next-e2e (fixes host EACCES on .next/trace; requires sudo; dev/test only)
+	$(call guard_var_writable,pwa.chown.next)
+	@for d in $(PWA_ROOT)/.next $(PWA_ROOT)/.next-e2e; do \
+		[ -e "$$d" ] && sudo chown -R $(shell id -u):$(shell id -g) "$$d" || true; \
+	done
+	@echo "✓ pwa/.next now owned by $(shell id -un)"
 
 ## —— PWA clean ——
 
