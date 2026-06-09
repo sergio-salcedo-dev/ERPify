@@ -215,6 +215,7 @@ final class MarkerStatusMapContractTest extends TestCase
             },
             RateLimited::class => new class ('', 'x') extends DomainException implements RateLimited {
             },
+            // phpcs:ignore Generic.Files.LineLength.TooLong
             InvalidSearchCriteria::class => new class ('', 'x') extends DomainException implements InvalidSearchCriteria {
             },
             default => throw new LogicException(\sprintf(

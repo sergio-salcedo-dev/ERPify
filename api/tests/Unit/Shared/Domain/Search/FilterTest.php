@@ -28,11 +28,12 @@ final class FilterTest extends TestCase
 
     public function testInBuildsAListFilter(): void
     {
-        $filter = Filter::in('id', ['7f9154f3-0e6d-4c14-b1a5-7a2d40d51a4f', 'c0a8b0e2-2f64-43d3-9b21-1f2f5f4e8d3c']);
+        $ids = ['7f9154f3-0e6d-4c14-b1a5-7a2d40d51a4f', 'c0a8b0e2-2f64-43d3-9b21-1f2f5f4e8d3c'];
+        $filter = Filter::in('id', $ids);
 
         $this->assertSame('id', $filter->field);
         $this->assertSame(FilterOperator::In, $filter->operator);
-        $this->assertSame(['7f9154f3-0e6d-4c14-b1a5-7a2d40d51a4f', 'c0a8b0e2-2f64-43d3-9b21-1f2f5f4e8d3c'], $filter->value);
+        $this->assertSame($ids, $filter->value);
     }
 
     public function testContainsBuildsASubstringFilter(): void

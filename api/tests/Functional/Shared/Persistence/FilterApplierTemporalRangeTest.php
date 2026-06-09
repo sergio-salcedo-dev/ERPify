@@ -248,11 +248,12 @@ final class FilterApplierTemporalRangeTest extends KernelTestCase
     {
         $token = \strtolower($this->uniqueSuffix());
         $base = new DateTimeImmutable('2026-06-01T12:00:00+00:00');
+        $displayBase = self::NAME_DISPLAY_PREFIX . $token;
 
         return [
-            $this->createBankAt(self::NAME_DISPLAY_PREFIX . $token . ' Early', 'BR' . $this->uniqueSuffix(), $base->modify('-1 second')),
-            $this->createBankAt(self::NAME_DISPLAY_PREFIX . $token . ' Exact', 'BR' . $this->uniqueSuffix(), $base),
-            $this->createBankAt(self::NAME_DISPLAY_PREFIX . $token . ' Late', 'BR' . $this->uniqueSuffix(), $base->modify('+1 second')),
+            $this->createBankAt($displayBase . ' Early', 'BR' . $this->uniqueSuffix(), $base->modify('-1 second')),
+            $this->createBankAt($displayBase . ' Exact', 'BR' . $this->uniqueSuffix(), $base),
+            $this->createBankAt($displayBase . ' Late', 'BR' . $this->uniqueSuffix(), $base->modify('+1 second')),
             $base,
             $token,
         ];
