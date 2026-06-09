@@ -21,6 +21,7 @@ use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\SearchFieldMap;
 use InvalidArgumentException;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 /**
@@ -137,18 +138,28 @@ final class FilterApplierTest extends KernelTestCase
         });
     }
 
-    public function testContainsEscapesPercentWildcard(): void
-    {
-        $this->inRolledBackTransaction(function (): void {
+    #[DataProvider('provideContainsEscapesLikeWildcardCases')]
+    public function testContainsEscapesLikeWildcard(
+        string $literalName,
+        string $decoyName,
+        string $shortNamePrefix,
+        string $containsTerm,
+    ): void {
+        $this->inRolledBackTransaction(function () use (
+            $literalName,
+            $decoyName,
+            $shortNamePrefix,
+            $containsTerm,
+        ): void {
             $suffixLiteral = $this->uniqueSuffix();
             $suffixDecoy = $this->uniqueSuffix();
-            $literal = $this->createBank('Banco 100% Legal ' . $suffixLiteral, 'BNP' . $suffixLiteral);
-            $decoy = $this->createBank('Banco 100x Legal ' . $suffixDecoy, 'BNP' . $suffixDecoy);
+            $literal = $this->createBank($literalName . ' ' . $suffixLiteral, $shortNamePrefix . $suffixLiteral);
+            $decoy = $this->createBank($decoyName . ' ' . $suffixDecoy, $shortNamePrefix . $suffixDecoy);
 
             $queryBuilder = $this->bankQueryBuilder();
             $this->filterApplier->apply(
                 $queryBuilder,
-                Filters::fromList([Filter::contains('name', '100% Legal')]),
+                Filters::fromList([Filter::contains('name', $containsTerm)]),
                 $this->bankFieldMap(),
             );
 
@@ -158,48 +169,16 @@ final class FilterApplierTest extends KernelTestCase
         });
     }
 
-    public function testContainsEscapesUnderscoreWildcard(): void
+    /**
+     * @return iterable<string, array{string, string, string, string}>
+     */
+    public static function provideContainsEscapesLikeWildcardCases(): iterable
     {
-        $this->inRolledBackTransaction(function (): void {
-            $suffixLiteral = $this->uniqueSuffix();
-            $suffixDecoy = $this->uniqueSuffix();
-            $literal = $this->createBank('Plan a_b ' . $suffixLiteral, 'BNL' . $suffixLiteral);
-            $decoy = $this->createBank('Plan axb ' . $suffixDecoy, 'BNL' . $suffixDecoy);
-
-            $queryBuilder = $this->bankQueryBuilder();
-            $this->filterApplier->apply(
-                $queryBuilder,
-                Filters::fromList([Filter::contains('name', 'a_b')]),
-                $this->bankFieldMap(),
-            );
-
-            $resultIds = $this->resultIds($queryBuilder);
-            $this->assertContains($literal->getId(), $resultIds);
-            $this->assertNotContains($decoy->getId(), $resultIds);
-        });
-    }
-
-    public function testContainsEscapesBackslash(): void
-    {
-        $this->inRolledBackTransaction(function (): void {
-            $suffixLiteral = $this->uniqueSuffix();
-            $suffixDecoy = $this->uniqueSuffix();
-            $literal = $this->createBank('Ruta a\b ' . $suffixLiteral, 'BNB' . $suffixLiteral);
-            // Unescaped '\b' in a LIKE pattern means literal 'b', so broken escaping would
-            // match 'ab' while missing the row that actually contains 'a\b'.
-            $decoy = $this->createBank('Ruta ab ' . $suffixDecoy, 'BNB' . $suffixDecoy);
-
-            $queryBuilder = $this->bankQueryBuilder();
-            $this->filterApplier->apply(
-                $queryBuilder,
-                Filters::fromList([Filter::contains('name', 'a\b')]),
-                $this->bankFieldMap(),
-            );
-
-            $resultIds = $this->resultIds($queryBuilder);
-            $this->assertContains($literal->getId(), $resultIds);
-            $this->assertNotContains($decoy->getId(), $resultIds);
-        });
+        // Unescaped '\b' in a LIKE pattern means literal 'b', so broken escaping would
+        // match 'ab' while missing the row that actually contains 'a\b'.
+        yield 'percent wildcard' => ['Banco 100% Legal', 'Banco 100x Legal', 'BNP', '100% Legal'];
+        yield 'underscore wildcard' => ['Plan a_b', 'Plan axb', 'BNL', 'a_b'];
+        yield 'backslash escape' => ['Ruta a\b', 'Ruta ab', 'BNB', 'a\b'];
     }
 
     public function testSameFieldFiltersComposeWithAnd(): void
