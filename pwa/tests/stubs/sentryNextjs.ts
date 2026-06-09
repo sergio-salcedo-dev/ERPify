@@ -9,15 +9,15 @@
  * (see `SentryTelemetry.test.ts`, `createTelemetry.test.ts`). Everything here is
  * an inert no-op so importing telemetry never touches the network.
  */
-export function init(): void {}
+export const init = (): void => {};
 
 export const captureRouterTransitionStart = (): void => {};
 
 export const captureRequestError = (): void => {};
 
-export function captureException(): void {}
+export const captureException = (): void => {};
 
-export function captureMessage(): void {}
+export const captureMessage = (): void => {};
 
 export function withScope(callback: (scope: unknown) => void): void {
   callback({ setLevel: () => {}, setTag: () => {}, setContext: () => {} });

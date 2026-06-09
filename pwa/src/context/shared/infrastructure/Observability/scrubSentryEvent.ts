@@ -31,26 +31,35 @@ export function scrubSentryEvent<E extends Event>(event: E): E {
     event.breadcrumbs = scrubDeep(event.breadcrumbs) as E["breadcrumbs"];
   }
 
-  const request = event.request;
-  if (request) {
-    if (request.data && typeof request.data === "object") {
-      request.data = scrubDeep(request.data);
-    }
-    if (request.headers) {
-      request.headers = scrubDeep(request.headers) as Record<string, string>;
-    }
-    if (request.cookies) {
-      request.cookies = scrubDeep(request.cookies) as Record<string, string>;
-    }
-    if (typeof request.query_string === "string" && request.query_string !== "") {
-      request.query_string = scrubQueryString(request.query_string);
-    }
-    if (typeof request.url === "string" && request.url.includes("?")) {
-      request.url = scrubUrlQuery(request.url);
-    }
+  if (event.request) {
+    scrubRequest(event.request);
   }
 
   return event;
+}
+
+/**
+ * Scrubs the caller-controlled `request` sub-objects in place: the structured
+ * `data` / `headers` / `cookies` via the recursive denylist, and the raw
+ * `query_string` + `url` query (strings that bypass key-based filtering, so they
+ * are parsed param-by-param).
+ */
+function scrubRequest(request: NonNullable<Event["request"]>): void {
+  if (request.data && typeof request.data === "object") {
+    request.data = scrubDeep(request.data);
+  }
+  if (request.headers) {
+    request.headers = scrubDeep(request.headers) as Record<string, string>;
+  }
+  if (request.cookies) {
+    request.cookies = scrubDeep(request.cookies) as Record<string, string>;
+  }
+  if (typeof request.query_string === "string" && request.query_string !== "") {
+    request.query_string = scrubQueryString(request.query_string);
+  }
+  if (typeof request.url === "string" && request.url.includes("?")) {
+    request.url = scrubUrlQuery(request.url);
+  }
 }
 
 /** Strips denylisted params from a raw `a=b&c=d` query string. */

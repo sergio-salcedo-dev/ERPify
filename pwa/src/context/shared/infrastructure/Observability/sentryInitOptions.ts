@@ -2,7 +2,7 @@ import { AppEnv } from "@/context/shared/domain/types/appEnv";
 import { scrubSentryEvent } from "./scrubSentryEvent";
 
 /** Full tracing in dev (only the developer hits `erpify-pwa-dev`) for local verification. */
-const DEV_TRACES_SAMPLE_RATE = 1.0;
+const DEV_TRACES_SAMPLE_RATE = 1;
 /** Sampled tracing in staging/prod — parity with the API's prod `SENTRY_TRACES_SAMPLE_RATE`. */
 const PROD_TRACES_SAMPLE_RATE = 0.2;
 
