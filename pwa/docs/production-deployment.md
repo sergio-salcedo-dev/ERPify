@@ -35,6 +35,7 @@ Step-by-step guidance for deploying the monorepo safely. For a shorter checklist
 
 - Run with **`NODE_ENV=production`**. The **`pwa`** image listens on **3000** internally only; browsers hit **`php`** on **443** (or your LB).
 - Align **`NEXT_PUBLIC_API_BASE_URL`** (build arg) with the public site URL and **CORS** when origins differ.
+- **Sentry** — set **`NEXT_PUBLIC_SENTRY_DSN`** (build arg, **required** in prod via `compose.prod.yaml`) to the **`erpify-pwa-prod`** project DSN; the dev image uses **`erpify-pwa-dev`**. It is public (write-only ingest key), baked into the bundle. Errors + perf tracing (~0.2 sample) capture client, server, and edge runtimes; PII is off and events are scrubbed (`beforeSend`). Events POST to the same-origin **`/monitoring`** tunnel, so no CSP `connect-src` change and no ad-blocker drops. Source-map upload is **not** wired (prod stack traces are minified — deferred).
 
 ## Docker / images
 

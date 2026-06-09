@@ -84,9 +84,16 @@ you change anything here.
       sub-arrays and `query_string`. Secret-bearing keys outside the denylist,
       breadcrumbs and exception messages are out of that scope.
 - [ ] No secret hides behind a `NEXT_PUBLIC_*` name — those are inlined into the
-      browser bundle at build time. Only `NEXT_PUBLIC_API_BASE_URL` and
-      `NEXT_PUBLIC_APP_ENV` are allowed; the `pwa/tests/next-public-env-allowlist.test.ts`
-      guard (in `make pwa.test.unit`) fails the build on any other.
+      browser bundle at build time. Only `NEXT_PUBLIC_API_BASE_URL`,
+      `NEXT_PUBLIC_APP_ENV`, and `NEXT_PUBLIC_SENTRY_DSN` are allowed; the
+      `pwa/tests/next-public-env-allowlist.test.ts` guard (in `make pwa.test.unit`)
+      fails the build on any other. The Sentry DSN is intentionally public
+      (write-only, browser-embeddable); the real Sentry secret is
+      `SENTRY_AUTH_TOKEN` (source-map upload — not used yet, never `NEXT_PUBLIC_`).
+- [ ] Sentry events are scrubbed before send: `sendDefaultPii: false` plus a
+      `beforeSend` denylist scrub in parity with the API's `SentryEventScrubber`
+      (`scrubSentryEvent` / shared `redaction` keys); deliberate `telemetry.*`
+      causes pass through `serializeCause` (PII-scrubbed). No replay enabled.
 - [ ] Migrations are reversible (`down()`); no PII/secrets seeded; no
       `DROP TABLE` outside an explicit destructive migration.
 - [ ] Messenger handlers idempotent (at-least-once delivery).
