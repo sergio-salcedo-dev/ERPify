@@ -27,19 +27,19 @@ Feature: Search banks
     And the JSON node "pagination" should exist
     And 1 request got executed only for doctrine connection "default"
 
-  Scenario: Unknown pagination mode returns 400
+  Scenario: Unknown pagination mode returns 422
     When I send a "GET" request to "/backoffice/banks?paginationMode=unknownPaginationMode"
-    Then the response status code should be 400
+    Then the response status code should be 422
     And 0 requests got executed across all doctrine connections
 
-  Scenario: Array-form pagination mode returns 400
+  Scenario: Array-form pagination mode returns 422
     When I send a "GET" request to "/backoffice/banks?paginationMode[]=light"
-    Then the response status code should be 400
+    Then the response status code should be 422
     And 0 requests got executed across all doctrine connections
 
-  Scenario Outline: Invalid page returns 400
+  Scenario Outline: Invalid page returns 422
     When I send a "GET" request to "/backoffice/banks?page=<page>"
-    Then the response status code should be 400
+    Then the response status code should be 422
     And 0 requests got executed across all doctrine connections
     Examples:
       | page  |
@@ -47,9 +47,9 @@ Feature: Search banks
       | -1    |
       | 10001 |
 
-  Scenario Outline: Invalid limit returns 400
+  Scenario Outline: Invalid limit returns 422
     When I send a "GET" request to "/backoffice/banks?limit=<limit>"
-    Then the response status code should be 400
+    Then the response status code should be 422
     And 0 requests got executed across all doctrine connections
     Examples:
       | limit |

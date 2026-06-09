@@ -246,7 +246,7 @@ final readonly class ProblemDetailsFactory
                     new ProblemDetails(
                         type: 'validation-failed',
                         title: 'Validation failed.',
-                        status: Response::HTTP_BAD_REQUEST,
+                        status: Response::HTTP_UNPROCESSABLE_ENTITY,
                         detail: null,
                         instance: $instance,
                         correlationId: $correlationId,

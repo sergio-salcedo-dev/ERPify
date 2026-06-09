@@ -16,27 +16,24 @@ Feature: Get banks
     And the JSON node "data.storedObjectUrl" should be null
     And 1 request got executed only for doctrine connection "default"
 
-  Scenario Outline: Get a bank with an invalid id returns a 400 validation-failed Problem Details body
+  Scenario Outline: Get a bank with a malformed id returns a 400 invalid-uuid Problem Details body
     When I send a "GET" request to "/backoffice/banks/<bankId>"
     Then the response status code should be 400
     And the header "Content-Type" should be equal to "application/problem+json"
     And the header "Cache-Control" should contain "no-store"
     And the response should be in JSON
-    And the JSON node "type" should be equal to "validation-failed"
-    And the JSON node "title" should be equal to "Validation failed."
+    And the JSON node "type" should be equal to "invalid-uuid"
+    And the JSON node "title" should be equal to "The provided value is not a valid UUID."
     And the JSON node "status" should be equal to the number 400
-    And the JSON node "violations" should have 1 element
-    And the JSON node "violations[0].field" should be equal to "id"
-    And the JSON node "violations[0].message" should be equal to "<errorMessage>"
-    And the JSON node "violations[0].code" should be equal to "51120b12-a2bc-41bf-aa53-cd73daf330d0"
+    And the JSON node "violations" should not exist
     And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
     And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
     And the JSON node "debug" should have 5 elements
     And 0 requests got executed across all doctrine connections
     Examples:
-      | bankId      | errorMessage                    |
-      | null        | This value is not a valid UUID. |
-      | invalidUuid | This value is not a valid UUID. |
+      | bankId      |
+      | null        |
+      | invalidUuid |
 
   Scenario: Get a bank that does not exist returns a 404 bank-not-found Problem Details body
     When I send a "GET" request to "/backoffice/banks/2e6d865c-17b0-476a-85f2-037bf6d3b3dc"

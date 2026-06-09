@@ -55,7 +55,7 @@ For API changes specifically, walk these before pushing:
 
 -   Doctrine queries are parameterised (`:placeholder` / query-builder bindings); no `${…}` interpolation reaching SQL/DQL.
 -   New controllers / handlers declare a Security voter or `IsGranted`, or document why they are public.
--   Request DTOs carry `#[Assert\…]` constraints, enforced by `#[MapRequestPayload]` / `#[MapQueryString]` at mapping time; other inputs (route ids, uploads) go through the shared `Validator::ensure()` before any domain call. Validate UUIDs are UUIDs.
+-   Request DTOs carry `#[Assert\…]` constraints, enforced by `#[MapRequestPayload]` / `#[MapQueryString]` at mapping time (failures → 422 `validation-failed`); other inputs (uploads, non-id scalars) go through the shared `Validator::ensure()` before any domain call. Route-id UUIDs are guarded by the domain primitive `Uuid::ensure()` (`Shared/Domain/Uuid/Uuid`) → `InvalidUuidException` (400 `invalid-uuid`) before any repository lookup; a malformed id is a request-target error, distinct from a valid-but-absent id (404). Validate UUIDs are UUIDs.
 -   Serializer groups never expose audit fields (`id`, `createdAt`, `updatedAt`, internal flags) to client-supplied payloads.
 -   Errors follow RFC 9457 Problem Details; no stack traces or DB strings leak outside `dev`.
 -   `.env*.local` and other secret files are NOT in the diff.

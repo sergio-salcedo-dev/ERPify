@@ -9,9 +9,9 @@ use Erpify\Backoffice\Bank\Domain\Exception\BankInUseException;
 use Erpify\Backoffice\Bank\Domain\Exception\BankNotFoundException;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository;
+use Erpify\Shared\Domain\Uuid\InvalidUuidException;
 use Symfony\Component\Messenger\Exception\ExceptionInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
-use Symfony\Component\Validator\Exception\ValidationFailedException;
 
 final readonly class BankDeleter
 {
@@ -24,8 +24,8 @@ final readonly class BankDeleter
     }
 
     /**
+     * @throws InvalidUuidException  when $id is not a well-formed UUID (400 invalid-input)
      * @throws BankNotFoundException
-     * @throws ValidationFailedException
      * @throws BankInUseException
      * @throws ExceptionInterface
      */

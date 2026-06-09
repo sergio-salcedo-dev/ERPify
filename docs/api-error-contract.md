@@ -66,13 +66,15 @@ Marker resolution honours implements-clause order, intersected with the canonica
 
 | Symfony exception                                 | HTTP status            | `type`                                                       |
 |---------------------------------------------------|------------------------|--------------------------------------------------------------|
-| `Validator\Exception\ValidationFailedException` * | 400                    | `validation-failed` (+ `violations[]`)                       |
+| `Validator\Exception\ValidationFailedException` * | 422                    | `validation-failed` (+ `violations[]`)                       |
 | `Security\Core\Exception\AccessDeniedException`   | 403                    | `forbidden`                                                  |
 | `Security\Core\Exception\AuthenticationException` | 401                    | `unauthenticated`                                            |
 | `HttpKernel\Exception\HttpExceptionInterface`     | from `getStatusCode()` | mirrors marker default for known statuses, else `http-error` |
 | Anything else (`\Throwable`)                      | 500                    | `unhandled-exception`                                        |
 
-\* The factory walks `getPrevious()` so wrapped `ValidationFailedException` (e.g. inside Symfony's `RequestPayloadValueResolver` 422 wrapper used by `#[MapRequestPayload]` / `#[MapQueryString]`) is unwrapped and re-mapped to a 400 with the structured `violations[]` extension instead of Symfony's generic 422. `violations[]` shape: `[{field, message, code}, ...]`.
+\* The factory walks `getPrevious()` so wrapped `ValidationFailedException` (e.g. inside Symfony's `RequestPayloadValueResolver` 422 wrapper used by `#[MapRequestPayload]` / `#[MapQueryString]`) is unwrapped and re-emitted as a **422** carrying the structured `violations[]` extension in place of Symfony's generic, unstructured 422 body. `violations[]` shape: `[{field, message, code}, ...]`.
+
+422 is the contract for *semantic* validation of request **content** (RFC 9110 §15.5.21): the request body (and, by sharing the same `validation-failed` type, query-string DTOs) parsed correctly but the values violate constraints. It is deliberately distinct from **400 `invalid-input`**, which covers a malformed *request target* — most notably a path parameter that is not a well-formed UUID. Route ids are guarded by [`Uuid::ensure()`](../api/src/Shared/Domain/Uuid/Uuid.php), which throws [`InvalidUuidException`](../api/src/Shared/Domain/Uuid/InvalidUuidException.php) (`InvalidInput` marker → 400 `invalid-uuid`) *before* any repository lookup; a well-formed id with no matching row is a 404. So the three outcomes for `GET /banks/{id}` are: malformed id → **400 `invalid-uuid`**, absent → **404**, and body/DTO validation elsewhere → **422 `validation-failed`**. See ADR `_bmad-output/planning-artifacts/architecture.md`.
 
 ## How to add a new error (Amelia walk-through from PRD §Journey 1)
 

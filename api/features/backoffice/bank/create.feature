@@ -28,7 +28,7 @@ Feature: Create a bank
     """
     {"name": "Incomplete Bank"}
     """
-    Then the response status code should be 400
+    Then the response status code should be 422
     And 0 requests got executed across all doctrine connections
 
   Scenario: Fail to create a bank whose name only differs in case from an existing one
@@ -36,7 +36,7 @@ Feature: Create a bank
     """
     {"name": "bbva", "shortName": "BB"}
     """
-    Then the response status code should be 400
+    Then the response status code should be 422
     And the JSON node "type" should be equal to "validation-failed"
     And the JSON node "violations[0].field" should be equal to "name"
     And 2 requests got executed only for doctrine connection "default"
@@ -46,7 +46,7 @@ Feature: Create a bank
     """
     {"name": "Some New Bank", "shortName": "bbva"}
     """
-    Then the response status code should be 400
+    Then the response status code should be 422
     And the JSON node "type" should be equal to "validation-failed"
     And the JSON node "violations[0].field" should be equal to "shortName"
     And 2 requests got executed only for doctrine connection "default"
@@ -56,7 +56,7 @@ Feature: Create a bank
     """
     {"name": "Sociedad Anonima", "shortName": "SA2"}
     """
-    Then the response status code should be 400
+    Then the response status code should be 422
     And the JSON node "type" should be equal to "validation-failed"
     And the JSON node "violations[0].field" should be equal to "name"
     And 2 requests got executed only for doctrine connection "default"
