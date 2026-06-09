@@ -76,6 +76,15 @@ final class FilterApplierTemporalRangeTest extends KernelTestCase
 
             $this->assertEqualsCanonicalizing([$exact->getId(), $late->getId()], $resultIds);
             $this->assertNotContains($early->getId(), $resultIds);
+
+            // The triplet sets createdAt AND updatedAt to the same instant, so the identical
+            // query over updatedAt must discriminate identically — proving updatedAt is wired to
+            // its own column, not aliased to createdAt (a mis-mapped updatedAt would not).
+            $updatedAtIds = $this->applyAndResultIds(Filters::fromList([
+                Filter::contains('name', self::NAME_FILTER_PREFIX . $token),
+                Filter::gte('updatedAt', $base->format(DateTimeInterface::ATOM)),
+            ]));
+            $this->assertEqualsCanonicalizing([$exact->getId(), $late->getId()], $updatedAtIds);
         });
     }
 
@@ -90,6 +99,13 @@ final class FilterApplierTemporalRangeTest extends KernelTestCase
             ]));
 
             $this->assertSame([$late->getId()], $resultIds);
+
+            // Same exclusivity over updatedAt — wired independently, not aliased to createdAt.
+            $updatedAtIds = $this->applyAndResultIds(Filters::fromList([
+                Filter::contains('name', self::NAME_FILTER_PREFIX . $token),
+                Filter::gt('updatedAt', $base->format(DateTimeInterface::ATOM)),
+            ]));
+            $this->assertSame([$late->getId()], $updatedAtIds);
         });
     }
 
@@ -169,13 +185,14 @@ final class FilterApplierTemporalRangeTest extends KernelTestCase
         $queryBuilder = $this->bankQueryBuilder();
 
         // The +00:00 offset form and the canonical JS Date.prototype.toISOString() form (millis
-        // + Z) are both accepted, bound as typed datetime_immutable parameters, and normalized
-        // to the same UTC instant — never a raw string against a timestamp column.
+        // + Z) are both accepted, bound as typed datetime_immutable parameters — never a raw
+        // string against a timestamp column. Two DISTINCT instants prove each format branch
+        // parses to its own UTC value rather than coinciding on a single instant.
         $this->filterApplier->apply(
             $queryBuilder,
             Filters::fromList([
                 Filter::gte('createdAt', '2026-01-01T00:00:00+00:00'),
-                Filter::lte('createdAt', '2026-01-01T00:00:00.000Z'),
+                Filter::lte('createdAt', '2026-03-15T08:30:00.000Z'),
             ]),
             $this->bankFieldMap(),
         );
@@ -183,12 +200,20 @@ final class FilterApplierTemporalRangeTest extends KernelTestCase
         $parameters = $queryBuilder->getParameters();
         $this->assertCount(2, $parameters);
 
+        $boundInstants = [];
+
         foreach ($parameters as $parameter) {
             $value = $parameter->getValue();
             $this->assertInstanceOf(DateTimeImmutable::class, $value);
             $this->assertSame(Types::DATETIME_IMMUTABLE, $parameter->getType());
-            $this->assertSame('2026-01-01T00:00:00+00:00', $value->format(DateTimeInterface::ATOM));
+            $boundInstants[] = $value->format(DateTimeInterface::ATOM);
         }
+
+        // Order across parameters is not guaranteed, so compare the set.
+        $this->assertEqualsCanonicalizing(
+            ['2026-01-01T00:00:00+00:00', '2026-03-15T08:30:00+00:00'],
+            $boundInstants,
+        );
     }
 
     #[DataProvider('provideInvalidRangeBoundIsRejectedAsInvalidSearchValueCases')]
@@ -215,13 +240,15 @@ final class FilterApplierTemporalRangeTest extends KernelTestCase
     {
         // "now"/date-only parse under the lenient constructor but must NOT under the strict
         // format set (a relative bound would be an unintended vector); the null byte makes
-        // createFromFormat throw a ValueError that would otherwise escape as an engine 500;
-        // +25:00 is beyond any real timezone. All are client input → a 400, never a 5xx.
+        // createFromFormat throw a ValueError that would otherwise escape as an engine 500.
+        // The real-world offset span is asymmetric (UTC-12..UTC+14), so both +25:00 and the
+        // non-existent -13:00 are rejected. All are client input → a 400, never a 5xx.
         yield 'malformed' => ['not-a-date'];
         yield 'lax relative form' => ['now'];
         yield 'date without time' => ['2026-01-01'];
         yield 'null byte' => ["2026-01-01T00:00:00+00:00\0evil"];
-        yield 'out-of-range utc offset' => ['2026-01-01T00:00:00+25:00'];
+        yield 'out-of-range east utc offset' => ['2026-01-01T00:00:00+25:00'];
+        yield 'out-of-range west utc offset' => ['2026-01-01T00:00:00-13:00'];
     }
 
     public function testRangeOperatorOnANonDateTimeFieldIsRejectedAsProgrammerError(): void

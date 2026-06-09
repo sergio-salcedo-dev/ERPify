@@ -166,3 +166,22 @@ the boot crash — were patched in-loop).
   URL with a token in its query, a SQL string). The `before_send` scrubber only walks event `extra` +
   `request`, not `$event->getBreadcrumbs()`. Add a breadcrumb pass (walk each breadcrumb's metadata
   through the denylist) if/when breadcrumb content proves sensitive in practice.
+
+## Deferred from: code review of story-1.7 (2026-06-09, step-04)
+
+Surfaced by the adversarial review of the temporal range operators. Both are Low; the live correctness
+and security invariants (typed binding, strict parse, 400-not-500, asymmetric offset bound) were patched
+in-loop. The third 1.7 deferral (the unguarded `FieldMapping` flag combinations) is already recorded
+above under the original implementation note.
+
+- **Harden `FilterApplier::parseStrict` with a reparse round-trip.** Validity currently rests on
+  `DateTimeImmutable::getLastErrors()` warning/error counts after `createFromFormat`, plus the adjacency
+  of the `createFromFormat`/`getLastErrors` calls (a process-global). Verified functionally correct on
+  PHP 8.5.7 against every malformed/relative/null-byte/leap-second/out-of-range-offset case. Optional
+  robustness: add `$dt->format($format) === $value` so correctness no longer depends on warning emission
+  nor on no intervening datetime call mutating the global error state. Low.
+- **`DROP INDEX IF EXISTS` in the migration `down()`.** `Version20260608165844::down()` drops
+  `idx_bank_created_at` / `idx_bank_updated_at` without `IF EXISTS`, so a half-applied `up()` would abort
+  the rollback on the missing one. The indexes are perf-only (NFR4) and have no behavior-test coverage —
+  a forgotten migration fails no test. Add `IF EXISTS` (and consider a `doctrine:schema:validate` gate)
+  if migration reversibility under partial application becomes a concern. Low.

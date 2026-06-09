@@ -48,8 +48,11 @@ final readonly class FilterApplier
         'Y-m-d\TH:i:s.uP',
     ];
 
-    /** Largest real-world UTC offset (UTC+14 / UTC-12); beyond it a bound is nonsensical. */
-    private const int MAX_UTC_OFFSET_SECONDS = 14 * 3600;
+    /** Easternmost real-world UTC offset (UTC+14, e.g. Kiribati); east of it a bound is nonsensical. */
+    private const int MAX_UTC_OFFSET_EAST_SECONDS = 14 * 3600;
+
+    /** Westernmost real-world UTC offset (UTC-12, e.g. Baker Island); west of it a bound is nonsensical. */
+    private const int MIN_UTC_OFFSET_WEST_SECONDS = -12 * 3600;
 
     public function apply(QueryBuilder $queryBuilder, Filters $filters, SearchFieldMap $fieldMap): void
     {
@@ -238,10 +241,13 @@ final readonly class FilterApplier
         $hasParseProblem = false !== $errors && ($errors['warning_count'] > 0 || $errors['error_count'] > 0);
 
         // `false === $dateTime` is kept first so the offset read only runs on a real instant.
+        // The real-world offset span is asymmetric (UTC-12 to UTC+14), so each side is checked
+        // separately; a symmetric abs() would admit the non-existent -13/-14h offsets.
         if (
             false === $dateTime
             || $hasParseProblem
-            || \abs($dateTime->getOffset()) > self::MAX_UTC_OFFSET_SECONDS
+            || $dateTime->getOffset() > self::MAX_UTC_OFFSET_EAST_SECONDS
+            || $dateTime->getOffset() < self::MIN_UTC_OFFSET_WEST_SECONDS
         ) {
             return null;
         }
