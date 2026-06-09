@@ -93,7 +93,9 @@ final class FilterQueryTest extends TestCase
         yield 'eq with blank value' => [new FilterQuery('name', FilterOperator::Eq, '   '), ['value']];
         // Unicode-whitespace-only values survive ASCII trim() but the field normalizer folds
         // them to blank downstream; they must be rejected at mapping, not 500 in the applier.
-        yield 'eq with non-breaking-space value' => [new FilterQuery('name', FilterOperator::Eq, "\u{00A0}"), ['value']];
+        yield 'eq with non-breaking-space value' => [
+            new FilterQuery('name', FilterOperator::Eq, "\u{00A0}"), ['value'],
+        ];
         yield 'contains with ideographic-space value' => [
             new FilterQuery('name', FilterOperator::Contains, "\u{3000}"),
             ['value'],
