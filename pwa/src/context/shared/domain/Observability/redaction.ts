@@ -60,9 +60,11 @@ export function scrubDeep(value: unknown, depth = 0, state = { nodes: 0 }): unkn
     return value;
   }
 
-  // If it's a non-plain object (has a custom constructor), pass it through
-  // untouched to avoid accidentally breaking class instances or complex types.
-  if (value.constructor !== Object && !Array.isArray(value)) {
+  // If it's a non-plain object (has a custom constructor other than Object),
+  // pass it through untouched to avoid accidentally breaking class instances.
+  // Objects with no prototype (constructor is undefined) are treated as plain.
+  const ctor = (value as Record<string, unknown>).constructor;
+  if (ctor !== undefined && ctor !== Object && !Array.isArray(value)) {
     return value;
   }
 

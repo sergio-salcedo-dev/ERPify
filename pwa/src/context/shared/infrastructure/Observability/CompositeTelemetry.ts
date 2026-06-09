@@ -26,10 +26,11 @@ export class CompositeTelemetry implements Telemetry {
       try {
         emit(sink);
       } catch (error) {
-        // A failing sink must not suppress the others or reach the caller, but
-        // we log it to the console so the failure is visible to developers.
+        // A failing sink must not suppress the others or reach the caller.
+        // We log the meta-failure to the console so it's visible during
+        // development/debugging; this is a last-resort visibility channel.
         // eslint-disable-next-line no-console
-        console.error("Telemetry sink failed:", error);
+        console.error("Telemetry composite: sink failed to emit diagnostic", error);
       }
     }
   }

@@ -97,4 +97,11 @@ describe("scrubDeep", () => {
     const user = new User("Alice");
     expect(scrubDeep(user)).toBe(user);
   });
+
+  it("scrubs objects with no prototype (Object.create(null))", () => {
+    const noProto = Object.create(null);
+    noProto.token = "secret";
+    noProto.ok = true;
+    expect(scrubDeep(noProto)).toEqual({ ok: true });
+  });
 });

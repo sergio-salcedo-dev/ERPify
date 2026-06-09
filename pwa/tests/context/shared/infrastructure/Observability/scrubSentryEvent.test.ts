@@ -61,6 +61,14 @@ describe("scrubSentryEvent", () => {
     expect(scrubSentryEvent(event).request?.url).toBe("https://app.example/banks?page=2#section");
   });
 
+  it("handles URLs with multiple hashes gracefully (preserving them)", () => {
+    const event = {
+      request: { url: "https://app.example/banks?token=abc#section#subtitle" },
+    } as unknown as ErrorEvent;
+
+    expect(scrubSentryEvent(event).request?.url).toBe("https://app.example/banks#section#subtitle");
+  });
+
   it("scrubs stringified JSON request bodies", () => {
     const event = {
       request: { data: JSON.stringify({ token: "t", name: "ok" }) },

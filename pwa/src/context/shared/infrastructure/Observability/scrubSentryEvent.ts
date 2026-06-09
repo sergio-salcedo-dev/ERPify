@@ -53,8 +53,9 @@ function scrubRequest(request: NonNullable<Event["request"]>): void {
       try {
         const parsed = JSON.parse(request.data);
         request.data = JSON.stringify(scrubDeep(parsed));
-      } catch {
-        // Fall back to original if not valid JSON.
+      } catch (error) {
+        // Fall back to original if not valid JSON; we do not log here to avoid
+        // noise on every non-JSON POST body (e.g. form-data).
       }
     }
   }
@@ -86,15 +87,20 @@ function scrubQueryString(queryString: string): string {
 
 /** Strips denylisted params from a URL's query, preserving the path and hash. */
 function scrubUrl(url: string): string {
-  const [pathAndQuery, hash] = url.split("#");
-  const [path, query] = pathAndQuery.split("?");
+  const hashStart = url.indexOf("#");
+  const pathAndQuery = hashStart === -1 ? url : url.slice(0, hashStart);
+  const hash = hashStart === -1 ? "" : url.slice(hashStart);
 
-  if (query === undefined) {
-    return hash !== undefined ? `${path}#${hash}` : path;
+  const queryStart = pathAndQuery.indexOf("?");
+  if (queryStart === -1) {
+    return pathAndQuery + hash;
   }
+
+  const path = pathAndQuery.slice(0, queryStart);
+  const query = pathAndQuery.slice(queryStart + 1);
 
   const scrubbedQuery = scrubQueryString(query);
   const result = scrubbedQuery === "" ? path : `${path}?${scrubbedQuery}`;
 
-  return hash !== undefined ? `${result}#${hash}` : result;
+  return result + hash;
 }

@@ -35,6 +35,9 @@ describe("CompositeTelemetry", () => {
 
     expect(() => composite.warn("w")).not.toThrow();
     expect(healthy.warn).toHaveBeenCalledWith("w", undefined);
-    expect(consoleSpy).toHaveBeenCalledWith("Telemetry sink failed:", error);
+    expect(consoleSpy).toHaveBeenCalledWith(
+      "Telemetry composite: sink failed to emit diagnostic",
+      error,
+    );
   });
 });

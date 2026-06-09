@@ -45,7 +45,10 @@ export class SentryTelemetry implements Telemetry {
       if (cause !== undefined) {
         // serializeCause already returns a plain record ({ value } for non-Error
         // causes), so attach it directly — no extra wrapping layer.
-        sentryScope.setContext("cause", { ...serializeCause(cause) });
+        const serialized = serializeCause(cause);
+        if (serialized !== undefined) {
+          sentryScope.setContext("cause", serialized);
+        }
       }
       Sentry.captureMessage(message, level);
     });
