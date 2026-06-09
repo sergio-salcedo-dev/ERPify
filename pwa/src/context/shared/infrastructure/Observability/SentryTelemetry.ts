@@ -47,9 +47,7 @@ export class SentryTelemetry implements Telemetry {
         // causes), so attach it directly — no extra wrapping layer.
         const serialized = serializeCause(cause);
         if (serialized !== undefined) {
-          // SerializedCause is a precise interface; Sentry's setContext wants a
-          // string-indexed record. The shape is a plain record at runtime.
-          sentryScope.setContext("cause", serialized as Record<string, unknown>);
+          sentryScope.setContext("cause", serialized);
         }
       }
       Sentry.captureMessage(message, level);

@@ -9,13 +9,13 @@ export const MAX_CAUSE_CHAIN = 5;
  * record (name / message / stack / nested cause) or a scrubbed `value` for
  * non-Error causes.
  */
-export interface SerializedCause {
+export type SerializedCause = {
   name?: string;
   message?: string;
   stack?: string;
   cause?: SerializedCause;
   value?: unknown;
-}
+};
 
 export interface SerializationOptions {
   maxMessageChars?: number;
