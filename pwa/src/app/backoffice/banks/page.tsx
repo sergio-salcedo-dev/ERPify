@@ -42,6 +42,7 @@ import {
   DEFAULT_SORT,
   EMPTY_FILTER,
   hasActiveFilter,
+  isDefaultSort,
   type BanksFilter,
   type BanksSort,
 } from "./_lib/banksFilterSort";
@@ -594,6 +595,16 @@ export default function BanksListPage() {
       </Button>
     ) : undefined;
 
+  // Keep the filters toolbar mounted whenever the user is actively filtering or
+  // sorting, not only when READY. Each filter/sort change refetches and flips
+  // the boundary to LOADING; gating purely on READY would unmount the toolbar
+  // mid-interaction, collapsing the panel and stealing focus from the search
+  // box on every keystroke. While filtering/sorting the skeleton stays scoped
+  // to the list region (the AsyncBoundary below); only the pristine first load
+  // and the no-filter empty state render without the toolbar.
+  const showFiltersToolbar =
+    boundaryState === ViewStatus.READY || hasActiveFilter(filter) || !isDefaultSort(sort);
+
   return (
     <div
       ref={listContainerRef}
@@ -654,7 +665,7 @@ export default function BanksListPage() {
         </Link>
       </header>
 
-      {boundaryState === ViewStatus.READY ? (
+      {showFiltersToolbar ? (
         <BanksFilters
           filter={filter}
           onFilterChange={setFilter}
