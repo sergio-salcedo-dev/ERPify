@@ -45,31 +45,42 @@ export function scrubSentryEvent<E extends Event>(event: E): E {
  * are parsed param-by-param).
  */
 function scrubRequest(request: NonNullable<Event["request"]>): void {
-  if (request.data) {
-    if (typeof request.data === "object") {
-      request.data = scrubDeep(request.data);
-    } else if (typeof request.data === "string" && request.data.startsWith("{")) {
-      // Attempt to scrub stringified JSON bodies which would otherwise bypass redaction.
-      try {
-        const parsed = JSON.parse(request.data);
-        request.data = JSON.stringify(scrubDeep(parsed));
-      } catch (error) {
-        // Fall back to original if not valid JSON; we do not log here to avoid
-        // noise on every non-JSON POST body (e.g. form-data).
-      }
+  const { data, headers, cookies, query_string: qs, url } = request;
+
+  if (data) {
+    if (typeof data === "object") {
+      request.data = scrubDeep(data);
+    } else if (typeof data === "string" && data.startsWith("{")) {
+      request.data = tryScrubJson(data);
     }
   }
-  if (request.headers) {
-    request.headers = scrubDeep(request.headers) as Record<string, string>;
+
+  if (headers) {
+    request.headers = scrubDeep(headers) as Record<string, string>;
   }
-  if (request.cookies) {
-    request.cookies = scrubDeep(request.cookies) as Record<string, string>;
+
+  if (cookies) {
+    request.cookies = scrubDeep(cookies) as Record<string, string>;
   }
-  if (typeof request.query_string === "string" && request.query_string !== "") {
-    request.query_string = scrubQueryString(request.query_string);
+
+  if (typeof qs === "string" && qs !== "") {
+    request.query_string = scrubQueryString(qs);
   }
-  if (typeof request.url === "string") {
-    request.url = scrubUrl(request.url);
+
+  if (typeof url === "string") {
+    request.url = scrubUrl(url);
+  }
+}
+
+/** Attempt to scrub stringified JSON bodies which would otherwise bypass redaction. */
+function tryScrubJson(data: string): string {
+  try {
+    const parsed = JSON.parse(data);
+    return JSON.stringify(scrubDeep(parsed));
+  } catch (error) {
+    // Fall back to original if not valid JSON; we do not log here to avoid
+    // noise on every non-JSON POST body (e.g. form-data).
+    return data;
   }
 }
 

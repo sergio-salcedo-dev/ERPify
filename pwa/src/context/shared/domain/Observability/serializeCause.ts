@@ -41,7 +41,7 @@ function truncate(text: string, max: number): string {
 export function serializeCause(
   cause: unknown,
   chainDepth = 0,
-  options: SerializationOptions = {},
+  options?: SerializationOptions,
 ): SerializedCause | undefined {
   if (cause === undefined || cause === null) {
     return undefined;
@@ -51,7 +51,7 @@ export function serializeCause(
     maxMessageChars = MAX_MESSAGE_CHARS,
     maxStackChars = MAX_STACK_CHARS,
     maxCauseChain = MAX_CAUSE_CHAIN,
-  } = options;
+  } = options ?? {};
 
   if (cause instanceof Error) {
     const serialized: SerializedCause = {

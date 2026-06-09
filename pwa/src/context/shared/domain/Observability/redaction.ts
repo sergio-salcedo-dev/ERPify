@@ -40,8 +40,9 @@ export function isDenylistedKey(key: string): boolean {
  * Depth-bounded (MAX_DEPTH) and node-bounded (MAX_NODES) so a cyclic or
  * massive object can never loop forever or block the main thread.
  */
-export function scrubDeep(value: unknown, depth = 0, state = { nodes: 0 }): unknown {
-  state.nodes += 1;
+export function scrubDeep(value: unknown, depth = 0, state?: { nodes: number }): unknown {
+  const actualState = state ?? { nodes: 0 };
+  actualState.nodes += 1;
 
   if (value === null || typeof value !== "object") {
     return value;
@@ -50,7 +51,7 @@ export function scrubDeep(value: unknown, depth = 0, state = { nodes: 0 }): unkn
   // At the depth or node cap, return a sentinel rather than the raw object:
   // returning the value verbatim would let a denylisted key sitting past the
   // limit ride out unscrubbed, breaking the strip guarantee.
-  if (depth >= MAX_DEPTH || state.nodes >= MAX_NODES) {
+  if (depth >= MAX_DEPTH || actualState.nodes >= MAX_NODES) {
     return "[depth-limited]";
   }
 
@@ -64,12 +65,12 @@ export function scrubDeep(value: unknown, depth = 0, state = { nodes: 0 }): unkn
   // pass it through untouched to avoid accidentally breaking class instances.
   // Objects with no prototype (constructor is undefined) are treated as plain.
   const ctor = (value as Record<string, unknown>).constructor;
-  if (ctor !== undefined && ctor !== Object && !Array.isArray(value)) {
+  if (ctor && ctor !== Object && !Array.isArray(value)) {
     return value;
   }
 
   if (Array.isArray(value)) {
-    return value.map((item) => scrubDeep(item, depth + 1, state));
+    return value.map((item) => scrubDeep(item, depth + 1, actualState));
   }
 
   const scrubbed: Record<string, unknown> = {};
@@ -77,7 +78,7 @@ export function scrubDeep(value: unknown, depth = 0, state = { nodes: 0 }): unkn
     if (isDenylistedKey(key)) {
       continue;
     }
-    scrubbed[key] = scrubDeep(nested, depth + 1, state);
+    scrubbed[key] = scrubDeep(nested, depth + 1, actualState);
   }
   return scrubbed;
 }
