@@ -18,20 +18,18 @@ final class FieldMappingTest extends TestCase
 {
     public function testUuidFieldRejectsContainsAmongExplicitOperators(): void
     {
-        $this->expectException(LogicException::class);
-
-        new FieldMapping(
+        $this->assertConstructionRejected(static fn (): FieldMapping => new FieldMapping(
             'b.id',
             operators: [FilterOperator::Eq, FilterOperator::Contains],
             requiresUuidValues: true,
-        );
+        ));
     }
 
     public function testUuidFieldRejectsDefaultOperatorsBecauseTheyIncludeContains(): void
     {
-        $this->expectException(LogicException::class);
-
-        new FieldMapping('b.id', requiresUuidValues: true);
+        $this->assertConstructionRejected(
+            static fn (): FieldMapping => new FieldMapping('b.id', requiresUuidValues: true),
+        );
     }
 
     public function testUuidFieldAcceptsEqAndIn(): void
@@ -58,20 +56,18 @@ final class FieldMappingTest extends TestCase
 
     public function testDateTimeFieldRejectsContainsAmongExplicitOperators(): void
     {
-        $this->expectException(LogicException::class);
-
-        new FieldMapping(
+        $this->assertConstructionRejected(static fn (): FieldMapping => new FieldMapping(
             'b.createdAt',
             operators: [FilterOperator::Gte, FilterOperator::Contains],
             requiresDateTimeValues: true,
-        );
+        ));
     }
 
     public function testDateTimeFieldRejectsDefaultOperatorsBecauseTheyIncludeContains(): void
     {
-        $this->expectException(LogicException::class);
-
-        new FieldMapping('b.createdAt', requiresDateTimeValues: true);
+        $this->assertConstructionRejected(
+            static fn (): FieldMapping => new FieldMapping('b.createdAt', requiresDateTimeValues: true),
+        );
     }
 
     public function testDateTimeFieldAllowsRangeOperators(): void
@@ -87,5 +83,18 @@ final class FieldMappingTest extends TestCase
         $this->assertTrue($mapping->allows(FilterOperator::Lt));
         $this->assertTrue($mapping->allows(FilterOperator::Lte));
         $this->assertFalse($mapping->allows(FilterOperator::Eq));
+    }
+
+    /**
+     * Asserts the guarded constructor rejects the given arguments. The construction is deferred
+     * inside the closure so the `new` is a returned (used) value, never a bare discarded statement.
+     *
+     * @param callable(): FieldMapping $construct
+     */
+    private function assertConstructionRejected(callable $construct): void
+    {
+        $this->expectException(LogicException::class);
+
+        $construct();
     }
 }

@@ -235,12 +235,14 @@ final readonly class FilterApplier
         }
 
         $errors = DateTimeImmutable::getLastErrors();
+        $hasParseProblem = false !== $errors && ($errors['warning_count'] > 0 || $errors['error_count'] > 0);
 
-        if (false === $dateTime || (false !== $errors && ($errors['warning_count'] > 0 || $errors['error_count'] > 0))) {
-            return null;
-        }
-
-        if (\abs($dateTime->getOffset()) > self::MAX_UTC_OFFSET_SECONDS) {
+        // `false === $dateTime` is kept first so the offset read only runs on a real instant.
+        if (
+            false === $dateTime
+            || $hasParseProblem
+            || \abs($dateTime->getOffset()) > self::MAX_UTC_OFFSET_SECONDS
+        ) {
             return null;
         }
 

@@ -42,6 +42,12 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 #[CoversClass(FilterApplier::class)]
 final class FilterApplierTemporalRangeTest extends KernelTestCase
 {
+    /** Display-name prefix every persisted bank shares; the per-run token disambiguates rows. */
+    private const string NAME_DISPLAY_PREFIX = 'Range ';
+
+    /** Lowercased form the CONTAINS filter matches (the name normalizer lowercases the value). */
+    private const string NAME_FILTER_PREFIX = 'range ';
+
     private EntityManagerInterface $entityManager;
 
     private FilterApplier $filterApplier;
@@ -64,7 +70,7 @@ final class FilterApplierTemporalRangeTest extends KernelTestCase
             [$early, $exact, $late, $base, $token] = $this->persistTemporalTriplet();
 
             $resultIds = $this->applyAndResultIds(Filters::fromList([
-                Filter::contains('name', 'range ' . $token),
+                Filter::contains('name', self::NAME_FILTER_PREFIX . $token),
                 Filter::gte('createdAt', $base->format(DateTimeInterface::ATOM)),
             ]));
 
@@ -79,7 +85,7 @@ final class FilterApplierTemporalRangeTest extends KernelTestCase
             [, , $late, $base, $token] = $this->persistTemporalTriplet();
 
             $resultIds = $this->applyAndResultIds(Filters::fromList([
-                Filter::contains('name', 'range ' . $token),
+                Filter::contains('name', self::NAME_FILTER_PREFIX . $token),
                 Filter::gt('createdAt', $base->format(DateTimeInterface::ATOM)),
             ]));
 
@@ -93,7 +99,7 @@ final class FilterApplierTemporalRangeTest extends KernelTestCase
             [$early, $exact, , $base, $token] = $this->persistTemporalTriplet();
 
             $resultIds = $this->applyAndResultIds(Filters::fromList([
-                Filter::contains('name', 'range ' . $token),
+                Filter::contains('name', self::NAME_FILTER_PREFIX . $token),
                 Filter::lte('createdAt', $base->format(DateTimeInterface::ATOM)),
             ]));
 
@@ -107,7 +113,7 @@ final class FilterApplierTemporalRangeTest extends KernelTestCase
             [$early, , , $base, $token] = $this->persistTemporalTriplet();
 
             $resultIds = $this->applyAndResultIds(Filters::fromList([
-                Filter::contains('name', 'range ' . $token),
+                Filter::contains('name', self::NAME_FILTER_PREFIX . $token),
                 Filter::lt('createdAt', $base->format(DateTimeInterface::ATOM)),
             ]));
 
@@ -122,7 +128,7 @@ final class FilterApplierTemporalRangeTest extends KernelTestCase
 
             $bound = $base->format(DateTimeInterface::ATOM);
             $resultIds = $this->applyAndResultIds(Filters::fromList([
-                Filter::contains('name', 'range ' . $token),
+                Filter::contains('name', self::NAME_FILTER_PREFIX . $token),
                 Filter::gte('createdAt', $bound),
                 Filter::lte('createdAt', $bound),
             ]));
@@ -136,14 +142,14 @@ final class FilterApplierTemporalRangeTest extends KernelTestCase
         $this->inRolledBackTransaction(function (): void {
             $token = \strtolower($this->uniqueSuffix());
             $bank = $this->createBankAt(
-                'Range ' . $token . ' Utc',
+                self::NAME_DISPLAY_PREFIX . $token . ' Utc',
                 'BR' . $this->uniqueSuffix(),
                 new DateTimeImmutable('2026-06-01T12:00:00+00:00'),
             );
 
             // 14:00+02:00 is the same instant as 12:00 UTC: gte includes it (inclusive bound)...
             $included = $this->applyAndResultIds(Filters::fromList([
-                Filter::contains('name', 'range ' . $token),
+                Filter::contains('name', self::NAME_FILTER_PREFIX . $token),
                 Filter::gte('createdAt', '2026-06-01T14:00:00+02:00'),
             ]));
             $this->assertSame([$bank->getId()], $included);
@@ -151,7 +157,7 @@ final class FilterApplierTemporalRangeTest extends KernelTestCase
             // ...and gt excludes it. A bound left un-normalized would compare against the 14:00
             // wall-clock and wrongly keep the 12:00 row.
             $excluded = $this->applyAndResultIds(Filters::fromList([
-                Filter::contains('name', 'range ' . $token),
+                Filter::contains('name', self::NAME_FILTER_PREFIX . $token),
                 Filter::gt('createdAt', '2026-06-01T14:00:00+02:00'),
             ]));
             $this->assertSame([], $excluded);
@@ -244,9 +250,9 @@ final class FilterApplierTemporalRangeTest extends KernelTestCase
         $base = new DateTimeImmutable('2026-06-01T12:00:00+00:00');
 
         return [
-            $this->createBankAt('Range ' . $token . ' Early', 'BR' . $this->uniqueSuffix(), $base->modify('-1 second')),
-            $this->createBankAt('Range ' . $token . ' Exact', 'BR' . $this->uniqueSuffix(), $base),
-            $this->createBankAt('Range ' . $token . ' Late', 'BR' . $this->uniqueSuffix(), $base->modify('+1 second')),
+            $this->createBankAt(self::NAME_DISPLAY_PREFIX . $token . ' Early', 'BR' . $this->uniqueSuffix(), $base->modify('-1 second')),
+            $this->createBankAt(self::NAME_DISPLAY_PREFIX . $token . ' Exact', 'BR' . $this->uniqueSuffix(), $base),
+            $this->createBankAt(self::NAME_DISPLAY_PREFIX . $token . ' Late', 'BR' . $this->uniqueSuffix(), $base->modify('+1 second')),
             $base,
             $token,
         ];
