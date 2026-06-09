@@ -35,7 +35,7 @@
 # - El Dev mueve la historia a 'review' y luego ejecuta code-review (contexto fresco, LLM distinto recomendado)
 
 generated: 2026-06-07 00:19:52
-last_updated: 2026-06-08
+last_updated: 2026-06-09
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -52,10 +52,10 @@ development_status:
   1-6-receta-de-generalizacion-y-cierre-documental: done
   1-7-operador-de-rango-y-campos-shortname-createdat-filtrables-en-bank: done
   1-8-orden-server-side-en-el-contrato-de-busqueda: done
-  epic-1-retrospective: optional
+  epic-1-retrospective: done  # epic-1-2-retro-2026-06-09.md (retro combinada Epic 1 + Epic 2)
 
   # Epic 2: Filtrado server-driven en la PWA — fase 2
   epic-2: in-progress
   2-1-vocabulario-y-builder-de-filtros-compartido-en-la-pwa: review
   2-2-lista-de-banks-filtrada-server-driven: review
-  epic-2-retrospective: optional
+  epic-2-retrospective: done  # epic-1-2-retro-2026-06-09.md (retro combinada Epic 1 + Epic 2)
