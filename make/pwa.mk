@@ -111,17 +111,22 @@ pwa.util.extract.testids: ## Extract data-testid attributes
 
 ## —— PWA ownership ——
 
-# The host `pwa.dev` (Turbopack on :80) writes .next/trace on the host tree.
-# A root-owned pwa/.next — left by a container/worktree stack writing the bind
-# mount as root — makes that write fail with EACCES. This reclaims ownership of
-# .next / .next-e2e for the host user WITHOUT deleting the build cache (unlike
-# pwa.clean.sudo). Mirrors sf.chown.var. No-op'd dirs are skipped.
-pwa.chown.next: ## Reclaim ownership of root-owned pwa/.next + .next-e2e (fixes host EACCES on .next/trace; requires sudo; dev/test only)
+# The host `pwa.dev` (Turbopack on :80) and `pwa.test.e2e` (its Next webServer)
+# regenerate several build artifacts on the host tree: .next/trace, the
+# .next-e2e dir, plus the root-level next-env.d.ts and tsconfig.tsbuildinfo. When
+# a container/worktree stack wrote any of them as root onto the bind mount, the
+# host process fails with EACCES (mkdir .next-e2e/dev, open next-env.d.ts, …).
+# This reclaims ownership of every such regenerable artifact for the host user
+# WITHOUT deleting the build cache (unlike pwa.clean.sudo). Mirrors sf.chown.var.
+# Missing paths are skipped; all listed paths are Next/TS-regenerated, so a chown
+# (not a wipe) is always safe.
+PWA_CHOWN_TARGETS := .next .next-e2e next-env.d.ts tsconfig.tsbuildinfo
+pwa.chown.next: ## Reclaim ownership of root-owned pwa Next/TS build artifacts (.next, .next-e2e, next-env.d.ts, tsconfig.tsbuildinfo); fixes host EACCES (requires sudo; dev/test only)
 	$(call guard_var_writable,pwa.chown.next)
-	@for d in $(PWA_ROOT)/.next $(PWA_ROOT)/.next-e2e; do \
+	@for d in $(addprefix $(PWA_ROOT)/,$(PWA_CHOWN_TARGETS)); do \
 		[ -e "$$d" ] && sudo chown -R $(shell id -u):$(shell id -g) "$$d" || true; \
 	done
-	@echo "✓ pwa/.next now owned by $(shell id -un)"
+	@echo "✓ pwa Next/TS build artifacts now owned by $(shell id -un)"
 
 ## —— PWA clean ——
 
