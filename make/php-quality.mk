@@ -132,7 +132,13 @@ php.lint.error-contract: ## Error-contract drift gate
 
 ## —— Aggregates ——————————————————————————————————————————————————————————
 
-php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.psalm.fix.all php.gherkin php.lint.doctrine php.lint.error-contract php.psalm ## Full PHP lint sweep
+# `php.cs.dry-run` is appended LAST (after every mutating fixer) on purpose:
+# `php.cs` runs phpcbf in apply mode with an `exit ≤2` tolerance, and phpcbf has
+# NO fixer for the line-length sniff — so an over-120/over-160 line is silently
+# masked here and only fails later in CI's `php.quality.dry-run`. Re-running the
+# strict, read-only `php.cs.dry-run` at the end makes `make php.quality` FAIL on
+# that drift locally, so it is caught before commit/push instead of on CI. History: long-line drift slipped through on the keyset PR.
+php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.psalm.fix.all php.gherkin php.lint.doctrine php.lint.error-contract php.psalm php.cs.dry-run ## Full PHP lint sweep
 
 # Check-only sweep for CI / pre-push: the read-only subset of php.quality that is
 # currently green, fanned out in parallel. Two wins over php.quality:
