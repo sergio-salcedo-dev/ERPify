@@ -63,16 +63,10 @@ This is surgical: it suppresses only the boot probe, leaving real runtime error
 reporting (HTTP requests, message handlers, genuine DB outages at runtime)
 completely untouched.
 
-### Same trap for Datadog APM
-
-ddtrace traces console commands by default (`DD_TRACE_CLI_ENABLED=1`), so once APM
-is enabled (`DD_TRACE_ENABLED=true` + the `datadog` compose profile), the identical
-loop would emit an **errored CLI trace per failed retry** — the same
-hundreds-per-boot flood, in Datadog APM instead of (or alongside) Sentry. The
-`DD_TRACE_ENABLED=false` prefix above pre-empts it. Datadog is off by default, so
-this only bites once an operator turns APM on, but the guard ships now so the
-foundation is clean. See [`deployment-guide.md`](./deployment-guide.md)
-(Observability — Datadog APM).
+The `DD_TRACE_ENABLED=false` prefix in the same command is the **Datadog APM**
+analog of this fix — ddtrace would otherwise emit an errored CLI trace per failed
+retry once APM is enabled. That preventive guard is documented on its own in
+[`datadog-boot-probe-noise.md`](./datadog-boot-probe-noise.md).
 
 ### Why this is safe in prod too
 

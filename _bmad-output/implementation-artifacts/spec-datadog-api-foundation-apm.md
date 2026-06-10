@@ -117,8 +117,9 @@ context:
   `DD_TRACE_CLI_ENABLED=1`), generaría una traza CLI errónea por reintento — el mismo flood que el commit
   de Sentry `fc6316a` arregló (848 eventos). **Fix:** añadir `DD_TRACE_ENABLED=false` al comando-sonda en
   `api/frankenphp/docker-entrypoint.sh` (junto a `SENTRY_DSN=`); verificado que el override inline gana
-  sobre la env/ini del contenedor. Solo afecta cuando se activa APM (default inerte). Docs:
-  `docs/sentry-boot-probe-noise.md` + deployment-guide.
+  sobre la env/ini del contenedor. Solo afecta cuando se activa APM (default inerte). Doc dedicado
+  `docs/datadog-boot-probe-noise.md` (mismo formato que el de Sentry) + cross-ref en el de Sentry,
+  `docs/index.md` y deployment-guide.
 
 ## Design Notes
 

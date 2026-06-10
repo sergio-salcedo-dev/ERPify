@@ -44,6 +44,7 @@
 - **[api-error-contract.md](./api-error-contract.md)** — RFC 9457 Problem Details: marker→status map, correlation-id, instance UUIDv7, logging tiers, `exception_category` SRE taxonomy
 - **[sentry-domain-error-filtering.md](./sentry-domain-error-filtering.md)** — deferred: drop/sample `domain_error` noise in Sentry (`ignore_exceptions` vs `before_send`), with the trade-off
 - **[sentry-boot-probe-noise.md](./sentry-boot-probe-noise.md)** — fixed: silencing the container boot DB-probe flood (`SENTRY_DSN=` on the entrypoint `SELECT 1` wait), safe in dev + prod
+- **[datadog-boot-probe-noise.md](./datadog-boot-probe-noise.md)** — pre-empted: the same boot DB-probe flood for Datadog APM (`DD_TRACE_ENABLED=false` on the entrypoint `SELECT 1` wait); off by default, guard ships now
 
 ### Deep-Dive Documentation
 

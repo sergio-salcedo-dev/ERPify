@@ -182,7 +182,7 @@ per-message span flushing on the worker so a single run does not accumulate one 
 **Boot-probe noise is pre-empted.** The entrypoint runs its DB-wait probe (`dbal:run-sql "SELECT 1"`,
 up to 60× per boot) with `DD_TRACE_ENABLED=false` (alongside `SENTRY_DSN=`), so enabling APM won't
 flood Datadog with errored liveness traces on every cold start — see
-[`sentry-boot-probe-noise.md`](sentry-boot-probe-noise.md).
+[`datadog-boot-probe-noise.md`](datadog-boot-probe-noise.md).
 
 ## Prod hardening (compose.prod.yaml)
 
