@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
-  LucideIcon,
   LayoutDashboard,
   User,
   LogOut,
@@ -25,28 +24,9 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { bankRoutes } from "./banks/_lib/bankRoutes";
 import { sectionTitleFor } from "./_lib/sectionTitle";
+import { erpMenuGroups, type NavGroup, type NavItem } from "./_lib/erpMenu";
 
 const SIDEBAR_STORAGE_KEY = "erpify:sidebar-open";
-
-interface NavSubItem {
-  name: string;
-  path: string;
-  icon?: LucideIcon;
-  testId?: string;
-}
-
-interface NavItem {
-  name: string;
-  icon: LucideIcon;
-  path: string;
-  subItems?: NavSubItem[];
-  testId?: string;
-}
-
-interface NavGroup {
-  label: string;
-  items: NavItem[];
-}
 
 export default function BackOfficeLayoutClient({
   children,
@@ -97,6 +77,9 @@ export default function BackOfficeLayoutClient({
         },
       ],
     },
+    // ERP navigation sections (placeholder pages). Kept as data in
+    // ./_lib/erpMenu so the layout stays focused on rendering.
+    ...erpMenuGroups,
     // Conditional dev/test-only category. Disappears entirely from the
     // sidebar in production via the `isDevToolsAvailable()` check, which
     // mirrors the gating model of the route at `app/dev-tools/page.tsx`.
