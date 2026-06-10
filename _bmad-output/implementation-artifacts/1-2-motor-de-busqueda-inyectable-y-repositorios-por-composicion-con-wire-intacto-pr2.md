@@ -2,17 +2,19 @@
 baseline_commit: 8bfb8b7835293d5c5bb50eb7117a3f717e11bda8
 ---
 
-# Story 1.2: Motor de búsqueda inyectable y repositorios por composición, con wire intacto (PR2)
+# Story 1.2: Motor de búsqueda keyset inyectable OFF-WIRE — engine + Row Uniqueness Guard + migración de infraestructura + suites de verificación directa (PR2)
 
-Status: review
+> **Reconciliación de alcance (D-1, 2026-06-11).** El título y los AC originales prometían "repositorios por composición" y "el envelope viejo emitido desde el motor nuevo". Por las decisiones arquitectónicas vinculantes **D-1** (PR2 = engine off-wire; PR3 = único flip observable), eso NO es lo que PR2 entrega. Esta historia se ha reescrito para que el contrato coincida con lo realmente aprobado y entregado: un engine keyset de especificación, verificado por tests directos y NO conectado al wire. El trabajo de composición de repositorios se decidirá por separado (mover íntegro a PR3 o crear una historia intermedia) — ver AC3.
+
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
 ## Story
 
 As a desarrollador de ERPify,
-I want que `DoctrineSearchEngine` sea el único query-shaper del read-path de búsqueda y que los repositorios de Bank/BankAccount pasen de herencia a composición, emitiendo el envelope viejo desde el motor nuevo,
-so that la ejecución real quede gobernada por el trace sellado y los contratos de unicidad de filas antes de exponer ningún cambio observable al consumidor.
+I want que `DoctrineSearchEngine` exista como engine keyset de especificación — único query-shaper del read-path, gobernado por el trace sellado y el Row Uniqueness Contract, verificado por tests directos (property/snapshot/contract) y **NO conectado al wire** (el `Paginator` legacy sigue sirviendo el HTTP),
+so that la corrección de la ejecución keyset quede sellada y demostrada antes del flip observable de PR3, sin exponer ningún cambio al consumidor en esta historia.
 
 ## Acceptance Criteria
 
@@ -20,7 +22,7 @@ so that la ejecución real quede gobernada por el trace sellado y los contratos 
 
 2. **Guard del Row Uniqueness Contract (AR5):** Given un query builder base cuyo join con `addSelect` apunta a una asociación to-many — definida como asociación con `ClassMetadata::isCollectionValuedAssociation()` true (OneToMany / ManyToMany según el mapping de Doctrine), nunca por heurística de nombres, When el engine inspecciona el QueryBuilder **en el momento de sellar el trace** (paso 4 — antes de validar el cursor y antes de cualquier compilación), Then lanza `LogicException` clasificada como programmer error (→ `exception_category` critical, despierta on-call). And el fallo NUNCA es `InvalidCursor` ni ningún 422: es un bug del repositorio, no un error del cliente — prohibido que el pipeline RFC 9457 lo degrade a error de petición. And los joins to-one con `addSelect` están permitidos; las colecciones to-many se cargan por segunda query batch fuera del read-path paginado. And el engine jamás añade DISTINCT. And controllers y use cases nunca tocan QueryBuilder/applier/codec: los repositorios solo aportan su query builder base con joins.
 
-3. **Repositorios por composición (FR9/K9, FR12, FR11 parcial):** Given `DoctrineBankRepository` y `DoctrineBankAccountRepository`, When la historia se completa, Then implementan solo sus puertos de dominio con `EntityManagerInterface` inyectado — sin `ServiceEntityRepository`, sin `getEntityClassName()`, sin `QueryBuilderWithOptions`, sin `PaginatorOption`. And el contrato del puerto expone `save()` sin flush implícito obligatorio (FR12 — puerta abierta). And los helpers muertos accesibles se eliminan de `AbstractDoctrineRepository` preservando el comentario del naming estable de parámetros (FR11 parcial).
+3. **Repositorios por composición — FUERA DEL ALCANCE DE ESTA HISTORIA, diferido (FR9/K9, FR12, FR11 parcial):** Por la decisión D-1 (PR2 = engine off-wire; PR3 = único flip observable), migrar `DoctrineBankRepository`/`DoctrineBankAccountRepository` de herencia a composición — puertos de dominio con `EntityManagerInterface` inyectado, sin `ServiceEntityRepository`/`getEntityClassName()`/`QueryBuilderWithOptions`/`PaginatorOption` —, relajar el `save()` sin flush implícito (FR12) y eliminar los helpers muertos de `AbstractDoctrineRepository` (FR11 parcial) **no forma parte del entregable de PR2**: ese trabajo solo tiene sentido cuando el engine entra al runtime path. En PR2 los repos conservan su forma actual (herencia + `Paginator` legacy) **intacta**. Decisión pendiente (fuera de esta historia): trasladar el bloque íntegro a PR3 o crear una historia intermedia específica. _Criterio de aceptación en PR2: ningún cambio en los repositorios ni en `AbstractDoctrineRepository`._
 
 4. **`SortFieldMapIndexContractTest` + migración de infraestructura (NFR3 refinado, AR13, AR23, AR17):** Given cada entrada de `sortFieldMap()` de un repositorio de búsqueda, When corre `SortFieldMapIndexContractTest` en CI, Then asserta vía ClassMetadata la **propiedad de estabilidad de orden bajo igualdad del sort key, no la forma física del índice**: columna UNIQUE → su índice único de una columna satisface la regla; columna sortable no única → exige índice compuesto `(columna, id)`; en ambos casos `nullable: false`; y toda columna de texto sortable declara `COLLATE "C"`. And se añaden `(created_at, id)` y `(updated_at, id)` en Bank como índices secundarios — los simples existentes (`idx_bank_created_at`/`idx_bank_updated_at`) se conservan — y se aplica `COLLATE "C"` a `name_normalized` y `short_name`, todo en una única migración de infraestructura. And esa migración es evolución de infraestructura (índices + determinismo de ordenación), no contractual: no cambia esquema lógico, entidad ni semántica de dominio, por lo que **no reabre el pin "cero migraciones" de NFR6**.
 
@@ -28,7 +30,7 @@ so that la ejecución real quede gobernada por el trace sellado y los contratos 
 
 6. **`KeysetSqlSnapshotTest` derivado no normativo (AR4, AR20, AR22):** Given el SQL compilado del read-path, When corre `KeysetSqlSnapshotTest`, Then compara únicamente SQL string + parámetros bindeados + ordering — nunca objetos Doctrine. And el snapshot es derivado NO normativo: detector de regresiones, jamás contrato de compatibilidad runtime.
 
-7. **Wire intacto + gates verdes + docs (AR16, AR18, FR3):** Given la suite Behat completa, When corre CI, Then los 52 bloques existentes de `search.feature` pasan **sin modificación**: el envelope viejo se emite desde el motor nuevo (wire intacto — page-based navigation, `currentPage`/`pageCount`, degradación silenciosa de cursor inválido, modos LIGHT/DETAILED y los conteos de query por escenario, todos preservados). And `make php.stan` + `make php.psalm` + `make php.quality` verdes sin baselines nuevas. And los docs obligatorios del PR se actualizan (AR18): `docs/architecture-api.md`, `api/docs/adding-endpoints.md`, `docs/source-tree-analysis.md`.
+7. **Wire intacto + gates verdes + docs (AR16, AR18, FR3):** Given la suite Behat completa, When corre CI, Then los 52 bloques existentes de `search.feature` pasan **sin modificación** — el wire queda intacto **porque el engine es OFF-wire**: el `Paginator` legacy sigue siendo el único que sirve el read-path HTTP (page-based navigation, `currentPage`/`pageCount`, degradación silenciosa de cursor inválido, modos LIGHT/DETAILED y los conteos de query por escenario, todos preservados). El motor nuevo **NO emite el envelope en PR2**; su conexión al wire (nuevo codec + 422 + envelope `after`/`before`) es PR3. And `make php.stan` + `make php.psalm` + `make php.quality` verdes sin baselines nuevas. And los docs obligatorios del PR se actualizan (AR18): `docs/architecture-api.md`, `api/docs/adding-endpoints.md`, `docs/source-tree-analysis.md`.
 
 ## Tasks / Subtasks
 
@@ -319,9 +321,48 @@ claude-opus-4-8[1m] (dev-story workflow).
 **Modificados (docs, AR18):**
 - `docs/architecture-api.md`, `docs/source-tree-analysis.md`, `api/docs/adding-endpoints.md`
 
+**Modificados por el code review (2026-06-11):**
+- `api/src/Shared/Infrastructure/Persistence/Doctrine/Search/DoctrineSearchEngine.php` (P1 — reset ORDER BY)
+- `api/src/Shared/Infrastructure/Persistence/Doctrine/Search/RowUniquenessGuard.php` (P2 — `leadingAlias()`)
+- `api/tests/Functional/Shared/Persistence/SortFieldMapIndexContractTest.php` (P3 — docblock duplicado)
+
+### Review Findings
+
+_Code review adversarial (Blind Hunter + Edge Case Hunter + Acceptance Auditor) sobre PR #214 — 2026-06-11. Verificados contra el código real de la rama. **3 patch aplicados, 12 defer, 6 descartados.** Tras los patches: `make php.stan` OK · `make php.quality` EXIT=0 · 38 unit + 28 funcional verdes (snapshot SQL idéntico, property gate normativo verde)._
+
+#### Patch — aplicados y verificados
+
+- [x] [Review][Patch] `applyOrderBy` ahora hace `$queryBuilder->resetDQLPart('orderBy')` antes de aplicar el orden keyset — un ORDER BY parásito del base QB ya no puede volverse clave primaria y corromper el walk (espejo de `countIfDetailed`) [DoctrineSearchEngine.php]
+- [x] [Review][Patch] `RowUniquenessGuard` con helper `leadingAlias()` — caza el to-many traído por `addSelect('a.field')`/`PARTIAL a.{…}`/`a AS x`, no solo el alias entero [RowUniquenessGuard.php]
+- [x] [Review][Patch] Eliminado el docblock `@return list<string>` duplicado en `SortFieldMapIndexContractTest::bankIndexDefinitionsFor()` [SortFieldMapIndexContractTest.php]
+
+#### Defer — registrados en `deferred-work.md` (`code review of story-1.2`)
+
+- [x] [Review][Defer] **AC3 (repos por composición) + AC7 "envelope viejo desde el motor nuevo" no entregados** — RECONCILIADO en esta revisión (título/Story/AC3/AC7/Status reescritos para reflejar el engine off-wire; sprint → `in-progress`). Pendiente fuera de esta historia: mover composición a PR3 o crear historia intermedia.
+- [x] [Review][Defer] (era Patch P4) `KeysetSqlSnapshotTest` no cierra la conexión DBAL paralela de `setUp()` — el `tearDown()` idiomático dispara el conflicto sancionado rector↔psalm (desnuda `#[Override]` → exige baseline nueva), violando el AC7 "sin baselines nuevas". Leak *low* mitigado por refcounting; alternativa: cerrar dentro de `inRolledBackTransaction()`.
+- [x] [Review][Defer] `resolveLimit` nunca aplica `policy.defaultLimit` (25); `limit` ausente (`SearchCriteria` default 1000) → `min(1000, maxLimit=100)`=100. Campo `defaultLimit` inerte. Decisión de wiring de PR3.
+- [x] [Review][Defer] Página `before` vacía devuelve `hasNext=false` (debería ser `true`); off-wire y sin cursor accionable hoy — PR3.
+- [x] [Review][Defer] `RowUniquenessGuard` falla-abierto en cartesiano multi-root y joins to-many no seleccionados (también multiplican filas bajo `LIMIT`) — hardening fuera del scope addSelect del AC2.
+- [x] [Review][Defer] Walk `(col DESC, id ASC)` vs índice compuesto `(col, id)` ASC — gap de cobertura de índice (perf); el contract test asserta existencia, no dirección.
+- [x] [Review][Defer] El engine no impone `nullable: false` en columnas sortables; solo lo verifica el contract test hardcodeado a Bank.
+- [x] [Review][Defer] `SortFieldMapIndexContractTest` refleja los campos de Bank a mano en vez de derivarlos del `SortFieldMap` — AC4 dice "por cada entrada de `sortFieldMap()`".
+- [x] [Review][Defer] AC5 invariante (3) frontera intra-empate asserted solo transitivamente (subsumida por la igualdad partición==oráculo).
+- [x] [Review][Defer] `qualify()` reescribe el DQL por regex; acoplado al `id` bare — seguro hoy (Bank pre-cualifica), latente para paths bare; preferir pasar el alias al predicate builder.
+- [x] [Review][Defer] `entityName()` usa nombre corto de clase — colisiona el fingerprint entre entidades homónimas de distintos contextos (single-tenant/Bank hoy).
+- [x] [Review][Defer] Migración `down()` revierte collation a `pg_catalog."default"` en vez de la heredada original — no es inverso fiel.
+
+#### Descartados como ruido (verificados falsos / ya manejados)
+
+- `before` no-vacío `hasNext`/`hasPrev` "estructuralmente mal" — VERIFICADO CORRECTO (un walk `before` siempre lleva cursor → `hasNext=hadCursor=true` es la página real de la que vienes).
+- Cursor con claves sobrantes → predicado malformado/500 — VERIFICADO FALSO (`KeysetPredicateBuilder::build()` itera `$columns->all()`; claves sobrantes inertes).
+- Guard pierde to-many en joins anidados — VERIFICADO MANEJADO (`joinedAssociationsByAlias()` rellena `aliasToEntity` al caminar).
+- Contradicción status/checkboxes — resuelta por esta reconciliación.
+- Recomputo del COUNT / `limit=0` — confirmados manejados (`resolveLimit` clampa a ≥1).
+
 ## Change Log
 
 | Fecha       | Versión | Descripción                                                                                  | Autor          |
 |-------------|---------|----------------------------------------------------------------------------------------------|----------------|
 | 2026-06-10  | 0.1     | Creación del contexto de la Story 1.2 (PR2: engine inyectable + repos por composición).      | create-story   |
 | 2026-06-10  | 1.0     | Implementación PR2 re-scopeada por D-1: engine *specification* off-wire + guard + migración + suites directas (property/contract/snapshot) + dedup. Task 5 (repos por composición) diferida a PR3. Gates verdes, wire intacto. Status → review. | dev-story (Opus 4.8) |
+| 2026-06-11  | 1.1     | Code review (Blind/Edge/Auditor): 3 patches aplicados (reset ORDER BY; guard `leadingAlias`; docblock dup), 12 defer, 6 descartados. **Reconciliación D-1:** título/Story/AC3/AC7 reescritos al entregable real (engine off-wire); AC3 fuera de alcance; Status → in-progress hasta cerrar el desalineamiento contrato↔entrega. | code-review (Opus 4.8) |
