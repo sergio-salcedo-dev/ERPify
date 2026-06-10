@@ -51,16 +51,28 @@ hundreds of events. The probe is a **liveness check**; its failures are
 
 ## The fix
 
-Run the probe with the SDK inert by clearing `SENTRY_DSN` for **that one
-command** (an empty DSN makes the Sentry SDK a no-op):
+Run the probe with the observability SDKs inert for **that one command** — clear
+`SENTRY_DSN` (an empty DSN makes the Sentry SDK a no-op) and set
+`DD_TRACE_ENABLED=false` (so ddtrace doesn't trace the probe):
 
 ```sh
-until ... || DATABASE_ERROR=$(SENTRY_DSN= php bin/console dbal:run-sql -q "SELECT 1" 2>&1); do
+until ... || DATABASE_ERROR=$(SENTRY_DSN= DD_TRACE_ENABLED=false php bin/console dbal:run-sql -q "SELECT 1" 2>&1); do
 ```
 
 This is surgical: it suppresses only the boot probe, leaving real runtime error
 reporting (HTTP requests, message handlers, genuine DB outages at runtime)
 completely untouched.
+
+### Same trap for Datadog APM
+
+ddtrace traces console commands by default (`DD_TRACE_CLI_ENABLED=1`), so once APM
+is enabled (`DD_TRACE_ENABLED=true` + the `datadog` compose profile), the identical
+loop would emit an **errored CLI trace per failed retry** — the same
+hundreds-per-boot flood, in Datadog APM instead of (or alongside) Sentry. The
+`DD_TRACE_ENABLED=false` prefix above pre-empts it. Datadog is off by default, so
+this only bites once an operator turns APM on, but the guard ships now so the
+foundation is clean. See [`deployment-guide.md`](./deployment-guide.md)
+(Observability — Datadog APM).
 
 ### Why this is safe in prod too
 

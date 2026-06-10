@@ -111,6 +111,14 @@ context:
   nota de que `DD_TRACE_ENABLED` debe ir emparejado con el profile; aclaración `DD_SERVICE` (web) vs
   `DD_WORKER_SERVICE` (worker); nota de `NON_LOCAL_TRAFFIC` en el security checklist; corregida la línea
   "+ profiler" en `deferred-work.md`; checkbox de docs marcado.
+- **2026-06-10 (post-merge, a raíz de pregunta del usuario sobre el commit `fc6316a`) — boot-probe APM
+  flood pre-empted.** El entrypoint espera la DB reintentando `bin/console dbal:run-sql "SELECT 1"`
+  hasta 60× por arranque; ese bucle bootea el kernel y, con APM activo (ddtrace traza CLI por
+  `DD_TRACE_CLI_ENABLED=1`), generaría una traza CLI errónea por reintento — el mismo flood que el commit
+  de Sentry `fc6316a` arregló (848 eventos). **Fix:** añadir `DD_TRACE_ENABLED=false` al comando-sonda en
+  `api/frankenphp/docker-entrypoint.sh` (junto a `SENTRY_DSN=`); verificado que el override inline gana
+  sobre la env/ini del contenedor. Solo afecta cuando se activa APM (default inerte). Docs:
+  `docs/sentry-boot-probe-noise.md` + deployment-guide.
 
 ## Design Notes
 
