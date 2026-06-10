@@ -2,6 +2,7 @@ import { test, expect, type APIRequestContext } from "@playwright/test";
 import { VIEWPORT_DESKTOP } from "../constants";
 import {
   createApiContext,
+  createBank,
   deleteBanksSafely,
   filterByName,
   seedBanks,
@@ -278,5 +279,27 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
     // The API returns 404 for the deleted id.
     const probe = await api.get(`/api/v1/backoffice/banks/${id}`);
     expect(probe.status()).toBe(404);
+  });
+
+  test("create — diacritic short name is canonicalized to ASCII upper by the API", async ({
+    page,
+  }) => {
+    // The API canonicalizes codes via NormalizedText::toAsciiUpper
+    // (Any-Latin; Latin-ASCII; Upper()) — uppercase AND accent-stripping — so a
+    // "-GLÉ" input persists as "-GLE". Seeding a non-ASCII code locks that the
+    // detail view shows the API's rule, which a local toLocaleUpperCase()
+    // (accent preserved) would not reproduce.
+    const accentedInput = `${runPrefix.slice(-40)}-GLÉ`.slice(0, 50);
+    const bank = await createBank(api, `${runPrefix} Accented`, accentedInput);
+    trackedIds.push(bank.id);
+
+    expect(bank.shortName).toMatch(/-GLE$/);
+    // Pure printable ASCII — every diacritic folded away, not just Latin-1 ones.
+    expect(bank.shortName).not.toMatch(/[^\x20-\x7E]/);
+
+    // The detail page renders exactly the canonical value the API returned.
+    await page.goto(`/backoffice/banks/${bank.id}`);
+    await expect(page.getByTestId("banks-detail")).toHaveAttribute("data-state", "ready");
+    await expect(page.getByTestId("banks-detail__shortname")).toHaveText(bank.shortName);
   });
 });
