@@ -141,6 +141,38 @@ describe("buildActiveFilterChips", () => {
     expect(to[0]).toEqual({ key: "created", label: "Created before: 30/06/2026" });
   });
 
+  it("drops an unparseable created bound instead of echoing the raw value", () => {
+    const bothInvalid = buildActiveFilterChips(
+      { ...EMPTY_FILTER, createdFrom: "2026-13-99", createdTo: "nope" },
+      DEFAULT_SORT,
+      dateTimeProvider,
+    );
+    expect(bothInvalid.some((chip) => chip.key === "created")).toBe(false);
+
+    const validFrom = buildActiveFilterChips(
+      { ...EMPTY_FILTER, createdFrom: "2026-06-01", createdTo: "2026-13-99" },
+      DEFAULT_SORT,
+      dateTimeProvider,
+    );
+    expect(validFrom[0]).toEqual({ key: "created", label: "Created after: 01/06/2026" });
+
+    const validTo = buildActiveFilterChips(
+      { ...EMPTY_FILTER, createdFrom: "bad", createdTo: "2026-06-30" },
+      DEFAULT_SORT,
+      dateTimeProvider,
+    );
+    expect(validTo[0]).toEqual({ key: "created", label: "Created before: 30/06/2026" });
+  });
+
+  it("normalises an inverted created range to chronological order", () => {
+    const inverted = buildActiveFilterChips(
+      { ...EMPTY_FILTER, createdFrom: "2026-06-30", createdTo: "2026-06-01" },
+      DEFAULT_SORT,
+      dateTimeProvider,
+    );
+    expect(inverted[0]).toEqual({ key: "created", label: "Created: 01/06/2026 – 30/06/2026" });
+  });
+
   it("adds a sort chip only when sort drifts from the default", () => {
     expect(
       buildActiveFilterChips(

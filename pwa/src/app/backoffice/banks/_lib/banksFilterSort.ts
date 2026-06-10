@@ -81,15 +81,22 @@ const SORT_ARROW: Record<SortDirection, string> = {
 };
 
 function formatCreatedChipLabel(filter: BanksFilter, dateTime: DateTimeProvider): string | null {
-  const from = filter.createdFrom.trim();
-  const to = filter.createdTo.trim();
-  const fmt = (iso: string): string => {
-    const parsed = dateTime.parseISO(iso);
-    return parsed ? dateTime.formatToDate(parsed) : iso;
-  };
-  if (from && to) return `Created: ${fmt(from)} – ${fmt(to)}`;
-  if (from) return `Created after: ${fmt(from)}`;
-  if (to) return `Created before: ${fmt(to)}`;
+  // A bound earns a place in the label only when it resolves to a real date, so
+  // a malformed value (reachable via external/URL state, never the min/max-
+  // constrained pickers) is dropped instead of being echoed raw and breaking
+  // the dd/mm/yyyy formatting of its siblings.
+  const from = dateTime.parseISO(filter.createdFrom.trim());
+  const to = dateTime.parseISO(filter.createdTo.trim());
+  if (from && to) {
+    // Present the span chronologically so an inverted pair never reads
+    // "later – earlier".
+    const inverted = dateTime.isAfter(from, to);
+    const earlier = inverted ? to : from;
+    const later = inverted ? from : to;
+    return `Created: ${dateTime.formatToDate(earlier)} – ${dateTime.formatToDate(later)}`;
+  }
+  if (from) return `Created after: ${dateTime.formatToDate(from)}`;
+  if (to) return `Created before: ${dateTime.formatToDate(to)}`;
   return null;
 }
 
