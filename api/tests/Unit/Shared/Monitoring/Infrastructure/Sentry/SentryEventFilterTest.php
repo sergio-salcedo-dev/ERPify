@@ -28,7 +28,11 @@ final class SentryEventFilterTest extends TestCase
 
         $result = (new SentryEventFilter())(Event::createEvent(), $hint);
 
-        $this->assertNotInstanceOf(Event::class, $result, 'A ClientError (expected 4xx) must be dropped before Sentry.');
+        $this->assertNotInstanceOf(
+            Event::class,
+            $result,
+            'A ClientError (expected 4xx) must be dropped before Sentry.',
+        );
     }
 
     public function testKeepsEventWhoseHintExceptionIsNotAClientError(): void
