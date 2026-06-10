@@ -40,11 +40,11 @@ export function BanksEmptyFiltered({ onReset }: Readonly<BanksEmptyFilteredProps
         size="sm"
         className="mt-1"
         onClick={onReset}
-        title="Clear all bank filters"
-        aria-label="Clear all bank filters"
+        title="Clear all filters and sort"
+        aria-label="Clear all filters and sort"
         data-testid="banks-list__reset-filters"
       >
-        Reset filters
+        Clear all
       </Button>
     </section>
   );

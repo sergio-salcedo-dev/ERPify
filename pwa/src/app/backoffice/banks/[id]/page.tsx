@@ -302,7 +302,7 @@ export default function BankDetailPage() {
           >
             <Field label="Name" value={bank.name} testId="banks-detail__field-name" />
             <Field
-              label="Short name"
+              label="Code"
               value={bank.shortName}
               valueClassName="font-mono text-xs uppercase"
               testId="banks-detail__field-shortname"

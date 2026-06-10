@@ -378,7 +378,7 @@ export async function mockBanksApi(page: Page, scenario: BanksApiScenario): Prom
                 violations: [
                   {
                     field: "shortName",
-                    message: "The shortName must not exceed 50 characters.",
+                    message: "The code must not exceed 50 characters.",
                   },
                 ],
               }),

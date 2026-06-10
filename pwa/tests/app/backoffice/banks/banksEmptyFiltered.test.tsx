@@ -14,7 +14,7 @@ describe("BanksEmptyFiltered", () => {
     );
     expect(screen.getByTestId("banks-list__empty-filtered-description")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId("banks-list__reset-filters"));
+    fireEvent.click(screen.getByRole("button", { name: /clear all/i }));
     expect(onReset).toHaveBeenCalledTimes(1);
   });
 });
