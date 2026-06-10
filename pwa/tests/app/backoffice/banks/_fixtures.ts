@@ -4,7 +4,7 @@ import type { BankSearchPage } from "@/context/backoffice/bank/domain/BankReposi
 /**
  * Builds a `BankSearchPage` in the shape `BackOfficeSearchBanks.run` resolves to
  * under the server-driven contract. Defaults to a complete single page (page 1,
- * no further pages, total = the row count); pass `overrides` to vary any field.
+ * no further pages); pass `overrides` to vary any field.
  */
 export function searchPage(banks: Bank[], overrides: Partial<BankSearchPage> = {}): BankSearchPage {
   return {
@@ -12,7 +12,6 @@ export function searchPage(banks: Bank[], overrides: Partial<BankSearchPage> = {
     cursor: "",
     currentPage: 1,
     hasMorePages: false,
-    totalCount: banks.length,
     ...overrides,
   };
 }

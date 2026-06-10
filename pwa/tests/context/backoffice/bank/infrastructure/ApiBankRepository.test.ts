@@ -65,7 +65,8 @@ describe("ApiBankRepository.search", () => {
     expect(q.get("page")).toBe("2");
     expect(q.get("cursor")).toBe("cursor-1");
     expect(q.get("limit")).toBe("50");
-    expect(q.get("paginationMode")).toBe("detailed");
+    // No `paginationMode` is sent — the API defaults to LIGHT (no COUNT(*)).
+    expect(q.has("paginationMode")).toBe(false);
   });
 
   it("omits sort and cursor when absent", async () => {
@@ -90,7 +91,6 @@ describe("ApiBankRepository.search", () => {
     expect(page.cursor).toBe("cursor-1");
     expect(page.currentPage).toBe(2);
     expect(page.hasMorePages).toBe(true);
-    expect(page.totalCount).toBe(42);
   });
 });
 

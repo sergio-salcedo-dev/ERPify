@@ -32,15 +32,14 @@ export interface BankSearchCriteria {
 
 /**
  * One page of banks plus the keyset pagination envelope. `cursor` is opaque and
- * fed back verbatim to navigate; `totalCount` comes from the detailed pagination
- * mode (null if the server did not compute it).
+ * fed back verbatim to navigate; `hasMorePages` drives prev/next under the
+ * server's LIGHT pagination mode (no total is computed).
  */
 export interface BankSearchPage {
   banks: Bank[];
   cursor: string;
   currentPage: number;
   hasMorePages: boolean;
-  totalCount: number | null;
 }
 
 export interface BankRepository {

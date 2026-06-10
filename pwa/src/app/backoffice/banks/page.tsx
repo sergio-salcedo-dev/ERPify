@@ -95,7 +95,6 @@ export default function BanksListPage() {
   const [banks, setBanks] = useState<Bank[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMorePages, setHasMorePages] = useState(false);
-  const [totalCount, setTotalCount] = useState<number | null>(null);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
   const [filter, setFilter] = useState<BanksFilter>(EMPTY_FILTER);
   const [sort, setSort] = useState<BanksSort>(DEFAULT_SORT);
@@ -178,7 +177,6 @@ export default function BanksListPage() {
         setBanks(result.banks);
         setCurrentPage(result.currentPage);
         setHasMorePages(result.hasMorePages);
-        setTotalCount(result.totalCount);
         // Selection is scoped to the visible page: ids absent from the new
         // result (a different page, or a row deleted server-side) drop out, so
         // the bulk count never counts phantoms or rows the user cannot see.
@@ -643,14 +641,6 @@ export default function BanksListPage() {
           <p className="text-muted-foreground mt-1 text-sm" data-testid="banks-list__subtitle">
             Manage the banks available in the back office.
           </p>
-          {boundaryState === ViewStatus.READY && totalCount !== null ? (
-            <p
-              className="banks-list__total text-muted-foreground mt-1 text-xs"
-              data-testid="banks-list__total"
-            >
-              Total banks: <span className="text-foreground font-medium">{totalCount}</span>
-            </p>
-          ) : null}
         </div>
         <Link
           href={bankRoutes.new}

@@ -10,10 +10,6 @@ import type {
   BankSearchPage,
 } from "../domain/BankRepository";
 
-// Mirrors the PHP `PaginationMode` backing value; requesting "detailed" makes
-// the response carry the total `count` that drives the "Total banks" header.
-const PAGINATION_MODE_DETAILED = "detailed";
-
 interface BankSearchResponse {
   data: BankPrimitives[];
   pagination: {
@@ -84,7 +80,9 @@ export class ApiBankRepository implements BankRepository {
       params.append("cursor", criteria.cursor);
     }
     params.append("limit", String(criteria.limit));
-    params.append("paginationMode", PAGINATION_MODE_DETAILED);
+    // No `paginationMode` → the API defaults to LIGHT: it skips the COUNT(*) and
+    // reports `hasMorePages` via a single fetch. The banks list navigates by
+    // cursor (prev/next) and shows no total, so the extra count is pure cost.
 
     const response = await this.httpClient.get(
       `${API_ENDPOINTS.BACKOFFICE.BANKS.LIST}?${params.toString()}`,
@@ -96,7 +94,6 @@ export class ApiBankRepository implements BankRepository {
       cursor: response.pagination.cursor,
       currentPage: response.pagination.currentPage,
       hasMorePages: response.pagination.hasMorePages,
-      totalCount: response.pagination.count,
     };
   }
 
