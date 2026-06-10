@@ -77,7 +77,7 @@ This document provides the complete epic and story breakdown for ERPify, decompo
 - AR13 (Tests pineados): `TraceEquivalenceStabilityTest` (el test más importante del sistema: mismo input ⇒ trace canónico byte-a-byte), `KeysetOrderStabilityPropertyTest` (gate **normativo** de la propiedad de estabilidad de orden — conductual, dataset + asserts, independiente del índice; ver Story 1.2), `SortFieldMapIndexContractTest` (forma del índice + NOT NULL vía ClassMetadata — gate de performance, subordinado a la propiedad), `KeysetSqlSnapshotTest` (derivado no normativo), simetría next×3/prev×3 con fixture de empates masivos en Behat `search.feature` (extender, no crear feature paralela); object mothers `CursorMother`/`PageMother`/`TraceMother`. Jerarquía: propiedad > forma > snapshot.
 - AR14 (Observabilidad, PR3): métricas `invalid_cursor_count{cause}` (signature/version/payload/fingerprint), `cursor_version_distribution`, `next/prev_navigation_count`; dashboards actualizados en el mismo PR; runbook del pico post-deploy.
 - AR15 (PWA, PR3): tipos en `pwa/src/context/shared/domain/Search/` (`PageEnvelope`, `PaginationLinks` con `string | null` no opcional, named exports); hard removal de `currentPage`/`pageCount` + barrido explícito de adapters/hooks ocultos; descarte client-side de ambos cursores al cambiar `sort`/`direction`/`filters`/`limit`; el cliente nunca decodifica cursores; sin librerías nuevas.
-- AR16 (Secuencia vinculante): PR1 (piezas puras, sin cambio de contrato) → PR2 (motor + repos, wire intacto) → PR3 (el switch: envelope + PWA + Behat + métricas + válvula — único flip observable) → PR4 (borrado del legado, puramente sustractivo; PR3 revertible sin tocar PR4). Cada PR en su worktree. Cualquier desviación del orden invalida el modelo de validación.
+- AR16 (Secuencia vinculante; **revisada por D-1 2026-06-11**): PR1 (piezas puras, sin cambio de contrato) → PR2 (motor *off-wire*: engine + guard + migración + suites directas; **repos intactos**, wire intacto) → PR3 (el switch: envelope + **repos por composición delegando en el engine** + PWA + Behat + métricas + válvula — único flip observable) → PR4 (borrado del legado, puramente sustractivo; PR3 revertible sin tocar PR4). Cada PR en su worktree. Cualquier desviación del orden invalida el modelo de validación.
 - AR17 (Verificaciones pineadas a PR concreto — estado tras la verificación de readiness 2026-06-10): PR2 añade los compuestos `(created_at, id)`/`(updated_at, id)` de Bank (verificado: faltan; las columnas UNIQUE ya satisfacen la propiedad — ver NFR3 refinado); la verificación del listener legacy queda **resuelta**: `SearchExceptionListener` fue retirado cuando `ProblemDetailsFactory` absorbió sus mappings — en PR3 basta confirmar que `InvalidCursor` fluye por `ExceptionResponder` (`PRIORITY = 16`); datetimes del cursor a precisión de columna (`TIMESTAMP(0)` ⇒ segundos, confirmado en DDL), UTC `Y-m-d\TH:i:sP`.
 - AR18 (Docs obligatorios por PR, regla CLAUDE.md): `docs/architecture-api.md`, `api/docs/adding-endpoints.md`, `docs/api-error-contract.md` (marker), `docs/architecture-pwa.md` + `pwa/docs/`, `docs/source-tree-analysis.md` + `docs/claude-code-quickref.md` (PR4).
 - AR19 (Brownfield, sin starter): implementación propia sobre la fundación existente (seam `FilterApplier`/`SearchFieldMap`/`SortFieldMap`, pipeline RFC 9457, `PaginationMode`, escenarios Behat de search — 52 bloques a 2026-06-10). Librerías candidatas evaluadas y descartadas. Primera acción: `make worktree.create BRANCH=feat/api-keyset-pagination`.
@@ -103,10 +103,10 @@ N/A — no existe documento de UX Design para este alcance. El cambio es de cont
 | FR6 (envelope nuevo) | Epic 1 | PR3 (Stories 1.3–1.4) |
 | FR7 (seam exportaciones async) | Epic 1 | PR1–PR2 (policy seam; feature diferida) |
 | FR8 (DoctrineSearchEngine + trace) | Epic 1 | PR2 (Story 1.2) |
-| FR9 (repos por composición) | Epic 1 | PR2 (Story 1.2) |
+| FR9 (repos por composición) | Epic 1 | **PR3 (Story 1.3)** — trasladado desde PR2 por D-1 (PR2 = engine off-wire; la composición solo tiene sentido cuando el engine entra al runtime path) |
 | FR10 (descomposición Paginator) | Epic 1 | PR1 piezas (Story 1.1) → PR4 muerte del viejo (Story 1.5) |
-| FR11 (código muerto) | Epic 1 | PR2 parcial (Story 1.2) → PR4 total (Story 1.5) |
-| FR12 (frontera transaccional no bloqueada) | Epic 1 | restricción transversal (PR2) |
+| FR11 (código muerto) | Epic 1 | **PR3 (Story 1.3)** parcial (era PR2, trasladado por D-1) → PR4 total (Story 1.5) |
+| FR12 (frontera transaccional no bloqueada) | Epic 1 | **PR3 (Story 1.3)** — `save()` sin flush implícito acompaña a la composición (era PR2, trasladado por D-1) |
 | FR13 (after/before direccionales) | Epic 1 | PR1 piezas (Story 1.1) → PR3 wire (Story 1.3) |
 | FR14 (sin snapshot, documentado) | Epic 1 | PR3 (docs + Behat, Stories 1.3–1.4) |
 | FR15 (versionado `v` del cursor) | Epic 1 | PR1 (Story 1.1) |
@@ -121,7 +121,7 @@ El consumidor del API (la PWA y sus usuarios de backoffice) navega cualquier lis
 
 **FRs covered:** FR1–FR15 (todos), non-goals vinculantes, NFR1–NFR7, AR1–AR22.
 
-**Estructura interna:** 5 historias alineadas exactamente a la secuencia vinculante PR1–PR4 del ADR (1.1 = PR1 kernel puro · 1.2 = PR2 engine + repositorios · 1.3 = PR3 API flip del contrato · 1.4 = PR3 PWA + Behat + observabilidad · 1.5 = PR4 limpieza final). Las historias 1.3 y 1.4 se coordinan en el mismo worktree/PR (breaking change sincronizado API↔PWA del mismo ciclo).
+**Estructura interna:** 5 historias alineadas exactamente a la secuencia vinculante PR1–PR4 del ADR (1.1 = PR1 kernel puro · 1.2 = PR2 engine off-wire + guard + migración + suites directas · 1.3 = PR3 API flip del contrato **+ repos por composición** · 1.4 = PR3 PWA + Behat + observabilidad · 1.5 = PR4 limpieza final). Las historias 1.3 y 1.4 se coordinan en el mismo worktree/PR (breaking change sincronizado API↔PWA del mismo ciclo).
 
 ## Epic 1: Sustitución completa del modelo de paginación por navegación cursor-only
 
@@ -168,11 +168,13 @@ So that el flip posterior del contrato (PR3) se apoye exclusivamente en componen
 **And** las suites unitarias nuevas viven en `api/tests/Unit/…/Keyset/` sin necesitar el kernel, con object mothers `CursorMother`/`TraceMother`/`PageMother` (AR13)
 **And** `make php.stan`, `make php.psalm` y `make php.quality` quedan verdes.
 
-### Story 1.2: Motor de búsqueda inyectable y repositorios por composición, con wire intacto (PR2)
+### Story 1.2: Motor de búsqueda keyset inyectable OFF-WIRE — engine + guard + migración + suites directas (PR2)
+
+> **D-1 (2026-06-11):** los repositorios por composición se trasladaron a la Story 1.3 (PR3). Esta historia entrega solo el engine off-wire; los repos quedan intactos.
 
 As a desarrollador de ERPify,
-I want que `DoctrineSearchEngine` sea el único query-shaper del read-path de búsqueda y que los repositorios de Bank/BankAccount pasen de herencia a composición, emitiendo el envelope viejo desde el motor nuevo,
-So that la ejecución real quede gobernada por el trace sellado y los contratos de unicidad de filas antes de exponer ningún cambio observable al consumidor.
+I want que `DoctrineSearchEngine` exista como engine keyset de especificación — único query-shaper del read-path, gobernado por el trace sellado y el Row Uniqueness Contract, verificado por tests directos (property/snapshot/contract) y NO conectado al wire (el `Paginator` legacy sigue sirviendo el HTTP),
+So that la corrección de la ejecución keyset quede sellada y demostrada antes del flip observable de PR3, sin exponer ningún cambio al consumidor en esta historia.
 
 **Acceptance Criteria:**
 
@@ -224,13 +226,21 @@ So that la ejecución real quede gobernada por el trace sellado y los contratos 
 **Then** los escenarios Behat existentes (52 bloques) pasan sin modificación: el envelope viejo se emite desde el motor nuevo (wire intacto)
 **And** `make php.stan` + `make php.psalm` + `make php.quality` verdes; docs obligatorios del PR actualizados (AR18).
 
-### Story 1.3: Flip del contrato API — wire cursor-only con envelope nuevo (PR3, lado API)
+### Story 1.3: Flip del contrato API — wire cursor-only con envelope nuevo + repos por composición (PR3, lado API)
+
+> **D-1 (2026-06-11):** la reestructuración de repositorios de herencia a composición (FR9, FR11 parcial, FR12) se trasladó aquí desde PR2 — es la pieza que conecta el `DoctrineSearchEngine` (ya entregado off-wire en PR2) al runtime path, así que solo cobra sentido en el flip observable de PR3.
 
 As a consumidor del API de listados (la PWA),
 I want navegar `GET /api/v1/backoffice/banks` exclusivamente con `limit` + `after`/`before` opacos y recibir el envelope `{hasNext, hasPrev, count?, links}`,
 So that la navegación sea O(1) a cualquier profundidad, los enlaces sean autocontenidos y toda invalidez de cursor sea observable — sin rastro de páginas numeradas.
 
 **Acceptance Criteria:**
+
+**Given** `DoctrineBankRepository` y `DoctrineBankAccountRepository` (hoy por herencia + `Paginator` legacy)
+**When** se completa el flip de PR3
+**Then** implementan solo sus puertos de dominio con `EntityManagerInterface` inyectado — sin `ServiceEntityRepository`, sin `getEntityClassName()`, sin `QueryBuilderWithOptions`, sin `PaginatorOption` — y delegan el read-path paginado en el `DoctrineSearchEngine` de PR2 (FR9/K9)
+**And** el contrato del puerto expone `save()` sin flush implícito obligatorio (FR12 — puerta abierta), y los helpers muertos accesibles se eliminan de `AbstractDoctrineRepository` preservando el comentario del naming estable de parámetros (FR11 parcial)
+**And** el `Paginator` legacy deja de servir el read-path de Bank/BankAccount (su borrado total es PR4/Story 1.5) — este es el único punto donde el engine nuevo pasa a gobernar la ejecución real.
 
 **Given** una petición con `filters[]`/`sort`/`direction` válidos y sin cursor
 **When** se ejecuta
