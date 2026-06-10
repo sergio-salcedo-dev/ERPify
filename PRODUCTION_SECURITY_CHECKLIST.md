@@ -30,6 +30,13 @@ you change anything here.
       **required** in prod (in `make prod.env.check` and guarded by `${VAR:?}` in
       `compose.prod.yaml`): the deploy aborts by name if either is missing, on the
       test machine and the VPS alike.
+- [ ] `DD_API_KEY` (Datadog) is **only** required when the optional `datadog`
+      compose profile is enabled — it is **not** in `make prod.env.check` and the
+      default deploy runs without the agent. When used, it lives only in
+      `.env.prod.local` (gitignored) and never on the `php`/`messenger_worker`
+      tracers. It uses a soft default (NOT `${VAR:?}` — compose evaluates `:?` even
+      for profile-disabled services, which would break the default deploy); a missing
+      key surfaces as the agent failing its healthcheck. See §8.
 
 ## 2. No weak fallbacks
 
@@ -105,3 +112,26 @@ you change anything here.
 - [ ] `docker compose … ps` shows every service healthy under the prod overlay.
 - [ ] `make docker.down.clean-volumes` and `db.reset` are **never** run against
       a prod stack.
+
+## 8. Datadog APM (optional, off by default)
+
+Only relevant when the `datadog` compose profile is enabled; the default stack
+ships none of this active.
+
+- [ ] `DD_API_KEY` is set **only** in `.env.prod.local`, never committed, and only
+      on the `datadog-agent` service (soft default empty — a missing key fails the
+      agent healthcheck, not a compose abort). The `php` / `messenger_worker` tracers
+      carry no key — they only set `DD_AGENT_HOST`.
+- [ ] The `datadog-agent` runs on the `frontend` network only (it needs egress to
+      Datadog intake; the `internal` `backend` network would block it). Postgres
+      isolation is unchanged.
+- [ ] The agent accepts traces (`8126/tcp`) + DogStatsD (`8125/udp`) from any
+      container on its network (`DD_*_NON_LOCAL_TRAFFIC=true`, required for the
+      sidecar pattern; no host port published). Acceptable on the internal Compose
+      network — revisit if untrusted workloads ever share `frontend`.
+- [ ] APM stays **off** unless deliberately enabled (`DD_TRACE_ENABLED`); the image is inert
+      by default via `api/frankenphp/conf.d/10-ddtrace.ini`. The continuous profiler is not
+      installed in the baseline image (deferred). Remember every Datadog surface is billed.
+- [ ] The agent's `docker.sock` / `/proc` / `/sys/fs/cgroup` mounts are read-only.
+      `cap_drop: ALL` is intentionally **not** applied to the agent (it manages its
+      own privilege drop) — revisit tightening with a live `make deploy.local`.

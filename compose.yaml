@@ -27,6 +27,17 @@ services:
       MAILER_DSN: ${MAILER_DSN:-null://null}
       MAILER_FROM: ${MAILER_FROM:-noreply@erpify.local}
       DEFAULT_NOTIFICATION_EMAIL: ${DEFAULT_NOTIFICATION_EMAIL:-sergio.salcedo.dev@gmail.com}
+      # Datadog APM — OFF by default (zero cost). The ddtrace extension ships in the image but
+      # stays inert until DD_TRACE_ENABLED=true AND the datadog-agent runs (compose profile
+      # "datadog"). DD_API_KEY lives ONLY on the datadog-agent service, never here.
+      # DD_PROFILING_ENABLED is reserved: the continuous profiler is NOT in the baseline image
+      # (needs a datadog-setup.php build — see deferred-work.md), so it is a no-op until then.
+      DD_AGENT_HOST: ${DD_AGENT_HOST:-datadog-agent}
+      DD_TRACE_ENABLED: ${DD_TRACE_ENABLED:-false}
+      DD_PROFILING_ENABLED: ${DD_PROFILING_ENABLED:-false}
+      DD_ENV: ${DD_ENV:-dev}
+      DD_SERVICE: ${DD_SERVICE:-erpify-api}
+      DD_VERSION: ${DD_VERSION:-dev}
     volumes:
       - caddy_data:/data
       - caddy_config:/config
@@ -126,7 +137,42 @@ services:
       MERCURE_URL: ${CADDY_MERCURE_URL:-http://php/.well-known/mercure}
       MERCURE_PUBLIC_URL: ${CADDY_MERCURE_PUBLIC_URL:-https://${SERVER_NAME:-localhost}:${HTTPS_PORT:-443}/.well-known/mercure}
       MERCURE_JWT_SECRET: ${CADDY_MERCURE_JWT_SECRET:-!ChangeThisMercureHubJWTSecretKey!}
+      # Datadog APM — OFF by default (see php service). DD_TRACE_CLI_ENABLED (default 1) lets the
+      # tracer instrument this long-lived `messenger:consume`; still gated by DD_TRACE_ENABLED.
+      # Tagged with its own DD_SERVICE so worker traces are distinct from the web service.
+      DD_AGENT_HOST: ${DD_AGENT_HOST:-datadog-agent}
+      DD_TRACE_ENABLED: ${DD_TRACE_ENABLED:-false}
+      DD_PROFILING_ENABLED: ${DD_PROFILING_ENABLED:-false}
+      DD_ENV: ${DD_ENV:-dev}
+      DD_SERVICE: ${DD_WORKER_SERVICE:-erpify-messenger-worker}
+      DD_VERSION: ${DD_VERSION:-dev}
     command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600"]
+
+  # Datadog Agent — OFF by default. Gated behind the "datadog" compose profile so the default
+  # `make app.dev` / `make docker.up` never starts it: the image crash-loops without DD_API_KEY,
+  # and any telemetry it forwards is billed (Datadog has no real free tier). Listens on 8126/tcp
+  # (APM) and 8125/udp (DogStatsD) for the php/worker tracers over the shared network — no host
+  # publish needed. Enable with:
+  #   DD_API_KEY=<key> COMPOSE_PROFILES=datadog DD_TRACE_ENABLED=true make docker.up.wait
+  # See _bmad-output/implementation-artifacts/spec-datadog-api-foundation-apm.md.
+  datadog-agent:
+    image: gcr.io/datadoghq/agent:7 # major-pinned; pin by digest (Dependabot) as a follow-up
+    restart: unless-stopped
+    profiles: ["datadog"]
+    environment:
+      DD_API_KEY: ${DD_API_KEY:-}
+      DD_SITE: ${DD_SITE:-datadoghq.com}
+      DD_APM_ENABLED: ${DD_APM_ENABLED:-true}
+      # Accept traces + DogStatsD from OTHER containers (the php/worker tracers), not just localhost.
+      DD_APM_NON_LOCAL_TRAFFIC: "true"
+      DD_DOGSTATSD_NON_LOCAL_TRAFFIC: "true"
+      # Log collection is a separate (billed) surface — deferred (Goal B). Keep off.
+      DD_LOGS_ENABLED: ${DD_LOGS_ENABLED:-false}
+      DD_ENV: ${DD_ENV:-dev}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup/:/host/sys/fs/cgroup/:ro
 
 volumes:
   caddy_data:

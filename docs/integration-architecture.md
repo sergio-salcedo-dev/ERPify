@@ -11,6 +11,7 @@ How the `api/` and `pwa/` parts communicate, and the traffic topology that makes
 | PostgreSQL | API's primary data store | Internal Compose network |
 | Mercure Hub | SSE hub (separate or embedded) | Behind `/.well-known/mercure` on the FrankenPHP origin |
 | `messenger_worker` (prod/ci only) | Symfony Messenger consumer | N/A (no HTTP) |
+| `datadog-agent` (opt-in: `datadog` compose profile) | Datadog Agent sidecar — receives APM traces + DogStatsD from `php`/`messenger_worker`; off by default | APM `:8126`, DogStatsD `:8125/udp` (Compose network only) |
 
 ## Traffic topology (default: Docker dev)
 

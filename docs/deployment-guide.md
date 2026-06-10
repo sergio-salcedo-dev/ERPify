@@ -132,6 +132,53 @@ This leaves only real HTTP requests traced. **Dev** traces at `traces_sample_rat
 `SENTRY_DSN` in `api/.env.local`; **prod** stays at `~0.2`. If you add a *new*
 long-running console command, exclude it here too.
 
+## Observability — Datadog APM (optional, off by default)
+
+Distributed tracing (APM) for the API, **alongside** Sentry (Sentry stays the error tracker;
+Datadog adds APM). It is **off by default and costs nothing** until enabled — Datadog has no real
+free tier (APM, Logs, Profiler and infra/custom metrics are all billed), so the only zero-cost
+state is "no data sent". Two pieces ship in this foundation:
+
+- The **`ddtrace` extension** (APM tracer) is installed in the FrankenPHP image
+  ([`../api/Dockerfile`](../api/Dockerfile)) but kept inert by
+  [`../api/frankenphp/conf.d/10-ddtrace.ini`](../api/frankenphp/conf.d/10-ddtrace.ini)
+  (`datadog.trace.enabled = 0`). `DD_TRACE_ENABLED` overrides the ini. **The continuous profiler is
+  NOT installed in the baseline image** — `install-php-extensions` doesn't bundle it on this
+  FrankenPHP/ZTS build. It is supported on ZTS since dd-trace-php 0.99.0; enabling it is a future
+  opt-in build via `datadog-setup.php --enable-profiling` (recipe in
+  `_bmad-output/implementation-artifacts/deferred-work.md`).
+- A **`datadog-agent` sidecar** gated behind the `datadog` compose profile, so the default
+  `make app.dev` / `make docker.up` never starts it (the agent image crash-loops without
+  `DD_API_KEY`). `DD_API_KEY` lives **only** on the agent service; the `php` / `messenger_worker`
+  tracers just point at `DD_AGENT_HOST=datadog-agent` (APM `:8126`, DogStatsD `:8125/udp`).
+
+Enable it (dev or a prod host):
+
+```bash
+# dev
+DD_API_KEY=<key> COMPOSE_PROFILES=datadog DD_TRACE_ENABLED=true make docker.up.wait
+# prod (DD_API_KEY in .env.prod.local; without it the agent fails its healthcheck when the profile is on)
+COMPOSE_PROFILES=datadog DD_TRACE_ENABLED=true make docker.up ENV=prod
+```
+
+Knobs (all default off / dev): `DD_TRACE_ENABLED`, `DD_ENV` (the prod overlay defaults it to
+`prod`), `DD_SERVICE` (`erpify-api`; the worker uses `DD_WORKER_SERVICE=erpify-messenger-worker`),
+`DD_VERSION` (inject the release tag / commit SHA for deploy↔trace correlation — the prod overlay
+leaves it empty so the version facet is omitted rather than mislabeled `dev`), `DD_SITE`
+(`datadoghq.com` / `datadoghq.eu`). `DD_PROFILING_ENABLED` is wired but a no-op until the profiler
+build lands (above). **Pair `DD_TRACE_ENABLED=true` with the `datadog` profile** — enabling the trace
+flag without the profile leaves the tracer pointed at a non-existent agent (degrades to a silent
+no-op). On a **staging** host set `DD_ENV=staging` (the prod overlay defaults it to `prod`, so staging
+would otherwise pollute prod dashboards). `DD_API_KEY` is not a compose `:?` guard (that would abort
+the default deploy); a missing key when the profile is on surfaces as the agent failing its
+healthcheck. Secret handling is in
+[`../PRODUCTION_SECURITY_CHECKLIST.md`](../PRODUCTION_SECURITY_CHECKLIST.md); Logs and custom
+DogStatsD metrics are deferred (`_bmad-output/implementation-artifacts/deferred-work.md`).
+
+**Worker tracing caveat (mirror of the Sentry gotcha above):** `DD_TRACE_CLI_ENABLED` defaults on,
+so the tracer instruments the long-lived `messenger:consume`. Before enabling APM in prod, verify
+per-message span flushing on the worker so a single run does not accumulate one hour-long trace.
+
 ## Prod hardening (compose.prod.yaml)
 
 - Every service runs `no-new-privileges`, drops all Linux caps and re-adds only

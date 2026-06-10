@@ -20,6 +20,8 @@ The `api/` deployable is a Symfony 8 HTTP API running on **FrankenPHP** (Caddy e
 | Media           | Intervention Image                             | 4.0                                           |
 | CORS            | nelmio/cors-bundle                             | 2.6                                           |
 | Logging         | symfony/monolog-bundle                         | 4.0                                           |
+| Error tracking  | sentry/sentry-symfony                          | 5.10                                          |
+| APM (opt-in)    | Datadog `ddtrace` ext (off by default; profiler deferred) | image extension; agent via `datadog` profile |
 | UID             | symfony/uid (UUIDv7)                           | 8.0.x                                         |
 | Validation      | symfony/validator                              | 8.0.x                                         |
 | Security        | symfony/security-core                          | 8.0.x                                         |

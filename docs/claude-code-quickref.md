@@ -103,8 +103,9 @@ make super-lint.slim                # SuperLinter on changed files only (slim im
 | `pwa`              | `./pwa` (Next.js 16)                 | internal `:3000`                     | App Router HTML, served via FrankenPHP       |
 | `database`         | `postgres:18-alpine` (sha256-pinned) | internal `:5432`                     | Main app DB                                  |
 | `messenger_worker` | reuses `php` image                   | —                                    | Async Symfony Messenger consumer             |
+| `datadog-agent`    | `gcr.io/datadoghq/agent:7`           | — (profile `datadog`, off by default)| Datadog APM/DogStatsD sidecar (opt-in)       |
 
-Compose base images are sha256-pinned; Dependabot tracks digest bumps. `compose.yaml` + `compose.dev.yaml` / `compose.prod.yaml` overlays live at the repo root.
+Compose base images are sha256-pinned; Dependabot tracks digest bumps. `datadog-agent` is gated behind the `datadog` compose profile — the default `up` never starts it; enable with `COMPOSE_PROFILES=datadog` + `DD_API_KEY` (see [`deployment-guide.md`](deployment-guide.md)). `compose.yaml` + `compose.dev.yaml` / `compose.prod.yaml` overlays live at the repo root.
 
 ---
 

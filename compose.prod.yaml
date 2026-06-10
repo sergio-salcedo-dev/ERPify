@@ -39,6 +39,12 @@ services:
       # missing. The Sentry "environment" tag is just APP_ENV (= prod).
       SENTRY_DSN: ${SENTRY_DSN:?SENTRY_DSN is required in prod}
       SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:?SENTRY_TRACES_SAMPLE_RATE is required in prod}
+      # Datadog stays OFF by default (DD_TRACE_ENABLED=false from compose.yaml). These only fix the
+      # tags so, if/when enabled, traces read env:prod (not the dev default) and version is not the
+      # misleading literal "dev": empty → Datadog omits the version facet. Set DD_ENV=staging and a
+      # real DD_VERSION (release tag / commit SHA) in .env.prod.local per host.
+      DD_ENV: ${DD_ENV:-prod}
+      DD_VERSION: ${DD_VERSION:-}
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -138,6 +144,9 @@ services:
       # Sentry captures async handler failures too (same required gating as php).
       SENTRY_DSN: ${SENTRY_DSN:?SENTRY_DSN is required in prod}
       SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:?SENTRY_TRACES_SAMPLE_RATE is required in prod}
+      # Datadog stays OFF by default; fix env/version tags to prod (see php service).
+      DD_ENV: ${DD_ENV:-prod}
+      DD_VERSION: ${DD_VERSION:-}
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -153,6 +162,33 @@ services:
       - frontend
       - backend
     command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600", "--limit=10000", "--memory-limit=256M"]
+
+  # Datadog Agent (prod overlay). Still gated behind the "datadog" profile, so the default
+  # prod deploy never starts it. Joins `frontend` only — it needs egress to Datadog intake,
+  # which the internal-only `backend` network forbids; php/worker reach it on `frontend`.
+  datadog-agent:
+    profiles: ["datadog"]
+    environment:
+      # Soft default ON PURPOSE — do NOT use ${VAR:?}. Compose (v2/v5) interpolates `:?` even for
+      # profile-DISABLED services, so a `:?` here aborts the DEFAULT prod deploy (datadog profile
+      # off), breaking `make docker.up ENV=prod`. When the profile IS enabled, the agent's own
+      # image healthcheck fails without a valid key — that is the missing-key signal. `make
+      # prod.env.check` does not require DD_API_KEY (the default deploy runs without the agent).
+      DD_API_KEY: ${DD_API_KEY:-}
+      DD_ENV: ${DD_ENV:-prod}
+    security_opt:
+      - no-new-privileges:true
+    # NOTE: cap_drop ALL is intentionally NOT applied. The Datadog Agent needs several caps
+    # for container/infra metric collection (its entrypoint drops to the dd-agent user itself).
+    # Tightening the cap set requires a live `make deploy.local` check — deferred as an
+    # "Ask First" follow-up, consistent with this file's caps philosophy above.
+    deploy:
+      resources:
+        limits:
+          cpus: ${DD_AGENT_CPU_LIMIT:-1.0}
+          memory: ${DD_AGENT_MEM_LIMIT:-512m}
+    networks:
+      - frontend
 
 # frontend: host-facing + inter-service. backend: internal-only (no egress,
 # no host port) so the database is fully isolated. mailpit lives in the dev

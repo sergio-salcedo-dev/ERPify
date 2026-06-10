@@ -55,6 +55,16 @@ RUN install-php-extensions pdo_pgsql
 ###< doctrine/doctrine-bundle ###
 ###< recipes ###
 
+# Datadog APM tracer only. Installed in the shared base stage so dev and prod share it.
+# Inert by default via frankenphp/conf.d/10-ddtrace.ini (datadog.trace.enabled=0); enable
+# per-environment with DD_TRACE_ENABLED. PHP 8.5 requires ddtrace >= 1.14 (install pulls latest).
+# NOTE: the continuous profiler is NOT installed in this baseline image — install-php-extensions
+# does not bundle datadog-profiling on this FrankenPHP/ZTS build. It IS supported on ZTS since
+# dd-trace-php 0.99.0; enabling it needs the datadog-setup.php --enable-profiling installer
+# (a future opt-in build stage). See _bmad-output/implementation-artifacts/deferred-work.md.
+RUN install-php-extensions ddtrace
+
+COPY --link frankenphp/conf.d/10-ddtrace.ini $PHP_INI_DIR/app.conf.d/
 COPY --link frankenphp/conf.d/10-app.ini $PHP_INI_DIR/app.conf.d/
 COPY --link --chmod=755 frankenphp/docker-entrypoint.sh /usr/local/bin/docker-entrypoint
 COPY --link frankenphp/Caddyfile frankenphp/worker.Caddyfile /etc/frankenphp/
