@@ -158,20 +158,20 @@ Feature: Search banks
     And the JSON node "data" should have 1 elements
     And 2 requests got executed only for doctrine connection "default"
 
-  # Semantic 400s come from the applier (invalid-search-criteria family) and abort before
+  # Semantic 422s come from the applier (invalid-search-criteria family) and abort before
   # any SQL executes; storedObjectKey is a real column but NOT in the allow-list on purpose.
-  Scenario: Generic filter on a field outside the allow-list returns a 400 unknown-search-field Problem Details body
+  Scenario: Generic filter on a field outside the allow-list returns a 422 unknown-search-field Problem Details body
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=storedObjectKey&filters[0][operator]=eq&filters[0][value]=BBVA"
-    Then the response status code should be 400
+    Then the response status code should be 422
     And the header "Content-Type" should be equal to "application/problem+json"
     And the response should be in JSON
     And the JSON node "type" should be equal to "unknown-search-field"
-    And the JSON node "status" should be equal to the number 400
+    And the JSON node "status" should be equal to the number 422
     And 0 requests got executed across all doctrine connections
 
-  Scenario: Generic filter with an operator the field does not allow returns a 400 unsupported-search-operator Problem Details body
+  Scenario: Generic filter with an operator the field does not allow returns a 422 unsupported-search-operator Problem Details body
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=id&filters[0][operator]=contains&filters[0][value]=1111"
-    Then the response status code should be 400
+    Then the response status code should be 422
     And the header "Content-Type" should be equal to "application/problem+json"
     And the JSON node "type" should be equal to "unsupported-search-operator"
     And 0 requests got executed across all doctrine connections
@@ -203,9 +203,9 @@ Feature: Search banks
 
   # A malformed uuid bound against the UUID column must surface as input error, never as a
   # Postgres 22P02 turned 500 — the field map marks id as requiresUuidValues.
-  Scenario: Generic id filter with a malformed uuid returns a 400 invalid-search-value Problem Details body
+  Scenario: Generic id filter with a malformed uuid returns a 422 invalid-search-value Problem Details body
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=id&filters[0][operator]=eq&filters[0][value]=not-a-uuid"
-    Then the response status code should be 400
+    Then the response status code should be 422
     And the header "Content-Type" should be equal to "application/problem+json"
     And the JSON node "type" should be equal to "invalid-search-value"
     And the JSON node "field" should be equal to "id"
@@ -317,11 +317,11 @@ Feature: Search banks
     And the JSON node "data" should have 31 elements
     And 2 requests got executed only for doctrine connection "default"
 
-  # An out-of-range UTC offset (beyond UTC+14/-12) is malformed input: rejected as a 400
+  # An out-of-range UTC offset (beyond UTC+14/-12) is invalid input: rejected as a 422
   # invalid-search-value before any SQL runs, never silently shifted past a real timezone.
-  Scenario: A range filter with an out-of-range UTC offset returns 400 invalid-search-value
+  Scenario: A range filter with an out-of-range UTC offset returns 422 invalid-search-value
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=createdAt&filters[0][operator]=gte&filters[0][value]=2026-01-01T00:00:00%2B25:00"
-    Then the response status code should be 400
+    Then the response status code should be 422
     And the header "Content-Type" should be equal to "application/problem+json"
     And the JSON node "type" should be equal to "invalid-search-value"
     And 0 requests got executed across all doctrine connections
@@ -336,18 +336,18 @@ Feature: Search banks
 
   # name lists default operators (eq/in/contains) only; a range operator is not allow-listed,
   # so the applier rejects it semantically before any SQL runs.
-  Scenario: A range operator on a field that does not allow it returns 400 unsupported-search-operator
+  Scenario: A range operator on a field that does not allow it returns 422 unsupported-search-operator
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=gt&filters[0][value]=x"
-    Then the response status code should be 400
+    Then the response status code should be 422
     And the header "Content-Type" should be equal to "application/problem+json"
     And the JSON node "type" should be equal to "unsupported-search-operator"
     And 0 requests got executed across all doctrine connections
 
-  # A malformed datetime is client input: it must surface as 400 invalid-search-value, never as
+  # A malformed datetime is client input: it must surface as 422 invalid-search-value, never as
   # a Postgres 22007/22008 turned 500. The applier rejects it before any SQL runs.
-  Scenario: A malformed datetime on a range filter returns 400 invalid-search-value
+  Scenario: A malformed datetime on a range filter returns 422 invalid-search-value
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=createdAt&filters[0][operator]=gte&filters[0][value]=not-a-date"
-    Then the response status code should be 400
+    Then the response status code should be 422
     And the header "Content-Type" should be equal to "application/problem+json"
     And the JSON node "type" should be equal to "invalid-search-value"
     And the JSON node "field" should be equal to "createdAt"
@@ -383,7 +383,7 @@ Feature: Search banks
   # createdAt/updatedAt are allow-listed and index-backed (NFR4), but the Alice fixtures are created
   # within the same instant, so ordering by them ties and the id ASC tiebreak (added by the
   # Paginator) decides — there is no date order to pin. These scenarios prove the temporal fields
-  # are accepted (never a 400 unknown-sort-field) and the indexed query executes in both directions.
+  # are accepted (never a 422 unknown-sort-field) and the indexed query executes in both directions.
   Scenario Outline: Sorting by an allow-listed temporal field executes in both directions
     When I send a "GET" request to "/backoffice/banks?sort=<field>&direction=<direction>"
     Then the response status code should be 200
@@ -396,14 +396,14 @@ Feature: Search banks
       | updatedAt | ASC       |
       | updatedAt | DESC      |
 
-  # Semantic 400: a sort field outside the allow-list is rejected before any SQL runs (the field
+  # Semantic 422: a sort field outside the allow-list is rejected before any SQL runs (the field
   # is never interpolated into DQL). Reuses the InvalidSearchCriteria family → unknown-sort-field.
-  Scenario: Sorting by a field outside the sort allow-list returns 400 unknown-sort-field
+  Scenario: Sorting by a field outside the sort allow-list returns 422 unknown-sort-field
     When I send a "GET" request to "/backoffice/banks?sort=id&direction=ASC"
-    Then the response status code should be 400
+    Then the response status code should be 422
     And the header "Content-Type" should be equal to "application/problem+json"
     And the JSON node "type" should be equal to "unknown-sort-field"
-    And the JSON node "status" should be equal to the number 400
+    And the JSON node "status" should be equal to the number 422
     And 0 requests got executed across all doctrine connections
 
   # Shape 422: an invalid direction is caught at mapping by the enum (validation-failed), exactly
@@ -440,19 +440,19 @@ Feature: Search banks
     And 0 requests got executed across all doctrine connections
 
   # Story 1.8 code-review (P2): a SQL/DQL-injection-shaped sort is just another value outside the sort
-  # allow-list — resolved through sortFieldMap() to null → 400 unknown-sort-field before any SQL runs,
+  # allow-list — resolved through sortFieldMap() to null → 422 unknown-sort-field before any SQL runs,
   # never interpolated into DQL. Adversarial regression guard for the "client sort is never
   # interpolated" invariant. The value decodes to `createdAt); DROP TABLE bank; --`.
   Scenario: An injection-shaped sort value is rejected before any SQL runs
     When I send a "GET" request to "/backoffice/banks?sort=createdAt%29%3B%20DROP%20TABLE%20bank%3B%20--&direction=ASC"
-    Then the response status code should be 400
+    Then the response status code should be 422
     And the header "Content-Type" should be equal to "application/problem+json"
     And the JSON node "type" should be equal to "unknown-sort-field"
     And 0 requests got executed across all doctrine connections
 
   # Story 1.8 code-review (P4): an empty sort= on the wire means "no sort" — SearchQuery::toCriteria()
   # coalesces '' → null, so it falls back to the default order (createdAt asc, id tiebreak) instead of a
-  # 400 unknown-sort-field.
+  # 422 unknown-sort-field.
   Scenario: An empty sort parameter falls back to the default order
     When I send a "GET" request to "/backoffice/banks?sort=&limit=1"
     Then the response status code should be 200

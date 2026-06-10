@@ -29,7 +29,7 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  * Integration lock for the temporal range operators (gt/gte/lt/lte) of the filter applier
  * against real Postgres (never SQLite): boundary inclusivity, UTC normalization of offset
  * bounds, typed `datetime_immutable` binding (never a raw string against a timestamp column),
- * and the 400/programmer-error rejections.
+ * and the 422/programmer-error rejections.
  *
  * Each row-based test scopes its assertions with a unique name token so a CONTAINS filter
  * isolates exactly the rows it created from the shared dev database, while the temporal filter
@@ -242,7 +242,7 @@ final class FilterApplierTemporalRangeTest extends KernelTestCase
         // format set (a relative bound would be an unintended vector); the null byte makes
         // createFromFormat throw a ValueError that would otherwise escape as an engine 500.
         // The real-world offset span is asymmetric (UTC-12..UTC+14), so both +25:00 and the
-        // non-existent -13:00 are rejected. All are client input → a 400, never a 5xx.
+        // non-existent -13:00 are rejected. All are client input → a 422, never a 5xx.
         yield 'malformed' => ['not-a-date'];
         yield 'lax relative form' => ['now'];
         yield 'date without time' => ['2026-01-01'];

@@ -117,7 +117,7 @@ final readonly class ProblemDetailsFactory
         InvariantViolation::class => Response::HTTP_UNPROCESSABLE_ENTITY,
         InvalidInput::class => Response::HTTP_BAD_REQUEST,
         RateLimited::class => Response::HTTP_TOO_MANY_REQUESTS,
-        InvalidSearchCriteria::class => Response::HTTP_BAD_REQUEST,
+        InvalidSearchCriteria::class => Response::HTTP_UNPROCESSABLE_ENTITY,
     ];
 
     private const array MARKER_DEFAULT_TYPE_MAP = [

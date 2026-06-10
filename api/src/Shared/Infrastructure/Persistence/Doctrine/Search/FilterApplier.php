@@ -79,7 +79,7 @@ final readonly class FilterApplier
     /**
      * Pre-validates values bound against UUID columns: Postgres rejects a malformed uuid with
      * 22P02 at execution time, which would surface as a 500 — but a bad uuid is client input,
-     * so it must be a 400 from the invalid-search-criteria family instead.
+     * so it must be a 422 from the invalid-search-criteria family instead.
      */
     private function ensureUuidValues(Filter $filter): void
     {
@@ -205,7 +205,7 @@ final readonly class FilterApplier
      * otherwise: a lax `new DateTimeImmutable($value)` would accept "now"/"tomorrow", a
      * date-only string has no wall-clock to compare, and an out-of-range offset would shift the
      * instant past any real timezone — all rejected. A non-parseable value is client input, so
-     * it surfaces as a 400 from the invalid-search-criteria family instead of a Postgres
+     * it surfaces as a 422 from the invalid-search-criteria family instead of a Postgres
      * 22007/22008 turned 500.
      */
     private function dateTimeBound(Filter $filter): DateTimeImmutable

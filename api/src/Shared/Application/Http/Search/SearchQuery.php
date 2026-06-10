@@ -50,7 +50,7 @@ final readonly class SearchQuery
         #[Assert\Count(max: self::MAX_FILTERS)]
         public array $filters = [],
         // The semantic allow-list of sortable fields lives in each repository's SortFieldMap
-        // (a 400 unknown-sort-field for anything outside it). The length cap is only a cheap
+        // (a 422 unknown-sort-field for anything outside it). The length cap is only a cheap
         // shape guard so an absurd value never reaches that lookup.
         #[Assert\Length(max: self::MAX_SORT_LENGTH)]
         public ?string $sort = null,

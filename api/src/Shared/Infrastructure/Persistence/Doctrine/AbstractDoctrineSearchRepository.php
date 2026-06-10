@@ -131,7 +131,7 @@ abstract class AbstractDoctrineSearchRepository extends AbstractDoctrineReposito
         ?SortDirection $direction,
     ): QueryBuilder {
         // The default branch interpolates only the trusted createdAt constant; a client-supplied
-        // sort field is resolved against the allow-list — or rejected with a 400 (unknown-sort-field)
+        // sort field is resolved against the allow-list — or rejected with a 422 (unknown-sort-field)
         // before any SQL runs. The client value is never interpolated into DQL raw.
         $path = null === $orderByField
             ? \sprintf('%s.%s', $alias, QueryParam::CREATED_AT->value)

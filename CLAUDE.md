@@ -12,7 +12,27 @@ Monorepo with two deployables sharing one Compose stack: a Symfony HTTP API on F
 - Every time Claude makes a mistake → you add a rule
 - Every time you repeat yourself → you add a workflow
 - Every time something breaks → you add a guardrail
--
+
+### Detect automation opportunities (then ask before building)
+
+Watch the user's requests and your own steps for repetition. When a pattern
+matches one of the signals below, **stop and tell the user** what you noticed,
+which automation fits, and the one-line value — then let them decide. Never
+create the skill/command/routine/hook unprompted; surface it and wait.
+
+| Signal you notice                                                                                                            | Propose                                                                    | Why                                                                         |
+|------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------|-----------------------------------------------------------------------------|
+| A multi-step **procedure** repeated across sessions (same sequence of steps/decisions, repo-specific know-how)               | a **skill** (`.claude/skills/`)                                            | Captures the *how* so it loads on demand. See `superpowers:writing-skills`. |
+| The user keeps typing/asking for the **same invocation** to kick off a known task ("do the release steps", "run the import") | a **slash command** (`.claude/commands/`)                                  | A named shortcut for one repeatable action.                                 |
+| "**Every time** X happens, do Y" — a deterministic action tied to a tool event (pre/post edit, on stop, on session start)    | a **hook** in `settings.json` (use the `update-config` skill)              | The harness runs it, not me — the only way to guarantee "always".           |
+| A task that should run **on a schedule / unattended** ("check the deploy every morning", "weekly cleanup")                   | a **routine** (`/schedule` cloud agent, or `/loop` for in-session polling) | Time-based, recurring, no human in the loop.                                |
+
+Heuristics: a pattern earns an automation when I've **repeated it ≥2–3 times**,
+the steps are **stable**, and the trigger is **recognizable**. If it's a
+one-off, a guess, or still in flux, don't propose — just do the work. Prefer
+the lightest tool that fits (command < skill < hook < routine in setup cost).
+When unsure which fits, name the trade-off and let the user pick.
+
 ---
 
 ## Top-hits commands
@@ -41,6 +61,8 @@ make ci                             # Full CI (ci.quality + ci.test).
 **Always start the stack with `make app.dev` or `make docker.up`.** Bare `docker compose up -d` skips composer install on cold checkouts and the `pwa.install.if-missing` guard.
 
 **Per-worktree stacks — isolated, no collision with `main`.** You can bring a worktree's stack up without touching the primary checkout's. `make/config.mk` derives `COMPOSE_PROJECT_NAME` from the checkout automatically: the primary keeps the bare `erpify` (fixed ports `80/443/15432/8025`, volumes untouched); a linked worktree under `.claude/worktrees/` gets `erpify-<dir-slug>` and, in dev, publishes host ports ephemerally (`0` → a random free port) so it never collides with `main` or other worktrees. Run `make app.dev` / `make docker.up` from inside the worktree — `make` targets then exec into *that* stack (so checks/tests see the worktree's code). Worktree stacks are driven via `docker compose exec` and the internal network (`MINK_BASE_URL`, pwa→php), not fixed host ports — so the random ports don't matter for the checks/tests a worktree runs.
+
+**Hard rule — every new feature starts in a worktree.** Never start feature work (or any multi-edit task) in the primary `main` checkout; it's a live shared surface where uncommitted/branch work can be wiped by concurrent git ops. Create the worktree *first*. The `/feature <scope> <slug>` slash command wraps the mechanics below; fixes/chores follow the same rule with their branch prefix.
 
 **Creating a worktree.** `make worktree.create BRANCH=<branch>` adds a linked worktree under `.claude/worktrees/` on a *new* branch off `BASE=` (default `main`). A random 4-char suffix is appended to **both** the branch and the dir slug, so the branch, the dir, and its `erpify-<slug>` Compose project never collide — `feat/foo` and `fix/foo` can coexist, and re-running is always safe. `NAME=<dir-base>` overrides the derived dir slug (still suffixed); `START=true` also brings the new stack up via `make app.dev`, otherwise it just prints the `cd … && make app.dev` next step. The recipe also seeds the worktree's `.claude/skills/` with the `bmad-*` skills from its tracked `.agent/skills/` copy (`.claude/skills/bmad-*/` is gitignored, so a bare checkout lacks it) — `/bmad-*` slash commands work in new worktrees with no manual copy.
 

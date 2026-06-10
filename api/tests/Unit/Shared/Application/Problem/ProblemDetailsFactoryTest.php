@@ -165,7 +165,7 @@ final class ProblemDetailsFactoryTest extends TestCase
         yield 'InvalidSearchCriteria' => [
             new class ('', 'x') extends DomainException implements InvalidSearchCriteria {
             },
-            400,
+            422,
             'invalid-search-criteria',
         ];
     }
@@ -589,7 +589,7 @@ final class ProblemDetailsFactoryTest extends TestCase
             InvariantViolation::class => 422,
             InvalidInput::class => 400,
             RateLimited::class => 429,
-            InvalidSearchCriteria::class => 400,
+            InvalidSearchCriteria::class => 422,
         ];
 
         $this->assertSame(
@@ -974,7 +974,7 @@ final class ProblemDetailsFactoryTest extends TestCase
         );
     }
 
-    public function testUnknownSearchFieldMapsTo400WithItsExplicitType(): void
+    public function testUnknownSearchFieldMapsTo422WithItsExplicitType(): void
     {
         $problemDetails = $this->factoryFor()->fromThrowable(
             UnknownSearchField::named('shoeSize'),
@@ -982,14 +982,14 @@ final class ProblemDetailsFactoryTest extends TestCase
             self::INSTANCE,
         );
 
-        // The InvalidSearchCriteria marker supplies the 400; the concrete exception's
+        // The InvalidSearchCriteria marker supplies the 422; the concrete exception's
         // explicit type() wins over the marker default ('invalid-search-criteria').
-        $this->assertSame(400, $problemDetails->status);
+        $this->assertSame(422, $problemDetails->status);
         $this->assertSame('unknown-search-field', $problemDetails->type);
         $this->assertSame(['field' => 'shoeSize'], $problemDetails->extensions);
     }
 
-    public function testUnsupportedSearchOperatorMapsTo400WithItsExplicitType(): void
+    public function testUnsupportedSearchOperatorMapsTo422WithItsExplicitType(): void
     {
         $problemDetails = $this->factoryFor()->fromThrowable(
             UnsupportedSearchOperator::forField('id', FilterOperator::Contains),
@@ -999,7 +999,7 @@ final class ProblemDetailsFactoryTest extends TestCase
 
         // Mirror of the UnknownSearchField pin — also proves the two-key context
         // (field + wire operator token) survives the whitelist into extensions.
-        $this->assertSame(400, $problemDetails->status);
+        $this->assertSame(422, $problemDetails->status);
         $this->assertSame('unsupported-search-operator', $problemDetails->type);
         $this->assertSame(['field' => 'id', 'operator' => 'contains'], $problemDetails->extensions);
     }
