@@ -3,7 +3,9 @@
     "allow": [
       "Bash(git mv *)",
       "Bash(git rm *)",
-      "Bash(tee *)"
+      "Bash(tee *)",
+      "Bash(git worktree *)",
+      "Bash(git *)"
     ]
   },
   "$version": 4
