@@ -208,7 +208,10 @@ export function BanksFilters({
   // Reset clears the toolbar name search too, so its visibility must track
   // ALL filters — not just the panel-only count behind the badge.
   const canReset = hasActiveFilter(filter) || sortDrift;
-  const toggleLabel = hasActive ? `Filters, ${activeCount} active` : "Filters";
+  // Panel-scoped wording on purpose: the badge counts only panel-hosted filters
+  // (the name search lives in the toolbar and is summarised by the chip bar), so
+  // "in this panel" avoids reading as a grand total of every active filter.
+  const toggleLabel = hasActive ? `Filters, ${activeCount} in this panel` : "Filters";
 
   useEffect(() => {
     if (!canReset && pendingToggleFocus.current) {
