@@ -244,6 +244,14 @@ Do not spawn subagents for tasks that share state mid-flight — e.g. two agents
 - `api/var/` — Symfony runtime cache and logs; never commit.
 - `api/migrations/` once merged — generate new ones via `make db.diff`. Editing migrations on the current feature branch is allowed; editing applied/merged migrations is not.
 
+### bmad working artifacts
+
+Files under `_bmad-output/implementation-artifacts/` are **transient working artifacts**, not durable docs.
+
+- **Done spec → delete it.** A `spec-*.md` is a quick-dev design contract whose frozen intent is spent once the work ships. When its frontmatter `status:` is `done`, **remove it from the tree** — git history preserves it; the shipped tests + PR/commit carry the record. Keep specs still in progress (`Status: ready-for-dev`, etc.). Grep for the filename before deleting so no Markdown link breaks. The `/prune-done-specs` slash command sweeps them in one pass (`--dry-run` to preview).
+- **`deferred-work.md` is pending-only.** It's a live registry, not a changelog: on resolving an item, **delete its bullet** rather than annotating it "done/resuelto" inline. If the PR that resolves it also added it, restore the file to `origin/main` so the net diff is empty. (The pending registry itself was migrated to GitHub issues #194–#207.)
+- Keep the live registries (`deferred-work.md`, `sprint-status.yaml`); never delete those for being "done".
+
 ### Markdown link style
 
 The repo's IDE Markdown linter rejects link targets that don't resolve to a concrete file. When writing or editing any `.md`:
