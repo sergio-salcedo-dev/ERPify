@@ -820,7 +820,7 @@ export default function BanksListPage() {
               </dd>
             </div>
             <div className="banks-peek__field">
-              <dt className="text-muted-foreground text-xs font-medium uppercase">Short name</dt>
+              <dt className="text-muted-foreground text-xs font-medium uppercase">Code</dt>
               <dd className="mt-0.5 font-mono uppercase" data-testid="banks-peek__shortname">
                 {peekBank.shortName}
               </dd>

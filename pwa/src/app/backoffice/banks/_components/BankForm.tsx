@@ -214,7 +214,7 @@ export function BankForm({ mode, initial, onStaleBank }: Readonly<BankFormProps>
 
       <FormField
         name="shortName"
-        label="Short name"
+        label="Code"
         required
         error={errors.shortName?.message}
         helper={'Saved in upper-case ASCII without accents — e.g. "bbva" → "BBVA", "GLÉ" → "GLE".'}

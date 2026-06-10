@@ -34,7 +34,7 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
 #[ORM\Index(name: 'idx_bank_created_at_id', columns: ['created_at', 'id'])]
 #[ORM\Index(name: 'idx_bank_updated_at_id', columns: ['updated_at', 'id'])]
 #[UniqueEntity(fields: ['nameNormalized'], message: 'This bank name is already in use.', errorPath: 'name')]
-#[UniqueEntity(fields: ['shortName'], message: 'This short name is already in use.')]
+#[UniqueEntity(fields: ['shortName'], message: 'This code is already in use.')]
 final class Bank extends AggregateRoot
 {
     /**

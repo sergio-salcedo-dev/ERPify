@@ -50,11 +50,9 @@ describe("BanksFilters — debounce", () => {
     expect(onFilterChange).not.toHaveBeenCalled();
   });
 
-  it("clears the name input on Reset even when the debounce has not propagated yet", () => {
+  it("Clear all clears a pending (un-propagated) name input and cancels the debounce", () => {
     const onFilterChange = vi.fn();
     const onReset = vi.fn();
-    // Reset button is visible because another field is already active,
-    // while the name input is only in local (pending, un-propagated) state.
     render(
       <BanksFilters
         filter={{ ...EMPTY_FILTER, shortName: "x" }}
@@ -68,19 +66,58 @@ describe("BanksFilters — debounce", () => {
 
     const nameInput = screen.getByTestId("banks-filters__name") as HTMLInputElement;
     fireEvent.change(nameInput, { target: { value: "cosmos" } });
-    // Debounce NOT advanced — the parent filter.name is still "".
 
-    fireEvent.click(screen.getByTestId("banks-filters__reset"));
+    fireEvent.click(screen.getByTestId("banks-filters__clear-all"));
     expect(onReset).toHaveBeenCalledTimes(1);
-
-    // The local input must clear immediately…
     expect((screen.getByTestId("banks-filters__name") as HTMLInputElement).value).toBe("");
 
-    // …and the pending debounce must NOT re-apply the stale "cosmos".
     act(() => {
       vi.advanceTimersByTime(300);
     });
     expect(onFilterChange).not.toHaveBeenCalledWith(expect.objectContaining({ name: "cosmos" }));
+  });
+
+  it("removing the code chip clears shortName without re-applying a pending value", () => {
+    const onFilterChange = vi.fn();
+    render(
+      <BanksFilters
+        filter={{ ...EMPTY_FILTER, shortName: "ACM" }}
+        onFilterChange={onFilterChange}
+        sort={DEFAULT_SORT}
+        onSortChange={vi.fn()}
+        onReset={vi.fn()}
+        defaultOpen
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("banks-filters__chip-shortName"));
+    expect(onFilterChange).toHaveBeenCalledWith(expect.objectContaining({ shortName: "" }));
+  });
+
+  it("removing the name chip clears name and cancels a pending typed value", () => {
+    const onFilterChange = vi.fn();
+    render(
+      <BanksFilters
+        filter={{ ...EMPTY_FILTER, name: "acme" }}
+        onFilterChange={onFilterChange}
+        sort={DEFAULT_SORT}
+        onSortChange={vi.fn()}
+        onReset={vi.fn()}
+        defaultOpen
+      />,
+    );
+
+    // Type a newer, still-undebounced value over the committed "acme".
+    fireEvent.change(screen.getByTestId("banks-filters__name"), { target: { value: "acme2" } });
+
+    fireEvent.click(screen.getByTestId("banks-filters__chip-name"));
+    expect(onFilterChange).toHaveBeenCalledWith(expect.objectContaining({ name: "" }));
+
+    // The cancelled debounce must never re-apply the stale "acme2".
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(onFilterChange).not.toHaveBeenCalledWith(expect.objectContaining({ name: "acme2" }));
   });
 
   it("debounces name filter changes (~300ms) and emits the latest value once", () => {
