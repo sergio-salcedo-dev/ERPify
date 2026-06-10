@@ -252,7 +252,7 @@ export function BanksFilters({
         <div className="banks-filters__panel-inner overflow-hidden">
           <div className="banks-filters__panel-fields border-border bg-muted/20 mt-3 rounded-md border p-3 sm:p-4">
             <div className="banks-filters__grid grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <FormField name="banks-filters-short-name" label="Short name">
+              <FormField name="banks-filters-short-name" label="Code">
                 <Input
                   type="text"
                   value={shortNameInput}

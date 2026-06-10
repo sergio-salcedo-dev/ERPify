@@ -33,7 +33,7 @@ describe("BankSchema", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       const issue = result.issues.find((i) => i.path === "shortName");
-      expect(issue?.message).toBe("The shortName field is required.");
+      expect(issue?.message).toBe("The code field is required.");
     }
   });
 
@@ -52,7 +52,7 @@ describe("BankSchema", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.issues.find((i) => i.path === "shortName")?.message).toBe(
-        "The shortName must not exceed 50 characters.",
+        "The code must not exceed 50 characters.",
       );
     }
   });

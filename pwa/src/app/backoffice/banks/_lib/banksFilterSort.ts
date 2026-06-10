@@ -19,7 +19,7 @@ export type BanksSortableColumn = "shortName" | "name" | "createdAt" | "updatedA
 
 /** The set of columns the user can sort by, paired with the labels shown in the filters panel. */
 export const BANKS_SORTABLE_COLUMNS: ReadonlyArray<{ id: BanksSortableColumn; label: string }> = [
-  { id: "shortName", label: "Short name" },
+  { id: "shortName", label: "Code" },
   { id: "name", label: "Name" },
   { id: "createdAt", label: "Created" },
   { id: "updatedAt", label: "Updated" },

@@ -111,7 +111,7 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
     await expect(page.locator("tbody tr")).toHaveCount(SEED_COUNT);
   });
 
-  test("sort — Short name column flips ascending and descending", async ({ page }) => {
+  test("sort — Code column flips ascending and descending", async ({ page }) => {
     await page.goto("/backoffice/banks");
     await expect(page.getByTestId("banks-list")).toHaveAttribute("data-state", "ready");
     await page.getByTestId("banks-filters__toggle").click();
@@ -187,7 +187,7 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
 
     await expect(page).toHaveURL(/\/backoffice\/banks\/new$/);
     await expect(page.getByText("The name field is required.")).toBeVisible();
-    await expect(page.getByText("The shortName field is required.")).toBeVisible();
+    await expect(page.getByText("The code field is required.")).toBeVisible();
   });
 
   test("create — happy path lands on the detail page with the new bank", async ({ page }) => {

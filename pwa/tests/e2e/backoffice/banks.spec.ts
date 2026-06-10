@@ -276,7 +276,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       await page.getByTestId("bank-form__short-name").fill(overlong);
       await page.getByTestId("bank-form__submit").click();
 
-      await expect(page.getByText("The shortName must not exceed 50 characters.")).toBeVisible();
+      await expect(page.getByText("The code must not exceed 50 characters.")).toBeVisible();
     });
   });
 

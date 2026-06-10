@@ -30,6 +30,11 @@ describe("BANKS_SORTABLE_COLUMNS", () => {
       expect(column.label.length).toBeGreaterThan(0);
     }
   });
+
+  it("labels the shortName column 'Code' (the unique upper-case bank code)", () => {
+    const column = BANKS_SORTABLE_COLUMNS.find((c) => c.id === "shortName");
+    expect(column?.label).toBe("Code");
+  });
 });
 
 describe("isDefaultSort", () => {

@@ -21,10 +21,10 @@ export const BankSchema = z.object({
     .min(1, "The name field is required.")
     .max(BANK_NAME_MAX_LENGTH, "The name must not exceed 255 characters."),
   shortName: z
-    .string({ error: "The shortName field is required." })
+    .string({ error: "The code field is required." })
     .trim()
-    .min(1, "The shortName field is required.")
-    .max(50, "The shortName must not exceed 50 characters."),
+    .min(1, "The code field is required.")
+    .max(50, "The code must not exceed 50 characters."),
 });
 
 /** Inferred form-values shape — consume this from React components. */
