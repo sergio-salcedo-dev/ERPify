@@ -16,6 +16,7 @@ use Erpify\Shared\Domain\Search\Filter;
 use Erpify\Shared\Domain\Search\FilterOperator;
 use Erpify\Shared\Domain\Search\Filters;
 use Erpify\Shared\Domain\Uuid\Uuid;
+use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\Keyset\AppliedFilters;
 use InvalidArgumentException;
 use ValueError;
 
@@ -54,11 +55,22 @@ final readonly class FilterApplier
     /** Westernmost real-world UTC offset (UTC-12, e.g. Baker Island); west of it a bound is nonsensical. */
     private const int MIN_UTC_OFFSET_WEST_SECONDS = -12 * 3600;
 
-    public function apply(QueryBuilder $queryBuilder, Filters $filters, SearchFieldMap $fieldMap): void
+    /**
+     * Applies the allow-listed filters to the query builder and returns the receipt of what was
+     * actually applied — the {@see AppliedFilters} that feed step 4 of the engine pipeline (the
+     * sealed {@see Keyset\QueryExecutionTrace}) and therefore the cursor fingerprint (AR22). The
+     * receipt is the post-allow-list truth, never the raw request: every filter either passes the
+     * map and is translated, or throws, so a drift between "requested" and "applied" can never
+     * silently corrupt a cursor. The mutation of the query builder (`andWhere` + binds, LIKE
+     * escaping) is unchanged — only the return type is widened from `void`.
+     */
+    public function apply(QueryBuilder $queryBuilder, Filters $filters, SearchFieldMap $fieldMap): AppliedFilters
     {
         if ($filters->isEmpty()) {
-            return;
+            return AppliedFilters::none();
         }
+
+        $applied = [];
 
         foreach ($filters as $filter) {
             $mapping = $fieldMap->mappingFor($filter->field)
@@ -73,7 +85,10 @@ final readonly class FilterApplier
             }
 
             $this->applyFilter($queryBuilder, $mapping, $filter);
+            $applied[] = $filter;
         }
+
+        return new AppliedFilters(...$applied);
     }
 
     /**

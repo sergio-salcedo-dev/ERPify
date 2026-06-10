@@ -36,19 +36,42 @@ final readonly class OrderByColumns
     }
 
     /**
-     * Builds the column list from N primary sort keys, appending the `id`
-     * tie-break unless the last key already IS the tie-break column (sorting by
-     * `id` directly is already a total order).
+     * Builds the column list from N primary sort keys, appending the `id` tie-break unless the last
+     * key already IS the tie-break column (sorting by `id` directly is already a total order).
+     *
+     * Any `id` key that is NOT in the final position is dropped first: the tie-break is appended
+     * exactly once as the last column, so a mid-list `id` would duplicate it in both the ORDER BY and
+     * the keyset predicate (a duplicated boundary key over-constrains the walk). Resolved as the
+     * deferred review item from story 1.1, where PR2 first wires real multi-key sorts.
      *
      * @param non-empty-list<array{column: string, direction: SortDirection}> $sorts
      */
     public static function fromSorts(array $sorts): self
     {
-        if (self::TIE_BREAK_COLUMN === \array_reverse($sorts)[0]['column']) {
-            return new self($sorts);
+        $lastIndex = \array_key_last($sorts);
+        $last = $sorts[$lastIndex];
+
+        $preceding = [];
+
+        foreach ($sorts as $index => $sort) {
+            if ($index === $lastIndex) {
+                continue;
+            }
+
+            if (self::TIE_BREAK_COLUMN === $sort['column']) {
+                continue;
+            }
+
+            $preceding[] = $sort;
         }
 
-        $columns = $sorts;
+        // The last key is always kept, so the list is non-empty; any earlier `id` was dropped above.
+        $columns = [...$preceding, $last];
+
+        if (self::TIE_BREAK_COLUMN === $last['column']) {
+            return new self($columns);
+        }
+
         $columns[] = ['column' => self::TIE_BREAK_COLUMN, 'direction' => SortDirection::ASC];
 
         return new self($columns);

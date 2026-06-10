@@ -76,4 +76,18 @@ final class OrderByColumnsTest extends TestCase
 
         $this->assertSame(['name', 'id'], $columns->columnNames());
     }
+
+    #[Test]
+    public function itDropsAnIdKeyThatIsNotInTheFinalPositionToAvoidDuplicatingTheTieBreak(): void
+    {
+        // Deferred review item (story 1.1): a mid-list `id` would duplicate the appended tie-break in
+        // the ORDER BY and the keyset predicate. It is dropped; the tie-break is appended exactly once.
+        $columns = OrderByColumns::fromSorts([
+            ['column' => 'id', 'direction' => SortDirection::DESC],
+            ['column' => 'name', 'direction' => SortDirection::ASC],
+        ]);
+
+        $this->assertSame(['name', 'id'], $columns->columnNames());
+        $this->assertSame('id', $columns->tieBreakColumn());
+    }
 }
