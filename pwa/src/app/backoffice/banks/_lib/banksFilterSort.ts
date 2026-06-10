@@ -1,5 +1,6 @@
 import type { DataTableSort } from "@/components/erpify";
 import { SortDirection } from "@/context/shared/domain/types/sorting";
+import type { DateTimeProvider } from "@/context/shared/domain/DateTimeProvider/DateTimeProvider";
 
 export interface BanksFilter {
   name: string;
@@ -64,4 +65,64 @@ export function hasActivePanelFilter(filter: BanksFilter): boolean {
  */
 export function hasActiveFilter(filter: BanksFilter): boolean {
   return Boolean(filter.name.trim()) || hasActivePanelFilter(filter);
+}
+
+export type FilterChipKey = "name" | "shortName" | "created" | "sort";
+
+export interface FilterChipDescriptor {
+  key: FilterChipKey;
+  /** Human label rendered inside the chip, e.g. `Code: ACM`. */
+  label: string;
+}
+
+const SORT_ARROW: Record<SortDirection, string> = {
+  [SortDirection.ASC]: "↑",
+  [SortDirection.DESC]: "↓",
+};
+
+function formatCreatedChipLabel(filter: BanksFilter, dateTime: DateTimeProvider): string | null {
+  const from = filter.createdFrom.trim();
+  const to = filter.createdTo.trim();
+  const fmt = (iso: string): string => {
+    const parsed = dateTime.parseISO(iso);
+    return parsed ? dateTime.formatToDate(parsed) : iso;
+  };
+  if (from && to) return `Created: ${fmt(from)} – ${fmt(to)}`;
+  if (from) return `Created after: ${fmt(from)}`;
+  if (to) return `Created before: ${fmt(to)}`;
+  return null;
+}
+
+/**
+ * Descriptors for the always-visible active-filter chip bar. Mirrors the same
+ * "active" rules as the badge/Reset helpers above; the name search lives in the
+ * toolbar but still earns a chip so the bar is a complete summary. The sort
+ * chip appears for any drift from {@link DEFAULT_SORT}, including the user's
+ * explicit "None" (`null`), which reads as "Unsorted".
+ */
+export function buildActiveFilterChips(
+  filter: BanksFilter,
+  sort: BanksSort,
+  dateTime: DateTimeProvider,
+): FilterChipDescriptor[] {
+  const chips: FilterChipDescriptor[] = [];
+  if (filter.name.trim()) chips.push({ key: "name", label: `Name: ${filter.name.trim()}` });
+  if (filter.shortName.trim())
+    chips.push({ key: "shortName", label: `Code: ${filter.shortName.trim()}` });
+
+  const created = formatCreatedChipLabel(filter, dateTime);
+  if (created) chips.push({ key: "created", label: created });
+
+  if (!isDefaultSort(sort)) {
+    if (sort) {
+      const column = BANKS_SORTABLE_COLUMNS.find((c) => c.id === sort.columnId);
+      chips.push({
+        key: "sort",
+        label: `Sorted: ${column?.label ?? sort.columnId} ${SORT_ARROW[sort.direction]}`,
+      });
+    } else {
+      chips.push({ key: "sort", label: "Unsorted" });
+    }
+  }
+  return chips;
 }

@@ -106,7 +106,7 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
     await expect(page.getByRole("cell", { name: target.shortName, exact: true })).toBeVisible();
 
     // Reset clears both filters and brings the seeded set back.
-    await page.getByTestId("banks-filters__reset").click();
+    await page.getByTestId("banks-filters__clear-all").click();
     await filterByName(page, runPrefix);
     await expect(page.locator("tbody tr")).toHaveCount(SEED_COUNT);
   });

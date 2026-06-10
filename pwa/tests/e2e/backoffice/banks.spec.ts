@@ -371,22 +371,21 @@ test.describe("BackOffice - Banks CRUD", () => {
       await expect(panel).toBeHidden();
     });
 
-    test("Reset button is hidden when no filters are active and appears once a filter is set", async ({
+    test("Clear all button is hidden when no filters are active and appears once a filter is set", async ({
       page,
     }) => {
       await mockBanksApi(page, { list: "happy", list_banks: allBanks });
       await page.goto("/backoffice/banks");
 
-      await page.getByTestId("banks-filters__toggle").click();
-      // Reset is removed from the DOM (not just disabled) when nothing to reset.
-      await expect(page.getByTestId("banks-filters__reset")).toHaveCount(0);
+      // Clear all is removed from the DOM (not just disabled) when nothing to reset.
+      await expect(page.getByTestId("banks-filters__clear-all")).toHaveCount(0);
 
       await page.getByTestId("banks-filters__name").fill("cosmos");
-      await expect(page.getByTestId("banks-filters__reset")).toBeVisible();
+      await expect(page.getByTestId("banks-filters__clear-all")).toBeVisible();
 
-      await page.getByTestId("banks-filters__reset").click();
+      await page.getByTestId("banks-filters__clear-all").click();
       await expect(page.getByTestId("banks-filters__name")).toHaveValue("");
-      await expect(page.getByTestId("banks-filters__reset")).toHaveCount(0);
+      await expect(page.getByTestId("banks-filters__clear-all")).toHaveCount(0);
     });
 
     test("toggle button shows a count badge with the number of active filters", async ({
@@ -423,7 +422,6 @@ test.describe("BackOffice - Banks CRUD", () => {
       await expect(page.getByRole("cell", { name: "Acme Savings" })).toBeVisible();
       await expect(page.getByRole("cell", { name: "Cosmos Bank" })).toBeVisible();
 
-      await page.getByTestId("banks-filters__toggle").click();
       await page.getByTestId("banks-filters__name").fill("cosmos");
       await expect(page.getByRole("cell", { name: "Cosmos Bank" })).toBeVisible();
       await expect(page.getByRole("cell", { name: "Acme Savings" })).toBeHidden();
@@ -431,7 +429,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       // AC: filter input does not change the URL.
       await expect(page).toHaveURL(/\/backoffice\/banks$/);
 
-      await page.getByTestId("banks-filters__reset").click();
+      await page.getByTestId("banks-filters__clear-all").click();
       await expect(page.getByTestId("banks-filters__name")).toHaveValue("");
       await expect(page.getByRole("cell", { name: "Acme Savings" })).toBeVisible();
       await expect(page.getByRole("cell", { name: "Brookline Trust" })).toBeVisible();
@@ -573,14 +571,13 @@ test.describe("BackOffice - Banks CRUD", () => {
       await page.goto("/backoffice/banks");
 
       // Drift away from the defaults.
-      await page.getByTestId("banks-filters__toggle").click();
       await page.getByTestId("banks-filters__name").fill("cosmos");
       const nameHeader = page
         .getByRole("columnheader", { name: "Name", exact: true })
         .getByRole("button");
       await nameHeader.click(); // asc → desc
 
-      await page.getByTestId("banks-filters__reset").click();
+      await page.getByTestId("banks-filters__clear-all").click();
 
       await expect(page.getByTestId("banks-filters__name")).toHaveValue("");
       await expect(page.getByRole("columnheader", { name: "Name", exact: true })).toHaveAttribute(
@@ -698,22 +695,22 @@ test.describe("BackOffice - Banks CRUD", () => {
       );
     });
 
-    test("Reset button appears when sort drifts even without an active filter", async ({
+    test("Clear all button appears when sort drifts even without an active filter", async ({
       page,
     }) => {
       await mockBanksApi(page, { list: "happy", list_banks: allBanks });
       await page.goto("/backoffice/banks");
 
+      await expect(page.getByTestId("banks-filters__clear-all")).toHaveCount(0);
+
       await page.getByTestId("banks-filters__toggle").click();
-      await expect(page.getByTestId("banks-filters__reset")).toHaveCount(0);
-
       await page.getByTestId("banks-filters__sort-direction").selectOption("desc");
-      await expect(page.getByTestId("banks-filters__reset")).toBeVisible();
+      await expect(page.getByTestId("banks-filters__clear-all")).toBeVisible();
 
-      await page.getByTestId("banks-filters__reset").click();
+      await page.getByTestId("banks-filters__clear-all").click();
       await expect(page.getByTestId("banks-filters__sort-by")).toHaveValue("name");
       await expect(page.getByTestId("banks-filters__sort-direction")).toHaveValue("asc");
-      await expect(page.getByTestId("banks-filters__reset")).toHaveCount(0);
+      await expect(page.getByTestId("banks-filters__clear-all")).toHaveCount(0);
     });
 
     test("sort selected in the panel applies to the cards view as well", async ({ page }) => {
@@ -732,6 +729,20 @@ test.describe("BackOffice - Banks CRUD", () => {
         "data-testid",
         `banks-cards__item-${SAMPLE_BANK_D.id}`,
       );
+    });
+
+    test("active-filter chips appear in the bar and remove individually", async ({ page }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: allBanks });
+      await page.goto("/backoffice/banks");
+
+      await page.getByTestId("banks-filters__name").fill("cosmos");
+      // The chip bar is visible without opening the panel.
+      await expect(page.getByTestId("banks-filters__active")).toBeVisible();
+      await expect(page.getByTestId("banks-filters__chip-name")).toBeVisible();
+
+      await page.getByTestId("banks-filters__chip-name").click();
+      await expect(page.getByTestId("banks-filters__name")).toHaveValue("");
+      await expect(page.getByTestId("banks-filters__active")).toHaveCount(0);
     });
   });
 
@@ -1064,16 +1075,16 @@ test.describe("BackOffice - Banks CRUD", () => {
 
       // Panel collapsed by default on mobile too.
       await expect(page.getByTestId("banks-filters__panel")).toBeHidden();
-      await expect(page.getByTestId("banks-filters__reset")).toHaveCount(0);
+      await expect(page.getByTestId("banks-filters__clear-all")).toHaveCount(0);
 
       await toggle.click();
       await expect(page.getByTestId("banks-filters__panel")).toBeVisible();
 
       // Name is a toolbar search — it does NOT contribute to the panel badge.
-      // Use a panel field (short name) to verify the badge and reset button.
+      // Use a panel field (short name) to verify the badge and clear-all button.
       await page.getByTestId("banks-filters__short-name").fill("acm");
       await expect(page.getByTestId("banks-filters__count")).toHaveText("1");
-      await expect(page.getByTestId("banks-filters__reset")).toBeVisible();
+      await expect(page.getByTestId("banks-filters__clear-all")).toBeVisible();
     });
 
     test("on mobile, switching to cards renders a single-column stack", async ({ page }) => {
