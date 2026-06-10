@@ -4,6 +4,6 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Domain\Exception;
 
-interface InvalidInput
+interface InvalidInput extends ClientError
 {
 }
