@@ -1,6 +1,7 @@
 import { expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { BanksActiveFilters } from "@/app/backoffice/banks/_components/BanksActiveFilters";
+import type { FilterChipDescriptor } from "@/app/backoffice/banks/_lib/banksFilterSort";
 
 const chips = [
   { key: "name" as const, label: "Name: Acme" },
@@ -29,33 +30,22 @@ it("calls onClearAll when Clear all is clicked", () => {
   expect(onClearAll).toHaveBeenCalledTimes(1);
 });
 
-it("moves focus to the next chip after a non-last chip is removed", () => {
+// `remaining` mirrors the parent's post-removal chip set, so each assertion
+// below exercises the same render → remove → re-render flow with different ends.
+function removeChipThenRerender(removeTestId: string, remaining: FilterChipDescriptor) {
   const { rerender } = render(
     <BanksActiveFilters chips={chips} onRemove={vi.fn()} onClearAll={vi.fn()} />,
   );
-  fireEvent.click(screen.getByTestId("banks-filters__chip-name")); // remove index 0
-  // Parent re-renders with the remaining chip now at index 0.
-  rerender(
-    <BanksActiveFilters
-      chips={[{ key: "shortName", label: "Code: ACM" }]}
-      onRemove={vi.fn()}
-      onClearAll={vi.fn()}
-    />,
-  );
+  fireEvent.click(screen.getByTestId(removeTestId));
+  rerender(<BanksActiveFilters chips={[remaining]} onRemove={vi.fn()} onClearAll={vi.fn()} />);
+}
+
+it("moves focus to the next chip after a non-last chip is removed", () => {
+  removeChipThenRerender("banks-filters__chip-name", { key: "shortName", label: "Code: ACM" });
   expect(screen.getByTestId("banks-filters__chip-shortName")).toHaveFocus();
 });
 
 it("moves focus to Clear all after the last chip is removed", () => {
-  const { rerender } = render(
-    <BanksActiveFilters chips={chips} onRemove={vi.fn()} onClearAll={vi.fn()} />,
-  );
-  fireEvent.click(screen.getByTestId("banks-filters__chip-shortName")); // remove index 1 (last)
-  rerender(
-    <BanksActiveFilters
-      chips={[{ key: "name", label: "Name: Acme" }]}
-      onRemove={vi.fn()}
-      onClearAll={vi.fn()}
-    />,
-  );
+  removeChipThenRerender("banks-filters__chip-shortName", { key: "name", label: "Name: Acme" });
   expect(screen.getByTestId("banks-filters__clear-all")).toHaveFocus();
 });
