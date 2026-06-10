@@ -39,18 +39,18 @@ final class CursorCodecTest extends TestCase
     #[Test]
     public function itRoundTripsACursorExactly(): void
     {
-        $cursor = CursorMother::create(fp: $this->canonicalFingerprint());
+        $cursor = CursorMother::create(fingerprint: $this->canonicalFingerprint());
 
         $decoded = $this->codec->decode(
             $this->codec->encode($cursor),
             $this->canonicalFingerprint(),
-            $cursor->dir,
+            $cursor->direction,
         );
 
-        $this->assertSame($cursor->v, $decoded->v);
-        $this->assertSame($cursor->dir, $decoded->dir);
+        $this->assertSame($cursor->version, $decoded->version);
+        $this->assertSame($cursor->direction, $decoded->direction);
         $this->assertSame($cursor->values, $decoded->values);
-        $this->assertSame($cursor->fp, $decoded->fp);
+        $this->assertSame($cursor->fingerprint, $decoded->fingerprint);
     }
 
     #[Test]
@@ -91,12 +91,12 @@ final class CursorCodecTest extends TestCase
     public function itRoundTripsASecondPrecisionDatetimeValueExactly(): void
     {
         $values = ['createdAt' => '2026-06-10T12:30:45+00:00', 'id' => CursorMother::DEFAULT_ID];
-        $cursor = CursorMother::create(values: $values, fp: $this->canonicalFingerprint());
+        $cursor = CursorMother::create(values: $values, fingerprint: $this->canonicalFingerprint());
 
         $decoded = $this->codec->decode(
             $this->codec->encode($cursor),
             $this->canonicalFingerprint(),
-            $cursor->dir,
+            $cursor->direction,
         );
 
         $this->assertSame($values, $decoded->values);
@@ -105,7 +105,7 @@ final class CursorCodecTest extends TestCase
     #[Test]
     public function itRejectsACursorWithATamperedSignature(): void
     {
-        $encoded = $this->codec->encode(CursorMother::create(fp: $this->canonicalFingerprint()));
+        $encoded = $this->codec->encode(CursorMother::create(fingerprint: $this->canonicalFingerprint()));
         $tampered = \substr($encoded, 0, -1) . (\str_ends_with($encoded, 'a') ? 'b' : 'a');
 
         $this->assertDecodeFailsWith(InvalidCursorCause::Signature, $tampered, $this->canonicalFingerprint());
@@ -131,7 +131,7 @@ final class CursorCodecTest extends TestCase
     #[Test]
     public function itRejectsACursorWhoseFingerprintDoesNotMatch(): void
     {
-        $encoded = $this->codec->encode(CursorMother::create(fp: $this->canonicalFingerprint()));
+        $encoded = $this->codec->encode(CursorMother::create(fingerprint: $this->canonicalFingerprint()));
 
         $this->assertDecodeFailsWith(InvalidCursorCause::Fingerprint, $encoded, 'ffffffffffffffffffffffffffffffff');
     }
@@ -139,7 +139,7 @@ final class CursorCodecTest extends TestCase
     #[Test]
     public function itRejectsACursorWhoseDirectionBindingDoesNotMatch(): void
     {
-        $encoded = $this->codec->encode(CursorMother::create(dir: Cursor::DIRECTION_AFTER, fp: $this->canonicalFingerprint()));
+        $encoded = $this->codec->encode(CursorMother::create(direction: Cursor::DIRECTION_AFTER, fingerprint: $this->canonicalFingerprint()));
 
         // dir mismatch is a payload-integrity failure, never a navigation decision (AR21).
         $this->assertDecodeFailsWith(

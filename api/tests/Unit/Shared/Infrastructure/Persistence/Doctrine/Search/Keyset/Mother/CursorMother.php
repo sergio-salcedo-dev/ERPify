@@ -23,12 +23,12 @@ final class CursorMother
      * @param array<string, mixed>|null $values
      */
     public static function create(
-        int $v = CursorCodec::CURRENT_VERSION,
-        string $dir = Cursor::DIRECTION_AFTER,
+        int $version = CursorCodec::CURRENT_VERSION,
+        string $direction = Cursor::DIRECTION_AFTER,
         ?array $values = null,
-        string $fp = self::DEFAULT_FINGERPRINT,
+        string $fingerprint = self::DEFAULT_FINGERPRINT,
     ): Cursor {
-        return new Cursor($v, $dir, $values ?? self::defaultValues(), $fp);
+        return new Cursor($version, $direction, $values ?? self::defaultValues(), $fingerprint);
     }
 
     /**

@@ -57,8 +57,15 @@ final readonly class CursorCodec
     {
         // Fixed key order: the body is signed and round-tripped, so its bytes
         // must be deterministic for a given cursor.
+        // Property ⇄ wire-key mapping lives here: the JSON keys are the pinned
+        // short forms (v/dir/values/fp), the Cursor properties are descriptive.
         $json = \json_encode(
-            ['v' => $cursor->v, 'dir' => $cursor->dir, 'values' => $cursor->values, 'fp' => $cursor->fp],
+            [
+                'v' => $cursor->version,
+                'dir' => $cursor->direction,
+                'values' => $cursor->values,
+                'fp' => $cursor->fingerprint,
+            ],
             JSON_THROW_ON_ERROR,
         );
 
