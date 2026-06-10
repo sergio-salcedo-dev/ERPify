@@ -43,3 +43,9 @@ Collected during quick-dev. Not part of the current story's shippable scope.
   sección **Review Findings** de `spec-banks-mercure-realtime`.
 - **Sentry sink PWA** — shipped 2026-06-08 (spec-pwa-sentry): `serializeCause()` + scrub
   recursivo, `createTelemetry()`, túnel same-origin `/monitoring`, severity map.
+
+## Deferred from: code review of story-1.1 (2026-06-10)
+
+- **Codec accepts `values` with wrong arity / missing ORDER BY column / non-scalar elements** → en el cableado de PR2, `KeysetPredicateBuilder` lanza `InvalidArgumentException` (500) en vez de `InvalidCursor` (422). El codec no puede validar aridad (no conoce las columnas — diferido al engine por AR16). PR2 debe garantizar aridad antes de invocar al builder, o mapear el `InvalidArgumentException` a `InvalidCursor` para preservar el contrato 422 `invalid-cursor`.
+- **`OrderByColumns::fromSorts` sólo deduplica `id` cuando es la última clave** → un sort multi-clave con `id` en posición no-última re-añadiría la columna tie-break, produciendo `id` duplicado en ORDER BY/predicado. Sin caller en PR1 (`fromPrimarySort` pasa una sola clave); guardar antes de que PR2 cablee sorts multi-clave reales.
+- **Floor de microsegundos vs redondeo de Postgres `TIMESTAMP(0)` + drift float en la frontera** → `CursorPositionExtractor` trunca (floor) a segundos; Postgres `TIMESTAMP(0)` redondea. Para filas ya persistidas la columna ya está a precisión de segundo, así que el riesgo es bajo, pero verificar con round-trip real contra Postgres (Behat) en PR2/PR3 que las filas frontera no se saltan/duplican en empates sub-segundo; idem precisión JSON de columnas float usadas como clave de orden.
