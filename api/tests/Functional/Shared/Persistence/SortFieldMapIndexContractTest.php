@@ -171,9 +171,6 @@ final class SortFieldMapIndexContractTest extends KernelTestCase
      *
      * @return list<string>
      */
-    /**
-     * @return list<string>
-     */
     private function bankIndexDefinitionsFor(): array
     {
         /** @var list<string> $definitions */

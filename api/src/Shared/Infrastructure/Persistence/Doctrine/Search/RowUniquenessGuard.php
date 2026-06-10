@@ -72,15 +72,30 @@ final readonly class RowUniquenessGuard
             }
 
             foreach ($selectPart->getParts() as $part) {
-                $part = \trim((string) $part);
+                $alias = $this->leadingAlias((string) $part);
 
-                if ($part !== $rootAlias && 1 === \preg_match('/^[A-Za-z_]\w*$/', $part)) {
-                    $selected[] = $part;
+                if (null !== $alias && $alias !== $rootAlias) {
+                    $selected[] = $alias;
                 }
             }
         }
 
         return $selected;
+    }
+
+    /**
+     * The leading alias an `addSelect` part hydrates from, in every form that can pull a joined entity
+     * into the row set: `a`, `a.field`, `PARTIAL a.{id,name}`, `a AS x`. A to-many reached by ANY of
+     * these multiplies SQL rows under the engine's raw `setMaxResults`, so the bare-alias form is not
+     * enough. A DQL function part (`COUNT(a.id)`) yields the function name, which never matches a
+     * joined alias and is harmlessly skipped by the caller.
+     */
+    private function leadingAlias(string $part): ?string
+    {
+        $part = \trim($part);
+        $part = (string) \preg_replace('/^PARTIAL\s+/i', '', $part);
+
+        return 1 === \preg_match('/^([A-Za-z_]\w*)/', $part, $matches) ? $matches[1] : null;
     }
 
     /**

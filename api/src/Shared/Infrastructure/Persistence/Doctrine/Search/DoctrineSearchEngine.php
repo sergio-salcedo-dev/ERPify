@@ -244,6 +244,11 @@ final readonly class DoctrineSearchEngine
 
     private function applyOrderBy(QueryBuilder $queryBuilder, OrderByColumns $columns, string $alias): void
     {
+        // why: ordering is the engine's monopoly (the base QB contract is SELECT/FROM/joins only). A
+        // stray ORDER BY from the repo would, via addOrderBy, sit AHEAD of the keyset columns and become
+        // the primary sort — silently breaking the monotonic walk. Reset it first, as countIfDetailed does.
+        $queryBuilder->resetDQLPart('orderBy');
+
         foreach ($columns->all() as $column) {
             $queryBuilder->addOrderBy($this->qualifyColumn($column['column'], $alias), $column['direction']->value);
         }
