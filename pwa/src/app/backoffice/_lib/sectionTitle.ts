@@ -1,24 +1,18 @@
 import { Routes } from "@/context/shared/domain/types/routes";
-import { bankRoutes } from "@/app/backoffice/banks/_lib/bankRoutes";
-import { erpSectionRules } from "@/app/backoffice/_lib/erpMenu";
+import { sectionTitleRules } from "@/app/backoffice/_lib/backofficeMenu";
 
 /**
- * Maps a backoffice pathname to the section title shown in the top bar.
- * Sorted longest-match-first so nested routes (e.g. `/profile/settings`,
- * `/companies/employees`) resolve before their parent prefix. The
- * `localeCompare` tie-break makes the order total (and deterministic across
- * JS engines) for the many equal-length paths, so the rule set never depends
- * on unspecified sort behaviour.
+ * `[path, title]` rules sorted longest-match-first so nested routes
+ * (e.g. `/profile/settings`, `/companies/employees`) resolve before their
+ * parent prefix. The `localeCompare` tie-break makes the order total (and
+ * deterministic across JS engines) for the many equal-length paths, so the
+ * rule set never depends on unspecified sort behaviour. The rules themselves
+ * are derived from the navigation model in `backofficeMenu`, so titles and
+ * menu can never drift.
  */
-const SECTION_RULES: ReadonlyArray<readonly [string, string]> = [
-  [bankRoutes.list, "Banks"] as const,
-  [`${Routes.BACKOFFICE}/health`, "Service Health"] as const,
-  [`${Routes.BACKOFFICE}/administration`, "Administration"] as const,
-  [`${Routes.BACKOFFICE}/profile/notifications`, "Notifications"] as const,
-  [`${Routes.BACKOFFICE}/profile/settings`, "Settings"] as const,
-  [`${Routes.BACKOFFICE}/profile`, "User Profile"] as const,
-  ...erpSectionRules,
-].sort((a, b) => b[0].length - a[0].length || a[0].localeCompare(b[0]));
+const SECTION_RULES: ReadonlyArray<readonly [string, string]> = [...sectionTitleRules].sort(
+  (a, b) => b[0].length - a[0].length || a[0].localeCompare(b[0]),
+);
 
 export function sectionTitleFor(pathname: string): string {
   if (pathname === Routes.BACKOFFICE) return "Dashboard";

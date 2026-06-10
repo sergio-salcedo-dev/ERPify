@@ -1,5 +1,6 @@
 import {
   LucideIcon,
+  LayoutDashboard,
   Users,
   Activity,
   ShoppingCart,
@@ -33,13 +34,21 @@ import {
   Database,
   Settings as SettingsIcon,
   History,
+  Bell,
+  LogOut,
+  User,
+  Wrench,
 } from "lucide-react";
 import { Routes } from "@/context/shared/domain/types/routes";
+import { bankRoutes } from "@/app/backoffice/banks/_lib/bankRoutes";
+import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
 
 /**
- * Sidebar navigation model shared by {@link BackOfficeLayoutClient} (desktop
- * + mobile menus) and {@link sectionTitleFor} (top-bar title). Kept here as
- * plain data so the layout component stays focused on rendering.
+ * Single source of truth for the back-office navigation. Both the sidebar
+ * ({@link BackOfficeLayoutClient}, desktop + mobile) and the top-bar title
+ * ({@link sectionTitleFor}) are built from the same data so the menu and the
+ * section titles can never drift. Kept as plain data so the layout component
+ * stays focused on rendering.
  */
 export interface NavSubItem {
   name: string;
@@ -64,10 +73,19 @@ export interface NavGroup {
 const BASE = Routes.BACKOFFICE;
 
 /**
- * ERP navigation sections. Labels are in English to match the rest of the
- * backoffice; every route is a placeholder page under {@link Routes.BACKOFFICE}.
+ * The full sidebar, top to bottom. Labels are in English to match the rest of
+ * the back-office. ERP section routes are placeholder pages under
+ * {@link Routes.BACKOFFICE}; Dashboard and Banks are the live features. Group
+ * labels and order are presentational only — no test depends on them.
  */
-export const erpMenuGroups: NavGroup[] = [
+export const backofficeMenuGroups: NavGroup[] = [
+  {
+    label: "General",
+    items: [
+      { name: "Dashboard", icon: LayoutDashboard, path: BASE },
+      { name: "Banks", icon: Building2, path: bankRoutes.list },
+    ],
+  },
   {
     label: "Commercial",
     items: [
@@ -207,18 +225,83 @@ export const erpMenuGroups: NavGroup[] = [
       },
     ],
   },
+  {
+    label: "System",
+    items: [
+      {
+        name: "Administration",
+        icon: SettingsIcon,
+        path: `${BASE}/administration`,
+        subItems: [{ name: "Service Health", path: `${BASE}/health`, icon: Activity }],
+      },
+    ],
+  },
+  // Dev/QA-only group. Absent from production builds via the same
+  // `isDevToolsAvailable()` gate that guards the route at `app/dev-tools`.
+  ...(isDevToolsAvailable()
+    ? [
+        {
+          label: "Development",
+          items: [
+            {
+              name: "Dev Tools",
+              icon: Wrench,
+              path: Routes.DEV_TOOLS,
+              testId: "bo-layout__sidebar-dev-tools",
+            },
+          ],
+        },
+      ]
+    : []),
 ];
 
 /**
- * Flattened `[path, title]` rules for the top-bar section title, derived from
- * {@link erpMenuGroups}. Order is irrelevant here: the sole consumer
- * ({@link sectionTitleFor}'s `SECTION_RULES`) re-sorts the merged set
- * longest-match-first, so this list is left in declaration order.
+ * Account entry pinned to the sidebar footer, rendered apart from the scrolling
+ * groups. Logout points at `/` (home) rather than a back-office section.
  */
-export const erpSectionRules: ReadonlyArray<readonly [string, string]> = erpMenuGroups
-  .flatMap((group) => group.items)
-  .flatMap((item) =>
-    item.subItems && item.subItems.length > 0
-      ? item.subItems.map((sub) => [sub.path, sub.name] as const)
-      : [[item.path, item.name] as const],
-  );
+export const accountMenuItem: NavItem = {
+  name: "User Profile",
+  icon: User,
+  path: `${BASE}/profile`,
+  subItems: [
+    { name: "Notifications", path: `${BASE}/profile/notifications`, icon: Bell },
+    { name: "Settings", path: `${BASE}/profile/settings`, icon: SettingsIcon },
+    { name: "Logout", path: "/", icon: LogOut },
+  ],
+};
+
+/**
+ * Landing titles for the bare parent segments that group nested routes but are
+ * not themselves menu entries (e.g. `/finance`, reachable by URL truncation).
+ * Their leaf children still resolve to their own titles via longest-match-first.
+ */
+const SECTION_LANDING_RULES: ReadonlyArray<readonly [string, string]> = [
+  [`${BASE}/finance`, "Finance"],
+  [`${BASE}/catalog`, "Catalog"],
+  [`${BASE}/settings`, "Settings"],
+];
+
+/**
+ * `[path, title]` rules for {@link sectionTitleFor}, derived from the menu so
+ * the titles never drift from the navigation. For each item the parent rule is
+ * emitted first and then its sub-items, so a sub-item that shares its parent's
+ * path (the ERP convention) wins with the more specific leaf name. The
+ * Dashboard root (`/backoffice`) and the Logout target (`/`) are skipped: as
+ * prefixes of every path they would shadow the whole tree. Order is irrelevant
+ * here — the consumer re-sorts longest-match-first.
+ */
+export const sectionTitleRules: ReadonlyArray<readonly [string, string]> = (() => {
+  const rules = new Map<string, string>();
+  const add = (path: string, name: string): void => {
+    if (path === BASE || path === "/") return;
+    rules.set(path, name);
+  };
+  const consider = (item: NavItem): void => {
+    add(item.path, item.name);
+    item.subItems?.forEach((sub) => add(sub.path, sub.name));
+  };
+  backofficeMenuGroups.flatMap((group) => group.items).forEach(consider);
+  consider(accountMenuItem);
+  SECTION_LANDING_RULES.forEach(([path, name]) => add(path, name));
+  return [...rules.entries()];
+})();

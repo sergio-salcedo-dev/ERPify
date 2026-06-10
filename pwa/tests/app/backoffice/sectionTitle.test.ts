@@ -60,4 +60,16 @@ describe("sectionTitleFor", () => {
     expect(sectionTitleFor("/backoffice/clients/abc-123")).toBe("Clients");
     expect(sectionTitleFor("/backoffice/finance/treasury/settings")).toBe("Treasury & Banks");
   });
+
+  it("titles the bare parent-segment landing pages", () => {
+    expect(sectionTitleFor("/backoffice/finance")).toBe("Finance");
+    expect(sectionTitleFor("/backoffice/catalog")).toBe("Catalog");
+    expect(sectionTitleFor("/backoffice/settings")).toBe("Settings");
+  });
+
+  it("keeps parent-segment landings from shadowing their nested routes", () => {
+    expect(sectionTitleFor("/backoffice/finance/control")).toBe("Management Control");
+    expect(sectionTitleFor("/backoffice/catalog/brands")).toBe("Brands & Manufacturers");
+    expect(sectionTitleFor("/backoffice/settings/features")).toBe("Features & Modules");
+  });
 });

@@ -2,29 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import {
-  LayoutDashboard,
-  User,
-  LogOut,
-  Menu,
-  Settings as SettingsIcon,
-  Bell,
-  Activity,
-  Building2,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Search,
-  Wrench,
-} from "lucide-react";
+import { User, Menu, Bell, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
 import { Logo, SidebarItem, ThemeToggle } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
-import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
-import { Routes } from "@/context/shared/domain/types/routes";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { bankRoutes } from "./banks/_lib/bankRoutes";
 import { sectionTitleFor } from "./_lib/sectionTitle";
-import { erpMenuGroups, type NavGroup, type NavItem } from "./_lib/erpMenu";
+import { backofficeMenuGroups, accountMenuItem, type NavItem } from "./_lib/backofficeMenu";
 
 const SIDEBAR_STORAGE_KEY = "erpify:sidebar-open";
 
@@ -57,59 +41,7 @@ export default function BackOfficeLayoutClient({
     return () => globalThis.removeEventListener("keydown", handleKey);
   }, []);
 
-  const menuGroups: NavGroup[] = [
-    {
-      label: "General",
-      items: [{ name: "Dashboard", icon: LayoutDashboard, path: "/backoffice" }],
-    },
-    {
-      label: "Banking",
-      items: [{ name: "Banks", icon: Building2, path: bankRoutes.list }],
-    },
-    {
-      label: "System",
-      items: [
-        {
-          name: "Administration",
-          icon: SettingsIcon,
-          path: "/backoffice/administration",
-          subItems: [{ name: "Service Health", path: "/backoffice/health", icon: Activity }],
-        },
-      ],
-    },
-    // ERP navigation sections (placeholder pages). Kept as data in
-    // ./_lib/erpMenu so the layout stays focused on rendering.
-    ...erpMenuGroups,
-    // Conditional dev/test-only category. Disappears entirely from the
-    // sidebar in production via the `isDevToolsAvailable()` check, which
-    // mirrors the gating model of the route at `app/dev-tools/page.tsx`.
-    ...(isDevToolsAvailable()
-      ? [
-          {
-            label: "Development",
-            items: [
-              {
-                name: "Dev Tools",
-                icon: Wrench,
-                path: Routes.DEV_TOOLS,
-                testId: "bo-layout__sidebar-dev-tools",
-              },
-            ],
-          },
-        ]
-      : []),
-  ];
-
-  const userProfileItem: NavItem = {
-    name: "User Profile",
-    icon: User,
-    path: "/backoffice/profile",
-    subItems: [
-      { name: "Notifications", path: "/backoffice/profile/notifications", icon: Bell },
-      { name: "Settings", path: "/backoffice/profile/settings", icon: SettingsIcon },
-      { name: "Logout", path: "/", icon: LogOut },
-    ],
-  };
+  const menuGroups = backofficeMenuGroups;
 
   const handleNavigation = (path: string) => {
     if (path === "/") {
@@ -200,8 +132,8 @@ export default function BackOfficeLayoutClient({
               </p>
             )}
             <SidebarItem
-              {...userProfileItem}
-              isActive={isItemActive(userProfileItem)}
+              {...accountMenuItem}
+              isActive={isItemActive(accountMenuItem)}
               onClick={handleNavigation}
               isCompact={isCompact}
             />
@@ -298,19 +230,19 @@ export default function BackOfficeLayoutClient({
                     </p>
                     <div className="bo-layout__sidebar-mobile-item-wrapper">
                       <button
-                        onClick={() => handleNavigation(userProfileItem.path)}
-                        title={userProfileItem.name}
+                        onClick={() => handleNavigation(accountMenuItem.path)}
+                        title={accountMenuItem.name}
                         className={`bo-layout__sidebar-mobile-link w-full flex items-center gap-3 p-3 rounded-md font-semibold transition-all ${
-                          pathname === userProfileItem.path
+                          pathname === accountMenuItem.path
                             ? "bg-primary/15 text-primary"
                             : "text-muted-foreground hover:bg-accent"
                         }`}
                       >
-                        <userProfileItem.icon className="w-5 h-5" />
-                        <span className="text-sm">{userProfileItem.name}</span>
+                        <accountMenuItem.icon className="w-5 h-5" />
+                        <span className="text-sm">{accountMenuItem.name}</span>
                       </button>
                       <div className="ml-8 mt-1 space-y-1">
-                        {userProfileItem.subItems?.map((subItem) => (
+                        {accountMenuItem.subItems?.map((subItem) => (
                           <button
                             key={subItem.name}
                             onClick={() => handleNavigation(subItem.path)}
