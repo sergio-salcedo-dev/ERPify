@@ -102,12 +102,25 @@ services:
         condition: service_started
     environment:
       MAILER_DSN: "${MAILER_DSN:-smtp://mailpit:1025}"
+      # Long-running worker in dev: turn debug OFF so the DI container is compiled
+      # once and never auto-recompiled, and (below) give it a private var/cache so
+      # the web `php` container's recompiles can't delete its container directory
+      # mid-flight. Without both, the worker hits a vanished lazy-service file at
+      # console.terminate (Sentry ERPIFY-API-DEV-7). Trade-off: the worker no longer
+      # hot-reloads code — run `docker compose restart messenger_worker` after handler
+      # changes. See docs/sentry-messenger-worker-dev-cache-crash.md.
+      APP_DEBUG: "0"
     volumes:
       - ./api:/app/api
       - ./api/var:/app/api/var
+      # Private compiled-container cache. More specific than the ./api/var bind mount
+      # above, so it wins for this subtree, isolating the worker from the shared
+      # var/cache/dev that `php` rebuilds. var/log and the rest of var/ stay shared.
+      - messenger_cache:/app/api/var/cache
       - ./api/frankenphp/conf.d/20-app.dev.ini:/usr/local/etc/php/app.conf.d/20-app.dev.ini:ro
 
 volumes:
   pwa_node_modules:
   pwa_next:
   pwa_next_e2e:
+  messenger_cache:

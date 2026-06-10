@@ -44,6 +44,7 @@
 - **[api-error-contract.md](./api-error-contract.md)** — RFC 9457 Problem Details: marker→status map, correlation-id, instance UUIDv7, logging tiers, `exception_category` SRE taxonomy
 - **[sentry-domain-error-filtering.md](./sentry-domain-error-filtering.md)** — deferred: drop/sample `domain_error` noise in Sentry (`ignore_exceptions` vs `before_send`), with the trade-off
 - **[sentry-boot-probe-noise.md](./sentry-boot-probe-noise.md)** — fixed: silencing the container boot DB-probe flood (`SENTRY_DSN=` on the entrypoint `SELECT 1` wait), safe in dev + prod
+- **[sentry-messenger-worker-dev-cache-crash.md](./sentry-messenger-worker-dev-cache-crash.md)** — fixed: dev Messenger worker crashed on a recompiled DI container (shared `var/cache/dev` deleted under the long-lived worker); fix = `APP_DEBUG=0` + private cache volume on the worker
 
 ### Deep-Dive Documentation
 
