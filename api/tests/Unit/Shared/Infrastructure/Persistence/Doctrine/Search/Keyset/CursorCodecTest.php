@@ -114,7 +114,12 @@ final class CursorCodecTest extends TestCase
     #[Test]
     public function itRejectsACursorWithAnUnknownVersion(): void
     {
-        $body = $this->signedBody(['v' => 2, 'dir' => Cursor::DIRECTION_AFTER, 'values' => [], 'fp' => $this->canonicalFingerprint()]);
+        $body = $this->signedBody([
+            'v' => 2,
+            'dir' => Cursor::DIRECTION_AFTER,
+            'values' => [],
+            'fp' => $this->canonicalFingerprint(),
+        ]);
 
         $this->assertDecodeFailsWith(InvalidCursorCause::Version, $body, $this->canonicalFingerprint());
     }
@@ -139,7 +144,9 @@ final class CursorCodecTest extends TestCase
     #[Test]
     public function itRejectsACursorWhoseDirectionBindingDoesNotMatch(): void
     {
-        $encoded = $this->codec->encode(CursorMother::create(direction: Cursor::DIRECTION_AFTER, fingerprint: $this->canonicalFingerprint()));
+        $encoded = $this->codec->encode(
+            CursorMother::create(direction: Cursor::DIRECTION_AFTER, fingerprint: $this->canonicalFingerprint()),
+        );
 
         // dir mismatch is a payload-integrity failure, never a navigation decision (AR21).
         $this->assertDecodeFailsWith(
@@ -162,7 +169,12 @@ final class CursorCodecTest extends TestCase
     public function itReportsSignatureBeforeVersionWhenBothAreInvalid(): void
     {
         // v=2 would be a version failure, but a tampered signature is checked first.
-        $body = $this->signedBody(['v' => 2, 'dir' => Cursor::DIRECTION_AFTER, 'values' => [], 'fp' => $this->canonicalFingerprint()]);
+        $body = $this->signedBody([
+            'v' => 2,
+            'dir' => Cursor::DIRECTION_AFTER,
+            'values' => [],
+            'fp' => $this->canonicalFingerprint(),
+        ]);
         $tampered = \substr($body, 0, -1) . (\str_ends_with($body, 'a') ? 'b' : 'a');
 
         $this->assertDecodeFailsWith(InvalidCursorCause::Signature, $tampered, $this->canonicalFingerprint());

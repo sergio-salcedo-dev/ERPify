@@ -131,12 +131,18 @@ final class TraceEquivalenceStabilityTest extends TestCase
             Filter::gte('createdAt', '2026-01-01T00:00:00Z'),
         ));
 
-        $this->assertNotSame($this->canonicalizer->canonical($this->reference()), $this->canonicalizer->canonical($changed));
+        $this->assertNotSame(
+            $this->canonicalizer->canonical($this->reference()),
+            $this->canonicalizer->canonical($changed),
+        );
     }
 
     private function assertCanonicallyEquivalentToReference(AppliedFilters $drifted): void
     {
-        $this->assertSame($this->canonicalizer->canonical($this->reference()), $this->canonicalizer->canonical($this->traceWith($drifted)));
+        $this->assertSame(
+            $this->canonicalizer->canonical($this->reference()),
+            $this->canonicalizer->canonical($this->traceWith($drifted)),
+        );
     }
 
     private function reference(): QueryExecutionTrace
