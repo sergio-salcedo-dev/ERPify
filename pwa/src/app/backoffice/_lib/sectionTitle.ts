@@ -5,7 +5,10 @@ import { erpSectionRules } from "@/app/backoffice/_lib/erpMenu";
 /**
  * Maps a backoffice pathname to the section title shown in the top bar.
  * Sorted longest-match-first so nested routes (e.g. `/profile/settings`,
- * `/companies/employees`) resolve before their parent prefix.
+ * `/companies/employees`) resolve before their parent prefix. The
+ * `localeCompare` tie-break makes the order total (and deterministic across
+ * JS engines) for the many equal-length paths, so the rule set never depends
+ * on unspecified sort behaviour.
  */
 const SECTION_RULES: ReadonlyArray<readonly [string, string]> = [
   [bankRoutes.list, "Banks"] as const,
@@ -15,7 +18,7 @@ const SECTION_RULES: ReadonlyArray<readonly [string, string]> = [
   [`${Routes.BACKOFFICE}/profile/settings`, "Settings"] as const,
   [`${Routes.BACKOFFICE}/profile`, "User Profile"] as const,
   ...erpSectionRules,
-].sort((a, b) => b[0].length - a[0].length);
+].sort((a, b) => b[0].length - a[0].length || a[0].localeCompare(b[0]));
 
 export function sectionTitleFor(pathname: string): string {
   if (pathname === Routes.BACKOFFICE) return "Dashboard";

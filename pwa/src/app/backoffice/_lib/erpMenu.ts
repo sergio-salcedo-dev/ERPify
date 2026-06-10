@@ -211,8 +211,9 @@ export const erpMenuGroups: NavGroup[] = [
 
 /**
  * Flattened `[path, title]` rules for the top-bar section title, derived from
- * {@link erpMenuGroups}. Leaf (sub-item) paths first so a nested path like
- * `/finance/control` resolves to its own title rather than a parent prefix.
+ * {@link erpMenuGroups}. Order is irrelevant here: the sole consumer
+ * ({@link sectionTitleFor}'s `SECTION_RULES`) re-sorts the merged set
+ * longest-match-first, so this list is left in declaration order.
  */
 export const erpSectionRules: ReadonlyArray<readonly [string, string]> = erpMenuGroups
   .flatMap((group) => group.items)
@@ -220,5 +221,4 @@ export const erpSectionRules: ReadonlyArray<readonly [string, string]> = erpMenu
     item.subItems && item.subItems.length > 0
       ? item.subItems.map((sub) => [sub.path, sub.name] as const)
       : [[item.path, item.name] as const],
-  )
-  .sort((a, b) => b[0].length - a[0].length);
+  );

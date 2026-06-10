@@ -30,4 +30,34 @@ describe("sectionTitleFor", () => {
     expect(sectionTitleFor("/backoffice/unknown")).toBe("Backoffice");
     expect(sectionTitleFor("/something-else")).toBe("Backoffice");
   });
+
+  it("maps ERP leaf routes to their section title", () => {
+    expect(sectionTitleFor("/backoffice/clients")).toBe("Clients");
+    expect(sectionTitleFor("/backoffice/quotes")).toBe("Quotes");
+    expect(sectionTitleFor("/backoffice/invoices")).toBe("Invoicing");
+    expect(sectionTitleFor("/backoffice/products")).toBe("Products Catalog");
+    expect(sectionTitleFor("/backoffice/audit")).toBe("Audit Logs");
+  });
+
+  it("resolves nested ERP routes before their parent prefix", () => {
+    // /docs is a strict prefix of /docs/dictionary and /docs/flow.
+    expect(sectionTitleFor("/backoffice/docs")).toBe("Technical Explorer");
+    expect(sectionTitleFor("/backoffice/docs/dictionary")).toBe("Data Dictionary");
+    expect(sectionTitleFor("/backoffice/docs/flow")).toBe("Domain Flows");
+    // /companies vs /companies/employees.
+    expect(sectionTitleFor("/backoffice/companies")).toBe("Companies");
+    expect(sectionTitleFor("/backoffice/companies/employees")).toBe("Employees");
+  });
+
+  it("distinguishes equal-length sibling routes under finance", () => {
+    expect(sectionTitleFor("/backoffice/finance/control")).toBe("Management Control");
+    expect(sectionTitleFor("/backoffice/finance/treasury")).toBe("Treasury & Banks");
+    expect(sectionTitleFor("/backoffice/finance/cash-flow")).toBe("Cash Flow");
+    expect(sectionTitleFor("/backoffice/finance/accounting")).toBe("Cost Allocation");
+  });
+
+  it("keeps the title for deep sub-routes of an ERP leaf", () => {
+    expect(sectionTitleFor("/backoffice/clients/abc-123")).toBe("Clients");
+    expect(sectionTitleFor("/backoffice/finance/treasury/settings")).toBe("Treasury & Banks");
+  });
 });
