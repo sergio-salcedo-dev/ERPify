@@ -132,6 +132,11 @@ This leaves only real HTTP requests traced. **Dev** traces at `traces_sample_rat
 `SENTRY_DSN` in `api/.env.local`; **prod** stays at `~0.2`. If you add a *new*
 long-running console command, exclude it here too.
 
+A second, **dev-only** worker gotcha (the same long-lived process, a different
+failure mode) is documented separately: the worker can crash on a dev DI
+container that the web `php` container recompiled out from under it — see
+[`sentry-messenger-worker-dev-cache-crash.md`](./sentry-messenger-worker-dev-cache-crash.md).
+
 ## Prod hardening (compose.prod.yaml)
 
 - Every service runs `no-new-privileges`, drops all Linux caps and re-adds only
