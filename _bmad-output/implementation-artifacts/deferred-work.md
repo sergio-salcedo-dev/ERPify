@@ -43,19 +43,3 @@ Collected during quick-dev. Not part of the current story's shippable scope.
   sección **Review Findings** de `spec-banks-mercure-realtime`.
 - **Sentry sink PWA** — shipped 2026-06-08 (spec-pwa-sentry): `serializeCause()` + scrub
   recursivo, `createTelemetry()`, túnel same-origin `/monitoring`, severity map.
-
-## Nuevos diferidos (post-migración)
-
-- **2026-06-10 — Falta guard de longitud canónica para `shortName` (API).** Surgido en el
-  review adversarial de `fix/pwa-shortname-normalize-asserts` (bmad-quick-dev, gh-203). Severidad:
-  Low, pre-existente — NO causado por ese cambio (sólo toca tests e2e).
-  `CreateBankCommand`/`UpdateBankCommand` validan `shortName` con `Length(max: 50)` sobre el input
-  **crudo**, pero `Bank::create()`/`rename()` persisten `NormalizedText::toAsciiUpper($shortName)`
-  en una columna `VARCHAR(50)`. La regla ICU `Any-Latin; Latin-ASCII; Upper()` puede **expandir**
-  caracteres (`ß→SS`, `Æ→AE`, `Œ→OE`, `½→ 1/2`), así que un input de 50 chars con esos caracteres
-  puede canonicalizar a >50 y reventar la columna con un 500 ("value too long") en vez de un 422
-  limpio. El campo `name` ya tiene su guard equivalente (`validateNormalizedNameLength` en
-  `Bank.php`); `shortName` no.
-  - [ ] Añadir un guard de invariante sobre la longitud del `shortName` **canonicalizado** (callback
-    de validación en `Bank` o assert en el VO), paralelo al de `name`, para que el caso de
-    expansión devuelva 422 en vez de 500.
