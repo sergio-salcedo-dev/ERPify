@@ -5,7 +5,7 @@ import type { BankRealtimeHandlers } from "@/context/backoffice/bank/infrastruct
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
 import { toastNotifier } from "@/context/shared/infrastructure/Notification/Toast";
-import { ACME, BETA } from "./_fixtures";
+import { ACME, BETA, searchPage } from "./_fixtures";
 
 /**
  * Counterpart to `bankDetailDelete.test.tsx`: deleting a bank from the LIST
@@ -48,7 +48,7 @@ vi.mock("@/context/backoffice/bank/infrastructure/bankRealtime", async () =>
 describe("BanksListPage — delete UX", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    searchRun.mockResolvedValue({ banks: [ACME, BETA], nextCursor: undefined });
+    searchRun.mockResolvedValue(searchPage([ACME, BETA]));
     deleteRun.mockResolvedValue(undefined);
   });
 
@@ -86,7 +86,7 @@ describe("BanksListPage — delete UX", () => {
   });
 
   it("shows the first-run empty state, not the filtered-to-zero state, after deleting the last bank", async () => {
-    searchRun.mockResolvedValue({ banks: [ACME], nextCursor: undefined });
+    searchRun.mockResolvedValue(searchPage([ACME]));
     render(<BanksListPage />);
     expect(await screen.findByTestId(`banks-table__row-${ACME.id}`)).toBeInTheDocument();
 
@@ -143,7 +143,7 @@ async function confirmDeleteOf(id: string): Promise<void> {
 describe("BanksListPage — failed delete lands in the persistent error surface", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    searchRun.mockResolvedValue({ banks: [ACME, BETA], nextCursor: undefined });
+    searchRun.mockResolvedValue(searchPage([ACME, BETA]));
   });
 
   it("409 bank-in-use: the dialog closes, the error persists above the list with no recovery action, the row stays", async () => {
@@ -177,7 +177,7 @@ describe("BanksListPage — failed delete lands in the persistent error surface"
     await confirmDeleteOf(ACME.id);
 
     await screen.findByTestId("banks-list__delete-error");
-    searchRun.mockResolvedValue({ banks: [BETA], nextCursor: undefined });
+    searchRun.mockResolvedValue(searchPage([BETA]));
 
     fireEvent.click(screen.getByTestId("banks-list__delete-error-refresh"));
 
@@ -210,7 +210,9 @@ describe("BanksListPage — failed delete lands in the persistent error surface"
     await confirmDeleteOf(ACME.id);
     await screen.findByTestId("banks-list__delete-error");
 
-    // A Mercure delta reconciles the list (another client deleted BETA)…
+    // A Mercure delta reconciles the list (another client deleted BETA): the
+    // silent refetch returns the list without BETA.
+    searchRun.mockResolvedValue(searchPage([ACME]));
     act(() => {
       realtimeHandlers?.onDeleted?.(BETA.id);
     });

@@ -163,6 +163,83 @@ async function fulfillProblem(
   });
 }
 
+function bankFieldValue(bank: BankFixture, field: string): string {
+  switch (field) {
+    case "name":
+      return bank.name;
+    case "shortName":
+      return bank.shortName;
+    case "createdAt":
+      return bank.createdAt;
+    case "updatedAt":
+      return bank.updatedAt;
+    case "id":
+      return bank.id;
+    default:
+      return "";
+  }
+}
+
+function matchesFilter(
+  bank: BankFixture,
+  field: string,
+  operator: string,
+  params: URLSearchParams,
+  index: number,
+): boolean {
+  if (operator === "in") {
+    return params.getAll(`filters[${index}][value][]`).includes(bankFieldValue(bank, field));
+  }
+  const value = params.get(`filters[${index}][value]`) ?? "";
+  const fieldValue = bankFieldValue(bank, field);
+  switch (operator) {
+    case "contains":
+      return fieldValue.toLowerCase().includes(value.toLowerCase());
+    case "eq":
+      return fieldValue === value;
+    case "gt":
+      return Date.parse(fieldValue) > Date.parse(value);
+    case "gte":
+      return Date.parse(fieldValue) >= Date.parse(value);
+    case "lt":
+      return Date.parse(fieldValue) < Date.parse(value);
+    case "lte":
+      return Date.parse(fieldValue) <= Date.parse(value);
+    default:
+      return true;
+  }
+}
+
+function compareField(a: BankFixture, b: BankFixture, field: string): number {
+  if (field === "createdAt" || field === "updatedAt") {
+    return Date.parse(bankFieldValue(a, field)) - Date.parse(bankFieldValue(b, field));
+  }
+  return bankFieldValue(a, field).localeCompare(bankFieldValue(b, field), "en", {
+    sensitivity: "base",
+  });
+}
+
+/**
+ * Emulates the server-driven search contract over the in-memory fixtures:
+ * applies the wire `filters[]` then `sort`/`direction`. The PWA is now
+ * server-driven, so the mock must do what the real endpoint does instead of
+ * returning the whole list; pagination (page/limit) is applied by the caller.
+ */
+function applyMockQuery(banks: BankFixture[], params: URLSearchParams): BankFixture[] {
+  let result = [...banks];
+  for (let i = 0; params.has(`filters[${i}][field]`); i++) {
+    const field = params.get(`filters[${i}][field]`) ?? "";
+    const operator = params.get(`filters[${i}][operator]`) ?? "";
+    result = result.filter((bank) => matchesFilter(bank, field, operator, params, i));
+  }
+  const sort = params.get("sort");
+  if (sort) {
+    const direction = params.get("direction") === "DESC" ? -1 : 1;
+    result.sort((a, b) => direction * compareField(a, b, sort));
+  }
+  return result;
+}
+
 export async function mockBanksApi(page: Page, scenario: BanksApiScenario): Promise<void> {
   const bank = scenario.bank ?? SAMPLE_BANK_A;
   const listBanks = scenario.list_banks ?? [SAMPLE_BANK_A, SAMPLE_BANK_B];
@@ -173,39 +250,38 @@ export async function mockBanksApi(page: Page, scenario: BanksApiScenario): Prom
       const method = route.request().method();
 
       if (method === "GET") {
-        const pagination = {
-          currentPage: 1,
-          pageCount: 1,
-          count: listBanks.length,
-          hasMorePages: !!scenario.list_next_cursor,
-          cursor: scenario.list_next_cursor ?? "empty-cursor-hmac",
-        };
-
-        switch (scenario.list) {
-          case "empty":
-            await fulfillJson(route, 200, {
-              data: [],
-              pagination: { ...pagination, count: 0, hasMorePages: false },
-            });
-            return;
-          case "server-error": {
-            const correlationId = "01H-list-error";
-            await fulfillProblem(
-              route,
-              500,
-              problemBody("unhandled-exception", "Database unavailable.", 500, correlationId),
-              correlationId,
-            );
-            return;
-          }
-          case "happy":
-          default:
-            await fulfillJson(route, 200, {
-              data: listBanks,
-              pagination,
-            });
-            return;
+        if (scenario.list === "server-error") {
+          const correlationId = "01H-list-error";
+          await fulfillProblem(
+            route,
+            500,
+            problemBody("unhandled-exception", "Database unavailable.", 500, correlationId),
+            correlationId,
+          );
+          return;
         }
+
+        // Server-driven: apply the wire filters/sort, then slice by page/limit.
+        // The cursor is opaque — the client replays it but never reads it.
+        const base = scenario.list === "empty" ? [] : listBanks;
+        const params = new URL(route.request().url()).searchParams;
+        const matched = applyMockQuery(base, params);
+        const limit = Number(params.get("limit")) || 25;
+        const currentPage = Number(params.get("page")) || 1;
+        const start = (currentPage - 1) * limit;
+        const slice = matched.slice(start, start + limit);
+
+        await fulfillJson(route, 200, {
+          data: slice,
+          pagination: {
+            currentPage,
+            pageCount: Math.max(1, Math.ceil(matched.length / limit)),
+            count: matched.length,
+            hasMorePages: start + limit < matched.length,
+            cursor: scenario.list_next_cursor ?? "cursor-hmac",
+          },
+        });
+        return;
       }
 
       if (method === "POST") {

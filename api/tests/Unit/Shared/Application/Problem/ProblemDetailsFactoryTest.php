@@ -12,10 +12,14 @@ use Erpify\Shared\Domain\Exception\Conflict;
 use Erpify\Shared\Domain\Exception\DomainException;
 use Erpify\Shared\Domain\Exception\Forbidden;
 use Erpify\Shared\Domain\Exception\InvalidInput;
+use Erpify\Shared\Domain\Exception\InvalidSearchCriteria;
 use Erpify\Shared\Domain\Exception\InvariantViolation;
 use Erpify\Shared\Domain\Exception\NotFound;
 use Erpify\Shared\Domain\Exception\RateLimited;
 use Erpify\Shared\Domain\Exception\Unauthenticated;
+use Erpify\Shared\Domain\Search\Exception\UnknownSearchField;
+use Erpify\Shared\Domain\Search\Exception\UnsupportedSearchOperator;
+use Erpify\Shared\Domain\Search\FilterOperator;
 use JsonSchema\Validator as JsonSchemaValidator;
 use JsonSerializable;
 use LogicException;
@@ -156,6 +160,13 @@ final class ProblemDetailsFactoryTest extends TestCase
             },
             429,
             'rate-limited',
+        ];
+
+        yield 'InvalidSearchCriteria' => [
+            new class ('', 'x') extends DomainException implements InvalidSearchCriteria {
+            },
+            422,
+            'invalid-search-criteria',
         ];
     }
 
@@ -560,7 +571,7 @@ final class ProblemDetailsFactoryTest extends TestCase
         $this->assertSame([], $problemDetails->extensions);
     }
 
-    public function testMarkerStatusMapHasExactlyTheCanonicalSevenEntries(): void
+    public function testMarkerStatusMapHasExactlyTheCanonicalEightEntries(): void
     {
         $reflectionClass = new ReflectionClass(ProblemDetailsFactory::class);
         $constant = $reflectionClass->getReflectionConstant('MARKER_STATUS_MAP');
@@ -578,16 +589,17 @@ final class ProblemDetailsFactoryTest extends TestCase
             InvariantViolation::class => 422,
             InvalidInput::class => 400,
             RateLimited::class => 429,
+            InvalidSearchCriteria::class => 422,
         ];
 
         $this->assertSame(
             $expected,
             $value,
-            'MARKER_STATUS_MAP must contain exactly the seven canonical marker→status entries in canonical order.',
+            'MARKER_STATUS_MAP must contain exactly the eight canonical marker→status entries in canonical order.',
         );
     }
 
-    public function testMarkerDefaultTypeMapHasExactlyTheCanonicalSevenEntries(): void
+    public function testMarkerDefaultTypeMapHasExactlyTheCanonicalEightEntries(): void
     {
         $reflectionClass = new ReflectionClass(ProblemDetailsFactory::class);
         $constant = $reflectionClass->getReflectionConstant('MARKER_DEFAULT_TYPE_MAP');
@@ -605,12 +617,13 @@ final class ProblemDetailsFactoryTest extends TestCase
             InvariantViolation::class => 'invariant-violation',
             InvalidInput::class => 'invalid-input',
             RateLimited::class => 'rate-limited',
+            InvalidSearchCriteria::class => 'invalid-search-criteria',
         ];
 
         $this->assertSame(
             $expected,
             $value,
-            'MARKER_DEFAULT_TYPE_MAP must contain exactly the seven canonical '
+            'MARKER_DEFAULT_TYPE_MAP must contain exactly the eight canonical '
             . 'marker→default-type entries in canonical order.',
         );
     }
@@ -940,7 +953,13 @@ final class ProblemDetailsFactoryTest extends TestCase
             $this->assertIsString($marker);
             $this->assertIsInt($status);
             $this->assertArrayHasKey($marker, $markerType);
-            $derived[$status] = $markerType[$marker];
+
+            // First-wins: the bridge map carries the GENERIC marker type per status (e.g.
+            // 400 → invalid-input). Specific markers sharing a status (InvalidSearchCriteria)
+            // are declared AFTER the generic one in MARKER_STATUS_MAP and must not displace it.
+            if (!\array_key_exists($status, $derived)) {
+                $derived[$status] = $markerType[$marker];
+            }
         }
 
         \ksort($derived);
@@ -953,6 +972,36 @@ final class ProblemDetailsFactoryTest extends TestCase
             . 'so PWA `type`-only routing is uniform across DomainException markers, Security Core, '
             . 'and Symfony HttpException sources.',
         );
+    }
+
+    public function testUnknownSearchFieldMapsTo422WithItsExplicitType(): void
+    {
+        $problemDetails = $this->factoryFor()->fromThrowable(
+            UnknownSearchField::named('shoeSize'),
+            self::CID,
+            self::INSTANCE,
+        );
+
+        // The InvalidSearchCriteria marker supplies the 422; the concrete exception's
+        // explicit type() wins over the marker default ('invalid-search-criteria').
+        $this->assertSame(422, $problemDetails->status);
+        $this->assertSame('unknown-search-field', $problemDetails->type);
+        $this->assertSame(['field' => 'shoeSize'], $problemDetails->extensions);
+    }
+
+    public function testUnsupportedSearchOperatorMapsTo422WithItsExplicitType(): void
+    {
+        $problemDetails = $this->factoryFor()->fromThrowable(
+            UnsupportedSearchOperator::forField('id', FilterOperator::Contains),
+            self::CID,
+            self::INSTANCE,
+        );
+
+        // Mirror of the UnknownSearchField pin — also proves the two-key context
+        // (field + wire operator token) survives the whitelist into extensions.
+        $this->assertSame(422, $problemDetails->status);
+        $this->assertSame('unsupported-search-operator', $problemDetails->type);
+        $this->assertSame(['field' => 'id', 'operator' => 'contains'], $problemDetails->extensions);
     }
 
     public function testRuntimeExceptionStillFallsThroughToUnhandledException(): void

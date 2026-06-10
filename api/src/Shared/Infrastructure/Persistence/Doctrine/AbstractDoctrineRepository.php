@@ -7,6 +7,7 @@ namespace Erpify\Shared\Infrastructure\Persistence\Doctrine;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
+use Erpify\Shared\Domain\Search\SearchCriteria;
 use Erpify\Shared\Infrastructure\Persistence\QueryParam;
 use Override;
 
@@ -17,8 +18,6 @@ use Override;
  */
 abstract class AbstractDoctrineRepository extends ServiceEntityRepository
 {
-    final public const int MAX_LIMIT = 1_000;
-
     public function __construct(ManagerRegistry $registry)
     {
         parent::__construct(registry: $registry, entityClass: static::getEntityClassName());
@@ -65,29 +64,6 @@ abstract class AbstractDoctrineRepository extends ServiceEntityRepository
     }
 
     /** @param array<mixed> $values */
-    protected function addWhereIn(
-        QueryBuilder $queryBuilder,
-        string $alias,
-        string $field,
-        array $values,
-    ): QueryBuilder {
-        if ([] === $values) {
-            return $queryBuilder;
-        }
-
-        $values = $this->sanitizeArray($values);
-
-        if ([] === $values) {
-            return $queryBuilder;
-        }
-
-        $paramName = $this->generateUniqueParameter($queryBuilder, $values);
-        $where = \sprintf('%s.%s IN (:%s)', $alias, $field, $paramName);
-
-        return $queryBuilder->andWhere($where);
-    }
-
-    /** @param array<mixed> $values */
     protected function addWhereInCaseInsensitive(
         QueryBuilder $queryBuilder,
         string $alias,
@@ -113,15 +89,6 @@ abstract class AbstractDoctrineRepository extends ServiceEntityRepository
         $where = \sprintf('LOWER(%s.%s) IN (:%s)', $alias, $field, $paramName);
 
         return $queryBuilder->andWhere($where);
-    }
-
-    /** @param array<mixed> $ids */
-    protected function addWhereIdsIn(
-        QueryBuilder|QueryBuilderWithOptions $queryBuilder,
-        string $alias,
-        array $ids,
-    ): QueryBuilder {
-        return $this->addWhereIn($queryBuilder, alias: $alias, field: 'id', values: $ids);
     }
 
     /** @param array<string, mixed> $values */
@@ -154,7 +121,7 @@ abstract class AbstractDoctrineRepository extends ServiceEntityRepository
         return $queryBuilder;
     }
 
-    protected function addLimit(QueryBuilder $queryBuilder, int $limit = self::MAX_LIMIT): QueryBuilder
+    protected function addLimit(QueryBuilder $queryBuilder, int $limit = SearchCriteria::MAX_LIMIT): QueryBuilder
     {
         return $queryBuilder->setMaxResults($limit);
     }

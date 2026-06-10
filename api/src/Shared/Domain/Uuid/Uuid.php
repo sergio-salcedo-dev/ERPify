@@ -21,18 +21,28 @@ abstract class Uuid
     }
 
     /**
-     * Guards that `$value` is a well-formed RFC 4122 UUID, throwing the domain
-     * {@see InvalidUuidException} (mapped to 400 `invalid-input`) otherwise.
+     * Predicate for a well-formed RFC 4122 UUID. The single domain definition of
+     * UUID validity: callers that need a guard use {@see Uuid::ensure()}, callers
+     * that branch and raise their own error (e.g. search filters) use this.
      *
      * Validates format, not version: any RFC 4122 UUID is accepted — minting
      * stays v7 (see {@see Uuid::generate()}), but identifiers received from the
      * outside are only required to be well-formed.
+     */
+    public static function isValid(string $value): bool
+    {
+        return SymfonyUuid::isValid($value);
+    }
+
+    /**
+     * Guards that `$value` is a well-formed RFC 4122 UUID, throwing the domain
+     * {@see InvalidUuidException} (mapped to 400 `invalid-input`) otherwise.
      *
      * @throws InvalidUuidException
      */
     public static function ensure(string $value): void
     {
-        if (!SymfonyUuid::isValid($value)) {
+        if (!self::isValid($value)) {
             throw new InvalidUuidException();
         }
     }

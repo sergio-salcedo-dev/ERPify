@@ -5,7 +5,7 @@ import type { Bank } from "@/context/backoffice/bank/domain/Bank";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
 import { toastNotifier } from "@/context/shared/infrastructure/Notification/Toast";
-import { ACME, BETA } from "./_fixtures";
+import { ACME, BETA, searchPage } from "./_fixtures";
 
 vi.mock("next/navigation", async () => (await import("./_mocks")).routerMock());
 
@@ -83,7 +83,7 @@ async function expectBetaRestoredAndReselected() {
 describe("BanksListPage — bulk actions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    searchRun.mockResolvedValue({ banks: [ACME, BETA], nextCursor: undefined });
+    searchRun.mockResolvedValue(searchPage([ACME, BETA]));
     deleteRun.mockResolvedValue(undefined);
     // The existence pre-check probes every selected id before the attempt.
     findRun.mockImplementation((id: string) => Promise.resolve(id === ACME.id ? ACME : BETA));
@@ -203,7 +203,7 @@ describe("BanksListPage — bulk actions", () => {
 
     // Refresh: the stale row drops, the selection recalculates (2 → 1), and
     // focus lands back on the bulk bar's Delete.
-    searchRun.mockResolvedValue({ banks: [ACME], nextCursor: undefined });
+    searchRun.mockResolvedValue(searchPage([ACME]));
     fireEvent.click(screen.getByTestId("banks-list__delete-error-refresh"));
 
     await waitFor(() => {

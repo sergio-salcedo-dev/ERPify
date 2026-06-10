@@ -49,10 +49,10 @@ api/src/Shared/
 - **Contributor note:** Hexagonal boundary — keep implementations in Infrastructure/. Do not split into multiple ports unless modeling genuinely distinct sinks.
 
 #### `api/src/Shared/Application/Http/Search/SearchQuery.php`
-- **LOC:** 57 — **Type:** HTTP-boundary `readonly` DTO; `MAX_PAGE = 10_000`, `MAX_LIMIT = 1_000`.
-- **Exports:** Constructor with `#[Assert\*]` constraints on `cursor`/`page`/`limit`/`paginationMode`/`ids`; `toCriteria(): SearchCriteria`.
+- **LOC:** 87 — **Type:** HTTP-boundary `final readonly` DTO; `MAX_PAGE = 10_000`, `MAX_LIMIT = 1_000`, `MAX_FILTERS = 20`.
+- **Exports:** Constructor with `#[Assert\*]` constraints on `cursor`/`page`/`limit`/`paginationMode`/`filters`; `validateFilterIndexes()` (contiguous-from-0 callback); `toCriteria(): SearchCriteria`.
 - **Used by:** `Backoffice/Bank/Application/BankSearcher`, `Backoffice/Bank/Infrastructure/Controller/BankSearchController` (binds via `#[MapQueryString]`), `Infrastructure/Persistence/Doctrine/AbstractDoctrineSearchRepository`.
-- **Contributor note:** Subclass per entity to add domain-specific filters and override `toCriteria()`. Validation failures bubble to `ValidationFailedException` → `ProblemDetailsFactory` → 400.
+- **Contributor note:** `final` on purpose — do **not** subclass. Per-entity filtering is expressed through the generic `filters[]` grammar resolved against each repository's `searchFieldMap()`, never through subclasses or typed wire params (see the filterable-search recipe in [`architecture-api.md`](./architecture-api.md#filterable-search-generic-filters-contract)). Validation failures bubble to `ValidationFailedException` → `ProblemDetailsFactory` → 400.
 - **Verification:** `api/tests/Unit/Shared/Application/Http/Search/SearchQueryTest.php`.
 
 #### `api/src/Shared/Application/Mailer/NotificationMailer.php`
@@ -152,7 +152,7 @@ api/src/Shared/
 - **LOC:** 27 — string-backed enum: `DETAILED` (extra `COUNT(*)`) or `LIGHT` (default; +1 fetch trick).
 
 #### `api/src/Shared/Domain/Search/SearchCriteria.php`
-- **LOC:** 23 — `readonly` base. Public `MAX_LIMIT = 1_000`. Constructor: `(?cursor, page=1, limit=MAX_LIMIT, paginationMode=LIGHT, ?ids)`. `cursor` and `page` are mutually exclusive; repository disambiguates.
+- **LOC:** 25 — `final readonly`. Public `MAX_LIMIT = 1_000`. Constructor: `(?cursor, page=1, limit=MAX_LIMIT, paginationMode=LIGHT, filters=new Filters())`. `cursor` and `page` are mutually exclusive; repository disambiguates. Carries the generic `Filters` — never per-entity typed properties.
 
 #### `api/src/Shared/Domain/Search/SearchCursor.php`
 - **LOC:** 25 — read-only domain interface. `getCurrentPage(): ?int`, `getCount(): ?int`, `getFirstItem(): array`, `getLastItem(): array`. Mutable infrastructure interface (`PaginatorCursorInterface`) extends this.
@@ -404,11 +404,12 @@ Key invariants pinned by tests:
 SearchQuery (Application/Http/Search)            ← HTTP boundary; #[MapQueryString]
     │ toCriteria()
     ▼
-SearchCriteria (Domain/Search)                   ← cursor | page | limit | mode | ids
+SearchCriteria (Domain/Search)                   ← cursor | page | limit | mode | filters
     │
     ▼
 AbstractDoctrineSearchRepository::getPaginatedResults()  ← extracts mode, calls subclass
-    │ getSearchQueryBuilder(criteria)
+    │ getSearchQueryBuilder(criteria)            ← per-repo joins / order
+    │ FilterApplier::apply(qb, criteria->filters, searchFieldMap())  ← generic filters: allow-list + bound params
     ▼
 QueryBuilderWithOptions (Doctrine subclass)      ← carries PaginatorOption flags
     │
@@ -597,9 +598,9 @@ StoredObjectOrphanCleaner::cleanupAfterRemoval($hash)
 ## Modification Guidance
 
 ### Adding a new bounded context that uses `Shared/`
-1. Mirror `Backoffice/Bank/` layering: `Domain/{Aggregate,Event,Exception,Repository,Search}` framework-free; `Application/` use cases + DTOs; `Infrastructure/` Doctrine + HTTP + Messenger.
+1. Mirror `Backoffice/Bank/` layering: `Domain/{Aggregate,Event,Exception,Repository}` framework-free; `Application/` use cases + DTOs; `Infrastructure/` Doctrine + HTTP + Messenger.
 2. Domain exceptions extend `DomainException` and implement zero or more markers from `Domain/Exception/` — first marker in the implements clause wins for status mapping.
-3. Search repository extends `AbstractDoctrineSearchRepository<T>`; entity-specific `SearchQuery` extends `Application/Http/Search/SearchQuery` and overrides `toCriteria()`.
+3. Search repository extends `AbstractDoctrineSearchRepository<T>` and implements the mandatory `searchFieldMap(): SearchFieldMap`; the controller maps the **base** `Application/Http/Search/SearchQuery` directly and calls `$query->toCriteria()` — no per-entity `SearchQuery` subclass (the base is `final`; filtering is the generic `filters[]` grammar against the field map).
 4. If the new context stores objects in Flysystem, implement `StoredObjectReferenceInspector` and tag it `stored_object.reference_inspector`. Wire `StoredObjectOrphanCleaner::cleanupAfterRemoval()` from a domain-event handler when references are dropped.
 5. New domain events: subclass `DomainEvent`, override `eventName()` (kebab-case identifier) and `toPrimitives()`. Audit persistence is automatic via `PersistDomainEventMiddleware`.
 
@@ -633,7 +634,7 @@ StoredObjectOrphanCleaner::cleanupAfterRemoval($hash)
 | Map an exception to a new HTTP status | `Application/Problem/ProblemDetailsFactory.php` (`MARKER_STATUS_MAP`)                                                                                                                  |
 | Add a sensitive key to denylist       | `Application/Problem/RedactionDenylist.php` + `RedactionDenylistTest`                                                                                                                  |
 | Customize debug payload per env       | `ProblemDetailsFactory::resolveDebugMode()` + `buildDebugExtension()`                                                                                                                  |
-| Build a search endpoint               | `Application/Http/Search/SearchQuery` (subclass) + `Infrastructure/Persistence/Doctrine/AbstractDoctrineSearchRepository` (extend) + `Infrastructure/Http/Controller/AbstractSearchController` (extend) |
+| Build a search endpoint               | Map the base `Application/Http/Search/SearchQuery` + extend `Infrastructure/Persistence/Doctrine/AbstractDoctrineSearchRepository` (implement `searchFieldMap()`) + extend `Infrastructure/Http/Controller/AbstractSearchController`. Recipe: [`architecture-api.md`](./architecture-api.md#filterable-search-generic-filters-contract) |
 | Add a domain event                    | `Domain/Event/DomainEvent` (subclass) — audit persistence is wired                                                                                                                     |
 | Send an email                         | `Application/Mailer/NotificationMailer` (port) — already has plain-text adapter                                                                                                        |
 | Store a small image (BYTEA)           | `Media/Application/MediaRegistrar`                                                                                                                                                     |

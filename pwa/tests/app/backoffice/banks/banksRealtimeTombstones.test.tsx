@@ -1,14 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
-import { ACME, BETA } from "./_fixtures";
+import { ACME, BETA, searchPage } from "./_fixtures";
 import { renderWithRows } from "./_render";
 
 /**
- * Tombstones close the two row-resurrection windows: a late at-least-once
- * redelivery of `created` after a delete, and a Mercure `deleted` processed
- * during the bulk-restore re-probe window. A successful reload prunes the
- * set — the server list is authoritative.
+ * Under server-driven search a Mercure event reconciles by silently refetching
+ * the current page — the server list is authoritative, so there is no in-memory
+ * merge to "resurrect". The deleted-id tombstone now covers a single window: a
+ * Mercure `deleted` processed during the bulk-restore re-probe (where the
+ * reconciling refetch is suppressed so the optimistic bulk op owns the page).
  */
 
 // The Mercure subscription is replaced while `realtime.handlers` captures the
@@ -37,48 +38,25 @@ describe("BanksListPage — deleted-id tombstones", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     realtime.handlers = undefined;
-    searchRun.mockResolvedValue({ banks: [ACME, BETA], nextCursor: undefined });
+    searchRun.mockResolvedValue(searchPage([ACME, BETA]));
     deleteRun.mockResolvedValue(undefined);
     findRun.mockImplementation((id: string) => Promise.resolve(id === ACME.id ? ACME : BETA));
   });
 
-  it("does not resurrect a deleted row on a late `created` redelivery", async () => {
+  it("reconciles a remote delete via a silent refetch — the server list wins", async () => {
     await renderWithRows();
+    expect(searchRun).toHaveBeenCalledTimes(1);
 
+    // The server now lists everything except ACME; the Mercure `deleted` triggers
+    // a silent refetch that reflects it (no in-memory merge / resurrection).
+    searchRun.mockResolvedValue(searchPage([BETA]));
     act(() => realtime.handlers?.onDeleted?.(ACME.id));
+
     await waitFor(() => {
       expect(screen.queryByTestId(`banks-table__row-${ACME.id}`)).toBeNull();
     });
-
-    // At-least-once redelivery of the original `created` arrives after the
-    // delete — the tombstone keeps the row gone.
-    act(() => realtime.handlers?.onCreated?.(ACME));
-
-    expect(screen.queryByTestId(`banks-table__row-${ACME.id}`)).toBeNull();
     expect(screen.getByTestId(`banks-table__row-${BETA.id}`)).toBeInTheDocument();
-  });
-
-  it("prunes the tombstones on a successful reload — the server list wins", async () => {
-    await renderWithRows();
-
-    act(() => realtime.handlers?.onDeleted?.(ACME.id));
-    await waitFor(() => {
-      expect(screen.queryByTestId(`banks-table__row-${ACME.id}`)).toBeNull();
-    });
-
-    // A reconnect reconciles with the server (which no longer lists ACME) and
-    // empties the tombstone set.
-    searchRun.mockResolvedValue({ banks: [BETA], nextCursor: undefined });
-    act(() => realtime.handlers?.onReconnect?.());
-    await waitFor(() => {
-      expect(searchRun).toHaveBeenCalledTimes(2);
-    });
-
-    // ACME is genuinely re-created later: with the tombstone pruned, the
-    // `created` event inserts it again.
-    act(() => realtime.handlers?.onCreated?.(ACME));
-
-    expect(await screen.findByTestId(`banks-table__row-${ACME.id}`)).toBeInTheDocument();
+    expect(searchRun).toHaveBeenCalledTimes(2);
   });
 
   it("does not restore nor re-select a row whose Mercure delete lands during the bulk-restore window", async () => {

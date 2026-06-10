@@ -7,12 +7,16 @@ namespace Erpify\Shared\Infrastructure\Persistence\Doctrine;
 use Doctrine\ORM\Query\Expr\Select;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
+use Erpify\Shared\Domain\Search\Exception\UnknownSortField;
 use Erpify\Shared\Domain\Search\PaginationMode;
 use Erpify\Shared\Domain\Search\SearchCriteria;
+use Erpify\Shared\Domain\Search\SortDirection;
+use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\FilterApplier;
+use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\SearchFieldMap;
+use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\SortFieldMap;
 use Erpify\Shared\Infrastructure\Persistence\PaginatorCursorFactory;
 use Erpify\Shared\Infrastructure\Persistence\PaginatorCursorInterface;
 use Erpify\Shared\Infrastructure\Persistence\QueryParam;
-use Erpify\Shared\Infrastructure\Persistence\SortDirection;
 use LogicException;
 
 /**
@@ -27,16 +31,24 @@ abstract class AbstractDoctrineSearchRepository extends AbstractDoctrineReposito
     public function __construct(
         ManagerRegistry $registry,
         private readonly PaginatorCursorFactory $paginatorCursorFactory,
+        private readonly FilterApplier $filterApplier,
     ) {
         parent::__construct($registry);
     }
 
     /**
+     * Generic filters are auto-applied here, between the repository-authored query builder and
+     * pagination — repositories only declare their allow-list via {@see SearchFieldMap()} and
+     * never invoke the applier themselves. `getQueryBuilderPaginatedResults()` stays outside
+     * the seam on purpose (callers passing an arbitrary query builder own its conditions).
+     *
      * @return Paginator<T>
      */
     public function getPaginatedResults(SearchCriteria $criteria): Paginator
     {
         $queryBuilder = $this->getSearchQueryBuilder($criteria);
+
+        $this->filterApplier->apply($queryBuilder, $criteria->filters, $this->searchFieldMap());
 
         return $this->getQueryBuilderPaginatedResults(
             $queryBuilder,
@@ -45,6 +57,20 @@ abstract class AbstractDoctrineSearchRepository extends AbstractDoctrineReposito
             $criteria->paginationMode,
         );
     }
+
+    /**
+     * Mandatory allow-list of publicly filterable fields for this repository. Return
+     * `new SearchFieldMap([])` to expose no filterable field at all — anything outside the
+     * map is rejected with a 400 by the applier.
+     */
+    abstract protected function searchFieldMap(): SearchFieldMap;
+
+    /**
+     * Mandatory allow-list of publicly sortable fields for this repository (sibling of
+     * {@see SearchFieldMap()}). Return `new SortFieldMap([])` to expose no sortable field —
+     * any client `sort` is then rejected with a 400 by {@see addOrderByFromQueryParams()}.
+     */
+    abstract protected function sortFieldMap(): SortFieldMap;
 
     /**
      * @return Paginator<T>
@@ -92,7 +118,7 @@ abstract class AbstractDoctrineSearchRepository extends AbstractDoctrineReposito
             $idFieldNames,
             $options,
             $page,
-            $queryBuilder->getMaxResults() ?? self::MAX_LIMIT,
+            $queryBuilder->getMaxResults() ?? SearchCriteria::MAX_LIMIT,
         );
 
         return $paginator;
@@ -104,12 +130,16 @@ abstract class AbstractDoctrineSearchRepository extends AbstractDoctrineReposito
         ?string $orderByField,
         ?SortDirection $direction,
     ): QueryBuilder {
-        $sort = $orderByField ?? QueryParam::CREATED_AT->value;
-        $order = $direction ?? SortDirection::ASC;
+        // The default branch interpolates only the trusted createdAt constant; a client-supplied
+        // sort field is resolved against the allow-list — or rejected with a 422 (unknown-sort-field)
+        // before any SQL runs. The client value is never interpolated into DQL raw.
+        $path = null === $orderByField
+            ? \sprintf('%s.%s', $alias, QueryParam::CREATED_AT->value)
+            : ($this->sortFieldMap()->pathFor($orderByField) ?? throw UnknownSortField::named($orderByField));
 
         return $queryBuilder->addOrderBy(
-            sort: \sprintf('%s.%s', $alias, $sort),
-            order: $order->value,
+            sort: $path,
+            order: ($direction ?? SortDirection::ASC)->value,
         );
     }
 

@@ -82,6 +82,99 @@ Cross-context calls go through **published Application services** or **domain ev
 - Public health endpoints exposed from `Frontoffice/Health/` and `Backoffice/Health/`.
 - Search endpoints share plumbing in `Shared/Application/Http/Search/` and `Shared/Infrastructure/Http/Controller/AbstractSearchController.php`.
 
+## Filterable search (generic `filters[]` contract)
+
+Every search endpoint accepts the same generic filter grammar — there is no per-entity filter code beyond the repository's allow-list. A request filters with `filters[N][field|operator|value]`; the operator tokens are `eq`, `in`, `contains` and the temporal range operators `gt`, `gte`, `lt`, `lte` (lowercase — the `FilterOperator` enum backing string **is** the wire contract). Full wire grammar, caps, and the per-request walkthrough live in [`../api/docs/adding-endpoints.md`](../api/docs/adding-endpoints.md#generic-filters-wire-contract); this section is the architectural source of truth for the pattern.
+
+**Read-path flow** (the seam auto-applies filtering — repositories never call the applier):
+
+```text
+query string
+  → #[MapQueryString] SearchQuery        (Application/Http/Search; base DTO, final, shape-validated)
+  → $query->toCriteria()                 (controller)
+  → SearchCriteria(+Filters)             (Domain/Search; framework-free, final)
+  → <Entity>Searcher::search(criteria)   (bank wraps it in Application/Query/SearchBanksQuery — CQRS read-side)
+  → AbstractDoctrineSearchRepository::getPaginatedResults()
+       ├─ getSearchQueryBuilder(criteria)                                   (per-repo joins; order resolved via sortFieldMap())
+       ├─ FilterApplier::apply(qb, criteria->filters, searchFieldMap())     (allow-list + bound params)
+       └─ Paginator                                                         (keyset/HMAC cursor, intact)
+```
+
+`FilterApplier` (`Shared/Infrastructure/Persistence/Doctrine/Search/`) only ever adds `andWhere` + bound parameters (hashed `xxh128` naming); it is invoked **exclusively** by the base repository's `getPaginatedResults()`. `SearchFieldMap` is built **exclusively** inside each concrete repository's `searchFieldMap()` — the allow-list lives with the schema knowledge, never in Application. `Domain/Search` carries only the **public** field name; the DQL path is resolved in Infrastructure.
+
+**Ordering** follows the same allow-list discipline. `SearchQuery`/`SearchCriteria` also carry `sort` (public field name) + `direction` (`SortDirection` enum, uppercase `ASC`/`DESC` wire tokens). The base repository's `addOrderByFromQueryParams()` resolves a client `sort` against the repository's `sortFieldMap()` (a `SortFieldMap`: public name → DQL path, sibling of `SearchFieldMap`) or throws `UnknownSortField` (400) — the client value is **never** interpolated into DQL raw. Without `sort` the default order is `createdAt` ASC (a lone `direction` applies to that default field — `direction=DESC` ⇒ `createdAt` DESC; an empty `sort=` is normalized to null → default order, not a 400); sorting and filtering are independent allow-lists. Expose only index-backed columns (NFR4).
+
+**Two validation layers** (pinned — never duplicated elsewhere):
+
+- **Shape** — unknown operator token, `value`/operator mismatch, caps exceeded, non-contiguous indexes → fail at `#[MapQueryString]` mapping → 400 `validation-failed` with `violations[]`.
+- **Semantics** — field outside the filter allow-list (`unknown-search-field`), operator not allowed for the field (`unsupported-search-operator`), value not matching the field's required format such as a malformed UUID (`invalid-search-value`) → fail in `FilterApplier`; an order field outside the sort allow-list (`unknown-sort-field`) → fails in the base repository while building the query. Both → 422 from the `invalid-search-criteria` marker family. A bad `direction` (outside the enum) is instead a shape 422 `validation-failed` at mapping. See the marker row in [`api-error-contract.md`](./api-error-contract.md).
+
+Filters are never validated in controllers or use cases.
+
+**Recipe — add a filterable list** (FR7: ≤ 2 new classes + 1 field map, zero files in `Shared/`):
+
+1. The entity's search repository already extends `AbstractDoctrineSearchRepository` (true for any paginated read endpoint). Implement the mandatory `searchFieldMap(): SearchFieldMap`, mapping each public field to a `FieldMapping(dqlPath, normalizer?, operators?, requiresUuidValues?, requiresDateTimeValues?)`. Return `new SearchFieldMap([])` to expose nothing filterable.
+2. Implement the mandatory `sortFieldMap(): SortFieldMap` (sibling abstract method) — the allow-list of publicly **sortable** fields (public name → DQL path) for `sort`/`direction`. Map a public name to an index-backed expression (NFR4); return `new SortFieldMap([])` to expose nothing sortable. Filtering and sorting are independent allow-lists.
+3. Add the thin `<Entity>Searcher` and the `<Entity>SearchController` — both build on the **base** `SearchQuery`/`SearchCriteria` (`$query->toCriteria()`); no per-entity **HTTP** DTO and no `SearchQuery`/`SearchCriteria` subclass (both `final`). Optionally, a context can mirror its write side for CQRS symmetry by wrapping the criteria in an application-layer `Application/Query/<Entity>SearchQuery` — the read-side counterpart of `Application/Command/<Verb><Entity>Command` — that its `<Entity>Searcher` handles; **bank** does this with `SearchBanksQuery`. It is a per-context choice, not required by the generic mechanism (FR7's ≤ 2 classes is the searcher + controller).
+4. That is the whole cost: filtering, ordering, validation, error mapping, and pagination are inherited. The step-by-step controller skeleton is in [`../api/docs/adding-endpoints.md`](../api/docs/adding-endpoints.md#skeleton).
+
+Canonical `searchFieldMap()` (from `DoctrineBankRepository`, the pilot):
+
+```php
+protected function searchFieldMap(): SearchFieldMap
+{
+    $range = [FilterOperator::Gt, FilterOperator::Gte, FilterOperator::Lt, FilterOperator::Lte];
+
+    return new SearchFieldMap([
+        'name' => new FieldMapping('b.nameNormalized', $this->normalizedText),
+        // shortName is stored upper-case ASCII, so its normalizer upper-cases the value.
+        'shortName' => new FieldMapping('b.shortName', $this->asciiUpperText),
+        // No contains on id: a LIKE over a UUID column breaks at the SQL level.
+        'id' => new FieldMapping(
+            'b.id',
+            operators: [FilterOperator::Eq, FilterOperator::In],
+            requiresUuidValues: true,
+        ),
+        // Timestamp columns: range-only. Public names are the serialized `timestamped` keys.
+        'createdAt' => new FieldMapping('b.createdAt', operators: $range, requiresDateTimeValues: true),
+        'updatedAt' => new FieldMapping('b.updatedAt', operators: $range, requiresDateTimeValues: true),
+    ]);
+}
+```
+
+`operators` defaults to all three (`eq`/`in`/`contains`); restrict it (as `id` does) whenever an operator would break at the SQL level, or widen it to the temporal range set (`gt`/`gte`/`lt`/`lte`) for timestamp-backed fields. A field's `FieldNormalizer` applies across **all** its allowed operators (so they share normalization); `requiresUuidValues: true` pre-validates UUID format → a 422 `invalid-search-value` (carrying `{field, position}`, never the value) instead of a Postgres 22P02 500. Because the default set includes `contains` — which a UUID column can never satisfy — a UUID-backed field **must** restrict `operators` to exclude it (the example pins `[Eq, In]`); that combination is otherwise rejected at construction.
+
+`requiresDateTimeValues: true` is the temporal sibling: it marks a `timestamp` column so each range bound is parsed as an RFC 3339 / ISO-8601 datetime — the offset form `2026-01-01T00:00:00+00:00` (`+`-encoded as `%2B` on the wire) or the `Z` form, with optional fractional seconds, so the JS `toISOString()` output is accepted as-is — bounds resolve at second precision (the columns are `TIMESTAMP(0)`, so a sub-second component is truncated and >6 fractional digits are rejected); lax/relative forms and out-of-range offsets (beyond UTC+14/-12) are rejected — normalized to UTC, and bound as a typed `datetime_immutable` parameter (a raw string against a timestamp column has no Postgres operator → a 500; a malformed bound becomes a 422 `invalid-search-value`). It is likewise incompatible with `contains` (a `LIKE` over a timestamp column breaks at the SQL level), so a datetime-backed field lists only range operators. There is deliberately **no `between`**: a closed range is two filters on the same field (`gte` + `lte`), which already compose with AND — adding a redundant operator would violate NFR1/YAGNI. Index every range-filterable column at the entity's `#[ORM\Table]` level (NFR4) — never on the shared `Timestamped` trait, which would index every timestamped entity.
+
+Canonical `sortFieldMap()` (from the same pilot) — name → DQL path only; no operators or normalizers, since ordering needs neither:
+
+```php
+protected function sortFieldMap(): SortFieldMap
+{
+    // Each path is btree-indexed (NFR4). `name` sorts by the accent-folded, lower-cased
+    // nameNormalized (case/diacritic-insensitive, matching the displayed order); `id` is not sortable.
+    return new SortFieldMap([
+        'name' => 'b.nameNormalized',
+        'shortName' => 'b.shortName',
+        'createdAt' => 'b.createdAt',
+        'updatedAt' => 'b.updatedAt',
+    ]);
+}
+```
+
+When the order column is not the displayed one (here `name` → `nameNormalized`), the entity needs a plain read accessor for it (e.g. `getNameNormalized()`) — the keyset paginator reads each order-by column from the result entity to build the cursor. Keep it out of the serializer groups so it does not leak into the payload.
+
+**Anti-patterns (forbidden):**
+
+- ❌ `EntityRepository::matching()` / `Collections\Criteria` on the read-path.
+- ❌ Ad-hoc filtering in repositories (`addWhereIn` for an already-mappable field) — filtering enters **only** through the seam.
+- ❌ Invoking `FilterApplier` from a controller, use case, or concrete repository — only the base repository calls it.
+- ❌ Validating filters in a controller or use case (duplicates the pinned layers).
+- ❌ Manual `JsonResponse` for filter errors (bypasses the RFC 9457 pipeline).
+- ❌ Interpolating a client `sort` into DQL (`ORDER BY $alias.$sort`) — the order field **must** be resolved through `sortFieldMap()`; an un-mapped value is a 422 `unknown-sort-field`, never raw SQL.
+- ❌ Exposing a non-indexed column as sortable (filesort → NFR4 regression), or sorting by a field with no read accessor (the keyset cursor cannot extract it).
+- ❌ Subclassing `SearchQuery`/`SearchCriteria` or adding per-entity wire params — both are `final` on purpose; new filterable fields go through `searchFieldMap()`, new sortable fields through `sortFieldMap()`.
+
 ## Error contract (RFC 9457 Problem Details)
 
 Every non-2xx response from `/api/*` carries a uniform [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) Problem Details body (`Content-Type: application/problem+json`, `Cache-Control: no-store`) with deterministic key order: `type, title, status, detail?, instance, correlation-id, <extensions>`. Domain exceptions tag themselves with marker interfaces (`NotFound`, `Conflict`, `Forbidden`, `Unauthenticated`, `InvariantViolation`, `InvalidInput`, `RateLimited`) and a single mapping site resolves each to its HTTP status — no controller-level catch blocks, no per-route error wiring.

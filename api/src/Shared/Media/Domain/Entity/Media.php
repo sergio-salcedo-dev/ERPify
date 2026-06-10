@@ -16,7 +16,7 @@ use Erpify\Shared\Media\Domain\Repository\MediaRepository;
  */
 #[ORM\Entity(repositoryClass: MediaRepository::class)]
 #[ORM\Table(name: 'media')]
-class Media extends AggregateRoot
+final class Media extends AggregateRoot
 {
     private function __construct(
         string $id,

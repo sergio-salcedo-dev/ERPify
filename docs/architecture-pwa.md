@@ -112,6 +112,32 @@ The `Observability` module provides a non-user-facing diagnostic channel for inf
 - Server-side fetches use `SYMFONY_INTERNAL_URL` (Compose-internal); client-side fetches use the public URL.
 - Mercure SSE consumed at `/.well-known/mercure` (same origin, JWT subscribed).
 
+### Server-driven filtered search
+
+Filterable lists are **server-driven**: filtering, sorting, and keyset pagination are resolved by the API,
+not in the browser. The shared vocabulary mirrors the API's generic `filters[]` contract:
+
+- `context/shared/domain/Search/` — `Filter` (discriminated union by `FilterOperator`:
+  `eq | in | contains | gte | lte`) is the typed, framework-free vocabulary.
+- `context/shared/infrastructure/Search/buildSearchParams.ts` — serializes a `Filter[]` into the exact wire
+  grammar (`filters[N][field|operator|value]`; `filters[N][value][]` for `in`), returning a composable
+  `URLSearchParams`.
+- A repository's `search(criteria)` composes those params with `sort` + `direction` (uppercased to the API's
+  `ASC`/`DESC` enum), `page`, an opaque `cursor` (replayed verbatim, never interpreted client-side), `limit`,
+  and `paginationMode=detailed` (so `pagination.count` drives a real total). See
+  `context/backoffice/bank/infrastructure/ApiBankRepository.ts` as the reference consumer.
+
+Two list-behaviour rules are load-bearing:
+
+- **Discard the cursor when the query changes.** Any change to a filter, the sort, or the page size resets to
+  page 1, which sends no cursor — so a stale cursor is dropped by construction. Only sequential prev/next
+  navigation replays the last response's cursor.
+- **Reconcile realtime by refetching.** Under server-driven search the client cannot decide whether a Mercure
+  `created`/`updated`/`deleted` belongs on the current page, so every event triggers a coalesced silent
+  refetch of the current page (yielding to an in-flight optimistic bulk delete). There is no in-memory merge.
+
+Recipe to make a new list filterable → [`pwa/docs/server-driven-search.md`](../pwa/docs/server-driven-search.md).
+
 ## Error consumption
 
 The PWA consumes the API's [RFC 9457 Problem Details](./api-error-contract.md) contract. Routing/UI logic determines the semantic category from `type` (opaque, stable identifier) — never from message text or status code alone. `correlation-id` from the body (or the `X-Correlation-Id` response header) is the link to server-side log lines for support tickets.

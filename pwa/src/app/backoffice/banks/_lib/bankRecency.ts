@@ -18,12 +18,3 @@ export function isRecentlyCreated(
   const ageDays = provider.calculateDuration(created, provider.now(), "days");
   return ageDays >= 0 && ageDays <= withinDays;
 }
-
-/** Count how many of the given ISO timestamps are recently created. */
-export function countRecentlyCreated(
-  createdAtIsos: readonly string[],
-  provider: DateTimeProvider,
-  withinDays: number = BANK_NEW_WINDOW_DAYS,
-): number {
-  return createdAtIsos.filter((iso) => isRecentlyCreated(iso, provider, withinDays)).length;
-}

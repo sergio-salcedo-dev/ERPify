@@ -1,14 +1,27 @@
 import { inject, injectable } from "inversify";
 import { API_ENDPOINTS } from "../../../shared/infrastructure/api/ApiEndpoints";
 import type { HttpClient } from "../../../shared/infrastructure/HttpClient/HttpClient";
+import { buildSearchParams } from "@/context/shared/infrastructure/Search";
 import { Bank, type BankPrimitives } from "../domain/Bank";
-import type { BankInput, BankRepository, BankSearchPage } from "../domain/BankRepository";
+import type {
+  BankInput,
+  BankRepository,
+  BankSearchCriteria,
+  BankSearchPage,
+} from "../domain/BankRepository";
+
+// Mirrors the PHP `PaginationMode` backing value; requesting "detailed" makes
+// the response carry the total `count` that drives the "Total banks" header.
+const PAGINATION_MODE_DETAILED = "detailed";
 
 interface BankSearchResponse {
   data: BankPrimitives[];
   pagination: {
-    cursor: string;
+    currentPage: number;
+    pageCount: number | null;
+    count: number | null;
     hasMorePages: boolean;
+    cursor: string;
   };
 }
 
@@ -31,6 +44,10 @@ function isBankPrimitives(value: unknown): value is BankPrimitives {
   );
 }
 
+function isNumberOrNull(value: unknown): value is number | null {
+  return value === null || typeof value === "number";
+}
+
 export function isBankSearchResponse(value: unknown): value is BankSearchResponse {
   if (!isObjectRecord(value) || !Array.isArray(value.data)) {
     return false;
@@ -39,8 +56,11 @@ export function isBankSearchResponse(value: unknown): value is BankSearchRespons
   return (
     data.every(isBankPrimitives) &&
     isObjectRecord(pagination) &&
-    typeof pagination.cursor === "string" &&
-    typeof pagination.hasMorePages === "boolean"
+    typeof pagination.currentPage === "number" &&
+    isNumberOrNull(pagination.pageCount) &&
+    isNumberOrNull(pagination.count) &&
+    typeof pagination.hasMorePages === "boolean" &&
+    typeof pagination.cursor === "string"
   );
 }
 
@@ -52,14 +72,31 @@ export function isBankSingleResponse(value: unknown): value is BankSingleRespons
 export class ApiBankRepository implements BankRepository {
   constructor(@inject("HttpClient") private readonly httpClient: HttpClient) {}
 
-  async search(): Promise<BankSearchPage> {
+  async search(criteria: BankSearchCriteria): Promise<BankSearchPage> {
+    const params = buildSearchParams(criteria.filters);
+    if (criteria.sort) {
+      params.append("sort", criteria.sort.field);
+      // The API sort enum is uppercase (`ASC`/`DESC`); the PWA enum is lowercase.
+      params.append("direction", criteria.sort.direction.toUpperCase());
+    }
+    params.append("page", String(criteria.page));
+    if (criteria.cursor !== undefined) {
+      params.append("cursor", criteria.cursor);
+    }
+    params.append("limit", String(criteria.limit));
+    params.append("paginationMode", PAGINATION_MODE_DETAILED);
+
     const response = await this.httpClient.get(
-      API_ENDPOINTS.BACKOFFICE.BANKS.LIST,
+      `${API_ENDPOINTS.BACKOFFICE.BANKS.LIST}?${params.toString()}`,
       isBankSearchResponse,
     );
+
     return {
       banks: response.data.map(Bank.fromPrimitives),
-      nextCursor: response.pagination.hasMorePages ? response.pagination.cursor : undefined,
+      cursor: response.pagination.cursor,
+      currentPage: response.pagination.currentPage,
+      hasMorePages: response.pagination.hasMorePages,
+      totalCount: response.pagination.count,
     };
   }
 

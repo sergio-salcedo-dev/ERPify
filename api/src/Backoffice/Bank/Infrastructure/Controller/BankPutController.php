@@ -6,36 +6,37 @@ namespace Erpify\Backoffice\Bank\Infrastructure\Controller;
 
 use Erpify\Backoffice\Bank\Application\BankUpdater;
 use Erpify\Backoffice\Bank\Application\Command\UpdateBankCommand;
-use Erpify\Shared\Application\UseCase\Result;
-use Erpify\Shared\Infrastructure\Http\Responder\ResponderInterface;
-use Erpify\Shared\Infrastructure\Serializer\ResourceNormalizer;
+use Erpify\Backoffice\Bank\Domain\Entity\Bank;
+use Erpify\Shared\Infrastructure\Http\Responder\ResourceResponder;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Messenger\Exception\ExceptionInterface as MessengerExceptionInterface;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Serializer\Exception\ExceptionInterface;
 
-#[Route('/banks/{id}', name: 'backoffice_bank_put', methods: ['PUT'])]
+#[Route('/banks/{id}', name: 'backoffice_bank_update', methods: ['PUT'])]
 final readonly class BankPutController
 {
     public function __construct(
         private BankUpdater $bankUpdater,
-        private ResourceNormalizer $resourceNormalizer,
-        private ResponderInterface $responder,
+        private ResourceResponder $resourceResponder,
     ) {
     }
 
     /**
+     * @throws ExceptionInterface
      * @throws MessengerExceptionInterface
      */
-    public function __invoke(string $id, #[MapRequestPayload] UpdateBankCommand $bankCommand): Response
-    {
+    public function __invoke(
+        string $id,
+        #[MapRequestPayload]
+        UpdateBankCommand $bankCommand,
+    ): Response {
         $bank = $this->bankUpdater->update($id, $bankCommand);
 
-        $data = $this->resourceNormalizer->toArray(
+        return $this->resourceResponder->respond(
             $bank,
-            ['identifiable', 'timestamped', 'bank:get'],
+            [Bank::GROUP_IDENTIFIABLE, Bank::GROUP_TIMESTAMPED, Bank::GROUP_DETAIL],
         );
-
-        return $this->responder->respond(Result::ok($data));
     }
 }

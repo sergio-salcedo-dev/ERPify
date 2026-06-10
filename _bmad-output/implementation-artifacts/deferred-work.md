@@ -90,6 +90,71 @@ root-owned `tsconfig.tsbuildinfo` on the host (the primary checkout has one toda
 may hit EACCES — pass `--incremental false` (or run in the container). Tree verified clean at
 `42d47b6` (`npx tsc --noEmit --incremental false` exits 0); re-verify at gate-add time.
 
+## Deferred from: code review of 1-2-errores-de-busqueda-invalida-en-el-pipeline-rfc-9457 (2026-06-07)
+
+- **Precedencia de default-type sin guard para excepciones dual-marker `InvalidInput` + `InvalidSearchCriteria` (ambos → 400).** `firstMatchingMarker` resuelve por orden de implements-clause (documentado en `docs/api-error-contract.md` y pineado por `testMarkerOrderingFollowsImplementsClause`), así que el `type` por defecto de una excepción que implementara ambos markers con `type()` vacío dependería silenciosamente del orden de su cláusula `implements` — no del orden de declaración de los maps. Benigno hoy: el status (400) coincide en ambos y ninguna concreta de producción implementa los dos markers; las dos shipped llevan `TYPE` explícito. Revisitar si alguna vez aparece una excepción dual-marker (p. ej. añadir un guard/test que pinee el resultado). Low. (source: blind+edge)
+
+## Deferred from: code review of 1-4-contrato-generico-filters-expuesto-en-el-endpoint-de-banks (2026-06-07)
+
+- ~~**Coste de query sin límite más allá de los caps planos del contrato `filters[]`.**~~
+  **Resuelto (2026-06-07, story 1.5):** gate NFR4 ejecutado — `EXPLAIN ANALYZE` sobre las 4 formas
+  del camino único contra el dataset de fixtures: `in`/`eq` sobre `name_normalized` → Index Scan
+  (índice UNIQUE), `id` → Index Scan (PK); `contains` → Seq Scan asumido conscientemente (LIKE con
+  comodín inicial no indexable por btree; los caps de mapping acotan el peor caso). El plan del
+  camino único es idéntico al del legacy retirado (mismo shape `IN` bindeado) → p95 sin regresión.
+- ~~**`InvalidSearchValue` no señala el índice posicional del valor ofensor.**~~
+  **Resuelto (2026-06-07, story 1.5):** `notAUuid(string $field, int $position)` — el context lleva
+  campo + posición 0-based, nunca el valor; expuesto en el body Problem Details y asseverado en
+  `FilterApplierTest` + Behat. La decisión de equivalencia de types legacy↔genérico quedó moot:
+  los params legacy `names[]`/`ids[]` se retiraron del wire en la propia 1.5 (decisión de usuario
+  2026-06-07 — el código no está desplegado en producción; fase *contract* adelantada).
+
+## From: code review of fix/pwa-e2e-tooltip-and-test-types (2026-06-07)
+
+- **E2E shortName assertions normalize with `.toLocaleUpperCase()`, not the API's rule.**
+  `banks-real-api.spec.ts` and `banks-real-api-flows.spec.ts` pre-empt the API's canonicalization
+  by upcasing the raw seeded input; the API's `NormalizedText::toAsciiUpper` also strips
+  diacritics (`Any-Latin; Latin-ASCII; Upper()`). They only stay green because their seeded
+  inputs are diacritic-free ASCII. Pre-existing; if a non-ASCII shortName is ever seeded, assert
+  against the API-returned value instead (the pattern `banks-containment.spec.ts` now uses). Low.
+  (source: adversarial review)
+
+## Deferred from: code review of epics.md story 1.7 (2026-06-08)
+
+Adversarial review (Blind Hunter / Edge Case Hunter / Acceptance Auditor) of the temporal-range +
+`shortName` implementation. The `decision-needed` and `patch` findings (incl. a critical null-byte
+→ 500 and the missing `shortName` half of AC3) were applied live; the two defense-in-depth items
+below are deferred — programmer-error guards in `FieldMapping`, not reachable from the wire on `banks`.
+
+- **A `requiresDateTimeValues` field that also allowed `eq`/`in` would bind an untyped string → 500.**
+  `FilterApplier::eqCondition`/`inCondition` pass a `null` Doctrine type; only `rangeCondition`
+  binds a typed `datetime_immutable`. The `FieldMapping` constructor forbids `contains` on a
+  datetime field but not `eq`/`in`, so a future map declaring
+  `new FieldMapping('b.createdAt', operators: [Eq, In], requiresDateTimeValues: true)` would send a
+  raw string against a `timestamp` column → Postgres 22007 → 500. Not reachable today: `banks` wires
+  only the four range operators onto its datetime fields. Harden by typing the eq/in binding for
+  datetime fields, or rejecting that combination at construction. Low. (source: edge)
+
+- **`requiresUuidValues` + `requiresDateTimeValues` both `true` is unguarded.** The constructor
+  validates each flag against `contains` independently but never forbids the contradictory
+  both-true combination (a value cannot be both a UUID and a datetime); such a field would run UUID
+  pre-validation then datetime parsing and reject every value. Programmer error only, not reachable
+  from the wire. Add a mutual-exclusion guard in the `FieldMapping` constructor. Low. (source: edge)
+
+## Deferred from: code review of 1-8-orden-server-side-en-el-contrato-de-busqueda (2026-06-08)
+
+Adversarial review (Blind Hunter / Edge Case Hunter / Acceptance Auditor) of server-side `sort`/`direction`
+on `e0d8794..5d36330`. The `decision-needed` and `patch` findings are tracked in the story's Review Findings
+section; the one item below is deferred.
+
+- **Cursor keyset + `sort` change has no e2e coverage.** When a client changes `sort` while carrying a
+  keyset cursor, the cursor (which encodes the previous order columns) no longer matches and the paginator
+  degrades to offset. The degradation mechanism is verified to exist (`Paginator::buildCursorWhere` returns
+  `null` when an order column is absent from the cursor → offset fallback), but no Behat scenario exercises
+  the cursor→offset jump on a `sort` switch. The consumer-side contract (the PWA must discard the cursor on
+  sort change — the learned debounce+pagination race rule) lands in Story 2.2; pin the server-side jump there
+  alongside it. Low. (source: blind)
+
 ## Deferred from: code review of spec-sentry-api-observability (2026-06-08, step-04)
 
 Surfaced by the adversarial review of the API Sentry integration; both are real but lower-priority
@@ -106,6 +171,25 @@ the boot crash — were patched in-loop).
   URL with a token in its query, a SQL string). The `before_send` scrubber only walks event `extra` +
   `request`, not `$event->getBreadcrumbs()`. Add a breadcrumb pass (walk each breadcrumb's metadata
   through the denylist) if/when breadcrumb content proves sensitive in practice.
+
+## Deferred from: code review of story-1.7 (2026-06-09, step-04)
+
+Surfaced by the adversarial review of the temporal range operators. Both are Low; the live correctness
+and security invariants (typed binding, strict parse, 400-not-500, asymmetric offset bound) were patched
+in-loop. The third 1.7 deferral (the unguarded `FieldMapping` flag combinations) is already recorded
+above under the original implementation note.
+
+- **Harden `FilterApplier::parseStrict` with a reparse round-trip.** Validity currently rests on
+  `DateTimeImmutable::getLastErrors()` warning/error counts after `createFromFormat`, plus the adjacency
+  of the `createFromFormat`/`getLastErrors` calls (a process-global). Verified functionally correct on
+  PHP 8.5.7 against every malformed/relative/null-byte/leap-second/out-of-range-offset case. Optional
+  robustness: add `$dt->format($format) === $value` so correctness no longer depends on warning emission
+  nor on no intervening datetime call mutating the global error state. Low.
+- **`DROP INDEX IF EXISTS` in the migration `down()`.** `Version20260608165844::down()` drops
+  `idx_bank_created_at` / `idx_bank_updated_at` without `IF EXISTS`, so a half-applied `up()` would abort
+  the rollback on the missing one. The indexes are perf-only (NFR4) and have no behavior-test coverage —
+  a forgotten migration fails no test. Add `IF EXISTS` (and consider a `doctrine:schema:validate` gate)
+  if migration reversibility under partial application becomes a concern. Low.
 
 ## Deferred from: code review of spec-pwa-sentry.md (2026-06-09)
 

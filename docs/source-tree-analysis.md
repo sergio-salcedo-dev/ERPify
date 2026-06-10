@@ -10,7 +10,7 @@ ERPify/
 │   │   ├── Backoffice/
 │   │   │   ├── Bank/               # Bank bounded context
 │   │   │   │   ├── Application/    # Use cases, DTOs (Application/Http/)
-│   │   │   │   ├── Domain/         # Entity, Event, Exception, Repository, Search (framework-free)
+│   │   │   │   ├── Domain/         # Entity, Event, Exception, Repository (framework-free)
 │   │   │   │   └── Infrastructure/ # Controller, Messenger, Persistence, Request, Serializer, Storage
 │   │   │   └── Health/
 │   │   │       └── Infrastructure/Controller
@@ -34,7 +34,7 @@ ERPify/
 │   │       │   ├── Http/           # CorrelationIdListener, ProblemDetailsResponder, EventListener/ExceptionResponder, Controller/, Responder/
 │   │       │   ├── Mailer/         # Mailer adapter
 │   │       │   ├── Messenger/      # Messenger middleware/handlers
-│   │       │   ├── Persistence/    # Entity, Paginator, Repository
+│   │       │   ├── Persistence/    # Entity, Paginator, Repository, Doctrine/Search (FilterApplier + per-repo field maps)
 │   │       │   ├── Serializer/     # Symfony serializer adapters
 │   │       │   └── Uuid/           # UUID generator port adapter
 │   │       ├── Media/              # Image processing (Intervention Image) — full DDD layering
@@ -140,6 +140,7 @@ All browser traffic terminates at **FrankenPHP on `localhost`**. `/` is reverse-
 | `api/src/Shared/Domain/Exception/`                           | Marker interfaces + `DomainException` base — see [`api-error-contract.md`](./api-error-contract.md) |
 | `api/src/Shared/Application/Problem/`                        | `ProblemDetails` VO + `ProblemDetailsFactory` (single throwable→wire mapping site)                  |
 | `api/src/Shared/Infrastructure/Http/`                        | `CorrelationIdListener`, `ProblemDetailsResponder`, `EventListener/ExceptionResponder`              |
+| `api/src/Shared/Infrastructure/Persistence/Doctrine/Search/` | `FilterApplier` + `SearchFieldMap` — shared search-filter plumbing (mandatory allow-list)           |
 | `api/src/*/Application/`                                     | Use cases, DTOs, orchestration                                                                      |
 | `api/src/*/Infrastructure/`                                  | Doctrine, HTTP, Messenger adapters                                                                  |
 | `api/config/packages/`                                       | All bundle config (Doctrine, Messenger, Mercure, …)                                                 |

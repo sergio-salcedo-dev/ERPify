@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
-import { ACME, BETA } from "./_fixtures";
+import { ACME, BETA, searchPage } from "./_fixtures";
 import { renderWithRows } from "./_render";
 
 /**
@@ -25,7 +25,7 @@ describe("BanksListPage — record peek (`o`)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     realtime.handlers = undefined;
-    searchRun.mockResolvedValue({ banks: [ACME, BETA], nextCursor: undefined });
+    searchRun.mockResolvedValue(searchPage([ACME, BETA]));
   });
 
   it("opens the peek with the five in-memory fields and a detail link from a table row", async () => {
@@ -81,6 +81,9 @@ describe("BanksListPage — record peek (`o`)", () => {
     fireEvent.keyDown(row, { key: "o" });
     await screen.findByTestId("banks-list__peek");
 
+    // The remote delete reconciles via a silent refetch (server-driven), so the
+    // server now lists everything except ACME.
+    searchRun.mockResolvedValue(searchPage([BETA]));
     act(() => realtime.handlers?.onDeleted?.(ACME.id));
 
     await waitFor(() => {

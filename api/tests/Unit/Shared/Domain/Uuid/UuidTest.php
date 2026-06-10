@@ -44,6 +44,18 @@ final class UuidTest extends TestCase
         $this->assertInstanceOf(UuidV7::class, Uuid::fromString($value));
     }
 
+    public function testIsValidAcceptsAWellFormedUuid(): void
+    {
+        $this->assertTrue(DomainUuid::isValid(DomainUuid::generate()));
+        // isValid checks format, not version: a v4 string is a valid identifier.
+        $this->assertTrue(DomainUuid::isValid(Uuid::v4()->toRfc4122()));
+    }
+
+    public function testIsValidRejectsAMalformedValue(): void
+    {
+        $this->assertFalse(DomainUuid::isValid('not-a-uuid'));
+    }
+
     public function testEnsureAcceptsAnAppMintedUuid(): void
     {
         $this->expectNotToPerformAssertions();

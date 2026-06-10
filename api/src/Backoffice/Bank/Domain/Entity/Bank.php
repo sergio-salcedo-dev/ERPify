@@ -22,9 +22,13 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'bank')]
+// btree indexes for the temporal range filters (story 1.7). Declared here at the Bank table
+// level, never on the shared Timestamped trait, so only this entity pays for the indexes.
+#[ORM\Index(name: 'idx_bank_created_at', columns: ['created_at'])]
+#[ORM\Index(name: 'idx_bank_updated_at', columns: ['updated_at'])]
 #[UniqueEntity(fields: ['nameNormalized'], message: 'This bank name is already in use.', errorPath: 'name')]
 #[UniqueEntity(fields: ['shortName'], message: 'This short name is already in use.')]
-class Bank extends AggregateRoot
+final class Bank extends AggregateRoot
 {
     /**
      * Validation limit for the bank name. It matches the default `VARCHAR(255)`
@@ -34,12 +38,24 @@ class Bank extends AggregateRoot
      */
     private const int MAX_NAME_LENGTH = 255;
 
+    /** Serialization group for the single-resource detail projection (GET one, POST, PUT responses). */
+    public const string GROUP_DETAIL = 'bank:detail';
+
+    /** Serialization group for the collection projection (search / list responses). */
+    public const string GROUP_LIST = 'bank:list';
+
+    /**
+     * Serialization group that opts a response into the computed logo / stored-object URLs
+     * synthesized by {@see \Erpify\Backoffice\Bank\Infrastructure\Serializer\BankLogoUrlNormalizer}.
+     */
+    public const string GROUP_READ_URLS = 'bank:read:urls';
+
     private function __construct(
         string $id,
         #[ORM\Column]
         #[Assert\NotBlank]
         #[Assert\Length(max: self::MAX_NAME_LENGTH)]
-        #[Groups(['bank:get', 'bank:search'])]
+        #[Groups([self::GROUP_DETAIL, self::GROUP_LIST])]
         private string $name,
         #[ORM\Column(unique: true)]
         private string $nameNormalized,
@@ -51,7 +67,7 @@ class Bank extends AggregateRoot
         #[ORM\Column(length: 50, unique: true)]
         #[Assert\NotBlank]
         #[Assert\Length(max: 50)]
-        #[Groups(['bank:get', 'bank:search'])]
+        #[Groups([self::GROUP_DETAIL, self::GROUP_LIST])]
         private string $shortName,
         #[ORM\ManyToOne(targetEntity: Media::class, cascade: ['persist'])]
         #[ORM\JoinColumn(name: 'logo_media_id', referencedColumnName: 'id', nullable: true)]
@@ -114,6 +130,16 @@ class Bank extends AggregateRoot
     public function getName(): string
     {
         return $this->name;
+    }
+
+    /**
+     * Read accessor for the accent-folded, lower-cased name. Carries no serializer group, so it
+     * stays out of the HTTP payload; it exists so the keyset paginator can read the order-by
+     * column when the list is sorted by `name` (which maps to the indexed `nameNormalized`).
+     */
+    public function getNameNormalized(): string
+    {
+        return $this->nameNormalized;
     }
 
     public function getShortName(): string

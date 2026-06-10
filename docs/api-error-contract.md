@@ -42,20 +42,23 @@ Encoding: `\json_encode($problemDetails->toArray(), JSON_UNESCAPED_UNICODE | JSO
 
 ## Marker interface → HTTP status table
 
-The mapping is the constant `ProblemDetailsFactory::MARKER_STATUS_MAP` (see [`api/src/Shared/Application/Problem/ProblemDetailsFactory.php`](../api/src/Shared/Application/Problem/ProblemDetailsFactory.php) lines 111–119). The default `type` per marker is `MARKER_DEFAULT_TYPE_MAP` (lines 121–129). **Do not duplicate the values here — this table is a navigation aid; the source is the constant** (NFR25).
+The mapping is the constant `ProblemDetailsFactory::MARKER_STATUS_MAP` (see [`api/src/Shared/Application/Problem/ProblemDetailsFactory.php`](../api/src/Shared/Application/Problem/ProblemDetailsFactory.php) lines 112–121). The default `type` per marker is `MARKER_DEFAULT_TYPE_MAP` (lines 123–132). **Do not duplicate the values here — this table is a navigation aid; the source is the constant** (NFR25).
 
-| Marker (`api/src/Shared/Domain/Exception/`) | HTTP status | Default `type`        |
-|---------------------------------------------|-------------|-----------------------|
-| `NotFound`                                  | 404         | `not-found`           |
-| `Conflict`                                  | 409         | `conflict`            |
-| `Forbidden`                                 | 403         | `forbidden`           |
-| `Unauthenticated`                           | 401         | `unauthenticated`     |
-| `InvariantViolation`                        | 422         | `invariant-violation` |
-| `InvalidInput`                              | 400         | `invalid-input`       |
-| `RateLimited`                               | 429         | `rate-limited`        |
-| Plain `DomainException` (no marker)         | 500         | `domain-error`        |
+| Marker (`api/src/Shared/Domain/Exception/`) | HTTP status | Default `type`            |
+|---------------------------------------------|-------------|---------------------------|
+| `NotFound`                                  | 404         | `not-found`               |
+| `Conflict`                                  | 409         | `conflict`                |
+| `Forbidden`                                 | 403         | `forbidden`               |
+| `Unauthenticated`                           | 401         | `unauthenticated`         |
+| `InvariantViolation`                        | 422         | `invariant-violation`     |
+| `InvalidInput`                              | 400         | `invalid-input`           |
+| `RateLimited`                               | 429         | `rate-limited`            |
+| `InvalidSearchCriteria`                     | 422         | `invalid-search-criteria` |
+| Plain `DomainException` (no marker)         | 500         | `domain-error`            |
 
-Marker resolution honours implements-clause order, intersected with the canonical marker list (`firstMatchingMarker`, lines 352–364). Subclasses may override `DomainException::type()` to return a more specific opaque identifier. Markers are framework-free — no HTTP / ORM / transport imports allowed inside `Shared/Domain/Exception/`.
+`InvalidSearchCriteria` covers semantically invalid search criteria — invalid filters (unknown/un-filterable field, operator not allowed for the field, value not matching the field's required format or being blank), an un-sortable order field, and out-of-range pagination. Its concrete exceptions live under `api/src/Shared/Domain/Search/Exception/` (`UnknownSearchField` → `unknown-search-field`, `UnsupportedSearchOperator` → `unsupported-search-operator`, `InvalidSearchValue` → `invalid-search-value`, `UnknownSortField` → `unknown-sort-field`, `InvalidPagination` → `invalid-pagination`). `unknown-search-field`, `unsupported-search-operator` and the format checks of `invalid-search-value` are thrown by the shared filter applier; `unknown-sort-field` is thrown by the shared search repository when `sort` falls outside the repository's `sortFieldMap()` allow-list (before any SQL runs, so the field is never interpolated into DQL) — its `context` carries only `{field}`, never interpolated into the title. `invalid-search-value` fires for any value the field's mapping cannot accept: a malformed UUID against a UUID column (`requiresUuidValues`) or a malformed / lax datetime against a timestamp column (`requiresDateTimeValues`) — each would otherwise reach Postgres as a 22xxx error turned 500 — and is also raised by the domain `Filter` constructor for a blank value (empty after a Unicode-aware trim), so that invariant holds for every adapter (HTTP, CLI, message handlers). Its `context` carries only `{field, position}`, never the offending value. `invalid-pagination` is raised by the `SearchCriteria` constructor when `page` or `limit` falls outside its `[1, max]` range (`MAX_PAGE` / `MAX_LIMIT`) — likewise an all-adapter invariant, with the HTTP boundary DTO (`SearchQuery`) rejecting the same values earlier as a 422 `validation-failed`. Its `context` carries only `{page, max}` or `{limit, max}` — bare integers, never client-identifying input. The whole family maps to **422** (not 400): the criteria are *well-formed but semantically invalid* query input, so they join the wire DTO `validation-failed` (also 422) under the pragmatic industry convention (Rails, Laravel, GitHub) that 422 covers any well-formed-but-unprocessable input, body or query. 400 is reserved for a malformed request *target* — a path id that is not a well-formed UUID (`InvalidInput` → `invalid-uuid`); the specific search marker travels only on `DomainException` instances and never collides with it.
+
+Marker resolution honours implements-clause order, intersected with the canonical marker list (`firstMatchingMarker`, lines 444–456). Subclasses may override `DomainException::type()` to return a more specific opaque identifier. Markers are framework-free — no HTTP / ORM / transport imports allowed inside `Shared/Domain/Exception/`.
 
 > **Adding a marker interface or changing its mapping requires updating this page**. The CI grep gate that enforces freshness.
 
@@ -71,7 +74,7 @@ Marker resolution honours implements-clause order, intersected with the canonica
 
 \* The factory walks `getPrevious()` so wrapped `ValidationFailedException` (e.g. inside Symfony's `RequestPayloadValueResolver` 422 wrapper used by `#[MapRequestPayload]` / `#[MapQueryString]`) is unwrapped and re-emitted as a **422** carrying the structured `violations[]` extension in place of Symfony's generic, unstructured 422 body. `violations[]` shape: `[{field, message, code}, ...]`.
 
-422 is the contract for *semantic* validation of request **content** (RFC 9110 §15.5.21): the request body (and, by sharing the same `validation-failed` type, query-string DTOs) parsed correctly but the values violate constraints. It is deliberately distinct from **400 `invalid-input`**, which covers a malformed *request target* — most notably a path parameter that is not a well-formed UUID. Route ids are guarded by [`Uuid::ensure()`](../api/src/Shared/Domain/Uuid/Uuid.php), which throws [`InvalidUuidException`](../api/src/Shared/Domain/Uuid/InvalidUuidException.php) (`InvalidInput` marker → 400 `invalid-uuid`) *before* any repository lookup; a well-formed id with no matching row is a 404. So the three outcomes for `GET /banks/{id}` are: malformed id → **400 `invalid-uuid`**, absent → **404**, and body/DTO validation elsewhere → **422 `validation-failed`**. See ADR `_bmad-output/planning-artifacts/architecture.md`.
+422 is the contract for any *well-formed but semantically invalid* input (RFC 9110 §15.5.21), following the pragmatic industry convention (Rails, Laravel, GitHub API): the request body, the query-string DTOs (`validation-failed`), **and** the `invalid-search-criteria` family (unknown filter field/operator, un-sortable field, malformed filter value, out-of-range pagination) all parsed correctly but violate constraints. It is deliberately distinct from **400 `invalid-input`**, which covers a malformed *request target* — most notably a path parameter that is not a well-formed UUID. Route ids are guarded by [`Uuid::ensure()`](../api/src/Shared/Domain/Uuid/Uuid.php), which throws [`InvalidUuidException`](../api/src/Shared/Domain/Uuid/InvalidUuidException.php) (`InvalidInput` marker → 400 `invalid-uuid`) *before* any repository lookup; a well-formed id with no matching row is a 404. So the three outcomes for `GET /banks/{id}` are: malformed id → **400 `invalid-uuid`**, absent → **404**, and body/DTO validation elsewhere → **422 `validation-failed`**. See ADR `_bmad-output/planning-artifacts/architecture.md`.
 
 ## How to add a new error (Amelia walk-through from PRD §Journey 1)
 
@@ -250,7 +253,7 @@ Grep by `instance` for the single failure entry; grep by `correlation_id` for th
 
 The Sentry `ErrorListener` (dev + prod, not test) runs first at `128` but only *captures* the throwable — it sets no response, so `ExceptionResponder` (16) still builds the RFC 9457 body unchanged.
 
-`ExceptionResponder` checks `$event->hasResponse()` first — if a higher-priority listener (e.g. `SearchExceptionListener`) already produced a response, it leaves it alone and does **not** log. Listener priority ordering vs. Nelmio CORS is pinned by (`ExceptionResponderListenerPriorityTest`).
+`ExceptionResponder` checks `$event->hasResponse()` first — if a higher-priority listener already produced a response, it leaves it alone and does **not** log. Listener priority ordering vs. Nelmio CORS is pinned by (`ExceptionResponderListenerPriorityTest`).
 
 ## Rate limiting (per-IP)
 

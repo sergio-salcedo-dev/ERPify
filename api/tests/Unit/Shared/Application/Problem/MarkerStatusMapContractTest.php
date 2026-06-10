@@ -9,6 +9,7 @@ use Erpify\Shared\Domain\Exception\Conflict;
 use Erpify\Shared\Domain\Exception\DomainException;
 use Erpify\Shared\Domain\Exception\Forbidden;
 use Erpify\Shared\Domain\Exception\InvalidInput;
+use Erpify\Shared\Domain\Exception\InvalidSearchCriteria;
 use Erpify\Shared\Domain\Exception\InvariantViolation;
 use Erpify\Shared\Domain\Exception\NotFound;
 use Erpify\Shared\Domain\Exception\RateLimited;
@@ -26,22 +27,25 @@ use ReflectionClass;
  * The data provider reflects directly over {@see ProblemDetailsFactory::MARKER_STATUS_MAP}
  * and `MARKER_DEFAULT_TYPE_MAP` so the test cannot drift from the production constants:
  * adding or removing a marker without matching code-side updates makes this contract
- * fail. The seven canonical markers are the marker-interface set:
+ * fail. The eight canonical markers are the marker-interface set:
  * {@see NotFound}, {@see Conflict}, {@see Forbidden}, {@see Unauthenticated},
- * {@see InvariantViolation}, {@see InvalidInput}, {@see RateLimited}.
+ * {@see InvariantViolation}, {@see InvalidInput}, {@see RateLimited},
+ * {@see InvalidSearchCriteria}.
  *
  * Co-located alongside {@see ProblemDetailsFactoryTest} under
  * `api/tests/Unit/Shared/Application/Problem/`.
  *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[CoversClass(ProblemDetailsFactory::class)]
 final class MarkerStatusMapContractTest extends TestCase
 {
     /**
-     * The seven canonical marker interfaces. Pinned here as a STATIC list so any addition to
+     * The eight canonical marker interfaces. Pinned here as a STATIC list so any addition to
      * `MARKER_STATUS_MAP` without updating this canonical-set assertion fails the
-     * `testMarkerStatusMapContainsExactlyTheCanonicalSeven` guard. The data-provider-driven
+     * `testMarkerStatusMapContainsExactlyTheCanonicalEight` guard. The data-provider-driven
      * row tests still iterate from the constants directly — the canonical list is the
      * "should equal X" half of the equality, not the source of the rows.
      */
@@ -53,6 +57,7 @@ final class MarkerStatusMapContractTest extends TestCase
         InvariantViolation::class,
         InvalidInput::class,
         RateLimited::class,
+        InvalidSearchCriteria::class,
     ];
 
     private const string CID = '0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c';
@@ -136,19 +141,19 @@ final class MarkerStatusMapContractTest extends TestCase
     }
 
     /**
-     * Pins that the factory's mapping constant array contains exactly those seven marker classes.
+     * Pins that the factory's mapping constant array contains exactly those eight marker classes.
      * Set-equality (not order-sensitive) so a marker addition that drifts the constant from
      * the canonical list fails fast — without forcing a particular declaration order
      * (`testMarkerOrderingFollowsImplementsClause` already pins the ordering separately).
      */
-    public function testMarkerStatusMapContainsExactlyTheCanonicalSeven(): void
+    public function testMarkerStatusMapContainsExactlyTheCanonicalEight(): void
     {
         $statusMap = self::reflectConstant('MARKER_STATUS_MAP');
 
         $this->assertCount(
-            7,
+            8,
             $statusMap,
-            'MARKER_STATUS_MAP must contain exactly the seven canonical markers.',
+            'MARKER_STATUS_MAP must contain exactly the eight canonical markers.',
         );
 
         $actualKeys = \array_keys($statusMap);
@@ -189,7 +194,7 @@ final class MarkerStatusMapContractTest extends TestCase
 
     /**
      * Builds a minimal anonymous {@see DomainException} that implements the requested marker.
-     * Each branch mirrors the seven canonical markers; the `match` is exhaustive and falls through
+     * Each branch mirrors the eight canonical markers; the `match` is exhaustive and falls through
      * to a {@see LogicException} so a future marker addition without a corresponding branch
      * here surfaces immediately rather than silently skipping a row.
      */
@@ -209,6 +214,9 @@ final class MarkerStatusMapContractTest extends TestCase
             InvalidInput::class => new class ('', 'x') extends DomainException implements InvalidInput {
             },
             RateLimited::class => new class ('', 'x') extends DomainException implements RateLimited {
+            },
+            // phpcs:ignore Generic.Files.LineLength.TooLong
+            InvalidSearchCriteria::class => new class ('', 'x') extends DomainException implements InvalidSearchCriteria {
             },
             default => throw new LogicException(\sprintf(
                 'No anonymous-class branch for marker %s — add it when extending the marker set.',

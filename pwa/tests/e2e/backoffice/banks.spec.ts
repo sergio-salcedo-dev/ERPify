@@ -690,23 +690,6 @@ test.describe("BackOffice - Banks CRUD", () => {
         `banks-cards__item-${SAMPLE_BANK_D.id}`,
       );
     });
-
-    test("notice copy when meta.nextCursor is present calls out the page-only scope", async ({
-      page,
-    }) => {
-      await mockBanksApi(page, {
-        list: "happy",
-        list_banks: allBanks,
-        list_next_cursor: "next-page-cursor",
-      });
-      await page.goto("/backoffice/banks");
-
-      await expect(
-        page.getByText(
-          "More banks available. Filters, sort, and pagination apply only to this page.",
-        ),
-      ).toBeVisible();
-    });
   });
 
   test.describe("pagination", () => {
@@ -855,21 +838,6 @@ test.describe("BackOffice - Banks CRUD", () => {
       await expect(page.getByTestId("banks-pagination__page-size")).toBeVisible();
       await expect(page.getByTestId("banks-pagination__prev")).toBeHidden();
       await expect(page.getByTestId("banks-pagination__next")).toBeHidden();
-    });
-
-    test("nextCursor notice text mentions pagination too", async ({ page }) => {
-      await mockBanksApi(page, {
-        list: "happy",
-        list_banks: makeBanks(60),
-        list_next_cursor: "next-page-cursor",
-      });
-      await page.goto("/backoffice/banks");
-
-      await expect(
-        page.getByText(
-          "More banks available. Filters, sort, and pagination apply only to this page.",
-        ),
-      ).toBeVisible();
     });
   });
 

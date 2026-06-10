@@ -4,22 +4,30 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\Bank\Infrastructure\Persistence\Doctrine;
 
+use Doctrine\Persistence\ManagerRegistry;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Backoffice\Bank\Domain\Repository\BankSearchRepository;
 use Erpify\Backoffice\Bank\Domain\Repository\BankStoredObjectQueries;
-use Erpify\Backoffice\Bank\Domain\Search\BankSearchCriteria;
+use Erpify\Shared\Domain\Search\FilterOperator;
 use Erpify\Shared\Domain\Search\PaginatedResult;
 use Erpify\Shared\Domain\Search\SearchCriteria;
-use Erpify\Shared\Domain\ValueObject\NormalizedText;
 use Erpify\Shared\Infrastructure\Persistence\Doctrine\AbstractDoctrineSearchRepository;
 use Erpify\Shared\Infrastructure\Persistence\Doctrine\QueryBuilderWithOptions;
-use InvalidArgumentException;
+use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\AsciiUpperTextFieldNormalizer;
+use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\FieldMapping;
+use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\FilterApplier;
+use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\NormalizedTextFieldNormalizer;
+use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\SearchFieldMap;
+use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\SortFieldMap;
+use Erpify\Shared\Infrastructure\Persistence\PaginatorCursorFactory;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
 /**
  * @extends AbstractDoctrineSearchRepository<Bank>
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[AsAlias(BankRepository::class)]
 #[AsAlias(BankSearchRepository::class)]
@@ -29,6 +37,16 @@ final class DoctrineBankRepository extends AbstractDoctrineSearchRepository impl
     BankSearchRepository,
     BankStoredObjectQueries
 {
+    public function __construct(
+        ManagerRegistry $registry,
+        PaginatorCursorFactory $paginatorCursorFactory,
+        FilterApplier $filterApplier,
+        private readonly NormalizedTextFieldNormalizer $normalizedText,
+        private readonly AsciiUpperTextFieldNormalizer $asciiUpperText,
+    ) {
+        parent::__construct($registry, $paginatorCursorFactory, $filterApplier);
+    }
+
     #[Override]
     public function save(Bank $bank): void
     {
@@ -56,38 +74,59 @@ final class DoctrineBankRepository extends AbstractDoctrineSearchRepository impl
     #[Override]
     public function getSearchQueryBuilder(SearchCriteria $criteria): QueryBuilderWithOptions
     {
-        if (!$criteria instanceof BankSearchCriteria) {
-            throw new InvalidArgumentException(
-                'Invalid criteria type. Expected BankSearchCriteria, got ' . $criteria::class . ' instead.',
-            );
-        }
-
+        // No ad hoc filtering here: all filtering arrives as criteria->filters and is
+        // applied by the shared seam against searchFieldMap().
         $queryBuilderWithOptions = $this->createQueryBuilder('b');
-
-        $this->addWhereIdsIn($queryBuilderWithOptions, alias: 'b', ids: $criteria->ids ?? []);
-
-        $normalizedNames = \array_map(
-            NormalizedText::normalize(...),
-            $criteria->names ?? [],
-        );
-
-        $this->addWhereIn(
-            $queryBuilderWithOptions,
-            alias: 'b',
-            field: 'nameNormalized',
-            values: $normalizedNames,
-        );
 
         $this->addOrderByFromQueryParams(
             $queryBuilderWithOptions,
             alias: 'b',
-            orderByField: null,
-            direction: null,
+            orderByField: $criteria->sort,
+            direction: $criteria->direction,
         );
 
         $this->addLimit($queryBuilderWithOptions, $criteria->limit);
 
         return $queryBuilderWithOptions;
+    }
+
+    #[Override]
+    protected function searchFieldMap(): SearchFieldMap
+    {
+        $rangeOperators = [FilterOperator::Gt, FilterOperator::Gte, FilterOperator::Lt, FilterOperator::Lte];
+
+        return new SearchFieldMap([
+            'name' => new FieldMapping('b.nameNormalized', $this->normalizedText),
+            // shortName is stored upper-case ASCII, so its normalizer upper-cases the search
+            // value (the lower-casing name normalizer would never match). Default operators:
+            // eq/in/contains.
+            'shortName' => new FieldMapping('b.shortName', $this->asciiUpperText),
+            // No contains on id: a LIKE over a UUID column breaks at the SQL level.
+            'id' => new FieldMapping(
+                'b.id',
+                operators: [FilterOperator::Eq, FilterOperator::In],
+                requiresUuidValues: true,
+            ),
+            // Timestamp columns: range-only. The public names are the serialized
+            // `timestamped` group keys (createdAt/updatedAt), never the DQL paths.
+            'createdAt' => new FieldMapping('b.createdAt', operators: $rangeOperators, requiresDateTimeValues: true),
+            'updatedAt' => new FieldMapping('b.updatedAt', operators: $rangeOperators, requiresDateTimeValues: true),
+        ]);
+    }
+
+    #[Override]
+    protected function sortFieldMap(): SortFieldMap
+    {
+        // The 4 fields the list can order by, each backed by a btree index (NFR4): name sorts by
+        // the accent-folded lower-cased nameNormalized (UNIQUE index, case/diacritic-insensitive,
+        // matching the list's expected alphabetical order); shortName by its UNIQUE column;
+        // createdAt/updatedAt by their idx_bank_* indexes. `id` is deliberately not sortable.
+        return new SortFieldMap([
+            'name' => 'b.nameNormalized',
+            'shortName' => 'b.shortName',
+            'createdAt' => 'b.createdAt',
+            'updatedAt' => 'b.updatedAt',
+        ]);
     }
 
     #[Override]

@@ -30,10 +30,11 @@ use SplFileInfo;
  *
  * Curated grep — narrowest possible scope, mirrors the pattern in
  * {@see BannedDoctrineApisTest}. The walk targets only the explicitly-listed
- * files / directories so the legacy search-path class
- * `AbstractSearchController` — which is NOT part of the Problem Details error
- * contract — keeps its existing Symfony Serializer dependency without tripping
- * this gate. (`SearchExceptionListener` and its `JsonApiErrorBuilder` envelope
+ * files / directories so the success-payload resource responders under
+ * `Shared/Infrastructure/Http/Responder/` (e.g. `ResourceResponder`,
+ * `SearchResponder`) — which are NOT part of the Problem Details error
+ * contract — keep their Symfony Serializer dependency without tripping this
+ * gate. (`SearchExceptionListener` and its `JsonApiErrorBuilder` envelope
  * were retired once {@see ProblemDetailsFactory} subsumed their mappings
  * natively.)
  *
@@ -176,9 +177,10 @@ final class NativeJsonEncodeContractTest extends TestCase
     /**
      * Yields the explicit Problem Details error-contract files / directory: the entire
      * `Shared/Application/Problem/` subtree (factory + value objects + denylist) plus
-     * the responder and listener that emit the wire body. The legacy search-path class
-     * `AbstractSearchController` is intentionally excluded — it predates the error
-     * contract and lives in `Shared/Infrastructure/Http/` but is not part of the
+     * the responder and listener that emit the wire body. The success-payload resource
+     * responders under `Shared/Infrastructure/Http/Responder/` (e.g. `ResourceResponder`,
+     * `SearchResponder`) are intentionally excluded — they serialize success bodies, not
+     * error bodies, so they live in `Shared/Infrastructure/Http/` but are not part of the
      * listener / factory / responder triple. (`SearchExceptionListener` and its
      * `JsonApiErrorBuilder` envelope were retired once the factory subsumed their
      * mappings natively.).

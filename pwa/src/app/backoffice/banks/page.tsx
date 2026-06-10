@@ -41,15 +41,15 @@ import { BULK_DELETE_TESTID, BanksBulkBar } from "./_components/BanksBulkBar";
 import {
   DEFAULT_SORT,
   EMPTY_FILTER,
-  applyFilters,
-  applySort,
+  hasActiveFilter,
+  isDefaultSort,
   type BanksFilter,
   type BanksSort,
 } from "./_lib/banksFilterSort";
-import { BANKS_PAGE_SIZE_DEFAULT, type BanksPageSize, paginate } from "./_lib/paginate";
+import { toBankFilters, toBankSort } from "./_lib/banksSearchCriteria";
+import { BANKS_PAGE_SIZE_DEFAULT, type BanksPageSize } from "./_lib/paginate";
 import { bankRoutes } from "./_lib/bankRoutes";
 import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
-import { countRecentlyCreated } from "./_lib/bankRecency";
 import { bankTopics, useBankRealtime } from "@/context/backoffice/bank/infrastructure/bankRealtime";
 import { useStoredPreference } from "@/lib/useStoredPreference";
 import { KeyboardKey } from "@/context/shared/domain/types/keyboard";
@@ -93,7 +93,9 @@ function isNotFoundError(reason: unknown): boolean {
 export default function BanksListPage() {
   const [state, setState] = useState<State>(ViewStatus.LOADING);
   const [banks, setBanks] = useState<Bank[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | undefined>(undefined);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMorePages, setHasMorePages] = useState(false);
+  const [totalCount, setTotalCount] = useState<number | null>(null);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
   const [filter, setFilter] = useState<BanksFilter>(EMPTY_FILTER);
   const [sort, setSort] = useState<BanksSort>(DEFAULT_SORT);
@@ -123,6 +125,14 @@ export default function BanksListPage() {
   }, []);
 
   const reloadingRef = useRef(false);
+  // The opaque cursor from the last response, replayed verbatim to navigate
+  // (only sent when page > 1; page 1 needs none). A change in filter/sort/
+  // pageSize resets page to 1, so the stale cursor is naturally dropped.
+  const cursorRef = useRef<string | undefined>(undefined);
+  // Monotonic request token: a slow in-flight response whose token is no longer
+  // current is discarded, so a debounced filter + a page click never let an
+  // older result overwrite a newer one (the debounce↔pagination race).
+  const seqRef = useRef(0);
 
   // Tombstones: ids this client has seen deleted (own deletes, bulk successes,
   // or Mercure `deleted` events) since the last successful load. Consulted by
@@ -138,78 +148,82 @@ export default function BanksListPage() {
   // The bulk bar stays mounted during the probe window — also guards re-entry.
   const bulkDeleteInFlightRef = useRef(false);
 
-  const loadBanks = useCallback(async (options?: { silent?: boolean }) => {
-    // A silent reconcile (e.g. after a realtime reconnect) refreshes in the
-    // background: no LOADING skeleton flash, and a transient failure leaves the
-    // current list in place instead of swapping in an error screen.
-    if (!options?.silent) {
-      setState(ViewStatus.LOADING);
-      setProblem(null);
-    }
-    reloadingRef.current = true;
-    try {
-      const useCase = container.get<SearchBanks>("BackOfficeSearchBanks");
-      const result = await useCase.run();
-      if (!mountedRef.current) return;
-      if (!bulkDeleteInFlightRef.current) {
-        deletedIdsRef.current = new Set();
+  const loadBanks = useCallback(
+    async (options?: { silent?: boolean }) => {
+      // A silent reconcile (e.g. a realtime event or reconnect) refreshes in the
+      // background: no LOADING skeleton flash, and a transient failure leaves the
+      // current page in place instead of swapping in an error screen.
+      const seq = ++seqRef.current;
+      if (!options?.silent) {
+        setState(ViewStatus.LOADING);
+        setProblem(null);
       }
-      setBanks(result.banks);
-      setNextCursor(result.nextCursor);
-      // A reload recalculates the selection: ids that no longer exist on the
-      // server would otherwise survive as phantoms inflating the bulk count.
-      setSelectedIds((prev) => {
-        if (prev.size === 0) return prev;
-        const live = new Set(result.banks.map((bank) => bank.id));
-        const next = new Set([...prev].filter((id) => live.has(id)));
-        return next.size === prev.size ? prev : next;
-      });
-      setState(ViewStatus.READY);
-    } catch (err) {
-      if (!mountedRef.current || options?.silent) return;
-      const fallbackDetail = err instanceof Error ? err.message : "Unknown error";
-      const nextProblem = err instanceof HttpError ? err.problem : genericProblem(fallbackDetail);
-      setProblem(nextProblem);
-      setState(ViewStatus.ERROR);
-    } finally {
-      reloadingRef.current = false;
-    }
-  }, []);
+      reloadingRef.current = true;
+      try {
+        const useCase = container.get<SearchBanks>("BackOfficeSearchBanks");
+        const result = await useCase.run({
+          filters: toBankFilters(filter),
+          sort: toBankSort(sort),
+          page,
+          cursor: page === 1 ? undefined : cursorRef.current,
+          limit: pageSize,
+        });
+        // A newer request superseded this one (e.g. a fast page click after a
+        // debounced filter) — drop the stale result.
+        if (!mountedRef.current || seq !== seqRef.current) return;
+        if (!bulkDeleteInFlightRef.current) {
+          deletedIdsRef.current = new Set();
+        }
+        cursorRef.current = result.cursor;
+        setBanks(result.banks);
+        setCurrentPage(result.currentPage);
+        setHasMorePages(result.hasMorePages);
+        setTotalCount(result.totalCount);
+        // Selection is scoped to the visible page: ids absent from the new
+        // result (a different page, or a row deleted server-side) drop out, so
+        // the bulk count never counts phantoms or rows the user cannot see.
+        setSelectedIds((prev) => {
+          if (prev.size === 0) return prev;
+          const live = new Set(result.banks.map((bank) => bank.id));
+          const next = new Set([...prev].filter((id) => live.has(id)));
+          return next.size === prev.size ? prev : next;
+        });
+        setState(ViewStatus.READY);
+      } catch (err) {
+        if (!mountedRef.current || options?.silent || seq !== seqRef.current) return;
+        const fallbackDetail = err instanceof Error ? err.message : "Unknown error";
+        const nextProblem = err instanceof HttpError ? err.problem : genericProblem(fallbackDetail);
+        setProblem(nextProblem);
+        setState(ViewStatus.ERROR);
+      } finally {
+        if (seq === seqRef.current) reloadingRef.current = false;
+      }
+    },
+    [filter, sort, page, pageSize],
+  );
 
   useEffect(() => {
-    // loadBanks resets state to LOADING before its first await; that initial
-    // setState is intentional (it also drives the Retry path) and runs through
-    // a stable callback, so the cascading-render warning does not apply here.
+    // The query is server-driven: re-run whenever filter/sort/page/pageSize
+    // change (loadBanks closes over them). The LOADING reset before the first
+    // await is intentional (it also drives the Retry path) through this stable
+    // callback, so the cascading-render warning does not apply here.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadBanks();
   }, [loadBanks]);
 
-  const visibleBanks = useMemo(
-    () => applySort(applyFilters(banks, filter), sort),
-    [banks, filter, sort],
-  );
-
-  // `state` tracks only the load lifecycle (loading / ready / error). Whether a
-  // settled list reads as first-run empty or ready is purely a function of how
-  // many banks remain, so derive it instead of caching a flag that goes stale
-  // when a delete empties the list — otherwise the now-empty list keeps its
-  // stale "ready" state and falls through to the filtered-to-zero panel even
-  // with no active filter.
+  // `state` tracks only the load lifecycle (loading / ready / error). An empty
+  // page with no active filter reads as first-run empty ("No banks yet"); an
+  // empty page WITH a filter falls through to the filtered-to-zero panel. Derive
+  // it so a delete that empties the page does not strand a stale "ready" state.
   const boundaryState = useMemo<State>(() => {
     if (state === ViewStatus.LOADING || state === ViewStatus.ERROR) return state;
-    return banks.length === 0 ? ViewStatus.EMPTY : ViewStatus.READY;
-  }, [state, banks.length]);
+    return banks.length === 0 && !hasActiveFilter(filter) ? ViewStatus.EMPTY : ViewStatus.READY;
+  }, [state, banks.length, filter]);
 
-  const recentCount = useMemo(
-    () =>
-      countRecentlyCreated(
-        banks.map((bank) => bank.createdAt),
-        dateTimeProvider,
-      ),
-    [banks],
-  );
-
-  // Reset page when filters, sort or pageSize change (adjusting state during render)
+  // Reset to page 1 when the query (filters/sort/pageSize) changes, adjusting
+  // state during render. Page 1 sends no cursor, so the stale cursor from the
+  // previous query is discarded by construction (the cursor is only replayed
+  // for page > 1).
   const [prevFilter, setPrevFilter] = useState(filter);
   const [prevSort, setPrevSort] = useState(sort);
   const [prevPageSize, setPrevPageSize] = useState(pageSize);
@@ -220,10 +234,18 @@ export default function BanksListPage() {
     setPage(1);
   }
 
-  const paged = useMemo(
-    () => paginate(visibleBanks, page, pageSize),
-    [visibleBanks, page, pageSize],
-  );
+  // Stepping off the end of the list — the last row on a page beyond the first
+  // was deleted (optimistically or via a reconcile) — would otherwise strand the
+  // user on an empty page rendered as the first-run "No banks yet" state, with no
+  // Prev control to escape. Fall back one page so they land on real rows (or, at
+  // page 1, the genuine empty state). Page numbers only ever decrease here, so it
+  // settles in at most a few hops; loadBanks (page in deps) refetches each step.
+  useEffect(() => {
+    if (state === ViewStatus.READY && banks.length === 0 && page > 1) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPage((current) => Math.max(1, current - 1));
+    }
+  }, [state, banks.length, page]);
 
   const resetFilters = (): void => {
     setFilter(EMPTY_FILTER);
@@ -243,8 +265,8 @@ export default function BanksListPage() {
     const deleted = banks.find((bank) => bank.id === id);
     toastNotifier.success("Bank deleted", deleted ? { description: deleted.name } : undefined);
     setDeleteError(null);
-    const index = paged.rows.findIndex((bank) => bank.id === id);
-    const neighbor = index === -1 ? undefined : (paged.rows[index + 1] ?? paged.rows[index - 1]);
+    const index = banks.findIndex((bank) => bank.id === id);
+    const neighbor = index === -1 ? undefined : (banks[index + 1] ?? banks[index - 1]);
     pendingFocusIdRef.current = neighbor && neighbor.id !== id ? neighbor.id : null;
     setBanks((prev) => prev.filter((bank) => bank.id !== id));
     setSelectedIds((prev) => {
@@ -279,8 +301,8 @@ export default function BanksListPage() {
     if (!current) return;
     if (current.scope === "single") {
       // The stale row disappears with the refresh; focus its neighbor.
-      const index = paged.rows.findIndex((bank) => bank.id === current.bankId);
-      const neighbor = index === -1 ? undefined : (paged.rows[index + 1] ?? paged.rows[index - 1]);
+      const index = banks.findIndex((bank) => bank.id === current.bankId);
+      const neighbor = index === -1 ? undefined : (banks[index + 1] ?? banks[index - 1]);
       pendingFocusIdRef.current = neighbor && neighbor.id !== current.bankId ? neighbor.id : null;
     } else {
       pendingBulkFocusRef.current = true;
@@ -515,54 +537,41 @@ export default function BanksListPage() {
     setSelectedIds((prev) => new Set([...prev, ...confirmed]));
   };
 
-  // A realtime delta arriving while the list still shows a failed-load error
-  // means that error is likely stale. Reconcile with a full silent reload rather
-  // than trusting the delta: Mercure has no replay, so the events seen so far are
-  // only a partial slice — promoting them to READY would render an incomplete list.
-  // A reload already in flight wins, so a burst of deltas coalesces into a single
-  // reconcile instead of launching one overlapping silent reload per event.
-  const reconcileAfterErroredLoad = (): void => {
-    if (state === ViewStatus.ERROR && !reloadingRef.current) {
-      loadBanks({ silent: true });
-    }
+  // A coalesced silent reconcile: collapse a burst of deltas into one reload
+  // (skip while one is already in flight) and yield to an in-flight bulk delete,
+  // which owns the page in memory during its optimistic re-probe window.
+  const silentReload = (): void => {
+    if (reloadingRef.current || bulkDeleteInFlightRef.current) return;
+    loadBanks({ silent: true });
   };
 
-  // Real-time sync of changes made by OTHER clients (Mercure). These reconcile
-  // state silently (no toast): the acting user already got their own feedback,
-  // and passive viewers shouldn't be spammed. Merges are id-keyed so duplicate
-  // at-least-once deliveries are no-ops.
+  // Real-time sync (Mercure). Under server-driven search the client cannot tell
+  // whether an incoming bank belongs on the current page (the filter/sort/keyset
+  // all live on the server), so every event reconciles by silently refetching the
+  // current page — which also heals a stale errored view. Silent: the acting user
+  // already has their own feedback and passive viewers are not spammed.
   useBankRealtime([bankTopics.collection], {
-    onCreated: (incoming) => {
-      // A late at-least-once redelivery of `created` after a delete must not
-      // resurrect the row — the tombstone outlives the event until the next
-      // successful load reconciles with the server.
-      if (!deletedIdsRef.current.has(incoming.id)) {
-        setBanks((prev) => (prev.some((b) => b.id === incoming.id) ? prev : [incoming, ...prev]));
-      }
-      reconcileAfterErroredLoad();
+    onCreated: () => {
+      silentReload();
     },
-    onUpdated: (incoming) => {
-      setBanks((prev) => prev.map((b) => (b.id === incoming.id ? incoming : b)));
-      reconcileAfterErroredLoad();
+    onUpdated: () => {
+      silentReload();
     },
     onDeleted: (deletedId) => {
+      // Tombstone + selection pruning cover the window between an optimistic
+      // local/bulk delete and the reconciling refetch (the refetch is suppressed
+      // while a bulk delete is in flight, so these must stand on their own).
       deletedIdsRef.current.add(deletedId);
-      setBanks((prev) => prev.filter((b) => b.id !== deletedId));
-      // Mirror the local-delete pruning so a remote delete of a selected row
-      // doesn't leave a phantom id inflating the bulk-selection count.
       setSelectedIds((prev) => {
         if (!prev.has(deletedId)) return prev;
         const next = new Set(prev);
         next.delete(deletedId);
         return next;
       });
-      reconcileAfterErroredLoad();
+      silentReload();
     },
-    // On stream re-open after a drop, silently reconcile: events published during
-    // the gap (Mercure has no replay) are otherwise lost and the list diverges.
-    // Fire-and-forget: loadBanks handles its own errors.
     onReconnect: () => {
-      loadBanks({ silent: true });
+      silentReload();
     },
   });
 
@@ -585,6 +594,16 @@ export default function BanksListPage() {
         Refresh list
       </Button>
     ) : undefined;
+
+  // Keep the filters toolbar mounted whenever the user is actively filtering or
+  // sorting, not only when READY. Each filter/sort change refetches and flips
+  // the boundary to LOADING; gating purely on READY would unmount the toolbar
+  // mid-interaction, collapsing the panel and stealing focus from the search
+  // box on every keystroke. While filtering/sorting the skeleton stays scoped
+  // to the list region (the AsyncBoundary below); only the pristine first load
+  // and the no-filter empty state render without the toolbar.
+  const showFiltersToolbar =
+    boundaryState === ViewStatus.READY || hasActiveFilter(filter) || !isDefaultSort(sort);
 
   return (
     <div
@@ -624,18 +643,12 @@ export default function BanksListPage() {
           <p className="text-muted-foreground mt-1 text-sm" data-testid="banks-list__subtitle">
             Manage the banks available in the back office.
           </p>
-          {boundaryState === ViewStatus.READY ? (
+          {boundaryState === ViewStatus.READY && totalCount !== null ? (
             <p
               className="banks-list__total text-muted-foreground mt-1 text-xs"
               data-testid="banks-list__total"
             >
-              Total banks: <span className="text-foreground font-medium">{banks.length}</span>
-              {recentCount > 0 ? (
-                <>
-                  {" · "}
-                  <span className="text-foreground font-medium">{recentCount}</span> added this week
-                </>
-              ) : null}
+              Total banks: <span className="text-foreground font-medium">{totalCount}</span>
             </p>
           ) : null}
         </div>
@@ -652,7 +665,7 @@ export default function BanksListPage() {
         </Link>
       </header>
 
-      {boundaryState === ViewStatus.READY ? (
+      {showFiltersToolbar ? (
         <BanksFilters
           filter={filter}
           onFilterChange={setFilter}
@@ -660,7 +673,7 @@ export default function BanksListPage() {
           onSortChange={setSort}
           onReset={resetFilters}
           leading={
-            visibleBanks.length > 0 ? (
+            banks.length > 0 ? (
               <div className="banks-list__display-toggles flex items-center gap-2">
                 <BanksViewToggle view={view} onViewChange={setView} />
                 <DensityToggle
@@ -718,7 +731,7 @@ export default function BanksListPage() {
         }
       >
         {() =>
-          visibleBanks.length === 0 ? (
+          banks.length === 0 ? (
             <BanksEmptyFiltered onReset={resetFilters} />
           ) : (
             <>
@@ -727,7 +740,7 @@ export default function BanksListPage() {
                   {/* Below md the table becomes stacked card-rows — zero
                       horizontal scroll on mobile; same data, same paging. */}
                   <BanksStackedList
-                    banks={paged.rows}
+                    banks={banks}
                     onBankDeleted={handleBankDeleted}
                     onBankDeleteFailed={handleBankDeleteFailed}
                     selectedIds={selectedIds}
@@ -739,7 +752,7 @@ export default function BanksListPage() {
                   />
                   <div className="hidden md:block">
                     <BanksTable
-                      banks={paged.rows}
+                      banks={banks}
                       sort={sort}
                       onSortChange={setSort}
                       onBankDeleted={handleBankDeleted}
@@ -752,7 +765,7 @@ export default function BanksListPage() {
                 </>
               ) : (
                 <BanksCards
-                  banks={paged.rows}
+                  banks={banks}
                   onBankDeleted={handleBankDeleted}
                   onBankDeleteFailed={handleBankDeleteFailed}
                   selectedIds={selectedIds}
@@ -761,18 +774,13 @@ export default function BanksListPage() {
                 />
               )}
               <BanksPagination
-                page={paged.page}
+                page={currentPage}
                 pageSize={pageSize}
-                hasPrev={paged.hasPrev}
-                hasNext={paged.hasNext}
+                hasPrev={currentPage > 1}
+                hasNext={hasMorePages}
                 onPageChange={setPage}
                 onPageSizeChange={setPageSize}
               />
-              {nextCursor ? (
-                <p className="text-muted-foreground text-xs" data-testid="banks-list__more-notice">
-                  More banks available. Filters, sort, and pagination apply only to this page.
-                </p>
-              ) : null}
             </>
           )
         }
