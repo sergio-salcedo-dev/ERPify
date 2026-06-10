@@ -69,6 +69,11 @@ These gate the later phases — answers change the implementation:
    only worth it if app-level secrets must travel in the repo.
 4. **Versioning scheme** — semver git tags (`vX.Y.Z`) for prod releases +
    commit-SHA tags for every build is assumed below.
+5. **Tenancy model** — ERPify is a multi-company SaaS, but the schema has **no
+   tenant discriminator yet** (no `company_id` anywhere). Decide: single DB +
+   shared schema with a `company_id` column (assumed below — lowest
+   operational cost on a Compose-only stack), schema-per-tenant, or
+   DB-per-tenant. The answer gates Phase H and shapes every future index.
 
 ---
 
@@ -204,12 +209,57 @@ from the same image built once.
 - **Ops:** backup rotation + a tested restore drill, uptime/health monitoring,
   log shipping, and a deploy/rollback runbook.
 
+## Phase H — Multi-tenant foundation (`company_id`)
+
+**Goal:** every tenant-owned row is scoped to a company, enforced at the query
+level, so two customers can never see each other's data.
+
+> **Scope note:** unlike Phases A–G this is an **application/data phase** — it
+> deliberately touches `api/src` and ships migrations, so the carried-forward
+> "don't touch application code" constraint (which binds the *infra* phases)
+> does not apply here. It still follows the expand/contract migration policy
+> from Phase C.
+
+- **Tenant aggregate** — a `Company` aggregate in its own bounded context
+  (UUID v7 PK like every entity), plus the membership model
+  (user ↔ company) when auth lands.
+- **Schema** — `company_id UUID NOT NULL` FK on every tenant-owned table,
+  added expand/contract: (1) nullable column + backfill, (2) `NOT NULL` +
+  FK constraint one release later. Shared/global tables (e.g. `domain_event`
+  audit) carry it too so audit queries are tenant-scopable.
+- **Indexes** — composite indexes **led by the tenant**:
+  `(company_id, created_at, id)` and tenant-led variants of every column
+  exposed in a `SearchFieldMap`/`SortFieldMap`. A bare single-column index on
+  a tenant-owned table is a smell once `company_id` exists (every query is
+  tenant-scoped, so the planner needs the composite). Verify with
+  `EXPLAIN ANALYZE` per `docs/rules/database.md`.
+- **Enforcement** — tenant scoping applied at the query level (Doctrine
+  filter or a mandatory scope on the shared search/repository seam), never
+  left to per-repository discipline; voters only authorize the individual
+  resource. Collections are pre-filtered in SQL (OWASP API1/BOLA).
+- **Pagination interplay** — keyset cursors must be bound to the tenant via
+  the signed cursor fingerprint so a cursor minted under one company is
+  rejected under another (see the keyset-pagination ADR in
+  `_bmad-output/planning-artifacts/architecture-keyset-pagination.md`).
+
+**Commit slices:** `feat(shared): company aggregate + tenant column expand` ·
+`feat(shared): tenant-led composite indexes` · `feat(shared): query-level
+tenant scoping` · `feat(shared): contract migration (NOT NULL + FK)`.
+
+**Acceptance:** an integration test proves a tenant-scoped query cannot
+return another company's rows even when a repository forgets an explicit
+filter; every search-exposed column has a tenant-led composite index.
+
 ---
 
 ## Suggested sequencing
 
 A → B → C → D → E unlock the core "ship safely, never go down, auto-recover"
 loop. F (staging split) can run in parallel after B. G is opportunistic.
+H (multi-tenant foundation) is independent of the delivery-pipeline phases
+and is a **prerequisite for onboarding a second customer**; sequence it
+against product needs, and land it before (or together with) the
+keyset-pagination ADR's tenant-led indexes so the indexes are built once.
 
 Keep each phase one short-lived branch; one cohesive concern per commit; update
 [`PRODUCTION_SECURITY_CHECKLIST.md`](../PRODUCTION_SECURITY_CHECKLIST.md) and
