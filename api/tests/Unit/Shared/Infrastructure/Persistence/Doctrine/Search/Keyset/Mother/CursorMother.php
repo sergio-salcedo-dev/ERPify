@@ -1,0 +1,41 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Erpify\Tests\Unit\Shared\Infrastructure\Persistence\Doctrine\Search\Keyset\Mother;
+
+use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\Keyset\Cursor;
+use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\Keyset\CursorCodec;
+
+/**
+ * Builds {@see Cursor} value objects with sensible defaults (static methods,
+ * following the {@see \Erpify\Tests\Unit\Shared\Domain\Search\Mother\FilterMother}
+ * precedent).
+ */
+final class CursorMother
+{
+    /** A valid xxh128 shape (32 hex chars). */
+    public const string DEFAULT_FINGERPRINT = '0123456789abcdef0123456789abcdef';
+
+    public const string DEFAULT_ID = '0a8c1f5e-7b2d-4c3a-9e6f-1d2c3b4a5e6f';
+
+    /**
+     * @param array<string, mixed>|null $values
+     */
+    public static function create(
+        int $v = CursorCodec::CURRENT_VERSION,
+        string $dir = Cursor::DIRECTION_AFTER,
+        ?array $values = null,
+        string $fp = self::DEFAULT_FINGERPRINT,
+    ): Cursor {
+        return new Cursor($v, $dir, $values ?? self::defaultValues(), $fp);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public static function defaultValues(): array
+    {
+        return ['name' => 'BBVA', 'id' => self::DEFAULT_ID];
+    }
+}

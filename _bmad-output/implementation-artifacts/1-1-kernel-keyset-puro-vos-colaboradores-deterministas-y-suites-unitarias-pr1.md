@@ -1,6 +1,10 @@
+---
+baseline_commit: 12dfe91eb15d8d9487152ca0a35cc61a021d6a51
+---
+
 # Story 1.1: Kernel keyset puro — VOs, colaboradores deterministas y suites unitarias (PR1)
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -24,49 +28,61 @@ so that el flip posterior del contrato (PR3) se apoye exclusivamente en componen
 
 ## Tasks / Subtasks
 
-- [ ] Task 0: Preparar el entorno aislado (AC: #1)
-  - [ ] `make worktree.create BRANCH=feat/api-keyset-pagination` desde el checkout primario; `cd` al worktree y `make app.dev` (regla dura del repo: jamás trabajar en `main`)
-  - [ ] Verificar que el stack del worktree responde (`make docker.info`, `make php.unit c='--filter SearchCriteriaTest'` como smoke)
-- [ ] Task 1: Puerto de dominio puro (AC: #1)
-  - [ ] `api/src/Shared/Domain/Search/Page.php` — `final readonly`, `@template T`, propiedades: `items` (list<T>), `hasNext`, `hasPrev`, `count` (?int), `nextCursor`/`prevCursor` (?string). Los campos de cursor son **tokens de transporte opacos**: el dominio NO asume estructura, decodificabilidad ni validez más allá de la identidad de string (el dominio trata el cursor como un id). `Page` no es un DTO de transporte — el envelope wire lo construye el responder en PR3. Cero imports de framework (NFR5)
-  - [ ] `api/src/Shared/Domain/Search/Exception/InvalidCursor.php` — implementa el marker existente `Erpify\Shared\Domain\Exception\InvalidSearchCriteria`, `TYPE = 'invalid-cursor'`, named constructors por causa: `signature()`, `version()`, `payload()`, `fingerprint()` (la causa viaja en la excepción para logging/métricas; el mensaje wire es indistinguible entre causas)
-- [ ] Task 2: Recibos y trace sellado (AC: #4)
-  - [ ] `Keyset/AppliedFilters.php`, `Keyset/AppliedSort.php`, `Keyset/AppliedLimit.php` — recibos inmutables readonly de lo realmente aplicado
-  - [ ] `Keyset/QueryExecutionTrace.php` — compone los recibos + entity + slot de tenant; sellado (se construye una vez, inmutable); expone la representación canónica
-  - [ ] Pinear el slot de tenant como UNA constante en un único sitio con comentario `// why:` (Fase H del roadmap SaaS; cambiarla tras PR3 = bump de `v`) (NFR7)
-- [ ] Task 3: Canonicalizador y fingerprint (AC: #4)
-  - [ ] `Keyset/FingerprintCanonicalizer.php` — cadena canónica `tenant|entity|filters|sort|direction|limit` desde los recibos del trace; filtros ordenados por (field, operator, valor serializado), listas IN ordenadas; numéricos serializados como strings normalizados post-validación; datetimes UTC `Y-m-d\TH:i:sP` a precisión de columna; `fp = xxh128(canonical)` (hash rápido no criptográfico es correcto: la integridad la da el HMAC del conjunto)
-  - [ ] Canonicalización SINTÁCTICA por diseño — non-goal vinculante: prohibido cualquier intento de equivalencia semántica (`amount > 100 ≢ amount >= 101`)
-  - [ ] **Estabilidad append-only**: la canonicalización debe ser estable bajo extensión aditiva — un `FilterOperator` nuevo (o expansión multi-valor futura) define sus reglas de ordenación SIN modificar la semántica de orden canónico de los operadores existentes. Cambiar el orden de lo ya existente = cambio del contrato de serialización = bump de `v` (FR15 ampliado). Diseñar el sort canónico de modo que añadir operadores no recoloque entradas existentes (orden lexicográfico sobre tokens estables, no sobre posición de enum)
-  - [ ] Suite propia con ejemplos documentados de la cadena canónica
-- [ ] Task 4: Codec del cursor (AC: #2, #3)
-  - [ ] `Keyset/Cursor.php` — VO infra `{v, dir, values, fp}`; `v: 1` inicial
-  - [ ] `Keyset/CursorCodec.php` — encode: `base64url sin padding` del JSON + `.` + `substr(hash_hmac('sha256', body, secret), 0, 32)`; decode con validación en orden intrínseco-primero: firma (`hash_equals`) → versión → payload → fingerprint. Cap de longitud 512 ANTES de tocar HMAC. SIN zlib (a diferencia del `PaginatorCursorFactory` legacy — no copiar su compresión)
-  - [ ] El check de fingerprint es un **hook de integridad diferido**: el codec recibe el fp esperado como `string` por parámetro y compara — JAMÁS importa ni conoce `QueryExecutionTrace`. En PR1 no existe trace en runtime; el cableado trace→fp esperado es responsabilidad exclusiva del `DoctrineSearchEngine` (PR2). Acoplar el codec al trace aquí es implementación prematura que rompe la secuencia AR16
-  - [ ] Secret por constructor `string` (DI: `#[Autowire('%kernel.secret%')]`, mismo patrón que `PaginatorCursorFactory`); los tests pasan el secret directamente — sin kernel
-  - [ ] `dir` se compara contra la dirección esperada como integrity binding (discrepancia → `InvalidCursor`); JAMÁS se usa para decidir navegación (AR21)
-- [ ] Task 5: Columnas, posición y predicado (AC: #2, #5)
-  - [ ] `Keyset/OrderByColumns.php` — VO columnas+dirección; tie-break `id` siempre presente como última clave
-  - [ ] `Keyset/CursorPositionExtractor.php` — extrae los valores frontera de una fila a precisión de columna (`TIMESTAMP(0)` ⇒ truncar a segundos; el `extractFields` legacy emite microsegundos: ese desajuste de frontera es exactamente lo que esta pieza corrige). Sin `PropertyAccess::createPropertyAccessor()` por llamada (anti-ejemplo de pureza citado por el ADR)
-  - [ ] `Keyset/KeysetPredicateBuilder.php` — cadena `col > :v OR (col = :v AND id > :i)` extendida a N claves (DQL no soporta tuplas), parámetros bindeados, pre-compilación; recibe configuración explícita por policy
-  - [ ] **Paréntesis explícitos obligatorios por nivel de clave** — el builder emite agrupación explícita `(col > :v) OR (col = :v AND (…))` en cada nivel; prohibido el flattening de operadores confiando en precedencia implícita OR/AND (la composición dinámica en DQL es ambigua sin agrupación). Los tests assertan los paréntesis en el string emitido
-  - [ ] `Keyset/WirePaginationPolicy.php` — configuración wire explícita (default 25, techo 100, semántica de frontera, emisión de cursores). Los valores viven aquí; NO tocar `SearchQuery`/`SearchCriteria` (eso es PR3)
-  - [ ] `api/src/Shared/Infrastructure/Persistence/Doctrine/Search/PaginatorConfig.php` — readonly tipado, reemplazo del options-bag `PaginatorOption`; forma mínima (YAGNI — PR2 la refina cuando el engine la consuma)
-- [ ] Task 6: Suites unitarias sin kernel (AC: #2, #3, #4, #5, #6)
-  - [ ] Object mothers en `api/tests/Unit/Shared/Infrastructure/Persistence/Doctrine/Search/Keyset/Mother/`: `CursorMother`, `TraceMother`, `PageMother` — siguiendo el precedente `FilterMother` (estáticos con defaults)
-  - [ ] `CursorCodecTest` — round-trip exacto; exactamente un punto; las 4 causas de invalidez en orden; cap 512; cursor con `dir` discrepante; datetimes round-trip a segundos
-  - [ ] `FingerprintCanonicalizerTest` — determinismo, orden de filtros/IN, datetimes, ejemplos canónicos literales
-  - [ ] `TraceEquivalenceStabilityTest` — mismo input ⇒ trace canónico byte-a-byte idéntico en ejecuciones repetidas (el test más importante del sistema). Dos categorías explícitas: (a) **estabilidad positiva** — repetición exacta ⇒ bytes idénticos; (b) **negative drift** — alteraciones de representación que NO cambian semántica (orden de filtros en el *input*, permutación de listas IN de entrada, espacios/formato del valor pre-normalización) ⇒ mismo trace canónico byte-a-byte. Es la categoría donde los sistemas de canonicalización fallan históricamente — cada invariante de orden del canonicalizador tiene su caso negative-drift
-  - [ ] `KeysetPredicateBuilderTest` — 1, 2 y N claves; ASC/DESC; binds correctos
-  - [ ] `CursorPositionExtractorTest` — precisión de columna, truncado de microsegundos
-  - [ ] `OrderByColumnsTest` — tie-break `id` garantizado
-  - [ ] Criterio de review en cada test: *¿este test necesita el kernel?* — la respuesta debe ser no
-- [ ] Task 7: Gates y cierre (AC: #6)
-  - [ ] `make php.stan` por archivo cambiado durante el desarrollo
-  - [ ] `make php.unit` — suites nuevas + existentes verdes
-  - [ ] `make php.behat` — los 52 bloques de `search.feature` pasan SIN tocar (cero cambio de contrato wire)
-  - [ ] `make php.quality` al cierre (incluye psalm + error-contract gate) — verde sin baselines nuevas
-  - [ ] Self-review de seguridad del repo (checklist de CLAUDE.md, sección backend) antes del PR
+- [x] Task 0: Preparar el entorno aislado (AC: #1)
+  - [x] `make worktree.create BRANCH=feat/api-keyset-pagination` desde el checkout primario; `cd` al worktree y `make app.dev` (regla dura del repo: jamás trabajar en `main`)
+  - [x] Verificar que el stack del worktree responde (`make docker.info`, `make php.unit c='--filter SearchCriteriaTest'` como smoke)
+- [x] Task 1: Puerto de dominio puro (AC: #1)
+  - [x] `api/src/Shared/Domain/Search/Page.php` — `final readonly`, `@template T`, propiedades: `items` (list<T>), `hasNext`, `hasPrev`, `count` (?int), `nextCursor`/`prevCursor` (?string). Los campos de cursor son **tokens de transporte opacos**: el dominio NO asume estructura, decodificabilidad ni validez más allá de la identidad de string (el dominio trata el cursor como un id). `Page` no es un DTO de transporte — el envelope wire lo construye el responder en PR3. Cero imports de framework (NFR5)
+  - [x] `api/src/Shared/Domain/Search/Exception/InvalidCursor.php` — implementa el marker existente `Erpify\Shared\Domain\Exception\InvalidSearchCriteria`, `TYPE = 'invalid-cursor'`, named constructors por causa: `signature()`, `version()`, `payload()`, `fingerprint()` (la causa viaja en la excepción para logging/métricas; el mensaje wire es indistinguible entre causas)
+- [x] Task 2: Recibos y trace sellado (AC: #4)
+  - [x] `Keyset/AppliedFilters.php`, `Keyset/AppliedSort.php`, `Keyset/AppliedLimit.php` — recibos inmutables readonly de lo realmente aplicado
+  - [x] `Keyset/QueryExecutionTrace.php` — compone los recibos + entity + slot de tenant; sellado (se construye una vez, inmutable); expone la representación canónica
+  - [x] Pinear el slot de tenant como UNA constante en un único sitio con comentario `// why:` (Fase H del roadmap SaaS; cambiarla tras PR3 = bump de `v`) (NFR7)
+- [x] Task 3: Canonicalizador y fingerprint (AC: #4)
+  - [x] `Keyset/FingerprintCanonicalizer.php` — cadena canónica `tenant|entity|filters|sort|direction|limit` desde los recibos del trace; filtros ordenados por (field, operator, valor serializado), listas IN ordenadas; numéricos serializados como strings normalizados post-validación; datetimes UTC `Y-m-d\TH:i:sP` a precisión de columna; `fp = xxh128(canonical)` (hash rápido no criptográfico es correcto: la integridad la da el HMAC del conjunto)
+  - [x] Canonicalización SINTÁCTICA por diseño — non-goal vinculante: prohibido cualquier intento de equivalencia semántica (`amount > 100 ≢ amount >= 101`)
+  - [x] **Estabilidad append-only**: la canonicalización debe ser estable bajo extensión aditiva — un `FilterOperator` nuevo (o expansión multi-valor futura) define sus reglas de ordenación SIN modificar la semántica de orden canónico de los operadores existentes. Cambiar el orden de lo ya existente = cambio del contrato de serialización = bump de `v` (FR15 ampliado). Diseñar el sort canónico de modo que añadir operadores no recoloque entradas existentes (orden lexicográfico sobre tokens estables, no sobre posición de enum)
+  - [x] Suite propia con ejemplos documentados de la cadena canónica
+- [x] Task 4: Codec del cursor (AC: #2, #3)
+  - [x] `Keyset/Cursor.php` — VO infra `{v, dir, values, fp}`; `v: 1` inicial
+  - [x] `Keyset/CursorCodec.php` — encode: `base64url sin padding` del JSON + `.` + `substr(hash_hmac('sha256', body, secret), 0, 32)`; decode con validación en orden intrínseco-primero: firma (`hash_equals`) → versión → payload → fingerprint. Cap de longitud 512 ANTES de tocar HMAC. SIN zlib (a diferencia del `PaginatorCursorFactory` legacy — no copiar su compresión)
+  - [x] El check de fingerprint es un **hook de integridad diferido**: el codec recibe el fp esperado como `string` por parámetro y compara — JAMÁS importa ni conoce `QueryExecutionTrace`. En PR1 no existe trace en runtime; el cableado trace→fp esperado es responsabilidad exclusiva del `DoctrineSearchEngine` (PR2). Acoplar el codec al trace aquí es implementación prematura que rompe la secuencia AR16
+  - [x] Secret por constructor `string` (DI: `#[Autowire('%kernel.secret%')]`, mismo patrón que `PaginatorCursorFactory`); los tests pasan el secret directamente — sin kernel
+  - [x] `dir` se compara contra la dirección esperada como integrity binding (discrepancia → `InvalidCursor`); JAMÁS se usa para decidir navegación (AR21)
+- [x] Task 5: Columnas, posición y predicado (AC: #2, #5)
+  - [x] `Keyset/OrderByColumns.php` — VO columnas+dirección; tie-break `id` siempre presente como última clave
+  - [x] `Keyset/CursorPositionExtractor.php` — extrae los valores frontera de una fila a precisión de columna (`TIMESTAMP(0)` ⇒ truncar a segundos; el `extractFields` legacy emite microsegundos: ese desajuste de frontera es exactamente lo que esta pieza corrige). Sin `PropertyAccess::createPropertyAccessor()` por llamada (anti-ejemplo de pureza citado por el ADR)
+  - [x] `Keyset/KeysetPredicateBuilder.php` — cadena `col > :v OR (col = :v AND id > :i)` extendida a N claves (DQL no soporta tuplas), parámetros bindeados, pre-compilación; recibe configuración explícita por policy
+  - [x] **Paréntesis explícitos obligatorios por nivel de clave** — el builder emite agrupación explícita `(col > :v) OR (col = :v AND (…))` en cada nivel; prohibido el flattening de operadores confiando en precedencia implícita OR/AND (la composición dinámica en DQL es ambigua sin agrupación). Los tests assertan los paréntesis en el string emitido
+  - [x] `Keyset/WirePaginationPolicy.php` — configuración wire explícita (default 25, techo 100, semántica de frontera, emisión de cursores). Los valores viven aquí; NO tocar `SearchQuery`/`SearchCriteria` (eso es PR3)
+  - [x] `api/src/Shared/Infrastructure/Persistence/Doctrine/Search/PaginatorConfig.php` — readonly tipado, reemplazo del options-bag `PaginatorOption`; forma mínima (YAGNI — PR2 la refina cuando el engine la consuma)
+- [x] Task 6: Suites unitarias sin kernel (AC: #2, #3, #4, #5, #6)
+  - [x] Object mothers en `api/tests/Unit/Shared/Infrastructure/Persistence/Doctrine/Search/Keyset/Mother/`: `CursorMother`, `TraceMother`, `PageMother` — siguiendo el precedente `FilterMother` (estáticos con defaults)
+  - [x] `CursorCodecTest` — round-trip exacto; exactamente un punto; las 4 causas de invalidez en orden; cap 512; cursor con `dir` discrepante; datetimes round-trip a segundos
+  - [x] `FingerprintCanonicalizerTest` — determinismo, orden de filtros/IN, datetimes, ejemplos canónicos literales
+  - [x] `TraceEquivalenceStabilityTest` — mismo input ⇒ trace canónico byte-a-byte idéntico en ejecuciones repetidas (el test más importante del sistema). Dos categorías explícitas: (a) **estabilidad positiva** — repetición exacta ⇒ bytes idénticos; (b) **negative drift** — alteraciones de representación que NO cambian semántica (orden de filtros en el *input*, permutación de listas IN de entrada, espacios/formato del valor pre-normalización) ⇒ mismo trace canónico byte-a-byte. Es la categoría donde los sistemas de canonicalización fallan históricamente — cada invariante de orden del canonicalizador tiene su caso negative-drift
+  - [x] `KeysetPredicateBuilderTest` — 1, 2 y N claves; ASC/DESC; binds correctos
+  - [x] `CursorPositionExtractorTest` — precisión de columna, truncado de microsegundos
+  - [x] `OrderByColumnsTest` — tie-break `id` garantizado
+  - [x] Criterio de review en cada test: *¿este test necesita el kernel?* — la respuesta debe ser no
+- [x] Task 7: Gates y cierre (AC: #6)
+  - [x] `make php.stan` por archivo cambiado durante el desarrollo
+  - [x] `make php.unit` — suites nuevas + existentes verdes
+  - [x] `make php.behat` — los 52 bloques de `search.feature` pasan SIN tocar (cero cambio de contrato wire)
+  - [x] `make php.quality` al cierre (incluye psalm + error-contract gate) — verde sin baselines nuevas
+  - [x] Self-review de seguridad del repo (checklist de CLAUDE.md, sección backend) antes del PR
+
+### Review Findings
+
+_Code review adversarial (Blind Hunter + Edge Case Hunter + Acceptance Auditor) — 2026-06-10. Acceptance Auditor: 0 violaciones de AC, 0 anti-patterns. Hallazgos residuales abajo._
+
+- [x] [Review][Decision→Dismiss] Cursor over-length / sin separador `.` mapea a causa `payload` — **RESUELTO (usuario, 2026-06-10): mantener `payload`.** Over-length y estructura inválida (`.` ausente) son fallos intrínsecos de formato *previos* a cualquier verificación criptográfica; clasificarlos como `payload` respeta el orden intrínseco-primero (AR10) mejor que `signature`, mantiene el set de 4 causas exacto y deja wire/ACs/tests intactos. Se añade comentario `// why:` en `authenticBody()` documentando la decisión para PR3. [CursorCodec.php — authenticBody]
+- [x] [Review][Patch] IN-list canonicaliza con `\sort()` (SORT_REGULAR) → inestabilidad byte para strings numéricamente-iguales-pero-distintas (`'1e3'`/`'1000'`, `'01'`/`'1'`); usar `SORT_STRING` + comparación de strings en el `usort` para honrar el contrato lexicográfico de AC4 [FingerprintCanonicalizer.php:105] — **APLICADO**: `SORT_STRING` + `strcmp` en el `usort`; test `itOrdersNumericLookingInValuesLexicographicallyAndStably`
+- [x] [Review][Patch] Tests de HMAC del cursor y de nombres de parámetro re-implementan la expresión de producción (sólo auto-consistentes) → añadir un known-answer/golden vector que pinee los bytes exactos de un cursor y un nombre de parámetro, para cazar regresiones de firma/hash [CursorCodecTest.php, KeysetPredicateBuilderTest.php] — **APLICADO**: `itEncodesToTheKnownGoldenVector` + `itGeneratesTheKnownGoldenParameterNames` (literales hardcoded)
+- [x] [Review][Patch] Sin cobertura del fallback no-temporal de `normalizeTemporalBound` (valor de operador de rango que no parsea como fecha cae a string crudo trimmeado — correcto para bounds numéricos, pero no testeado) → añadir caso negativo [FingerprintCanonicalizer.php:710] — **APLICADO**: test `itLeavesNonTemporalRangeBoundsAsTheirTrimmedString`
+- [x] [Review][Defer] Codec acepta `values` estructuralmente válido con aridad incorrecta / columna ORDER BY ausente / elementos no-escalares → en el cableado de PR2, `KeysetPredicateBuilder` lanza `InvalidArgumentException` (500) en vez de `InvalidCursor` (422). El codec no puede validar aridad (no conoce las columnas — diferido al engine por AR16). PR2 debe garantizar aridad o mapear el fallo a `InvalidCursor` [CursorCodec.php / KeysetPredicateBuilder.php] — deferred, integración PR2
+- [x] [Review][Defer] `OrderByColumns::fromSorts` sólo deduplica `id` cuando es la ÚLTIMA clave; un sort multi-clave con `id` no-último duplicaría la columna tie-break. Sin caller en PR1; guardar antes de que PR2 cablee sorts multi-clave [OrderByColumns.php:47] — deferred, pre-existing (sin caller en PR1)
+- [x] [Review][Defer] Floor de microsegundos vs redondeo de Postgres `TIMESTAMP(0)` + drift de precisión JSON en columnas float en la frontera → verificar con round-trip real contra Postgres (Behat) en PR2/PR3 que las filas frontera no se saltan/duplican en empates sub-segundo [CursorPositionExtractor.php] — deferred, integración PR2/PR3
 
 ## Dev Notes
 
@@ -179,8 +195,99 @@ PHP 8.5 (no inventar sintaxis 8.5-specific; idioms 8.3 forward-compatible) · Sy
 
 ### Agent Model Used
 
+claude-opus-4-8 (Opus 4.8, 1M context) — workflow `bmad-dev-story`.
+
 ### Debug Log References
+
+- PHPStan: limpio sobre 334 ficheros.
+- Psalm: `No errors found!` (EXIT=0); las 534 issues restantes son nivel info pre-existentes.
+- PHPUnit: 748 tests, 3614 assertions, 3 skipped pre-existentes del entorno.
+- Behat: 116 escenarios / 773 pasos verdes (incluye los 52 bloques de `search.feature` SIN modificar).
+- `make php.quality`: EXIT=0 (stan, rector, cs-fixer, phpmd, phpcs, gherkin, `php.lint.doctrine`, `php.lint.error-contract`, psalm) — sin baselines nuevas.
 
 ### Completion Notes List
 
+Implementado el kernel keyset completo como piezas puras (Tasks 0–7). Las 6 ACs
+quedan satisfechas; cero cambio de contrato wire (Behat verde), cero dependencias
+Composer, cero migraciones, cero cambios en `services.yaml`.
+
+Decisiones de implementación y desviaciones menores (para el reviewer):
+
+- **`InvalidCursorCause` (enum nuevo, no pineado en AR12):** la causa viaja en
+  `InvalidCursor::$cause` como enum backed cuyos 4 casos son EXACTAMENTE las
+  causas pineadas (`signature|version|payload|fingerprint`, label de la métrica
+  `invalid_cursor_count{cause}` de PR3). Es un tipo de soporte (idioma del repo:
+  enums para conjuntos cerrados), no una variante de un FQCN pineado. El wire es
+  indistinguible entre causas (mismo `type`/título, `context` vacío); la causa
+  solo sirve para logs/métricas.
+- **Binding `dir`:** un `dir` discrepante mapea a la causa `payload` (es un
+  integrity binding del payload). Las 4 causas siguen siendo exactamente las
+  pineadas. `dir` jamás decide navegación (AR21) — solo se compara con
+  `hash_equals` contra la dirección esperada que pasa el caller.
+- **`OrderByColumns::fromSorts` (multi-clave):** generalizado para ejercitar el
+  camino N-claves del `KeysetPredicateBuilder` (DQL no soporta tuplas → forma
+  anidada con paréntesis explícitos por nivel). `fromPrimarySort` delega en él.
+- **Fila `invalid-cursor` en `docs/api-error-contract.md`: NO añadida.**
+  `InvalidCursor` implementa el marker YA mapeado `InvalidSearchCriteria` (→ 422),
+  no añade marker nuevo y vive en `Domain/Search/Exception/`, así que el gate
+  `php.lint.error-contract` queda verde sin tocar el doc. Se difiere a la Story
+  1.3 (PR3) según las Dev Notes — gate jamás suprimido.
+- **Nombres de métodos de test en camelCase:** el ECS/cs-fixer del repo convierte
+  automáticamente los `it_...` snake_case a camelCase; la regla del linter manda
+  sobre el ejemplo de `project-context.md`.
+
+Self-review de seguridad (checklist backend de CLAUDE.md): **OK.** Inyección —
+`KeysetPredicateBuilder` interpola solo identificadores de columna (autor:
+repositorio) + nombres de parámetro generados; todos los valores frontera van
+bindeados. HMAC con `hash_equals` (tiempo constante), cap 512 ANTES del HMAC
+(guarda DoS), cursor crudo jamás logueado. Secret vía `%kernel.secret%`, nunca
+serializado ni devuelto. Sin `unserialize`/`eval`; base64url vía ext-sodium;
+`json_decode` con `JSON_THROW_ON_ERROR`. Sin entidades/setters (mass-assignment
+N/A), sin migraciones, sin ampliación de CORS/Mercure.
+
 ### File List
+
+**Nuevos — producción (`api/src/`):**
+
+- `api/src/Shared/Domain/Search/Page.php`
+- `api/src/Shared/Domain/Search/Exception/InvalidCursor.php`
+- `api/src/Shared/Domain/Search/Exception/InvalidCursorCause.php`
+- `api/src/Shared/Infrastructure/Persistence/Doctrine/Search/PaginatorConfig.php`
+- `api/src/Shared/Infrastructure/Persistence/Doctrine/Search/Keyset/AppliedFilters.php`
+- `api/src/Shared/Infrastructure/Persistence/Doctrine/Search/Keyset/AppliedSort.php`
+- `api/src/Shared/Infrastructure/Persistence/Doctrine/Search/Keyset/AppliedLimit.php`
+- `api/src/Shared/Infrastructure/Persistence/Doctrine/Search/Keyset/QueryExecutionTrace.php`
+- `api/src/Shared/Infrastructure/Persistence/Doctrine/Search/Keyset/FingerprintCanonicalizer.php`
+- `api/src/Shared/Infrastructure/Persistence/Doctrine/Search/Keyset/Cursor.php`
+- `api/src/Shared/Infrastructure/Persistence/Doctrine/Search/Keyset/CursorCodec.php`
+- `api/src/Shared/Infrastructure/Persistence/Doctrine/Search/Keyset/OrderByColumns.php`
+- `api/src/Shared/Infrastructure/Persistence/Doctrine/Search/Keyset/CursorPositionExtractor.php`
+- `api/src/Shared/Infrastructure/Persistence/Doctrine/Search/Keyset/KeysetPredicateBuilder.php`
+- `api/src/Shared/Infrastructure/Persistence/Doctrine/Search/Keyset/WirePaginationPolicy.php`
+
+**Nuevos — tests (`api/tests/`):**
+
+- `api/tests/Unit/Shared/Domain/Search/PageTest.php`
+- `api/tests/Unit/Shared/Infrastructure/Persistence/Doctrine/Search/PaginatorConfigTest.php`
+- `api/tests/Unit/Shared/Infrastructure/Persistence/Doctrine/Search/Keyset/CursorCodecTest.php`
+- `api/tests/Unit/Shared/Infrastructure/Persistence/Doctrine/Search/Keyset/FingerprintCanonicalizerTest.php`
+- `api/tests/Unit/Shared/Infrastructure/Persistence/Doctrine/Search/Keyset/TraceEquivalenceStabilityTest.php`
+- `api/tests/Unit/Shared/Infrastructure/Persistence/Doctrine/Search/Keyset/KeysetPredicateBuilderTest.php`
+- `api/tests/Unit/Shared/Infrastructure/Persistence/Doctrine/Search/Keyset/CursorPositionExtractorTest.php`
+- `api/tests/Unit/Shared/Infrastructure/Persistence/Doctrine/Search/Keyset/OrderByColumnsTest.php`
+- `api/tests/Unit/Shared/Infrastructure/Persistence/Doctrine/Search/Keyset/AppliedLimitTest.php`
+- `api/tests/Unit/Shared/Infrastructure/Persistence/Doctrine/Search/Keyset/WirePaginationPolicyTest.php`
+- `api/tests/Unit/Shared/Infrastructure/Persistence/Doctrine/Search/Keyset/Mother/CursorMother.php`
+- `api/tests/Unit/Shared/Infrastructure/Persistence/Doctrine/Search/Keyset/Mother/TraceMother.php`
+- `api/tests/Unit/Shared/Infrastructure/Persistence/Doctrine/Search/Keyset/Mother/PageMother.php`
+
+**Modificados:**
+
+- `_bmad-output/implementation-artifacts/1-1-kernel-keyset-puro-vos-colaboradores-deterministas-y-suites-unitarias-pr1.md` (frontmatter `baseline_commit`, checkboxes, Dev Agent Record, Change Log, Status)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (estado de la historia → review)
+
+## Change Log
+
+| Fecha       | Versión | Descripción                                                                                   | Autor          |
+|-------------|---------|-----------------------------------------------------------------------------------------------|----------------|
+| 2026-06-10  | 0.1     | Implementación PR1: kernel keyset puro (VOs + colaboradores deterministas + suites unitarias). | Amelia (dev)   |
