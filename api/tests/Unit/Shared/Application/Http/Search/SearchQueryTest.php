@@ -9,6 +9,7 @@ use Erpify\Shared\Application\Http\Search\SearchQuery;
 use Erpify\Shared\Domain\Search\Filter;
 use Erpify\Shared\Domain\Search\FilterOperator;
 use Erpify\Shared\Domain\Search\PaginationMode;
+use Erpify\Shared\Domain\Search\SearchCriteria;
 use Erpify\Shared\Domain\Search\SortDirection;
 use Generator;
 use Override;
@@ -85,9 +86,9 @@ final class SearchQueryTest extends TestCase
     {
         yield 'page zero' => [new SearchQuery(page: 0), ['page']];
         yield 'page negative' => [new SearchQuery(page: -1), ['page']];
-        yield 'page over cap' => [new SearchQuery(page: SearchQuery::MAX_PAGE + 1), ['page']];
+        yield 'page over cap' => [new SearchQuery(page: SearchCriteria::MAX_PAGE + 1), ['page']];
         yield 'limit zero' => [new SearchQuery(limit: 0), ['limit']];
-        yield 'limit over cap' => [new SearchQuery(limit: SearchQuery::MAX_LIMIT + 1), ['limit']];
+        yield 'limit over cap' => [new SearchQuery(limit: SearchCriteria::MAX_LIMIT + 1), ['limit']];
         yield 'cursor too long' => [new SearchQuery(cursor: \str_repeat('a', 8193)), ['cursor']];
         yield 'sort too long' => [new SearchQuery(sort: \str_repeat('a', 65)), ['sort']];
     }
@@ -128,7 +129,7 @@ final class SearchQueryTest extends TestCase
 
         $this->assertNull($searchCriteria->cursor);
         $this->assertSame(1, $searchCriteria->page);
-        $this->assertSame(SearchQuery::MAX_LIMIT, $searchCriteria->limit);
+        $this->assertSame(SearchCriteria::MAX_LIMIT, $searchCriteria->limit);
         $this->assertSame(PaginationMode::LIGHT, $searchCriteria->paginationMode);
         $this->assertNull($searchCriteria->sort);
         $this->assertNotInstanceOf(SortDirection::class, $searchCriteria->direction);

@@ -314,39 +314,6 @@ final class FilterApplierTest extends KernelTestCase
         );
     }
 
-    public function testContainsValueNormalizingToEmptyIsRejectedAsProgrammerError(): void
-    {
-        $this->expectException(InvalidArgumentException::class);
-
-        $this->filterApplier->apply(
-            $this->bankQueryBuilder(),
-            Filters::fromList([Filter::contains('name', '   ')]),
-            $this->bankFieldMap(),
-        );
-    }
-
-    public function testEqValueNormalizingToEmptyIsRejectedAsProgrammerError(): void
-    {
-        $this->expectException(InvalidArgumentException::class);
-
-        $this->filterApplier->apply(
-            $this->bankQueryBuilder(),
-            Filters::fromList([Filter::eq('name', '   ')]),
-            $this->bankFieldMap(),
-        );
-    }
-
-    public function testInItemNormalizingToEmptyIsRejectedAsProgrammerError(): void
-    {
-        $this->expectException(InvalidArgumentException::class);
-
-        $this->filterApplier->apply(
-            $this->bankQueryBuilder(),
-            Filters::fromList([Filter::in('name', ['Banco Válido', '   '])]),
-            $this->bankFieldMap(),
-        );
-    }
-
     /**
      * Runs the test body inside a transaction that is always rolled back, so persisted rows
      * never leak into the shared dev database. Deliberately not a tearDown() override —

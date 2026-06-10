@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Domain\Search;
 
+use Erpify\Shared\Domain\Search\Exception\InvalidSearchValue;
 use Erpify\Shared\Domain\Search\Filter;
 use Erpify\Shared\Domain\Search\FilterOperator;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -64,6 +65,32 @@ final class FilterTest extends TestCase
         yield 'gte' => [Filter::gte('createdAt', $bound), FilterOperator::Gte];
         yield 'lt' => [Filter::lt('createdAt', $bound), FilterOperator::Lt];
         yield 'lte' => [Filter::lte('createdAt', $bound), FilterOperator::Lte];
+    }
+
+    #[DataProvider('provideRejectsABlankScalarValueCases')]
+    public function testRejectsABlankScalarValue(string $value): void
+    {
+        $this->expectException(InvalidSearchValue::class);
+
+        Filter::eq('name', $value);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function provideRejectsABlankScalarValueCases(): iterable
+    {
+        yield 'empty' => [''];
+        yield 'ascii whitespace' => ['   '];
+        yield 'non-breaking space' => ["\u{00A0}"];
+        yield 'ideographic space' => ["\u{3000}"];
+    }
+
+    public function testRejectsABlankItemInAnInList(): void
+    {
+        $this->expectException(InvalidSearchValue::class);
+
+        Filter::in('name', ['BBVA', "\u{00A0}"]);
     }
 
     public function testIsImmutable(): void

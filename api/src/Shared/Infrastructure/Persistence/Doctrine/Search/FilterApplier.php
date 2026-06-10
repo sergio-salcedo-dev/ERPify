@@ -257,9 +257,11 @@ final readonly class FilterApplier
 
     /**
      * Normalizes the value with the field's normalizer and rejects results that are blank.
-     * Unreachable from the wire (shape validation rejects blank values in mapping), so a blank
-     * here is a programmer error: CONTAINS would degenerate into a match-everything `LIKE '%%'`,
-     * EQ and IN into a meaningless empty-string predicate. Fail loudly instead.
+     * The domain {@see Filter} constructor rejects A raw-blank value (empty after a Unicode-aware trim)
+     * before the applier runs, and the wire DTO rejects it earlier still.
+     * This guard remains as defense in depth for a field normalizer that folds a non-blank value
+     * to an empty string: a programmer error, since CONTAINS would degenerate into a match-everything
+     * `LIKE '%%'` and EQ/IN into a meaningless empty-string predicate. Fail loudly instead.
      */
     private function normalizedNotBlank(FieldMapping $mapping, string $value, FilterOperator $operator): string
     {

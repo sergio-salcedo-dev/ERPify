@@ -118,7 +118,7 @@ abstract class AbstractDoctrineSearchRepository extends AbstractDoctrineReposito
             $idFieldNames,
             $options,
             $page,
-            $queryBuilder->getMaxResults() ?? self::MAX_LIMIT,
+            $queryBuilder->getMaxResults() ?? SearchCriteria::MAX_LIMIT,
         );
 
         return $paginator;

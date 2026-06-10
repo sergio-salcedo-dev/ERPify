@@ -27,10 +27,6 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
  */
 final readonly class SearchQuery
 {
-    public const int MAX_PAGE = 10_000;
-
-    public const int MAX_LIMIT = 1_000;
-
     public const int MAX_FILTERS = 20;
 
     public const int MAX_SORT_LENGTH = 64;
@@ -44,11 +40,11 @@ final readonly class SearchQuery
         #[Assert\Length(max: 8192)]
         public ?string $cursor = null,
         #[Assert\Positive]
-        #[Assert\LessThanOrEqual(self::MAX_PAGE)]
+        #[Assert\LessThanOrEqual(SearchCriteria::MAX_PAGE)]
         public ?int $page = 1,
         #[Assert\Positive]
-        #[Assert\LessThanOrEqual(self::MAX_LIMIT)]
-        public ?int $limit = self::MAX_LIMIT,
+        #[Assert\LessThanOrEqual(SearchCriteria::MAX_LIMIT)]
+        public ?int $limit = SearchCriteria::MAX_LIMIT,
         public PaginationMode $paginationMode = PaginationMode::LIGHT,
         #[Assert\Valid]
         #[Assert\Count(max: self::MAX_FILTERS)]
@@ -80,7 +76,7 @@ final readonly class SearchQuery
         return new SearchCriteria(
             cursor: $this->cursor,
             page: $this->page ?? 1,
-            limit: $this->limit ?? self::MAX_LIMIT,
+            limit: $this->limit ?? SearchCriteria::MAX_LIMIT,
             paginationMode: $this->paginationMode,
             filters: $this->domainFilters(),
             // An empty `sort=` on the wire means "no sort" → the default order, not a 400
