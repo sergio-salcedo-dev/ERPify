@@ -50,6 +50,49 @@ test.describe("BackOffice - Banks CRUD", () => {
       await expect(page.getByTestId(`banks-table__delete-${SAMPLE_BANK_A.id}`)).toBeVisible();
     });
 
+    test("dismissing the overflow menu by an outside click does not leave the row actions revealed", async ({
+      page,
+    }) => {
+      await mockBanksApi(page, { list: "happy" });
+      await page.goto("/backoffice/banks");
+
+      const reveal = page
+        .getByTestId(`banks-table__row-${SAMPLE_BANK_A.id}`)
+        .locator(".banks-row-actions__reveal");
+
+      // At rest, on a fine pointer, the Copy/Edit cluster is hidden (opacity 0).
+      await expect(reveal).toHaveCSS("opacity", "0");
+
+      // Open the per-row overflow (⋯) menu…
+      await page.getByTestId(`banks-table__actions-${SAMPLE_BANK_A.id}`).click();
+      await expect(page.getByTestId(`banks-table__delete-${SAMPLE_BANK_A.id}`)).toBeVisible();
+
+      // …then dismiss it with a pointer click on neutral page space (top-left,
+      // away from row A so hover never keeps the cluster shown). The menu's
+      // inert backdrop consumes the click to close; this is a mouse dismissal,
+      // so the trigger regains focus without :focus-visible.
+      await page.mouse.click(2, 2);
+      await expect(page.getByTestId(`banks-table__delete-${SAMPLE_BANK_A.id}`)).toBeHidden();
+
+      // The menu restores focus to the always-visible ⋯ trigger, but that
+      // mouse-driven focus must not keep Copy/Edit revealed once the pointer
+      // has left the row.
+      await expect(reveal).toHaveCSS("opacity", "0");
+    });
+
+    test("hovering a row still reveals its copy and edit actions", async ({ page }) => {
+      await mockBanksApi(page, { list: "happy" });
+      await page.goto("/backoffice/banks");
+
+      const reveal = page
+        .getByTestId(`banks-table__row-${SAMPLE_BANK_A.id}`)
+        .locator(".banks-row-actions__reveal");
+
+      await expect(reveal).toHaveCSS("opacity", "0");
+      await page.getByTestId(`banks-table__row-${SAMPLE_BANK_A.id}`).hover();
+      await expect(reveal).toHaveCSS("opacity", "1");
+    });
+
     test("clicking the inline edit button navigates to the edit page", async ({ page }) => {
       await mockBanksApi(page, { list: "happy", get: "happy", bank: SAMPLE_BANK_A });
       await page.goto("/backoffice/banks");
