@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Shared\Application\Problem;
 
 use Erpify\Shared\Application\Problem\ProblemDetailsFactory;
+use Erpify\Shared\Domain\Exception\ClientError;
 use Erpify\Shared\Domain\Exception\Conflict;
 use Erpify\Shared\Domain\Exception\DomainException;
 use Erpify\Shared\Domain\Exception\Forbidden;
@@ -190,6 +191,36 @@ final class MarkerStatusMapContractTest extends TestCase
             $defaultTypeKeys,
             'MARKER_DEFAULT_TYPE_MAP keys must equal MARKER_STATUS_MAP keys.',
         );
+    }
+
+    /**
+     * Couples the RFC 9457 marker→status table to observability. A marker is a
+     * {@see ClientError} — and so is suppressed from Sentry by
+     * {@see \Erpify\Shared\Monitoring\Infrastructure\Sentry\SentryEventFilter} — IF AND ONLY IF
+     * its mapped HTTP status is 4xx. This encodes the rule "4xx are expected client errors, 5xx
+     * are server faults", not the weaker "every marker we have today is 4xx": the day a 5xx
+     * marker joins the map it fails UNLESS that marker deliberately does NOT extend ClientError,
+     * forcing a conscious "should this reach Sentry?" decision rather than silently leaking a 4xx
+     * (noise) or hiding a 5xx (lost error).
+     */
+    public function testMarkerIsClientErrorIffStatusIs4xx(): void
+    {
+        $statusMap = self::reflectConstant('MARKER_STATUS_MAP');
+
+        foreach ($statusMap as $markerClass => $status) {
+            $isClientStatus = \is_int($status) && $status >= 400 && $status < 500;
+
+            $this->assertSame(
+                $isClientStatus,
+                \is_subclass_of((string) $markerClass, ClientError::class),
+                \sprintf(
+                    'Marker %s maps to status %s, so it must %sextend ClientError.',
+                    (string) $markerClass,
+                    \is_int($status) ? (string) $status : \get_debug_type($status),
+                    $isClientStatus ? '' : 'NOT ',
+                ),
+            );
+        }
     }
 
     /**
