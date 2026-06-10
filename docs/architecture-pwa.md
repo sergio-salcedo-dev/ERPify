@@ -123,8 +123,10 @@ not in the browser. The shared vocabulary mirrors the API's generic `filters[]` 
   grammar (`filters[N][field|operator|value]`; `filters[N][value][]` for `in`), returning a composable
   `URLSearchParams`.
 - A repository's `search(criteria)` composes those params with `sort` + `direction` (uppercased to the API's
-  `ASC`/`DESC` enum), `page`, an opaque `cursor` (replayed verbatim, never interpreted client-side), `limit`,
-  and `paginationMode=detailed` (so `pagination.count` drives a real total). See
+  `ASC`/`DESC` enum), `page`, an opaque `cursor` (replayed verbatim, never interpreted client-side), and
+  `limit`. It sends no `paginationMode`, so the API defaults to `LIGHT` — it skips the `COUNT(*)` and reports
+  `hasMorePages` from a single fetch, which is all a prev/next cursor list needs. Send `paginationMode=detailed`
+  only on a view that actually renders a total (`pagination.count`), paying the extra count deliberately. See
   `context/backoffice/bank/infrastructure/ApiBankRepository.ts` as the reference consumer.
 
 Two list-behaviour rules are load-bearing:

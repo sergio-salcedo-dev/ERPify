@@ -60,20 +60,13 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
     await api.dispose();
   });
 
-  test("list — renders seeded rows and reports the total", async ({ page }) => {
+  test("list — renders seeded rows", async ({ page }) => {
     await page.goto("/backoffice/banks");
 
     const list = page.getByTestId("banks-list");
     await expect(list).toHaveAttribute("data-state", "ready");
     await expect(page.getByTestId("banks-table")).toBeVisible();
     await expect(page.getByTestId("banks-list__title")).toHaveText("Banks");
-
-    // The total count counts every bank the API returned, not just the
-    // page-size slice. With at least our seeded rows present it must be
-    // >= SEED_COUNT.
-    const totalText = await page.getByTestId("banks-list__total").innerText();
-    const total = Number(totalText.match(/(\d+)/)?.[1] ?? "0");
-    expect(total).toBeGreaterThanOrEqual(SEED_COUNT);
 
     // Narrow the client-side filter to test-owned rows. The filters panel
     // is collapsed by default, so reveal it before driving its inputs.

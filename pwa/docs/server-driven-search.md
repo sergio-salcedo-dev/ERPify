@@ -21,13 +21,15 @@ Filterable lists resolve filtering, sorting, and pagination on the **server**, t
 2. **Give the repository a `search(criteria)`.** Criteria carries `{ filters, sort, page, cursor?, limit }`.
    In the API adapter, `buildSearchParams(filters)` then append `sort` + `direction`
    (`direction.toUpperCase()` — the API enum is `ASC`/`DESC`), `page`, `cursor` (only when navigating
-   beyond page 1), `limit`, and `paginationMode=detailed`. Return
-   `{ banks, cursor, currentPage, hasMorePages, totalCount }` from the `{ data, pagination }` envelope.
+   beyond page 1), and `limit`. Send **no** `paginationMode` for a prev/next cursor list — the API defaults to
+   `LIGHT` (no `COUNT(*)`; `hasMorePages` from a single fetch). Return
+   `{ banks, cursor, currentPage, hasMorePages }` from the `{ data, pagination }` envelope. Only a view that
+   renders a real total appends `paginationMode=detailed` and surfaces `pagination.count` as `totalCount`.
 
 3. **Wire the page.** The list state holds `filter`, `sort`, `pageSize`, `page`, and the last response's
    `cursor` (in a ref). Refetch whenever `filter`/`sort`/`page`/`pageSize` change. Use a monotonic request
-   token so a slow response can never overwrite a newer one (the debounce↔pagination race). Drive the total
-   from `totalCount`; `hasNext` from `hasMorePages`; `hasPrev` from `currentPage > 1`.
+   token so a slow response can never overwrite a newer one (the debounce↔pagination race). Drive `hasNext`
+   from `hasMorePages` and `hasPrev` from `currentPage > 1` (no total under `LIGHT`).
 
 ## Load-bearing rules
 
