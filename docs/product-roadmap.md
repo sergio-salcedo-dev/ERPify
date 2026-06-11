@@ -19,7 +19,10 @@ una sola fuente de verdad**, siguiendo el patrón que el repo ya usa para la
 navegación (`backofficeMenu.ts` alimenta la sidebar):
 
 1. **`roadmap.ts`** — dato tipado (`RoadmapPhase` → `RoadmapModule` →
-   `RoadmapSubmodule` con `status`/`priority`/`dependsOn`/`boundedContext`). Es
+   `RoadmapSubmodule` con `status`/`priority`/`dependsOn`/`boundedContext`).
+   Cada módulo declara además su `objective` (la "definición de hecho" de
+   ingeniería) y `userNeeds` (qué espera el usuario que ERPify le resuelva ahí).
+   Es
    el backlog vivo, importable, portable (un futuro seed de API/DB o un export a
    GitHub Projects consume la misma forma) y **sin drift** posible respecto a la
    UI.

@@ -41,6 +41,10 @@ import {
  * - `in-progress` — partially present; foundations exist but the module is not
  *                   yet a finished, reusable capability.
  * - `planned`     — not started.
+ *
+ * `objective` is the engineering "definition of done"; `userNeeds` is the
+ * complementary user-facing view — the jobs a user expects ERPify to solve for
+ * them. Foundation/ops modules frame the need from the operator/admin's seat.
  */
 export type RoadmapStatus = "done" | "in-progress" | "planned";
 
@@ -61,8 +65,10 @@ export interface RoadmapModule {
   icon: LucideIcon;
   status: RoadmapStatus;
   priority: RoadmapPriority;
-  /** What "done" means for this module, one line. */
+  /** What "done" means for this module, one line (engineering view). */
   objective: string;
+  /** What a user expects ERPify to solve here — the needs this module covers. */
+  userNeeds: string[];
   /** Bounded context this module lives in, when decided. */
   boundedContext?: string;
   /** Module codes this one depends on. */
@@ -92,6 +98,11 @@ export const roadmapPhases: RoadmapPhase[] = [
         status: "in-progress",
         priority: "critical",
         objective: "Todo el sistema reacciona a eventos internos sin acoplamiento.",
+        userNeeds: [
+          "Que mis acciones disparen efectos automáticos (avisos, tareas) sin esperar.",
+          "Que nada se pierda aunque un proceso falle por el camino.",
+          "Que la app siga ágil aunque crezca el volumen de trabajo.",
+        ],
         boundedContext: "shared",
         submodules: [
           { name: "Command Bus / Query Bus (CQRS light)", status: "in-progress" },
@@ -110,6 +121,10 @@ export const roadmapPhases: RoadmapPhase[] = [
         status: "in-progress",
         priority: "critical",
         objective: "Consistencia fuerte entre la DB y los eventos publicados.",
+        userNeeds: [
+          "Que un cambio guardado nunca quede a medias respecto a sus avisos o integraciones.",
+          "Que no me lleguen notificaciones duplicadas por un mismo hecho.",
+        ],
         boundedContext: "shared",
         dependsOn: ["0.3"],
         submodules: [
@@ -128,6 +143,11 @@ export const roadmapPhases: RoadmapPhase[] = [
         status: "in-progress",
         priority: "critical",
         objective: "Estandarizar el acceso a datos de forma componible.",
+        userNeeds: [
+          "Buscar, filtrar y ordenar cualquier listado al instante.",
+          "Trabajar con listas grandes sin que la pantalla se congele.",
+          "Recibir errores claros y entendibles, no pantallazos técnicos.",
+        ],
         boundedContext: "shared",
         submodules: [
           { name: "Criteria Query System (filtros componibles)", status: "done" },
@@ -145,6 +165,11 @@ export const roadmapPhases: RoadmapPhase[] = [
         status: "in-progress",
         priority: "critical",
         objective: "Base SaaS enterprise: aislamiento por tenant y autorización.",
+        userNeeds: [
+          "Entrar de forma segura con mi cuenta.",
+          "Que cada empresa solo pueda ver y tocar sus propios datos.",
+          "Permisos por rol: cada persona ve y hace exactamente lo que le toca.",
+        ],
         boundedContext: "shared",
         submodules: [
           { name: "Tenant Context Resolver", status: "planned" },
@@ -162,6 +187,10 @@ export const roadmapPhases: RoadmapPhase[] = [
         status: "in-progress",
         priority: "high",
         objective: "Sistema observable desde el primer día.",
+        userNeeds: [
+          "Que si algo falla se detecte antes de que me afecte.",
+          "Que soporte pueda rastrear mi incidencia concreta por un identificador.",
+        ],
         boundedContext: "shared",
         submodules: [
           { name: "Structured logging standard", status: "done" },
@@ -178,6 +207,11 @@ export const roadmapPhases: RoadmapPhase[] = [
         status: "planned",
         priority: "high",
         objective: "Toda la app disponible en inglés y español, con el idioma como preferencia del usuario.",
+        userNeeds: [
+          "Usar toda la aplicación en mi idioma (español o inglés).",
+          "Que fechas, números y moneda se muestren en mi formato local.",
+          "Recibir emails y mensajes de error también en mi idioma.",
+        ],
         boundedContext: "shared",
         submodules: [
           { name: "Catálogos de traducción PWA (next-intl)" },
@@ -200,6 +234,11 @@ export const roadmapPhases: RoadmapPhase[] = [
         status: "in-progress",
         priority: "high",
         objective: "Trazabilidad completa: quién cambió qué y cuándo, consultable y exportable.",
+        userNeeds: [
+          "Saber quién cambió qué y cuándo en cualquier registro.",
+          "Recuperar el historial completo de cambios de un dato.",
+          "Exportar el rastro de actividad para una auditoría o un cliente.",
+        ],
         boundedContext: "shared",
         dependsOn: ["0.6"],
         submodules: [
@@ -228,6 +267,11 @@ export const roadmapPhases: RoadmapPhase[] = [
         status: "planned",
         priority: "high",
         objective: "Usuarios, empresas (frontera multi-tenant) y equipos.",
+        userNeeds: [
+          "Gestionar los usuarios y equipos de mi empresa.",
+          "Invitar gente y asignarle el rol y los permisos adecuados.",
+          "Editar mi perfil, mi contraseña y mis preferencias.",
+        ],
         boundedContext: "organization",
         dependsOn: ["0.6"],
         submodules: [
@@ -245,6 +289,12 @@ export const roadmapPhases: RoadmapPhase[] = [
         status: "planned",
         priority: "high",
         objective: "Gestión de clientes, pipeline y actividad comercial.",
+        userNeeds: [
+          "Tener todos mis clientes, contactos y oportunidades en un único sitio.",
+          "Seguir cada oportunidad por sus fases hasta cerrarla.",
+          "Registrar llamadas, tareas, emails y notas sin perder el hilo.",
+          "No olvidarme nunca de un seguimiento comercial.",
+        ],
         boundedContext: "frontoffice",
         dependsOn: ["1.1"],
         submodules: [
@@ -264,6 +314,11 @@ export const roadmapPhases: RoadmapPhase[] = [
         status: "planned",
         priority: "high",
         objective: "Vertical CORE: gestión de obra de principio a fin.",
+        userNeeds: [
+          "Controlar cada obra de principio a fin desde un solo lugar.",
+          "Ver el avance real por fases e hitos en tiempo real.",
+          "Saber quién está haciendo qué tarea y cuándo.",
+        ],
         boundedContext: "operations",
         dependsOn: ["1.1"],
         submodules: [
@@ -282,6 +337,11 @@ export const roadmapPhases: RoadmapPhase[] = [
         status: "planned",
         priority: "high",
         objective: "Presupuestos por proyecto con estructura de coste y versionado.",
+        userNeeds: [
+          "Hacer presupuestos por obra con sus partidas de coste.",
+          "Reutilizar plantillas para no empezar de cero cada vez.",
+          "Comparar lo previsto frente a lo real y ver el margen.",
+        ],
         boundedContext: "operations",
         dependsOn: ["1.3"],
         submodules: [
@@ -300,6 +360,12 @@ export const roadmapPhases: RoadmapPhase[] = [
         status: "planned",
         priority: "high",
         objective: "Proveedores, compras y control de stock por proyecto.",
+        userNeeds: [
+          "Saber qué material tengo y en qué almacén está.",
+          "Lanzar y seguir pedidos a proveedores.",
+          "Reservar material para una obra concreta.",
+          "Que me avise antes de quedarme sin stock.",
+        ],
         boundedContext: "operations",
         dependsOn: ["1.3"],
         submodules: [
@@ -327,6 +393,12 @@ export const roadmapPhases: RoadmapPhase[] = [
         status: "planned",
         priority: "medium",
         objective: "Personal, subcontratas y partes de trabajo con coste por hora.",
+        userNeeds: [
+          "Registrar las horas trabajadas por tarea y por obra.",
+          "Llevar los partes de trabajo de empleados y subcontratas.",
+          "Saber el coste real de mano de obra de cada proyecto.",
+          "Planificar la carga de trabajo del equipo.",
+        ],
         boundedContext: "operations",
         dependsOn: ["1.3"],
         submodules: [
@@ -345,6 +417,11 @@ export const roadmapPhases: RoadmapPhase[] = [
         status: "planned",
         priority: "medium",
         objective: "Almacenamiento, versionado y permisos de documentos ligados a proyecto.",
+        userNeeds: [
+          "Guardar todos los documentos de una obra juntos y encontrarlos rápido.",
+          "Acceder siempre a la última versión de cada documento.",
+          "Controlar quién puede ver o editar cada documento.",
+        ],
         boundedContext: "shared",
         dependsOn: ["0.6"],
         submodules: [
@@ -367,6 +444,12 @@ export const roadmapPhases: RoadmapPhase[] = [
         status: "in-progress",
         priority: "high",
         objective: "Facturación, pagos y agregación de coste por proyecto.",
+        userNeeds: [
+          "Emitir y controlar facturas de cliente y de proveedor.",
+          "Seguir cobros y pagos pendientes.",
+          "Ver el cashflow y la tesorería de un vistazo.",
+          "Saber el coste y el margen real de cada proyecto.",
+        ],
         boundedContext: "backoffice",
         dependsOn: ["1.4"],
         submodules: [
@@ -394,6 +477,11 @@ export const roadmapPhases: RoadmapPhase[] = [
         status: "planned",
         priority: "high",
         objective: "Motor de reglas y workflows que reacciona a eventos del dominio.",
+        userNeeds: [
+          "Automatizar tareas repetitivas con reglas 'si pasa X, haz Y'.",
+          "Diseñar mis propios flujos de trabajo sin programar.",
+          "Que el sistema cree tareas y avise por mí, solo.",
+        ],
         boundedContext: "shared",
         dependsOn: ["0.3"],
         submodules: [
@@ -412,6 +500,11 @@ export const roadmapPhases: RoadmapPhase[] = [
         status: "in-progress",
         priority: "medium",
         objective: "Centro de notificaciones in-app, email y push con preferencias por usuario.",
+        userNeeds: [
+          "Enterarme al momento de lo que me afecta.",
+          "Elegir qué avisos quiero recibir y por qué canal (app, email o push).",
+          "Ver mis notificaciones en un único centro.",
+        ],
         boundedContext: "shared",
         dependsOn: ["0.3"],
         submodules: [
@@ -437,6 +530,10 @@ export const roadmapPhases: RoadmapPhase[] = [
         status: "planned",
         priority: "low",
         objective: "Activación por tenant/usuario y rollout gradual.",
+        userNeeds: [
+          "Activar o desactivar funciones para mi empresa sin esperar a un despliegue.",
+          "Probar novedades con un grupo reducido antes de abrirlas a todos.",
+        ],
         boundedContext: "shared",
         dependsOn: ["0.6"],
         submodules: [
@@ -462,6 +559,11 @@ export const roadmapPhases: RoadmapPhase[] = [
         status: "planned",
         priority: "medium",
         objective: "KPIs configurables y dashboards de proyecto/financieros con export.",
+        userNeeds: [
+          "Ver dashboards de obra y financieros de un vistazo.",
+          "Crear mis propios KPIs sin depender de nadie.",
+          "Exportar informes a PDF o Excel para compartir.",
+        ],
         boundedContext: "backoffice",
         dependsOn: ["2.3"],
         submodules: [
@@ -479,6 +581,11 @@ export const roadmapPhases: RoadmapPhase[] = [
         status: "planned",
         priority: "low",
         objective: "Desviación de coste, rentabilidad y detección de cuellos de botella.",
+        userNeeds: [
+          "Detectar desviaciones de coste a tiempo, no cuando ya es tarde.",
+          "Saber qué proyectos son realmente rentables.",
+          "Anticipar cuellos de botella antes de que frenen la obra.",
+        ],
         boundedContext: "backoffice",
         dependsOn: ["4.1"],
         submodules: [
@@ -502,6 +609,11 @@ export const roadmapPhases: RoadmapPhase[] = [
         status: "planned",
         priority: "low",
         objective: "Webhooks, gateway de API externa y pipelines de import/export.",
+        userNeeds: [
+          "Conectar ERPify con mi contabilidad, mi banco u otras herramientas.",
+          "Importar y exportar datos sin tener que teclearlos a mano.",
+          "Recibir y enviar eventos a sistemas externos (webhooks).",
+        ],
         boundedContext: "shared",
         dependsOn: ["0.3"],
         submodules: [
@@ -519,6 +631,10 @@ export const roadmapPhases: RoadmapPhase[] = [
         status: "planned",
         priority: "low",
         objective: "Registro de módulos activables por tenant con hooks de extensión.",
+        userNeeds: [
+          "Añadir o quitar módulos según lo que necesite mi empresa.",
+          "Pagar solo por las capacidades que realmente uso.",
+        ],
         boundedContext: "shared",
         dependsOn: ["3.3"],
         submodules: [
@@ -543,6 +659,10 @@ export const roadmapPhases: RoadmapPhase[] = [
         status: "in-progress",
         priority: "high",
         objective: "Pipeline de build, promoción de entornos y rollback automático.",
+        userNeeds: [
+          "Que las novedades y correcciones lleguen rápido y sin romper nada.",
+          "Que se pueda volver atrás al instante si un despliegue sale mal.",
+        ],
         boundedContext: "shared",
         submodules: [
           { name: "GitHub Actions pipelines", status: "done", note: "quality + tests en push/PR" },
@@ -559,6 +679,10 @@ export const roadmapPhases: RoadmapPhase[] = [
         status: "in-progress",
         priority: "high",
         objective: "Cobertura BDD, contract testing y utilidades de test event-driven.",
+        userNeeds: [
+          "Confiar en que cada versión está probada antes de llegar a mí.",
+          "Sufrir menos errores y regresiones en producción.",
+        ],
         boundedContext: "shared",
         submodules: [
           { name: "Behat BDD layer", status: "done" },
@@ -575,6 +699,10 @@ export const roadmapPhases: RoadmapPhase[] = [
         status: "in-progress",
         priority: "medium",
         objective: "Entornos Compose, deploy blue/green y escalado de workers.",
+        userNeeds: [
+          "Que la app esté disponible sin cortes durante las actualizaciones.",
+          "Que el rendimiento se mantenga aunque aumente la carga.",
+        ],
         boundedContext: "shared",
         submodules: [
           { name: "Docker Compose environments", status: "done" },

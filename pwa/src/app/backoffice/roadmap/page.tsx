@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Check } from "lucide-react";
 import { StatusBadge, type StatusBadgeVariant } from "@/components/erpify";
 import { cn } from "@/lib/utils";
 import {
@@ -91,6 +91,20 @@ function ModuleCard({ module }: Readonly<{ module: RoadmapModule }>) {
       <p className="roadmap__module-objective text-muted-foreground text-xs leading-relaxed">
         {module.objective}
       </p>
+
+      <div className="roadmap__needs bg-muted/40 border-border flex flex-col gap-1.5 rounded-lg border p-3">
+        <p className="roadmap__needs-title text-foreground text-2xs font-semibold tracking-wider uppercase">
+          Necesidades que cubre
+        </p>
+        <ul className="roadmap__needs-list flex flex-col gap-1">
+          {module.userNeeds.map((need) => (
+            <li key={need} className="roadmap__need text-foreground flex items-start gap-2 text-xs">
+              <Check className="text-status-dot-success mt-0.5 size-3.5 flex-none" aria-hidden="true" />
+              <span className="min-w-0 flex-1">{need}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
 
       <div className="roadmap__module-meta flex flex-wrap items-center gap-1.5">
         <Chip>Prioridad: {PRIORITY_LABEL[module.priority]}</Chip>
