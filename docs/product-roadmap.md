@@ -68,6 +68,65 @@ Lo grande que **falta** y condiciona todo: **autenticación / RBAC / multi-tenan
 
 El desglose de módulos y submódulos de cada fase está en `roadmap.ts`.
 
+## Estrategia de implementación — modelado de datos (muy importante)
+
+Cómo se construye el esquema a medida que se entregan los módulos de negocio
+(Fase 1+). Es ortogonal a las fases de producto: describe la **evolución del
+modelo de datos**, no qué módulo va antes. Operacionaliza —a nivel de datos— la
+regla ya vigente en [`architecture-api.md`](architecture-api.md): *un contexto
+nunca alcanza el `Domain/` ni la `Infrastructure/` de otro; la comunicación
+entre contextos va por Application services publicados o por eventos de dominio.*
+
+### Etapa 1 — ahora (cada módulo, aislado)
+
+- **Entidades mínimas por contexto.** Solo los campos que el módulo necesita
+  hoy; nada especulativo.
+- **Relaciones locales.** FKs dentro del mismo bounded context; **sin FKs
+  cross-module agresivas**. Una referencia a otro contexto se modela como un
+  identificador (UUID) sin constraint de FK física entre contextos.
+- **Fixtures por módulo.** Cada contexto trae sus propios datos de prueba,
+  independientes.
+
+### Etapa 2 — integración (solo vía eventos)
+
+- **Integración entre módulos SOLO por eventos** (de dominio / integración),
+  nunca por consultas directas al repositorio de otro contexto.
+- **Read models para dashboards**: proyecciones materializadas que escuchan
+  esos eventos, en lugar de hacer JOINs cross-context en caliente.
+- **Automatizaciones simples** disparadas por eventos (Fase 3 del producto).
+
+### Etapa 3 — consolidación
+
+- **Consolidación de esquema** una vez los límites están probados por el uso.
+- **Optimización de queries** (índices, `EXPLAIN ANALYZE` — ver
+  [`rules/database.md`](rules/database.md)).
+- **Proyecciones / CQRS ligero** donde el coste de lectura lo justifique.
+
+### Recomendación arquitectónica concreta
+
+**❌ NO:** una base de datos «ERPIFY_CORE» gigante con todo conectado por FKs
+entre contextos. Acopla los módulos y degenera en el monolito espagueti.
+
+**✅ SÍ:** **una sola DB física** (correcto en un modular monolith), pero con:
+
+- **separación lógica estricta** — schema por bounded context, o una
+  convención de nombres fuerte (`<context>_<tabla>`) si se mantiene un único
+  schema;
+- **repositorios aislados** por contexto;
+- **sin cross-repository queries directas** entre contextos — los datos de otro
+  contexto se obtienen por su Application service o por un read model alimentado
+  por eventos.
+
+> Encaja con el plan multi-tenant (`company_id`) de
+> [`saas-production-roadmap.md`](saas-production-roadmap.md) (Fase H): el
+> aislamiento por tenant es ortogonal al aislamiento por contexto; ambos se
+> aplican a nivel de query, no por disciplina de cada repositorio.
+
+Si se quiere que estas reglas sean **vinculantes y verificadas** (no solo
+guía de roadmap), el siguiente paso es trasladarlas a
+[`rules/database.md`](rules/database.md) / [`architecture-api.md`](architecture-api.md)
+y añadir un gate de lint que detecte FKs o imports cross-context.
+
 ## Buckets de complejidad (para estimar)
 
 Las ~35 funcionalidades pendientes del menú backoffice no cuestan lo mismo.
