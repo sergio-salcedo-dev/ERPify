@@ -44,10 +44,10 @@ use LogicException;
  * The fingerprint derives EXCLUSIVELY from the sealed trace (step 4), never from raw request input,
  * and no validation output mutates the trace post-sealing (AR22).
  *
- * PR2 scope (D-1, sealed): this engine is a *specification engine* verified by DIRECT tests
- * (property, snapshot, contract — never HTTP). It does NOT participate in the HTTP wire-path; the
- * legacy {@see \Erpify\Shared\Infrastructure\Persistence\Doctrine\Paginator} still serves the wire.
- * The flip (engine → HTTP runtime, new cursor codec + 422 + after/before envelope) is PR3.
+ * This engine is the single runtime query-shaper for the filterable-search read-path: the HTTP
+ * layer hands it a base query builder plus allow-lists and receives an immutable {@see Page} with
+ * opaque cursors (after/before envelope, 422 on an invalid cursor). It is also verified in
+ * isolation by DIRECT tests (property, snapshot, contract — never HTTP).
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */

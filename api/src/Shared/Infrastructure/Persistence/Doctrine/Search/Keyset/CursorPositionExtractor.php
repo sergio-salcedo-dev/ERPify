@@ -15,14 +15,12 @@ use Symfony\Component\PropertyAccess\PropertyAccessorInterface;
  * Extracts the boundary-row values for the ORDER BY columns, at COLUMN
  * precision — the values a cursor carries and the keyset predicate binds.
  *
- * Two corrections over the legacy `Paginator::extractFields()`:
+ * Two invariants keep a boundary value round-tripping exactly:
  *   1. Datetimes are formatted to UTC at column precision — `Y-m-d\TH:i:sP`
- *      (seconds, the schema's `TIMESTAMP(0)`). The legacy emitted microseconds
- *      (`.uP`), so a boundary value never round-tripped exactly against a
- *      second-precision column — that off-by-a-fraction boundary bug is what
- *      this piece fixes.
- *   2. The property accessor is injected once (constructor), not instantiated
- *      per call — the impurity the ADR calls out by name.
+ *      (seconds, the schema's `TIMESTAMP(0)`). Emitting microseconds (`.uP`)
+ *      would make a boundary value miss a second-precision column by a fraction.
+ *   2. The property accessor is injected once (constructor), never instantiated
+ *      per call — the purity rule the ADR calls out by name.
  *
  * Deterministic and side-effect free: same row + columns ⇒ same position.
  */

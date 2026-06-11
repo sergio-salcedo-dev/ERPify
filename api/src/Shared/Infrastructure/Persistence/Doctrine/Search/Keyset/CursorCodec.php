@@ -15,19 +15,18 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
  *   `base64url(json{v, dir, values, fp})` + `.` + `HMAC-SHA256(body)` truncated
  *   to 32 hex (128 bits) — exactly one `.` separator.
  *
- * Unlike the legacy {@see \Erpify\Shared\Infrastructure\Persistence\PaginatorCursorFactory}
- * there is NO zlib: a cursor is a small, bounded token, and compression buys
- * nothing but an extra failure mode. The HMAC pattern (secret via
- * `%kernel.secret%`, `hash_equals`, `.` separator) is the one proven piece kept.
+ * The body is NOT zlib-compressed: a cursor is a small, bounded token, and
+ * compression buys nothing but an extra failure mode. The HMAC (secret via
+ * `%kernel.secret%`, `hash_equals`, `.` separator) is what guards integrity.
  *
  * Decoding validates in the intrinsic-first DAG order (AR10):
  *   signature → version → payload → fingerprint.
  * The length cap is enforced BEFORE any HMAC work (NFR1: never hash an
  * unbounded input). The fingerprint check is a DEFERRED integrity hook: the
  * caller passes the expected fingerprint as a plain string and the codec
- * compares — it NEVER imports or knows {@see QueryExecutionTrace}. Wiring the
- * trace to the expected fingerprint is the engine's job in PR2; coupling it here
- * would be premature and break the AR16 sequence.
+ * compares — it NEVER imports or knows {@see QueryExecutionTrace}. The engine
+ * wires the trace to the expected fingerprint; the codec stays agnostic of how
+ * that fingerprint was produced.
  *
  * The `dir` field is an integrity binding (K2/AR21): compared against the
  * expected direction, never consulted to decide navigation. A mismatch is a
