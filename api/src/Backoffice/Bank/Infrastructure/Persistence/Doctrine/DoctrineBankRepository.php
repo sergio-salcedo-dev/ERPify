@@ -93,8 +93,8 @@ final readonly class DoctrineBankRepository implements
             ->from(Bank::class, 'b')
         ;
 
-        /** @var Page<Bank> $page */
-        $page = $this->searchEngine->paginate(
+        /** @var Page<Bank> */
+        return $this->searchEngine->paginate(
             $queryBuilder,
             $criteria,
             $this->searchFieldMap(),
@@ -103,8 +103,6 @@ final readonly class DoctrineBankRepository implements
             WirePaginationPolicy::wire(),
             $this->routingDirection($criteria->routingDirection),
         );
-
-        return $page;
     }
 
     #[Override]

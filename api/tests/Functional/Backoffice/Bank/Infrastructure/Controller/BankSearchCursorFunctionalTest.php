@@ -31,6 +31,8 @@ final class BankSearchCursorFunctionalTest extends WebTestCase
 {
     private const string ENDPOINT = '/api/v1/backoffice/banks';
 
+    private const string FIRST_PAGE_QUERY = '?limit=10&sort=name&direction=ASC';
+
     private const int DATASET_SIZE = 30;
 
     private KernelBrowser $client;
@@ -60,7 +62,7 @@ final class BankSearchCursorFunctionalTest extends WebTestCase
      */
     public function testFirstPageEmitsTheConstantCursorOnlyEnvelopeWithoutPageNumbers(): void
     {
-        $body = $this->get(self::ENDPOINT . '?limit=10&sort=name&direction=ASC');
+        $body = $this->get(self::ENDPOINT . self::FIRST_PAGE_QUERY);
 
         self::assertResponseIsSuccessful();
         $pagination = $this->pagination($body);
@@ -87,7 +89,7 @@ final class BankSearchCursorFunctionalTest extends WebTestCase
      */
     public function testForwardThenBackwardNavigationViaLinksRoundTrips(): void
     {
-        $page1 = $this->get(self::ENDPOINT . '?limit=10&sort=name&direction=ASC');
+        $page1 = $this->get(self::ENDPOINT . self::FIRST_PAGE_QUERY);
         $next = $this->link($this->pagination($page1), 'next');
         $this->assertNotNull($next);
 
@@ -136,12 +138,12 @@ final class BankSearchCursorFunctionalTest extends WebTestCase
     public function testCursorReplayedInTheWrongDirectionIsRejected(): void
     {
         // A `next` cursor carries dir=after; replaying it as `before` contradicts the wire param.
-        $firstPage = $this->get(self::ENDPOINT . '?limit=10&sort=name&direction=ASC');
+        $firstPage = $this->get(self::ENDPOINT . self::FIRST_PAGE_QUERY);
         $next = $this->link($this->pagination($firstPage), 'next');
         $this->assertNotNull($next);
         $afterCursor = $this->cursorParam($next, 'after');
 
-        $body = $this->get(self::ENDPOINT . '?limit=10&sort=name&direction=ASC&before=' . \rawurlencode($afterCursor));
+        $body = $this->get(self::ENDPOINT . self::FIRST_PAGE_QUERY . '&before=' . \rawurlencode($afterCursor));
 
         self::assertResponseStatusCodeSame(422);
         $this->assertSame('invalid-cursor', $this->type($body));
@@ -182,7 +184,7 @@ final class BankSearchCursorFunctionalTest extends WebTestCase
     public function testBeforeIntoADeletedGapIsForwardRecoverable(): void
     {
         // Reach page 2 (banks 11–20) and grab its prev cursor (points before bank 11).
-        $page1 = $this->get(self::ENDPOINT . '?limit=10&sort=name&direction=ASC');
+        $page1 = $this->get(self::ENDPOINT . self::FIRST_PAGE_QUERY);
         $next = $this->link($this->pagination($page1), 'next');
         $this->assertNotNull($next);
         $page2 = $this->get($next);
@@ -244,10 +246,8 @@ final class BankSearchCursorFunctionalTest extends WebTestCase
         $this->assertArrayHasKey('pagination', $body);
         $this->assertIsArray($body['pagination']);
 
-        /** @var array<string, mixed> $pagination */
-        $pagination = $body['pagination'];
-
-        return $pagination;
+        /** @phpstan-var array<string, mixed> */
+        return $body['pagination'];
     }
 
     /**
@@ -260,10 +260,8 @@ final class BankSearchCursorFunctionalTest extends WebTestCase
         $this->assertArrayHasKey('links', $pagination);
         $this->assertIsArray($pagination['links']);
 
-        /** @var array<string, mixed> $links */
-        $links = $pagination['links'];
-
-        return $links;
+        /** @phpstan-var array<string, mixed> */
+        return $pagination['links'];
     }
 
     /**

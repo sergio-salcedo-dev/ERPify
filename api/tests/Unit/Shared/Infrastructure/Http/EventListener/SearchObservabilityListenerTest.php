@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Infrastructure\Http\EventListener;
 
+use BadMethodCallException;
 use Erpify\Shared\Domain\Search\Exception\InvalidCursor;
 use Erpify\Shared\Infrastructure\Http\CorrelationIdListener;
 use Erpify\Shared\Infrastructure\Http\EventListener\ExceptionResponder;
@@ -253,7 +254,7 @@ final class SearchObservabilityListenerTest extends TestCase
             #[Override]
             public function handle(Request $request, int $type = self::MAIN_REQUEST, bool $catch = true): Response
             {
-                throw new RuntimeException('Test kernel: handle() must not be called by the listener.');
+                throw new BadMethodCallException('Test kernel: handle() must not be called by the listener.');
             }
         };
     }
@@ -266,9 +267,7 @@ final class SearchObservabilityListenerTest extends TestCase
         $logs = \array_values($logger->cleanLogs());
         $this->assertCount(1, $logs, 'Exactly one observability line expected.');
 
-        /** @var array{string, string, array<string, mixed>} $record */
-        $record = $logs[0];
-
-        return $record;
+        /** @phpstan-var array{string, string, array<string, mixed>} */
+        return $logs[0];
     }
 }
