@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { flows, type Flow, type FlowTone } from "./_lib/flows";
+import { flows, type Flow, type FlowDiagramNode, type FlowTone } from "./_lib/flows";
 
 export const metadata: Metadata = {
   title: "Cómo funciona ERPify",
@@ -60,6 +60,153 @@ function FlowMap({ flow }: Readonly<{ flow: Flow }>) {
   );
 }
 
+const NODE_W = 158;
+const NODE_H = 56;
+const GAP_X = 36;
+const GAP_Y = 46;
+const CHART_PAD = 10;
+
+function nodeRect(node: FlowDiagramNode) {
+  const x = CHART_PAD + node.col * (NODE_W + GAP_X);
+  const y = CHART_PAD + node.row * (NODE_H + GAP_Y);
+  return { x, y, cx: x + NODE_W / 2, cy: y + NODE_H / 2 };
+}
+
+function edgeGeometry(from: FlowDiagramNode, to: FlowDiagramNode) {
+  const a = nodeRect(from);
+  const b = nodeRect(to);
+  if (from.row === to.row) {
+    const [sx, ex] = a.x < b.x ? [a.x + NODE_W, b.x] : [a.x, b.x + NODE_W];
+    return { path: `M ${sx} ${a.cy} L ${ex} ${b.cy}`, labelX: (sx + ex) / 2, labelY: a.cy - 7 };
+  }
+  if (from.col === to.col) {
+    return {
+      path: `M ${a.cx} ${a.y + NODE_H} L ${b.cx} ${b.y}`,
+      labelX: a.cx + 8,
+      labelY: (a.y + NODE_H + b.y) / 2 + 3,
+    };
+  }
+  const midY = b.y - GAP_Y / 2;
+  return {
+    path: `M ${a.cx} ${a.y + NODE_H} L ${a.cx} ${midY} L ${b.cx} ${midY} L ${b.cx} ${b.y}`,
+    labelX: (a.cx + b.cx) / 2,
+    labelY: midY - 6,
+  };
+}
+
+function FlowChart({ flow }: Readonly<{ flow: Flow }>) {
+  const diagram = flow.diagram;
+  if (!diagram) return null;
+  const byId = new Map(diagram.nodes.map((node) => [node.id, node]));
+  const cols = Math.max(...diagram.nodes.map((node) => node.col)) + 1;
+  const rows = Math.max(...diagram.nodes.map((node) => node.row)) + 1;
+  const width = CHART_PAD * 2 + cols * NODE_W + (cols - 1) * GAP_X;
+  const height = CHART_PAD * 2 + rows * NODE_H + (rows - 1) * GAP_Y;
+  const arrowId = `${flow.id}-arrow`;
+  return (
+    <figure
+      className="flow__chart border-border bg-card overflow-x-auto rounded-xl border p-4 shadow-sm"
+      data-testid={`docs-flow__chart-${flow.id}`}
+    >
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label={diagram.title}
+        className="w-full"
+        style={{ minWidth: `${Math.round(width * 0.85)}px` }}
+      >
+        <g className="text-muted-foreground">
+          <defs>
+            <marker
+              id={arrowId}
+              viewBox="0 0 7 7"
+              refX="6"
+              refY="3.5"
+              markerWidth="7"
+              markerHeight="7"
+              orient="auto-start-reverse"
+            >
+              <path d="M0,0 L7,3.5 L0,7 Z" fill="currentColor" />
+            </marker>
+          </defs>
+          {diagram.edges.map((edge) => {
+            const from = byId.get(edge.from);
+            const to = byId.get(edge.to);
+            if (!from || !to) return null;
+            const { path, labelX, labelY } = edgeGeometry(from, to);
+            return (
+              <g key={`${edge.from}-${edge.to}`}>
+                <path
+                  d={path}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.2"
+                  strokeDasharray={edge.async ? "5 4" : undefined}
+                  markerEnd={`url(#${arrowId})`}
+                  markerStart={edge.bidirectional ? `url(#${arrowId})` : undefined}
+                />
+                {edge.label ? (
+                  <text x={labelX} y={labelY} textAnchor="middle" fontSize="10" fill="currentColor">
+                    {edge.label}
+                  </text>
+                ) : null}
+              </g>
+            );
+          })}
+        </g>
+        {diagram.nodes.map((node) => {
+          const { x, y, cx, cy } = nodeRect(node);
+          return (
+            <g key={node.id}>
+              <rect
+                x={x}
+                y={y}
+                width={NODE_W}
+                height={NODE_H}
+                rx="10"
+                className="fill-card stroke-border"
+                strokeWidth="1"
+                strokeDasharray={node.async ? "5 4" : undefined}
+              />
+              <text
+                x={cx}
+                y={node.sublabel ? cy - 3 : cy + 4}
+                textAnchor="middle"
+                fontSize="12"
+                fontWeight="600"
+                className="fill-foreground"
+              >
+                {node.label}
+              </text>
+              {node.sublabel ? (
+                <text
+                  x={cx}
+                  y={cy + 13}
+                  textAnchor="middle"
+                  fontSize="10"
+                  className="fill-muted-foreground"
+                >
+                  {node.sublabel}
+                </text>
+              ) : null}
+            </g>
+          );
+        })}
+      </svg>
+      <figcaption className="flow__chart-legend text-muted-foreground mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs">
+        <span className="flex items-center gap-2">
+          <span className="border-muted-foreground w-5 border-t" aria-hidden="true" />
+          Camino de tu petición (ida y vuelta)
+        </span>
+        <span className="flex items-center gap-2">
+          <span className="border-muted-foreground w-5 border-t border-dashed" aria-hidden="true" />
+          En segundo plano (asíncrono)
+        </span>
+      </figcaption>
+    </figure>
+  );
+}
+
 function FlowJourney({ flow }: Readonly<{ flow: Flow }>) {
   return (
     <section className="flow flex flex-col gap-5" data-testid={`docs-flow__flow-${flow.id}`}>
@@ -69,6 +216,8 @@ function FlowJourney({ flow }: Readonly<{ flow: Flow }>) {
       </header>
 
       <FlowMap flow={flow} />
+
+      <FlowChart flow={flow} />
 
       <ol className="flow__steps flex flex-col">
         {flow.steps.map((step, index) => {

@@ -33,10 +33,41 @@ export interface FlowStep {
   tech?: string;
 }
 
+export interface FlowDiagramNode {
+  id: string;
+  label: string;
+  /** One short clarifier line under the label. */
+  sublabel?: string;
+  /** Grid column (0-based, left to right). */
+  col: number;
+  /** Grid row (0-based, top to bottom). */
+  row: number;
+  /** Part of the background (asynchronous) path — rendered dashed. */
+  async?: boolean;
+}
+
+export interface FlowDiagramEdge {
+  from: string;
+  to: string;
+  label?: string;
+  /** Request/response pair — arrowheads on both ends. */
+  bidirectional?: boolean;
+  /** Background (asynchronous) hop — rendered dashed. */
+  async?: boolean;
+}
+
+export interface FlowDiagram {
+  /** Accessible name for the SVG. */
+  title: string;
+  nodes: FlowDiagramNode[];
+  edges: FlowDiagramEdge[];
+}
+
 export interface Flow {
   id: string;
   title: string;
   intro: string;
+  diagram?: FlowDiagram;
   steps: FlowStep[];
 }
 
@@ -45,6 +76,50 @@ const requestLifecycle: Flow = {
   title: "El viaje de una petición",
   intro:
     "Cada vez que haces algo en ERPify (guardar, buscar, editar), tu acción recorre el sistema de punta a punta y vuelve. Este es el recorrido real, pieza a pieza y con sus nombres reales.",
+  diagram: {
+    title:
+      "Diagrama del viaje de una petición: el camino síncrono va del navegador a la base de datos y vuelve; del API se bifurca el camino asíncrono hacia la cola, el worker y Mercure.",
+    nodes: [
+      { id: "navegador", label: "Navegador", sublabel: "tú", col: 0, row: 0 },
+      { id: "pwa", label: "PWA (Next.js)", sublabel: "la interfaz", col: 1, row: 0 },
+      { id: "proxy", label: "FrankenPHP", sublabel: "enruta cada petición", col: 2, row: 0 },
+      { id: "api", label: "API (Symfony)", sublabel: "valida y aplica reglas", col: 3, row: 0 },
+      { id: "db", label: "PostgreSQL", sublabel: "datos permanentes", col: 4, row: 0 },
+      {
+        id: "evento",
+        label: "Evento de dominio",
+        sublabel: "«ha pasado algo»",
+        col: 3,
+        row: 1,
+        async: true,
+      },
+      {
+        id: "worker",
+        label: "Worker (Messenger)",
+        sublabel: "emails, avisos, reintentos",
+        col: 2,
+        row: 2,
+        async: true,
+      },
+      {
+        id: "mercure",
+        label: "Mercure",
+        sublabel: "tiempo real al navegador",
+        col: 4,
+        row: 2,
+        async: true,
+      },
+    ],
+    edges: [
+      { from: "navegador", to: "pwa", bidirectional: true },
+      { from: "pwa", to: "proxy", label: "HTTP", bidirectional: true },
+      { from: "proxy", to: "api", label: "/api/*", bidirectional: true },
+      { from: "api", to: "db", label: "SQL", bidirectional: true },
+      { from: "api", to: "evento", async: true },
+      { from: "evento", to: "worker", label: "cola", async: true },
+      { from: "worker", to: "mercure", label: "publica", async: true },
+    ],
+  },
   steps: [
     {
       icon: MousePointerClick,
