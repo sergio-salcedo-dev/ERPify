@@ -172,6 +172,15 @@ Do **not** spawn subagents for tasks that share state mid-flight — two agents 
 
 [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope>): <subject>` — subject lower-case, imperative, no trailing period. Types: `feat | fix | docs | style | refactor | perf | test | build | ci | chore | revert`. Full pre-commit hook setup in [`docs/contribution-guide.md`](docs/contribution-guide.md).
 
+### Code comments (`api/src`, `pwa/src`, tests)
+
+A comment must explain the non-obvious *why* of the **current** code, standing on its own with no diff context. Two patterns are banned from anything merged to `main`:
+
+- **Change-relative comments** — never describe the change or what was there before ("previously…", "replaces the old X", "now uses Y instead of…"). A month later the "before" doesn't exist and the comment is unverifiable noise. Git history and the PR carry that record.
+- **Story / requirement IDs** — `Story 1.7`, `NFR4`, AC numbers, ticket refs. Fine as scaffolding *while* developing a task, but sweep your own diff and delete them before the final commit; traceability lives in the PR, commit messages, and spec artifacts.
+
+No mass cleanup of existing files. Instead apply the **boy scout rule**: when editing a file for any reason, also remove this kind of stale comment you find in it — leave the file better than you found it.
+
 ### Do not touch
 
 - `api/config/reference.php` — auto-generated.
