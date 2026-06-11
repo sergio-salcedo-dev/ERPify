@@ -16,9 +16,12 @@
 
 1. **Modular monolith, una sola DB física.** Separación **lógica** estricta:
    schema por bounded context o convención de nombres fuerte (`<contexto>_<tabla>`).
-2. **Sin FKs cross-context.** Una referencia a otro contexto es un **UUID v7**
-   sin constraint de FK física. La integridad cross-context se valida por
-   eventos/políticas, no por la DB.
+2. **Referencias cross-context por ID, no por FK (por defecto).** Una referencia
+   a otro contexto de negocio es un **UUID v7** sin FK física; la integridad la
+   dan eventos/políticas/ACL, no la DB. Una FK hacia shared kernel/identidad
+   (`user`, `company_id`/tenant) sí está permitida. Lo prohibido no es la
+   herramienta (FK/import), es el **conocimiento del dominio ajeno** — ver los
+   tres niveles abajo.
 3. **Sin cross-repository queries.** Un contexto nunca consulta el repositorio
    de otro; obtiene datos ajenos por un Application service publicado o por un
    **read model** alimentado por eventos.
@@ -36,11 +39,23 @@
 7. **Errores:** excepciones de dominio con markers (`NotFound` → 404,
    `Conflict` → 409, etc.) y respuesta RFC 9457.
 
-> Los principios 1–4 son **vinculantes** (defecto que bloquea revisión), no
-> orientativos — enunciado completo en
-> [`rules/database.md`](rules/database.md#bounded-context-data-isolation-modular-monolith--binding)
-> y [`architecture-api.md`](architecture-api.md). Un gate estático (FK / import
-> cross-context) está registrado como deferred work hasta que se implemente.
+**Enforce boundaries, not total isolation (3 niveles).** El acoplamiento se
+clasifica, no se prohíbe en bloque:
+
+- **🔴 Level 1 — vinculante (bloquea revisión):** import cross-context del
+  `Domain/`/`Application/` ajeno (salvo su Application service publicado +
+  integration events); cross-repository query / `JOIN` cross-context.
+- **🟡 Level 2 — desaconsejado (soft):** FK cross-context entre contextos de
+  negocio → preferir referencia por ID; justificar una FK real en el PR.
+- **🟢 Level 3 — permitido:** shared kernel (`User`, tenant, `Money`, `Uuid`),
+  referencias solo-ID, integración por eventos, read models.
+
+> **Regla de oro:** *los contextos referencian las identidades y reaccionan a
+> los eventos de otros, nunca conocen sus interioridades.* Enunciado completo y
+> niveles en
+> [`rules/database.md`](rules/database.md#bounded-context-data-isolation-modular-monolith)
+> y [`architecture-api.md`](architecture-api.md). Un gate estático de 3 niveles
+> (error/warning/allowlist) está registrado como deferred work.
 
 > **Eventos de dominio vs. de integración.** Un *domain event* es interno al
 > contexto (rico, puede cambiar). Un *integration event* es el contrato público

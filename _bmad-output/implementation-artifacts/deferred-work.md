@@ -52,25 +52,30 @@ Collected during quick-dev. Not part of the current story's shippable scope.
 
 ## Deferred from: bounded-context isolation strategy (2026-06-11)
 
-- **Static gate for bounded-context isolation** → make the isolation rules now
-  documented as *binding* in [`docs/rules/database.md`](../../docs/rules/database.md#bounded-context-data-isolation-modular-monolith--binding)
-  and [`docs/architecture-api.md`](../../docs/architecture-api.md) **machine-verified**,
-  so a violation fails CI instead of relying on review. Two checks:
-  (a) **No cross-context FK** — scan Doctrine mapping (`#[ORM\JoinColumn]` /
-  `#[ORM\ManyToOne]`/`OneToMany`/`ManyToMany` targets, and generated migration
-  `FOREIGN KEY` DDL) and fail when the FK target entity lives in a different
-  top-level context (`Backoffice/<A>` ↔ `Backoffice/<B>`, or across
-  `Backoffice`/`Frontoffice`). Cross-context references must be a bare UUID v7
-  column.
-  (b) **No cross-context import** — fail when a file under
-  `src/<Top>/<ContextA>/` has a `use Erpify\<Top>\<ContextB>\…` import, except
-  the allowed seams: another context's **published Application service**
-  interface and **integration-event** classes (define an allowlist
-  namespace/marker). `Shared/` is always importable.
-  Wire it as a `make php.lint.*` target next to the existing
-  `make php.lint.error-contract` drift gate, and add it to the "Required checks"
-  in `CLAUDE.md` once it exists. Pair with a PHPStan rule if the AST check is
-  cleaner there than in a grep gate.
+- **Static gate for bounded-context isolation (3 levels)** → make the isolation
+  rules now documented in [`docs/rules/database.md`](../../docs/rules/database.md#bounded-context-data-isolation-modular-monolith)
+  and [`docs/architecture-api.md`](../../docs/architecture-api.md) **machine-verified**.
+  The gate must **enforce boundaries, not total isolation** — model the three
+  levels, do NOT make it a dogmatic "zero coupling" check (that freezes dev,
+  forces data duplication, fights the framework):
+  - **🔴 Level 1 → ERROR (fail build).** (a) Cross-context **import**: a file
+    under `src/<Top>/<ContextA>/` with `use Erpify\<Top>\<ContextB>\Domain\…`
+    or `…\Application\…`. **Allowlist seams:** the other context's published
+    Application service interface + its integration-event classes (define a
+    marker interface / namespace convention to recognize them). `Shared/` is
+    always importable. (b) Cross-context **repository query**: another context's
+    `*Repository` injected/used outside its own context.
+  - **🟡 Level 2 → WARNING (report, don't fail).** Cross-context **FK** between
+    two business contexts — scan Doctrine `#[ORM\ManyToOne]`/`JoinColumn`
+    targets and generated migration `FOREIGN KEY` DDL; warn when the target
+    entity lives in a different top-level/business context so it gets justified
+    in review. Do not block.
+  - **🟢 Level 3 → ALLOWLISTED (no signal).** FK/refs toward shared kernel &
+    identity (`User`, tenant/`company_id`, `Money`, `Uuid`), ID-only columns,
+    event-based integration, read models.
+  Wire as a `make php.lint.*` target next to `make php.lint.error-contract`; add
+  to "Required checks" in `CLAUDE.md` once it exists. A PHPStan rule may be a
+  cleaner home for the AST import/repository checks than a grep gate.
 
 ## Deferred from: code review of story-1.2 (2026-06-11)
 

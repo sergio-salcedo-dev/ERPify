@@ -56,42 +56,67 @@
   audit row) must set its id prior to `persist()`/flush; a null id is a bug, not a Doctrine cue.
 - Validate inbound ids as UUIDs (`#[Assert\Uuid(strict: true)]`) — version-agnostic, so v7 passes.
 
-## Bounded-context data isolation (modular monolith — binding)
+## Bounded-context data isolation (modular monolith)
 
-ERPify is a **modular monolith on one physical PostgreSQL database**. Logical
-isolation between bounded contexts is **mandatory**, not stylistic. These rules
-are binding (a violation is a review-blocking defect), and complement the
-context map in [`../bounded-contexts.md`](../bounded-contexts.md) and the
-data-modeling strategy in [`../product-roadmap.md`](../product-roadmap.md).
+ERPify is a **modular monolith on one physical PostgreSQL database**. The goal is
+to **enforce context boundaries, not total isolation** — FKs and imports are not
+bad *per se*; the defect is coupling to another context's **domain internals**.
+The tool isn't the problem, the boundary it crosses is. Guiding principle:
 
-- **One physical DB, strict logical separation.** Each bounded context owns its
-  tables under a schema or a strong naming convention (`<context>_<table>`). A
-  context never reads or writes another context's tables directly.
-- **No cross-context foreign keys.** An FK constraint may only link tables
-  **inside the same bounded context**. A reference to another context is stored
-  as a bare **UUID v7 column with no `FOREIGN KEY`** (e.g. `company_id`,
-  `project_id`). Referential integrity across contexts is upheld by domain
-  events/policies and ACLs, not by the database. This keeps contexts
-  independently deployable/refactorable and avoids the "ERPIFY_CORE giant graph"
-  anti-pattern.
-- **No cross-repository queries between contexts.** A repository queries only its
-  own context's aggregates. To use another context's data, call its **published
-  Application service** or read from a **read model fed by that context's
-  events** — never `JOIN` across contexts in a hot query, and never inject
-  another context's repository.
-- **Integration only via events.** Cross-context state changes flow through
-  domain/integration events (recorded on the aggregate, persisted via the
-  outbox, published on Messenger). The consumer translates the foreign event
-  through an Anti-Corruption Layer; it does not import the emitter's `Domain/`
-  types. See the event catalog in [`../bounded-contexts.md`](../bounded-contexts.md).
-- **Tenant scoping is orthogonal and also at query level.** When `company_id`
-  lands (multi-tenant, Phase H of [`../saas-production-roadmap.md`](../saas-production-roadmap.md)),
-  every tenant-owned table carries it and every query is tenant-scoped via a
-  Doctrine filter / mandatory repository scope — never left to per-call
-  discipline. Indexes are tenant-led composites (`(company_id, …)`).
+> **Los contextos no pueden conocer las interioridades de otro, pero sí pueden
+> referenciar sus identidades y reaccionar a sus eventos.** DDD no prohíbe
+> dependencias; prohíbe el *conocimiento directo del dominio ajeno*.
 
-> **Enforcement status:** today these are enforced by **review**. A static gate
-> that fails the build on a cross-context FK or a cross-context `use` import is
-> tracked as deferred work
-> (`_bmad-output/implementation-artifacts/deferred-work.md`). Until it lands,
-> call out compliance explicitly in any PR that adds a cross-context reference.
+Each context owns its tables under a schema or a strong naming convention
+(`<context>_<table>`) and never reads/writes another's tables directly. Beyond
+that, classify coupling in **three levels** — only Level 1 is review-blocking.
+Complements the context map in [`../bounded-contexts.md`](../bounded-contexts.md)
+and the data-modeling strategy in [`../product-roadmap.md`](../product-roadmap.md).
+
+**🔴 Level 1 — prohibido (defecto que bloquea revisión):**
+
+- **Cross-context domain import.** A file under `src/<Top>/<ContextA>/` importing
+  `Erpify\<Top>\<ContextB>\Domain\…` or `…\Application\…` — i.e. knowing the
+  foreign context's internals. The **only** allowed seams are that context's
+  **published Application service interface** and its **integration-event**
+  classes.
+- **Cross-context repository query.** Injecting/using another context's
+  repository, or a `JOIN` across contexts in a hot query
+  (`$leadRepository->find($project->leadId)` from Projects ❌). Foreign data
+  comes from a published Application service or a **read model fed by events**.
+
+**🟡 Level 2 — desaconsejado (soft rule; default = referencia por ID):**
+
+- **Cross-context FK between two business contexts** (`project.lead_id →
+  crm_lead.id`). Prefer a bare **UUID v7 column with no `FOREIGN KEY`**;
+  integrity is upheld by events/policies/ACL. A genuine FK here is a warning to
+  **justify in the PR**, not an automatic block — it avoids the "ERPIFY_CORE
+  giant graph" where a CRM change breaks Projects.
+
+**🟢 Level 3 — permitido:**
+
+- **Shared kernel** — identity (`User`), tenant (`company_id`), `Money`, `Uuid`,
+  shared VOs. An FK toward an identity/tenant/shared table is fine.
+- **ID-only references** across contexts (`project.leadId`) — no JOIN, no entity
+  association, no foreign repository.
+- **Integration via events** — `ProjectCreated → CRM updates its projection`.
+  This is the canonical cross-context channel; Symfony **Messenger is the
+  boundary enforcer**.
+- **Read models** owned by the consumer, rebuilt from the emitter's events.
+
+Don't over-tighten: a dogmatic "zero coupling" gate freezes development, forces
+needless data duplication, and fights the framework. Symfony gives the
+structural base (PSR-4 autoload, service isolation, Messenger event boundary,
+per-context Doctrine mapping) — the gate itself is custom (see below).
+
+**Tenant scoping is orthogonal and also at query level.** When `company_id`
+lands (multi-tenant, Phase H of [`../saas-production-roadmap.md`](../saas-production-roadmap.md)),
+every tenant-owned table carries it and every query is tenant-scoped via a
+Doctrine filter / mandatory repository scope — never left to per-call discipline.
+Indexes are tenant-led composites (`(company_id, …)`).
+
+> **Enforcement status:** today this is enforced by **review**. A 3-level static
+> gate (Level 1 = error, Level 2 = warning, Level 3 = allowlisted) is tracked as
+> deferred work (`_bmad-output/implementation-artifacts/deferred-work.md`). Until
+> it lands, call out compliance explicitly in any PR that adds a cross-context
+> reference.

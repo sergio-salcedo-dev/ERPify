@@ -57,24 +57,25 @@ api/src/
 
 Cross-context calls go through **published Application services** or **domain events**; one context never reaches into another's `Domain/` or `Infrastructure/`.
 
-**Bounded-context isolation (binding).** ERPify is a modular monolith on one
-physical DB, with strict logical isolation between contexts. The following are
-review-blocking rules — full statement and rationale in
-[`rules/database.md`](./rules/database.md#bounded-context-data-isolation-modular-monolith--binding):
+**Bounded-context isolation.** ERPify is a modular monolith on one physical DB.
+The rule is *enforce boundaries, not total isolation* — couple to another
+context's **identities and events**, never its **internals**. FKs/imports aren't
+bad per se; the boundary they cross is what matters. Three levels (full statement
++ rationale in [`rules/database.md`](./rules/database.md#bounded-context-data-isolation-modular-monolith)):
 
-- **No cross-context foreign keys** — a reference to another context is a bare
-  UUID v7 column with no `FOREIGN KEY` (e.g. `company_id`, `project_id`).
-- **No cross-repository queries** — a repository touches only its own context;
-  foreign data comes from that context's published Application service or from a
-  **read model fed by its events**, never a cross-context `JOIN` or an injected
-  foreign repository.
-- **Integration only via events** — cross-context state changes flow through
-  domain/integration events; the consumer translates them through an
-  Anti-Corruption Layer (no importing the emitter's `Domain/` types). Granular
+- **🔴 Level 1 — review-blocking:** no cross-context import of another context's
+  `Domain/`/`Application/` (only allowed seams: its published Application service
+  interface + integration-event classes); no cross-context repository query /
+  `JOIN`.
+- **🟡 Level 2 — discouraged (soft):** a cross-context FK between two business
+  contexts — default to a bare UUID v7 column; justify a real FK in the PR.
+- **🟢 Level 3 — allowed:** shared kernel (`User`, tenant/`company_id`, `Money`,
+  `Uuid`), ID-only references, integration via events, read models. Granular
   context map + event catalog: [`bounded-contexts.md`](./bounded-contexts.md).
 
-A static gate (cross-context FK / cross-context import) is tracked as deferred
-work; until then, isolation is enforced by review.
+Golden rule: *contexts reference each other's identities and react to each
+other's events, never know each other's internals.* A 3-level static gate is
+tracked as deferred work; until then, enforced by review.
 
 ## Layer responsibilities
 
