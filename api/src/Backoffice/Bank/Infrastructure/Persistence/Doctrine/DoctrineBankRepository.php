@@ -4,94 +4,152 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\Bank\Infrastructure\Persistence\Doctrine;
 
-use Doctrine\Persistence\ManagerRegistry;
+use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Backoffice\Bank\Domain\Repository\BankSearchRepository;
 use Erpify\Backoffice\Bank\Domain\Repository\BankStoredObjectQueries;
 use Erpify\Shared\Domain\Search\FilterOperator;
-use Erpify\Shared\Domain\Search\PaginatedResult;
+use Erpify\Shared\Domain\Search\NavigationDirection;
+use Erpify\Shared\Domain\Search\Page;
 use Erpify\Shared\Domain\Search\SearchCriteria;
-use Erpify\Shared\Infrastructure\Persistence\Doctrine\AbstractDoctrineSearchRepository;
-use Erpify\Shared\Infrastructure\Persistence\Doctrine\QueryBuilderWithOptions;
 use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\AsciiUpperTextFieldNormalizer;
+use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\DoctrineSearchEngine;
 use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\FieldMapping;
-use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\FilterApplier;
+use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\Keyset\Cursor;
+use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\Keyset\WirePaginationPolicy;
 use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\NormalizedTextFieldNormalizer;
+use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\PaginatorConfig;
 use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\SearchFieldMap;
 use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\SortFieldMap;
-use Erpify\Shared\Infrastructure\Persistence\PaginatorCursorFactory;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
 /**
- * @extends AbstractDoctrineSearchRepository<Bank>
+ * Bank persistence by COMPOSITION (PR3): implements only its domain ports with an injected
+ * {@see EntityManagerInterface}, and its paginated read-path delegates to the keyset
+ * {@see DoctrineSearchEngine} (the single runtime query-shaper). No more `ServiceEntityRepository`
+ * inheritance, no `ManagerRegistry`/`PaginatorCursorFactory`/`FilterApplier` in the constructor
+ * (the engine orchestrates filtering internally), no `QueryBuilderWithOptions`/`PaginatorOption`.
+ *
+ * The repository's sole search responsibility is to hand the engine a base query builder
+ * (`SELECT`/`FROM`, no joins for Bank) plus its allow-lists ({@see SearchFieldMap()}/
+ * {@see SortFieldMap()}); ordering, limit, the keyset predicate and cursor encoding are the
+ * engine's monopoly. The returned {@see Page} carries OPAQUE cursors — link materialization is
+ * the responder's job, never here (W9/OQ-4).
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[AsAlias(BankRepository::class)]
 #[AsAlias(BankSearchRepository::class)]
 #[AsAlias(BankStoredObjectQueries::class)]
-final class DoctrineBankRepository extends AbstractDoctrineSearchRepository implements
+final readonly class DoctrineBankRepository implements
     BankRepository,
     BankSearchRepository,
     BankStoredObjectQueries
 {
     public function __construct(
-        ManagerRegistry $registry,
-        PaginatorCursorFactory $paginatorCursorFactory,
-        FilterApplier $filterApplier,
-        private readonly NormalizedTextFieldNormalizer $normalizedText,
-        private readonly AsciiUpperTextFieldNormalizer $asciiUpperText,
+        private EntityManagerInterface $entityManager,
+        private DoctrineSearchEngine $searchEngine,
+        private NormalizedTextFieldNormalizer $normalizedText,
+        private AsciiUpperTextFieldNormalizer $asciiUpperText,
     ) {
-        parent::__construct($registry, $paginatorCursorFactory, $filterApplier);
     }
 
     #[Override]
     public function save(Bank $bank): void
     {
-        $this->persistAndFlush($bank);
+        // D-3 (FR12): the port contract no longer mandates the implicit flush, but the observable
+        // semantics stay persist+flush so POST/PUT/DELETE Behat is unaffected. Transaction-boundary
+        // ownership is a separate, out-of-scope decision.
+        $this->entityManager->persist($bank);
+        $this->entityManager->flush();
     }
 
     #[Override]
     public function remove(Bank $bank): void
     {
-        $this->removeAndFlush($bank);
+        $this->entityManager->remove($bank);
+        $this->entityManager->flush();
     }
 
     #[Override]
     public function findById(string $id): ?Bank
     {
-        return $this->find($id);
+        return $this->entityManager->find(Bank::class, $id);
     }
 
+    /**
+     * @return Page<Bank>
+     */
     #[Override]
-    public function search(SearchCriteria $criteria): PaginatedResult
+    public function search(SearchCriteria $criteria): Page
     {
-        return $this->getPaginatedResults($criteria);
-    }
+        // Base query builder only: SELECT/FROM, no joins (Bank is a single root). The engine owns
+        // ordering, the keyset predicate, the limit clamp and cursor encoding — the repo never
+        // touches the applier, the codec or the predicate builder.
+        $queryBuilder = $this->entityManager->createQueryBuilder()
+            ->select('b')
+            ->from(Bank::class, 'b')
+        ;
 
-    #[Override]
-    public function getSearchQueryBuilder(SearchCriteria $criteria): QueryBuilderWithOptions
-    {
-        // No ad hoc filtering here: all filtering arrives as criteria->filters and is
-        // applied by the shared seam against searchFieldMap().
-        $queryBuilderWithOptions = $this->createQueryBuilder('b');
-
-        $this->addOrderByFromQueryParams(
-            $queryBuilderWithOptions,
-            alias: 'b',
-            orderByField: $criteria->sort,
-            direction: $criteria->direction,
+        /** @var Page<Bank> $page */
+        $page = $this->searchEngine->paginate(
+            $queryBuilder,
+            $criteria,
+            $this->searchFieldMap(),
+            $this->sortFieldMap(),
+            new PaginatorConfig($criteria->paginationMode, fetchJoinCollection: false),
+            WirePaginationPolicy::wire(),
+            $this->routingDirection($criteria->routingDirection),
         );
 
-        $this->addLimit($queryBuilderWithOptions, $criteria->limit);
-
-        return $queryBuilderWithOptions;
+        return $page;
     }
 
     #[Override]
-    protected function searchFieldMap(): SearchFieldMap
+    public function countBanksWithStoredObjectContentHash(string $contentHash): int
+    {
+        return (int) $this->entityManager->createQueryBuilder()
+            ->select('COUNT(b.id)')
+            ->from(Bank::class, 'b')
+            ->where('b.storedObjectContentHash = :contentHash')
+            ->setParameter('contentHash', $contentHash)
+            ->getQuery()
+            ->getSingleScalarResult()
+        ;
+    }
+
+    #[Override]
+    public function findStoredObjectMimeTypeByContentHash(string $contentHash): ?string
+    {
+        /** @var Bank|null $bank */
+        $bank = $this->entityManager->createQueryBuilder()
+            ->select('b')
+            ->from(Bank::class, 'b')
+            ->where('b.storedObjectContentHash = :h')
+            ->setParameter('h', $contentHash)
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult()
+        ;
+
+        return $bank?->getStoredObjectMimeType();
+    }
+
+    /**
+     * The wire intent ({@see NavigationDirection}) is the single routing authority (AR21); the
+     * infrastructure adapter maps it to the engine's string token here, keeping the domain VO free
+     * of any infrastructure import.
+     */
+    private function routingDirection(NavigationDirection $direction): string
+    {
+        return NavigationDirection::Before === $direction
+            ? Cursor::DIRECTION_BEFORE
+            : Cursor::DIRECTION_AFTER;
+    }
+
+    private function searchFieldMap(): SearchFieldMap
     {
         $rangeOperators = [FilterOperator::Gt, FilterOperator::Gte, FilterOperator::Lt, FilterOperator::Lte];
 
@@ -114,8 +172,7 @@ final class DoctrineBankRepository extends AbstractDoctrineSearchRepository impl
         ]);
     }
 
-    #[Override]
-    protected function sortFieldMap(): SortFieldMap
+    private function sortFieldMap(): SortFieldMap
     {
         // The 4 fields the list can order by, each backed by a btree index (NFR4): name sorts by
         // the accent-folded lower-cased nameNormalized (UNIQUE index, case/diacritic-insensitive,
@@ -127,38 +184,5 @@ final class DoctrineBankRepository extends AbstractDoctrineSearchRepository impl
             'createdAt' => 'b.createdAt',
             'updatedAt' => 'b.updatedAt',
         ]);
-    }
-
-    #[Override]
-    public function countBanksWithStoredObjectContentHash(string $contentHash): int
-    {
-        return (int) $this->createQueryBuilder('b')
-            ->select('COUNT(b.id)')
-            ->where('b.storedObjectContentHash = :contentHash')
-            ->setParameter('contentHash', $contentHash)
-            ->getQuery()
-            ->getSingleScalarResult()
-        ;
-    }
-
-    #[Override]
-    public function findStoredObjectMimeTypeByContentHash(string $contentHash): ?string
-    {
-        /** @var Bank|null $bank */
-        $bank = $this->createQueryBuilder('b')
-            ->where('b.storedObjectContentHash = :h')
-            ->setParameter('h', $contentHash)
-            ->setMaxResults(1)
-            ->getQuery()
-            ->getOneOrNullResult()
-        ;
-
-        return $bank?->getStoredObjectMimeType();
-    }
-
-    #[Override]
-    protected static function getEntityClassName(): string
-    {
-        return Bank::class;
     }
 }

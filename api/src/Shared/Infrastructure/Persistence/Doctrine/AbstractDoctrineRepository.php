@@ -7,11 +7,26 @@ namespace Erpify\Shared\Infrastructure\Persistence\Doctrine;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
-use Erpify\Shared\Domain\Search\SearchCriteria;
-use Erpify\Shared\Infrastructure\Persistence\QueryParam;
 use Override;
 
 /**
+ * Legacy Doctrine repository base, retained ONLY to back the env-gated `pagination_mode=legacy`
+ * search valve (its sole live subtype is {@see AbstractDoctrineSearchRepository}); the cursor-only
+ * runtime read-path uses {@see \Doctrine\ORM\EntityManagerInterface} by composition instead. The
+ * whole legacy pagination stack is deleted in PR4 (AR16).
+ *
+ * PR3 stripped the helpers the flip left without a caller (FR11): the persist/flush wrappers (the
+ * composition repositories call `EntityManagerInterface::persist()`/`flush()` directly), `addLimit`
+ * (callers use `setMaxResults` directly), and the `addWhere*`/`sanitizeArray` filter helpers with
+ * their `generateUniqueParameter*` chain. The reason that chain existed is preserved here as
+ * institutional knowledge, since the live filtering now runs through the keyset engine's applier:
+ *
+ *   why (param naming): a generated DQL parameter name must be STABLE across executions of the same
+ *   logical query. An unstable name (e.g. a counter or random suffix) makes Doctrine emit a fresh
+ *   SQL cache file per request, which can grow until it exhausts disk. Any future parameter-name
+ *   generator (in the engine's applier or elsewhere) must keep the name a deterministic function of
+ *   the query shape, not of call order or time.
+ *
  * @template T of object
  *
  * @extends ServiceEntityRepository<T>
@@ -36,137 +51,5 @@ abstract class AbstractDoctrineRepository extends ServiceEntityRepository
             ->select($alias)
             ->from($this->getClassName(), $alias, $indexBy)
         ;
-    }
-
-    /** @param T $object */
-    protected function persist(object $object): void
-    {
-        $this->getEntityManager()->persist($object);
-    }
-
-    protected function flush(): void
-    {
-        $this->getEntityManager()->flush();
-    }
-
-    /** @param T $object */
-    protected function persistAndFlush(object $object): void
-    {
-        $this->persist($object);
-        $this->flush();
-    }
-
-    /** @param T $object */
-    public function removeAndFlush(object $object): void
-    {
-        $this->getEntityManager()->remove($object);
-        $this->flush();
-    }
-
-    /** @param array<mixed> $values */
-    protected function addWhereInCaseInsensitive(
-        QueryBuilder $queryBuilder,
-        string $alias,
-        string $field,
-        array $values,
-    ): QueryBuilder {
-        if ([] === $values) {
-            return $queryBuilder;
-        }
-
-        $values = $this->sanitizeArray($values);
-
-        if ([] === $values) {
-            return $queryBuilder;
-        }
-
-        $values = \array_map(
-            static fn (mixed $v): string => \mb_strtolower(\is_scalar($v) ? (string) $v : ''),
-            $values,
-        );
-
-        $paramName = $this->generateUniqueParameter($queryBuilder, $values);
-        $where = \sprintf('LOWER(%s.%s) IN (:%s)', $alias, $field, $paramName);
-
-        return $queryBuilder->andWhere($where);
-    }
-
-    /** @param array<string, mixed> $values */
-    protected function addWhereBetweenDates(
-        QueryBuilder $queryBuilder,
-        string $alias,
-        string $field,
-        array $values,
-    ): QueryBuilder {
-        return $this->addWhereBetweenValues($queryBuilder, $alias, $field, $values);
-    }
-
-    /** @param array<string, mixed> $values */
-    protected function addWhereBetweenValues(
-        QueryBuilder $queryBuilder,
-        string $alias,
-        string $field,
-        array $values,
-    ): QueryBuilder {
-        if (isset($values[QueryParam::FROM->value])) {
-            $paramName = $this->generateUniqueParameter($queryBuilder, $values[QueryParam::FROM->value]);
-            $queryBuilder->andWhere(\sprintf('%s.%s >= :%s', $alias, $field, $paramName));
-        }
-
-        if (isset($values[QueryParam::TO->value])) {
-            $paramName = $this->generateUniqueParameter($queryBuilder, $values[QueryParam::TO->value]);
-            $queryBuilder->andWhere(\sprintf('%s.%s <= :%s', $alias, $field, $paramName));
-        }
-
-        return $queryBuilder;
-    }
-
-    protected function addLimit(QueryBuilder $queryBuilder, int $limit = SearchCriteria::MAX_LIMIT): QueryBuilder
-    {
-        return $queryBuilder->setMaxResults($limit);
-    }
-
-    /**
-     * @param array<mixed>|null $array
-     *
-     * @return array<mixed>
-     */
-    private function sanitizeArray(?array $array): array
-    {
-        return \array_filter(
-            $array ?? [],
-            static fn (mixed $value): bool => \is_numeric($value) || (null !== $value && '' !== $value),
-        );
-    }
-
-    private function generateUniqueParameter(QueryBuilder $queryBuilder, mixed $value): string
-    {
-        $paramName = $this->generateUniqueParameterName($queryBuilder);
-
-        $queryBuilder->setParameter(
-            key: $this->generateUniqueParameterName($queryBuilder),
-            value: $value,
-        );
-
-        return $paramName;
-    }
-
-    /**
-     * Note: the generated param name needs to be resilient across several executions to
-     * prevent doctrine to always generate different SQL cache files that may ends up
-     * eating all disk space.
-     */
-    private function generateUniqueParameterName(QueryBuilder $queryBuilder): string
-    {
-        /**
-         * Keep consistency based on custom query builder state (change for every request), and
-         * counting generated parameters is also important to handle the case where we ask to generate 2
-         * consecutive ones without adding them yet to the DQL.
-         *
-         * The hash is a non-cryptographic digest used purely to derive a stable, collision-resistant
-         * parameter name from the DQL — it never guards a secret, so a fast hash (xxh128) is the
-         * correct, intent-revealing choice here (not a security context).
-         */
-        return 'p' . \hash('xxh128', $queryBuilder->getDQL()) . \count($queryBuilder->getParameters());
     }
 }

@@ -151,29 +151,28 @@ test.describe("BackOffice - Banks per-flow CRUD (real API)", () => {
     // The smallest selectable page size is 25; with 30 seeded rows that
     // splits into 25 + 5.
     await expect(page.getByTestId("banks-pagination__page-size")).toHaveValue("25");
-    await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 1");
     await expect(page.locator("tbody tr")).toHaveCount(25);
-    await expect(page.getByTestId("banks-pagination__prev")).toBeHidden();
+    await expect(page.getByTestId("banks-pagination__prev")).toBeDisabled();
+    await expect(page.getByTestId("banks-pagination__next")).toBeEnabled();
 
     await page.getByTestId("banks-pagination__next").click();
-    await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 2");
     await expect(page.locator("tbody tr")).toHaveCount(SEED_COUNT - 25);
-    await expect(page.getByTestId("banks-pagination__next")).toBeHidden();
+    await expect(page.getByTestId("banks-pagination__next")).toBeDisabled();
+    await expect(page.getByTestId("banks-pagination__prev")).toBeEnabled();
 
-    // Prev is wired up — round-tripping back lands on page 1 with the
+    // Prev is wired up — round-tripping back lands on the first page with the
     // full 25-row slice again. The existing suite asserts only the
     // forward direction, so this complements it.
     await page.getByTestId("banks-pagination__prev").click();
-    await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 1");
     await expect(page.locator("tbody tr")).toHaveCount(25);
+    await expect(page.getByTestId("banks-pagination__prev")).toBeDisabled();
 
     // Bumping the page size to 100 collapses every seeded row onto a
-    // single page.
+    // single page (cursors discarded, back to the first page).
     await page.getByTestId("banks-pagination__page-size").selectOption("100");
-    await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 1");
     await expect(page.locator("tbody tr")).toHaveCount(SEED_COUNT);
-    await expect(page.getByTestId("banks-pagination__next")).toBeHidden();
-    await expect(page.getByTestId("banks-pagination__prev")).toBeHidden();
+    await expect(page.getByTestId("banks-pagination__next")).toBeDisabled();
+    await expect(page.getByTestId("banks-pagination__prev")).toBeDisabled();
   });
 
   test("create — surfaces field-level validation when required fields are empty", async ({

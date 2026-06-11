@@ -121,19 +121,29 @@ not in the browser. The shared vocabulary mirrors the API's generic `filters[]` 
   `eq | in | contains | gte | lte`) is the typed, framework-free vocabulary.
 - `context/shared/infrastructure/Search/buildSearchParams.ts` — serializes a `Filter[]` into the exact wire
   grammar (`filters[N][field|operator|value]`; `filters[N][value][]` for `in`), returning a composable
-  `URLSearchParams`.
-- A repository's `search(criteria)` composes those params with `sort` + `direction` (uppercased to the API's
-  `ASC`/`DESC` enum), `page`, an opaque `cursor` (replayed verbatim, never interpreted client-side), and
-  `limit`. It sends no `paginationMode`, so the API defaults to `LIGHT` — it skips the `COUNT(*)` and reports
-  `hasMorePages` from a single fetch, which is all a prev/next cursor list needs. Send `paginationMode=detailed`
-  only on a view that actually renders a total (`pagination.count`), paying the extra count deliberately. See
-  `context/backoffice/bank/infrastructure/ApiBankRepository.ts` as the reference consumer.
+  `URLSearchParams`. **Filters-only** since PR3 — it never emits `after`/`before` (W11): a cursor only ever
+  reaches the API via a server link replayed verbatim, never one the client builds.
+- **Cursor-only consumer (PR3, W11).** The API wire is cursor-only: the `pagination` envelope is
+  `{ hasNext, hasPrev, count, links: { next, prev } }` (`context/shared/domain/Search/PageEnvelope.ts` +
+  `PaginationLinks.ts`; `next`/`prev` are `string | null`, always present). There are **no** page numbers and
+  **no** exposed cursor scalar — the opaque cursor lives inside `links.next`/`links.prev`. Two seams keep the
+  client from ever decoding or reconstructing it:
+  - **first page / query change** → the *domain* port `BankRepository.search(criteria)` is **link-free**
+    (`criteria` = `filters` + `sort` + `direction` + `limit`, no cursor). It sends no `paginationMode`, so the
+    API defaults to `LIGHT` (no `COUNT(*)`, `count: null`); request `paginationMode=detailed` only on a view that
+    renders a total. `limit` is clamped to `WIRE_MAX_LIMIT` (100, mirror of the API ceiling, D-Cap).
+  - **next / prev** → the *application* port `BankSearchNavigator.follow(link)`
+    (`context/backoffice/bank/application/BankSearchNavigator.ts`; impl `ApiBankSearchNavigator`) re-sends
+    `envelope.links.next!` / `links.prev!` **verbatim** after a same-origin/relative `safeHref` check — it never
+    parses the link to extract a cursor or filters. The transport `string` lives in the application layer, never
+    the domain port. See `context/backoffice/bank/infrastructure/ApiBankRepository.ts` as the reference consumer.
 
 Two list-behaviour rules are load-bearing:
 
-- **Discard the cursor when the query changes.** Any change to a filter, the sort, or the page size resets to
-  page 1, which sends no cursor — so a stale cursor is dropped by construction. Only sequential prev/next
-  navigation replays the last response's cursor.
+- **Discard the cursor when the query changes (W8).** Any change to a filter, the sort, or the page size resets
+  to the first page via `search(criteria)` (no cursor) — so a stale cursor is dropped by construction. Only
+  sequential prev/next navigation follows the last response's `links`. A `null` link renders as a **disabled
+  (not hidden)** prev/next control (D-A11y, AR15 — see `pwa/CLAUDE.md`; `BanksPagination.tsx`).
 - **Reconcile realtime by refetching.** Under server-driven search the client cannot decide whether a Mercure
   `created`/`updated`/`deleted` belongs on the current page, so every event triggers a coalesced silent
   refetch of the current page (yielding to an in-flight optimistic bulk delete). There is no in-memory merge.

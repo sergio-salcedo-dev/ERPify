@@ -5,20 +5,20 @@ import { Button } from "@/components/ui/button";
 import { BANKS_PAGE_SIZE_OPTIONS, type BanksPageSize } from "../_lib/paginate";
 
 interface BanksPaginationProps {
-  page: number;
   pageSize: BanksPageSize;
   hasPrev: boolean;
   hasNext: boolean;
-  onPageChange: (next: number) => void;
+  onPrev: () => void;
+  onNext: () => void;
   onPageSizeChange: (next: BanksPageSize) => void;
 }
 
 export function BanksPagination({
-  page,
   pageSize,
   hasPrev,
   hasNext,
-  onPageChange,
+  onPrev,
+  onNext,
   onPageSizeChange,
 }: Readonly<BanksPaginationProps>) {
   return (
@@ -45,46 +45,43 @@ export function BanksPagination({
         </select>
       </label>
 
+      {/* Cursor-only navigation: prev/next are ALWAYS rendered and disabled when
+          there is no target (the envelope link is null), never hidden. A
+          persistent, predictable pair is discoverable and keeps the control's
+          DOM stable — the documented D-A11y exception to pwa/CLAUDE.md's
+          hide-when-no-target rule (the ADR governs this scope). There is no page
+          number to show, so the numbered indicator is gone. */}
       <div className="banks-pagination__controls flex items-center justify-end gap-2">
-        {hasPrev ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="banks-pagination__prev"
-            onClick={() => onPageChange(page - 1)}
-            aria-label="Previous page"
-            title="Previous page"
-            data-testid="banks-pagination__prev"
-            data-icon="inline-start"
-          >
-            <ChevronLeft className="size-3.5" aria-hidden="true" />
-            <span className="hidden sm:inline">Prev</span>
-          </Button>
-        ) : null}
-        <span
-          className="banks-pagination__indicator text-muted-foreground min-w-[4.5rem] text-center text-xs"
-          aria-live="polite"
-          data-testid="banks-pagination__indicator"
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="banks-pagination__prev"
+          onClick={onPrev}
+          disabled={!hasPrev}
+          aria-label="Previous page"
+          title="Previous page"
+          data-testid="banks-pagination__prev"
+          data-icon="inline-start"
         >
-          Page {page}
-        </span>
-        {hasNext ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="banks-pagination__next"
-            onClick={() => onPageChange(page + 1)}
-            aria-label="Next page"
-            title="Next page"
-            data-testid="banks-pagination__next"
-            data-icon="inline-end"
-          >
-            <span className="hidden sm:inline">Next</span>
-            <ChevronRight className="size-3.5" aria-hidden="true" />
-          </Button>
-        ) : null}
+          <ChevronLeft className="size-3.5" aria-hidden="true" />
+          <span className="hidden sm:inline">Prev</span>
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="banks-pagination__next"
+          onClick={onNext}
+          disabled={!hasNext}
+          aria-label="Next page"
+          title="Next page"
+          data-testid="banks-pagination__next"
+          data-icon="inline-end"
+        >
+          <span className="hidden sm:inline">Next</span>
+          <ChevronRight className="size-3.5" aria-hidden="true" />
+        </Button>
       </div>
     </nav>
   );

@@ -411,6 +411,16 @@ of the following:
 - For pagination/navigation controls that have no valid target (no previous or
   no next page), **hide** the control instead of rendering it disabled — a
   disabled control is still discovered by assistive tech and adds noise.
+  - **Exception — cursor-only keyset pagination (D-A11y, PR3 / `BanksPagination`):**
+    the prev/next pair is **always rendered and `disabled` when the envelope link
+    is `null`, never hidden**. The keyset ADR (`architecture-keyset-pagination.md`,
+    IMPLEMENTATION LOCKED, AR15) governs this scope and overrides the hide rule
+    here: a persistent, well-labelled pair (`aria-label` + `title`, decorative
+    icons `aria-hidden`) is a predictable, discoverable affordance, and keeping
+    the control in the DOM preserves the system state the envelope expresses
+    (and the Behat/e2e determinism that asserts `toBeDisabled()`, not absence).
+    Hiding would drop that state. New cursor-only lists follow `BanksPagination`,
+    not the hide rule above.
 
 For destructive actions also wire the user through a confirmation dialog
 (`Dialog.*` from `@/components/ui/dialog`). When the mutation fails, the

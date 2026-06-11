@@ -5,6 +5,10 @@ monolog:
         - mercure
         - audit
         - media
+        # Dedicated stream for the cursor-pagination D-Obs events (keyset_search / invalid_cursor).
+        # MUST stay off the `fingers_crossed` handlers below: those buffer until a 5xx and discard
+        # everything otherwise, which would drop these non-error metric lines in prod.
+        - observability
 
 when@dev:
     monolog:
@@ -13,14 +17,20 @@ when@dev:
                 type: stream
                 path: "%kernel.logs_dir%/%kernel.environment%.log"
                 level: debug
-                channels: ["!event"]
+                channels: ["!event", "!observability"]
                 formatter: monolog.formatter.line
             stderr:
                 type: stream
                 path: php://stderr
                 level: debug
-                channels: ["!event"]
+                channels: ["!event", "!observability"]
                 formatter: monolog.formatter.line
+            observability:
+                type: stream
+                path: "%kernel.logs_dir%/observability.log"
+                level: info
+                channels: [observability]
+                formatter: monolog.formatter.json
             console:
                 type: console
                 process_psr_3_messages: false
@@ -34,11 +44,17 @@ when@test:
                 action_level: error
                 handler: nested
                 excluded_http_codes: [404, 405]
-                channels: ["!event"]
+                channels: ["!event", "!observability"]
             nested:
                 type: stream
                 path: "%kernel.logs_dir%/%kernel.environment%.log"
                 level: debug
+            observability:
+                type: stream
+                path: "%kernel.logs_dir%/observability.log"
+                level: info
+                channels: [observability]
+                formatter: monolog.formatter.json
 
 when@prod:
     monolog:
@@ -48,12 +64,20 @@ when@prod:
                 action_level: error
                 handler: nested
                 excluded_http_codes: [404, 405]
-                channels: ["!deprecation"]
+                channels: ["!deprecation", "!observability"]
                 buffer_size: 50
             nested:
                 type: stream
                 path: php://stderr
                 level: debug
+                formatter: monolog.formatter.json
+            # Always-on JSON stream (NOT fingers_crossed) so the cursor-pagination metric lines are
+            # never buffered away. One line per search / rejected cursor → parse by `event`.
+            observability:
+                type: stream
+                channels: [observability]
+                path: php://stderr
+                level: info
                 formatter: monolog.formatter.json
             console:
                 type: console

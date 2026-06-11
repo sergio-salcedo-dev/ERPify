@@ -50,6 +50,10 @@ Collected during quick-dev. Not part of the current story's shippable scope.
 - **`OrderByColumns::fromSorts` sólo deduplica `id` cuando es la última clave** → un sort multi-clave con `id` en posición no-última re-añadiría la columna tie-break, produciendo `id` duplicado en ORDER BY/predicado. Sin caller en PR1 (`fromPrimarySort` pasa una sola clave); guardar antes de que PR2 cablee sorts multi-clave reales.
 - **Floor de microsegundos vs redondeo de Postgres `TIMESTAMP(0)` + drift float en la frontera** → `CursorPositionExtractor` trunca (floor) a segundos; Postgres `TIMESTAMP(0)` redondea. Para filas ya persistidas la columna ya está a precisión de segundo, así que el riesgo es bajo, pero verificar con round-trip real contra Postgres (Behat) en PR2/PR3 que las filas frontera no se saltan/duplican en empates sub-segundo; idem precisión JSON de columnas float usadas como clave de orden.
 
+## Deferred from: PR3 API contract freeze (2026-06-11)
+
+- **Seam "ir a fecha" server-side (Story 1.3 Task 10 / AC#6 / FR5)** — sintetizar una posición de cursor desde un valor de clave de ordenación (misma maquinaria K3/K4: `CursorPositionExtractor`/`CursorCodec`), `hasPrev: true` conservador, **sin endpoint nuevo**. Diferido del flip de PR3 por decisión de freeze (Sergio, 2026-06-11): es el único cambio de comportamiento real pendiente y toca navegación temporal del cursor → riesgo de reabrir W9/W10. Sin spec UX en alcance. Retomar como trabajo aislado post-freeze, no dentro de PR3.
+
 ## Deferred from: code review of story-1.2 (2026-06-11)
 
 - **`KeysetSqlSnapshotTest` no cierra la conexión DBAL paralela de `setUp()`** → un `tearDown()` con `parent::tearDown()` dispara el conflicto rector↔psalm del repo (rector `NoSetupWithParentCallOverrideRector` desnuda `#[Override]`, psalm exige baseline nueva de `MissingOverrideAttribute`), violando el AC7 "sin baselines nuevas". Leak *low* mitigado por refcounting de PHP. Alternativa: cerrar dentro de `inRolledBackTransaction()` sin método override.

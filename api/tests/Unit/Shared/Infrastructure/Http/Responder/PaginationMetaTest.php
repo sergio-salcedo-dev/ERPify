@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Infrastructure\Http\Responder;
 
-use Erpify\Shared\Domain\Search\PaginatedResult;
+use Erpify\Shared\Domain\Search\Page;
 use Erpify\Shared\Infrastructure\Http\Responder\PaginationMeta;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -15,57 +15,53 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(PaginationMeta::class)]
 final class PaginationMetaTest extends TestCase
 {
-    public function testToArrayEmitsTheExactWireShape(): void
+    public function testToArrayEmitsTheConstantCursorOnlyShape(): void
     {
         $meta = new PaginationMeta(
-            currentPage: 2,
-            pageCount: 7,
+            hasNext: true,
+            hasPrev: false,
             count: 31,
-            hasMorePages: true,
-            cursor: 'encoded-cursor',
+            nextLink: '/api/v1/backoffice/banks?after=abc',
+            prevLink: null,
         );
 
         $this->assertSame([
-            'currentPage' => 2,
-            'pageCount' => 7,
+            'hasNext' => true,
+            'hasPrev' => false,
             'count' => 31,
-            'hasMorePages' => true,
-            'cursor' => 'encoded-cursor',
+            'links' => [
+                'next' => '/api/v1/backoffice/banks?after=abc',
+                'prev' => null,
+            ],
         ], $meta->toArray());
     }
 
-    public function testFromPaginatedResultReadsMetadataFromTheResultAndTakesTheEncodedCursor(): void
+    public function testFromPageCopiesFlagsAndCountAndTakesThePrebuiltLinks(): void
     {
-        $result = $this->createStub(PaginatedResult::class);
-        $result->method('getCurrentPage')->willReturn(2);
-        $result->method('getPageCount')->willReturn(7);
-        $result->method('getCount')->willReturn(31);
-        $result->method('hasMorePages')->willReturn(true);
+        $page = new Page(items: [], hasNext: true, hasPrev: true, count: 12, nextCursor: 'n', prevCursor: 'p');
 
-        $meta = PaginationMeta::fromPaginatedResult($result, 'encoded-cursor');
+        $meta = PaginationMeta::fromPage($page, '/banks?after=n', '/banks?before=p');
 
         $this->assertSame([
-            'currentPage' => 2,
-            'pageCount' => 7,
-            'count' => 31,
-            'hasMorePages' => true,
-            'cursor' => 'encoded-cursor',
+            'hasNext' => true,
+            'hasPrev' => true,
+            'count' => 12,
+            'links' => ['next' => '/banks?after=n', 'prev' => '/banks?before=p'],
         ], $meta->toArray());
     }
 
-    public function testLightPaginationModeLeavesPageCountAndCountNull(): void
+    public function testNullsAreEmittedExplicitlyNeverSkipped(): void
     {
-        $result = $this->createStub(PaginatedResult::class);
-        $result->method('getCurrentPage')->willReturn(1);
-        $result->method('getPageCount')->willReturn(null);
-        $result->method('getCount')->willReturn(null);
-        $result->method('hasMorePages')->willReturn(true);
+        // Light pagination (count null) on a single full page (no next/prev): every key is still
+        // present with an explicit null — `skip_null_values` is forbidden (W1/AR20). assertSame on
+        // the WHOLE array pins both key presence and the explicit-null values.
+        $page = new Page(items: [], hasNext: false, hasPrev: false);
 
-        $meta = PaginationMeta::fromPaginatedResult($result, 'encoded-cursor');
-
-        $this->assertNull($meta->pageCount);
-        $this->assertNull($meta->count);
-        $this->assertSame(1, $meta->currentPage);
-        $this->assertTrue($meta->hasMorePages);
+        $this->assertSame([
+            'hasNext' => false,
+            'hasPrev' => false,
+            'count' => null,
+            'links' => ['next' => null, 'prev' => null],
+        ], PaginationMeta::fromPage($page, null, null)->toArray());
     }
 }

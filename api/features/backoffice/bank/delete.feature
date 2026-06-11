@@ -47,4 +47,4 @@ Feature: Delete a bank
     And the JSON node "accountCount" should be equal to the number 1
     And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
     And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
-    And 4 requests got executed only for doctrine connection "default"
+    And 3 requests got executed only for doctrine connection "default"

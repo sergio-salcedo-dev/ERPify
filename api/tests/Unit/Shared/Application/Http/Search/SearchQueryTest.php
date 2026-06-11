@@ -8,6 +8,7 @@ use Erpify\Shared\Application\Http\Search\FilterQuery;
 use Erpify\Shared\Application\Http\Search\SearchQuery;
 use Erpify\Shared\Domain\Search\Filter;
 use Erpify\Shared\Domain\Search\FilterOperator;
+use Erpify\Shared\Domain\Search\NavigationDirection;
 use Erpify\Shared\Domain\Search\PaginationMode;
 use Erpify\Shared\Domain\Search\SearchCriteria;
 use Erpify\Shared\Domain\Search\SortDirection;
@@ -46,8 +47,7 @@ final class SearchQueryTest extends TestCase
     public function testFullyPopulatedHappyPathIsValid(): void
     {
         $searchQuery = new SearchQuery(
-            cursor: 'abc',
-            page: 2,
+            after: 'abc',
             limit: 50,
             paginationMode: PaginationMode::DETAILED,
             filters: [new FilterQuery('name', FilterOperator::Eq, 'BBVA')],
@@ -56,6 +56,19 @@ final class SearchQueryTest extends TestCase
         );
 
         $this->assertCount(0, $this->validator->validate($searchQuery));
+    }
+
+    public function testRejectsBothAfterAndBeforeSimultaneously(): void
+    {
+        $constraintViolationList = $this->validator->validate(new SearchQuery(after: 'a', before: 'b'));
+
+        $actualPaths = [];
+
+        foreach ($constraintViolationList as $violation) {
+            $actualPaths[] = $violation->getPropertyPath();
+        }
+
+        $this->assertContains('after', $actualPaths);
     }
 
     /**
@@ -84,20 +97,19 @@ final class SearchQueryTest extends TestCase
      */
     public static function provideValidatorRejectsInvalidInputCases(): iterable
     {
-        yield 'page zero' => [new SearchQuery(page: 0), ['page']];
-        yield 'page negative' => [new SearchQuery(page: -1), ['page']];
-        yield 'page over cap' => [new SearchQuery(page: SearchCriteria::MAX_PAGE + 1), ['page']];
         yield 'limit zero' => [new SearchQuery(limit: 0), ['limit']];
+        yield 'limit negative' => [new SearchQuery(limit: -1), ['limit']];
         yield 'limit over cap' => [new SearchQuery(limit: SearchCriteria::MAX_LIMIT + 1), ['limit']];
-        yield 'cursor too long' => [new SearchQuery(cursor: \str_repeat('a', 8193)), ['cursor']];
+        yield 'after too long' => [new SearchQuery(after: \str_repeat('a', 8193)), ['after']];
+        yield 'before too long' => [new SearchQuery(before: \str_repeat('a', 8193)), ['before']];
+        yield 'both cursors' => [new SearchQuery(after: 'a', before: 'b'), ['after']];
         yield 'sort too long' => [new SearchQuery(sort: \str_repeat('a', 65)), ['sort']];
     }
 
     public function testToCriteriaProducesEquivalentDomainValueObject(): void
     {
         $searchQuery = new SearchQuery(
-            cursor: 'abc',
-            page: 3,
+            after: 'abc',
             limit: 25,
             paginationMode: PaginationMode::DETAILED,
             sort: 'shortName',
@@ -107,11 +119,19 @@ final class SearchQueryTest extends TestCase
         $searchCriteria = $searchQuery->toCriteria();
 
         $this->assertSame('abc', $searchCriteria->cursor);
-        $this->assertSame(3, $searchCriteria->page);
+        $this->assertSame(NavigationDirection::After, $searchCriteria->routingDirection);
         $this->assertSame(25, $searchCriteria->limit);
         $this->assertSame(PaginationMode::DETAILED, $searchCriteria->paginationMode);
         $this->assertSame('shortName', $searchCriteria->sort);
         $this->assertSame(SortDirection::DESC, $searchCriteria->direction);
+    }
+
+    public function testToCriteriaMapsBeforeToBackwardNavigation(): void
+    {
+        $searchCriteria = (new SearchQuery(before: 'xyz'))->toCriteria();
+
+        $this->assertSame('xyz', $searchCriteria->cursor);
+        $this->assertSame(NavigationDirection::Before, $searchCriteria->routingDirection);
     }
 
     public function testToCriteriaNormalizesAnEmptySortToNoOrdering(): void
@@ -123,13 +143,13 @@ final class SearchQueryTest extends TestCase
         $this->assertNull($searchCriteria->sort);
     }
 
-    public function testToCriteriaPropagatesMaxLimit(): void
+    public function testToCriteriaAppliesTheDefaultsForAnEmptyQuery(): void
     {
         $searchCriteria = (new SearchQuery())->toCriteria();
 
         $this->assertNull($searchCriteria->cursor);
-        $this->assertSame(1, $searchCriteria->page);
-        $this->assertSame(SearchCriteria::MAX_LIMIT, $searchCriteria->limit);
+        $this->assertSame(NavigationDirection::After, $searchCriteria->routingDirection);
+        $this->assertSame(SearchCriteria::DEFAULT_LIMIT, $searchCriteria->limit);
         $this->assertSame(PaginationMode::LIGHT, $searchCriteria->paginationMode);
         $this->assertNull($searchCriteria->sort);
         $this->assertNotInstanceOf(SortDirection::class, $searchCriteria->direction);

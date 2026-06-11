@@ -80,6 +80,16 @@
       <code><![CDATA[DoctrineBankRepository]]></code>
     </UnusedClass>
   </file>
+  <file src="../../src/Backoffice/Bank/Infrastructure/Persistence/Doctrine/LegacyBankSearchRepository.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="../../src/Backoffice/Bank/Infrastructure/Persistence/Doctrine/PaginationModeBankSearchValve.php">
+    <UnusedClass>
+      <code><![CDATA[PaginationModeBankSearchValve]]></code>
+    </UnusedClass>
+  </file>
   <file src="../../src/Backoffice/Bank/Infrastructure/Serializer/BankLogoUrlNormalizer.php">
     <PossiblyNullArgument>
       <code><![CDATA[$groups]]></code>
@@ -217,15 +227,6 @@
       <code><![CDATA[PersistDomainEventMiddleware]]></code>
     </UnusedClass>
   </file>
-  <file src="../../src/Shared/Infrastructure/Persistence/Doctrine/AbstractDoctrineRepository.php">
-    <PossiblyUnusedMethod>
-      <code><![CDATA[addWhereBetweenDates]]></code>
-      <code><![CDATA[addWhereInCaseInsensitive]]></code>
-    </PossiblyUnusedMethod>
-    <PossiblyUnusedReturnValue>
-      <code><![CDATA[QueryBuilder]]></code>
-    </PossiblyUnusedReturnValue>
-  </file>
   <file src="../../src/Shared/Infrastructure/Persistence/Doctrine/AbstractDoctrineSearchRepository.php">
     <PossiblyUnusedReturnValue>
       <code><![CDATA[QueryBuilder]]></code>
@@ -271,9 +272,9 @@
     </PossiblyUnusedReturnValue>
   </file>
   <file src="../../src/Shared/Infrastructure/Serializer/JsonDecoder.php">
-    <UnusedClass>
-      <code><![CDATA[JsonDecoder]]></code>
-    </UnusedClass>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[decodeResponse]]></code>
+    </PossiblyUnusedMethod>
   </file>
   <file src="../../src/Shared/Media/Application/MediaRegistrar.php">
     <PossiblyUnusedMethod>
@@ -472,6 +473,7 @@
       <code><![CDATA[$method]]></code>
       <code><![CDATA[$name]]></code>
       <code><![CDATA[$name]]></code>
+      <code><![CDATA[$node]]></code>
       <code><![CDATA[$node]]></code>
       <code><![CDATA[$pyStringNode]]></code>
       <code><![CDATA[$pyStringNode]]></code>
