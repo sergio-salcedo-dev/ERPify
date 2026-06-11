@@ -2,6 +2,8 @@
 stepsCompleted: [1, 2, 3, 4]
 status: 'complete'
 completedAt: '2026-06-10'
+revisedAt: '2026-06-11'
+revisionNote: 'Ciclo D-1 (repos por composición PR2→PR3) + limpieza H1 (AC huérfano en Story 1.2), H4 (ownership del perf gate) y nota de override semantics (epics.md supersede al addendum en secuenciación/estructura post-D-1). completedAt se conserva como baseline original.'
 inputDocuments:
   - '_bmad-output/planning-artifacts/architecture-keyset-pagination.md'
   - 'docs/saas-production-roadmap.md (Fase H — contexto tenant)'
@@ -14,6 +16,8 @@ inputDocuments:
 This document provides the complete epic and story breakdown for ERPify, decomposing the requirements from the PRD, UX Design if it exists, and Architecture requirements into implementable stories.
 
 **Nota de origen:** no existe PRD formal para este alcance (precedente del ADR de filtros 2026-06-06). La fuente única de requisitos es el ADR `architecture-keyset-pagination.md` (status: IMPLEMENTATION LOCKED, 2026-06-10), que embebe FRs, NFRs, non-goals, contrato de extremos keyset y secuencia de implementación vinculante PR1–PR4. Alcance: rediseño de la paginación a keyset puro (`after`/`before`) + reestructuración de repositorios de herencia a composición.
+
+**Jerarquía documental (override semantics, formalizado 2026-06-11).** Ante divergencia, este `epics.md` (verdad de planificación operativa) **supersede** al addendum `architecture-keyset-pagination.md` (contrato técnico local del PR, *frozen* el 2026-06-10) en secuenciación y decisiones estructurales introducidas tras el ciclo **D-1 (post-2026-06-10)**: secuenciación PR2/PR3 (repos por composición trasladados de PR2 a PR3), forma física de índices (NFR3 refinado: una columna UNIQUE no exige índice compuesto), collation a alcance de columna (AR23) y los refinamientos AR23/AR24. El addendum permanece como *implementation-bound technical snapshot (pre-D-1, parcialmente superseded)* — derivado con override parcial, **no histórico muerto**: sigue siendo la fuente de los FR/NFR/K y de su rationale, pero cede ante este documento en los puntos anteriores. _In case of divergence, `epics.md` supersedes the architecture addendum for sequencing and structural decisions introduced post-2026-06-10 D-1 cycle._
 
 ## Requirements Inventory
 
@@ -52,7 +56,7 @@ This document provides the complete epic and story breakdown for ERPify, decompo
 
 - NFR1 (Seguridad): HMAC-SHA256 truncado 128 bits con `hash_equals`; cap de longitud pre-HMAC (512, `#[Assert]`); allow-lists de identificadores ORDER BY y parámetros bindeados intactos; fingerprint con slot de tenant; el cursor solo transporta valores de claves de ordenación de la fila frontera; nunca el cursor crudo en logs.
 - NFR2 (Contrato de errores, NFR26 del repo): las cuatro causas de invalidez (firma, fingerprint, payload, versión) producen el mismo 422 `invalid-cursor` (familia `invalid-search-criteria`), indistinguibles para el cliente. Obliga a: fila en `docs/api-error-contract.md`, `MarkerStatusMapContractTest`, `make php.lint.error-contract` verde.
-- NFR3 (Rendimiento): keyset O(1) por página independiente de la profundidad. Sortable ⇒ estabilidad de orden bajo igualdad del sort key. **Refinamiento 2026-06-10 (verificación de readiness):** el contract test prescribe la *propiedad*, no la forma física del índice — columna UNIQUE → su índice único de una columna la satisface (no hay empates posibles); columna sortable NO única → exige índice compuesto `(columna, id)`. Doble gate: (a) test de arquitectura en CI (propiedad por cada entrada de `sortFieldMap()` + `nullable: false`), (b) perf gate de staging con doble perfil (uniforme ~100k + sesgado skew 80/10). p95 del listado sin regresión.
+- NFR3 (Rendimiento): keyset O(1) por página independiente de la profundidad. Sortable ⇒ estabilidad de orden bajo igualdad del sort key. **Refinamiento 2026-06-10 (verificación de readiness):** el contract test prescribe la *propiedad*, no la forma física del índice — columna UNIQUE → su índice único de una columna la satisface (no hay empates posibles); columna sortable NO única → exige índice compuesto `(columna, id)`. Doble gate: (a) test de arquitectura en CI (propiedad por cada entrada de `sortFieldMap()` + `nullable: false`), (b) perf gate de staging con doble perfil (uniforme ~100k + sesgado skew 80/10). p95 del listado sin regresión. **Ownership (H4, 2026-06-11):** el gate (a) es propiedad de Story 1.2 (`SortFieldMapIndexContractTest`); el gate (b) —perf gate de staging, doble perfil + plan `EXPLAIN`— es **infra-owned** (job de CI/staging cross-cutting), no propiedad de ninguna historia de feature: queda fuera del slicing PR1–PR4 por diseño.
 - NFR4 (Calidad): resolución estructural (no supresión) de Sonar `php:S1448`; gates `make php.stan` + `make php.quality` (PHPMD sin baseline). Regla de pureza de capa: colaboradores deterministas, readonly, sin estado interno; solo `DoctrineSearchEngine` toca Doctrine. Criterio de review: ¿este test necesita el kernel?
 - NFR5 (Pureza de dominio): 0 dependencias nuevas en `Domain/`; el puerto evoluciona a `Page` sin imports de framework; los arrays `firstItem`/`lastItem` del `SearchCursor` desaparecen del puerto.
 - NFR6 (Compatibilidad): cero migraciones de BD; cero dependencias Composer/npm nuevas. Breaking change del envelope coordinado con la PWA en el mismo ciclo (PR3); cursores en vuelo invalidados explícitamente (422 + `v`).
@@ -191,12 +195,6 @@ So that la corrección de la ejecución keyset quede sellada y demostrada antes 
 **And** los joins to-one con `addSelect` están permitidos; las colecciones to-many se cargan por segunda query batch fuera del read-path paginado
 **And** el engine jamás añade DISTINCT
 **And** controllers y use cases nunca tocan QueryBuilder/applier/codec: los repositorios solo aportan su query builder base con joins.
-
-**Given** `DoctrineBankRepository` y `DoctrineBankAccountRepository`
-**When** la historia se completa
-**Then** implementan solo sus puertos de dominio con `EntityManagerInterface` inyectado — sin `ServiceEntityRepository`, sin `getEntityClassName()`, sin `QueryBuilderWithOptions`, sin `PaginatorOption` (FR9/K9)
-**And** el contrato del puerto expone `save()` sin flush implícito obligatorio (FR12 — puerta abierta)
-**And** los helpers muertos accesibles se eliminan de `AbstractDoctrineRepository` preservando el comentario del naming estable de parámetros (FR11 parcial).
 
 **Given** cada entrada de `sortFieldMap()` de un repositorio de búsqueda
 **When** corre `SortFieldMapIndexContractTest` en CI
