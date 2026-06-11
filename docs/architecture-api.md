@@ -57,6 +57,25 @@ api/src/
 
 Cross-context calls go through **published Application services** or **domain events**; one context never reaches into another's `Domain/` or `Infrastructure/`.
 
+**Bounded-context isolation (binding).** ERPify is a modular monolith on one
+physical DB, with strict logical isolation between contexts. The following are
+review-blocking rules — full statement and rationale in
+[`rules/database.md`](./rules/database.md#bounded-context-data-isolation-modular-monolith--binding):
+
+- **No cross-context foreign keys** — a reference to another context is a bare
+  UUID v7 column with no `FOREIGN KEY` (e.g. `company_id`, `project_id`).
+- **No cross-repository queries** — a repository touches only its own context;
+  foreign data comes from that context's published Application service or from a
+  **read model fed by its events**, never a cross-context `JOIN` or an injected
+  foreign repository.
+- **Integration only via events** — cross-context state changes flow through
+  domain/integration events; the consumer translates them through an
+  Anti-Corruption Layer (no importing the emitter's `Domain/` types). Granular
+  context map + event catalog: [`bounded-contexts.md`](./bounded-contexts.md).
+
+A static gate (cross-context FK / cross-context import) is tracked as deferred
+work; until then, isolation is enforced by review.
+
 ## Layer responsibilities
 
 | Layer             | Contains                                                                                                                                                 | Must NOT depend on                                     |

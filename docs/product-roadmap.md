@@ -131,6 +131,72 @@ guía de roadmap), el siguiente paso es trasladarlas a
 [`rules/database.md`](rules/database.md) / [`architecture-api.md`](architecture-api.md)
 y añadir un gate de lint que detecte FKs o imports cross-context.
 
+## Estrategia de arranque — frontend-first con contract-first (idea)
+
+**Veredicto:** sí, empezar por el frontend con datos mockeados es recomendable
+en ERPify — **pero solo con disciplina contract-first.** Sin contratos estables
+desde el día 1 degenera en "UI bonita sin realidad de backend".
+
+**Por qué encaja en ERPify.** No es un CRUD: hay workflows de obra, estados de
+proyecto, automatizaciones, stock con movimientos, pipeline de CRM y finanzas
+con dependencias. El riesgo principal **no es técnico, es de producto**:
+construir un backend perfecto para una UI incorrecta. Empezar por la UI valida
+el **flujo de usuario** antes de comprometer agregados, relaciones y tablas.
+
+**Qué te da:**
+
+1. **Valida la UX de procesos complejos** (¿cómo se ve un flujo de obra real?
+   ¿cómo se mueve `lead → proyecto → presupuesto`?).
+2. **Revela el dominio real** — aparecen entidades que el modelado "de tabla" no
+   ve: `ActivityLog`, `WorkflowState`, `StockReservation`, `CostDeviation`.
+3. **Contratos API más limpios** — DTOs estables nacidos del uso, no endpoints
+   improvisados desde el backend.
+4. **Evita overengineering temprano** — no construyes agregados/tablas erróneos.
+
+**Riesgos a evitar (los tres pecados):**
+
+- ❌ Frontend **sin modelo de dominio** → endpoints "para pantallas", no para
+  negocio.
+- ❌ Backend **sin UX validada** → agregados y relaciones prematuros.
+- ❌ Cualquiera de los dos **sin contratos claros** → al conectar, no encaja y se
+  rompe el diseño.
+
+**Cómo hacerlo bien (contract-first + mock domain):**
+
+1. **Define el contrato primero** (sin backend, sin DB): DTOs por entidad con
+   estados reales del dominio, no formas inventadas. Ej. un `LeadDTO` con
+   `status: new | contacted | won | lost`; un `ProjectDTO` con
+   `status: planning | in_progress | completed` y `progress`. El contrato es el
+   **modelo conceptual compartido** (DDD) entre front y back, y casa con los
+   agregados del [mapa de contextos](bounded-contexts.md).
+2. **Mock service layer detrás del puerto de dominio, no hardcode.** La PWA ya es
+   DDD (`context/<contexto>/{domain,application,infrastructure}` con interfaces
+   de `Repository`). El mock es un **adaptador in-memory detrás del mismo puerto**
+   (un `InMemory<Entidad>Repository` junto al `Api<Entidad>Repository` real, como
+   ya existe para Bank): cambiar de mock a API real es swap de binding en
+   Inversify, sin tocar páginas ni casos de uso.
+3. **Mockea eventos y estados, no listas.** La UI debe **reaccionar a eventos**
+   del dominio (`LeadCreated`, `ProjectStarted`, `StockMoved`, `InvoiceGenerated`),
+   no pintar arrays estáticos — así el mock ya prepara el terreno para el
+   Automation Engine, el outbox y el realtime, y no nace desconectado.
+4. **La UI = mapa de módulos del roadmap.** Navegación completa por módulo (CRM,
+   Projects, Inventory, Finance, Automation, Documents) que valida la
+   arquitectura antes de escribir backend.
+
+**Orden propuesto (complementa, no sustituye, las fases de producto):**
+
+| Etapa | Qué | Resultado |
+|-------|-----|-----------|
+| 1 · UX-first | PWA Next.js, páginas por módulo, mocks por dominio (eventos+estados), navegación completa, **sin backend real** | flujo de usuario validado |
+| 2 · Contract freeze | DTOs / OpenAPI estables, validados contra el frontend, ajustes de UX | contrato congelado |
+| 3 · Backend | Symfony modular monolith: bounded contexts reales, eventos Messenger, outbox, persistencia (sigue la estrategia de datos de arriba) | realidad de negocio |
+| 4 · Integration loop | el frontend deja los mocks y conecta la API real; ajuste iterativo | producto conectado |
+
+> **Regla de oro:** «el frontend define la intención, el backend define la
+> realidad» — pero **ambos comparten el mismo modelo conceptual (DDD)**. El
+> contrato es ese puente; los mocks deben representar eventos y estados reales
+> del dominio, nunca datos arbitrarios.
+
 ## Buckets de complejidad (para estimar)
 
 Las ~35 funcionalidades pendientes del menú backoffice no cuestan lo mismo.

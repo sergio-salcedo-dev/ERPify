@@ -50,6 +50,28 @@ Collected during quick-dev. Not part of the current story's shippable scope.
 - **`OrderByColumns::fromSorts` sólo deduplica `id` cuando es la última clave** → un sort multi-clave con `id` en posición no-última re-añadiría la columna tie-break, produciendo `id` duplicado en ORDER BY/predicado. Sin caller en PR1 (`fromPrimarySort` pasa una sola clave); guardar antes de que PR2 cablee sorts multi-clave reales.
 - **Floor de microsegundos vs redondeo de Postgres `TIMESTAMP(0)` + drift float en la frontera** → `CursorPositionExtractor` trunca (floor) a segundos; Postgres `TIMESTAMP(0)` redondea. Para filas ya persistidas la columna ya está a precisión de segundo, así que el riesgo es bajo, pero verificar con round-trip real contra Postgres (Behat) en PR2/PR3 que las filas frontera no se saltan/duplican en empates sub-segundo; idem precisión JSON de columnas float usadas como clave de orden.
 
+## Deferred from: bounded-context isolation strategy (2026-06-11)
+
+- **Static gate for bounded-context isolation** → make the isolation rules now
+  documented as *binding* in [`docs/rules/database.md`](../../docs/rules/database.md#bounded-context-data-isolation-modular-monolith--binding)
+  and [`docs/architecture-api.md`](../../docs/architecture-api.md) **machine-verified**,
+  so a violation fails CI instead of relying on review. Two checks:
+  (a) **No cross-context FK** — scan Doctrine mapping (`#[ORM\JoinColumn]` /
+  `#[ORM\ManyToOne]`/`OneToMany`/`ManyToMany` targets, and generated migration
+  `FOREIGN KEY` DDL) and fail when the FK target entity lives in a different
+  top-level context (`Backoffice/<A>` ↔ `Backoffice/<B>`, or across
+  `Backoffice`/`Frontoffice`). Cross-context references must be a bare UUID v7
+  column.
+  (b) **No cross-context import** — fail when a file under
+  `src/<Top>/<ContextA>/` has a `use Erpify\<Top>\<ContextB>\…` import, except
+  the allowed seams: another context's **published Application service**
+  interface and **integration-event** classes (define an allowlist
+  namespace/marker). `Shared/` is always importable.
+  Wire it as a `make php.lint.*` target next to the existing
+  `make php.lint.error-contract` drift gate, and add it to the "Required checks"
+  in `CLAUDE.md` once it exists. Pair with a PHPStan rule if the AST check is
+  cleaner there than in a grep gate.
+
 ## Deferred from: code review of story-1.2 (2026-06-11)
 
 - **`KeysetSqlSnapshotTest` no cierra la conexión DBAL paralela de `setUp()`** → un `tearDown()` con `parent::tearDown()` dispara el conflicto rector↔psalm del repo (rector `NoSetupWithParentCallOverrideRector` desnuda `#[Override]`, psalm exige baseline nueva de `MissingOverrideAttribute`), violando el AC7 "sin baselines nuevas". Leak *low* mitigado por refcounting de PHP. Alternativa: cerrar dentro de `inRolledBackTransaction()` sin método override.

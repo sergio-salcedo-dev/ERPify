@@ -21,8 +21,7 @@
    eventos/políticas, no por la DB.
 3. **Sin cross-repository queries.** Un contexto nunca consulta el repositorio
    de otro; obtiene datos ajenos por un Application service publicado o por un
-   **read model** alimentado por eventos. (Regla ya vigente en
-   [`architecture-api.md`](architecture-api.md).)
+   **read model** alimentado por eventos.
 4. **Todo pasa por eventos desde el inicio.** Cada cambio de estado de un
    agregado **registra un domain event** (`AggregateRoot::record`), se persiste
    en la tabla de auditoría/outbox (`PersistDomainEventMiddleware` →
@@ -36,6 +35,12 @@
    [`rules/database.md`](rules/database.md).
 7. **Errores:** excepciones de dominio con markers (`NotFound` → 404,
    `Conflict` → 409, etc.) y respuesta RFC 9457.
+
+> Los principios 1–4 son **vinculantes** (defecto que bloquea revisión), no
+> orientativos — enunciado completo en
+> [`rules/database.md`](rules/database.md#bounded-context-data-isolation-modular-monolith--binding)
+> y [`architecture-api.md`](architecture-api.md). Un gate estático (FK / import
+> cross-context) está registrado como deferred work hasta que se implemente.
 
 > **Eventos de dominio vs. de integración.** Un *domain event* es interno al
 > contexto (rico, puede cambiar). Un *integration event* es el contrato público
