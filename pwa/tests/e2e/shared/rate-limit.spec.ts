@@ -50,7 +50,7 @@ test.describe("Rate limiting — 429 Too Many Requests", () => {
     page,
   }) => {
     // Use the dev-tools error gallery which renders ProblemDisplay fixtures
-    await page.goto("/dev-tools/error-gallery");
+    await page.goto("/backoffice/dev-tools/error-gallery");
 
     // Find the 429 rate-limited example section
     const rateLimitedSection = page.locator('text="429 — rate limited"').first();

@@ -154,12 +154,12 @@ export const backofficeMenuGroups: NavGroup[] = [
   {
     label: "Finance",
     items: [
-      { name: "Banks", icon: Building2, path: bankRoutes.list },
       {
         name: "Finance",
         icon: Landmark,
-        path: `${BASE}/finance/control`,
+        path: bankRoutes.list,
         subItems: [
+          { name: "Banks", path: bankRoutes.list, icon: Building2 },
           { name: "Management Control", path: `${BASE}/finance/control`, icon: Activity },
           { name: "Global Transactions", path: `${BASE}/finance/transactions`, icon: RefreshCw },
           { name: "Invoicing", path: `${BASE}/invoices`, icon: Receipt },
