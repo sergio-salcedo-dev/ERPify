@@ -50,6 +50,33 @@ Collected during quick-dev. Not part of the current story's shippable scope.
 - **`OrderByColumns::fromSorts` sólo deduplica `id` cuando es la última clave** → un sort multi-clave con `id` en posición no-última re-añadiría la columna tie-break, produciendo `id` duplicado en ORDER BY/predicado. Sin caller en PR1 (`fromPrimarySort` pasa una sola clave); guardar antes de que PR2 cablee sorts multi-clave reales.
 - **Floor de microsegundos vs redondeo de Postgres `TIMESTAMP(0)` + drift float en la frontera** → `CursorPositionExtractor` trunca (floor) a segundos; Postgres `TIMESTAMP(0)` redondea. Para filas ya persistidas la columna ya está a precisión de segundo, así que el riesgo es bajo, pero verificar con round-trip real contra Postgres (Behat) en PR2/PR3 que las filas frontera no se saltan/duplican en empates sub-segundo; idem precisión JSON de columnas float usadas como clave de orden.
 
+## Deferred from: bounded-context isolation strategy (2026-06-11)
+
+- **Static gate for bounded-context isolation (3 levels)** → make the isolation
+  rules now documented in [`docs/rules/database.md`](../../docs/rules/database.md#bounded-context-data-isolation-modular-monolith)
+  and [`docs/architecture-api.md`](../../docs/architecture-api.md) **machine-verified**.
+  The gate must **enforce boundaries, not total isolation** — model the three
+  levels, do NOT make it a dogmatic "zero coupling" check (that freezes dev,
+  forces data duplication, fights the framework):
+  - **🔴 Level 1 → ERROR (fail build).** (a) Cross-context **import**: a file
+    under `src/<Top>/<ContextA>/` with `use Erpify\<Top>\<ContextB>\Domain\…`
+    or `…\Application\…`. **Allowlist seams:** the other context's published
+    Application service interface + its integration-event classes (define a
+    marker interface / namespace convention to recognize them). `Shared/` is
+    always importable. (b) Cross-context **repository query**: another context's
+    `*Repository` injected/used outside its own context.
+  - **🟡 Level 2 → WARNING (report, don't fail).** Cross-context **FK** between
+    two business contexts — scan Doctrine `#[ORM\ManyToOne]`/`JoinColumn`
+    targets and generated migration `FOREIGN KEY` DDL; warn when the target
+    entity lives in a different top-level/business context so it gets justified
+    in review. Do not block.
+  - **🟢 Level 3 → ALLOWLISTED (no signal).** FK/refs toward shared kernel &
+    identity (`User`, tenant/`company_id`, `Money`, `Uuid`), ID-only columns,
+    event-based integration, read models.
+  Wire as a `make php.lint.*` target next to `make php.lint.error-contract`; add
+  to "Required checks" in `CLAUDE.md` once it exists. A PHPStan rule may be a
+  cleaner home for the AST import/repository checks than a grep gate.
+
 ## Deferred from: code review of story-1.2 (2026-06-11)
 
 - **`KeysetSqlSnapshotTest` no cierra la conexión DBAL paralela de `setUp()`** → un `tearDown()` con `parent::tearDown()` dispara el conflicto rector↔psalm del repo (rector `NoSetupWithParentCallOverrideRector` desnuda `#[Override]`, psalm exige baseline nueva de `MissingOverrideAttribute`), violando el AC7 "sin baselines nuevas". Leak *low* mitigado por refcounting de PHP. Alternativa: cerrar dentro de `inRolledBackTransaction()` sin método override.

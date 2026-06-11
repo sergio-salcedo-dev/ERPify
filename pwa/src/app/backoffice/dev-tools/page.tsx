@@ -8,10 +8,10 @@ export const metadata = {
 };
 
 /**
- * `/dev-tools` — public route bound to the dev-tools module's
+ * `/backoffice/dev-tools` — public route bound to the dev-tools module's
  * `<DevToolsMenu>`. The page calls `notFound()` in production so the URL
  * is unreachable for real users, mirroring the same gating model used by
- * `/dev-throw` and the nested `/dev-tools/error-gallery` route.
+ * `/dev-throw` and the nested `/backoffice/dev-tools/error-gallery` route.
  */
 export default function DevToolsPage() {
   if (!isDevToolsAvailable()) {

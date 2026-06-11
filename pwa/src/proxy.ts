@@ -5,8 +5,8 @@ import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevTool
 /**
  * Production short-circuit for the dev-tools surface.
  *
- * In production every dev / QA route (`/dev-tools` and its nested tools
- * such as `/dev-tools/error-gallery`, plus the sibling `/dev-throw`
+ * In production every dev / QA route (`/backoffice/dev-tools` and its nested tools
+ * such as `/backoffice/dev-tools/error-gallery`, plus the sibling `/dev-throw`
  * fixture) is rewritten to a guaranteed-unmatched URL **before** the
  * page handler runs. Next then renders the
  * branded `app/not-found.tsx` page with HTTP 404 — exactly what a real
@@ -44,5 +44,10 @@ export function proxy(request: NextRequest): NextResponse {
 }
 
 export const config = {
-  matcher: ["/dev-tools", "/dev-tools/:path*", "/dev-throw", "/dev-throw/:path*"],
+  matcher: [
+    "/backoffice/dev-tools",
+    "/backoffice/dev-tools/:path*",
+    "/dev-throw",
+    "/dev-throw/:path*",
+  ],
 };

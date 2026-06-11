@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Wrench } from "lucide-react";
+import { ArrowLeft, Wrench } from "lucide-react";
 import { Routes } from "@/context/shared/domain/types/routes";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 import { DEV_TOOL_GROUPS } from "./devToolGroups";
 
 /**
- * Hub page rendered at `/dev-tools` listing every dev / QA tool the PWA
+ * Hub page rendered at `/backoffice/dev-tools` listing every dev / QA tool the PWA
  * ships. Hidden from production via the route's `notFound()` guard and
  * the `isDevToolsAvailable()` checks at every entry point (frontoffice
  * navbar, backoffice sidebar).
@@ -17,8 +17,8 @@ import { DEV_TOOL_GROUPS } from "./devToolGroups";
  */
 export function DevToolsMenu() {
   return (
-    <div className="dev-tools bg-background min-h-screen" data-testid="dev-tools">
-      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+    <div className="dev-tools" data-testid="dev-tools">
+      <div className="mx-auto max-w-5xl py-4 sm:py-8">
         <header className="dev-tools__header border-warning/40 bg-warning/10 mb-8 rounded-md border p-4 sm:p-5">
           <div className="dev-tools__header-row flex items-center gap-2">
             <Wrench className="text-warning-strong size-4 sm:size-5" aria-hidden="true" />
@@ -90,20 +90,6 @@ export function DevToolsMenu() {
             >
               <ArrowLeft className="size-3.5" aria-hidden="true" />
               FrontOffice
-            </Link>
-            <Link
-              href={Routes.BACKOFFICE}
-              className={cn(
-                buttonVariants({ variant: "default", size: "sm" }),
-                "dev-tools__footer-link",
-              )}
-              data-icon="inline-end"
-              data-testid="dev-tools__footer-backoffice"
-              title="Go to BackOffice"
-              aria-label="BackOffice"
-            >
-              BackOffice
-              <ArrowRight className="size-3.5" aria-hidden="true" />
             </Link>
           </div>
         </footer>

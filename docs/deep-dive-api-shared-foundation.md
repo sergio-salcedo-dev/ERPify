@@ -10,7 +10,7 @@
 
 ## Overview
 
-`api/src/Shared/` is the cross-context spine of the Symfony API. It owns the framework-free domain primitives, the application-layer ports/use-case scaffolding, and the infrastructure adapters (HTTP, persistence, messaging, storage, image processing, mail) that every bounded context layers on top of. The most load-bearing surface today is the **RFC 9457 Problem Details error pipeline** (Stories 1.1, 3.1–3.7, 4.1–4.6) — every uncaught `/api/*` exception flows through `ProblemDetailsFactory` → `ExceptionResponder` → `ProblemDetailsResponder`, and most of the unit/functional test mass in this tree pins those guarantees.
+`api/src/Shared/` is the cross-context spine of the Symfony API. It owns the framework-free domain primitives, the application-layer ports/use-case scaffolding, and the infrastructure adapters (HTTP, persistence, messaging, storage, image processing, mail) that every bounded context layers on. The most load-bearing surface is the **RFC 9457 Problem Details error pipeline** (Stories 1.1, 3.1–3.7, 4.1–4.6) — every uncaught `/api/*` exception flows through `ProblemDetailsFactory` → `ExceptionResponder` → `ProblemDetailsResponder`, and most unit/functional test mass here pins those guarantees.
 
 **Top-level layout (5 subtrees, file counts in parentheses):**
 
@@ -26,19 +26,19 @@ api/src/Shared/
 
 **Architectural posture (high level):**
 - DDD + Hexagonal: Domain → Application → Infrastructure dependency direction.
-- Single mapping site for errors: `Shared/Application/Problem/ProblemDetailsFactory`.
+- Single error mapping site: `Shared/Application/Problem/ProblemDetailsFactory`.
 - Cursor-aware paginator forked from `chiliz/doctrine-bundle`.
-- Domain events are persisted to the `domain_event` audit table **before** Messenger transport enqueue, via `PersistDomainEventMiddleware`.
-- Image normalizer (Intervention Image / GD) and Flysystem are hidden behind ports; swapping backends is a config change.
+- Domain events persist to the `domain_event` audit table **before** Messenger transport enqueue, via `PersistDomainEventMiddleware`.
+- Image normalizer (Intervention Image / GD) and Flysystem sit behind ports; swapping backends is a config change.
 
-**Architectural debt surfaced by the literal sweep (see "Known issues" near the end):**
+**Architectural debt surfaced by the literal sweep (see "Known issues"):**
 1. `Shared/Domain/Entity/Identifiable.php` and `Shared/Domain/Entity/Timestamped.php` import Doctrine ORM, Symfony Serializer, and Symfony Validator — a documented violation of the "no framework imports inside `Domain/`" rule in `CLAUDE.md`.
 
 ---
 
 ## Complete File Inventory
 
-> Each block is a compressed digest of a literal, full-file read. Long-form notes from each subagent's report are folded into the cross-cutting sections below; file blocks here are the shortest form sufficient for navigation and change-impact reasoning.
+> Each block is a compressed digest of a literal full-file read. Long-form notes are folded into the cross-cutting sections below; these blocks are the shortest form sufficient for navigation and change-impact reasoning.
 
 ### Subtree: `Application/` (9 files)
 
@@ -46,13 +46,13 @@ api/src/Shared/
 - **LOC:** 18 — **Type:** outbound port interface.
 - **Exports:** `DomainEventStore::append(DomainEvent): void`.
 - **Used by:** `Infrastructure/Persistence/DoctrineDomainEventStore` (adapter), `Infrastructure/Messenger/PersistDomainEventMiddleware` (caller).
-- **Contributor note:** Hexagonal boundary — keep implementations in Infrastructure/. Do not split into multiple ports unless modeling genuinely distinct sinks.
+- **Contributor note:** Hexagonal boundary — keep implementations in Infrastructure/. Don't split into multiple ports unless modeling genuinely distinct sinks.
 
 #### `api/src/Shared/Application/Http/Search/SearchQuery.php`
 - **LOC:** 87 — **Type:** HTTP-boundary `final readonly` DTO; `MAX_PAGE = 10_000`, `MAX_LIMIT = 1_000`, `MAX_FILTERS = 20`.
 - **Exports:** Constructor with `#[Assert\*]` constraints on `cursor`/`page`/`limit`/`paginationMode`/`filters`; `validateFilterIndexes()` (contiguous-from-0 callback); `toCriteria(): SearchCriteria`.
 - **Used by:** `Backoffice/Bank/Application/BankSearcher`, `Backoffice/Bank/Infrastructure/Controller/BankSearchController` (binds via `#[MapQueryString]`), `Infrastructure/Persistence/Doctrine/AbstractDoctrineSearchRepository`.
-- **Contributor note:** `final` on purpose — do **not** subclass. Per-entity filtering is expressed through the generic `filters[]` grammar resolved against each repository's `searchFieldMap()`, never through subclasses or typed wire params (see the filterable-search recipe in [`architecture-api.md`](./architecture-api.md#filterable-search-generic-filters-contract)). Validation failures bubble to `ValidationFailedException` → `ProblemDetailsFactory` → 400.
+- **Contributor note:** `final` on purpose — do **not** subclass. Per-entity filtering uses the generic `filters[]` grammar resolved against each repository's `searchFieldMap()`, never subclasses or typed wire params (filterable-search recipe: [`architecture-api.md`](./architecture-api.md#filterable-search-generic-filters-contract)). Validation failures bubble to `ValidationFailedException` → `ProblemDetailsFactory` → 400.
 - **Verification:** `api/tests/Unit/Shared/Application/Http/Search/SearchQueryTest.php`.
 
 #### `api/src/Shared/Application/Mailer/NotificationMailer.php`
@@ -64,27 +64,27 @@ api/src/Shared/
 #### `api/src/Shared/Application/Problem/ProblemBodyTooLargeException.php`
 - **LOC:** 30 (1 code, 29 docblock) — **Type:** marker exception.
 - **Used by:** `ProblemDetailsFactory::applyBodyCap()` (thrown), `Infrastructure/Http/EventListener/ExceptionResponder` (caught → static last-resort body).
-- **Contributor note:** Indicates the multi-KB error title alone exceeds the 16 KiB cap. Never catch elsewhere; the listener owns escalation.
+- **Contributor note:** Signals the multi-KB error title alone exceeds the 16 KiB cap. Never catch elsewhere; the listener owns escalation.
 
 #### `api/src/Shared/Application/Problem/ProblemDetails.php`
 - **LOC:** 51 (30 code, 21 docblock) — **Type:** immutable `final readonly` value object for the RFC 9457 wire shape.
 - **Exports:** Constructor (`type`, `title`, `status`, `detail`, `instance`, `correlationId`, `extensions`), `toArray()`.
-- **Key detail:** Field order is pinned: `type`, `title`, `status`, then optional `detail`, then `instance`, then `correlation-id` (camelCase → kebab-case mapping at line 47), then extensions. Determinism is load-bearing for downstream parsers.
+- **Key detail:** Field order is pinned — `type`, `title`, `status`, then optional `detail`, `instance`, `correlation-id` (camelCase → kebab-case mapping at line 47), then extensions. Determinism is load-bearing for downstream parsers.
 - **Verification:** `api/tests/Unit/Shared/Application/Problem/ProblemDetailsTest.php`.
 
 #### `api/src/Shared/Application/Problem/ProblemDetailsFactory.php`
-- **LOC:** 712 — **Type:** `final readonly` service. **The single mapping site** for every uncaught throwable on `/api/*` to RFC 9457 Problem Details.
+- **LOC:** 712 — **Type:** `final readonly` service. **The single mapping site** turning every uncaught `/api/*` throwable into RFC 9457 Problem Details.
 - **Exports:** `fromThrowable(Throwable, string $correlationId, string $instance): ProblemDetails` plus extensive private helpers.
 - **Pinned by Stories:** 1.1 (marker resolution), 3.1 (debug extension), 3.2 (redaction), 3.3 (unserializable sentinel), 3.4 (listener self-failure interplay), 3.6 (16 KiB body cap), 3.7 (constant-time auth branching).
 - **Key contracts:**
   - `MARKER_STATUS_MAP` is the canonical marker→HTTP-status map (NFR25).
   - Debug modes: `dev`/`test` → 5-key map; `staging` → 2-key map; `prod` → null (NFR7 no-leak; unhandled exception title replaced with `'An unexpected error occurred.'`).
-  - Redaction: `redactKeys()` delegates to `RedactionDenylist::filter()` and runs **after** reserved-key unset, **before** whitelist check.
+  - Redaction: `redactKeys()` delegates to `RedactionDenylist::filter()`, running **after** reserved-key unset, **before** whitelist check.
   - Unserializable sentinel: type-uniform `'[unserializable]'` token; one PSR-3 NOTICE per replacement.
-  - Constant-time auth (NFR9): all 401/403 paths flow through identical construction shape.
-  - Body cap: 16 KiB hard ceiling; truncation pops violations tail → drops extension keys reverse-order → throws `ProblemBodyTooLargeException` if the core fields alone overflow.
+  - Constant-time auth (NFR9): all 401/403 paths share identical construction shape.
+  - Body cap: 16 KiB hard ceiling; truncation pops violations tail → drops extension keys reverse-order → throws `ProblemBodyTooLargeException` if core fields alone overflow.
 - **Used by:** `Infrastructure/Http/EventListener/ExceptionResponder` (only direct caller).
-- **Verification:** Big test pin set: `ProblemDetailsFactoryTest`, `ErrorContractGateTest`, `MarkerStatusMapContractTest`, `ConstantTimeAuthBranchingContractTest`, `ConstantTimeAuthBranchingBenchmarkTest`, `NativeJsonEncodeContractTest`, `BannedDoctrineApisTest`, `LoggerInterfaceContractTest`, `NoDatabaseDependenciesContractTest`, `StatelessPropertiesContractTest`, plus `api/tests/Bench/.../ExceptionResponderBenchmarkTest.php` (NFR2 budget — opt-in via `make php.bench`).
+- **Verification:** Big pin set: `ProblemDetailsFactoryTest`, `ErrorContractGateTest`, `MarkerStatusMapContractTest`, `ConstantTimeAuthBranchingContractTest`, `ConstantTimeAuthBranchingBenchmarkTest`, `NativeJsonEncodeContractTest`, `BannedDoctrineApisTest`, `LoggerInterfaceContractTest`, `NoDatabaseDependenciesContractTest`, `StatelessPropertiesContractTest`, plus `api/tests/Bench/.../ExceptionResponderBenchmarkTest.php` (NFR2 budget — opt-in via `make php.bench`).
 
 #### `api/src/Shared/Application/Problem/RedactionDenylist.php`
 - **LOC:** 81 (50 code, 31 docblock) — **Type:** caseless `enum`.
@@ -101,7 +101,7 @@ api/src/Shared/
 #### `api/src/Shared/Application/Validation/Validator.php`
 - **LOC:** 41 — **Type:** thin wrapper over `Symfony\…\ValidatorInterface`.
 - **Exports:** `ensure(mixed $value, ?Constraint|array $constraints = null, …): void` — validate-or-throw `ValidationFailedException`.
-- **Contributor note:** Use this in Application layer for programmatic / nested validation. HTTP-boundary DTOs (e.g., `SearchQuery`) rely on Symfony's `#[MapQueryString]` to validate automatically.
+- **Contributor note:** Use in Application layer for programmatic / nested validation. HTTP-boundary DTOs (e.g. `SearchQuery`) rely on Symfony's `#[MapQueryString]` to validate automatically.
 
 ---
 
@@ -112,13 +112,13 @@ api/src/Shared/
 #### `api/src/Shared/Domain/Aggregate/AggregateRoot.php`
 - **LOC:** 47 — abstract base composing `Identifiable` + `Timestamped` traits.
 - **Exports:** `final pullDomainEvents(): list<DomainEvent>` (idempotent drain), `final protected record(DomainEvent): void`.
-- **Constructor seeds** `createdAt`/`updatedAt = now()`; subclass owns `id` via `Identifiable`.
+- **Constructor** seeds `createdAt`/`updatedAt = now()`; subclass owns `id` via `Identifiable`.
 - **Used by:** `Bank` (Backoffice), `Media` (Shared), `StoredDomainEvent` ORM entity.
 
 #### `api/src/Shared/Domain/Entity/Identifiable.php`
 - **LOC:** 34 — UUID identity trait composed into `AggregateRoot`.
 - **Imports (FRAMEWORK LEAK):** `Doctrine\DBAL\Types\Types`, `Doctrine\ORM\Mapping`, `Symfony\Bridge\Doctrine\IdGenerator\UuidGenerator`, `Symfony\Component\Serializer\Attribute`, `Symfony\Component\Validator\Constraints`. Decorates `id` with ORM mapping, serialization group `identifiable`, and `#[Assert\Uuid(strict: true)]`.
-- **Risk:** Any persistence backend or serializer change has to touch domain code. See Known issues.
+- **Risk:** Any persistence-backend or serializer change must touch domain code. See Known issues.
 
 #### `api/src/Shared/Domain/Entity/Timestamped.php`
 - **LOC:** 49 — `createdAt`/`updatedAt` audit trait.
@@ -128,14 +128,14 @@ api/src/Shared/
 - **LOC:** 21 — extends `\BackedEnum`. Methods: `getLabel()`, `getLabelOrFail()`, `static getLabels()`, `static fromLabel()`, `static fromLabelOrFail()`.
 
 #### `api/src/Shared/Domain/Enum/Abstraction/HumanReadableIntEnumTrait.php`
-- **LOC:** 133 — implements the interface using reflection + `SplObjectStorage` cache (lazy on first call). Utilities: `getKeysFromValues()`, `getValues()`, `getValuesNotIn()`. `*OrFail` variants throw `\InvalidArgumentException`.
+- **LOC:** 133 — implements the interface via reflection + `SplObjectStorage` cache (lazy on first call). Utilities: `getKeysFromValues()`, `getValues()`, `getValuesNotIn()`. `*OrFail` variants throw `\InvalidArgumentException`.
 
 #### `api/src/Shared/Domain/Enum/Attribute/HumanReadableIntEnumValue.php`
 - **LOC:** 16 — `Attribute::TARGET_CLASS_CONSTANT` marker carrying a `?string $label`.
 
 #### `api/src/Shared/Domain/Event/DomainEvent.php`
 - **LOC:** 50 — abstract base. Constructor takes `aggregateId`, `occurredOn` (readonly); `eventId` is no longer a parameter — it is minted in the constructor via `Shared/Domain/Uuid/Uuid::generate()` (UUID v7). Abstract: `static eventName(): string`, `toPrimitives(): array`. Helper: `protected static now(): DateTimeImmutable`.
-- **Subclassed by:** `Backoffice/Bank/Domain/Event/BankCreatedDomainEvent`, `BankUpdatedDomainEvent` (and any future events).
+- **Subclassed by:** `Backoffice/Bank/Domain/Event/BankCreatedDomainEvent`, `BankUpdatedDomainEvent` (and future events).
 
 #### `api/src/Shared/Domain/Exception/DomainException.php`
 - **LOC:** 50 — abstract base extending `\DomainException`. Constructor: `(type, title, context, ?previous)`; accessors `type()`, `title()`, `context()`.
@@ -164,32 +164,29 @@ api/src/Shared/
 
 ### Subtree: `Infrastructure/` (25 files)
 
-> Largest subtree by far; the HTTP error-pipeline files here are the most load-bearing files in `Shared/`.
+> Largest subtree by far; the HTTP error-pipeline files here are the most load-bearing in `Shared/`.
 
 #### `api/src/Shared/Infrastructure/Http/Controller/AbstractSearchController.php`
 - **LOC:** 59 — `abstract readonly` controller template.
-- **Key detail:** Uses **non-promoted protected properties** (intentional, documented at lines 17–21) so subclasses can declare their own promoted readonly properties for their entity searcher. `buildResponse()` normalizes paginated items, calls `PaginatorCursorFactory::toString()` for cursor envelope, returns via `ResponderInterface`.
+- **Key detail:** Uses **non-promoted protected properties** (intentional, documented at lines 17–21) so subclasses can declare their own promoted readonly properties for their entity searcher. `buildResponse()` normalizes paginated items, calls `PaginatorCursorFactory::toString()` for the cursor envelope, returns via `ResponderInterface`.
 
 #### `api/src/Shared/Infrastructure/Http/CorrelationIdListener.php`
-- **LOC:** 90 — two listeners on the same class via attributes.
-- **`PRIORITY = 1024`** on `kernel.request`; **`RESPONSE_PRIORITY = -1024`** on `kernel.response`.
+- **LOC:** 90 — two listeners on one class via attributes. **`PRIORITY = 1024`** on `kernel.request`; **`RESPONSE_PRIORITY = -1024`** on `kernel.response`.
 - Inbound `X-Correlation-Id` is validated against a strict UUIDv7 regex (`UUIDV7_PATTERN`, `\A…\z` anchors, lowercase hex, RFC 9562 §6.10) with a length short-circuit (`UUIDV7_LENGTH = 36`) to prevent regex-DoS on multi-MB attribute values. Skips sub-requests. Response handler **re-validates** the request attribute before writing the `X-Correlation-Id` header (defense-in-depth).
 - **Verification:** `api/tests/Unit/Shared/Infrastructure/Http/CorrelationIdListenerTest.php`, `api/tests/Functional/Shared/Infrastructure/Http/CorrelationIdListenerFunctionalTest.php`.
 
 #### `api/src/Shared/Infrastructure/Http/EventListener/ExceptionResponder.php`
-- **LOC:** 316 — `final readonly`. **`PRIORITY = 16`** on `kernel.exception`.
-- Path-scoped to `/api/*`. Mints a per-error UUIDv7 `instance`; reads `_correlation_id` from the request attribute and re-validates it.
-- Top-level try/catch wrapping the primary path: any throw from factory/responder/logger → static `LAST_RESORT_BODY` (literal byte-for-byte JSON, no encoding risk) and a CRITICAL log line (NFR15: even if the logger then throws, response is already set).
-- **Log tiers (first match wins):** `\LogicException` → CRITICAL (pinned ahead of marker matching so a programmer / platform error wakes on-call irrespective of how the factory mapped it); `unhandled-exception` → CRITICAL; status ≥ 500 → ERROR; 4xx → WARNING. Nine canonical context fields filtered through `RedactionDenylist::filter()`, including `exception_category` (`programmer_error` / `runtime_error` / `domain_error` / `engine_error` / `unknown`) for SRE routing without parsing FQCNs — see [`api-error-contract.md`](./api-error-contract.md#exception_category--sre-routable-taxonomy).
+- **LOC:** 316 — `final readonly`. **`PRIORITY = 16`** on `kernel.exception`. Path-scoped to `/api/*`. Mints a per-error UUIDv7 `instance`; reads `_correlation_id` from the request attribute and re-validates it.
+- Top-level try/catch wraps the primary path: any throw from factory/responder/logger → static `LAST_RESORT_BODY` (literal byte-for-byte JSON, no encoding risk) and a CRITICAL log line (NFR15: even if the logger then throws, the response is already set).
+- **Log tiers (first match wins):** `\LogicException` → CRITICAL (pinned ahead of marker matching so a programmer / platform error wakes on-call regardless of factory mapping); `unhandled-exception` → CRITICAL; status ≥ 500 → ERROR; 4xx → WARNING. Nine canonical context fields filtered through `RedactionDenylist::filter()`, including `exception_category` (`programmer_error` / `runtime_error` / `domain_error` / `engine_error` / `unknown`) for SRE routing without parsing FQCNs — see [`api-error-contract.md`](./api-error-contract.md#exception_category--sre-routable-taxonomy).
 - **Three invariants pinned by tests** (`ExceptionResponderListenerPriorityTest`):
   1. `PRIORITY === 16`.
-  2. NelmioCors `kernel.response` listener priority remains `0` (so CORS headers attach **after** the Problem Details body).
+  2. NelmioCors `kernel.response` listener priority remains `0` (CORS headers attach **after** the Problem Details body).
   3. Last-resort body is a literal string (never `json_encode`).
 - **Verification:** `ExceptionResponderTest` (unit), `ExceptionResponderFunctionalTest` (E2E with 14 fixture controllers in `tests/Functional/.../EventListener/Fixtures/`), `ExceptionResponderListenerPriorityTest` (priority pin), `ExceptionResponderBenchmarkTest` (NFR2 perf budget, opt-in via `make php.bench`).
 
 #### `api/src/Shared/Infrastructure/Http/ProblemDetailsResponder.php`
-- **LOC:** 46 — adapter `ProblemDetails → Symfony\Response`.
-- Uses raw `Response` (not `JsonResponse`) to control encoding; flags = `JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR`. Headers: `Content-Type: application/problem+json` (no charset — RFC 9457 §3 mandates UTF-8), `Cache-Control: no-store`.
+- **LOC:** 46 — adapter `ProblemDetails → Symfony\Response`. Uses raw `Response` (not `JsonResponse`) to control encoding; flags = `JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR`. Headers: `Content-Type: application/problem+json` (no charset — RFC 9457 §3 mandates UTF-8), `Cache-Control: no-store`.
 - **Intentionally does NOT implement `ResponderInterface`** (documented at lines 10–26) — error-path and success-path are different concerns.
 - **Verification:** `api/tests/Unit/Shared/Infrastructure/Http/ProblemDetailsResponderTest.php`.
 
@@ -198,16 +195,15 @@ api/src/Shared/
 - **Verification:** `JsonResponderTest`.
 
 #### `api/src/Shared/Infrastructure/Mailer/PlainTextNotificationMailer.php`
-- **LOC:** 56 — `#[AsAlias(NotificationMailer::class)]`. Builds dual-body email (text + HTML); HTML body escapes via `htmlspecialchars(ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')` and wraps in `<pre>`. Optional `correlationLabel` is prepended.
+- **LOC:** 56 — `#[AsAlias(NotificationMailer::class)]`. Builds a dual-body email (text + HTML); HTML body escapes via `htmlspecialchars(ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')` and wraps in `<pre>`. Optional `correlationLabel` is prepended.
 - **Risk:** No size cap on `$fields`; nested arrays produce unbounded JSON strings.
 
 #### `api/src/Shared/Infrastructure/Messenger/PersistDomainEventMiddleware.php`
-- **LOC:** 35 — registered first in `messenger.bus.default.middleware` (see `api/config/packages/messenger.yaml`). Runs **before** `SendMessageMiddleware` so the audit row is committed even if transport enqueue throws.
-- Dispatches via the `DomainEventStore` port (alias → `DoctrineDomainEventStore`).
+- **LOC:** 35 — registered first in `messenger.bus.default.middleware` (see `api/config/packages/messenger.yaml`). Runs **before** `SendMessageMiddleware` so the audit row commits even if transport enqueue throws. Dispatches via the `DomainEventStore` port (alias → `DoctrineDomainEventStore`).
 
 #### `api/src/Shared/Infrastructure/Persistence/Doctrine/AbstractDoctrineRepository.php`
 - **LOC:** 215 — extends Doctrine's `ServiceEntityRepository<T>`. `createQueryBuilder()` is overridden to return `QueryBuilderWithOptions` (load-bearing for the paginator).
-- WHERE-helper APIs: `addWhereIn`, `addWhereInCaseInsensitive`, `addWhereIdsIn`, `addWhereBetweenDates`, `addWhereBetweenValues`. Parameter naming uses `xxh128($qb->getDQL())` + a counter to keep parameter names deterministic across repeated executions (prevents Doctrine SQL-cache disk explosion — comment at lines 202–204).
+- WHERE-helper APIs: `addWhereIn`, `addWhereInCaseInsensitive`, `addWhereIdsIn`, `addWhereBetweenDates`, `addWhereBetweenValues`. Parameter naming uses `xxh128($qb->getDQL())` + a counter for deterministic names across repeated executions (prevents Doctrine SQL-cache disk explosion — comment at lines 202–204).
 
 #### `api/src/Shared/Infrastructure/Persistence/Doctrine/AbstractDoctrineSearchRepository.php`
 - **LOC:** 133 — generic `<T>`. Bridges `SearchCriteria` → `Paginator<T>`. Two notable optimizations:
@@ -228,24 +224,20 @@ api/src/Shared/
 
 #### `api/src/Shared/Infrastructure/Persistence/Doctrine/Paginator.php`
 - **LOC:** 417 — port of `chiliz/doctrine-bundle` Paginator; **the most algorithmically dense file in `Shared/`**. Implements `PaginatedResult<T>` and `IteratorAggregate`.
-- Cursor WHERE optimization: walks order-by columns in **reverse**, building OR/AND chains comparing column values against `$cursor->getLastItem()` / `getFirstItem()` with operators chosen by sort direction × page direction. Skips `OFFSET` when cursor is present.
+- Cursor WHERE optimization: walks order-by columns in **reverse**, building OR/AND chains comparing column values against `$cursor->getLastItem()` / `getFirstItem()` with operators chosen by sort direction × page direction. Skips `OFFSET` when a cursor is present.
 - `ORDER_BY_IDENTIFIER_PATTERN` regex restricts column names to safe DQL identifiers (`alias.field` / `field`, underscores allowed) — protects the cursor-WHERE generator from injection.
 - `hasMorePages()` is determined by the +1 row trick (fetches `maxPerPage + 1`).
 - DETAILED mode triggers a separate `COUNT(*)` query (with `ORDER BY` reset).
 - DateTime fields are extracted to ISO-8601 UTC for cursor serialization stability.
 
 #### `api/src/Shared/Infrastructure/Persistence/PaginatorCursor.php` · `PaginatorCursorInterface.php` · `PaginatorCursorFactory.php`
-- 68 + 35 + 138 LOC.
-- `PaginatorCursorFactory` serializes/deserializes cursors as `base64(gzip(json)).hmacSha256` using `%kernel.secret%` as the HMAC key. Hard limits: `MAX_DECOMPRESSED_BYTES = 65_536` (gzip-bomb defense), constant-time `hash_equals` on signature compare. Bad signature / bad gzip / bad JSON → empty cursor (silent fail; client retries from page 1).
+- 68 + 35 + 138 LOC. `PaginatorCursorFactory` serializes/deserializes cursors as `base64(gzip(json)).hmacSha256` using `%kernel.secret%` as the HMAC key. Hard limits: `MAX_DECOMPRESSED_BYTES = 65_536` (gzip-bomb defense), constant-time `hash_equals` on signature compare. Bad signature / gzip / JSON → empty cursor (silent fail; client retries from page 1).
 
 #### `api/src/Shared/Infrastructure/Persistence/Doctrine/QueryBuilderWithOptions.php` · `PaginatorOption.php`
-- 37 + 17 LOC.
-- `QueryBuilderWithOptions` extends Doctrine's `QueryBuilder` and carries an options bag — that's what lets `Paginator` discover `FETCH_JOIN_COLLECTION` / `ENABLE_CURSOR_PAGINATION` / `PAGINATION_MODE` without a wider `QueryBuilder` API.
-- `PaginatorOption` enum: `FETCH_JOIN_COLLECTION`, `ENABLE_CURSOR_PAGINATION`, `PAGINATION_MODE`.
+- 37 + 17 LOC. `QueryBuilderWithOptions` extends Doctrine's `QueryBuilder` and carries an options bag — letting `Paginator` discover `FETCH_JOIN_COLLECTION` / `ENABLE_CURSOR_PAGINATION` / `PAGINATION_MODE` without a wider `QueryBuilder` API. `PaginatorOption` enum: `FETCH_JOIN_COLLECTION`, `ENABLE_CURSOR_PAGINATION`, `PAGINATION_MODE`.
 
 #### `api/src/Shared/Infrastructure/Persistence/QueryParam.php` · `SortDirection.php` · `StoredDomainEventRepository.php`
-- 20 + 11 + 18 LOC.
-- `QueryParam` enum names the standard URL parameters (`IDS`, `CREATED_AT`, `UPDATED_AT`, `PAGE`, `CURSOR`, `PAGINATION_MODE`, `SORT`, `DIRECTION`, `LIMIT`, `FROM`, `TO`).
+- 20 + 11 + 18 LOC. `QueryParam` enum names the standard URL parameters (`IDS`, `CREATED_AT`, `UPDATED_AT`, `PAGE`, `CURSOR`, `PAGINATION_MODE`, `SORT`, `DIRECTION`, `LIMIT`, `FROM`, `TO`).
 
 #### `api/src/Shared/Infrastructure/Serializer/JsonDecoder.php` · `ResourceNormalizer.php`
 - 43 + 46 LOC.
@@ -257,7 +249,7 @@ api/src/Shared/
 
 ### Subtree: `Media/` (11 files)
 
-> In-DB media storage path. Used for small images attached to aggregates (e.g., bank logos). Uses BYTEA columns; not Flysystem.
+> In-DB media storage path for small images attached to aggregates (e.g. bank logos). Uses BYTEA columns; not Flysystem.
 
 #### `api/src/Shared/Media/Application/Dto/NormalizedImage.php`
 - **LOC:** 15 — `final readonly` DTO: `bytes`, `mimeType`, `contentHash`. Hash is computed **after** transcoding/scaling — premature hashing breaks deduplication.
@@ -266,21 +258,20 @@ api/src/Shared/
 - **LOC:** 43 — orchestrates `UploadedFile → ImageNormalizer → MediaRepository → Media`. Deduplicates by content hash via `findByContentHash()` before creating a new aggregate (idempotent).
 
 #### `api/src/Shared/Media/Application/Port/ImageNormalizer.php` · `MediaPublicUrlGenerator.php`
-- 13 + 13 LOC ports. URL generator returns either an absolute URL (when `MEDIA_PUBLIC_BASE_URL` is set) or a relative path; **not stored on the entity** so swapping CDNs requires no migration.
+- 13 + 13 LOC ports. URL generator returns an absolute URL (when `MEDIA_PUBLIC_BASE_URL` is set) or a relative path; **not stored on the entity** so swapping CDNs needs no migration.
 
 #### `api/src/Shared/Media/Domain/Entity/Media.php`
 - **LOC:** 69 — extends `AggregateRoot`. Doctrine columns: `content_hash` (64-char SHA256), `mime_type`, `byte_size`, `raw_bytes` (BLOB). `getRawBytes()` handles Doctrine's resource/string polymorphism for BLOB reads. No soft delete — media is hard-deleted per the deletion policy in [`rules/database.md`](rules/database.md) (GDPR erasure).
 - **Note:** Raw bytes live in PostgreSQL — small media only. Larger payloads belong on the Storage/Flysystem path.
 
 #### `api/src/Shared/Media/Domain/Exception/InvalidImageException.php`
-- **LOC:** 29 — extends `DomainException` and implements `InvariantViolation` → 422. Carries `formField` in `context` so API responses can pinpoint the offending input.
+- **LOC:** 29 — extends `DomainException`, implements `InvariantViolation` → 422. Carries `formField` in `context` so API responses can pinpoint the offending input.
 
 #### `api/src/Shared/Media/Domain/Repository/MediaRepository.php`
-- **LOC:** 16 — interface: `save()`, `findByContentHash()`, `existsByContentHash()`. **No delete method** — no deletion use case exists yet; any future one is a hard `DELETE` (see [`rules/database.md`](rules/database.md)).
+- **LOC:** 16 — interface: `save()`, `findByContentHash()`, `existsByContentHash()`. **No delete method** — no deletion use case yet; any future one is a hard `DELETE` (see [`rules/database.md`](rules/database.md)).
 
 #### `api/src/Shared/Media/Infrastructure/Controller/MediaGetController.php`
-- **LOC:** 69 — `#[Route('/media/{hash}', requirements: ['hash' => '[a-f0-9]{64}'])]`.
-- ETag = content hash. Returns 304 on `If-None-Match` match. Cache headers: `Cache-Control: public, max-age=31536000, immutable`, `X-Content-Type-Options: nosniff`. No auth (currently public).
+- **LOC:** 69 — `#[Route('/media/{hash}', requirements: ['hash' => '[a-f0-9]{64}'])]`. ETag = content hash. Returns 304 on `If-None-Match` match. Cache headers: `Cache-Control: public, max-age=31536000, immutable`, `X-Content-Type-Options: nosniff`. No auth (currently public).
 
 #### `api/src/Shared/Media/Infrastructure/Http/ConfigurableMediaPublicUrlGenerator.php`
 - **LOC:** 45 — `#[AsAlias(MediaPublicUrlGenerator::class)]`. Resolution order: `MEDIA_PUBLIC_BASE_URL` env → Symfony router (when request context exists) → relative fallback `/api/v1/media/{hash}`.
@@ -302,7 +293,7 @@ api/src/Shared/
 
 ### Subtree: `Storage/` (12 files)
 
-> Flysystem-backed object-storage path. Content-addressed (`objects/{sha256}`). Used by aggregates that own larger uploads (e.g., generic stored objects beyond the small-media use case).
+> Flysystem-backed object-storage path. Content-addressed (`objects/{sha256}`). For aggregates owning larger uploads (e.g. generic stored objects beyond the small-media use case).
 
 #### `api/src/Shared/Storage/Application/Dto/StoredObjectWriteResult.php`
 - **LOC:** 16 — `final readonly` DTO: `objectKey`, `mimeType`, `byteSize`, `contentHash`.
@@ -320,7 +311,7 @@ api/src/Shared/
 - **LOC:** 16 — interface each domain implements once and registers via tag `stored_object.reference_inspector`. Methods: `countReferencesToContentHash()`, `findMimeTypeForContentHash()`. **Critical for orphan cleanup correctness** — see Known issues.
 
 #### `api/src/Shared/Storage/Application/StoredImageObjectWriter.php`
-- **LOC:** 47 — orchestrates upload → normalize → Flysystem write. Idempotent (checks `exists()` before `write()`). Catches `InvalidImageException` from normalizer to attach a custom `formField`.
+- **LOC:** 47 — orchestrates upload → normalize → Flysystem write. Idempotent (checks `exists()` before `write()`). Catches `InvalidImageException` from the normalizer to attach a custom `formField`.
 
 #### `api/src/Shared/Storage/Application/StoredObjectOrphanCleaner.php`
 - **LOC:** 41 — `cleanupAfterRemoval(?string $hash): void`. Iterates **all** registered `StoredObjectReferenceInspector` implementations (auto-wired iterator); deletes the blob only if every inspector reports zero references. **No explicit call sites yet** — expected to be invoked by aggregate-level domain-event handlers when a stored-object reference is dropped.
@@ -390,11 +381,11 @@ kernel.response
 
 Key invariants pinned by tests:
 - `ExceptionResponder::PRIORITY === 16` (above Symfony's default `-128` exception listener; below any per-context carve-out).
-- NelmioCors `kernel.response` priority remains `0` (so the Problem Details body is written before CORS headers attach).
+- NelmioCors `kernel.response` priority remains `0` (Problem Details body written before CORS headers attach).
 - The last-resort body is a literal string (never `json_encode`), so an encoding bug or malformed `Throwable` chain still produces a parseable 500.
-- 16 KiB body cap; truncation algorithm pops violations tail → drops extension keys reverse-order → throws `ProblemBodyTooLargeException` if the core fields alone overflow → outer try/catch emits the static fallback.
+- 16 KiB body cap; truncation pops violations tail → drops extension keys reverse-order → throws `ProblemBodyTooLargeException` if core fields alone overflow → outer try/catch emits the static fallback.
 - All 401/403 paths flow through identical construction shape (constant-time auth branching).
-- `correlation-id` is per-request (in the response header, in every log line on that request); `instance` is per-error (in the problem body and on the matching log line).
+- `correlation-id` is per-request (in the response header and every log line on that request); `instance` is per-error (in the problem body and the matching log line).
 
 ---
 
@@ -461,7 +452,7 @@ $messengerBus->dispatch($event)                   ← messenger.bus.default
                           └─ NotificationMailer::send()
 ```
 
-The middleware order is non-negotiable: audit row must exist before transport accepts the message, otherwise enqueue failures would silently drop history.
+The middleware order is non-negotiable: the audit row must exist before transport accepts the message, else enqueue failures would silently drop history.
 
 ---
 
@@ -553,7 +544,7 @@ StoredObjectOrphanCleaner::cleanupAfterRemoval($hash)
 
 **Gaps worth surfacing:**
 - Persistence pagination internals (`Paginator`, `PaginatorCursorFactory`, `AbstractDoctrineSearchRepository`, `AbstractDoctrineRepository` parameter-naming) are tested only through bounded-context integration tests today. Consider `tests/Unit/Shared/Infrastructure/Persistence/` to lock cursor round-trip + cursor-WHERE generation + composite-PK guard explicitly.
-- Image normalizer (`InterventionImageNormalizer`) has no tests — and it owns determinism guarantees for content-hash dedup. Add unit tests covering MIME allowlist, scaling math, transcode quality, and SHA-256 stability.
+- Image normalizer (`InterventionImageNormalizer`) has no tests — yet it owns determinism guarantees for content-hash dedup. Add unit tests covering MIME allowlist, scaling math, transcode quality, and SHA-256 stability.
 - Storage subtree has zero direct tests (Flysystem adapter, content-key value object, composite access, orphan cleaner). Orphan cleanup is the highest-risk untested path.
 
 ---
@@ -561,10 +552,10 @@ StoredObjectOrphanCleaner::cleanupAfterRemoval($hash)
 ## Architecture & Design Patterns
 
 - **Hexagonal across the board.** Each subtree exposes ports in `Application/Port/` and adapters in `Infrastructure/`. `#[AsAlias(Port::class)]` plus autowiring binds them; tagged-iterator collection (`#[AutowireIterator]`) is the open-set extension mechanism for storage reference inspectors.
-- **Domain events are POPOs at the source, ORM rows at the sink.** Domain code never sees `Doctrine`; the audit table mapping lives entirely in `Infrastructure/Persistence/Entity/StoredDomainEvent.php`.
-- **Single mapping site discipline.** No marker→status table is duplicated anywhere. `MARKER_STATUS_MAP` and `HTTP_STATUS_TYPE_MAP` are the sole sources of truth, and the contract tests in `Application/Problem/` keep them honest.
-- **Constant-time security branching.** All 401/403 paths share construction shape; pinned by both a source-text reflection test and a microbenchmark. Resource-presence is never a branch condition in the auth path.
-- **Defense-in-depth redaction.** `RedactionDenylist::filter()` is invoked at two independent points: extension promotion in the factory and log-context build in the listener. Either alone would suffice; both run.
+- **Domain events are POPOs at the source, ORM rows at the sink.** Domain code never sees `Doctrine`; the audit-table mapping lives entirely in `Infrastructure/Persistence/Entity/StoredDomainEvent.php`.
+- **Single mapping site discipline.** No marker→status table is duplicated. `MARKER_STATUS_MAP` and `HTTP_STATUS_TYPE_MAP` are the sole sources of truth, kept honest by the contract tests in `Application/Problem/`.
+- **Constant-time security branching.** All 401/403 paths share construction shape; pinned by a source-text reflection test and a microbenchmark. Resource-presence is never a branch condition in the auth path.
+- **Defense-in-depth redaction.** `RedactionDenylist::filter()` runs at two independent points: extension promotion in the factory and log-context build in the listener. Either alone would suffice; both run.
 - **Content-addressed media + storage.** Same SHA-256 → same blob, same DB row, same URL. `max-age=31536000, immutable` is sound because the hash makes mutation impossible.
 - **Cursor opacity.** Domain owns the read-only `SearchCursor` interface; infrastructure owns the mutable `PaginatorCursorInterface` extension and HMAC envelope. Cursors are tamper-evident (HMAC) and self-limiting (65 KiB decompressed cap).
 
@@ -572,15 +563,15 @@ StoredObjectOrphanCleaner::cleanupAfterRemoval($hash)
 
 ## Known Issues / Tech Debt
 
-1. **Framework leak in `Domain/Entity/`.** `Identifiable.php` and `Timestamped.php` import `Doctrine\…\Mapping`, `Doctrine\DBAL\Types`, `Symfony\Bridge\Doctrine\IdGenerator\UuidGenerator`, `Symfony\Component\Serializer\Attribute`, and `Symfony\Component\Validator\Constraints`. This violates the "no framework imports inside `Domain/`" rule in `CLAUDE.md` (and in `docs/rules/architecture.md`). The `TaxonomyArchitectureTest` purity guard only covers `Domain/Exception/`, so it doesn't catch these. Documented debt — refactor cost is high because every aggregate and the `StoredDomainEvent` entity composes the traits.
+1. **Framework leak in `Domain/Entity/`.** `Identifiable.php` and `Timestamped.php` import `Doctrine\…\Mapping`, `Doctrine\DBAL\Types`, `Symfony\Bridge\Doctrine\IdGenerator\UuidGenerator`, `Symfony\Component\Serializer\Attribute`, and `Symfony\Component\Validator\Constraints`, violating the "no framework imports inside `Domain/`" rule in `CLAUDE.md` (and in `docs/rules/architecture.md`). The `TaxonomyArchitectureTest` purity guard covers only `Domain/Exception/`, so it doesn't catch these. Documented debt — refactor cost is high because every aggregate and the `StoredDomainEvent` entity composes the traits.
 
 2. **`Guzzle/Enum/GuzzleContextTypeEnum.php` has no callers.** Forward-compat placeholder. Either land the consuming HTTP-client adapter or delete to keep the tree honest.
 
-3. **Storage orphan cleanup has no production caller.** `StoredObjectOrphanCleaner::cleanupAfterRemoval()` is well-designed (composite inspectors, conservative delete), but nothing invokes it yet. Until a domain calls it on aggregate removal, blobs accumulate. New domains storing objects must (a) implement `StoredObjectReferenceInspector`, (b) tag it `stored_object.reference_inspector`, and (c) wire a cleanup call from a domain-event handler.
+3. **Storage orphan cleanup has no production caller.** `StoredObjectOrphanCleaner::cleanupAfterRemoval()` is well-designed (composite inspectors, conservative delete), but nothing invokes it yet, so blobs accumulate until a domain calls it on aggregate removal. New object-storing domains must (a) implement `StoredObjectReferenceInspector`, (b) tag it `stored_object.reference_inspector`, and (c) wire a cleanup call from a domain-event handler.
 
-4. **`Infrastructure/Mailer/PlainTextNotificationMailer` has no size cap.** A pathological `$fields` array with deeply nested data produces an unbounded body. Acceptable today (callers control inputs); worth a max-bytes guard before exposing the port to user-driven content.
+4. **`Infrastructure/Mailer/PlainTextNotificationMailer` has no size cap.** A pathological deeply-nested `$fields` array produces an unbounded body. Acceptable today (callers control inputs); worth a max-bytes guard before exposing the port to user-driven content.
 
-5. **Two near-identical URL generators** (`Configurable{Media,StoredObject}PublicUrlGenerator`). Three resolution branches duplicated. Extract a base class or trait if a third URL generator joins.
+5. **Two near-identical URL generators** (`Configurable{Media,StoredObject}PublicUrlGenerator`). Three resolution branches duplicated. Extract a base class or trait if a third joins.
 
 6. **UUID minting is consolidated on `Domain/Uuid/Uuid::generate()` (v7).** Entity PKs and domain-event `eventId`s now share the one v7 mint; the former `Infrastructure/Uuid/SymfonyUuidGenerator` adapter and its `Domain/Uuid/UuidGenerator` port were retired. The HTTP error pipeline still uses `Symfony\Uid\Uuid::v7()` directly when it needs the raw uid object.
 
@@ -589,9 +580,9 @@ StoredObjectOrphanCleaner::cleanupAfterRemoval($hash)
 ## Optimization Opportunities
 
 - **Persistence test coverage.** Wire `Unit/Shared/Infrastructure/Persistence/` to lock cursor round-trip (HMAC, gzip cap), cursor-WHERE column generation, and `addWhereIn*` parameter-naming determinism in isolation from any concrete repository.
-- **Image normalizer determinism contract.** Pin SHA-256 stability across Intervention Image upgrades with a fixed-input fixture suite. This is the load-bearing assumption of the dedup + immutable-cache strategy.
+- **Image normalizer determinism contract.** Pin SHA-256 stability across Intervention Image upgrades with a fixed-input fixture suite — the load-bearing assumption of the dedup + immutable-cache strategy.
 - **Tagged-test architecture guard.** Extend `TaxonomyArchitectureTest`'s purity check to all of `Domain/` (not just `Exception/`). Today's gap masks the `Identifiable`/`Timestamped` debt from CI.
-- **`Paginator` complexity.** PHPMD suppressions live on the file; the cursor-WHERE generator is the densest part. If the algorithm needs another change, splitting `alterWhere()` into a dedicated builder will reduce the regression surface.
+- **`Paginator` complexity.** PHPMD suppressions live on the file; the cursor-WHERE generator is the densest part. If the algorithm needs another change, splitting `alterWhere()` into a dedicated builder reduces the regression surface.
 
 ---
 
@@ -601,21 +592,21 @@ StoredObjectOrphanCleaner::cleanupAfterRemoval($hash)
 1. Mirror `Backoffice/Bank/` layering: `Domain/{Aggregate,Event,Exception,Repository}` framework-free; `Application/` use cases + DTOs; `Infrastructure/` Doctrine + HTTP + Messenger.
 2. Domain exceptions extend `DomainException` and implement zero or more markers from `Domain/Exception/` — first marker in the implements clause wins for status mapping.
 3. Search repository extends `AbstractDoctrineSearchRepository<T>` and implements the mandatory `searchFieldMap(): SearchFieldMap`; the controller maps the **base** `Application/Http/Search/SearchQuery` directly and calls `$query->toCriteria()` — no per-entity `SearchQuery` subclass (the base is `final`; filtering is the generic `filters[]` grammar against the field map).
-4. If the new context stores objects in Flysystem, implement `StoredObjectReferenceInspector` and tag it `stored_object.reference_inspector`. Wire `StoredObjectOrphanCleaner::cleanupAfterRemoval()` from a domain-event handler when references are dropped.
+4. If the new context stores objects in Flysystem, implement `StoredObjectReferenceInspector`, tag it `stored_object.reference_inspector`, and wire `StoredObjectOrphanCleaner::cleanupAfterRemoval()` from a domain-event handler when references are dropped.
 5. New domain events: subclass `DomainEvent`, override `eventName()` (kebab-case identifier) and `toPrimitives()`. Audit persistence is automatic via `PersistDomainEventMiddleware`.
 
 ### Touching `ProblemDetailsFactory` or `ExceptionResponder`
 1. Run `make php.unit c='--testsuite Shared'` first to baseline. (Or the explicit subset: `--filter "Problem|Exception"`.)
 2. Any change to `MARKER_STATUS_MAP` / `HTTP_STATUS_TYPE_MAP` needs matching contract-test updates (`MarkerStatusMapContractTest`).
-3. Any new sensitive context key requires four casing rows in `RedactionDenylistTest` + a count assertion update.
+3. Any new sensitive context key requires four casing rows in `RedactionDenylistTest` + a count-assertion update.
 4. Listener priority changes: update `ExceptionResponderListenerPriorityTest`. NelmioCors `kernel.response` priority must remain 0.
-5. Body-cap algorithm changes: `BODY_BYTE_CAP` must stay synchronized with `applyBodyCap()` and the static last-resort body must independently fit.
+5. Body-cap algorithm changes: `BODY_BYTE_CAP` must stay synchronized with `applyBodyCap()`, and the static last-resort body must independently fit.
 6. Run `make php.bench` (sets `RUN_BENCHMARKS=1`) before declaring perf-relevant changes done.
 
 ### Touching `Paginator` / cursor factory
 1. Cursor envelope is signed with `%kernel.secret%`. Any format change breaks all in-flight cursors silently (clients restart from page 1 — acceptable).
-2. The `ORDER_BY_IDENTIFIER_PATTERN` regex is the only injection guard on the cursor-WHERE column names. Don't loosen.
-3. Composite-PK guard depends on `ClassMetadata::getIdentifierFieldNames()` returning the entity's actual PK shape; new entities with composite PKs should be exercised in integration tests.
+2. The `ORDER_BY_IDENTIFIER_PATTERN` regex is the only injection guard on cursor-WHERE column names. Don't loosen.
+3. Composite-PK guard depends on `ClassMetadata::getIdentifierFieldNames()` returning the entity's actual PK shape; exercise new composite-PK entities in integration tests.
 
 ### Pre-PR checklist
 - [ ] `make php.stan` clean on every PHP file you touched.

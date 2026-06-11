@@ -2,7 +2,7 @@
 
 ## Executive summary
 
-The `pwa/` deployable is a Next.js 16.2 (App Router) + React 19.2 + TypeScript 6 application styled with Tailwind 4 (CSS-first config) and Shadcn primitives. Business logic is wired through **Inversify 8** for runtime DI and organised by **bounded context** under `src/context/`, mirroring the API's DDD layering (`domain / application / infrastructure`). Tests are split between Vitest (unit) and Playwright (E2E).
+The `pwa/` deployable is a Next.js 16.2 (App Router) + React 19.2 + TypeScript 6 application styled with Tailwind 4 (CSS-first config) and Shadcn primitives. Business logic is wired through **Inversify 8** for runtime DI and organised by **bounded context** under `src/context/`, mirroring the API's DDD layering (`domain / application / infrastructure`). Tests split between Vitest (unit) and Playwright (E2E).
 
 ## Technology stack
 
@@ -55,7 +55,7 @@ pwa/src/context/
 
 ### Where shared code goes (decision rule)
 
-Cross-cutting code has several homes; pick by **purpose**, not just "is it reused". The same rule is mirrored in [`pwa/CLAUDE.md`](../pwa/CLAUDE.md).
+Cross-cutting code has several homes; pick by **purpose**, not just "is it reused". Mirrored in [`pwa/CLAUDE.md`](../pwa/CLAUDE.md).
 
 | Put it in… | When it is… | Examples |
 | --- | --- | --- |
@@ -67,12 +67,7 @@ Cross-cutting code has several homes; pick by **purpose**, not just "is it reuse
 
 The back-office (token-driven Shadcn + `@/components/erpify`) and the landing/marketing surface (raw-palette + `tw-animate-css` / CSS, under `app/_components/`) are two deliberate design languages — use the one matching the surface; don't cross-import. App-shell primitives reused by both (e.g. `Logo`) live in `@/components/erpify`. The former `context/shared/infrastructure/ui/components/` folder (atomic-design `atoms`/`molecules`/`organisms`) was retired: app-shell primitives → `@/components/erpify`, marketing components → `app/_components/`.
 
-The `Notification` module (`context/shared/{domain,infrastructure}/Notification/`)
-provides transient user feedback. Its first channel is **Toast**: the
-`ToastNotifier` port with a Sonner adapter (`SonnerToastNotifier` +
-`SonnerToaster`, mounted once in the root layout) and the `toastNotifier`
-singleton. The naming leaves room for additional channels (`Banner`, `Push`)
-and alternative adapters without renaming the port.
+The `Notification` module (`context/shared/{domain,infrastructure}/Notification/`) provides transient user feedback. Its first channel is **Toast**: the `ToastNotifier` port with a Sonner adapter (`SonnerToastNotifier` + `SonnerToaster`, mounted once in the root layout) and the `toastNotifier` singleton. The naming leaves room for additional channels (`Banner`, `Push`) and alternative adapters without renaming the port.
 
 ### Observability — Telemetry seam
 
@@ -82,7 +77,7 @@ The `Observability` module provides a non-user-facing diagnostic channel for inf
 - **Adapter** — [`ConsoleTelemetry.ts`](../pwa/src/context/shared/infrastructure/Observability/ConsoleTelemetry.ts) implements the port; it emits to `console.warn` / `console.error` when `NEXT_PUBLIC_APP_ENV` is `dev` or `staging`, and is a no-op in `prod` (or unknown). `NODE_ENV` alone cannot distinguish staging from prod — both build images run in `production` mode — so `NEXT_PUBLIC_APP_ENV` is the correct gate.
 - **Decorator** — [`ThrottledTelemetry.ts`](../pwa/src/context/shared/infrastructure/Observability/ThrottledTelemetry.ts) wraps any `Telemetry` and coalesces a flood of identical diagnostics (same level + scope + message) into one emit per window (10s default), surfacing the suppressed count as a `(+N suppressed)` suffix on the next emit. It protects the console today and a metered Sentry/Datadog sink tomorrow.
 - **Singleton** — `telemetry` exported from `@/context/shared/infrastructure/Observability` (`index.ts`) is the only instance: `ThrottledTelemetry` wrapping `ConsoleTelemetry`. A future Sentry/Datadog adapter (or a `CompositeTelemetry` fan-out) replaces the *wrapped* adapter behind this singleton — the throttle and every call site stay put. Adapter-selection-by-env, the `cause` scrub helper, and CSP `connect-src` widening are tracked in `_bmad-output/implementation-artifacts/deferred-work.md` for when the sink lands.
-- **Realtime integration** — [`useMercureRealtime.ts`](../pwa/src/context/shared/infrastructure/RealTime/useMercureRealtime.ts) is a generic hook that centralises Mercure authorize / subscribe / reconnect-reauth for all entity-specific realtime hooks. Entity hooks (e.g. [`bankRealtime.ts`](../pwa/src/context/backoffice/bank/infrastructure/bankRealtime.ts)) delegate to it by supplying `{ topics, authorizePath, parse, onEvent, scope }`. Failures that were previously swallowed silently — subscription skipped, cookie refresh failed, malformed payload — are now routed through `telemetry.warn` with the hook's `scope` for traceability.
+- **Realtime integration** — [`useMercureRealtime.ts`](../pwa/src/context/shared/infrastructure/RealTime/useMercureRealtime.ts) is a generic hook centralising Mercure authorize / subscribe / reconnect-reauth for all entity-specific realtime hooks. Entity hooks (e.g. [`bankRealtime.ts`](../pwa/src/context/backoffice/bank/infrastructure/bankRealtime.ts)) delegate to it by supplying `{ topics, authorizePath, parse, onEvent, scope }`. Failures previously swallowed silently — subscription skipped, cookie refresh failed, malformed payload — are now routed through `telemetry.warn` with the hook's `scope` for traceability.
 
 ## Layer responsibilities
 
@@ -97,8 +92,8 @@ The `Observability` module provides a non-user-facing diagnostic channel for inf
 - **App Router** under `src/app/`.
 - Entry: `app/layout.tsx` (root layout) + `app/page.tsx` (root page).
 - `app/globals.css` holds Tailwind 4's CSS-first `@theme` / `@config` directives.
-- `app/backoffice/` is the backoffice route segment. `/backoffice/health` is the internal admin health page: it adopts the same Atlassian-style status presentation as `/status`, but in the backoffice design language (design tokens + `@/components/erpify`, never the marketing palette). It auto-runs `BackOfficeCheckHealth` on mount, renders an aggregate `SystemStatusBanner` plus a per-component `<StatusBadge>` row, and — being an internal diagnostic surface — keeps surfacing the technical `ProblemDetails` / correlation id on failure. Both status pages reuse the pure status model in `@/lib/systemStatus` (`SystemStatus`, `deriveSystemStatus`, `systemHeadline`, `componentStatusLabel`) and the styling-agnostic `StatusBannerView` (`@/components/status/`), each passing its own design-language theme (palette + layout) so structure is shared without crossing palettes.
-- `app/status/` — public, unauthenticated service status page (Atlassian-style). Auto-runs the existing `FrontOfficeCheckHealth` use case on mount and renders an aggregate banner and per-component rows. Presentation components live in `app/status/_components/` in the marketing design language (raw Tailwind palette, not `@/components/erpify`). Linked from the navbar and footer. Distinct from the internal admin `app/backoffice/health/` page.
+- `app/backoffice/` is the backoffice route segment. `/backoffice/health` is the internal admin health page: same Atlassian-style status presentation as `/status`, but in the backoffice design language (design tokens + `@/components/erpify`, never the marketing palette). It auto-runs `BackOfficeCheckHealth` on mount, renders an aggregate `SystemStatusBanner` plus a per-component `<StatusBadge>` row, and — being an internal diagnostic surface — keeps surfacing the technical `ProblemDetails` / correlation id on failure. Both status pages reuse the pure status model in `@/lib/systemStatus` (`SystemStatus`, `deriveSystemStatus`, `systemHeadline`, `componentStatusLabel`) and the styling-agnostic `StatusBannerView` (`@/components/status/`), each passing its own design-language theme (palette + layout) so structure is shared without crossing palettes.
+- `app/status/` — public, unauthenticated service status page (Atlassian-style). Auto-runs the existing `FrontOfficeCheckHealth` use case on mount, renders an aggregate banner and per-component rows. Presentation components live in `app/status/_components/` in the marketing design language (raw Tailwind palette, not `@/components/erpify`). Linked from the navbar and footer. Distinct from the internal admin `app/backoffice/health/` page.
 
 ## Dependency injection
 
@@ -114,8 +109,7 @@ The `Observability` module provides a non-user-facing diagnostic channel for inf
 
 ### Server-driven filtered search
 
-Filterable lists are **server-driven**: filtering, sorting, and keyset pagination are resolved by the API,
-not in the browser. The shared vocabulary mirrors the API's generic `filters[]` contract:
+Filterable lists are **server-driven**: filtering, sorting, and keyset pagination are resolved by the API, not in the browser. The shared vocabulary mirrors the API's generic `filters[]` contract:
 
 - `context/shared/domain/Search/` — `Filter` (discriminated union by `FilterOperator`:
   `eq | in | contains | gte | lte`) is the typed, framework-free vocabulary.
@@ -125,7 +119,7 @@ not in the browser. The shared vocabulary mirrors the API's generic `filters[]` 
 - A repository's `search(criteria)` composes those params with `sort` + `direction` (uppercased to the API's
   `ASC`/`DESC` enum), `page`, an opaque `cursor` (replayed verbatim, never interpreted client-side), and
   `limit`. It sends no `paginationMode`, so the API defaults to `LIGHT` — it skips the `COUNT(*)` and reports
-  `hasMorePages` from a single fetch, which is all a prev/next cursor list needs. Send `paginationMode=detailed`
+  `hasMorePages` from a single fetch, all a prev/next cursor list needs. Send `paginationMode=detailed`
   only on a view that actually renders a total (`pagination.count`), paying the extra count deliberately. See
   `context/backoffice/bank/infrastructure/ApiBankRepository.ts` as the reference consumer.
 
@@ -142,7 +136,7 @@ Recipe to make a new list filterable → [`pwa/docs/server-driven-search.md`](..
 
 ## Error consumption
 
-The PWA consumes the API's [RFC 9457 Problem Details](./api-error-contract.md) contract. Routing/UI logic determines the semantic category from `type` (opaque, stable identifier) — never from message text or status code alone. `correlation-id` from the body (or the `X-Correlation-Id` response header) is the link to server-side log lines for support tickets.
+The PWA consumes the API's [RFC 9457 Problem Details](./api-error-contract.md) contract. Routing/UI logic determines the semantic category from `type` (opaque, stable identifier) — never from message text or status code alone. `correlation-id` from the body (or the `X-Correlation-Id` response header) links to server-side log lines for support tickets.
 
 ## Configuration
 

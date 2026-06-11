@@ -3,7 +3,7 @@ import { clickUntilVisible } from "./click-until-visible";
 
 export async function navigateToHealthViaSidebarDesktop(page: Page): Promise<void> {
   await clickUntilVisible(
-    page.getByRole("button", { name: "Administration" }),
+    page.getByRole("button", { name: "Configuration" }),
     page.getByRole("button", { name: "Service Health" }),
   );
   await page.getByRole("button", { name: "Service Health" }).click();

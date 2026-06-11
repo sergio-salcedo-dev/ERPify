@@ -1,7 +1,7 @@
 import { NodeEnv } from "@/context/shared/domain/types/nodeEnv";
 
 /**
- * Whether the dev-tools surface (the `/dev-tools` page, the navbar entry
+ * Whether the dev-tools surface (the `/backoffice/dev-tools` page, the navbar entry
  * point in the frontoffice, and the backoffice sidebar entry) should be
  * exposed at all. Returns `false` in production builds so neither the
  * route nor its entry points reach a real user.

@@ -59,6 +59,7 @@ Detailed exhaustive analysis of specific areas:
 - **[deployment-guide.md](./deployment-guide.md)** — Docker Compose envs and prod services
 - **[erpify-local-test-deployment.md](./erpify-local-test-deployment.md)** — Step-by-step: run the prod profile at `https://erpify.local` (internal TLS) on a local box
 - **[vps-deployment.md](./vps-deployment.md)** — Promote to a public VPS + remote database access (CLI / GUI over SSH)
+- **[background-jobs-and-scheduling.md](./background-jobs-and-scheduling.md)** — Decision record: supervised `messenger_worker` over host crontab; how to add periodic jobs (Symfony Scheduler) and scale to many daemons
 - **[saas-production-roadmap.md](./saas-production-roadmap.md)** — Forward plan: registry publishing, safe migrations, zero-downtime, rollback, staging/prod split (planning only)
 - **[development-guide-api.md](./development-guide-api.md)** — Day-to-day API workflow via `make`
 - **[development-guide-pwa.md](./development-guide-pwa.md)** — Day-to-day PWA workflow via `make`

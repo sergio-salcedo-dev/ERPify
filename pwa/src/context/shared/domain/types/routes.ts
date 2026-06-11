@@ -24,6 +24,6 @@ export const Routes = {
    * The route is gated behind `isDevToolsAvailable()` and short-
    * circuited by the proxy in production.
    */
-  DEV_TOOLS: "/dev-tools",
+  DEV_TOOLS: "/backoffice/dev-tools",
 } as const;
 export type Routes = (typeof Routes)[keyof typeof Routes];
