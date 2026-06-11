@@ -7,6 +7,7 @@ import {
   computeRoadmapProgress,
   moduleStatus,
   submoduleStatus,
+  type RoadmapComplexity,
   type RoadmapModule,
   type RoadmapPhase,
   type RoadmapPriority,
@@ -41,6 +42,12 @@ const PRIORITY_LABEL: Record<RoadmapPriority, string> = {
   high: "Alta",
   medium: "Media",
   low: "Baja",
+};
+
+const COMPLEXITY_LABEL: Record<RoadmapComplexity, string> = {
+  low: "Baja",
+  medium: "Media",
+  high: "Alta",
 };
 
 function Chip({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -118,6 +125,7 @@ function ModuleCard({ module }: Readonly<{ module: RoadmapModule }>) {
 
       <div className="roadmap__module-meta flex flex-wrap items-center gap-1.5">
         <Chip>Prioridad: {PRIORITY_LABEL[module.priority]}</Chip>
+        <Chip>Complejidad: {COMPLEXITY_LABEL[module.complexity]}</Chip>
         {module.boundedContext ? <Chip>Contexto: {module.boundedContext}</Chip> : null}
         {module.dependsOn?.length ? <Chip>Depende de: {module.dependsOn.join(", ")}</Chip> : null}
       </div>
@@ -219,7 +227,25 @@ export default function RoadmapPage() {
             </li>
           </ul>
           <p className="text-muted-foreground max-w-3xl text-sm leading-relaxed">
-            Fuente de verdad: <code className="text-foreground">roadmap.ts</code>.
+            La complejidad mide la facilidad de implementación, no la importancia:
+          </p>
+          <ul className="roadmap__complexity-legend text-muted-foreground max-w-3xl text-sm leading-relaxed">
+            <li>
+              <span className="text-foreground font-medium">Baja</span> = CRUD sin relaciones en DB
+              (calcar la plantilla Banks)
+            </li>
+            <li>
+              <span className="text-foreground font-medium">Media</span> = relaciones en DB + reglas
+              de negocio
+            </li>
+            <li>
+              <span className="text-foreground font-medium">Alta</span> = motores, integraciones o
+              UI interactiva
+            </li>
+          </ul>
+          <p className="text-muted-foreground max-w-3xl text-sm leading-relaxed">
+            Para elegir la siguiente tarea: prioridad alta + complejidad baja primero. Fuente de
+            verdad: <code className="text-foreground">roadmap.ts</code>.
           </p>
         </div>
 

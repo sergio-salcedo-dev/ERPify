@@ -25,6 +25,8 @@ import {
   Package,
   Factory,
   Warehouse,
+  Handshake,
+  PackageSearch,
   Building2,
   Network,
   ShieldCheck,
@@ -129,6 +131,8 @@ export const backofficeMenuGroups: NavGroup[] = [
   {
     label: "Purchasing & Inventory",
     items: [
+      { name: "Suppliers", icon: Handshake, path: `${BASE}/suppliers` },
+      { name: "Purchase Orders", icon: PackageSearch, path: `${BASE}/purchase-orders` },
       { name: "Products Catalog", icon: Package, path: `${BASE}/products` },
       { name: "Brands & Manufacturers", icon: Factory, path: `${BASE}/catalog/brands` },
       { name: "Stock Control", icon: Warehouse, path: `${BASE}/catalog/stock` },

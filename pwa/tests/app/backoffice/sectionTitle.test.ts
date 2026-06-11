@@ -22,6 +22,8 @@ describe("sectionTitleFor", () => {
     ["/backoffice/quotes", "Quotes"],
     ["/backoffice/invoices", "Invoicing"],
     ["/backoffice/products", "Products Catalog"],
+    ["/backoffice/suppliers", "Suppliers"],
+    ["/backoffice/purchase-orders", "Purchase Orders"],
     ["/backoffice/audit", "Audit Logs"],
     ["/backoffice/roadmap", "Product Roadmap"],
   ])("maps ERP leaf route %s to %s", (pathname, title) => {

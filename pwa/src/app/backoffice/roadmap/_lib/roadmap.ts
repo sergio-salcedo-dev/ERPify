@@ -26,6 +26,8 @@ import {
   Languages,
   ScrollText,
   FolderArchive,
+  LayoutTemplate,
+  Smartphone,
 } from "lucide-react";
 
 /**
@@ -61,6 +63,18 @@ export type RoadmapStatus = "done" | "in-progress" | "planned";
 
 export type RoadmapPriority = "critical" | "high" | "medium" | "low";
 
+/**
+ * Implementation-ease bucket, orthogonal to priority. The scale is about how
+ * hard the module is to BUILD, mirroring the estimation buckets in
+ * `docs/product-roadmap.md`:
+ * - `low`    — CRUD without DB relations; clone the Banks template.
+ * - `medium` — DB relations + business rules.
+ * - `high`   — engines, integrations or interactive UI.
+ * Pick the next task by priority AND ease: high priority + low complexity
+ * first; a high-complexity module deserves slicing before starting.
+ */
+export type RoadmapComplexity = "low" | "medium" | "high";
+
 export interface RoadmapSubmodule {
   name: string;
   /** Defaults to `planned` when omitted — progress is always opt-in. */
@@ -75,6 +89,8 @@ export interface RoadmapModule {
   name: string;
   icon: LucideIcon;
   priority: RoadmapPriority;
+  /** How hard it is to build — see {@link RoadmapComplexity}. */
+  complexity: RoadmapComplexity;
   /** What "done" means for this module, one line (engineering view). */
   objective: string;
   /** What a user expects ERPify to solve here — the needs this module covers. */
@@ -106,6 +122,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         name: "Event-Driven Backbone",
         icon: Workflow,
         priority: "critical",
+        complexity: "high",
         objective: "Todo el sistema reacciona a eventos internos sin acoplamiento.",
         userNeeds: [
           "Que mis acciones disparen efectos automáticos (avisos, tareas) sin esperar.",
@@ -128,6 +145,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         name: "Transactional Outbox System",
         icon: Inbox,
         priority: "critical",
+        complexity: "high",
         objective: "Consistencia fuerte entre la DB y los eventos publicados.",
         userNeeds: [
           "Que un cambio guardado nunca quede a medias respecto a sus avisos o integraciones.",
@@ -149,6 +167,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         name: "API & Query Infrastructure",
         icon: Database,
         priority: "critical",
+        complexity: "medium",
         objective: "Estandarizar el acceso a datos de forma componible.",
         userNeeds: [
           "Buscar, filtrar y ordenar cualquier listado al instante.",
@@ -170,6 +189,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         name: "Security & Multi-Tenant Core",
         icon: ShieldCheck,
         priority: "critical",
+        complexity: "high",
         objective: "Base SaaS enterprise: aislamiento por tenant y autorización.",
         userNeeds: [
           "Entrar de forma segura con mi cuenta.",
@@ -191,6 +211,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         name: "Observability Foundation",
         icon: Activity,
         priority: "high",
+        complexity: "medium",
         objective: "Sistema observable desde el primer día.",
         userNeeds: [
           "Que si algo falla se detecte antes de que me afecte.",
@@ -210,6 +231,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         name: "Internationalization (i18n)",
         icon: Languages,
         priority: "high",
+        complexity: "medium",
         objective:
           "Toda la app disponible en inglés y español, con el idioma como preferencia del usuario.",
         userNeeds: [
@@ -236,6 +258,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         name: "Audit & Activity Trail",
         icon: ScrollText,
         priority: "high",
+        complexity: "medium",
         objective: "Trazabilidad completa: quién cambió qué y cuándo, consultable y exportable.",
         userNeeds: [
           "Saber quién cambió qué y cuándo en cualquier registro.",
@@ -260,6 +283,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         name: "Media & Document System",
         icon: FolderArchive,
         priority: "high",
+        complexity: "high",
         objective:
           "Centralizar la gestión de archivos (imágenes, PDFs, Excel…) desacoplada del dominio de negocio. Core transversal, no un módulo más.",
         userNeeds: [
@@ -286,6 +310,28 @@ export const roadmapPhases: RoadmapPhase[] = [
           { name: "F5 · Optimización SaaS (URLs firmadas, CDN, thumbnails, OCR)" },
         ],
       },
+      {
+        code: "0.9",
+        name: "Frontend Platform (PWA)",
+        icon: LayoutTemplate,
+        priority: "high",
+        complexity: "medium",
+        objective:
+          "Plataforma de frontend reutilizable: design system, capa de cliente API, estado y carga por módulos, con cimientos offline-first.",
+        userNeeds: [
+          "Que toda la app se vea y se maneje igual, pantalla a pantalla.",
+          "Que la app cargue rápido aunque crezca el número de módulos.",
+          "Poder seguir trabajando con cobertura intermitente (base para obra).",
+        ],
+        boundedContext: "shared",
+        submodules: [
+          { name: "Design system (tokens, composites, patrones)" },
+          { name: "API client layer (puerto HTTP + adaptadores)" },
+          { name: "State management (preferencias, caché de listados)" },
+          { name: "Offline-first foundations (service worker, cola de sincronización)" },
+          { name: "Lazy loading / code splitting por módulo" },
+        ],
+      },
     ],
   },
   {
@@ -299,6 +345,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         name: "Identity & Organization",
         icon: UsersRound,
         priority: "high",
+        complexity: "medium",
         objective: "Usuarios, empresas (frontera multi-tenant) y equipos.",
         userNeeds: [
           "Gestionar los usuarios y equipos de mi empresa.",
@@ -320,6 +367,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         name: "CRM (Sales & Customer Management)",
         icon: HeartHandshake,
         priority: "high",
+        complexity: "medium",
         objective: "Gestión de clientes, pipeline y actividad comercial.",
         userNeeds: [
           "Tener todos mis clientes, contactos y oportunidades en un único sitio.",
@@ -336,6 +384,8 @@ export const roadmapPhases: RoadmapPhase[] = [
           { name: "Opportunities (deals)" },
           { name: "Activities (llamadas, tareas, emails)" },
           { name: "Notes & attachments" },
+          { name: "Documentos comerciales", note: "sobre el core 0.8" },
+          { name: "Lead scoring" },
           { name: "Basic automation triggers (event-driven)" },
         ],
       },
@@ -344,6 +394,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         name: "Projects / Construction Management",
         icon: HardHat,
         priority: "high",
+        complexity: "high",
         objective: "Vertical CORE: gestión de obra de principio a fin.",
         userNeeds: [
           "Controlar cada obra de principio a fin desde un solo lugar.",
@@ -355,8 +406,12 @@ export const roadmapPhases: RoadmapPhase[] = [
         submodules: [
           { name: "Projects (obra)" },
           { name: "Phases / milestones" },
+          { name: "Estructura de capítulos (WBS)" },
           { name: "Tasks & assignments" },
+          { name: "Planificación (tareas, Gantt)" },
           { name: "Progress tracking" },
+          { name: "Mediciones de obra" },
+          { name: "Certificaciones de obra", note: "medición → certificación → factura (2.3)" },
           { name: "Project status lifecycle" },
           { name: "Resource allocation hooks" },
         ],
@@ -366,6 +421,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         name: "Budgeting & Estimation Engine",
         icon: Calculator,
         priority: "high",
+        complexity: "medium",
         objective: "Presupuestos por proyecto con estructura de coste y versionado.",
         userNeeds: [
           "Hacer presupuestos por obra con sus partidas de coste.",
@@ -388,6 +444,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         name: "Procurement & Inventory (Almacén)",
         icon: PackageSearch,
         priority: "high",
+        complexity: "medium",
         objective: "Proveedores, compras y control de stock por proyecto.",
         userNeeds: [
           "Saber qué material tengo y en qué almacén está.",
@@ -420,6 +477,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         name: "Workforce & Time Tracking",
         icon: Clock,
         priority: "medium",
+        complexity: "medium",
         objective: "Personal, subcontratas y partes de trabajo con coste por hora.",
         userNeeds: [
           "Registrar las horas trabajadas por tarea y por obra.",
@@ -443,6 +501,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         name: "Document Management System (DMS)",
         icon: FileStack,
         priority: "medium",
+        complexity: "medium",
         objective:
           "Capa de negocio documental sobre el core Media (0.8): documentos por proyecto, plantillas y permisos. Storage y versionado los aporta 0.8 — aquí no se duplican.",
         userNeeds: [
@@ -456,6 +515,8 @@ export const roadmapPhases: RoadmapPhase[] = [
           { name: "Project-linked documents" },
           { name: "Templates (contratos, informes)" },
           { name: "Permissions per document" },
+          { name: "Firmas electrónicas" },
+          { name: "Licencias y permisos de obra (compliance)" },
           { name: "Audit trail documental", note: "sobre la base de 0.7" },
         ],
       },
@@ -464,6 +525,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         name: "Finance Layer (ERP Financial Core)",
         icon: Banknote,
         priority: "high",
+        complexity: "high",
         objective: "Facturación, pagos y agregación de coste por proyecto.",
         userNeeds: [
           "Emitir y controlar facturas de cliente y de proveedor.",
@@ -477,10 +539,36 @@ export const roadmapPhases: RoadmapPhase[] = [
           { name: "Banks / Treasury (vertical de referencia)" },
           { name: "Invoices (cliente/proveedor)" },
           { name: "Payments tracking" },
+          { name: "Facturación por certificación (progress billing)", note: "desde 1.3" },
+          { name: "Conciliación bancaria (matching automático)" },
+          { name: "Asientos automáticos (operación → contabilidad)" },
           { name: "Cashflow view" },
           { name: "Cost aggregation per project" },
           { name: "Tax abstraction layer (future-proof)" },
           { name: "Financial reporting engine" },
+        ],
+      },
+      {
+        code: "2.4",
+        name: "Mobile Field Operations",
+        icon: Smartphone,
+        priority: "high",
+        complexity: "high",
+        objective:
+          "La obra como fuente de datos en tiempo real: capturar partes, fotos e incidencias desde el móvil, con o sin cobertura.",
+        userNeeds: [
+          "Registrar partes de trabajo desde la obra, sin volver a la oficina.",
+          "Adjuntar fotos geolocalizadas de avances e incidencias al proyecto.",
+          "Que lo capturado sin cobertura se sincronice solo al recuperarla.",
+        ],
+        boundedContext: "operations",
+        dependsOn: ["0.9", "1.3"],
+        submodules: [
+          { name: "Captura de partes de trabajo en obra" },
+          { name: "Fotos geolocalizadas e incidencias" },
+          { name: "Modo offline + sincronización" },
+          { name: "Aprobaciones desde el móvil" },
+          { name: "Mediciones de campo → certificación", note: "alimenta 1.3 y 2.3" },
         ],
       },
     ],
@@ -496,6 +584,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         name: "Automation Engine",
         icon: Cog,
         priority: "high",
+        complexity: "high",
         objective: "Motor de reglas y workflows que reacciona a eventos del dominio.",
         userNeeds: [
           "Automatizar tareas repetitivas con reglas 'si pasa X, haz Y'.",
@@ -511,6 +600,20 @@ export const roadmapPhases: RoadmapPhase[] = [
           { name: "Action system (email, update entity, create task)" },
           { name: "Retry + compensation (sagas light)" },
           { name: "Visual workflow builder (UI clave)" },
+          {
+            name: "Generación automática de documentos",
+            note: "presupuestos, certificaciones, facturas, órdenes de compra desde plantillas + reglas",
+          },
+          {
+            name: "Sincronización de estados entre módulos",
+            note: "venta cerrada → proyecto + presupuesto + planificación, sin traspasos manuales",
+          },
+          { name: "Captura automática de datos (OCR / email ingestion)" },
+          { name: "Compras por umbral", note: "con aprobación opcional" },
+          {
+            name: "Autopilot por proyecto",
+            note: "automático dentro de límites; alertas solo en excepciones",
+          },
         ],
       },
       {
@@ -518,6 +621,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         name: "Notification System",
         icon: Bell,
         priority: "medium",
+        complexity: "medium",
         objective: "Centro de notificaciones in-app, email y push con preferencias por usuario.",
         userNeeds: [
           "Enterarme al momento de lo que me afecta.",
@@ -545,6 +649,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         name: "Feature Flags System",
         icon: Flag,
         priority: "low",
+        complexity: "medium",
         objective: "Activación por tenant/usuario y rollout gradual.",
         userNeeds: [
           "Activar o desactivar funciones para mi empresa sin esperar a un despliegue.",
@@ -573,6 +678,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         name: "Reporting Engine",
         icon: BarChart3,
         priority: "medium",
+        complexity: "high",
         objective: "KPIs configurables y dashboards de proyecto/financieros con export.",
         userNeeds: [
           "Ver dashboards de obra y financieros de un vistazo.",
@@ -594,6 +700,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         name: "Advanced Analytics",
         icon: TrendingUp,
         priority: "low",
+        complexity: "high",
         objective: "Desviación de coste, rentabilidad y detección de cuellos de botella.",
         userNeeds: [
           "Detectar desviaciones de coste a tiempo, no cuando ya es tarde.",
@@ -606,6 +713,7 @@ export const roadmapPhases: RoadmapPhase[] = [
           { name: "Cost deviation analysis" },
           { name: "Project profitability tracking" },
           { name: "Forecasting engine (rule-based inicialmente)" },
+          { name: "Predicción de sobrecostes y retrasos (histórico de obras)" },
           { name: "Bottleneck detection (workflow + time analysis)" },
         ],
       },
@@ -621,6 +729,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         name: "Integration Layer",
         icon: Webhook,
         priority: "low",
+        complexity: "high",
         objective: "Webhooks, gateway de API externa y pipelines de import/export.",
         userNeeds: [
           "Conectar ERPify con mi contabilidad, mi banco u otras herramientas.",
@@ -642,6 +751,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         name: "Plugin / Extension System",
         icon: Puzzle,
         priority: "low",
+        complexity: "high",
         objective: "Registro de módulos activables por tenant con hooks de extensión.",
         userNeeds: [
           "Añadir o quitar módulos según lo que necesite mi empresa.",
@@ -669,6 +779,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         name: "CI/CD Pipeline System",
         icon: Rocket,
         priority: "high",
+        complexity: "medium",
         objective: "Pipeline de build, promoción de entornos y rollback automático.",
         userNeeds: [
           "Que las novedades y correcciones lleguen rápido y sin romper nada.",
@@ -688,6 +799,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         name: "Quality & Testing Infrastructure",
         icon: FlaskConical,
         priority: "high",
+        complexity: "medium",
         objective: "Cobertura BDD, contract testing y utilidades de test event-driven.",
         userNeeds: [
           "Confiar en que cada versión está probada antes de llegar a mí.",
@@ -707,6 +819,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         name: "Deployment Infrastructure",
         icon: Container,
         priority: "medium",
+        complexity: "medium",
         objective: "Entornos Compose, deploy blue/green y escalado de workers.",
         userNeeds: [
           "Que la app esté disponible sin cortes durante las actualizaciones.",

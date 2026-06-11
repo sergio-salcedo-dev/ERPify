@@ -40,6 +40,16 @@ de partida», abajo). Se declara **solo a nivel de submódulo** (omitido =
 (`moduleStatus`), de modo que un módulo nunca puede aparentar más avance que
 el trabajo que contiene.
 
+## Norte estratégico
+
+ERPify **no** compite como "un conjunto de módulos" (CRM + facturación + obras)
+ni como un Odoo verticalizado. Compite como un **motor de ejecución de procesos
+de construcción**: automatización basada en **eventos + reglas + datos reales de
+obra**. Cada módulo del roadmap se diseña para alimentar ese motor (todo emite
+eventos, todo es automatizable), no como un silo CRUD. La obra es la fuente de
+datos (módulo 2.4) y el Automation Engine (3.1) es el diferenciador: detectar
+problemas, proponer soluciones y ejecutar acciones — con o sin aprobación.
+
 ## Estado de partida (lo que ya hay)
 
 Dos verticales completas validan los cimientos de la Fase 0:
@@ -206,7 +216,11 @@ el **flujo de usuario** antes de comprometer agregados, relaciones y tablas.
 ## Buckets de complejidad (para estimar)
 
 Las ~35 funcionalidades pendientes del menú backoffice no cuestan lo mismo.
-Asumiendo que se reutiliza la plantilla Banks:
+Asumiendo que se reutiliza la plantilla Banks. Cada módulo de `roadmap.ts`
+declara su bucket en el campo `complexity` (`low` = CRUD sin relaciones en DB,
+`medium` = relaciones + reglas, `high` = motores/integraciones/UI interactiva),
+visible como chip en la página — la regla para elegir tarea es **prioridad alta
++ complejidad baja primero**:
 
 | Bucket | Ejemplos | Días/módulo | Nº aprox. | Total |
 |--------|----------|-------------|-----------|-------|
