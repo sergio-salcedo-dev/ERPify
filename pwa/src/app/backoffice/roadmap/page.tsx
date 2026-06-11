@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
-import { ArrowRight, Check } from "lucide-react";
+import { Check } from "lucide-react";
 import { StatusBadge, type StatusBadgeVariant } from "@/components/erpify";
 import { cn } from "@/lib/utils";
 import {
   roadmapPhases,
   computeRoadmapProgress,
-  effectiveSubmoduleStatus,
+  moduleStatus,
+  submoduleStatus,
   type RoadmapModule,
   type RoadmapPhase,
   type RoadmapPriority,
@@ -50,11 +51,16 @@ function Chip({ children }: Readonly<{ children: React.ReactNode }>) {
   );
 }
 
-function ProgressBar({ percent, testId }: Readonly<{ percent: number; testId?: string }>) {
+function ProgressBar({
+  percent,
+  label,
+  testId,
+}: Readonly<{ percent: number; label: string; testId?: string }>) {
   return (
     <div
       className="roadmap__progress-track bg-muted h-1.5 w-full overflow-hidden rounded-full"
       role="progressbar"
+      aria-label={label}
       aria-valuenow={percent}
       aria-valuemin={0}
       aria-valuemax={100}
@@ -70,6 +76,7 @@ function ProgressBar({ percent, testId }: Readonly<{ percent: number; testId?: s
 
 function ModuleCard({ module }: Readonly<{ module: RoadmapModule }>) {
   const Icon = module.icon;
+  const status = moduleStatus(module);
   return (
     <article
       className="roadmap__module bg-card border-border flex flex-col gap-3 rounded-xl border p-4 shadow-sm"
@@ -85,7 +92,7 @@ function ModuleCard({ module }: Readonly<{ module: RoadmapModule }>) {
           </p>
           <h3 className="text-foreground text-sm font-semibold tracking-tight">{module.name}</h3>
         </div>
-        <StatusBadge variant={STATUS_VARIANT[module.status]} label={STATUS_LABEL[module.status]} />
+        <StatusBadge variant={STATUS_VARIANT[status]} label={STATUS_LABEL[status]} />
       </header>
 
       <p className="roadmap__module-objective text-muted-foreground text-xs leading-relaxed">
@@ -111,18 +118,13 @@ function ModuleCard({ module }: Readonly<{ module: RoadmapModule }>) {
 
       <div className="roadmap__module-meta flex flex-wrap items-center gap-1.5">
         <Chip>Prioridad: {PRIORITY_LABEL[module.priority]}</Chip>
-        {module.boundedContext ? <Chip>{module.boundedContext}</Chip> : null}
-        {module.dependsOn?.length ? (
-          <Chip>
-            <ArrowRight className="size-3" aria-hidden="true" />
-            {module.dependsOn.join(", ")}
-          </Chip>
-        ) : null}
+        {module.boundedContext ? <Chip>Contexto: {module.boundedContext}</Chip> : null}
+        {module.dependsOn?.length ? <Chip>Depende de: {module.dependsOn.join(", ")}</Chip> : null}
       </div>
 
       <ul className="roadmap__submodules flex flex-col gap-1.5 pt-1">
         {module.submodules.map((submodule) => {
-          const status = effectiveSubmoduleStatus(submodule, module);
+          const status = submoduleStatus(submodule);
           return (
             <li key={submodule.name} className="roadmap__submodule flex items-start gap-2 text-xs">
               <span
@@ -170,7 +172,10 @@ function PhaseSection({ phase }: Readonly<{ phase: RoadmapPhase }>) {
         </div>
         <p className="text-muted-foreground max-w-3xl text-sm leading-relaxed">{phase.summary}</p>
         <div className="roadmap__phase-progress flex items-center gap-3">
-          <ProgressBar percent={progress.donePercent} />
+          <ProgressBar
+            percent={progress.donePercent}
+            label={`Progreso fase ${phase.code}: ${phase.label}`}
+          />
           <span className="text-muted-foreground text-2xs font-medium whitespace-nowrap">
             {progress.done}/{progress.total} ({progress.donePercent}%)
           </span>
@@ -220,7 +225,11 @@ export default function RoadmapPage() {
             <span className="text-muted-foreground text-xs">de {overall.total} submódulos</span>
           </div>
           <div className="flex items-center gap-3">
-            <ProgressBar percent={overall.donePercent} testId="roadmap__overall-progress" />
+            <ProgressBar
+              percent={overall.donePercent}
+              label="Progreso global"
+              testId="roadmap__overall-progress"
+            />
             <span className="text-muted-foreground text-2xs font-medium whitespace-nowrap">
               {overall.donePercent}%
             </span>

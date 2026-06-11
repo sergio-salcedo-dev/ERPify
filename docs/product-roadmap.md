@@ -32,9 +32,12 @@ navegación (`backofficeMenu.ts` alimenta la sidebar):
 3. **Este doc** — la narrativa de fases, los buckets de complejidad y la
    estimación de tiempo. No duplica la lista de submódulos (enlaza a la fuente).
 
-El `status` de cada módulo refleja el **código real**, no la aspiración:
-`done` = entregado y ejercitado por una vertical real; `in-progress` =
-cimientos presentes; `planned` = sin empezar.
+El `status` refleja el **código real**, no la aspiración: `done` = entregado y
+ejercitado por una vertical real; `in-progress` = cimientos presentes;
+`planned` = sin empezar. Se declara **solo a nivel de submódulo** (omitido =
+`planned`); el estado de un módulo se **deriva** de sus submódulos
+(`moduleStatus`), de modo que un módulo nunca puede aparentar más avance que
+el trabajo que contiene.
 
 ## Estado de partida (lo que ya hay)
 
@@ -246,8 +249,9 @@ Tres factores que mueven mucho la cifra:
 
 - El backlog (estado, prioridad, dependencias) se edita **solo en `roadmap.ts`**;
   la página in-app y cualquier consumidor futuro derivan de ahí.
-- Al cerrar un submódulo, cambia su `status` a `done` en `roadmap.ts` (o quítale
-  el override para heredar el del módulo) — la barra de progreso se recalcula
-  sola (`computeRoadmapProgress`).
+- Al cerrar un submódulo, cambia su `status` a `done` en `roadmap.ts`; al
+  empezarlo, márcalo `in-progress`. Un submódulo sin `status` cuenta como
+  `planned`, y el estado del módulo se deriva solo — la barra de progreso se
+  recalcula sola (`computeRoadmapProgress`).
 - Actualiza la narrativa de fases / buckets de este doc solo cuando cambie la
   **estrategia**, no en cada submódulo cerrado.

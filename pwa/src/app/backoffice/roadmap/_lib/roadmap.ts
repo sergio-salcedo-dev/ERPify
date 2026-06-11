@@ -43,6 +43,17 @@ import {
  *                   yet a finished, reusable capability.
  * - `planned`     — not started.
  *
+ * Status is declared ONLY at the submodule level, where it can be checked
+ * against real code; an omitted submodule status means `planned` — never an
+ * inherited optimism. A module's status is DERIVED from its submodules
+ * ({@link moduleStatus}), so a module can never look more advanced than the
+ * work inside it.
+ *
+ * Language: module/submodule names are technical identifiers kept in English
+ * (they match how the codebase and docs refer to them); narrative fields
+ * (`summary`, `objective`, `userNeeds`, notes) are Spanish until the i18n
+ * module (0.8) makes the whole surface translatable.
+ *
  * `objective` is the engineering "definition of done"; `userNeeds` is the
  * complementary user-facing view — the jobs a user expects ERPify to solve for
  * them. Foundation/ops modules frame the need from the operator/admin's seat.
@@ -53,7 +64,7 @@ export type RoadmapPriority = "critical" | "high" | "medium" | "low";
 
 export interface RoadmapSubmodule {
   name: string;
-  /** Defaults to the parent module's status when omitted. */
+  /** Defaults to `planned` when omitted — progress is always opt-in. */
   status?: RoadmapStatus;
   /** Short clarifier shown as a muted note. */
   note?: string;
@@ -64,7 +75,6 @@ export interface RoadmapModule {
   code: string;
   name: string;
   icon: LucideIcon;
-  status: RoadmapStatus;
   priority: RoadmapPriority;
   /** What "done" means for this module, one line (engineering view). */
   objective: string;
@@ -96,7 +106,6 @@ export const roadmapPhases: RoadmapPhase[] = [
         code: "0.3",
         name: "Event-Driven Backbone",
         icon: Workflow,
-        status: "in-progress",
         priority: "critical",
         objective: "Todo el sistema reacciona a eventos internos sin acoplamiento.",
         userNeeds: [
@@ -119,7 +128,6 @@ export const roadmapPhases: RoadmapPhase[] = [
         code: "0.4",
         name: "Transactional Outbox System",
         icon: Inbox,
-        status: "in-progress",
         priority: "critical",
         objective: "Consistencia fuerte entre la DB y los eventos publicados.",
         userNeeds: [
@@ -141,7 +149,6 @@ export const roadmapPhases: RoadmapPhase[] = [
         code: "0.5",
         name: "API & Query Infrastructure",
         icon: Database,
-        status: "in-progress",
         priority: "critical",
         objective: "Estandarizar el acceso a datos de forma componible.",
         userNeeds: [
@@ -163,7 +170,6 @@ export const roadmapPhases: RoadmapPhase[] = [
         code: "0.6",
         name: "Security & Multi-Tenant Core",
         icon: ShieldCheck,
-        status: "in-progress",
         priority: "critical",
         objective: "Base SaaS enterprise: aislamiento por tenant y autorización.",
         userNeeds: [
@@ -185,7 +191,6 @@ export const roadmapPhases: RoadmapPhase[] = [
         code: "0.7",
         name: "Observability Foundation",
         icon: Activity,
-        status: "in-progress",
         priority: "high",
         objective: "Sistema observable desde el primer día.",
         userNeeds: [
@@ -205,7 +210,6 @@ export const roadmapPhases: RoadmapPhase[] = [
         code: "0.8",
         name: "Internationalization (i18n)",
         icon: Languages,
-        status: "planned",
         priority: "high",
         objective:
           "Toda la app disponible en inglés y español, con el idioma como preferencia del usuario.",
@@ -233,7 +237,6 @@ export const roadmapPhases: RoadmapPhase[] = [
         code: "0.9",
         name: "Audit & Activity Trail",
         icon: ScrollText,
-        status: "in-progress",
         priority: "high",
         objective: "Trazabilidad completa: quién cambió qué y cuándo, consultable y exportable.",
         userNeeds: [
@@ -258,7 +261,6 @@ export const roadmapPhases: RoadmapPhase[] = [
         code: "0.10",
         name: "Media & Document System",
         icon: FolderArchive,
-        status: "in-progress",
         priority: "high",
         objective:
           "Centralizar la gestión de archivos (imágenes, PDFs, Excel…) desacoplada del dominio de negocio. Core transversal, no un módulo más.",
@@ -300,7 +302,6 @@ export const roadmapPhases: RoadmapPhase[] = [
         code: "1.1",
         name: "Identity & Organization",
         icon: UsersRound,
-        status: "planned",
         priority: "high",
         objective: "Usuarios, empresas (frontera multi-tenant) y equipos.",
         userNeeds: [
@@ -322,7 +323,6 @@ export const roadmapPhases: RoadmapPhase[] = [
         code: "1.2",
         name: "CRM (Sales & Customer Management)",
         icon: HeartHandshake,
-        status: "planned",
         priority: "high",
         objective: "Gestión de clientes, pipeline y actividad comercial.",
         userNeeds: [
@@ -347,7 +347,6 @@ export const roadmapPhases: RoadmapPhase[] = [
         code: "1.3",
         name: "Projects / Construction Management",
         icon: HardHat,
-        status: "planned",
         priority: "high",
         objective: "Vertical CORE: gestión de obra de principio a fin.",
         userNeeds: [
@@ -370,7 +369,6 @@ export const roadmapPhases: RoadmapPhase[] = [
         code: "1.4",
         name: "Budgeting & Estimation Engine",
         icon: Calculator,
-        status: "planned",
         priority: "high",
         objective: "Presupuestos por proyecto con estructura de coste y versionado.",
         userNeeds: [
@@ -393,7 +391,6 @@ export const roadmapPhases: RoadmapPhase[] = [
         code: "1.5",
         name: "Procurement & Inventory (Almacén)",
         icon: PackageSearch,
-        status: "planned",
         priority: "high",
         objective: "Proveedores, compras y control de stock por proyecto.",
         userNeeds: [
@@ -426,7 +423,6 @@ export const roadmapPhases: RoadmapPhase[] = [
         code: "2.1",
         name: "Workforce & Time Tracking",
         icon: Clock,
-        status: "planned",
         priority: "medium",
         objective: "Personal, subcontratas y partes de trabajo con coste por hora.",
         userNeeds: [
@@ -450,34 +446,27 @@ export const roadmapPhases: RoadmapPhase[] = [
         code: "2.2",
         name: "Document Management System (DMS)",
         icon: FileStack,
-        status: "planned",
         priority: "medium",
-        objective: "Almacenamiento, versionado y permisos de documentos ligados a proyecto.",
+        objective:
+          "Capa de negocio documental sobre el core Media (0.10): documentos por proyecto, plantillas y permisos. Storage y versionado los aporta 0.10 — aquí no se duplican.",
         userNeeds: [
           "Guardar todos los documentos de una obra juntos y encontrarlos rápido.",
           "Acceder siempre a la última versión de cada documento.",
           "Controlar quién puede ver o editar cada documento.",
         ],
         boundedContext: "shared",
-        dependsOn: ["0.6"],
+        dependsOn: ["0.6", "0.10"],
         submodules: [
-          {
-            name: "File storage abstraction (S3/local)",
-            status: "in-progress",
-            note: "Banks ya sube ficheros",
-          },
-          { name: "Document versioning" },
           { name: "Project-linked documents" },
           { name: "Templates (contratos, informes)" },
           { name: "Permissions per document" },
-          { name: "Audit trail" },
+          { name: "Audit trail documental", note: "sobre la base de 0.9" },
         ],
       },
       {
         code: "2.3",
         name: "Finance Layer (ERP Financial Core)",
         icon: Banknote,
-        status: "in-progress",
         priority: "high",
         objective: "Facturación, pagos y agregación de coste por proyecto.",
         userNeeds: [
@@ -510,7 +499,6 @@ export const roadmapPhases: RoadmapPhase[] = [
         code: "3.1",
         name: "Automation Engine",
         icon: Cog,
-        status: "planned",
         priority: "high",
         objective: "Motor de reglas y workflows que reacciona a eventos del dominio.",
         userNeeds: [
@@ -533,7 +521,6 @@ export const roadmapPhases: RoadmapPhase[] = [
         code: "3.2",
         name: "Notification System",
         icon: Bell,
-        status: "in-progress",
         priority: "medium",
         objective: "Centro de notificaciones in-app, email y push con preferencias por usuario.",
         userNeeds: [
@@ -563,7 +550,6 @@ export const roadmapPhases: RoadmapPhase[] = [
         code: "3.3",
         name: "Feature Flags System",
         icon: Flag,
-        status: "planned",
         priority: "low",
         objective: "Activación por tenant/usuario y rollout gradual.",
         userNeeds: [
@@ -592,7 +578,6 @@ export const roadmapPhases: RoadmapPhase[] = [
         code: "4.1",
         name: "Reporting Engine",
         icon: BarChart3,
-        status: "planned",
         priority: "medium",
         objective: "KPIs configurables y dashboards de proyecto/financieros con export.",
         userNeeds: [
@@ -614,7 +599,6 @@ export const roadmapPhases: RoadmapPhase[] = [
         code: "4.2",
         name: "Advanced Analytics",
         icon: TrendingUp,
-        status: "planned",
         priority: "low",
         objective: "Desviación de coste, rentabilidad y detección de cuellos de botella.",
         userNeeds: [
@@ -642,7 +626,6 @@ export const roadmapPhases: RoadmapPhase[] = [
         code: "5.1",
         name: "Integration Layer",
         icon: Webhook,
-        status: "planned",
         priority: "low",
         objective: "Webhooks, gateway de API externa y pipelines de import/export.",
         userNeeds: [
@@ -664,7 +647,6 @@ export const roadmapPhases: RoadmapPhase[] = [
         code: "5.2",
         name: "Plugin / Extension System",
         icon: Puzzle,
-        status: "planned",
         priority: "low",
         objective: "Registro de módulos activables por tenant con hooks de extensión.",
         userNeeds: [
@@ -692,7 +674,6 @@ export const roadmapPhases: RoadmapPhase[] = [
         code: "6.1",
         name: "CI/CD Pipeline System",
         icon: Rocket,
-        status: "in-progress",
         priority: "high",
         objective: "Pipeline de build, promoción de entornos y rollback automático.",
         userNeeds: [
@@ -712,7 +693,6 @@ export const roadmapPhases: RoadmapPhase[] = [
         code: "6.2",
         name: "Quality & Testing Infrastructure",
         icon: FlaskConical,
-        status: "in-progress",
         priority: "high",
         objective: "Cobertura BDD, contract testing y utilidades de test event-driven.",
         userNeeds: [
@@ -732,7 +712,6 @@ export const roadmapPhases: RoadmapPhase[] = [
         code: "6.3",
         name: "Deployment Infrastructure",
         icon: Container,
-        status: "in-progress",
         priority: "medium",
         objective: "Entornos Compose, deploy blue/green y escalado de workers.",
         userNeeds: [
@@ -761,12 +740,21 @@ export interface RoadmapProgress {
   donePercent: number;
 }
 
-/** Resolve a submodule's effective status (falls back to its module's). */
-export function effectiveSubmoduleStatus(
-  submodule: RoadmapSubmodule,
-  module: RoadmapModule,
-): RoadmapStatus {
-  return submodule.status ?? module.status;
+/** Resolve a submodule's effective status (`planned` unless declared). */
+export function submoduleStatus(submodule: RoadmapSubmodule): RoadmapStatus {
+  return submodule.status ?? "planned";
+}
+
+/**
+ * Derive a module's status from its submodules: `done` only when every
+ * submodule is done, `in-progress` as soon as any work exists, `planned`
+ * otherwise. Declared nowhere — a module can never outrun its submodules.
+ */
+export function moduleStatus(module: RoadmapModule): RoadmapStatus {
+  const statuses = module.submodules.map(submoduleStatus);
+  if (statuses.length > 0 && statuses.every((status) => status === "done")) return "done";
+  if (statuses.some((status) => status !== "planned")) return "in-progress";
+  return "planned";
 }
 
 /** Compute progress over an arbitrary slice of phases (defaults to all). */
@@ -777,7 +765,7 @@ export function computeRoadmapProgress(phases: RoadmapPhase[] = roadmapPhases): 
   for (const phase of phases) {
     for (const mod of phase.modules) {
       for (const submodule of mod.submodules) {
-        const status = effectiveSubmoduleStatus(submodule, mod);
+        const status = submoduleStatus(submodule);
         if (status === "done") done += 1;
         else if (status === "in-progress") inProgress += 1;
         else planned += 1;

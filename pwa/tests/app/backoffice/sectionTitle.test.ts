@@ -48,7 +48,7 @@ describe("sectionTitleFor", () => {
     ["/backoffice/profile", "User Profile"],
     ["/backoffice/docs", "Technical Explorer"],
     ["/backoffice/docs/dictionary", "Data Dictionary"],
-    ["/backoffice/docs/flow", "Domain Flows"],
+    ["/backoffice/docs/flow", "How ERPify Works"],
     ["/backoffice/companies", "Companies"],
     ["/backoffice/companies/employees", "Employees"],
   ])("resolves the longest matching prefix: %s → %s", (pathname, title) => {

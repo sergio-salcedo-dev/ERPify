@@ -239,7 +239,7 @@ export const backofficeMenuGroups: NavGroup[] = [
         subItems: [
           { name: "Technical Explorer", path: `${BASE}/docs`, icon: Code },
           { name: "Data Dictionary", path: `${BASE}/docs/dictionary`, icon: Database },
-          { name: "Domain Flows", path: `${BASE}/docs/flow`, icon: Activity },
+          { name: "How ERPify Works", path: `${BASE}/docs/flow`, icon: Activity },
         ],
       },
     ],
