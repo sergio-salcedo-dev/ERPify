@@ -36,23 +36,22 @@ import {
  * no framework imports — so it stays portable (a future API/DB seed or a
  * GitHub-Projects export can consume the same shape).
  *
- * `status` reflects the real state of the codebase, not aspiration:
- * - `done`        — shipped and exercised by a real vertical slice (Banks, Health)
- *                   or by existing infra (CI, Compose, error contract).
- * - `in-progress` — partially present; foundations exist but the module is not
- *                   yet a finished, reusable capability.
- * - `planned`     — not started.
+ * `status` is flipped EXPLICITLY, task by task, as each piece is closed and
+ * verified — the backlog ships fully unmarked and is never pre-marked from
+ * assumptions about the codebase:
+ * - `done`        — delivered and verified by a closed task.
+ * - `in-progress` — actively being worked on.
+ * - `planned`     — not started (the default).
  *
- * Status is declared ONLY at the submodule level, where it can be checked
- * against real code; an omitted submodule status means `planned` — never an
- * inherited optimism. A module's status is DERIVED from its submodules
- * ({@link moduleStatus}), so a module can never look more advanced than the
- * work inside it.
+ * Status is declared ONLY at the submodule level; an omitted submodule status
+ * means `planned` — never an inherited optimism. A module's status is DERIVED
+ * from its submodules ({@link moduleStatus}), so a module can never look more
+ * advanced than the work inside it.
  *
  * Language: module/submodule names are technical identifiers kept in English
  * (they match how the codebase and docs refer to them); narrative fields
  * (`summary`, `objective`, `userNeeds`, notes) are Spanish until the i18n
- * module (0.8) makes the whole surface translatable.
+ * module (0.6) makes the whole surface translatable.
  *
  * `objective` is the engineering "definition of done"; `userNeeds` is the
  * complementary user-facing view — the jobs a user expects ERPify to solve for
@@ -71,7 +70,7 @@ export interface RoadmapSubmodule {
 }
 
 export interface RoadmapModule {
-  /** Stable dotted code used for cross-references and test ids, e.g. "0.3". */
+  /** Stable dotted code used for cross-references and test ids, e.g. "0.1". */
   code: string;
   name: string;
   icon: LucideIcon;
@@ -103,7 +102,7 @@ export const roadmapPhases: RoadmapPhase[] = [
       "La base enterprise-grade sobre la que se apoya todo lo demás. Probada por las dos verticales ya entregadas (Banks, Service Health); lo que falta es generalizarla en capacidades reutilizables.",
     modules: [
       {
-        code: "0.3",
+        code: "0.1",
         name: "Event-Driven Backbone",
         icon: Workflow,
         priority: "critical",
@@ -115,17 +114,17 @@ export const roadmapPhases: RoadmapPhase[] = [
         ],
         boundedContext: "shared",
         submodules: [
-          { name: "Command Bus / Query Bus (CQRS light)", status: "in-progress" },
-          { name: "Domain Event Dispatcher", status: "done" },
-          { name: "Async Job Pipeline (Messenger transports)", status: "done" },
-          { name: "Retry / failure strategy (DLQ)", status: "planned" },
-          { name: "Idempotency layer", status: "planned", note: "crítico para ERP" },
-          { name: "Event versioning strategy", status: "planned" },
-          { name: "Integration Events vs Domain Events", status: "in-progress" },
+          { name: "Command Bus / Query Bus (CQRS light)" },
+          { name: "Domain Event Dispatcher" },
+          { name: "Async Job Pipeline (Messenger transports)" },
+          { name: "Retry / failure strategy (DLQ)" },
+          { name: "Idempotency layer", note: "crítico para ERP" },
+          { name: "Event versioning strategy" },
+          { name: "Integration Events vs Domain Events" },
         ],
       },
       {
-        code: "0.4",
+        code: "0.2",
         name: "Transactional Outbox System",
         icon: Inbox,
         priority: "critical",
@@ -135,18 +134,18 @@ export const roadmapPhases: RoadmapPhase[] = [
           "Que no me lleguen notificaciones duplicadas por un mismo hecho.",
         ],
         boundedContext: "shared",
-        dependsOn: ["0.3"],
+        dependsOn: ["0.1"],
         submodules: [
-          { name: "Outbox table schema", status: "done" },
-          { name: "Outbox writer (decorator de persistencia)", status: "in-progress" },
-          { name: "Outbox publisher worker (Messenger consumer)", status: "done" },
-          { name: "Retry + backoff strategy", status: "planned" },
-          { name: "Deduplication / idempotency keys", status: "planned" },
-          { name: "Event serialization registry", status: "planned" },
+          { name: "Outbox table schema" },
+          { name: "Outbox writer (decorator de persistencia)" },
+          { name: "Outbox publisher worker (Messenger consumer)" },
+          { name: "Retry + backoff strategy" },
+          { name: "Deduplication / idempotency keys" },
+          { name: "Event serialization registry" },
         ],
       },
       {
-        code: "0.5",
+        code: "0.3",
         name: "API & Query Infrastructure",
         icon: Database,
         priority: "critical",
@@ -158,16 +157,16 @@ export const roadmapPhases: RoadmapPhase[] = [
         ],
         boundedContext: "shared",
         submodules: [
-          { name: "Criteria Query System (filtros componibles)", status: "done" },
-          { name: "Pagination (cursor-based + offset fallback)", status: "done" },
-          { name: "Sorting DSL", status: "done" },
-          { name: "API Response Standard (RFC 9457)", status: "done" },
-          { name: "DTO mapping layer (no exponer entidades)", status: "done" },
-          { name: "Read model separation (futuro CQRS)", status: "planned" },
+          { name: "Criteria Query System (filtros componibles)" },
+          { name: "Pagination (cursor-based + offset fallback)" },
+          { name: "Sorting DSL" },
+          { name: "API Response Standard (RFC 9457)" },
+          { name: "DTO mapping layer (no exponer entidades)" },
+          { name: "Read model separation (futuro CQRS)" },
         ],
       },
       {
-        code: "0.6",
+        code: "0.4",
         name: "Security & Multi-Tenant Core",
         icon: ShieldCheck,
         priority: "critical",
@@ -179,16 +178,16 @@ export const roadmapPhases: RoadmapPhase[] = [
         ],
         boundedContext: "shared",
         submodules: [
-          { name: "Tenant Context Resolver", status: "planned" },
-          { name: "RBAC engine (roles + permisos)", status: "planned" },
-          { name: "Future ABAC hooks (policies)", status: "planned" },
-          { name: "JWT auth + refresh strategy", status: "planned" },
-          { name: "Session / device tracking", status: "planned" },
-          { name: "Audit log base system", status: "done", note: "tabla domain_event" },
+          { name: "Tenant Context Resolver" },
+          { name: "RBAC engine (roles + permisos)" },
+          { name: "Future ABAC hooks (policies)" },
+          { name: "JWT auth + refresh strategy" },
+          { name: "Session / device tracking" },
+          { name: "Audit log base system", note: "tabla domain_event" },
         ],
       },
       {
-        code: "0.7",
+        code: "0.5",
         name: "Observability Foundation",
         icon: Activity,
         priority: "high",
@@ -199,15 +198,15 @@ export const roadmapPhases: RoadmapPhase[] = [
         ],
         boundedContext: "shared",
         submodules: [
-          { name: "Structured logging standard", status: "done" },
-          { name: "Correlation ID propagation", status: "done", note: "crítico con Messenger" },
-          { name: "Sentry integration (backend + frontend)", status: "done" },
-          { name: "Metrics hooks (futuro Prometheus)", status: "planned" },
-          { name: "Event tracing hooks (domain → async)", status: "planned" },
+          { name: "Structured logging standard" },
+          { name: "Correlation ID propagation", note: "crítico con Messenger" },
+          { name: "Sentry integration (backend + frontend)" },
+          { name: "Metrics hooks (futuro Prometheus)" },
+          { name: "Event tracing hooks (domain → async)" },
         ],
       },
       {
-        code: "0.8",
+        code: "0.6",
         name: "Internationalization (i18n)",
         icon: Languages,
         priority: "high",
@@ -227,14 +226,13 @@ export const roadmapPhases: RoadmapPhase[] = [
           { name: "Mensajes de error RFC 9457 localizados" },
           {
             name: "Formato de fecha/número/moneda por locale",
-            status: "in-progress",
             note: "dateTimeProvider ya formatea por locale",
           },
           { name: "Cobertura de traducción en CI (claves faltantes fallan)" },
         ],
       },
       {
-        code: "0.9",
+        code: "0.7",
         name: "Audit & Activity Trail",
         icon: ScrollText,
         priority: "high",
@@ -245,9 +243,9 @@ export const roadmapPhases: RoadmapPhase[] = [
           "Exportar el rastro de actividad para una auditoría o un cliente.",
         ],
         boundedContext: "shared",
-        dependsOn: ["0.6"],
+        dependsOn: ["0.4"],
         submodules: [
-          { name: "Audit table schema (domain_event)", status: "done" },
+          { name: "Audit table schema (domain_event)" },
           { name: "Audit log viewer (UI /backoffice/audit)" },
           { name: "Filtro + búsqueda por entidad / usuario / acción" },
           { name: "Historial de cambios por entidad (timeline)" },
@@ -258,7 +256,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         ],
       },
       {
-        code: "0.10",
+        code: "0.8",
         name: "Media & Document System",
         icon: FolderArchive,
         priority: "high",
@@ -274,11 +272,9 @@ export const roadmapPhases: RoadmapPhase[] = [
         submodules: [
           {
             name: "F0 · Diseño del modelo (MediaFile, StorageProviderInterface, MIME)",
-            status: "done",
           },
           {
             name: "F1 · Storage local + upload/download por tenant",
-            status: "in-progress",
             note: "Bank ya sube/recupera ficheros",
           },
           { name: "F2 · Media Library genérica (reutilización, sin duplicar, tags)" },
@@ -310,7 +306,7 @@ export const roadmapPhases: RoadmapPhase[] = [
           "Editar mi perfil, mi contraseña y mis preferencias.",
         ],
         boundedContext: "organization",
-        dependsOn: ["0.6"],
+        dependsOn: ["0.4"],
         submodules: [
           { name: "Users" },
           { name: "Companies (multi-tenant boundary)" },
@@ -448,19 +444,19 @@ export const roadmapPhases: RoadmapPhase[] = [
         icon: FileStack,
         priority: "medium",
         objective:
-          "Capa de negocio documental sobre el core Media (0.10): documentos por proyecto, plantillas y permisos. Storage y versionado los aporta 0.10 — aquí no se duplican.",
+          "Capa de negocio documental sobre el core Media (0.8): documentos por proyecto, plantillas y permisos. Storage y versionado los aporta 0.8 — aquí no se duplican.",
         userNeeds: [
           "Guardar todos los documentos de una obra juntos y encontrarlos rápido.",
           "Acceder siempre a la última versión de cada documento.",
           "Controlar quién puede ver o editar cada documento.",
         ],
         boundedContext: "shared",
-        dependsOn: ["0.6", "0.10"],
+        dependsOn: ["0.4", "0.8"],
         submodules: [
           { name: "Project-linked documents" },
           { name: "Templates (contratos, informes)" },
           { name: "Permissions per document" },
-          { name: "Audit trail documental", note: "sobre la base de 0.9" },
+          { name: "Audit trail documental", note: "sobre la base de 0.7" },
         ],
       },
       {
@@ -478,7 +474,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         boundedContext: "backoffice",
         dependsOn: ["1.4"],
         submodules: [
-          { name: "Banks / Treasury (vertical de referencia)", status: "done" },
+          { name: "Banks / Treasury (vertical de referencia)" },
           { name: "Invoices (cliente/proveedor)" },
           { name: "Payments tracking" },
           { name: "Cashflow view" },
@@ -507,7 +503,7 @@ export const roadmapPhases: RoadmapPhase[] = [
           "Que el sistema cree tareas y avise por mí, solo.",
         ],
         boundedContext: "shared",
-        dependsOn: ["0.3"],
+        dependsOn: ["0.1"],
         submodules: [
           { name: "Event trigger registry" },
           { name: "Rules engine (IF/THEN)" },
@@ -529,16 +525,14 @@ export const roadmapPhases: RoadmapPhase[] = [
           "Ver mis notificaciones en un único centro.",
         ],
         boundedContext: "shared",
-        dependsOn: ["0.3"],
+        dependsOn: ["0.1"],
         submodules: [
           {
             name: "Notification center (in-app)",
-            status: "in-progress",
             note: "toasts + Mercure realtime",
           },
           {
             name: "Email notifications",
-            status: "in-progress",
             note: "BankChanged notify handler",
           },
           { name: "Event subscriptions per user/role" },
@@ -557,7 +551,7 @@ export const roadmapPhases: RoadmapPhase[] = [
           "Probar novedades con un grupo reducido antes de abrirlas a todos.",
         ],
         boundedContext: "shared",
-        dependsOn: ["0.6"],
+        dependsOn: ["0.4"],
         submodules: [
           { name: "Feature flag registry" },
           { name: "Tenant-based enablement" },
@@ -634,7 +628,7 @@ export const roadmapPhases: RoadmapPhase[] = [
           "Recibir y enviar eventos a sistemas externos (webhooks).",
         ],
         boundedContext: "shared",
-        dependsOn: ["0.3"],
+        dependsOn: ["0.1"],
         submodules: [
           { name: "Webhooks system (incoming/outgoing)" },
           { name: "External API gateway" },
@@ -682,7 +676,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         ],
         boundedContext: "shared",
         submodules: [
-          { name: "GitHub Actions pipelines", status: "done", note: "quality + tests en push/PR" },
+          { name: "GitHub Actions pipelines", note: "quality + tests en push/PR" },
           { name: "Environment promotion (dev → staging → prod)" },
           { name: "Migration automation strategy" },
           { name: "Rollback system" },
@@ -701,11 +695,11 @@ export const roadmapPhases: RoadmapPhase[] = [
         ],
         boundedContext: "shared",
         submodules: [
-          { name: "Behat BDD layer", status: "done" },
+          { name: "Behat BDD layer" },
           { name: "Contract testing (API)" },
-          { name: "Integration test harness", status: "in-progress" },
+          { name: "Integration test harness" },
           { name: "Event-driven test utilities" },
-          { name: "Test data factories (DDD aligned)", status: "in-progress" },
+          { name: "Test data factories (DDD aligned)" },
         ],
       },
       {
@@ -720,7 +714,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         ],
         boundedContext: "shared",
         submodules: [
-          { name: "Docker Compose environments", status: "done" },
+          { name: "Docker Compose environments" },
           { name: "Infrastructure as code (futuro)" },
           { name: "Blue/green o rolling deploy" },
           { name: "Background worker scaling (Messenger consumers)" },

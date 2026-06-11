@@ -6,7 +6,7 @@
 > Procurement (PDFs de proveedor) y Accounting (facturas).
 >
 > Artefacto de **roadmap / diseño** — backlog vivo por capas, no roadmap cerrado.
-> El módulo `0.10` del [`product-roadmap.md`](product-roadmap.md) (visible en la
+> El módulo `0.8` del [`product-roadmap.md`](product-roadmap.md) (visible en la
 > página in-app `/backoffice/roadmap`) resume el estado por fases; aquí está el
 > detalle de historias, DoD y gates.
 
@@ -131,6 +131,6 @@ habilita multi-storage (F4) sin refactor masivo.
 
 ## Mantenimiento
 
-El estado por fases se refleja en `roadmap.ts` (módulo `0.10`); el detalle de
+El estado por fases se refleja en `roadmap.ts` (módulo `0.8`); el detalle de
 historias/DoD/gates vive aquí. Al cerrar una fase, actualiza su `status` en
 `roadmap.ts` y marca su DoD en este doc.

@@ -204,10 +204,10 @@ export default function RoadmapPage() {
             Product Roadmap
           </h1>
           <p className="text-muted-foreground max-w-3xl text-sm leading-relaxed">
-            Backlog vivo de producto + ingeniería, por fases y módulos. El estado refleja el código
-            real: <span className="text-foreground font-medium">Hecho</span> = entregado y
-            ejercitado por una vertical real,{" "}
-            <span className="text-foreground font-medium">En curso</span> = cimientos presentes,{" "}
+            Backlog vivo de producto + ingeniería, por fases y módulos. El estado se marca tarea a
+            tarea, al cerrar y verificar cada pieza:{" "}
+            <span className="text-foreground font-medium">Hecho</span> = entregado y verificado,{" "}
+            <span className="text-foreground font-medium">En curso</span> = se está trabajando,{" "}
             <span className="text-foreground font-medium">Pendiente</span> = sin empezar. Fuente de
             verdad: <code className="text-foreground">roadmap.ts</code>.
           </p>

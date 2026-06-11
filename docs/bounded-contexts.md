@@ -354,7 +354,7 @@ Dos caras del mismo núcleo compartido:
 - **Emite:** — (consume y expone).
 - **Consume:** **todos** los domain events (vía el store/outbox compartido).
 - **Necesidad:** saber quién cambió qué, recuperar historial, exportar para
-  auditoría. *(roadmap 0.9)*
+  auditoría. *(roadmap 0.7)*
 
 ### Integration Layer (`erpify.backoffice.integration.*`)
 

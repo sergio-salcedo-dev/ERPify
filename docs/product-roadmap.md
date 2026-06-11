@@ -32,9 +32,10 @@ navegación (`backofficeMenu.ts` alimenta la sidebar):
 3. **Este doc** — la narrativa de fases, los buckets de complejidad y la
    estimación de tiempo. No duplica la lista de submódulos (enlaza a la fuente).
 
-El `status` refleja el **código real**, no la aspiración: `done` = entregado y
-ejercitado por una vertical real; `in-progress` = cimientos presentes;
-`planned` = sin empezar. Se declara **solo a nivel de submódulo** (omitido =
+El `status` se marca **explícitamente, tarea a tarea**, al cerrar y verificar
+cada pieza — el backlog arranca sin nada marcado y nunca se pre-marca por
+suposiciones sobre el código (la narrativa de lo ya existente vive en «Estado
+de partida», abajo). Se declara **solo a nivel de submódulo** (omitido =
 `planned`); el estado de un módulo se **deriva** de sus submódulos
 (`moduleStatus`), de modo que un módulo nunca puede aparentar más avance que
 el trabajo que contiene.
@@ -55,7 +56,7 @@ pipeline async (Messenger), correlation-id, Sentry (front + back), tabla de
 auditoría `domain_event`, CI (quality + tests) y entornos Compose.
 
 Lo grande que **falta** y condiciona todo: **autenticación / RBAC / multi-tenant**
-(no hay `company_id` ni login todavía) — es trabajo fundacional de la Fase 0.6.
+(no hay `company_id` ni login todavía) — es trabajo fundacional de la Fase 0.4.
 
 ## Fases
 
@@ -74,7 +75,7 @@ El desglose de módulos y submódulos de cada fase está en `roadmap.ts`.
 El mapa **granular de bounded contexts** (agregados, value objects, invariantes
 y los eventos por los que se integran) está en
 [`bounded-contexts.md`](bounded-contexts.md). El **Media & Document System**
-(core transversal, módulo `0.10`) tiene su backlog evolutivo por capas detallado
+(core transversal, módulo `0.8`) tiene su backlog evolutivo por capas detallado
 en [`media-document-system.md`](media-document-system.md).
 
 ## Estrategia de implementación — modelado de datos (muy importante)
