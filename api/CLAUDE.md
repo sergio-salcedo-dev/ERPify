@@ -43,6 +43,11 @@ New bounded contexts/modules follow the same three-layer split. Cross-context ca
 -   **Never** hand-edit a migration that has already been applied. Generate a new one with `make db.diff`.
 -   **Don't skip** `make php.quality` locally — CI runs it and the fixers (`cs-fixer`, `rector`) mutate files, so running them first keeps diffs clean.
 -   **PHPStan (`level: max`) is the sole type-checking gate.** Psalm's general analysis was retired (the redundant second type-checker disagreed with PHPStan, and its `--alter` auto-fix / ~492-issue baseline were pure friction). Psalm now runs **taint-only** via `make php.psalm.taint` (security dataflow → SARIF, its own `api-taint` CI job, config `tools/psalm/psalm-taint.xml`). There is no general psalm config or baseline anymore.
+-   **PostgreSQL Migrations:**
+    -   Use `CONCURRENTLY` for indices in prod (requires `isTransactional() => false`) to avoid blocking writes.
+    -   Use `IF [NOT] EXISTS` for idempotency and resilient rollbacks.
+    -   Review lock impact of non-concurrent operations (e.g., `ALTER TABLE`).
+    -   Always verify migrations in staging before production.
 -   Add async jobs via Messenger buses; don't spawn processes or inline long work in request handlers. See [`docs/architecture-api.md`](../docs/architecture-api.md) for the audit table + domain-event flow.
 -   Keep lines under 120 characters; wrap longer ones unless breaking them hurts readability (e.g. long URLs, string literals).
 -   Prod requires `APP_SECRET`, `CADDY_MERCURE_JWT_SECRET`, `POSTGRES_PASSWORD` in env — see [`../docs/deployment-guide.md`](../docs/deployment-guide.md) and [`../pwa/docs/production-deployment.md`](../pwa/docs/production-deployment.md).

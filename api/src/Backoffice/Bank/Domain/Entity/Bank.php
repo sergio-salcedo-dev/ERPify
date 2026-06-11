@@ -22,15 +22,6 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'bank')]
-// btree indexes for the temporal range filters (story 1.7). Declared here at the Bank table
-// level, never on the shared Timestamped trait, so only this entity pays for the indexes.
-#[ORM\Index(name: 'idx_bank_created_at', columns: ['created_at'])]
-#[ORM\Index(name: 'idx_bank_updated_at', columns: ['updated_at'])]
-// Composite (column, id) indexes backing keyset order stability on the non-unique temporal sort
-// keys (story 1.2): a tie on created_at/updated_at resolves by the id tie-break under a single
-// index walk. The simple indexes above stay for the range filters. The unique name_normalized /
-// short_name columns already give a total order from their single-column unique index, so they
-// need no composite — see SortFieldMapIndexContractTest.
 #[ORM\Index(name: 'idx_bank_created_at_id', columns: ['created_at', 'id'])]
 #[ORM\Index(name: 'idx_bank_updated_at_id', columns: ['updated_at', 'id'])]
 #[UniqueEntity(fields: ['nameNormalized'], message: 'This bank name is already in use.', errorPath: 'name')]
