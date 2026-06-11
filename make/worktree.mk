@@ -45,6 +45,14 @@
 # re-derives the erpify-<slug> project from the dir basename (same slug rule as
 # config.mk) and runs `docker compose -p erpify-<slug> down --volumes` from the
 # main checkout so the orphaned containers/volumes don't leak.
+#
+# worktree.chown: reclaims ownership of the whole .claude/worktrees/ folder.
+#                 Worktree stacks write bind-mounted files as root (pwa/.next,
+#                 node_modules, api/var, …), which makes `git worktree remove` /
+#                 `rm -rf` fail with "Permission denied". Mirrors pwa.chown.next:
+#                 sudo chown -R to the host user, dev/test only. Covers every
+#                 worktree at once, including stale dirs git no longer tracks.
+#                 Run it, then retry worktree.remove.
 
 ## —— Worktrees ————————————————————————————————————————————————————————————
 
@@ -101,12 +109,21 @@ worktree.remove: ## Remove worktree NAME=<dir|path|branch> + its stack/volumes +
 		(cd "$$main" && docker compose -p "erpify-$$slug" -f compose.yaml -f compose.dev.yaml down --remove-orphans --volumes) || true; \
 	fi; \
 	echo "→ removing worktree $$wt"; \
-	git -C "$$main" worktree remove $(if $(FORCE),--force ,)"$$wt" || { echo "✗ worktree has changes; re-run with FORCE=true to discard"; exit 1; }; \
+	git -C "$$main" worktree remove $(if $(FORCE),--force ,)"$$wt" || { echo "✗ worktree remove failed — dirty worktree (re-run with FORCE=true) or root-owned files ('Permission denied' → run 'make worktree.chown' first)"; exit 1; }; \
 	git -C "$$main" worktree prune; \
 	if [ -n "$$branch" ]; then \
 		git -C "$$main" branch $(if $(FORCE),-D,-d) "$$branch" && echo "✓ deleted branch $$branch" \
 			|| echo "• branch '$$branch' kept (squash-merged looks unmerged) — delete with 'make worktree.remove NAME=$$branch FORCE=true'"; \
 	fi
+
+worktree.chown: ## Reclaim ownership of root-owned container-written files under .claude/worktrees/; fixes 'Permission denied' on worktree.remove (requires sudo; dev/test only)
+	$(call guard_var_writable,worktree.chown)
+	@main="$$(git -C "$(PROJECT_ROOT)" worktree list --porcelain | awk '/^worktree /{print $$2; exit}')"; \
+	dir="$$main/.claude/worktrees"; \
+	if [ ! -d "$$dir" ]; then echo "✓ nothing to do — $$dir does not exist"; exit 0; fi; \
+	echo "→ sudo chown -R $(shell id -un) $$dir"; \
+	sudo chown -R $(shell id -u):$(shell id -g) "$$dir"; \
+	echo "✓ $$dir now owned by $(shell id -un) — retry 'make worktree.remove NAME=…'"
 
 worktree.remove-all: ## Remove ALL linked worktrees + their stacks/volumes + branches; FORCE=true drops dirty/unmerged (destructive)
 	@main="$$(git -C "$(PROJECT_ROOT)" worktree list --porcelain | awk '/^worktree /{print $$2; exit}')"; \
@@ -118,4 +135,4 @@ worktree.remove-all: ## Remove ALL linked worktrees + their stacks/volumes + bra
 	done; \
 	git -C "$$main" worktree prune
 
-.PHONY: worktree.create worktree.list worktree.remove worktree.remove-all
+.PHONY: worktree.create worktree.list worktree.remove worktree.chown worktree.remove-all
