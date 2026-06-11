@@ -115,14 +115,24 @@ Para cada uno: **responsabilidad**, **agregados/entidades** (raíz marcada con �
 consume** (de quién), **read models** propios y la **necesidad de usuario** que
 cubre (resumen; detalle en `roadmap.ts`).
 
-### Shared Kernel (no es un contexto de negocio)
+### Shared Kernel / Platform (no es un contexto de negocio)
 
-- **Responsabilidad:** primitivas compartidas — identidad (`Identifiable`,
+Dos caras del mismo núcleo compartido:
+
+- **Kernel técnico** — primitivas compartidas: identidad (`Identifiable`,
   `Uuid` v7), `AggregateRoot`, `DomainEvent`, store/outbox de eventos
   (`StoredDomainEvent`), `ProblemDetails`, criteria de búsqueda/paginación,
-  `NormalizedText`, validación, mailer.
-- **Regla:** estable y mínimo. Nada específico de un dominio entra aquí. Lo que
-  hoy vive en `api/src/Shared` ya es la base.
+  `NormalizedText`, validación, mailer. Hoy ya vive en `api/src/Shared`.
+- **Platform (kernel de negocio referenciable por todos)** — identidad y
+  plataforma: `User`, `Tenant`/`company_id`, `Role`, `Permission`,
+  `FeatureFlag`. Es el **único** núcleo que cualquier contexto puede
+  referenciar, y hacia el que una **FK / `ManyToOne` está permitida** (Level 3).
+  Su CRUD/gestión vive en sus módulos del roadmap (Organization para
+  users/roles, Feature Flags), pero como *referencia* actúan como shared kernel.
+- **Regla:** estable y mínimo. Un contexto de negocio **no** se referencia por
+  asociación Doctrine desde otro (eso es por id + eventos); solo el Platform
+  recibe ese trato. Detalle y ejemplos en
+  [`rules/database.md`](rules/database.md#bounded-context-data-isolation-modular-monolith).
 
 ### Organization (`erpify.backoffice.organization.*`)
 

@@ -104,6 +104,48 @@ and the data-modeling strategy in [`../product-roadmap.md`](../product-roadmap.m
   boundary enforcer**.
 - **Read models** owned by the consumer, rebuilt from the emitter's events.
 
+**One shared EntityManager — the boundary is the domain model, not the EM.**
+ERPify uses a **single `EntityManager`** (one DB, one EM): it simplifies
+transactions, Messenger + outbox, and migrations. It is a *modular monolith*, not
+microservices, so it is **not** split into multiple EntityManagers. The informal
+phrase "don't share EntityManagers between contexts" is **not a Doctrine term**;
+what it really means is **don't share domain models between contexts**. The
+defect is not the shared EM — it is one context **importing, mutating and
+persisting** another's entities:
+
+```php
+// ❌ Projects knows, mutates and persists a CRM entity
+use Erpify\Frontoffice\Crm\Domain\Entity\Lead;   // cross-context import (Level 1)
+$lead = $this->leadRepository->find($leadId);     // foreign repository (Level 1)
+$lead->markAsConverted();                          // mutating another context's domain
+```
+
+Even with the same EntityManager, that breaks the boundary. The conversion is
+done by **CRM reacting to an event** (`projects.project.created`), not by Projects.
+
+**Doctrine relations — two options:**
+
+- **Strict (default between business contexts):** no association — store the id
+  and communicate via events.
+  ```php
+  class Project { private string $leadId; }        // ✅ reference by id
+  ```
+- **Pragmatic (only toward the Platform / shared kernel):** a controlled
+  `#[ORM\ManyToOne]` is acceptable **only** toward identity/platform, because
+  every context references that core.
+  ```php
+  class Project {
+      #[ORM\ManyToOne] private User $manager;       // ✅ User ∈ shared kernel
+  }
+  ```
+  A `#[ORM\ManyToOne]` toward **another business context's** entity
+  (`Project → Lead`) is Level 2 — discouraged; prefer the id.
+
+**Platform / shared kernel** = the special context every context may reference:
+`User`, `Tenant`/`company_id`, `Role`, `Permission`, `FeatureFlag`. An FK or a
+`ManyToOne` toward it is Level 3 (allowed); a business context never gets that
+treatment.
+
 Don't over-tighten: a dogmatic "zero coupling" gate freezes development, forces
 needless data duplication, and fights the framework. Symfony gives the
 structural base (PSR-4 autoload, service isolation, Messenger event boundary,
