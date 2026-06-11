@@ -102,7 +102,7 @@ make php.behat                             # Behat (isolated tree)
 ## Lint / analyze
 
 ```bash
-make php.quality                  # PHPStan + Rector + PHP-CS-Fixer + PHPMD + PHPCS + Psalm (aggregate)
+make php.quality                  # PHPStan + Rector + PHP-CS-Fixer + PHPMD + PHPCS (aggregate)
 make php.stan
 make php.rector                # apply
 make php.rector.dry-run
@@ -111,12 +111,10 @@ make php.cs-fixer.dry-run
 make php.md
 make php.cs                    # apply
 make php.cs.dry-run
-make php.psalm
-make php.psalm.taint
-make php.psalm.baseline
+make php.psalm.taint           # Psalm security dataflow → SARIF (api-taint CI job)
 ```
 
-Tool configs live at `api/.php-cs-fixer.php`, `api/phpstan.neon`, `api/psalm.xml`, `api/rector.php`.
+Tool configs live at `api/.php-cs-fixer.php`, `api/tools/phpstan/phpstan.neon`, `api/tools/psalm/psalm-taint.xml`, `api/rector.php`. PHPStan (`level: max`) is the sole type-checking gate; Psalm's general analysis was retired — it now runs taint-only.
 
 ## Directory discipline
 

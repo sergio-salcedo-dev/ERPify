@@ -37,7 +37,7 @@ make php.test                       # PHPUnit + Behat. Pass c='…' for extra ar
 make php.unit c='--filter SomeTest' # PHPUnit only.
 make php.behat c='features/...'     # Behat only.
 make php.bench                      # Opt-in performance-budget benchmarks (default php.unit skips).
-make php.quality                    # Full sweep: PHPStan, Rector, PHP-CS-Fixer, PHPMD, PHPCS, Psalm.
+make php.quality                    # Full sweep: PHPStan, Rector, PHP-CS-Fixer, PHPMD, PHPCS.
 make php.stan                       # PHPStan only — REQUIRED on every PHP file you change.
 make composer.update                # Safe dependency update (within composer.json ranges).
 make composer.upgrade               # Force-upgrade direct deps to latest (bumps constraints across majors).
@@ -52,7 +52,7 @@ make db.tunnel                      # Expose prod/staging DB on 127.0.0.1:15432 
 make xdebug.enable                  # Toggle Xdebug in api/.env (also xdebug.disable, xdebug.status).
 ```
 
-Individual linters: `php.rector[.dry-run]`, `php.cs-fixer[.dry-run]`, `php.md`, `php.cs[.dry-run]`, `php.psalm`, `php.psalm.taint`, `php.psalm.baseline`, `composer.check.all`. Error-contract drift gate: `php.lint.error-contract` (FR50/FR51/NFR26).
+Individual linters: `php.rector[.dry-run]`, `php.cs-fixer[.dry-run]`, `php.md`, `php.cs[.dry-run]`, `php.psalm.taint` (Psalm security dataflow → SARIF, `api-taint` CI job), `composer.check.all`. Error-contract drift gate: `php.lint.error-contract` (FR50/FR51/NFR26).
 
 ### PWA / JS
 

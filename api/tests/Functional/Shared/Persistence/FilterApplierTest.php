@@ -339,7 +339,7 @@ final class FilterApplierTest extends KernelTestCase
     /**
      * Runs the test body inside a transaction that is always rolled back, so persisted rows
      * never leak into the shared dev database. Deliberately not a tearDown() override —
-     * rector and Psalm disagree on #[Override] for hooks with parent calls; a helper avoids
+     * rector strips #[Override] from hooks with parent calls; a helper avoids
      * the override entirely.
      *
      * @param callable(): void $testBody

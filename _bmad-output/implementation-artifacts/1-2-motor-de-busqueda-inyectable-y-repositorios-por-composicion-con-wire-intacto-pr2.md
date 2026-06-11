@@ -30,7 +30,7 @@ so that la corrección de la ejecución keyset quede sellada y demostrada antes 
 
 6. **`KeysetSqlSnapshotTest` derivado no normativo (AR4, AR20, AR22):** Given el SQL compilado del read-path, When corre `KeysetSqlSnapshotTest`, Then compara únicamente SQL string + parámetros bindeados + ordering — nunca objetos Doctrine. And el snapshot es derivado NO normativo: detector de regresiones, jamás contrato de compatibilidad runtime.
 
-7. **Wire intacto + gates verdes + docs (AR16, AR18, FR3):** Given la suite Behat completa, When corre CI, Then los 52 bloques existentes de `search.feature` pasan **sin modificación** — el wire queda intacto **porque el engine es OFF-wire**: el `Paginator` legacy sigue siendo el único que sirve el read-path HTTP (page-based navigation, `currentPage`/`pageCount`, degradación silenciosa de cursor inválido, modos LIGHT/DETAILED y los conteos de query por escenario, todos preservados). El motor nuevo **NO emite el envelope en PR2**; su conexión al wire (nuevo codec + 422 + envelope `after`/`before`) es PR3. And `make php.stan` + `make php.psalm` + `make php.quality` verdes sin baselines nuevas. And los docs obligatorios del PR se actualizan (AR18): `docs/architecture-api.md`, `api/docs/adding-endpoints.md`, `docs/source-tree-analysis.md`.
+7. **Wire intacto + gates verdes + docs (AR16, AR18, FR3):** Given la suite Behat completa, When corre CI, Then los 52 bloques existentes de `search.feature` pasan **sin modificación** — el wire queda intacto **porque el engine es OFF-wire**: el `Paginator` legacy sigue siendo el único que sirve el read-path HTTP (page-based navigation, `currentPage`/`pageCount`, degradación silenciosa de cursor inválido, modos LIGHT/DETAILED y los conteos de query por escenario, todos preservados). El motor nuevo **NO emite el envelope en PR2**; su conexión al wire (nuevo codec + 422 + envelope `after`/`before`) es PR3. And `make php.stan` + `make php.quality` verdes sin baselines nuevas. And los docs obligatorios del PR se actualizan (AR18): `docs/architecture-api.md`, `api/docs/adding-endpoints.md`, `docs/source-tree-analysis.md`.
 
 ## Tasks / Subtasks
 
@@ -99,7 +99,7 @@ so that la corrección de la ejecución keyset quede sellada y demostrada antes 
 - [x] Task 11: Gates, docs y cierre (AC: #7)
   - [x] `make php.stan` por archivo cambiado durante el desarrollo
   - [x] `make php.unit` + `make php.behat` verdes (suites nuevas + existentes)
-  - [x] `make php.quality` al cierre (stan + psalm + error-contract + phpmd) — verde sin baselines nuevas. Vigilar Psalm `findUnusedCode`: el engine consume el API público de PR1 (debería resolver `PossiblyUnusedMethod` pendientes); si algo legítimo dispara, suppression puntual con `// why:`, jamás regenerar baseline sin limpiar `var/cache/psalm`
+  - [x] `make php.quality` al cierre (stan + error-contract + phpmd) — verde sin baselines nuevas
   - [x] Docs obligatorios (AR18): `docs/architecture-api.md` (engine + repos por composición), `api/docs/adding-endpoints.md` (cómo un repo de búsqueda nuevo aporta su QB base y delega en el engine), `docs/source-tree-analysis.md` (nuevo `DoctrineSearchEngine`)
   - [x] Self-review de seguridad del repo (checklist backend de CLAUDE.md) antes del PR
 
@@ -220,7 +220,7 @@ Invariantes impuestos **hasta el paso 6**; nada posterior forma parte de las gar
 - **`make app.dev` en el worktree reescribe `api/config/reference.php`** — nunca `git add -A` sin revisar; auto-generado.
 - **FrankenPHP vuelca `core.N` (~1GB) en `api/` durante test runs en contenedor** — borrar, jamás commitear.
 - **Lint siempre vía `make` desde la raíz** (contenedor dev; un entorno sin ext-bcmath voltea cs-fixer).
-- **Psalm `findUnusedCode`:** PR2 da consumidor de producción al API público de PR1 (debería resolver `PossiblyUnusedMethod` pendientes). Si algo legítimo dispara, suppression puntual con `// why:`; **jamás** regenerar baseline sin `var/cache/psalm` limpio.
+- **Métodos sin consumidor hasta que PR2 cablea el engine:** PR2 da consumidor de producción al API público de PR1. (El gate general de Psalm con `findUnusedCode` que vigilaba esto fue retirado — PHPStan `level: max` es la única autoridad de tipos.)
 - **`SearchExceptionListener` ya retirado** (lo absorbió `ProblemDetailsFactory`): AR17 resuelto, PR2 no lo toca.
 - **`make php.quality` incluye `php.lint.error-contract`:** PR2 no añade marker nuevo en el wire (el 422 `invalid-cursor` es PR3). El `LogicException` del guard es programmer_error, no marker 422 — verificar que el gate queda verde sin tocar `docs/api-error-contract.md` (si exigiera algo, añadirlo, no suprimir).
 - **Commits:** Conventional Commits (`feat(api): …` / `feat(shared): …`), pre-commit hooks activos; nunca `--no-verify`, nunca amend tras fallo de hook.
@@ -339,7 +339,7 @@ _Code review adversarial (Blind Hunter + Edge Case Hunter + Acceptance Auditor) 
 #### Defer — registrados en `deferred-work.md` (`code review of story-1.2`)
 
 - [x] [Review][Defer] **AC3 (repos por composición) + AC7 "envelope viejo desde el motor nuevo" no entregados** — RECONCILIADO en esta revisión (título/Story/AC3/AC7/Status reescritos para reflejar el engine off-wire; sprint → `in-progress`). **Resuelto D-1: composición trasladada a PR3 (Story 1.3)** — reasignada en `epics.md`.
-- [x] [Review][Defer] (era Patch P4) `KeysetSqlSnapshotTest` no cierra la conexión DBAL paralela de `setUp()` — el `tearDown()` idiomático dispara el conflicto sancionado rector↔psalm (desnuda `#[Override]` → exige baseline nueva), violando el AC7 "sin baselines nuevas". Leak *low* mitigado por refcounting; alternativa: cerrar dentro de `inRolledBackTransaction()`.
+- [x] [Review][Defer] (era Patch P4) `KeysetSqlSnapshotTest` no cierra la conexión DBAL paralela de `setUp()` — el `tearDown()` idiomático hace que rector desnude `#[Override]` (la mitad psalm del antiguo conflicto rector↔psalm ya no aplica: el análisis general de Psalm fue retirado). Leak *low* mitigado por refcounting; alternativa: cerrar dentro de `inRolledBackTransaction()`.
 - [x] [Review][Defer] `resolveLimit` nunca aplica `policy.defaultLimit` (25); `limit` ausente (`SearchCriteria` default 1000) → `min(1000, maxLimit=100)`=100. Campo `defaultLimit` inerte. Decisión de wiring de PR3.
 - [x] [Review][Defer] Página `before` vacía devuelve `hasNext=false` (debería ser `true`); off-wire y sin cursor accionable hoy — PR3.
 - [x] [Review][Defer] `RowUniquenessGuard` falla-abierto en cartesiano multi-root y joins to-many no seleccionados (también multiplican filas bajo `LIMIT`) — hardening fuera del scope addSelect del AC2.

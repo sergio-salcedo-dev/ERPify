@@ -24,7 +24,7 @@ so that el flip posterior del contrato (PR3) se apoye exclusivamente en componen
 
 5. **Predicado keyset (FR4, AR4, AR11):** Given columnas de ORDER BY con tie-break `id` y una posición de cursor, When `KeysetPredicateBuilder` construye el predicado, Then produce la cadena `col > :v OR (col = :v AND id > :i)` (extendida a N claves) con parámetros bindeados, pre-compilación. And el builder recibe configuración explícita de `WirePaginationPolicy` — nunca se comparte sin contexto entre policies.
 
-6. **Cero cambio de contrato + gates verdes (AR13, AR16):** Given la suite completa del repo, When corre CI, Then los escenarios Behat existentes de `search.feature` (52 bloques a 2026-06-10: 47 Scenario + 5 Outline) pasan sin modificación alguna. And las suites unitarias nuevas viven en `api/tests/Unit/Shared/Infrastructure/Persistence/Doctrine/Search/Keyset/` sin necesitar el kernel, con object mothers `CursorMother`/`TraceMother`/`PageMother`. And `make php.stan`, `make php.psalm` y `make php.quality` quedan verdes.
+6. **Cero cambio de contrato + gates verdes (AR13, AR16):** Given la suite completa del repo, When corre CI, Then los escenarios Behat existentes de `search.feature` (52 bloques a 2026-06-10: 47 Scenario + 5 Outline) pasan sin modificación alguna. And las suites unitarias nuevas viven en `api/tests/Unit/Shared/Infrastructure/Persistence/Doctrine/Search/Keyset/` sin necesitar el kernel, con object mothers `CursorMother`/`TraceMother`/`PageMother`. And `make php.stan` y `make php.quality` quedan verdes.
 
 ## Tasks / Subtasks
 
@@ -69,7 +69,7 @@ so that el flip posterior del contrato (PR3) se apoye exclusivamente en componen
   - [x] `make php.stan` por archivo cambiado durante el desarrollo
   - [x] `make php.unit` — suites nuevas + existentes verdes
   - [x] `make php.behat` — los 52 bloques de `search.feature` pasan SIN tocar (cero cambio de contrato wire)
-  - [x] `make php.quality` al cierre (incluye psalm + error-contract gate) — verde sin baselines nuevas
+  - [x] `make php.quality` al cierre (incluye error-contract gate) — verde sin baselines nuevas
   - [x] Self-review de seguridad del repo (checklist de CLAUDE.md, sección backend) antes del PR
 
 ### Review Findings
@@ -155,7 +155,7 @@ Colisiones verificadas 2026-06-10: ningún FQCN existente choca con los nuevos (
 
 ### Gotchas operativos del repo (aprendidos en sesiones previas — evitan ciclos de review)
 
-- **Psalm `findUnusedCode="true"`** (`api/tools/psalm/psalm.xml`, tests en scope): las clases de PR1 no tienen consumidores de producción hasta PR2. Los tests cuentan como uso, pero métodos públicos solo consumidos en PR2 pueden disparar `PossiblyUnusedMethod`. Mitigación: cobertura real en tests de TODO el API público; si algo legítimo dispara, suppression puntual `@psalm-suppress PossiblyUnusedMethod` con comentario "consumido por DoctrineSearchEngine en PR2" — JAMÁS regenerar el baseline (y si alguna vez hiciera falta: limpiar `api/var/cache/psalm` antes, el caché caliente corrompe la regeneración).
+- **Métodos sin consumidor de producción hasta PR2**: las clases de PR1 solo las consumen los tests hasta que PR2 las cablea. (Histórico: el análisis general de Psalm con `findUnusedCode` vigilaba `PossiblyUnusedMethod` aquí; ese gate fue retirado — PHPStan `level: max` es ahora la única autoridad de tipos y no exige baseline.)
 - **Lint siempre vía `make` desde la raíz del repo** (ejecuta dentro del contenedor dev — un entorno sin ext-bcmath voltea cs-fixer).
 - **`make app.dev` en el worktree reescribe `api/config/reference.php`** — nunca `git add -A` sin revisar; ese fichero es auto-generado y no se toca.
 - **FrankenPHP puede volcar `core.N` (~1GB) en `api/` durante test runs en contenedor** — borrar, jamás commitear.
@@ -203,7 +203,7 @@ claude-opus-4-8 (Opus 4.8, 1M context) — workflow `bmad-dev-story`.
 - Psalm: `No errors found!` (EXIT=0); las 534 issues restantes son nivel info pre-existentes.
 - PHPUnit: 748 tests, 3614 assertions, 3 skipped pre-existentes del entorno.
 - Behat: 116 escenarios / 773 pasos verdes (incluye los 52 bloques de `search.feature` SIN modificar).
-- `make php.quality`: EXIT=0 (stan, rector, cs-fixer, phpmd, phpcs, gherkin, `php.lint.doctrine`, `php.lint.error-contract`, psalm) — sin baselines nuevas.
+- `make php.quality`: EXIT=0 (stan, rector, cs-fixer, phpmd, phpcs, gherkin, `php.lint.doctrine`, `php.lint.error-contract`) — sin baselines nuevas.
 
 ### Completion Notes List
 

@@ -195,7 +195,7 @@ misma sesión. Dos bloques:
   — porque `EXPLAIN` sobre tablas diminutas de CI miente. p95 del listado
   sin regresión.
 - **Calidad**: resolución estructural (no supresión) de Sonar `php:S1448`;
-  gates `make php.stan` + `make php.psalm` + `make php.quality` (PHPMD sin
+  gates `make php.stan` + `make php.quality` (PHPMD sin
   baseline). **Regla de pureza de capa**: colaboradores deterministas
   (input → output), readonly, sin estado interno ni servicios instanciados
   dentro (el `PropertyAccess::createPropertyAccessor()` por llamada actual
@@ -391,7 +391,7 @@ código ni dependencias de terceros para el mecanismo central. Fundación que
 se conserva y sobre la que se construye: seam
 `FilterApplier`/`SearchFieldMap`/`SortFieldMap`, pipeline RFC 9457 con su
 gate, `PaginationMode`, 29 escenarios Behat, gates Make
-(`php.stan`/`php.psalm`/`php.quality`), stacks por worktree.
+(`php.stan`/`php.quality`), stacks por worktree.
 
 **Initialization Command:**
 
@@ -411,8 +411,8 @@ make worktree.create BRANCH=feat/api-keyset-pagination   # PR1 — VOs + colabor
 - **Testing Framework:** PHPUnit 13 + Behat (29 escenarios search) +
   Vitest/Playwright — infraestructura configurada.
 - **Code Organization:** DDD + Hexagonal con bounded contexts.
-- **Development Experience:** Make-first, stacks por worktree, gates de
-  calidad dobles (PHPStan + Psalm).
+- **Development Experience:** Make-first, stacks por worktree, gate de
+  calidad PHPStan `level: max` (única autoridad de tipos; Psalm solo taint).
 
 **Note:** la primera historia de implementación es PR1 de la secuencia
 vinculante del Risk Register (VOs `Cursor`/`Page`/`PaginatorConfig` +
@@ -673,7 +673,7 @@ modelo mental.
 
 ### Enforcement Guidelines
 
-**All AI Agents MUST:** `make php.stan` + `make php.psalm` por archivo y
+**All AI Agents MUST:** `make php.stan` por archivo y
 `make php.quality` al cierre; `make php.lint.error-contract` + fila en
 `api-error-contract.md` + `MarkerStatusMapContractTest` en el PR de K5;
 mantener verdes `TraceEquivalenceStabilityTest`,

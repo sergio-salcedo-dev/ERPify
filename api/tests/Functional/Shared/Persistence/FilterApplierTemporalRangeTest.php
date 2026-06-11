@@ -322,8 +322,8 @@ final class FilterApplierTemporalRangeTest extends KernelTestCase
 
     /**
      * Always rolls the transaction back, so persisted rows never leak into the shared dev
-     * database. A helper rather than a tearDown() override — rector and Psalm disagree on
-     * #[Override] for hooks with parent calls; the helper avoids the override entirely.
+     * database. A helper rather than a tearDown() override — rector strips #[Override] from
+     * hooks with parent calls; the helper avoids the override entirely.
      *
      * @param callable(): void $testBody
      */
