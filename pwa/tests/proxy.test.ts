@@ -74,7 +74,8 @@ type ProxyDecision = {
   headers?: Headers;
 };
 function runProxy(pathname: string, init?: RequestInit): ProxyDecision {
-  return proxy(fakeRequest(pathname, init)) as unknown as ProxyDecision;
+  const result: unknown = proxy(fakeRequest(pathname, init));
+  return result as ProxyDecision;
 }
 
 describe("isDevToolRoute", () => {

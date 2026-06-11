@@ -48,8 +48,11 @@ export function resolveClientKey(forwardedFor: string | null | undefined): strin
     return UNKNOWN_CLIENT_KEY;
   }
   const hops = forwardedFor.split(",");
-  const rightmost = hops[hops.length - 1]?.trim();
-  return rightmost ? rightmost : UNKNOWN_CLIENT_KEY;
+  const rightmost = hops.at(-1)?.trim();
+  if (rightmost) {
+    return rightmost;
+  }
+  return UNKNOWN_CLIENT_KEY;
 }
 
 /**
