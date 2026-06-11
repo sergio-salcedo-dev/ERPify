@@ -24,6 +24,7 @@ import {
   FlaskConical,
   Container,
   Languages,
+  ScrollText,
 } from "lucide-react";
 
 /**
@@ -190,6 +191,26 @@ export const roadmapPhases: RoadmapPhase[] = [
             note: "dateTimeProvider ya formatea por locale",
           },
           { name: "Cobertura de traducción en CI (claves faltantes fallan)" },
+        ],
+      },
+      {
+        code: "0.9",
+        name: "Audit & Activity Trail",
+        icon: ScrollText,
+        status: "in-progress",
+        priority: "high",
+        objective: "Trazabilidad completa: quién cambió qué y cuándo, consultable y exportable.",
+        boundedContext: "shared",
+        dependsOn: ["0.6"],
+        submodules: [
+          { name: "Audit table schema (domain_event)", status: "done" },
+          { name: "Audit log viewer (UI /backoffice/audit)" },
+          { name: "Filtro + búsqueda por entidad / usuario / acción" },
+          { name: "Historial de cambios por entidad (timeline)" },
+          { name: "Consultas de auditoría tenant-scoped" },
+          { name: "Política de retención + archivado" },
+          { name: "Export (CSV / PDF)" },
+          { name: "Tamper-evidence / integridad del registro" },
         ],
       },
     ],
