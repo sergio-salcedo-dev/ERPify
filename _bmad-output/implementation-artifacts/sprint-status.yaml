@@ -40,7 +40,7 @@
 # en paralelo fuera de ese emparejamiento.
 
 generated: 2026-06-10 15:27:34
-last_updated: 2026-06-11 14:00:00
+last_updated: 2026-06-11 22:00:00
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -49,8 +49,8 @@ story_location: /home/sergio-dev/Projects/ERPify/_bmad-output/implementation-art
 development_status:
   epic-1: in-progress
   1-1-kernel-keyset-puro-vos-colaboradores-deterministas-y-suites-unitarias-pr1: done
-  1-2-motor-de-busqueda-inyectable-y-repositorios-por-composicion-con-wire-intacto-pr2: in-progress
-  1-3-flip-del-contrato-api-wire-cursor-only-con-envelope-nuevo-pr3-lado-api: in-progress
-  1-4-migracion-pwa-red-behat-y-observabilidad-del-switch-pr3-lado-consumidor: in-progress
+  1-2-motor-de-busqueda-inyectable-y-repositorios-por-composicion-con-wire-intacto-pr2: done
+  1-3-flip-del-contrato-api-wire-cursor-only-con-envelope-nuevo-pr3-lado-api: done
+  1-4-migracion-pwa-red-behat-y-observabilidad-del-switch-pr3-lado-consumidor: done
   1-5-borrado-del-legado-de-paginacion-pr4: backlog
   epic-1-retrospective: optional
