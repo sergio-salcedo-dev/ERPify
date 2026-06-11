@@ -144,6 +144,14 @@ describe("ThrottledTelemetry", () => {
     expect(() => new ThrottledTelemetry(inner, -1)).toThrow(RangeError);
   });
 
+  it("rejects a non-positive maxKeys / ttlMs / sweepIntervalOps at construction", () => {
+    const inner = fakeTelemetry();
+
+    expect(() => new ThrottledTelemetry(inner, 1000, { maxKeys: 0 })).toThrow(RangeError);
+    expect(() => new ThrottledTelemetry(inner, 1000, { ttlMs: 0 })).toThrow(RangeError);
+    expect(() => new ThrottledTelemetry(inner, 1000, { sweepIntervalOps: 0 })).toThrow(RangeError);
+  });
+
   it("does not collide distinct (scope, message) tuples that would share a delimiter-joined key", () => {
     const inner = fakeTelemetry();
     const t = new ThrottledTelemetry(inner, 1000);
@@ -153,5 +161,98 @@ describe("ThrottledTelemetry", () => {
     t.warn("z", { scope: "x|y" });
 
     expect(inner.warn).toHaveBeenCalledTimes(2);
+  });
+
+  describe("bounded eviction", () => {
+    it("never retains more than maxKeys keys when distinct keys keep arriving", () => {
+      const inner = fakeTelemetry();
+      // ttlMs huge so only the size cap (not the TTL) drives eviction here.
+      const t = new ThrottledTelemetry(inner, 1000, {
+        maxKeys: 3,
+        ttlMs: 1_000_000,
+        sweepIntervalOps: 5,
+      });
+
+      for (let i = 0; i < 10; i++) {
+        t.warn(`msg-${i}`, { scope: "s" });
+      }
+
+      expect(t.size).toBe(3);
+    });
+
+    it("evicts by least-recently-seen, not by insertion order", () => {
+      const inner = fakeTelemetry();
+      // maxKeys 1 so exactly one key survives the sweep. "early" is inserted
+      // first but touched again last, so it is the most-recently-seen; a naive
+      // insertion-order (FIFO) eviction would drop it instead of "late".
+      const t = new ThrottledTelemetry(inner, 1000, {
+        maxKeys: 1,
+        ttlMs: 1_000_000,
+        sweepIntervalOps: 3,
+      });
+
+      t.warn("early", { scope: "s" }); // t=0, inserted first
+      vi.setSystemTime(100);
+      t.warn("late", { scope: "s" }); // inserted second
+      vi.setSystemTime(200);
+      t.warn("early", { scope: "s" }); // within window → suppressed, lastSeenAt bumped; 3rd op → sweep
+
+      // "early" is the most-recently-seen → survives with its suppressed tally;
+      // "late" is the least-recently-seen → evicted.
+      vi.setSystemTime(1300); // past "early"'s window → it re-emits, flushing the tally
+      t.warn("early", { scope: "s" });
+
+      expect(t.size).toBe(1);
+      expect(inner.warn).toHaveBeenLastCalledWith("early (+1 suppressed)", { scope: "s" });
+    });
+
+    it("evicts a key left untouched for longer than ttlMs", () => {
+      const inner = fakeTelemetry();
+      const t = new ThrottledTelemetry(inner, 1000, {
+        maxKeys: 1000,
+        ttlMs: 5000,
+        sweepIntervalOps: 1,
+      });
+
+      t.warn("idle", { scope: "s" }); // t=0, lastSeenAt=0
+      expect(t.size).toBe(1);
+
+      vi.setSystemTime(6000); // 6000 - 0 >= ttl
+      t.warn("other", { scope: "s" }); // any op runs a sweep → "idle" expires
+
+      expect(t.size).toBe(1); // only "other" survives
+    });
+
+    it("keeps a key alive across the ttl while it keeps being touched", () => {
+      const inner = fakeTelemetry();
+      const t = new ThrottledTelemetry(inner, 1000, {
+        maxKeys: 1000,
+        ttlMs: 5000,
+        sweepIntervalOps: 1,
+      });
+
+      t.warn("hot", { scope: "s" }); // t=0
+      for (let ts = 4000; ts <= 20000; ts += 4000) {
+        vi.setSystemTime(ts); // each touch is < ttl after the previous one
+        t.warn("hot", { scope: "s" });
+      }
+
+      expect(t.size).toBe(1); // never evicted despite total elapsed ≫ ttl
+    });
+
+    it("does not evict anything while key cardinality stays under the cap", () => {
+      const inner = fakeTelemetry();
+      const t = new ThrottledTelemetry(inner, 1000, {
+        maxKeys: 1000,
+        ttlMs: 1_000_000,
+        sweepIntervalOps: 1,
+      });
+
+      t.warn("a", { scope: "s" });
+      t.warn("b", { scope: "s" });
+      t.warn("c", { scope: "s" });
+
+      expect(t.size).toBe(3);
+    });
   });
 });
