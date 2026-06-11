@@ -3,7 +3,7 @@ Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount:
         __factory:
             Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount::create:
                 - '33333333-3333-7000-8000-000000000001'
-                - '@bank_jpmorgan_chase'
+                - '@bank_jpmorgan_chase->id'
                 - 'Globex Corporation'
                 - 'DE89370400440532013000'
                 - 'DEUTDEFFXXX'
@@ -14,6 +14,6 @@ Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount:
         __factory:
             Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount::create:
                 - '33333333-3333-7000-8000-000000000002'
-                - '@bank_of_america'
+                - '@bank_of_america->id'
                 - 'Initech LLC'
                 - 'FR1420041010050500013M02606'

@@ -6,10 +6,10 @@ namespace Erpify\Backoffice\BankAccount\Domain\Entity;
 
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
-use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountStatus;
 use Erpify\Shared\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Domain\Enum\Currency;
+use Erpify\Shared\Domain\Uuid\Uuid;
 use Erpify\Shared\Infrastructure\Validator\EnumType;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Validator\Constraints as Assert;
@@ -21,10 +21,10 @@ final class BankAccount extends AggregateRoot
 {
     private function __construct(
         string $id,
-        #[ORM\ManyToOne(targetEntity: Bank::class)]
-        #[ORM\JoinColumn(name: 'bank_id', referencedColumnName: 'id', nullable: false)]
-        #[Assert\NotNull]
-        private Bank $bank,
+        #[ORM\Column(name: 'bank_id', type: Types::GUID)]
+        #[Assert\NotBlank]
+        #[Assert\Uuid]
+        private string $bankId,
         #[ORM\Column(length: 255)]
         #[Assert\NotBlank]
         #[Assert\Length(max: 255)]
@@ -63,7 +63,7 @@ final class BankAccount extends AggregateRoot
 
     public static function create(
         string $id,
-        Bank $bank,
+        string $bankId,
         string $holderName,
         string $iban,
         ?string $bic = null,
@@ -71,9 +71,11 @@ final class BankAccount extends AggregateRoot
         Currency $currency = Currency::EUR,
         BankAccountStatus $status = BankAccountStatus::ACTIVE,
     ): self {
+        Uuid::ensure($bankId);
+
         return new self(
             $id,
-            $bank,
+            $bankId,
             $holderName,
             self::canonicalizeIban($iban),
             null === $bic ? null : \strtoupper($bic),
@@ -83,9 +85,9 @@ final class BankAccount extends AggregateRoot
         );
     }
 
-    public function getBank(): Bank
+    public function getBankId(): string
     {
-        return $this->bank;
+        return $this->bankId;
     }
 
     public function getIban(): string
