@@ -70,7 +70,9 @@ El desglose de módulos y submódulos de cada fase está en `roadmap.ts`.
 
 El mapa **granular de bounded contexts** (agregados, value objects, invariantes
 y los eventos por los que se integran) está en
-[`bounded-contexts.md`](bounded-contexts.md).
+[`bounded-contexts.md`](bounded-contexts.md). El **Media & Document System**
+(core transversal, módulo `0.10`) tiene su backlog evolutivo por capas detallado
+en [`media-document-system.md`](media-document-system.md).
 
 ## Estrategia de implementación — modelado de datos (muy importante)
 

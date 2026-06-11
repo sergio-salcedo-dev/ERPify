@@ -246,7 +246,9 @@ Dos caras del mismo núcleo compartido:
 ### Document Management (`erpify.backoffice.dms.*`)
 
 - **Responsabilidad:** documentos ligados a entidades (obra, cliente…), con
-  versionado y permisos.
+  versionado y permisos. Es la **capa de negocio (F3)** del Media & Document
+  System transversal — `Document` (agregado versionado) ≠ `MediaFile` (fichero
+  técnico). Backlog por capas: [`media-document-system.md`](media-document-system.md).
 - **Agregados/entidades:** ⬢ `Document` · `DocumentVersion` · `DocumentTemplate`
   · `AccessGrant`.
 - **Value objects:** `FileRef` (storage key + content hash, ya existe el patrón

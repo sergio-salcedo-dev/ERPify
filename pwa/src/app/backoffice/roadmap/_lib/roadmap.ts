@@ -25,6 +25,7 @@ import {
   Container,
   Languages,
   ScrollText,
+  FolderArchive,
 } from "lucide-react";
 
 /**
@@ -251,6 +252,40 @@ export const roadmapPhases: RoadmapPhase[] = [
           { name: "Política de retención + archivado" },
           { name: "Export (CSV / PDF)" },
           { name: "Tamper-evidence / integridad del registro" },
+        ],
+      },
+      {
+        code: "0.10",
+        name: "Media & Document System",
+        icon: FolderArchive,
+        status: "in-progress",
+        priority: "high",
+        objective:
+          "Centralizar la gestión de archivos (imágenes, PDFs, Excel…) desacoplada del dominio de negocio. Core transversal, no un módulo más.",
+        userNeeds: [
+          "Adjuntar y recuperar archivos (logos, fotos de obra, PDFs, facturas) desde cualquier módulo.",
+          "Reutilizar un mismo archivo en varias entidades sin duplicarlo.",
+          "Tener mis documentos de obra versionados, con estados (borrador/aprobado/archivado) e historial.",
+          "Descargas rápidas y seguras (enlaces temporales) sin depender de quién lo subió.",
+        ],
+        boundedContext: "shared",
+        submodules: [
+          {
+            name: "F0 · Diseño del modelo (MediaFile, StorageProviderInterface, MIME)",
+            status: "done",
+          },
+          {
+            name: "F1 · Storage local + upload/download por tenant",
+            status: "in-progress",
+            note: "Bank ya sube/recupera ficheros",
+          },
+          { name: "F2 · Media Library genérica (reutilización, sin duplicar, tags)" },
+          { name: "F3 · Document System (agregado Document, versionado, tipos, estados)" },
+          {
+            name: "F4 · Storage abstraction (S3/MinIO, swap por config)",
+            note: "Flysystem ya provee la abstracción; falta adapter S3/MinIO",
+          },
+          { name: "F5 · Optimización SaaS (URLs firmadas, CDN, thumbnails, OCR)" },
         ],
       },
     ],
