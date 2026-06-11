@@ -21,7 +21,7 @@ final class DoctrineBankAccountRepository extends AbstractDoctrineRepository imp
     {
         return (int) $this->createQueryBuilder('ba')
             ->select('COUNT(ba.id)')
-            ->where('IDENTITY(ba.bank) = :bankId')
+            ->where('ba.bankId = :bankId')
             ->setParameter('bankId', $bankId)
             ->getQuery()
             ->getSingleScalarResult()

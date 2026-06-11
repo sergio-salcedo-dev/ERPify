@@ -34,7 +34,7 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  *  - Every sortable TEXT column declares `COLLATE "C"` so byte-wise ordering matches the keyset
  *    oracle independently of the database's locale collation.
  *
- * These hold after migration {@see \DoctrineMigrations\Version20260610195734} (already applied).
+ * These hold after the bank migration {@see \DoctrineMigrations\Version20260527115017}.
  *
  * @internal
  */
