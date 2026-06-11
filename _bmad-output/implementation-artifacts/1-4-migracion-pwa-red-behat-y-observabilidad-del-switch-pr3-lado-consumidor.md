@@ -4,7 +4,7 @@ baseline_commit: 8b1d72899ee4484b9b75273ff49ce60ca46d3f1c
 
 # Story 1.4: Migración PWA, red Behat y observabilidad del switch (PR3, lado consumidor)
 
-Status: in-progress
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

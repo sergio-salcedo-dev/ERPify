@@ -6,7 +6,7 @@ baseline_commit: 8bfb8b7835293d5c5bb50eb7117a3f717e11bda8
 
 > **Reconciliación de alcance (D-1, 2026-06-11).** El título y los AC originales prometían "repositorios por composición" y "el envelope viejo emitido desde el motor nuevo". Por las decisiones arquitectónicas vinculantes **D-1** (PR2 = engine off-wire; PR3 = único flip observable), eso NO es lo que PR2 entrega. Esta historia se ha reescrito para que el contrato coincida con lo realmente aprobado y entregado: un engine keyset de especificación, verificado por tests directos y NO conectado al wire. El trabajo de composición de repositorios se **trasladó a la Story 1.3 (PR3)** (decisión D-1, 2026-06-11) — ver AC3 y `epics.md` (FR Coverage Map FR9/FR11/FR12 + AC de la Story 1.3).
 
-Status: in-progress
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
