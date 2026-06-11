@@ -97,6 +97,15 @@ you change anything here.
 - [ ] Migrations are reversible (`down()`); no PII/secrets seeded; no
       `DROP TABLE` outside an explicit destructive migration.
 - [ ] Messenger handlers idempotent (at-least-once delivery).
+- [ ] The health endpoints (`/api/v1/health`, `/api/v1/backoffice/health`) are
+      **consciously public and liveness-only**: static payload (status, service
+      name, server time) with no DB / Mercure / Messenger probing, no PII, no
+      versions. Anonymous access is required by the §7 smoke test and the PWA
+      dashboard health check. Two invariants: any *deep* health check
+      (dependency status) must be authenticated or internal-only — never on
+      these routes — and when an API firewall lands, these two paths need an
+      explicit `PUBLIC_ACCESS` exemption. Tracked in
+      [#222](https://github.com/sergio-salcedo-dev/ERPify/issues/222).
 
 ## 7. Deploy & verify
 
