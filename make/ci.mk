@@ -10,6 +10,6 @@ ci: ci.quality ci.test ## Full CI (lint + test)
 
 ci.api: php.quality php.test ## API only: lint + tests
 
-ci.pwa: pwa.lint pwa.test.unit pwa.production.build ## PWA only: lint + unit + build (no E2E)
+ci.pwa: pwa.lint pwa.typecheck pwa.test.unit pwa.production.build ## PWA only: lint + typecheck + unit + build (no E2E)
 
 .PHONY: ci ci.quality ci.test ci.api ci.pwa
