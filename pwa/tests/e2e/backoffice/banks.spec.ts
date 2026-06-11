@@ -829,7 +829,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       await expect(page.locator("tbody tr")).toHaveCount(60);
     });
 
-    test("offers 25, 50, 100, 500, and 1000 in the page-size dropdown", async ({ page }) => {
+    test("offers 25, 50, and 100 in the page-size dropdown (all <= wire cap)", async ({ page }) => {
       await mockBanksApi(page, { list: "happy", list_banks: makeBanks(30) });
       await page.goto("/backoffice/banks");
 
@@ -842,10 +842,12 @@ test.describe("BackOffice - Banks CRUD", () => {
       const optionValues = await select.evaluate((node) =>
         Array.from((node as HTMLSelectElement).options).map((option) => option.value),
       );
-      expect(optionValues).toEqual(["25", "50", "100", "500", "1000"]);
+      // Cursor-only (D-Cap): the former 500/1000 were dropped — every option is
+      // <= WIRE_MAX_LIMIT (100), so the UI can never request a page the API caps.
+      expect(optionValues).toEqual(["25", "50", "100"]);
 
       // Sanity-check selecting each value still applies and resets to the first page.
-      for (const v of ["25", "50", "100", "500", "1000"]) {
+      for (const v of ["25", "50", "100"]) {
         await select.selectOption(v);
         await expect(select).toHaveValue(v);
       }

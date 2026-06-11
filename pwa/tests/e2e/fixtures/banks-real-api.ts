@@ -45,10 +45,10 @@ export async function createApiContext(): Promise<APIRequestContext> {
 
 /**
  * Run-scoped prefix used for every bank created by an E2E test. The list
- * filter is client-side and the API page size is large (1000), so seeded
- * rows always come back in the first response and a substring filter on
- * this prefix narrows the UI to test-owned data without touching whatever
- * banks the dev DB happens to hold.
+ * filter is server-driven (sent as `filters[]`), so a substring filter on
+ * this unique prefix narrows the API result to test-owned data without
+ * touching whatever banks the dev DB happens to hold — independent of the
+ * cursor page size (<= 100, D-Cap).
  */
 export function uniqueRunPrefix(label: string): string {
   const random = randomBytes(4).toString("hex");
