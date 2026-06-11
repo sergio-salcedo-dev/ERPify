@@ -168,6 +168,21 @@ Feature: Search banks
     And the JSON node "type" should be equal to "invalid-cursor"
     And 0 requests got executed across all doctrine connections
 
+  # Fingerprint contract: a cursor is valid only against the exact canonical chain that minted it
+  # (tenant|entity|filters|sort.field|sort.direction|limit) — not just its own bytes. A pristine
+  # cursor followed under a different allow-listed sort is therefore the SAME indistinguishable
+  # 422 invalid-cursor as tampering, never a silent degradation onto the new sort. The single
+  # executed query is the first page's: the mismatching follow runs no SQL.
+  Scenario: A valid cursor followed under a different sort is rejected as 422 invalid-cursor
+    Given I send a "GET" request to "/backoffice/banks?sort=name&direction=ASC&limit=5"
+    And the response status code should be 200
+    And the JSON node "pagination.links.next" should not be null
+    When I follow the "pagination.links.next" link from the previous response overriding the "sort" query param with "createdAt"
+    Then the response status code should be 422
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the JSON node "type" should be equal to "invalid-cursor"
+    And 1 request got executed only for doctrine connection "default"
+
   # W7 / fix #3: navigating before into a logical gap (rows deleted under the cursor) is not an error.
   # The empty page is forward-recoverable only — hasNext=true with a minted recovery link (W10), and
   # hasPrev=false with links.prev=null, since nothing remains before the gap. Mirror of the engine's

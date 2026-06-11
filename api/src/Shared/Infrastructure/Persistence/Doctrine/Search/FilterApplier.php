@@ -240,9 +240,10 @@ final readonly class FilterApplier
 
     /**
      * Strict single-format parse: returns the datetime only when the value matches the format
-     * exactly (no trailing data, no warnings) and carries a real-world UTC offset. A value with
-     * a null byte makes `createFromFormat` throw a `ValueError`; that is client input too, so it
-     * is caught and reported as a 400 rather than escaping as an engine 500.
+     * exactly (no trailing data, no warnings, byte-identical round-trip) and carries a
+     * real-world UTC offset. A value with a null byte makes `createFromFormat` throw a
+     * `ValueError`; that is client input too, so it is caught and reported as a 400 rather
+     * than escaping as an engine 500.
      */
     private function parseStrict(string $format, string $value): ?DateTimeImmutable
     {
@@ -267,7 +268,29 @@ final readonly class FilterApplier
             return null;
         }
 
+        if (!$this->isCanonicalUnder($dateTime, $format, $value)) {
+            return null;
+        }
+
         return $dateTime;
+    }
+
+    /**
+     * Round-trip gate: the value is canonical under `$format` only if formatting the parsed
+     * instant reproduces it byte-identically. `createFromFormat()` tolerates non-canonical
+     * digit widths (e.g. a single-digit month) without raising a warning, and
+     * `getLastErrors()` reads global state that any adjacent datetime call may clobber —
+     * correctness here must depend on neither. UTC has two canonical spellings: `P` parses
+     * both but only emits `+00:00`, while `p` emits the literal `Z` a JS toISOString()
+     * client sends — so the round-trip accepts either spelling of the same instant.
+     */
+    private function isCanonicalUnder(DateTimeImmutable $dateTime, string $format, string $value): bool
+    {
+        if ($dateTime->format($format) === $value) {
+            return true;
+        }
+
+        return $dateTime->format(\str_replace('P', 'p', $format)) === $value;
     }
 
     /**

@@ -10,6 +10,9 @@ import type { BankRealtimeHandlers } from "@/context/backoffice/bank/infrastruct
 
 type RunStub = { run: ReturnType<typeof vi.fn> };
 
+/** Stub shape for the cursor-only `BankSearchNavigator` port (`follow(link)`). */
+type FollowStub = { follow: ReturnType<typeof vi.fn> };
+
 /**
  * `next/navigation` mock. Pass captured spies to assert on navigation; omitted
  * entries default to throwaway spies.
@@ -30,7 +33,7 @@ export function routerMock(
  * DI container mock that resolves the given tokens to their use-case stubs and
  * throws on anything unexpected — mirroring the real container's behaviour.
  */
-export function containerMock(handlers: Record<string, RunStub>) {
+export function containerMock(handlers: Record<string, RunStub | FollowStub>) {
   return {
     container: {
       get: (token: string) => {
