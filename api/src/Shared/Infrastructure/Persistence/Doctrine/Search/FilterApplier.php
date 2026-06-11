@@ -24,8 +24,8 @@ use ValueError;
  * Translates domain {@see Filters} into `andWhere` conditions with bound parameters, governed
  * by the repository's mandatory {@see SearchFieldMap} allow-list — the required parameter makes
  * it impossible to filter without one. Only conditions are added here: pagination, ordering,
- * joins and COUNT remain the monopoly of the Paginator and each repository's
- * `getSearchQueryBuilder()`.
+ * joins and COUNT remain the monopoly of the {@see DoctrineSearchEngine} and each repository's
+ * base query builder.
  *
  * Client input is never interpolated into DQL: the only interpolated fragments are the map's
  * `dqlPath` (repository-authored) and the generated parameter name; values always travel as
@@ -336,11 +336,11 @@ final readonly class FilterApplier
 
     private function uniqueParameterName(QueryBuilder $queryBuilder): string
     {
-        // Same stable naming scheme as AbstractDoctrineRepository::generateUniqueParameterName
-        // (private there; the applier is not a repository): deriving the name from the current
-        // DQL + parameter count keeps it consistent across requests so Doctrine reuses SQL
-        // cache files instead of minting ever-new ones. xxh128 is a fast non-cryptographic
-        // digest — it never guards a secret.
+        // A generated parameter name must be STABLE across executions of the same logical query:
+        // deriving it from the current DQL + parameter count keeps it consistent across requests so
+        // Doctrine reuses SQL cache files instead of minting an ever-new one per request (an unstable
+        // name grows the cache until it exhausts disk). xxh128 is a fast non-cryptographic digest —
+        // it never guards a secret.
         return 'p' . \hash('xxh128', $queryBuilder->getDQL()) . \count($queryBuilder->getParameters());
     }
 }

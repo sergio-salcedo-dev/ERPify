@@ -52,5 +52,5 @@ development_status:
   1-2-motor-de-busqueda-inyectable-y-repositorios-por-composicion-con-wire-intacto-pr2: done
   1-3-flip-del-contrato-api-wire-cursor-only-con-envelope-nuevo-pr3-lado-api: done
   1-4-migracion-pwa-red-behat-y-observabilidad-del-switch-pr3-lado-consumidor: done
-  1-5-borrado-del-legado-de-paginacion-pr4: backlog
+  1-5-borrado-del-legado-de-paginacion-pr4: done
   epic-1-retrospective: optional
