@@ -6,7 +6,6 @@ Monorepo with two deployables sharing one Compose stack: a Symfony HTTP API on F
 
 > Full command catalog, repo layout tables, "adding new code" recipes, and gotchas → [`docs/claude-code-quickref.md`](docs/claude-code-quickref.md). Run `make help` for the live target list.
 
-
 ## What to do
 
 - Every time Claude makes a mistake → you add a rule
@@ -15,10 +14,7 @@ Monorepo with two deployables sharing one Compose stack: a Symfony HTTP API on F
 
 ### Detect automation opportunities (then ask before building)
 
-Watch the user's requests and your own steps for repetition. When a pattern
-matches one of the signals below, **stop and tell the user** what you noticed,
-which automation fits, and the one-line value — then let them decide. Never
-create the skill/command/routine/hook unprompted; surface it and wait.
+Watch the user's requests and your own steps for repetition. When a pattern matches a signal below, **stop and tell the user** what you noticed, which automation fits, and the one-line value — then let them decide. Never create the skill/command/routine/hook unprompted.
 
 | Signal you notice                                                                                                            | Propose                                                                    | Why                                                                         |
 |------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------|-----------------------------------------------------------------------------|
@@ -27,11 +23,7 @@ create the skill/command/routine/hook unprompted; surface it and wait.
 | "**Every time** X happens, do Y" — a deterministic action tied to a tool event (pre/post edit, on stop, on session start)    | a **hook** in `settings.json` (use the `update-config` skill)              | The harness runs it, not me — the only way to guarantee "always".           |
 | A task that should run **on a schedule / unattended** ("check the deploy every morning", "weekly cleanup")                   | a **routine** (`/schedule` cloud agent, or `/loop` for in-session polling) | Time-based, recurring, no human in the loop.                                |
 
-Heuristics: a pattern earns an automation when I've **repeated it ≥2–3 times**,
-the steps are **stable**, and the trigger is **recognizable**. If it's a
-one-off, a guess, or still in flux, don't propose — just do the work. Prefer
-the lightest tool that fits (command < skill < hook < routine in setup cost).
-When unsure which fits, name the trade-off and let the user pick.
+A pattern earns an automation when I've **repeated it ≥2–3 times**, the steps are **stable**, and the trigger is **recognizable** — otherwise just do the work. Prefer the lightest tool that fits (command < skill < hook < routine); when unsure, name the trade-off and let the user pick.
 
 ---
 
@@ -48,7 +40,7 @@ make sf c='about'                   # Symfony console (also: make sf.cc, make sf
 make composer c='req vendor/pkg'    # Composer in container.
 make php.unit c='--filter SomeTest' # PHPUnit (also: make php.behat, make php.test).
 make php.stan                       # PHPStan — REQUIRED on every PHP file you change.
-make php.quality                       # Full PHP lint sweep — REQUIRED at end of any PHP task.
+make php.quality                    # Full PHP lint sweep — REQUIRED at end of any PHP task.
 make db.diff                        # Generate migration from entity diff (then make db.migrate).
 make pwa.dev                        # Next dev (Turbopack, host :80) — needs pwa/.env.local.
 make pwa.test                       # Vitest + Playwright (also: make pwa.test.unit/.e2e).
@@ -60,22 +52,15 @@ make ci                             # Full CI (ci.quality + ci.test).
 
 **Always start the stack with `make app.dev` or `make docker.up`.** Bare `docker compose up -d` skips composer install on cold checkouts and the `pwa.install.if-missing` guard.
 
-**Per-worktree stacks — isolated, no collision with `main`.** You can bring a worktree's stack up without touching the primary checkout's. `make/config.mk` derives `COMPOSE_PROJECT_NAME` from the checkout automatically: the primary keeps the bare `erpify` (fixed ports `80/443/15432/8025`, volumes untouched); a linked worktree under `.claude/worktrees/` gets `erpify-<dir-slug>` and, in dev, publishes host ports ephemerally (`0` → a random free port) so it never collides with `main` or other worktrees. Run `make app.dev` / `make docker.up` from inside the worktree — `make` targets then exec into *that* stack (so checks/tests see the worktree's code). Worktree stacks are driven via `docker compose exec` and the internal network (`MINK_BASE_URL`, pwa→php), not fixed host ports — so the random ports don't matter for the checks/tests a worktree runs.
+### Worktrees
 
-**Hard rule — every new feature starts in a worktree.** Never start feature work (or any multi-edit task) in the primary `main` checkout; it's a live shared surface where uncommitted/branch work can be wiped by concurrent git ops. Create the worktree *first*. The `/feature <scope> <slug>` slash command wraps the mechanics below; fixes/chores follow the same rule with their branch prefix.
+**Hard rule — every new feature (or any multi-edit task) starts in a worktree**, never in the primary `main` checkout (a live shared surface where concurrent git ops can wipe uncommitted/branch work). Create it *first*. `/feature <scope> <slug>` wraps the mechanics; fixes/chores follow the same rule with their branch prefix. Per-worktree stacks are isolated — `make/config.mk` derives `COMPOSE_PROJECT_NAME` per checkout (primary keeps bare `erpify` with fixed ports `80/443/15432/8025`; a worktree gets `erpify-<slug>` with ephemeral host ports), so they never collide. Run `make` targets from inside the worktree and they exec into *that* stack (checks/tests see the worktree's code, over the internal network — random host ports don't matter).
 
-**Creating a worktree.** `make worktree.create BRANCH=<branch>` adds a linked worktree under `.claude/worktrees/` on a *new* branch off `BASE=` (default `main`). A random 4-char suffix is appended to **both** the branch and the dir slug, so the branch, the dir, and its `erpify-<slug>` Compose project never collide — `feat/foo` and `fix/foo` can coexist, and re-running is always safe. `NAME=<dir-base>` overrides the derived dir slug (still suffixed); `START=true` also brings the new stack up via `make app.dev`, otherwise it just prints the `cd … && make app.dev` next step. The recipe also seeds the worktree's `.claude/skills/` with the `bmad-*` skills from its tracked `.agent/skills/` copy (`.claude/skills/bmad-*/` is gitignored, so a bare checkout lacks it) — `/bmad-*` slash commands work in new worktrees with no manual copy.
+- **Create** — `make worktree.create BRANCH=<branch>`: linked worktree under `.claude/worktrees/`, new branch off `BASE=` (default `main`), random 4-char suffix on branch+dir+project so re-running is always safe. `NAME=<dir-base>` overrides the dir slug; `START=true` also runs `make app.dev`. Seeds `bmad-*` skills automatically.
+- **Remove** — `make worktree.remove NAME=<dir>` (stack + volumes + worktree + branch; **local only**). `make worktree.remove-all`; `make worktree.list` for `NAME` values. `FORCE=true` discards a dirty worktree / deletes a not-fully-merged branch (squash-merged PRs look unmerged → need `FORCE=true`). On `Permission denied` (root-owned bind mounts: `pwa/.next`, `node_modules`, `api/var`) run `make worktree.chown` (sudo, dev/test) and retry.
+- **Browse a worktree UI (on demand; default is browse-from-`main`)** — `HTTPS_PORT=8443 make docker.up` from inside it (any free port ≠ main's 443; also feeds `DEFAULT_URI`/Mercure so internal URLs stay consistent). Other `*_PORT` vars work the same; `make docker.info` prints the resolved project + ports.
 
-**Tearing a worktree down.** `make worktree.remove NAME=<dir>` removes one (its isolated `erpify-<slug>` stack + volumes, the worktree, then its branch); `make worktree.remove-all` clears every linked worktree. Both are **local only** — nothing is pushed to the remote. `FORCE=true` discards a dirty worktree and deletes a not-fully-merged branch (a squash-merged branch looks unmerged to git, so the merged-PR case needs `FORCE=true`). `make worktree.list` shows the `NAME` values. Degraded states are handled too: if the worktree's dir was deleted out-of-band, the stack is torn down by project name instead; and if only the branch survived a half-finished removal, `NAME=<branch>` deletes just that branch. If removal fails with `Permission denied`, a worktree's containers wrote bind-mounted files as `root` (`pwa/.next`, `node_modules`, `api/var`, …) — run `make worktree.chown` (sudo, dev/test only; reclaims the whole `.claude/worktrees/` folder, stale dirs included) and retry.
-
-**Browsing a worktree's UI (on demand).** The default is browse-from-`main`. When you do need a worktree's UI in the browser, opt that run into a fixed, non-colliding port instead of adding any new tooling — every `*_PORT` is `?=`, so a value you pass wins over the ephemeral `0`:
-
-```bash
-HTTPS_PORT=8443 make docker.up      # from inside the worktree; pick any free port ≠ main's 443
-# then open https://localhost:8443  — HTTPS_PORT also feeds DEFAULT_URI / Mercure, so internal URLs stay consistent
-```
-
-Set additional `*_PORT` vars (`HTTP_PORT`, `MAILPIT_UI_PORT`, `POSTGRES_PORT`, …) the same way if you need those surfaces too; leave the rest ephemeral. `make docker.info` prints the resolved project + ports. Full details → [`docs/claude-code-quickref.md`](docs/claude-code-quickref.md).
+Full mechanics (ephemeral-port internals, degraded-state recovery) → [`docs/claude-code-quickref.md`](docs/claude-code-quickref.md).
 
 ---
 
@@ -93,16 +78,16 @@ Browser → FrankenPHP :80/:443 ──┬─ /api/*                 → Symfony 
 
 Full request-routing diagram and host/container trade-offs in [`docs/integration-architecture.md`](docs/integration-architecture.md).
 
-Both sides follow **DDD + Hexagonal / Clean Architecture**, with dependencies pointing inward. **Do not** import frameworks (Symfony, Doctrine, Next, Inversify, HTTP clients, ORM) inside `Domain/` — adapters go in `Infrastructure/`, orchestration in `Application/`. Documented exceptions: API domain entities may carry passive metadata attributes (`#[ORM]`, `#[Assert]`, `#[Groups]`), and `Domain/` may import `symfony/uid` as a UUID value-object library (e.g. `api/src/Shared/Domain/Uuid/Uuid.php`) — see [`docs/rules/architecture.md`](docs/rules/architecture.md). Full rule set: `docs/rules/*.md` (architecture, clean-code, database, frontend, php-standards, security, solid-principles, testing).
+Both sides follow **DDD + Hexagonal / Clean Architecture**, dependencies pointing inward. **Do not** import frameworks (Symfony, Doctrine, Next, Inversify, HTTP clients, ORM) inside `Domain/` — adapters go in `Infrastructure/`, orchestration in `Application/`. Documented exceptions: API domain entities may carry passive metadata attributes (`#[ORM]`, `#[Assert]`, `#[Groups]`), and `Domain/` may import `symfony/uid` as a UUID value-object library (e.g. `api/src/Shared/Domain/Uuid/Uuid.php`) — see [`docs/rules/architecture.md`](docs/rules/architecture.md). Full rule set: `docs/rules/*.md` (architecture, clean-code, database, frontend, php-standards, security, solid-principles, testing).
 
 ---
 
 ## Required checks
 
-- **PHP edits** → run `make php.stan` on every changed file before declaring the task done; fix anything reported. At the end, run `make php.quality` and fix anything new it reports.
-- **PWA edits** → run `make pwa.quality` at the end.
-- **HTTP error responses** → never bypass the RFC 9457 pipeline with manual `JsonResponse` error bodies. Adding a marker interface or changing its mapping requires updating [`docs/api-error-contract.md`](docs/api-error-contract.md) (NFR26). The drift gate is `make php.lint.error-contract`.
-- **Migrations** → generate via `make db.diff`. You may only edit a migration created on the current feature branch. Once merged into `main`, it is immutable — create a new migration instead.
+- **PHP edits** → `make php.stan` on every changed file before declaring done; at the end run `make php.quality`. Fix anything reported.
+- **PWA edits** → `make pwa.quality` at the end.
+- **HTTP error responses** → never bypass the RFC 9457 pipeline with manual `JsonResponse` error bodies. Adding a marker interface or changing its mapping requires updating [`docs/api-error-contract.md`](docs/api-error-contract.md) (NFR26). Drift gate: `make php.lint.error-contract`.
+- **Migrations** → generate via `make db.diff`. You may edit a migration created on the current feature branch; once merged into `main` it is immutable — create a new one instead.
 
 ---
 
@@ -118,87 +103,33 @@ Both sides follow **DDD + Hexagonal / Clean Architecture**, with dependencies po
 
 ## Security review on every change (backend AND frontend)
 
-Every PR — even a "small" one — MUST be self-reviewed for the most common
-attack classes BEFORE asking for human review and BEFORE pushing the final
-commit. This applies to both `api/` and `pwa/`. If a class doesn't apply,
-say so in the PR description; don't silently skip.
-
-For each diffed file, walk this checklist:
+Every PR — even a "small" one — MUST be self-reviewed for the common attack classes BEFORE human review and BEFORE the final commit, across both `api/` and `pwa/`. If a class doesn't apply, say so in the PR description; don't silently skip. Walk this checklist per diffed file:
 
 **Frontend (`pwa/`)**
-- **XSS** — never write `dangerouslySetInnerHTML`, `innerHTML`,
-  `document.write`, `eval`, or `new Function(string)`. Wrap every dynamic
-  `href` / `src` / `router.push` URL in `safeHref(...)` from `@/lib/safeHref`
-  and `encodeURIComponent` the dynamic path segment. Static `aria-label` /
-  `title` only — see `pwa/CLAUDE.md` for the full rule list.
-- **CSRF / Open redirect** — Validate that any URL coming from query
-  params, location state, or API payload is same-origin or relative
-  before navigating; reject `data:`, `javascript:`, `file:`, `vbscript:`.
-- **Untrusted input → DOM attributes** — explicit allowlists for
-  `target`, `rel`, `download`. External `target="_blank"` always pairs
-  with `rel="noopener noreferrer"`.
-- **Storage / clipboard** — never put secrets, JWTs, or PII into
-  `localStorage` / `sessionStorage`; use httpOnly cookies. Clipboard
-  writes go through `<CopyButton>` which never trusts the value as HTML.
-- **Headers** — confirm `next.config.ts#headers()` (CSP,
-  `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`,
-  `Permissions-Policy`, COOP/CORP, HSTS) hasn't regressed. Don't add
-  `'unsafe-eval'` to production CSP and don't widen `connect-src` /
-  `script-src` without explicit reason.
-- **Dependencies** — `npm audit` clean, no new transitive package whose
-  ownership you haven't verified.
+- **XSS** — never `dangerouslySetInnerHTML`, `innerHTML`, `document.write`, `eval`, `new Function(string)`. Wrap every dynamic `href` / `src` / `router.push` URL in `safeHref(...)` (`@/lib/safeHref`) and `encodeURIComponent` the dynamic path segment. Static `aria-label` / `title` only — full list in `pwa/CLAUDE.md`.
+- **CSRF / Open redirect** — validate any URL from query params, location state, or API payload is same-origin or relative before navigating; reject `data:`, `javascript:`, `file:`, `vbscript:`.
+- **Untrusted input → DOM attributes** — explicit allowlists for `target`, `rel`, `download`. External `target="_blank"` always pairs with `rel="noopener noreferrer"`.
+- **Storage / clipboard** — never put secrets, JWTs, or PII into `localStorage` / `sessionStorage` (use httpOnly cookies). Clipboard writes go through `<CopyButton>`, which never trusts the value as HTML.
+- **Headers** — confirm `next.config.ts#headers()` (CSP, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, COOP/CORP, HSTS) hasn't regressed. No `'unsafe-eval'` in production CSP; don't widen `connect-src` / `script-src` without explicit reason.
+- **Dependencies** — `npm audit` clean; no new transitive package whose ownership you haven't verified.
 
 **Backend (`api/`)**
-- **Injection** — every Doctrine query parameterised (`:placeholder` or
-  query builder bindings), no raw `${}`/`.$variable.` interpolation
-  reaching SQL or DQL. No `Process::fromShellCommandline($userInput)` —
-  use the array form. No `unserialize($userInput)`.
-- **Authentication / Authorization** — every new controller / handler
-  declares the security voter or `IsGranted` it expects; absence is a
-  conscious public route, called out in the PR.
-- **Input validation** — every DTO carries Symfony Validator constraints
-  (`#[Assert\…]`), enforced by `#[MapRequestPayload]` / `#[MapQueryString]`
-  at mapping time (failures → 422 `validation-failed`); other inputs
-  (uploads, non-id scalars) go through the shared `Validator::ensure()`
-  (`Shared/Application/Validation`) before any domain call. Route-id UUIDs
-  are guarded by the domain primitive `Uuid::ensure()`
-  (`Shared/Domain/Uuid/Uuid`), which throws `InvalidUuidException`
-  (400 `invalid-uuid`) before any repository lookup — a malformed id is a
-  request-target error, distinct from a valid-but-absent id (404). Validate
-  IDs are UUIDs, not arbitrary strings.
-- **Mass assignment / hidden fields** — entity setters / serializer
-  groups never expose audit fields (`createdAt`, `updatedAt`, `id`) to
-  client-supplied payloads.
-- **Output encoding / serialization** — JSON-only responses, no HTML
-  rendered server-side (no Twig templates emitting user content). Error
-  payloads follow RFC 9457 (Problem Details) without leaking stack
-  traces in non-dev environments.
-- **Secrets** — never logged, never returned, never committed. Confirm
-  `.env`/`*.local` are not in the diff. Use `APP_SECRET`,
-  `CADDY_MERCURE_JWT_SECRET`, `POSTGRES_PASSWORD` env-driven —
-  see `PRODUCTION_SECURITY_CHECKLIST.md`.
-- **CORS / CSRF / Mercure** — the allowlist hasn't broadened; the
-  Mercure JWT secret rotation policy is preserved.
-- **Migrations & data** — never seed PII or secrets; never
-  `DROP TABLE` outside an explicit destructive migration; the `down()`
-  method is reversible. Hard delete is the default — soft delete only
-  under the exceptions in [`docs/rules/database.md`](docs/rules/database.md)
-  (GDPR erasure must stay satisfiable).
-- **Domain events / Messenger** — handlers are idempotent; transports
-  authenticated; payloads scrubbed of secrets.
+- **Injection** — every Doctrine query parameterised (`:placeholder` or query-builder bindings); no raw `${}`/`.$variable.` interpolation reaching SQL/DQL. No `Process::fromShellCommandline($userInput)` (use the array form); no `unserialize($userInput)`.
+- **Authentication / Authorization** — every new controller / handler declares the security voter or `IsGranted` it expects; absence is a conscious public route, called out in the PR.
+- **Input validation** — every DTO carries `#[Assert\…]` constraints, enforced by `#[MapRequestPayload]` / `#[MapQueryString]` at mapping time (failures → 422 `validation-failed`); other inputs (uploads, non-id scalars) go through the shared `Validator::ensure()` (`Shared/Application/Validation`) before any domain call. Route-id UUIDs are guarded by `Uuid::ensure()` (`Shared/Domain/Uuid/Uuid`), throwing `InvalidUuidException` (400 `invalid-uuid`) before any repository lookup — a malformed id is a request-target error, distinct from a valid-but-absent id (404). Validate IDs are UUIDs, not arbitrary strings.
+- **Mass assignment / hidden fields** — entity setters / serializer groups never expose audit fields (`createdAt`, `updatedAt`, `id`) to client-supplied payloads.
+- **Output encoding / serialization** — JSON-only responses, no server-side HTML (no Twig emitting user content). Error payloads follow RFC 9457 without leaking stack traces outside dev.
+- **Secrets** — never logged, returned, or committed. Confirm `.env`/`*.local` are not in the diff. `APP_SECRET`, `CADDY_MERCURE_JWT_SECRET`, `POSTGRES_PASSWORD` env-driven — see `PRODUCTION_SECURITY_CHECKLIST.md`.
+- **CORS / CSRF / Mercure** — allowlist not broadened; Mercure JWT secret rotation policy preserved.
+- **Migrations & data** — never seed PII or secrets; never `DROP TABLE` outside an explicit destructive migration; `down()` is reversible. Hard delete is the default — soft delete only under the exceptions in [`docs/rules/database.md`](docs/rules/database.md) (GDPR erasure must stay satisfiable).
+- **Domain events / Messenger** — handlers idempotent; transports authenticated; payloads scrubbed of secrets.
 
 **Process**
-- Run `make php.quality` and `make pwa.quality` locally before pushing —
-  PHPStan / Psalm / ESLint catch many of the above implicitly.
-- For security-sensitive changes (auth, input parsing, file uploads,
-  SQL, headers, CSP), update `PRODUCTION_SECURITY_CHECKLIST.md` and
-  [`docs/rules/security.md`](docs/rules/security.md) if a new pattern is introduced.
-- When a finding is genuinely out of scope, file a follow-up issue
-  rather than ship-and-forget.
+- Run `make php.quality` and `make pwa.quality` locally before pushing — PHPStan / Psalm / ESLint catch many of the above implicitly.
+- For security-sensitive changes (auth, input parsing, file uploads, SQL, headers, CSP), update `PRODUCTION_SECURITY_CHECKLIST.md` and [`docs/rules/security.md`](docs/rules/security.md) if a new pattern is introduced.
+- When a finding is genuinely out of scope, file a follow-up issue rather than ship-and-forget.
 
-If you cannot answer "yes" to every applicable item, fix it in the same
-PR or call it out explicitly in the PR description and link a tracking
-issue. Silent skips are the most common path to a CVE.
+If you cannot answer "yes" to every applicable item, fix it in the same PR or call it out explicitly in the PR description and link a tracking issue. Silent skips are the most common path to a CVE.
 
 ---
 
@@ -206,9 +137,9 @@ issue. Silent skips are the most common path to a CVE.
 
 When a task decomposes into independent subtasks (different bounded contexts, different files, no shared state), spawn parallel subagents rather than working sequentially. Each subagent must receive a self-contained prompt with full context.
 
-Example: plan → subagent A (API: domain entity + Doctrine mapping + migration in `api/`) + subagent B (PWA: route + component + Inversify wiring in `pwa/`) running in parallel → verify each (`make php.stan`, `make pwa.quality`) → commit.
+Example: plan → subagent A (API: domain entity + Doctrine mapping + migration in `api/`) + subagent B (PWA: route + component + Inversify wiring in `pwa/`) in parallel → verify each (`make php.stan`, `make pwa.quality`) → commit.
 
-Do not spawn subagents for tasks that share state mid-flight — e.g. two agents editing the same migration, the same `services.yaml`, the same Inversify container module, or both touching `api/src/Shared/`.
+Do **not** spawn subagents for tasks that share state mid-flight — two agents editing the same migration, the same `services.yaml`, the same Inversify container module, or both touching `api/src/Shared/`.
 
 ---
 
@@ -217,8 +148,7 @@ Do not spawn subagents for tasks that share state mid-flight — e.g. two agents
 ### Protected `main` (hard rule for agents)
 
 - **Never force-push `main`** — no `git push --force` / `--force-with-lease` / `--force-if-includes` to `main`, ever.
-- **Never merge into `main` without explicit permission from the user** — neither a local `git merge`/`git rebase` onto `main` nor merging a PR (web UI, `gh pr merge`, MCP). Prepare the branch/PR and stop; the user decides the merge.
-- Permission is per-merge: approval for one PR/branch does not carry over to the next.
+- **Never merge into `main` without explicit per-merge permission from the user** — neither a local `git merge`/`git rebase` onto `main` nor merging a PR (web UI, `gh pr merge`, MCP). Prepare the branch/PR and stop. Approval for one PR/branch does not carry over to the next.
 
 ### Branch naming
 
@@ -242,22 +172,22 @@ Do not spawn subagents for tasks that share state mid-flight — e.g. two agents
 - `api/config/reference.php` — auto-generated.
 - `api/vendor/`, `pwa/node_modules/` — package-manager managed.
 - `api/var/` — Symfony runtime cache and logs; never commit.
-- `api/migrations/` once merged — generate new ones via `make db.diff`. Editing migrations on the current feature branch is allowed; editing applied/merged migrations is not.
+- `api/migrations/` once merged — generate new ones via `make db.diff`. Editing a migration on the current feature branch is allowed; editing an applied/merged one is not.
 
 ### bmad working artifacts
 
 Files under `_bmad-output/implementation-artifacts/` are **transient working artifacts**, not durable docs.
 
-- **Done spec → delete it.** A `spec-*.md` is a quick-dev design contract whose frozen intent is spent once the work ships. When its frontmatter `status:` is `done`, **remove it from the tree** — git history preserves it; the shipped tests + PR/commit carry the record. Keep specs still in progress (`Status: ready-for-dev`, etc.). Grep for the filename before deleting so no Markdown link breaks. The `/prune-done-specs` slash command sweeps them in one pass (`--dry-run` to preview).
-- **`deferred-work.md` is pending-only.** It's a live registry, not a changelog: on resolving an item, **delete its bullet** rather than annotating it "done/resuelto" inline. If the PR that resolves it also added it, restore the file to `origin/main` so the net diff is empty. (The pending registry itself was migrated to GitHub issues #194–#207.)
+- **Done spec → delete it.** A `spec-*.md` is a quick-dev design contract whose intent is spent once the work ships. When its frontmatter `status:` is `done`, remove it from the tree — git history + shipped tests + PR carry the record. Keep in-progress specs (`Status: ready-for-dev`, etc.). Grep the filename before deleting so no Markdown link breaks. `/prune-done-specs` sweeps them (`--dry-run` to preview).
+- **`deferred-work.md` is pending-only.** A live registry, not a changelog: on resolving an item, **delete its bullet** rather than annotating it "done" inline. If the resolving PR also added it, restore the file to `origin/main` so the net diff is empty. (The pending registry was migrated to GitHub issues #194–#207.)
 - Keep the live registries (`deferred-work.md`, `sprint-status.yaml`); never delete those for being "done".
 
 ### Markdown link style
 
-The repo's IDE Markdown linter rejects link targets that don't resolve to a concrete file. When writing or editing any `.md`:
+The repo's IDE Markdown linter rejects link targets that don't resolve to a concrete file. When writing/editing any `.md`:
 
-- **Link only to concrete files.** No trailing-slash directory hrefs (`[api/docs/](api/docs/)`). Pick a representative file or use inline code: `` `api/docs/` ``.
-- **Don't link to globs** like `[…](docs/rules/*.md)`. Use inline code: `` `docs/rules/*.md` ``, optionally followed by a link to one specific rule file.
+- **Link only to concrete files.** No trailing-slash directory hrefs (`[api/docs/](api/docs/)`) — pick a representative file or use inline code: `` `api/docs/` ``.
+- **Don't link to globs** like `[…](docs/rules/*.md)`. Use inline code: `` `docs/rules/*.md` ``, optionally plus a link to one specific rule file.
 
 Fix violations you spot while editing a file for another reason.
 
@@ -266,8 +196,8 @@ Fix violations you spot while editing a file for another reason.
 Update the matching file as part of any PR that changes:
 
 - **New Make targets or commands** → this file (`CLAUDE.md`), [`docs/claude-code-quickref.md`](docs/claude-code-quickref.md), the relevant `make/*.mk` module, and [`docs/development-guide-api.md`](docs/development-guide-api.md) / [`docs/development-guide-pwa.md`](docs/development-guide-pwa.md) when the workflow surface changes.
-- **New `src/` directories or renamed ones** → [`docs/claude-code-quickref.md`](docs/claude-code-quickref.md), [`docs/architecture-api.md`](docs/architecture-api.md) or [`docs/architecture-pwa.md`](docs/architecture-pwa.md), and [`docs/source-tree-analysis.md`](docs/source-tree-analysis.md).
-- **Architecture decisions** → [`docs/architecture-api.md`](docs/architecture-api.md) / [`docs/architecture-pwa.md`](docs/architecture-pwa.md), and [`docs/integration-architecture.md`](docs/integration-architecture.md) when cross-deployable.
+- **New / renamed `src/` directories** → [`docs/claude-code-quickref.md`](docs/claude-code-quickref.md), [`docs/architecture-api.md`](docs/architecture-api.md) or [`docs/architecture-pwa.md`](docs/architecture-pwa.md), and [`docs/source-tree-analysis.md`](docs/source-tree-analysis.md).
+- **Architecture decisions** → [`docs/architecture-api.md`](docs/architecture-api.md) / [`docs/architecture-pwa.md`](docs/architecture-pwa.md), plus [`docs/integration-architecture.md`](docs/integration-architecture.md) when cross-deployable.
 - **Domain events / Messenger transports** → [`docs/architecture-api.md`](docs/architecture-api.md).
 - **API endpoints, controllers, or response shapes** → `api/docs/` and [`docs/architecture-api.md`](docs/architecture-api.md).
 - **Error contract (markers, status mapping, redaction, `debug` block, per-error log line shape, `exception_category` taxonomy)** → [`docs/api-error-contract.md`](docs/api-error-contract.md). Adding a marker interface, changing its mapping, or changing the per-error log line (fields, declaration order, level tiering, `exception_category` dispatch) is mandatory here (NFR26).
