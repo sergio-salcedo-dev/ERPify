@@ -74,7 +74,7 @@ alcance funcional:
 - **Dependencias**: únicas adiciones de runtime permitidas:
   `phpstan/phpdoc-parser` + `phpdocumentor/type-resolver` (promoción
   dev → prod, requisito de `#[MapQueryString]` con arrays de DTOs).
-- **Calidad**: gates del repo — `make php.stan` + `make php.psalm` (ambos),
+- **Calidad**: gates del repo — `make php.stan`,
   `make php.quality` completo, Behat extendido; PHPMD sin baseline.
 
 **Scale & Complexity:**
@@ -114,8 +114,8 @@ alcance funcional:
   (patrón nuevo + receta "añadir lista filtrable"), `api/docs/` (forma del
   endpoint), `docs/api-error-contract.md` (marker), `pwa/docs/` +
   `docs/architecture-pwa.md` (builder, fase 2).
-- **Doble análisis estático** (PHPStan + Psalm con discrepancias conocidas) y
-  PHPMD sin baseline: afecta a cómo se escriben fixtures y tests.
+- **Análisis estático** PHPStan `level: max` (única autoridad de tipos; el análisis
+  general de Psalm fue retirado, solo queda taint) y PHPMD sin baseline: afecta a cómo se escriben fixtures y tests.
 - **Tensión YAGNI vs tolerancia al cambio**: diseño admite operadores futuros
   (`NEQ/GT/GTE/LT/LTE/NOT_IN/IS_NULL`) y OR/grupos, pero solo se implementa
   lo consumido; OR requiere decisión arquitectónica explícita.
@@ -181,7 +181,7 @@ infraestructura ya configurada.
 — las piezas nuevas se ubican siguiendo este patrón.
 
 **Development Experience:** Make-first desde repo root, stacks por worktree,
-gates `php.stan`/`php.psalm`/`php.quality`/`pwa.quality`.
+gates `php.stan`/`php.quality`/`pwa.quality`.
 
 **Note:** No hay historia de inicialización de proyecto; la primera historia
 de implementación es la fase 0 del roadmap (núcleo sin cambio de contrato).
@@ -298,7 +298,7 @@ alteraciones de build:
   versiones las ya locked en `api/composer.lock`; requisito runtime de
   `#[MapQueryString]` con arrays de DTOs anidados (verificado contra doc
   Symfony 8.1 en el research).
-- Gates existentes sin cambios: `make php.stan` + `make php.psalm` +
+- Gates existentes sin cambios: `make php.stan` +
   `make php.quality` + Behat; `make pwa.quality` + Vitest en fase 2.
 
 ### Decision Impact Analysis
@@ -436,7 +436,7 @@ divergir implementando ESTE mecanismo: **8 áreas críticas**.
 
 **All AI Agents MUST:**
 
-- Pasar `make php.stan` Y `make php.psalm` por archivo tocado;
+- Pasar `make php.stan` por archivo tocado;
   `make php.quality` completo al final (PHPMD sin baseline).
 - Pasar `make php.lint.error-contract` tras tocar el marker (D3) y
   actualizar `docs/api-error-contract.md` + `MarkerStatusMapContractTest`
@@ -673,7 +673,7 @@ en rutas de búsqueda.
 
 - Un PR por fase (fases 0 y 1 pueden compartir si el tamaño lo permite);
   rama por worktree: `make worktree.create BRANCH=feat/shared-search-filters`.
-- Gates por fase: `make php.stan` + `make php.psalm` por archivo, `make
+- Gates por fase: `make php.stan` por archivo, `make
   php.quality` + `make php.behat` al cierre; fase 0/1 además
   `make php.lint.error-contract`. Fase 2: `make pwa.quality` + `make pwa.test`.
 - Cierre de la decisión del research: retirar `php-criteria-main/` del
@@ -698,10 +698,10 @@ piezas (`FieldNormalizer` infra → `NormalizedText` domain; VOs sin imports).
 Naming, capas de validación, normalización y enforcement (step 5) soportan
 las decisiones sin contradicción. La convención sin-sufijo de excepciones
 queda fijada explícitamente como precedente, resolviendo la inconsistencia
-preexistente del repo. Riesgo conocido asumido: el union
-`string|list<string>` de `FilterQuery::value` puede provocar discrepancias
-PHPStan↔Psalm (precedente documentado en memoria del proyecto) — mitigado
-por el gate doble obligatorio.
+preexistente del repo. Nota: el union `string|list<string>` de
+`FilterQuery::value` solía provocar discrepancias PHPStan↔Psalm; ese riesgo
+desapareció al retirar el análisis general de Psalm — PHPStan `level: max` es
+ahora el único gate de tipos.
 
 **Structure Alignment:**
 El árbol delta (step 6) materializa cada decisión en rutas verificadas

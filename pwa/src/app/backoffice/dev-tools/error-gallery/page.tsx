@@ -1,4 +1,4 @@
-// Visual inventory of every PWA error surface, linked from `/dev-tools`.
+// Visual inventory of every PWA error surface, linked from `/backoffice/dev-tools`.
 // Hidden from production via `isDevToolsAvailable()` (same gating model as
 // the parent dev-tools hub and the `/dev-throw` fixture) — `notFound()`
 // kicks in for any production user that types the URL by hand.
@@ -221,8 +221,8 @@ export default function DevErrorGalleryPage() {
   }
 
   return (
-    <div className="error-gallery bg-background min-h-screen" data-testid="error-gallery">
-      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+    <div className="error-gallery" data-testid="error-gallery">
+      <div className="mx-auto max-w-5xl py-4 sm:py-8">
         <header className="error-gallery__header border-warning/40 bg-warning/10 mb-8 rounded-md border p-4 sm:p-5">
           <p className="text-warning-strong text-xs font-semibold tracking-wider uppercase">
             Dev / test only · linked from{" "}
@@ -336,15 +336,7 @@ export default function DevErrorGalleryPage() {
             className="text-primary underline-offset-4 hover:underline"
             data-testid="error-gallery__footer-home"
           >
-            Home
-          </Link>{" "}
-          ·{" "}
-          <Link
-            href={Routes.BACKOFFICE}
-            className="text-primary underline-offset-4 hover:underline"
-            data-testid="error-gallery__footer-backoffice"
-          >
-            BackOffice
+            Home (FrontOffice)
           </Link>
         </footer>
       </div>

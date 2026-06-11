@@ -39,32 +39,22 @@ New bounded contexts/modules follow the same three-layer split. Cross-context ca
 
 ## Rules that bite
 
--   **Never** put Symfony services, HTTP concerns, or Messenger handlers inside `Domain/`. Entities are attribute-mapped in place (`#[ORM\…]`) under the passive-metadata exception, and `symfony/uid` is permitted in `Domain/Uuid/` as a value-object library — both documented in [`../docs/rules/architecture.md`](../docs/rules/architecture.md). Behavioral framework code stays out.
+-   **Never** put Symfony services, HTTP concerns, or Messenger handlers inside `Domain/` — behavioral framework code stays out (the passive-metadata `#[ORM\…]` and `symfony/uid` value-object exceptions are covered in "Layer rules" above and [`../docs/rules/architecture.md`](../docs/rules/architecture.md)).
 -   **Never** hand-edit a migration that has already been applied. Generate a new one with `make db.diff`.
--   **Don't skip** `make php.quality` locally — CI runs it and the fixers (`cs-fixer`, `psalm.fix.*`) mutate files, so running them first keeps diffs clean.
--   **Clear `var/cache/psalm` before regenerating the psalm baseline.** A warm psalm cache makes `make php.psalm.baseline` miss `findUnusedCode` findings, so the regenerated `tools/psalm/psalm-baseline.xml` comes out incomplete — green locally, red on CI. Clear the cache, run `make php.psalm.baseline`, then re-run `make php.quality` (cache cleared again) and confirm `EXIT=0`; the baseline diff vs `origin/main` should be only the intended entries. Framework-instantiated DTOs/commands mapped by `#[MapRequestPayload]` / `#[MapQueryString]` are the usual `PossiblyUnusedMethod` source — baseline them or give them an explicit `new` caller.
+-   **Don't skip** `make php.quality` locally — CI runs it and the fixers (`cs-fixer`, `rector`) mutate files, so running them first keeps diffs clean.
+-   **PHPStan (`level: max`) is the sole type-checking gate.** Psalm's general analysis was retired (the redundant second type-checker disagreed with PHPStan, and its `--alter` auto-fix / ~492-issue baseline were pure friction). Psalm now runs **taint-only** via `make php.psalm.taint` (security dataflow → SARIF, its own `api-taint` CI job, config `tools/psalm/psalm-taint.xml`). There is no general psalm config or baseline anymore.
+-   **PostgreSQL Migrations:**
+    -   Use `CONCURRENTLY` for indices in prod (requires `isTransactional() => false`) to avoid blocking writes.
+    -   Use `IF [NOT] EXISTS` for idempotency and resilient rollbacks.
+    -   Review lock impact of non-concurrent operations (e.g., `ALTER TABLE`).
+    -   Always verify migrations in staging before production.
 -   Add async jobs via Messenger buses; don't spawn processes or inline long work in request handlers. See [`docs/architecture-api.md`](../docs/architecture-api.md) for the audit table + domain-event flow.
 -   Keep lines under 120 characters; wrap longer ones unless breaking them hurts readability (e.g. long URLs, string literals).
 -   Prod requires `APP_SECRET`, `CADDY_MERCURE_JWT_SECRET`, `POSTGRES_PASSWORD` in env — see [`../docs/deployment-guide.md`](../docs/deployment-guide.md) and [`../pwa/docs/production-deployment.md`](../pwa/docs/production-deployment.md).
 
 ## Security review (mandatory on every change)
 
-Every PR — even small fixes — runs the security checklist documented in
-the root [`../CLAUDE.md`](../CLAUDE.md) ("Security review on every change").
-For API changes specifically, walk these before pushing:
-
--   Doctrine queries are parameterised (`:placeholder` / query-builder bindings); no `${…}` interpolation reaching SQL/DQL.
--   New controllers / handlers declare a Security voter or `IsGranted`, or document why they are public.
--   Request DTOs carry `#[Assert\…]` constraints, enforced by `#[MapRequestPayload]` / `#[MapQueryString]` at mapping time (failures → 422 `validation-failed`); other inputs (uploads, non-id scalars) go through the shared `Validator::ensure()` before any domain call. Route-id UUIDs are guarded by the domain primitive `Uuid::ensure()` (`Shared/Domain/Uuid/Uuid`) → `InvalidUuidException` (400 `invalid-uuid`) before any repository lookup; a malformed id is a request-target error, distinct from a valid-but-absent id (404). Validate UUIDs are UUIDs.
--   Serializer groups never expose audit fields (`id`, `createdAt`, `updatedAt`, internal flags) to client-supplied payloads.
--   Errors follow RFC 9457 Problem Details; no stack traces or DB strings leak outside `dev`.
--   `.env*.local` and other secret files are NOT in the diff.
--   CORS / CSRF / Mercure allowlist not broadened without justification.
--   Migrations are reversible; no PII / secrets seeded; no untracked `DROP TABLE` outside an explicit destructive migration.
--   Messenger handlers are idempotent; transport auth and payload scrub preserved.
-
-If a class doesn't apply, say so in the PR description rather than silently
-skipping. Silent skips are the most common path to a CVE.
+Every PR — even small fixes — runs the checklist in the root [`../CLAUDE.md`](../CLAUDE.md) ("Security review on every change"); its **Backend (`api/`)** list is authoritative. Quick recap of what to walk before pushing: parameterised Doctrine queries (no `${…}` reaching SQL/DQL); a Security voter / `IsGranted` per new controller/handler (or a documented public route); `#[Assert\…]` DTOs via `#[MapRequestPayload]`/`#[MapQueryString]`, `Validator::ensure()` for other inputs, `Uuid::ensure()` for route ids (400 `invalid-uuid` before any lookup; absent valid id → 404); no audit fields (`id`, `createdAt`, `updatedAt`) exposed to client payloads; RFC 9457 errors with no stack-trace/DB-string leak outside `dev`; no `.env*.local`/secrets in the diff; CORS/CSRF/Mercure allowlist unbroadened; reversible, PII-free, no-untracked-`DROP TABLE` migrations; idempotent Messenger handlers. If a class doesn't apply, say so in the PR rather than silently skipping.
 
 ## Docs to consult
 

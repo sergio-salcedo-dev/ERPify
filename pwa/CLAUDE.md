@@ -1,10 +1,6 @@
 # pwa/CLAUDE.md — ERPify PWA (Next.js 16 App Router)
 
-PWA-scoped guidance. Root [`../CLAUDE.md`](../CLAUDE.md) is authoritative for monorepo conventions, the Docker stack,
-and the full `make` target list — this file only covers PWA specifics. For UX, [`DESIGN.md`](DESIGN.md) is the
-authoritative source — the **enterprise-first UX philosophy & UI review mandate**, the design-system contract
-(tokens, composites, patterns), and the accessibility non-negotiables all live there.
-Also consult [`../docs/rules/frontend.md`](../docs/rules/frontend.md).
+PWA-scoped guidance. Root [`../CLAUDE.md`](../CLAUDE.md) is authoritative for monorepo conventions, the Docker stack, and the full `make` target list — this file only covers PWA specifics. For UX, [`DESIGN.md`](DESIGN.md) is authoritative (enterprise-first UX philosophy & UI review mandate, the design-system contract — tokens, composites, patterns — and the accessibility non-negotiables). Also consult [`../docs/rules/frontend.md`](../docs/rules/frontend.md).
 
 ## Stack
 
@@ -36,30 +32,29 @@ Several homes exist for cross-cutting code; pick by **purpose**, not just "is it
 | `components/ui/`                                     | a raw **Shadcn** primitive                                                                                                                                      | `button`, `dialog`, `input`                                                                                            |
 | `src/lib/`                                           | a **pure helper or generic hook** with no domain identity                                                                                                       | `safeHref`, `useDebouncedValue`, `utils`                                                                               |
 
-Note: the back-office (token-driven Shadcn + `@/components/erpify`) and the landing/marketing surface (raw-palette + `tw-animate-css` / CSS, under `app/_components/`) are two deliberate design languages — reach for the one matching the surface you're building, don't cross-import. App-shell primitives reused by both (e.g. `Logo`) live in `@/components/erpify`. The former `context/shared/infrastructure/ui/components/` folder was retired: app-shell primitives (`Logo`, `SidebarItem`, `StatCard`) moved to `@/components/erpify`, marketing components (`Navbar`, `Footer`, `FeatureCard`) to `app/_components/`, and `PlaceholderCard` was folded into `<EmptyState>` (via its new optional `icon` prop).
+The back-office (token-driven Shadcn + `@/components/erpify`) and the landing/marketing surface (raw-palette + `tw-animate-css` / CSS, under `app/_components/`) are two deliberate design languages — use the one matching your surface, don't cross-import. App-shell primitives reused by both (e.g. `Logo`) live in `@/components/erpify`. The former `context/shared/infrastructure/ui/components/` folder was retired: app-shell primitives (`Logo`, `SidebarItem`, `StatCard`) moved to `@/components/erpify`, marketing components (`Navbar`, `Footer`, `FeatureCard`) to `app/_components/`, and `PlaceholderCard` folded into `<EmptyState>` (new optional `icon` prop).
 
 ## Make targets (run from repo root)
 
-- `make pwa.install` — `npm ci`. Auto-cleans the empty root-owned `pwa/node_modules/` that the dev compose volume leaves on the host.
-- `make pwa.install.if-missing` — guard used as a prerequisite of `make app.dev`; runs `pwa.install` only when `pwa/node_modules/` is missing or unhealthy.
+- `make pwa.install` — `npm ci`. Auto-cleans the empty root-owned `pwa/node_modules/` the dev compose volume leaves on the host.
+- `make pwa.install.if-missing` — prerequisite of `make app.dev`; runs `pwa.install` only when `pwa/node_modules/` is missing or unhealthy.
 - `make pwa.dev` — Next dev (Turbopack, host :80).
 - `make pwa.production.build` — production build.
 - `make pwa.test` = `pwa.test.unit` (Vitest) + `pwa.test.e2e` (Playwright).
-  - Single file: `make pwa.test.unit c='path/to/file.test.ts'`.
-  - Watch mode: `make pwa.test.unit.watch`. Report viewer: `make pwa.test.e2e.reports`.
+  - Single file: `make pwa.test.unit c='path/to/file.test.ts'`. Watch: `make pwa.test.unit.watch`. Report viewer: `make pwa.test.e2e.reports`.
   - E2E sharding: `CI_SHARD=N CI_TOTAL_SHARDS=M make pwa.test.e2e`.
 - `make pwa.quality` — ESLint + Prettier check. Fixers: `pwa.lint` (ESLint --fix), `pwa.format` (Prettier --write).
 - `make pwa.clean.all` — remove `node_modules`, `.next` (destructive).
-- `make pwa.chown.next` — reclaim ownership of root-owned `pwa/.next` / `.next-e2e` for the host user (sudo, dev/test only). Use this — **not** the destructive `pwa.clean.sudo` — when `make pwa.dev` fails with `EACCES … pwa/.next/trace`: a worktree/container stack wrote the bind mount as `root`, so the host Turbopack can't write `.next/trace`. It preserves the build cache.
+- `make pwa.chown.next` — reclaim ownership of root-owned `pwa/.next` / `.next-e2e` for the host user (sudo, dev/test only). Use this — **not** the destructive `pwa.clean.sudo` — when `make pwa.dev` fails with `EACCES … pwa/.next/trace` (a worktree/container stack wrote the bind mount as `root`, so host Turbopack can't write `.next/trace`). Preserves the build cache.
 
 Full-stack targets (`make app.dev`, `make docker.up`, `make docker.down`, …) live in the root `Makefile` — see root `CLAUDE.md`.
 
 ## Env
 
 - **Docker stack** (default): `NEXT_PUBLIC_API_BASE_URL=https://localhost`, `SYMFONY_INTERNAL_URL=http://php:80` (set in Compose).
-- `NEXT_PUBLIC_APP_ENV` (`dev` | `staging` | `prod`) — public, non-secret, baked at build (`pwa/Dockerfile` ARG fed from the same-named `NEXT_PUBLIC_APP_ENV` Compose build arg; set it per environment — `staging` on staging hosts enables console diagnostics, `prod` keeps them silent). Drives client telemetry verbosity; `NODE_ENV` can't distinguish staging from prod (the built image is always `production`).
-- `NEXT_PUBLIC_SENTRY_DSN` — public, non-secret (write-only, browser-embeddable Sentry ingest key), baked per environment image (`pwa/Dockerfile` ARG; `erpify-pwa-dev` DSN locally, `erpify-pwa-prod` in prod where it is **required**). Empty keeps the SDK fully inert. Events route through the same-origin `/monitoring` tunnel (so the CSP `connect-src` stays untouched). The real Sentry secret is `SENTRY_AUTH_TOKEN` (source-map upload — deferred, never `NEXT_PUBLIC_`).
-- **`NEXT_PUBLIC_*` is public by construction — allowlisted, never secret.** Next.js inlines every `process.env.NEXT_PUBLIC_FOO` literal into the browser bundle at build time, so any value behind the prefix ships to every visitor. The **only** permitted names are `NEXT_PUBLIC_API_BASE_URL`, `NEXT_PUBLIC_APP_ENV`, and `NEXT_PUBLIC_SENTRY_DSN`. Adding another is a deliberate act: register it in `ALLOWED_PUBLIC_ENV_VARS` in [`tests/next-public-env-allowlist.test.ts`](tests/next-public-env-allowlist.test.ts), add it to this table, and confirm in review it carries no secret/credential/PII. A secret never gets the prefix — read it server-side only (`SYMFONY_INTERNAL_URL` is the pattern: no `NEXT_PUBLIC_`, SSR/route-handler only). The guard test fails the build (part of `make pwa.test.unit`) if any non-allowlisted `NEXT_PUBLIC_` name appears in `src/`, the `Dockerfile`, or `.env.example`.
+- `NEXT_PUBLIC_APP_ENV` (`dev` | `staging` | `prod`) — public, non-secret, baked at build (`pwa/Dockerfile` ARG fed from the same-named Compose build arg). Drives client-telemetry verbosity; set per environment (`staging` enables console diagnostics, `prod` keeps them silent). `NODE_ENV` can't distinguish staging from prod (the built image is always `production`).
+- `NEXT_PUBLIC_SENTRY_DSN` — public, non-secret (write-only browser ingest key), baked per environment image (`pwa/Dockerfile` ARG; `erpify-pwa-dev` locally, `erpify-pwa-prod` in prod where **required**). Empty keeps the SDK inert. Events route through the same-origin `/monitoring` tunnel (CSP `connect-src` untouched). The real secret is `SENTRY_AUTH_TOKEN` (source-map upload — deferred, never `NEXT_PUBLIC_`).
+- **`NEXT_PUBLIC_*` is public by construction — allowlisted, never secret.** Next.js inlines every `process.env.NEXT_PUBLIC_FOO` literal into the browser bundle at build time, so any value behind the prefix ships to every visitor. The **only** permitted names are `NEXT_PUBLIC_API_BASE_URL`, `NEXT_PUBLIC_APP_ENV`, `NEXT_PUBLIC_SENTRY_DSN`. Adding another: register it in `ALLOWED_PUBLIC_ENV_VARS` in [`tests/next-public-env-allowlist.test.ts`](tests/next-public-env-allowlist.test.ts), add it to this list, and confirm in review it carries no secret/credential/PII. Secrets are read server-side only (`SYMFONY_INTERNAL_URL` is the pattern). The guard test fails the build (part of `make pwa.test.unit`) if any non-allowlisted `NEXT_PUBLIC_` name appears in `src/`, the `Dockerfile`, or `.env.example`.
 
 ## Rules that bite
 
@@ -67,346 +62,76 @@ Full-stack targets (`make app.dev`, `make docker.up`, `make docker.down`, …) l
 - New bounded contexts follow the `domain`/`application`/`infrastructure` split — don't flatten into `src/app/` or `src/lib/`.
 - Prefer functional components + hooks; strict TS types (no `any` unless justified).
 - BEM class names — `.card__header--highlighted`, not arbitrary utility clusters that escape the component.
-- **No `maxLength` on inputs — never silently truncate typed/pasted text.** The HTML attribute cuts user input with zero feedback (a 300-char paste becomes a saved 255-char name). Declare the limit in the entity's Zod schema (`.max()`) so the user sees the same "must not exceed" error the API returns; the server validates it anyway. Enforced by an ESLint `no-restricted-syntax` ban on the `maxLength` JSX attribute in `eslint.config.mjs`.
-- **No linter-narration comments.** Never add a comment whose only purpose is to justify a construct against a lint/Sonar rule ID — e.g. `// block body avoids S6544/S3735`, `// void would trip S3735`. Make the linters pass and let the code stand; if a non-obvious pattern needs a note, state the _intent_ ("fire-and-forget", "stable callback — no cascade") and don't name rules. The only allowed rule-referencing comment is the load-bearing `// eslint-disable-next-line <rule>` directive (it actually suppresses, so it earns its place).
+- **No `maxLength` on inputs — never silently truncate typed/pasted text.** The HTML attribute cuts user input with zero feedback (a 300-char paste saved as 255). Declare the limit in the entity's Zod schema (`.max()`) so the user sees the same "must not exceed" error the API returns. Enforced by an ESLint `no-restricted-syntax` ban on the `maxLength` JSX attribute in `eslint.config.mjs`.
+- **No linter-narration comments.** Never add a comment whose only purpose is to justify a construct against a lint/Sonar rule ID (e.g. `// block body avoids S6544/S3735`). Make the linters pass and let the code stand; for a non-obvious pattern state the _intent_ ("fire-and-forget", "stable callback") without naming rules. The only allowed rule-referencing comment is the load-bearing `// eslint-disable-next-line <rule>` directive.
 
 ## Security review (mandatory on every change)
 
-Every PR — even small fixes — runs the security checklist documented in
-the root [`../CLAUDE.md`](../CLAUDE.md) ("Security review on every
-change"). The frontend-specific items below are part of that
-checklist; do not treat them as optional.
+Every PR — even small fixes — runs the checklist in the root [`../CLAUDE.md`](../CLAUDE.md) ("Security review on every change"); its **Frontend (`pwa/`)** list is authoritative. The XSS rules below are part of that checklist, not optional.
 
-## XSS prevention rules
+### XSS prevention rules
 
-React escapes JSX text by default, but the framework does **not** block
-script-bearing URL schemes and several attribute / sink categories remain
-attack surface. Treat the following as load-bearing:
+React escapes JSX text by default but does **not** block script-bearing URL schemes, and several attribute / sink categories remain attack surface. Treat as load-bearing:
 
-- **Dynamic `href` / `src`** — every URL whose value is influenced by API
-  data, route params, query strings, or user input MUST go through
-  `safeHref(value, fallback)` from `@/lib/safeHref` (rejects `javascript:`,
-  `data:`, `vbscript:`, `file:` regardless of casing or whitespace
-  obfuscation). Combine with `encodeURIComponent` on the dynamic segment
-  when inserting it into a path. Never interpolate raw API data straight
-  into an `href` template literal.
-- **`router.push` / programmatic navigation** — same rule: wrap the URL in
-  `safeHref` so a malicious `javascript:` payload cannot be navigated to.
-- **`dangerouslySetInnerHTML`** — banned outside very specific, sanitized
-  Markdown / SVG embeds. If you genuinely need it, the input MUST be
-  produced by a vetted sanitizer (e.g. DOMPurify) and reviewed; do not
-  reach for it for "richtext" or "format-as-bold" hacks.
-- **`innerHTML` / direct DOM writes / `document.write` / `eval` /
-  `new Function(string)`** — banned. Use React state instead.
-- **Attributes that don't execute scripts (`title`, `aria-label`,
-  `data-*`)** — safe to interpolate; React escapes them. Still keep
-  static `aria-label`s where row context already conveys the resource
-  name (see `BanksTable`'s actions cell).
-- **Server response headers** — the security baseline lives in
-  `next.config.ts#headers()`: a strict-ish `Content-Security-Policy`
-  (`object-src 'none'`, `frame-ancestors 'none'`, `base-uri 'self'`,
-  `form-action 'self'`, `upgrade-insecure-requests`), plus
-  `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`,
-  `Permissions-Policy`, COOP / CORP, HSTS. `script-src` keeps
-  `'unsafe-inline'` for now to support Next.js hydration; the future
-  state is a nonce-based CSP via `middleware.ts`. Do NOT add
-  `'unsafe-eval'` outside development.
-- **Clipboard / navigator APIs** — `CopyButton` is the canonical path;
-  it never trusts the value as HTML. Don't compose your own
-  `navigator.clipboard.writeText` flows from entity components.
+- **Dynamic `href` / `src`** — every URL influenced by API data, route params, query strings, or user input MUST go through `safeHref(value, fallback)` from `@/lib/safeHref` (rejects `javascript:`, `data:`, `vbscript:`, `file:` regardless of casing/whitespace obfuscation). Combine with `encodeURIComponent` on the dynamic path segment. Never interpolate raw API data into an `href` template literal.
+- **`router.push` / programmatic navigation** — same rule: wrap the URL in `safeHref`.
+- **`dangerouslySetInnerHTML`** — banned outside specific, sanitized Markdown/SVG embeds; if genuinely needed the input MUST come from a vetted sanitizer (e.g. DOMPurify) and be reviewed. Never for "richtext"/"format-as-bold" hacks.
+- **`innerHTML` / direct DOM writes / `document.write` / `eval` / `new Function(string)`** — banned. Use React state.
+- **Non-executing attributes (`title`, `aria-label`, `data-*`)** — safe to interpolate (React escapes them). Still keep static `aria-label`s where row context conveys the resource name (see `BanksTable`'s actions cell).
+- **Server response headers** — baseline lives in `next.config.ts#headers()`: strict-ish CSP (`object-src 'none'`, `frame-ancestors 'none'`, `base-uri 'self'`, `form-action 'self'`, `upgrade-insecure-requests`), plus `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, COOP/CORP, HSTS. `script-src` keeps `'unsafe-inline'` for now (Next.js hydration); future state is a nonce-based CSP via `middleware.ts`. Do NOT add `'unsafe-eval'` outside development.
+- **Clipboard / navigator APIs** — `CopyButton` is the canonical path (never trusts the value as HTML). Don't compose your own `navigator.clipboard.writeText` flows from entity components.
 
 ## Shared building blocks (use these, don't reinvent)
 
-UI-level primitives live under `src/components/erpify/` and are exported from
-its barrel (`@/components/erpify`). Framework glue and generic hooks with no
-domain identity (e.g. `safeHref`, `useDebouncedValue`) live under `src/lib/`.
-Reach for these from every entity instead of re-implementing them locally:
+UI primitives live under `src/components/erpify/` (barrel `@/components/erpify`); pure helpers / generic hooks with no domain identity live under `src/lib/`. Reach for these from every entity instead of re-implementing. When you need a new cross-entity primitive, add it to `components/erpify/` (or `src/lib/` for a pure helper/hook) and export it from the matching barrel.
 
-- **Dates** — the `dateTimeProvider` singleton from
-  `@/context/shared/infrastructure/DateTimeProvider`, typed as the
-  `DateTimeProvider` port (never as the concrete `DateFnsDateTimeProvider`).
-  No `date-fns` / `dayjs` / `Temporal` types leak past this boundary. Render
-  `created_at` / `updated_at` (and any other ISO timestamp) via
-  `dateTimeProvider.formatIsoToLocalDateTime(iso)` — it returns the raw input back
-  on unparseable values so tables never show "Invalid Date". Use
-  `formatToDisplay(date)` / `formatToDate(date)` for `Date` objects. Never
-  call `new Date(...).toLocaleString()` directly in entity components.
-  For glanceable "2 days ago" timestamps use `dateTimeProvider.formatIsoToRelative(iso)` and pair it with the absolute value in a `title` tooltip; never compute relative time inline.
-- **Date filter inputs** — `<DateField>` from `@/components/erpify`. Renders
-  the canonical `dd/mm/yyyy` text input with the right `pattern` /
-  `inputMode` / `placeholder` / tooltip / `(dd/mm/yyyy)` label hint, and
-  pairs with `dateTimeProvider.parseDdMmYyyyToStartTimestamp` /
-  `parseDdMmYyyyToEndTimestamp` for inclusive filter bounds. For the native
-  `<DatePickerField>` (`yyyy-mm-dd`) use `parseIsoDateToStartTimestamp` /
-  `parseIsoDateToEndTimestamp` instead.
-- **Copy-to-clipboard** — `<CopyButton value={…}>` from `@/components/erpify`.
-  Handles the success / error feedback flip, the icon swap, the sr-only
-  fallback, and the async-clipboard / `execCommand` path. Never call
-  `navigator.clipboard.writeText` from an entity component directly.
-- **Tables / boundaries / sheets** — `<DataTable>`, `<AsyncBoundary>`,
-  `<RecordSheet>`, `<EmptyState>`, `<FormField>`, `<ProblemDisplay>`,
-  `<StatusBadge>`, `<CorrelationIdChip>`, `<AppShell>`.
-- **Long-text containment** — `<TruncatedText value lines testId>` from
-  `@/components/erpify`: CSS-only truncate/clamp (the full string always
-  stays in the DOM and the accessibility tree) plus a full-value tooltip
-  mounted **only when the text actually truncates** — opens on hover and on
-  keyboard focus of the enclosing row (`focusScopeSelector`, default `tr`;
-  exactly one cell per row sets `openOnRowFocus`); Esc dismisses with
-  precedence over outer Esc handlers. Built on `components/ui/tooltip.tsx`
-  (Base UI; `<TooltipProvider delay={200}>` is mounted in the back-office
-  layout) and `useIsTruncated` from `@/lib/useIsTruncated`. Never reach for
-  `title=` on truncated cells; timestamps and other non-truncating hints may
-  keep `title`.
-- **Single-line auto-grow field** — `<SingleLineTextarea>` from
-  `@/components/erpify`: an input-styled textarea that grows with its value
-  so the user can always read everything they typed; Enter submits the
-  enclosing form, pasted newlines collapse to a space, never `maxLength`
-  (limits live in the Zod schema). Use it for any long single-line domain
-  value (names, titles).
-- **List display preferences** — `<DensityToggle>` (compact 36px /
-  comfortable 44px; padding changes, type size never does) +
-  `useStoredPreference(key, fallback, isValid)` from
-  `@/lib/useStoredPreference` (hydration-safe localStorage preference:
-  SSR/first paint render the fallback, the stored value applies after
-  hydration — reading localStorage during the initial render causes React
-  hydration mismatches). The density key is shared across entity lists:
-  `LIST_DENSITY_STORAGE_KEY` from `@/components/erpify`.
-- **Error module** — every Next.js error surface (`not-found.tsx`,
-  `error.tsx`, `global-error.tsx`, the Next 15+ `forbidden.tsx` /
-  `unauthorized.tsx` convention files, plus the navigable
-  `/maintenance`, `/rate-limited`, `/offline`, `/unauthorized`,
-  `/unauthenticated` routes inside the `app/(errors)/` route group)
-  composes a single bounded module:
-  - `src/context/shared/error/domain/IconTone.ts` — pure domain types
-    (`IconTone` constant + type).
-  - `src/context/shared/error/infrastructure/ui/ErrorScreen.tsx` —
-    responsive shell. Tune mobile / tablet / laptop / desktop / large
-    breakpoints here, once.
-  - `src/context/shared/error/infrastructure/ui/ErrorActions.tsx` —
-    Client Component that renders the canonical 2-button row (primary
-    `Home` outside `Routes.BACKOFFICE`, primary `Return to BackOffice`
-    inside it; secondary `Go back` via `router.back()` with a fallback
-    to the primary destination when there is no history).
-  - One Screen / Boundary component per surface lives in the same
-    `infrastructure/ui/` folder: `<NotFoundScreen>`,
-    `<AccessDeniedScreen>` (HTTP 403), `<SignInRequiredScreen>` (HTTP
-    401), `<SegmentErrorBoundary>` (HTTP 500), `<RootErrorBoundary>`
-    (root-layout crash). The Next convention files at
-    `app/{error,forbidden,global-error,not-found,unauthorized}.tsx`
-    are **thin re-exports** of these — the JSX has a single source of
-    truth that's discoverable next to the rest of the module. The
-    navigable `app/(errors)/<slug>/page.tsx` routes import the same
-    Screen so a `forbidden()` boundary and `/unauthorized` look
-    identical by construction.
-  - Exported via `@/context/shared/error/infrastructure/ui`. Do NOT
-    re-export from `@/components/erpify` — keep the boundary explicit.
-  - Local-test recipes for every error surface (and how to verify
-    production redaction) live in
-    [`docs/error-pages-testing.md`](docs/error-pages-testing.md). The
-    matching automated coverage is
-    [`tests/e2e/error-pages.spec.ts`](tests/e2e/error-pages.spec.ts);
-    drive `error.tsx` deterministically via the dev-only `/dev-throw`
-    fixture at `src/app/(errors)/dev-throw/page.tsx`.
-  - The `error.tsx` / `global-error.tsx` boundaries must continue to gate
-    `error.message` behind
-    `process.env.NODE_ENV === NodeEnv.DEVELOPMENT` so production never
-    leaks stack traces.
-- **Toast notifications** — `toastNotifier` from
-  `@/context/shared/infrastructure/Notification/Toast`, typed as the
-  `ToastNotifier` port (never as the concrete `SonnerToastNotifier`). Call
-  `toastNotifier.success("…")` / `.error` / `.info` / `.warning` from any
-  client component for transient feedback; pass
-  `{ description, durationMs, id }` via `ToastOptions`. The Sonner adapter
-  (`SonnerToastNotifier` trigger +
-  `SonnerToaster` viewport) is co-located under
-  `src/context/shared/infrastructure/Notification/Toast/`; the viewport is
-  mounted once in `app/layout.tsx`. Messages are plain strings rendered as
-  escaped text — never pass HTML. To swap libraries, replace the two Sonner
-  files and the singleton; the port and call sites stay put. Future channels
-  (`Banner`/`Push`) are siblings under `domain/Notification/`.
-- **Client telemetry** — `telemetry` from
-  `@/context/shared/infrastructure/Observability`, typed as the `Telemetry`
-  port (never the concrete `ConsoleTelemetry`). Call
-  `telemetry.warn(message, { scope, cause })` / `.error(...)` for non-user-facing
-  diagnostics. The console adapter emits only in `dev`/`staging` (gated by
-  `NEXT_PUBLIC_APP_ENV`) and is silent in `prod`. The **Sentry adapter**
-  (`SentryTelemetry`) is added behind the same port via `createTelemetry()`
-  whenever `NEXT_PUBLIC_SENTRY_DSN` is set, fanned out alongside the console by
-  `CompositeTelemetry` (Datadog will slot in as one more entry). The singleton
-  wraps the composite in `ThrottledTelemetry`, so a flood of identical
-  diagnostics (same level + scope + message) coalesces to one emit per window (a
-  `(+N suppressed)` suffix reports the tally) before reaching ANY sink — no need
-  to rate-limit at call sites. `cause` may carry PII: the console adapter
-  forwards it as-is (local), but the Sentry adapter serializes + scrubs it via
-  `serializeCause` (denylist parity with the API), and the SDK's `beforeSend`
-  (`scrubSentryEvent`) scrubs every event with `sendDefaultPii: false`. Realtime hooks route
-  through it via `useMercureRealtime`
-  (`@/context/shared/infrastructure/RealTime/useMercureRealtime`): supply
-  `{ topics, authorizePath, parse, onEvent, scope }` and authorize + subscribe +
-  reconnect-reauth + failure telemetry are handled for you (see `useBankRealtime`
-  for the canonical wiring). The Next.js error boundaries
-  (`SegmentErrorBoundary` / `RootErrorBoundary`) also report through it via
-  `telemetry.error` (scopes `error:segment` / `error:root`) instead of a bare
-  `console.error`, so prod stays silent on the console while the Sentry sink
-  captures them (the SDK's own global handlers can't see boundary-swallowed
-  render errors); this is independent of the browser redaction that keeps
-  `error.message` out of the prod DOM. Messages are plain strings; never pass
-  secrets/PII in `cause`. **Scope tags** follow a `<surface>:<detail>` convention —
-  never hand-write the literal. Build them with `telemetryScope(surface, detail)` /
-  `realtimeScope(detail)` / `apiScope(detail)` from
-  `@/context/shared/domain/Observability/TelemetryScope`: `surface` is a curated
-  closed set (`TelemetrySurface` — `realtime`, `error`, `api`), `detail` is open. A new
-  entity's feed is `realtimeScope("<entity>")` (transport-agnostic, owned by that
-  context, no shared edit); a transport adapter tags itself with
-  `realtimeScope(RealtimeTransport.MERCURE)`; a backend-call diagnostic is
-  `apiScope("<endpoint-or-use-case>")` (e.g. `api:frontoffice-health`), tagged by
-  endpoint/use-case, never by the calling page. The `Telemetry` port keeps `scope?: string`
-  on purpose — it's the transport-agnostic seam; the convention is enforced at
-  construction (the builders + `useMercureRealtime`'s typed `scope`), not on the
-  port.
-- **Dev Tools module** — internal QA / engineering hub at
-  `https://localhost/dev-tools`, gated behind
-  `isDevToolsAvailable()` (`process.env.NODE_ENV !== NodeEnv.PRODUCTION`).
-  - `src/context/shared/dev-tools/domain/DevTool.ts` — `DevTool` /
-    `DevToolGroup` types.
-  - `src/context/shared/dev-tools/domain/isDevToolsAvailable.ts` —
-    central env predicate. Use it everywhere that mounts a dev/QA
-    surface (route file, navbar link, sidebar item) so the production
-    gate stays consistent.
-  - `src/context/shared/dev-tools/domain/devToolRoutes.ts` —
-    authoritative URL inventory (`/dev-tools` and its nested tools,
-    `/dev-throw`). Add a new dev URL here once and the middleware
-    matcher + the page-level guard pick it up.
-  - `src/context/shared/dev-tools/infrastructure/ui/devToolGroups.ts` —
-    authoritative registry. Adding a new tool = a new entry here; the
-    menu picks it up automatically.
-  - `src/context/shared/dev-tools/infrastructure/ui/DevToolsMenu.tsx` —
-    page UI. Re-exported from `app/dev-tools/page.tsx` (thin Next
-    binding with a `notFound()` guard).
-  - Entry points: a "Dev Tools" link in the frontoffice
-    `<Navbar>` (rendered only when `isDevToolsAvailable()`) and a
-    `Development` sidebar group with a `Dev Tools` item in
-    `BackOfficeLayoutClient.tsx`. Both disappear in production builds.
-  - **Production short-circuit** — `pwa/src/proxy.ts` (Next 16's
-    successor to `middleware.ts`) rewrites every dev-tool URL to a
-    guaranteed-unmatched path _before_ the page handler runs in
-    production, so the branded `not-found.tsx` is served and the dev
-    surface is unreachable even if a future contributor accidentally
-    drops the page-level `isDevToolsAvailable()` check. Turbopack
-    requires `config.matcher` to be a static literal, so the matcher
-    array in `proxy.ts` is hardcoded — its parity with
-    `DEV_TOOL_ROUTE_PREFIXES` is locked by
-    [`tests/proxy.test.ts`](tests/proxy.test.ts) so a forgotten entry
-    fails the build.
-- **String constants** — never compare `process.env.NODE_ENV` against
-  the literal `"development"` / `"production"` / `"test"`; use
-  `NodeEnv` from `@/context/shared/domain/types/nodeEnv`. Never hard-
-  code top-level paths (`/`, `/backoffice`) in shared infrastructure
-  code (error pages, navigation guards, fallbacks); use `Routes` from
-  `@/context/shared/domain/types/routes`. Entity-scoped paths
-  (`/backoffice/banks/${id}`) stay next to the use case that builds
-  them. Likewise never compare against the literal `"light"` /
-  `"dark"` / `"system"`; use `Theme` from
-  `@/context/shared/domain/types/theme`.
-- **Theme / dark mode** — `<ThemeToggle testId>` from
-  `@/components/erpify` cycles light → dark → system via `next-themes`
-  (`useTheme`), showing the current theme's `Sun`/`Moon`/`Monitor` icon
-  and describing the next action in `title` / `aria-label` (with an
-  `sr-only` fallback). `next-themes` adds/removes the `.dark` class on
-  `<html>` — the `globals.css` tokens do the rest (semantic colors used
-  _as text_ take the `-strong` variants in dark, e.g. `text-danger-strong`
-  — see `DESIGN.md`). It is mounted in the back-office top bar
-  (`testId="bo-layout__topbar-theme"` / mobile
-  `bo-layout__header-mobile-theme`) **and** in the frontoffice landing
-  `<Navbar>` (`testId="navbar__theme"` / mobile `navbar__theme--mobile`)
-  — the landing + `/status` are token-driven, so dark mode now covers the
-  whole surface, not just the back office. The provider is mounted once in `app/layout.tsx` via the thin
-  `"use client"` wrapper `@/lib/ThemeProvider` (`attribute="class"`,
-  `defaultTheme={Theme.SYSTEM}`, `enableSystem`,
-  `disableTransitionOnChange`) with `suppressHydrationWarning` on
-  `<html>`. The chosen theme persists under the `THEME_STORAGE_KEY`
-  (`erpify:theme`, mirroring `erpify:sidebar-open`); both the key and
-  the `Theme` constants live in `@/context/shared/domain/types/theme`.
-  Don't hand-write an anti-FOUC `<script>` — next-themes injects it
-  (covered by the existing `script-src 'unsafe-inline'` CSP).
-- **`buttonVariants` import path** — import from
-  `@/components/ui/button-variants`, never from
-  `@/components/ui/button` (the latter is `"use client"` and Next 16
-  blocks server invocations of the cva helper). Import the `Button`
-  component itself from `@/components/ui/button` as before.
-- **UUIDs** — generate every client-side identifier with `uuidV7()` from
-  `@/lib/uuidV7` (a thin wrapper over the `uuid` library). **Never call
-  `crypto.randomUUID()`** — it always returns a UUID **v4**, while the
-  whole stack is UUID **v7**: the API's persisted PKs and minted
-  `correlation-id` are v7 (its `CorrelationIdListener` strictly rejects
-  non-v7), and `ProblemDetails.instance` / `correlation-id` are typed as
-  v7. This matters wherever the UI fabricates a fallback `ProblemDetails`
-  (no response / non-ProblemDetails body). Keep the `uuid` import inside
-  `@/lib/uuidV7` only — don't scatter `import … from "uuid"` across
-  components.
-- **Form validation** — `Validator` / `ZodValidatorAdapter` / `useZodForm`
-  from `@/context/shared/infrastructure/Validation`. Each entity declares
-  its own schema in `src/context/<bounded-context>/<entity>/application/schemas/`
-  (e.g. `BankSchema.ts`) and exports a Zod schema **plus** the inferred
-  `*FormValues` type. React components consume the schema via
-  `useZodForm(schema, { defaultValues })` and the inferred type — they
-  never import `zod` or `@hookform/resolvers/zod` directly. Use the same
-  schema with `ZodValidatorAdapter` from non-React application services
-  to validate API payloads end-to-end. Match the schema's per-field
-  error messages to the strings the API returns in 422 responses so a
-  single set of UI assertions covers both client- and server-side
-  surfacing; map server `ProblemViolation`s onto RHF errors via
-  `setError(field, { type: "server", message: violation.message })`.
-
-When you need a new cross-entity primitive, add it to `components/erpify/` (or
-`src/lib/` for a pure helper or generic hook) and export it from the matching
-barrel.
+- **Dates** — the `dateTimeProvider` singleton from `@/context/shared/infrastructure/DateTimeProvider`, typed as the `DateTimeProvider` port (never the concrete `DateFnsDateTimeProvider`; no `date-fns`/`dayjs`/`Temporal` types leak past this boundary). Render ISO timestamps (`created_at`/`updated_at`) via `dateTimeProvider.formatIsoToLocalDateTime(iso)` (returns the raw input on unparseable values, so tables never show "Invalid Date"); `formatToDisplay(date)`/`formatToDate(date)` for `Date` objects. For "2 days ago" use `formatIsoToRelative(iso)` paired with the absolute value in a `title`. Never `new Date(...).toLocaleString()` in entity components.
+- **Date filter inputs** — `<DateField>` from `@/components/erpify`: canonical `dd/mm/yyyy` text input with the right `pattern`/`inputMode`/`placeholder`/tooltip/label hint; pairs with `dateTimeProvider.parseDdMmYyyyToStartTimestamp`/`parseDdMmYyyyToEndTimestamp` for inclusive bounds. For native `<DatePickerField>` (`yyyy-mm-dd`) use `parseIsoDateToStartTimestamp`/`parseIsoDateToEndTimestamp`.
+- **Copy-to-clipboard** — `<CopyButton value={…}>` from `@/components/erpify`: handles success/error flip, icon swap, sr-only fallback, async-clipboard / `execCommand` path. Never call `navigator.clipboard.writeText` directly.
+- **Tables / boundaries / sheets** — `<DataTable>`, `<AsyncBoundary>`, `<RecordSheet>`, `<EmptyState>`, `<FormField>`, `<ProblemDisplay>`, `<StatusBadge>`, `<CorrelationIdChip>`, `<AppShell>`.
+- **Long-text containment** — `<TruncatedText value lines testId>` from `@/components/erpify`: CSS-only truncate/clamp (full string always in the DOM + a11y tree) plus a full-value tooltip mounted **only when the text actually truncates** — opens on hover and on keyboard focus of the enclosing row (`focusScopeSelector`, default `tr`; exactly one cell per row sets `openOnRowFocus`); Esc dismisses with precedence over outer Esc handlers. Built on `components/ui/tooltip.tsx` (Base UI; `<TooltipProvider delay={200}>` mounted in the back-office layout) and `useIsTruncated` from `@/lib/useIsTruncated`. Never `title=` on truncated cells; non-truncating hints (timestamps) may keep `title`.
+- **Single-line auto-grow field** — `<SingleLineTextarea>` from `@/components/erpify`: input-styled textarea that grows with its value; Enter submits the enclosing form, pasted newlines collapse to a space, never `maxLength` (limits in the Zod schema). Use for any long single-line domain value (names, titles).
+- **List display preferences** — `<DensityToggle>` (compact 36px / comfortable 44px; padding changes, type size never does) + `useStoredPreference(key, fallback, isValid)` from `@/lib/useStoredPreference` (hydration-safe localStorage: SSR/first paint render the fallback, stored value applies after hydration — reading localStorage during initial render causes hydration mismatches). Shared density key: `LIST_DENSITY_STORAGE_KEY` from `@/components/erpify`.
+- **Error module** — every Next.js error surface (`not-found.tsx`, `error.tsx`, `global-error.tsx`, the Next 15+ `forbidden.tsx`/`unauthorized.tsx` convention files, plus the navigable `/maintenance`, `/rate-limited`, `/offline`, `/unauthorized`, `/unauthenticated` routes in `app/(errors)/`) composes one bounded module:
+  - `src/context/shared/error/domain/IconTone.ts` — pure domain types (`IconTone` constant + type).
+  - `src/context/shared/error/infrastructure/ui/ErrorScreen.tsx` — responsive shell; tune breakpoints here once.
+  - `src/context/shared/error/infrastructure/ui/ErrorActions.tsx` — Client Component rendering the canonical 2-button row (primary `Home`/`Return to BackOffice` depending on `Routes.BACKOFFICE`; secondary `Go back` via `router.back()` with a fallback when there's no history).
+  - One Screen/Boundary per surface in the same `infrastructure/ui/`: `<NotFoundScreen>`, `<AccessDeniedScreen>` (403), `<SignInRequiredScreen>` (401), `<SegmentErrorBoundary>` (500), `<RootErrorBoundary>` (root-layout crash). The Next convention files at `app/{error,forbidden,global-error,not-found,unauthorized}.tsx` are **thin re-exports** of these (single source of truth for the JSX); the navigable `app/(errors)/<slug>/page.tsx` routes import the same Screen so a `forbidden()` boundary and `/unauthorized` look identical.
+  - Exported via `@/context/shared/error/infrastructure/ui`. Do NOT re-export from `@/components/erpify` — keep the boundary explicit.
+  - Local-test recipes + production-redaction verification: [`docs/error-pages-testing.md`](docs/error-pages-testing.md); coverage: [`tests/e2e/error-pages.spec.ts`](tests/e2e/error-pages.spec.ts); drive `error.tsx` via the dev-only `/dev-throw` fixture (`src/app/(errors)/dev-throw/page.tsx`).
+  - `error.tsx`/`global-error.tsx` must keep gating `error.message` behind `process.env.NODE_ENV === NodeEnv.DEVELOPMENT` so production never leaks stack traces.
+- **Toast notifications** — `toastNotifier` from `@/context/shared/infrastructure/Notification/Toast`, typed as the `ToastNotifier` port (never the concrete `SonnerToastNotifier`). Call `.success("…")`/`.error`/`.info`/`.warning` from any client component; pass `{ description, durationMs, id }` via `ToastOptions`. Adapter (`SonnerToastNotifier` + `SonnerToaster`) co-located under the Toast folder; viewport mounted once in `app/layout.tsx`. Messages are plain strings rendered as escaped text — never HTML. To swap libraries, replace the two Sonner files + the singleton. Future channels (`Banner`/`Push`) are siblings under `domain/Notification/`.
+- **Client telemetry** — `telemetry` from `@/context/shared/infrastructure/Observability`, typed as the `Telemetry` port (never the concrete `ConsoleTelemetry`). Call `.warn(message, { scope, cause })`/`.error(...)` for non-user-facing diagnostics. The console adapter emits only in `dev`/`staging` (gated by `NEXT_PUBLIC_APP_ENV`), silent in `prod`. The **Sentry adapter** (`SentryTelemetry`) is added behind the same port via `createTelemetry()` when `NEXT_PUBLIC_SENTRY_DSN` is set, fanned out alongside the console by `CompositeTelemetry`. The singleton wraps the composite in `ThrottledTelemetry`, so a flood of identical diagnostics (same level+scope+message) coalesces to one emit per window (`(+N suppressed)` suffix) before any sink — no need to rate-limit at call sites. `cause` may carry PII: the console adapter forwards as-is (local), the Sentry adapter serializes+scrubs via `serializeCause` (denylist parity with the API), and `beforeSend` (`scrubSentryEvent`) scrubs every event with `sendDefaultPii: false`. Realtime hooks route through it via `useMercureRealtime` (`@/context/shared/infrastructure/RealTime/useMercureRealtime`): supply `{ topics, authorizePath, parse, onEvent, scope }` and authorize + subscribe + reconnect-reauth + failure telemetry are handled (see `useBankRealtime`). The Next.js boundaries (`SegmentErrorBoundary`/`RootErrorBoundary`) report through `telemetry.error` (scopes `error:segment`/`error:root`) so prod stays console-silent while Sentry captures boundary-swallowed render errors. Never pass secrets/PII in `cause`. **Scope tags** follow `<surface>:<detail>` — never hand-write the literal; build with `telemetryScope(surface, detail)` / `realtimeScope(detail)` / `apiScope(detail)` from `@/context/shared/domain/Observability/TelemetryScope` (`surface` is the curated closed set `TelemetrySurface` — `realtime`, `error`, `api`; `detail` open). An entity feed is `realtimeScope("<entity>")`; a transport adapter tags `realtimeScope(RealtimeTransport.MERCURE)`; a backend-call diagnostic is `apiScope("<endpoint-or-use-case>")` (e.g. `api:frontoffice-health`), never by the calling page. `Telemetry.scope?: string` stays open on purpose (transport-agnostic seam); the convention is enforced at construction (the builders + `useMercureRealtime`'s typed `scope`), not on the port.
+- **Dev Tools module** — internal QA/engineering hub at `https://localhost/dev-tools`, gated behind `isDevToolsAvailable()` (`process.env.NODE_ENV !== NodeEnv.PRODUCTION`):
+  - `src/context/shared/dev-tools/domain/DevTool.ts` — `DevTool`/`DevToolGroup` types.
+  - `src/context/shared/dev-tools/domain/isDevToolsAvailable.ts` — central env predicate; use everywhere that mounts a dev/QA surface (route file, navbar link, sidebar item).
+  - `src/context/shared/dev-tools/domain/devToolRoutes.ts` — authoritative URL inventory (`/dev-tools` + nested tools, `/dev-throw`); add a dev URL here once and the middleware matcher + page guard pick it up.
+  - `src/context/shared/dev-tools/infrastructure/ui/devToolGroups.ts` — authoritative registry; adding a tool = a new entry here.
+  - `src/context/shared/dev-tools/infrastructure/ui/DevToolsMenu.tsx` — page UI, re-exported from `app/dev-tools/page.tsx` (thin Next binding with a `notFound()` guard).
+  - Entry points: a "Dev Tools" link in the frontoffice `<Navbar>` and a `Development` sidebar group in `BackOfficeLayoutClient.tsx` (both rendered only when `isDevToolsAvailable()`; both disappear in production builds).
+  - **Production short-circuit** — `pwa/src/proxy.ts` (Next 16's successor to `middleware.ts`) rewrites every dev-tool URL to a guaranteed-unmatched path _before_ the page handler runs in production, so the branded `not-found.tsx` is served even if a future page-level check is dropped. Turbopack requires `config.matcher` to be a static literal, so the matcher array is hardcoded — its parity with `DEV_TOOL_ROUTE_PREFIXES` is locked by [`tests/proxy.test.ts`](tests/proxy.test.ts).
+- **String constants** — never compare `process.env.NODE_ENV` against literal `"development"`/`"production"`/`"test"`; use `NodeEnv` from `@/context/shared/domain/types/nodeEnv`. Never hard-code top-level paths (`/`, `/backoffice`) in shared infrastructure (error pages, nav guards, fallbacks); use `Routes` from `@/context/shared/domain/types/routes` (entity-scoped paths like `/backoffice/banks/${id}` stay next to the use case). Never compare against `"light"`/`"dark"`/`"system"`; use `Theme` from `@/context/shared/domain/types/theme`.
+- **Theme / dark mode** — `<ThemeToggle testId>` from `@/components/erpify` cycles light → dark → system via `next-themes` (`useTheme`), showing the current theme's `Sun`/`Moon`/`Monitor` icon and describing the next action in `title`/`aria-label` (+ `sr-only` fallback). `next-themes` toggles the `.dark` class on `<html>`; `globals.css` tokens do the rest (semantic colors used _as text_ take the `-strong` variants in dark — see `DESIGN.md`). Mounted in the back-office top bar (`testId="bo-layout__topbar-theme"` / mobile `bo-layout__header-mobile-theme`) **and** the frontoffice landing `<Navbar>` (`testId="navbar__theme"` / mobile `navbar__theme--mobile`) — landing + `/status` are token-driven so dark mode covers the whole surface. Provider mounted once in `app/layout.tsx` via the thin `"use client"` wrapper `@/lib/ThemeProvider` (`attribute="class"`, `defaultTheme={Theme.SYSTEM}`, `enableSystem`, `disableTransitionOnChange`) with `suppressHydrationWarning` on `<html>`. Persists under `THEME_STORAGE_KEY` (`erpify:theme`); key + `Theme` constants live in `@/context/shared/domain/types/theme`. Don't hand-write an anti-FOUC `<script>` — next-themes injects it (covered by the existing `script-src 'unsafe-inline'` CSP).
+- **`buttonVariants` import path** — import from `@/components/ui/button-variants`, never from `@/components/ui/button` (the latter is `"use client"` and Next 16 blocks server invocations of the cva helper). Import the `Button` component itself from `@/components/ui/button` as before.
+- **UUIDs** — `uuidV7()` from `@/lib/uuidV7` (thin wrapper over `uuid`) for every client-side id. **Never `crypto.randomUUID()`** (returns v4; the whole stack is v7 — API PKs, minted `correlation-id`, and `ProblemDetails.instance`/`correlation-id` are v7, and `CorrelationIdListener` strictly rejects non-v7). Matters most where the UI fabricates a fallback `ProblemDetails` (no response / non-ProblemDetails body). Keep the `uuid` import inside `@/lib/uuidV7` — don't scatter `import … from "uuid"`.
+- **Form validation** — `Validator`/`ZodValidatorAdapter`/`useZodForm` from `@/context/shared/infrastructure/Validation`. Each entity declares its schema in `src/context/<bounded-context>/<entity>/application/schemas/` (e.g. `BankSchema.ts`), exporting a Zod schema **plus** the inferred `*FormValues` type. Components consume it via `useZodForm(schema, { defaultValues })` + the inferred type — never importing `zod` or `@hookform/resolvers/zod` directly. Use the same schema with `ZodValidatorAdapter` from non-React services to validate API payloads end-to-end. Match per-field error messages to the API's 422 strings so one set of UI assertions covers both surfaces; map server `ProblemViolation`s onto RHF errors via `setError(field, { type: "server", message: violation.message })`.
 
 ## Test ID rules
 
-QA scripts target controls by `data-testid`. The contract is simple: **every
-static `data-testid` literal must be unique across the source tree** so that
-two elements with the same id never end up on the same page (Playwright's
-strict-mode locators fail with "more than one element matched" when they do).
+QA scripts target controls by `data-testid`. The contract: **every static `data-testid` literal must be unique across the source tree** so two elements with the same id never land on the same page (Playwright strict-mode locators fail with "more than one element matched").
 
-- Use BEM-flavoured prefixes that already match the entity / surface
-  (e.g. `banks-list__title`, `banks-detail__copy-id`,
-  `banks-pagination__next`).
-- For lists / tables, the testid MUST encode the row identity using the
-  **backend entity id** (typically a UUID) from the API — for example
-  ``data-testid={`banks-table__row-${row.id}`}`` for the row itself and
-  ``data-testid={`banks-table__edit-${row.id}`}`` /
-  ``data-testid={`banks-table__delete-${row.id}`}`` for the per-row
-  actions. The entity id is unique by construction, so the rendered DOM
-  stays unique. Do NOT emit a parallel `data-row-id` (or similar)
-  attribute — the `data-testid` is the canonical row identity for QA.
-  `<DataTable>` enforces this with its `rowTestId` prop.
-- For reusable components, **never hardcode a testid**. Accept a `testId`
-  prop and let the consumer set it (see `<DataTable testId rowTestId>`,
-  `<CopyButton testId>`, `<DateField testId>`). Hardcoding traps every
-  consumer into the same id and triggers the strict-mode failure mode.
-- The guard `tests/data-testid-uniqueness.test.ts` walks `src/` at CI time
-  and fails if a literal `data-testid="..."` appears in more than one file
-  or more than once in the same file. Do not weaken or skip it.
+- Use BEM-flavoured prefixes matching the entity/surface (e.g. `banks-list__title`, `banks-detail__copy-id`, `banks-pagination__next`).
+- For lists/tables, encode row identity with the **backend entity id** (a UUID) from the API — e.g. ``data-testid={`banks-table__row-${row.id}`}`` for the row and `banks-table__edit-${row.id}` / `banks-table__delete-${row.id}` for per-row actions. The id is unique by construction. Do NOT emit a parallel `data-row-id` — `data-testid` is the canonical row identity. `<DataTable>` enforces this with its `rowTestId` prop.
+- For reusable components, **never hardcode a testid** — accept a `testId` prop (see `<DataTable testId rowTestId>`, `<CopyButton testId>`, `<DateField testId>`). Hardcoding traps every consumer into the same id and triggers strict-mode failures.
+- The guard `tests/data-testid-uniqueness.test.ts` walks `src/` at CI time and fails if a literal `data-testid="..."` appears in more than one file or twice in the same file. Don't weaken or skip it.
 
 ## Accessibility rules for action buttons
 
-Every interactive control that triggers an action (button, anchor styled as
-button, dialog trigger, pagination control, form submit/cancel) must carry **all**
-of the following:
+Every interactive control that triggers an action (button, anchor styled as button, dialog trigger, pagination control, form submit/cancel) must carry **all** of:
 
-- `title` — descriptive hover tooltip; include the resource name when meaningful
-  (e.g. `title={\`Edit bank ${row.name}\`}`).
-- `aria-label` — keep the accessible name **short and static** (`"Edit"`,
-  `"Delete"`, `"Previous page"`). When the control lives inside a `role="cell"`
-  or `role="row"`, the cell's accessible name is computed from descendant
-  control names, so dynamic labels containing the row's text break Playwright's
-  strict-mode locators (e.g. `getByRole("cell", { name: "Acme Savings" })`
-  matches both the name cell and the actions cell). Put the dynamic part in
-  `title` instead.
-- A textual fallback for icon-only controls — either visible text, an
-  `<span className="sr-only">…</span>`, or both — so the control still has a
-  name when CSS fails to load.
+- `title` — descriptive hover tooltip; include the resource name when meaningful (e.g. `title={\`Edit bank ${row.name}\`}`).
+- `aria-label` — keep the accessible name **short and static** (`"Edit"`, `"Delete"`, `"Previous page"`). Inside a `role="cell"`/`role="row"` the cell's accessible name is computed from descendant control names, so dynamic labels containing row text break Playwright strict-mode locators (e.g. `getByRole("cell", { name: "Acme Savings" })` matches both the name cell and the actions cell) — put the dynamic part in `title` instead.
+- A textual fallback for icon-only controls — visible text and/or `<span className="sr-only">…</span>` — so the control has a name when CSS fails to load.
 - `aria-hidden="true"` on every decorative icon inside the control.
 - For pagination/navigation controls that have no valid target (no previous or
   no next page), **hide** the control instead of rendering it disabled — a
@@ -422,17 +147,4 @@ of the following:
     Hiding would drop that state. New cursor-only lists follow `BanksPagination`,
     not the hide rule above.
 
-For destructive actions also wire the user through a confirmation dialog
-(`Dialog.*` from `@/components/ui/dialog`). When the mutation fails, the
-dialog **closes itself** and the failure surfaces in a persistent
-`<MutationError>` from `@/components/erpify`, anchored to the mutation's
-origin (above the list/grid, under the detail H1, above the form) — never
-inside the dialog, and never a toast alone (the error toast is only a
-transient pointer to the persistent surface). The surface receives focus,
-stays until dismissed / replaced by a retry / cleared by a success, and lets
-the user copy the message, the `type · status` code, the correlation id, and
-the full problem JSON (in production builds the copied JSON omits `debug`,
-mirroring the render). Typed recovery actions go in its `action` slot (e.g.
-`bank-not-found` → "Refresh list"; `bank-in-use` → none). Never silently
-dismiss failures, and never synthesize problem payloads client-side. Contract:
-EXPERIENCE.md § «Errores de mutación — superficie persistente» (2026-06-04).
+For destructive actions also wire a confirmation dialog (`Dialog.*` from `@/components/ui/dialog`). When the mutation fails, the dialog **closes itself** and the failure surfaces in a persistent `<MutationError>` from `@/components/erpify`, anchored to the mutation's origin (above the list/grid, under the detail H1, above the form) — never inside the dialog, and never a toast alone (the error toast is only a transient pointer to the persistent surface). The surface receives focus, stays until dismissed / replaced by a retry / cleared by a success, and lets the user copy the message, the `type · status` code, the correlation id, and the full problem JSON (production builds omit `debug`, mirroring the render). Typed recovery actions go in its `action` slot (`bank-not-found` → "Refresh list"; `bank-in-use` → none). Never silently dismiss failures, and never synthesize problem payloads client-side. Contract: EXPERIENCE.md § «Errores de mutación — superficie persistente» (2026-06-04).

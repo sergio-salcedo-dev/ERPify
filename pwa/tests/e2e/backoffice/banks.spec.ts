@@ -1114,11 +1114,16 @@ test.describe("BackOffice - Banks CRUD", () => {
   });
 
   test.describe("nav", () => {
-    test("Banking > Banks appears in the sidebar and links to the list", async ({ page }) => {
+    test("Finance > Treasury > Banks appears in the sidebar and links to the list", async ({
+      page,
+    }) => {
       await mockBanksApi(page, { list: "empty" });
       await page.goto("/backoffice");
 
       const aside = page.locator("aside");
+      const treasuryItem = aside.getByRole("button", { name: "Treasury" });
+      await expect(treasuryItem).toBeVisible();
+      await treasuryItem.click();
       const banksItem = aside.getByRole("button", { name: "Banks" });
       await expect(banksItem).toBeVisible();
       await banksItem.click();

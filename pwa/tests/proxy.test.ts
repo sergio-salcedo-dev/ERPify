@@ -68,14 +68,14 @@ describe("isDevToolRoute", () => {
     expect(isDevToolRoute("/backoffice/banks")).toBe(false);
     expect(isDevToolRoute("/dev-tooling")).toBe(false);
     // The gallery used to live at the top-level `/dev-error-gallery`;
-    // it now nests under `/dev-tools/error-gallery`, so the old path
+    // it now nests under `/backoffice/dev-tools/error-gallery`, so the old path
     // must NOT be matched (and the proxy must not protect it).
     expect(isDevToolRoute("/dev-error-gallery")).toBe(false);
   });
 
-  it("matches the nested /dev-tools/error-gallery tool route", () => {
-    expect(isDevToolRoute("/dev-tools/error-gallery")).toBe(true);
-    expect(isDevToolRoute("/dev-tools/error-gallery/something")).toBe(true);
+  it("matches the nested /backoffice/dev-tools/error-gallery tool route", () => {
+    expect(isDevToolRoute("/backoffice/dev-tools/error-gallery")).toBe(true);
+    expect(isDevToolRoute("/backoffice/dev-tools/error-gallery/something")).toBe(true);
   });
 });
 
@@ -106,7 +106,7 @@ describe("proxy — dev-tools production short-circuit", () => {
     });
 
     it("rewrites nested dev-tool URLs as well", () => {
-      const result = runProxy("/dev-tools/anything/here");
+      const result = runProxy("/backoffice/dev-tools/anything/here");
       expect(result.kind).toBe("rewrite");
     });
 

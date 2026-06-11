@@ -53,7 +53,7 @@ This document provides the complete epic and story breakdown for ERPify, decompo
 - NFR1 (Seguridad): HMAC-SHA256 truncado 128 bits con `hash_equals`; cap de longitud pre-HMAC (512, `#[Assert]`); allow-lists de identificadores ORDER BY y parámetros bindeados intactos; fingerprint con slot de tenant; el cursor solo transporta valores de claves de ordenación de la fila frontera; nunca el cursor crudo en logs.
 - NFR2 (Contrato de errores, NFR26 del repo): las cuatro causas de invalidez (firma, fingerprint, payload, versión) producen el mismo 422 `invalid-cursor` (familia `invalid-search-criteria`), indistinguibles para el cliente. Obliga a: fila en `docs/api-error-contract.md`, `MarkerStatusMapContractTest`, `make php.lint.error-contract` verde.
 - NFR3 (Rendimiento): keyset O(1) por página independiente de la profundidad. Sortable ⇒ estabilidad de orden bajo igualdad del sort key. **Refinamiento 2026-06-10 (verificación de readiness):** el contract test prescribe la *propiedad*, no la forma física del índice — columna UNIQUE → su índice único de una columna la satisface (no hay empates posibles); columna sortable NO única → exige índice compuesto `(columna, id)`. Doble gate: (a) test de arquitectura en CI (propiedad por cada entrada de `sortFieldMap()` + `nullable: false`), (b) perf gate de staging con doble perfil (uniforme ~100k + sesgado skew 80/10). p95 del listado sin regresión.
-- NFR4 (Calidad): resolución estructural (no supresión) de Sonar `php:S1448`; gates `make php.stan` + `make php.psalm` + `make php.quality` (PHPMD sin baseline). Regla de pureza de capa: colaboradores deterministas, readonly, sin estado interno; solo `DoctrineSearchEngine` toca Doctrine. Criterio de review: ¿este test necesita el kernel?
+- NFR4 (Calidad): resolución estructural (no supresión) de Sonar `php:S1448`; gates `make php.stan` + `make php.quality` (PHPMD sin baseline). Regla de pureza de capa: colaboradores deterministas, readonly, sin estado interno; solo `DoctrineSearchEngine` toca Doctrine. Criterio de review: ¿este test necesita el kernel?
 - NFR5 (Pureza de dominio): 0 dependencias nuevas en `Domain/`; el puerto evoluciona a `Page` sin imports de framework; los arrays `firstItem`/`lastItem` del `SearchCursor` desaparecen del puerto.
 - NFR6 (Compatibilidad): cero migraciones de BD; cero dependencias Composer/npm nuevas. Breaking change del envelope coordinado con la PWA en el mismo ciclo (PR3); cursores en vuelo invalidados explícitamente (422 + `v`).
 - NFR7 (Multiempresa forward-looking): el diseño reserva el slot de tenant en el fingerprint y la posición líder en los índices compuestos para que la llegada de `company_id` (Fase H del roadmap SaaS) no fuerce un segundo rediseño.
@@ -166,7 +166,7 @@ So that el flip posterior del contrato (PR3) se apoye exclusivamente en componen
 **When** corre CI
 **Then** los escenarios Behat existentes de `search.feature` (52 bloques a 2026-06-10: 47 Scenario + 5 Outline) pasan sin modificación alguna (cero cambio de contrato wire)
 **And** las suites unitarias nuevas viven en `api/tests/Unit/…/Keyset/` sin necesitar el kernel, con object mothers `CursorMother`/`TraceMother`/`PageMother` (AR13)
-**And** `make php.stan`, `make php.psalm` y `make php.quality` quedan verdes.
+**And** `make php.stan` y `make php.quality` quedan verdes.
 
 ### Story 1.2: Motor de búsqueda keyset inyectable OFF-WIRE — engine + guard + migración + suites directas (PR2)
 
@@ -224,7 +224,7 @@ So that la corrección de la ejecución keyset quede sellada y demostrada antes 
 **Given** la suite Behat completa
 **When** corre CI
 **Then** los escenarios Behat existentes (52 bloques) pasan sin modificación: el envelope viejo se emite desde el motor nuevo (wire intacto)
-**And** `make php.stan` + `make php.psalm` + `make php.quality` verdes; docs obligatorios del PR actualizados (AR18).
+**And** `make php.stan` + `make php.quality` verdes; docs obligatorios del PR actualizados (AR18).
 
 ### Story 1.3: Flip del contrato API — wire cursor-only con envelope nuevo + repos por composición (PR3, lado API)
 
@@ -274,7 +274,7 @@ So that la navegación sea O(1) a cualquier profundidad, los enlaces sean autoco
 **Given** el entorno `dev` o `staging`
 **When** se activa la válvula `pagination_mode=legacy|cursor_v2`
 **Then** permite emitir el envelope viejo — `#[When(env)]`, inalcanzable en prod por construcción, sin tests propios (AR8/K13)
-**And** `make php.stan` + `make php.psalm` + `make php.quality` verdes; docs API obligatorios actualizados (AR18), incluyendo documentar explícitamente la no-garantía de instantánea entre páginas y la garantía que sí se da — sin duplicados ni saltos causados por la propia paginación, unicidad de ids intra-página (FR14: el "documentado" es parte del requisito).
+**And** `make php.stan` + `make php.quality` verdes; docs API obligatorios actualizados (AR18), incluyendo documentar explícitamente la no-garantía de instantánea entre páginas y la garantía que sí se da — sin duplicados ni saltos causados por la propia paginación, unicidad de ids intra-página (FR14: el "documentado" es parte del requisito).
 
 **Given** la rama con PR1 y PR2 ya integrados en `main`
 **When** se revierte el merge de PR3 (junto con Story 1.4, mismo PR)
@@ -333,7 +333,7 @@ So that quede un único kernel keyset, muera Sonar S1448 estructuralmente y el m
 **Given** el quality gate
 **When** corre el análisis
 **Then** Sonar `php:S1448` queda resuelto estructuralmente (no suprimido) y las 3 supresiones PHPMD asociadas se eliminan (NFR4)
-**And** `make php.stan` + `make php.psalm` + `make php.quality` verdes sin baselines nuevas.
+**And** `make php.stan` + `make php.quality` verdes sin baselines nuevas.
 
 **Given** la suite completa
 **When** corre CI

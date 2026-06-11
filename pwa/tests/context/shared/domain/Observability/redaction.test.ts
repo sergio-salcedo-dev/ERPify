@@ -15,14 +15,17 @@ describe("redaction denylist", () => {
       "cookie",
       "ssn",
       "iban",
+      "email",
+      "phone_number",
+      "address",
     ]);
   });
 
-  it("matches keys case-insensitively, exact (no substring)", () => {
+  it("matches keys case-insensitively (substring)", () => {
     expect(isDenylistedKey("Password")).toBe(true);
     expect(isDenylistedKey("AUTHORIZATION")).toBe(true);
     expect(isDenylistedKey("token")).toBe(true);
-    expect(isDenylistedKey("user_password")).toBe(false);
+    expect(isDenylistedKey("user_password")).toBe(true);
     expect(isDenylistedKey("name")).toBe(false);
   });
 });
@@ -71,11 +74,11 @@ describe("scrubDeep", () => {
   it("returns a sentinel when the node budget (1000) is exceeded", () => {
     const wide: Record<string, unknown> = {};
     for (let i = 0; i < 1001; i += 1) {
-      wide[`k${i}`] = { password: "p" };
+      wide[`k${i}`] = { psw: "p" }; // use a non-denylisted key so it doesn't just skip it immediately without traversing
     }
     const scrubbed = scrubDeep(wide) as Record<string, unknown>;
     // Some keys will be scrubbed, but eventually it hits the node cap.
-    expect(JSON.stringify(scrubbed)).toContain("[depth-limited]");
+    expect(JSON.stringify(scrubbed)).toContain("[node-limited]");
   });
 
   it("passes through Dates, Maps, and Sets untouched instead of destroying them", () => {

@@ -13,18 +13,20 @@ import {
   Grid3x3,
   ClipboardList,
   HardHat,
-  Briefcase,
   SquareCheckBig,
   Landmark,
   RefreshCw,
   Receipt,
   DollarSign,
   ChartPie,
+  BarChart3,
   Bot,
   Rocket,
   Package,
   Factory,
   Warehouse,
+  Handshake,
+  PackageSearch,
   Building2,
   Network,
   ShieldCheck,
@@ -80,22 +82,19 @@ const BASE = Routes.BACKOFFICE;
  */
 export const backofficeMenuGroups: NavGroup[] = [
   {
-    label: "General",
-    items: [
-      { name: "Dashboard", icon: LayoutDashboard, path: BASE },
-      { name: "Banks", icon: Building2, path: bankRoutes.list },
-    ],
+    label: "Home",
+    items: [{ name: "Dashboard", icon: LayoutDashboard, path: BASE }],
   },
   {
-    label: "Commercial",
+    label: "Sales & CRM",
     items: [
       {
-        name: "CRM",
+        name: "Customers",
         icon: Users,
         path: `${BASE}/clients`,
         subItems: [
           { name: "Clients", path: `${BASE}/clients`, icon: Users },
-          { name: "Sales Follow-ups", path: `${BASE}/follow-ups`, icon: Activity },
+          { name: "Follow-ups", path: `${BASE}/follow-ups`, icon: Activity },
         ],
       },
       {
@@ -104,17 +103,19 @@ export const backofficeMenuGroups: NavGroup[] = [
         path: `${BASE}/quotes`,
         subItems: [
           { name: "Quotes", path: `${BASE}/quotes`, icon: FileText },
-          { name: "Work Orders", path: `${BASE}/orders`, icon: ShoppingCart },
+          { name: "Sales Orders", path: `${BASE}/orders`, icon: ShoppingCart },
           { name: "Delivery Notes", path: `${BASE}/delivery-notes`, icon: Truck },
-          { name: "Dynamic Pricing", path: `${BASE}/pricing`, icon: Tag },
+          { name: "Price Lists", path: `${BASE}/pricing`, icon: Tag },
           { name: "Commissions", path: `${BASE}/commissions`, icon: Coins },
         ],
       },
     ],
   },
   {
-    label: "Operations",
+    label: "Projects",
     items: [
+      { name: "Projects", icon: HardHat, path: `${BASE}/projects` },
+      { name: "Tasks", icon: SquareCheckBig, path: `${BASE}/tasks` },
       {
         name: "Technical Office",
         icon: SlidersVertical,
@@ -125,59 +126,37 @@ export const backofficeMenuGroups: NavGroup[] = [
           { name: "Technical Studies", path: `${BASE}/pavement-studies`, icon: ClipboardList },
         ],
       },
-      {
-        name: "Production",
-        icon: HardHat,
-        path: `${BASE}/projects`,
-        subItems: [{ name: "Project Management", path: `${BASE}/projects`, icon: Briefcase }],
-      },
-      {
-        name: "Collaboration",
-        icon: SquareCheckBig,
-        path: `${BASE}/tasks`,
-        subItems: [{ name: "Team Tasks", path: `${BASE}/tasks`, icon: SquareCheckBig }],
-      },
-      {
-        name: "Logistics",
-        icon: Package,
-        path: `${BASE}/products`,
-        subItems: [
-          { name: "Products Catalog", path: `${BASE}/products`, icon: Package },
-          { name: "Brands & Manufacturers", path: `${BASE}/catalog/brands`, icon: Factory },
-          { name: "Stock Control", path: `${BASE}/catalog/stock`, icon: Warehouse },
-        ],
-      },
+    ],
+  },
+  {
+    label: "Purchasing & Inventory",
+    items: [
+      { name: "Suppliers", icon: Handshake, path: `${BASE}/suppliers` },
+      { name: "Purchase Orders", icon: PackageSearch, path: `${BASE}/purchase-orders` },
+      { name: "Products Catalog", icon: Package, path: `${BASE}/products` },
+      { name: "Brands & Manufacturers", icon: Factory, path: `${BASE}/catalog/brands` },
+      { name: "Stock Control", icon: Warehouse, path: `${BASE}/catalog/stock` },
     ],
   },
   {
     label: "Finance",
     items: [
+      { name: "Invoicing", icon: Receipt, path: `${BASE}/invoices` },
       {
-        name: "Finance",
+        name: "Treasury",
         icon: Landmark,
-        path: `${BASE}/finance/control`,
+        path: bankRoutes.list,
         subItems: [
-          { name: "Management Control", path: `${BASE}/finance/control`, icon: Activity },
-          { name: "Global Transactions", path: `${BASE}/finance/transactions`, icon: RefreshCw },
-          { name: "Invoicing", path: `${BASE}/invoices`, icon: Receipt },
-          { name: "Treasury & Banks", path: `${BASE}/finance/treasury`, icon: Landmark },
+          { name: "Banks", path: bankRoutes.list, icon: Building2 },
+          { name: "Transactions", path: `${BASE}/finance/transactions`, icon: RefreshCw },
           { name: "Cash Flow", path: `${BASE}/finance/cash-flow`, icon: DollarSign },
-          { name: "Cost Allocation", path: `${BASE}/finance/accounting`, icon: ChartPie },
         ],
       },
-      {
-        name: "AI Intelligence",
-        icon: Bot,
-        path: `${BASE}/ai-reports`,
-        subItems: [
-          { name: "AI Reports", path: `${BASE}/ai-reports`, icon: Bot },
-          { name: "Roadmap & AI Labs", path: `${BASE}/roadmap`, icon: Rocket },
-        ],
-      },
+      { name: "Project Costs", icon: ChartPie, path: `${BASE}/finance/accounting` },
     ],
   },
   {
-    label: "Organization",
+    label: "Organization & People",
     items: [
       {
         name: "Organization",
@@ -201,26 +180,15 @@ export const backofficeMenuGroups: NavGroup[] = [
     ],
   },
   {
-    label: "Resources",
+    label: "Insights",
     items: [
       {
-        name: "Documentation",
-        icon: BookOpen,
-        path: `${BASE}/docs`,
+        name: "Reports & Analytics",
+        icon: BarChart3,
+        path: `${BASE}/finance/control`,
         subItems: [
-          { name: "Technical Explorer", path: `${BASE}/docs`, icon: Code },
-          { name: "Data Dictionary", path: `${BASE}/docs/dictionary`, icon: Database },
-          { name: "Domain Flows", path: `${BASE}/docs/flow`, icon: Activity },
-        ],
-      },
-      {
-        name: "Configuration",
-        icon: SettingsIcon,
-        path: `${BASE}/users`,
-        subItems: [
-          { name: "Users", path: `${BASE}/users`, icon: Users },
-          { name: "Features & Modules", path: `${BASE}/settings/features`, icon: SlidersVertical },
-          { name: "Audit Logs", path: `${BASE}/audit`, icon: History },
+          { name: "Budget vs Actuals", path: `${BASE}/finance/control`, icon: Activity },
+          { name: "AI Reports", path: `${BASE}/ai-reports`, icon: Bot },
         ],
       },
     ],
@@ -229,11 +197,25 @@ export const backofficeMenuGroups: NavGroup[] = [
     label: "System",
     items: [
       {
-        name: "Administration",
+        name: "Configuration",
         icon: SettingsIcon,
-        path: `${BASE}/administration`,
-        subItems: [{ name: "Service Health", path: `${BASE}/health`, icon: Activity }],
+        path: `${BASE}/users`,
+        subItems: [
+          { name: "Users", path: `${BASE}/users`, icon: Users },
+          { name: "Features & Modules", path: `${BASE}/settings/features`, icon: SlidersVertical },
+          { name: "Audit Logs", path: `${BASE}/audit`, icon: History },
+          { name: "Service Health", path: `${BASE}/health`, icon: Activity },
+        ],
       },
+    ],
+  },
+  {
+    label: "Help & Guides",
+    items: [
+      { name: "How ERPify Works", icon: BookOpen, path: `${BASE}/docs/flow` },
+      { name: "Product Roadmap", icon: Rocket, path: `${BASE}/roadmap` },
+      { name: "Technical Explorer", icon: Code, path: `${BASE}/docs` },
+      { name: "Data Dictionary", icon: Database, path: `${BASE}/docs/dictionary` },
     ],
   },
   // Dev/QA-only group. Absent from production builds via the same

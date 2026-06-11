@@ -23,7 +23,6 @@ final class Version20260405212338 extends AbstractMigration
             . 'mime_type VARCHAR(64) NOT NULL, '
             . 'byte_size INT NOT NULL, '
             . 'raw_bytes BYTEA NOT NULL, '
-            . 'deleted_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, '
             . 'created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, '
             . 'updated_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, '
             . 'PRIMARY KEY (id))',

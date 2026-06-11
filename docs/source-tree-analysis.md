@@ -56,8 +56,8 @@ ERPify/
 │   ├── docs/                       # API-specific docs (upstream symfony-docker + local additions)
 │   ├── composer.json
 │   ├── phpunit.xml.dist
-│   ├── phpstan.neon
-│   ├── psalm.xml
+│   ├── tools/phpstan/phpstan.neon  # PHPStan (level: max) — sole type-checking gate
+│   ├── tools/psalm/psalm-taint.xml # Psalm taint-only (security dataflow → SARIF)
 │   ├── rector.php
 │   ├── .php-cs-fixer.php
 │   └── Dockerfile                  # FrankenPHP-based image (digest-pinned base)

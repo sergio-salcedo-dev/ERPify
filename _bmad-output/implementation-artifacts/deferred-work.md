@@ -9,22 +9,20 @@ Collected during quick-dev. Not part of the current story's shippable scope.
 
 ## Migrado a issues (2026-06-10)
 
-| Issue | Item |
-|---|---|
-| [#194](https://github.com/sergio-salcedo-dev/ERPify/issues/194) | Gatear el endpoint público de autorización Mercure cuando llegue la auth de backoffice (incluye el item "privacy-theater" del review de PR #87) |
-| [#195](https://github.com/sergio-salcedo-dev/ERPify/issues/195) | Sink de Datadog como segunda entrada de `CompositeTelemetry` (absorbe las notas históricas de prep: CSP `connect-src`, client token + allowlist, severity map) |
-| [#196](https://github.com/sergio-salcedo-dev/ERPify/issues/196) | Subida de source-maps a Sentry (`SENTRY_AUTH_TOKEN` + `withSentryConfig`) |
-| [#197](https://github.com/sergio-salcedo-dev/ERPify/issues/197) | Rate-limiting del túnel público `/monitoring` (fusiona el item 2026-06-09 y la tunnel-abuse note 2026-06-08) |
-| [#198](https://github.com/sergio-salcedo-dev/ERPify/issues/198) | Gate `tsc --noEmit` en `pwa.quality`/CI |
-| [#199](https://github.com/sergio-salcedo-dev/ERPify/issues/199) | Hardening del contrato `filters[]`: guards de `FieldMapping` (datetime+eq/in, flags mutuamente excluyentes) + round-trip en `parseStrict` |
+| Issue                                                           | Item                                                                                                                                                                                            |
+|-----------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [#194](https://github.com/sergio-salcedo-dev/ERPify/issues/194) | Gatear el endpoint público de autorización Mercure cuando llegue la auth de backoffice (incluye el item "privacy-theater" del review de PR #87)                                                 |
+| [#196](https://github.com/sergio-salcedo-dev/ERPify/issues/196) | Subida de source-maps a Sentry (`SENTRY_AUTH_TOKEN` + `withSentryConfig`)                                                                                                                       |
+| [#197](https://github.com/sergio-salcedo-dev/ERPify/issues/197) | Rate-limiting del túnel público `/monitoring` (fusiona el item 2026-06-09 y la tunnel-abuse note 2026-06-08)                                                                                    |
+| [#198](https://github.com/sergio-salcedo-dev/ERPify/issues/198) | Gate `tsc --noEmit` en `pwa.quality`/CI                                                                                                                                                         |
+| [#199](https://github.com/sergio-salcedo-dev/ERPify/issues/199) | Hardening del contrato `filters[]`: guards de `FieldMapping` (datetime+eq/in, flags mutuamente excluyentes) + round-trip en `parseStrict`                                                       |
 | [#200](https://github.com/sergio-salcedo-dev/ERPify/issues/200) | Cobertura e2e de cursor keyset + cambio de `sort` — reasignado de la extinta Story 2.2 a **PR3 del ciclo keyset** (ojo: bajo el contrato del ADR es 422 `invalid-cursor`, no fallback a offset) |
-| [#201](https://github.com/sergio-salcedo-dev/ERPify/issues/201) | Evicción acotada en el mapa interno de `ThrottledTelemetry` (review PR #120) |
-| [#202](https://github.com/sergio-salcedo-dev/ERPify/issues/202) | Guard de precedencia default-type para excepciones dual-marker `InvalidInput` + `InvalidSearchCriteria` |
-| [#203](https://github.com/sergio-salcedo-dev/ERPify/issues/203) | Asserts e2e de shortName normalizan con `.toLocaleUpperCase()` en vez de la regla del API |
-| [#204](https://github.com/sergio-salcedo-dev/ERPify/issues/204) | API Sentry: headers de auth custom en `RedactionDenylist` + scrub de breadcrumbs |
-| [#205](https://github.com/sergio-salcedo-dev/ERPify/issues/205) | PWA Sentry: denylist amplio, PII no-secreta, presupuesto de nodos en `scrubDeep`/`serializeCause` |
-| [#206](https://github.com/sergio-salcedo-dev/ERPify/issues/206) | Guard de paridad del stub `sentryNextjs.ts` (fusiona los dos items duplicados 2026-06-08/09) |
-| [#207](https://github.com/sergio-salcedo-dev/ERPify/issues/207) | `DROP INDEX IF EXISTS` en `Version20260608165844::down()` |
+| [#201](https://github.com/sergio-salcedo-dev/ERPify/issues/201) | Evicción acotada en el mapa interno de `ThrottledTelemetry` (review PR #120)                                                                                                                    |
+| [#202](https://github.com/sergio-salcedo-dev/ERPify/issues/202) | Guard de precedencia default-type para excepciones dual-marker `InvalidInput` + `InvalidSearchCriteria`                                                                                         |
+| [#203](https://github.com/sergio-salcedo-dev/ERPify/issues/203) | Asserts e2e de shortName normalizan con `.toLocaleUpperCase()` en vez de la regla del API                                                                                                       |
+| [#204](https://github.com/sergio-salcedo-dev/ERPify/issues/204) | API Sentry: headers de auth custom en `RedactionDenylist` + scrub de breadcrumbs                                                                                                                |
+| [#205](https://github.com/sergio-salcedo-dev/ERPify/issues/205) | PWA Sentry: denylist amplio, PII no-secreta, presupuesto de nodos en `scrubDeep`/`serializeCause`                                                                                               |
+| [#206](https://github.com/sergio-salcedo-dev/ERPify/issues/206) | Guard de paridad del stub `sentryNextjs.ts` (fusiona los dos items duplicados 2026-06-08/09)                                                                                                    |
 
 ## Resueltos antes de la migración (histórico)
 
@@ -53,10 +51,36 @@ Collected during quick-dev. Not part of the current story's shippable scope.
 ## Deferred from: PR3 API contract freeze (2026-06-11)
 
 - **Seam "ir a fecha" server-side (Story 1.3 Task 10 / AC#6 / FR5)** — sintetizar una posición de cursor desde un valor de clave de ordenación (misma maquinaria K3/K4: `CursorPositionExtractor`/`CursorCodec`), `hasPrev: true` conservador, **sin endpoint nuevo**. Diferido del flip de PR3 por decisión de freeze (Sergio, 2026-06-11): es el único cambio de comportamiento real pendiente y toca navegación temporal del cursor → riesgo de reabrir W9/W10. Sin spec UX en alcance. Retomar como trabajo aislado post-freeze, no dentro de PR3.
+## Deferred from: bounded-context isolation strategy (2026-06-11)
+
+- **Static gate for bounded-context isolation (3 levels)** → make the isolation
+  rules now documented in [`docs/rules/database.md`](../../docs/rules/database.md#bounded-context-data-isolation-modular-monolith)
+  and [`docs/architecture-api.md`](../../docs/architecture-api.md) **machine-verified**.
+  The gate must **enforce boundaries, not total isolation** — model the three
+  levels, do NOT make it a dogmatic "zero coupling" check (that freezes dev,
+  forces data duplication, fights the framework):
+  - **🔴 Level 1 → ERROR (fail build).** (a) Cross-context **import**: a file
+    under `src/<Top>/<ContextA>/` with `use Erpify\<Top>\<ContextB>\Domain\…`
+    or `…\Application\…`. **Allowlist seams:** the other context's published
+    Application service interface + its integration-event classes (define a
+    marker interface / namespace convention to recognize them). `Shared/` is
+    always importable. (b) Cross-context **repository query**: another context's
+    `*Repository` injected/used outside its own context.
+  - **🟡 Level 2 → WARNING (report, don't fail).** Cross-context **FK** between
+    two business contexts — scan Doctrine `#[ORM\ManyToOne]`/`JoinColumn`
+    targets and generated migration `FOREIGN KEY` DDL; warn when the target
+    entity lives in a different top-level/business context so it gets justified
+    in review. Do not block.
+  - **🟢 Level 3 → ALLOWLISTED (no signal).** FK/refs toward shared kernel &
+    identity (`User`, tenant/`company_id`, `Money`, `Uuid`), ID-only columns,
+    event-based integration, read models.
+  Wire as a `make php.lint.*` target next to `make php.lint.error-contract`; add
+  to "Required checks" in `CLAUDE.md` once it exists. A PHPStan rule may be a
+  cleaner home for the AST import/repository checks than a grep gate.
 
 ## Deferred from: code review of story-1.2 (2026-06-11)
 
-- **`KeysetSqlSnapshotTest` no cierra la conexión DBAL paralela de `setUp()`** → un `tearDown()` con `parent::tearDown()` dispara el conflicto rector↔psalm del repo (rector `NoSetupWithParentCallOverrideRector` desnuda `#[Override]`, psalm exige baseline nueva de `MissingOverrideAttribute`), violando el AC7 "sin baselines nuevas". Leak *low* mitigado por refcounting de PHP. Alternativa: cerrar dentro de `inRolledBackTransaction()` sin método override.
+- **`KeysetSqlSnapshotTest` no cierra la conexión DBAL paralela de `setUp()`** → un `tearDown()` con `parent::tearDown()` hace que rector `NoSetupWithParentCallOverrideRector` desnude `#[Override]` (la mitad psalm del antiguo conflicto rector↔psalm ya no aplica: el análisis general de Psalm fue retirado, así que no se exige baseline de `MissingOverrideAttribute`). Leak *low* mitigado por refcounting de PHP. Alternativa: cerrar dentro de `inRolledBackTransaction()` sin método override.
 - **`resolveLimit` nunca aplica `policy.defaultLimit` (25)** → `limit` ausente (`SearchCriteria` default `MAX_LIMIT`=1000) → `min(1000, maxLimit=100)`=100, no 25; `WirePaginationPolicy::defaultLimit` queda inerte. Decidir en PR3 dónde vive el default (adapter HTTP vs engine).
 - **Página `before` vacía devuelve `hasNext=false`** → debería ser `true` (la página de la que vienes es "next"); la rama vacía de `buildPage` puentea la lógica `isBefore ? hadCursor`. Off-wire y sin cursor accionable hoy; corregir en PR3.
 - **`RowUniquenessGuard` falla-abierto fuera del caso addSelect-alias-líder** → no caza (a) cartesiano multi-root `from(A)->from(B)`, (b) joins to-many no seleccionados que también multiplican filas bajo `LIMIT`. Endurecer hacia fail-closed; excede el scope addSelect del AC2. (El caso `addSelect('a.field')`/`PARTIAL` SÍ se resolvió como patch P2.)

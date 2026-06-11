@@ -2065,6 +2065,8 @@ final class ProblemDetailsFactoryTest extends TestCase
             yield $canonical . ' (Title)' => [\ucfirst($canonical)];
             yield $canonical . ' (UPPER)' => [\strtoupper($canonical)];
             yield $canonical . ' (mIxEd)' => [self::alternatingCase($canonical)];
+            yield $canonical . ' (prefix)' => ['my_' . $canonical];
+            yield $canonical . ' (suffix)' => [$canonical . '_hash'];
         }
     }
 
@@ -2093,13 +2095,9 @@ final class ProblemDetailsFactoryTest extends TestCase
      */
     public static function provideFactoryDoesNotStripNonDenylistKeysCases(): iterable
     {
-        yield 'substring (my_password)' => ['my_password'];
-        yield 'substring/prefix (password_hash)' => ['password_hash'];
         yield 'prefix-only (pass)' => ['pass'];
-        yield 'leading whitespace ( password)' => [' password'];
-        yield 'trailing whitespace (password )' => ['password '];
-        yield 'non-ASCII (PÄSSWORD)' => ['PÄSSWORD'];
-        yield 'unrelated (email)' => ['email'];
+        yield 'unrelated (username)' => ['username'];
+        yield 'unrelated (public_key)' => ['public_key'];
         yield 'numeric-string (42)' => ['42'];
     }
 

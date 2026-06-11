@@ -16,7 +16,7 @@
 .PHONY: pwa.install pwa.install.if-missing pwa.update pwa.upgrade pwa.dev \
         pwa.production.build pwa.production.start \
         pwa.quality.dry-run pwa.quality \
-        pwa.lint.dry-run pwa.lint pwa.format.dry-run pwa.format \
+        pwa.lint.dry-run pwa.lint pwa.format.dry-run pwa.format pwa.typecheck \
         pwa.test pwa.test.unit pwa.test.unit.watch pwa.test.e2e pwa.test.e2e.reports npm.dev.e2e \
         pwa.util.extract.testids pwa.chown.next pwa.clean.soft pwa.clean.all pwa.clean.sudo
 
@@ -57,9 +57,9 @@ pwa.production.start: ## Start production server on port 80
 
 ## —— PWA quality ——
 
-pwa.quality.dry-run: pwa.lint.dry-run pwa.format.dry-run ## Full PWA lint (ESLint + Prettier check)
+pwa.quality.dry-run: pwa.lint.dry-run pwa.format.dry-run pwa.typecheck ## Full PWA lint (ESLint + Prettier + Typecheck)
 
-pwa.quality: pwa.lint pwa.format ## Full PWA lint (ESLint + Prettier check)
+pwa.quality: pwa.lint pwa.format pwa.typecheck ## Full PWA lint (ESLint + Prettier + Typecheck)
 
 ## —— PWA lint (ESLint) ——
 
@@ -76,6 +76,11 @@ pwa.format.dry-run: pwa.install.if-missing ## Prettier check (no writes)
 
 pwa.format: pwa.install.if-missing ## Prettier --write
 	@$(call pwa_cmd,npm run format:fix)
+
+## —— PWA typecheck (tsc) ——
+
+pwa.typecheck: pwa.install.if-missing ## Typecheck PWA (tsc --noEmit)
+	@$(call pwa_cmd,npm run typecheck -- --incremental false)
 
 ## —— Unit Tests (Vitest) ——
 

@@ -23,7 +23,7 @@ test.describe("BackOffice - Dashboard", () => {
   test.describe("desktop", () => {
     test.use({ viewport: VIEWPORT_DESKTOP });
 
-    test("reaches health check via Administration sidebar", async ({ page }) => {
+    test("reaches health check via Configuration sidebar", async ({ page }) => {
       await navigateToHealthViaSidebarDesktop(page);
       await expect(page).toHaveURL("/backoffice/health");
       await expectBackOfficeHealthOk(page);

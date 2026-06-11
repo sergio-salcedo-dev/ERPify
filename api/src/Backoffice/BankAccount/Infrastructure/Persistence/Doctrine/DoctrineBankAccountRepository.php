@@ -30,7 +30,7 @@ final readonly class DoctrineBankAccountRepository implements BankAccountReposit
         return (int) $this->entityManager->createQueryBuilder()
             ->select('COUNT(ba.id)')
             ->from(BankAccount::class, 'ba')
-            ->where('IDENTITY(ba.bank) = :bankId')
+            ->where('ba.bankId = :bankId')
             ->setParameter('bankId', $bankId)
             ->getQuery()
             ->getSingleScalarResult()
