@@ -99,7 +99,10 @@ function ModuleCard({ module }: Readonly<{ module: RoadmapModule }>) {
         <ul className="roadmap__needs-list flex flex-col gap-1">
           {module.userNeeds.map((need) => (
             <li key={need} className="roadmap__need text-foreground flex items-start gap-2 text-xs">
-              <Check className="text-status-dot-success mt-0.5 size-3.5 flex-none" aria-hidden="true" />
+              <Check
+                className="text-status-dot-success mt-0.5 size-3.5 flex-none"
+                aria-hidden="true"
+              />
               <span className="min-w-0 flex-1">{need}</span>
             </li>
           ))}

@@ -62,7 +62,10 @@ const requestLifecycle: Flow = {
       { role: "El camarero (la app/PWA)", maps: "toma nota y la lleva a cocina" },
       { role: "La puerta de cocina (FrankenPHP)", maps: "deja pasar cada pedido a quien le toca" },
       { role: "El chef (la API)", maps: "lo prepara siguiendo las recetas (las reglas)" },
-      { role: "La despensa (la base de datos)", maps: "guarda y saca los ingredientes (los datos)" },
+      {
+        role: "La despensa (la base de datos)",
+        maps: "guarda y saca los ingredientes (los datos)",
+      },
       { role: "La campana de «¡listo!» (los eventos)", maps: "avisa de que algo ha ocurrido" },
       { role: "Los pinches (los workers)", maps: "hacen tareas extra sin frenar el servicio" },
       { role: "El panel en vivo (Mercure)", maps: "todos ven el estado al momento" },
@@ -73,8 +76,7 @@ const requestLifecycle: Flow = {
       icon: MousePointerClick,
       tone: "brand",
       title: "Tú haces algo",
-      plain:
-        "Pulsas un botón o abres una pantalla; por ejemplo, guardar un banco nuevo.",
+      plain: "Pulsas un botón o abres una pantalla; por ejemplo, guardar un banco nuevo.",
       tech: "Una interacción en el navegador.",
     },
     {

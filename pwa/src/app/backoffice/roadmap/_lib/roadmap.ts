@@ -206,7 +206,8 @@ export const roadmapPhases: RoadmapPhase[] = [
         icon: Languages,
         status: "planned",
         priority: "high",
-        objective: "Toda la app disponible en inglés y español, con el idioma como preferencia del usuario.",
+        objective:
+          "Toda la app disponible en inglés y español, con el idioma como preferencia del usuario.",
         userNeeds: [
           "Usar toda la aplicación en mi idioma (español o inglés).",
           "Que fechas, números y moneda se muestren en mi formato local.",
