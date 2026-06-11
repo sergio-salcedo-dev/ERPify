@@ -3,8 +3,12 @@ Feature: Search banks
   In order to manage banks
   I need to be able to retrieve banks
 
+  # PR3 cursor-only envelope: pagination is {hasNext, hasPrev, count, links: {next, prev}} — 4 keys,
+  # links always present (null when the affordance does not apply). There is no page number, no
+  # currentPage/pageCount/hasMorePages and no exposed cursor scalar: the opaque cursor lives INSIDE
+  # links.next/links.prev, which the client follows verbatim. `limit` defaults to 25, ceiling 100.
   Scenario: List all banks
-    When I send a "GET" request to "/backoffice/banks"
+    When I send a "GET" request to "/backoffice/banks?limit=100"
     Then the response status code should be 200
     And the JSON node "data" should have 31 elements
     And the JSON nodes matching "data[*]" should have 5 children
@@ -13,12 +17,25 @@ Feature: Search banks
     And the JSON nodes matching "data[*].shortName" should exist
     And the JSON nodes matching "data[*].createdAt" should exist
     And the JSON nodes matching "data[*].updatedAt" should exist
-    And the JSON node "pagination" should have 5 elements
-    And the JSON node "pagination.currentPage" should be equal to the number 1
-    And the JSON node "pagination.pageCount" should be null
-    And the JSON node "pagination.hasMorePages" should be false
-    And the JSON node "pagination.cursor" should not be null
-    And 2 requests got executed only for doctrine connection "default"
+    And the JSON node "pagination" should have 4 elements
+    And the JSON node "pagination.hasNext" should be false
+    And the JSON node "pagination.hasPrev" should be false
+    And the JSON node "pagination.count" should be null
+    And the JSON node "pagination.links.next" should be null
+    And the JSON node "pagination.links.prev" should be null
+    And 1 request got executed only for doctrine connection "default"
+
+  # Default limit is 25 (not the whole dataset): a full first page flags hasNext and exposes a next
+  # link but no prev. Pins the wire default after the flip away from the unbounded page-based default.
+  Scenario: The default page returns 25 banks with a forward-only affordance
+    When I send a "GET" request to "/backoffice/banks"
+    Then the response status code should be 200
+    And the JSON node "data" should have 25 elements
+    And the JSON node "pagination.hasNext" should be true
+    And the JSON node "pagination.hasPrev" should be false
+    And the JSON node "pagination.links.next" should not be null
+    And the JSON node "pagination.links.prev" should be null
+    And 1 request got executed only for doctrine connection "default"
 
   Scenario: Filtering by a valid id that does not exist returns no results
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=id&filters[0][operator]=in&filters[0][value][]=2e6d865c-17b0-476a-85f2-037bf6d3b3dc"
@@ -37,16 +54,8 @@ Feature: Search banks
     Then the response status code should be 422
     And 0 requests got executed across all doctrine connections
 
-  Scenario Outline: Invalid page returns 422
-    When I send a "GET" request to "/backoffice/banks?page=<page>"
-    Then the response status code should be 422
-    And 0 requests got executed across all doctrine connections
-    Examples:
-      | page  |
-      | 0     |
-      | -1    |
-      | 10001 |
-
+  # `limit` ∉ [1, 100] is a 422 validation-failed; 101 is the smallest value over the new ceiling,
+  # pinning MAX_LIMIT=100 exactly (the legacy 1000/1001 cases are gone with the page-based model).
   Scenario Outline: Invalid limit returns 422
     When I send a "GET" request to "/backoffice/banks?limit=<limit>"
     Then the response status code should be 422
@@ -55,67 +64,131 @@ Feature: Search banks
       | limit |
       | 0     |
       | -1    |
-      | 1001  |
+      | 101   |
       | abc   |
 
-  # PaginatorCursorFactory silently coerces unsigned input to empty cursor (HMAC hardening),
-  # so missing-separator or signature-mismatch produces 200, not 400. See spec change log #1.
-  Scenario: Cursor without HMAC signature is silently treated as empty
-    When I send a "GET" request to "/backoffice/banks?cursor=invalidBase64"
-    Then the response status code should be 200
-    And 2 requests got executed only for doctrine connection "default"
-
-  # Paginator refactor coverage: alterWhere + buildCursorWhere extraction
-  # and the inlined isSingleFirstPageQuery short-circuit in setCursorCount.
-  Scenario: Light pagination mode emits a cursor and skips pageCount on page one
+  # Cursor navigation (W4/W11): the direction is fixed by the param the link carries (after/before);
+  # the client follows links.next/links.prev VERBATIM and never decodes or fabricates a cursor.
+  Scenario: Light pagination omits the total count and exposes a next link on a full first page
     When I send a "GET" request to "/backoffice/banks?paginationMode=light&limit=5"
     Then the response status code should be 200
     And the JSON node "data" should have 5 elements
-    And the JSON node "pagination.currentPage" should be equal to the number 1
-    And the JSON node "pagination.pageCount" should be null
-    And the JSON node "pagination.hasMorePages" should be true
-    And the JSON node "pagination.cursor" should not be null
-    And 2 requests got executed only for doctrine connection "default"
+    And the JSON node "pagination.hasNext" should be true
+    And the JSON node "pagination.hasPrev" should be false
+    And the JSON node "pagination.count" should be null
+    And the JSON node "pagination.links.next" should not be null
+    And the JSON node "pagination.links.prev" should be null
+    And 1 request got executed only for doctrine connection "default"
 
-  Scenario: Light pagination mode follows the cursor to the next page
+  Scenario: Following the next link advances the window and exposes a previous affordance (light)
     Given I send a "GET" request to "/backoffice/banks?paginationMode=light&limit=5"
-    And I send a "GET" request to "/backoffice/banks?paginationMode=light&limit=5&page=2&cursor={value}" using the JSON node "pagination.cursor" from the previous response
+    And I follow the "pagination.links.next" link from the previous response
     Then the response status code should be 200
     And the JSON node "data" should have 5 elements
-    And the JSON node "pagination.currentPage" should be equal to the number 2
-    And the JSON node "pagination.pageCount" should be null
-    And the JSON node "pagination.hasMorePages" should be true
-    And the JSON node "pagination.cursor" should not be null
+    And the JSON node "data[0].id" should be equal to "11111111-1111-7000-8000-000000000006"
+    And the JSON node "pagination.hasNext" should be true
+    And the JSON node "pagination.hasPrev" should be true
+    And the JSON node "pagination.count" should be null
+    And the JSON node "pagination.links.next" should not be null
+    And the JSON node "pagination.links.prev" should not be null
+    And 2 requests got executed only for doctrine connection "default"
+
+  Scenario: Detailed pagination populates the total count while following the next link
+    Given I send a "GET" request to "/backoffice/banks?paginationMode=detailed&limit=5"
+    And I follow the "pagination.links.next" link from the previous response
+    Then the response status code should be 200
+    And the JSON node "data" should have 5 elements
+    And the JSON node "data[0].id" should be equal to "11111111-1111-7000-8000-000000000006"
+    And the JSON node "pagination.hasNext" should be true
+    And the JSON node "pagination.hasPrev" should be true
+    And the JSON node "pagination.count" should be equal to the number 31
+    And the JSON node "pagination.links.next" should not be null
+    And the JSON node "pagination.links.prev" should not be null
     And 4 requests got executed only for doctrine connection "default"
 
-  Scenario: Detailed pagination mode follows the cursor to the next page
-    Given I send a "GET" request to "/backoffice/banks?paginationMode=detailed&limit=5"
-    And I send a "GET" request to "/backoffice/banks?paginationMode=detailed&limit=5&page=2&cursor={value}" using the JSON node "pagination.cursor" from the previous response
-    Then the response status code should be 200
-    And the JSON node "data" should have 5 elements
-    And the JSON node "pagination.currentPage" should be equal to the number 2
-    And the JSON node "pagination.pageCount" should be equal to the number 7
-    And the JSON node "pagination.hasMorePages" should be true
-    And the JSON node "pagination.cursor" should not be null
-    And 5 requests got executed only for doctrine connection "default"
-
-  Scenario: Detailed pagination mode exposes total counts on a full first page
-    When I send a "GET" request to "/backoffice/banks?paginationMode=detailed&limit=1000"
+  Scenario: Detailed pagination exposes the total count and no affordances on a single full page
+    When I send a "GET" request to "/backoffice/banks?paginationMode=detailed&limit=100"
     Then the response status code should be 200
     And the JSON node "data" should have 31 elements
-    And the JSON node "pagination.currentPage" should be equal to the number 1
-    And the JSON node "pagination.pageCount" should be equal to the number 1
-    And the JSON node "pagination.hasMorePages" should be false
+    And the JSON node "pagination.hasNext" should be false
+    And the JSON node "pagination.hasPrev" should be false
+    And the JSON node "pagination.count" should be equal to the number 31
+    And the JSON node "pagination.links.next" should be null
+    And the JSON node "pagination.links.prev" should be null
     And 2 requests got executed only for doctrine connection "default"
 
-  Scenario: Detailed pagination mode runs the COUNT query when the page does not fit
+  Scenario: Detailed pagination runs the COUNT query and flags a next page when the window does not fit
     When I send a "GET" request to "/backoffice/banks?paginationMode=detailed&limit=10"
     Then the response status code should be 200
     And the JSON node "data" should have 10 elements
-    And the JSON node "pagination.currentPage" should be equal to the number 1
-    And the JSON node "pagination.pageCount" should be equal to the number 4
-    And the JSON node "pagination.hasMorePages" should be true
-    And 3 requests got executed only for doctrine connection "default"
+    And the JSON node "pagination.hasNext" should be true
+    And the JSON node "pagination.hasPrev" should be false
+    And the JSON node "pagination.count" should be equal to the number 31
+    And the JSON node "pagination.links.next" should not be null
+    And 2 requests got executed only for doctrine connection "default"
+
+  # AR13 cursor coverage: symmetry under a maximally-tied sort key. Every fixture bank shares the same
+  # createdAt (load-time instant), so the default order resolves entirely through the id tiebreak — the
+  # adversarial mass-ties dataset. Walking next×3 then prev×3 must retrace the exact reverse path, with
+  # ids stable across the round trip (no boundary row skipped or duplicated).
+  Scenario: Cursor navigation is symmetric under mass ties — next×3 then prev×3 retraces the path
+    Given I send a "GET" request to "/backoffice/banks?limit=5"
+    And the JSON node "data[0].id" should be equal to "11111111-1111-7000-8000-000000000001"
+    And the JSON node "data[4].id" should be equal to "11111111-1111-7000-8000-000000000005"
+    When I follow the "pagination.links.next" link from the previous response
+    Then the JSON node "data[0].id" should be equal to "11111111-1111-7000-8000-000000000006"
+    And I follow the "pagination.links.next" link from the previous response
+    And the JSON node "data[0].id" should be equal to "11111111-1111-7000-8000-000000000011"
+    And I follow the "pagination.links.next" link from the previous response
+    And the JSON node "data[0].id" should be equal to "11111111-1111-7000-8000-000000000016"
+    And I follow the "pagination.links.prev" link from the previous response
+    And the JSON node "data[0].id" should be equal to "11111111-1111-7000-8000-000000000011"
+    And I follow the "pagination.links.prev" link from the previous response
+    And the JSON node "data[0].id" should be equal to "11111111-1111-7000-8000-000000000006"
+    And I follow the "pagination.links.prev" link from the previous response
+    And the JSON node "data[0].id" should be equal to "11111111-1111-7000-8000-000000000001"
+    And the JSON node "data[4].id" should be equal to "11111111-1111-7000-8000-000000000005"
+    And the JSON node "pagination.hasPrev" should be false
+    And the JSON node "pagination.links.prev" should be null
+
+  # W6: after and before are mutually exclusive — a request carrying both has no single navigation
+  # intent and is rejected at mapping (validation-failed) before any SQL runs.
+  Scenario: Providing both after and before returns 422 validation-failed
+    When I send a "GET" request to "/backoffice/banks?after=AAAA&before=BBBB"
+    Then the response status code should be 422
+    And the JSON node "type" should be equal to "validation-failed"
+    And 0 requests got executed across all doctrine connections
+
+  # W5: every cursor invalidity (signature/version/payload/fingerprint) surfaces as the SAME 422
+  # invalid-cursor, indistinguishable to the client — no silent degradation, no 500, no SQL.
+  Scenario: A tampered cursor is rejected as 422 invalid-cursor
+    When I send a "GET" request to "/backoffice/banks?after=not-a-real-cursor"
+    Then the response status code should be 422
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the JSON node "type" should be equal to "invalid-cursor"
+    And 0 requests got executed across all doctrine connections
+
+  # W7 / fix #3: navigating before into a logical gap (rows deleted under the cursor) is not an error.
+  # The empty page is forward-recoverable only — hasNext=true with a minted recovery link (W10), and
+  # hasPrev=false with links.prev=null, since nothing remains before the gap. Mirror of the engine's
+  # BankSearchCursorFunctionalTest::testBeforeIntoADeletedGapIsForwardRecoverable.
+  Scenario: Navigating before into a deleted gap returns an empty, forward-recoverable page
+    Given I reload the fixtures
+    And I send a "GET" request to "/backoffice/banks?limit=10"
+    And I follow the "pagination.links.next" link from the previous response
+    And the JSON node "data[0].id" should be equal to "11111111-1111-7000-8000-000000000011"
+    When I execute the SQL query "DELETE FROM bank_account"
+    And I execute the SQL query "DELETE FROM bank WHERE id <= '11111111-1111-7000-8000-000000000010'"
+    And I follow the "pagination.links.prev" link from the previous response
+    Then the response status code should be 200
+    And the JSON node "data" should have 0 elements
+    And the JSON node "pagination.hasNext" should be true
+    And the JSON node "pagination.hasPrev" should be false
+    And the JSON node "pagination.links.next" should not be null
+    And the JSON node "pagination.links.prev" should be null
+    # Raw-SQL deletes do not trip the Doctrine onFlush dirty-tracker, and fixtures only reload
+    # between features — so this destructive scenario restores the dataset for the ones that follow.
+    And I reload the fixtures
 
   # Generic filters[N][field|operator|value] contract — the single filtering vocabulary. The
   # legacy names[]/ids[] params were retired before any production deployment (story 1.5).
@@ -124,31 +197,31 @@ Feature: Search banks
     Then the response status code should be 200
     And the JSON node "data" should have 1 elements
     And the JSON node "pagination" should exist
-    And 2 requests got executed only for doctrine connection "default"
+    And 1 request got executed only for doctrine connection "default"
 
   Scenario: Generic in filter matches several banks
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=in&filters[0][value][]=BBVA&filters[0][value][]=CaixaBank"
     Then the response status code should be 200
     And the JSON node "data" should have 2 elements
-    And 2 requests got executed only for doctrine connection "default"
+    And 1 request got executed only for doctrine connection "default"
 
   Scenario: Generic contains filter matches banks by substring
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=contains&filters[0][value]=banc"
     Then the response status code should be 200
     And the JSON node "data" should have 2 elements
-    And 2 requests got executed only for doctrine connection "default"
+    And 1 request got executed only for doctrine connection "default"
 
   Scenario: Generic contains filter ignores diacritics in the search value
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=contains&filters[0][value]=G%C3%A9n%C3%A9rale"
     Then the response status code should be 200
     And the JSON node "data" should have 1 elements
-    And 2 requests got executed only for doctrine connection "default"
+    And 1 request got executed only for doctrine connection "default"
 
   Scenario: Generic id filter accepts the in operator with a bound uuid
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=id&filters[0][operator]=in&filters[0][value][]=11111111-1111-7000-8000-000000000020"
     Then the response status code should be 200
     And the JSON node "data" should have 1 elements
-    And 2 requests got executed only for doctrine connection "default"
+    And 1 request got executed only for doctrine connection "default"
 
   # The boundary scenario pins real behaviour under PHP's default max_input_vars=1000:
   # the effective wire limit is min(caps, max_input_vars, URL length).
@@ -156,7 +229,7 @@ Feature: Search banks
     When I send a "GET" request to "/backoffice/banks" with a "name" in-filter of 100 values, the last being "BBVA"
     Then the response status code should be 200
     And the JSON node "data" should have 1 elements
-    And 2 requests got executed only for doctrine connection "default"
+    And 1 request got executed only for doctrine connection "default"
 
   # Semantic 422s come from the applier (invalid-search-criteria family) and abort before
   # any SQL executes; storedObjectKey is a real column but NOT in the allow-list on purpose.
@@ -219,28 +292,28 @@ Feature: Search banks
     Then the response status code should be 200
     And the JSON node "data" should have 1 elements
     And the JSON node "data[0].id" should be equal to "11111111-1111-7000-8000-000000000020"
-    And 2 requests got executed only for doctrine connection "default"
+    And 1 request got executed only for doctrine connection "default"
 
   Scenario: Generic in filter over name ignores diacritics in the search values
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=in&filters[0][value][]=Sociedad%20Anonima"
     Then the response status code should be 200
     And the JSON node "data" should have 1 elements
     And the JSON node "data[0].id" should be equal to "11111111-1111-7000-8000-000000000031"
-    And 2 requests got executed only for doctrine connection "default"
+    And 1 request got executed only for doctrine connection "default"
 
   Scenario: Generic in filter over id pins the exact bank id
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=id&filters[0][operator]=in&filters[0][value][]=11111111-1111-7000-8000-000000000020"
     Then the response status code should be 200
     And the JSON node "data" should have 1 elements
     And the JSON node "data[0].id" should be equal to "11111111-1111-7000-8000-000000000020"
-    And 2 requests got executed only for doctrine connection "default"
+    And 1 request got executed only for doctrine connection "default"
 
   Scenario: Two generic filters on the same field compose with AND
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=in&filters[0][value][]=Banco%20Santander&filters[1][field]=name&filters[1][operator]=contains&filters[1][value]=banc"
     Then the response status code should be 200
     And the JSON node "data" should have 1 elements
     And the JSON node "data[0].id" should be equal to "11111111-1111-7000-8000-000000000019"
-    And 2 requests got executed only for doctrine connection "default"
+    And 1 request got executed only for doctrine connection "default"
 
   Scenario: Disjoint generic filters compose with AND into an empty result
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=in&filters[0][value][]=BBVA&filters[1][field]=name&filters[1][operator]=contains&filters[1][value]=banc"
@@ -248,13 +321,13 @@ Feature: Search banks
     And the JSON node "data" should have 0 elements
     And 1 request got executed only for doctrine connection "default"
 
-  # The retired legacy params are plain unknown query params now: ignored like any other,
-  # never an error, never a filter.
-  Scenario: Retired legacy filter params are ignored as unknown query params
-    When I send a "GET" request to "/backoffice/banks?names[]=BBVA&ids[]=11111111-1111-7000-8000-000000000020"
+  # The retired legacy params (names[]/ids[]) and the dropped page-based param (page) are plain
+  # unknown query params now: ignored like any other, never an error, never a filter, never paging.
+  Scenario: Retired legacy filter params and the dropped page param are ignored as unknown query params
+    When I send a "GET" request to "/backoffice/banks?names[]=BBVA&ids[]=11111111-1111-7000-8000-000000000020&page=2&limit=100"
     Then the response status code should be 200
     And the JSON node "data" should have 31 elements
-    And 2 requests got executed only for doctrine connection "default"
+    And 1 request got executed only for doctrine connection "default"
 
   # Story 1.7: shortName is filterable (eq/in/contains). The column is stored upper-case ASCII
   # via NormalizedText::toAsciiUpper, and the field normalizer applies the same rule to the
@@ -264,35 +337,36 @@ Feature: Search banks
     Then the response status code should be 200
     And the JSON node "data" should have 1 elements
     And the JSON node "data[0].id" should be equal to "11111111-1111-7000-8000-000000000020"
-    And 2 requests got executed only for doctrine connection "default"
+    And 1 request got executed only for doctrine connection "default"
 
   Scenario: Generic in filter over shortName matches several banks case-insensitively
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=shortName&filters[0][operator]=in&filters[0][value][]=bbva&filters[0][value][]=san"
     Then the response status code should be 200
     And the JSON node "data" should have 2 elements
-    And 2 requests got executed only for doctrine connection "default"
+    And 1 request got executed only for doctrine connection "default"
 
   Scenario: Generic contains filter over shortName matches by substring case-insensitively
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=shortName&filters[0][operator]=contains&filters[0][value]=bbv"
     Then the response status code should be 200
     And the JSON node "data" should have 1 elements
     And the JSON node "data[0].id" should be equal to "11111111-1111-7000-8000-000000000020"
-    And 2 requests got executed only for doctrine connection "default"
+    And 1 request got executed only for doctrine connection "default"
 
   # Story 1.7: temporal range operators (gt/gte/lt/lte) over createdAt/updatedAt. Fixtures are
   # created at load time, so bounds use a far past/future to keep counts deterministic. The "+"
   # in the offset is URL-encoded as %2B. Range is allow-listed ONLY on createdAt/updatedAt.
+  # `limit=100` lifts the 25 default so the "all 31" sanity checks see the full dataset.
   Scenario: Generic gte range filter over createdAt returns banks created on or after a past bound
-    When I send a "GET" request to "/backoffice/banks?filters[0][field]=createdAt&filters[0][operator]=gte&filters[0][value]=2000-01-01T00:00:00%2B00:00"
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=createdAt&filters[0][operator]=gte&filters[0][value]=2000-01-01T00:00:00%2B00:00&limit=100"
     Then the response status code should be 200
     And the JSON node "data" should have 31 elements
-    And 2 requests got executed only for doctrine connection "default"
+    And 1 request got executed only for doctrine connection "default"
 
   Scenario: Generic lt range filter over updatedAt returns banks updated before a future bound
-    When I send a "GET" request to "/backoffice/banks?filters[0][field]=updatedAt&filters[0][operator]=lt&filters[0][value]=2100-01-01T00:00:00%2B00:00"
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=updatedAt&filters[0][operator]=lt&filters[0][value]=2100-01-01T00:00:00%2B00:00&limit=100"
     Then the response status code should be 200
     And the JSON node "data" should have 31 elements
-    And 2 requests got executed only for doctrine connection "default"
+    And 1 request got executed only for doctrine connection "default"
 
   Scenario: Generic gt range filter over createdAt with a future bound returns no results
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=createdAt&filters[0][operator]=gt&filters[0][value]=2100-01-01T00:00:00%2B00:00"
@@ -312,10 +386,10 @@ Feature: Search banks
   # The canonical JS Date.prototype.toISOString() form (fractional seconds + Z) is accepted as
   # a first-class bound, not only the +00:00 offset form.
   Scenario: Generic gte range filter accepts the JS toISOString datetime form
-    When I send a "GET" request to "/backoffice/banks?filters[0][field]=createdAt&filters[0][operator]=gte&filters[0][value]=2000-01-01T00:00:00.000Z"
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=createdAt&filters[0][operator]=gte&filters[0][value]=2000-01-01T00:00:00.000Z&limit=100"
     Then the response status code should be 200
     And the JSON node "data" should have 31 elements
-    And 2 requests got executed only for doctrine connection "default"
+    And 1 request got executed only for doctrine connection "default"
 
   # An out-of-range UTC offset (beyond UTC+14/-12) is invalid input: rejected as a 422
   # invalid-search-value before any SQL runs, never silently shifted past a real timezone.
@@ -329,10 +403,10 @@ Feature: Search banks
   # gte+lte over the same field compose with AND into a closed range — the documented
   # equivalent of a (deliberately absent) "between" operator.
   Scenario: A closed date range composes gte and lte with AND
-    When I send a "GET" request to "/backoffice/banks?filters[0][field]=createdAt&filters[0][operator]=gte&filters[0][value]=2000-01-01T00:00:00%2B00:00&filters[1][field]=createdAt&filters[1][operator]=lte&filters[1][value]=2100-01-01T00:00:00%2B00:00"
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=createdAt&filters[0][operator]=gte&filters[0][value]=2000-01-01T00:00:00%2B00:00&filters[1][field]=createdAt&filters[1][operator]=lte&filters[1][value]=2100-01-01T00:00:00%2B00:00&limit=100"
     Then the response status code should be 200
     And the JSON node "data" should have 31 elements
-    And 2 requests got executed only for doctrine connection "default"
+    And 1 request got executed only for doctrine connection "default"
 
   # name lists default operators (eq/in/contains) only; a range operator is not allow-listed,
   # so the applier rejects it semantically before any SQL runs.
@@ -372,7 +446,7 @@ Feature: Search banks
     Then the response status code should be 200
     And the JSON node "data" should have 1 elements
     And the JSON node "data[0].id" should be equal to "<id>"
-    And 2 requests got executed only for doctrine connection "default"
+    And 1 request got executed only for doctrine connection "default"
     Examples:
       | field     | direction | id                                   |
       | name      | ASC       | 11111111-1111-7000-8000-000000000022 |
@@ -381,14 +455,15 @@ Feature: Search banks
       | shortName | DESC      | 11111111-1111-7000-8000-000000000003 |
 
   # createdAt/updatedAt are allow-listed and index-backed (NFR4), but the Alice fixtures are created
-  # within the same instant, so ordering by them ties and the id ASC tiebreak (added by the
-  # Paginator) decides — there is no date order to pin. These scenarios prove the temporal fields
-  # are accepted (never a 422 unknown-sort-field) and the indexed query executes in both directions.
+  # within the same instant, so ordering by them ties and the id ASC tiebreak (the keyset secondary
+  # key) decides — there is no date order to pin. These scenarios prove the temporal fields are
+  # accepted (never a 422 unknown-sort-field) and the indexed query executes in both directions.
+  # `limit=100` lifts the 25 default so the full dataset is returned.
   Scenario Outline: Sorting by an allow-listed temporal field executes in both directions
-    When I send a "GET" request to "/backoffice/banks?sort=<field>&direction=<direction>"
+    When I send a "GET" request to "/backoffice/banks?sort=<field>&direction=<direction>&limit=100"
     Then the response status code should be 200
     And the JSON node "data" should have 31 elements
-    And 2 requests got executed only for doctrine connection "default"
+    And 1 request got executed only for doctrine connection "default"
     Examples:
       | field     | direction |
       | createdAt | ASC       |
@@ -427,7 +502,7 @@ Feature: Search banks
     Then the response status code should be 200
     And the JSON node "data" should have 1 elements
     And the JSON node "data[0].id" should be equal to "11111111-1111-7000-8000-000000000001"
-    And 2 requests got executed only for doctrine connection "default"
+    And 1 request got executed only for doctrine connection "default"
 
   # Story 1.8 code-review (P1): `direction` is a nullable enum (?SortDirection), but an array form is
   # still a type mismatch at mapping → 422 validation-failed, exactly like the non-nullable
@@ -458,4 +533,4 @@ Feature: Search banks
     Then the response status code should be 200
     And the JSON node "data" should have 1 elements
     And the JSON node "data[0].id" should be equal to "11111111-1111-7000-8000-000000000001"
-    And 2 requests got executed only for doctrine connection "default"
+    And 1 request got executed only for doctrine connection "default"

@@ -133,6 +133,18 @@ Every interactive control that triggers an action (button, anchor styled as butt
 - `aria-label` — keep the accessible name **short and static** (`"Edit"`, `"Delete"`, `"Previous page"`). Inside a `role="cell"`/`role="row"` the cell's accessible name is computed from descendant control names, so dynamic labels containing row text break Playwright strict-mode locators (e.g. `getByRole("cell", { name: "Acme Savings" })` matches both the name cell and the actions cell) — put the dynamic part in `title` instead.
 - A textual fallback for icon-only controls — visible text and/or `<span className="sr-only">…</span>` — so the control has a name when CSS fails to load.
 - `aria-hidden="true"` on every decorative icon inside the control.
-- For pagination/navigation controls with no valid target (no prev/next page), **hide** the control rather than rendering it disabled (a disabled control is still discovered by assistive tech and adds noise).
+- For pagination/navigation controls that have no valid target (no previous or
+  no next page), **hide** the control instead of rendering it disabled — a
+  disabled control is still discovered by assistive tech and adds noise.
+  - **Exception — cursor-only keyset pagination (D-A11y, PR3 / `BanksPagination`):**
+    the prev/next pair is **always rendered and `disabled` when the envelope link
+    is `null`, never hidden**. The keyset ADR (`architecture-keyset-pagination.md`,
+    IMPLEMENTATION LOCKED, AR15) governs this scope and overrides the hide rule
+    here: a persistent, well-labelled pair (`aria-label` + `title`, decorative
+    icons `aria-hidden`) is a predictable, discoverable affordance, and keeping
+    the control in the DOM preserves the system state the envelope expresses
+    (and the Behat/e2e determinism that asserts `toBeDisabled()`, not absence).
+    Hiding would drop that state. New cursor-only lists follow `BanksPagination`,
+    not the hide rule above.
 
 For destructive actions also wire a confirmation dialog (`Dialog.*` from `@/components/ui/dialog`). When the mutation fails, the dialog **closes itself** and the failure surfaces in a persistent `<MutationError>` from `@/components/erpify`, anchored to the mutation's origin (above the list/grid, under the detail H1, above the form) — never inside the dialog, and never a toast alone (the error toast is only a transient pointer to the persistent surface). The surface receives focus, stays until dismissed / replaced by a retry / cleared by a success, and lets the user copy the message, the `type · status` code, the correlation id, and the full problem JSON (production builds omit `debug`, mirroring the render). Typed recovery actions go in its `action` slot (`bank-not-found` → "Refresh list"; `bank-in-use` → none). Never silently dismiss failures, and never synthesize problem payloads client-side. Contract: EXPERIENCE.md § «Errores de mutación — superficie persistente» (2026-06-04).

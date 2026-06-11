@@ -1,4 +1,4 @@
-import type { Filter } from "@/context/shared/domain/Search";
+import type { Filter, PageEnvelope } from "@/context/shared/domain/Search";
 import type { SortDirection } from "@/context/shared/domain/types/sorting";
 import type { Bank } from "./Bank";
 
@@ -18,29 +18,26 @@ export interface BankSort {
 }
 
 /**
- * A server-driven banks search request: generic filters, optional sort, and
- * keyset pagination. `cursor` is the opaque cursor from the previous page
- * (only meaningful when `page > 1`); `limit` is the page size.
+ * A server-driven banks search request: generic filters, optional sort, and a
+ * page size. It only STARTS a search (first page) or re-runs it after a query
+ * change — cursor-only navigation is deliberately NOT expressed here. There is
+ * no `page` and no `cursor`: continuing to the next/prev page is
+ * `BankSearchNavigator.follow(link)`, which forwards a server-issued link
+ * verbatim (W11), so the cursor never enters this domain port.
  */
 export interface BankSearchCriteria {
   filters: Filter[];
   sort: BankSort | null;
-  page: number;
-  cursor?: string;
   limit: number;
 }
 
 /**
- * One page of banks plus the keyset pagination envelope. `cursor` is opaque and
- * fed back verbatim to navigate; `hasMorePages` drives prev/next under the
- * server's LIGHT pagination mode (no total is computed).
+ * One page of banks plus the cursor-only pagination envelope. Items travel in
+ * `banks`; `hasNext`/`hasPrev`/`count` and the verbatim navigation `links` come
+ * from {@link PageEnvelope}. There is no page number and no raw cursor — the
+ * client navigates by replaying `links` verbatim.
  */
-export interface BankSearchPage {
-  banks: Bank[];
-  cursor: string;
-  currentPage: number;
-  hasMorePages: boolean;
-}
+export type BankSearchPage = { banks: Bank[] } & PageEnvelope;
 
 export interface BankRepository {
   search(criteria: BankSearchCriteria): Promise<BankSearchPage>;

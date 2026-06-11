@@ -14,13 +14,13 @@ Feature: Doctrine query stats on bank CRUD
     When I send a "GET" request to "/backoffice/banks"
     Then the response status code should be 200
     And a request contains "FROM bank" across all doctrine connections
-    And 2 requests got executed only for doctrine connection "default"
+    And 1 request got executed only for doctrine connection "default"
 
   Scenario: Listing banks with a name filter still hits a single connection
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=in&filters[0][value][]=BBVA"
     Then the response status code should be 200
     And a request contains "SELECT" for doctrine connection "default"
-    And 2 requests got executed only for doctrine connection "default"
+    And 1 request got executed only for doctrine connection "default"
 
   Scenario: GET for an unknown id still queries only the default connection
     When I send a "GET" request to "/backoffice/banks/2e6d865c-17b0-476a-85f2-037bf6d3b3dc"

@@ -214,7 +214,7 @@ final readonly class DoctrineSearchEngine
             $items,
             $orderByColumns,
             $hasExtra,
-            $cursor instanceof Cursor,
+            $cursor,
             $isBefore,
             $fingerprint,
             $this->countIfDetailed($queryBuilder, $alias, $config),
@@ -270,13 +270,34 @@ final readonly class DoctrineSearchEngine
         array $items,
         OrderByColumns $orderByColumns,
         bool $hasExtra,
-        bool $hadCursor,
+        ?Cursor $cursor,
         bool $isBefore,
         string $fingerprint,
         ?int $count,
     ): Page {
+        $hadCursor = $cursor instanceof Cursor;
+
         if ([] === $items) {
-            return new Page([], false, false, $count);
+            if (!$cursor instanceof Cursor) {
+                // First-page empty: a genuinely empty dataset, no affordance in either direction.
+                return new Page([], false, false, $count);
+            }
+
+            // Reached via a cursor. The affordance derives from the SAME directional formula as a
+            // populated page (hasExtra = false): a `before` walk into a gap/edge keeps hasNext (the
+            // page you came from, ahead, is recoverable via next); an `after` walk keeps hasPrev.
+            // NOT a special bidirectional state (empty-before ⇒ hasNext=true,hasPrev=false;
+            // empty-after ⇒ hasNext=false,hasPrev=true). W10 (Linkability): the true flag must carry
+            // a usable cursor, so the recovery cursor re-signs the INBOUND cursor's own boundary
+            // values under the OPPOSITE direction — navigating it walks back toward where you came.
+            return new Page(
+                [],
+                $isBefore,
+                !$isBefore,
+                $count,
+                $isBefore ? $this->reencodeCursor($cursor, Cursor::DIRECTION_AFTER, $fingerprint) : null,
+                $isBefore ? null : $this->reencodeCursor($cursor, Cursor::DIRECTION_BEFORE, $fingerprint),
+            );
         }
 
         $lastItem = \array_last($items);
@@ -288,6 +309,20 @@ final readonly class DoctrineSearchEngine
         $hasPrev = $isBefore ? $hasExtra : $hadCursor;
 
         return new Page($items, $hasNext, $hasPrev, $count, $nextCursor, $prevCursor);
+    }
+
+    /**
+     * Re-signs an existing cursor's boundary values under a (possibly flipped) direction. Used for
+     * the empty-page recovery cursor (W10): the inbound cursor's values become a usable token for
+     * the opposite navigation, so a true hasNext/hasPrev flag is never stranded without a cursor.
+     * The boundary is exclusive, so recovery lands just past the boundary row (documented edge of
+     * gap navigation).
+     */
+    private function reencodeCursor(Cursor $cursor, string $direction, string $fingerprint): string
+    {
+        return $this->cursorCodec->encode(
+            new Cursor(CursorCodec::CURRENT_VERSION, $direction, $cursor->values, $fingerprint),
+        );
     }
 
     private function encodeBoundary(
@@ -308,8 +343,11 @@ final readonly class DoctrineSearchEngine
             return null;
         }
 
+        // getClassMetadata needs the FQCN, NOT the short trace name (entityName()) — passing the
+        // short name throws a MappingException (a 500). DETAILED was never exercised against a real
+        // EntityManager before the PR3 wire-path, which is why this only surfaces now.
         $identifier = $queryBuilder->getEntityManager()
-            ->getClassMetadata($this->entityName($queryBuilder))
+            ->getClassMetadata($this->rootEntity($queryBuilder))
             ->getSingleIdentifierFieldName()
         ;
 
@@ -377,14 +415,25 @@ final readonly class DoctrineSearchEngine
     /** Short entity name for the trace's canonical chain (`Erpify\…\Bank` ⇒ `Bank`). */
     private function entityName(QueryBuilder $queryBuilder): string
     {
+        $parts = \explode('\\', $this->rootEntity($queryBuilder));
+
+        return \end($parts);
+    }
+
+    /**
+     * The root entity FQCN — for {@see countIfDetailed}'s `getClassMetadata` lookup (which needs the
+     * full class name, unlike the trace's short {@see entityName}).
+     *
+     * @return class-string
+     */
+    private function rootEntity(QueryBuilder $queryBuilder): string
+    {
         $entities = $queryBuilder->getRootEntities();
 
         if ([] === $entities) {
             throw new LogicException('The keyset engine requires a query builder with at least one root entity.');
         }
 
-        $parts = \explode('\\', $entities[0]);
-
-        return \end($parts);
+        return $entities[0];
     }
 }

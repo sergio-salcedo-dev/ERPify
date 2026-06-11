@@ -6,6 +6,7 @@ namespace Erpify\Shared\Application\Http\Search;
 
 use Erpify\Shared\Domain\Search\Filter;
 use Erpify\Shared\Domain\Search\Filters;
+use Erpify\Shared\Domain\Search\NavigationDirection;
 use Erpify\Shared\Domain\Search\PaginationMode;
 use Erpify\Shared\Domain\Search\SearchCriteria;
 use Erpify\Shared\Domain\Search\SortDirection;
@@ -18,8 +19,15 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
  * Decorated with `#[Assert\…]`; consumed by Symfony `#[MapQueryString]`
  * and validated automatically — failures emit `ValidationFailedException`,
  * which {@see \Erpify\Shared\Application\Problem\ProblemDetailsFactory} maps
- * to a 400 `validation-failed` Problem Details body via
+ * to a 422 `validation-failed` Problem Details body via
  * {@see \Erpify\Shared\Infrastructure\Http\EventListener\ExceptionResponder}.
+ *
+ * Cursor-only navigation (PR3): `after`/`before` carry the OPAQUE keyset cursor
+ * (base64url + HMAC); they are mutually exclusive (the callback below is layer 1
+ * of the validation DAG, AR1/K2) and the present one fixes the
+ * {@see NavigationDirection}. There is no `page` number. `limit` defaults to
+ * {@see SearchCriteria::DEFAULT_LIMIT} (25) with a {@see SearchCriteria::MAX_LIMIT}
+ * (100) ceiling — out of [1, 100] is a 422 `validation-failed`.
  *
  * Filtering is expressed exclusively through the generic `filters[]` grammar
  * ({@see FilterQuery}) resolved against each repository's field map — search
@@ -31,20 +39,21 @@ final readonly class SearchQuery
 
     public const int MAX_SORT_LENGTH = 64;
 
+    public const int MAX_CURSOR_LENGTH = 8192;
+
     /**
      * @param array<int, FilterQuery> $filters pre-validation the wire can deliver sparse
      *                                         indexes; the callback below rejects anything
      *                                         that is not a contiguous list from 0 (D1)
      */
     public function __construct(
-        #[Assert\Length(max: 8192)]
-        public ?string $cursor = null,
-        #[Assert\Positive]
-        #[Assert\LessThanOrEqual(SearchCriteria::MAX_PAGE)]
-        public ?int $page = 1,
+        #[Assert\Length(max: self::MAX_CURSOR_LENGTH)]
+        public ?string $after = null,
+        #[Assert\Length(max: self::MAX_CURSOR_LENGTH)]
+        public ?string $before = null,
         #[Assert\Positive]
         #[Assert\LessThanOrEqual(SearchCriteria::MAX_LIMIT)]
-        public ?int $limit = SearchCriteria::MAX_LIMIT,
+        public ?int $limit = SearchCriteria::DEFAULT_LIMIT,
         public PaginationMode $paginationMode = PaginationMode::LIGHT,
         #[Assert\Valid]
         #[Assert\Count(max: self::MAX_FILTERS)]
@@ -58,28 +67,49 @@ final readonly class SearchQuery
     ) {
     }
 
+    /**
+     * Mapping-time invariants — layer 1 of the validation DAG, surfaced as 422 `validation-failed`
+     * before the handler runs (never a late decision):
+     *   - filter indexes must be a contiguous list from 0 (D1);
+     *   - `after`/`before` are mutually exclusive (AR1/K2) — a request carrying both has no single
+     *     navigation intent.
+     * Both live in this one `#[Assert\Callback]` so the method (and its Psalm baseline entry, an
+     * attribute-callback false positive the analyzer cannot resolve) stays stable.
+     */
     #[Assert\Callback]
     public function validateFilterIndexes(ExecutionContextInterface $context): void
     {
-        if (\array_is_list($this->filters)) {
-            return;
+        if (!\array_is_list($this->filters)) {
+            $context->buildViolation('Filter indexes must be contiguous and start at 0.')
+                ->atPath('filters')
+                ->addViolation()
+            ;
         }
 
-        $context->buildViolation('Filter indexes must be contiguous and start at 0.')
-            ->atPath('filters')
-            ->addViolation()
-        ;
+        if (null !== $this->after && null !== $this->before) {
+            $context->buildViolation('Provide either `after` or `before`, never both.')
+                ->atPath('after')
+                ->addViolation()
+            ;
+        }
     }
 
     public function toCriteria(): SearchCriteria
     {
+        // The wire param that arrived is the single routing authority (AR21): `before` → walk
+        // backwards, otherwise (`after` present, or neither on the first page) walk forwards.
+        // Mutual exclusion is already guaranteed by the callback above for the HTTP path.
+        [$cursor, $routingDirection] = null !== $this->before
+            ? [$this->before, NavigationDirection::Before]
+            : [$this->after, NavigationDirection::After];
+
         return new SearchCriteria(
-            cursor: $this->cursor,
-            page: $this->page ?? 1,
-            limit: $this->limit ?? SearchCriteria::MAX_LIMIT,
+            cursor: $cursor,
+            routingDirection: $routingDirection,
+            limit: $this->limit ?? SearchCriteria::DEFAULT_LIMIT,
             paginationMode: $this->paginationMode,
             filters: $this->domainFilters(),
-            // An empty `sort=` on the wire means "no sort" → the default order, not a 400
+            // An empty `sort=` on the wire means "no sort" → the default order, not a 422
             // unknown-sort-field; the criteria never carries a meaningless empty field name.
             sort: '' === $this->sort ? null : $this->sort,
             direction: $this->direction,

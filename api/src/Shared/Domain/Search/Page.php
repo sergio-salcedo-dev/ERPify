@@ -18,7 +18,7 @@ namespace Erpify\Shared\Domain\Search;
  * DTO; the HTTP envelope (with relative `links`) is assembled by the responder
  * in PR3. Cero imports de framework (NFR5).
  *
- * @template T
+ * @template-covariant T
  */
 final readonly class Page
 {

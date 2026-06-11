@@ -42,9 +42,15 @@ abstract class AbstractDoctrineSearchRepository extends AbstractDoctrineReposito
      * never invoke the applier themselves. `getQueryBuilderPaginatedResults()` stays outside
      * the seam on purpose (callers passing an arbitrary query builder own its conditions).
      *
+     * why: PR3 removed the page number from {@see SearchCriteria} (the keyset wire is cursor-only),
+     * so the legacy page-based read-path takes `$page` explicitly now. This whole legacy search
+     * base no longer serves Bank in the runtime cursor path — it survives only behind the
+     * env-gated `pagination_mode=legacy` valve and is deleted wholesale in PR4 (AR16). Decoupled,
+     * not removed.
+     *
      * @return Paginator<T>
      */
-    public function getPaginatedResults(SearchCriteria $criteria): Paginator
+    public function getPaginatedResults(SearchCriteria $criteria, int $page = 1): Paginator
     {
         $queryBuilder = $this->getSearchQueryBuilder($criteria);
 
@@ -53,7 +59,7 @@ abstract class AbstractDoctrineSearchRepository extends AbstractDoctrineReposito
         return $this->getQueryBuilderPaginatedResults(
             $queryBuilder,
             $this->paginatorCursorFactory->createFromString($criteria->cursor),
-            $criteria->page,
+            $page,
             $criteria->paginationMode,
         );
     }

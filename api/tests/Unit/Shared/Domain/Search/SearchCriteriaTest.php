@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Shared\Domain\Search;
 
 use Erpify\Shared\Domain\Search\Exception\InvalidPagination;
+use Erpify\Shared\Domain\Search\NavigationDirection;
 use Erpify\Shared\Domain\Search\SearchCriteria;
 use Erpify\Shared\Domain\Search\SortDirection;
 use Erpify\Tests\Unit\Shared\Domain\Search\Mother\FilterMother;
@@ -51,22 +52,21 @@ final class SearchCriteriaTest extends TestCase
         $this->assertSame(SortDirection::DESC, $criteria->direction);
     }
 
-    #[DataProvider('provideRejectsAPageOutsideTheAllowedRangeCases')]
-    public function testRejectsAPageOutsideTheAllowedRange(int $page): void
+    public function testDefaultsToForwardNavigationAndTheDefaultLimit(): void
     {
-        $this->expectException(InvalidPagination::class);
+        $criteria = new SearchCriteria();
 
-        new SearchCriteria(page: $page);
+        $this->assertNull($criteria->cursor);
+        $this->assertSame(NavigationDirection::After, $criteria->routingDirection);
+        $this->assertSame(SearchCriteria::DEFAULT_LIMIT, $criteria->limit);
     }
 
-    /**
-     * @return iterable<string, array{int}>
-     */
-    public static function provideRejectsAPageOutsideTheAllowedRangeCases(): iterable
+    public function testTransportsCursorAndRoutingDirectionAsNamedArguments(): void
     {
-        yield 'zero' => [0];
-        yield 'negative' => [-1];
-        yield 'above max' => [SearchCriteria::MAX_PAGE + 1];
+        $criteria = new SearchCriteria(cursor: 'opaque-token', routingDirection: NavigationDirection::Before);
+
+        $this->assertSame('opaque-token', $criteria->cursor);
+        $this->assertSame(NavigationDirection::Before, $criteria->routingDirection);
     }
 
     #[DataProvider('provideRejectsALimitOutsideTheAllowedRangeCases')]

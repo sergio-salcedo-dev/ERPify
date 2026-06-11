@@ -6,6 +6,7 @@ import { ApiHealthCheckRepository as BackOfficeApiHealthCheckRepository } from "
 import { CheckHealth as FrontOfficeCheckHealth } from "../../../frontoffice/health/application/CheckHealth";
 import { CheckHealth as BackOfficeCheckHealth } from "../../../backoffice/health/application/CheckHealth";
 import { ApiBankRepository } from "../../../backoffice/bank/infrastructure/ApiBankRepository";
+import { ApiBankSearchNavigator } from "../../../backoffice/bank/infrastructure/ApiBankSearchNavigator";
 import { SearchBanks } from "../../../backoffice/bank/application/SearchBanks";
 import { FindBank } from "../../../backoffice/bank/application/FindBank";
 import { CreateBank } from "../../../backoffice/bank/application/CreateBank";
@@ -38,6 +39,11 @@ container.bind<BackOfficeCheckHealth>("BackOfficeCheckHealth").to(BackOfficeChec
 container
   .bind<ApiBankRepository>("BackOfficeBankRepository")
   .to(ApiBankRepository)
+  .inSingletonScope();
+
+container
+  .bind<ApiBankSearchNavigator>("BackOfficeBankSearchNavigator")
+  .to(ApiBankSearchNavigator)
   .inSingletonScope();
 
 container.bind<SearchBanks>("BackOfficeSearchBanks").to(SearchBanks);

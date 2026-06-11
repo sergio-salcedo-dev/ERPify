@@ -338,8 +338,50 @@ class HttpRequestContext extends AbstractContext
     #[Given('I send a :method request to :url using the JSON node :node from the previous response')]
     public function iSendARequestUsingJsonNodeFromPreviousResponse(string $method, string $url, string $node): void
     {
-        $payload = JsonDecoder::decodeArray((string) $this->getLastResponse()->getContent());
-        $value = $payload;
+        $value = $this->jsonNodeFromPreviousResponse($node);
+
+        if (!\is_scalar($value)) {
+            throw new UnexpectedValueException(
+                \sprintf('JSON node "%s" is not a scalar (got %s).', $node, \get_debug_type($value)),
+            );
+        }
+
+        $this->iSendARequestTo($method, \str_replace('{value}', \rawurlencode((string) $value), $url));
+    }
+
+    /**
+     * Follow a server-supplied navigation link VERBATIM (cursor-only pagination, W11): JSON node
+     * `$node` (e.g. `pagination.links.next`) is a complete relative path already carrying the opaque
+     * cursor and preserved params — navigated AS-IS, never decoded/re-encoded/rebuilt. It includes
+     * the full route path (`/api/v1/...`), so `baseUrl` is NOT re-applied (sent host-relative). A
+     * `null` link is unfollowable — the step fails loudly rather than degrade silently.
+     *
+     * @throws JsonException
+     */
+    #[Given('I follow the :node link from the previous response')]
+    public function iFollowTheLinkFromThePreviousResponse(string $node): void
+    {
+        $value = $this->jsonNodeFromPreviousResponse($node);
+
+        if (!\is_string($value) || '' === $value) {
+            throw new UnexpectedValueException(
+                \sprintf('JSON node "%s" is not a followable link (got %s).', $node, \get_debug_type($value)),
+            );
+        }
+
+        $this->iSendARequestTo('GET', 'http://localhost' . $value);
+    }
+
+    /**
+     * Resolve a (possibly nested, dot-separated) JSON node from the previous response's decoded
+     * body — e.g. `pagination.links.next`. Throws if any path segment is missing. Shared by the
+     * cursor-substitution and link-following steps above.
+     *
+     * @throws JsonException
+     */
+    private function jsonNodeFromPreviousResponse(string $node): mixed
+    {
+        $value = JsonDecoder::decodeArray((string) $this->getLastResponse()->getContent());
 
         foreach (\explode('.', $node) as $segment) {
             if (!\is_array($value) || !\array_key_exists($segment, $value)) {
@@ -351,13 +393,7 @@ class HttpRequestContext extends AbstractContext
             $value = $value[$segment];
         }
 
-        if (!\is_scalar($value)) {
-            throw new UnexpectedValueException(
-                \sprintf('JSON node "%s" is not a scalar (got %s).', $node, \get_debug_type($value)),
-            );
-        }
-
-        $this->iSendARequestTo($method, \str_replace('{value}', \rawurlencode((string) $value), $url));
+        return $value;
     }
 
     // THEN SCENARIOS
