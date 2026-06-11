@@ -14,7 +14,7 @@ import {
 } from "./_lib/roadmap";
 
 export const metadata: Metadata = {
-  title: "Roadmap & AI Labs",
+  title: "Product Roadmap",
   description: "Backlog vivo de producto + ingeniería de ERPify, por fases y módulos.",
 };
 
@@ -201,7 +201,7 @@ export default function RoadmapPage() {
             className="text-foreground text-2xl font-semibold tracking-tight"
             data-testid="roadmap__title"
           >
-            Roadmap &amp; AI Labs
+            Product Roadmap
           </h1>
           <p className="text-muted-foreground max-w-3xl text-sm leading-relaxed">
             Backlog vivo de producto + ingeniería, por fases y módulos. El estado refleja el código

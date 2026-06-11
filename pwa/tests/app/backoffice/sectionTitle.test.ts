@@ -5,7 +5,6 @@ describe("sectionTitleFor", () => {
   it.each([
     ["/backoffice", "Dashboard"],
     ["/backoffice/health", "Service Health"],
-    ["/backoffice/administration", "Administration"],
   ])("maps the top-level route %s to %s", (pathname, title) => {
     expect(sectionTitleFor(pathname)).toBe(title);
   });
@@ -24,6 +23,7 @@ describe("sectionTitleFor", () => {
     ["/backoffice/invoices", "Invoicing"],
     ["/backoffice/products", "Products Catalog"],
     ["/backoffice/audit", "Audit Logs"],
+    ["/backoffice/roadmap", "Product Roadmap"],
   ])("maps ERP leaf route %s to %s", (pathname, title) => {
     expect(sectionTitleFor(pathname)).toBe(title);
   });
@@ -56,10 +56,10 @@ describe("sectionTitleFor", () => {
   });
 
   it.each([
-    ["/backoffice/finance/control", "Management Control"],
-    ["/backoffice/finance/treasury", "Treasury"],
+    ["/backoffice/finance/control", "Budget vs Actuals"],
+    ["/backoffice/finance/transactions", "Transactions"],
     ["/backoffice/finance/cash-flow", "Cash Flow"],
-    ["/backoffice/finance/accounting", "Cost Allocation"],
+    ["/backoffice/finance/accounting", "Project Costs"],
     ["/backoffice/catalog/brands", "Brands & Manufacturers"],
     ["/backoffice/settings/features", "Features & Modules"],
   ])("distinguishes sibling routes under a shared parent: %s → %s", (pathname, title) => {
@@ -68,7 +68,7 @@ describe("sectionTitleFor", () => {
 
   it.each([
     ["/backoffice/clients/abc-123", "Clients"],
-    ["/backoffice/finance/treasury/settings", "Treasury"],
+    ["/backoffice/finance/cash-flow/settings", "Cash Flow"],
   ])("keeps the title for deep sub-routes of an ERP leaf: %s → %s", (pathname, title) => {
     expect(sectionTitleFor(pathname)).toBe(title);
   });
