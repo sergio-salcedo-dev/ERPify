@@ -12,41 +12,31 @@ import {
 } from "lucide-react";
 
 /**
- * Friendly, non-technical "how it works" flows shown at
+ * Technical-but-accessible "how it works" flows shown at
  * `/backoffice/docs/flow` ({@link DocsFlowPage}). Plain data — no React — so the
  * page stays a thin renderer and new flows are just new entries here (mirrors
- * how `roadmap.ts` drives the roadmap page). Each step pairs a plain-language
- * explanation with an optional "behind the scenes" technical aside, so the same
- * page works for a manager skimming the journey and a curious dev.
+ * how `roadmap.ts` drives the roadmap page). The voice is a developer explaining
+ * the real pieces by their real names, in language a 16-year-old can follow:
+ * `plain` builds the mental model, the optional `tech` aside names the exact
+ * stack for whoever wants to go deeper.
  */
 export type FlowTone = "brand" | "success" | "warning" | "accent";
 
 export interface FlowStep {
   icon: LucideIcon;
   tone: FlowTone;
-  /** Friendly, human title. */
+  /** Short, concrete title — names the real piece doing the work. */
   title: string;
-  /** One or two sentences anyone can understand. */
+  /** One or two sentences anyone can understand, using real concepts. */
   plain: string;
-  /** Optional "behind the scenes" note for the technically curious. */
+  /** Optional "behind the scenes" note with the exact technology. */
   tech?: string;
-}
-
-export interface AnalogyItem {
-  role: string;
-  maps: string;
-}
-
-export interface FlowAnalogy {
-  intro: string;
-  items: AnalogyItem[];
 }
 
 export interface Flow {
   id: string;
   title: string;
   intro: string;
-  analogy?: FlowAnalogy;
   steps: FlowStep[];
 }
 
@@ -54,94 +44,79 @@ const requestLifecycle: Flow = {
   id: "request-lifecycle",
   title: "El viaje de una petición",
   intro:
-    "Cada vez que haces algo en ERPify (guardar, buscar, editar), tu acción hace un pequeño viaje de ida y vuelta. Aquí lo cuentas paso a paso, sin tecnicismos.",
-  analogy: {
-    intro: "Piensa en ERPify como un restaurante:",
-    items: [
-      { role: "Tú, el cliente", maps: "haces tu pedido usando la app" },
-      { role: "El camarero (la app/PWA)", maps: "toma nota y la lleva a cocina" },
-      { role: "La puerta de cocina (FrankenPHP)", maps: "deja pasar cada pedido a quien le toca" },
-      { role: "El chef (la API)", maps: "lo prepara siguiendo las recetas (las reglas)" },
-      {
-        role: "La despensa (la base de datos)",
-        maps: "guarda y saca los ingredientes (los datos)",
-      },
-      { role: "La campana de «¡listo!» (los eventos)", maps: "avisa de que algo ha ocurrido" },
-      { role: "Los pinches (los workers)", maps: "hacen tareas extra sin frenar el servicio" },
-      { role: "El panel en vivo (Mercure)", maps: "todos ven el estado al momento" },
-    ],
-  },
+    "Cada vez que haces algo en ERPify (guardar, buscar, editar), tu acción recorre el sistema de punta a punta y vuelve. Este es el recorrido real, pieza a pieza y con sus nombres reales.",
   steps: [
     {
       icon: MousePointerClick,
       tone: "brand",
-      title: "Tú haces algo",
-      plain: "Pulsas un botón o abres una pantalla; por ejemplo, guardar un banco nuevo.",
-      tech: "Una interacción en el navegador.",
+      title: "Acción en el navegador",
+      plain:
+        "Pulsas «Guardar» en la interfaz. El navegador no guarda nada por sí mismo: su trabajo es capturar tu acción y preparársela al servidor, que es donde viven los datos.",
+      tech: "Un evento de UI en la PWA (Next.js / React).",
     },
     {
       icon: LayoutDashboard,
       tone: "brand",
-      title: "La app prepara la petición",
+      title: "Petición HTTP",
       plain:
-        "La aplicación que ves recoge tu acción y la convierte en una petición clara para el sistema.",
-      tech: "La PWA (Next.js) hace una llamada al backend.",
+        "La aplicación convierte tu acción en una petición HTTP: un mensaje estructurado que dice qué quieres hacer y con qué datos. Todo lo que ves en cualquier app web viaja así.",
+      tech: "La PWA llama a la API con fetch; los datos van como JSON.",
     },
     {
       icon: DoorOpen,
       tone: "accent",
-      title: "El portero la recibe",
+      title: "Enrutado en el servidor",
       plain:
-        "Un portero muy rápido recibe tu petición y la dirige al sitio correcto: a la propia app o al cerebro del sistema.",
-      tech: "FrankenPHP/Caddy enruta /api/* a la API y el resto a la PWA.",
+        "En el servidor hay un único punto de entrada que mira cada petición y la dirige: las que empiezan por /api/* van a la API (la lógica); el resto, a la interfaz. Una sola puerta, bien vigilada.",
+      tech: "FrankenPHP (con Caddy embebido) actúa de reverse proxy.",
     },
     {
       icon: BrainCircuit,
       tone: "success",
-      title: "El cerebro decide",
+      title: "La API aplica las reglas",
       plain:
-        "El sistema comprueba que todo es válido y aplica las reglas de negocio antes de tocar nada.",
-      tech: "Un controlador de Symfony delega en un caso de uso (capa de aplicación).",
+        "La API comprueba que los datos son válidos y que la operación está permitida, y solo entonces ejecuta la lógica de negocio. Nada toca los datos sin pasar por las reglas.",
+      tech: "Un controlador Symfony delega en un caso de uso (capa de aplicación).",
     },
     {
       icon: Database,
       tone: "success",
-      title: "La memoria guarda o consulta",
+      title: "Base de datos",
       plain:
-        "La información se guarda o se lee de forma segura y permanente, para que nunca se pierda.",
-      tech: "PostgreSQL a través de Doctrine.",
+        "Los datos se guardan o se leen en la base de datos: un almacén estructurado y permanente. Guardar ahí es lo que hace que tu cambio sobreviva a cierres, fallos y reinicios.",
+      tech: "PostgreSQL a través de Doctrine, dentro de una transacción.",
     },
     {
       icon: Zap,
       tone: "warning",
-      title: "«¡Ha pasado algo!»",
+      title: "Evento de dominio",
       plain:
-        "Cada cambio importante deja una nota de que ocurrió, como un aviso: «se ha creado un banco».",
-      tech: "Se registra un evento de dominio y se guarda (auditoría / outbox).",
+        "Además de guardar, el sistema deja constancia del hecho con un nombre: «se ha creado un banco». Otras piezas pueden reaccionar a ese evento sin conocerse entre sí — así el sistema crece sin enredarse.",
+      tech: "El evento de dominio se registra y persiste (auditoría / outbox).",
     },
     {
       icon: Cog,
       tone: "warning",
-      title: "Los ayudantes trabajan en segundo plano",
+      title: "Cola y worker",
       plain:
-        "Las tareas que pueden esperar (enviar un email, avisar a otros) se hacen aparte, para que tú no tengas que esperar.",
+        "Lo que puede esperar (enviar un email, avisar a otros sistemas) se pone en una cola y lo procesa un worker: un proceso aparte que trabaja en segundo plano. Tu petición responde rápido, y si algo falla por el camino, se reintenta.",
       tech: "Symfony Messenger entrega el evento a un worker asíncrono.",
     },
     {
       icon: RadioTower,
       tone: "brand",
-      title: "Aviso instantáneo a quien esté mirando",
+      title: "Tiempo real",
       plain:
-        "Si otra persona está viendo la misma pantalla, la ve actualizarse al instante, sin recargar nada.",
-      tech: "Mercure publica el cambio y la PWA actualiza la pantalla en vivo (tiempo real).",
+        "El servidor publica el cambio y todos los navegadores suscritos lo reciben al instante por una conexión que se queda abierta. Por eso otra persona ve tu cambio sin recargar la página.",
+      tech: "Mercure (server-sent events); la PWA actualiza la vista al recibirlo.",
     },
     {
       icon: CheckCircle2,
       tone: "success",
-      title: "Ves el resultado",
+      title: "Respuesta",
       plain:
-        "Recibes la respuesta y la pantalla muestra el cambio. Y si algo va mal, un mensaje claro te explica qué pasó. Listo.",
-      tech: "Respuesta JSON; los errores siguen un formato estándar y entendible.",
+        "La API responde con el resultado y la interfaz lo refleja. Si algo va mal, recibes un error con un formato estándar que explica qué pasó y permite rastrearlo.",
+      tech: "Respuesta JSON; los errores siguen RFC 9457 (Problem Details).",
     },
   ],
 };

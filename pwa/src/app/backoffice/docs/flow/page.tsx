@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { flows, type Flow, type FlowTone } from "./_lib/flows";
 
@@ -15,6 +15,51 @@ const TONE_ICON: Record<FlowTone, string> = {
   accent: "bg-accent text-accent-foreground",
 };
 
+function FlowMap({ flow }: Readonly<{ flow: Flow }>) {
+  return (
+    <nav
+      className="flow__map border-border bg-card overflow-x-auto rounded-xl border p-4 shadow-sm"
+      aria-label={`Mapa del flujo: ${flow.title}`}
+      data-testid={`docs-flow__map-${flow.id}`}
+    >
+      <ol className="flow__map-track flex items-start gap-1.5">
+        {flow.steps.map((step, index) => {
+          const Icon = step.icon;
+          const isLast = index === flow.steps.length - 1;
+          return (
+            <li key={step.title} className="flow__map-node flex items-start gap-1.5">
+              <a
+                href={`#${flow.id}-step-${index + 1}`}
+                className="hover:bg-muted/60 focus-visible:ring-ring flex w-21 flex-col items-center gap-1 rounded-lg p-1.5 text-center focus-visible:ring-2 focus-visible:outline-none"
+                title={`Ir al paso ${index + 1}: ${step.title}`}
+              >
+                <span
+                  className={cn(
+                    "flow__map-icon flex size-9 flex-none items-center justify-center rounded-full",
+                    TONE_ICON[step.tone],
+                  )}
+                >
+                  <Icon className="size-4" aria-hidden="true" />
+                </span>
+                <span className="text-muted-foreground text-2xs font-semibold tracking-wider uppercase">
+                  {index + 1}
+                </span>
+                <span className="text-foreground text-xs leading-snug">{step.title}</span>
+              </a>
+              {isLast ? null : (
+                <ArrowRight
+                  className="text-muted-foreground mt-4 size-4 flex-none"
+                  aria-hidden="true"
+                />
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+}
+
 function FlowJourney({ flow }: Readonly<{ flow: Flow }>) {
   return (
     <section className="flow flex flex-col gap-5" data-testid={`docs-flow__flow-${flow.id}`}>
@@ -23,26 +68,7 @@ function FlowJourney({ flow }: Readonly<{ flow: Flow }>) {
         <p className="text-muted-foreground max-w-3xl text-sm leading-relaxed">{flow.intro}</p>
       </header>
 
-      {flow.analogy ? (
-        <aside className="flow__analogy bg-muted/40 border-border flex flex-col gap-3 rounded-xl border p-4">
-          <p className="text-foreground flex items-center gap-2 text-sm font-medium">
-            <Sparkles className="text-brand size-4 flex-none" aria-hidden="true" />
-            {flow.analogy.intro}
-          </p>
-          <ul className="flow__analogy-list grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
-            {flow.analogy.items.map((item) => (
-              <li key={item.role} className="flex items-baseline gap-2 text-sm">
-                <span className="text-foreground font-medium">{item.role}</span>
-                <ArrowRight
-                  className="text-muted-foreground size-3 flex-none translate-y-0.5"
-                  aria-hidden="true"
-                />
-                <span className="text-muted-foreground min-w-0 flex-1">{item.maps}</span>
-              </li>
-            ))}
-          </ul>
-        </aside>
-      ) : null}
+      <FlowMap flow={flow} />
 
       <ol className="flow__steps flex flex-col">
         {flow.steps.map((step, index) => {
@@ -51,7 +77,8 @@ function FlowJourney({ flow }: Readonly<{ flow: Flow }>) {
           return (
             <li
               key={step.title}
-              className="flow__step flex gap-4"
+              id={`${flow.id}-step-${index + 1}`}
+              className="flow__step flex scroll-mt-24 gap-4"
               data-testid={`docs-flow__step-${flow.id}-${index + 1}`}
             >
               <div className="flow__step-rail flex flex-col items-center">
@@ -101,8 +128,9 @@ export default function DocsFlowPage() {
           Cómo funciona ERPify
         </h1>
         <p className="text-muted-foreground max-w-3xl text-sm leading-relaxed">
-          Explicamos por dentro ERPify sin tecnicismos: flujos de trabajo contados paso a paso, con
-          una analogía cercana y una nota «entre bastidores» por si te pica la curiosidad técnica.
+          Cómo está construido ERPify por dentro, con las piezas reales y sus nombres reales,
+          explicado para que cualquiera pueda seguirlo. Cada paso lleva una nota «entre bastidores»
+          con la tecnología exacta por si quieres profundizar.
         </p>
       </header>
 
