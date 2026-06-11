@@ -26,11 +26,10 @@ use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
 /**
- * Bank persistence by COMPOSITION (PR3): implements only its domain ports with an injected
+ * Bank persistence by COMPOSITION: implements only its domain ports with an injected
  * {@see EntityManagerInterface}, and its paginated read-path delegates to the keyset
- * {@see DoctrineSearchEngine} (the single runtime query-shaper). No more `ServiceEntityRepository`
- * inheritance, no `ManagerRegistry`/`PaginatorCursorFactory`/`FilterApplier` in the constructor
- * (the engine orchestrates filtering internally), no `QueryBuilderWithOptions`/`PaginatorOption`.
+ * {@see DoctrineSearchEngine} (the single runtime query-shaper) — no ORM base-class inheritance,
+ * and no filtering wiring in the constructor (the engine orchestrates filtering internally).
  *
  * The repository's sole search responsibility is to hand the engine a base query builder
  * (`SELECT`/`FROM`, no joins for Bank) plus its allow-lists ({@see SearchFieldMap()}/

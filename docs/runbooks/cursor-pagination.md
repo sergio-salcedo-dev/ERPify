@@ -1,8 +1,7 @@
 # Runbook — cursor-only keyset pagination
 
-Operational guide for the cursor-only search pagination shipped in **PR3** (keyset engine on the wire,
-replacing the legacy page-based paginator). Covers the wire contract, the observability events, how to
-diagnose `invalid-cursor`, how to tell whether the legacy fallback is in use, and how to roll back.
+Operational guide for the cursor-only search pagination (keyset engine on the wire). Covers the wire
+contract, the observability events, how to diagnose `invalid-cursor`, and how to roll back.
 
 - **Contract / design**: [`_bmad-output/planning-artifacts/architecture-keyset-pagination.md`](../../_bmad-output/planning-artifacts/architecture-keyset-pagination.md), [`pr3-execution-contract.md`](../../_bmad-output/implementation-artifacts/pr3-execution-contract.md)
 - **Error contract**: [`docs/api-error-contract.md`](../api-error-contract.md) (`invalid-cursor` row)
@@ -144,43 +143,22 @@ across instances and look for tampering.
 
 ---
 
-## 5. Is the legacy page-based fallback in use?
+## 5. Rollback
 
-The transition valve `PaginationModeBankSearchValve` decorates the search repository and can route a
-read to the legacy page-based strategy (`LegacyBankSearchRepository`) instead of the keyset engine —
-**both return the same `Page` envelope (W9)**.
+Cursor-only is now the **only** pagination contract: the legacy page-based stack and its transition
+valve have been removed, so there is no runtime fallback and no single-PR revert back to page numbers.
+Prefer a roll-forward fix. A full rollback to page-based pagination means reverting the legacy-removal
+and the cursor-flip commits **together** (the keyset kernel + off-wire engine underneath them stay
+intact); never force-push `main`. No migration rollback is involved — the composite indexes +
+`COLLATE "C"` are independent of the wire contract and stay. The observability channel and listener
+are additive and revert cleanly.
 
-- **Opt-in param**: `?pagination_mode=legacy` (snake_case). **Do not confuse it** with `paginationMode`
-  (camelCase) — the latter is the `light`/`detailed` count-mode logged as `pagination_mode` in
-  `keyset_search`, a *different* parameter.
-- **Fail-closed**: the legacy branch is reachable **only** in `dev`/`staging`. In **prod** (and `test`,
-  and on missing/invalid value) every request resolves to the cursor path. So in prod the legacy code
-  is **present-but-inert** — the fallback is effectively never used.
-- **To check (dev/staging)**: grep request URIs for `pagination_mode=legacy`. There is no dedicated
-  log event for the legacy branch (it is going away in PR4); the request-target is the signal.
-
-PR4 deletes the valve, `LegacyBankSearchRepository`, and the whole legacy pagination stack wholesale.
+When undoing the wire flip, the API and the PWA consumer must move together: a page-based PWA against a
+cursor-only API (or vice versa) is broken.
 
 ---
 
-## 6. Rollback PR3 → PR2
-
-PR3 (1.3 API flip + 1.4 PWA/Behat/observability) is **revertible as one unit** (AR16):
-
-1. **Revert the PR3 merge commit** on `main` (`git revert -m 1 <merge-sha>`; never force-push `main`).
-   This restores the page-based wire contract, the page-based PWA consumer, and the page-based Behat
-   net in lockstep — PR1/PR2 (the keyset kernel + off-wire engine) are untouched.
-2. No migration rollback is needed: PR3 added **no** migrations; the composite indexes + `COLLATE "C"`
-   came in PR2 and stay.
-3. The observability channel and listener are additive — a revert removes them cleanly; no schema or
-   handler in the existing `app`/`audit`/… channels changed.
-
-Because both halves live in one PR, **do not** revert only the API or only the PWA — the envelope and
-its consumer must move together (a page-based PWA against a cursor-only API, or vice versa, is broken).
-
----
-
-## 7. FR14 — guarantees and non-guarantees
+## 6. FR14 — guarantees and non-guarantees
 
 **Guaranteed** (by the keyset engine + the property/Behat suites):
 
