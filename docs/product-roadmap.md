@@ -68,6 +68,10 @@ Lo grande que **falta** y condiciona todo: **autenticación / RBAC / multi-tenan
 
 El desglose de módulos y submódulos de cada fase está en `roadmap.ts`.
 
+El mapa **granular de bounded contexts** (agregados, value objects, invariantes
+y los eventos por los que se integran) está en
+[`bounded-contexts.md`](bounded-contexts.md).
+
 ## Estrategia de implementación — modelado de datos (muy importante)
 
 Cómo se construye el esquema a medida que se entregan los módulos de negocio
