@@ -94,6 +94,13 @@ you change anything here.
       `beforeSend` denylist scrub in parity with the API's `SentryEventScrubber`
       (`scrubSentryEvent` / shared `redaction` keys); deliberate `telemetry.*`
       causes pass through `serializeCause` (PII-scrubbed). No replay enabled.
+- [ ] The public `/monitoring` Sentry tunnel (`tunnelRoute`, relays anonymous
+      browser POSTs to ingest) is rate-limited per client IP in `pwa/src/proxy.ts`
+      (`monitoringTunnelRateLimiter`, 60 POSTs / 60s; over-limit → `429` +
+      `Retry-After`), so one source can't burn the Sentry quota. The IP is the
+      rightmost (Caddy-appended, unspoofable) `X-Forwarded-For` entry; state is
+      per-process/in-memory (single PWA instance — revisit for horizontal scale).
+      Sentry's server-side limits remain the second line of defence.
 - [ ] Migrations are reversible (`down()`); no PII/secrets seeded; no
       `DROP TABLE` outside an explicit destructive migration.
 - [ ] Messenger handlers idempotent (at-least-once delivery).

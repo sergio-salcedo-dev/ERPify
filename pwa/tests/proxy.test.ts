@@ -16,19 +16,30 @@ import {
  */
 
 vi.mock("next/server", () => {
-  // jsdom doesn't ship a Web `Request` polyfill that satisfies
-  // `NextRequest`; we only need the URL + the `next()` / `rewrite()`
-  // sentinels to assert the proxy's choice.
+  // jsdom doesn't ship a Web `Request` polyfill that satisfies `NextRequest`.
+  // The `next()` / `rewrite()` sentinels (`kind` / `destination`) cover the
+  // dev-tools decisions; the public constructor mirrors `new NextResponse(body,
+  // init)` so the monitoring rate-limit path's 429 (status + headers) is
+  // assertable too.
   class FakeNextResponse {
-    constructor(
-      public readonly kind: "next" | "rewrite",
-      public readonly destination?: URL,
-    ) {}
+    kind: "next" | "rewrite" | "raw" = "raw";
+    destination?: URL;
+    readonly status: number;
+    readonly headers: Headers;
+    constructor(_body?: BodyInit | null, init?: ResponseInit) {
+      this.status = init?.status ?? 200;
+      this.headers = new Headers(init?.headers);
+    }
     static next(): FakeNextResponse {
-      return new FakeNextResponse("next");
+      const response = new FakeNextResponse();
+      response.kind = "next";
+      return response;
     }
     static rewrite(destination: URL): FakeNextResponse {
-      return new FakeNextResponse("rewrite", destination);
+      const response = new FakeNextResponse();
+      response.kind = "rewrite";
+      response.destination = destination;
+      return response;
     }
   }
   return { NextResponse: FakeNextResponse };
@@ -37,19 +48,33 @@ vi.mock("next/server", () => {
 import { config, proxy } from "@/proxy";
 import type { NextRequest } from "next/server";
 
-function fakeRequest(pathname: string): NextRequest {
-  // jsdom doesn't ship a Web Request polyfill that satisfies NextRequest.
-  // The proxy only reads `nextUrl`, so a structural stub is enough and
-  // avoids the `as never` casts the type assertion would otherwise need.
-  return { nextUrl: new URL(pathname, "https://localhost") } as unknown as NextRequest;
+interface RequestInit {
+  method?: string;
+  forwardedFor?: string;
 }
 
-// `proxy` is typed against the real `NextResponse`, but the mock above
-// returns a `FakeNextResponse` whose `kind` / `destination` sentinels are
-// what we assert on. This bridges the static type to the mock's shape.
-type ProxyDecision = { kind: "next" | "rewrite"; destination?: URL };
-function runProxy(pathname: string): ProxyDecision {
-  return proxy(fakeRequest(pathname)) as unknown as ProxyDecision;
+function fakeRequest(pathname: string, init?: RequestInit): NextRequest {
+  // jsdom doesn't ship a Web Request polyfill that satisfies NextRequest.
+  // The proxy reads `nextUrl`, plus `method` / `x-forwarded-for` for the
+  // monitoring path, so a structural stub is enough and avoids `as never` casts.
+  return {
+    nextUrl: new URL(pathname, "https://localhost"),
+    method: init?.method ?? "GET",
+    headers: new Headers(init?.forwardedFor ? { "x-forwarded-for": init.forwardedFor } : {}),
+  } as unknown as NextRequest;
+}
+
+// `proxy` is typed against the real `NextResponse`, but the mock above returns a
+// `FakeNextResponse` whose sentinels are what we assert on. This bridges the
+// static type to the mock's shape.
+type ProxyDecision = {
+  kind: "next" | "rewrite" | "raw";
+  destination?: URL;
+  status?: number;
+  headers?: Headers;
+};
+function runProxy(pathname: string, init?: RequestInit): ProxyDecision {
+  return proxy(fakeRequest(pathname, init)) as unknown as ProxyDecision;
 }
 
 describe("isDevToolRoute", () => {
@@ -84,9 +109,39 @@ describe("proxy.config.matcher — domain ↔ static-literal parity", () => {
   // can't derive it from `DEV_TOOL_ROUTE_PREFIXES` at runtime. The two
   // are duplicated by necessity — this test fails the build the moment
   // they drift.
-  it("contains both the bare prefix and the `:path*` form for every domain prefix", () => {
-    const expected = DEV_TOOL_ROUTE_PREFIXES.flatMap((prefix) => [prefix, `${prefix}/:path*`]);
-    expect(config.matcher).toEqual(expected);
+  it("contains the dev-tool prefixes plus the monitoring tunnel entries", () => {
+    const devToolEntries = DEV_TOOL_ROUTE_PREFIXES.flatMap((prefix) => [
+      prefix,
+      `${prefix}/:path*`,
+    ]);
+    expect(config.matcher).toEqual([...devToolEntries, "/monitoring", "/monitoring/:path*"]);
+  });
+});
+
+describe("proxy — monitoring tunnel rate limit", () => {
+  it("passes a POST within the allowance through to the Sentry tunnel handler", () => {
+    expect(runProxy("/monitoring", { method: "POST", forwardedFor: "203.0.113.1" }).kind).toBe(
+      "next",
+    );
+  });
+
+  it("does not rate-limit non-POST /monitoring requests", () => {
+    expect(runProxy("/monitoring", { method: "GET", forwardedFor: "203.0.113.2" }).kind).toBe(
+      "next",
+    );
+  });
+
+  it("returns 429 with a Retry-After once an IP exceeds the allowance", () => {
+    const forwardedFor = "203.0.113.3";
+    let decision = runProxy("/monitoring", { method: "POST", forwardedFor });
+    // The singleton limiter accumulates within its wall-clock window; this loop
+    // runs in milliseconds, so every call lands in the same window.
+    for (let i = 0; i < 500 && decision.kind === "next"; i++) {
+      decision = runProxy("/monitoring", { method: "POST", forwardedFor });
+    }
+    expect(decision.kind).toBe("raw");
+    expect(decision.status).toBe(429);
+    expect(decision.headers?.get("Retry-After")).toBeTruthy();
   });
 });
 
