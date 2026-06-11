@@ -163,7 +163,7 @@ _Fuentes: https://martinfowler.com/eaaCatalog/queryObject.html, https://martinfo
 |------------------------------------------------------|---------------------------------------------------------------------------------------|----------------------------------------------------------|
 | Añadir una lista de entidad nueva                    | Sin código nuevo de filtrado: solo allow-list de campos + repo                        | DTO + criteria subclase + lógica en repo (3 clases)      |
 | Añadir un operador nuevo                             | 1 caso de enum + 1 rama en el applier (centralizado)                                  | Tocar cada DTO/repo afectado (disperso)                  |
-| Verificación estática (PHPStan/Psalm nivel del repo) | Campos = strings en runtime; el análisis estático no puede verificar nombres de campo | Tipado extremo a extremo; un typo no compila el contrato |
+| Verificación estática (PHPStan nivel del repo) | Campos = strings en runtime; el análisis estático no puede verificar nombres de campo | Tipado extremo a extremo; un typo no compila el contrato |
 | Seguridad                                            | Exige allow-list explícita obligatoria por recurso                                    | Allow-list por construcción (propiedades del DTO)        |
 | Expresividad HTTP                                    | Cliente compone field/operator/value arbitrarios                                      | Solo lo previsto por el DTO                              |
 | Riesgo de sobre-exposición                           | Alto si la allow-list se descuida                                                     | Bajo                                                     |
@@ -237,7 +237,7 @@ Dos patrones canónicos enmarcan la ejecución de la opción C:
 
 ### Flujo de desarrollo y tooling
 
-- Rama `feat/shared-search-filters` desde `origin/main`; sin migraciones de BD (cero cambio de esquema). Gates del repo: `make php.stan` por archivo tocado, `make php.quality` completo al final (PHPMD sin baseline; evitar clases anónimas readonly en fixtures — usar mothers nombradas), y **ambos** `php.stan` + `php.psalm` (discrepancias conocidas entre ellos en este repo).
+- Rama `feat/shared-search-filters` desde `origin/main`; sin migraciones de BD (cero cambio de esquema). Gates del repo: `make php.stan` por archivo tocado, `make php.quality` completo al final (PHPMD sin baseline; evitar clases anónimas readonly en fixtures — usar mothers nombradas).
 - Documentación obligatoria por CLAUDE.md: `docs/architecture-api.md` (patrón nuevo en Shared), `api/docs/` (forma del endpoint), `docs/api-error-contract.md` (marker), `pwa/docs/` + `docs/architecture-pwa.md` (builder cliente en fase 2).
 
 ### Testing y QA

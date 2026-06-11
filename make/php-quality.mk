@@ -44,52 +44,18 @@ php.cs: ## PHPCBF (apply fixes) ; pass c= for extra args
 php.cs.dry-run: ## PHPCS (check only); pass c= for extra args
 	@$(PHP_TEST) vendor/bin/phpcs --standard=tools/phpcs/phpcs.xml src tests $(c)
 
-## —— Psalm ——
+## —— Psalm (taint / security flow analysis only) ——
+#
+# Psalm's general static analysis was retired (chore/remove-psalm-general):
+# PHPStan at `level: max` (tools/phpstan/phpstan.neon) is the sole type-checking
+# authority. Two overlapping analysers disagreed on the same code and the frozen
+# ~492-issue psalm-baseline.xml + `--alter` auto-fix were pure friction. What
+# PHPStan has no native equivalent for — taint / security dataflow — is kept here.
 
-PSALM_CONFIG = tools/psalm/psalm.xml
 PSALM_TAINT_CONFIG = tools/psalm/psalm-taint.xml
-PSALM_BASELINE = tools/psalm/psalm-baseline.xml
 PSALM_BIN = vendor/bin/psalm
 
-# Todo add to CLEANUP_ISSUES ,PossiblyUnusedMethod,ClassMustBeFinal,MissingParamType
-# Cleanup issues compatible with --alter
-#####CLEANUP_ISSUES = MissingOverrideAttribute,RedundantCast,RedundantCastGivenDocblockType,UnusedMethod,UnusedVariable,PossiblyUnusedProperty,UnnecessaryVarAnnotation
-# NB: `MissingOverrideAttribute` is intentionally excluded. Rector's
-# `NoSetupWithParentCallOverrideRector` (phpunitCodeQuality set) STRIPS `#[Override]`
-# from test setUp()/tearDown() that call parent::, while psalm --alter would re-ADD it
-# — a tug-of-war between the two analysers (same class of conflict as MissingParamType
-# below). Excluding it lets rector win; the residual `MissingOverrideAttribute` psalm
-# still reports on those methods is frozen in psalm-baseline.xml.
-CLEANUP_ISSUES = UnusedVariable,UnusedMethod,PossiblyUnusedProperty,UnnecessaryVarAnnotation
-# Typing issues compatible with --alter (Psalm will inject types based on its inference)
-#####TYPE_ISSUES = MissingParamType,MissingPropertyType,MissingReturnType,MissingClosureReturnType,InvalidReturnType,InvalidNullableReturnType,InvalidFalsableReturnType,MismatchingDocblockParamType
-# NB: `MissingParamType` is intentionally excluded. It is suppressed in psalm.xml,
-# and forcing it via --alter narrows explicit `mixed` params to an inferred type
-# (e.g. `array`), which then breaks PHPStan at call sites that legitimately pass
-# scalars/objects — a tug-of-war between the two analysers on every `php.quality`
-TYPE_ISSUES = MissingReturnType,MissingPropertyType
-
-php.psalm: ## Run standard static analysis
-	$(PHP_TEST) $(PSALM_BIN) --config=$(PSALM_CONFIG)
-
-php.psalm.fix.cleanup: ## Fix safe redundancies and dead code
-	$(PHP_TEST) $(PSALM_BIN) --config=$(PSALM_CONFIG) --alter --issues=$(CLEANUP_ISSUES) --no-cache
-
-php.psalm.fix.types: ## Infer and inject missing types (Review changes carefully!)
-	$(PHP_TEST) $(PSALM_BIN) --config=$(PSALM_CONFIG) --alter --issues=$(TYPE_ISSUES) --no-cache
-
-php.psalm.fix.all: ## Run all supported auto-fixes (cleanup + types)
-	$(PHP_TEST) $(PSALM_BIN) --config=$(PSALM_CONFIG) --alter --issues=$(CLEANUP_ISSUES),$(TYPE_ISSUES) --no-cache
-
-# --config resolves from cwd (api/), so PSALM_* configs carry the tools/psalm/ prefix.
-# --set-baseline, however, resolves relative to the config-file dir (resolveFromConfigFile=true),
-# i.e. tools/psalm/ — so it needs the bare filename. We keep PSALM_BASELINE in the same
-# tools/psalm/ form as the configs and strip the dir with $(notdir) only here, matching
-# errorBaseline in psalm.xml. (Passing the full path would write tools/psalm/tools/psalm/….)
-php.psalm.baseline: ## Generate or update the error baseline (run after fixing psalm issues)
-	$(PHP_TEST) $(PSALM_BIN) --config=$(PSALM_CONFIG) --set-baseline=$(notdir $(PSALM_BASELINE))
-
-# Uses a baseline-free config (PSALM_TAINT_CONFIG) so taint mode does not flag every
+# Baseline-free config (PSALM_TAINT_CONFIG) so taint mode does not flag every
 # regular baseline entry as UnusedBaselineEntry — see tools/psalm/psalm-taint.xml.
 php.psalm.taint: ## Psalm taint analysis (SARIF)
 	$(PHP_TEST) $(PSALM_BIN) --config=$(PSALM_TAINT_CONFIG) --taint-analysis --report=psalm-taint.sarif
@@ -138,12 +104,12 @@ php.lint.error-contract: ## Error-contract drift gate
 # masked here and only fails later in CI's `php.quality.dry-run`. Re-running the
 # strict, read-only `php.cs.dry-run` at the end makes `make php.quality` FAIL on
 # that drift locally, so it is caught before commit/push instead of on CI. History: long-line drift slipped through on the keyset PR.
-php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.psalm.fix.all php.gherkin php.lint.doctrine php.lint.error-contract php.psalm php.cs.dry-run ## Full PHP lint sweep
+php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint.doctrine php.lint.error-contract php.cs.dry-run ## Full PHP lint sweep
 
 # Check-only sweep for CI / pre-push: the read-only subset of php.quality that is
 # currently green, fanned out in parallel. Two wins over php.quality:
 #   1. Gating — php.quality runs the fixers in APPLY mode (rector process,
-#      cs-fixer fix, phpcbf, psalm --alter), so in an ephemeral CI container it
+#      cs-fixer fix, phpcbf), so in an ephemeral CI container it
 #      auto-fixes drift and exits 0; these check variants FAIL on drift instead.
 #   2. Parallel-safe — every prerequisite here is read-only (no src/ writes), so
 #      CI can fan them out with `make -j --output-sync=target` without racing.
@@ -154,21 +120,16 @@ php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.psalm.fix.all ph
 # (all lines ≤120), so plain `phpcs` now FAILS on any new >120 (warning) / >160
 # (error) line instead of being masked by phpcbf's `exit ≤2` tolerance.
 #
-# psalm IS gated here too via php.psalm: its ~492-issue backlog at errorLevel=3
-# (findUnusedCode=true) is frozen in tools/psalm/psalm-baseline.xml, wired through
-# `errorBaseline` in psalm.xml. Plain `psalm` reports 0 errors today and FAILS on
-# any NEW regression — no longer masked by `psalm --alter` (auto-fix-and-discard).
-# Because findUnusedBaselineEntry=true, FIXING a baselined issue turns the gate red
-# until you regenerate (`make php.psalm.baseline`) and commit the smaller baseline —
-# by design, so the backlog only ever shrinks. History: issue #97.
-php.quality.dry-run: php.stan php.psalm php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.doctrine php.lint.error-contract ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
+# Psalm's general analysis is no longer part of this sweep (chore/remove-psalm-general):
+# PHPStan `level: max` is the sole type-checking gate. Psalm now runs taint-only,
+# in its own CI job (`api-taint` → `make php.psalm.taint`), not here.
+php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.doctrine php.lint.error-contract ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
 
 .PHONY: php.stan php.stan.baseline \
         php.rector php.rector.dry-run \
         php.cs-fixer php.cs-fixer.dry-run \
         php.md php.cs php.cs.dry-run \
-        php.psalm php.psalm.baseline php.psalm.taint \
-        php.psalm.fix.cleanup php.psalm.fix.types php.psalm.fix.all \
+        php.psalm.taint \
         php.gherkin php.gherkin.rules \
         php.lint.doctrine php.lint.yaml \
         php.lint.error-contract \

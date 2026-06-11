@@ -74,7 +74,6 @@ final class KeysetSqlSnapshotTest extends KernelTestCase
 
         // why: getParams() is @internal but is the documented way to clone a live connection's config
         // onto a parallel logging connection in a test — there is no public alternative.
-        /** @psalm-suppress InternalMethod */
         $loggedConnection = DriverManager::getConnection($realEntityManager->getConnection()->getParams(), $dbalConfig);
 
         $this->loggedEntityManager = new EntityManager($loggedConnection, $realEntityManager->getConfiguration());
