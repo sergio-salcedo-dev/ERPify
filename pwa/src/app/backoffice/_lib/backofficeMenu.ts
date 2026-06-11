@@ -80,14 +80,11 @@ const BASE = Routes.BACKOFFICE;
  */
 export const backofficeMenuGroups: NavGroup[] = [
   {
-    label: "General",
-    items: [
-      { name: "Dashboard", icon: LayoutDashboard, path: BASE },
-      { name: "Banks", icon: Building2, path: bankRoutes.list },
-    ],
+    label: "Home",
+    items: [{ name: "Dashboard", icon: LayoutDashboard, path: BASE }],
   },
   {
-    label: "Commercial",
+    label: "Sales & CRM",
     items: [
       {
         name: "CRM",
@@ -113,7 +110,7 @@ export const backofficeMenuGroups: NavGroup[] = [
     ],
   },
   {
-    label: "Operations",
+    label: "Projects",
     items: [
       {
         name: "Technical Office",
@@ -137,6 +134,11 @@ export const backofficeMenuGroups: NavGroup[] = [
         path: `${BASE}/tasks`,
         subItems: [{ name: "Team Tasks", path: `${BASE}/tasks`, icon: SquareCheckBig }],
       },
+    ],
+  },
+  {
+    label: "Purchasing & Inventory",
+    items: [
       {
         name: "Logistics",
         icon: Package,
@@ -152,6 +154,7 @@ export const backofficeMenuGroups: NavGroup[] = [
   {
     label: "Finance",
     items: [
+      { name: "Banks", icon: Building2, path: bankRoutes.list },
       {
         name: "Finance",
         icon: Landmark,
@@ -160,24 +163,15 @@ export const backofficeMenuGroups: NavGroup[] = [
           { name: "Management Control", path: `${BASE}/finance/control`, icon: Activity },
           { name: "Global Transactions", path: `${BASE}/finance/transactions`, icon: RefreshCw },
           { name: "Invoicing", path: `${BASE}/invoices`, icon: Receipt },
-          { name: "Treasury & Banks", path: `${BASE}/finance/treasury`, icon: Landmark },
+          { name: "Treasury", path: `${BASE}/finance/treasury`, icon: Landmark },
           { name: "Cash Flow", path: `${BASE}/finance/cash-flow`, icon: DollarSign },
           { name: "Cost Allocation", path: `${BASE}/finance/accounting`, icon: ChartPie },
-        ],
-      },
-      {
-        name: "AI Intelligence",
-        icon: Bot,
-        path: `${BASE}/ai-reports`,
-        subItems: [
-          { name: "AI Reports", path: `${BASE}/ai-reports`, icon: Bot },
-          { name: "Roadmap & AI Labs", path: `${BASE}/roadmap`, icon: Rocket },
         ],
       },
     ],
   },
   {
-    label: "Organization",
+    label: "Organization & People",
     items: [
       {
         name: "Organization",
@@ -201,18 +195,22 @@ export const backofficeMenuGroups: NavGroup[] = [
     ],
   },
   {
-    label: "Resources",
+    label: "Insights",
     items: [
       {
-        name: "Documentation",
-        icon: BookOpen,
-        path: `${BASE}/docs`,
+        name: "AI Intelligence",
+        icon: Bot,
+        path: `${BASE}/ai-reports`,
         subItems: [
-          { name: "Technical Explorer", path: `${BASE}/docs`, icon: Code },
-          { name: "Data Dictionary", path: `${BASE}/docs/dictionary`, icon: Database },
-          { name: "Domain Flows", path: `${BASE}/docs/flow`, icon: Activity },
+          { name: "AI Reports", path: `${BASE}/ai-reports`, icon: Bot },
+          { name: "Roadmap & AI Labs", path: `${BASE}/roadmap`, icon: Rocket },
         ],
       },
+    ],
+  },
+  {
+    label: "System",
+    items: [
       {
         name: "Configuration",
         icon: SettingsIcon,
@@ -223,16 +221,26 @@ export const backofficeMenuGroups: NavGroup[] = [
           { name: "Audit Logs", path: `${BASE}/audit`, icon: History },
         ],
       },
-    ],
-  },
-  {
-    label: "System",
-    items: [
       {
         name: "Administration",
         icon: SettingsIcon,
         path: `${BASE}/administration`,
         subItems: [{ name: "Service Health", path: `${BASE}/health`, icon: Activity }],
+      },
+    ],
+  },
+  {
+    label: "Help & Guides",
+    items: [
+      {
+        name: "Documentation",
+        icon: BookOpen,
+        path: `${BASE}/docs`,
+        subItems: [
+          { name: "Technical Explorer", path: `${BASE}/docs`, icon: Code },
+          { name: "Data Dictionary", path: `${BASE}/docs/dictionary`, icon: Database },
+          { name: "Domain Flows", path: `${BASE}/docs/flow`, icon: Activity },
+        ],
       },
     ],
   },

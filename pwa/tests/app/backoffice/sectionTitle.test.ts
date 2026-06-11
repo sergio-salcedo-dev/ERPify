@@ -57,7 +57,7 @@ describe("sectionTitleFor", () => {
 
   it.each([
     ["/backoffice/finance/control", "Management Control"],
-    ["/backoffice/finance/treasury", "Treasury & Banks"],
+    ["/backoffice/finance/treasury", "Treasury"],
     ["/backoffice/finance/cash-flow", "Cash Flow"],
     ["/backoffice/finance/accounting", "Cost Allocation"],
     ["/backoffice/catalog/brands", "Brands & Manufacturers"],
@@ -68,7 +68,7 @@ describe("sectionTitleFor", () => {
 
   it.each([
     ["/backoffice/clients/abc-123", "Clients"],
-    ["/backoffice/finance/treasury/settings", "Treasury & Banks"],
+    ["/backoffice/finance/treasury/settings", "Treasury"],
   ])("keeps the title for deep sub-routes of an ERP leaf: %s → %s", (pathname, title) => {
     expect(sectionTitleFor(pathname)).toBe(title);
   });
