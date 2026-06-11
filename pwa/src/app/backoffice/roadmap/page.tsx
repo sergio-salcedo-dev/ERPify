@@ -170,7 +170,7 @@ function PhaseSection({ phase }: Readonly<{ phase: RoadmapPhase }>) {
           </span>
           <h2 className="text-foreground text-lg font-semibold tracking-tight">{phase.label}</h2>
         </div>
-        <p className="text-muted-foreground max-w-3xl text-sm leading-relaxed">{phase.summary}</p>
+        <p className="text-muted-foreground text-sm leading-relaxed">{phase.summary}</p>
         <div className="roadmap__phase-progress flex items-center gap-3">
           <ProgressBar
             percent={progress.donePercent}
@@ -205,11 +205,21 @@ export default function RoadmapPage() {
           </h1>
           <p className="text-muted-foreground max-w-3xl text-sm leading-relaxed">
             Backlog vivo de producto + ingeniería, por fases y módulos. El estado se marca tarea a
-            tarea, al cerrar y verificar cada pieza:{" "}
-            <span className="text-foreground font-medium">Hecho</span> = entregado y verificado,{" "}
-            <span className="text-foreground font-medium">En curso</span> = se está trabajando,{" "}
-            <span className="text-foreground font-medium">Pendiente</span> = sin empezar. Fuente de
-            verdad: <code className="text-foreground">roadmap.ts</code>.
+            tarea, al cerrar y verificar cada pieza:
+          </p>
+          <ul className="roadmap__status-legend text-muted-foreground max-w-3xl text-sm leading-relaxed">
+            <li>
+              <span className="text-foreground font-medium">Hecho</span> = entregado y verificado
+            </li>
+            <li>
+              <span className="text-foreground font-medium">En curso</span> = se está trabajando
+            </li>
+            <li>
+              <span className="text-foreground font-medium">Pendiente</span> = sin empezar
+            </li>
+          </ul>
+          <p className="text-muted-foreground max-w-3xl text-sm leading-relaxed">
+            Fuente de verdad: <code className="text-foreground">roadmap.ts</code>.
           </p>
         </div>
 
