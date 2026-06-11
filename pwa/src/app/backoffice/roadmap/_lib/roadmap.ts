@@ -23,6 +23,7 @@ import {
   Rocket,
   FlaskConical,
   Container,
+  Languages,
 } from "lucide-react";
 
 /**
@@ -167,6 +168,28 @@ export const roadmapPhases: RoadmapPhase[] = [
           { name: "Sentry integration (backend + frontend)", status: "done" },
           { name: "Metrics hooks (futuro Prometheus)", status: "planned" },
           { name: "Event tracing hooks (domain → async)", status: "planned" },
+        ],
+      },
+      {
+        code: "0.8",
+        name: "Internationalization (i18n)",
+        icon: Languages,
+        status: "planned",
+        priority: "high",
+        objective: "Toda la app disponible en inglés y español, con el idioma como preferencia del usuario.",
+        boundedContext: "shared",
+        submodules: [
+          { name: "Catálogos de traducción PWA (next-intl)" },
+          { name: "Detección + conmutación de locale (EN/ES)" },
+          { name: "Selector de idioma + persistencia (preferencia de usuario)" },
+          { name: "Traducciones backend (Symfony Translation: validación, emails)" },
+          { name: "Mensajes de error RFC 9457 localizados" },
+          {
+            name: "Formato de fecha/número/moneda por locale",
+            status: "in-progress",
+            note: "dateTimeProvider ya formatea por locale",
+          },
+          { name: "Cobertura de traducción en CI (claves faltantes fallan)" },
         ],
       },
     ],
