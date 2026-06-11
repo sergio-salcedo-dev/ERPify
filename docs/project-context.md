@@ -92,7 +92,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 - Early returns; max nesting 3–4 levels; functions small and single-purpose.
 - Never import framework/ORM/HTTP classes inside `Domain/` — domain stays pure (see `docs/rules/architecture.md`).
 - Namespace root is `Erpify\` → `api/src/`. Tests: `Erpify\Tests\` → `api/tests/`. Keep `Backoffice` / `Frontoffice` / `Shared` top-level boundaries.
-- Doctrine entities live in `Infrastructure/` (or designated persistence folder), not `Domain/`. Domain objects are POPOs; mapping is via XML/attributes in the infra layer.
+- Doctrine entities live in `Domain/Entity` and may carry **passive metadata attributes** (`#[ORM\…]`, `#[Assert\…]`, `#[Groups]`) — documented exception in `docs/rules/architecture.md` (canonical example: `api/src/Backoffice/Bank/Domain/Entity/Bank.php`). Behavioral framework code (`EntityManagerInterface`, `Request`/`Response`, Messenger envelopes) stays out of `Domain/`.
 
 #### TypeScript (pwa/)
 
