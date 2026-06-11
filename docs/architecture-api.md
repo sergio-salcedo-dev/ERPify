@@ -2,7 +2,7 @@
 
 ## Executive summary
 
-The `api/` deployable is a Symfony 8 HTTP API running on **FrankenPHP** (Caddy embedded), backed by PostgreSQL via Doctrine ORM 3.6 / DBAL 4.4, with async workflows on Symfony Messenger and real-time updates on Mercure. The code is organised as **DDD + Hexagonal / Clean Architecture** across top-level bounded contexts (`Backoffice/`, `Frontoffice/`, `Shared/`), each internally layered into `Domain / Application / Infrastructure`.
+The `api/` deployable is a Symfony 8 HTTP API on **FrankenPHP** (Caddy embedded), backed by PostgreSQL via Doctrine ORM 3.6 / DBAL 4.4, with async workflows on Symfony Messenger and real-time updates on Mercure. Code follows **DDD + Hexagonal / Clean Architecture** across top-level bounded contexts (`Backoffice/`, `Frontoffice/`, `Shared/`), each layered into `Domain / Application / Infrastructure`.
 
 ## Technology stack
 
@@ -29,7 +29,7 @@ The `api/` deployable is a Symfony 8 HTTP API running on **FrankenPHP** (Caddy e
 | Style / quality | PHP-CS-Fixer / PHPCS / PHPMD                   | 3.x / 4 / —                                   |
 | Fixtures        | Hautelook Alice                                | 2.x                                           |
 
-See [`project-context.md`](./project-context.md#technology-stack--versions) for the full constraint table (version gotchas, Doctrine 3 API deltas, polyfill `replace` block, Behat isolation rationale).
+Full constraint table (version gotchas, Doctrine 3 API deltas, polyfill `replace` block, Behat isolation rationale): [`project-context.md`](./project-context.md#technology-stack--versions).
 
 ## Architecture pattern
 
@@ -57,25 +57,13 @@ api/src/
 
 Cross-context calls go through **published Application services** or **domain events**; one context never reaches into another's `Domain/` or `Infrastructure/`.
 
-**Bounded-context isolation.** ERPify is a modular monolith on one physical DB.
-The rule is *enforce boundaries, not total isolation* — couple to another
-context's **identities and events**, never its **internals**. FKs/imports aren't
-bad per se; the boundary they cross is what matters. Three levels (full statement
-+ rationale in [`rules/database.md`](./rules/database.md#bounded-context-data-isolation-modular-monolith)):
+**Bounded-context isolation.** ERPify is a modular monolith on one physical DB. The rule is *enforce boundaries, not total isolation* — couple to another context's **identities and events**, never its **internals**. FKs/imports aren't bad per se; the boundary they cross is what matters. Three levels (full statement + rationale in [`rules/database.md`](./rules/database.md#bounded-context-data-isolation-modular-monolith)):
 
-- **🔴 Level 1 — review-blocking:** no cross-context import of another context's
-  `Domain/`/`Application/` (only allowed seams: its published Application service
-  interface + integration-event classes); no cross-context repository query /
-  `JOIN`.
-- **🟡 Level 2 — discouraged (soft):** a cross-context FK between two business
-  contexts — default to a bare UUID v7 column; justify a real FK in the PR.
-- **🟢 Level 3 — allowed:** shared kernel (`User`, tenant/`company_id`, `Money`,
-  `Uuid`), ID-only references, integration via events, read models. Granular
-  context map + event catalog: [`bounded-contexts.md`](./bounded-contexts.md).
+- **🔴 Level 1 — review-blocking:** no cross-context import of another context's `Domain/`/`Application/` (only allowed seams: its published Application service interface + integration-event classes); no cross-context repository query / `JOIN`.
+- **🟡 Level 2 — discouraged (soft):** a cross-context FK between two business contexts — default to a bare UUID v7 column; justify a real FK in the PR.
+- **🟢 Level 3 — allowed:** shared kernel (`User`, tenant/`company_id`, `Money`, `Uuid`), ID-only references, integration via events, read models. Granular context map + event catalog: [`bounded-contexts.md`](./bounded-contexts.md).
 
-Golden rule: *contexts reference each other's identities and react to each
-other's events, never know each other's internals.* A 3-level static gate is
-tracked as deferred work; until then, enforced by review.
+Golden rule: *contexts reference each other's identities and react to each other's events, never know each other's internals.* A 3-level static gate is tracked as deferred work; until then, enforced by review.
 
 ## Layer responsibilities
 
@@ -90,13 +78,13 @@ tracked as deferred work; until then, enforced by review.
 - **Primary store**: PostgreSQL 18 via Doctrine ORM.
 - **Migrations**: `api/migrations/2026/Version<timestamp>.php` (organised by year). Generate via `make db.diff`; never hand-edit applied migrations.
 - **Fixtures**: Hautelook Alice — `make db.load.fixtures`; destructive reset via `make db.reset` (drop → migrate → fixtures).
-- **Mapping**: Doctrine mapping is declared as `#[ORM\…]` attributes on the entities themselves (passive-metadata exception — see [`rules/architecture.md`](./rules/architecture.md)); repository implementations and persistence listeners live in `Infrastructure/Persistence/`.
-- **Identifiers**: every entity id is an **app-assigned UUID v7** (`Uuid::generate()`, `Shared/Domain/Uuid`), mapped via the shared `Shared/Domain/Entity/Identifiable` trait as a Doctrine *assigned* identifier — `#[ORM\Id]` + `#[ORM\Column]`, **no** `#[ORM\GeneratedValue]`. This is load-bearing: the id assigned in the application layer is the persisted PK **and** the id carried by the aggregate's creation `DomainEvent`, so id-based consumers (e.g. Mercure realtime) match the create event to its row. Re-adding a Doctrine id generator makes it mint a divergent v7 PK at flush and breaks that invariant — pinned by `tests/Functional/Doctrine/IdentifiableAssignedIdentifierTest`. The `StoredDomainEvent` audit row is an `Identifiable` user too: `DoctrineDomainEventStore::append()` mints its v7 id (it is no longer Doctrine-generated). See [`rules/database.md`](./rules/database.md#identifiers-uuid-v7-app-assigned).
+- **Mapping**: declared as `#[ORM\…]` attributes on the entities (passive-metadata exception — see [`rules/architecture.md`](./rules/architecture.md)); repository implementations and persistence listeners live in `Infrastructure/Persistence/`.
+- **Identifiers**: every entity id is an **app-assigned UUID v7** (`Uuid::generate()`, `Shared/Domain/Uuid`), mapped via the shared `Shared/Domain/Entity/Identifiable` trait as a Doctrine *assigned* identifier — `#[ORM\Id]` + `#[ORM\Column]`, **no** `#[ORM\GeneratedValue]`. Load-bearing: the id assigned in the application layer is the persisted PK **and** the id carried by the aggregate's creation `DomainEvent`, so id-based consumers (e.g. Mercure realtime) match the create event to its row. Re-adding a Doctrine id generator makes it mint a divergent v7 PK at flush and breaks that invariant — pinned by `tests/Functional/Doctrine/IdentifiableAssignedIdentifierTest`. The `StoredDomainEvent` audit row is an `Identifiable` user too: `DoctrineDomainEventStore::append()` mints its v7 id (no longer Doctrine-generated). See [`rules/database.md`](./rules/database.md#identifiers-uuid-v7-app-assigned).
 - **Doctrine 3 / DBAL 4 API caveats**: see [`project-context.md` → Runtime gotchas](./project-context.md).
 
 ## API design
 
-- Attribute-only routing (`#[Route]`) on controllers placed under each bounded context's `Infrastructure/Controller/`.
+- Attribute-only routing (`#[Route]`) on controllers under each bounded context's `Infrastructure/Controller/`.
 - Controllers are thin — delegate to Application-layer use cases and return via `AbstractController::json()` so Serializer groups apply.
 - CORS configured in `api/config/packages/nelmio_cors.php` (PHP, not YAML); no wildcard `*` for credentialed origins.
 - Public health endpoints exposed from `Frontoffice/Health/` and `Backoffice/Health/`.
@@ -104,7 +92,7 @@ tracked as deferred work; until then, enforced by review.
 
 ## Filterable search (generic `filters[]` contract)
 
-Every search endpoint accepts the same generic filter grammar — there is no per-entity filter code beyond the repository's allow-list. A request filters with `filters[N][field|operator|value]`; the operator tokens are `eq`, `in`, `contains` and the temporal range operators `gt`, `gte`, `lt`, `lte` (lowercase — the `FilterOperator` enum backing string **is** the wire contract). Full wire grammar, caps, and the per-request walkthrough live in [`../api/docs/adding-endpoints.md`](../api/docs/adding-endpoints.md#generic-filters-wire-contract); this section is the architectural source of truth for the pattern.
+Every search endpoint accepts the same generic filter grammar — no per-entity filter code beyond the repository's allow-list. A request filters with `filters[N][field|operator|value]`; operator tokens are `eq`, `in`, `contains` and the temporal range operators `gt`, `gte`, `lt`, `lte` (lowercase — the `FilterOperator` enum backing string **is** the wire contract). Full wire grammar, caps, and per-request walkthrough: [`../api/docs/adding-endpoints.md`](../api/docs/adding-endpoints.md#generic-filters-wire-contract); this section is the architectural source of truth for the pattern.
 
 **Read-path flow** (the seam auto-applies filtering — repositories never call the applier):
 
@@ -120,7 +108,7 @@ query string
        └─ Paginator                                                         (keyset/HMAC cursor, intact)
 ```
 
-`FilterApplier` (`Shared/Infrastructure/Persistence/Doctrine/Search/`) only ever adds `andWhere` + bound parameters (hashed `xxh128` naming); it is invoked **exclusively** by the base repository's `getPaginatedResults()`. `SearchFieldMap` is built **exclusively** inside each concrete repository's `searchFieldMap()` — the allow-list lives with the schema knowledge, never in Application. `Domain/Search` carries only the **public** field name; the DQL path is resolved in Infrastructure. As of PR2, `FilterApplier::apply()` returns an `AppliedFilters` receipt (the post-allow-list truth) instead of `void`; the legacy wire caller ignores it, the keyset engine consumes it for the trace fingerprint (AR22).
+`FilterApplier` (`Shared/Infrastructure/Persistence/Doctrine/Search/`) only ever adds `andWhere` + bound parameters (hashed `xxh128` naming); invoked **exclusively** by the base repository's `getPaginatedResults()`. `SearchFieldMap` is built **exclusively** inside each concrete repository's `searchFieldMap()` — the allow-list lives with the schema knowledge, never in Application. `Domain/Search` carries only the **public** field name; the DQL path is resolved in Infrastructure. As of PR2, `FilterApplier::apply()` returns an `AppliedFilters` receipt (the post-allow-list truth) instead of `void`; the legacy wire caller ignores it, the keyset engine consumes it for the trace fingerprint (AR22).
 
 #### Keyset engine (`DoctrineSearchEngine`) — built in PR2, off-wire
 
@@ -168,9 +156,9 @@ protected function searchFieldMap(): SearchFieldMap
 }
 ```
 
-`operators` defaults to all three (`eq`/`in`/`contains`); restrict it (as `id` does) whenever an operator would break at the SQL level, or widen it to the temporal range set (`gt`/`gte`/`lt`/`lte`) for timestamp-backed fields. A field's `FieldNormalizer` applies across **all** its allowed operators (so they share normalization); `requiresUuidValues: true` pre-validates UUID format → a 422 `invalid-search-value` (carrying `{field, position}`, never the value) instead of a Postgres 22P02 500. Because the default set includes `contains` — which a UUID column can never satisfy — a UUID-backed field **must** restrict `operators` to exclude it (the example pins `[Eq, In]`); that combination is otherwise rejected at construction.
+`operators` defaults to all three (`eq`/`in`/`contains`); restrict it (as `id` does) whenever an operator would break at the SQL level, or widen it to the temporal range set (`gt`/`gte`/`lt`/`lte`) for timestamp-backed fields. A field's `FieldNormalizer` applies across **all** its allowed operators (shared normalization); `requiresUuidValues: true` pre-validates UUID format → a 422 `invalid-search-value` (carrying `{field, position}`, never the value) instead of a Postgres 22P02 500. Because the default set includes `contains` — which a UUID column can never satisfy — a UUID-backed field **must** restrict `operators` to exclude it (the example pins `[Eq, In]`); that combination is otherwise rejected at construction.
 
-`requiresDateTimeValues: true` is the temporal sibling: it marks a `timestamp` column so each range bound is parsed as an RFC 3339 / ISO-8601 datetime — the offset form `2026-01-01T00:00:00+00:00` (`+`-encoded as `%2B` on the wire) or the `Z` form, with optional fractional seconds, so the JS `toISOString()` output is accepted as-is — bounds resolve at second precision (the columns are `TIMESTAMP(0)`, so a sub-second component is truncated and >6 fractional digits are rejected); lax/relative forms and out-of-range offsets (beyond UTC+14/-12) are rejected — normalized to UTC, and bound as a typed `datetime_immutable` parameter (a raw string against a timestamp column has no Postgres operator → a 500; a malformed bound becomes a 422 `invalid-search-value`). It is likewise incompatible with `contains` (a `LIKE` over a timestamp column breaks at the SQL level), so a datetime-backed field lists only range operators. There is deliberately **no `between`**: a closed range is two filters on the same field (`gte` + `lte`), which already compose with AND — adding a redundant operator would violate NFR1/YAGNI. Index every range-filterable column at the entity's `#[ORM\Table]` level (NFR4) — never on the shared `Timestamped` trait, which would index every timestamped entity.
+`requiresDateTimeValues: true` is the temporal sibling: it marks a `timestamp` column so each range bound is parsed as an RFC 3339 / ISO-8601 datetime — the offset form `2026-01-01T00:00:00+00:00` (`+`-encoded as `%2B` on the wire) or the `Z` form, with optional fractional seconds, so the JS `toISOString()` output is accepted as-is — bounds resolve at second precision (the columns are `TIMESTAMP(0)`, so a sub-second component is truncated and >6 fractional digits are rejected); lax/relative forms and out-of-range offsets (beyond UTC+14/-12) are rejected — normalized to UTC, and bound as a typed `datetime_immutable` parameter (a raw string against a timestamp column has no Postgres operator → a 500; a malformed bound becomes a 422 `invalid-search-value`). Likewise incompatible with `contains` (a `LIKE` over a timestamp column breaks at the SQL level), so a datetime-backed field lists only range operators. There is deliberately **no `between`**: a closed range is two filters on the same field (`gte` + `lte`), which already compose with AND — a redundant operator would violate NFR1/YAGNI. Index every range-filterable column at the entity's `#[ORM\Table]` level (NFR4) — never on the shared `Timestamped` trait, which would index every timestamped entity.
 
 Canonical `sortFieldMap()` (from the same pilot) — name → DQL path only; no operators or normalizers, since ordering needs neither:
 
