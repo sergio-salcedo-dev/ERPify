@@ -20,12 +20,21 @@ use stdClass;
 #[CoversClass(RedactionDenylist::class)]
 final class RedactionDenylistTest extends TestCase
 {
-    public function testKeysConstantContainsTheSevenCanonicalDenylistKeys(): void
+    public function testKeysConstantContainsTheCanonicalDenylistKeys(): void
     {
         // @phpstan-ignore method.alreadyNarrowedType (the assertion IS the test — pins the constant baseline)
         $this->assertSame(
             RedactionDenylist::KEYS,
-            ['password', 'token', 'secret', 'authorization', 'cookie', 'ssn', 'iban'],
+            [
+                'password',
+                'token', 'secret',
+                'authorization', 'cookie',
+                'ssn',
+                'iban',
+                'email',
+                'phone_number',
+                'address',
+            ],
         );
     }
 
@@ -44,8 +53,8 @@ final class RedactionDenylistTest extends TestCase
     /**
      * @param non-empty-string $caseVariant
      */
-    #[DataProvider('provideFilterStripsExactKeyMatchCaseInsensitiveCases')]
-    public function testFilterStripsExactKeyMatchCaseInsensitive(string $caseVariant): void
+    #[DataProvider('provideFilterStripsSubstringMatchCaseInsensitiveCases')]
+    public function testFilterStripsSubstringMatchCaseInsensitive(string $caseVariant): void
     {
         $filtered = RedactionDenylist::filter([
             $caseVariant => 'sensitive',
@@ -60,21 +69,23 @@ final class RedactionDenylistTest extends TestCase
     /**
      * @return iterable<string, array{0: non-empty-string}>
      */
-    public static function provideFilterStripsExactKeyMatchCaseInsensitiveCases(): iterable
+    public static function provideFilterStripsSubstringMatchCaseInsensitiveCases(): iterable
     {
         foreach (RedactionDenylist::KEYS as $canonical) {
             yield $canonical . ' (lower)' => [$canonical];
             yield $canonical . ' (Title)' => [\ucfirst($canonical)];
             yield $canonical . ' (UPPER)' => [\strtoupper($canonical)];
             yield $canonical . ' (mIxEd)' => [self::alternatingCase($canonical)];
+            yield $canonical . ' (prefix)' => ['my_' . $canonical];
+            yield $canonical . ' (suffix)' => [$canonical . '_hash'];
         }
     }
 
     /**
      * @param non-empty-string $key
      */
-    #[DataProvider('provideFilterDoesNotStripSubstringPrefixOrSuffixCases')]
-    public function testFilterDoesNotStripSubstringPrefixOrSuffix(string $key): void
+    #[DataProvider('provideFilterDoesNotStripUnrelatedKeysCases')]
+    public function testFilterDoesNotStripUnrelatedKeys(string $key): void
     {
         $filtered = RedactionDenylist::filter([$key => 'kept']);
 
@@ -85,15 +96,10 @@ final class RedactionDenylistTest extends TestCase
     /**
      * @return iterable<string, array{0: non-empty-string}>
      */
-    public static function provideFilterDoesNotStripSubstringPrefixOrSuffixCases(): iterable
+    public static function provideFilterDoesNotStripUnrelatedKeysCases(): iterable
     {
-        yield 'substring (my_password)' => ['my_password'];
-        yield 'substring/prefix (password_hash)' => ['password_hash'];
-        yield 'prefix-only (pass)' => ['pass'];
-        yield 'leading whitespace ( password)' => [' password'];
-        yield 'trailing whitespace (password )' => ['password '];
-        yield 'non-ASCII (PÄSSWORD)' => ['PÄSSWORD'];
-        yield 'unrelated (email)' => ['email'];
+        yield 'unrelated (username)' => ['username'];
+        yield 'unrelated (public_key)' => ['public_key'];
         yield 'numeric-string (42)' => ['42'];
     }
 
@@ -188,15 +194,15 @@ final class RedactionDenylistTest extends TestCase
         );
     }
 
-    public function testDataProviderRowCountMatchesKeysCountTimesFour(): void
+    public function testDataProviderRowCountMatchesKeysCountTimesSix(): void
     {
-        $rows = \iterator_to_array(self::provideFilterStripsExactKeyMatchCaseInsensitiveCases(), preserve_keys: false);
+        $rows = \iterator_to_array(self::provideFilterStripsSubstringMatchCaseInsensitiveCases(), preserve_keys: false);
 
         $this->assertCount(
-            \count(RedactionDenylist::KEYS) * 4,
+            \count(RedactionDenylist::KEYS) * 6,
             $rows,
-            'Adding a new key to RedactionDenylist::KEYS requires adding four casing rows '
-            . 'to provideFilterStripsExactKeyMatchCaseInsensitiveCases.',
+            'Adding a new key to RedactionDenylist::KEYS requires adding six casing/substring rows '
+            . 'to provideFilterStripsSubstringMatchCaseInsensitiveCases.',
         );
     }
 

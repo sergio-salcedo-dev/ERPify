@@ -19,8 +19,8 @@ namespace Erpify\Shared\Application\Problem;
  * `password` is itself a signal to an attacker, and stripping composes cleanly with the
  * factory's sibling {@see ProblemDetailsFactory::RESERVED_KEYS} `unset()` layer.
  *
- * **Match scope:** exact-key (no substring), case-insensitive ASCII (`strtolower`),
- * single-level (no recursion into nested arrays). Substring/value-pattern redaction
+ * **Match scope:** substring match, case-insensitive ASCII (`strtolower`),
+ * single-level (no recursion into nested arrays). Value-pattern redaction
  * (e.g. `password=secret` inside `$throwable->getMessage()`) is out of scope.
  *
  * **Extending the denylist:** add the new key to {@see KEYS} and add four casing rows to
@@ -43,10 +43,13 @@ enum RedactionDenylist
         'cookie',
         'ssn',
         'iban',
+        'email',
+        'phone_number',
+        'address',
     ];
 
     /**
-     * Strips denylisted string keys from `$input` (case-insensitive ASCII, exact match).
+     * Strips denylisted string keys from `$input` (case-insensitive ASCII, substring match).
      * Numeric-coerced integer keys pass through unchanged — the filter only acts on string
      * keys, even though the canonical caller {@see ProblemDetailsFactory::redactKeys} only
      * passes `array<string, mixed>`. The runtime `is_string` guard is defense-in-depth
@@ -59,14 +62,24 @@ enum RedactionDenylist
      */
     public static function filter(array $input): array
     {
-        /** @var array<string, int> $denied */
-        $denied = \array_flip(self::KEYS);
-
+        /** @var array<int|string, mixed> $filtered */
         $filtered = [];
 
         foreach ($input as $key => $value) {
-            if (\is_string($key) && isset($denied[\strtolower($key)])) {
-                continue;
+            if (\is_string($key)) {
+                $lowerKey = \strtolower($key);
+
+                $isDenied = \array_any(
+                    self::KEYS,
+                    static fn (string $deniedKey): bool => \str_contains(
+                        $lowerKey,
+                        $deniedKey,
+                    ),
+                );
+
+                if ($isDenied) {
+                    continue;
+                }
             }
 
             $filtered[$key] = $value;
