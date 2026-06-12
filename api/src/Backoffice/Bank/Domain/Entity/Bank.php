@@ -48,6 +48,24 @@ final class Bank extends AggregateRoot
      */
     public const string GROUP_READ_URLS = 'bank:read:urls';
 
+    /**
+     * Serialization group that opts a READ response (list and single-bank detail) into the derived
+     * {@see $accountCount}. Deliberately distinct from {@see GROUP_DETAIL} so the write-path responses
+     * (create/update) — which also serialize with {@see GROUP_DETAIL} but never enrich the count —
+     * do not emit a stale `accountCount: 0`.
+     */
+    public const string GROUP_ACCOUNT_COUNT = 'bank:account-count';
+
+    /**
+     * Read-projection: number of bank accounts that reference this bank. Not persisted — it is a
+     * derived count assembled at read time (list and detail) by the application layer through the
+     * BankAccount read port {@see \Erpify\Backoffice\BankAccount\Domain\Repository\AccountCountsByBank},
+     * never by Bank itself. Defaults to 0 so the field is always a non-null integer, even before
+     * enrichment.
+     */
+    #[Groups([self::GROUP_ACCOUNT_COUNT])]
+    private int $accountCount = 0;
+
     private function __construct(
         string $id,
         #[ORM\Column]
@@ -143,6 +161,21 @@ final class Bank extends AggregateRoot
     public function getShortName(): string
     {
         return $this->shortName;
+    }
+
+    public function getAccountCount(): int
+    {
+        return $this->accountCount;
+    }
+
+    /**
+     * Enrich this read-projection with the number of accounts referencing the bank, computed by the
+     * application layer via the BankAccount read port. Read-only concern: it never participates in
+     * the aggregate's write invariants or domain events.
+     */
+    public function assignAccountCount(int $accountCount): void
+    {
+        $this->accountCount = $accountCount;
     }
 
     public function getLogo(): ?Media
