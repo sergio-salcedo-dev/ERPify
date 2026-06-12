@@ -7,11 +7,6 @@ Collected during quick-dev. Not part of the current story's shippable scope.
 > Este fichero permanece como sink del workflow quick-dev — los nuevos diferidos
 > se siguen apuntando aquí y se migran a issues periódicamente.
 
-## Deferred from: code review of spec-gh-199-200-202-hardening-sweep (2026-06-12)
-
-- **Gate dual-marker autocarga todo `api/src`** (`api/tests/Unit/Shared/Application/Problem/MarkerStatusMapContractTest.php`) — `class_exists()` por fichero autocarga cada clase para filtrar `Throwable`; más pesado que el `ErrorContractGateTest` (grep textual). El scan completo es decisión consciente (markers en todos los contextos). Revisar si `api/src` crece mucho o si una clase con efecto secundario en load-time rompe el gate con un fallo no relacionado.
-- **Documentar el contrato de precisión de `parseStrict`** (`docs/api-error-contract.md`) — el round-trip byte-canónico acepta solo segundos / 3 dígitos (millis) / 6 dígitos (micros); cualquier otra precisión → 422. Deliberado pero solo documentado en el docstring de `FilterApplier`; añadir una línea explícita en el contrato de error de cara a clientes.
-
 ## Migrado a issues (2026-06-10)
 
 | Issue                                                           | Item                                                                                                                                                                                            |
