@@ -17,6 +17,7 @@ use RuntimeException;
  */
 #[ORM\Entity(repositoryClass: MediaRepository::class)]
 #[ORM\Table(name: 'media')]
+#[ORM\UniqueConstraint(name: 'media_content_hash_uniq', fields: ['contentHash'])]
 final class Media extends AggregateRoot
 {
     private function __construct(
