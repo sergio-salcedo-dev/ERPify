@@ -37,9 +37,10 @@ final class KeysetPredicateBuilderTest extends TestCase
             OrderByColumns::tieBreakOnly(),
             ['id' => 'u-1'],
             WirePaginationPolicy::wire(),
+            'b',
         );
 
-        $this->assertSame(\sprintf('(id > :%s)', $this->param('id')), $result['dql']);
+        $this->assertSame(\sprintf('(b.id > :%s)', $this->param('id')), $result['dql']);
         $this->assertSame([$this->param('id') => 'u-1'], $result['parameters']);
     }
 
@@ -50,10 +51,11 @@ final class KeysetPredicateBuilderTest extends TestCase
             OrderByColumns::fromPrimarySort('name', SortDirection::ASC),
             ['name' => 'BBVA', 'id' => 'u-1'],
             WirePaginationPolicy::wire(),
+            'b',
         );
 
         $this->assertSame(\sprintf(
-            '((name > :%1$s) OR (name = :%1$s AND (id > :%2$s)))',
+            '((b.name > :%1$s) OR (b.name = :%1$s AND (b.id > :%2$s)))',
             $this->param('name'),
             $this->param('id'),
         ), $result['dql']);
@@ -67,11 +69,12 @@ final class KeysetPredicateBuilderTest extends TestCase
             OrderByColumns::fromPrimarySort('name', SortDirection::DESC),
             ['name' => 'BBVA', 'id' => 'u-1'],
             WirePaginationPolicy::wire(),
+            'b',
         );
 
         // name DESC ⇒ '<'; the id tie-break stays ASC ⇒ '>'.
         $this->assertSame(\sprintf(
-            '((name < :%1$s) OR (name = :%1$s AND (id > :%2$s)))',
+            '((b.name < :%1$s) OR (b.name = :%1$s AND (b.id > :%2$s)))',
             $this->param('name'),
             $this->param('id'),
         ), $result['dql']);
@@ -87,10 +90,11 @@ final class KeysetPredicateBuilderTest extends TestCase
             ]),
             ['name' => 'BBVA', 'code' => 'ES', 'id' => 'u-1'],
             WirePaginationPolicy::wire(),
+            'b',
         );
 
         $this->assertSame(\sprintf(
-            '((name > :%1$s) OR (name = :%1$s AND ((code < :%2$s) OR (code = :%2$s AND (id > :%3$s)))))',
+            '((b.name > :%1$s) OR (b.name = :%1$s AND ((b.code < :%2$s) OR (b.code = :%2$s AND (b.id > :%3$s)))))',
             $this->param('name'),
             $this->param('code'),
             $this->param('id'),
@@ -109,9 +113,10 @@ final class KeysetPredicateBuilderTest extends TestCase
             OrderByColumns::tieBreakOnly(),
             ['id' => 'u-1'],
             new WirePaginationPolicy(exclusiveBoundary: false),
+            'b',
         );
 
-        $this->assertSame(\sprintf('(id >= :%s)', $this->param('id')), $result['dql']);
+        $this->assertSame(\sprintf('(b.id >= :%s)', $this->param('id')), $result['dql']);
     }
 
     #[Test]
@@ -123,6 +128,7 @@ final class KeysetPredicateBuilderTest extends TestCase
             OrderByColumns::fromPrimarySort('name', SortDirection::ASC),
             ['name' => 'BBVA'], // 'id' boundary value missing
             WirePaginationPolicy::wire(),
+            'b',
         );
     }
 
@@ -141,6 +147,7 @@ final class KeysetPredicateBuilderTest extends TestCase
             OrderByColumns::fromPrimarySort('name', SortDirection::ASC),
             ['name' => 'BBVA', 'id' => 'u-1'],
             WirePaginationPolicy::wire(),
+            'b',
         );
 
         $this->assertSame(

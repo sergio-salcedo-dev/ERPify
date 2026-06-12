@@ -336,7 +336,10 @@ final readonly class DoctrineSearchEngine
         );
     }
 
-    /** Step 6 — bind the keyset boundary predicate, qualifying bare columns (e.g. the `id` tie-break). */
+    /**
+     * Step 6 — bind the keyset boundary predicate. The builder qualifies every bare column (e.g. the
+     * `id` tie-break) with the root alias as it emits, so the DQL is bound here as-is.
+     */
     private function applyKeysetPredicate(
         QueryBuilder $queryBuilder,
         OrderByColumns $columns,
@@ -348,9 +351,9 @@ final readonly class DoctrineSearchEngine
             return;
         }
 
-        $predicate = $this->predicateBuilder->build($columns, $cursor->values, $policy);
+        $predicate = $this->predicateBuilder->build($columns, $cursor->values, $policy, $alias);
 
-        $queryBuilder->andWhere($this->qualify($predicate['dql'], $columns, $alias));
+        $queryBuilder->andWhere($predicate['dql']);
 
         foreach ($predicate['parameters'] as $name => $value) {
             $queryBuilder->setParameter($name, $value);
@@ -484,28 +487,6 @@ final readonly class DoctrineSearchEngine
             ],
             $columns->all(),
         ));
-    }
-
-    /**
-     * Qualifies every bare column identifier in a predicate DQL string with the root alias. The
-     * lookbehind/lookahead match a column only as a standalone identifier — never inside a
-     * `:keyset_…` parameter or an already-qualified `alias.col` — so binding stays intact.
-     */
-    private function qualify(string $dql, OrderByColumns $columns, string $alias): string
-    {
-        foreach ($columns->columnNames() as $column) {
-            if (\str_contains($column, '.')) {
-                continue;
-            }
-
-            $dql = (string) \preg_replace(
-                \sprintf('/(?<![\w.:])%s(?![\w.])/', \preg_quote($column, '/')),
-                $alias . '.' . $column,
-                $dql,
-            );
-        }
-
-        return $dql;
     }
 
     private function qualifyColumn(string $column, string $alias): string

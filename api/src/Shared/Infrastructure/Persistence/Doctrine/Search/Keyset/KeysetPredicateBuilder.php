@@ -20,8 +20,9 @@ use InvalidArgumentException;
  * implicit operator precedence is forbidden — the grouping is part of the
  * contract and is asserted in the emitted string.
  *
- * Only the repository-authored column identifiers and generated parameter names
- * are interpolated; every boundary value travels as a bound parameter.
+ * Only the repository-authored column identifiers (qualified with the caller's
+ * root alias) and generated parameter names are interpolated; every boundary
+ * value travels as a bound parameter.
  *
  * Kernel-único: the builder holds no policy state. Each caller passes its
  * {@see WirePaginationPolicy} explicitly (boundary semantics), so it can never
@@ -33,10 +34,13 @@ final readonly class KeysetPredicateBuilder
 
     /**
      * @param array<string, mixed> $values boundary values keyed by ORDER BY column
+     * @param string               $alias  the query's root alias; every bare column is qualified
+     *                                      with it before emission, so the DQL is self-contained and
+     *                                      needs no post-hoc rewrite by the caller
      *
      * @return array{dql: string, parameters: array<string, mixed>}
      */
-    public function build(OrderByColumns $columns, array $values, WirePaginationPolicy $policy): array
+    public function build(OrderByColumns $columns, array $values, WirePaginationPolicy $policy, string $alias): array
     {
         // Build inside-out: the tie-break (last column) is the innermost group.
         $reversed = \array_reverse($columns->all());
@@ -46,7 +50,7 @@ final readonly class KeysetPredicateBuilder
         $parameters = [$innerName => $this->boundaryValue($values, $innermost['column'])];
         $condition = \sprintf(
             '(%s %s :%s)',
-            $innermost['column'],
+            $this->qualify($innermost['column'], $alias),
             $this->comparison($innermost['direction'], $policy),
             $innerName,
         );
@@ -55,12 +59,24 @@ final readonly class KeysetPredicateBuilder
             $name = $this->parameterName($column['column']);
             $parameters[$name] = $this->boundaryValue($values, $column['column']);
 
-            $strict = \sprintf('%s %s :%s', $column['column'], $this->comparison($column['direction'], $policy), $name);
-            $equals = \sprintf('%s = :%s', $column['column'], $name);
+            $qualified = $this->qualify($column['column'], $alias);
+            $strict = \sprintf('%s %s :%s', $qualified, $this->comparison($column['direction'], $policy), $name);
+            $equals = \sprintf('%s = :%s', $qualified, $name);
             $condition = \sprintf('((%s) OR (%s AND %s))', $strict, $equals, $condition);
         }
 
         return ['dql' => $condition, 'parameters' => $parameters];
+    }
+
+    /**
+     * Qualifies a bare column with the root alias; an already-qualified `alias.col` path (a
+     * repository that pre-qualifies its sort fields) is left untouched. The parameter name is derived
+     * from the ORIGINAL identifier, never the qualified one, so the alias never perturbs the stable,
+     * content-derived names that key Doctrine's SQL cache.
+     */
+    private function qualify(string $column, string $alias): string
+    {
+        return \str_contains($column, '.') ? $column : $alias . '.' . $column;
     }
 
     /**
