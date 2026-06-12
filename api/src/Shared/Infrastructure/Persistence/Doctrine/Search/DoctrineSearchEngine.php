@@ -102,7 +102,7 @@ final readonly class DoctrineSearchEngine
         $appliedLimit = $this->resolveLimit($criteria, $policy);
 
         // Step 4: seal the trace, derive the fingerprint, and guard the Row Uniqueness Contract.
-        $entity = $this->entityName($queryBuilder);
+        $entity = $this->rootEntity($queryBuilder);
         $trace = new QueryExecutionTrace($entity, $appliedFilters, $appliedSort, $appliedLimit);
         $fingerprint = $this->fingerprintCanonicalizer->fingerprint($trace);
         $this->rowUniquenessGuard->assert($queryBuilder);
@@ -185,7 +185,7 @@ final readonly class DoctrineSearchEngine
         $appliedLimit = $this->resolveLimit($criteria, $policy);
 
         $fingerprint = $this->fingerprintCanonicalizer->fingerprint(
-            new QueryExecutionTrace($this->entityName($queryBuilder), $appliedFilters, $appliedSort, $appliedLimit),
+            new QueryExecutionTrace($this->rootEntity($queryBuilder), $appliedFilters, $appliedSort, $appliedLimit),
         );
 
         $values = $this->positionExtractor->extract(
@@ -458,8 +458,6 @@ final readonly class DoctrineSearchEngine
             return null;
         }
 
-        // getClassMetadata needs the FQCN, NOT the short trace name (entityName()) — passing the
-        // short name throws a MappingException (a 500).
         $identifier = $queryBuilder->getEntityManager()
             ->getClassMetadata($this->rootEntity($queryBuilder))
             ->getSingleIdentifierFieldName()
@@ -526,17 +524,10 @@ final readonly class DoctrineSearchEngine
         return $aliases[0];
     }
 
-    /** Short entity name for the trace's canonical chain (`Erpify\…\Bank` ⇒ `Bank`). */
-    private function entityName(QueryBuilder $queryBuilder): string
-    {
-        $parts = \explode('\\', $this->rootEntity($queryBuilder));
-
-        return \end($parts);
-    }
-
     /**
-     * The root entity FQCN — for {@see countIfDetailed}'s `getClassMetadata` lookup (which needs the
-     * full class name, unlike the trace's short {@see entityName}).
+     * The root entity FQCN — the fully-qualified class name is the trace's entity segment (a globally
+     * unique identity, so two homonymous entities across bounded contexts never collide in the
+     * fingerprint canonical chain) and {@see countIfDetailed}'s `getClassMetadata` lookup key.
      *
      * @return class-string
      */
