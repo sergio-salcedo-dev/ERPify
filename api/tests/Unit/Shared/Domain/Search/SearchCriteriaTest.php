@@ -52,13 +52,14 @@ final class SearchCriteriaTest extends TestCase
         $this->assertSame(SortDirection::DESC, $criteria->direction);
     }
 
-    public function testDefaultsToForwardNavigationAndTheDefaultLimit(): void
+    public function testDefaultsToForwardNavigationAndDefersTheLimitToThePolicy(): void
     {
         $criteria = new SearchCriteria();
 
         $this->assertNull($criteria->cursor);
         $this->assertSame(NavigationDirection::After, $criteria->routingDirection);
-        $this->assertSame(SearchCriteria::DEFAULT_LIMIT, $criteria->limit);
+        // null is the "unspecified" sentinel: the engine resolves the page size from the policy.
+        $this->assertNull($criteria->limit);
     }
 
     public function testTransportsCursorAndRoutingDirectionAsNamedArguments(): void

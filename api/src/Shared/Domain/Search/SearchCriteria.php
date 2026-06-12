@@ -18,14 +18,22 @@ use Erpify\Shared\Domain\Search\Exception\InvalidPagination;
  * or `before` arrived; the cursor payload's own `dir` is only an integrity binding.
  *
  * The constructor enforces the one surviving pagination invariant ({@see InvalidPagination}):
- * `limit` within [1, {@see MAX_LIMIT}] — so it holds for every adapter that builds a criteria
- * (HTTP, CLI, message handlers), not only the HTTP boundary DTO. Purely wire concerns (sparse
- * filter indexes, the untrusted value shapes / 422 violation format, `after` XOR `before`)
- * stay in {@see \Erpify\Shared\Application\Http\Search\SearchQuery}.
+ * an EXPLICIT `limit` within [1, {@see MAX_LIMIT}] — so it holds for every adapter that builds a
+ * criteria (HTTP, CLI, message handlers), not only the HTTP boundary DTO. A `null` `limit` is the
+ * "unspecified" sentinel: the criteria defers the page size to the engine, which resolves it from
+ * the active policy's `defaultLimit` (an adapter selects its default by handing the engine a
+ * different policy, never by baking one in here). Purely wire concerns (sparse filter indexes, the
+ * untrusted value shapes / 422 violation format, `after` XOR `before`) stay in
+ * {@see \Erpify\Shared\Application\Http\Search\SearchQuery}.
  */
 final readonly class SearchCriteria
 {
-    /** Wire page-size default when the client omits `limit` (OQ-2: the default lives in the adapter). */
+    /**
+     * Wire-surface page size advertised to clients when they omit `limit` — the value the HTTP DTO
+     * and navigation links materialize. It is NOT the criteria's constructor default (that is `null`,
+     * the defer-to-policy sentinel); the engine's effective default is the active policy's
+     * `defaultLimit`, which mirrors this on the wire path.
+     */
     public const int DEFAULT_LIMIT = 25;
 
     /** Wire page-size ceiling. Mirrors {@see \Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\Keyset\WirePaginationPolicy::MAX_LIMIT}. */
@@ -34,13 +42,14 @@ final readonly class SearchCriteria
     public function __construct(
         public ?string $cursor = null,
         public NavigationDirection $routingDirection = NavigationDirection::After,
-        public int $limit = self::DEFAULT_LIMIT,
+        // null = unspecified: the engine resolves the page size from the policy's `defaultLimit`.
+        public ?int $limit = null,
         public PaginationMode $paginationMode = PaginationMode::LIGHT,
         public Filters $filters = new Filters(),
         public ?string $sort = null,
         public ?SortDirection $direction = null,
     ) {
-        if ($limit < 1 || $limit > self::MAX_LIMIT) {
+        if (null !== $limit && ($limit < 1 || $limit > self::MAX_LIMIT)) {
             throw InvalidPagination::limitOutOfRange($limit, self::MAX_LIMIT);
         }
     }
