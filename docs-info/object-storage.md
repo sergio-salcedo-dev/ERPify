@@ -58,7 +58,14 @@ Do these **in addition** to the main monorepo checklist in [`docs/production-dep
    If you run **more than one** `php` pod/instance, they must share the **same** writable storage (NFS, cloud file store, or **S3** once you add an adapter). Multiple instances writing to **different local disks** will cause inconsistent reads and orphan files.
 
 4. **Backups**  
-   Include **`OBJECT_STORAGE_LOCAL_PATH`** (or your object-store bucket) in **backup and restore** procedures **together with PostgreSQL**. Restore order: restore DB and files for the **same** point in time to avoid rows pointing to missing `objects/{hash}` files (or blobs without rows).
+   Back up the **`object_storage_data`** named volume **together with `database_data`** (PostgreSQL) — the prod stack's two stateful volumes. A DB row and its `objects/{hash}` file are one logical record: restore both from the **same** point in time, or rows point at missing files (or blobs sit orphaned without rows). Example volume snapshot:
+
+   ```bash
+   docker run --rm -v erpify_object_storage_data:/src:ro -v "$PWD/backups":/dst \
+     alpine tar czf /dst/object-storage-$(date +%F).tar.gz -C /src .
+   ```
+
+   If you relocate storage off the named volume (bind mount, S3), back up that location instead — the pairing rule with the DB snapshot is what matters.
 
 5. **Public URLs**  
    If clients need absolute **`storedObjectUrl`** / **`logoUrl`**, set **`MEDIA_PUBLIC_BASE_URL`** to your public API origin (HTTPS).
