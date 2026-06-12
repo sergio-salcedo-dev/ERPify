@@ -8,6 +8,16 @@
 > **Status:** planning only — nothing here is implemented yet. Each phase is a
 > short-lived branch off `main` delivered in small Conventional-Commits slices,
 > matching the cadence used by the prod-hardening work.
+>
+> **Related roadmaps.** This is the *delivery/infra* plan — the "how" of
+> shipping. The **product/feature** roadmap is
+> [`product-roadmap.md`](product-roadmap.md), whose module-by-module source of
+> truth is the typed data in
+> [`pwa/src/app/backoffice/roadmap/_lib/roadmap.ts`](../pwa/src/app/backoffice/roadmap/_lib/roadmap.ts),
+> rendered as the live in-app backlog at `/backoffice/roadmap`. That page also
+> carries this plan as its phase **6 — Platform Ops (CI/CD + Delivery)**, a
+> summary that points back here (phases A–H) for the detail — keep the two in
+> sync when phases land.
 
 ## Where we are today (baseline — already shipped)
 
