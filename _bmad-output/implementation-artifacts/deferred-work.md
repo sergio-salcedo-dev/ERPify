@@ -57,4 +57,3 @@ deriva los campos del `SortFieldMap` de producción) — todos retirados. El res
 | [#234](https://github.com/sergio-salcedo-dev/ERPify/issues/234) | keyset: `qualify()` reescribe el DQL del predicado por regex (acoplado a `id` bare) |
 | [#235](https://github.com/sergio-salcedo-dev/ERPify/issues/235) | keyset: `entityName()` colapsa al nombre corto → colisión de fingerprint multi-contexto |
 | [#236](https://github.com/sergio-salcedo-dev/ERPify/issues/236) | arch: static gate de aislamiento bounded-context (3 niveles) |
-| [#237](https://github.com/sergio-salcedo-dev/ERPify/issues/237) | keyset: seam server-side «ir a fecha» (cursor sintético desde valor de clave) |

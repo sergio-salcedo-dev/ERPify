@@ -159,13 +159,35 @@ final class KeysetSqlSnapshotTest extends KernelTestCase
     }
 
     /**
+     * Proves an OMITTED limit (criteria carries `null`) is resolved from the active policy's
+     * `defaultLimit`, never a value baked into {@see SearchCriteria}: with three rows and a policy
+     * whose `defaultLimit` is 2, the page caps at two items and reports a forward affordance —
+     * the old hardcoded wire default (25) would have returned all three with no next page.
+     *
+     * A first page emits no bound parameters, so the SQL `LIMIT` is invisible to the
+     * statement-only {@see CapturingSqlLogger}; the page shape is the observable proof instead.
+     */
+    #[Test]
+    public function itResolvesAnOmittedLimitFromThePolicyDefault(): void
+    {
+        $this->inRolledBackTransaction(function (): void {
+            $this->seedBanks('alpha', 'bravo', 'charlie');
+
+            $page = $this->paginate(null, limit: null, policy: new WirePaginationPolicy(defaultLimit: 2));
+
+            $this->assertCount(2, $page->items);
+            $this->assertTrue($page->hasNext);
+        });
+    }
+
+    /**
      * @return Page<Bank>
      */
-    private function paginate(?string $cursor): Page
+    private function paginate(?string $cursor, ?int $limit = 3, ?WirePaginationPolicy $policy = null): Page
     {
         $criteria = new SearchCriteria(
             cursor: $cursor,
-            limit: 3,
+            limit: $limit,
             sort: 'name',
             direction: SortDirection::ASC,
         );
@@ -177,7 +199,7 @@ final class KeysetSqlSnapshotTest extends KernelTestCase
             $this->searchFieldMap(),
             $this->sortFieldMap(),
             new PaginatorConfig(),
-            WirePaginationPolicy::wire(),
+            $policy ?? WirePaginationPolicy::wire(),
             Cursor::DIRECTION_AFTER,
         );
 
@@ -186,7 +208,12 @@ final class KeysetSqlSnapshotTest extends KernelTestCase
 
     private function seedTwoBanks(): void
     {
-        foreach (['alpha', 'bravo'] as $index => $name) {
+        $this->seedBanks('alpha', 'bravo');
+    }
+
+    private function seedBanks(string ...$names): void
+    {
+        foreach ($names as $index => $name) {
             $suffix = \substr(\str_replace('-', '', Uuid::generate()), -6);
             $bank = Bank::create(Uuid::generate(), \sprintf('%s %s', $name, $suffix), \strtoupper($index . $suffix));
             $this->loggedEntityManager->persist($bank);

@@ -149,7 +149,8 @@ final class SearchQueryTest extends TestCase
 
         $this->assertNull($searchCriteria->cursor);
         $this->assertSame(NavigationDirection::After, $searchCriteria->routingDirection);
-        $this->assertSame(SearchCriteria::DEFAULT_LIMIT, $searchCriteria->limit);
+        // An omitted `limit` stays null so the engine resolves the page size from the policy.
+        $this->assertNull($searchCriteria->limit);
         $this->assertSame(PaginationMode::LIGHT, $searchCriteria->paginationMode);
         $this->assertNull($searchCriteria->sort);
         $this->assertNotInstanceOf(SortDirection::class, $searchCriteria->direction);

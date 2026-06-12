@@ -108,7 +108,7 @@ services:
       # mid-flight. Without both, the worker hits a vanished lazy-service file at
       # console.terminate (Sentry ERPIFY-API-DEV-7). Trade-off: the worker no longer
       # hot-reloads code — run `docker compose restart messenger_worker` after handler
-      # changes. See docs/sentry-messenger-worker-dev-cache-crash.md.
+      # changes. See docs/troubleshooting/sentry-messenger-worker-dev-cache-crash.md.
       APP_DEBUG: "0"
     volumes:
       - ./api:/app/api

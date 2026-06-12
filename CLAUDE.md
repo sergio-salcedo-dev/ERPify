@@ -82,8 +82,8 @@ Both sides follow **DDD + Hexagonal / Clean Architecture**, dependencies pointin
 
 ### Per-aggregate persistence strategy (conscious decision)
 
-- **No object graph crosses a module boundary.** An aggregate references another module's aggregate by id (`private string $fooId`, UUID v7, `Uuid::ensure()` at the edge) — never via a typed `#[ORM\ManyToOne]` property to the other module's entity. Read composition (e.g. account + bank name) is an explicit DQL JOIN into a projection DTO. Physical FKs are kept schema-aware via a `postGenerateSchema` listener. Full decision record: [`docs/adr-bank-bankaccount-modeling.md`](docs/adr-bank-bankaccount-modeling.md).
-- **State-oriented persistence is the default; event sourcing is opt-in per aggregate, never global.** Before modeling a new aggregate (or extending one into a new business meaning), **stop and present the user the persistence-strategy decision**: where is this aggregate headed — does the business need only the current snapshot (catalogs, reference data → state-oriented), or is the history itself the business (ledgers, balances, stock movements → event-sourcing candidate)? Lay out both options with their costs and let the user pick. Worked example (bank account as payment reference in invoicing vs ledger in finance/treasury) and criteria table: [`docs/adr-bank-bankaccount-modeling.md`](docs/adr-bank-bankaccount-modeling.md).
+- **No object graph crosses a module boundary.** An aggregate references another module's aggregate by id (`private string $fooId`, UUID v7, `Uuid::ensure()` at the edge) — never via a typed `#[ORM\ManyToOne]` property to the other module's entity. Read composition (e.g. account + bank name) is an explicit DQL JOIN into a projection DTO. Physical FKs are kept schema-aware via a `postGenerateSchema` listener. Full decision record: [`docs/adr/bank-bankaccount-modeling.md`](docs/adr/bank-bankaccount-modeling.md).
+- **State-oriented persistence is the default; event sourcing is opt-in per aggregate, never global.** Before modeling a new aggregate (or extending one into a new business meaning), **stop and present the user the persistence-strategy decision**: where is this aggregate headed — does the business need only the current snapshot (catalogs, reference data → state-oriented), or is the history itself the business (ledgers, balances, stock movements → event-sourcing candidate)? Lay out both options with their costs and let the user pick. Worked example (bank account as payment reference in invoicing vs ledger in finance/treasury) and criteria table: [`docs/adr/bank-bankaccount-modeling.md`](docs/adr/bank-bankaccount-modeling.md).
 
 ---
 
@@ -204,6 +204,14 @@ The repo's IDE Markdown linter rejects link targets that don't resolve to a conc
 - **Don't link to globs** like `[…](docs/rules/*.md)`. Use inline code: `` `docs/rules/*.md` ``, optionally plus a link to one specific rule file.
 
 Fix violations you spot while editing a file for another reason.
+
+### Docs density (`docs/`)
+
+`docs/` is durable reference, and every line there is maintenance debt — high density is the rule:
+
+- **State decisions and constraints, not the process that produced them.** No workflow narrative, step scaffolding, readiness checklists, or "this document builds collaboratively" boilerplate — that belongs in `_bmad-output/` working artifacts and dies with them. BMAD/workflow output gets **distilled** before landing under `docs/`, never copied verbatim.
+- **Prefer extending the doc that owns the topic over creating a new `.md`.** A new file must answer a question no existing doc owns; it gets an entry in `docs/index.md`. Point-in-time reports and plans whose work shipped get deleted (git preserves them).
+- **ADRs (`docs/adr/`)** follow the style of [`docs/adr/bank-bankaccount-modeling.md`](docs/adr/bank-bankaccount-modeling.md): context, numbered decisions with discarded alternatives inline, the non-obvious why — target ≤ ~150 lines. The current-state description belongs in the architecture docs, not the ADR.
 
 ### Keeping docs up to date
 
