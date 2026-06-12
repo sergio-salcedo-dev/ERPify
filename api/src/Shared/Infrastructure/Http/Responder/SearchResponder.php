@@ -45,25 +45,35 @@ final readonly class SearchResponder
     }
 
     /**
-     * @param Page<object> $page
-     * @param string       $routeName the search endpoint's route name, for relative-link generation
-     * @param list<string> $groups    serializer groups projecting each result
+     * @param Page<object>          $page
+     * @param string                $routeName   the search endpoint's route name, for relative-link generation
+     * @param list<string>          $groups      serializer groups projecting each result
+     * @param array<string, string> $routeParams path parameters of a nested route (e.g. `['id' => $bankId]`
+     *                                           for `/banks/{id}/accounts`); empty for flat routes. Merged
+     *                                           into every navigation link so the cursor link stays valid.
      *
      * @throws JsonException
      * @throws ExceptionInterface
      */
-    public function respond(Page $page, SearchQuery $query, string $routeName, array $groups): Response
-    {
+    public function respond(
+        Page $page,
+        SearchQuery $query,
+        string $routeName,
+        array $groups,
+        array $routeParams = [],
+    ): Response {
         $meta = PaginationMeta::fromPage(
             $page,
-            $this->linkFor($routeName, $query, self::AFTER, $page->hasNext, $page->nextCursor),
-            $this->linkFor($routeName, $query, self::BEFORE, $page->hasPrev, $page->prevCursor),
+            $this->linkFor($routeName, $query, self::AFTER, $page->hasNext, $page->nextCursor, $routeParams),
+            $this->linkFor($routeName, $query, self::BEFORE, $page->hasPrev, $page->prevCursor, $routeParams),
         );
 
         return $this->resourceResponder->respondCollection($page->items, $groups, ['pagination' => $meta->toArray()]);
     }
 
     /**
+     * @param array<string, string> $routeParams nested-route path parameters merged into the link
+     *
      * @SuppressWarnings("PHPMD.BooleanArgumentFlag")
      */
     private function linkFor(
@@ -72,6 +82,7 @@ final readonly class SearchResponder
         string $cursorParam,
         bool $applies,
         ?string $cursor,
+        array $routeParams = [],
     ): ?string {
         if (!$applies || null === $cursor) {
             return null;
@@ -79,7 +90,7 @@ final readonly class SearchResponder
 
         return $this->urlGenerator->generate(
             $routeName,
-            [...$this->preservedParams($query), $cursorParam => $cursor],
+            [...$routeParams, ...$this->preservedParams($query), $cursorParam => $cursor],
             UrlGeneratorInterface::ABSOLUTE_PATH,
         );
     }

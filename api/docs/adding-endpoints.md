@@ -114,3 +114,15 @@ GET /api/v1/backoffice/banks?limit=25&sort=name&before=<cursor># previous page �
 - `ValidationFailedException` from the DTO is automatically mapped to a **422** `validation-failed` RFC 9457 Problem Details body (Symfony's `RequestPayloadValueResolver` wraps it in an `HttpException(422)`; `Erpify\Shared\Application\Problem\ProblemDetailsFactory` walks `getPrevious()` and re-emits it as 422 with the structured `violations` extension in place of Symfony's generic body). See [`../../docs/api-error-contract.md`](../../docs/api-error-contract.md).
 - Pagination caps live on `SearchCriteria::DEFAULT_LIMIT` (25) / `SearchCriteria::MAX_LIMIT` (100) — the domain single source of truth that `SearchQuery`'s `#[Assert]` reads and `WirePaginationPolicy` mirrors. There is no `MAX_PAGE`: cursor-only navigation has no page number, so the only pagination invariant `SearchCriteria` enforces is `limit ∈ [1, MAX_LIMIT]` (→ `invalid-pagination` for non-HTTP adapters; the DTO rejects it earlier as `validation-failed`).
 - `SearchQuery` and `SearchCriteria` are final on purpose: per-entity typed filter params (the old `names[]`/`ids[]`) were retired before any production deployment. Expose new filterable fields through the repository's `searchFieldMap()` — never through new wire params or subclasses.
+
+### Nested (child-resource) search endpoints
+
+A keyset endpoint under a parent path (e.g. `GET /banks/{id}/accounts`) follows the same skeleton with two additions:
+
+- **Scope the base query, not a filter.** The parent id is a fixed route constraint, so the repository's `search(string $parentId, SearchCriteria $criteria)` adds `WHERE child.parentId = :parentId` to the base query builder before handing it to the engine — it is not a client-tunable `filters[]` entry.
+- **Pass the route params to the responder.** `SearchResponder::respond(..., array $routeParams)` merges them into every `links.next`/`links.prev` so the cursor links stay valid for a parameterised route (`['id' => $id]`). Flat routes omit the argument.
+- **Guard the parent's existence first.** Reuse the published `BankExistenceChecker::ensureExists($id)` (it validates the UUID shape → `400 invalid-uuid` before any query, then existence → `404`) rather than re-implementing a `find`-then-search pre-read per endpoint.
+
+### IBAN wire contract
+
+The IBAN is always serialized **canonical**: upper-case, no spaces, no separators (`ES9121000418450200051332`) — the form it is persisted in. Masking is presentational on the client only; the backend never masks, and the value (classified PII) is **never logged**. A future `iban` filter must canonicalize the input the same way before matching.
