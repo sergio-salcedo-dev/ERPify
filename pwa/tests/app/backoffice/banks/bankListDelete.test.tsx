@@ -6,6 +6,7 @@ import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
 import { toastNotifier } from "@/context/shared/infrastructure/Notification/Toast";
 import { ACME, BETA, searchPage } from "./_fixtures";
+import { confirmDeleteOf } from "./_interactions";
 
 /**
  * Counterpart to `bankDetailDelete.test.tsx`: deleting a bank from the LIST
@@ -118,27 +119,6 @@ const STALE_PROBLEM: ProblemDetails = {
   instance: "01926e7e-7b8a-7c4e-9f31-000000000404",
   "correlation-id": "01926e7e-7b8a-7c4e-9f30-000000000404",
 };
-
-// The row menu is a Radix dropdown rendered through a portal: under jsdom
-// churn a just-opened menu can close again before its items render, so the
-// OPEN is retried (never the assertions — those stay single-shot).
-async function openDeleteItem(id: string): Promise<HTMLElement> {
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    fireEvent.click(screen.getByTestId(`banks-table__actions-${id}`));
-    try {
-      return await screen.findByTestId(`banks-table__delete-${id}`);
-    } catch {
-      // The item never rendered — the open lost the race; re-open the menu.
-    }
-  }
-  fireEvent.click(screen.getByTestId(`banks-table__actions-${id}`));
-  return screen.findByTestId(`banks-table__delete-${id}`);
-}
-
-async function confirmDeleteOf(id: string): Promise<void> {
-  fireEvent.click(await openDeleteItem(id));
-  fireEvent.click(await screen.findByTestId("banks-detail__delete-confirm"));
-}
 
 describe("BanksListPage — failed delete lands in the persistent error surface", () => {
   beforeEach(() => {
