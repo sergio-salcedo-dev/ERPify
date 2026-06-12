@@ -1,23 +1,11 @@
 ---
-stepsCompleted: [1, 2, 3, 4, 5, 6, 7, 8]
-lastStep: 8
-status: 'complete'
-completedAt: '2026-06-06'
-inputDocuments:
-  - '_bmad-output/planning-artifacts/research/technical-php-criteria-vs-searchcriteria-erpify-research-2026-06-06.md'
-  - 'docs/project-context.md'
-  - 'docs/architecture-api.md'
-  - 'docs/api-error-contract.md'
-  - 'docs/deep-dive-api-shared-foundation.md'
-workflowType: 'architecture'
-project_name: 'ERPify'
-user_name: 'Sergio'
+status: 'complete — shipped (stories 1.5–1.7, PR #180)'
 date: '2026-06-06'
 ---
 
-# Architecture Decision Document
+# ADR — Generic `filters[]` search vocabulary (SearchQuery / SearchCriteria)
 
-_This document builds collaboratively through step-by-step discovery. Sections are appended as we work through each architectural decision together._
+Decision record: rationale, alternatives weighed, and the FR/NFR inventory cited by ID from the living docs. The current-state description of the shipped system lives in [`architecture-api.md`](./architecture-api.md).
 
 ## Project Context Analysis
 

@@ -1,20 +1,5 @@
 ---
-stepsCompleted: [1, 2, 3, 4, 5, 6, 7, 8]
-lastStep: 8
-status: 'complete'
-completedAt: '2026-06-10'
-inputDocuments:
-  - '_bmad-output/planning-artifacts/architecture.md'
-  - '_bmad-output/planning-artifacts/research/technical-adopcion-de-jsonapi-en-erpify-sin-api-platform-research-2026-06-06.md'
-  - '_bmad-output/planning-artifacts/research/technical-php-criteria-vs-searchcriteria-erpify-research-2026-06-06.md'
-  - 'docs/architecture-api.md'
-  - 'docs/api-error-contract.md'
-  - 'docs/deep-dive-api-shared-foundation.md'
-  - 'docs/saas-production-roadmap.md'
-  - 'docs/project-context.md'
-workflowType: 'architecture'
-project_name: 'ERPify'
-user_name: 'Sergio'
+status: 'IMPLEMENTATION LOCKED 2026-06-10 — shipped (epic-1, stories 1.1–1.5, PR1–PR4)'
 date: '2026-06-10'
 scope: >-
   Rediseño de la paginación a cursor/keyset puro (contrato API limit+cursor,
@@ -23,12 +8,14 @@ scope: >-
   async) + reestructuración de AbstractDoctrineRepository y
   AbstractDoctrineSearchRepository de herencia a composición.
 relatedDecisions:
-  - '_bmad-output/planning-artifacts/architecture.md (filtros genéricos filters[], 2026-06-06 — cerrado, restricciones heredadas)'
+  - 'docs/adr-filters-search-criteria.md (filtros genéricos filters[], 2026-06-06 — cerrado, restricciones heredadas)'
 ---
 
-# Architecture Decision Document — Keyset Pagination & Repository Restructuring
+# ADR — Keyset Pagination & Repository Restructuring
 
-_This document builds collaboratively through step-by-step discovery. Sections are appended as we work through each architectural decision together._
+Decision record: rationale and the FR/NFR/AR/W/K inventory cited by ID from the living docs ([`architecture-api.md`](./architecture-api.md), [`runbooks/cursor-pagination.md`](./runbooks/cursor-pagination.md) describe the shipped system).
+
+> **Post-freeze overrides (D-1 cycle, 2026-06-11)** — the planning truth diverged from this frozen snapshot on three points, all implemented: repositories-by-composition moved from PR2 to PR3; NFR3 refined (a UNIQUE column does not require a composite index); collation narrowed to column scope (AR23, with the AR23/AR24 refinements). On those points the shipped code, not this document, is authoritative.
 
 ## Project Context Analysis
 
