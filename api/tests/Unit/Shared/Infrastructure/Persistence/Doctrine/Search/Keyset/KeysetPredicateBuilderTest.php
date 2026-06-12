@@ -119,6 +119,28 @@ final class KeysetPredicateBuilderTest extends TestCase
         $this->assertSame(\sprintf('(b.id >= :%s)', $this->param('id')), $result['dql']);
     }
 
+    /**
+     * A repository that pre-qualifies its sort field (e.g. `b.name`) must NOT be re-qualified into
+     * `b.b.name`: the alias is prepended only to BARE identifiers. The bare `id` tie-break still gets
+     * the alias, and the parameter name stays keyed by the original identifier either way.
+     */
+    #[Test]
+    public function itDoesNotRequalifyAnAlreadyQualifiedColumn(): void
+    {
+        $result = $this->builder->build(
+            OrderByColumns::fromPrimarySort('b.name', SortDirection::ASC),
+            ['b.name' => 'BBVA', 'id' => 'u-1'],
+            WirePaginationPolicy::wire(),
+            'b',
+        );
+
+        $this->assertSame(\sprintf(
+            '((b.name > :%1$s) OR (b.name = :%1$s AND (b.id > :%2$s)))',
+            $this->param('b.name'),
+            $this->param('id'),
+        ), $result['dql']);
+    }
+
     #[Test]
     public function itRejectsACursorMissingABoundaryValueForAColumn(): void
     {
