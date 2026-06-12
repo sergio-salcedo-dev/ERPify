@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import BanksListPage from "@/app/backoffice/banks/page";
 import { Bank } from "@/context/backoffice/bank/domain/Bank";
 import { ACME, BETA, searchPage } from "./_fixtures";
+import { confirmDeleteOf } from "./_interactions";
 
 /** A row living on the previous page — distinct from the deleted ACME/BETA. */
 const GAMMA = Bank.fromPrimitives({
@@ -101,21 +102,3 @@ describe("BanksListPage — emptied page recovers to the previous page", () => {
     expect(screen.queryByTestId("banks-list__empty-filtered")).toBeNull();
   });
 });
-
-async function openDeleteItem(id: string): Promise<HTMLElement> {
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    fireEvent.click(screen.getByTestId(`banks-table__actions-${id}`));
-    try {
-      return await screen.findByTestId(`banks-table__delete-${id}`);
-    } catch {
-      // The dropdown lost the open race under jsdom churn; re-open it.
-    }
-  }
-  fireEvent.click(screen.getByTestId(`banks-table__actions-${id}`));
-  return screen.findByTestId(`banks-table__delete-${id}`);
-}
-
-async function confirmDeleteOf(id: string): Promise<void> {
-  fireEvent.click(await openDeleteItem(id));
-  fireEvent.click(await screen.findByTestId("banks-detail__delete-confirm"));
-}
