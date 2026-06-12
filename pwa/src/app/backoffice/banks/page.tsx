@@ -222,6 +222,21 @@ export default function BanksListPage() {
     setActiveLink(link);
   }, []);
 
+  // Recover from an emptied page beyond the first. When an optimistic delete (or
+  // a cursor walk into a gap) drains every row but the envelope still offers a
+  // step — a backward link from deleting a last page's rows, or a forward link
+  // from a `before` walk — follow it so the user lands on real rows instead of
+  // the filtered-to-zero panel (whose only escape, Clear all, is a no-op when no
+  // filter is active). Gated on READY + not mid-load so it never fires during a
+  // skeleton or fights an in-flight request; it walks back page by page until a
+  // populated page or the first page (no affordance) ends the chain.
+  useEffect(() => {
+    if (state !== ViewStatus.READY || banks.length > 0 || reloadingRef.current) return;
+    const recoveryLink = pagination?.links.prev ?? pagination?.links.next;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (recoveryLink) navigateTo(recoveryLink);
+  }, [state, banks.length, pagination, navigateTo]);
+
   useEffect(() => {
     // The query is server-driven: re-run whenever filter/sort/page/pageSize
     // change (loadBanks closes over them). The LOADING reset before the first
