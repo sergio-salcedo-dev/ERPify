@@ -171,8 +171,10 @@ binds + ordering, nunca objetos Doctrine), jamás compatibilidad runtime. El cri
 
 **Row Uniqueness Contract (segundo contrato del sistema):** la corrección keyset exige que la
 query produzca **cada fila lógica exactamente una vez, en un orden total determinista**. Reglas:
-(a) el query builder base NO hace fetch-join de colecciones to-many en el read-path paginado
-(to-one sí; to-many → segunda query batch) — guard runtime en el engine al sellar el trace
+(a) el query builder base tiene **exactamente un root** (multi-root `from(A)->from(B)` = producto
+cartesiano, prohibido) y NO une colecciones to-many en el read-path paginado —ni vía `addSelect`
+ni como join para filtrar, ambas multiplican filas bajo `LIMIT`— (to-one sí; to-many → segunda
+query batch, filtro to-many → subconsulta `EXISTS`) — guard runtime en el engine al sellar el trace
 (`LogicException`, programmer error); (b) orden total = columnas NOT NULL + tie-break `id`;
 (c) el engine jamás añade DISTINCT. "Row identity instability under stable trace" es el único
 fallo que rompe keyset silenciosamente sin producir error.
