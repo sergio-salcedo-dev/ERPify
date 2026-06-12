@@ -148,7 +148,7 @@ api/src/Shared/
 #### `api/src/Shared/Domain/Search/Page.php`
 - **LOC:** 33 — generic `final readonly class Page<T> implements IteratorAggregate`.
 - **Exports:** `getItems(): array`, `getCursor(): ?string`, `hasNextPage(): bool`.
-- **Contributor note:** Replaces legacy `PaginatedResult`. It is a simple envelope for a single "chunk" of data and the cursor to fetch the next one.
+- **Contributor note:** a simple envelope for a single "chunk" of data plus the cursor to fetch the next one.
 
 #### `api/src/Shared/Domain/Search/PaginationMode.php`
 - **LOC:** 27 — string-backed enum: `DETAILED` (extra `COUNT(*)`) or `LIGHT` (default; +1 fetch trick).
@@ -375,7 +375,7 @@ Key invariants pinned by tests:
 
 ---
 
-## Persistence / Paginator Pipeline (Keyset Engine)
+## Persistence / Keyset Search Pipeline
 
 ```
 SearchQuery (Application/Http/Search)            ← HTTP boundary; #[MapQueryString]
