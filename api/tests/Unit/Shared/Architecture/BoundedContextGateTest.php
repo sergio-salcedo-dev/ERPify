@@ -386,12 +386,14 @@ final class BoundedContextGateTest extends TestCase
         $importsByShortName = $this->importsByShortName($source);
         $hits = [];
 
-        if (false === \preg_match_all(
+        $matched = \preg_match_all(
             '/targetEntity:\s*\\\?([A-Za-z0-9_\\\]+)::class/',
             $source,
             $matches,
             PREG_OFFSET_CAPTURE,
-        )) {
+        );
+
+        if (false === $matched) {
             return [];
         }
 
