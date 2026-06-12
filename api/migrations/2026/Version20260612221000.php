@@ -15,19 +15,16 @@ final class Version20260612221000 extends AbstractMigration
             . '(fails if duplicate hashes already exist — dedupe rows manually first)';
     }
 
-    // CREATE/DROP INDEX CONCURRENTLY cannot run inside a transaction block.
-    public function isTransactional(): bool
-    {
-        return false;
-    }
-
+    // Plain (non-CONCURRENTLY) on purpose: the migrate pipeline runs --all-or-nothing and the
+    // container entrypoint migrates on boot, both of which reject non-transactional migrations.
+    // The brief table lock is acceptable — media rows are few and writes are rare.
     public function up(Schema $schema): void
     {
-        $this->addSql('CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS media_content_hash_uniq ON media (content_hash)');
+        $this->addSql('CREATE UNIQUE INDEX IF NOT EXISTS media_content_hash_uniq ON media (content_hash)');
     }
 
     public function down(Schema $schema): void
     {
-        $this->addSql('DROP INDEX CONCURRENTLY IF EXISTS media_content_hash_uniq');
+        $this->addSql('DROP INDEX IF EXISTS media_content_hash_uniq');
     }
 }
