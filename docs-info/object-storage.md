@@ -49,10 +49,10 @@ Migrations add **`bank.stored_object_*`** columns (and any future tables you int
 Do these **in addition** to the main monorepo checklist in [`docs/production-deployment.md`](production-deployment.md).
 
 1. **Persistent volume**  
-   Map **`OBJECT_STORAGE_LOCAL_PATH`** to storage that **survives container recreation** (named Docker volume, bind mount to the host, EBS/EFS, etc.). Do **not** rely on an unmounted path under `/app/api/var` in production unless you have explicitly mounted it.
+   [`compose.prod.yaml`](../compose.prod.yaml) mounts the named volume **`object_storage_data`** at the default `OBJECT_STORAGE_LOCAL_PATH` (`/app/api/var/storage/objects`) on **both** the `php` and `messenger_worker` services. If you relocate the path (different volume driver, EBS/EFS, bind mount), keep it on storage that **survives container recreation** and mounted on both services.
 
 2. **Permissions**  
-   The user running PHP inside **`frankenphp`** / **`php`** must be able to **read and write** that directory. On first deploy, ensure the directory exists and ownership matches the container user (adjust host `chown`/`chmod` or image `USER` + volume `uid`/`gid` as needed).
+   The prod image pre-creates the storage root owned by **`www-data`** (the runtime user) so the named volume initializes writable — see `api/Dockerfile`. If you bind-mount a host path instead, ensure ownership matches the container user (`chown`/`chmod` on first deploy).
 
 3. **Same path for all app replicas**  
    If you run **more than one** `php` pod/instance, they must share the **same** writable storage (NFS, cloud file store, or **S3** once you add an adapter). Multiple instances writing to **different local disks** will cause inconsistent reads and orphan files.
@@ -87,7 +87,7 @@ volumes:
   erpify_object_storage:
 ```
 
-For **production** merges, you can add this under `compose.dev.yaml` locally or a dedicated `compose.object-storage.yaml` merged with `-f`. The repo root [`compose.yaml`](../compose.yaml) does not mount object storage by default so development can use the default under the project tree.
+The prod overlay [`compose.prod.yaml`](../compose.prod.yaml) already mounts the **`object_storage_data`** named volume at the default path on `php` and `messenger_worker`; the fragment above is only needed for a non-default location. The repo root [`compose.yaml`](../compose.yaml) does not mount object storage so development uses the default under the project tree.
 
 ---
 

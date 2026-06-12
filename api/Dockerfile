@@ -183,6 +183,11 @@ EOF
 COPY --link --exclude=var --from=frankenphp_prod_builder /app/api /app/api
 COPY --chown=www-data:www-data --chmod=700 --from=frankenphp_prod_builder /app/api/var /app/api/var
 
+# Pre-create the Flysystem object-storage root with the runtime user's ownership: the named
+# volume compose.prod.yaml mounts here initializes from this directory. Without it Docker
+# creates the mountpoint as root and the (www-data) app cannot write uploads.
+RUN install -d -o www-data -g www-data -m 700 /app/api/var/storage/objects
+
 COPY --link --chmod=755 frankenphp/docker-entrypoint.sh /usr/local/bin/docker-entrypoint
 
 VOLUME /app/api/var/
