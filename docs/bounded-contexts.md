@@ -55,7 +55,8 @@ clasifica, no se prohíbe en bloque:
 > niveles en
 > [`rules/database.md`](rules/database.md#bounded-context-data-isolation-modular-monolith)
 > y [`architecture-api.md`](architecture-api.md). Un gate estático de 3 niveles
-> (error/warning/allowlist) está registrado como deferred work.
+> (error/warning/allowlist) lo verifica: `make php.lint.bounded-context` (Nivel 1
+> bloquea, Nivel 2 avisa; seams publicados en `api/.bounded-context-allowlist`).
 
 > **Eventos de dominio vs. de integración.** Un *domain event* es interno al
 > contexto (rico, puede cambiar). Un *integration event* es el contrato público

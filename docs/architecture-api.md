@@ -63,7 +63,7 @@ Cross-context calls go through **published Application services** or **domain ev
 - **🟡 Level 2 — discouraged (soft):** a cross-context FK between two business contexts — default to a bare UUID v7 column; justify a real FK in the PR.
 - **🟢 Level 3 — allowed:** shared kernel (`User`, tenant/`company_id`, `Money`, `Uuid`), ID-only references, integration via events, read models. Granular context map + event catalog: [`bounded-contexts.md`](./bounded-contexts.md).
 
-Golden rule: *contexts reference each other's identities and react to each other's events, never know each other's internals.* A 3-level static gate is tracked as deferred work; until then, enforced by review.
+Golden rule: *contexts reference each other's identities and react to each other's events, never know each other's internals.* Enforced by a 3-level static gate — `make php.lint.bounded-context` (in `make php.quality`): Level 1 fails the build, Level 2 warns, published seams live in `api/.bounded-context-allowlist`.
 
 ## Layer responsibilities
 

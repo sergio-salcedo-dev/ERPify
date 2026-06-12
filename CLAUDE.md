@@ -92,6 +92,7 @@ Both sides follow **DDD + Hexagonal / Clean Architecture**, dependencies pointin
 - **PHP edits** → `make php.stan` on every changed file before declaring done; at the end run `make php.quality`. Fix anything reported.
 - **PWA edits** → `make pwa.quality` at the end.
 - **HTTP error responses** → never bypass the RFC 9457 pipeline with manual `JsonResponse` error bodies. Adding a marker interface or changing its mapping requires updating [`docs/api-error-contract.md`](docs/api-error-contract.md) (NFR26). Drift gate: `make php.lint.error-contract`.
+- **Bounded-context isolation** → never import another business context's `Domain\`/`Application\` (inject foreign repositories, know its internals) — reference identities and react to events instead (`Erpify\Shared\…` is always importable). A genuine published cross-context seam goes in `api/.bounded-context-allowlist`. Gate: `make php.lint.bounded-context` (Level 1 fails; cross-context FKs are Level 2 warnings). Rule: [`docs/rules/database.md`](docs/rules/database.md).
 - **Migrations** → generate via `make db.diff`. You may edit a migration created on the current feature branch; once merged into `main` it is immutable — create a new one instead.
 
 ---

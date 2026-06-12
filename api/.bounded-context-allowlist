@@ -1,0 +1,31 @@
+# bounded-context isolation gate allowlist.
+#
+# The gate (tests/Unit/Shared/Architecture/BoundedContextGateTest.php) fails the
+# build when a file in one business context imports another business context's
+# `Domain\` or `Application\` namespace — see the Level 1 rule in
+# docs/rules/database.md#bounded-context-data-isolation-modular-monolith.
+# `Erpify\Shared\…` is always importable (shared kernel) and never needs listing.
+#
+# Lines starting with `#` and blank lines are ignored. Three entry forms:
+#
+#   <relative/path.php>
+#       Exempt the whole importer file. Coarse escape hatch — prefer a seam
+#       entry so a *new* bad import in the same file is still caught.
+#
+#   <relative/path.php> => <Imported\Fqcn>
+#       Exempt one specific (importer file, imported FQCN) seam. Preferred.
+#
+#   * => <Imported\Fqcn>
+#       A globally published seam: a context's published Application service
+#       interface or an integration-event class, importable from any context.
+#
+# Paths are POSIX, relative to api/, with no leading slash. Adding an entry is a
+# deliberate, reviewable exception: the only legitimate reasons are a published
+# cross-context seam (Application service interface / integration event) or a
+# coupling explicitly justified in an ADR.
+
+# Bank → BankAccount referential-integrity check. BankDeleter (Bank/Application)
+# consumes the BankAccountRepository *interface* to block deleting a bank that
+# still has accounts (clean 409 before the FK fires). Blessed by
+# docs/adr/bank-bankaccount-modeling.md (inverse direction, "el patrón correcto").
+src/Backoffice/Bank/Application/BankDeleter.php => Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository

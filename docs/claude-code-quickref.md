@@ -52,7 +52,7 @@ make db.tunnel                      # Expose prod/staging DB on 127.0.0.1:15432 
 make xdebug.enable                  # Toggle Xdebug in api/.env (also xdebug.disable, xdebug.status).
 ```
 
-Individual linters: `php.rector[.dry-run]`, `php.cs-fixer[.dry-run]`, `php.md`, `php.cs[.dry-run]`, `php.psalm.taint` (Psalm security dataflow → SARIF, `api-taint` CI job), `composer.check.all`. Error-contract drift gate: `php.lint.error-contract` (FR50/FR51/NFR26).
+Individual linters: `php.rector[.dry-run]`, `php.cs-fixer[.dry-run]`, `php.md`, `php.cs[.dry-run]`, `php.psalm.taint` (Psalm security dataflow → SARIF, `api-taint` CI job), `composer.check.all`. Error-contract drift gate: `php.lint.error-contract` (FR50/FR51/NFR26). Bounded-context isolation gate: `php.lint.bounded-context` (Level 1 cross-context `Domain`/`Application` import fails; Level 2 cross-context FK warns; seams in `api/.bounded-context-allowlist`).
 
 ### PWA / JS
 
