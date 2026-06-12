@@ -76,8 +76,9 @@ and the data-modeling strategy in [`../product-roadmap.md`](../product-roadmap.m
 **🔴 Level 1 — prohibido (defecto que bloquea revisión):**
 
 - **Cross-context domain import.** A file under `src/<Top>/<ContextA>/` importing
-  `Erpify\<Top>\<ContextB>\Domain\…` or `…\Application\…` — i.e. knowing the
-  foreign context's internals. The **only** allowed seams are that context's
+  `Erpify\<Top>\<ContextB>\Domain\…`, `…\Application\…`, or `…\Infrastructure\…`
+  — i.e. knowing the foreign context's internals (a concrete adapter is as much
+  an internal as the domain model). The **only** allowed seams are that context's
   **published Application service interface** and its **integration-event**
   classes.
 - **Cross-context repository query.** Injecting/using another context's
@@ -157,8 +158,17 @@ every tenant-owned table carries it and every query is tenant-scoped via a
 Doctrine filter / mandatory repository scope — never left to per-call discipline.
 Indexes are tenant-led composites (`(company_id, …)`).
 
-> **Enforcement status:** today this is enforced by **review**. A 3-level static
-> gate (Level 1 = error, Level 2 = warning, Level 3 = allowlisted) is tracked as
-> deferred work (`_bmad-output/implementation-artifacts/deferred-work.md`). Until
-> it lands, call out compliance explicitly in any PR that adds a cross-context
-> reference.
+> **Enforcement status:** a 3-level static gate is wired into `make php.quality`
+> as `make php.lint.bounded-context` (PHPUnit gate that tokenizes imports —
+> `api/tests/Unit/Shared/Architecture/BoundedContextGateTest.php`). **Level 1**
+> (cross-context `Domain\`/`Application\`/`Infrastructure\` import — including
+> injecting a foreign repository) **fails** the build; imports are read via
+> `token_get_all` so grouped/aliased/multiline `use` cannot evade it.
+> `Erpify\Shared\…` is always importable, and genuinely published seams (a
+> context's Application service interface, its integration-event classes) are
+> declared in `api/.bounded-context-allowlist`. **Level 2** (a cross-context
+> Doctrine FK whose `targetEntity` resolves to another business context) is
+> printed as a non-blocking warning — justify it in the PR. **Level 3** is
+> allowed. ID-only references are plain strings with no import and are invisible
+> to the gate by construction; the gate enforces the import seam, not total
+> runtime independence.

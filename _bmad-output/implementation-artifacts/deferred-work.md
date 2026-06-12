@@ -56,4 +56,3 @@ deriva los campos del `SortFieldMap` de producción) — todos retirados. El res
 | [#233](https://github.com/sergio-salcedo-dev/ERPify/issues/233) | keyset: `RowUniquenessGuard` falla-abierto fuera del caso addSelect (cartesiano / to-many no seleccionado) |
 | [#234](https://github.com/sergio-salcedo-dev/ERPify/issues/234) | keyset: `qualify()` reescribe el DQL del predicado por regex (acoplado a `id` bare) |
 | [#235](https://github.com/sergio-salcedo-dev/ERPify/issues/235) | keyset: `entityName()` colapsa al nombre corto → colisión de fingerprint multi-contexto |
-| [#236](https://github.com/sergio-salcedo-dev/ERPify/issues/236) | arch: static gate de aislamiento bounded-context (3 niveles) |
