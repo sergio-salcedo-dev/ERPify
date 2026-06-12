@@ -88,6 +88,15 @@ final class KeysetSqlSnapshotTest extends KernelTestCase
         );
     }
 
+    protected function tearDown(): void
+    {
+        // The parallel logging connection opened in setUp() is independent of the kernel's
+        // managed connection, so kernel shutdown never reaches it — close it explicitly.
+        $this->loggedEntityManager->getConnection()->close();
+
+        parent::tearDown();
+    }
+
     /**
      * Pins the compiled SQL of the cursor (second-page) read-path for a `name ASC` sort: the two-key
      * keyset predicate with explicit per-level grouping and the bare `id` tie-break qualified to the
