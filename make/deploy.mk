@@ -47,4 +47,7 @@ deploy.local: ## Stand up the prod profile on this host at https://erpify.local 
 deploy.local.trust: ## Run the PRIVILEGED client-trust steps (hosts + system CA + Chromium NSS). Run with sudo: `sudo make deploy.local.trust`
 	@bash $(PROJECT_ROOT)/scripts/deploy/trust-local.sh
 
-.PHONY: prod.env.check deploy.local deploy.local.trust
+backup.prod: ## Paired prod backup: pg_dump + object-storage archive (knobs: BACKUP_DIR, RETENTION_DAYS, BACKUP_SYNC_CMD)
+	@bash $(PROJECT_ROOT)/scripts/deploy/backup-prod.sh
+
+.PHONY: prod.env.check deploy.local deploy.local.trust backup.prod

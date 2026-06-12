@@ -1,8 +1,9 @@
 # VPS deployment & remote operations
 
 Central reference for running ERPify on a public VPS: promoting the prod profile
-to a real domain, and accessing the database from your workstation (CLI or a GUI
-client) without weakening the production hardening.
+to a real domain, accessing the database from your workstation (CLI or a GUI
+client) without weakening the production hardening, and the backup/restore
+runbook for the stack's stateful volumes.
 
 For the **local** `erpify.local` rehearsal (internal TLS, pre-prod on a laptop),
 see [`erpify-local-test-deployment.md`](./erpify-local-test-deployment.md). The
@@ -157,6 +158,78 @@ DB_BACKEND_IP=10.123.45.10
 
 Recreate the stack so the database picks up the new address
 (`ENV=prod make docker.up`), then update the host/IP in your GUI / ssh config.
+
+---
+
+## Backups
+
+The prod stack has two stateful volumes — `database_data` (PostgreSQL) and
+`object_storage_data` (Flysystem uploads) — and they form **one logical
+dataset**: a DB row references its `objects/{hash}` file, so they are backed up
+and restored **as a pair from the same point in time** (rationale:
+[`object-storage.md`](../docs-info/object-storage.md)).
+
+### Taking a backup — `make backup.prod`
+
+`scripts/deploy/backup-prod.sh` produces two artifacts sharing one timestamp in
+`BACKUP_DIR` (default `/var/backups/erpify`):
+
+1. `db-<stamp>.dump` — `pg_dump -Fc` exec'd inside the running `database`
+   container (MVCC-consistent, no downtime, no published port needed).
+2. `objects-<stamp>.tar.gz` — archive of the object-storage volume.
+
+The order is load-bearing and the script enforces it: **DB first, objects
+after**. Writers persist the object file *before* the referencing row, so every
+hash referenced in the dump already exists in the later archive. The only
+residual window is the orphan cleaner deleting a file between the two steps —
+run the backup in a low-traffic window (or stop `messenger_worker` during it)
+if you need to exclude even that.
+
+Knobs (env vars): `BACKUP_DIR`, `RETENTION_DAYS` (default 14, local pruning),
+`OBJECT_STORAGE_VOLUME` (defaults to `<project>_object_storage_data`; check
+`make docker.info`), `BACKUP_SYNC_CMD` (offsite hook, below).
+
+### Schedule it (cron)
+
+```cron
+15 3 * * * cd /opt/erpify && BACKUP_SYNC_CMD='rclone sync /var/backups/erpify remote:erpify-backups' make backup.prod >> /var/log/erpify-backup.log 2>&1 || logger -t erpify-backup FAILED
+```
+
+A backup that fails silently is no backup — keep the `|| logger` (or wire a
+real alert) so failures surface.
+
+### Offsite copy (required)
+
+A backup on the same disk as the data does not survive the failure modes that
+matter (disk loss, VPS compromise, fat-fingered `rm`). Sync `BACKUP_DIR` to an
+independent location via `BACKUP_SYNC_CMD` — e.g. `rclone sync` to S3/B2/Drive.
+**Dumps contain business data (PII): encrypt the offsite copy** — use an
+`rclone` `crypt` remote, or switch the whole pipeline to `restic`/`borg`
+(encrypted + deduplicating; content-addressed files dedupe almost perfectly
+across days).
+
+### Restore (reverse order: objects first, DB after, same stamp)
+
+```bash
+# 1) objects — wipe the volume and unpack the archive
+docker run --rm -v erpify_object_storage_data:/dst -v /var/backups/erpify:/src \
+  alpine sh -c 'rm -rf /dst/* && tar xzf /src/objects-<stamp>.tar.gz -C /dst'
+
+# 2) database — restore the SAME stamp's dump
+docker compose -p erpify --env-file .env.prod.local -f compose.yaml -f compose.prod.yaml \
+  exec -T database sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists' \
+  < /var/backups/erpify/db-<stamp>.dump
+```
+
+Restore is destructive by design — it is deliberately **not** wrapped in a make
+target. Stop the `php`/`messenger_worker` services first on a live host.
+
+### Restore drill (quarterly)
+
+A backup is only proven by a restore. Once a quarter, restore the latest pair
+into a scratch stack (a worktree stack works) and run the object-storage smoke
+test: create a bank with a `stored_object` upload, then `GET
+/api/v1/stored-objects/{hash}` → expect 200 with `Cache-Control: immutable`.
 
 ---
 
