@@ -120,11 +120,11 @@ final class BoundedContextGateTest extends TestCase
         $warnings = $this->scanForCrossContextAssociations();
 
         if ([] !== $warnings) {
-            \fwrite(\STDERR, "\n[bounded-context] Level 2 cross-context FK warnings "
+            \fwrite(STDERR, "\n[bounded-context] Level 2 cross-context FK warnings "
                 . "(soft rule — justify in the PR, prefer a bare UUID id column):\n");
 
             foreach ($warnings as $warning) {
-                \fwrite(\STDERR, \sprintf(
+                \fwrite(STDERR, \sprintf(
                     "  %s:%d: %s -> %s\n",
                     $warning['file'],
                     $warning['line'],
@@ -165,7 +165,7 @@ final class BoundedContextGateTest extends TestCase
             $hits,
             'Gate matcher failed to flag a cross-context Domain import — the parser has regressed.',
         );
-        $this->assertSame('Erpify\Backoffice\Bank\Domain\Entity\Bank', $hits[0]['target']);
+        $this->assertSame(\Erpify\Backoffice\Bank\Domain\Entity\Bank::class, $hits[0]['target']);
 
         // Clean fixture: a shared-kernel import and a same-context import are both
         // allowed and must not be flagged.
@@ -348,7 +348,11 @@ final class BoundedContextGateTest extends TestCase
             $target = $import['fqcn'];
             [$context, $layer] = $this->contextAndLayer($target);
 
-            if (null === $context || $context === $ownerContext) {
+            if (null === $context) {
+                continue;
+            }
+
+            if ($context === $ownerContext) {
                 continue;
             }
 
@@ -356,7 +360,11 @@ final class BoundedContextGateTest extends TestCase
                 continue;
             }
 
-            if (null === $layer || !\in_array($layer, self::GUARDED_LAYERS, true)) {
+            if (null === $layer) {
+                continue;
+            }
+
+            if (!\in_array($layer, self::GUARDED_LAYERS, true)) {
                 continue;
             }
 
@@ -379,10 +387,10 @@ final class BoundedContextGateTest extends TestCase
         $hits = [];
 
         if (false === \preg_match_all(
-            '/targetEntity:\s*\\\\?([A-Za-z0-9_\\\\]+)::class/',
+            '/targetEntity:\s*\\\?([A-Za-z0-9_\\\]+)::class/',
             $source,
             $matches,
-            \PREG_OFFSET_CAPTURE,
+            PREG_OFFSET_CAPTURE,
         )) {
             return [];
         }
@@ -398,7 +406,11 @@ final class BoundedContextGateTest extends TestCase
 
             [$context] = $this->contextAndLayer($target);
 
-            if (null === $context || $context === $ownerContext) {
+            if (null === $context) {
+                continue;
+            }
+
+            if ($context === $ownerContext) {
                 continue;
             }
 
@@ -440,12 +452,10 @@ final class BoundedContextGateTest extends TestCase
         $map = [];
 
         foreach ($this->parseImports($source) as $import) {
-            $segments = \explode('\\', $import['fqcn']);
-            $shortName = \end($segments);
-
-            if (false !== $shortName) {
-                $map[$shortName] = $import['fqcn'];
-            }
+            $fqcn = $import['fqcn'];
+            $separator = \strrpos($fqcn, '\\');
+            $shortName = false === $separator ? $fqcn : \substr($fqcn, $separator + 1);
+            $map[$shortName] = $fqcn;
         }
 
         return $map;
@@ -463,7 +473,7 @@ final class BoundedContextGateTest extends TestCase
         foreach ($lines as $i => $line) {
             // Class imports only — `use function …` / `use const …` start with a
             // different keyword and never match this anchored pattern.
-            if (1 !== \preg_match('/^\s*use\s+(Erpify\\\\[A-Za-z0-9_\\\\]+)/', $line, $m)) {
+            if (1 !== \preg_match('/^\s*use\s+(Erpify\\\[A-Za-z0-9_\\\]+)/', $line, $m)) {
                 continue;
             }
 
@@ -558,7 +568,11 @@ final class BoundedContextGateTest extends TestCase
         foreach (\preg_split('/\R/', $raw) ?: [] as $line) {
             $trimmed = \trim($line);
 
-            if ('' === $trimmed || \str_starts_with($trimmed, '#')) {
+            if ('' === $trimmed) {
+                continue;
+            }
+
+            if (\str_starts_with($trimmed, '#')) {
                 continue;
             }
 
@@ -568,7 +582,9 @@ final class BoundedContextGateTest extends TestCase
                 continue;
             }
 
-            [$left, $right] = \array_map(\trim(...), \explode('=>', $trimmed, 2));
+            $parts = \explode('=>', $trimmed, 2);
+            $left = \trim($parts[0]);
+            $right = \trim($parts[1] ?? '');
 
             if ('*' === $left) {
                 $result['globalSeams'][] = $right;
