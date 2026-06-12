@@ -15,16 +15,13 @@ use Erpify\Shared\Domain\Exception\InvariantViolation;
 use Erpify\Shared\Domain\Exception\NotFound;
 use Erpify\Shared\Domain\Exception\RateLimited;
 use Erpify\Shared\Domain\Exception\Unauthenticated;
-use FilesystemIterator;
+use Erpify\Tests\Support\ApiSourceFiles;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
-use RecursiveDirectoryIterator;
-use RecursiveIteratorIterator;
 use ReflectionClass;
-use SplFileInfo;
 use Throwable;
 
 /**
@@ -283,31 +280,16 @@ final class MarkerStatusMapContractTest extends TestCase
      * Walks `api/src` and yields a {@see ReflectionClass} for every concrete (non-abstract,
      * non-interface) class implementing {@see Throwable}. FQCNs are derived from the PSR-4
      * mapping `Erpify\` → `src/`; files whose path does not resolve to a loadable class are
-     * skipped. Same file-walk pattern as {@see ErrorContractGateTest}.
+     * skipped. The directory sweep is the shared {@see ApiSourceFiles} walk that
+     * {@see ErrorContractGateTest} also uses; this gate layers FQCN + reflection on top.
      *
      * @return iterable<ReflectionClass<object>>
      */
     private function concreteThrowableClassesUnderApiSrc(): iterable
     {
-        $srcRoot = \dirname(__DIR__, 5) . '/src';
+        $srcRoot = ApiSourceFiles::root();
 
-        $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($srcRoot, FilesystemIterator::SKIP_DOTS),
-        );
-
-        foreach ($iterator as $file) {
-            if (!$file instanceof SplFileInfo) {
-                continue;
-            }
-
-            if (!$file->isFile()) {
-                continue;
-            }
-
-            if ('php' !== $file->getExtension()) {
-                continue;
-            }
-
+        foreach (ApiSourceFiles::phpFiles($srcRoot) as $file) {
             $relative = \substr($file->getPathname(), \strlen($srcRoot) + 1, -\strlen('.php'));
             $fqcn = 'Erpify\\' . \str_replace('/', '\\', $relative);
 

@@ -101,3 +101,13 @@ context:
 - `make php.behat c='features/backoffice/bank/search.feature'` — expected: verde con el escenario nuevo.
 - `make pwa.test.unit c='tests/app/backoffice/banks/banksCursorReset.test.tsx'` — expected: verde.
 - `make php.quality` y `make pwa.quality` — expected: sin findings.
+
+## Review Findings
+
+Triaje de una review externa del PR #229 (2026-06-12). La mayoría de sus riesgos ya estaban resueltos en sitios que el revisor no tenía a la vista (este spec, el ADR de keyset, los docstrings de producción) — verificados y descartados. Los accionables:
+
+- [x] **[Patch] DRY del file-walk `api/src` en `ApiSourceFiles`** [`api/tests/Support/ApiSourceFiles.php`] — el barrido recursivo estaba duplicado entre `MarkerStatusMapContractTest` (autoload + reflexión) y `ErrorContractGateTest` (grep textual). Extraído a un único helper de test; cada gate mantiene su derivación encima. Verificado: PHPStan 0, ambos gates verdes (17/17), `php.quality` sin findings.
+- [x] **[Defer] El gate dual-marker autocarga todo `api/src`, no solo excepciones** [`api/tests/Unit/Shared/Application/Problem/MarkerStatusMapContractTest.php`] — `class_exists()` por fichero dispara el autoload de cada clase para luego filtrar `Throwable`; es más pesado que el `ErrorContractGateTest` que cita (ese es grep textual, no autocarga). Diferido: el scan completo es **decisión consciente** (los markers viven en todos los contextos; filtrar por `*/Exception/*` o por nombre fallaría con `RateLimited`/`NotFound`/`Conflict`). Revisable si `api/src` crece mucho o si una clase con efecto secundario en load-time rompe el gate con un fallo no relacionado.
+- [x] **[Defer] Documentar el contrato de precisión de `parseStrict`** [`docs/api-error-contract.md`] — el round-trip byte-canónico acepta solo precisión de segundos, 3 dígitos (millis JS `toISOString()`) o 6 (micros), y devuelve 422 ante cualquier otra (`.5`, 4/5/7+ dígitos). Es deliberado y cubre los emisores reales, pero hoy solo está en el docstring de `FilterApplier`; conviene una línea explícita en el contrato de error de cara a clientes. No es un defecto.
+
+Descartados como ya-resuelto / decisión consciente (sin acción): estricteza byte-canónica de `parseStrict` (es el requisito #199, no un bug; internamente normalizado vía `setTimezone(UTC)`), enforcement del gate vía atributos runtime (rechazado en este spec con motivo), invariante del cursor "solo en tests" (documentado en `FingerprintCanonicalizer` AR3 + el ADR + el contrato de error), step Behat "frágil" (ya encapsulado en `withOverriddenQueryParam`), mensajes del gate y "porqué" del contrato (ya presentes).
