@@ -21,6 +21,7 @@ Feature: Create a bank
 #    And the last bank created notification email should mention event "erpify.backoffice.bank.created"
     And the response should contain "Test Bank"
     And the response should contain "TB"
+    And the JSON node "data.accountCount" should not exist
     And 6 requests got executed only for doctrine connection "default"
 
   Scenario: Fail to create a bank with missing fields
