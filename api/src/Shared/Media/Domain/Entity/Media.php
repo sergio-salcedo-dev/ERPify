@@ -8,6 +8,7 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Erpify\Shared\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Media\Domain\Repository\MediaRepository;
+use RuntimeException;
 
 /**
  * (repositoryClass is the domain interface; the concrete repository implementation is wired via DI).
@@ -64,7 +65,14 @@ final class Media extends AggregateRoot
     {
         if (\is_resource($this->rawBytes)) {
             $contents = \stream_get_contents($this->rawBytes);
-            $this->rawBytes = false !== $contents ? $contents : '';
+
+            // why: a failed BLOB stream read must not degrade to '' — callers serve these
+            // bytes as the response body, and an empty 200 is silent, cacheable corruption.
+            if (false === $contents) {
+                throw new RuntimeException(\sprintf('Failed to read raw bytes stream of media "%s".', $this->id));
+            }
+
+            $this->rawBytes = $contents;
         }
 
         // @phpstan-ignore return.type (BLOB hydrates to string|resource; narrowed to string above)

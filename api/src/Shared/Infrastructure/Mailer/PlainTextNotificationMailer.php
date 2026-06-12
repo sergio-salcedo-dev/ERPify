@@ -38,7 +38,11 @@ final readonly class PlainTextNotificationMailer implements NotificationMailer
         }
 
         foreach ($fields as $key => $value) {
-            $lines[] = \sprintf('%s: %s', $key, \is_scalar($value) ? $value : \json_encode($value));
+            // why: json_encode() returns false on unencodable values (resources, invalid
+            // UTF-8); sprintf would render that as an empty string, silently dropping the
+            // field from the notification — keep the line visibly marked instead.
+            $encoded = \is_scalar($value) ? $value : \json_encode($value);
+            $lines[] = \sprintf('%s: %s', $key, false === $encoded ? '[unserializable]' : $encoded);
         }
 
         $body = \implode("\n", $lines);

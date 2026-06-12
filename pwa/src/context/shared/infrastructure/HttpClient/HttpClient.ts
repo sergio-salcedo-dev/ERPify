@@ -176,22 +176,32 @@ export class FetchHttpClient implements HttpClient {
   // stale browser bundle fetching a newer, reshaped API response).
   private async parseBody<T>(res: Response, url: string, validate?: ResponseGuard<T>): Promise<T> {
     if (!validate) {
-      return (await res.json()) as T;
+      try {
+        return (await res.json()) as T;
+      } catch {
+        // why: a guard-less caller still relies on this boundary's typed-error
+        // contract — an unparseable 2xx body must not leak a raw SyntaxError.
+        throw this.malformedEnvelope(res, `Unparseable JSON response body for ${url}`);
+      }
     }
 
     const parsed: unknown = await res.json().catch(() => undefined);
     if (!validate(parsed)) {
-      throw new HttpError({
-        type: MALFORMED_RESPONSE_ENVELOPE,
-        title: "API response did not match the expected shape",
-        status: res.status,
-        detail: `Unexpected response body shape for ${url}`,
-        instance: uuidV7(),
-        "correlation-id": res.headers.get("X-Correlation-Id") ?? uuidV7(),
-      });
+      throw this.malformedEnvelope(res, `Unexpected response body shape for ${url}`);
     }
 
     return parsed;
+  }
+
+  private malformedEnvelope(res: Response, detail: string): HttpError {
+    return new HttpError({
+      type: MALFORMED_RESPONSE_ENVELOPE,
+      title: "API response did not match the expected shape",
+      status: res.status,
+      detail,
+      instance: uuidV7(),
+      "correlation-id": res.headers.get("X-Correlation-Id") ?? uuidV7(),
+    });
   }
 
   private resolveUrl(url: string): string {
