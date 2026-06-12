@@ -3,7 +3,7 @@
 Operational guide for the cursor-only search pagination (keyset engine on the wire). Covers the wire
 contract, the observability events, how to diagnose `invalid-cursor`, and how to roll back.
 
-- **Contract / design**: [`_bmad-output/planning-artifacts/architecture-keyset-pagination.md`](../../_bmad-output/planning-artifacts/architecture-keyset-pagination.md), [`pr3-execution-contract.md`](../../_bmad-output/implementation-artifacts/pr3-execution-contract.md)
+- **Contract / design**: [`_bmad-output/planning-artifacts/architecture-keyset-pagination.md`](../../_bmad-output/planning-artifacts/architecture-keyset-pagination.md)
 - **Error contract**: [`docs/api-error-contract.md`](../api-error-contract.md) (`invalid-cursor` row)
 - **API architecture**: [`docs/architecture-api.md`](../architecture-api.md)
 - **Wire composer**: [`api/src/Shared/Infrastructure/Http/Responder/SearchResponder.php`](../../api/src/Shared/Infrastructure/Http/Responder/SearchResponder.php)
