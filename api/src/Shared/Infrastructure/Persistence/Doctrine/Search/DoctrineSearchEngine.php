@@ -254,10 +254,15 @@ final readonly class DoctrineSearchEngine
         ];
     }
 
-    /** Step 3 — clamp the requested limit to the policy ceiling; the receipt is always ≥ 1. */
+    /**
+     * Step 3 — resolve the effective page size and clamp it to the policy ceiling; the receipt is
+     * always ≥ 1. A `null` criteria limit is "unspecified" and falls back to the policy's
+     * `defaultLimit`, so an adapter picks its default by selecting the policy — never by baking a
+     * value into {@see SearchCriteria}.
+     */
     private function resolveLimit(SearchCriteria $criteria, WirePaginationPolicy $policy): AppliedLimit
     {
-        return new AppliedLimit(\max(1, \min($criteria->limit, $policy->maxLimit)));
+        return new AppliedLimit(\max(1, \min($criteria->limit ?? $policy->defaultLimit, $policy->maxLimit)));
     }
 
     /**

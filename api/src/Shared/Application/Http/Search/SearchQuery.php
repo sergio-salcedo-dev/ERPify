@@ -25,9 +25,11 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
  * Cursor-only navigation (PR3): `after`/`before` carry the OPAQUE keyset cursor
  * (base64url + HMAC); they are mutually exclusive (the callback below is layer 1
  * of the validation DAG, AR1/K2) and the present one fixes the
- * {@see NavigationDirection}. There is no `page` number. `limit` defaults to
- * {@see SearchCriteria::DEFAULT_LIMIT} (25) with a {@see SearchCriteria::MAX_LIMIT}
- * (100) ceiling — out of [1, 100] is a 422 `validation-failed`.
+ * {@see NavigationDirection}. There is no `page` number. An omitted `limit` stays
+ * `null` through to the criteria, where the engine resolves it from the active
+ * policy's `defaultLimit` ({@see SearchCriteria::DEFAULT_LIMIT}, 25, on the wire
+ * path); a supplied `limit` is capped at {@see SearchCriteria::MAX_LIMIT} (100) —
+ * out of [1, 100] is a 422 `validation-failed`.
  *
  * Filtering is expressed exclusively through the generic `filters[]` grammar
  * ({@see FilterQuery}) resolved against each repository's field map — search
@@ -53,7 +55,7 @@ final readonly class SearchQuery
         public ?string $before = null,
         #[Assert\Positive]
         #[Assert\LessThanOrEqual(SearchCriteria::MAX_LIMIT)]
-        public ?int $limit = SearchCriteria::DEFAULT_LIMIT,
+        public ?int $limit = null,
         public PaginationMode $paginationMode = PaginationMode::LIGHT,
         #[Assert\Valid]
         #[Assert\Count(max: self::MAX_FILTERS)]
@@ -106,7 +108,8 @@ final readonly class SearchQuery
         return new SearchCriteria(
             cursor: $cursor,
             routingDirection: $routingDirection,
-            limit: $this->limit ?? SearchCriteria::DEFAULT_LIMIT,
+            // An omitted `limit` stays null: the engine resolves the page size from the policy.
+            limit: $this->limit,
             paginationMode: $this->paginationMode,
             filters: $this->domainFilters(),
             // An empty `sort=` on the wire means "no sort" → the default order, not a 422
