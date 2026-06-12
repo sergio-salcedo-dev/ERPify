@@ -135,7 +135,7 @@ long-running console command, exclude it here too.
 A second, **dev-only** worker gotcha (the same long-lived process, a different
 failure mode) is documented separately: the worker can crash on a dev DI
 container that the web `php` container recompiled out from under it — see
-[`sentry-messenger-worker-dev-cache-crash.md`](./sentry-messenger-worker-dev-cache-crash.md).
+[`troubleshooting/sentry-messenger-worker-dev-cache-crash.md`](./troubleshooting/sentry-messenger-worker-dev-cache-crash.md).
 
 ## Prod hardening (compose.prod.yaml)
 

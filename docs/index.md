@@ -41,13 +41,13 @@
 - **[architecture-api.md](./architecture-api.md)** — API layering, stack, Doctrine, Messenger, Mercure
 - **[architecture-pwa.md](./architecture-pwa.md)** — PWA layering, Next.js, Inversify DI, testing
 - **[integration-architecture.md](./integration-architecture.md)** — How API and PWA share `localhost`
-- **[adr-bank-bankaccount-modeling.md](./adr-bank-bankaccount-modeling.md)** — ADR: id-based cross-module references (Bank/BankAccount), schema-aware FK, per-aggregate persistence strategy (state vs event sourcing)
-- **[adr-filters-search-criteria.md](./adr-filters-search-criteria.md)** — ADR: generic `filters[]` search vocabulary (SearchQuery/SearchCriteria), rationale and FR/NFR inventory
-- **[adr-keyset-pagination.md](./adr-keyset-pagination.md)** — ADR: cursor-only keyset pagination + repositories by composition (IMPLEMENTATION LOCKED, with post-D-1 override note)
+- **[adr/bank-bankaccount-modeling.md](./adr/bank-bankaccount-modeling.md)** — ADR: id-based cross-module references (Bank/BankAccount), schema-aware FK, per-aggregate persistence strategy (state vs event sourcing)
+- **[adr/filters-search-criteria.md](./adr/filters-search-criteria.md)** — ADR: generic `filters[]` search vocabulary (SearchQuery/SearchCriteria), rationale and FR/NFR inventory
+- **[adr/keyset-pagination.md](./adr/keyset-pagination.md)** — ADR: cursor-only keyset pagination + repositories by composition (IMPLEMENTATION LOCKED, with post-D-1 override note)
 - **[api-error-contract.md](./api-error-contract.md)** — RFC 9457 Problem Details: marker→status map, correlation-id, instance UUIDv7, logging tiers, `exception_category` SRE taxonomy
-- **[sentry-domain-error-filtering.md](./sentry-domain-error-filtering.md)** — deferred: drop/sample `domain_error` noise in Sentry (`ignore_exceptions` vs `before_send`), with the trade-off
-- **[sentry-boot-probe-noise.md](./sentry-boot-probe-noise.md)** — fixed: silencing the container boot DB-probe flood (`SENTRY_DSN=` on the entrypoint `SELECT 1` wait), safe in dev + prod
-- **[sentry-messenger-worker-dev-cache-crash.md](./sentry-messenger-worker-dev-cache-crash.md)** — fixed: dev Messenger worker crashed on a recompiled DI container (shared `var/cache/dev` deleted under the long-lived worker); fix = `APP_DEBUG=0` + private cache volume on the worker
+- **[troubleshooting/sentry-domain-error-filtering.md](./troubleshooting/sentry-domain-error-filtering.md)** — deferred: drop/sample `domain_error` noise in Sentry (`ignore_exceptions` vs `before_send`), with the trade-off
+- **[troubleshooting/sentry-boot-probe-noise.md](./troubleshooting/sentry-boot-probe-noise.md)** — fixed: silencing the container boot DB-probe flood (`SENTRY_DSN=` on the entrypoint `SELECT 1` wait), safe in dev + prod
+- **[troubleshooting/sentry-messenger-worker-dev-cache-crash.md](./troubleshooting/sentry-messenger-worker-dev-cache-crash.md)** — fixed: dev Messenger worker crashed on a recompiled DI container (shared `var/cache/dev` deleted under the long-lived worker); fix = `APP_DEBUG=0` + private cache volume on the worker
 
 ### Deep-Dive Documentation
 

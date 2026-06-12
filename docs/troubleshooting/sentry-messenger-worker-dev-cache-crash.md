@@ -1,14 +1,14 @@
 # Sentry — Messenger worker crash on a recompiled dev container (fixed)
 
 > **Status:** FIXED — Solution A applied in
-> [`compose.dev.yaml`](../compose.dev.yaml) (`APP_DEBUG=0` + a private
+> [`compose.dev.yaml`](../../compose.dev.yaml) (`APP_DEBUG=0` + a private
 > `messenger_cache` volume on `messenger_worker`). Watch `ERPIFY-API-DEV-7` and
 > close it once it stays silent.
 > Siblings: [`sentry-boot-probe-noise.md`](./sentry-boot-probe-noise.md) (a
 > *different* dev-lifecycle Sentry flood, fixed) and
 > [`sentry-domain-error-filtering.md`](./sentry-domain-error-filtering.md)
 > (deferred 4xx noise tuning). The performance-tracing side of the same worker is
-> covered in [`deployment-guide.md`](./deployment-guide.md) ("Performance tracing
+> covered in [`deployment-guide.md`](../deployment-guide.md) ("Performance tracing
 > & the messenger worker").
 
 ## Symptom
@@ -39,7 +39,7 @@ ContainerLKbhA2o\Erpify_KernelDevDebugContainer::load()
 This is **not** an application bug and **not** a misconfigured service. The
 compiled container that expected to find that file no longer exists on disk. The
 worker self-heals — `messenger_worker` runs `restart: unless-stopped`
-([`compose.yaml`](../compose.yaml)), so it restarts against the fresh container
+([`compose.yaml`](../../compose.yaml)), so it restarts against the fresh container
 and the in-flight message is retried (at-least-once delivery). The only real cost
 is Sentry noise at worker turnover.
 
@@ -50,7 +50,7 @@ a long-lived process that shares that cache directory.** Every piece is present
 in our setup:
 
 1. **The worker is long-lived and runs in `dev`.**
-   [`compose.yaml`](../compose.yaml) launches
+   [`compose.yaml`](../../compose.yaml) launches
    `messenger:consume async --time-limit=3600` with
    `APP_ENV: ${APP_ENV:-dev}`. The process boots once and lives up to an hour.
 
@@ -61,11 +61,11 @@ in our setup:
 3. **In `dev` (`APP_DEBUG=1`) Symfony watches source/config files and recompiles
    the container on change**, writing a directory with a **new** hash and
    **deleting the previous one**. Triggers: editing any config/service file,
-   `make sf.cc` (`cache:clear`, [`make/symfony.mk`](../make/symfony.mk)),
+   `make sf.cc` (`cache:clear`, [`make/symfony.mk`](../../make/symfony.mk)),
    restarting the `php` container, etc.
 
 4. **The dev cache is shared by bind-mount between `php` (web) and
-   `messenger_worker`.** [`compose.dev.yaml`](../compose.dev.yaml) mounts both
+   `messenger_worker`.** [`compose.dev.yaml`](../../compose.dev.yaml) mounts both
    `./api:/app/api` **and** `./api/var:/app/api/var` into the worker — the same
    host `var/cache/dev` the FrankenPHP `php` container uses. The `php` container
    *is* in debug and recompiles on request handling, so **it deletes the
@@ -96,15 +96,15 @@ The bug requires **two** preconditions, and **both are dev-only**:
 
 1. **A container that auto-recompiles mid-process.** Only happens with
    `APP_DEBUG=1`. Prod runs `APP_ENV=prod` ⇒ `APP_DEBUG=0`
-   ([`compose.prod.yaml`](../compose.prod.yaml) sets `APP_ENV: prod` on the
+   ([`compose.prod.yaml`](../../compose.prod.yaml) sets `APP_ENV: prod` on the
    worker), so Symfony does **no** freshness checks and **never recompiles** the
    container while the process is alive — it is immutable for the container's
    lifetime.
 2. **A `var/cache` directory a second process can delete.** Dev shares it by
-   bind-mount ([`compose.dev.yaml`](../compose.dev.yaml)). Prod does **not**:
+   bind-mount ([`compose.dev.yaml`](../../compose.dev.yaml)). Prod does **not**:
    `compose.prod.yaml` declares **no `volumes:`** on either `php` or
    `messenger_worker`, and the Dockerfile's `VOLUME /app/api/var/`
-   ([`../api/Dockerfile`](../api/Dockerfile)) gives **each container its own
+   ([`../api/Dockerfile`](../../api/Dockerfile)) gives **each container its own
    anonymous `var/` volume** — `php` and the worker never share a cache, and the
    prod image is built once (`app-php-prod`). Nothing can yank the worker's
    container directory.
@@ -118,7 +118,7 @@ The `environment: dev` tag on `ERPIFY-API-DEV-7` is itself the proof.
 ## The fix (applied) — Solution A: isolate the worker from the dev cache churn
 
 Give `messenger_worker` a **stable, private** container cache. Two changes in
-[`compose.dev.yaml`](../compose.dev.yaml) (this is a dev-only concern; prod is
+[`compose.dev.yaml`](../../compose.dev.yaml) (this is a dev-only concern; prod is
 already immutable):
 
 ```yaml
@@ -160,7 +160,7 @@ workers behave in prod and is the expected workflow.
    class of "container deleted under me" failures.
 3. **`messenger:stop-workers` in maintenance scripts** — good complementary
    practice. `make sf.messenger.stop-workers`
-   ([`make/symfony.mk`](../make/symfony.mk)) makes the worker stop cleanly
+   ([`make/symfony.mk`](../../make/symfony.mk)) makes the worker stop cleanly
    between messages so `restart: unless-stopped` brings it back on the fresh
    container. Wire it into flows that run `cache:clear` / `cache:warmup` /
    `composer install` / `composer dump-autoload`. Caveat: it does **not** cover

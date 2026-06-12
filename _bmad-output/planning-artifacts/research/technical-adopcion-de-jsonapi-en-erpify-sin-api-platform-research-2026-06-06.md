@@ -8,6 +8,7 @@ research_topic: 'Adopción de JSON:API en ERPify sin API Platform'
 research_goals: 'Evaluar la viabilidad y el coste de adoptar el estándar JSON:API en ERPify (API Symfony 8 hexagonal sin API Platform + PWA Next.js 16): librerías PHP standalone compatibles con PHP 8.5/Symfony 8, include/sparse fieldsets sobre Doctrine sin N+1, cliente de normalización [type,id] en Next.js/TypeScript con Mercure, reconciliación del contrato de errores RFC 9457 (NFR26) con JSON:API errors, estrategia de adopción incremental por bounded context, y comparativa con la alternativa de adoptar solo las convenciones de query params (filter/sort/page/fields/include) sobre el formato JSON actual.'
 user_name: 'Sergio'
 date: '2026-06-06'
+last_updated: '2026-06-12'
 web_research_enabled: true
 source_verification: true
 ---
@@ -17,6 +18,7 @@ source_verification: true
 **Date:** 2026-06-06
 **Author:** Sergio
 **Research Type:** technical
+**Última actualización:** 2026-06-12 — estado de implementación sincronizado con `main`; decisiones pendientes acotadas a `fields[]` e `include`/`expand`
 
 ---
 
@@ -26,9 +28,56 @@ Esta investigación evalúa la adopción del estándar JSON:API v1.1 en ERPify �
 
 **Conclusión central:** el valor de JSON:API para ERPify está en sus convenciones de consulta, no en su document format. El envelope completo presenta cinco bloqueos verificados (ecosistema PHP muerto sin API Platform, conflicto con el contrato RFC 9457/NFR26, sin cliente TS canónico para App Router, beneficio de latencia refutado con HTTP/2/3, y superficie BOLA/BOPLA elevada para un ERP multi-rol), mientras que las convenciones de query params son adoptables a bajo coste ancladas a Google AIP y Zalando Guidelines, con expansión de relaciones estilo Stripe. Resumen ejecutivo completo y recomendación en 7 puntos en la sección **Síntesis de la investigación** al final del documento.
 
+**Actualización 2026-06-12:** la ruta recomendada (capturar las convenciones de consulta sin adoptar el envelope) está mayoritariamente implementada en `main`: `filters[]` como vocabulario único de búsqueda, paginación keyset con cursor opaco firmado, envelope plano `data`+`pagination` y contrato RFC 9457 intacto y ampliado. La sintaxis concreta shippeada **diverge deliberadamente de la sintaxis JSON:API** que proponía el punto 1 de la recomendación — decisión registrada en ADRs propios. Quedan pendientes de decisión los dos elementos restantes del alcance original: **sparse fieldsets (`fields[]`)** y **expansión de relaciones (`include`/`expand` estilo Stripe)**. Detalle en la sección **Estado de implementación (actualización 2026-06-12)**.
+
 ---
 
 <!-- Content will be appended sequentially through research workflow steps -->
+
+## Estado de implementación (actualización 2026-06-12)
+
+_Verificado contra el código de `main` el 2026-06-12. Los hallazgos web del informe (verificados el 2026-06-06) siguen vigentes; esta sección sincroniza el informe con lo construido desde entonces y acota las decisiones pendientes._
+
+### Recomendación en 7 puntos: estado por punto
+
+| # | Recomendación (2026-06-06) | Estado en `main` (2026-06-12) |
+|---|---|---|
+| 1 | Query params con sintaxis JSON:API (`sort` con `-`, `filter[...]`, `page[...]`, `fields[...]`) | **Superada por decisión de diseño.** Se shippeó un vocabulario propio, más estructurado que el de JSON:API: `filters[N][field]`+`[operator]`+`[value]` (tripletas con operadores explícitos), `after`/`before`/`limit` top-level con cursor opaco, y `sort`+`direction` como params separados. Decisiones registradas en `docs/adr/filters-search-criteria.md` y `docs/adr/keyset-pagination.md`. El espíritu de la recomendación (cursor opaco server-driven, allowlists, no offset — AIP-158/Zalando 160) se conserva; la sintaxis literal JSON:API se descartó. |
+| 2 | Expansión de relaciones estilo Stripe (`include`/`expand`) | **Pendiente — sin implementar ni stub.** Una de las dos decisiones abiertas (ver más abajo). |
+| 3 | Mapeo a Criteria/Specification | **Implementado.** `SearchQuery` (`#[MapQueryString]`, `api/src/Shared/Application/Http/Search/`) → `SearchCriteria` de dominio (`api/src/Shared/Domain/Search/`) → `DoctrineSearchEngine` en Infrastructure. El dominio no conoce la sintaxis wire. |
+| 4 | Allowlists + autorización por recurso | **Parcial.** Allowlists por repositorio implementadas (`SearchFieldMap`/`SortFieldMap` obligatorios, campo desconocido → 422) más un gate dual-marker en `FieldMapping` que rechaza en build-time combinaciones operador/tipo imposibles (LIKE sobre UUID, rangos sobre texto). El pre-filtrado por rol/tenant y los voters por recurso siguen fuera del alcance shippeado (no hay aún capa de autorización por roles en la API). |
+| 5 | Errores: RFC 9457 intacto | **Implementado y ampliado.** Pipeline `application/problem+json` único; nuevos problem types: 422 `validation-failed` (mapping DTO), familia 422 `invalid-search-criteria` (`unknown-search-field`, `unsupported-search-operator`, `invalid-search-value`, `unknown-sort-field`, `invalid-pagination`, `invalid-cursor`) y 400 `invalid-uuid` (`Uuid::ensure()` en path ids). Catálogo en `docs/api-error-contract.md`. |
+| 6 | Cliente PWA: TanStack Query | **Superada por decisión de diseño.** La PWA consume la búsqueda vía use case hexagonal + fetch (p. ej. `BackOfficeSearchBanks`) y navega siguiendo los links construidos por el servidor (`pagination.links.next`/`prev`) sin inspeccionar el cursor; cambio de filtro/sort descarta el cursor activo. TanStack Query no se adoptó; Mercure se integra por hook propio (`useBankRealtime`). |
+| 7 | Gates de contrato | **Parcial.** El gate `make php.lint.error-contract` sigue cubriendo el contrato de errores; la convención de consulta está protegida por tests directos del motor y e2e cursor+sort, pero no consta lint de contrato OpenAPI (Spectral/oasdiff) sobre la convención. |
+
+### Contrato de consulta shippeado (resumen citable)
+
+- **Filtros:** `filters[N][field]`, `filters[N][operator]`, `filters[N][value]`; operadores `eq | in | contains | gt | gte | lt | lte`; máx. 20 filtros por petición, índices contiguos desde 0; `in` con máx. 100 valores; valores máx. 255 chars, trim Unicode-aware; valores siempre como parámetros bind de Doctrine con normalizadores por campo (accent-folding, ASCII-upper) y escapado de comodines LIKE.
+- **Paginación keyset:** `after` / `before` (excluyentes) + `limit` (default 25, máx. 100) + `paginationMode=light|detailed` (`light` sin COUNT → `count: null`). Cursor opaco: `base64url(JSON{v, dir, values, fp})` + HMAC-SHA256 con `%kernel.secret%`, tope 512 bytes pre-HMAC; el fingerprint sella entidad+filtros+sort+limit y cualquier mismatch → 422 `invalid-cursor` (causa interna distinguible solo en logs). Tie-break implícito por `id` para orden total estable.
+- **Orden:** `sort=<campo>` + `direction=asc|desc`, allowlist por `SortFieldMap`.
+- **Envelope de colección:** `{ "data": [...], "pagination": { "hasNext", "hasPrev", "count", "links": { "next", "prev" } } }` — nulls explícitos (sin `skip_null_values`); los links preservan todos los params validados sustituyendo solo el cursor.
+
+### Decisiones pendientes: `fields[]` e `include`/`expand`
+
+Los dos elementos del alcance original aún sin decidir. La investigación de los pasos 2-4 sigue siendo la base de evidencia; el motor ya shippeado añade restricciones nuevas que la decisión debe tener en cuenta.
+
+**Sparse fieldsets (`fields[]`)**
+
+- Evidencia vigente del informe: proyección en la capa de serialización, no en SQL (PARTIAL frágil); superficie BOPLA — la respuesta debe ser la *intersección* entre la allowlist por rol y los campos pedidos; convenciones de referencia AIP-157 (field masks, default `*`) y Zalando Rule 157.
+- Restricciones nuevas del motor shippeado: (a) la proyección actual son **serializer groups** — `fields[]` sería un refinamiento dinámico sobre ellos, no un mecanismo paralelo; (b) el responder ya propaga todos los query params a `links.next/prev`, así que `fields[]` viajaría en la paginación sin trabajo extra; (c) hay que decidir explícitamente si `fields[]` entra en el fingerprint del cursor — no altera el orden de filas, por lo que lo natural es dejarlo fuera (cursores estables al cambiar proyección), pero es una decisión de contrato, no un default; (d) sintaxis: el vocabulario propio ya divergió de JSON:API, y con un solo resource type por endpoint `fields=a,b` bastaría frente a `fields[type]=a,b`.
+- Coste estimado: bajo (proyección en serialización + validación allowlist). Valor dependiente de presión real de payload — **diferible sin coste** hasta que una vista la demuestre.
+
+**Expansión de relaciones (`include`/`expand`)**
+
+- Evidencia vigente del informe: Stripe `expand[]` (allowlist + profundidad máx. 4), Drupal hardening (profundidad máx. 2 — cifra operativa recomendada), to-one por join barato vs. to-many por segunda query `WHERE IN`, autorización por **cada** recurso expandido (BOLA), y la laguna confirmada "cursor + include to-many sin receta publicada".
+- Restricciones nuevas del repo y del motor: (a) la regla per-aggregate de ERPify — **ningún grafo de objetos cruza frontera de módulo**; la composición de lectura es un DQL JOIN explícito a un projection DTO por endpoint (`docs/adr/bank-bankaccount-modeling.md`) — hace que un motor genérico de `include` cross-módulo contradiga un ADR vigente: lo coherente es expansión por proyección explícita y acotada por endpoint, no un mecanismo genérico tipo Drupal; (b) keyset + to-many encaja con la receta inferida en el informe (el cursor pagina la colección raíz; los expandidos se resuelven por `WHERE IN` posterior y quedan fuera del fingerprint); (c) la autorización por recurso expandido depende de una capa de roles que la API aún no tiene — implementar `expand` antes que la autorización invertiría el orden de las mitigaciones BOLA del informe.
+- Coste estimado: el más alto de los dos, con superficie de seguridad propia. **Candidata a ADR + spike dedicados** cuando aparezca el primer caso real de composición de lectura que el patrón actual (JOIN a projection DTO) no cubra bien; el spike benchmark expand-vs-N-requests sobre FrankenPHP sigue siendo el paso previo recomendado.
+
+### Triggers de re-evaluación
+
+Sin cambios respecto a los documentados en las recomendaciones (consumidores externos múltiples, batch transaccional, madurez del ecosistema Symfony 8 / extensión `problem-details`). Ninguno se ha activado a fecha de esta actualización.
+
+---
 
 ## Confirmación del alcance de la investigación técnica
 
@@ -310,6 +359,8 @@ _Dos líneas de investigación paralelas verificadas el 2026-06-06: (a) la alter
 
 ### Recomendación principal
 
+> **Estado 2026-06-12:** puntos 3 y 5 implementados; 1 y 6 superados por decisiones de diseño propias (vocabulario `filters[]`/keyset en ADRs; consumo hexagonal en la PWA); 4 y 7 parciales; 2 pendiente de decisión junto con `fields[]`. Detalle en **Estado de implementación (actualización 2026-06-12)**.
+
 **No adoptar el document format completo de JSON:API en ERPify.** La evidencia: ecosistema PHP server-side muerto/en pausa sin API Platform, conflicto frontal con el contrato RFC 9457 (NFR26), ausencia de cliente TS canónico para App Router, beneficio de latencia refutado como verdad general con HTTP/2/3 (incl. benchmark del propio autor de FrankenPHP), superficie BOLA/BOPLA significativa para un ERP multi-rol, y codegen/OpenAPI degradados — mientras su beneficio central (anti-bikeshedding multi-cliente) no aplica a un único frontend propio.
 
 **Sí adoptar, como convención documentada del repo (estilo "ERPify API Query Conventions")**:
@@ -367,6 +418,7 @@ Los precedentes industriales (Stripe `expand[]` con profundidad máxima 4 y allo
 
 ### Tabla de contenidos del informe
 
+0. Estado de implementación (actualización 2026-06-12) — recomendación punto a punto vs. `main`; contrato de consulta shippeado; decisiones pendientes (`fields[]`, `include`/`expand`)
 1. Confirmación del alcance de la investigación técnica
 2. Análisis del stack tecnológico — estado del estándar; librerías servidor PHP; cliente JS/TS; tendencias de adopción
 3. Análisis de patrones de integración — `include`/sparse fieldsets sobre Doctrine; reconciliación RFC 9457 ↔ JSON:API; Mercure; interoperabilidad y versionado
@@ -425,14 +477,15 @@ Los precedentes industriales (Stripe `expand[]` con profundidad máxima 4 y allo
 
 **Síntesis:** ERPify no debe adoptar el document format de JSON:API: sus costes verificados (ecosistema, contrato de errores, cliente, rendimiento de servidor, seguridad) superan a un beneficio central — estandarización multi-cliente — que el proyecto no necesita hoy. Sí debe capturar el valor reutilizable del estándar: sintaxis de consulta probada, anclada a AIP/Zalando, con expansión estilo Stripe, preservando intactos RFC 9457, los controladores puros y la frontera hexagonal. La decisión queda protegida por triggers de re-evaluación explícitos.
 
-**Próximos pasos sugeridos (flujo BMad):**
-1. **`bmad-create-architecture`** — convertir la recomendación en decisión arquitectónica formal (ADR "ERPify API Query Conventions"), actualizando `docs/architecture-api.md` y, si se toca el pipeline de errores, `docs/api-error-contract.md` (NFR26).
-2. **`bmad-create-epics-and-stories`** — trocear la implementación: documento de convención + parser/validador de query params con allowlists + Criteria pattern + expansión con autorización + paginación cursor + TanStack Query en la PWA + gates de CI.
-3. **Spike opcional previo:** benchmark interno expand-vs-N-requests sobre FrankenPHP/HTTP-3 con datos reales del dominio (cierra la laguna del conflicto Dunglas/Pot para este stack concreto).
+**Próximos pasos (actualizados 2026-06-12 — el grueso de la ruta recomendada ya está en `main`):**
+1. **Decisión `fields[]` (sparse fieldsets):** diferible sin coste hasta que una vista demuestre presión real de payload; cuando llegue, es un refinamiento de los serializer groups con allowlist por rol (BOPLA: intersección, nunca ampliación) — cabe en un spec de quick-dev, sin spike.
+2. **Decisión `include`/`expand`:** candidata a **ADR + spike dedicados** cuando aparezca el primer caso de composición de lectura que el patrón vigente (DQL JOIN a projection DTO por endpoint, `docs/adr/bank-bankaccount-modeling.md`) no cubra bien; prerrequisito de seguridad: capa de autorización por roles (BOLA por recurso expandido). El spike benchmark expand-vs-N-requests sobre FrankenPHP/HTTP-3 sigue siendo el paso previo recomendado (cierra la laguna del conflicto Dunglas/Pot para este stack).
+3. **Gate de convención (punto 7, parcial):** evaluar lint de contrato OpenAPI (Spectral + oasdiff) sobre la convención de consulta shippeada, siguiendo el patrón de `make php.lint.error-contract`.
 
 ---
 
 **Fecha de finalización de la investigación:** 2026-06-06
+**Última actualización:** 2026-06-12 — estado de implementación verificado contra el código de `main` (sin re-verificación web: los datos del 2026-06-06 siguen dentro de vigencia); decisiones pendientes acotadas a `fields[]` e `include`/`expand`
 **Verificación de fuentes:** todas las afirmaciones citadas con fuentes vigentes a fecha de corte; niveles de confianza por dato
 **Nivel de confianza global:** Alto en la dirección de la recomendación (multi-fuente, primarias); Medio en detalles señalados como [MEDIA]/[BAJA] o laguna
 
