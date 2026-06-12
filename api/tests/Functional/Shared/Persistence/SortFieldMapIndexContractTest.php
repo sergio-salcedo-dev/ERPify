@@ -8,11 +8,14 @@ use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Mapping\ClassMetadata;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
+use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\SortFieldMap;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
+use ReflectionMethod;
+use ReflectionProperty;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 /**
@@ -42,26 +45,51 @@ final class SortFieldMapIndexContractTest extends KernelTestCase
     }
 
     #[Test]
-    #[DataProvider('provideEverySortableColumnIsNotNullableCases')]
-    public function everySortableColumnIsNotNullable(string $entityField): void
+    public function everySortableColumnFromTheProductionMapIsNotNullable(): void
     {
-        $nullable = $this->bankMetadata()->getFieldMapping($entityField)->nullable;
+        $entityFields = $this->productionSortableEntityFields();
+        $this->assertNotEmpty($entityFields, 'The production sort field map exposed no sortable field.');
 
-        // Treat null as false (ORM 3 default). NULL-able keys break keyset boundaries.
-        $this->assertNotTrue($nullable, \sprintf('Sort column for "%s" must be NOT NULL.', $entityField));
+        foreach ($entityFields as $entityField) {
+            // Treat null as false (ORM 3 default). NULL-able keys break keyset boundaries.
+            $nullable = $this->bankMetadata()->getFieldMapping($entityField)->nullable;
+            $this->assertNotTrue($nullable, \sprintf('Sort column for "%s" must be NOT NULL.', $entityField));
+        }
     }
 
     /**
-     * Maps public sort names to entity fields for exhaustive contract verification.
-     *
-     * @return iterable<string, array{string}>
+     * Completeness guard so a newly added sortable field cannot slip past the per-case index and
+     * collation assertions below: every field the production map exposes must own an index-contract
+     * case (single-column UNIQUE or composite `(col, id)`), and every sortable TEXT column a
+     * collation case.
      */
-    public static function provideEverySortableColumnIsNotNullableCases(): iterable
+    #[Test]
+    public function everySortableColumnFromTheProductionMapHasAStructuralContractCase(): void
     {
-        yield 'name → nameNormalized' => ['nameNormalized'];
-        yield 'shortName → shortName' => ['shortName'];
-        yield 'createdAt → createdAt' => ['createdAt'];
-        yield 'updatedAt → updatedAt' => ['updatedAt'];
+        $indexed = [
+            ...$this->providerColumns(self::provideItRequiresACompositeIndexForEachNonUniqueSortableColumnCases()),
+            ...$this->providerColumns(self::provideAUniqueSortableColumnNeedsNoCompositeIndexCases()),
+        ];
+        $collated = $this->providerColumns(self::provideEachSortableTextColumnDeclaresByteWiseCollationCases());
+
+        foreach ($this->productionSortableEntityFields() as $entityField) {
+            $mapping = $this->bankMetadata()->getFieldMapping($entityField);
+            $column = $this->bankMetadata()->getColumnName($entityField);
+
+            $this->assertContains(
+                $column,
+                $indexed,
+                \sprintf('Sortable column "%s" needs an index-contract case (unique or composite provider).', $column),
+            );
+
+            if ('string' === $mapping->type) {
+                $this->assertContains(
+                    $column,
+                    $collated,
+                    \sprintf('Sortable text column "%s" needs a collation-contract case.', $column),
+                );
+            }
+        }
     }
 
     #[Test]
@@ -135,6 +163,45 @@ final class SortFieldMapIndexContractTest extends KernelTestCase
     {
         yield 'name_normalized' => ['name_normalized'];
         yield 'short_name' => ['short_name'];
+    }
+
+    /**
+     * The production sort allow-list, read from the concrete repository so this contract is driven
+     * by what the app actually exposes — a newly added sortable field cannot escape it. SortFieldMap
+     * is a sealed allow-list with no enumerator and the repository builds it privately where the
+     * schema knowledge lives, so both the map and its `$paths` are read by reflection.
+     *
+     * @return list<string> entity field names backing each sortable column
+     */
+    private function productionSortableEntityFields(): array
+    {
+        $repository = self::getContainer()->get(BankRepository::class);
+        $sortFieldMap = (new ReflectionMethod($repository, 'sortFieldMap'))->invoke($repository);
+        $this->assertInstanceOf(SortFieldMap::class, $sortFieldMap);
+
+        /** @var array<string, string> $paths */
+        $paths = (new ReflectionProperty(SortFieldMap::class, 'paths'))->getValue($sortFieldMap);
+
+        return \array_map(
+            static fn (string $path): string => \substr($path, (int) \strrpos($path, '.') + 1),
+            \array_values($paths),
+        );
+    }
+
+    /**
+     * @param iterable<string, array{string}> $cases
+     *
+     * @return list<string>
+     */
+    private function providerColumns(iterable $cases): array
+    {
+        $columns = [];
+
+        foreach ($cases as $case) {
+            $columns[] = $case[0];
+        }
+
+        return $columns;
     }
 
     /**

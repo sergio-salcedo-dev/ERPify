@@ -6,6 +6,8 @@ namespace Erpify\Tests\Unit\Shared\Domain\Exception;
 
 use Erpify\Shared\Domain\Exception\Conflict;
 use Erpify\Shared\Domain\Exception\DomainException;
+use Erpify\Shared\Domain\Exception\InvalidInput;
+use Erpify\Shared\Domain\Exception\InvalidSearchCriteria;
 use Erpify\Shared\Domain\Exception\NotFound;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -53,6 +55,31 @@ final class DomainExceptionTest extends TestCase
 
         $message = 'class_implements must surface NotFound before Conflict, mirroring the implements clause.';
         $this->assertSame([NotFound::class, Conflict::class], $markers, $message);
+    }
+
+    /**
+     * Pin for the dual-marker default-type resolution: an empty `type()` is the "no explicit
+     * type" representation, and the factory then resolves type/status from the FIRST canonical
+     * marker in `class_implements` order — here InvalidInput (400 invalid-input), never
+     * InvalidSearchCriteria (422). Asserted via the same `class_implements` intersection the
+     * factory's `firstMatchingMarker` relies on. Production code may not ship this shape: the
+     * dual-marker gate in MarkerStatusMapContractTest requires an explicit type instead.
+     */
+    public function testDualMarkerDefaultTypeFollowsTheFirstImplementedMarker(): void
+    {
+        $exception = new class ('', 'x') extends DomainException implements InvalidInput, InvalidSearchCriteria {
+        };
+
+        $this->assertSame('', $exception->type(), 'An empty type() is the default-type representation.');
+
+        $markers = \array_values(\array_intersect(
+            \class_implements($exception),
+            [InvalidInput::class, InvalidSearchCriteria::class],
+        ));
+
+        $message = 'class_implements must surface InvalidInput before InvalidSearchCriteria, mirroring the '
+            . 'implements clause — the precedence the factory resolves the default type and status with.';
+        $this->assertSame([InvalidInput::class, InvalidSearchCriteria::class], $markers, $message);
     }
 
     public function testBaseClassIsAbstract(): void
