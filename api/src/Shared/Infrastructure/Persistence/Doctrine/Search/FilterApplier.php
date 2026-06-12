@@ -239,9 +239,10 @@ final readonly class FilterApplier
     }
 
     /**
-     * Strict single-format parse: returns the datetime only when the value matches the format
-     * exactly (no trailing data, no warnings, byte-identical round-trip) and carries a
-     * real-world UTC offset. A value with a null byte makes `createFromFormat` throw a
+     * Strict single-format parse: returns the datetime only when the parse yields a real
+     * instant, that instant carries a real-world UTC offset, and the value round-trips
+     * byte-identically under the format ({@see self::isCanonicalUnder()} — the deterministic
+     * canonicality gate). A value with a null byte makes `createFromFormat` throw a
      * `ValueError`; that is client input too, so it is caught and reported as a 400 rather
      * than escaping as an engine 500.
      */
@@ -253,16 +254,16 @@ final readonly class FilterApplier
             return null;
         }
 
-        $errors = DateTimeImmutable::getLastErrors();
-        $hasParseProblem = false !== $errors && ($errors['warning_count'] > 0 || $errors['error_count'] > 0);
+        // A real instant is required before any offset read; createFromFormat returns false on
+        // an unparseable value (and on a hard error), so this also subsumes the error path.
+        if (false === $dateTime) {
+            return null;
+        }
 
-        // `false === $dateTime` is kept first so the offset read only runs on a real instant.
         // The real-world offset span is asymmetric (UTC-12 to UTC+14), so each side is checked
         // separately; a symmetric abs() would admit the non-existent -13/-14h offsets.
         if (
-            false === $dateTime
-            || $hasParseProblem
-            || $dateTime->getOffset() > self::MAX_UTC_OFFSET_EAST_SECONDS
+            $dateTime->getOffset() > self::MAX_UTC_OFFSET_EAST_SECONDS
             || $dateTime->getOffset() < self::MIN_UTC_OFFSET_WEST_SECONDS
         ) {
             return null;
@@ -276,13 +277,16 @@ final readonly class FilterApplier
     }
 
     /**
-     * Round-trip gate: the value is canonical under `$format` only if formatting the parsed
-     * instant reproduces it byte-identically. `createFromFormat()` tolerates non-canonical
-     * digit widths (e.g. a single-digit month) without raising a warning, and
-     * `getLastErrors()` reads global state that any adjacent datetime call may clobber —
-     * correctness here must depend on neither. UTC has two canonical spellings: `P` parses
-     * both but only emits `+00:00`, while `p` emits the literal `Z` a JS toISOString()
-     * client sends — so the round-trip accepts either spelling of the same instant.
+     * Round-trip gate — the sole canonicality check: the value is canonical under `$format`
+     * only if formatting the parsed instant reproduces it byte-identically. This is what makes
+     * the parse strict without trusting either of two unreliable signals — `createFromFormat()`
+     * tolerates non-canonical digit widths (e.g. a single-digit month) without raising a
+     * warning, and `getLastErrors()` exposes global state any adjacent datetime call may
+     * clobber. A byte-identical reproduction is immune to both: trailing data, calendar
+     * rollover and defaulted-missing fields all shift the render away from the input. UTC has
+     * two canonical spellings: `P` parses both but only emits `+00:00`, while `p` emits the
+     * literal `Z` a JS toISOString() client sends — so the round-trip accepts either spelling
+     * of the same instant.
      */
     private function isCanonicalUnder(DateTimeImmutable $dateTime, string $format, string $value): bool
     {
