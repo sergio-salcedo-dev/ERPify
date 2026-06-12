@@ -208,7 +208,7 @@ final class BoundedContextGateTest extends TestCase
                 Entity\Bank,
                 Repository\BankRepository
             };
-            use Erpify\Backoffice\Bank\Infrastructure\Persistence\DoctrineBankRepository as Repo;
+            use Erpify\Backoffice\Bank\Infrastructure\Persistence\Doctrine\DoctrineBankRepository as Repo;
             use Erpify\Shared\Domain\Uuid\Uuid;
             use function Erpify\Backoffice\Bank\Application\helper;
             final class Service {
@@ -228,9 +228,9 @@ final class BoundedContextGateTest extends TestCase
 
         $this->assertSame(
             [
-                'Erpify\Backoffice\Bank\Domain\Entity\Bank',
-                'Erpify\Backoffice\Bank\Domain\Repository\BankRepository',
-                'Erpify\Backoffice\Bank\Infrastructure\Persistence\DoctrineBankRepository',
+                \Erpify\Backoffice\Bank\Domain\Entity\Bank::class,
+                \Erpify\Backoffice\Bank\Domain\Repository\BankRepository::class,
+                \Erpify\Backoffice\Bank\Infrastructure\Persistence\Doctrine\DoctrineBankRepository::class,
             ],
             $targets,
             'Grouped / aliased / Infrastructure cross-context imports must all be flagged, '
@@ -577,17 +577,22 @@ final class BoundedContextGateTest extends TestCase
     private function parseImports(string $source): array
     {
         $tokens = \token_get_all($source);
-        $count = \count($tokens);
         $imports = [];
 
-        for ($i = 0; $i < $count; ++$i) {
-            $token = $tokens[$i];
-
-            if (!\is_array($token) || T_USE !== $token[0]) {
+        foreach ($tokens as $i => $token) {
+            if (!\is_array($token)) {
                 continue;
             }
 
-            foreach ($this->collectUseImports($tokens, $i, $count) as $import) {
+            if (T_USE !== $token[0]) {
+                continue;
+            }
+
+            // Hand the statement's tail (everything after the `use` keyword) to the
+            // collector by value, so it iterates without index arithmetic.
+            $rest = \array_slice($tokens, $i + 1);
+
+            foreach ($this->collectUseImports($rest, $token[2]) as $import) {
                 $imports[] = $import;
             }
         }
@@ -596,28 +601,28 @@ final class BoundedContextGateTest extends TestCase
     }
 
     /**
-     * Collects the `Erpify\…` class names introduced by the `use` statement that
-     * begins at $start, expanding grouped imports against their prefix. Returns
-     * an empty list for closure `use`, `use function`, and `use const`.
+     * Collects the `Erpify\…` class names introduced by a single `use` statement,
+     * given the tokens that follow its `use` keyword (up to and including the
+     * terminating `;`) and the statement's line. Grouped imports are expanded
+     * against their prefix; closure `use`, `use function`, and `use const` yield
+     * an empty list.
      *
-     * @param array<int, string|array{0: int, 1: string, 2: int}> $tokens
+     * @param list<string|array{0: int, 1: string, 2: int}> $rest
      *
      * @return list<array{line: int, fqcn: string}>
      *
      * @SuppressWarnings("PHPMD.CyclomaticComplexity")
      * @SuppressWarnings("PHPMD.NPathComplexity")
+     * @SuppressWarnings("PHPMD.ExcessiveMethodLength")
      */
-    private function collectUseImports(array $tokens, int $start, int $count): array
+    private function collectUseImports(array $rest, int $line): array
     {
-        $line = \is_array($tokens[$start]) ? $tokens[$start][2] : 0;
         $names = [];
         $prefix = '';
         $current = '';
         $skipAlias = false;
 
-        for ($i = $start + 1; $i < $count; ++$i) {
-            $token = $tokens[$i];
-
+        foreach ($rest as $token) {
             if (\is_array($token)) {
                 // `use function …` / `use const …` — not a class import.
                 if (T_FUNCTION === $token[0] || T_CONST === $token[0]) {
