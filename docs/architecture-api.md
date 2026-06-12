@@ -245,6 +245,7 @@ Full reference (mapping table, header rules, observability, code map, test surfa
 ## Async & messaging
 
 - **Symfony Messenger** with a **separate `messenger_worker` Compose service** (`compose.yaml`) running `php bin/console messenger:consume async --time-limit=3600`. Handlers must be idempotent and tolerate at-least-once delivery.
+- Handlers with a **non-idempotent external side effect** (email, third-party APIs) claim their `(eventId, handler)` pair through `Shared/Application/DomainEvent/DomainEventHandlerDeduplicator` (DBAL `INSERT … ON CONFLICT DO NOTHING` into `handled_domain_event`; the table is kept schema-aware by `HandledDomainEventSchemaListener`) before acting, and release the claim on failure so the transport retry stays open. Naturally idempotent handlers (Mercure publish, upserts) skip it. Example: `BankChangedNotifyEmailHandler`.
 - Default transport: Doctrine (`MESSENGER_TRANSPORT_DSN=doctrine://default?auto_setup=0`).
 - **Mercure Hub**: publish via `Frontoffice/Mercure/` publishers at `/.well-known/mercure`; JWT required (`CADDY_MERCURE_JWT_SECRET` in prod).
 - Mail is dispatched asynchronously via Messenger.
