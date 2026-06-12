@@ -35,8 +35,8 @@ final readonly class KeysetPredicateBuilder
     /**
      * @param array<string, mixed> $values boundary values keyed by ORDER BY column
      * @param string               $alias  the query's root alias; every bare column is qualified
-     *                                      with it before emission, so the DQL is self-contained and
-     *                                      needs no post-hoc rewrite by the caller
+     *                                     with it before emission, so the DQL is self-contained and
+     *                                     needs no post-hoc rewrite by the caller
      *
      * @return array{dql: string, parameters: array<string, mixed>}
      */
