@@ -5,7 +5,7 @@ date: '2026-06-06'
 
 # ADR — Generic `filters[]` search vocabulary (SearchQuery / SearchCriteria)
 
-Decision record: rationale, alternatives weighed, and the FR/NFR inventory cited by ID from the living docs. The current-state description of the shipped system lives in [`architecture-api.md`](./architecture-api.md).
+Decision record: rationale, alternatives weighed, and the FR/NFR inventory cited by ID from the living docs. The current-state description of the shipped system lives in [`architecture-api.md`](../architecture-api.md).
 
 ## Project Context Analysis
 

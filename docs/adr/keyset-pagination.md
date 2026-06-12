@@ -8,12 +8,12 @@ scope: >-
   async) + reestructuración de AbstractDoctrineRepository y
   AbstractDoctrineSearchRepository de herencia a composición.
 relatedDecisions:
-  - 'docs/adr-filters-search-criteria.md (filtros genéricos filters[], 2026-06-06 — cerrado, restricciones heredadas)'
+  - 'docs/adr/filters-search-criteria.md (filtros genéricos filters[], 2026-06-06 — cerrado, restricciones heredadas)'
 ---
 
 # ADR — Keyset Pagination & Repository Restructuring
 
-Decision record: rationale and the FR/NFR/AR/W/K inventory cited by ID from the living docs ([`architecture-api.md`](./architecture-api.md), [`runbooks/cursor-pagination.md`](./runbooks/cursor-pagination.md) describe the shipped system).
+Decision record: rationale and the FR/NFR/AR/W/K inventory cited by ID from the living docs ([`architecture-api.md`](../architecture-api.md), [`runbooks/cursor-pagination.md`](../runbooks/cursor-pagination.md) describe the shipped system).
 
 > **Post-freeze overrides (D-1 cycle, 2026-06-11)** — the planning truth diverged from this frozen snapshot on three points, all implemented: repositories-by-composition moved from PR2 to PR3; NFR3 refined (a UNIQUE column does not require a composite index); collation narrowed to column scope (AR23, with the AR23/AR24 refinements). On those points the shipped code, not this document, is authoritative.
 

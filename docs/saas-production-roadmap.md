@@ -240,7 +240,7 @@ level, so two customers can never see each other's data.
 - **Pagination interplay** — keyset cursors must be bound to the tenant via
   the signed cursor fingerprint so a cursor minted under one company is
   rejected under another (see the keyset-pagination ADR in
-  [`adr-keyset-pagination.md`](./adr-keyset-pagination.md)).
+  [`adr/keyset-pagination.md`](./adr/keyset-pagination.md)).
 
 **Commit slices:** `feat(shared): company aggregate + tenant column expand` ·
 `feat(shared): tenant-led composite indexes` · `feat(shared): query-level
