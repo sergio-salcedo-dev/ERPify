@@ -21,7 +21,7 @@ private Bank $bank,
 Esto crea un **grafo de objetos cross-módulo**: el dominio de `BankAccount` importa la entidad de
 dominio de `Bank`, y el acoplamiento no es solo de lectura (`getBank()->getName()`) sino **de
 construcción** — crear una cuenta exige un `Bank` hidratado. La regla de aislamiento del repo
-([`architecture-api.md`](./architecture-api.md), [`bounded-contexts.md`](./bounded-contexts.md))
+([`architecture-api.md`](../architecture-api.md), [`bounded-contexts.md`](../bounded-contexts.md))
 ya prescribe referencias por ID con 3 niveles de acoplamiento *entre contextos*; este ADR la
 extiende explícitamente al nivel de **módulo** dentro de un contexto.
 
@@ -45,7 +45,7 @@ asociación deja de ser "metadato pasivo" en el momento en que tipa la propiedad
 otro módulo y habilita navegación.
 
 Descartado: crear contextos `MasterData`/`Finance` top-level hoy (falla Rule of Three; además
-[`bounded-contexts.md`](./bounded-contexts.md) ya asigna `Bank` y `BankAccount` al futuro contexto
+[`bounded-contexts.md`](../bounded-contexts.md) ya asigna `Bank` y `BankAccount` al futuro contexto
 **Finance** — la migración módulo→contexto será mecánica porque las costuras quedan cortadas).
 Descartado: mantener el `ManyToOne` "prohibiendo su uso" (acoplamiento de constructor, inviable
 sin enforcement).
@@ -74,9 +74,9 @@ diferidos hasta que existan contextos o almacenes separados de verdad.
 ### D4 — Las entidades siguen en `Domain/` con metadato pasivo
 
 Se confirma la excepción documentada de
-[`rules/architecture.md`](./rules/architecture.md): entidades en `Domain/Entity` con atributos
+[`rules/architecture.md`](../rules/architecture.md): entidades en `Domain/Entity` con atributos
 `#[ORM]`/`#[Assert]`/`#[Groups]` pasivos; prohibición absoluta de framework *conductual* en
-`Domain/`. Se corrigió la contradicción que [`project-context.md`](./project-context.md) mantenía
+`Domain/`. Se corrigió la contradicción que [`project-context.md`](../project-context.md) mantenía
 con esa regla (decía "entities live in Infrastructure, domain objects are POPOs").
 
 Descartado hoy: modelo dual POPO+entidad (peaje de mappers/UnitOfWork sin beneficio actual) y

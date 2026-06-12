@@ -50,9 +50,18 @@ use LogicException;
  * isolation by DIRECT tests (property, snapshot, contract — never HTTP).
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
+ * @SuppressWarnings("PHPMD.ExcessiveClassLength")
  */
 final readonly class DoctrineSearchEngine
 {
+    /**
+     * Boundary floor for the `id` tie-break of a synthetic position: the nil UUID collates before
+     * every real id, so with the ASC tie-break and the wire's exclusive boundary, `id > floor`
+     * admits all rows tied on the primary sort key — the synthesized position is INCLUSIVE of the
+     * target value.
+     */
+    private const string SYNTHETIC_TIE_BREAK_FLOOR = '00000000-0000-0000-0000-000000000000';
+
     public function __construct(
         private FilterApplier $filterApplier,
         private CursorCodec $cursorCodec,
@@ -93,7 +102,7 @@ final readonly class DoctrineSearchEngine
         $appliedLimit = $this->resolveLimit($criteria, $policy);
 
         // Step 4: seal the trace, derive the fingerprint, and guard the Row Uniqueness Contract.
-        $entity = $this->entityName($queryBuilder);
+        $entity = $this->rootEntity($queryBuilder);
         $trace = new QueryExecutionTrace($entity, $appliedFilters, $appliedSort, $appliedLimit);
         $fingerprint = $this->fingerprintCanonicalizer->fingerprint($trace);
         $this->rowUniquenessGuard->assert($queryBuilder);
@@ -113,6 +122,112 @@ final readonly class DoctrineSearchEngine
             $config,
             $fingerprint,
         );
+    }
+
+    /**
+     * The "go-to-date" seam (K14): synthesizes an `after` cursor positioned AT a primary sort-key
+     * value with no boundary row to extract from — the keyset model's inherent ability to jump to
+     * a key value instead of walking pages. No new endpoint: the token flows through the same
+     * `after` wire param as any real cursor.
+     *
+     * The token reuses the exact emission machinery of a real cursor (extractor normalization at
+     * column precision, codec signing, fingerprint of the sealed trace), so it is
+     * wire-indistinguishable from one minted off a row and binds to the query it was synthesized
+     * for: a follow-up request must carry the same filters, sort, direction and limit, or
+     * fingerprint validation rejects it (422 `invalid-cursor`).
+     *
+     * Landing semantics: under an ASC primary sort the page starts at the first row whose key is
+     * `>=` the target; under DESC, `<=` (see {@see self::SYNTHETIC_TIE_BREAK_FLOOR} for why ties
+     * on the target are included). Affordance is conservative by construction (K10): paginating
+     * with the token is a cursor-bearing request, so the landing page reports `hasPrev: true`
+     * even when it is the dataset's very first row.
+     *
+     * The Row Uniqueness guard is not run here — no rows are fetched; the paired {@see paginate}
+     * call asserts it against the same base builder.
+     *
+     * @param QueryBuilder $queryBuilder the same base builder contract as {@see paginate} —
+     *                                   `SELECT`/`FROM`/joins only; it is never mutated here
+     * @param mixed        $sortKeyValue a TRUSTED, typed value in the physical sort column's
+     *                                   domain: a `DateTimeInterface` for temporal columns
+     *                                   (normalized to UTC at column precision like any real
+     *                                   boundary), a pre-normalized scalar for normalized text
+     *                                   columns (no field normalizer runs here). Validating and
+     *                                   coercing untrusted wire input into that domain is the
+     *                                   calling adapter's obligation, as {@see FilterApplier}
+     *                                   does for filter values.
+     */
+    public function synthesizeCursor(
+        QueryBuilder $queryBuilder,
+        SearchCriteria $criteria,
+        SearchFieldMap $searchFieldMap,
+        SortFieldMap $sortFieldMap,
+        WirePaginationPolicy $policy,
+        mixed $sortKeyValue,
+    ): string {
+        if (null === $criteria->sort || '' === $criteria->sort) {
+            throw new LogicException(
+                'Synthesizing a cursor position requires a primary sort: natural id order has no semantic sort key.',
+            );
+        }
+
+        [$appliedSort, $orderByColumns] = $this->resolveSort($criteria, $sortFieldMap);
+
+        if (OrderByColumns::TIE_BREAK_COLUMN === $this->fieldOf($orderByColumns->columnNames()[0])) {
+            throw new LogicException(
+                'Cannot synthesize a cursor position over the id tie-break: the target value would replace the '
+                . 'inclusive floor and the landing would silently turn exclusive.',
+            );
+        }
+
+        // Filters run against a clone: only the receipt matters here, and the caller's base
+        // builder must stay pristine for the paginate() call the token will be used with.
+        $appliedFilters = $this->filterApplier->apply(clone $queryBuilder, $criteria->filters, $searchFieldMap);
+        $appliedLimit = $this->resolveLimit($criteria, $policy);
+
+        $fingerprint = $this->fingerprintCanonicalizer->fingerprint(
+            new QueryExecutionTrace($this->rootEntity($queryBuilder), $appliedFilters, $appliedSort, $appliedLimit),
+        );
+
+        $values = $this->positionExtractor->extract(
+            $orderByColumns,
+            $this->syntheticBoundaryRow($orderByColumns, $sortKeyValue),
+        );
+
+        // A null boundary value would be signed into a token whose predicate matches nothing
+        // (SQL three-valued logic) — every landing an empty page, indistinguishable from a gap.
+        // Fail loud instead: it means a null target, or an order-by column the synthetic row
+        // does not cover.
+        if (\in_array(null, $values, true)) {
+            throw new LogicException(
+                'A synthetic cursor position must cover every order-by column with a non-null boundary value.',
+            );
+        }
+
+        return $this->cursorCodec->encode(
+            new Cursor(CursorCodec::CURRENT_VERSION, Cursor::DIRECTION_AFTER, $values, $fingerprint),
+        );
+    }
+
+    /**
+     * The array row the extractor reads a synthetic position from: the target value on the primary
+     * sort key, the nil-UUID floor on the `id` tie-break.
+     *
+     * @return array<string, mixed>
+     */
+    private function syntheticBoundaryRow(OrderByColumns $orderByColumns, mixed $sortKeyValue): array
+    {
+        return [
+            $this->fieldOf($orderByColumns->tieBreakColumn()) => self::SYNTHETIC_TIE_BREAK_FLOOR,
+            $this->fieldOf($orderByColumns->columnNames()[0]) => $sortKeyValue,
+        ];
+    }
+
+    /** Strips the optional `alias.` of a DQL identifier, mirroring the extractor's property path. */
+    private function fieldOf(string $column): string
+    {
+        $parts = \explode('.', $column, 2);
+
+        return $parts[1] ?? $parts[0];
     }
 
     /**
@@ -139,10 +254,15 @@ final readonly class DoctrineSearchEngine
         ];
     }
 
-    /** Step 3 — clamp the requested limit to the policy ceiling; the receipt is always ≥ 1. */
+    /**
+     * Step 3 — resolve the effective page size and clamp it to the policy ceiling; the receipt is
+     * always ≥ 1. A `null` criteria limit is "unspecified" and falls back to the policy's
+     * `defaultLimit`, so an adapter picks its default by selecting the policy — never by baking a
+     * value into {@see SearchCriteria}.
+     */
     private function resolveLimit(SearchCriteria $criteria, WirePaginationPolicy $policy): AppliedLimit
     {
-        return new AppliedLimit(\max(1, \min($criteria->limit, $policy->maxLimit)));
+        return new AppliedLimit(\max(1, \min($criteria->limit ?? $policy->defaultLimit, $policy->maxLimit)));
     }
 
     /**
@@ -221,7 +341,10 @@ final readonly class DoctrineSearchEngine
         );
     }
 
-    /** Step 6 — bind the keyset boundary predicate, qualifying bare columns (e.g. the `id` tie-break). */
+    /**
+     * Step 6 — bind the keyset boundary predicate. The builder qualifies every bare column (e.g. the
+     * `id` tie-break) with the root alias as it emits, so the DQL is bound here as-is.
+     */
     private function applyKeysetPredicate(
         QueryBuilder $queryBuilder,
         OrderByColumns $columns,
@@ -233,9 +356,9 @@ final readonly class DoctrineSearchEngine
             return;
         }
 
-        $predicate = $this->predicateBuilder->build($columns, $cursor->values, $policy);
+        $predicate = $this->predicateBuilder->build($columns, $cursor->values, $policy, $alias);
 
-        $queryBuilder->andWhere($this->qualify($predicate['dql'], $columns, $alias));
+        $queryBuilder->andWhere($predicate['dql']);
 
         foreach ($predicate['parameters'] as $name => $value) {
             $queryBuilder->setParameter($name, $value);
@@ -343,9 +466,6 @@ final readonly class DoctrineSearchEngine
             return null;
         }
 
-        // getClassMetadata needs the FQCN, NOT the short trace name (entityName()) — passing the
-        // short name throws a MappingException (a 500). DETAILED was never exercised against a real
-        // EntityManager before the PR3 wire-path, which is why this only surfaces now.
         $identifier = $queryBuilder->getEntityManager()
             ->getClassMetadata($this->rootEntity($queryBuilder))
             ->getSingleIdentifierFieldName()
@@ -374,28 +494,6 @@ final readonly class DoctrineSearchEngine
         ));
     }
 
-    /**
-     * Qualifies every bare column identifier in a predicate DQL string with the root alias. The
-     * lookbehind/lookahead match a column only as a standalone identifier — never inside a
-     * `:keyset_…` parameter or an already-qualified `alias.col` — so binding stays intact.
-     */
-    private function qualify(string $dql, OrderByColumns $columns, string $alias): string
-    {
-        foreach ($columns->columnNames() as $column) {
-            if (\str_contains($column, '.')) {
-                continue;
-            }
-
-            $dql = (string) \preg_replace(
-                \sprintf('/(?<![\w.:])%s(?![\w.])/', \preg_quote($column, '/')),
-                $alias . '.' . $column,
-                $dql,
-            );
-        }
-
-        return $dql;
-    }
-
     private function qualifyColumn(string $column, string $alias): string
     {
         return \str_contains($column, '.') ? $column : $alias . '.' . $column;
@@ -412,17 +510,10 @@ final readonly class DoctrineSearchEngine
         return $aliases[0];
     }
 
-    /** Short entity name for the trace's canonical chain (`Erpify\…\Bank` ⇒ `Bank`). */
-    private function entityName(QueryBuilder $queryBuilder): string
-    {
-        $parts = \explode('\\', $this->rootEntity($queryBuilder));
-
-        return \end($parts);
-    }
-
     /**
-     * The root entity FQCN — for {@see countIfDetailed}'s `getClassMetadata` lookup (which needs the
-     * full class name, unlike the trace's short {@see entityName}).
+     * The root entity FQCN — the fully-qualified class name is the trace's entity segment (a globally
+     * unique identity, so two homonymous entities across bounded contexts never collide in the
+     * fingerprint canonical chain) and {@see countIfDetailed}'s `getClassMetadata` lookup key.
      *
      * @return class-string
      */

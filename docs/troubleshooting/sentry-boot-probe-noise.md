@@ -1,6 +1,6 @@
 # Sentry — silencing the container boot DB-probe flood (fixed)
 
-> **Status:** FIXED in [`api/frankenphp/docker-entrypoint.sh`](../api/frankenphp/docker-entrypoint.sh).
+> **Status:** FIXED in [`api/frankenphp/docker-entrypoint.sh`](../../api/frankenphp/docker-entrypoint.sh).
 > Sibling note: [`sentry-domain-error-filtering.md`](./sentry-domain-error-filtering.md)
 > (a *different*, still-deferred decision about 4xx `domain_error` noise).
 
@@ -42,7 +42,7 @@ entrypoint).
 
 The trap: `bin/console dbal:run-sql` **boots the full Symfony kernel with the
 Sentry SDK active** (`register_error_listener: true` in
-[`config/packages/sentry.yaml`](../api/config/packages/sentry.yaml)). So while
+[`config/packages/sentry.yaml`](../../api/config/packages/sentry.yaml)). So while
 the `database` host isn't resolvable/accepting yet — exactly the window during a
 cold up, a deploy, or a worktree spin-up — **each failed retry is captured as a
 Sentry error**. Two containers × up to 60 retries × several stack cycles =

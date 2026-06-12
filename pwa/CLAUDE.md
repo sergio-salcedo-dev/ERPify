@@ -138,7 +138,7 @@ Every interactive control that triggers an action (button, anchor styled as butt
   disabled control is still discovered by assistive tech and adds noise.
   - **Exception — cursor-only keyset pagination (D-A11y, PR3 / `BanksPagination`):**
     the prev/next pair is **always rendered and `disabled` when the envelope link
-    is `null`, never hidden**. The keyset ADR (`docs/adr-keyset-pagination.md`,
+    is `null`, never hidden**. The keyset ADR (`docs/adr/keyset-pagination.md`,
     IMPLEMENTATION LOCKED, AR15) governs this scope and overrides the hide rule
     here: a persistent, well-labelled pair (`aria-label` + `title`, decorative
     icons `aria-hidden`) is a predictable, discoverable affordance, and keeping

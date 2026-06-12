@@ -6,96 +6,73 @@ namespace Erpify\Shared\Infrastructure\Persistence\Doctrine\Search;
 
 use Doctrine\ORM\Mapping\ClassMetadata;
 use Doctrine\ORM\Query\Expr\Join;
-use Doctrine\ORM\Query\Expr\Select;
 use Doctrine\ORM\QueryBuilder;
 use LogicException;
 
 /**
- * Enforces the Row Uniqueness Contract (AR5) on a keyset base query: a query whose `addSelect` pulls
- * in a TO-MANY association multiplies result rows (one root row per child), which silently corrupts
- * keyset boundaries — a page can straddle a duplicated root, dropping or repeating rows. This guard
- * rejects that shape BEFORE the trace is used to compile a query.
+ * Enforces the Row Uniqueness Contract (AR5) on a keyset base query: keyset correctness requires the
+ * query to emit each logical row EXACTLY ONCE under a total order. Two base-query shapes silently
+ * break that by multiplying SQL rows under the engine's raw `setMaxResults`, so a page can straddle a
+ * duplicated root and drop or repeat rows. This guard rejects both BEFORE the trace compiles a query:
  *
- * Detection is by {@see ClassMetadata::isCollectionValuedAssociation()} ONLY (OneToMany/ManyToMany),
- * never by a name heuristic. TO-ONE fetch-joins are allowed (they never multiply rows); TO-MANY
- * collections are loaded by a separate batch query outside the paginated read-path. The engine never
- * adds `DISTINCT` to paper over a to-many — the guard is the contract, not a crutch.
+ *   1. MULTI-ROOT cartesian product — `from(A)->from(B)` (≥ 2 FROM roots) cross-joins the roots.
+ *   2. TO-MANY JOIN — a OneToMany/ManyToMany join multiplies the root by its children, whether the
+ *      association is pulled into the hydration via `addSelect` or merely joined for a WHERE filter.
+ *      An unselected to-many join multiplies the SQL rows just the same under `LIMIT`, so selection is
+ *      NOT the discriminant — the join itself is.
+ *
+ * To-many detection is by {@see ClassMetadata::isCollectionValuedAssociation()} ONLY, never by a name
+ * heuristic. TO-ONE joins are allowed (they never multiply rows); TO-MANY collections are loaded by a
+ * separate batch query, and to-many filters belong in an EXISTS subquery, never a read-path join. The
+ * engine never adds `DISTINCT` to paper over a to-many — the guard is the contract, not a crutch.
  *
  * The violation is a PROGRAMMER error: a plain {@see LogicException} (→ `exception_category` critical),
- * NEVER an {@see \Erpify\Shared\Domain\Search\Exception\InvalidCursor}/422. A repository that fetch-joins
- * a collection is a bug to wake on-call for, not a bad-request from the client.
+ * NEVER an {@see \Erpify\Shared\Domain\Search\Exception\InvalidCursor}/422. A repository that joins a
+ * collection or declares a second root is a bug to wake on-call for, not a bad-request from the client.
  */
 final readonly class RowUniquenessGuard
 {
     public function assert(QueryBuilder $queryBuilder): void
     {
-        $joinedAssociations = $this->joinedAssociationsByAlias($queryBuilder);
-
-        foreach ($this->selectedAliases($queryBuilder) as $selectedAlias) {
-            $association = $joinedAssociations[$selectedAlias] ?? null;
-
-            if (null === $association) {
-                continue;
-            }
-
-            $metadata = $queryBuilder->getEntityManager()->getClassMetadata($association['sourceEntity']);
-
-            if ($metadata->isCollectionValuedAssociation($association['field'])) {
-                throw new LogicException(\sprintf(
-                    'Row Uniqueness Contract violated: the base query fetch-joins the to-many association '
-                    . '"%s" via addSelect("%s"), which multiplies result rows and corrupts keyset boundaries. '
-                    . 'Load to-many collections with a separate batch query, never inside the paginated read-path.',
-                    $association['field'],
-                    $selectedAlias,
-                ));
-            }
-        }
+        $this->assertSingleRoot($queryBuilder);
+        $this->assertNoToManyJoin($queryBuilder);
     }
 
-    /**
-     * @return list<string> the aliases pulled in via `addSelect` beyond the root alias
-     */
-    private function selectedAliases(QueryBuilder $queryBuilder): array
+    private function assertSingleRoot(QueryBuilder $queryBuilder): void
     {
         $rootAliases = $queryBuilder->getRootAliases();
-        $rootAlias = $rootAliases[0] ?? '';
-        $selected = [];
-        $selectParts = $queryBuilder->getDQLPart('select');
 
-        if (!\is_array($selectParts)) {
-            return [];
+        if (\count($rootAliases) <= 1) {
+            return;
         }
 
-        foreach ($selectParts as $selectPart) {
-            if (!$selectPart instanceof Select) {
+        throw new LogicException(\sprintf(
+            'Row Uniqueness Contract violated: the base query declares %d FROM roots (%s), a cartesian '
+            . 'product that multiplies result rows and corrupts keyset boundaries. A keyset base query has '
+            . 'exactly one root; reference another aggregate with a to-one join or a separate query.',
+            \count($rootAliases),
+            \implode(', ', $rootAliases),
+        ));
+    }
+
+    private function assertNoToManyJoin(QueryBuilder $queryBuilder): void
+    {
+        foreach ($this->joinedAssociationsByAlias($queryBuilder) as $alias => $association) {
+            $metadata = $queryBuilder->getEntityManager()->getClassMetadata($association['sourceEntity']);
+
+            if (!$metadata->isCollectionValuedAssociation($association['field'])) {
                 continue;
             }
 
-            foreach ($selectPart->getParts() as $part) {
-                $alias = $this->leadingAlias((string) $part);
-
-                if (null !== $alias && $alias !== $rootAlias) {
-                    $selected[] = $alias;
-                }
-            }
+            throw new LogicException(\sprintf(
+                'Row Uniqueness Contract violated: the base query joins the to-many association "%s" '
+                . '(alias "%s"), which multiplies result rows under LIMIT and corrupts keyset boundaries — '
+                . 'whether selected or joined only for a filter. Load to-many collections with a separate '
+                . 'batch query and filter them with an EXISTS subquery, never inside the paginated read-path.',
+                $association['field'],
+                $alias,
+            ));
         }
-
-        return $selected;
-    }
-
-    /**
-     * The leading alias an `addSelect` part hydrates from, in every form that can pull a joined entity
-     * into the row set: `a`, `a.field`, `PARTIAL a.{id,name}`, `a AS x`. A to-many reached by ANY of
-     * these multiplies SQL rows under the engine's raw `setMaxResults`, so the bare-alias form is not
-     * enough. A DQL function part (`COUNT(a.id)`) yields the function name, which never matches a
-     * joined alias and is harmlessly skipped by the caller.
-     */
-    private function leadingAlias(string $part): ?string
-    {
-        $part = \trim($part);
-        $part = (string) \preg_replace('/^PARTIAL\s+/i', '', $part);
-
-        return 1 === \preg_match('/^([A-Za-z_]\w*)/', $part, $matches) ? $matches[1] : null;
     }
 
     /**

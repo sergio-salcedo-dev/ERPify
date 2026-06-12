@@ -2,8 +2,8 @@
 
 > **Status:** NOT implemented. This is a design note for a deliberate future
 > tuning decision. Captured so the trade-off isn't re-derived from scratch.
-> Related: [`api-error-contract.md`](api-error-contract.md) (the `exception_category`
-> taxonomy) and [`../_bmad-output/implementation-artifacts/deferred-work.md`](../_bmad-output/implementation-artifacts/deferred-work.md).
+> Related: [`api-error-contract.md`](../api-error-contract.md) (the `exception_category`
+> taxonomy) and [`../_bmad-output/implementation-artifacts/deferred-work.md`](../../_bmad-output/implementation-artifacts/deferred-work.md).
 
 ## The problem: Sentry is for bugs, not for expected "no"s
 
@@ -45,7 +45,7 @@ produced `domain_error` events in the dev Sentry project.)
    business outcomes.
 
 This is already half-acknowledged in the codebase: `exception_category` (see
-[`api-error-contract.md`](api-error-contract.md)) tags these as `domain_error`,
+[`api-error-contract.md`](../api-error-contract.md)) tags these as `domain_error`,
 and the routing table documents **`domain_error → log only`** (never page). The
 filter simply extends that policy to Sentry: domain errors stay in the **logs**
 (auditable by `correlation-id`) but don't become Sentry **issues**.
@@ -81,7 +81,7 @@ sampling, no keeping the interesting ones.
 ### Option B — drop in `before_send` (flexible, where sampling lives)
 
 Re-add the `?EventHint $hint` arg to
-[`SentryEventScrubber`](../api/src/Shared/Monitoring/Infrastructure/Sentry/SentryEventScrubber.php)
+[`SentryEventScrubber`](../../api/src/Shared/Monitoring/Infrastructure/Sentry/SentryEventScrubber.php)
 (the cs-fixer removed it as unused); `EventHint::$exception` is the original
 throwable:
 
@@ -104,7 +104,7 @@ This unlocks what Option A can't:
   `Unauthenticated` / `Forbidden` (a security signal).
 
 The base class is
-[`DomainException`](../api/src/Shared/Domain/Exception/DomainException.php)
+[`DomainException`](../../api/src/Shared/Domain/Exception/DomainException.php)
 (`Erpify\Shared\Domain\Exception\DomainException`).
 
 ## The trade-off — why this is deferred, not a default
