@@ -20,7 +20,7 @@ use PHPUnit\Framework\TestCase;
  * Three coupling levels, two of them machine-checked here:
  *
  *   🔴 Level 1 (ERROR — fails the gate). A file in business context A that
- *      imports `Erpify\<Top>\<ContextB>\Domain\…` or `…\Application\…` of a
+ *      imports the `Domain`/`Application`/`Infrastructure` namespace of a
  *      *different* business context B. This is the "knows another context's
  *      internals" defect — including injecting another context's repository
  *      (repository interfaces live in `Domain\Repository`). `Erpify\Shared\…`
@@ -39,8 +39,16 @@ use PHPUnit\Framework\TestCase;
  *      naturally invisible to the gate), event integration, and read models.
  *
  * The matcher walks each `.php` file under `api/src/`, derives the file's owning
- * context from its path, parses its `use Erpify\…;` imports, and flags every
- * cross-context `Domain`/`Application` import not covered by the allowlist.
+ * context from its path, tokenizes its `use Erpify\…;` imports (group-use- and
+ * alias-aware), and flags every cross-context guarded-layer import not covered by
+ * the allowlist.
+ *
+ * Scope of the guarantee: the gate catches coupling expressed as a `use` import —
+ * the overwhelmingly common shape. It does NOT catch a foreign class named by a
+ * fully-qualified string built at runtime, reached by reflection, or resolved
+ * through a container alias; nor does ID-only referencing (a plain string) count
+ * as coupling. The gate enforces the boundary at the import seam, not total
+ * runtime independence.
  *
  * Failure output:
  *
@@ -58,6 +66,7 @@ use PHPUnit\Framework\TestCase;
  * @SuppressWarnings("PHPMD.ExcessiveClassComplexity")
  * @SuppressWarnings("PHPMD.ExcessiveClassLength")
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
+ * @SuppressWarnings("PHPMD.TooManyMethods")
  */
 #[CoversNothing]
 final class BoundedContextGateTest extends TestCase
@@ -73,13 +82,16 @@ final class BoundedContextGateTest extends TestCase
 
     /**
      * Cross-context import layers that constitute the Level 1 defect: knowing a
-     * foreign context's domain model or use cases. `Infrastructure` is
-     * deliberately out of scope — a context's adapters are not a published seam,
-     * but importing them is already unusual and not the modeled rule.
+     * foreign context's internals. All three of a business context's layers are
+     * guarded — importing another context's `Infrastructure` (a concrete Doctrine
+     * repository, controller, or mapper) is as much a boundary breach as its
+     * `Domain`/`Application`. The only sanctioned cross-context seams are a
+     * context's published Application service interface and its integration-event
+     * classes, carried by `api/.bounded-context-allowlist`.
      *
      * @var list<string>
      */
-    private const array GUARDED_LAYERS = ['Domain', 'Application'];
+    private const array GUARDED_LAYERS = ['Domain', 'Application', 'Infrastructure'];
 
     /**
      * Top-level namespace segment of the shared kernel: always importable from
@@ -184,6 +196,48 @@ final class BoundedContextGateTest extends TestCase
         );
     }
 
+    public function testGateCatchesGroupedAndAliasedImports(): void
+    {
+        // The tokenizer-based parser must not be evadable via grouped imports,
+        // aliases, a cross-line statement, or a cross-context Infrastructure
+        // import; closure `use` and `use function` must stay invisible.
+        $source = <<<'PHP'
+            <?php
+            namespace Erpify\Backoffice\BankAccount\Application;
+            use Erpify\Backoffice\Bank\Domain\{
+                Entity\Bank,
+                Repository\BankRepository
+            };
+            use Erpify\Backoffice\Bank\Infrastructure\Persistence\DoctrineBankRepository as Repo;
+            use Erpify\Shared\Domain\Uuid\Uuid;
+            use function Erpify\Backoffice\Bank\Application\helper;
+            final class Service {
+                public function run(Uuid $id): callable {
+                    return function () use ($id) {
+                        return $id;
+                    };
+                }
+            }
+            PHP;
+
+        $targets = \array_column(
+            $this->matchCrossContextImports($source, 'Backoffice/BankAccount'),
+            'target',
+        );
+        \sort($targets);
+
+        $this->assertSame(
+            [
+                'Erpify\Backoffice\Bank\Domain\Entity\Bank',
+                'Erpify\Backoffice\Bank\Domain\Repository\BankRepository',
+                'Erpify\Backoffice\Bank\Infrastructure\Persistence\DoctrineBankRepository',
+            ],
+            $targets,
+            'Grouped / aliased / Infrastructure cross-context imports must all be flagged, '
+            . 'while `use function` and closure `use` stay invisible.',
+        );
+    }
+
     public function testFixtureExposesAssociationMatcher(): void
     {
         // A ManyToOne whose targetEntity resolves (via the file's imports) to
@@ -249,6 +303,54 @@ final class BoundedContextGateTest extends TestCase
                 \implode("\n", $missing),
             ),
         );
+    }
+
+    public function testAllowlistTargetsResolveToExistingClasses(): void
+    {
+        // A seam/global-seam target whose class was renamed or removed leaves the
+        // allowlist exempting a name nothing imports any more — dead weight that
+        // would silently accumulate. Resolve each target through PSR-4
+        // (`Erpify\ => src/`) and require the file to exist.
+        $apiRoot = $this->apiRoot();
+        $missing = [];
+
+        $targets = $this->loadAllowlist()['globalSeams'];
+
+        foreach ($this->loadAllowlist()['seams'] as $seam) {
+            $targets[] = $seam['target'];
+        }
+
+        foreach (\array_unique($targets) as $target) {
+            $relative = $this->fqcnToRelativePath($target);
+
+            if (null === $relative || !\is_file($apiRoot . '/' . $relative)) {
+                $missing[] = $target;
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $missing,
+            \sprintf(
+                "Stale target(s) in api/.bounded-context-allowlist (class file not found under src/):\n%s",
+                \implode("\n", $missing),
+            ),
+        );
+    }
+
+    /**
+     * Maps an `Erpify\…` FQCN to its PSR-4 source path (`Erpify\ => src/`), or
+     * null when the name is not under the `Erpify\` root the allowlist governs.
+     */
+    private function fqcnToRelativePath(string $fqcn): ?string
+    {
+        if (!\str_starts_with($fqcn, 'Erpify\\')) {
+            return null;
+        }
+
+        $relative = \substr($fqcn, \strlen('Erpify\\'));
+
+        return 'src/' . \str_replace('\\', '/', $relative) . '.php';
     }
 
     /**
@@ -464,22 +566,134 @@ final class BoundedContextGateTest extends TestCase
     }
 
     /**
+     * Extracts every class `use Erpify\…;` import via the tokenizer rather than a
+     * line regex, so the gate cannot be evaded with forms a naive regex misses:
+     * grouped imports (`use Erpify\A\{B, C\D};`), aliases (`… as X`), and
+     * statements split across lines. `use function`/`use const` and closure
+     * `use (...)` captures are skipped — they are not class imports.
+     *
      * @return list<array{line: int, fqcn: string}>
      */
     private function parseImports(string $source): array
     {
-        $split = \preg_split('/\R/', $source);
-        $lines = false === $split ? [] : $split;
+        $tokens = \token_get_all($source);
+        $count = \count($tokens);
         $imports = [];
 
-        foreach ($lines as $i => $line) {
-            // Class imports only — `use function …` / `use const …` start with a
-            // different keyword and never match this anchored pattern.
-            if (1 !== \preg_match('/^\s*use\s+(Erpify\\\[A-Za-z0-9_\\\]+)/', $line, $m)) {
+        for ($i = 0; $i < $count; ++$i) {
+            $token = $tokens[$i];
+
+            if (!\is_array($token) || T_USE !== $token[0]) {
                 continue;
             }
 
-            $imports[] = ['line' => $i + 1, 'fqcn' => $m[1]];
+            foreach ($this->collectUseImports($tokens, $i, $count) as $import) {
+                $imports[] = $import;
+            }
+        }
+
+        return $imports;
+    }
+
+    /**
+     * Collects the `Erpify\…` class names introduced by the `use` statement that
+     * begins at $start, expanding grouped imports against their prefix. Returns
+     * an empty list for closure `use`, `use function`, and `use const`.
+     *
+     * @param array<int, string|array{0: int, 1: string, 2: int}> $tokens
+     *
+     * @return list<array{line: int, fqcn: string}>
+     *
+     * @SuppressWarnings("PHPMD.CyclomaticComplexity")
+     * @SuppressWarnings("PHPMD.NPathComplexity")
+     */
+    private function collectUseImports(array $tokens, int $start, int $count): array
+    {
+        $line = \is_array($tokens[$start]) ? $tokens[$start][2] : 0;
+        $names = [];
+        $prefix = '';
+        $current = '';
+        $skipAlias = false;
+
+        for ($i = $start + 1; $i < $count; ++$i) {
+            $token = $tokens[$i];
+
+            if (\is_array($token)) {
+                // `use function …` / `use const …` — not a class import.
+                if (T_FUNCTION === $token[0] || T_CONST === $token[0]) {
+                    return [];
+                }
+
+                if (T_AS === $token[0]) {
+                    $skipAlias = true;
+
+                    continue;
+                }
+
+                if (T_STRING === $token[0] && $skipAlias) {
+                    $skipAlias = false; // the alias identifier — ignore it
+
+                    continue;
+                }
+
+                if (T_NS_SEPARATOR === $token[0]) {
+                    $current .= '\\';
+
+                    continue;
+                }
+
+                if (\in_array($token[0], [T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED, T_STRING], true)) {
+                    $current .= \ltrim($token[1], '\\');
+                }
+
+                continue;
+            }
+
+            // Closure `use (...)` capture — not an import.
+            if ('(' === $token) {
+                return [];
+            }
+
+            if ('{' === $token) {
+                $prefix = $current;
+                $current = '';
+
+                continue;
+            }
+
+            if (',' === $token) {
+                $names[] = $prefix . $current;
+                $current = '';
+                $skipAlias = false;
+
+                continue;
+            }
+
+            if (';' === $token) {
+                if ('' !== $current) {
+                    $names[] = $prefix . $current;
+                }
+
+                break;
+            }
+        }
+
+        return $this->toErpifyImports($names, $line);
+    }
+
+    /**
+     * @param list<string> $names
+     *
+     * @return list<array{line: int, fqcn: string}>
+     */
+    private function toErpifyImports(array $names, int $line): array
+    {
+        $imports = [];
+
+        foreach ($names as $name) {
+            if (\str_starts_with($name, 'Erpify\\')) {
+                $imports[] = ['line' => $line, 'fqcn' => $name];
+            }
         }
 
         return $imports;

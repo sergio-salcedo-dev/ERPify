@@ -2,8 +2,8 @@
 #
 # The gate (tests/Unit/Shared/Architecture/BoundedContextGateTest.php) fails the
 # build when a file in one business context imports another business context's
-# `Domain\` or `Application\` namespace — see the Level 1 rule in
-# docs/rules/database.md#bounded-context-data-isolation-modular-monolith.
+# `Domain\`, `Application\`, or `Infrastructure\` namespace — see the Level 1 rule
+# in docs/rules/database.md#bounded-context-data-isolation-modular-monolith.
 # `Erpify\Shared\…` is always importable (shared kernel) and never needs listing.
 #
 # Lines starting with `#` and blank lines are ignored. Three entry forms:
