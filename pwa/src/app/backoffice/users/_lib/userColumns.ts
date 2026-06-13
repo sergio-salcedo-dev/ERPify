@@ -15,6 +15,26 @@ export const DEFAULT_VISIBLE_COLUMNS: readonly UserColumnKey[] = [
   "createdAt",
 ];
 export const USERS_COLUMNS_STORAGE_KEY = "erpify:users-columns";
-export function isUserColumnKeyArray(v: unknown): v is UserColumnKey[] {
-  return Array.isArray(v) && v.every((x) => (USER_COLUMN_KEYS as readonly string[]).includes(x));
+
+const COLUMNS_SEPARATOR = ",";
+
+/** Serialize the visible set to a CSV string for `useStoredPreference` (string-only). */
+export function serializeColumns(keys: readonly UserColumnKey[]): string {
+  return keys.join(COLUMNS_SEPARATOR);
+}
+
+/** Parse the CSV back to keys; the pinned `email` column is always present. */
+export function parseColumns(raw: string): UserColumnKey[] {
+  const parts = raw
+    .split(COLUMNS_SEPARATOR)
+    .filter((p): p is UserColumnKey => (USER_COLUMN_KEYS as readonly string[]).includes(p));
+  return parts.includes("email") ? parts : ["email", ...parts];
+}
+
+/** Validate a stored CSV value: every token must be a known column key. */
+export function isStoredColumnsValue(v: string): v is string {
+  return (
+    v.length > 0 &&
+    v.split(COLUMNS_SEPARATOR).every((p) => (USER_COLUMN_KEYS as readonly string[]).includes(p))
+  );
 }
