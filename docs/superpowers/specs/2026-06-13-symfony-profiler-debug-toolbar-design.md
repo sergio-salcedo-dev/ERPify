@@ -7,6 +7,13 @@
 Give developers the Symfony Profiler and a visible Web Debug Toolbar for the ERPify
 HTTP API, **strictly in `dev` + `test`** — never loaded in production.
 
+> **Amendment (2026-06-14):** the scope was narrowed to **`dev` only**. Registering the
+> profiler in `test` perturbs doctrine-bundle's query instrumentation and breaks Behat's
+> per-scenario query-count assertions (queries under-count, e.g. 12→6). The bundles are now
+> `['dev' => true]`, the `when@test` blocks in `web_profiler.yaml`/`twig.yaml` are dropped,
+> and the `ProfilerEnabledFunctionalTest` that pinned the test-env wiring is removed. The
+> dev+test decisions recorded below are the original design, kept for history.
+
 ## The JSON reality (why this isn't the stock recipe)
 
 The API returns JSON only and has no Twig in production (the security checklist forbids

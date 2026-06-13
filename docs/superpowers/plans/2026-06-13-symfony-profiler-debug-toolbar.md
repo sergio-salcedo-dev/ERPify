@@ -4,6 +4,8 @@
 
 **Goal:** Give developers the Symfony Profiler (web UI at `/_profiler`), a visible floating Web Debug Toolbar (on a dev-only `/_dev` HTML page), and an out-of-band `dump()` server — strictly in `dev` + `test`, never loaded in production.
 
+> **Amendment (2026-06-14):** scope narrowed to **`dev` only** — the profiler in `test` broke Behat's per-scenario Doctrine query-count assertions. Bundles are `['dev' => true]`, the `when@test` blocks in `web_profiler.yaml`/`twig.yaml` are dropped, and `ProfilerEnabledFunctionalTest` is removed. The dev+test steps/verifications below are the original plan, kept for history.
+
 **Architecture:** Install `symfony/profiler-pack` as a dev dependency; register its bundles `['dev'=>true,'test'=>true]` so prod never loads Twig/profiler. Because the API is JSON-only, the toolbar can't inject into `/api/*` responses — so we serve one tiny dev-only HTML page (`/_dev`, via the framework's built-in `TemplateController`, no domain code) whose AJAX panel captures `/api/*` calls. A new `make/profiler.mk` adds `profiler.open` (launch the UI) and `profiler.dump-server`.
 
 **Tech Stack:** PHP 8.5 · Symfony 8 · FrankenPHP (worker mode, dev) · Caddy · Twig (dev/test only) · Make · Docker Compose · PHPUnit (WebTestCase).

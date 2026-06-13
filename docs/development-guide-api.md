@@ -38,11 +38,12 @@ make composer c='behat-tools-install'
 
 Switch overlay: `make docker.up ENV=ci|staging|prod` (default `dev`).
 
-## Profiler & debug toolbar (dev/test only)
+## Profiler & debug toolbar (dev only)
 
-The Symfony Profiler is enabled in `dev` + `test` (never prod — the bundles are registered
-`['dev'=>true,'test'=>true]`). Because the API returns JSON, the floating toolbar can't
-inject into `/api/*` responses; the surfaces are:
+The Symfony Profiler is enabled only in `dev` (never prod, and not `test` — the bundles are
+registered `['dev'=>true]`). It stays out of `test` so its Doctrine instrumentation can't
+perturb the per-scenario query-count assertions in Behat. Because the API returns JSON, the
+floating toolbar can't inject into `/api/*` responses; the surfaces are:
 
 - **`/_profiler`** — full Profiler web UI (Doctrine queries, timeline, Messenger,
   serializer, logs). `make profiler.open` opens `/_profiler/latest` in your browser
