@@ -7,6 +7,7 @@ namespace Erpify\Shared\Media\Domain\Entity;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Erpify\Shared\Domain\Aggregate\AggregateRoot;
+use Erpify\Shared\Media\Domain\Exception\MediaBytesUnreadableException;
 use Erpify\Shared\Media\Domain\Repository\MediaRepository;
 
 /**
@@ -16,6 +17,7 @@ use Erpify\Shared\Media\Domain\Repository\MediaRepository;
  */
 #[ORM\Entity(repositoryClass: MediaRepository::class)]
 #[ORM\Table(name: 'media')]
+#[ORM\UniqueConstraint(name: 'media_content_hash_uniq', fields: ['contentHash'])]
 final class Media extends AggregateRoot
 {
     private function __construct(
@@ -63,8 +65,19 @@ final class Media extends AggregateRoot
     public function getRawBytes(): string
     {
         if (\is_resource($this->rawBytes)) {
-            $contents = \stream_get_contents($this->rawBytes);
-            $this->rawBytes = false !== $contents ? $contents : '';
+            // why: read from offset 0, not the stream's current position. Doctrine can hand back a
+            // BLOB resource already advanced to EOF (a prior read, or re-hydration), and
+            // stream_get_contents() from EOF returns '' — not false — which would then be cached as
+            // the bytes. Callers serve these bytes as the response body, so a silently empty read is
+            // cacheable corruption. Seeking to 0 re-reads the whole blob; a genuinely unreadable or
+            // non-seekable stream still returns false and surfaces as a fault.
+            $contents = \stream_get_contents($this->rawBytes, null, 0);
+
+            if (false === $contents) {
+                throw MediaBytesUnreadableException::forMediaId($this->id());
+            }
+
+            $this->rawBytes = $contents;
         }
 
         // @phpstan-ignore return.type (BLOB hydrates to string|resource; narrowed to string above)
