@@ -186,14 +186,23 @@ run the backup in a low-traffic window (or stop `messenger_worker` during it)
 if you need to exclude even that.
 
 Knobs (env vars): `BACKUP_DIR`, `RETENTION_DAYS` (default 14, local pruning),
-`OBJECT_STORAGE_VOLUME` (defaults to `<project>_object_storage_data`; check
-`make docker.info`), `BACKUP_SYNC_CMD` (offsite hook, below).
+`BACKUP_MIN_FREE_MB` (default 500, abort if the target FS is below it),
+`OBJECT_STORAGE_VOLUME` (defaults to `<project>_object_storage_data` — `make
+docker.info` prints `<project>`, and `docker volume ls` confirms the full
+name), `BACKUP_SYNC_CMD` (offsite hook, below).
 
 ### Schedule it (cron)
 
 ```cron
+PATH=/usr/local/bin:/usr/bin:/bin
 15 3 * * * cd /opt/erpify && BACKUP_SYNC_CMD='rclone sync /var/backups/erpify remote:erpify-backups' make backup.prod >> /var/log/erpify-backup.log 2>&1 || logger -t erpify-backup FAILED
 ```
+
+cron runs with a stripped `PATH` — set it explicitly (or use absolute paths) so
+`make`/`docker`/`rclone` resolve, otherwise the job dies with
+`make: command not found` and only the `|| logger` fires with no detail. The log
+captures `ls -lh` output and tool errors (which may include remote names), so
+create it `umask 077` / `chmod 600 /var/log/erpify-backup.log`.
 
 A backup that fails silently is no backup — keep the `|| logger` (or wire a
 real alert) so failures surface.
@@ -210,19 +219,36 @@ across days).
 
 ### Restore (reverse order: objects first, DB after, same stamp)
 
-```bash
-# 1) objects — wipe the volume and unpack the archive
-docker run --rm -v erpify_object_storage_data:/dst -v /var/backups/erpify:/src \
-  alpine sh -c 'rm -rf /dst/* && tar xzf /src/objects-<stamp>.tar.gz -C /dst'
+Restore is destructive by design — it is deliberately **not** wrapped in a make
+target. The volume name and project must match what the backup used: the
+commands below assume `COMPOSE_PROJECT_NAME=erpify` (so volume
+`erpify_object_storage_data`) — substitute `<project>_object_storage_data` if you
+ran the backup under a different project, or `docker run -v` will silently
+**create** an empty volume and you restore into the wrong place.
 
-# 2) database — restore the SAME stamp's dump
+```bash
+# 0) stop writers FIRST — they must not race the destructive wipe below
 docker compose -p erpify --env-file .env.prod.local -f compose.yaml -f compose.prod.yaml \
-  exec -T database sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists' \
+  stop php messenger_worker
+
+# 1) objects — wipe the volume (incl. dotfiles) and unpack the archive
+docker run --rm -v erpify_object_storage_data:/dst -v /var/backups/erpify:/src \
+  alpine sh -c 'find /dst -mindepth 1 -delete && tar xzf /src/objects-<stamp>.tar.gz -C /dst'
+
+# 2) database — restore the SAME stamp's dump (--exit-on-error: stop on the first
+#    failure instead of leaving a half-restored DB that only looks intact)
+docker compose -p erpify --env-file .env.prod.local -f compose.yaml -f compose.prod.yaml \
+  exec -T database sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --exit-on-error' \
   < /var/backups/erpify/db-<stamp>.dump
+
+# 3) bring the writers back up
+docker compose -p erpify --env-file .env.prod.local -f compose.yaml -f compose.prod.yaml \
+  start php messenger_worker
 ```
 
-Restore is destructive by design — it is deliberately **not** wrapped in a make
-target. Stop the `php`/`messenger_worker` services first on a live host.
+`rm -rf /dst/*` would leave the previous dataset's dotfiles behind (the archive
+captures them via `tar -C /src .`) — `find /dst -mindepth 1 -delete` gives a
+truly clean target.
 
 ### Restore drill (quarterly)
 

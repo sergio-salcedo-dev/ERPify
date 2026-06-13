@@ -16,6 +16,7 @@
 # Knobs (env):
 #   BACKUP_DIR             target directory            (default /var/backups/erpify)
 #   RETENTION_DAYS         local retention             (default 14)
+#   BACKUP_MIN_FREE_MB     min free space preflight    (default 500)
 #   PROD_ENV_FILE          compose secrets file        (default .env.prod.local)
 #   COMPOSE_PROJECT_NAME   compose project             (default erpify)
 #   OBJECT_STORAGE_VOLUME  volume to archive           (default <project>_object_storage_data)
@@ -31,6 +32,7 @@ cd "$REPO_ROOT"
 ENV_FILE="${PROD_ENV_FILE:-.env.prod.local}"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/erpify}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
+MIN_FREE_MB="${BACKUP_MIN_FREE_MB:-500}"
 export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-erpify}"
 OBJECT_STORAGE_VOLUME="${OBJECT_STORAGE_VOLUME:-${COMPOSE_PROJECT_NAME}_object_storage_data}"
 STAMP="$(date +%F_%H%M%S)"
@@ -50,7 +52,14 @@ compose() {
 [[ -f "$ENV_FILE" ]] || { log_error "$ENV_FILE not found — see 'make prod.env.check'."; exit 1; }
 command -v docker >/dev/null || { log_error "docker not found."; exit 1; }
 
-if [[ -z "$(compose ps -q database)" ]]; then
+# A non-numeric RETENTION_DAYS makes the later `find -mtime` error out mid-run
+# (after a successful dump) or silently prune nothing.
+[[ "$RETENTION_DAYS" =~ ^[0-9]+$ ]] || { log_error "RETENTION_DAYS must be a non-negative integer (got '$RETENTION_DAYS')."; exit 1; }
+[[ "$MIN_FREE_MB" =~ ^[0-9]+$ ]] || { log_error "BACKUP_MIN_FREE_MB must be a non-negative integer (got '$MIN_FREE_MB')."; exit 1; }
+
+# A bare id is not enough — a created/exited/restarting container also has one;
+# only a running container can answer `pg_dump`.
+if [[ -z "$(compose ps --status running -q database)" ]]; then
   log_error "database service is not running (project '$COMPOSE_PROJECT_NAME')."
   exit 1
 fi
@@ -63,9 +72,20 @@ if ! docker volume inspect "$OBJECT_STORAGE_VOLUME" >/dev/null 2>&1; then
   exit 1
 fi
 
-mkdir -p "$BACKUP_DIR"
-# Dumps contain business data — keep artifacts unreadable to other users.
+# Dumps contain business data — keep the dir and every artifact unreadable to
+# other users. umask must precede mkdir so a freshly created BACKUP_DIR is not
+# left world-traversable by the default 022 mask.
 umask 077
+mkdir -p "$BACKUP_DIR"
+chmod 700 "$BACKUP_DIR"
+
+# Fail before dumping if the target filesystem is short on space: a dump that
+# fills the disk leaves a half-written, unrestorable artifact.
+avail_mb=$(($(df -Pk "$BACKUP_DIR" | awk 'NR==2 {print $4}') / 1024))
+if (( avail_mb < MIN_FREE_MB )); then
+  log_error "only ${avail_mb}MB free in $BACKUP_DIR (need ≥ ${MIN_FREE_MB}MB; tune BACKUP_MIN_FREE_MB)."
+  exit 1
+fi
 
 db_file="$BACKUP_DIR/db-$STAMP.dump"
 objects_file="$BACKUP_DIR/objects-$STAMP.tar.gz"
@@ -75,9 +95,18 @@ log_info "Dumping database to $db_file …"
 compose exec -T database sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "$db_file"
 
 # pg_dump custom format starts with the PGDMP magic; an empty/garbage file
-# means the dump failed in a way the exit code did not surface.
-if ! head -c 5 "$db_file" | grep -q 'PGDMP'; then
+# means the dump failed in a way the exit code did not surface. (LC_ALL=C + -a
+# so grep treats the binary header as text across grep implementations.)
+if ! head -c 5 "$db_file" | LC_ALL=C grep -qa 'PGDMP'; then
   log_error "dump verification failed: $db_file is not a pg_dump custom archive."
+  exit 1
+fi
+
+# A valid header says nothing about a dump truncated mid-write (connection drop,
+# disk full, OOM). pg_restore -l parses the whole table-of-contents and fails on
+# a corrupt/partial archive — the only cheap proof the dump is restorable.
+if ! compose exec -T database pg_restore -l > /dev/null 2>&1 < "$db_file"; then
+  log_error "dump verification failed: pg_restore could not read $db_file (truncated/corrupt)."
   exit 1
 fi
 
@@ -87,6 +116,10 @@ docker run --rm \
   -v "$OBJECT_STORAGE_VOLUME":/src:ro \
   -v "$BACKUP_DIR":/dst \
   alpine tar czf "/dst/$(basename "$objects_file")" -C /src .
+
+# The archive is created by root inside the container, which ignores the host
+# umask — tighten it to match the dump's 0600 (it carries the same PII).
+chmod 600 "$objects_file"
 
 tar -tzf "$objects_file" > /dev/null
 
