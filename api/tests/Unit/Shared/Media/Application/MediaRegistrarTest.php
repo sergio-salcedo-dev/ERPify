@@ -41,6 +41,34 @@ final class MediaRegistrarTest extends TestCase
         $this->assertSame(0, $mediaRepository->saveCalls);
     }
 
+    public function testRegistersAndReturnsNewMediaWhenContentHashIsUnseen(): void
+    {
+        $mediaRepository = new FakeMediaRepository();
+        $registrar = $this->makeRegistrar($mediaRepository);
+
+        $result = $registrar->registerFromUploadedFile($this->createStub(UploadedFile::class));
+
+        $this->assertSame(self::CONTENT_HASH, $result->getContentHash());
+        $this->assertSame(1, $mediaRepository->saveCalls);
+        $this->assertSame(1, $mediaRepository->findCalls, 'happy path must not re-query');
+    }
+
+    public function testReturnsTheConcurrentWinnerAfterLosingTheInsertRace(): void
+    {
+        $winner = Media::create(self::MEDIA_ID, self::CONTENT_HASH, 'image/png', 4, 'PNG.');
+        $mediaRepository = new FakeMediaRepository(
+            found: null,
+            saveFailure: $this->makeUniqueViolation(),
+            winner: $winner,
+        );
+        $registrar = $this->makeRegistrar($mediaRepository);
+
+        $result = $registrar->registerFromUploadedFile($this->createStub(UploadedFile::class));
+
+        $this->assertSame($winner, $result);
+        $this->assertSame(2, $mediaRepository->findCalls, 'dedup lookup + post-reset re-fetch of the winner');
+    }
+
     public function testThrowsConcurrentMediaWinnerMissingExceptionWhenWinnerCannotBeRefetched(): void
     {
         // Dedup misses, the unique index rejects our insert (another request won the race),

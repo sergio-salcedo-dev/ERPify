@@ -198,6 +198,32 @@ describe("FetchHttpClient", () => {
       });
     });
 
+    it("distinguishes a guarded unparseable body from a shape mismatch in the detail", async () => {
+      fetchSpy
+        .mockResolvedValueOnce(
+          new Response("{not json", {
+            status: HttpStatus.OK,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+        .mockResolvedValueOnce(makeResponse(HttpStatus.OK, { wrong: "shape" }));
+
+      const client = new FetchHttpClient();
+
+      await expect(client.get("/api/v1/backoffice/banks", isEnvelope)).rejects.toMatchObject({
+        problem: {
+          type: MALFORMED_RESPONSE_ENVELOPE,
+          detail: expect.stringContaining("Unparseable JSON response body"),
+        },
+      });
+      await expect(client.get("/api/v1/backoffice/banks", isEnvelope)).rejects.toMatchObject({
+        problem: {
+          type: MALFORMED_RESPONSE_ENVELOPE,
+          detail: expect.stringContaining("Unexpected response body shape"),
+        },
+      });
+    });
+
     it("guards POST and PUT bodies through the same seam", async () => {
       fetchSpy.mockResolvedValueOnce(makeResponse(HttpStatus.CREATED, { wrong: true }));
 

@@ -14,9 +14,10 @@ use Override;
  * {@see \Erpify\Shared\Media\Application\MediaRegistrar}'s dedup-and-concurrent-insert flow.
  *
  * When `$saveFailure` is given, `save()` throws it instead of completing — mimicking the
- * `media_content_hash_uniq` index rejecting a row another request inserted first.
- * `findByContentHash()` always returns `$found`, so passing `null` reproduces both the initial
- * dedup miss and the winner-vanished re-fetch in a single fixture.
+ * `media_content_hash_uniq` index rejecting a row another request inserted first. The initial
+ * dedup lookup returns `$found`; once a save has failed, the post-reset re-fetch returns `$winner`
+ * instead, so a single fixture can model "winner found" (`$winner` set) and "winner vanished"
+ * (`$winner` null).
  *
  * @internal
  */
@@ -26,9 +27,12 @@ final class FakeMediaRepository implements MediaRepository
 
     public int $findCalls = 0;
 
+    private bool $saveFailed = false;
+
     public function __construct(
         private readonly ?Media $found = null,
         private readonly ?UniqueConstraintViolationException $saveFailure = null,
+        private readonly ?Media $winner = null,
     ) {
     }
 
@@ -38,6 +42,8 @@ final class FakeMediaRepository implements MediaRepository
         ++$this->saveCalls;
 
         if ($this->saveFailure instanceof UniqueConstraintViolationException) {
+            $this->saveFailed = true;
+
             throw $this->saveFailure;
         }
     }
@@ -47,7 +53,7 @@ final class FakeMediaRepository implements MediaRepository
     {
         ++$this->findCalls;
 
-        return $this->found;
+        return $this->saveFailed ? $this->winner : $this->found;
     }
 
     #[Override]

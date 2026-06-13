@@ -9,6 +9,7 @@ use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
 use Erpify\Shared\Application\DomainEvent\DomainEventHandlerDeduplicator;
 use Erpify\Shared\Application\Mailer\NotificationMailer;
 use Erpify\Shared\Domain\Event\DomainEvent;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Throwable;
@@ -21,6 +22,7 @@ final readonly class BankChangedNotifyEmailHandler
     public function __construct(
         private DomainEventHandlerDeduplicator $domainEventHandlerDeduplicator,
         private NotificationMailer $notificationMailer,
+        private LoggerInterface $logger,
         #[Autowire('%env(DEFAULT_NOTIFICATION_EMAIL)%')]
         private string $notifyTo,
     ) {
@@ -43,7 +45,9 @@ final readonly class BankChangedNotifyEmailHandler
         // why: Messenger delivery is at-least-once, and an email is not idempotent — a
         // redelivery after a successful send would mail the recipient twice. Claim the
         // (eventId, handler) pair first; a failed send releases the claim so the
-        // transport's retry can attempt it again.
+        // transport's retry can attempt it again. Residual: if send() dispatched the mail
+        // and then threw, the release re-opens the claim and the retry re-sends — accepted,
+        // because for a notification mail guaranteed delivery beats exactly-once.
         if (!$this->domainEventHandlerDeduplicator->claim($domainEvent->eventId(), self::class)) {
             return;
         }
@@ -56,9 +60,25 @@ final readonly class BankChangedNotifyEmailHandler
                 $domainEvent::eventName(),
             );
         } catch (Throwable $throwable) {
-            $this->domainEventHandlerDeduplicator->release($domainEvent->eventId(), self::class);
+            $this->releaseClaim($domainEvent->eventId());
 
             throw $throwable;
+        }
+    }
+
+    private function releaseClaim(string $eventId): void
+    {
+        try {
+            $this->domainEventHandlerDeduplicator->release($eventId, self::class);
+        } catch (Throwable $throwable) {
+            // why: the send failure is the real error the transport must see; a release
+            // failure on top must not mask it. Log it (the claim then lingers, suppressing
+            // the retry — the at-most-once sliver) and let the original exception propagate.
+            $this->logger->warning('Failed to release domain-event handler claim after a send failure.', [
+                'eventId' => $eventId,
+                'handler' => self::class,
+                'exception' => $throwable,
+            ]);
         }
     }
 }

@@ -162,7 +162,7 @@ services:
     networks:
       - frontend
       - backend
-    command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600", "--limit=10000", "--memory-limit=256M"]
+    command: ["php", "bin/console", "messenger:consume", "async", "scheduler_maintenance", "--time-limit=3600", "--limit=10000", "--memory-limit=256M"]
 
 volumes:
   # Uploaded stored-objects (Flysystem local adapter). Survives container

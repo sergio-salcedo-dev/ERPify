@@ -59,7 +59,9 @@ final readonly class MediaRegistrar
     private function concurrentWinner(string $contentHash): Media
     {
         // The failed flush closed the entity manager; reset it so this re-query (and any
-        // persistence work the caller does afterwards) runs on a fresh, open one.
+        // persistence work the caller does afterwards) runs on a fresh, open one. Symfony
+        // re-initialises the EM proxy in place, so the injected repository transparently
+        // binds to the fresh manager.
         $this->managerRegistry->resetManager();
 
         $winner = $this->mediaRepository->findByContentHash($contentHash);

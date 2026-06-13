@@ -185,7 +185,15 @@ export class FetchHttpClient implements HttpClient {
       }
     }
 
-    const parsed: unknown = await res.json().catch(() => undefined);
+    let parsed: unknown;
+    try {
+      parsed = await res.json();
+    } catch {
+      // why: an unparseable body and a body that parsed but failed the guard are distinct
+      // failures — report them with the matching detail so triage isn't misled.
+      throw this.malformedEnvelope(res, `Unparseable JSON response body for ${url}`);
+    }
+
     if (!validate(parsed)) {
       throw this.malformedEnvelope(res, `Unexpected response body shape for ${url}`);
     }
