@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
   DataTable,
   StatusBadge,
@@ -49,6 +49,11 @@ export function BankAccountsTable({ accounts, density }: Readonly<BankAccountsTa
     setRevealedId(null);
   }
 
+  // Stable identity: IbanCell keys its ~10s auto-hide timer on `onHide`, so a
+  // fresh closure each render would restart the countdown on every ancestor
+  // re-render and keep the IBAN visible past the intended window.
+  const hideRevealed = useCallback(() => setRevealedId(null), []);
+
   const columns: DataTableColumn<BankAccount>[] = [
     {
       id: "holder",
@@ -65,7 +70,7 @@ export function BankAccountsTable({ accounts, density }: Readonly<BankAccountsTa
           iban={account.iban}
           revealed={revealedId === account.id}
           onReveal={() => setRevealedId(account.id)}
-          onHide={() => setRevealedId(null)}
+          onHide={hideRevealed}
           testId={`bank-accounts-table__iban-${account.id}`}
         />
       ),

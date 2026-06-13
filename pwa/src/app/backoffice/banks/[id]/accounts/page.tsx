@@ -21,6 +21,7 @@ import { safeHref } from "@/lib/safeHref";
 import { isUuid, uuidV7 } from "@/lib/uuidV7";
 import { bankRoutes } from "../../_lib/bankRoutes";
 import { BankAccountsTable } from "./_components/BankAccountsTable";
+import { BankAccountsListSkeleton } from "./_components/BankAccountsListSkeleton";
 import { BankAccountsPagination } from "./_components/BankAccountsPagination";
 import { BANK_ACCOUNTS_PAGE_SIZE_DEFAULT, type BankAccountsPageSize } from "./_lib/paginate";
 
@@ -176,6 +177,7 @@ export default function BankAccountsPage() {
         state={boundaryState}
         data={accounts}
         error={problem ?? undefined}
+        loading={<BankAccountsListSkeleton rows={Math.min(pageSize, 8)} />}
         errorAction={
           <Button
             type="button"

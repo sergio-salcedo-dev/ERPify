@@ -27,6 +27,12 @@ export interface IbanCellProps {
  * only ever rendered when the cell is explicitly revealed.
  */
 export function maskIban(iban: string): string {
+  // The country-code and last-four windows only stay disjoint (so the integral
+  // value can't be reconstructed from the mask) when there is a masked gap
+  // between them. A short/garbage value is fully masked rather than echoed.
+  if (iban.length < 7) {
+    return "•••• ···· ••••";
+  }
   return `${iban.slice(0, 2)}•• ···· ${iban.slice(-4)}`;
 }
 
