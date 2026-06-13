@@ -57,3 +57,7 @@ deriva los campos del `SortFieldMap` de producción) — todos retirados. El res
 | [#234](https://github.com/sergio-salcedo-dev/ERPify/issues/234) | keyset: `qualify()` reescribe el DQL del predicado por regex (acoplado a `id` bare) |
 | [#235](https://github.com/sergio-salcedo-dev/ERPify/issues/235) | keyset: `entityName()` colapsa al nombre corto → colisión de fingerprint multi-contexto |
 | [#236](https://github.com/sergio-salcedo-dev/ERPify/issues/236) | arch: static gate de aislamiento bounded-context (3 niveles) |
+
+## Deferred from: code review of story-2.3 (2026-06-13)
+
+- El guard de unión cerrada de `ApiBankAccountRepository` (`isBankAccountPrimitives`, líneas 988-1002) hace fallar la página entera con `malformed-response-envelope` si el backend añade una `currency` ≠ EUR o un 4º `status`. Es deliberado por CE-1 (un único contrato wire), pero la superficie de error es frágil: un cambio de contrato versionado tumba la pantalla en vez de degradar por fila. Reconsiderar cuando se amplíe el set de monedas/estados.

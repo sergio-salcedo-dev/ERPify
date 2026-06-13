@@ -40,7 +40,7 @@
 # en paralelo fuera de ese emparejamiento.
 
 generated: 2026-06-10 15:27:34
-last_updated: 2026-06-12 00:00:00
+last_updated: 2026-06-13 00:00:00
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -54,3 +54,14 @@ development_status:
   1-4-migracion-pwa-red-behat-y-observabilidad-del-switch-pr3-lado-consumidor: done
   1-5-borrado-del-legado-de-paginacion-pr4: done
   epic-1-retrospective: optional
+  # Epic 2 — Cuentas asociadas (Bank ↔ BankAccount). 2.1/2.2/2.3/2.4 se ejecutaron
+  # vía quick-dev (spec-*.md) y viven en PRs abiertas (#248: 2.1+2.4; #249: 2.2+2.3),
+  # no en main; sus estados aquí reflejan esa realidad. Reconciliar contra main al
+  # mergear. 2.3 a 'done' tras code-review (2026-06-13).
+  epic-2: in-progress
+  2-1-api-account-count-read-model-pr1: review
+  2-2-api-bank-accounts-endpoint-pr2: review
+  2-3-pwa-read-context-bankaccount-superficie-cuentas-pr3: done
+  2-4-pwa-senales-lista-y-detalle-pr4: review
+  2-5-pwa-delete-guard-recovery-bank-in-use-pr5: backlog
+  epic-2-retrospective: optional

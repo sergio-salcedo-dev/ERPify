@@ -4,7 +4,7 @@ baseline_commit: 15319aa628bafa4f8c5deedfc54f29547276fd72
 
 # Story 2.3: PWA · Read context BankAccount + superficie de cuentas
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -60,6 +60,16 @@ so that pueda verificar las cuentas asociadas antes de una acción de borrado o 
   - [x] `tests/e2e/backoffice/bank-accounts.spec.ts` (route-mock): carga en frío + tabla; reveal + copia del IBAN; empty; error boundary (500 → `ProblemDisplay`+`CorrelationIdChip`). Local bloqueado por browsers → se ejecuta en CI.
 - [x] **Task 10 — Quality gate** (AC: todos)
   - [x] `make pwa.quality` limpio (ESLint + Prettier + typecheck). Auto-review de seguridad frontend (XSS/safeHref/clipboard/PII) del diff: sin hallazgos.
+
+## Review Findings
+
+_Code review 2026-06-13 (3 capas: Blind Hunter, Edge Case Hunter, Acceptance Auditor). 4 patch · 0 decision · 1 defer · 12 descartados como ruido._
+
+- [x] [Review][Patch] `maskIban` filtra el IBAN íntegro con entradas cortas/malformadas — `slice(0,2)`+`slice(-4)` se solapan para len ≤ 6 (`maskIban("ES12")` → `"ES•• ···· ES12"`); el guard `isBankAccountPrimitives` valida `typeof iban === "string"` pero no longitud. Romper el invariante #3 con input no confiable. Fix: guardar longitud mínima y enmascarar por completo si es demasiado corto. [pwa/src/app/backoffice/banks/[id]/accounts/_components/IbanCell.tsx:489-491]
+- [x] [Review][Patch] El timer de auto-hide (~10s) se reinicia en cada re-render de un ancestro — `onReveal`/`onHide` son closures nuevos por render en `BankAccountsTable`, y el `useEffect` de `IbanCell` depende de `[revealed, onHide]`, así que cualquier re-render de la tabla con un IBAN revelado reinicia la cuenta de 10s (PII en pantalla más de lo que el spec garantiza). Fix: `useCallback` en los callbacks de la tabla o hide estable por ref. [pwa/src/app/backoffice/banks/[id]/accounts/_components/BankAccountsTable.tsx:409-411 + IbanCell.tsx:503-507]
+- [x] [Review][Patch] La carga en frío usa el `DefaultLoadingSkeleton` genérico, no un skeleton de filas — diverge del spec (Task 8 "skeleton de filas") y del patrón establecido en `banks/page.tsx`, que pasa `loading={<BanksListSkeleton rows=.../>}`. Fix: pasar un slot `loading` con skeleton de filas al `AsyncBoundary`. [pwa/src/app/backoffice/banks/[id]/accounts/page.tsx (AsyncBoundary)]
+- [x] [Review][Patch] Faltan tests para dos ítems explícitos de los AC: activación por teclado Enter/Space del toggle de revelado (AC#2) y aserción de que el IBAN nunca se escribe en storage (invariante #3, solo se testea `console`). Fix: añadir ambas aserciones. [pwa/tests/app/backoffice/banks/accounts/ibanCell.test.tsx]
+- [x] [Review][Defer] El guard de unión cerrada hace fallar la página entera (`malformed-response-envelope`) si el backend añade alguna `currency` ≠ EUR o un 4º `status` — deliberado por CE-1 (un único contrato wire) pero superficie de error frágil: un cambio de contrato versionado tumba la pantalla en vez de degradar por fila. [pwa/src/context/backoffice/bankaccount/infrastructure/ApiBankAccountRepository.ts:988-1002] — deferred, decisión de diseño por CE-1
 
 ## Dev Notes
 
