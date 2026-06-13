@@ -6,26 +6,29 @@
 # The inverse of backup-prod.sh: restores a <stamp> pair (objects FIRST, then
 # the DB dump of the SAME stamp) produced by `make backup.prod`.
 #
-# DESTRUCTIVE: wipes the object-storage volume and runs `pg_restore --clean`
-# over the live database. It is meant first for the **restore drill and pre-prod
-# verification** — prove a backup restores on the erpify.local rehearsal or a
-# scratch worktree stack before you ever need it for real. Both artifacts are
-# verified up front, so a corrupt backup is caught before any live data is
-# touched, and the run refuses to proceed without an explicit confirmation.
+# DESTRUCTIVE: wipes the object-storage volume and runs pg_restore (in a single
+# transaction) over the live database. It is meant first for the **restore drill
+# and pre-prod verification** — prove a backup restores on the erpify.local
+# rehearsal or a scratch worktree stack before you ever need it for real. Both
+# artifacts are fully verified up front, so a corrupt backup is caught before any
+# live data is touched, and the run refuses to proceed without an explicit
+# confirmation. The writers are restarted on any exit, so a failed restore never
+# leaves the app headless.
 #
-# Environment guard: when SERVER_NAME (from the env file) is a real domain the
-# run is treated as PRODUCTION and requires a second opt-in (ALLOW_PROD_RESTORE)
-# plus a typed phrase that includes the stamp — RESTORE_YES is ignored there, so
-# a production restore can never be scripted/unattended.
+# Environment guard: when SERVER_NAME (from the env file) is anything other than
+# an explicitly local host the run is treated as PRODUCTION and requires a second
+# opt-in (ALLOW_PROD_RESTORE) plus a typed phrase that includes the stamp —
+# RESTORE_YES is ignored there, so a production restore can never be
+# scripted/unattended.
 #
 # Knobs (env):
 #   STAMP                  pair to restore (or pass as $1); omit to list options
 #   BACKUP_DIR             source directory            (default /var/backups/erpify)
 #   PROD_ENV_FILE          compose secrets file        (default .env.prod.local)
 #   COMPOSE_PROJECT_NAME   compose project             (default erpify)
-#   STORAGE_VOLUME  volume to restore into      (default <project>_storage_data)
+#   STORAGE_VOLUME         volume to restore into      (default <project>_storage_data)
 #   RESTORE_YES            set to 1 to skip confirmation — NON-production only
-#   ALLOW_PROD_RESTORE     set to 1 to permit a restore when SERVER_NAME is a real domain
+#   ALLOW_PROD_RESTORE     set to 1 to permit a restore when SERVER_NAME is non-local
 #
 # Usage: scripts/deploy/restore-prod.sh <stamp>   (or `STAMP=<stamp> make restore.prod`)
 set -euo pipefail
@@ -39,16 +42,7 @@ export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-erpify}"
 STORAGE_VOLUME="${STORAGE_VOLUME:-${COMPOSE_PROJECT_NAME}_storage_data}"
 STAMP="${1:-${STAMP:-}}"
 
-RED='\033[0;31m'; GREEN='\033[0;32m'; BLUE='\033[0;34m'; YELLOW='\033[0;33m'; NC='\033[0m'
-log_info()    { echo -e "${BLUE}ℹ ${*}${NC}"; }
-log_success() { echo -e "${GREEN}✔ ${*}${NC}"; }
-log_warn()    { echo -e "${YELLOW}! ${*}${NC}"; }
-log_error()   { echo -e "${RED}✗ ${*}${NC}" >&2; }
-
-compose() {
-  docker compose -p "$COMPOSE_PROJECT_NAME" --env-file "$ENV_FILE" \
-    -f compose.yaml -f compose.prod.yaml "$@"
-}
+source "$REPO_ROOT/scripts/deploy/lib/common.sh"
 
 list_stamps() {
   find "$BACKUP_DIR" -maxdepth 1 -name 'db-*.dump' -printf '%f\n' 2>/dev/null \
@@ -56,30 +50,31 @@ list_stamps() {
 }
 
 # —— Preflight ————————————————————————————————————————————————————————————
-[[ -f compose.yaml ]] || { log_error "Run from the repo root (compose.yaml not found)."; exit 1; }
-[[ -f "$ENV_FILE" ]] || { log_error "$ENV_FILE not found — see 'make prod.env.check'."; exit 1; }
-command -v docker >/dev/null || { log_error "docker not found."; exit 1; }
+require_running_stack
+command -v flock >/dev/null || { log_error "flock not found (util-linux)."; exit 1; }
+[[ -d "$BACKUP_DIR" ]] || { log_error "BACKUP_DIR '$BACKUP_DIR' does not exist."; exit 1; }
 
-if [[ -z "$(compose ps --status running -q database)" ]]; then
-  log_error "database service is not running (project '$COMPOSE_PROJECT_NAME')."
-  exit 1
-fi
+# Resolve to an absolute path: a relative BACKUP_DIR would make the `docker run
+# -v "$BACKUP_DIR":/src` below read from a *named volume* of that name instead of
+# this directory.
+BACKUP_DIR="$(cd "$BACKUP_DIR" && pwd)"
 
-if ! docker volume inspect "$STORAGE_VOLUME" >/dev/null 2>&1; then
-  log_error "volume '$STORAGE_VOLUME' does not exist (project '$COMPOSE_PROJECT_NAME')."
-  exit 1
-fi
+# Serialize against backup-prod.sh via the shared lock: a cron backup must not
+# archive the storage volume / dump the DB while this restore is wiping and
+# reloading them (which would produce a silently corrupt backup).
+exec 9>"$BACKUP_DIR/.backup.lock"
+flock -n 9 || { log_error "a backup or restore is already running (lock: $BACKUP_DIR/.backup.lock)."; exit 1; }
 
-# Classify the target: a non-.local, non-localhost SERVER_NAME is a real
-# deployment, which gates the stricter production confirmation below.
+# Classify the target. Fail safe: ONLY an explicitly local SERVER_NAME is treated
+# as non-production. A real domain, an IP, or a bare internal hostname all gate
+# the stricter production confirmation below — an unrecognised target must never
+# silently fall through to the scriptable non-prod path.
 SERVER_NAME="$(grep -E '^SERVER_NAME=' "$ENV_FILE" 2>/dev/null | head -n1 | cut -d= -f2- | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' || true)"
 IS_PROD=0
 for host in $SERVER_NAME; do
   case "$host" in
-    *.local|localhost|127.0.0.1|*.localhost|"") : ;;
-    *.*) IS_PROD=1 ;;
-    # A bare, dotless hostname is not a real deployment target — leave IS_PROD unset.
-    *) : ;;
+    *.local|*.localhost|localhost|127.0.0.1|::1) : ;;
+    *) IS_PROD=1 ;;
   esac
 done
 
@@ -98,13 +93,11 @@ objects_file="$BACKUP_DIR/objects-$STAMP.tar.gz"
 [[ -f "$objects_file" ]] || { log_error "missing objects archive: $objects_file"; exit 1; }
 
 # —— Verify the artifacts BEFORE touching live data ————————————————————————
+# Full read-back (not just the TOC), so a dump truncated in its data section is
+# rejected here rather than failing halfway through the destructive restore.
 log_info "Verifying backup pair $STAMP …"
-head -c 5 "$db_file" | LC_ALL=C grep -qa 'PGDMP' \
-  || { log_error "$db_file is not a pg_dump custom archive."; exit 1; }
-compose exec -T database pg_restore -l > /dev/null 2>&1 < "$db_file" \
-  || { log_error "$db_file is unreadable by pg_restore (truncated/corrupt)."; exit 1; }
-tar -tzf "$objects_file" > /dev/null \
-  || { log_error "$objects_file is not a valid gzip archive."; exit 1; }
+verify_dump "$db_file" || exit 1
+verify_objects "$objects_file" || exit 1
 log_success "Both artifacts verified (sizes below)."
 ls -lh "$db_file" "$objects_file"
 
@@ -149,7 +142,22 @@ elif [[ "${RESTORE_YES:-}" != "1" ]]; then
 fi
 
 # —— Restore (reverse order: stop writers → objects → DB → start writers) ——
+# Once the writers are down, every exit path MUST bring them back: a failure
+# mid-restore (corrupt archive, pg_restore error, Ctrl-C) otherwise leaves the
+# app headless. The trap restarts them on any exit; `compose start` is
+# idempotent, so the happy path clearing the flag below just makes it a no-op.
+writers_stopped=0
+restart_writers() {
+  [[ "$writers_stopped" == "1" ]] || return 0
+  log_info "Restarting writers (php, messenger_worker) …"
+  compose start php messenger_worker \
+    || log_error "could not restart writers — start them manually: 'compose start php messenger_worker'."
+}
+trap restart_writers EXIT
+trap 'exit 130' INT TERM
+
 log_info "Stopping writers (php, messenger_worker) …"
+writers_stopped=1
 compose stop php messenger_worker
 
 log_info "Restoring objects into $STORAGE_VOLUME …"
@@ -160,11 +168,15 @@ docker run --rm \
   -e OBJ="$obj_base" \
   alpine sh -c 'find /dst -mindepth 1 -delete && tar xzf "/src/$OBJ" -C /dst'
 
+# --single-transaction wraps the whole restore (including the --clean DROPs) in
+# one BEGIN/COMMIT: any error rolls the database back to its pre-restore state
+# instead of leaving it half-restored. It implies --exit-on-error.
 log_info "Restoring database from $db_file …"
-compose exec -T database sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --exit-on-error' < "$db_file"
+compose exec -T database sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --single-transaction' < "$db_file"
 
 log_info "Starting writers (php, messenger_worker) …"
 compose start php messenger_worker
+writers_stopped=0
 
 log_success "Restore of pair $STAMP complete."
 log_info "Smoke test: GET /api/v1/stored-objects/{hash} for a known object → expect 200 with 'Cache-Control: … immutable'."

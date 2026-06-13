@@ -224,11 +224,14 @@ before the sync hook runs, by design.
 ### Restore — `make restore.prod` (reverse order: objects first, DB after, same stamp)
 
 Restore is destructive: it wipes the object-storage volume and runs
-`pg_restore --clean` over the live database. `make restore.prod` wraps the
-procedure with up-front artifact verification (PGDMP header + `pg_restore -l` +
-`tar -tzf`, so a corrupt backup is caught *before* any live data is touched) and
-a typed confirmation. Use it first for the **restore drill and pre-prod
-verification** — exercise it on the `erpify.local` rehearsal or a scratch
+`pg_restore` over the live database. `make restore.prod` wraps the procedure
+with up-front artifact verification (PGDMP header + a full `pg_restore` read-back
+of the whole dump + `tar -tzf`, so a corrupt or truncated backup is caught
+*before* any live data is touched), a typed confirmation, an **atomic DB restore**
+(`--single-transaction` — any error rolls back rather than leaving a half-restored
+database), and an automatic **writer restart on any failure** so a botched
+restore never leaves the app headless. Use it first for the **restore drill and
+pre-prod verification** — exercise it on the `erpify.local` rehearsal or a scratch
 worktree stack before you ever need it for real.
 
 First find the stamp to restore (newest last):
@@ -249,8 +252,11 @@ Knobs mirror the backup: `BACKUP_DIR`, and `COMPOSE_PROJECT_NAME` /
 already pruned by retention, pull `db-<stamp>.dump` + `objects-<stamp>.tar.gz`
 back from the offsite copy into `BACKUP_DIR` first.
 
-**Production guard.** When `SERVER_NAME` in the env file is a real domain (not
-`*.local`/`localhost`) the run is treated as **production**: `RESTORE_YES` no
+**Production guard.** Unless `SERVER_NAME` in the env file is explicitly local
+(`*.local`/`*.localhost`/`localhost`/`127.0.0.1`/`::1`) the run is treated as
+**production** — a real domain, an IP, or even a bare internal hostname all
+qualify, so an unrecognised target fails safe rather than slipping into the
+scriptable path. In production: `RESTORE_YES` no
 longer bypasses anything, the script prints the mandatory pre-restore checklist,
 and it requires both `ALLOW_PROD_RESTORE=1` and an interactive typed phrase that
 **includes the stamp** (`restore <project> <stamp>`) — so a production restore
@@ -276,10 +282,11 @@ docker compose -p erpify --env-file .env.prod.local -f compose.yaml -f compose.p
 docker run --rm -v erpify_storage_data:/dst -v /var/backups/erpify:/src:ro \
   alpine sh -c 'find /dst -mindepth 1 -delete && tar xzf /src/objects-<stamp>.tar.gz -C /dst'
 
-# 2) database — restore the SAME stamp's dump (--exit-on-error: stop on the first
-#    failure instead of leaving a half-restored DB that only looks intact)
+# 2) database — restore the SAME stamp's dump (--single-transaction: wrap the
+#    whole restore in one BEGIN/COMMIT so an error rolls back to the pre-restore
+#    state instead of leaving a half-restored DB that only looks intact)
 docker compose -p erpify --env-file .env.prod.local -f compose.yaml -f compose.prod.yaml \
-  exec -T database sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --exit-on-error' \
+  exec -T database sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --single-transaction' \
   < /var/backups/erpify/db-<stamp>.dump
 
 # 3) bring the writers back up
@@ -290,6 +297,9 @@ docker compose -p erpify --env-file .env.prod.local -f compose.yaml -f compose.p
 `rm -rf /dst/*` would leave the previous dataset's dotfiles behind (the archive
 captures them via `tar -C /src .`) — `find /dst -mindepth 1 -delete` gives a
 truly clean target.
+
+Unlike `make restore.prod`, this raw sequence has no safety net: if step 1 or 2
+fails, the writers stay stopped — rerun step 3 yourself to bring them back.
 
 ### Restore drill (quarterly)
 
@@ -308,7 +318,7 @@ Run the whole loop on the `erpify.local` rehearsal (or a scratch worktree stack)
 - [ ] **Seed an object** — create a bank with a `stored_object` upload; note its `{hash}`. `GET /api/v1/stored-objects/{hash}` → 200, `Cache-Control: … immutable`.
 - [ ] **Back up** — `make backup.prod`. Confirm both `db-<stamp>.dump` and `objects-<stamp>.tar.gz` exist (`ls -1 /var/backups/erpify/`), sharing one `<stamp>`.
 - [ ] **Mutate after the backup** — delete that bank (and ideally add a different one), so a successful restore is *observable* (the deleted object reappears, the post-backup one is gone).
-- [ ] **Restore** — `RESTORE_YES=1 STAMP=<stamp> make restore.prod`. Watch the up-front verification pass (PGDMP + `pg_restore -l` + `tar -tzf`).
+- [ ] **Restore** — `RESTORE_YES=1 STAMP=<stamp> make restore.prod`. Watch the up-front verification pass (PGDMP + full `pg_restore` read-back + `tar -tzf`).
 - [ ] **Verify the recovery point** — `GET /api/v1/stored-objects/{hash}` for the seeded object → 200, `Cache-Control: … immutable`; the bank is back; the post-backup mutation is gone.
 - [ ] **Confirm writers are up** — `docker compose … ps` shows `php`/`messenger_worker` running again.
 - [ ] **(prod dry-run)** Optionally rehearse the production path: with a real `SERVER_NAME`, confirm the run refuses without `ALLOW_PROD_RESTORE=1` and demands the typed `restore <project> <stamp>` phrase.
