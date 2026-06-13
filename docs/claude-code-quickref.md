@@ -35,6 +35,8 @@ Prod/staging load secrets from a gitignored root `.env.prod.local` (copy from [`
 ```bash
 make composer c='req vendor/pkg'    # Run composer inside the container.
 make sf c='about'                   # Symfony console (also: make sf.cc, make sf.routes f='…', make sf.about).
+make profiler.open                  # Open the Symfony Profiler UI (/_profiler/latest) in the browser (dev).
+make profiler.dump-server           # Start the var-dumper server: collects dump() out-of-band (dev).
 make php.test                       # PHPUnit + Behat. Pass c='…' for extra args.
 make php.unit c='--filter SomeTest' # PHPUnit only.
 make php.behat c='features/...'     # Behat only.
