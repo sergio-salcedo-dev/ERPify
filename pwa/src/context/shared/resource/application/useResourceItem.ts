@@ -20,16 +20,22 @@ export function useResourceItem<T, TInput>(repositoryKey: string, id: string) {
     };
   }, []);
 
+  // Monotonic request token: when `id` changes, a slower earlier fetch must not
+  // overwrite the result of the newer one (out-of-order resolution would show
+  // the wrong item).
+  const seqRef = useRef(0);
+
   const load = useCallback(async () => {
+    const seq = ++seqRef.current;
     setState(ViewStatus.LOADING);
     setProblem(null);
     try {
       const result = await container.get<CrudRepository<T, TInput>>(repositoryKey).find(id);
-      if (!mounted.current) return;
+      if (!mounted.current || seq !== seqRef.current) return;
       setItem(result);
       setState(ViewStatus.READY);
     } catch (err) {
-      if (!mounted.current) return;
+      if (!mounted.current || seq !== seqRef.current) return;
       setProblem(err instanceof HttpError ? err.problem : null);
       setState(ViewStatus.ERROR);
     }

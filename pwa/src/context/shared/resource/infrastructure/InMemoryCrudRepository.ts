@@ -5,7 +5,7 @@ import type {
   ResourceSearchPage,
 } from "../domain/CrudRepository";
 import { SortDirection } from "@/context/shared/domain/types/sorting";
-import { encodeCursorLink, decodeCursorOffset } from "./cursorLink";
+import { encodeCursorLink } from "./cursorLink";
 
 /** Per-entity hooks the generic base needs (the only entity-specific logic). */
 export interface InMemoryEntityConfig<T extends { id: string }, TInput> {
@@ -53,14 +53,17 @@ export class InMemoryCrudRepository<T extends { id: string }, TInput> implements
     await this.delay();
     const row = this.rows.find((r) => r.id === id);
     if (!row) throw new Error(`Not found: ${id}`);
-    return row;
+    // Hand back a copy: the store owns its rows, and a real HTTP repository
+    // returns freshly deserialized objects every call. A consumer mutating the
+    // result must never reach back into the in-memory source of truth.
+    return structuredClone(row);
   }
 
   async create(input: TInput): Promise<T> {
     await this.delay();
     const row = this.config.fromInput(input, this.nextId(), this.nowIso());
     this.rows = [row, ...this.rows];
-    return row;
+    return structuredClone(row);
   }
 
   async update(id: string, input: TInput): Promise<T> {
@@ -69,7 +72,7 @@ export class InMemoryCrudRepository<T extends { id: string }, TInput> implements
     if (index === -1) throw new Error(`Not found: ${id}`);
     const updated = this.config.applyInput(this.rows[index], input, this.nowIso());
     this.rows = this.rows.map((r, i) => (i === index ? updated : r));
-    return updated;
+    return structuredClone(updated);
   }
 
   async delete(id: string): Promise<void> {
@@ -85,18 +88,20 @@ export class InMemoryCrudRepository<T extends { id: string }, TInput> implements
     );
     const sorted = this.sortRows(filtered, criteria);
     const limit = Math.max(1, criteria.limit);
-    const items = sorted.slice(offset, offset + limit);
+    const items = sorted.slice(offset, offset + limit).map((row) => structuredClone(row));
     const hasNext = offset + limit < sorted.length;
     const hasPrev = offset > 0;
     return {
       items,
       hasNext,
       hasPrev,
-      // LIGHT pagination parity with Bank (no total shown).
+      // LIGHT pagination: no total is computed or shown.
       count: null,
+      // Links carry the full query plus the target offset, so a follow needs only
+      // the link — the navigator stays stateless.
       links: {
-        next: hasNext ? encodeCursorLink(offset + limit) : null,
-        prev: hasPrev ? encodeCursorLink(Math.max(0, offset - limit)) : null,
+        next: hasNext ? encodeCursorLink(criteria, offset + limit) : null,
+        prev: hasPrev ? encodeCursorLink(criteria, Math.max(0, offset - limit)) : null,
       },
     };
   }
@@ -112,5 +117,3 @@ export class InMemoryCrudRepository<T extends { id: string }, TInput> implements
     if (this.latencyMs > 0) await new Promise((res) => setTimeout(res, this.latencyMs));
   }
 }
-
-export { decodeCursorOffset };

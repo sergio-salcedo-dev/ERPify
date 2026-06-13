@@ -47,11 +47,9 @@ describe("InMemoryCrudRepository", () => {
   it("navigates next via the opaque link", async () => {
     const r = repo();
     const nav = new InMemoryResourceNavigator<Row, RowInput>(r);
-    const criteria = { filters: [], sort: null, limit: 3 };
-    // The navigator continues the live query, so the consumer (useResourceList)
-    // hands it the same criteria before following a link.
-    nav.remember(criteria);
-    const first = await r.search(criteria);
+    // The link is self-contained: it carries the query and the offset, so the
+    // navigator follows it with no prior state.
+    const first = await r.search({ filters: [], sort: null, limit: 3 });
     const second = await nav.follow(first.links.next!);
     expect(second.items.map((x) => x.id)).toEqual(["id-3", "id-4", "id-5"]);
     expect(second.hasPrev).toBe(true);

@@ -1,29 +1,22 @@
 import type { ResourceSearchNavigator } from "../domain/ResourceSearchNavigator";
-import type { ResourceSearchCriteria, ResourceSearchPage } from "../domain/CrudRepository";
+import type { ResourceSearchPage } from "../domain/CrudRepository";
 import type { InMemoryCrudRepository } from "./InMemoryCrudRepository";
-import { decodeCursorOffset } from "./cursorLink";
+import { decodeCursor } from "./cursorLink";
 
 /**
- * Generic navigator over an in-memory repository. Decodes the opaque link's
- * offset and re-runs the slice. The criteria are remembered from the last
- * search so a follow continues the same query (mirrors how a real link encodes
- * the full query server-side).
+ * Stateless navigator over an in-memory repository. The opaque link carries the
+ * full query and the page offset, so `follow(link)` decodes both and re-runs the
+ * slice with no remembered state — exactly how a real cursor URL encodes its own
+ * query server-side. There is no mutable navigator state and no side channel.
  */
 export class InMemoryResourceNavigator<
   T extends { id: string },
   TInput,
 > implements ResourceSearchNavigator<T> {
-  private lastCriteria: ResourceSearchCriteria = { filters: [], sort: null, limit: 25 };
-
   constructor(private readonly repository: InMemoryCrudRepository<T, TInput>) {}
 
-  /** Called by useResourceList before navigation so follow() reuses the live query. */
-  remember(criteria: ResourceSearchCriteria): void {
-    this.lastCriteria = criteria;
-  }
-
   async follow(link: string): Promise<ResourceSearchPage<T>> {
-    const offset = decodeCursorOffset(link);
-    return this.repository.searchAt(this.lastCriteria, offset);
+    const { criteria, offset } = decodeCursor(link);
+    return this.repository.searchAt(criteria, offset);
   }
 }

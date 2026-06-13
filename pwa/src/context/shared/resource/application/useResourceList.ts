@@ -64,13 +64,13 @@ function capitalize(word: string): string {
 }
 
 /**
- * Generalized list state machine (ported from the Bank list page, minus the
- * Mercure realtime block). Drives a cursor-only, server-driven list: two load
- * paths (criteria search vs verbatim link follow), a monotonic request guard,
- * query-reset-on-change, derived boundary state, page selection, optimistic
- * single + bulk delete (with existence re-probe), record peek, empty-page
- * recovery, and focus/announcement management. `silentReload` stays exposed for
- * callers that want a manual background refresh.
+ * Generalized list state machine for a cursor-only, server-driven list. Drives
+ * two load paths (criteria search vs verbatim link follow), a monotonic request
+ * guard, query-reset-on-change, derived boundary state, page selection,
+ * optimistic single + bulk delete (with existence re-probe), record peek,
+ * empty-page recovery, and focus/announcement management. There is no realtime
+ * channel; `silentReload` is exposed for callers that want a manual background
+ * refresh.
  */
 export function useResourceList<T extends { id: string }, F, TInput>(
   config: UseResourceListConfig<T, F>,
@@ -124,17 +124,13 @@ export function useResourceList<T extends { id: string }, F, TInput>(
       reloadingRef.current = true;
       try {
         const criteria = config.toCriteria(filter, sort, pageSize);
-        let result;
-        if (activeLink === null) {
-          // A criteria search continues the live query — let an in-memory
-          // navigator remember it so a subsequent link follow reuses the query.
-          const nav = navigator();
-          const remember = (nav as { remember?: (c: ResourceSearchCriteria) => void }).remember;
-          if (typeof remember === "function") remember.call(nav, criteria);
-          result = await repository().search(criteria);
-        } else {
-          result = await navigator().follow(activeLink);
-        }
+        // Two load paths: a fresh criteria search (first page of a query) or a
+        // verbatim follow of a server-issued link. The link is opaque and
+        // self-contained, so the navigator needs nothing but the link itself.
+        const result =
+          activeLink === null
+            ? await repository().search(criteria)
+            : await navigator().follow(activeLink);
         if (!mountedRef.current || seq !== seqRef.current) return;
         if (!bulkDeleteInFlightRef.current) {
           deletedIdsRef.current = new Set();
