@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Erpify\Shared\Storage\Application\Port;
 
 /**
- * Application-facing object storage (Flysystem today; swappable implementation).
+ * Application-facing storage (Flysystem today; swappable implementation).
  */
-interface ObjectStoragePort
+interface StoragePort
 {
     public function write(string $key, string $contents): void;
 

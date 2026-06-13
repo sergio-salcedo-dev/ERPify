@@ -284,8 +284,8 @@ api/src/Shared/
 #### `api/src/Shared/Storage/Application/Dto/StoredObjectWriteResult.php`
 - **LOC:** 16 — `final readonly` DTO: `objectKey`, `mimeType`, `byteSize`, `contentHash`.
 
-#### `api/src/Shared/Storage/Application/Port/ObjectStoragePort.php`
-- **LOC:** 19 — interface: `write`, `read`, `delete`, `exists`. Implementation: `FlysystemObjectStorage`.
+#### `api/src/Shared/Storage/Application/Port/StoragePort.php`
+- **LOC:** 19 — interface: `write`, `read`, `delete`, `exists`. Implementation: `FlysystemStorage`.
 
 #### `api/src/Shared/Storage/Application/Port/StoredObjectAccessPort.php`
 - **LOC:** 15 — composite read facade: `existsAnyWithContentHash()`, `getMimeTypeForContentHash()`. Implemented by `CompositeStoredObjectAccess` aggregating tagged inspectors.
@@ -311,8 +311,8 @@ api/src/Shared/
 #### `api/src/Shared/Storage/Infrastructure/Controller/StoredObjectGetController.php`
 - **LOC:** 78 — `#[Route('/stored-objects/{hash}')]` with the same `[a-f0-9]{64}` requirement. Reference-check first via `StoredObjectAccessPort` (404 on unknown hash), then Flysystem read, then ETag/304 + immutable cache headers (mirror of `MediaGetController`).
 
-#### `api/src/Shared/Storage/Infrastructure/FlysystemObjectStorage.php`
-- **LOC:** 55 — `#[AsAlias(ObjectStoragePort::class)]`. Constructor: `#[Target('erpify.object_storage.storage')] FilesystemOperator`. Wraps Flysystem's `UnableToReadFile` as `RuntimeException`. `delete()` is idempotent (checks `exists()` first).
+#### `api/src/Shared/Storage/Infrastructure/FlysystemStorage.php`
+- **LOC:** 55 — `#[AsAlias(StoragePort::class)]`. Constructor: `#[Target('erpify.storage')] FilesystemOperator`. Wraps Flysystem's `UnableToReadFile` as `RuntimeException`. `delete()` is idempotent (checks `exists()` first).
 
 #### `api/src/Shared/Storage/Infrastructure/Http/ConfigurableStoredObjectPublicUrlGenerator.php`
 - **LOC:** 45 — parallel to `ConfigurableMediaPublicUrlGenerator` (different route base). **Duplication candidate** — see Optimization opportunities.
@@ -460,7 +460,7 @@ multipart UploadedFile + formField name
     └─ StoredImageObjectWriter::storeFromUploadedFile()
             ├─ InterventionImageNormalizer::normalize()
             ├─ ContentAddressableObjectKey::fromContentHash()  → "objects/{hash}"
-            └─ ObjectStoragePort::exists() ? noop : write()
+            └─ StoragePort::exists() ? noop : write()
                     ▼
               Flysystem (local filesystem in dev; S3/GCS in prod via env)
 
@@ -468,12 +468,12 @@ GET /api/v1/stored-objects/{hash}
     └─ StoredObjectGetController
             ├─ StoredObjectAccessPort::existsAnyWithContentHash() → 404
             ├─ ETag / If-None-Match → 304
-            └─ ObjectStoragePort::read() → 200 + bytes (cache headers as above)
+            └─ StoragePort::read() → 200 + bytes (cache headers as above)
 
 (implicit, no caller yet)
 StoredObjectOrphanCleaner::cleanupAfterRemoval($hash)
     ├─ for each StoredObjectReferenceInspector: if count > 0 → return
-    └─ ObjectStoragePort::delete()
+    └─ StoragePort::delete()
 ```
 
 ---

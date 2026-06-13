@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Storage\Infrastructure;
 
-use Erpify\Shared\Storage\Application\Port\ObjectStoragePort;
+use Erpify\Shared\Storage\Application\Port\StoragePort;
 use League\Flysystem\FilesystemOperator;
 use League\Flysystem\UnableToReadFile;
 use Override;
@@ -12,8 +12,8 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\DependencyInjection\Attribute\Target;
 use UnexpectedValueException;
 
-#[AsAlias(ObjectStoragePort::class)]
-final readonly class FlysystemObjectStorage implements ObjectStoragePort
+#[AsAlias(StoragePort::class)]
+final readonly class FlysystemStorage implements StoragePort
 {
     public function __construct(
         #[Target('erpify.storage')]

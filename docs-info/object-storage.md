@@ -2,7 +2,7 @@
 
 This document explains **what to configure**, how it relates to **BYTEA media**, and **what you must do in production** so uploads survive deploys and backups stay consistent.
 
-**Code map:** `Erpify\Shared\Storage\*`, Flysystem bundle config in [`api/config/packages/flysystem.yaml`](../api/config/packages/flysystem.yaml), [`FlysystemObjectStorage`](../api/src/Shared/Storage/Infrastructure/FlysystemObjectStorage.php) → [`ObjectStoragePort`](../api/src/Shared/Storage/Application/Port/ObjectStoragePort.php).
+**Code map:** `Erpify\Shared\Storage\*`, Flysystem bundle config in [`api/config/packages/flysystem.yaml`](../api/config/packages/flysystem.yaml), [`FlysystemStorage`](../api/src/Shared/Storage/Infrastructure/FlysystemStorage.php) → [`StoragePort`](../api/src/Shared/Storage/Application/Port/StoragePort.php).
 
 **Upstream:** [League Flysystem](https://github.com/thephpleague/flysystem) (via [`league/flysystem-bundle`](https://github.com/thephpleague/flysystem-bundle)).
 
@@ -95,11 +95,11 @@ volumes:
 
 ## Operations
 
-| Concern          | Guidance                                                                                                                                                                                                                                                                                         |
-|------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Disk usage**   | Monitor free space on the volume; large uploads accumulate under **`objects/`** by content hash (deduplicated across rows).                                                                                                                                                                      |
-| **Orphan files** | Removing the last DB row that references a hash triggers **`StoredObjectOrphanCleaner`** (via entity listeners). If you delete rows with raw SQL, you may leave orphan files; a future maintenance command could reconcile.                                                                      |
-| **Future S3**    | Add an adapter package (e.g. AWS S3) and a second Flysystem storage in YAML; change the **`#[Target]`** on [`FlysystemObjectStorage`](../api/src/Shared/Storage/Infrastructure/FlysystemObjectStorage.php) or use a parameter — application code should keep using **`ObjectStoragePort`** only. |
+| Concern          | Guidance                                                                                                                                                                                                                                                                       |
+|------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Disk usage**   | Monitor free space on the volume; large uploads accumulate under **`objects/`** by content hash (deduplicated across rows).                                                                                                                                                    |
+| **Orphan files** | Removing the last DB row that references a hash triggers **`StoredObjectOrphanCleaner`** (via entity listeners). If you delete rows with raw SQL, you may leave orphan files; a future maintenance command could reconcile.                                                    |
+| **Future S3**    | Add an adapter package (e.g. AWS S3) and a second Flysystem storage in YAML; change the **`#[Target]`** on [`FlysystemStorage`](../api/src/Shared/Storage/Infrastructure/FlysystemStorage.php) or use a parameter — application code should keep using **`StoragePort`** only. |
 
 ---
 
@@ -112,7 +112,7 @@ Feature steps for stored-object URLs: **`StoredObjectApiContext`** ([`api/tests/
 ## Extending with a new entity
 
 1. **Columns:** Add nullable `stored_object_key`, `stored_object_mime_type`, `stored_object_byte_size`, `stored_object_content_hash` (or equivalent) on the new table, same semantics as **`bank`**.
-2. **Write path:** Use **`StoredImageObjectWriter`** (or **`ContentAddressableObjectKey::fromContentHash()`** + **`ObjectStoragePort`**) so all modules share **`objects/{hash}`**.
+2. **Write path:** Use **`StoredImageObjectWriter`** (or **`ContentAddressableObjectKey::fromContentHash()`** + **`StoragePort`**) so all modules share **`objects/{hash}`**.
 3. **Public GET + MIME:** Implement **`StoredObjectReferenceInspector`**, tag with **`stored_object.reference_inspector`** (optional **`priority`** on the tag). Picked up by **`CompositeStoredObjectAccess`** and **`StoredObjectOrphanCleaner`** (Symfony **`#[AutowireIterator('stored_object.reference_inspector')]`**).
 4. **Orphan deletion:** Add **`#[AsEntityListener(..., event: postRemove)]`** calling **`StoredObjectOrphanCleaner::cleanupAfterRemoval($entity->getStoredObjectContentHash())`** (same pattern as **`BankStoredObjectRemoveListener`**).
 
