@@ -7,6 +7,7 @@
         "Symfony\\Bundle\\WebProfilerBundle\\WebProfilerBundle",
         "Symfony\\Bundle\\TwigBundle\\TwigBundle",
         "Symfony\\Bundle\\DebugBundle\\DebugBundle",
+        "FriendsOfBehat\\SymfonyExtension\\Bundle\\FriendsOfBehatSymfonyExtensionBundle",
         "null",
         "true",
         "false",
