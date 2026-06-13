@@ -68,6 +68,13 @@ caduca las reclamaciones pasada la ventana de retención (`PruneHandledDomainEve
 borrar a mano la fila `handled_domain_event` de ese `(event_id, handler)`. Se acepta conscientemente:
 para un email de notificación, no duplicar pesa más que poder reenviar a voluntad.
 
+Footgun a vigilar: si el claim queda **colgado** sin liberar (un `release()` que también falla, o un
+crash duro entre `claim` y `send`), un `messenger:failed:retry` no solo no reenvía — el handler hace
+`return` sin lanzar, así que Messenger da el mensaje por manejado y lo **saca del failed transport**
+(email perdido, sin red). El orden seguro es siempre *borrar el claim → luego retry*. El escape hatch
+dedicado (comando de consola que limpia el claim) y este footgun se siguen en
+[#258](https://github.com/sergio-salcedo-dev/ERPify/issues/258).
+
 ## Verificación
 
 `doctrine:schema:validate` sobre una BD migrada desde cero queda **in sync** (la tabla aparece con su
