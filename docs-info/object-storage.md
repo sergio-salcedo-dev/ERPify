@@ -10,9 +10,9 @@ This document explains **what to configure**, how it relates to **BYTEA media**,
 
 ## Two ways the API stores images (do not confuse them)
 
-| Mechanism | Storage | Public URL | Typical use in ERPify |
-|-----------|---------|------------|------------------------|
-| **`Media` entity** | PostgreSQL **BYTEA** | `GET /api/v1/media/{hash}` | Bank **logo** (`logoUrl`) |
+| Mechanism               | Storage                                    | Public URL                          | Typical use in ERPify                       |
+|-------------------------|--------------------------------------------|-------------------------------------|---------------------------------------------|
+| **`Media` entity**      | PostgreSQL **BYTEA**                       | `GET /api/v1/media/{hash}`          | Bank **logo** (`logoUrl`)                   |
 | **Object storage port** | **Flysystem** (local disk today; S3 later) | `GET /api/v1/stored-objects/{hash}` | Bank **`storedObjectUrl`**, future entities |
 
 Both use a **64-character hex SHA-256** of normalized image bytes for caching and deduplication, but the **path prefix** on disk is **`objects/{hash}`** (see [`ContentAddressableObjectKey`](../api/src/Shared/Storage/Domain/ContentAddressableObjectKey.php)).
@@ -23,17 +23,17 @@ Both use a **64-character hex SHA-256** of normalized image bytes for caching an
 
 ### 1. Environment variables (`api/.env`)
 
-| Variable | Required in prod? | Purpose |
-|----------|-------------------|---------|
+| Variable                        | Required in prod?        | Purpose                                                                                                                                                                                                                                                                                                                      |
+|---------------------------------|--------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **`OBJECT_STORAGE_LOCAL_PATH`** | **Strongly recommended** | Absolute path to the directory Flysystem uses as the **local adapter** root. If unset, Symfony falls back to the default in [`flysystem.yaml`](../api/config/packages/flysystem.yaml): `%kernel.project_dir%/var/storage/objects` inside the container — which is **ephemeral** unless that path is on a **mounted volume**. |
-| **`MEDIA_PUBLIC_BASE_URL`** | Optional | If set (e.g. `https://api.example.com`), JSON fields **`logoUrl`** and **`storedObjectUrl`** are built as absolute URLs. If empty, the API uses the current request host or path-only URLs. Set in production when consumers (mobile apps, other origins) need a stable absolute base. |
+| **`MEDIA_PUBLIC_BASE_URL`**     | Optional                 | If set (e.g. `https://api.example.com`), JSON fields **`logoUrl`** and **`storedObjectUrl`** are built as absolute URLs. If empty, the API uses the current request host or path-only URLs. Set in production when consumers (mobile apps, other origins) need a stable absolute base.                                       |
 
 See the annotated blocks in [`api/.env.example`](../api/.env.example).
 
 ### 2. Symfony config
 
-| File | Role |
-|------|------|
+| File                                                                          | Role                                                                                                                                                                                                                                                               |
+|-------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | [`api/config/packages/flysystem.yaml`](../api/config/packages/flysystem.yaml) | Declares the **`erpify.object_storage.storage`** Flysystem instance (currently **local** adapter). The **`directory`** option is **`%env(OBJECT_STORAGE_LOCAL_PATH)%`**, with a default via `parameters.env(OBJECT_STORAGE_LOCAL_PATH)` when the env var is unset. |
 
 No code change is needed to point production at a different directory: set **`OBJECT_STORAGE_LOCAL_PATH`** in the environment passed to the **`php`** container (or host).
@@ -48,16 +48,16 @@ Migrations add **`bank.stored_object_*`** columns (and any future tables you int
 
 Do these **in addition** to the main monorepo checklist in [`docs/production-deployment.md`](production-deployment.md).
 
-1. **Persistent volume**  
+1. **Persistent volume**
    [`compose.prod.yaml`](../compose.prod.yaml) mounts the named volume **`object_storage_data`** at the default `OBJECT_STORAGE_LOCAL_PATH` (`/app/api/var/storage/objects`) on **both** the `php` and `messenger_worker` services. If you relocate the path (different volume driver, EBS/EFS, bind mount), keep it on storage that **survives container recreation** and mounted on both services.
 
-2. **Permissions**  
+2. **Permissions**
    The prod image pre-creates the storage root owned by **`www-data`** (the runtime user) so the named volume initializes writable — see `api/Dockerfile`. If you bind-mount a host path instead, ensure ownership matches the container user (`chown`/`chmod` on first deploy).
 
-3. **Same path for all app replicas**  
+3. **Same path for all app replicas**
    If you run **more than one** `php` pod/instance, they must share the **same** writable storage (NFS, cloud file store, or **S3** once you add an adapter). Multiple instances writing to **different local disks** will cause inconsistent reads and orphan files.
 
-4. **Backups**  
+4. **Backups**
    Back up the **`object_storage_data`** named volume **together with `database_data`** (PostgreSQL) — the prod stack's two stateful volumes. A DB row and its `objects/{hash}` file are one logical record: restore both from the **same** point in time, or rows point at missing files (or blobs sit orphaned without rows). Example volume snapshot:
 
    ```bash
@@ -67,13 +67,13 @@ Do these **in addition** to the main monorepo checklist in [`docs/production-dep
 
    If you relocate storage off the named volume (bind mount, S3), back up that location instead — the pairing rule with the DB snapshot is what matters.
 
-5. **Public URLs**  
+5. **Public URLs**
    If clients need absolute **`storedObjectUrl`** / **`logoUrl`**, set **`MEDIA_PUBLIC_BASE_URL`** to your public API origin (HTTPS).
 
-6. **Security**  
+6. **Security**
    Objects are **not** served as static files from `public/`; delivery goes through Symfony (`StoredObjectGetController`) and is gated by **`StoredObjectAccessPort`** (only hashes still referenced in the DB are served). Keep the storage directory **outside** the web document root.
 
-7. **Smoke test after go-live**  
+7. **Smoke test after go-live**
    Create a bank with multipart field **`stored_object`** (or your integration equivalent), then **`GET /api/v1/stored-objects/{hash}`** from the returned URL and confirm **200**, correct **`Content-Type`**, and **`Cache-Control`** containing **`immutable`**.
 
 ---
@@ -100,11 +100,11 @@ The prod overlay [`compose.prod.yaml`](../compose.prod.yaml) already mounts the 
 
 ## Operations
 
-| Concern | Guidance |
-|---------|----------|
-| **Disk usage** | Monitor free space on the volume; large uploads accumulate under **`objects/`** by content hash (deduplicated across rows). |
-| **Orphan files** | Removing the last DB row that references a hash triggers **`StoredObjectOrphanCleaner`** (via entity listeners). If you delete rows with raw SQL, you may leave orphan files; a future maintenance command could reconcile. |
-| **Future S3** | Add an adapter package (e.g. AWS S3) and a second Flysystem storage in YAML; change the **`#[Target]`** on [`FlysystemObjectStorage`](../api/src/Shared/Storage/Infrastructure/FlysystemObjectStorage.php) or use a parameter — application code should keep using **`ObjectStoragePort`** only. |
+| Concern          | Guidance                                                                                                                                                                                                                                                                                         |
+|------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Disk usage**   | Monitor free space on the volume; large uploads accumulate under **`objects/`** by content hash (deduplicated across rows).                                                                                                                                                                      |
+| **Orphan files** | Removing the last DB row that references a hash triggers **`StoredObjectOrphanCleaner`** (via entity listeners). If you delete rows with raw SQL, you may leave orphan files; a future maintenance command could reconcile.                                                                      |
+| **Future S3**    | Add an adapter package (e.g. AWS S3) and a second Flysystem storage in YAML; change the **`#[Target]`** on [`FlysystemObjectStorage`](../api/src/Shared/Storage/Infrastructure/FlysystemObjectStorage.php) or use a parameter — application code should keep using **`ObjectStoragePort`** only. |
 
 ---
 
@@ -125,18 +125,18 @@ Feature steps for stored-object URLs: **`StoredObjectApiContext`** ([`api/tests/
 
 ## Troubleshooting
 
-| Symptom | Things to check |
-|---------|------------------|
-| **500 / write errors on upload** | Directory missing; permissions; disk full; **`OBJECT_STORAGE_LOCAL_PATH`** typo. |
-| **404 on `GET /api/v1/stored-objects/{hash}`** | No row still references that hash; file missing on disk; hash mismatch. |
-| **URLs wrong in JSON** | **`MEDIA_PUBLIC_BASE_URL`**, **`DEFAULT_URI`**, reverse proxy **`X-Forwarded-*`** / trusted proxies. |
+| Symptom                                        | Things to check                                                                                      |
+|------------------------------------------------|------------------------------------------------------------------------------------------------------|
+| **500 / write errors on upload**               | Directory missing; permissions; disk full; **`OBJECT_STORAGE_LOCAL_PATH`** typo.                     |
+| **404 on `GET /api/v1/stored-objects/{hash}`** | No row still references that hash; file missing on disk; hash mismatch.                              |
+| **URLs wrong in JSON**                         | **`MEDIA_PUBLIC_BASE_URL`**, **`DEFAULT_URI`**, reverse proxy **`X-Forwarded-*`** / trusted proxies. |
 
 ---
 
 ## Related documentation
 
-| Topic | Document |
-|-------|----------|
-| Full production stack (TLS, DB, Messenger, mail, smoke tests) | [production-deployment.md](production-deployment.md) |
-| BYTEA logos and `logoUrl` | [media-upload.md](media-upload.md) |
-| PWA build and public API URL | [pwa/docs/production-deployment.md](../pwa/docs/production-deployment.md) |
+| Topic                                                         | Document                                                                  |
+|---------------------------------------------------------------|---------------------------------------------------------------------------|
+| Full production stack (TLS, DB, Messenger, mail, smoke tests) | [production-deployment.md](production-deployment.md)                      |
+| BYTEA logos and `logoUrl`                                     | [media-upload.md](media-upload.md)                                        |
+| PWA build and public API URL                                  | [pwa/docs/production-deployment.md](../pwa/docs/production-deployment.md) |

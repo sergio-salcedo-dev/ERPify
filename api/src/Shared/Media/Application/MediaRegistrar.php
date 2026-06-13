@@ -10,8 +10,8 @@ use Erpify\Shared\Application\Validation\Validator;
 use Erpify\Shared\Domain\Uuid\Uuid;
 use Erpify\Shared\Media\Application\Port\ImageNormalizer;
 use Erpify\Shared\Media\Domain\Entity\Media;
+use Erpify\Shared\Media\Domain\Exception\ConcurrentMediaWinnerMissingException;
 use Erpify\Shared\Media\Domain\Repository\MediaRepository;
-use RuntimeException;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 final readonly class MediaRegistrar
@@ -65,10 +65,7 @@ final readonly class MediaRegistrar
         $winner = $this->mediaRepository->findByContentHash($contentHash);
 
         if (!$winner instanceof Media) {
-            throw new RuntimeException(\sprintf(
-                'Media with content hash "%s" won a concurrent insert but cannot be re-fetched.',
-                $contentHash,
-            ));
+            throw ConcurrentMediaWinnerMissingException::forContentHash($contentHash);
         }
 
         return $winner;

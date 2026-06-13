@@ -6,28 +6,28 @@ The `api/` deployable is a Symfony 8 HTTP API on **FrankenPHP** (Caddy embedded)
 
 ## Technology stack
 
-| Category        | Technology                                     | Version                                       |
-|-----------------|------------------------------------------------|-----------------------------------------------|
-| Runtime         | PHP                                            | **8.5**                                       |
-| Framework       | Symfony (components)                           | **8.0.x**                                     |
-| HTTP server     | FrankenPHP (Caddy)                             | `dunglas/frankenphp:1-php8.5` (digest-pinned) |
-| ORM / DBAL      | Doctrine ORM / DBAL / Migrations / Persistence | 3.6 / 4.4 / 4.0 / 4.2                         |
-| Database        | PostgreSQL                                     | 18 (Compose)                                  |
-| Async           | Symfony Messenger + Doctrine transport         | 8.0.x                                         |
-| Realtime        | Symfony Mercure (+ Hub)                        | 0.7 / bundle 0.4                              |
-| Mail            | symfony/mailer                                 | 8.0.x                                         |
-| Storage         | league/flysystem (+ bundle)                    | 3.33 / 3.7                                    |
-| Media           | Intervention Image                             | 4.0                                           |
-| CORS            | nelmio/cors-bundle                             | 2.6                                           |
-| Logging         | symfony/monolog-bundle                         | 4.0                                           |
-| UID             | symfony/uid (UUIDv7)                           | 8.0.x                                         |
-| Validation      | symfony/validator                              | 8.0.x                                         |
-| Security        | symfony/security-core                          | 8.0.x                                         |
-| Unit tests      | PHPUnit                                        | 13                                            |
-| E2E tests       | Behat (isolated tree)                          | `api/tools/behat/`                            |
-| Static analysis | PHPStan (sole type gate) / Rector / Psalm (taint-only) | 2 / 2 / 6.x                            |
-| Style / quality | PHP-CS-Fixer / PHPCS / PHPMD                   | 3.x / 4 / —                                   |
-| Fixtures        | Hautelook Alice                                | 2.x                                           |
+| Category        | Technology                                             | Version                                       |
+|-----------------|--------------------------------------------------------|-----------------------------------------------|
+| Runtime         | PHP                                                    | **8.5**                                       |
+| Framework       | Symfony (components)                                   | **8.0.x**                                     |
+| HTTP server     | FrankenPHP (Caddy)                                     | `dunglas/frankenphp:1-php8.5` (digest-pinned) |
+| ORM / DBAL      | Doctrine ORM / DBAL / Migrations / Persistence         | 3.6 / 4.4 / 4.0 / 4.2                         |
+| Database        | PostgreSQL                                             | 18 (Compose)                                  |
+| Async           | Symfony Messenger + Doctrine transport                 | 8.0.x                                         |
+| Realtime        | Symfony Mercure (+ Hub)                                | 0.7 / bundle 0.4                              |
+| Mail            | symfony/mailer                                         | 8.0.x                                         |
+| Storage         | league/flysystem (+ bundle)                            | 3.33 / 3.7                                    |
+| Media           | Intervention Image                                     | 4.0                                           |
+| CORS            | nelmio/cors-bundle                                     | 2.6                                           |
+| Logging         | symfony/monolog-bundle                                 | 4.0                                           |
+| UID             | symfony/uid (UUIDv7)                                   | 8.0.x                                         |
+| Validation      | symfony/validator                                      | 8.0.x                                         |
+| Security        | symfony/security-core                                  | 8.0.x                                         |
+| Unit tests      | PHPUnit                                                | 13                                            |
+| E2E tests       | Behat (isolated tree)                                  | `api/tools/behat/`                            |
+| Static analysis | PHPStan (sole type gate) / Rector / Psalm (taint-only) | 2 / 2 / 6.x                                   |
+| Style / quality | PHP-CS-Fixer / PHPCS / PHPMD                           | 3.x / 4 / —                                   |
+| Fixtures        | Hautelook Alice                                        | 2.x                                           |
 
 Full constraint table (version gotchas, Doctrine 3 API deltas, polyfill `replace` block, Behat isolation rationale): [`project-context.md`](./project-context.md#technology-stack--versions).
 
@@ -245,7 +245,7 @@ Full reference (mapping table, header rules, observability, code map, test surfa
 ## Async & messaging
 
 - **Symfony Messenger** with a **separate `messenger_worker` Compose service** (`compose.yaml`) running `php bin/console messenger:consume async --time-limit=3600`. Handlers must be idempotent and tolerate at-least-once delivery.
-- Handlers with a **non-idempotent external side effect** (email, third-party APIs) claim their `(eventId, handler)` pair through `Shared/Application/DomainEvent/DomainEventHandlerDeduplicator` (DBAL `INSERT … ON CONFLICT DO NOTHING` into `handled_domain_event`; the table is kept schema-aware by `HandledDomainEventSchemaListener`) before acting, and release the claim on failure so the transport retry stays open. Naturally idempotent handlers (Mercure publish, upserts) skip it. Example: `BankChangedNotifyEmailHandler`.
+- Handlers with a **non-idempotent external side effect** (email, third-party APIs) claim their `(eventId, handler)` pair through `Shared/Application/DomainEvent/DomainEventHandlerDeduplicator` (DBAL `INSERT … ON CONFLICT DO NOTHING` into `handled_domain_event`; the table is kept schema-aware by `HandledDomainEventSchemaListener`) before acting, and release the claim on failure so the transport retry stays open. Naturally idempotent handlers (Mercure publish, upserts) skip it. Example: `BankChangedNotifyEmailHandler`. ADR (raw-DBAL claim + schema listener, alternatives rejected): [`adr/domain-event-handler-idempotency.md`](./adr/domain-event-handler-idempotency.md).
 - Default transport: Doctrine (`MESSENGER_TRANSPORT_DSN=doctrine://default?auto_setup=0`).
 - **Mercure Hub**: publish via `Frontoffice/Mercure/` publishers at `/.well-known/mercure`; JWT required (`CADDY_MERCURE_JWT_SECRET` in prod).
 - Mail is dispatched asynchronously via Messenger.

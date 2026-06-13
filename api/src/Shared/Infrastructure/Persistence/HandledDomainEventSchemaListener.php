@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Shared\Infrastructure\Persistence;
 
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
+use Doctrine\DBAL\Schema\PrimaryKeyConstraint;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Tools\Event\GenerateSchemaEventArgs;
 use Doctrine\ORM\Tools\ToolEvents;
@@ -31,6 +32,10 @@ final class HandledDomainEventSchemaListener
         $table->addColumn('event_id', Types::STRING, ['length' => 36]);
         $table->addColumn('handler', Types::STRING, ['length' => 190]);
         $table->addColumn('claimed_at', Types::DATETIME_IMMUTABLE);
-        $table->setPrimaryKey(['event_id', 'handler']);
+        $table->addPrimaryKeyConstraint(
+            PrimaryKeyConstraint::editor()
+                ->setUnquotedColumnNames('event_id', 'handler')
+                ->create(),
+        );
     }
 }
