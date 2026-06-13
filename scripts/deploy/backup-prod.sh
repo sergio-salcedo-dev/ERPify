@@ -35,7 +35,9 @@ RETENTION_DAYS="${RETENTION_DAYS:-14}"
 MIN_FREE_MB="${BACKUP_MIN_FREE_MB:-500}"
 export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-erpify}"
 OBJECT_STORAGE_VOLUME="${OBJECT_STORAGE_VOLUME:-${COMPOSE_PROJECT_NAME}_object_storage_data}"
-STAMP="$(date +%F_%H%M%S)"
+# UTC: a local-time stamp repeats an hour at the DST fall-back, which would
+# collide two pairs (the `>` redirect and tar overwrite silently).
+STAMP="$(date -u +%F_%H%M%S)"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; BLUE='\033[0;34m'; NC='\033[0m'
 log_info()    { echo -e "${BLUE}ℹ ${*}${NC}"; }
@@ -51,6 +53,7 @@ compose() {
 [[ -f compose.yaml ]] || { log_error "Run from the repo root (compose.yaml not found)."; exit 1; }
 [[ -f "$ENV_FILE" ]] || { log_error "$ENV_FILE not found — see 'make prod.env.check'."; exit 1; }
 command -v docker >/dev/null || { log_error "docker not found."; exit 1; }
+command -v flock >/dev/null || { log_error "flock not found (util-linux)."; exit 1; }
 
 # A non-numeric RETENTION_DAYS makes the later `find -mtime` error out mid-run
 # (after a successful dump) or silently prune nothing.
@@ -78,6 +81,12 @@ fi
 umask 077
 mkdir -p "$BACKUP_DIR"
 chmod 700 "$BACKUP_DIR"
+
+# Prevent overlapping runs (a cron tick overrunning into the next, or a manual
+# run racing cron) from interleaving two dumps/archives — and from racing each
+# other's retention prune. Non-blocking: a second run bails rather than queuing.
+exec 9>"$BACKUP_DIR/.backup.lock"
+flock -n 9 || { log_error "another backup is already running (lock: $BACKUP_DIR/.backup.lock)."; exit 1; }
 
 # Fail before dumping if the target filesystem is short on space: a dump that
 # fills the disk leaves a half-written, unrestorable artifact.
