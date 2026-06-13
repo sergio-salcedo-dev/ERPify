@@ -4,7 +4,7 @@ baseline_commit: ed045daa019438581222598e61ac79abedef0827
 
 # Story 2.5: PWA · Delete-guard + recovery de bank-in-use (PR5)
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -156,3 +156,11 @@ claude-opus-4-8 (1M context) — BMAD dev-story workflow.
 | Date       | Change                                                                                  |
 |------------|-----------------------------------------------------------------------------------------|
 | 2026-06-13 | Story 2.5 implemented: optimistic delete-guard (`accountCount > 0`) + `bank-in-use` 409 "View accounts" recovery (list + detail). e2e fixtures reconciled to the `accountCount` read contract. Gates green (unit 619/619, quality EXIT 0). Status → review. |
+
+## Review Findings
+
+_Code review 2026-06-13 (adversarial: Blind Hunter + Edge Case Hunter + Acceptance Auditor). All 3 ACs PASS. 1 decision-needed, 1 patch, 11 dismissed as noise/false-positive/by-design._
+
+- [x] [Review][Decision→Patch] Bulk-delete `bank-in-use` recovery "View accounts" only addressed the first failed bank — In `page.tsx` `runBulkDelete`, a bulk delete with ≥2 `bank-in-use` rejections sets `deleteError.bankId = rejections[0].id` (`scope: "bulk"`), so the IN_USE "View accounts" link routed only to the first failed bank's accounts; the others had no affordance even though the copy says "N of M could not be deleted". **Resolved (Sally, UX — option a refined):** `deleteRecoveryAction` now branches on `scope` — `single` keeps the per-bank "View accounts" deep-link; `bulk` renders a non-navigating orienting hint ("Open each flagged bank below to view its accounts."), since the in-use rows are restored to the list and each carries its own optimistic guard (the precise per-bank recovery). No client-synthesized ProblemDetails (contract-respecting). New test `banksBulkActions.test.tsx` "a bulk 409 bank-in-use orients to the per-row guard instead of deep-linking one bank". Gate: pwa.quality EXIT 0; affected unit suites 18/18; testid-uniqueness green. [pwa/src/app/backoffice/banks/page.tsx:637]
+
+- [x] [Review][Patch] Stale `BankProblemType.IN_USE` doc comment now contradicts the behavior this story adds — The constant was annotated `recovery lives outside the list`, but AC#2 makes the `bank-in-use` recovery an in-surface "View accounts" action. **Applied:** comment updated to describe the in-surface recovery (single deep-links; bulk orients to the per-row guard). [pwa/src/context/backoffice/bank/domain/BankProblemType.ts:9]
