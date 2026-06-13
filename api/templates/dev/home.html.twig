@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ERPify — dev tools</title>
+</head>
+<body>
+    <h1>ERPify — dev tools</h1>
+    <p>The Symfony Profiler is active in <strong>dev</strong>. The Web Debug Toolbar is
+       pinned to the bottom of this page; click any segment to open that request's profile.
+       API responses are JSON, so the toolbar can't render on them directly — use the
+       button below (its calls appear in the toolbar's AJAX panel) or the Profiler UI.</p>
+    <ul>
+        <li><a href="/_profiler/latest">Open the Profiler UI (/_profiler/latest)</a></li>
+    </ul>
+    <button type="button" id="sample-call">Run sample API call</button>
+    <pre id="sample-output"></pre>
+    <script>
+        document.getElementById('sample-call').addEventListener('click', async () => {
+            const out = document.getElementById('sample-output');
+            out.textContent = 'Loading…';
+            const res = await fetch('/api/v1/backoffice/banks', { headers: { Accept: 'application/json' } });
+            out.textContent = res.status + ' ' + res.statusText + '\n' + await res.text();
+        });
+    </script>
+</body>
+</html>
