@@ -35,9 +35,6 @@ RETENTION_DAYS="${RETENTION_DAYS:-14}"
 MIN_FREE_MB="${BACKUP_MIN_FREE_MB:-500}"
 export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-erpify}"
 OBJECT_STORAGE_VOLUME="${OBJECT_STORAGE_VOLUME:-${COMPOSE_PROJECT_NAME}_object_storage_data}"
-# UTC: a local-time stamp repeats an hour at the DST fall-back, which would
-# collide two pairs (the `>` redirect and tar overwrite silently).
-STAMP="$(date -u +%F_%H%M%S)"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; BLUE='\033[0;34m'; NC='\033[0m'
 log_info()    { echo -e "${BLUE}ℹ ${*}${NC}"; }
@@ -87,6 +84,11 @@ chmod 700 "$BACKUP_DIR"
 # other's retention prune. Non-blocking: a second run bails rather than queuing.
 exec 9>"$BACKUP_DIR/.backup.lock"
 flock -n 9 || { log_error "another backup is already running (lock: $BACKUP_DIR/.backup.lock)."; exit 1; }
+
+# Decide artifact names only after the lock is held, so two runs can never pick
+# the same name before one holds the lock. UTC: a local-time stamp repeats an
+# hour at the DST fall-back, which would collide a pair.
+STAMP="$(date -u +%F_%H%M%S)"
 
 # Fail before dumping if the target filesystem is short on space: a dump that
 # fills the disk leaves a half-written, unrestorable artifact.
