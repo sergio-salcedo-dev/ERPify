@@ -161,8 +161,8 @@ final class SortFieldMapIndexContractTest extends KernelTestCase
      */
     public static function provideEachSortableTextColumnDeclaresByteWiseCollationCases(): iterable
     {
-        yield 'name_normalized' => ['name_normalized'];
-        yield 'short_name' => ['short_name'];
+        yield 'name_normalized declares COLLATE "C"' => ['name_normalized'];
+        yield 'short_name declares COLLATE "C"' => ['short_name'];
     }
 
     /**

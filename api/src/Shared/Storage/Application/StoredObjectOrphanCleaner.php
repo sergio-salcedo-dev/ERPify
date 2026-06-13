@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Storage\Application;
 
-use Erpify\Shared\Storage\Application\Port\ObjectStoragePort;
+use Erpify\Shared\Storage\Application\Port\StoragePort;
 use Erpify\Shared\Storage\Application\Port\StoredObjectReferenceInspector;
 use Erpify\Shared\Storage\Domain\ContentAddressableObjectKey;
 use Symfony\Component\DependencyInjection\Attribute\AutowireIterator;
@@ -18,7 +18,7 @@ final readonly class StoredObjectOrphanCleaner
      * @param iterable<StoredObjectReferenceInspector> $inspectors
      */
     public function __construct(
-        private ObjectStoragePort $objectStoragePort,
+        private StoragePort $storagePort,
         #[AutowireIterator('stored_object.reference_inspector')]
         private iterable $inspectors,
     ) {
@@ -36,6 +36,6 @@ final readonly class StoredObjectOrphanCleaner
             }
         }
 
-        $this->objectStoragePort->delete(ContentAddressableObjectKey::fromContentHash($contentHash));
+        $this->storagePort->delete(ContentAddressableObjectKey::fromContentHash($contentHash));
     }
 }

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Shared\Storage\Infrastructure\Controller;
 
 use Erpify\Shared\Infrastructure\Http\ContentAddressedHttpCache;
-use Erpify\Shared\Storage\Application\Port\ObjectStoragePort;
+use Erpify\Shared\Storage\Application\Port\StoragePort;
 use Erpify\Shared\Storage\Application\Port\StoredObjectAccessPort;
 use Erpify\Shared\Storage\Domain\ContentAddressableObjectKey;
 use Symfony\Component\HttpFoundation\Request;
@@ -21,7 +21,7 @@ use Symfony\Component\Routing\Attribute\Route;
 final readonly class StoredObjectGetController
 {
     public function __construct(
-        private ObjectStoragePort $objectStoragePort,
+        private StoragePort $storagePort,
         private StoredObjectAccessPort $storedObjectAccessPort,
         private ContentAddressedHttpCache $httpCache,
     ) {
@@ -34,7 +34,7 @@ final readonly class StoredObjectGetController
         // A 304 may only claim the cached copy is fresh when the object is actually
         // retrievable, so gate it on both the metadata row and the stored blob.
         $isAvailable = $this->storedObjectAccessPort->existsAnyWithContentHash($hash)
-            && $this->objectStoragePort->exists($key);
+            && $this->storagePort->exists($key);
 
         if (!$isAvailable) {
             return new Response('Not Found', Response::HTTP_NOT_FOUND);
@@ -57,7 +57,7 @@ final readonly class StoredObjectGetController
      */
     private function buildBodyResponse(string $key, string $hash): Response
     {
-        $bytes = $this->objectStoragePort->read($key);
+        $bytes = $this->storagePort->read($key);
         $mime = $this->storedObjectAccessPort->getMimeTypeForContentHash($hash) ?? 'application/octet-stream';
 
         $response = new Response($bytes);
