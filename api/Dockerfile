@@ -183,7 +183,7 @@ EOF
 COPY --link --exclude=var --from=frankenphp_prod_builder /app/api /app/api
 COPY --chown=www-data:www-data --chmod=700 --from=frankenphp_prod_builder /app/api/var /app/api/var
 
-# Pre-create the Flysystem object-storage root (OBJECT_STORAGE_LOCAL_PATH default) with the
+# Pre-create the Flysystem object-storage root (STORAGE_LOCAL_PATH default) with the
 # runtime user's ownership: the named volume compose.prod.yaml mounts here initializes from this
 # directory, so an empty volume inherits www-data:www-data. Runs after the source COPY above (which
 # would otherwise re-root the dir). Without it Docker creates the mountpoint as root and the

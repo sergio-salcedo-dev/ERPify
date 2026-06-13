@@ -47,7 +47,7 @@ services:
       # FrankenPHP/Caddy binds privileged ports 80/443.
       - NET_BIND_SERVICE
     volumes:
-      # Flysystem object storage (OBJECT_STORAGE_LOCAL_PATH default). Without a
+      # Flysystem object storage (STORAGE_LOCAL_PATH default). Without a
       # persistent volume uploads are lost on container recreation. Back it up
       # alongside the DB — see docs-info/object-storage.md.
       - object_storage_data:/app/api/storage

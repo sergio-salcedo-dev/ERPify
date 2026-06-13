@@ -54,19 +54,19 @@ docker compose -f compose.yaml -f compose.prod.yaml up --wait --build --detach
 
 Never commit real secrets. Minimum production set:
 
-| Variable | Notes |
-|----------|--------|
-| **`APP_SECRET`** | Random 32+ hex chars; required for Symfony. |
-| **`APP_ENV`** | `prod`; **`APP_DEBUG`** must not be `1`. |
-| **`POSTGRES_*`** | Strong password; avoid raw `@`, `#`, `/`, `?` in passwords used inside `DATABASE_URL`, or URL-encode them. |
-| **`DATABASE_URL`** | Same database for **`php`** and **`messenger_worker`** (Compose defaults derive from `POSTGRES_*`). |
-| **`CADDY_MERCURE_JWT_SECRET`** | Random string; wires Mercure keys in Compose. |
-| **`MESSENGER_TRANSPORT_DSN`** | Typically `doctrine://default?auto_setup=0`; **`messenger_messages`** table must exist via migrations. |
-| **`MAILER_DSN`** | Real transport in production (SMTP, API bridge, etc.). **`null://null`** only for labs. |
-| **`MAILER_FROM`** | Must be a domain/address your provider allows (SPF/DKIM/DMARC on that domain). |
-| **`DEFAULT_NOTIFICATION_EMAIL`** | Operational inbox for bank create/update notifications (async handler). |
-| **`OBJECT_STORAGE_LOCAL_PATH`** | Flysystem local root for content-addressable files. **Production:** leave unset — the `object_storage_data` named volume persists the default `/app/api/storage` (`%kernel.project_dir%/storage`); set this only to relocate storage onto another absolute path / mount (see [object-storage.md](object-storage.md)). Optional in dev (same default). |
-| **`MEDIA_PUBLIC_BASE_URL`** | Optional. If set, **`logoUrl`** and **`storedObjectUrl`** in JSON use this origin; needed when clients require stable absolute asset URLs. |
+| Variable                         | Notes                                                                                                                                                                                                                                                                                                                                                 |
+|----------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **`APP_SECRET`**                 | Random 32+ hex chars; required for Symfony.                                                                                                                                                                                                                                                                                                           |
+| **`APP_ENV`**                    | `prod`; **`APP_DEBUG`** must not be `1`.                                                                                                                                                                                                                                                                                                              |
+| **`POSTGRES_*`**                 | Strong password; avoid raw `@`, `#`, `/`, `?` in passwords used inside `DATABASE_URL`, or URL-encode them.                                                                                                                                                                                                                                            |
+| **`DATABASE_URL`**               | Same database for **`php`** and **`messenger_worker`** (Compose defaults derive from `POSTGRES_*`).                                                                                                                                                                                                                                                   |
+| **`CADDY_MERCURE_JWT_SECRET`**   | Random string; wires Mercure keys in Compose.                                                                                                                                                                                                                                                                                                         |
+| **`MESSENGER_TRANSPORT_DSN`**    | Typically `doctrine://default?auto_setup=0`; **`messenger_messages`** table must exist via migrations.                                                                                                                                                                                                                                                |
+| **`MAILER_DSN`**                 | Real transport in production (SMTP, API bridge, etc.). **`null://null`** only for labs.                                                                                                                                                                                                                                                               |
+| **`MAILER_FROM`**                | Must be a domain/address your provider allows (SPF/DKIM/DMARC on that domain).                                                                                                                                                                                                                                                                        |
+| **`DEFAULT_NOTIFICATION_EMAIL`** | Operational inbox for bank create/update notifications (async handler).                                                                                                                                                                                                                                                                               |
+| **`STORAGE_LOCAL_PATH`**         | Flysystem local root for content-addressable files. **Production:** leave unset — the `object_storage_data` named volume persists the default `/app/api/storage` (`%kernel.project_dir%/storage`); set this only to relocate storage onto another absolute path / mount (see [object-storage.md](object-storage.md)). Optional in dev (same default). |
+| **`MEDIA_PUBLIC_BASE_URL`**      | Optional. If set, **`logoUrl`** and **`storedObjectUrl`** in JSON use this origin; needed when clients require stable absolute asset URLs.                                                                                                                                                                                                            |
 
 `compose.prod.yaml` passes **`APP_SECRET`** and **`MAILER_DSN`** into **`messenger_worker`**; other worker variables come from the base **`compose.yaml`** merge (e.g. **`DATABASE_URL`**, **`MESSENGER_TRANSPORT_DSN`**, **`DEFAULT_NOTIFICATION_EMAIL`**). If you add env-only overrides in production, ensure **both** **`php`** and **`messenger_worker`** stay aligned on DB and Messenger DSN.
 
@@ -147,18 +147,18 @@ See **[`scripts/deploy/README.md`](../scripts/deploy/README.md)** for full detai
 2. Load the PWA from the public URL; confirm **`NEXT_PUBLIC_API_BASE_URL`** matches reality (no mixed content).
 3. Create or update a bank via the API; confirm a row in **`domain_event`** with name **`erpify.backoffice.bank.created`** or **`erpify.backoffice.bank.updated`**, and that the worker delivers mail (inbox or provider logs).
 4. **`docker compose … logs messenger_worker`** — no repeating fatal errors.
-5. **Object storage (if you use bank `stored_object` or similar):** confirm **`OBJECT_STORAGE_LOCAL_PATH`** is mounted and writable; upload once and **`GET /api/v1/stored-objects/{hash}`** returns **200** (see [object-storage.md](object-storage.md)).
+5. **Object storage (if you use bank `stored_object` or similar):** confirm **`STORAGE_LOCAL_PATH`** is mounted and writable; upload once and **`GET /api/v1/stored-objects/{hash}`** returns **200** (see [object-storage.md](object-storage.md)).
 
 ---
 
 ## Related documentation
 
-| Topic | Document |
-|-------|----------|
-| Production index (TLS, DB, hardening, scaling) | [api/docs/production-ready/production.md](../api/docs/production-ready/production.md) |
-| DNS, starting the stack | [api/docs/production-ready/server-setup.md](../api/docs/production-ready/server-setup.md) |
-| Secrets & env reference | [api/docs/production-ready/secrets.md](../api/docs/production-ready/secrets.md) |
-| PWA build / public API URL | [pwa/docs/production-deployment.md](../pwa/docs/production-deployment.md) |
-| Domain events, audit table, Messenger flow | [domain-events-and-messenger.md](domain-events-and-messenger.md) |
-| Flysystem paths, prod volumes, backups, URLs | [object-storage.md](object-storage.md) |
-| Local traffic (FrankenPHP → Next) | [local-fullstack-traffic.md](local-fullstack-traffic.md) |
+| Topic                                          | Document                                                                                  |
+|------------------------------------------------|-------------------------------------------------------------------------------------------|
+| Production index (TLS, DB, hardening, scaling) | [api/docs/production-ready/production.md](../api/docs/production-ready/production.md)     |
+| DNS, starting the stack                        | [api/docs/production-ready/server-setup.md](../api/docs/production-ready/server-setup.md) |
+| Secrets & env reference                        | [api/docs/production-ready/secrets.md](../api/docs/production-ready/secrets.md)           |
+| PWA build / public API URL                     | [pwa/docs/production-deployment.md](../pwa/docs/production-deployment.md)                 |
+| Domain events, audit table, Messenger flow     | [domain-events-and-messenger.md](domain-events-and-messenger.md)                          |
+| Flysystem paths, prod volumes, backups, URLs   | [object-storage.md](object-storage.md)                                                    |
+| Local traffic (FrankenPHP → Next)              | [local-fullstack-traffic.md](local-fullstack-traffic.md)                                  |

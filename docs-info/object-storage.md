@@ -23,20 +23,20 @@ Both use a **64-character hex SHA-256** of normalized image bytes for caching an
 
 ### 1. Environment variables (`api/.env`)
 
-| Variable                        | Required in prod?        | Purpose                                                                                                                                                                                                                                                                                                                                                                                                       |
-|---------------------------------|--------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **`OBJECT_STORAGE_LOCAL_PATH`** | **Strongly recommended** | Absolute path to the directory Flysystem uses as the **local adapter** root. If unset, Symfony falls back to the default in [`flysystem.yaml`](../api/config/packages/flysystem.yaml): `%kernel.project_dir%/storage` inside the container — which is **ephemeral** unless that path is on a **mounted volume**. In `compose.prod.yaml` the named volume `object_storage_data` is already wired at that path. |
-| **`MEDIA_PUBLIC_BASE_URL`**     | Optional                 | If set (e.g. `https://api.example.com`), JSON fields **`logoUrl`** and **`storedObjectUrl`** are built as absolute URLs. If empty, the API uses the current request host or path-only URLs. Set in production when consumers (mobile apps, other origins) need a stable absolute base.                                                                                                                        |
+| Variable                    | Required in prod?        | Purpose                                                                                                                                                                                                                                                                                                                                                                                                       |
+|-----------------------------|--------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **`STORAGE_LOCAL_PATH`**    | **Strongly recommended** | Absolute path to the directory Flysystem uses as the **local adapter** root. If unset, Symfony falls back to the default in [`flysystem.yaml`](../api/config/packages/flysystem.yaml): `%kernel.project_dir%/storage` inside the container — which is **ephemeral** unless that path is on a **mounted volume**. In `compose.prod.yaml` the named volume `object_storage_data` is already wired at that path. |
+| **`MEDIA_PUBLIC_BASE_URL`** | Optional                 | If set (e.g. `https://api.example.com`), JSON fields **`logoUrl`** and **`storedObjectUrl`** are built as absolute URLs. If empty, the API uses the current request host or path-only URLs. Set in production when consumers (mobile apps, other origins) need a stable absolute base.                                                                                                                        |
 
 See the annotated blocks in [`api/.env.example`](../api/.env.example).
 
 ### 2. Symfony config
 
-| File                                                                          | Role                                                                                                                                                                                                                                                               |
-|-------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [`api/config/packages/flysystem.yaml`](../api/config/packages/flysystem.yaml) | Declares the **`erpify.object_storage.storage`** Flysystem instance (currently **local** adapter). The **`directory`** option is **`%env(OBJECT_STORAGE_LOCAL_PATH)%`**, with a default via `parameters.env(OBJECT_STORAGE_LOCAL_PATH)` when the env var is unset. |
+| File                                                                          | Role                                                                                                                                                                                                                                                 |
+|-------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [`api/config/packages/flysystem.yaml`](../api/config/packages/flysystem.yaml) | Declares the **`erpify.object_storage.storage`** Flysystem instance (currently **local** adapter). The **`directory`** option is **`%env(STORAGE_LOCAL_PATH)%`**, with a default via `parameters.env(STORAGE_LOCAL_PATH)` when the env var is unset. |
 
-No code change is needed to point production at a different directory: set **`OBJECT_STORAGE_LOCAL_PATH`** in the environment passed to the **`php`** container (or host).
+No code change is needed to point production at a different directory: set **`STORAGE_LOCAL_PATH`** in the environment passed to the **`php`** container (or host).
 
 ### 3. Database
 
@@ -49,7 +49,7 @@ Migrations add **`bank.stored_object_*`** columns (and any future tables you int
 Do these **in addition** to the main monorepo checklist in [`docs/production-deployment.md`](production-deployment.md).
 
 1. **Persistent volume**
-   Map **`OBJECT_STORAGE_LOCAL_PATH`** to storage that **survives container recreation** (named Docker volume, bind mount to the host, EBS/EFS, etc.). Do **not** rely on an unmounted path under `/app/api/var` in production unless you have explicitly mounted it.
+   Map **`STORAGE_LOCAL_PATH`** to storage that **survives container recreation** (named Docker volume, bind mount to the host, EBS/EFS, etc.). Do **not** rely on an unmounted path under `/app/api/var` in production unless you have explicitly mounted it.
 
 2. **Permissions**
    The user running PHP inside **`frankenphp`** / **`php`** must be able to **read and write** that directory. On first deploy, ensure the directory exists and ownership matches the container user (adjust host `chown`/`chmod` or image `USER` + volume `uid`/`gid` as needed).
@@ -58,7 +58,7 @@ Do these **in addition** to the main monorepo checklist in [`docs/production-dep
    If you run **more than one** `php` pod/instance, they must share the **same** writable storage (NFS, cloud file store, or **S3** once you add an adapter). Multiple instances writing to **different local disks** will cause inconsistent reads and orphan files.
 
 4. **Backups**
-   Include **`OBJECT_STORAGE_LOCAL_PATH`** (or your object-store bucket) in **backup and restore** procedures **together with PostgreSQL**. Restore order: restore DB and files for the **same** point in time to avoid rows pointing to missing `objects/{hash}` files (or blobs without rows).
+   Include **`STORAGE_LOCAL_PATH`** (or your object-store bucket) in **backup and restore** procedures **together with PostgreSQL**. Restore order: restore DB and files for the **same** point in time to avoid rows pointing to missing `objects/{hash}` files (or blobs without rows).
 
 5. **Public URLs**
    If clients need absolute **`storedObjectUrl`** / **`logoUrl`**, set **`MEDIA_PUBLIC_BASE_URL`** to your public API origin (HTTPS).
@@ -89,7 +89,7 @@ volumes:
   object_storage_data:
 ```
 
-`compose.prod.yaml` already ships this configuration. The named volume `object_storage_data` is mounted at the default `OBJECT_STORAGE_LOCAL_PATH` (`/app/api/storage`) on both `php` and `messenger_worker`. The prod image pre-creates that directory owned by `www-data` so the volume initializes writable on first deploy.
+`compose.prod.yaml` already ships this configuration. The named volume `object_storage_data` is mounted at the default `STORAGE_LOCAL_PATH` (`/app/api/storage`) on both `php` and `messenger_worker`. The prod image pre-creates that directory owned by `www-data` so the volume initializes writable on first deploy.
 
 ---
 
@@ -122,7 +122,7 @@ Feature steps for stored-object URLs: **`StoredObjectApiContext`** ([`api/tests/
 
 | Symptom                                        | Things to check                                                                                      |
 |------------------------------------------------|------------------------------------------------------------------------------------------------------|
-| **500 / write errors on upload**               | Directory missing; permissions; disk full; **`OBJECT_STORAGE_LOCAL_PATH`** typo.                     |
+| **500 / write errors on upload**               | Directory missing; permissions; disk full; **`STORAGE_LOCAL_PATH`** typo.                            |
 | **404 on `GET /api/v1/stored-objects/{hash}`** | No row still references that hash; file missing on disk; hash mismatch.                              |
 | **URLs wrong in JSON**                         | **`MEDIA_PUBLIC_BASE_URL`**, **`DEFAULT_URI`**, reverse proxy **`X-Forwarded-*`** / trusted proxies. |
 
