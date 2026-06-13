@@ -6,6 +6,12 @@ export interface BankFixture {
   shortName: string;
   createdAt: string;
   updatedAt: string;
+  /**
+   * Associated-account count — the read-model field the API serializes on
+   * reads (GROUP_ACCOUNT_COUNT) and the list/single response guards require.
+   * Defaults to 0 (no accounts → the optimistic delete-guard stays inactive).
+   */
+  accountCount: number;
 }
 
 export const SAMPLE_BANK_A: BankFixture = {
@@ -14,6 +20,7 @@ export const SAMPLE_BANK_A: BankFixture = {
   shortName: "ACME",
   createdAt: "2026-01-01T10:00:00Z",
   updatedAt: "2026-04-15T14:30:00Z",
+  accountCount: 0,
 };
 
 export const SAMPLE_BANK_B: BankFixture = {
@@ -22,6 +29,7 @@ export const SAMPLE_BANK_B: BankFixture = {
   shortName: "BRT",
   createdAt: "2026-02-12T09:00:00Z",
   updatedAt: "2026-04-20T16:00:00Z",
+  accountCount: 0,
 };
 
 export const SAMPLE_BANK_C: BankFixture = {
@@ -30,6 +38,7 @@ export const SAMPLE_BANK_C: BankFixture = {
   shortName: "COSM",
   createdAt: "2026-03-20T08:00:00Z",
   updatedAt: "2026-04-22T12:00:00Z",
+  accountCount: 0,
 };
 
 export const SAMPLE_BANK_D: BankFixture = {
@@ -38,6 +47,7 @@ export const SAMPLE_BANK_D: BankFixture = {
   shortName: "DCU",
   createdAt: "2026-04-05T11:30:00Z",
   updatedAt: "2026-04-25T09:00:00Z",
+  accountCount: 0,
 };
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -60,6 +70,7 @@ export function makeBanks(count: number): BankFixture[] {
       shortName: `BNK${padded}`,
       createdAt: created,
       updatedAt: created,
+      accountCount: 0,
     };
   });
 }

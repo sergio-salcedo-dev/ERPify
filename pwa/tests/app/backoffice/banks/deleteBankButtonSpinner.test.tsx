@@ -34,7 +34,13 @@ describe("DeleteBankButton — spinner", () => {
     );
     const onDeleted = vi.fn();
     render(
-      <DeleteBankButton id="abc" name="Acme Savings" onDeleted={onDeleted} onError={vi.fn()} />,
+      <DeleteBankButton
+        id="abc"
+        name="Acme Savings"
+        accountCount={0}
+        onDeleted={onDeleted}
+        onError={vi.fn()}
+      />,
     );
 
     fireEvent.click(screen.getByTestId("banks-detail__delete-button"));

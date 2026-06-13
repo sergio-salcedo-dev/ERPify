@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactElement } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
@@ -10,6 +11,7 @@ import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { toastNotifier } from "@/context/shared/infrastructure/Notification/Toast";
 import { Spinner } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import {
   Dialog,
   DialogClose,
@@ -20,11 +22,21 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
+import { safeHref } from "@/lib/safeHref";
 import { bankRoutes } from "../_lib/bankRoutes";
 
 interface DeleteBankButtonProps {
   id: string;
   name: string;
+  /**
+   * Associated-account count for this bank (the read-model signal surfaced on
+   * the list/detail). When `> 0` the destructive confirmation is replaced by a
+   * neutral guard that points at the accounts surface and never issues the
+   * `DELETE` — an optimistic UX guard; the backend stays the authoritative
+   * guard (a stale `0` that races a `409 bank-in-use` is recovered upstream).
+   */
+  accountCount: number;
   /** When provided, runs after a successful delete instead of redirecting to the list. */
   onDeleted?: (id: string) => void;
   /**
@@ -49,6 +61,7 @@ interface DeleteBankButtonProps {
 export function DeleteBankButton({
   id,
   name,
+  accountCount,
   onDeleted,
   onError,
   trigger,
@@ -61,6 +74,7 @@ export function DeleteBankButton({
   const [internalOpen, setInternalOpen] = useState(false);
   const open = isControlled ? openProp : internalOpen;
   const [submitting, setSubmitting] = useState(false);
+  const inUse = accountCount > 0;
 
   function setOpen(next: boolean): void {
     if (isControlled) {
@@ -116,48 +130,83 @@ export function DeleteBankButton({
     <Dialog open={open} onOpenChange={setOpen}>
       {isControlled ? null : <DialogTrigger render={trigger ?? defaultTrigger} />}
       <DialogContent data-testid="banks-detail__delete-dialog">
-        <DialogHeader>
-          <DialogTitle>Delete bank</DialogTitle>
-          <DialogDescription>
-            Are you sure you want to delete <span className="font-semibold">{name}</span>? This
-            cannot be undone.
-          </DialogDescription>
-        </DialogHeader>
+        {inUse ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>Can&apos;t delete bank</DialogTitle>
+              <DialogDescription data-testid="banks-detail__delete-guard-message">
+                <span className="font-semibold">{name}</span> can&apos;t be deleted — {accountCount}{" "}
+                associated {accountCount === 1 ? "account" : "accounts"}. Remove or reassign them
+                first.
+              </DialogDescription>
+            </DialogHeader>
 
-        <DialogFooter>
-          <DialogClose
-            render={
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={submitting}
-                aria-label="Cancel deletion"
-                title="Cancel deletion"
+            <DialogFooter>
+              <DialogClose
+                render={
+                  <Button variant="ghost" size="sm" aria-label="Close" title="Close">
+                    Close
+                  </Button>
+                }
+              />
+              <Link
+                href={safeHref(bankRoutes.accounts(id))}
+                className={cn(buttonVariants({ size: "sm" }))}
+                data-icon="inline-start"
+                data-testid="banks-detail__delete-guard-view-accounts"
+                aria-label="View accounts"
+                title={`View accounts of bank ${name}`}
               >
-                Cancel
+                View accounts
+              </Link>
+            </DialogFooter>
+          </>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle>Delete bank</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to delete <span className="font-semibold">{name}</span>? This
+                cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+
+            <DialogFooter>
+              <DialogClose
+                render={
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={submitting}
+                    aria-label="Cancel deletion"
+                    title="Cancel deletion"
+                  >
+                    Cancel
+                  </Button>
+                }
+              />
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleConfirm}
+                disabled={submitting}
+                data-icon={submitting ? "inline-start" : undefined}
+                aria-label={`Confirm delete of bank ${name}`}
+                title={`Confirm delete of bank ${name}`}
+                data-testid="banks-detail__delete-confirm"
+              >
+                {submitting ? (
+                  <>
+                    <Spinner className="size-3.5" testId="banks-detail__delete-spinner" />
+                    Deleting…
+                  </>
+                ) : (
+                  "Delete"
+                )}
               </Button>
-            }
-          />
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={handleConfirm}
-            disabled={submitting}
-            data-icon={submitting ? "inline-start" : undefined}
-            aria-label={`Confirm delete of bank ${name}`}
-            title={`Confirm delete of bank ${name}`}
-            data-testid="banks-detail__delete-confirm"
-          >
-            {submitting ? (
-              <>
-                <Spinner className="size-3.5" testId="banks-detail__delete-spinner" />
-                Deleting…
-              </>
-            ) : (
-              "Delete"
-            )}
-          </Button>
-        </DialogFooter>
+            </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -195,6 +195,7 @@ export function BanksStackedList({
               id={bank.id}
               name={bank.name}
               surface="stacked"
+              accountCount={bank.accountCount}
               onBankDeleted={onBankDeleted}
               onBankDeleteFailed={onBankDeleteFailed}
               className="relative z-10 flex-none"

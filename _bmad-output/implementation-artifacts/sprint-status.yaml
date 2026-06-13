@@ -40,7 +40,7 @@
 # en paralelo fuera de ese emparejamiento.
 
 generated: 2026-06-10 15:27:34
-last_updated: 2026-06-13
+last_updated: 2026-06-13 (story 2.5 review)
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -63,5 +63,5 @@ development_status:
   2-2-api-bank-accounts-endpoint-pr2: review
   2-3-pwa-read-context-bankaccount-superficie-cuentas-pr3: done
   2-4-pwa-senales-lista-y-detalle-pr4: done
-  2-5-pwa-delete-guard-recovery-bank-in-use-pr5: backlog
+  2-5-pwa-delete-guard-recovery-bank-in-use-pr5: review
   epic-2-retrospective: optional

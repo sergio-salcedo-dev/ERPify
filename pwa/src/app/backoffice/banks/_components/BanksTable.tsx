@@ -86,6 +86,7 @@ function buildBanksColumns(
       id={row.id}
       name={row.name}
       surface="table"
+      accountCount={row.accountCount}
       reveal="row"
       onBankDeleted={onBankDeleted}
       onBankDeleteFailed={onBankDeleteFailed}
