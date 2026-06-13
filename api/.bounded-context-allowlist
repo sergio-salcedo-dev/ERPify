@@ -29,3 +29,11 @@
 # still has accounts (clean 409 before the FK fires). Blessed by
 # docs/adr/bank-bankaccount-modeling.md (inverse direction, "el patrón correcto").
 src/Backoffice/Bank/Application/BankDeleter.php => Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository
+
+# Bank · account-count read model. BankSearcher and BankDetailFinder (Bank/Application)
+# consume AccountCountsByBank — a read-only port defined in the BankAccount context —
+# for the batched anti-N+1 GROUP-BY query. The Bank domain never queries bank_account
+# directly (CE-3, CE-4). Pattern: cross-context read composition via a read-only port,
+# same family as the referential-integrity check above.
+src/Backoffice/Bank/Application/BankDetailFinder.php => Erpify\Backoffice\BankAccount\Domain\Repository\AccountCountsByBank
+src/Backoffice/Bank/Application/BankSearcher.php => Erpify\Backoffice\BankAccount\Domain\Repository\AccountCountsByBank
