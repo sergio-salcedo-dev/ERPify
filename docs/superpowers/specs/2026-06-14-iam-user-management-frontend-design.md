@@ -17,6 +17,23 @@ context / ABAC-lite, multi-portal). We build the *conceptual model* and a lean
   it never represents Employee/Customer/Supplier. Those are future aggregates —
   here only conceptual **type seams** exist (`BusinessContext`, status enums),
   no modules, no billing/HR logic, no automatic role inference.
+- **Access-level statuses are separate from business-level statuses, even when
+  the names overlap.** `UserStatus` (ACTIVE/BLOCKED/PENDING) is an *access-control
+  primitive* and lives in the IAM layer (`context/shared/access/domain`); it gates
+  authentication, session validity, and the global access decision. Future
+  `CustomerStatus` (SUSPENDED/BLOCKED_FINANCIAL) and `EmployeeStatus`
+  (TERMINATED/ON_LEAVE) are *business* states and will live in their own
+  Customer/Employee domains — **never reuse `UserStatus` for them**, however
+  similar they sound. A business state may *influence* access only through the
+  `domainPolicyAllow` seam, never by mutating `UserStatus` directly (except the
+  blueprint's one documented sync: a terminated employee ⇒ `User.status = BLOCKED`,
+  which is v2 and out of scope here).
+
+| Concept | Location |
+|---|---|
+| `UserStatus` (ACTIVE/BLOCKED/PENDING) | IAM — `context/shared/access/domain` |
+| `CustomerStatus` (SUSPENDED/BLOCKED_FINANCIAL) | Customer domain (future) |
+| `EmployeeStatus` (TERMINATED/ON_LEAVE) | Employee domain (future) |
 - **Repeated logic → abstract; repeated structure → do NOT abstract yet.** Build
   an *execution core*, not an *entity framework*. (See memory
   `crud-toolkit-execution-core`.)
