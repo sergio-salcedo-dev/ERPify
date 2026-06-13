@@ -87,3 +87,45 @@ Issues 3 and 4 are one-to-two-event, clean transition artifacts — resolved in
 Sentry rather than chased with code. If a `terminating connection due to
 administrator command` ever recurs at volume *outside* a deploy/teardown window,
 that would be worth investigating as a real connection-stability problem.
+
+## Recurrence via the Messenger worker (fixed in `before_send`)
+
+The boot-probe fix above only silenced the `dbal:run-sql` liveness probe. The
+**same teardown noise re-surfaced through a different path** — the
+`messenger:consume` worker's own PostgreSQL connection — as a clustered pair of
+unhandled errors one second apart on every stack down/restart/deploy:
+
+| Sentry issue | Exception (outermost) | Origin | Trigger |
+| --- | --- | --- | --- |
+| `126426150` | `Messenger\…\TransportException` wrapping DBAL `ConnectionLost` | `PostgreSqlConnection::get()` → `LISTEN "messenger_messages"` | Postgres admin-terminates the backend (`terminating connection due to administrator command`, 08006) as the `database` container is killed |
+| `126426149` | DBAL `ConnectionException` | `PostgreSqlConnection::__destruct()` → `unlisten()` → `UNLISTEN "messenger_messages"` | a beat later the worker shuts down and the `database` host no longer resolves (`could not translate host name "database"`, 08006 DNS failure) |
+
+The worker holds a long-lived `LISTEN` connection and runs `UNLISTEN` in its
+shutdown destructor; both are caught in the container-lifecycle transition. The
+worker is self-healing (`restart: unless-stopped` reconnects on the next boot),
+so the real signal is the container exit status — not Sentry.
+
+`messenger:consume` is excluded from Sentry **tracing**
+([`sentry.yaml`](../../api/config/packages/sentry.yaml)), but
+`register_error_listener: true` still **captures** its unhandled exceptions, so
+these reached Sentry.
+
+### The fix
+
+[`SentryEventFilter`](../../api/src/Shared/Monitoring/Infrastructure/Sentry/SentryEventFilter.php)
+(the `before_send` filter) now drops a DBAL connection-loss **only when it
+originates from the worker transport**. Both conditions must hold:
+
+1. the throwable chain contains a `Doctrine\DBAL\Exception\ConnectionException`
+   (its subclass `ConnectionLost` and a wrapping `TransportException` are covered
+   by walking the chain), **and**
+2. the event came from the worker — either the `console.command: messenger:consume`
+   tag (the `LISTEN` path, issue `126426150`) or a `PostgreSqlConnection` frame in
+   the stack trace (the destructor `UNLISTEN` path, issue `126426149`, which
+   carries no command tag).
+
+A genuine DB outage during **HTTP request handling** has neither marker — no
+`messenger:consume` tag, no `PostgreSqlConnection` in its trace — so it is left
+untouched and still pages, exactly as the boot-probe fix deliberately preserved.
+This is why we still do **not** add the DBAL exceptions to `ignore_exceptions`:
+that blunt switch would also hide the page-worthy HTTP-path outage.
