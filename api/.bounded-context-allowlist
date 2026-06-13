@@ -37,3 +37,7 @@ src/Backoffice/Bank/Application/BankDeleter.php => Erpify\Backoffice\BankAccount
 # same family as the referential-integrity check above.
 src/Backoffice/Bank/Application/BankDetailFinder.php => Erpify\Backoffice\BankAccount\Domain\Repository\AccountCountsByBank
 src/Backoffice/Bank/Application/BankSearcher.php => Erpify\Backoffice\BankAccount\Domain\Repository\AccountCountsByBank
+# BankRealtimePublisherHandler (Bank/Infrastructure) enriches Mercure event payloads
+# with the current account count so the PWA never receives accountCount=undefined.
+# Same read-only port, same family as BankDetailFinder/BankSearcher above.
+src/Backoffice/Bank/Infrastructure/Messenger/BankRealtimePublisherHandler.php => Erpify\Backoffice\BankAccount\Domain\Repository\AccountCountsByBank

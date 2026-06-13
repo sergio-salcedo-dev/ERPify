@@ -40,7 +40,8 @@ function isBankPrimitives(value: unknown): value is BankPrimitives {
     typeof v.name === "string" &&
     typeof v.shortName === "string" &&
     typeof v.createdAt === "string" &&
-    typeof v.updatedAt === "string"
+    typeof v.updatedAt === "string" &&
+    typeof v.accountCount === "number"
   );
 }
 

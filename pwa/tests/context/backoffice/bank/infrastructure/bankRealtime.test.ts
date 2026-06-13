@@ -8,6 +8,7 @@ const primitives = {
   shortName: "ACME",
   createdAt: "2026-01-01T00:00:00+00:00",
   updatedAt: "2026-01-02T00:00:00+00:00",
+  accountCount: 0,
 };
 
 describe("parseBankRealtimeEvent", () => {
@@ -44,6 +45,23 @@ describe("parseBankRealtimeEvent", () => {
     expect(
       parseBankRealtimeEvent({ type: "bank.created", bank: { id: primitives.id } }),
     ).toBeNull();
+  });
+
+  it("returns null when accountCount is missing from the bank payload", () => {
+    const { accountCount: _, ...withoutCount } = primitives;
+    expect(parseBankRealtimeEvent({ type: "bank.created", bank: withoutCount })).toBeNull();
+    expect(parseBankRealtimeEvent({ type: "bank.updated", bank: withoutCount })).toBeNull();
+  });
+
+  it("maps accountCount correctly from the event payload", () => {
+    const event = parseBankRealtimeEvent({
+      type: "bank.updated",
+      bank: { ...primitives, accountCount: 7 },
+    });
+    expect(event?.kind).toBe("updated");
+    if (event?.kind === "updated") {
+      expect(event.bank.accountCount).toBe(7);
+    }
   });
 
   it("returns null when the deleted id is missing", () => {
