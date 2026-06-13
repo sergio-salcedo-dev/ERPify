@@ -10,7 +10,7 @@ use Erpify\Shared\Media\Domain\Repository\MediaRepository;
 use Override;
 
 /**
- * In-memory {@see MediaRepository} that records call counts, so a test can pin
+ * Recording {@see MediaRepository} that records call counts, so a test can pin
  * {@see \Erpify\Shared\Media\Application\MediaRegistrar}'s dedup-and-concurrent-insert flow.
  *
  * When `$saveFailure` is given, `save()` throws it instead of completing — mimicking the
@@ -21,7 +21,7 @@ use Override;
  *
  * @internal
  */
-final class FakeMediaRepository implements MediaRepository
+final class RecordingMediaRepository implements MediaRepository
 {
     public int $saveCalls = 0;
 

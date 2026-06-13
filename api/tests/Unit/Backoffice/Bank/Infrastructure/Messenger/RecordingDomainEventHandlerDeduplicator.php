@@ -9,12 +9,12 @@ use Override;
 use Throwable;
 
 /**
- * In-memory {@see DomainEventHandlerDeduplicator} that records call counts and can simulate a
+ * Recording {@see DomainEventHandlerDeduplicator} that records call counts and can simulate a
  * release failure, so a test can pin a handler's claim/send/release flow without a database.
  *
  * @internal
  */
-final class FakeDomainEventHandlerDeduplicator implements DomainEventHandlerDeduplicator
+final class RecordingDomainEventHandlerDeduplicator implements DomainEventHandlerDeduplicator
 {
     public int $claimCalls = 0;
 

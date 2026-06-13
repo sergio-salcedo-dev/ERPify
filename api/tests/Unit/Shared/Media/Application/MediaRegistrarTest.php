@@ -32,7 +32,7 @@ final class MediaRegistrarTest extends TestCase
     public function testReturnsExistingMediaWhenContentHashIsAlreadyRegistered(): void
     {
         $existing = Media::create(self::MEDIA_ID, self::CONTENT_HASH, 'image/png', 4, 'PNG.');
-        $mediaRepository = new FakeMediaRepository(found: $existing);
+        $mediaRepository = new RecordingMediaRepository(found: $existing);
         $registrar = $this->makeRegistrar($mediaRepository);
 
         $result = $registrar->registerFromUploadedFile($this->createStub(UploadedFile::class));
@@ -43,7 +43,7 @@ final class MediaRegistrarTest extends TestCase
 
     public function testRegistersAndReturnsNewMediaWhenContentHashIsUnseen(): void
     {
-        $mediaRepository = new FakeMediaRepository();
+        $mediaRepository = new RecordingMediaRepository();
         $registrar = $this->makeRegistrar($mediaRepository);
 
         $result = $registrar->registerFromUploadedFile($this->createStub(UploadedFile::class));
@@ -56,7 +56,7 @@ final class MediaRegistrarTest extends TestCase
     public function testReturnsTheConcurrentWinnerAfterLosingTheInsertRace(): void
     {
         $winner = Media::create(self::MEDIA_ID, self::CONTENT_HASH, 'image/png', 4, 'PNG.');
-        $mediaRepository = new FakeMediaRepository(
+        $mediaRepository = new RecordingMediaRepository(
             found: null,
             saveFailure: $this->makeUniqueViolation(),
             winner: $winner,
@@ -73,7 +73,7 @@ final class MediaRegistrarTest extends TestCase
     {
         // Dedup misses, the unique index rejects our insert (another request won the race),
         // then the winning row is absent from the re-query — an unrecoverable inconsistency.
-        $mediaRepository = new FakeMediaRepository(found: null, saveFailure: $this->makeUniqueViolation());
+        $mediaRepository = new RecordingMediaRepository(found: null, saveFailure: $this->makeUniqueViolation());
 
         $this->expectException(ConcurrentMediaWinnerMissingException::class);
         $this->expectExceptionMessageMatches('/' . self::CONTENT_HASH . '/');
@@ -83,7 +83,7 @@ final class MediaRegistrarTest extends TestCase
 
     public function testReQueriesForTheWinnerAfterLosingTheConcurrentInsertRace(): void
     {
-        $mediaRepository = new FakeMediaRepository(found: null, saveFailure: $this->makeUniqueViolation());
+        $mediaRepository = new RecordingMediaRepository(found: null, saveFailure: $this->makeUniqueViolation());
 
         try {
             $this->makeRegistrar($mediaRepository)->registerFromUploadedFile($this->createStub(UploadedFile::class));
@@ -95,7 +95,7 @@ final class MediaRegistrarTest extends TestCase
         $this->assertSame(2, $mediaRepository->findCalls);
     }
 
-    private function makeRegistrar(FakeMediaRepository $mediaRepository): MediaRegistrar
+    private function makeRegistrar(RecordingMediaRepository $mediaRepository): MediaRegistrar
     {
         $imageNormalizer = $this->createStub(ImageNormalizer::class);
         $imageNormalizer->method('normalize')->willReturn(

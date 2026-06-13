@@ -27,7 +27,7 @@ final class BankChangedNotifyEmailHandlerTest extends TestCase
     public function testSendsNotificationWhenClaimSucceeds(): void
     {
         $mailer = new RecordingNotificationMailer();
-        $handler = $this->makeHandler(FakeDomainEventHandlerDeduplicator::granting(), $mailer);
+        $handler = $this->makeHandler(RecordingDomainEventHandlerDeduplicator::granting(), $mailer);
 
         $handler->onBankCreated($this->bankCreatedEvent());
 
@@ -38,7 +38,7 @@ final class BankChangedNotifyEmailHandlerTest extends TestCase
     public function testDoesNotSendWhenClaimIsAlreadyHeld(): void
     {
         $mailer = new RecordingNotificationMailer();
-        $handler = $this->makeHandler(FakeDomainEventHandlerDeduplicator::rejecting(), $mailer);
+        $handler = $this->makeHandler(RecordingDomainEventHandlerDeduplicator::rejecting(), $mailer);
 
         $handler->onBankUpdated($this->bankUpdatedEvent());
 
@@ -48,7 +48,7 @@ final class BankChangedNotifyEmailHandlerTest extends TestCase
     public function testReleasesClaimAndRethrowsWhenSendFails(): void
     {
         $sendFailure = new RuntimeException('SMTP unreachable');
-        $deduplicator = FakeDomainEventHandlerDeduplicator::granting();
+        $deduplicator = RecordingDomainEventHandlerDeduplicator::granting();
         $handler = $this->makeHandler($deduplicator, new RecordingNotificationMailer(sendFailure: $sendFailure));
 
         try {
@@ -64,7 +64,7 @@ final class BankChangedNotifyEmailHandlerTest extends TestCase
     public function testPreservesTheSendFailureWhenReleaseAlsoFails(): void
     {
         $sendFailure = new RuntimeException('SMTP unreachable');
-        $deduplicator = FakeDomainEventHandlerDeduplicator::failingToRelease(
+        $deduplicator = RecordingDomainEventHandlerDeduplicator::failingToRelease(
             new RuntimeException('claim store unreachable'),
         );
         $handler = $this->makeHandler($deduplicator, new RecordingNotificationMailer(sendFailure: $sendFailure));
@@ -79,7 +79,7 @@ final class BankChangedNotifyEmailHandlerTest extends TestCase
     }
 
     private function makeHandler(
-        FakeDomainEventHandlerDeduplicator $deduplicator,
+        RecordingDomainEventHandlerDeduplicator $deduplicator,
         RecordingNotificationMailer $mailer,
     ): BankChangedNotifyEmailHandler {
         return new BankChangedNotifyEmailHandler($deduplicator, $mailer, new NullLogger(), self::NOTIFY_TO);
