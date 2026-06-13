@@ -20,16 +20,22 @@ final class ProfilerEnabledFunctionalTest extends WebTestCase
 {
     public function testProfilerIsEnabledAndRegistersCoreCollectors(): void
     {
-        $client = static::createClient();
+        $client = self::createClient();
         $client->enableProfiler();
 
-        $client->request('GET', '/api/v1/backoffice/health', [], [], ['HTTP_ACCEPT' => 'application/json']);
+        $client->request(
+            \Symfony\Component\HttpFoundation\Request::METHOD_GET,
+            '/api/v1/backoffice/health',
+            [],
+            [],
+            ['HTTP_ACCEPT' => 'application/json'],
+        );
 
         self::assertResponseIsSuccessful();
 
         $profile = $client->getProfile();
-        self::assertInstanceOf(Profile::class, $profile, 'The profiler must be enabled in the test environment.');
-        self::assertTrue($profile->hasCollector('db'), 'The Doctrine (db) collector must be registered.');
-        self::assertTrue($profile->hasCollector('time'), 'The time collector must be registered.');
+        $this->assertInstanceOf(Profile::class, $profile, 'The profiler must be enabled in the test environment.');
+        $this->assertTrue($profile->hasCollector('db'), 'The Doctrine (db) collector must be registered.');
+        $this->assertTrue($profile->hasCollector('time'), 'The time collector must be registered.');
     }
 }
