@@ -8,14 +8,15 @@
 # Not executable on its own; meant for `source`.
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; BLUE='\033[0;34m'; YELLOW='\033[0;33m'; NC='\033[0m'
-log_info()    { echo -e "${BLUE}ℹ ${*}${NC}"; }
-log_success() { echo -e "${GREEN}✔ ${*}${NC}"; }
-log_warn()    { echo -e "${YELLOW}! ${*}${NC}"; }
-log_error()   { echo -e "${RED}✗ ${*}${NC}" >&2; }
+log_info()    { echo -e "${BLUE}ℹ ${*}${NC}"; return 0; }
+log_success() { echo -e "${GREEN}✔ ${*}${NC}"; return 0; }
+log_warn()    { echo -e "${YELLOW}! ${*}${NC}"; return 0; }
+log_error()   { echo -e "${RED}✗ ${*}${NC}" >&2; return 0; }
 
 compose() {
   docker compose -p "$COMPOSE_PROJECT_NAME" --env-file "$ENV_FILE" \
     -f compose.yaml -f compose.prod.yaml "$@"
+  return $?
 }
 
 # Preflight shared by both scripts: repo root, env file, docker, a RUNNING
@@ -37,6 +38,8 @@ require_running_stack() {
     log_error "Check 'make docker.info' for the project name, or set STORAGE_VOLUME."
     exit 1
   fi
+
+  return 0
 }
 
 # Prove a pg_dump custom-format archive is fully restorable. The PGDMP magic
@@ -57,6 +60,7 @@ verify_dump() {
 # Prove a gzip tar archive is intact end to end (gzip CRC + tar structure).
 # $1 = path to the objects-<stamp>.tar.gz file.
 verify_objects() {
-  tar -tzf "$1" > /dev/null \
-    || { log_error "$1 is not a valid gzip archive."; return 1; }
+  local file="$1"
+  tar -tzf "$file" > /dev/null \
+    || { log_error "$file is not a valid gzip archive."; return 1; }
 }
