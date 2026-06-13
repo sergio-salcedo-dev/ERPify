@@ -56,3 +56,8 @@ deriva los campos del `SortFieldMap` de producción) — todos retirados. El res
 | [#233](https://github.com/sergio-salcedo-dev/ERPify/issues/233) | keyset: `RowUniquenessGuard` falla-abierto fuera del caso addSelect (cartesiano / to-many no seleccionado) |
 | [#234](https://github.com/sergio-salcedo-dev/ERPify/issues/234) | keyset: `qualify()` reescribe el DQL del predicado por regex (acoplado a `id` bare) |
 | [#235](https://github.com/sergio-salcedo-dev/ERPify/issues/235) | keyset: `entityName()` colapsa al nombre corto → colisión de fingerprint multi-contexto |
+
+## Deferred from: code review of iam-user-management-frontend plan — group 1 cores (2026-06-14)
+
+- Empty-page recovery in `useResourceList` (useResourceList.ts:178-183) can issue redundant `follow()` calls on a tail-emptied page. Bounded (terminates at offset 0; mock-only deterministic data). Harden with a visited-link/attempt guard and clamp `searchAt` offset to the result length.
+- `useQueryState.reset()` (createQueryState.ts:32-35) does not reset `pageSize` although its doc describes a "single reset" over filter/sort/pageSize. Either reset page size or adjust the doc — low priority, page size is arguably a viewing preference.

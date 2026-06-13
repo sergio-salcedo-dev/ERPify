@@ -2234,3 +2234,28 @@ git commit -m "docs(pwa): document access + resource toolkits and user module"
 - **Spec coverage:** routes `/backoffice/users` (T15/T19/T20) ✓; cursor envelope + opaque links + navigator (T8/T9) ✓ with no realtime (T11) ✓; IAM session-driven + evaluator + `useCan`/`<Can>`/`RequireAuth` + dev switcher (T1–T7) ✓; lean CRUD core hooks (T8–T11) ✓; column picker (T17) ✓; AccessPolicyRegistry empty seam (T2) ✓; access-vs-business status boundary (T1 doc + `UserStatus` in access domain) ✓; auth pages forms + mocked login establishing session (T21/T22) ✓; states via existing primitives (T16–T20) ✓; tests + quality + security (T23) ✓; docs (T24) ✓. No uncovered spec section.
 - **Placeholder scan:** the only "port from reference" directives point at concrete, readable repo files (`banks/page.tsx`, `BankForm.tsx`, etc.) with explicit substitution lists — not vague TODOs. `useResourceList` body (T11) is the one large port; its required return surface is enumerated.
 - **Type consistency:** `ResourceSearchPage<T>` uses `items`; `CrudRepository<T,TInput>`; `UserInput` matches the schema fields; repo/navigator DI keys `"BackOfficeUserRepository"`/`"BackOfficeUserSearchNavigator"` consistent across T14/T16/T19/T20; `UserStatus`/`Role`/`Permission` imported from `context/shared/access/domain` everywhere.
+
+---
+
+## Review Findings — Group 1: shared/access + shared/resource cores (2026-06-14)
+
+> Adversarial review (Blind Hunter + Edge Case Hunter + Acceptance Auditor), DDD/Codely lens. Scope: the two reusable cores only. Layer-3 consumers (user module, pages, auth) reviewed in later passes.
+
+### Decision needed — RESOLVED & APPLIED
+
+- [x] [Review][Decision] Stateful navigator + leaky `remember()` abstraction → **Resolved: Option A (stateless cursor-encoded navigation).** The opaque link now carries `{filters, sort, limit, offset}`; `InMemoryResourceNavigator.follow(link)` decodes both with no remembered state, `remember()`/`lastCriteria` removed, and the `(nav as { remember? })` cast dropped from `useResourceList`. Matches the stateless `ApiBankSearchNavigator`.
+- [x] [Review][Decision] SSR/hydration seed-admin flash → **Resolved: Option 2 (hydration gate now).** `AuthProvider` is a 3-state machine (`hydrating | authenticated | unauthenticated`); first paint renders no protected content. Seed-admin dev default preserved (applied only after storage is read, when none is stored), so the dev switcher still works without flashing.
+
+### Patch — APPLIED
+
+- [x] [Review][Patch] Repository returns live row references — `find`/`create`/`update`/`slice` now `structuredClone` on the way out [InMemoryCrudRepository.ts].
+- [x] [Review][Patch] Unvalidated session deserialization — `parseStoredSession()` validates shape (known `status`, array `roles`/`permissions`, string `id`/`email`/`context`) before `setSession`; failure degrades to the seed [AuthProvider.tsx].
+- [x] [Review][Patch] Impure `setState` updater in `override()` — merge now reads a `sessionRef` and routes through `persist()`, no side effect inside the updater [AuthProvider.tsx].
+- [x] [Review][Patch] `useResourceItem` request-sequence guard — added `seqRef`; stale out-of-order results are discarded [useResourceItem.ts].
+- [x] [Review][Patch] Cursor offset validation — `decodeCursor` requires `Number.isInteger(offset) && offset >= 0` and validates the criteria shape [cursorLink.ts].
+- [x] [Review][Patch] Change-relative comments swept [useResourceList.ts, InMemoryCrudRepository.ts].
+
+### Deferred
+
+- [x] [Review][Defer] Empty-page recovery can issue redundant follows on a tail-emptied page [useResourceList.ts:178-183] — bounded (terminates at offset 0; mock-only deterministic data). Harden later with a visited-link/attempt guard + clamp `searchAt` offset to result length.
+- [x] [Review][Defer] `useQueryState.reset()` omits `setPageSize` [createQueryState.ts:32-35] though the doc says "single reset" over filter/sort/pageSize — defensible (page size is a viewing preference), but align code or doc.
