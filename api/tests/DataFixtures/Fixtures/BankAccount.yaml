@@ -17,3 +17,26 @@ Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount:
                 - '@bank_of_america->id'
                 - 'Initech LLC'
                 - 'FR1420041010050500013M02606'
+    # Citigroup holds three accounts so the keyset cursor round-trip (next-link traversal across pages)
+    # can be exercised — the other banks have at most one. No assertion elsewhere pins Citigroup's count.
+    bank_account_citi_operations:
+        __factory:
+            Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount::create:
+                - '33333333-3333-7000-8000-000000000003'
+                - '@bank_citigroup->id'
+                - 'Citi Operations'
+                - 'GB29NWBK60161331926819'
+    bank_account_citi_payroll:
+        __factory:
+            Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount::create:
+                - '33333333-3333-7000-8000-000000000004'
+                - '@bank_citigroup->id'
+                - 'Citi Payroll'
+                - 'NL91ABNA0417164300'
+    bank_account_citi_treasury:
+        __factory:
+            Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount::create:
+                - '33333333-3333-7000-8000-000000000005'
+                - '@bank_citigroup->id'
+                - 'Citi Treasury'
+                - 'BE68539007547034'

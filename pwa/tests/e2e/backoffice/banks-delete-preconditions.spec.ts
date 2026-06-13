@@ -7,8 +7,10 @@ import { SAMPLE_BANK_A, SAMPLE_BANK_B, mockBanksApi } from "../fixtures/banks-ap
  * contract «Errores de mutación — superficie persistente», 2026-06-04): the
  * confirm dialog closes itself on failure, the problem renders verbatim above
  * the list with copy affordances, and typed recovery (404 → Refresh list,
- * 409 `bank-in-use` → none) lives in that surface — never in the dialog,
- * never only in a toast.
+ * 409 `bank-in-use` → View accounts) lives in that surface — never in the
+ * dialog, never only in a toast. Upstream of that, an optimistic delete-guard
+ * intercepts a delete when the bank's `accountCount > 0` and never issues the
+ * `DELETE` (the backend stays the authoritative guard for the racing 0 → 409).
  */
 
 async function confirmSingleDelete(page: Page, id: string): Promise<void> {
@@ -17,10 +19,46 @@ async function confirmSingleDelete(page: Page, id: string): Promise<void> {
   await page.getByTestId("banks-detail__delete-confirm").click();
 }
 
+const ITEM_DELETE_PATH = /\/api\/v1\/backoffice\/banks\/[^/?#]+$/;
+
 test.describe("BackOffice - Banks delete preconditions (mocked API)", () => {
   test.use({ viewport: VIEWPORT_DESKTOP });
 
-  test("single 409 bank-in-use: dialog closes, error persists above the list, copyable, no recovery action", async ({
+  test("optimistic guard: a bank with accounts never reaches DELETE; View accounts routes to its accounts", async ({
+    page,
+  }) => {
+    const inUseBank = { ...SAMPLE_BANK_A, accountCount: 3 };
+    await mockBanksApi(page, { list: "happy", list_banks: [inUseBank, SAMPLE_BANK_B] });
+
+    let deleteAttempts = 0;
+    page.on("request", (request) => {
+      if (request.method() === "DELETE" && ITEM_DELETE_PATH.test(new URL(request.url()).pathname)) {
+        deleteAttempts += 1;
+      }
+    });
+
+    await page.goto("/backoffice/banks");
+    await expect(page.getByTestId("banks-list")).toHaveAttribute("data-state", "ready");
+
+    // Opening the row's delete surfaces the neutral guard, not the destructive
+    // confirmation — the DELETE is never issued.
+    await page.getByTestId(`banks-table__actions-${inUseBank.id}`).click();
+    await page.getByTestId(`banks-table__delete-${inUseBank.id}`).click();
+
+    const viewAccounts = page.getByTestId("banks-detail__delete-guard-view-accounts");
+    await expect(viewAccounts).toBeVisible();
+    await expect(page.getByTestId("banks-detail__delete-confirm")).toHaveCount(0);
+    await expect(viewAccounts).toHaveAttribute(
+      "href",
+      `/backoffice/banks/${inUseBank.id}/accounts`,
+    );
+
+    await viewAccounts.click();
+    await expect(page).toHaveURL(new RegExp(`/backoffice/banks/${inUseBank.id}/accounts$`));
+    expect(deleteAttempts).toBe(0);
+  });
+
+  test("single 409 bank-in-use: dialog closes, error persists above the list, copyable, View accounts recovery", async ({
     page,
   }) => {
     await mockBanksApi(page, { list: "happy", delete: "in-use" });
@@ -40,8 +78,12 @@ test.describe("BackOffice - Banks delete preconditions (mocked API)", () => {
     await expect(page.getByTestId("banks-list__delete-error__copy-message")).toBeVisible();
     await expect(page.getByTestId("banks-list__delete-error__copy-code")).toBeVisible();
     await expect(page.getByTestId("banks-list__delete-error__copy-json")).toBeVisible();
-    // 409 carries no recovery action; the row was never removed.
+    // A raced 409 recovers by routing to the bank's accounts surface, not a refresh.
     await expect(page.getByTestId("banks-list__delete-error-refresh")).toHaveCount(0);
+    await expect(page.getByTestId("banks-list__delete-error-view-accounts")).toHaveAttribute(
+      "href",
+      `/backoffice/banks/${SAMPLE_BANK_A.id}/accounts`,
+    );
     await expect(page.getByTestId(`banks-table__row-${SAMPLE_BANK_A.id}`)).toBeVisible();
 
     // Dismiss closes it; nothing else changes.

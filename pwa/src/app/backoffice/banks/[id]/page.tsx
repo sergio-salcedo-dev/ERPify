@@ -275,6 +275,7 @@ export default function BankDetailPage() {
               <DeleteBankButton
                 id={bank.id}
                 name={bank.name}
+                accountCount={bank.accountCount}
                 onDeleted={handleDeleted}
                 onError={setDeleteProblem}
               />
@@ -284,6 +285,7 @@ export default function BankDetailPage() {
           {deleteProblem ? (
             <DeleteErrorPanel
               problem={deleteProblem}
+              bankId={bank.id}
               onDismiss={() => setDeleteProblem(null)}
               onRefresh={() => {
                 // A stale 404 heals by re-fetching: the load lands on the
@@ -323,6 +325,27 @@ export default function BankDetailPage() {
             />
             <div className="banks-detail__field sm:col-span-2">
               <dt className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                Associated accounts
+              </dt>
+              <dd className="mt-1 text-sm" data-testid="banks-detail__field-accounts">
+                {bank.accountCount > 0 ? (
+                  <>
+                    {bank.accountCount}
+                    {" · "}
+                    <Link
+                      href={safeHref(bankRoutes.accounts(bank.id))}
+                      className="text-[var(--erpify-brand)] hover:underline"
+                    >
+                      View accounts
+                    </Link>
+                  </>
+                ) : (
+                  <span className="text-muted-foreground">None</span>
+                )}
+              </dd>
+            </div>
+            <div className="banks-detail__field sm:col-span-2">
+              <dt className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
                 Identifier
               </dt>
               <dd className="mt-1 flex items-center gap-2">
@@ -353,10 +376,12 @@ export default function BankDetailPage() {
 
 function DeleteErrorPanel({
   problem,
+  bankId,
   onDismiss,
   onRefresh,
 }: Readonly<{
   problem: ProblemDetails;
+  bankId: string;
   onDismiss: () => void;
   onRefresh: () => void;
 }>) {
@@ -364,24 +389,50 @@ function DeleteErrorPanel({
     <MutationError
       problem={problem}
       onDismiss={onDismiss}
-      action={
-        problem.type === BankProblemType.NOT_FOUND ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onRefresh}
-            aria-label="Refresh"
-            title="Refresh this bank"
-            data-testid="banks-detail__delete-error-refresh"
-          >
-            Refresh
-          </Button>
-        ) : undefined
-      }
+      action={deleteErrorRecovery(problem, bankId, onRefresh)}
       testId="banks-detail__delete-error"
     />
   );
+}
+
+// Typed recovery for a failed detail-page delete: a stale `bank-not-found`
+// heals by re-fetching; a `bank-in-use` (the count raced the backend) routes
+// to the accounts surface. Other types carry no action.
+function deleteErrorRecovery(
+  problem: ProblemDetails,
+  bankId: string,
+  onRefresh: () => void,
+): ReactNode {
+  switch (problem.type) {
+    case BankProblemType.NOT_FOUND:
+      return (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onRefresh}
+          aria-label="Refresh"
+          title="Refresh this bank"
+          data-testid="banks-detail__delete-error-refresh"
+        >
+          Refresh
+        </Button>
+      );
+    case BankProblemType.IN_USE:
+      return (
+        <Link
+          href={safeHref(bankRoutes.accounts(bankId))}
+          className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+          aria-label="View associated accounts"
+          title="View the accounts associated with this bank"
+          data-testid="banks-detail__delete-error-view-accounts"
+        >
+          View accounts
+        </Link>
+      );
+    default:
+      return undefined;
+  }
 }
 
 function BackLink() {

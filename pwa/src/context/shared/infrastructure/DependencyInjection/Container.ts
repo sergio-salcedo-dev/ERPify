@@ -12,6 +12,9 @@ import { FindBank } from "../../../backoffice/bank/application/FindBank";
 import { CreateBank } from "../../../backoffice/bank/application/CreateBank";
 import { UpdateBank } from "../../../backoffice/bank/application/UpdateBank";
 import { DeleteBank } from "../../../backoffice/bank/application/DeleteBank";
+import { ApiBankAccountRepository } from "../../../backoffice/bankaccount/infrastructure/ApiBankAccountRepository";
+import { ApiBankAccountSearchNavigator } from "../../../backoffice/bankaccount/infrastructure/ApiBankAccountSearchNavigator";
+import { SearchBankAccounts } from "../../../backoffice/bankaccount/application/SearchBankAccounts";
 
 const container = new Container();
 
@@ -51,5 +54,19 @@ container.bind<FindBank>("BackOfficeFindBank").to(FindBank);
 container.bind<CreateBank>("BackOfficeCreateBank").to(CreateBank);
 container.bind<UpdateBank>("BackOfficeUpdateBank").to(UpdateBank);
 container.bind<DeleteBank>("BackOfficeDeleteBank").to(DeleteBank);
+
+// BankAccount read context (CE-4): read-only ports — no write use case is bound,
+// so a consumer of this surface can inject only the read capability.
+container
+  .bind<ApiBankAccountRepository>("BackOfficeBankAccountRepository")
+  .to(ApiBankAccountRepository)
+  .inSingletonScope();
+
+container
+  .bind<ApiBankAccountSearchNavigator>("BackOfficeBankAccountSearchNavigator")
+  .to(ApiBankAccountSearchNavigator)
+  .inSingletonScope();
+
+container.bind<SearchBankAccounts>("BackOfficeSearchBankAccounts").to(SearchBankAccounts);
 
 export { container };

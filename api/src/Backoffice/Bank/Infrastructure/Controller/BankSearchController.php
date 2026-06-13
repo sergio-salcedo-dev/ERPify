@@ -42,6 +42,7 @@ final readonly class BankSearchController
                 Bank::GROUP_IDENTIFIABLE,
                 Bank::GROUP_TIMESTAMPED,
                 Bank::GROUP_LIST,
+                Bank::GROUP_ACCOUNT_COUNT,
             ],
         );
     }

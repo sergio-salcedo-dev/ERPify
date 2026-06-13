@@ -32,6 +32,14 @@ const STALE_PROBLEM: ProblemDetails = {
   "correlation-id": "01926e7e-7b8a-7c4e-9f30-000000000404",
 };
 
+const IN_USE_PROBLEM: ProblemDetails = {
+  type: "bank-in-use",
+  title: "Bank still has associated accounts",
+  status: 409,
+  instance: "01926e7e-7b8a-7c4e-9f31-000000000409",
+  "correlation-id": "01926e7e-7b8a-7c4e-9f30-000000000409",
+};
+
 /** Deletes succeed except BETA's, which rejects with the given error. */
 function failBetaDelete(error: unknown = new Error("boom")) {
   deleteRun.mockImplementation((id: string) =>
@@ -132,6 +140,23 @@ describe("BanksListPage — bulk actions", () => {
     expect(toastNotifier.error).toHaveBeenCalledWith("Some banks could not be deleted", {
       description: "1 of 2 could not be deleted. See error details.",
     });
+  });
+
+  it("a bulk 409 bank-in-use orients to the per-row guard instead of deep-linking one bank", async () => {
+    failBetaDelete(new HttpError(IN_USE_PROBLEM));
+    await renderWithRows();
+
+    selectRows(ACME, BETA);
+    await confirmBulkDelete();
+
+    await expectBetaRestoredAndReselected();
+    const surface = await screen.findByTestId("banks-list__delete-error");
+    expect(surface).toBeInTheDocument();
+    // A bulk failure can involve several in-use banks, so the surface orients
+    // the user to the restored rows (each carries its own guard) rather than
+    // deep-linking only the first failed bank.
+    expect(screen.getByTestId("banks-list__delete-error-in-use-hint")).toBeInTheDocument();
+    expect(screen.queryByTestId("banks-list__delete-error-view-accounts")).toBeNull();
   });
 
   it("404 rejections do not resurrect the row (the bank is already gone)", async () => {

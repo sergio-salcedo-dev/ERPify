@@ -26,4 +26,6 @@ export const bankRoutes = {
   detail: (id: string): string => `${BANKS_BASE}/${encodeURIComponent(id)}`,
   /** Edit-bank form for a given id. */
   edit: (id: string): string => `${BANKS_BASE}/${encodeURIComponent(id)}/edit`,
+  /** Bank accounts list page for a given id. */
+  accounts: (id: string): string => `${BANKS_BASE}/${encodeURIComponent(id)}/accounts`,
 } as const;

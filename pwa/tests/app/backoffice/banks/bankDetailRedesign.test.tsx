@@ -9,6 +9,7 @@ const BANK = Bank.fromPrimitives({
   shortName: "SANB",
   createdAt: "2020-01-01T00:00:00.000Z",
   updatedAt: "2020-01-02T00:00:00.000Z",
+  accountCount: 0,
 });
 
 vi.mock("next/navigation", () => ({

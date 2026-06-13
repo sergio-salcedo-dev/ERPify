@@ -13,6 +13,7 @@ const RECENT = Bank.fromPrimitives({
   shortName: "SANB",
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
+  accountCount: 0,
 });
 
 const OLD = Bank.fromPrimitives({
@@ -21,6 +22,7 @@ const OLD = Bank.fromPrimitives({
   shortName: "CAIX",
   createdAt: "2020-01-01T00:00:00.000Z",
   updatedAt: "2020-01-01T00:00:00.000Z",
+  accountCount: 0,
 });
 
 describe("BanksCards — identity", () => {

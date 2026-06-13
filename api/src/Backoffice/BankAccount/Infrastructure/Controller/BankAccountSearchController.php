@@ -1,0 +1,55 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Erpify\Backoffice\BankAccount\Infrastructure\Controller;
+
+use Erpify\Backoffice\BankAccount\Application\BankAccountSearcher;
+use Erpify\Backoffice\BankAccount\Application\Query\SearchBankAccountsQuery;
+use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
+use Erpify\Shared\Application\Http\Search\SearchQuery;
+use Erpify\Shared\Infrastructure\Http\Responder\SearchResponder;
+use JsonException;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Attribute\MapQueryString;
+use Symfony\Component\Messenger\Exception\ExceptionInterface as MessengerExceptionInterface;
+use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Serializer\Exception\ExceptionInterface;
+
+/**
+ * Read-only accounts-by-bank surface. Public like the rest of `/backoffice` (the repo has no auth
+ * yet); it exposes the full PII IBAN — see PRODUCTION_SECURITY_CHECKLIST.md and the auth follow-up.
+ */
+#[Route('/banks/{id}/accounts', name: self::ROUTE_NAME, methods: ['GET'])]
+final readonly class BankAccountSearchController
+{
+    public const string ROUTE_NAME = 'backoffice_bankaccount_search';
+
+    public function __construct(
+        private BankAccountSearcher $bankAccountSearcher,
+        private SearchResponder $searchResponder,
+    ) {
+    }
+
+    /**
+     * @throws ExceptionInterface
+     * @throws JsonException
+     * @throws MessengerExceptionInterface
+     */
+    public function __invoke(
+        string $id,
+        #[MapQueryString]
+        SearchQuery $query = new SearchQuery(),
+    ): Response {
+        return $this->searchResponder->respond(
+            $this->bankAccountSearcher->search($id, new SearchBankAccountsQuery($query->toCriteria())),
+            $query,
+            self::ROUTE_NAME,
+            [
+                BankAccount::GROUP_IDENTIFIABLE,
+                BankAccount::GROUP_READ,
+            ],
+            ['id' => $id],
+        );
+    }
+}

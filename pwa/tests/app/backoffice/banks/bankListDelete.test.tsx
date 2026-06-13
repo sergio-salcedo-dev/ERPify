@@ -126,7 +126,7 @@ describe("BanksListPage — failed delete lands in the persistent error surface"
     searchRun.mockResolvedValue(searchPage([ACME, BETA]));
   });
 
-  it("409 bank-in-use: the dialog closes, the error persists above the list with no recovery action, the row stays", async () => {
+  it("409 bank-in-use: the dialog closes, the error persists above the list with a View accounts recovery, the row stays", async () => {
     deleteRun.mockRejectedValue(new HttpError(IN_USE_PROBLEM));
     render(<BanksListPage />);
     await screen.findByTestId(`banks-table__row-${ACME.id}`);
@@ -138,8 +138,12 @@ describe("BanksListPage — failed delete lands in the persistent error surface"
     expect(screen.queryByTestId("banks-detail__delete-dialog")).toBeNull();
     expect(surface).toHaveTextContent(IN_USE_PROBLEM.title);
     expect(screen.getByTestId("problem-display__type")).toHaveTextContent("bank-in-use");
-    // 409 carries no recovery action — recovery lives outside the list.
+    // A raced 409 recovers by routing to the bank's accounts surface, not a refresh.
     expect(screen.queryByTestId("banks-list__delete-error-refresh")).toBeNull();
+    expect(screen.getByTestId("banks-list__delete-error-view-accounts")).toHaveAttribute(
+      "href",
+      `/backoffice/banks/${ACME.id}/accounts`,
+    );
     // Copy affordances are present; the row was never removed.
     expect(screen.getByTestId("banks-list__delete-error__copy-json")).toBeInTheDocument();
     expect(screen.getByTestId(`banks-table__row-${ACME.id}`)).toBeInTheDocument();

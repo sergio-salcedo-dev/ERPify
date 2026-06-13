@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
@@ -58,6 +59,24 @@ const renderCreatedAtCell = (row: Bank) =>
 const renderUpdatedAtCell = (row: Bank) =>
   renderRelativeCell(row.updatedAt, `banks-table__updated-${row.id}`);
 
+const renderAccountsCell = (row: Bank) =>
+  row.accountCount > 0 ? (
+    <Link
+      href={safeHref(bankRoutes.accounts(row.id))}
+      className="text-[var(--erpify-brand)] tabular-nums text-xs hover:underline"
+      data-testid={`banks-table__accounts-${row.id}`}
+    >
+      {row.accountCount}
+    </Link>
+  ) : (
+    <span
+      className="text-muted-foreground tabular-nums text-xs"
+      data-testid={`banks-table__accounts-${row.id}`}
+    >
+      0
+    </span>
+  );
+
 function buildBanksColumns(
   onBankDeleteFailed: (id: string, problem: ProblemDetails) => void,
   onBankDeleted?: (id: string) => void,
@@ -67,6 +86,7 @@ function buildBanksColumns(
       id={row.id}
       name={row.name}
       surface="table"
+      accountCount={row.accountCount}
       reveal="row"
       onBankDeleted={onBankDeleted}
       onBankDeleteFailed={onBankDeleteFailed}
@@ -95,6 +115,14 @@ function buildBanksColumns(
       cell: renderStatusCell,
       className: "whitespace-nowrap",
       colClassName: "w-24",
+    },
+    {
+      id: "accounts",
+      header: "ACCOUNTS",
+      align: "right",
+      cell: renderAccountsCell,
+      className: "banks-table__col--accounts hidden lg:table-cell",
+      colClassName: "w-[72px] max-lg:hidden",
     },
     {
       id: "updatedAt",
