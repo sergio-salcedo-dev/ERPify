@@ -15,7 +15,8 @@ For deeper topics, use the linked guides in [`api/docs/production-ready/`](../ap
 | **`php`** | FrankenPHP + Caddy: public **80/443**, reverse-proxies HTML/`_next` to the PWA, serves **`/api/*`** and **Mercure** (`/.well-known/mercure`). Runs migrations on startup. |
 | **`pwa`** | Next.js on **:3000** (internal only); not exposed directly in the default layout. |
 | **`database`** | PostgreSQL. In production, **do not publish** the host port to the internet. |
-| **`messenger_worker`** | Long-lived **`messenger:consume async`** process. **Required** if you use async routing (e.g. notification emails). Uses the same **`DATABASE_URL`** and **`MESSENGER_TRANSPORT_DSN`** as the API. |
+| **`messenger_worker`** | Long-lived **`messenger:consume async`** process. **Required** if you use async routing (e.g. notification emails). Uses the same **`DATABASE_URL`** and **`MESSENGER_TRANSPORT_DSN`** as the API. **Scalable** — `FOR UPDATE SKIP LOCKED` gives each message to one replica, so `--scale messenger_worker=N` is safe. |
+| **`scheduler_worker`** | Single-replica **`messenger:consume scheduler_maintenance`** process: the daily `handled_domain_event` prune. Split off `messenger_worker` so the in-process Scheduler clock fires once, not once per replica. **Keep at `replicas: 1`** (lock-based alternative: #261). |
 
 Commands and env substitution use **`api/.env`** (and optionally a host-level **`.env`** next to Compose, depending on your setup). Run Compose from the **repo root**:
 

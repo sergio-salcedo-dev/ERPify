@@ -28,7 +28,8 @@ Defined in `compose.prod.yaml` on top of the base stack:
 - `php` — FrankenPHP + Symfony API (terminates TLS, reverse-proxies `/` to `pwa:3000`).
 - `pwa` — Next.js production (`next start -p 80` inside the container).
 - `postgres` — PostgreSQL.
-- `messenger_worker` — **separate** Symfony Messenger consumer (handlers must be idempotent; at-least-once delivery).
+- `messenger_worker` — **separate** Symfony Messenger consumer of the `async` transport (handlers must be idempotent; at-least-once delivery). Safe to scale horizontally (`ENV=prod make docker.up` then `docker compose … up -d --scale messenger_worker=N`): the Doctrine transport's `FOR UPDATE SKIP LOCKED` hands each queued message to exactly one replica.
+- `scheduler_worker` — **single-replica** consumer of the `scheduler_maintenance` transport (the daily `handled_domain_event` prune). Symfony Scheduler derives ticks from an in-process clock, so it is isolated here to fire once; on the scaled `messenger_worker` pool it would emit one tick per replica. **Must stay at `replicas: 1`** — the lock-based single-pool alternative is tracked in #261.
 - Mailer pipeline (async via Messenger).
 - Mercure Hub — behind `/.well-known/mercure` (JWT-signed).
 
