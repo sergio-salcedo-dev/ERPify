@@ -78,6 +78,8 @@ for host in $SERVER_NAME; do
   case "$host" in
     *.local|localhost|127.0.0.1|*.localhost|"") : ;;
     *.*) IS_PROD=1 ;;
+    # A bare, dotless hostname is not a real deployment target — leave IS_PROD unset.
+    *) : ;;
   esac
 done
 
@@ -108,14 +110,15 @@ ls -lh "$db_file" "$objects_file"
 
 # —— Confirm (destructive) ————————————————————————————————————————————————
 confirm_tty() { # $1 = expected phrase, $2 = prompt
+  local expected="$1" prompt="$2"
   if [[ ! -r /dev/tty ]]; then
     log_error "no TTY for confirmation — refusing to run unattended."
     exit 1
   fi
   local reply
-  printf '%s' "$2" > /dev/tty
+  printf '%s' "$prompt" > /dev/tty
   read -r reply < /dev/tty
-  [[ "$reply" == "$1" ]] || { log_error "confirmation did not match — aborted."; exit 1; }
+  [[ "$reply" == "$expected" ]] || { log_error "confirmation did not match — aborted."; exit 1; }
 }
 
 if [[ "$IS_PROD" == "1" ]]; then
