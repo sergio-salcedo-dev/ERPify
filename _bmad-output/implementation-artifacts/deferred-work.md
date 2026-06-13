@@ -61,3 +61,7 @@ deriva los campos del `SortFieldMap` de producción) — todos retirados. El res
 
 - Empty-page recovery in `useResourceList` (useResourceList.ts:178-183) can issue redundant `follow()` calls on a tail-emptied page. Bounded (terminates at offset 0; mock-only deterministic data). Harden with a visited-link/attempt guard and clamp `searchAt` offset to the result length.
 - `useQueryState.reset()` (createQueryState.ts:32-35) does not reset `pageSize` although its doc describes a "single reset" over filter/sort/pageSize. Either reset page size or adjust the doc — low priority, page size is arguably a viewing preference.
+
+## Deferred from: code review of iam-user-management-frontend plan — group 2 user module (2026-06-14)
+
+- `UserEditSchema` (pwa/src/context/backoffice/user/application/schemas/UserEditSchema.ts) is unused — referenced only in a `UserFormSchema` comment; the form validates with `UserFormSchema`. It documents the intended API edit contract but is dead per "minimum code, nothing speculative." Decide later: wire edit-mode validation to it, or remove it.

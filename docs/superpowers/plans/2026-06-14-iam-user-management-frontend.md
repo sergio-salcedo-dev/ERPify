@@ -2259,3 +2259,31 @@ git commit -m "docs(pwa): document access + resource toolkits and user module"
 
 - [x] [Review][Defer] Empty-page recovery can issue redundant follows on a tail-emptied page [useResourceList.ts:178-183] — bounded (terminates at offset 0; mock-only deterministic data). Harden later with a visited-link/attempt guard + clamp `searchAt` offset to result length.
 - [x] [Review][Defer] `useQueryState.reset()` omits `setPageSize` [createQueryState.ts:32-35] though the doc says "single reset" over filter/sort/pageSize — defensible (page size is a viewing preference), but align code or doc.
+
+---
+
+## Review Findings — Group 2: context/backoffice/user (2026-06-14)
+
+> Adversarial review (Blind Hunter + Edge Case Hunter + Acceptance Auditor), DDD/Codely lens. Scope: the User module only (domain, application schemas incl. auth, infrastructure repo + seed, schemas test). Auditor found 0 Critical/High spec violations; `domain/` purity, no-password-in-state, synthetic-PII-free seed, generic-CrudRepository reuse and `uuidV7` all confirmed compliant.
+
+### Decision needed — RESOLVED & APPLIED
+
+- [x] [Review][Decision] User aggregate unique email key → **Resolved: Option A (enforce in the mock).** `InMemoryUserRepository.create` now pre-checks the email (case-insensitive) and throws an `HttpError` with a `user-email-conflict` ProblemDetails (409); `rows` is `protected` in the base so the entity repo can guard its invariant. Update needs no guard — email is immutable post-create (read-only field + `applyInput` preserves `existing.email`). New tests exercise the previously-dormant conflict path.
+
+### Patch — APPLIED
+
+- [x] [Review][Patch] Password fields bounded — added `PASSWORD_MIN_LENGTH`/`PASSWORD_MAX_LENGTH` (8/128) in `passwordPolicy.ts`; `RegisterSchema`/`ResetPasswordSchema` password now `.min().max()`.
+- [x] [Review][Patch] Auth email fields capped — `.max(USER_EMAIL_MAX_LENGTH)` added to `RegisterSchema`/`LoginSchema`/`ForgotPasswordSchema` email (parity with `UserCreateSchema`).
+
+### Deferred
+
+- [x] [Review][Defer] `UserEditSchema` is unused — referenced only in a `UserFormSchema` comment; the form validates with `UserFormSchema` [grep]. It documents the intended API edit contract but is dead per "nothing speculative." Decide later: wire edit-mode validation to it, or remove it.
+
+### Dismissed (verified false-positive or by-design)
+
+- Email mutation on edit / mass-assignment — email is `readOnly` in edit mode (UserForm.tsx:190) and `applyInput` ignores `input.email`; no mutation path exists.
+- `status` default PENDING — present in the form's `defaultValues` (UserForm.tsx:88), satisfying the spec; schema-level default is a placement choice.
+- `matchesFilter` fail-open / role cast — `toCriteria` only emits known filter combos; theoretical.
+- `localeCompare` on ISO dates / sort tie nondeterminism — fixed-width UTC seed + stable `Array.sort`; deterministic for the mock.
+- 250ms latency, mock-as-prod, seed `users.read` on all roles — intentional mock/dev-seed; DI documents the shared instance.
+- Password complexity, `confirmPassword.min(1)` — backend concern / matched via `refine`.
