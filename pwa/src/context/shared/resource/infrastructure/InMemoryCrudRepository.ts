@@ -30,7 +30,9 @@ export class InMemoryCrudRepository<T extends { id: string }, TInput> implements
   TInput
 > {
   constructor(
-    private rows: T[],
+    // `protected` so an entity repository can enforce an aggregate invariant
+    // (e.g. a unique key) over the live rows before delegating to super.
+    protected rows: T[],
     private readonly config: InMemoryEntityConfig<T, TInput>,
     private readonly nextId: () => string,
     private readonly nowIso: () => string,

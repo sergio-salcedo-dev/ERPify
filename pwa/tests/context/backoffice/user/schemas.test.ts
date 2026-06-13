@@ -37,4 +37,22 @@ describe("auth schemas", () => {
     });
     expect(ok.success).toBe(true);
   });
+  it("RegisterSchema bounds password and email length", () => {
+    const longPassword = "a".repeat(129);
+    expect(
+      RegisterSchema.safeParse({
+        email: "a@b.com",
+        password: longPassword,
+        confirmPassword: longPassword,
+      }).success,
+    ).toBe(false);
+    const longEmail = `${"a".repeat(256)}@b.com`;
+    expect(
+      RegisterSchema.safeParse({
+        email: longEmail,
+        password: "password1",
+        confirmPassword: "password1",
+      }).success,
+    ).toBe(false);
+  });
 });

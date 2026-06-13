@@ -4,10 +4,24 @@ import {
   InMemoryCrudRepository,
   type InMemoryEntityConfig,
 } from "@/context/shared/resource/infrastructure/InMemoryCrudRepository";
+import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
+import { HttpStatus } from "@/context/shared/domain/types/http";
 import { uuidV7 } from "@/lib/uuidV7";
 import { User } from "../domain/User";
 import type { UserInput } from "../domain/UserRepository";
+import { UserProblemType } from "../domain/UserProblemType";
 import { userSeed } from "./userSeed";
+
+function emailConflict(email: string): HttpError {
+  return new HttpError({
+    type: UserProblemType.EMAIL_CONFLICT,
+    title: "Email already in use",
+    status: HttpStatus.CONFLICT,
+    detail: `A user with the email ${email} already exists.`,
+    instance: uuidV7(),
+    "correlation-id": uuidV7(),
+  });
+}
 
 const config: InMemoryEntityConfig<User, UserInput> = {
   matchesFilter: (user, filter: Filter): boolean => {
@@ -56,5 +70,19 @@ export class InMemoryUserRepository extends InMemoryCrudRepository<User, UserInp
       () => new Date().toISOString(),
       250,
     );
+  }
+
+  /**
+   * Email is the user's unique business identity: reject a create that collides
+   * with an existing user (`user-email-conflict`, 409), mirroring the constraint
+   * a real backend enforces. Update needs no guard — email is immutable after
+   * create (the form is read-only and `applyInput` preserves `existing.email`).
+   */
+  override async create(input: UserInput): Promise<User> {
+    const normalized = input.email.trim().toLowerCase();
+    if (this.rows.some((user) => user.email.toLowerCase() === normalized)) {
+      throw emailConflict(input.email);
+    }
+    return super.create(input);
   }
 }
