@@ -299,6 +299,23 @@ into a scratch stack (a worktree stack works) with
 a bank with a `stored_object` upload, then `GET /api/v1/stored-objects/{hash}` →
 expect 200 with `Cache-Control: … immutable`.
 
+#### End-to-end smoke checklist
+
+Run the whole loop on the `erpify.local` rehearsal (or a scratch worktree stack)
+— never first on real production:
+
+- [ ] **Stand up the prod profile** — `make deploy.local` (preflight → up → migrate → smoke). Confirm the stack is healthy.
+- [ ] **Seed an object** — create a bank with a `stored_object` upload; note its `{hash}`. `GET /api/v1/stored-objects/{hash}` → 200, `Cache-Control: … immutable`.
+- [ ] **Back up** — `make backup.prod`. Confirm both `db-<stamp>.dump` and `objects-<stamp>.tar.gz` exist (`ls -1 /var/backups/erpify/`), sharing one `<stamp>`.
+- [ ] **Mutate after the backup** — delete that bank (and ideally add a different one), so a successful restore is *observable* (the deleted object reappears, the post-backup one is gone).
+- [ ] **Restore** — `RESTORE_YES=1 STAMP=<stamp> make restore.prod`. Watch the up-front verification pass (PGDMP + `pg_restore -l` + `tar -tzf`).
+- [ ] **Verify the recovery point** — `GET /api/v1/stored-objects/{hash}` for the seeded object → 200, `Cache-Control: … immutable`; the bank is back; the post-backup mutation is gone.
+- [ ] **Confirm writers are up** — `docker compose … ps` shows `php`/`messenger_worker` running again.
+- [ ] **(prod dry-run)** Optionally rehearse the production path: with a real `SERVER_NAME`, confirm the run refuses without `ALLOW_PROD_RESTORE=1` and demands the typed `restore <project> <stamp>` phrase.
+
+Only after this loop passes is the backup/restore pair trusted for real
+production.
+
 ---
 
 ## Security notes
