@@ -56,6 +56,11 @@ services:
         limits:
           cpus: ${PHP_CPU_LIMIT:-2.0}
           memory: ${PHP_MEM_LIMIT:-1g}
+    volumes:
+      # Flysystem object storage (OBJECT_STORAGE_LOCAL_PATH default). Without a
+      # persistent volume uploads are lost on container recreation. Back it up
+      # alongside the DB — see docs-info/object-storage.md.
+      - object_storage_data:/app/api/storage
     networks:
       - frontend
       - backend
@@ -158,6 +163,11 @@ services:
         limits:
           cpus: ${WORKER_CPU_LIMIT:-1.0}
           memory: ${WORKER_MEM_LIMIT:-512m}
+    volumes:
+      # Same object-storage volume as the php service: async handlers must see
+      # the same files (StoredObjectOrphanCleaner runs in this worker too).
+      # See docs-info/object-storage.md for the shared-store requirement.
+      - object_storage_data:/app/api/storage
     # frontend = outbound SMTP egress; backend = reach Postgres.
     networks:
       - frontend
@@ -172,6 +182,9 @@ volumes:
 # frontend: host-facing + inter-service. backend: internal-only (no egress,
 # no host port) so the database is fully isolated. mailpit lives in the dev
 # overlay only, so naming networks here never touches dev.
+volumes:
+  object_storage_data:
+
 networks:
   frontend:
   backend:
