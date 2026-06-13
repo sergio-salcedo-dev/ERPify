@@ -31,7 +31,7 @@ export interface AuthContextValue {
   /** Clears the session (logout). */
   logout: () => void;
   /** Dev-only partial override (role/status/permissions), used by the switcher. */
-  override: (patch: Partial<Session> & { user?: Partial<Identity> }) => void;
+  override: (patch: Omit<Partial<Session>, "user"> & { user?: Partial<Identity> }) => void;
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null);
@@ -44,6 +44,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   useEffect(() => {
     try {
       const raw = globalThis.localStorage?.getItem(STORAGE_KEY);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (raw) setSession(JSON.parse(raw) as Session);
     } catch {
       // Corrupt/blocked storage → keep the seed.
@@ -70,7 +71,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const logout = useCallback((): void => persist(null), [persist]);
 
   const override = useCallback(
-    (patch: Partial<Session> & { user?: Partial<Identity> }): void => {
+    (patch: Omit<Partial<Session>, "user"> & { user?: Partial<Identity> }): void => {
       setSession((prev) => {
         const base = prev ?? SEED_SESSION;
         const user: Identity = { ...base.user, ...(patch.user ?? {}) };
