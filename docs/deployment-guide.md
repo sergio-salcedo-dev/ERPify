@@ -201,4 +201,5 @@ Step-by-step (incl. internal-CA trust and `/etc/hosts`) and VPS promotion:
 - `make docker.down.clean-volumes` drops volumes and is **destructive** — never on prod without explicit confirmation. On prod that includes the two stateful volumes: `database_data` **and** `storage_data` (uploaded stored-objects).
 - Do not run `db.reset` outside dev/ci.
 - DNS, CORS origins, and Mercure cookie/CORS config: see [`pwa/docs/production-deployment.md`](../pwa/docs/production-deployment.md).
+- Backups: `make backup.prod` takes the paired Postgres dump + object-storage archive; cron, offsite sync, restore and the quarterly drill are in [`vps-deployment.md`](./vps-deployment.md) § Backups.
 - Xdebug must be disabled in prod images.
