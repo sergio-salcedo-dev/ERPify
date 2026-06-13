@@ -56,3 +56,9 @@ deriva los campos del `SortFieldMap` de producción) — todos retirados. El res
 | [#233](https://github.com/sergio-salcedo-dev/ERPify/issues/233) | keyset: `RowUniquenessGuard` falla-abierto fuera del caso addSelect (cartesiano / to-many no seleccionado) |
 | [#234](https://github.com/sergio-salcedo-dev/ERPify/issues/234) | keyset: `qualify()` reescribe el DQL del predicado por regex (acoplado a `id` bare) |
 | [#235](https://github.com/sergio-salcedo-dev/ERPify/issues/235) | keyset: `entityName()` colapsa al nombre corto → colisión de fingerprint multi-contexto |
+
+## Deferred from: code review of 2-4-pwa-senales-lista-mas-detalle-pr4 (2026-06-13)
+
+- **Write-path `accountCount: 0`** — `ApiBankRepository.create`/`update` defaultean `accountCount` a `0` (POST/PUT omiten `GROUP_ACCOUNT_COUNT`); un banco con cuentas devuelve "0/None" hasta el refetch. Latente: seguro hoy solo porque todo consumidor refetchea. `ApiBankRepository.ts:538,549`.
+- **Sin clamping de `accountCount` malformado** — los type-guards (`ApiBankRepository.ts`, `bankRealtime.ts`) aceptan `NaN`/negativo/no-entero (`typeof NaN === "number"`), que renderiza como "None" en vez de rechazarse. Falta `Number.isInteger` + `>= 0`. Depende de una violación de contrato del API que hoy no ocurre.
+- **Enlace `/accounts` a ruta inexistente** — el contador clickable y "View accounts" apuntan a `/backoffice/banks/{id}/accounts` (Story 2.3, no en esta rama) → 404 hasta su merge. Aceptado por el spec; riesgo real solo si 2.4 aterriza antes que 2.3. `BanksTable.tsx`, `[id]/page.tsx`.

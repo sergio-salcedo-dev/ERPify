@@ -47,10 +47,23 @@ describe("parseBankRealtimeEvent", () => {
     ).toBeNull();
   });
 
-  it("returns null when accountCount is missing from the bank payload", () => {
+  it("defaults accountCount to 0 when missing rather than dropping the event", () => {
     const { accountCount: _, ...withoutCount } = primitives;
-    expect(parseBankRealtimeEvent({ type: "bank.created", bank: withoutCount })).toBeNull();
-    expect(parseBankRealtimeEvent({ type: "bank.updated", bank: withoutCount })).toBeNull();
+    const created = parseBankRealtimeEvent({ type: "bank.created", bank: withoutCount });
+    expect(created?.kind).toBe("created");
+    if (created?.kind === "created") {
+      expect(created.bank.accountCount).toBe(0);
+    }
+    const updated = parseBankRealtimeEvent({ type: "bank.updated", bank: withoutCount });
+    expect(updated?.kind).toBe("updated");
+    if (updated?.kind === "updated") {
+      expect(updated.bank.accountCount).toBe(0);
+    }
+  });
+
+  it("still rejects a payload missing a core identity field", () => {
+    const { id: _, ...withoutId } = primitives;
+    expect(parseBankRealtimeEvent({ type: "bank.created", bank: withoutId })).toBeNull();
   });
 
   it("maps accountCount correctly from the event payload", () => {

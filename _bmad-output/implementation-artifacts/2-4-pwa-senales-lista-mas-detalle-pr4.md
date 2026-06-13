@@ -4,7 +4,7 @@ baseline_commit: 6d38408f311d083862cf5754d4eec98606839163
 
 # Story 2.4: PWA · Señales de contador en lista y detalle (PR4)
 
-Status: review
+Status: done
 
 ## Story
 
@@ -47,11 +47,25 @@ so that tenga visibilidad inmediata de las dependencias antes de proceder con bo
 
 - [x] **T6** — `make pwa.quality` — ESLint + Prettier verdes (obligatorio antes de declarar done)
 
+### Review Findings
+
+_Code review 2026-06-13 (PR #248) — Blind Hunter · Edge Case Hunter · Acceptance Auditor._
+
+**DN1 resuelto (decisión de Sergio 2026-06-13): opción 1 — mantener el enriquecimiento Mercure, reconciliar el spec y relajar el guard.** El realtime `accountCount` pasa a estar en scope de v1; el Invariante #4 queda obsoleto. Se desglosa en los patches P2/P3.
+
+- [x] [Review][Patch] (P1) Test del caso `N === 0` reforzado: asegura no-navegabilidad (no `<a>`/`<button>`/`role=link`/ancestro anchor), no solo `tagName` (invariante #1) [pwa/tests/app/backoffice/banks/banksAccountCount.test.tsx]
+- [x] [Review][Patch] (P2) Spec reconciliado: Invariante #4 reescrito (realtime SÍ porta `accountCount` en v1) + `BankRealtimePublisherHandler.php`/test, `api/.bounded-context-allowlist` y `bankRealtime.ts` añadidos al File List [_bmad-output/implementation-artifacts/2-4-pwa-senales-lista-mas-detalle-pr4.md]
+- [x] [Review][Patch] (P3) Guard realtime resiliente: `toBankPrimitives` tolera `accountCount` ausente (default 0) en vez de descartar el evento; test actualizado [pwa/src/context/backoffice/bank/infrastructure/bankRealtime.ts]
+
+- [x] [Review][Defer] Write-path `create`/`update` devuelve `accountCount: 0` (POST/PUT omiten `GROUP_ACCOUNT_COUNT`) → un banco con cuentas devuelve "0/None" hasta el refetch; seguro hoy solo porque todo consumidor refetchea [pwa/src/context/backoffice/bank/infrastructure/ApiBankRepository.ts:538,549] — deferred, latente, sin ruptura actual
+- [x] [Review][Defer] Type-guards aceptan `accountCount` `NaN`/negativo/no-entero (`typeof NaN === "number"` → render como "None") — sin `Number.isInteger`/`>= 0` defensivo [pwa/src/context/backoffice/bank/infrastructure/ApiBankRepository.ts, bankRealtime.ts] — deferred, depende de violación de contrato del API que hoy no ocurre
+- [x] [Review][Defer] Enlace clickable a `/backoffice/banks/{id}/accounts` da 404 hasta que Story 2.3 mergee — riesgo solo si 2.4 aterriza antes que 2.3 (PRs stacked) [pwa/src/app/backoffice/banks/_components/BanksTable.tsx, [id]/page.tsx] — deferred, aceptado por el spec; caveat de orden de merge
+
 ## Dev Notes
 
 ### Contexto de esta story
 
-Story 2.4 es el **lado PWA de la feature `accountCount`** cuyo API ya está mergeado en esta rama (PR #248: `BankSearcher`, `BankDetailFinder`, `AccountCountsByBank`). El API entrega `accountCount` como entero en el payload de lista y detalle. Esta story solo consume ese campo — cero cambios en API o backend.
+Story 2.4 es el **lado PWA de la feature `accountCount`** cuyo API ya está mergeado en esta rama (PR #248: `BankSearcher`, `BankDetailFinder`, `AccountCountsByBank`). El API entrega `accountCount` como entero en el payload de lista y detalle. El grueso de la story consume ese campo en la PWA; el único cambio de API que arrastra es el enriquecimiento del payload Mercure (`BankRealtimePublisherHandler`) para que los eventos realtime también lo porten — ver Invariante #4 y el File List.
 
 **Dependencias:**
 - **PR1 (Story 2.1) ya mergeado en esta rama.** El API devuelve `accountCount: int` en lista (`GET /banks`) y detalle (`GET /banks/{id}`). El campo está en el grupo de serialización `GROUP_ACCOUNT_COUNT` — solo aparece en esos dos endpoints de lectura, **no** en POST/PUT.
@@ -59,23 +73,26 @@ Story 2.4 es el **lado PWA de la feature `accountCount`** cuyo API ya está merg
 
 **Invariante #1 (dual-truth — carga desde architecture-bank-associated-accounts.md):** `accountCount > 0` hace el link visible pero **no bloquea `DELETE`**. El guard optimista es Story 2.5. Esta story solo muestra el dato — ninguna lógica de borrado cambia aquí.
 
-**Invariante #4 (stale-tolerance):** `accountCount` refleja el último fetch; no hay Mercure para cuentas en v1. La columna nunca se "auto-actualiza" en la tabla — es estático hasta el siguiente fetch.
+**Invariante #4 (stale-tolerance):** `accountCount` refleja el último fetch o el último evento Mercure recibido. Los eventos `bank.created`/`bank.updated` **sí** portan `accountCount` (resuelto en publish-time por `BankRealtimePublisherHandler`), así que la tabla y el detalle pueden auto-actualizar el contador en tiempo real; entre eventos el valor es estático hasta el siguiente fetch. El contador es una señal display-only: si un evento llegara sin él (skew de rolling-deploy / mensaje replayed pre-`accountCount`), el parser lo defaultea a 0 y el siguiente fetch reconcilia — nunca se descarta el evento por un campo cosmético.
 
 ### Archivos a modificar
 
 | Archivo | Operación | Notas |
 |---|---|---|
 | `pwa/src/context/backoffice/bank/domain/Bank.ts` | MODIFICADO | `BankPrimitives` + `Bank` class + `fromPrimitives` |
-| `pwa/src/context/backoffice/bank/infrastructure/ApiBankRepository.ts` | MODIFICADO | `isBankPrimitives` + validación `accountCount` |
+| `pwa/src/context/backoffice/bank/infrastructure/ApiBankRepository.ts` | MODIFICADO | `isBankPrimitives` + validación `accountCount` (read-path estricto, write-path lenient con default 0) |
+| `pwa/src/context/backoffice/bank/infrastructure/bankRealtime.ts` | MODIFICADO | parser tolera `accountCount` ausente (default 0) en payloads realtime |
 | `pwa/src/app/backoffice/banks/_lib/bankRoutes.ts` | MODIFICADO | añadir `accounts: (id) => …` |
 | `pwa/src/app/backoffice/banks/_components/BanksTable.tsx` | MODIFICADO | nueva columna ACCOUNTS |
 | `pwa/src/app/backoffice/banks/[id]/page.tsx` | MODIFICADO | nuevo campo "Associated accounts" en dl/dd |
+| `api/src/Backoffice/Bank/Infrastructure/Messenger/BankRealtimePublisherHandler.php` (+ `BankRealtimePublisherHandlerTest.php`) | MODIFICADO | enriquece el payload Mercure `bank.created`/`bank.updated` con `accountCount` vía `AccountCountsByBank` |
+| `api/.bounded-context-allowlist` | MODIFICADO | declara el seam de lectura `AccountCountsByBank` consumido por el handler (CE-3/CE-4) |
 
 **No tocar:**
 - `BanksCards.tsx` — el diseño no especifica `accountCount` en la vista de tarjetas (la señal vive en la tabla y el detalle).
 - `BankRepository.ts` (dominio) — la interfaz de búsqueda no cambia.
 - `SearchBanks.ts`, `FindBank.ts` — use cases de aplicación, sin cambios.
-- Nada en `api/` — esta story es solo PWA.
+- El write-path del API (`BankPostController`/`BankPutController`) — `accountCount` solo viaja en el grupo `GROUP_ACCOUNT_COUNT` (lista + detalle + eventos realtime de lectura), nunca en POST/PUT.
 
 ### Estado actual de los ficheros (lo que vas a modificar)
 

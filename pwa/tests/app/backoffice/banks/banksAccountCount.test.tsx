@@ -31,12 +31,18 @@ describe("BanksTable — ACCOUNTS column", () => {
     expect(cell).toHaveAttribute("href", expect.stringContaining("/accounts"));
   });
 
-  it("renders a span without href when accountCount === 0", () => {
+  it("renders a non-navigable cell when accountCount === 0 (invariant #1)", () => {
     render(<BanksTable onBankDeleteFailed={() => {}} banks={[WITHOUT_ACCOUNTS]} />);
     const cell = screen.getByTestId(`banks-table__accounts-${WITHOUT_ACCOUNTS.id}`);
-    expect(cell.tagName.toLowerCase()).toBe("span");
     expect(cell).toHaveTextContent("0");
+    // A 0 count must not navigate by ANY mechanism, not merely lack an <a href>:
+    // no anchor (self or wrapping), no button, no role="link".
+    expect(cell.tagName.toLowerCase()).toBe("span");
     expect(cell).not.toHaveAttribute("href");
+    expect(cell).not.toHaveAttribute("role", "link");
+    expect(cell.closest("a")).toBeNull();
+    expect(cell.closest("button")).toBeNull();
+    expect(cell.querySelector("a, button")).toBeNull();
   });
 });
 
