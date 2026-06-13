@@ -9,6 +9,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { sectionTitleFor } from "./_lib/sectionTitle";
 import { backofficeMenuGroups, accountMenuItem, type NavItem } from "./_lib/backofficeMenu";
+import { RequireAuth, DevSessionSwitcher } from "@/context/shared/access/infrastructure/ui";
+import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
 
 const SIDEBAR_STORAGE_KEY = "erpify:sidebar-open";
 
@@ -296,6 +298,7 @@ export default function BackOfficeLayoutClient({
             </span>
 
             <div className="bo-layout__topbar-actions ml-auto flex items-center gap-1">
+              {isDevToolsAvailable() ? <DevSessionSwitcher /> : null}
               <ThemeToggle testId="bo-layout__topbar-theme" />
               <Button
                 type="button"
@@ -346,7 +349,9 @@ export default function BackOfficeLayoutClient({
               that never scrolls — breaking e.g. the banks bulk bar. Wide
               content (tables) brings its own overflow-x wrapper. */}
           <main id="main-content" className="bo-layout__main flex-grow pt-14 md:pt-0">
-            <div className="bo-layout__content mx-auto p-4 md:p-8">{children}</div>
+            <div className="bo-layout__content mx-auto p-4 md:p-8">
+              <RequireAuth>{children}</RequireAuth>
+            </div>
           </main>
         </div>
       </div>
