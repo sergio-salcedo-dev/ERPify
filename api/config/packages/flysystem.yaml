@@ -5,6 +5,6 @@ parameters:
 
 flysystem:
     storages:
-        erpify.object_storage.storage:
+        erpify.storage:
             local:
                 directory: "%env(STORAGE_LOCAL_PATH)%"

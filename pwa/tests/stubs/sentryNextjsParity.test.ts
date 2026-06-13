@@ -64,7 +64,7 @@ describe("Sentry Stub Parity", () => {
       );
       if (namespaceMatch) {
         const alias = namespaceMatch[1];
-        const memberRegex = new RegExp(`${alias}\\.(\\w+)`, "g");
+        const memberRegex = new RegExp(String.raw`${alias}\.(\w+)`, "g");
         let match;
         while ((match = memberRegex.exec(content)) !== null) {
           usedSymbols.add(match[1]);

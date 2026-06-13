@@ -16,7 +16,7 @@ use UnexpectedValueException;
 final readonly class FlysystemObjectStorage implements ObjectStoragePort
 {
     public function __construct(
-        #[Target('erpify.object_storage.storage')]
+        #[Target('erpify.storage')]
         private FilesystemOperator $filesystemOperator,
     ) {
     }

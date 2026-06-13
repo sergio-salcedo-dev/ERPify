@@ -32,9 +32,9 @@ See the annotated blocks in [`api/.env.example`](../api/.env.example).
 
 ### 2. Symfony config
 
-| File                                                                          | Role                                                                                                                                                                                                                                                 |
-|-------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [`api/config/packages/flysystem.yaml`](../api/config/packages/flysystem.yaml) | Declares the **`erpify.object_storage.storage`** Flysystem instance (currently **local** adapter). The **`directory`** option is **`%env(STORAGE_LOCAL_PATH)%`**, with a default via `parameters.env(STORAGE_LOCAL_PATH)` when the env var is unset. |
+| File                                                                          | Role                                                                                                                                                                                                                                  |
+|-------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [`api/config/packages/flysystem.yaml`](../api/config/packages/flysystem.yaml) | Declares the **`erpify.storage`** Flysystem instance (currently **local** adapter). The **`directory`** option is **`%env(STORAGE_LOCAL_PATH)%`**, with a default via `parameters.env(STORAGE_LOCAL_PATH)` when the env var is unset. |
 
 No code change is needed to point production at a different directory: set **`STORAGE_LOCAL_PATH`** in the environment passed to the **`php`** container (or host).
 
