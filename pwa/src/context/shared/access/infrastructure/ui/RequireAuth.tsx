@@ -3,23 +3,23 @@
 import { useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "../../application/useSession";
-import { UserStatus } from "../../domain/UserStatus";
 import { Routes } from "@/context/shared/domain/types/routes";
 
 /**
- * Route protection: no session or a non-ACTIVE user (e.g. BLOCKED via the dev
- * switcher) is redirected to /login. While redirecting it renders nothing so
- * protected content never flashes.
+ * Route protection. Identity is resolved before authorization: while the
+ * provider is `hydrating` it renders nothing and does not redirect (the stored
+ * session has not been read yet). Once resolved, only an `authenticated` (ACTIVE)
+ * session sees the children; anything else is redirected to /login. Protected
+ * content therefore never flashes on the strength of a default session.
  */
 export function RequireAuth({ children }: Readonly<{ children: ReactNode }>) {
   const router = useRouter();
-  const { session } = useSession();
-  const denied = !session || session.user.status !== UserStatus.ACTIVE;
+  const { status } = useSession();
 
   useEffect(() => {
-    if (denied) router.replace(Routes.LOGIN);
-  }, [denied, router]);
+    if (status === "unauthenticated") router.replace(Routes.LOGIN);
+  }, [status, router]);
 
-  if (denied) return null;
+  if (status !== "authenticated") return null;
   return <>{children}</>;
 }
