@@ -48,19 +48,14 @@ services:
       - NET_BIND_SERVICE
     volumes:
       # Flysystem object storage (OBJECT_STORAGE_LOCAL_PATH default). Without a
-      # named volume the uploads die with the container — see the production
-      # checklist in docs-info/object-storage.md. Back it up alongside the DB.
-      - object_storage_data:/app/api/var/storage/objects
+      # persistent volume uploads are lost on container recreation. Back it up
+      # alongside the DB — see docs-info/object-storage.md.
+      - object_storage_data:/app/api/storage
     deploy:
       resources:
         limits:
           cpus: ${PHP_CPU_LIMIT:-2.0}
           memory: ${PHP_MEM_LIMIT:-1g}
-    volumes:
-      # Flysystem object storage (OBJECT_STORAGE_LOCAL_PATH default). Without a
-      # persistent volume uploads are lost on container recreation. Back it up
-      # alongside the DB — see docs-info/object-storage.md.
-      - object_storage_data:/app/api/storage
     networks:
       - frontend
       - backend
@@ -155,19 +150,14 @@ services:
     # No privileged port and no daemon — the console consumer needs no caps.
     volumes:
       # Same object-storage volume as the php service: async handlers must see
-      # the objects the web container wrote (and vice versa) — the production
-      # checklist in docs-info/object-storage.md requires one shared store.
-      - object_storage_data:/app/api/var/storage/objects
+      # the same files the web container wrote (StoredObjectOrphanCleaner runs in
+      # this worker too). See docs-info/object-storage.md for the shared-store requirement.
+      - object_storage_data:/app/api/storage
     deploy:
       resources:
         limits:
           cpus: ${WORKER_CPU_LIMIT:-1.0}
           memory: ${WORKER_MEM_LIMIT:-512m}
-    volumes:
-      # Same object-storage volume as the php service: async handlers must see
-      # the same files (StoredObjectOrphanCleaner runs in this worker too).
-      # See docs-info/object-storage.md for the shared-store requirement.
-      - object_storage_data:/app/api/storage
     # frontend = outbound SMTP egress; backend = reach Postgres.
     networks:
       - frontend
@@ -182,9 +172,6 @@ volumes:
 # frontend: host-facing + inter-service. backend: internal-only (no egress,
 # no host port) so the database is fully isolated. mailpit lives in the dev
 # overlay only, so naming networks here never touches dev.
-volumes:
-  object_storage_data:
-
 networks:
   frontend:
   backend:

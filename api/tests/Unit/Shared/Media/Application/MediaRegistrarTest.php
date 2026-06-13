@@ -69,6 +69,25 @@ final class MediaRegistrarTest extends TestCase
         $this->assertSame(2, $mediaRepository->findCalls, 'dedup lookup + post-reset re-fetch of the winner');
     }
 
+    public function testRetriesTheWinnerRefetchWhenItIsNotVisibleOnTheFirstReQuery(): void
+    {
+        // The winning insert commits just after ours rolled back, so it is invisible to the first
+        // post-reset re-query under READ COMMITTED and only appears on the retry.
+        $winner = Media::create(self::MEDIA_ID, self::CONTENT_HASH, 'image/png', 4, 'PNG.');
+        $mediaRepository = new RecordingMediaRepository(
+            found: null,
+            saveFailure: $this->makeUniqueViolation(),
+            winner: $winner,
+            winnerVisibleFromFind: 2,
+        );
+        $registrar = $this->makeRegistrar($mediaRepository);
+
+        $result = $registrar->registerFromUploadedFile($this->createStub(UploadedFile::class));
+
+        $this->assertSame($winner, $result);
+        $this->assertSame(3, $mediaRepository->findCalls, 'dedup + first re-query (miss) + retry (hit)');
+    }
+
     public function testThrowsConcurrentMediaWinnerMissingExceptionWhenWinnerCannotBeRefetched(): void
     {
         // Dedup misses, the unique index rejects our insert (another request won the race),
@@ -91,8 +110,9 @@ final class MediaRegistrarTest extends TestCase
             // Expected — the registrar gives up only after the post-reset re-query also misses.
         }
 
-        // Dedup lookup + post-reset re-fetch: the registrar must re-query before giving up.
-        $this->assertSame(2, $mediaRepository->findCalls);
+        // Dedup lookup + two bounded post-reset re-fetch attempts: the registrar must exhaust the
+        // retry before giving up.
+        $this->assertSame(3, $mediaRepository->findCalls);
     }
 
     private function makeRegistrar(RecordingMediaRepository $mediaRepository): MediaRegistrar

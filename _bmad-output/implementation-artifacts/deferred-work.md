@@ -66,26 +66,3 @@ sobre PR #252 que no entran en el alcance de la propia PR. Triados como `defer`.
   `CREATE UNIQUE INDEX` (squasheado en `Version20260405212338`) aborta el boot bajo
   `--all-or-nothing` si ya hay filas duplicadas; documentado como prereq manual ("dedupe rows
   first"), sin guarda ni auto-dedupe. Pre-prod no aplica; futura red de seguridad si se reactiva.
-- **Replay manual de un mensaje fallido almacenado queda suprimido por `eventId` estable** —
-  `BankChangedNotifyEmailHandler` + `DbalDomainEventHandlerDeduplicator`: un `messenger:failed:retry`
-  de un evento que ya reclamó (y no liberó) no reenvía. Las actualizaciones reales distintas sí
-  obtienen `eventId` distinto (verificado), así que solo afecta a replays operativos intencionados.
-- **`Media::getRawBytes` cachea `''` si el stream está en EOF sin `rewind`** — `stream_get_contents`
-  sobre un recurso ya consumido devuelve `''` (no `false`), que se cachea; además lanzar desde un
-  getter puede aflorar durante serialización. Borde teórico sobre el flujo BLOB.
-- **Dockerfile: el dir pre-creado queda sombreado por un volumen `object_storage_data` pre-existente** —
-  en un upgrade desde un volumen creado root-owned, la propiedad `www-data` del layer de imagen no se
-  aplica (Docker solo inicializa volúmenes vacíos); `-m 700` compartido entre `php` y `messenger_worker`
-  es frágil. Falta un fallback `chown` en el entrypoint para el caso upgrade.
-- **`HttpClient.malformedEnvelope`: `correlation-id` cae a un UUID de cliente cuando falta el header** —
-  para las respuestas malformadas/error (justo donde más se necesita correlacionar) el id fabricado no
-  casa con ningún log de servidor. Pre-existente; esta PR solo lo extrajo a un helper.
-- **`MediaGetController:38` devuelve `new Response('Not Found', 404)` saltándose el pipeline RFC 9457** —
-  pre-existente, adyacente al `getRawBytes` tocado; convertir a Problem Details en un follow-up.
-- **`MediaRegistrar::concurrentWinner`: `findByContentHash` puede devolver null por timing** — bajo
-  read-committed o si el tx ganador hace rollback tras bumpear el índice, el re-query falla y mapea a
-  `ConcurrentMediaWinnerMissingException` (500) sin reintento; un único retry distinguiría
-  "no-visible-aún" de "realmente ausente".
-- **`HttpClient`: cuerpo 2xx vacío no-204 lanza `malformed-envelope`** — solo `204` se trata como vacío
-  legítimo; un endpoint que devuelva `200` con cuerpo vacío rompería un `get<void>` guard-less. Revisar
-  si algún consumidor espera 200-vacío.

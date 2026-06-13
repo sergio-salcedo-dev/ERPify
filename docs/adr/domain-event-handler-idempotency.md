@@ -52,6 +52,22 @@ esa tabla, (b) es configuración global que crece con cada tabla excluida, y (c)
 `schema_filter` mientras que el patrón listener ya está establecido (dos listeners). Un único
 mecanismo schema-aware es más barato de razonar.
 
+### D3 — Replay operativo: lo suprime el `eventId` estable; la poda lo acota
+
+El claim se indexa por `(eventId, handler)` y el `eventId` es **estable** para un evento dado, así que
+un `messenger:failed:retry` de un evento ya reclamado **no reenvía**: el `INSERT … ON CONFLICT` choca
+con la fila existente y `claim()` devuelve `false`. Es el comportamiento correcto bajo entrega
+at-least-once — dos entregas del *mismo* evento no deben duplicar el email — y dos actualizaciones de
+negocio *distintas* obtienen `eventId` distintos (verificado), por lo que cada una se notifica.
+
+La única consecuencia es que un **replay operativo intencionado** (reejecutar a mano un mensaje ya
+manejado para forzar otro envío) queda suprimido mientras exista su fila de claim. Escape:
+`PruneHandledDomainEventsHandler` (planificado a diario vía `HandledDomainEventMaintenanceSchedule`)
+caduca las reclamaciones pasada la ventana de retención (`PruneHandledDomainEventsMessage::retentionDays`,
+30 días por defecto), tras lo cual el evento vuelve a ser reclamable; un replay **inmediato** requiere
+borrar a mano la fila `handled_domain_event` de ese `(event_id, handler)`. Se acepta conscientemente:
+para un email de notificación, no duplicar pesa más que poder reenviar a voluntad.
+
 ## Verificación
 
 `doctrine:schema:validate` sobre una BD migrada desde cero queda **in sync** (la tabla aparece con su

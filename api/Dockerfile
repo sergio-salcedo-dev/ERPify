@@ -176,7 +176,6 @@ RUN <<-EOF
 	rm -rf /var/lib/apt/lists/*
 	mkdir -p /data/caddy /config/caddy
 	chown -R www-data:www-data /data /config
-	chown -R www-data:www-data /app/api/storage
 	# Remove setuid/setgid bits
 	find / -perm /6000 -type f -exec chmod a-s {} + 2>/dev/null || true
 EOF
@@ -184,10 +183,13 @@ EOF
 COPY --link --exclude=var --from=frankenphp_prod_builder /app/api /app/api
 COPY --chown=www-data:www-data --chmod=700 --from=frankenphp_prod_builder /app/api/var /app/api/var
 
-# Pre-create the Flysystem object-storage root with the runtime user's ownership: the named
-# volume compose.prod.yaml mounts here initializes from this directory. Without it Docker
-# creates the mountpoint as root and the (www-data) app cannot write uploads.
-RUN install -d -o www-data -g www-data -m 700 /app/api/var/storage/objects
+# Pre-create the Flysystem object-storage root (OBJECT_STORAGE_LOCAL_PATH default) with the
+# runtime user's ownership: the named volume compose.prod.yaml mounts here initializes from this
+# directory, so an empty volume inherits www-data:www-data. Runs after the source COPY above (which
+# would otherwise re-root the dir). Without it Docker creates the mountpoint as root and the
+# (www-data) app cannot write uploads. Upgrades from a pre-existing root-owned volume are not
+# re-initialised by Docker and need a one-time host-side chown of the volume.
+RUN install -d -o www-data -g www-data -m 700 /app/api/storage
 
 COPY --link --chmod=755 frankenphp/docker-entrypoint.sh /usr/local/bin/docker-entrypoint
 

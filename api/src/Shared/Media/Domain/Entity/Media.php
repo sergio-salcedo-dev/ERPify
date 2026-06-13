@@ -65,10 +65,14 @@ final class Media extends AggregateRoot
     public function getRawBytes(): string
     {
         if (\is_resource($this->rawBytes)) {
-            $contents = \stream_get_contents($this->rawBytes);
+            // why: read from offset 0, not the stream's current position. Doctrine can hand back a
+            // BLOB resource already advanced to EOF (a prior read, or re-hydration), and
+            // stream_get_contents() from EOF returns '' — not false — which would then be cached as
+            // the bytes. Callers serve these bytes as the response body, so a silently empty read is
+            // cacheable corruption. Seeking to 0 re-reads the whole blob; a genuinely unreadable or
+            // non-seekable stream still returns false and surfaces as a fault.
+            $contents = \stream_get_contents($this->rawBytes, null, 0);
 
-            // why: a failed BLOB stream read must not degrade to '' — callers serve these
-            // bytes as the response body, and an empty 200 is silent, cacheable corruption.
             if (false === $contents) {
                 throw MediaBytesUnreadableException::forMediaId($this->id());
             }

@@ -254,6 +254,34 @@ describe("FetchHttpClient", () => {
 
       expect(body).toEqual({ anything: "goes" });
     });
+
+    it("returns undefined for a guard-less empty 200 body (not only 204)", async () => {
+      fetchSpy.mockResolvedValueOnce(makeResponse(HttpStatus.OK, undefined));
+
+      const client = new FetchHttpClient();
+      const body = await client.get<void>("/api/v1/backoffice/ping");
+
+      expect(body).toBeUndefined();
+    });
+
+    it("returns undefined for a guard-less 204", async () => {
+      fetchSpy.mockResolvedValueOnce(makeResponse(HttpStatus.NO_CONTENT, undefined));
+
+      const client = new FetchHttpClient();
+      const body = await client.get<void>("/api/v1/backoffice/ping");
+
+      expect(body).toBeUndefined();
+    });
+
+    it("mints a synthetic correlation-id for a malformed envelope when the header is absent", async () => {
+      fetchSpy.mockResolvedValueOnce(makeResponse(HttpStatus.OK, { data: null }));
+
+      const client = new FetchHttpClient();
+
+      await expect(client.get("/api/v1/backoffice/banks", isEnvelope)).rejects.toMatchObject({
+        problem: { type: MALFORMED_RESPONSE_ENVELOPE, "correlation-id": STUB_UUID },
+      });
+    });
   });
 
   describe("browser base URL (same-origin by default)", () => {

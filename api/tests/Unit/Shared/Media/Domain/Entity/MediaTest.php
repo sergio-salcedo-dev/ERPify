@@ -49,4 +49,24 @@ final class MediaTest extends TestCase
 
         \fclose($stream);
     }
+
+    public function testReadsRawBytesFromAStreamLeftAtEof(): void
+    {
+        $media = Media::create(self::MEDIA_ID, self::CONTENT_HASH, 'image/png', 9, 'seed');
+
+        $stream = \fopen('php://memory', 'r+');
+
+        if (false === $stream) {
+            $this->fail('Could not open an in-memory stream for the test fixture.');
+        }
+
+        // Leave the cursor at EOF (no rewind): a Doctrine BLOB resource can arrive already consumed.
+        // Reading from the current position would yield '' — the getter must seek to the start.
+        \fwrite($stream, 'PNG-bytes');
+        (new ReflectionProperty(Media::class, 'rawBytes'))->setValue($media, $stream);
+
+        $this->assertSame('PNG-bytes', $media->getRawBytes());
+
+        \fclose($stream);
+    }
 }

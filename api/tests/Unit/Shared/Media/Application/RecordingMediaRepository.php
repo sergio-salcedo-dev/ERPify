@@ -17,7 +17,9 @@ use Override;
  * `media_content_hash_uniq` index rejecting a row another request inserted first. The initial
  * dedup lookup returns `$found`; once a save has failed, the post-reset re-fetch returns `$winner`
  * instead, so a single fixture can model "winner found" (`$winner` set) and "winner vanished"
- * (`$winner` null).
+ * (`$winner` null). `$winnerVisibleFromFind` delays that visibility to model a READ COMMITTED gap:
+ * the winner only becomes findable from the Nth post-failure re-query onward (1 = immediately),
+ * exercising the registrar's bounded refetch retry.
  *
  * @internal
  */
@@ -29,10 +31,13 @@ final class RecordingMediaRepository implements MediaRepository
 
     private bool $saveFailed = false;
 
+    private int $postFailureFinds = 0;
+
     public function __construct(
         private readonly ?Media $found = null,
         private readonly ?UniqueConstraintViolationException $saveFailure = null,
         private readonly ?Media $winner = null,
+        private readonly int $winnerVisibleFromFind = 1,
     ) {
     }
 
@@ -53,7 +58,13 @@ final class RecordingMediaRepository implements MediaRepository
     {
         ++$this->findCalls;
 
-        return $this->saveFailed ? $this->winner : $this->found;
+        if (!$this->saveFailed) {
+            return $this->found;
+        }
+
+        ++$this->postFailureFinds;
+
+        return $this->postFailureFinds >= $this->winnerVisibleFromFind ? $this->winner : null;
     }
 
     #[Override]
