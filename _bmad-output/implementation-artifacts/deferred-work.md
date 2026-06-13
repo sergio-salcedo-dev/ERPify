@@ -41,28 +41,3 @@ Collected during quick-dev. Not part of the current story's shippable scope.
 - **Sentry sink PWA** — shipped 2026-06-08 (spec-pwa-sentry): `serializeCause()` + scrub
   recursivo, `createTelemetry()`, túnel same-origin `/monitoring`, severity map.
 
-## Migrado a issues (2026-06-12)
-
-Triaje del backlog sin-issue de los reviews de keyset (auditado contra `main`): 8 items ya
-estaban resueltos en `main` por PR1–PR4 (codec arity guard, dedup `id` en `OrderByColumns`,
-precisión `TIMESTAMP(0)`, `hasNext` de página `before` vacía, dirección de índice, `nullable`
-sortable, frontera intra-empate del property test, y la migración inmutable de collation) y 2 se
-arreglaron en PR #229 (`KeysetSqlSnapshotTest` cierra su conexión DBAL paralela; `SortFieldMapIndexContractTest`
-deriva los campos del `SortFieldMap` de producción) — todos retirados. El resto se migró a issues:
-
-| Issue | Item |
-|-------|------|
-| [#232](https://github.com/sergio-salcedo-dev/ERPify/issues/232) | keyset: `resolveLimit` no aplica `policy.defaultLimit` (default del wire inerte) |
-| [#233](https://github.com/sergio-salcedo-dev/ERPify/issues/233) | keyset: `RowUniquenessGuard` falla-abierto fuera del caso addSelect (cartesiano / to-many no seleccionado) |
-| [#234](https://github.com/sergio-salcedo-dev/ERPify/issues/234) | keyset: `qualify()` reescribe el DQL del predicado por regex (acoplado a `id` bare) |
-| [#235](https://github.com/sergio-salcedo-dev/ERPify/issues/235) | keyset: `entityName()` colapsa al nombre corto → colisión de fingerprint multi-contexto |
-
-## Diferidos del code review de PR #252 (2026-06-13)
-
-Hallazgos reales del review adversarial (Blind Hunter / Edge Case Hunter / Acceptance Auditor)
-sobre PR #252 que no entran en el alcance de la propia PR. Triados como `defer`.
-
-- **Migración del índice único falla con duplicados `content_hash` pre-existentes** — el
-  `CREATE UNIQUE INDEX` (squasheado en `Version20260405212338`) aborta el boot bajo
-  `--all-or-nothing` si ya hay filas duplicadas; documentado como prereq manual ("dedupe rows
-  first"), sin guarda ni auto-dedupe. Pre-prod no aplica; futura red de seguridad si se reactiva.

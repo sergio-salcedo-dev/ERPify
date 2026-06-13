@@ -65,7 +65,7 @@ Never commit real secrets. Minimum production set:
 | **`MAILER_DSN`** | Real transport in production (SMTP, API bridge, etc.). **`null://null`** only for labs. |
 | **`MAILER_FROM`** | Must be a domain/address your provider allows (SPF/DKIM/DMARC on that domain). |
 | **`DEFAULT_NOTIFICATION_EMAIL`** | Operational inbox for bank create/update notifications (async handler). |
-| **`OBJECT_STORAGE_LOCAL_PATH`** | **Production:** absolute path to the Flysystem local root for content-addressable files (`objects/{hash}`). Must be on a **persistent volume** (see [object-storage.md](object-storage.md)). Optional in dev (defaults under `var/storage/objects`). |
+| **`OBJECT_STORAGE_LOCAL_PATH`** | Flysystem local root for content-addressable files. **Production:** leave unset — the `object_storage_data` named volume persists the default `/app/api/storage` (`%kernel.project_dir%/storage`); set this only to relocate storage onto another absolute path / mount (see [object-storage.md](object-storage.md)). Optional in dev (same default). |
 | **`MEDIA_PUBLIC_BASE_URL`** | Optional. If set, **`logoUrl`** and **`storedObjectUrl`** in JSON use this origin; needed when clients require stable absolute asset URLs. |
 
 `compose.prod.yaml` passes **`APP_SECRET`** and **`MAILER_DSN`** into **`messenger_worker`**; other worker variables come from the base **`compose.yaml`** merge (e.g. **`DATABASE_URL`**, **`MESSENGER_TRANSPORT_DSN`**, **`DEFAULT_NOTIFICATION_EMAIL`**). If you add env-only overrides in production, ensure **both** **`php`** and **`messenger_worker`** stay aligned on DB and Messenger DSN.
