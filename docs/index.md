@@ -44,6 +44,7 @@
 - **[adr/bank-bankaccount-modeling.md](./adr/bank-bankaccount-modeling.md)** — ADR: id-based cross-module references (Bank/BankAccount), schema-aware FK, per-aggregate persistence strategy (state vs event sourcing)
 - **[adr/filters-search-criteria.md](./adr/filters-search-criteria.md)** — ADR: generic `filters[]` search vocabulary (SearchQuery/SearchCriteria), rationale and FR/NFR inventory
 - **[adr/keyset-pagination.md](./adr/keyset-pagination.md)** — ADR: cursor-only keyset pagination + repositories by composition (IMPLEMENTATION LOCKED, with post-D-1 override note)
+- **[adr/domain-event-handler-idempotency.md](./adr/domain-event-handler-idempotency.md)** — ADR: Messenger handler idempotency — raw-DBAL claim table (`handled_domain_event`) + `postGenerateSchema` listener; ORM-entity and `schema_filter` alternatives rejected
 - **[api-error-contract.md](./api-error-contract.md)** — RFC 9457 Problem Details: marker→status map, correlation-id, instance UUIDv7, logging tiers, `exception_category` SRE taxonomy
 - **[troubleshooting/sentry-domain-error-filtering.md](./troubleshooting/sentry-domain-error-filtering.md)** — deferred: drop/sample `domain_error` noise in Sentry (`ignore_exceptions` vs `before_send`), with the trade-off
 - **[troubleshooting/sentry-boot-probe-noise.md](./troubleshooting/sentry-boot-probe-noise.md)** — fixed: silencing the container boot DB-probe flood (`SENTRY_DSN=` on the entrypoint `SELECT 1` wait), safe in dev + prod

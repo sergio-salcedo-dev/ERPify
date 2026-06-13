@@ -11,7 +11,7 @@ final class Version20260405212338 extends AbstractMigration
 {
     public function getDescription(): string
     {
-        return 'Add media table';
+        return 'Add media table with a unique index on content_hash backing the MediaRegistrar dedup check';
     }
 
     public function up(Schema $schema): void
@@ -27,6 +27,7 @@ final class Version20260405212338 extends AbstractMigration
             . 'updated_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, '
             . 'PRIMARY KEY (id))',
         );
+        $this->addSql('CREATE UNIQUE INDEX media_content_hash_uniq ON media (content_hash)');
     }
 
     public function down(Schema $schema): void

@@ -40,8 +40,6 @@ final readonly class MediaRegistrar
 
         $this->validator->ensure($media);
 
-        $this->mediaRepository->save($media);
-
-        return $media;
+        return $this->mediaRepository->saveOrGetByContentHash($media);
     }
 }

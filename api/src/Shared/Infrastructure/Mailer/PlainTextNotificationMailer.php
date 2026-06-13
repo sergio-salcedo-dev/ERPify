@@ -38,7 +38,7 @@ final readonly class PlainTextNotificationMailer implements NotificationMailer
         }
 
         foreach ($fields as $key => $value) {
-            $lines[] = \sprintf('%s: %s', $key, \is_scalar($value) ? $value : \json_encode($value));
+            $lines[] = \sprintf('%s: %s', $key, $this->renderFieldValue($value));
         }
 
         $body = \implode("\n", $lines);
@@ -52,5 +52,30 @@ final readonly class PlainTextNotificationMailer implements NotificationMailer
         ;
 
         $this->mailer->send($email);
+    }
+
+    /**
+     * Renders a field value as a stable, non-empty string. A boolean is a scalar, so `false` would
+     * otherwise vanish through `%s`; `null` is not scalar and must not be conflated with an encode
+     * failure; and a genuine `json_encode()` failure (resource, invalid UTF-8) stays visibly marked
+     * rather than silently dropping the field.
+     */
+    private function renderFieldValue(mixed $value): string
+    {
+        if (\is_bool($value)) {
+            return $value ? 'true' : 'false';
+        }
+
+        if (null === $value) {
+            return 'null';
+        }
+
+        if (\is_scalar($value)) {
+            return (string) $value;
+        }
+
+        $encoded = \json_encode($value);
+
+        return false === $encoded ? '[unserializable]' : $encoded;
     }
 }
