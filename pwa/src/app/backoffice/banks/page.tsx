@@ -612,9 +612,12 @@ export default function BanksListPage() {
 
   // Typed recovery in the persistent error surface, keyed off the problem type:
   // a stale `bank-not-found` heals in place via a refresh (recalculates the
-  // selection and re-derives the confirm phrase); a `bank-in-use` (the count
-  // raced the backend) routes to the accounts surface so the user can act on
-  // them. Other types carry no action.
+  // selection and re-derives the confirm phrase); a single `bank-in-use` (the
+  // count raced the backend) deep-links to that bank's accounts surface. A
+  // bulk delete can reject several banks at once, so a per-bank deep-link
+  // would silently address only the first — the in-use rows are restored to
+  // the list below, each carrying its own optimistic guard, which is the
+  // precise per-bank recovery. Other types carry no action.
   const deleteRecoveryAction = ((): ReactNode => {
     switch (deleteError?.problem.type) {
       case BankProblemType.NOT_FOUND:
@@ -635,7 +638,7 @@ export default function BanksListPage() {
           </Button>
         );
       case BankProblemType.IN_USE:
-        return (
+        return deleteError.scope === "single" ? (
           <Link
             href={safeHref(bankRoutes.accounts(deleteError.bankId))}
             className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
@@ -645,6 +648,13 @@ export default function BanksListPage() {
           >
             View accounts
           </Link>
+        ) : (
+          <span
+            className="text-muted-foreground text-sm"
+            data-testid="banks-list__delete-error-in-use-hint"
+          >
+            Open each flagged bank below to view its accounts.
+          </span>
         );
       default:
         return undefined;
