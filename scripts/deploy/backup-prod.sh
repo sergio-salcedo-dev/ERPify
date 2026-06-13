@@ -19,7 +19,7 @@
 #   BACKUP_MIN_FREE_MB     min free space preflight    (default 500)
 #   PROD_ENV_FILE          compose secrets file        (default .env.prod.local)
 #   COMPOSE_PROJECT_NAME   compose project             (default erpify)
-#   OBJECT_STORAGE_VOLUME  volume to archive           (default <project>_object_storage_data)
+#   STORAGE_VOLUME         volume to archive           (default <project>_storage_data)
 #   BACKUP_SYNC_CMD        optional offsite hook, run after a successful backup
 #                          (e.g. 'rclone sync /var/backups/erpify remote:erpify-backups')
 #
@@ -34,7 +34,7 @@ BACKUP_DIR="${BACKUP_DIR:-/var/backups/erpify}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
 MIN_FREE_MB="${BACKUP_MIN_FREE_MB:-500}"
 export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-erpify}"
-OBJECT_STORAGE_VOLUME="${OBJECT_STORAGE_VOLUME:-${COMPOSE_PROJECT_NAME}_object_storage_data}"
+STORAGE_VOLUME="${STORAGE_VOLUME:-${COMPOSE_PROJECT_NAME}_storage_data}"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; BLUE='\033[0;34m'; NC='\033[0m'
 log_info()    { echo -e "${BLUE}ℹ ${*}${NC}"; }
@@ -66,9 +66,9 @@ fi
 
 # Guard against archiving a typo: `docker run -v` would silently CREATE a
 # missing volume and back up nothing.
-if ! docker volume inspect "$OBJECT_STORAGE_VOLUME" >/dev/null 2>&1; then
-  log_error "volume '$OBJECT_STORAGE_VOLUME' does not exist."
-  log_error "Check 'make docker.info' for the project name, or set OBJECT_STORAGE_VOLUME."
+if ! docker volume inspect "$STORAGE_VOLUME" >/dev/null 2>&1; then
+  log_error "volume '$STORAGE_VOLUME' does not exist."
+  log_error "Check 'make docker.info' for the project name, or set STORAGE_VOLUME."
   exit 1
 fi
 
@@ -122,9 +122,9 @@ if ! compose exec -T database pg_restore -l > /dev/null 2>&1 < "$db_file"; then
 fi
 
 # —— 2) Object-storage archive (immutable content-addressed files) ————————
-log_info "Archiving volume $OBJECT_STORAGE_VOLUME to $objects_file …"
+log_info "Archiving volume $STORAGE_VOLUME to $objects_file …"
 docker run --rm \
-  -v "$OBJECT_STORAGE_VOLUME":/src:ro \
+  -v "$STORAGE_VOLUME":/src:ro \
   -v "$BACKUP_DIR":/dst \
   alpine tar czf "/dst/$(basename "$objects_file")" -C /src .
 

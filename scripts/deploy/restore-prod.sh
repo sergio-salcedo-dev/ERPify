@@ -23,7 +23,7 @@
 #   BACKUP_DIR             source directory            (default /var/backups/erpify)
 #   PROD_ENV_FILE          compose secrets file        (default .env.prod.local)
 #   COMPOSE_PROJECT_NAME   compose project             (default erpify)
-#   OBJECT_STORAGE_VOLUME  volume to restore into      (default <project>_object_storage_data)
+#   STORAGE_VOLUME  volume to restore into      (default <project>_storage_data)
 #   RESTORE_YES            set to 1 to skip confirmation — NON-production only
 #   ALLOW_PROD_RESTORE     set to 1 to permit a restore when SERVER_NAME is a real domain
 #
@@ -36,7 +36,7 @@ cd "$REPO_ROOT"
 ENV_FILE="${PROD_ENV_FILE:-.env.prod.local}"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/erpify}"
 export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-erpify}"
-OBJECT_STORAGE_VOLUME="${OBJECT_STORAGE_VOLUME:-${COMPOSE_PROJECT_NAME}_object_storage_data}"
+STORAGE_VOLUME="${STORAGE_VOLUME:-${COMPOSE_PROJECT_NAME}_storage_data}"
 STAMP="${1:-${STAMP:-}}"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; BLUE='\033[0;34m'; YELLOW='\033[0;33m'; NC='\033[0m'
@@ -65,8 +65,8 @@ if [[ -z "$(compose ps --status running -q database)" ]]; then
   exit 1
 fi
 
-if ! docker volume inspect "$OBJECT_STORAGE_VOLUME" >/dev/null 2>&1; then
-  log_error "volume '$OBJECT_STORAGE_VOLUME' does not exist (project '$COMPOSE_PROJECT_NAME')."
+if ! docker volume inspect "$STORAGE_VOLUME" >/dev/null 2>&1; then
+  log_error "volume '$STORAGE_VOLUME' does not exist (project '$COMPOSE_PROJECT_NAME')."
   exit 1
 fi
 
@@ -131,7 +131,7 @@ if [[ "$IS_PROD" == "1" ]]; then
   log_warn "  2. '$STAMP' is the intended recovery point (check the sizes/date above)."
   log_warn "  3. A maintenance window is in effect — php/messenger_worker WILL be stopped (downtime)."
   log_warn "  4. The offsite copy of '$STAMP' is intact, in case this restore goes wrong."
-  log_warn "  5. You are on the correct host (project '$COMPOSE_PROJECT_NAME', volume '$OBJECT_STORAGE_VOLUME')."
+  log_warn "  5. You are on the correct host (project '$COMPOSE_PROJECT_NAME', volume '$STORAGE_VOLUME')."
   if [[ "${ALLOW_PROD_RESTORE:-}" != "1" ]]; then
     log_error "production restore is gated: re-run with ALLOW_PROD_RESTORE=1 once the checklist is satisfied."
     exit 1
@@ -142,7 +142,7 @@ if [[ "$IS_PROD" == "1" ]]; then
     "Type 'restore $COMPOSE_PROJECT_NAME $STAMP' to proceed: "
 elif [[ "${RESTORE_YES:-}" != "1" ]]; then
   log_warn "This DESTROYS current data in project '$COMPOSE_PROJECT_NAME':"
-  log_warn "  • wipes volume $OBJECT_STORAGE_VOLUME and unpacks objects-$STAMP.tar.gz"
+  log_warn "  • wipes volume $STORAGE_VOLUME and unpacks objects-$STAMP.tar.gz"
   log_warn "  • pg_restore --clean over the current database (db-$STAMP.dump)"
   confirm_tty "$COMPOSE_PROJECT_NAME" \
     "Type the project name ($COMPOSE_PROJECT_NAME) to proceed: "
@@ -152,10 +152,10 @@ fi
 log_info "Stopping writers (php, messenger_worker) …"
 compose stop php messenger_worker
 
-log_info "Restoring objects into $OBJECT_STORAGE_VOLUME …"
+log_info "Restoring objects into $STORAGE_VOLUME …"
 obj_base="$(basename "$objects_file")"
 docker run --rm \
-  -v "$OBJECT_STORAGE_VOLUME":/dst \
+  -v "$STORAGE_VOLUME":/dst \
   -v "$BACKUP_DIR":/src:ro \
   -e OBJ="$obj_base" \
   alpine sh -c 'find /dst -mindepth 1 -delete && tar xzf "/src/$OBJ" -C /dst'

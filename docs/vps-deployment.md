@@ -164,7 +164,7 @@ Recreate the stack so the database picks up the new address
 ## Backups
 
 The prod stack has two stateful volumes — `database_data` (PostgreSQL) and
-`object_storage_data` (Flysystem uploads) — and they form **one logical
+`storage_data` (Flysystem uploads) — and they form **one logical
 dataset**: a DB row references its `objects/{hash}` file, so they are backed up
 and restored **as a pair from the same point in time** (rationale:
 [`object-storage.md`](../docs-info/object-storage.md)).
@@ -187,7 +187,7 @@ if you need to exclude even that.
 
 Knobs (env vars): `BACKUP_DIR`, `RETENTION_DAYS` (default 14, local pruning),
 `BACKUP_MIN_FREE_MB` (default 500, abort if the target FS is below it),
-`OBJECT_STORAGE_VOLUME` (defaults to `<project>_object_storage_data` — `make
+`STORAGE_VOLUME` (defaults to `<project>_storage_data` — `make
 docker.info` prints `<project>`, and `docker volume ls` confirms the full
 name), `BACKUP_SYNC_CMD` (offsite hook, below).
 
@@ -245,7 +245,7 @@ RESTORE_YES=1 STAMP=<stamp> make restore.prod      # drills/CI: skip the prompt 
 ```
 
 Knobs mirror the backup: `BACKUP_DIR`, and `COMPOSE_PROJECT_NAME` /
-`OBJECT_STORAGE_VOLUME` must match what the backup used. If the local pair was
+`STORAGE_VOLUME` must match what the backup used. If the local pair was
 already pruned by retention, pull `db-<stamp>.dump` + `objects-<stamp>.tar.gz`
 back from the offsite copy into `BACKUP_DIR` first.
 
@@ -261,10 +261,10 @@ point. The checklist it enforces:
 2. `<stamp>` is the intended recovery point (the script prints both artifact sizes to confirm).
 3. A maintenance window is in effect — `php`/`messenger_worker` are stopped (downtime).
 4. The offsite copy of `<stamp>` is intact, in case the restore goes wrong.
-5. You are on the correct host (`COMPOSE_PROJECT_NAME` / `OBJECT_STORAGE_VOLUME`).
+5. You are on the correct host (`COMPOSE_PROJECT_NAME` / `STORAGE_VOLUME`).
 
 Under the hood (the raw commands, e.g. for a host without this checkout — substitute
-`<project>_object_storage_data` if the backup ran under a different project, or
+`<project>_storage_data` if the backup ran under a different project, or
 `docker run -v` silently **creates** an empty volume and you restore into the wrong place):
 
 ```bash
@@ -273,7 +273,7 @@ docker compose -p erpify --env-file .env.prod.local -f compose.yaml -f compose.p
   stop php messenger_worker
 
 # 1) objects — wipe the volume (incl. dotfiles) and unpack the archive
-docker run --rm -v erpify_object_storage_data:/dst -v /var/backups/erpify:/src:ro \
+docker run --rm -v erpify_storage_data:/dst -v /var/backups/erpify:/src:ro \
   alpine sh -c 'find /dst -mindepth 1 -delete && tar xzf /src/objects-<stamp>.tar.gz -C /dst'
 
 # 2) database — restore the SAME stamp's dump (--exit-on-error: stop on the first
