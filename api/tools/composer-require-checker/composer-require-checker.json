@@ -4,6 +4,7 @@
         "Fidry\\AliceDataFixtures\\Bridge\\Symfony\\FidryAliceDataFixturesBundle",
         "Hautelook\\AliceBundle\\HautelookAliceBundle",
         "Nelmio\\Alice\\Bridge\\Symfony\\NelmioAliceBundle",
+        "FriendsOfBehat\\SymfonyExtension\\Bundle\\FriendsOfBehatSymfonyExtensionBundle",
         "null",
         "true",
         "false",
