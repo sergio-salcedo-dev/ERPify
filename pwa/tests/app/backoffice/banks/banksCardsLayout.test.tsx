@@ -13,6 +13,7 @@ const LONG = Bank.fromPrimitives({
   shortName: "BNCEMX0001LONGUNBROKENCODE",
   createdAt: "2026-01-01T10:00:00Z",
   updatedAt: "2026-04-15T10:00:00Z",
+  accountCount: 0,
 });
 
 describe("BanksCards — layout", () => {

@@ -40,7 +40,7 @@
 # en paralelo fuera de ese emparejamiento.
 
 generated: 2026-06-10 15:27:34
-last_updated: 2026-06-12 00:00:00
+last_updated: 2026-06-13
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -54,3 +54,6 @@ development_status:
   1-4-migracion-pwa-red-behat-y-observabilidad-del-switch-pr3-lado-consumidor: done
   1-5-borrado-del-legado-de-paginacion-pr4: done
   epic-1-retrospective: optional
+  epic-2: in-progress
+  2-1-api-read-model-batched-del-contador-pr1: done
+  2-4-pwa-senales-lista-mas-detalle-pr4: review

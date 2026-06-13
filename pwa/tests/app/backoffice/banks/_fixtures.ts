@@ -30,6 +30,7 @@ export const ACME = Bank.fromPrimitives({
   shortName: "ACME",
   createdAt: "2026-01-01T10:00:00Z",
   updatedAt: "2026-04-15T14:30:00Z",
+  accountCount: 0,
 });
 
 export const BETA = Bank.fromPrimitives({
@@ -38,4 +39,5 @@ export const BETA = Bank.fromPrimitives({
   shortName: "BETA",
   createdAt: "2026-01-02T10:00:00Z",
   updatedAt: "2026-04-16T14:30:00Z",
+  accountCount: 0,
 });
