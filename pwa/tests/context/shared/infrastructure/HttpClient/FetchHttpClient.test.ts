@@ -198,6 +198,32 @@ describe("FetchHttpClient", () => {
       });
     });
 
+    it("distinguishes a guarded unparseable body from a shape mismatch in the detail", async () => {
+      fetchSpy
+        .mockResolvedValueOnce(
+          new Response("{not json", {
+            status: HttpStatus.OK,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+        .mockResolvedValueOnce(makeResponse(HttpStatus.OK, { wrong: "shape" }));
+
+      const client = new FetchHttpClient();
+
+      await expect(client.get("/api/v1/backoffice/banks", isEnvelope)).rejects.toMatchObject({
+        problem: {
+          type: MALFORMED_RESPONSE_ENVELOPE,
+          detail: expect.stringContaining("Unparseable JSON response body"),
+        },
+      });
+      await expect(client.get("/api/v1/backoffice/banks", isEnvelope)).rejects.toMatchObject({
+        problem: {
+          type: MALFORMED_RESPONSE_ENVELOPE,
+          detail: expect.stringContaining("Unexpected response body shape"),
+        },
+      });
+    });
+
     it("guards POST and PUT bodies through the same seam", async () => {
       fetchSpy.mockResolvedValueOnce(makeResponse(HttpStatus.CREATED, { wrong: true }));
 
@@ -227,6 +253,34 @@ describe("FetchHttpClient", () => {
       const body = await client.get<{ anything: string }>("/api/v1/backoffice/banks");
 
       expect(body).toEqual({ anything: "goes" });
+    });
+
+    it("returns undefined for a guard-less empty 200 body (not only 204)", async () => {
+      fetchSpy.mockResolvedValueOnce(makeResponse(HttpStatus.OK, undefined));
+
+      const client = new FetchHttpClient();
+      const body = await client.get<void>("/api/v1/backoffice/ping");
+
+      expect(body).toBeUndefined();
+    });
+
+    it("returns undefined for a guard-less 204", async () => {
+      fetchSpy.mockResolvedValueOnce(makeResponse(HttpStatus.NO_CONTENT, undefined));
+
+      const client = new FetchHttpClient();
+      const body = await client.get<void>("/api/v1/backoffice/ping");
+
+      expect(body).toBeUndefined();
+    });
+
+    it("mints a synthetic correlation-id for a malformed envelope when the header is absent", async () => {
+      fetchSpy.mockResolvedValueOnce(makeResponse(HttpStatus.OK, { data: null }));
+
+      const client = new FetchHttpClient();
+
+      await expect(client.get("/api/v1/backoffice/banks", isEnvelope)).rejects.toMatchObject({
+        problem: { type: MALFORMED_RESPONSE_ENVELOPE, "correlation-id": STUB_UUID },
+      });
     });
   });
 

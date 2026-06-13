@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Shared\Media\Infrastructure\Persistence\Doctrine;
 
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\Persistence\ManagerRegistry;
 use Erpify\Shared\Media\Domain\Entity\Media;
 use Erpify\Shared\Media\Domain\Repository\MediaRepository;
@@ -17,16 +18,27 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 #[AsAlias(MediaRepository::class)]
 final class DoctrineMediaRepository extends ServiceEntityRepository implements MediaRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
+    public function __construct(
+        ManagerRegistry $registry,
+        private readonly MediaConcurrentInsertResolver $concurrentInsertResolver,
+    ) {
         parent::__construct($registry, Media::class);
     }
 
     #[Override]
-    public function save(Media $media): void
+    public function saveOrGetByContentHash(Media $media): Media
     {
-        $this->getEntityManager()->persist($media);
-        $this->getEntityManager()->flush();
+        try {
+            $this->getEntityManager()->persist($media);
+            $this->getEntityManager()->flush();
+        } catch (UniqueConstraintViolationException) {
+            // why: a concurrent request inserted the same content hash between the caller's dedup
+            // lookup and this flush; media_content_hash_uniq rejected ours, so the winning row is
+            // the canonical one — recover it on a fresh entity manager.
+            return $this->concurrentInsertResolver->resolveWinner($media->getContentHash(), $this);
+        }
+
+        return $media;
     }
 
     #[Override]
