@@ -9,9 +9,10 @@ import { decodeCursorOffset } from "./cursorLink";
  * search so a follow continues the same query (mirrors how a real link encodes
  * the full query server-side).
  */
-export class InMemoryResourceNavigator<T extends { id: string }, TInput>
-  implements ResourceSearchNavigator<T>
-{
+export class InMemoryResourceNavigator<
+  T extends { id: string },
+  TInput,
+> implements ResourceSearchNavigator<T> {
   private lastCriteria: ResourceSearchCriteria = { filters: [], sort: null, limit: 25 };
 
   constructor(private readonly repository: InMemoryCrudRepository<T, TInput>) {}

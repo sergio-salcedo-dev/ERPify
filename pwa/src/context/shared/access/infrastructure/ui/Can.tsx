@@ -27,8 +27,6 @@ export function Can({ permission, role, fallback = null, children }: Readonly<Ca
     permission === undefined || (session !== null && authorize(session, permission));
   const allowedByRole =
     role === undefined ||
-    (session !== null &&
-      session.user.status === UserStatus.ACTIVE &&
-      session.roles.includes(role));
+    (session !== null && session.user.status === UserStatus.ACTIVE && session.roles.includes(role));
   return allowedByPermission && allowedByRole ? <>{children}</> : <>{fallback}</>;
 }

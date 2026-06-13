@@ -25,9 +25,10 @@ export interface InMemoryEntityConfig<T extends { id: string }, TInput> {
  * the mock that fills the real domain port; an Api*Repository later replaces it
  * with zero consumer change.
  */
-export class InMemoryCrudRepository<T extends { id: string }, TInput>
-  implements CrudRepository<T, TInput>
-{
+export class InMemoryCrudRepository<T extends { id: string }, TInput> implements CrudRepository<
+  T,
+  TInput
+> {
   constructor(
     private rows: T[],
     private readonly config: InMemoryEntityConfig<T, TInput>,

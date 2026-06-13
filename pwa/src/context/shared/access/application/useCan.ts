@@ -15,5 +15,7 @@ export function useCan(permission: Permission): boolean {
 /** True when the current ACTIVE session holds `role`. */
 export function useCanRole(role: Role): boolean {
   const { session } = useSession();
-  return Boolean(session && session.user.status === UserStatus.ACTIVE && session.roles.includes(role));
+  return Boolean(
+    session && session.user.status === UserStatus.ACTIVE && session.roles.includes(role),
+  );
 }
