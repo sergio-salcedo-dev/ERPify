@@ -63,7 +63,7 @@
 				header({'Accept': '*text/html*'})
 				&& !path(
 					'/api*', '/.well-known/mercure*',
-					'/docs*', '/graphql*', '/bundles*', '/contexts*', '/_profiler*', '/_wdt*',
+					'/docs*', '/graphql*', '/bundles*', '/contexts*', '/_profiler*', '/_wdt*', '/_dev*',
 					'*.json*', '*.html', '*.csv', '*.yml', '*.yaml', '*.xml'
 				)
 			)
