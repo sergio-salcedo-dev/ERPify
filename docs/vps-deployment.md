@@ -217,6 +217,10 @@ independent location via `BACKUP_SYNC_CMD` — e.g. `rclone sync` to S3/B2/Drive
 (encrypted + deduplicating; content-addressed files dedupe almost perfectly
 across days).
 
+The backup strategy assumes local storage is the primary retention layer.
+Offsite sync failures do not block local retention management — retention prunes
+before the sync hook runs, by design.
+
 ### Restore (reverse order: objects first, DB after, same stamp)
 
 Restore is destructive by design — it is deliberately **not** wrapped in a make

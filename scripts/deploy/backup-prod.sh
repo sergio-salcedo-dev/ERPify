@@ -135,6 +135,8 @@ chmod 600 "$objects_file"
 tar -tzf "$objects_file" > /dev/null
 
 # —— 3) Local retention ———————————————————————————————————————————————————
+# Retention intentionally runs before offsite sync.
+# Local backups are the source of truth; offsite storage is a secondary copy.
 find "$BACKUP_DIR" -maxdepth 1 -name 'db-*.dump' -mtime +"$RETENTION_DAYS" -delete
 find "$BACKUP_DIR" -maxdepth 1 -name 'objects-*.tar.gz' -mtime +"$RETENTION_DAYS" -delete
 
