@@ -4,15 +4,11 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Media\Application;
 
-use Doctrine\DBAL\Driver\Exception as DriverException;
-use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
-use Doctrine\Persistence\ManagerRegistry;
 use Erpify\Shared\Application\Validation\Validator;
 use Erpify\Shared\Media\Application\Dto\NormalizedImage;
 use Erpify\Shared\Media\Application\MediaRegistrar;
 use Erpify\Shared\Media\Application\Port\ImageNormalizer;
 use Erpify\Shared\Media\Domain\Entity\Media;
-use Erpify\Shared\Media\Domain\Exception\ConcurrentMediaWinnerMissingException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
@@ -22,97 +18,51 @@ use Symfony\Component\Validator\Validation;
  * @internal
  */
 #[CoversClass(MediaRegistrar::class)]
-#[CoversClass(ConcurrentMediaWinnerMissingException::class)]
 final class MediaRegistrarTest extends TestCase
 {
     private const string MEDIA_ID = '0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c';
 
     private const string CONTENT_HASH = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
 
-    public function testReturnsExistingMediaWhenContentHashIsAlreadyRegistered(): void
+    public function testReturnsExistingMediaWithoutWritingWhenContentHashIsAlreadyRegistered(): void
     {
         $existing = Media::create(self::MEDIA_ID, self::CONTENT_HASH, 'image/png', 4, 'PNG.');
         $mediaRepository = new RecordingMediaRepository(found: $existing);
-        $registrar = $this->makeRegistrar($mediaRepository);
 
-        $result = $registrar->registerFromUploadedFile($this->createStub(UploadedFile::class));
+        $result = $this->makeRegistrar($mediaRepository)->registerFromUploadedFile(
+            $this->createStub(UploadedFile::class),
+        );
 
         $this->assertSame($existing, $result);
-        $this->assertSame(0, $mediaRepository->saveCalls);
+        $this->assertSame(0, $mediaRepository->saveOrGetCalls, 'an existing hash must not be re-written');
     }
 
     public function testRegistersAndReturnsNewMediaWhenContentHashIsUnseen(): void
     {
         $mediaRepository = new RecordingMediaRepository();
-        $registrar = $this->makeRegistrar($mediaRepository);
 
-        $result = $registrar->registerFromUploadedFile($this->createStub(UploadedFile::class));
+        $result = $this->makeRegistrar($mediaRepository)->registerFromUploadedFile(
+            $this->createStub(UploadedFile::class),
+        );
 
         $this->assertSame(self::CONTENT_HASH, $result->getContentHash());
-        $this->assertSame(1, $mediaRepository->saveCalls);
         $this->assertSame(1, $mediaRepository->findCalls, 'happy path must not re-query');
+        $this->assertSame(1, $mediaRepository->saveOrGetCalls);
     }
 
-    public function testReturnsTheConcurrentWinnerAfterLosingTheInsertRace(): void
+    public function testPropagatesTheCanonicalMediaTheRepositoryResolvesForTheContentHash(): void
     {
+        // The repository owns the concurrent-insert race; the registrar must surface whatever
+        // canonical row it returns (here, the winner of a lost race), not the row it built.
         $winner = Media::create(self::MEDIA_ID, self::CONTENT_HASH, 'image/png', 4, 'PNG.');
-        $mediaRepository = new RecordingMediaRepository(
-            found: null,
-            saveFailure: $this->makeUniqueViolation(),
-            winner: $winner,
-        );
-        $registrar = $this->makeRegistrar($mediaRepository);
+        $mediaRepository = new RecordingMediaRepository(winner: $winner);
 
-        $result = $registrar->registerFromUploadedFile($this->createStub(UploadedFile::class));
+        $result = $this->makeRegistrar($mediaRepository)->registerFromUploadedFile(
+            $this->createStub(UploadedFile::class),
+        );
 
         $this->assertSame($winner, $result);
-        $this->assertSame(2, $mediaRepository->findCalls, 'dedup lookup + post-reset re-fetch of the winner');
-    }
-
-    public function testRetriesTheWinnerRefetchWhenItIsNotVisibleOnTheFirstReQuery(): void
-    {
-        // The winning insert commits just after ours rolled back, so it is invisible to the first
-        // post-reset re-query under READ COMMITTED and only appears on the retry.
-        $winner = Media::create(self::MEDIA_ID, self::CONTENT_HASH, 'image/png', 4, 'PNG.');
-        $mediaRepository = new RecordingMediaRepository(
-            found: null,
-            saveFailure: $this->makeUniqueViolation(),
-            winner: $winner,
-            winnerVisibleFromFind: 2,
-        );
-        $registrar = $this->makeRegistrar($mediaRepository);
-
-        $result = $registrar->registerFromUploadedFile($this->createStub(UploadedFile::class));
-
-        $this->assertSame($winner, $result);
-        $this->assertSame(3, $mediaRepository->findCalls, 'dedup + first re-query (miss) + retry (hit)');
-    }
-
-    public function testThrowsConcurrentMediaWinnerMissingExceptionWhenWinnerCannotBeRefetched(): void
-    {
-        // Dedup misses, the unique index rejects our insert (another request won the race),
-        // then the winning row is absent from the re-query — an unrecoverable inconsistency.
-        $mediaRepository = new RecordingMediaRepository(found: null, saveFailure: $this->makeUniqueViolation());
-
-        $this->expectException(ConcurrentMediaWinnerMissingException::class);
-        $this->expectExceptionMessageMatches('/' . self::CONTENT_HASH . '/');
-
-        $this->makeRegistrar($mediaRepository)->registerFromUploadedFile($this->createStub(UploadedFile::class));
-    }
-
-    public function testReQueriesForTheWinnerAfterLosingTheConcurrentInsertRace(): void
-    {
-        $mediaRepository = new RecordingMediaRepository(found: null, saveFailure: $this->makeUniqueViolation());
-
-        try {
-            $this->makeRegistrar($mediaRepository)->registerFromUploadedFile($this->createStub(UploadedFile::class));
-        } catch (ConcurrentMediaWinnerMissingException) {
-            // Expected — the registrar gives up only after the post-reset re-query also misses.
-        }
-
-        // Dedup lookup + two bounded post-reset re-fetch attempts: the registrar must exhaust the
-        // retry before giving up.
-        $this->assertSame(3, $mediaRepository->findCalls);
+        $this->assertSame(1, $mediaRepository->saveOrGetCalls);
     }
 
     private function makeRegistrar(RecordingMediaRepository $mediaRepository): MediaRegistrar
@@ -124,15 +74,8 @@ final class MediaRegistrarTest extends TestCase
 
         return new MediaRegistrar(
             $imageNormalizer,
-            $this->createStub(ManagerRegistry::class),
             $mediaRepository,
             new Validator(Validation::createValidator()),
         );
-    }
-
-    private function makeUniqueViolation(): UniqueConstraintViolationException
-    {
-        // SQLSTATE 23505 = Postgres unique_violation, as raised by media_content_hash_uniq.
-        return new UniqueConstraintViolationException($this->createStub(DriverException::class), null);
     }
 }

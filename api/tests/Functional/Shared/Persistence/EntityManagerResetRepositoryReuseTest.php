@@ -7,16 +7,17 @@ namespace Erpify\Tests\Functional\Shared\Persistence;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
 use Erpify\Shared\Media\Domain\Repository\MediaRepository;
+use Erpify\Shared\Media\Infrastructure\Persistence\Doctrine\MediaConcurrentInsertResolver;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 /**
- * Locks the load-bearing assumption behind {@see \Erpify\Shared\Media\Application\MediaRegistrar}'s
- * concurrent-winner recovery: after a flush-time unique violation closes the entity manager, a
+ * Locks the load-bearing assumption behind {@see MediaConcurrentInsertResolver}'s concurrent-winner
+ * recovery: after a flush-time unique violation closes the entity manager, a
  * {@see ManagerRegistry::resetManager()} must leave the *already-injected* repository able to query
  * again. Symfony wraps the EM in a lazy proxy that `resetManager()` re-initialises in place, so a
  * repository that captured the proxy at construction transparently uses the fresh manager — without
- * this, the registrar's re-query would hit a closed manager.
+ * this, the resolver's re-query would hit a closed manager.
  *
  * @internal
  */
