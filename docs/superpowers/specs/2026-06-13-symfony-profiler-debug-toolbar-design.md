@@ -67,10 +67,25 @@ server-side HTML). Two consequences drive the design:
 ### var-dumper server
 - `api/.env.dev` → `VAR_DUMPER_SERVER=127.0.0.1:9912` (versioned dev default; prevents an
   unresolved-env error when `debug.yaml` is read).
-- Make target `php.dump-server` → `bin/console server:dump` inside the `php` container
-  (listens on `127.0.0.1:9912`; the web worker connects within the same container).
+- Started via the `profiler.dump-server` make target (below); listens on `127.0.0.1:9912`
+  inside the `php` container, where the web worker connects.
 - Safe when not running: `ServerDumper` falls back to inline dumping, so `dump()` never
   breaks on a missing server. Dumps also appear in the profiler's Debug/Dump collector.
+
+### Make targets — new module `make/profiler.mk`
+`include make/*.mk` auto-discovers the module. Follows `make/CONVENTIONS.md` (section
+header `## —— Profiler ——`, trailing `## description` per public target so `make help`
+groups them under "Profiler"). Both are dev-only conveniences over the running stack.
+
+- `profiler.open` — **open the Profiler UI in the host browser** (the explicit ask). Resolves
+  this checkout's published HTTPS port (`docker compose port $(PHP_SERVICE) 443`, default
+  `443` for the primary checkout, ephemeral for a worktree) and opens
+  `https://localhost:<port>/_profiler/latest` via `xdg-open` (Linux host), falling back to
+  `open`, then to printing the URL. Host-side action — does not exec into the container. The
+  browser sends `Accept: text/html`, and `/_profiler*` is excluded from `@pwa`, so Symfony
+  serves it.
+- `profiler.dump-server` — `bin/console server:dump` via `$(SYMFONY)` (foreground; Ctrl-C to
+  stop), collecting `dump()` output out-of-band.
 
 ### Caddy — `api/frankenphp/Caddyfile`
 - Add `/_dev*` to the `@pwa` exclusion list (next to `/_profiler*`, `/_wdt*`) so Symfony,
@@ -81,9 +96,11 @@ server-side HTML). Two consequences drive the design:
   but dev-only deps), mirroring the existing fixtures/alice entries.
 
 ### Docs
-- `docs/development-guide-api.md` (+ `docs/claude-code-quickref.md` for the new make
-  target): how to reach `/_dev` and `/_profiler`, the `php.dump-server` workflow, the
-  dev+test scope, and the JSON-no-inline-toolbar caveat.
+- `docs/development-guide-api.md` (+ `docs/claude-code-quickref.md` command catalog) for the
+  new `profiler.open` / `profiler.dump-server` targets: how to reach `/_dev` and `/_profiler`
+  (`make profiler.open`), the dump-server workflow, the dev+test scope, and the
+  JSON-no-inline-toolbar caveat. The CLAUDE.md "Top-hits commands" list stays untouched —
+  these are niche dev-only targets, not top hits.
 
 ## Out of scope
 
@@ -99,7 +116,9 @@ server-side HTML). Two consequences drive the design:
   panel with a profiler link (verified via Playwright screenshot).
 - `curl -I` an `/api/v1/...` endpoint → `X-Debug-Token` header present.
 - `GET /_profiler/latest` (`Accept: text/html`) → 200 HTML (reaches Symfony, not the PWA).
-- `dump('x')` in dev with `make php.dump-server` running → appears in the dump server
+- `make profiler.open` opens `https://localhost:<resolved-port>/_profiler/latest` in the host
+  browser (correct port for both the primary checkout and a worktree).
+- `dump('x')` in dev with `make profiler.dump-server` running → appears in the dump server
   terminal and the profiler Dump panel, not in the JSON body.
 - A `prod`-env `cache:clear`/container build → Twig, profiler, and debug bundle **not**
   loaded; no missing-env or missing-extension errors.
