@@ -38,6 +38,26 @@ make composer c='behat-tools-install'
 
 Switch overlay: `make docker.up ENV=ci|staging|prod` (default `dev`).
 
+## Profiler & debug toolbar (dev/test only)
+
+The Symfony Profiler is enabled in `dev` + `test` (never prod — the bundles are registered
+`['dev'=>true,'test'=>true]`). Because the API returns JSON, the floating toolbar can't
+inject into `/api/*` responses; the surfaces are:
+
+- **`/_profiler`** — full Profiler web UI (Doctrine queries, timeline, Messenger,
+  serializer, logs). `make profiler.open` opens `/_profiler/latest` in your browser
+  (resolves this checkout's HTTPS port, including worktrees). Every response also carries
+  an `X-Debug-Token` / `X-Debug-Token-Link` header.
+- **`/_dev`** — a dev-only HTML page where the floating toolbar renders. Its
+  "Run sample API call" button fetches `/api/*`, and those calls show up in the toolbar's
+  AJAX panel with profiler links.
+- **`dump()`** — run `make profiler.dump-server` in a spare terminal to collect dumps
+  out-of-band (so they never corrupt JSON responses); they also appear in the profiler's
+  Debug/Dump panel. Without the server running, dumps fall back to inline output.
+
+Want the toolbar on the real Next.js app instead? That's tracked as a follow-up (PWA
+reads `X-Debug-Token` and loads `/_wdt/{token}`); it's intentionally not wired here.
+
 ## Logs
 
 | Env                       | Destination                                              | Format |
