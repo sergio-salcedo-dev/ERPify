@@ -221,14 +221,51 @@ The backup strategy assumes local storage is the primary retention layer.
 Offsite sync failures do not block local retention management — retention prunes
 before the sync hook runs, by design.
 
-### Restore (reverse order: objects first, DB after, same stamp)
+### Restore — `make restore.prod` (reverse order: objects first, DB after, same stamp)
 
-Restore is destructive by design — it is deliberately **not** wrapped in a make
-target. The volume name and project must match what the backup used: the
-commands below assume `COMPOSE_PROJECT_NAME=erpify` (so volume
-`erpify_object_storage_data`) — substitute `<project>_object_storage_data` if you
-ran the backup under a different project, or `docker run -v` will silently
-**create** an empty volume and you restore into the wrong place.
+Restore is destructive: it wipes the object-storage volume and runs
+`pg_restore --clean` over the live database. `make restore.prod` wraps the
+procedure with up-front artifact verification (PGDMP header + `pg_restore -l` +
+`tar -tzf`, so a corrupt backup is caught *before* any live data is touched) and
+a typed confirmation. Use it first for the **restore drill and pre-prod
+verification** — exercise it on the `erpify.local` rehearsal or a scratch
+worktree stack before you ever need it for real.
+
+First find the stamp to restore (newest last):
+
+```bash
+ls -1 /var/backups/erpify/db-*.dump   # each db-<stamp>.dump → a <stamp> you can pass
+```
+
+Then restore that pair:
+
+```bash
+STAMP=<stamp> make restore.prod                    # asks for confirmation
+RESTORE_YES=1 STAMP=<stamp> make restore.prod      # drills/CI: skip the prompt (NON-prod only)
+```
+
+Knobs mirror the backup: `BACKUP_DIR`, and `COMPOSE_PROJECT_NAME` /
+`OBJECT_STORAGE_VOLUME` must match what the backup used. If the local pair was
+already pruned by retention, pull `db-<stamp>.dump` + `objects-<stamp>.tar.gz`
+back from the offsite copy into `BACKUP_DIR` first.
+
+**Production guard.** When `SERVER_NAME` in the env file is a real domain (not
+`*.local`/`localhost`) the run is treated as **production**: `RESTORE_YES` no
+longer bypasses anything, the script prints the mandatory pre-restore checklist,
+and it requires both `ALLOW_PROD_RESTORE=1` and an interactive typed phrase that
+**includes the stamp** (`restore <project> <stamp>`) — so a production restore
+can never be scripted, and you cannot fat-finger the wrong host or recovery
+point. The checklist it enforces:
+
+1. A fresh backup of the **current** state exists (`make backup.prod`) — you are about to overwrite live data.
+2. `<stamp>` is the intended recovery point (the script prints both artifact sizes to confirm).
+3. A maintenance window is in effect — `php`/`messenger_worker` are stopped (downtime).
+4. The offsite copy of `<stamp>` is intact, in case the restore goes wrong.
+5. You are on the correct host (`COMPOSE_PROJECT_NAME` / `OBJECT_STORAGE_VOLUME`).
+
+Under the hood (the raw commands, e.g. for a host without this checkout — substitute
+`<project>_object_storage_data` if the backup ran under a different project, or
+`docker run -v` silently **creates** an empty volume and you restore into the wrong place):
 
 ```bash
 # 0) stop writers FIRST — they must not race the destructive wipe below
@@ -236,7 +273,7 @@ docker compose -p erpify --env-file .env.prod.local -f compose.yaml -f compose.p
   stop php messenger_worker
 
 # 1) objects — wipe the volume (incl. dotfiles) and unpack the archive
-docker run --rm -v erpify_object_storage_data:/dst -v /var/backups/erpify:/src \
+docker run --rm -v erpify_object_storage_data:/dst -v /var/backups/erpify:/src:ro \
   alpine sh -c 'find /dst -mindepth 1 -delete && tar xzf /src/objects-<stamp>.tar.gz -C /dst'
 
 # 2) database — restore the SAME stamp's dump (--exit-on-error: stop on the first
@@ -257,9 +294,10 @@ truly clean target.
 ### Restore drill (quarterly)
 
 A backup is only proven by a restore. Once a quarter, restore the latest pair
-into a scratch stack (a worktree stack works) and run the object-storage smoke
-test: create a bank with a `stored_object` upload, then `GET
-/api/v1/stored-objects/{hash}` → expect 200 with `Cache-Control: immutable`.
+into a scratch stack (a worktree stack works) with
+`STAMP=<stamp> make restore.prod` and run the object-storage smoke test: create
+a bank with a `stored_object` upload, then `GET /api/v1/stored-objects/{hash}` →
+expect 200 with `Cache-Control: … immutable`.
 
 ---
 

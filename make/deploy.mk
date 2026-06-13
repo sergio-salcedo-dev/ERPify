@@ -50,4 +50,7 @@ deploy.local.trust: ## Run the PRIVILEGED client-trust steps (hosts + system CA 
 backup.prod: ## Paired prod backup: pg_dump + object-storage archive (knobs: BACKUP_DIR, RETENTION_DAYS, BACKUP_SYNC_CMD)
 	@bash $(PROJECT_ROOT)/scripts/deploy/backup-prod.sh
 
-.PHONY: prod.env.check deploy.local deploy.local.trust backup.prod
+restore.prod: ## Restore a backup pair (STAMP=<stamp>, omit to list) — DESTRUCTIVE, for the restore drill / pre-prod check (knobs: BACKUP_DIR, RESTORE_YES, ALLOW_PROD_RESTORE)
+	@STAMP="$(STAMP)" bash $(PROJECT_ROOT)/scripts/deploy/restore-prod.sh
+
+.PHONY: prod.env.check deploy.local deploy.local.trust backup.prod restore.prod

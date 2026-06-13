@@ -25,6 +25,7 @@ make prod.env.check      # Validate .env.prod.local has all required prod secret
 make deploy.local        # Stand up the PROD profile at https://erpify.local (preflight → up → migrate → smoke → CA export + trust guidance).
 sudo make deploy.local.trust  # Privileged client-trust steps (hosts + system CA + Chromium NSS); targets $SUDO_USER. Don't `sudo make deploy.local`.
 make backup.prod         # Paired prod backup: pg_dump + object-storage archive (BACKUP_DIR, RETENTION_DAYS, BACKUP_SYNC_CMD). Runbook: docs/vps-deployment.md § Backups.
+STAMP=<s> make restore.prod  # Paired restore (DESTRUCTIVE) for the drill / pre-prod check; verifies artifacts. Prod target needs ALLOW_PROD_RESTORE=1 + typed confirm. Runbook: § Backups.
 ```
 
 Prod/staging load secrets from a gitignored root `.env.prod.local` (copy from [`.env.prod.example`](../.env.prod.example)) via `--env-file`. Runbook: [`erpify-local-test-deployment.md`](erpify-local-test-deployment.md); security gate: [`../PRODUCTION_SECURITY_CHECKLIST.md`](../PRODUCTION_SECURITY_CHECKLIST.md).
