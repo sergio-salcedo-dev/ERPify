@@ -323,6 +323,27 @@ export default function BankDetailPage() {
             />
             <div className="banks-detail__field sm:col-span-2">
               <dt className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                Associated accounts
+              </dt>
+              <dd className="mt-1 text-sm" data-testid="banks-detail__field-accounts">
+                {bank.accountCount > 0 ? (
+                  <>
+                    {bank.accountCount}
+                    {" · "}
+                    <Link
+                      href={safeHref(bankRoutes.accounts(bank.id))}
+                      className="text-[var(--erpify-brand)] hover:underline"
+                    >
+                      View accounts
+                    </Link>
+                  </>
+                ) : (
+                  <span className="text-muted-foreground">None</span>
+                )}
+              </dd>
+            </div>
+            <div className="banks-detail__field sm:col-span-2">
+              <dt className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
                 Identifier
               </dt>
               <dd className="mt-1 flex items-center gap-2">

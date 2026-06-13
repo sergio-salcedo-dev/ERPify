@@ -8,6 +8,7 @@ const primitives = {
   shortName: "ACME",
   createdAt: "2026-01-01T00:00:00+00:00",
   updatedAt: "2026-01-02T00:00:00+00:00",
+  accountCount: 0,
 };
 
 const envelope = {

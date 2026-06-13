@@ -35,7 +35,8 @@ when@dev:
             # 100% of requests/commands traced — cheap locally, full DB/HTTP waterfall.
             traces_sample_rate: 1.0
             send_default_pii: false
-            # Drop expected 4xx ClientError events, then scrub PII on what remains.
+            # Drop expected 4xx ClientError events + messenger-worker DB-connection teardown noise
+            # (see SentryEventFilter), then scrub PII on what remains.
             before_send: 'Erpify\Shared\Monitoring\Infrastructure\Sentry\SentryBeforeSend'
             ignore_exceptions:
                 - 'Symfony\Component\ErrorHandler\Error\FatalError'
@@ -72,8 +73,9 @@ when@prod:
             traces_sample_rate: '%env(float:default::SENTRY_TRACES_SAMPLE_RATE)%'
             # Never attach request headers, cookies, IP or the authenticated user.
             send_default_pii: false
-            # Drop expected 4xx ClientError events (no technical action needed), then
-            # defense-in-depth scrub of denylisted keys on what remains — parity with RFC 9457.
+            # Drop expected 4xx ClientError events (no technical action needed) + messenger-worker
+            # DB-connection teardown noise (see SentryEventFilter), then defense-in-depth scrub of
+            # denylisted keys on what remains — parity with RFC 9457.
             before_send: 'Erpify\Shared\Monitoring\Infrastructure\Sentry\SentryBeforeSend'
             ignore_exceptions:
                 - 'Symfony\Component\ErrorHandler\Error\FatalError'
