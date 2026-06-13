@@ -194,11 +194,11 @@ Step-by-step (incl. internal-CA trust and `/etc/hosts`) and VPS promotion:
 
 - Images are immutable (digest-pinned). Redeploy the previous image tag.
 - Roll back DB changes only if the migration is reversible — otherwise restore from the most recent Postgres backup and replay.
-- A restore must pair the Postgres backup with the **`object_storage_data`** volume snapshot from the same point in time — `bank.stored_object_*` rows reference `objects/{hash}` files in that volume (see the backups item in [`docs-info/object-storage.md`](../docs-info/object-storage.md)).
+- A restore must pair the Postgres backup with the **`storage_data`** volume snapshot from the same point in time — `bank.stored_object_*` rows reference `objects/{hash}` files in that volume (see the backups item in [`docs-info/object-storage.md`](../docs-info/object-storage.md)).
 
 ## Operational notes
 
-- `make docker.down.clean-volumes` drops volumes and is **destructive** — never on prod without explicit confirmation. On prod that includes the two stateful volumes: `database_data` **and** `object_storage_data` (uploaded stored-objects).
+- `make docker.down.clean-volumes` drops volumes and is **destructive** — never on prod without explicit confirmation. On prod that includes the two stateful volumes: `database_data` **and** `storage_data` (uploaded stored-objects).
 - Do not run `db.reset` outside dev/ci.
 - DNS, CORS origins, and Mercure cookie/CORS config: see [`pwa/docs/production-deployment.md`](../pwa/docs/production-deployment.md).
 - Xdebug must be disabled in prod images.

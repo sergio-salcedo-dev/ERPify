@@ -25,7 +25,7 @@ Both use a **64-character hex SHA-256** of normalized image bytes for caching an
 
 | Variable                    | Required in prod?        | Purpose                                                                                                                                                                                                                                                                                                                                                                                                       |
 |-----------------------------|--------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **`STORAGE_LOCAL_PATH`**    | **Strongly recommended** | Absolute path to the directory Flysystem uses as the **local adapter** root. If unset, Symfony falls back to the default in [`flysystem.yaml`](../api/config/packages/flysystem.yaml): `%kernel.project_dir%/storage` inside the container — which is **ephemeral** unless that path is on a **mounted volume**. In `compose.prod.yaml` the named volume `object_storage_data` is already wired at that path. |
+| **`STORAGE_LOCAL_PATH`**    | **Strongly recommended** | Absolute path to the directory Flysystem uses as the **local adapter** root. If unset, Symfony falls back to the default in [`flysystem.yaml`](../api/config/packages/flysystem.yaml): `%kernel.project_dir%/storage` inside the container — which is **ephemeral** unless that path is on a **mounted volume**. In `compose.prod.yaml` the named volume `storage_data` is already wired at that path. |
 | **`MEDIA_PUBLIC_BASE_URL`** | Optional                 | If set (e.g. `https://api.example.com`), JSON fields **`logoUrl`** and **`storedObjectUrl`** are built as absolute URLs. If empty, the API uses the current request host or path-only URLs. Set in production when consumers (mobile apps, other origins) need a stable absolute base.                                                                                                                        |
 
 See the annotated blocks in [`api/.env.example`](../api/.env.example).
@@ -79,17 +79,17 @@ If you use Compose, pass the env var and mount a volume at that path. Example **
 services:
   php:
     volumes:
-      - object_storage_data:/app/api/storage
+      - storage_data:/app/api/storage
 
   messenger_worker:
     volumes:
-      - object_storage_data:/app/api/storage
+      - storage_data:/app/api/storage
 
 volumes:
-  object_storage_data:
+  storage_data:
 ```
 
-`compose.prod.yaml` already ships this configuration. The named volume `object_storage_data` is mounted at the default `STORAGE_LOCAL_PATH` (`/app/api/storage`) on both `php` and `messenger_worker`. The prod image pre-creates that directory owned by `www-data` so the volume initializes writable on first deploy.
+`compose.prod.yaml` already ships this configuration. The named volume `storage_data` is mounted at the default `STORAGE_LOCAL_PATH` (`/app/api/storage`) on both `php` and `messenger_worker`. The prod image pre-creates that directory owned by `www-data` so the volume initializes writable on first deploy.
 
 ---
 
