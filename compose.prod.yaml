@@ -162,7 +162,69 @@ services:
     networks:
       - frontend
       - backend
-    command: ["php", "bin/console", "messenger:consume", "async", "scheduler_maintenance", "--time-limit=3600", "--limit=10000", "--memory-limit=256M"]
+    # Consumes ONLY `async`. The Doctrine transport's FOR UPDATE SKIP LOCKED hands each queued
+    # message to exactly one consumer, so this pool is safe to scale horizontally
+    # (`docker compose up --scale messenger_worker=N`). The daily maintenance schedule is split
+    # out to the single `scheduler_worker` below so it ticks once, not once per replica.
+    command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600", "--limit=10000", "--memory-limit=256M"]
+
+  # Single-replica scheduler. Symfony Scheduler derives the daily maintenance tick
+  # (PruneHandledDomainEventsMessage) from an in-process clock, so running it on the scaled
+  # `messenger_worker` pool would emit one tick per replica — N redundant prunes a day.
+  # Isolating the `scheduler_maintenance` transport on this single instance keeps exactly one
+  # clock running. MUST stay at replicas: 1; scaling it reintroduces the duplicate-tick problem.
+  # Lifting that constraint (lock the schedule, then scale freely) needs symfony/lock, which the
+  # project deliberately does not install — tracked as a follow-up.
+  scheduler_worker:
+    image: ${IMAGES_PREFIX:-}app-php-prod
+    build:
+      context: ./api
+      target: frankenphp_prod
+    restart: unless-stopped
+    depends_on:
+      database:
+        condition: service_healthy
+      # Wait for php: its entrypoint runs the migration that creates handled_domain_event
+      # before the first prune tick can DELETE from it.
+      php:
+        condition: service_healthy
+    # Mirrors messenger_worker: a console consumer, not FrankenPHP, so the image's Caddy
+    # healthcheck can't apply. Probe that PID 1 (the consume process) is alive — `up --wait`
+    # requires a healthcheck on every waited service.
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    working_dir: /app/api
+    environment:
+      APP_ENV: prod
+      APP_SECRET: ${APP_SECRET:?APP_SECRET is required in prod}
+      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required in prod}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in prod}@database:5432/${POSTGRES_DB:?POSTGRES_DB is required in prod}?serverVersion=${POSTGRES_VERSION:-18}&charset=${POSTGRES_CHARSET:-utf8}
+      # Set explicitly (no base service to inherit from); the async transport is never
+      # consumed here but the receiver registry still resolves the DSN at boot.
+      MESSENGER_TRANSPORT_DSN: ${MESSENGER_TRANSPORT_DSN:-doctrine://default?auto_setup=0}
+      MAILER_DSN: ${MAILER_DSN:-null://null}
+      # Sentry captures prune failures too (same required gating as php/messenger_worker).
+      SENTRY_DSN: ${SENTRY_DSN:?SENTRY_DSN is required in prod}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:?SENTRY_TRACES_SAMPLE_RATE is required in prod}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # frontend = Sentry egress; backend = reach Postgres. No object-storage volume: the prune
+    # is a pure DB DELETE and never touches Flysystem.
+    networks:
+      - frontend
+      - backend
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: ${SCHEDULER_CPU_LIMIT:-0.25}
+          memory: ${SCHEDULER_MEM_LIMIT:-256m}
+    command: ["php", "bin/console", "messenger:consume", "scheduler_maintenance", "--time-limit=3600", "--memory-limit=256M"]
 
 volumes:
   # Uploaded stored-objects (Flysystem local adapter). Survives container
