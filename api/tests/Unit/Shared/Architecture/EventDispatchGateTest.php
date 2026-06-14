@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Architecture;
 
+use Erpify\Tests\Support\AllowlistFile;
 use Erpify\Tests\Support\ApiSourceFiles;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
@@ -204,35 +205,7 @@ final class EventDispatchGateTest extends TestCase
      */
     private function loadAllowlist(): array
     {
-        $path = $this->apiRoot() . '/.event-dispatch-allowlist';
-
-        if (!\is_file($path)) {
-            return [];
-        }
-
-        $raw = \file_get_contents($path);
-
-        if (false === $raw) {
-            return [];
-        }
-
-        $entries = [];
-
-        foreach (\preg_split('/\R/', $raw) ?: [] as $line) {
-            $trimmed = \trim($line);
-
-            if ('' === $trimmed) {
-                continue;
-            }
-
-            if (\str_starts_with($trimmed, '#')) {
-                continue;
-            }
-
-            $entries[] = $trimmed;
-        }
-
-        return $entries;
+        return AllowlistFile::entries($this->apiRoot() . '/.event-dispatch-allowlist');
     }
 
     private function relativePath(string $absolute): string
