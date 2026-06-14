@@ -58,6 +58,16 @@ function Harness() {
     <div>
       <span data-testid="state">{list.state}</span>
       <span data-testid="ids">{list.items.map((r) => r.id).join(",")}</span>
+      <span data-testid="selected">{[...list.selectedIds].join(",")}</span>
+      <button type="button" data-testid="select-0" onClick={() => list.toggleSelect("id-0")}>
+        select id-0
+      </button>
+      <button type="button" data-testid="mark-0" onClick={() => list.markDeleted("id-0")}>
+        mark id-0
+      </button>
+      <button type="button" data-testid="mark-1" onClick={() => list.markDeleted("id-1")}>
+        mark id-1
+      </button>
       <button
         type="button"
         data-testid="advance"
@@ -81,5 +91,28 @@ describe("useResourceList", () => {
 
     fireEvent.click(screen.getByTestId("advance"));
     await waitFor(() => expect(screen.getByTestId("ids").textContent).toBe("id-3,id-4,id-5"));
+  });
+
+  it("markDeleted drops the id from the current selection", async () => {
+    render(<Harness />);
+    await waitFor(() => expect(screen.getByTestId("state").textContent).toBe("ready"));
+
+    fireEvent.click(screen.getByTestId("select-0"));
+    await waitFor(() => expect(screen.getByTestId("selected").textContent).toBe("id-0"));
+
+    fireEvent.click(screen.getByTestId("mark-0"));
+    await waitFor(() => expect(screen.getByTestId("selected").textContent).toBe(""));
+  });
+
+  it("markDeleted is a no-op for an id that is not selected", async () => {
+    render(<Harness />);
+    await waitFor(() => expect(screen.getByTestId("state").textContent).toBe("ready"));
+
+    fireEvent.click(screen.getByTestId("select-0"));
+    await waitFor(() => expect(screen.getByTestId("selected").textContent).toBe("id-0"));
+
+    // id-1 was never selected — tombstoning it must not disturb the selection.
+    fireEvent.click(screen.getByTestId("mark-1"));
+    expect(screen.getByTestId("selected").textContent).toBe("id-0");
   });
 });

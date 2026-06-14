@@ -5,3 +5,8 @@
 export const BANKS_PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 export type BanksPageSize = (typeof BANKS_PAGE_SIZE_OPTIONS)[number];
 export const BANKS_PAGE_SIZE_DEFAULT: BanksPageSize = 25;
+
+/** Membership guard: narrows an arbitrary page size to a supported option. */
+export function isBanksPageSize(value: number): value is BanksPageSize {
+  return (BANKS_PAGE_SIZE_OPTIONS as readonly number[]).includes(value);
+}
