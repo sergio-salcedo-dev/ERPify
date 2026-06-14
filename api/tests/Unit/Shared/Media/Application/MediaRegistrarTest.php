@@ -6,12 +6,12 @@ namespace Erpify\Tests\Unit\Shared\Media\Application;
 
 use Erpify\Shared\Application\Validation\Validator;
 use Erpify\Shared\Media\Application\Dto\NormalizedImage;
+use Erpify\Shared\Media\Application\Dto\UploadedImage;
 use Erpify\Shared\Media\Application\MediaRegistrar;
 use Erpify\Shared\Media\Application\Port\ImageNormalizer;
 use Erpify\Shared\Media\Domain\Entity\Media;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\Validator\Validation;
 
 /**
@@ -29,8 +29,8 @@ final class MediaRegistrarTest extends TestCase
         $existing = Media::create(self::MEDIA_ID, self::CONTENT_HASH, 'image/png', 4, 'PNG.');
         $mediaRepository = new RecordingMediaRepository(found: $existing);
 
-        $result = $this->makeRegistrar($mediaRepository)->registerFromUploadedFile(
-            $this->createStub(UploadedFile::class),
+        $result = $this->makeRegistrar($mediaRepository)->register(
+            new UploadedImage('image/png', 'PNG.'),
         );
 
         $this->assertSame($existing, $result);
@@ -41,8 +41,8 @@ final class MediaRegistrarTest extends TestCase
     {
         $mediaRepository = new RecordingMediaRepository();
 
-        $result = $this->makeRegistrar($mediaRepository)->registerFromUploadedFile(
-            $this->createStub(UploadedFile::class),
+        $result = $this->makeRegistrar($mediaRepository)->register(
+            new UploadedImage('image/png', 'PNG.'),
         );
 
         $this->assertSame(self::CONTENT_HASH, $result->getContentHash());
@@ -57,8 +57,8 @@ final class MediaRegistrarTest extends TestCase
         $winner = Media::create(self::MEDIA_ID, self::CONTENT_HASH, 'image/png', 4, 'PNG.');
         $mediaRepository = new RecordingMediaRepository(winner: $winner);
 
-        $result = $this->makeRegistrar($mediaRepository)->registerFromUploadedFile(
-            $this->createStub(UploadedFile::class),
+        $result = $this->makeRegistrar($mediaRepository)->register(
+            new UploadedImage('image/png', 'PNG.'),
         );
 
         $this->assertSame($winner, $result);

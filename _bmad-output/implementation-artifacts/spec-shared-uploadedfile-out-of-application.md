@@ -2,8 +2,8 @@
 title: 'Shared · sacar `UploadedFile` (Symfony HTTP) de Application tras un VO `UploadedImage`'
 type: 'refactor'
 created: '2026-06-13'
-status: 'ready-for-dev'
-baseline_commit: 'c97d7dd'
+status: 'done'
+baseline_commit: '7140a99'
 tracking_issue: '#265'
 context:
   - '{project-root}/docs/project-context.md'
@@ -76,17 +76,17 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `api/src/Shared/Media/Application/Dto/UploadedImage.php` (NUEVO) -- VO `{ mimeType, bytes }`.
-- [ ] `api/src/Shared/Media/Application/Port/ImageNormalizer.php` (MODIFICAR) -- firma `normalize(UploadedImage)`.
-- [ ] `api/src/Shared/Media/Infrastructure/Image/InterventionImageNormalizer.php` (MODIFICAR) -- lee del VO; sin `UploadedFile`.
-- [ ] `api/src/Shared/Media/Application/MediaRegistrar.php` (MODIFICAR) -- `register(UploadedImage)`.
-- [ ] `api/src/Shared/Storage/Application/StoredImageObjectWriter.php` (MODIFICAR) -- `store(UploadedImage, …)`.
-- [ ] `api/src/Backoffice/Bank/Application/BankCreator.php` (MODIFICAR) -- params `?UploadedImage`; llamadas `store()`/`register()`.
-- [ ] `api/src/Backoffice/Bank/Infrastructure/Controller/BankPostController.php` (MODIFICAR) -- mapeo `UploadedFile`→`UploadedImage`.
-- [ ] `api/tests/Unit/Shared/Media/Application/MediaRegistrarTest.php` (MODIFICAR) -- input `UploadedImage`; sin stub `UploadedFile`.
-- [ ] `docs/adr/media-vs-documents-upload-boundary.md` (NUEVO) + `docs/index.md` (entrada).
-- [ ] `make php.stan` sobre cada fichero tocado y `make php.quality` al final, limpios.
-- [ ] Behat/funcionales de Bank (POST logo + storedObject) verdes sin tocar el wire.
+- [x] `api/src/Shared/Media/Application/Dto/UploadedImage.php` (NUEVO) -- VO `{ mimeType, bytes }`.
+- [x] `api/src/Shared/Media/Application/Port/ImageNormalizer.php` (MODIFICAR) -- firma `normalize(UploadedImage)`.
+- [x] `api/src/Shared/Media/Infrastructure/Image/InterventionImageNormalizer.php` (MODIFICAR) -- lee del VO; sin `UploadedFile`.
+- [x] `api/src/Shared/Media/Application/MediaRegistrar.php` (MODIFICAR) -- `register(UploadedImage)`.
+- [x] `api/src/Shared/Storage/Application/StoredImageObjectWriter.php` (MODIFICAR) -- `store(UploadedImage, …)`.
+- [x] `api/src/Backoffice/Bank/Application/BankCreator.php` (MODIFICAR) -- params `?UploadedImage`; llamadas `store()`/`register()`.
+- [x] `api/src/Backoffice/Bank/Infrastructure/Controller/BankPostController.php` (MODIFICAR) -- mapeo `UploadedFile`→`UploadedImage`.
+- [x] `api/tests/Unit/Shared/Media/Application/MediaRegistrarTest.php` (MODIFICAR) -- input `UploadedImage`; sin stub `UploadedFile`.
+- [x] `docs/adr/media-vs-documents-upload-boundary.md` (NUEVO) + `docs/index.md` (entrada).
+- [x] `make php.stan` sobre cada fichero tocado y `make php.quality` al final, limpios.
+- [x] Behat/funcionales de Bank (POST logo + storedObject) verdes sin tocar el wire.
 
 **Acceptance Criteria:**
 - Given la capa `Application/` (Media/Storage/Bank), then ningún símbolo importa `Symfony\Component\HttpFoundation\File\UploadedFile`; el único `UploadedFile` en `api/src` (prod) queda en los controllers.
@@ -121,18 +121,42 @@ context:
 
 ## Suggested Review Order
 
-**VO y puerto**
-- VO por valor (PHP puro): `api/src/Shared/Media/Application/Dto/UploadedImage.php`.
-- Firma del puerto: `api/src/Shared/Media/Application/Port/ImageNormalizer.php`.
+**El seam (empieza aquí)**
 
-**Adaptador y casos de uso (Symfony fuera de Application)**
-- Lectura del VO: `api/src/Shared/Media/Infrastructure/Image/InterventionImageNormalizer.php`.
-- `register`/`store`: `MediaRegistrar.php`, `StoredImageObjectWriter.php`.
-- Orquestación: `api/src/Backoffice/Bank/Application/BankCreator.php`.
+- VO por valor que sustituye al tipo HTTP — la superficie exacta que consume el pipeline.
+  [`UploadedImage.php:9`](../../api/src/Shared/Media/Application/Dto/UploadedImage.php#L9)
 
-**Boundary (único `UploadedFile` que queda)**
-- Mapeo `UploadedFile`→`UploadedImage`: `api/src/Backoffice/Bank/Infrastructure/Controller/BankPostController.php`.
+- El puerto ya habla del VO, cero Symfony.
+  [`ImageNormalizer.php:12`](../../api/src/Shared/Media/Application/Port/ImageNormalizer.php#L12)
 
-**Frontera y tests**
-- ADR Media↔Documents: `docs/adr/media-vs-documents-upload-boundary.md`.
-- Test del registrar con VO: `api/tests/Unit/Shared/Media/Application/MediaRegistrarTest.php`.
+**Boundary — el único `UploadedFile` que sobrevive**
+
+- `UploadedFile`→`UploadedImage` tras validar; lee MIME+bytes una vez, en el borde.
+  [`BankPostController.php:72`](../../api/src/Backoffice/Bank/Infrastructure/Controller/BankPostController.php#L72)
+
+**Application / casos de uso (Symfony fuera de Application)**
+
+- Orquesta: pasa los VOs a `store()`/`register()`; renombra los locales de dominio para no colisionar.
+  [`BankCreator.php:30`](../../api/src/Backoffice/Bank/Application/BankCreator.php#L30)
+
+- `register(UploadedImage)` — dedup por `contentHash` intacto.
+  [`MediaRegistrar.php:23`](../../api/src/Shared/Media/Application/MediaRegistrar.php#L23)
+
+- `store(UploadedImage, …)` — `exists`/`write` por content-hash intacto.
+  [`StoredImageObjectWriter.php:26`](../../api/src/Shared/Storage/Application/StoredImageObjectWriter.php#L26)
+
+**El lector real del fichero**
+
+- Lee `->mimeType`/`->bytes`; allowlist, check de vacío, scaleDown, re-encode y hash sin tocar.
+  [`InterventionImageNormalizer.php:46`](../../api/src/Shared/Media/Infrastructure/Image/InterventionImageNormalizer.php#L46)
+
+**Frontera documentada y tests (periféricos)**
+
+- ADR de la frontera Media↔Documents y el porqué del VO simple.
+  [`media-vs-documents-upload-boundary.md:1`](../../docs/adr/media-vs-documents-upload-boundary.md#L1)
+
+- Entrada del ADR en el índice.
+  [`index.md:48`](../../docs/index.md#L48)
+
+- Test del registrar con el VO real en vez de stub de `UploadedFile`.
+  [`MediaRegistrarTest.php:32`](../../api/tests/Unit/Shared/Media/Application/MediaRegistrarTest.php#L32)

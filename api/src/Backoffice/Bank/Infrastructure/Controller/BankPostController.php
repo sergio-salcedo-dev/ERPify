@@ -9,6 +9,7 @@ use Erpify\Backoffice\Bank\Application\Command\CreateBankCommand;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Shared\Application\Validation\Validator;
 use Erpify\Shared\Infrastructure\Http\Responder\ResourceResponder;
+use Erpify\Shared\Media\Application\Dto\UploadedImage;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\Response;
@@ -40,7 +41,11 @@ final readonly class BankPostController
         $this->assertValidUpload($image);
         $this->assertValidUpload($storedObject);
 
-        $bank = $this->bankCreator->create($bankCommand, $image, $storedObject);
+        $bank = $this->bankCreator->create(
+            $bankCommand,
+            $this->toUploadedImage($image),
+            $this->toUploadedImage($storedObject),
+        );
 
         return $this->resourceResponder->respond(
             $bank,
@@ -62,5 +67,17 @@ final readonly class BankPostController
                 mimeTypesMessage: 'Upload a JPEG, PNG, or WebP image.',
             ),
         ]);
+    }
+
+    private function toUploadedImage(?UploadedFile $file): ?UploadedImage
+    {
+        if (!$file instanceof UploadedFile) {
+            return null;
+        }
+
+        return new UploadedImage(
+            $file->getMimeType() ?? '',
+            (string) \file_get_contents($file->getPathname()),
+        );
     }
 }
