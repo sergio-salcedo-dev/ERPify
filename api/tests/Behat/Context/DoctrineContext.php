@@ -32,13 +32,15 @@ class DoctrineContext extends AbstractContext
 
     /**
      * Reset is global because TestDebugDataHolder uses static state — there's
-     * no per-connection clear API on Symfony's DebugDataHolder.
+     * no per-connection clear API on Symfony's DebugDataHolder. Uses resetScenario()
+     * rather than reset(): the latter is a no-op so the profiler's DoctrineDataCollector
+     * cannot wipe the accumulator mid-scenario (see TestDebugDataHolder).
      */
     #[Given('I reset the stats for all doctrine connections')]
     #[BeforeScenario]
     final public function resetConnectionStats(): void
     {
-        $this->debugDataHolder->reset();
+        $this->debugDataHolder->resetScenario();
     }
 
     #[Then(':count request(s) got executed for doctrine connection :connectionName')]

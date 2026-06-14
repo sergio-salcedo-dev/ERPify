@@ -6,3 +6,10 @@ when@dev:
     web_profiler_profiler:
         resource: '@WebProfilerBundle/Resources/config/routing/profiler.php'
         prefix: /_profiler
+
+when@test:
+    # Only `_profiler` is needed under test: the `print the web profiler link` step generates a
+    # URL for this route. The `_wdt` toolbar route is dev-only since the toolbar is never rendered.
+    web_profiler_profiler:
+        resource: '@WebProfilerBundle/Resources/config/routing/profiler.php'
+        prefix: /_profiler
