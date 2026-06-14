@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactElement } from "react";
+import { useState, type ReactElement, type ReactNode } from "react";
 import { Trash2 } from "lucide-react";
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
@@ -17,6 +17,24 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+
+/**
+ * Optional precondition that blocks deletion. When `active`, the destructive
+ * confirmation is replaced by a neutral, non-destructive guard view that never
+ * issues the delete — an optimistic UX guard surfaced to the user; the backend
+ * stays the authoritative guard. The caller owns the entity-specific copy and
+ * recovery (`action`); this component stays entity-agnostic.
+ */
+export interface ResourceDeleteGuard {
+  /** When true, render the guard view instead of the confirm-delete. */
+  active: boolean;
+  /** Dialog title for the guard view (e.g. "Can't delete bank"). */
+  title: ReactNode;
+  /** Why deletion is blocked; rendered in the dialog description. */
+  description: ReactNode;
+  /** Recovery action rendered beside Close (e.g. a "View accounts" link). */
+  action?: ReactElement;
+}
 
 export interface DeleteResourceButtonProps {
   id: string;
@@ -41,6 +59,12 @@ export interface DeleteResourceButtonProps {
   /** Custom trigger; defaults to a destructive button with a Trash icon. */
   trigger?: ReactElement;
   triggerTestId?: string;
+  /**
+   * When provided and `active`, replaces the confirm-delete with a neutral
+   * guard view that never issues the delete (e.g. a bank with associated
+   * accounts).
+   */
+  guard?: ResourceDeleteGuard;
   /** Controlled open state (used by the per-row actions menu). */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -63,6 +87,7 @@ export function DeleteResourceButton({
   onError,
   trigger,
   triggerTestId = `${testIdPrefix}__delete-button`,
+  guard,
   open: openProp,
   onOpenChange,
 }: Readonly<DeleteResourceButtonProps>) {
@@ -121,48 +146,72 @@ export function DeleteResourceButton({
     <Dialog open={open} onOpenChange={setOpen}>
       {isControlled ? null : <DialogTrigger render={trigger ?? defaultTrigger} />}
       <DialogContent data-testid={`${testIdPrefix}__delete-dialog`}>
-        <DialogHeader>
-          <DialogTitle>Delete {entityNoun}</DialogTitle>
-          <DialogDescription>
-            Are you sure you want to delete <span className="font-semibold">{resourceLabel}</span>?
-            This cannot be undone.
-          </DialogDescription>
-        </DialogHeader>
+        {guard?.active ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>{guard.title}</DialogTitle>
+              <DialogDescription data-testid={`${testIdPrefix}__delete-guard-message`}>
+                {guard.description}
+              </DialogDescription>
+            </DialogHeader>
 
-        <DialogFooter>
-          <DialogClose
-            render={
+            <DialogFooter>
+              <DialogClose
+                render={
+                  <Button variant="ghost" size="sm" aria-label="Close" title="Close">
+                    Close
+                  </Button>
+                }
+              />
+              {guard.action}
+            </DialogFooter>
+          </>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle>Delete {entityNoun}</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to delete{" "}
+                <span className="font-semibold">{resourceLabel}</span>? This cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+
+            <DialogFooter>
+              <DialogClose
+                render={
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={submitting}
+                    aria-label="Cancel deletion"
+                    title="Cancel deletion"
+                  >
+                    Cancel
+                  </Button>
+                }
+              />
               <Button
-                variant="ghost"
+                variant="destructive"
                 size="sm"
+                onClick={handleConfirm}
                 disabled={submitting}
-                aria-label="Cancel deletion"
-                title="Cancel deletion"
+                data-icon={submitting ? "inline-start" : undefined}
+                aria-label={`Confirm delete of ${entityNoun} ${resourceLabel}`}
+                title={`Confirm delete of ${entityNoun} ${resourceLabel}`}
+                data-testid={`${testIdPrefix}__delete-confirm`}
               >
-                Cancel
+                {submitting ? (
+                  <>
+                    <Spinner className="size-3.5" testId={`${testIdPrefix}__delete-spinner`} />
+                    Deleting…
+                  </>
+                ) : (
+                  "Delete"
+                )}
               </Button>
-            }
-          />
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={handleConfirm}
-            disabled={submitting}
-            data-icon={submitting ? "inline-start" : undefined}
-            aria-label={`Confirm delete of ${entityNoun} ${resourceLabel}`}
-            title={`Confirm delete of ${entityNoun} ${resourceLabel}`}
-            data-testid={`${testIdPrefix}__delete-confirm`}
-          >
-            {submitting ? (
-              <>
-                <Spinner className="size-3.5" testId={`${testIdPrefix}__delete-spinner`} />
-                Deleting…
-              </>
-            ) : (
-              "Delete"
-            )}
-          </Button>
-        </DialogFooter>
+            </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );
