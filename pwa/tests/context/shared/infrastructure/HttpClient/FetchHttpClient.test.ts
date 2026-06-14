@@ -318,6 +318,63 @@ describe("FetchHttpClient", () => {
     });
   });
 
+  describe("debug token publishing", () => {
+    it("publishes the token and profiler link on a 2xx response", async () => {
+      const publish = vi.fn();
+      const observer = { publish, subscribe: () => () => {} };
+      fetchSpy.mockResolvedValue(
+        makeResponse(
+          200,
+          { data: { ok: true } },
+          {
+            headers: {
+              "X-Debug-Token": "tok-2xx",
+              "X-Debug-Token-Link": "https://localhost/_profiler/tok-2xx",
+            },
+          },
+        ),
+      );
+
+      const client = new FetchHttpClient(observer);
+      await client.get("/api/backoffice/health");
+
+      expect(publish).toHaveBeenCalledWith({
+        token: "tok-2xx",
+        profilerUrl: "https://localhost/_profiler/tok-2xx",
+      });
+    });
+
+    it("publishes the token on an error response too", async () => {
+      const publish = vi.fn();
+      const observer = { publish, subscribe: () => () => {} };
+      fetchSpy.mockResolvedValue(
+        makeResponse(
+          404,
+          { type: "bank-not-found", title: "x", status: 404 },
+          {
+            headers: { "X-Debug-Token": "tok-404" },
+          },
+        ),
+      );
+
+      const client = new FetchHttpClient(observer);
+      await expect(client.get("/api/backoffice/banks/missing")).rejects.toBeInstanceOf(HttpError);
+
+      expect(publish).toHaveBeenCalledWith({ token: "tok-404", profilerUrl: null });
+    });
+
+    it("does not publish when the response carries no X-Debug-Token", async () => {
+      const publish = vi.fn();
+      const observer = { publish, subscribe: () => () => {} };
+      fetchSpy.mockResolvedValue(makeResponse(200, { data: { ok: true } }));
+
+      const client = new FetchHttpClient(observer);
+      await client.get("/api/backoffice/health");
+
+      expect(publish).not.toHaveBeenCalled();
+    });
+  });
+
   describe("server base URL (absolute by construction)", () => {
     const ORIGINAL_API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
     const ORIGINAL_INTERNAL = process.env.SYMFONY_INTERNAL_URL;

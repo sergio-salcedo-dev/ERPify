@@ -85,3 +85,12 @@ when@test:
         path: /api/test/_throw-doctrine-connection-lost
         controller: Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\ThrowDoctrineConnectionLostController
         methods: [GET]
+
+    # Mirrors the dev-only dev_wdt_loader route (config/routes/dev.yaml) so its loader-rendering
+    # behaviour is covered by a functional test through a real kernel.
+    dev_wdt_loader:
+        path: /_dev/wdt-loader/{token}
+        controller: Erpify\Frontoffice\Dev\Infrastructure\Controller\WebDebugToolbarLoaderController
+        methods: [GET]
+        requirements:
+            token: '[\w-]+'
