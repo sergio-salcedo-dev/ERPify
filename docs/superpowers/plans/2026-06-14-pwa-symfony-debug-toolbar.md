@@ -636,7 +636,9 @@ git commit -m "feat(dev-tools): add useLatestDebugToken hook"
 
 ---
 
-## Task 9: `<SymfonyDebugToolbar>` component (Approach A)
+## Task 9: `<SymfonyDebugToolbar>` component (Approach B — spike confirmed bare fragment)
+
+> **Spike outcome (2026-06-14):** `/_wdt/{token}` is bare markup, so **Approach B applies**. Task 9b shipped the dev-only loader endpoint `GET /_dev/wdt-loader/{token}` (commit `7c0c544`), which returns the real `Sfjs` loader (it pulls `/_wdt/{token}` + `/_wdt/styles` itself). The component therefore fetches `/_dev/wdt-loader/{token}`, **not** `/_wdt/{token}`. `WDT_PATH` below is set accordingly; everything else in this task is unchanged.
 
 **Files:**
 - Create: `pwa/src/context/shared/dev-tools/infrastructure/ui/SymfonyDebugToolbar.tsx`
@@ -676,7 +678,7 @@ describe("SymfonyDebugToolbar", () => {
     observer.publish({ token: "ddd", profilerUrl: "/_profiler/ddd" });
 
     await waitFor(() => {
-      expect(fetchSpy).toHaveBeenCalledWith("/_wdt/ddd", expect.objectContaining({ cache: "no-store" }));
+      expect(fetchSpy).toHaveBeenCalledWith("/_dev/wdt-loader/ddd", expect.objectContaining({ cache: "no-store" }));
     });
     await waitFor(() => {
       expect(screen.getByTestId("dev-tools__symfony-toolbar").querySelector("#sfwdt-marker")).not.toBeNull();
@@ -714,8 +716,8 @@ import { apiScope } from "@/context/shared/domain/Observability/TelemetryScope";
 import type { DebugTokenObserver } from "@/context/shared/domain/DebugToken/DebugTokenObserver";
 import { useLatestDebugToken } from "./useLatestDebugToken";
 
-/** Path Symfony serves the toolbar fragment from (already routed via FrankenPHP). */
-const WDT_PATH = "/_wdt";
+/** Dev-only Symfony endpoint serving the toolbar loader (already routed via FrankenPHP). */
+const WDT_PATH = "/_dev/wdt-loader";
 
 /**
  * Recreates a parsed node tree into `host`, replacing each `<script>` with a
