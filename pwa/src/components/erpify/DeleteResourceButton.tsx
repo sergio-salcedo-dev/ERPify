@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactElement, type ReactNode } from "react";
-import { Trash2 } from "lucide-react";
+import { Ban, TriangleAlert, Trash2 } from "lucide-react";
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { toastNotifier } from "@/context/shared/infrastructure/Notification/Toast";
@@ -145,20 +145,33 @@ export function DeleteResourceButton({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {isControlled ? null : <DialogTrigger render={trigger ?? defaultTrigger} />}
-      <DialogContent data-testid={`${testIdPrefix}__delete-dialog`}>
+      <DialogContent className="sm:max-w-md" data-testid={`${testIdPrefix}__delete-dialog`}>
         {guard?.active ? (
           <>
             <DialogHeader>
-              <DialogTitle>{guard.title}</DialogTitle>
-              <DialogDescription data-testid={`${testIdPrefix}__delete-guard-message`}>
-                {guard.description}
-              </DialogDescription>
+              <div className="flex items-start gap-3">
+                <span
+                  className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-full"
+                  aria-hidden="true"
+                >
+                  <Ban className="size-5" />
+                </span>
+                <div className="flex flex-1 flex-col gap-2">
+                  <DialogTitle className="text-lg">{guard.title}</DialogTitle>
+                  <DialogDescription
+                    className="text-base leading-relaxed"
+                    data-testid={`${testIdPrefix}__delete-guard-message`}
+                  >
+                    {guard.description}
+                  </DialogDescription>
+                </div>
+              </div>
             </DialogHeader>
 
             <DialogFooter>
               <DialogClose
                 render={
-                  <Button variant="ghost" size="sm" aria-label="Close" title="Close">
+                  <Button variant="ghost" aria-label="Close" title="Close">
                     Close
                   </Button>
                 }
@@ -169,11 +182,24 @@ export function DeleteResourceButton({
         ) : (
           <>
             <DialogHeader>
-              <DialogTitle>Delete {entityNoun}</DialogTitle>
-              <DialogDescription>
-                Are you sure you want to delete{" "}
-                <span className="font-semibold">{resourceLabel}</span>? This cannot be undone.
-              </DialogDescription>
+              <div className="flex items-start gap-3">
+                <span
+                  className="bg-destructive/10 text-destructive flex size-10 shrink-0 items-center justify-center rounded-full"
+                  aria-hidden="true"
+                >
+                  <TriangleAlert className="size-5" />
+                </span>
+                <div className="flex flex-1 flex-col gap-2">
+                  <DialogTitle className="text-lg">Delete {entityNoun}</DialogTitle>
+                  <DialogDescription className="text-base leading-relaxed">
+                    Are you sure you want to delete{" "}
+                    <span className="text-foreground font-semibold break-words">
+                      {resourceLabel}
+                    </span>
+                    ? This cannot be undone.
+                  </DialogDescription>
+                </div>
+              </div>
             </DialogHeader>
 
             <DialogFooter>
@@ -181,7 +207,6 @@ export function DeleteResourceButton({
                 render={
                   <Button
                     variant="ghost"
-                    size="sm"
                     disabled={submitting}
                     aria-label="Cancel deletion"
                     title="Cancel deletion"
@@ -192,7 +217,6 @@ export function DeleteResourceButton({
               />
               <Button
                 variant="destructive"
-                size="sm"
                 onClick={handleConfirm}
                 disabled={submitting}
                 data-icon={submitting ? "inline-start" : undefined}
@@ -202,7 +226,7 @@ export function DeleteResourceButton({
               >
                 {submitting ? (
                   <>
-                    <Spinner className="size-3.5" testId={`${testIdPrefix}__delete-spinner`} />
+                    <Spinner className="size-4" testId={`${testIdPrefix}__delete-spinner`} />
                     Deleting…
                   </>
                 ) : (

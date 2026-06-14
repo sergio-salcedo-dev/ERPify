@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Trash2 } from "lucide-react";
+import { TriangleAlert, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -104,18 +104,31 @@ export function ResourceBulkBar({
               </Button>
             }
           />
-          <DialogContent data-testid={`${testIdPrefix}__bulk-delete-dialog`}>
+          <DialogContent
+            className="sm:max-w-md"
+            data-testid={`${testIdPrefix}__bulk-delete-dialog`}
+          >
             <DialogHeader>
-              <DialogTitle>
-                Delete {count} {noun}
-              </DialogTitle>
-              <DialogDescription>
-                Are you sure you want to delete {count} selected {noun}? This cannot be undone.
-              </DialogDescription>
+              <div className="flex items-start gap-3">
+                <span
+                  className="bg-destructive/10 text-destructive flex size-10 shrink-0 items-center justify-center rounded-full"
+                  aria-hidden="true"
+                >
+                  <TriangleAlert className="size-5" />
+                </span>
+                <div className="flex flex-1 flex-col gap-2">
+                  <DialogTitle className="text-lg">
+                    Delete {count} {noun}
+                  </DialogTitle>
+                  <DialogDescription className="text-base leading-relaxed">
+                    Are you sure you want to delete {count} selected {noun}? This cannot be undone.
+                  </DialogDescription>
+                </div>
+              </div>
             </DialogHeader>
             {shownNames.length > 0 ? (
               <ul
-                className="resource-bulk-bar__delete-names text-muted-foreground list-none space-y-1 p-0 text-sm"
+                className="resource-bulk-bar__delete-names text-muted-foreground list-none space-y-1 p-0 text-sm sm:pl-13"
                 data-testid={`${testIdPrefix}__bulk-delete-names`}
               >
                 {shownNames.map((name) => (
@@ -131,7 +144,6 @@ export function ResourceBulkBar({
                 render={
                   <Button
                     variant="ghost"
-                    size="sm"
                     aria-label="Cancel bulk delete"
                     title="Cancel bulk delete"
                   >
@@ -142,7 +154,6 @@ export function ResourceBulkBar({
               <Button
                 type="button"
                 variant="destructive"
-                size="sm"
                 onClick={handleConfirm}
                 aria-label={`Confirm delete of ${count} ${noun}`}
                 title={`Confirm delete of ${count} ${noun}`}
