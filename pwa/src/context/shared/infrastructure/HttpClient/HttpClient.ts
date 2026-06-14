@@ -1,7 +1,9 @@
-import { injectable } from "inversify";
+import { inject, injectable } from "inversify";
 import { isProblemDetails, type ProblemDetails } from "../../domain/ProblemDetails";
 import { API_ENDPOINTS } from "../api/ApiEndpoints";
 import { HttpError } from "./HttpError";
+import type { DebugTokenObserver } from "../../domain/DebugToken/DebugTokenObserver";
+import { NoopDebugTokenObserver } from "../DebugToken/NoopDebugTokenObserver";
 import { uuidV7 } from "@/lib/uuidV7";
 
 /** Runtime shape check applied to a 2xx JSON body at the HTTP boundary. */
@@ -113,8 +115,28 @@ export class MockHttpClient implements HttpClient {
 
 @injectable()
 export class FetchHttpClient implements HttpClient {
+  // Optional + defaulted so the ~20 direct `new FetchHttpClient()` call sites in
+  // the unit suite keep working; the container always binds a real observer, so
+  // production/dev resolution never hits the default.
+  constructor(
+    @inject("DebugTokenObserver")
+    private readonly debugTokens: DebugTokenObserver = new NoopDebugTokenObserver(),
+  ) {}
+
+  // Single fetch chokepoint: every request reads the Symfony profiler token off
+  // the response (success and error paths share this) and publishes it for the
+  // dev-only toolbar. No-op in prod (header absent + inert observer).
+  private async request(input: string, init: RequestInit): Promise<Response> {
+    const res = await fetch(input, init);
+    const token = res.headers.get("X-Debug-Token");
+    if (token) {
+      this.debugTokens.publish({ token, profilerUrl: res.headers.get("X-Debug-Token-Link") });
+    }
+    return res;
+  }
+
   async get<T>(url: string, validate?: ResponseGuard<T>): Promise<T> {
-    const res = await fetch(this.resolveUrl(url), {
+    const res = await this.request(this.resolveUrl(url), {
       headers: { Accept: "application/json" },
       cache: "no-store",
     });
@@ -135,7 +157,7 @@ export class FetchHttpClient implements HttpClient {
   }
 
   async delete(url: string): Promise<void> {
-    const res = await fetch(this.resolveUrl(url), {
+    const res = await this.request(this.resolveUrl(url), {
       method: "DELETE",
       headers: { Accept: "application/json" },
       cache: "no-store",
@@ -152,7 +174,7 @@ export class FetchHttpClient implements HttpClient {
     body: TBody,
     validate?: ResponseGuard<T>,
   ): Promise<T> {
-    const res = await fetch(this.resolveUrl(url), {
+    const res = await this.request(this.resolveUrl(url), {
       method,
       headers: {
         Accept: "application/json",

@@ -21,8 +21,20 @@ import { ApiBankAccountSearchNavigator } from "../../../backoffice/bankaccount/i
 import { SearchBankAccounts } from "../../../backoffice/bankaccount/application/SearchBankAccounts";
 import { InMemoryUserRepository } from "../../../backoffice/user/infrastructure/InMemoryUserRepository";
 import { InMemoryResourceNavigator } from "../../../shared/resource/infrastructure/InMemoryResourceNavigator";
+import type { DebugTokenObserver } from "../../domain/DebugToken/DebugTokenObserver";
+import { EventTargetDebugTokenObserver } from "../DebugToken/EventTargetDebugTokenObserver";
+import { NoopDebugTokenObserver } from "../DebugToken/NoopDebugTokenObserver";
+import { isDevToolsAvailable } from "../../dev-tools/domain/isDevToolsAvailable";
 
 const container = new Container();
+
+// The debug toolbar exists only outside production. The dev adapter carries the
+// profiler token to the toolbar; prod binds the inert no-op so the feature is
+// dead by construction even before the (also-absent) profiler header.
+container
+  .bind<DebugTokenObserver>("DebugTokenObserver")
+  .to(isDevToolsAvailable() ? EventTargetDebugTokenObserver : NoopDebugTokenObserver)
+  .inSingletonScope();
 
 const useMockHttp = process.env.NODE_ENV === "test" || process.env.VITEST === "true";
 
