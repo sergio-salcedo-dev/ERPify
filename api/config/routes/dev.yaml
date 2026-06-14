@@ -6,3 +6,13 @@ when@dev:
         controller: Symfony\Bundle\FrameworkBundle\Controller\TemplateController
         defaults:
             template: dev/home.html.twig
+
+    # Renders Symfony's Web Debug Toolbar JS loader for a profiler token so the JSON API's PWA
+    # (which never gets the listener's </body> injection) can fetch and execute it to show the
+    # interactive toolbar. The /_dev* prefix is excluded from the FrankenPHP @pwa proxy (Caddyfile).
+    dev_wdt_loader:
+        path: /_dev/wdt-loader/{token}
+        controller: Erpify\Frontoffice\Dev\Infrastructure\Controller\WebDebugToolbarLoaderController
+        methods: [GET]
+        requirements:
+            token: '[\w-]+'
