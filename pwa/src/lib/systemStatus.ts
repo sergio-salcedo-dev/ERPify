@@ -66,7 +66,7 @@ export function aggregateSystemStatus(views: readonly SystemStatusView[]): Syste
   const datetime = views
     .map((view) => view.datetime)
     .filter((value): value is string => value !== null)
-    .sort()
+    .sort((a, b) => a.localeCompare(b))
     .at(-1);
 
   return { status, datetime: datetime ?? null };
