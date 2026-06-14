@@ -47,6 +47,22 @@ describe("BanksStackedList — mobile keyboard contract", () => {
     expect(second).toHaveAttribute("href", `/backoffice/banks/${BANKS[1].id}`);
   });
 
+  it("keeps a valid roving tab stop when an optimistic delete shrinks the list", () => {
+    const { rerender } = render(<BanksStackedList onBankDeleteFailed={() => {}} banks={BANKS} />);
+    // Move the active row to the last card, then drop it (optimistic delete).
+    const first = screen.getByTestId(`banks-stacked__row-${BANKS[0].id}`);
+    fireEvent.focus(first);
+    fireEvent.keyDown(first, { key: "ArrowDown" });
+    rerender(<BanksStackedList onBankDeleteFailed={() => {}} banks={[BANKS[0]]} />);
+
+    // The clamp keeps the (now only) row as the tab stop instead of leaving the
+    // stale index 1 past the end with no focusable row.
+    expect(screen.getByTestId(`banks-stacked__row-${BANKS[0].id}`)).toHaveAttribute(
+      "tabindex",
+      "0",
+    );
+  });
+
   it("Space toggles selection and the checkbox is always visible", () => {
     const onToggleSelect = vi.fn();
     render(
