@@ -1,14 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import Link from "next/link";
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { StatusBadge, TruncatedText } from "@/components/erpify";
+import { useRowKeyboardNavigation } from "@/context/shared/resource/application/useRowKeyboardNavigation";
 import { cn } from "@/lib/utils";
 import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
 import { safeHref } from "@/lib/safeHref";
-import { KeyboardKey } from "@/context/shared/domain/types/keyboard";
 import { bankRoutes } from "../_lib/bankRoutes";
 import { isRecentlyCreated } from "../_lib/bankRecency";
 import { BankRowActions } from "./BankRowActions";
@@ -51,89 +50,13 @@ export function BanksStackedList({
   density = "compact",
   className,
 }: Readonly<BanksStackedListProps>) {
-  const [focusedRow, setFocusedRow] = useState(0);
-  const rowRefs = useRef<Array<HTMLAnchorElement | null>>([]);
-  // Explorer-style range selection — mirrors DataTable: `anchor` pivots the
-  // range, `baseline` snapshots the selection at the first Shift+Arrow press,
-  // each press recomputes `baseline ∪ range`. Reset on any non-shift
-  // navigation or toggle, re-armed lazily on the next Shift+Arrow.
-  const rangeRef = useRef<{ anchor: number; baseline: ReadonlySet<string> } | null>(null);
-  const rangeEmittedRef = useRef<ReadonlySet<string> | null>(null);
-
-  // The cached anchor indexes into `banks`: any external mutation of the row
-  // slice (pagination, filtering, realtime deletes) invalidates it.
-  useEffect(() => {
-    rangeRef.current = null;
-  }, [banks]);
-
-  // An external selection change (bulk-bar Clear, checkbox click, remote
-  // pruning) also ends the range; only the set extendRange itself emitted
-  // keeps the anchor alive.
-  useEffect(() => {
-    if (selectedIds !== rangeEmittedRef.current) {
-      rangeRef.current = null;
-    }
-  }, [selectedIds]);
-
-  const extendRange = (fromIndex: number, toIndex: number): void => {
-    if (!onSelectionChange) return;
-    if (rangeRef.current === null) {
-      rangeRef.current = { anchor: fromIndex, baseline: new Set(selectedIds ?? []) };
-    }
-    const { anchor, baseline } = rangeRef.current;
-    const lo = Math.min(anchor, toIndex);
-    const hi = Math.max(anchor, toIndex);
-    const next = new Set(baseline);
-    for (let i = lo; i <= hi; i++) {
-      next.add(banks[i].id);
-    }
-    rangeEmittedRef.current = next;
-    onSelectionChange(next);
-  };
-
-  const handleKeyDown = (
-    event: KeyboardEvent<HTMLAnchorElement>,
-    bank: Bank,
-    index: number,
-  ): void => {
-    if (event.key === KeyboardKey.ARROW_DOWN) {
-      event.preventDefault();
-      const next = Math.min(index + 1, banks.length - 1);
-      if (event.shiftKey && onSelectionChange) {
-        extendRange(index, next);
-      } else {
-        rangeRef.current = null;
-      }
-      setFocusedRow(next);
-      rowRefs.current[next]?.focus();
-      return;
-    }
-    if (event.key === KeyboardKey.ARROW_UP) {
-      event.preventDefault();
-      const next = Math.max(index - 1, 0);
-      if (event.shiftKey && onSelectionChange) {
-        extendRange(index, next);
-      } else {
-        rangeRef.current = null;
-      }
-      setFocusedRow(next);
-      rowRefs.current[next]?.focus();
-      return;
-    }
-    // Case-insensitive so CapsLock can't disable the peek; Shift stays
-    // reserved for range selection.
-    if (event.key.toLowerCase() === KeyboardKey.O && !event.shiftKey && onBankPeek) {
-      event.preventDefault();
-      rangeRef.current = null;
-      onBankPeek(bank.id);
-      return;
-    }
-    if (event.key === KeyboardKey.SPACE && onToggleSelect) {
-      event.preventDefault();
-      rangeRef.current = null;
-      onToggleSelect(bank.id);
-    }
-  };
+  const { focusedRow, setFocusedRow, rowRefs, handleKeyDown } = useRowKeyboardNavigation<Bank>({
+    items: banks,
+    selectedIds,
+    onSelectionChange,
+    onToggleSelect,
+    onPeek: onBankPeek,
+  });
 
   // Roving tab stop, clamped so an optimistic delete that shrinks the list never
   // leaves the active index past the last row (which would drop keyboard focus to
@@ -184,7 +107,7 @@ export function BanksStackedList({
                 href={safeHref(bankRoutes.detail(bank.id))}
                 tabIndex={activeRow === index ? 0 : -1}
                 onFocus={() => setFocusedRow(index)}
-                onKeyDown={(event) => handleKeyDown(event, bank, index)}
+                onKeyDown={(event) => handleKeyDown(event, index)}
                 data-stacked-row
                 data-testid={`banks-stacked__row-${bank.id}`}
                 className="banks-stacked__link focus-visible:after:ring-ring block min-w-0 after:absolute after:inset-0 after:rounded-md focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset"

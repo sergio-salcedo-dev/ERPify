@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import Link from "next/link";
 import type { User } from "@/context/backoffice/user/domain/User";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { TruncatedText } from "@/components/erpify";
+import { useRowKeyboardNavigation } from "@/context/shared/resource/application/useRowKeyboardNavigation";
 import { cn } from "@/lib/utils";
 import { safeHref } from "@/lib/safeHref";
-import { KeyboardKey } from "@/context/shared/domain/types/keyboard";
 import { userRoutes } from "../_lib/userRoutes";
 import { UserStatusBadge } from "./UserStatusBadge";
 import { UserRowActions } from "./UserRowActions";
@@ -43,81 +42,13 @@ export function UsersStackedList({
   density = "compact",
   className,
 }: Readonly<UsersStackedListProps>) {
-  const [focusedRow, setFocusedRow] = useState(0);
-  const rowRefs = useRef<Array<HTMLAnchorElement | null>>([]);
-  const rangeRef = useRef<{ anchor: number; baseline: ReadonlySet<string> } | null>(null);
-  const rangeEmittedRef = useRef<ReadonlySet<string> | null>(null);
-
-  useEffect(() => {
-    rangeRef.current = null;
-  }, [users]);
-
-  useEffect(() => {
-    if (selectedIds !== rangeEmittedRef.current) {
-      rangeRef.current = null;
-    }
-  }, [selectedIds]);
-
-  const extendRange = (fromIndex: number, toIndex: number): void => {
-    if (!onSelectionChange) return;
-    if (rangeRef.current === null) {
-      rangeRef.current = { anchor: fromIndex, baseline: new Set(selectedIds ?? []) };
-    }
-    const { anchor, baseline } = rangeRef.current;
-    const lo = Math.min(anchor, toIndex);
-    const hi = Math.max(anchor, toIndex);
-    const next = new Set(baseline);
-    for (let i = lo; i <= hi; i++) {
-      // Guard the ref-captured range against an array that shrank under it
-      // (e.g. an optimistic delete between anchor capture and extension).
-      const row = users[i];
-      if (row) next.add(row.id);
-    }
-    rangeEmittedRef.current = next;
-    onSelectionChange(next);
-  };
-
-  const handleKeyDown = (
-    event: KeyboardEvent<HTMLAnchorElement>,
-    user: User,
-    index: number,
-  ): void => {
-    if (event.key === KeyboardKey.ARROW_DOWN) {
-      event.preventDefault();
-      const next = Math.min(index + 1, users.length - 1);
-      if (event.shiftKey && onSelectionChange) {
-        extendRange(index, next);
-      } else {
-        rangeRef.current = null;
-      }
-      setFocusedRow(next);
-      rowRefs.current[next]?.focus();
-      return;
-    }
-    if (event.key === KeyboardKey.ARROW_UP) {
-      event.preventDefault();
-      const next = Math.max(index - 1, 0);
-      if (event.shiftKey && onSelectionChange) {
-        extendRange(index, next);
-      } else {
-        rangeRef.current = null;
-      }
-      setFocusedRow(next);
-      rowRefs.current[next]?.focus();
-      return;
-    }
-    if (event.key.toLowerCase() === KeyboardKey.O && !event.shiftKey && onUserPeek) {
-      event.preventDefault();
-      rangeRef.current = null;
-      onUserPeek(user.id);
-      return;
-    }
-    if (event.key === KeyboardKey.SPACE && onToggleSelect) {
-      event.preventDefault();
-      rangeRef.current = null;
-      onToggleSelect(user.id);
-    }
-  };
+  const { focusedRow, setFocusedRow, rowRefs, handleKeyDown } = useRowKeyboardNavigation<User>({
+    items: users,
+    selectedIds,
+    onSelectionChange,
+    onToggleSelect,
+    onPeek: onUserPeek,
+  });
 
   // Roving tab stop, clamped so an optimistic delete that shrinks the list never
   // leaves the active index past the last row (which would drop keyboard focus to
@@ -162,7 +93,7 @@ export function UsersStackedList({
                 href={safeHref(userRoutes.detail(user.id))}
                 tabIndex={activeRow === index ? 0 : -1}
                 onFocus={() => setFocusedRow(index)}
-                onKeyDown={(event) => handleKeyDown(event, user, index)}
+                onKeyDown={(event) => handleKeyDown(event, index)}
                 data-stacked-row
                 data-testid={`users-stacked__row-${user.id}`}
                 className="users-stacked__link focus-visible:after:ring-ring block min-w-0 after:absolute after:inset-0 after:rounded-md focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset"
