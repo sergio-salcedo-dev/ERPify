@@ -6,6 +6,7 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -55,29 +56,31 @@ export function UsersColumnPicker({
         }
       />
       <DropdownMenuContent align="end" className="w-44">
-        <DropdownMenuLabel>Visible columns</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {PINNED_COLUMNS.map((k) => (
-          <DropdownMenuCheckboxItem
-            key={k}
-            checked
-            disabled
-            aria-label={`${LABEL[k]} (always shown)`}
-          >
-            {LABEL[k]}
-          </DropdownMenuCheckboxItem>
-        ))}
-        {TOGGLEABLE_COLUMNS.map((k) => (
-          <DropdownMenuCheckboxItem
-            key={k}
-            checked={visible.includes(k)}
-            onCheckedChange={() => toggle(k)}
-            onSelect={(event) => event.preventDefault()}
-            data-testid={`users-columns__${k}`}
-          >
-            {LABEL[k]}
-          </DropdownMenuCheckboxItem>
-        ))}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Visible columns</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {PINNED_COLUMNS.map((k) => (
+            <DropdownMenuCheckboxItem
+              key={k}
+              checked
+              disabled
+              aria-label={`${LABEL[k]} (always shown)`}
+            >
+              {LABEL[k]}
+            </DropdownMenuCheckboxItem>
+          ))}
+          {TOGGLEABLE_COLUMNS.map((k) => (
+            <DropdownMenuCheckboxItem
+              key={k}
+              checked={visible.includes(k)}
+              onCheckedChange={() => toggle(k)}
+              onSelect={(event) => event.preventDefault()}
+              data-testid={`users-columns__${k}`}
+            >
+              {LABEL[k]}
+            </DropdownMenuCheckboxItem>
+          ))}
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -51,8 +51,8 @@ export function DevSessionSwitcher() {
         }
       />
       <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel>Role</DropdownMenuLabel>
         <DropdownMenuRadioGroup value={role} onValueChange={(v) => setRole(v as Role)}>
+          <DropdownMenuLabel>Role</DropdownMenuLabel>
           {ALL_ROLES.map((r) => (
             <DropdownMenuRadioItem key={r} value={r}>
               {r}
@@ -60,8 +60,8 @@ export function DevSessionSwitcher() {
           ))}
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuLabel>Status</DropdownMenuLabel>
         <DropdownMenuRadioGroup value={session.user.status} onValueChange={setStatus}>
+          <DropdownMenuLabel>Status</DropdownMenuLabel>
           {Object.values(UserStatus).map((s) => (
             <DropdownMenuRadioItem key={s} value={s}>
               {s}
