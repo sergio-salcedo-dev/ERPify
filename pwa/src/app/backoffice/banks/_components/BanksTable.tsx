@@ -118,7 +118,7 @@ function buildBanksColumns(
     },
     {
       id: "accounts",
-      header: "ACCOUNTS",
+      header: "Accounts",
       align: "right",
       cell: renderAccountsCell,
       className: "banks-table__col--accounts hidden lg:table-cell",
