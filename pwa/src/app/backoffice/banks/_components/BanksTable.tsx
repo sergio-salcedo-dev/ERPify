@@ -11,10 +11,13 @@ import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvid
 import { safeHref } from "@/lib/safeHref";
 import { isRecentlyCreated } from "../_lib/bankRecency";
 import { bankRoutes } from "../_lib/bankRoutes";
+import type { BankColumnKey } from "../_lib/bankColumns";
 import { BankRowActions } from "./BankRowActions";
 
 interface BanksTableProps {
   banks: Bank[];
+  /** Which columns are visible (shortName + name always rendered; the rest are toggleable). */
+  visible: BankColumnKey[];
   sort?: DataTableSort | null;
   onSortChange?: (sort: DataTableSort | null) => void;
   onBankDeleted?: (id: string) => void;
@@ -78,9 +81,11 @@ const renderAccountsCell = (row: Bank) =>
   );
 
 function buildBanksColumns(
+  visible: BankColumnKey[],
   onBankDeleteFailed: (id: string, problem: ProblemDetails) => void,
   onBankDeleted?: (id: string) => void,
 ): DataTableColumn<Bank>[] {
+  const shown = new Set(visible);
   const renderActionsCell = (row: Bank) => (
     <BankRowActions
       id={row.id}
@@ -93,7 +98,8 @@ function buildBanksColumns(
       className="justify-end"
     />
   );
-  return [
+
+  const columns: DataTableColumn<Bank>[] = [
     {
       id: "shortName",
       header: "Code",
@@ -109,50 +115,60 @@ function buildBanksColumns(
       cell: renderNameCell,
       className: "min-w-0",
     },
-    {
+  ];
+  if (shown.has("status")) {
+    columns.push({
       id: "status",
       header: "Status",
       cell: renderStatusCell,
       className: "whitespace-nowrap",
       colClassName: "w-24",
-    },
-    {
+    });
+  }
+  if (shown.has("accounts")) {
+    columns.push({
       id: "accounts",
       header: "Accounts",
       align: "right",
       cell: renderAccountsCell,
       className: "banks-table__col--accounts hidden lg:table-cell",
       colClassName: "w-[72px] max-lg:hidden",
-    },
-    {
+    });
+  }
+  if (shown.has("updatedAt")) {
+    columns.push({
       id: "updatedAt",
       header: "Updated",
       sortable: true,
       cell: renderUpdatedAtCell,
       className: "banks-table__col--lg hidden lg:table-cell",
       colClassName: "w-32 max-lg:hidden",
-    },
-    {
+    });
+  }
+  if (shown.has("createdAt")) {
+    columns.push({
       id: "createdAt",
       header: "Created",
       sortable: true,
       cell: renderCreatedAtCell,
       className: "banks-table__col--xl hidden xl:table-cell",
       colClassName: "w-32 max-xl:hidden",
-    },
-    {
-      id: "actions",
-      header: "Actions",
-      align: "right",
-      className: "banks-table__col--actions",
-      colClassName: "w-28",
-      cell: renderActionsCell,
-    },
-  ];
+    });
+  }
+  columns.push({
+    id: "actions",
+    header: "Actions",
+    align: "right",
+    className: "banks-table__col--actions",
+    colClassName: "w-28",
+    cell: renderActionsCell,
+  });
+  return columns;
 }
 
 export function BanksTable({
   banks,
+  visible,
   sort,
   onSortChange,
   onBankDeleted,
@@ -164,8 +180,8 @@ export function BanksTable({
   const router = useRouter();
 
   const columns = useMemo(
-    () => buildBanksColumns(onBankDeleteFailed, onBankDeleted),
-    [onBankDeleteFailed, onBankDeleted],
+    () => buildBanksColumns(visible, onBankDeleteFailed, onBankDeleted),
+    [visible, onBankDeleteFailed, onBankDeleted],
   );
 
   return (

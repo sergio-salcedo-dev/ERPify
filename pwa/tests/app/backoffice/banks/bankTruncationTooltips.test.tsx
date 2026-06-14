@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { BanksTable } from "@/app/backoffice/banks/_components/BanksTable";
 import { BanksCards } from "@/app/backoffice/banks/_components/BanksCards";
+import { BANK_COLUMN_KEYS } from "@/app/backoffice/banks/_lib/bankColumns";
 import { Bank } from "@/context/backoffice/bank/domain/Bank";
 
 vi.mock("next/navigation", () => ({
@@ -26,7 +27,9 @@ const LONG = Bank.fromPrimitives({
  */
 describe("Bank short-name truncation", () => {
   it("table code cell keeps the full value in the DOM, truncating via CSS only", () => {
-    render(<BanksTable onBankDeleteFailed={() => {}} banks={[LONG]} />);
+    render(
+      <BanksTable onBankDeleteFailed={() => {}} banks={[LONG]} visible={[...BANK_COLUMN_KEYS]} />,
+    );
     const el = screen.getByText("VERYLONGSHORTNAMEVALUE");
     expect(el).not.toHaveAttribute("title");
     expect(el).toHaveClass("truncate");
@@ -60,7 +63,13 @@ describe("Bank short-name truncation", () => {
       updatedAt: "2026-01-01T10:00:00Z",
       accountCount: 0,
     });
-    render(<BanksTable onBankDeleteFailed={() => {}} banks={[longest]} />);
+    render(
+      <BanksTable
+        onBankDeleteFailed={() => {}}
+        banks={[longest]}
+        visible={[...BANK_COLUMN_KEYS]}
+      />,
+    );
     expect(screen.getByText(name)).toBeInTheDocument();
   });
 });
