@@ -27,6 +27,7 @@ import { useStoredPreference } from "@/lib/useStoredPreference";
 import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
 import { bankTopics, useBankRealtime } from "@/context/backoffice/bank/infrastructure/bankRealtime";
 import { BanksTable } from "./_components/BanksTable";
+import { BanksColumnPicker } from "./_components/BanksColumnPicker";
 import { BanksCards } from "./_components/BanksCards";
 import { BanksStackedList } from "./_components/BanksStackedList";
 import { BanksFilters } from "./_components/BanksFilters";
@@ -46,6 +47,14 @@ import {
 import { toBankFilters, toBankSort } from "./_lib/banksSearchCriteria";
 import { BANKS_PAGE_SIZE_DEFAULT, isBanksPageSize } from "./_lib/paginate";
 import { bankRoutes } from "./_lib/bankRoutes";
+import {
+  BANKS_COLUMNS_STORAGE_KEY,
+  DEFAULT_VISIBLE_COLUMNS,
+  isStoredColumnsValue,
+  parseColumns,
+  serializeColumns,
+  type BankColumnKey,
+} from "./_lib/bankColumns";
 
 const BANKS_VIEW_STORAGE_KEY = "erpify:banks-view";
 const DEFAULT_VIEW: BanksView = "table";
@@ -114,6 +123,14 @@ export default function BanksListPage() {
     "compact",
     isListDensity,
   );
+  // Column visibility persists as a CSV string (useStoredPreference is string-only).
+  const [columnsRaw, setColumnsRaw] = useStoredPreference<string>(
+    BANKS_COLUMNS_STORAGE_KEY,
+    serializeColumns(DEFAULT_VISIBLE_COLUMNS),
+    isStoredColumnsValue,
+  );
+  const columns = useMemo(() => parseColumns(columnsRaw), [columnsRaw]);
+  const setColumns = (next: BankColumnKey[]): void => setColumnsRaw(serializeColumns(next));
 
   // The table speaks `DataTableSort` ({columnId,direction}); the query holds the
   // backend-shaped `ResourceSort` ({field,direction}). Map at the boundary.
@@ -278,6 +295,11 @@ export default function BanksListPage() {
                   onDensityChange={setDensity}
                   testId="banks-list__density-toggle"
                 />
+                <BanksColumnPicker
+                  visible={columns}
+                  onChange={setColumns}
+                  testId="banks-list__columns"
+                />
               </div>
             ) : undefined
           }
@@ -350,6 +372,7 @@ export default function BanksListPage() {
                   <div className="hidden md:block">
                     <BanksTable
                       banks={items}
+                      visible={columns}
                       sort={tableSort}
                       onSortChange={setTableSort}
                       onBankDeleted={deleteItem}
