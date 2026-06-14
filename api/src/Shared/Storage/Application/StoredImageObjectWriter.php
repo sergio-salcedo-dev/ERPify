@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Storage\Application;
 
+use Erpify\Shared\Media\Application\Dto\UploadedImage;
 use Erpify\Shared\Media\Application\Port\ImageNormalizer;
 use Erpify\Shared\Media\Domain\Exception\InvalidImageException;
 use Erpify\Shared\Storage\Application\Dto\StoredObjectWriteResult;
 use Erpify\Shared\Storage\Application\Port\StoragePort;
 use Erpify\Shared\Storage\Domain\ContentAddressableObjectKey;
-use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 /**
  * Writes normalized raster bytes to the object store under {@see ContentAddressableObjectKey}.
@@ -23,12 +23,12 @@ final readonly class StoredImageObjectWriter
     ) {
     }
 
-    public function storeFromUploadedFile(
-        UploadedFile $uploadedFile,
+    public function store(
+        UploadedImage $uploadedImage,
         string $invalidImageFormField = 'stored_object',
     ): StoredObjectWriteResult {
         try {
-            $normalized = $this->imageNormalizer->normalize($uploadedFile);
+            $normalized = $this->imageNormalizer->normalize($uploadedImage);
         } catch (InvalidImageException $invalidImageException) {
             throw new InvalidImageException($invalidImageException->getMessage(), $invalidImageFormField);
         }
