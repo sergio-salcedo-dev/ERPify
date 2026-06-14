@@ -56,6 +56,20 @@ describe("InMemoryCrudRepository", () => {
     expect(second.hasNext).toBe(true);
   });
 
+  it("clamps a cursor that points past the end back to the last page with rows", async () => {
+    const r = repo();
+    // 7 rows, page size 3 → a cursor at offset 6 is the last page (one row).
+    // Rows deleted under it leave only 5 (id-0..id-4), so offset 6 overshoots.
+    await r.delete("id-5");
+    await r.delete("id-6");
+    const page = await r.searchAt({ filters: [], sort: null, limit: 3 }, 6);
+    // Clamped to the last page that still has rows (offset 3 → id-3, id-4) so a
+    // single follow lands on real rows instead of an empty tail page.
+    expect(page.items.map((x) => x.id)).toEqual(["id-3", "id-4"]);
+    expect(page.hasNext).toBe(false);
+    expect(page.hasPrev).toBe(true);
+  });
+
   it("filters by name contains", async () => {
     const page = await repo().search({
       filters: [{ field: "name", operator: FilterOperator.Contains, value: "n5" } as Filter],

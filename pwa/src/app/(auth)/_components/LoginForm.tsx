@@ -18,6 +18,7 @@ import { Routes } from "@/context/shared/domain/types/routes";
 import { toastNotifier } from "@/context/shared/infrastructure/Notification/Toast";
 import { uuidV7 } from "@/lib/uuidV7";
 import { safeHref } from "@/lib/safeHref";
+import { safeInternalPath } from "@/lib/safeInternalPath";
 
 export function LoginForm() {
   const router = useRouter();
@@ -39,7 +40,10 @@ export function LoginForm() {
       permissions: [PERMISSION_WILDCARD],
     });
     toastNotifier.success("Signed in");
-    router.push(safeHref(Routes.BACKOFFICE));
+    // Return to the deep link RequireAuth stashed in `?next=`, falling back to
+    // the back-office root. safeInternalPath rejects any off-origin target.
+    const next = new URLSearchParams(globalThis.location.search).get("next");
+    router.push(safeHref(safeInternalPath(next, Routes.BACKOFFICE)));
   });
 
   return (

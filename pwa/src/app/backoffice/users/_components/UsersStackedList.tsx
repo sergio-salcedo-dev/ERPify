@@ -119,6 +119,11 @@ export function UsersStackedList({
     }
   };
 
+  // Roving tab stop, clamped so an optimistic delete that shrinks the list never
+  // leaves the active index past the last row (which would drop keyboard focus to
+  // <body>). onFocus re-syncs it once focus lands on a real row.
+  const activeRow = Math.min(focusedRow, users.length - 1);
+
   return (
     <ul
       aria-label="Users"
@@ -155,7 +160,7 @@ export function UsersStackedList({
                   rowRefs.current[index] = el;
                 }}
                 href={safeHref(userRoutes.detail(user.id))}
-                tabIndex={focusedRow === index ? 0 : -1}
+                tabIndex={activeRow === index ? 0 : -1}
                 onFocus={() => setFocusedRow(index)}
                 onKeyDown={(event) => handleKeyDown(event, user, index)}
                 data-stacked-row

@@ -135,6 +135,11 @@ export function BanksStackedList({
     }
   };
 
+  // Roving tab stop, clamped so an optimistic delete that shrinks the list never
+  // leaves the active index past the last row (which would drop keyboard focus to
+  // <body>). onFocus re-syncs it once focus lands on a real row.
+  const activeRow = Math.min(focusedRow, banks.length - 1);
+
   return (
     <ul
       aria-label="Banks"
@@ -177,7 +182,7 @@ export function BanksStackedList({
                   rowRefs.current[index] = el;
                 }}
                 href={safeHref(bankRoutes.detail(bank.id))}
-                tabIndex={focusedRow === index ? 0 : -1}
+                tabIndex={activeRow === index ? 0 : -1}
                 onFocus={() => setFocusedRow(index)}
                 onKeyDown={(event) => handleKeyDown(event, bank, index)}
                 data-stacked-row

@@ -1,5 +1,19 @@
+import { Suspense } from "react";
+import { Spinner } from "@/components/erpify";
 import { ResetPasswordForm } from "../_components/ResetPasswordForm";
 
 export default function ResetPasswordPage() {
-  return <ResetPasswordForm />;
+  // ResetPasswordForm reads the reset token via useSearchParams, which Next 16
+  // requires to sit under a Suspense boundary.
+  return (
+    <Suspense
+      fallback={
+        <div className="flex justify-center py-4" data-testid="reset-password-page__loading">
+          <Spinner className="size-6" />
+        </div>
+      }
+    >
+      <ResetPasswordForm />
+    </Suspense>
+  );
 }

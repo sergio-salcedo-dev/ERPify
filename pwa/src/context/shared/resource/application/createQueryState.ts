@@ -11,6 +11,7 @@ export interface QueryState<F> {
   setSort: (s: ResourceSort | null) => void;
   pageSize: number;
   setPageSize: (n: number) => void;
+  /** Clears filter + sort back to their defaults; page size is left untouched. */
   reset: () => void;
 }
 
@@ -20,7 +21,11 @@ export interface QueryStateConfig<F> {
   defaultPageSize: number;
 }
 
-/** Hook factory: owns filter/sort/pageSize state with a single reset. */
+/**
+ * Hook factory owning filter, sort, and page-size state. `reset()` returns the
+ * filter and sort to their defaults; page size is a persistent viewing
+ * preference and survives a reset (it is changed only via `setPageSize`).
+ */
 export function useQueryState<F>({
   emptyFilter,
   defaultSort,

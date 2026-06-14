@@ -90,9 +90,16 @@ export class InMemoryCrudRepository<T extends { id: string }, TInput> implements
     );
     const sorted = this.sortRows(filtered, criteria);
     const limit = Math.max(1, criteria.limit);
-    const items = sorted.slice(offset, offset + limit).map((row) => structuredClone(row));
-    const hasNext = offset + limit < sorted.length;
-    const hasPrev = offset > 0;
+    // Clamp a cursor that points past the end (rows deleted under it) back to the
+    // start of the last page that still has items, so a follow lands on real rows
+    // in one hop instead of an empty tail page. A real keyset API resolves this
+    // server-side; the mock mirrors that contract.
+    const lastPageOffset =
+      sorted.length === 0 ? 0 : Math.floor((sorted.length - 1) / limit) * limit;
+    const safeOffset = Math.min(offset, lastPageOffset);
+    const items = sorted.slice(safeOffset, safeOffset + limit).map((row) => structuredClone(row));
+    const hasNext = safeOffset + limit < sorted.length;
+    const hasPrev = safeOffset > 0;
     return {
       items,
       hasNext,
@@ -102,8 +109,8 @@ export class InMemoryCrudRepository<T extends { id: string }, TInput> implements
       // Links carry the full query plus the target offset, so a follow needs only
       // the link — the navigator stays stateless.
       links: {
-        next: hasNext ? encodeCursorLink(criteria, offset + limit) : null,
-        prev: hasPrev ? encodeCursorLink(criteria, Math.max(0, offset - limit)) : null,
+        next: hasNext ? encodeCursorLink(criteria, safeOffset + limit) : null,
+        prev: hasPrev ? encodeCursorLink(criteria, Math.max(0, safeOffset - limit)) : null,
       },
     };
   }

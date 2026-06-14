@@ -48,7 +48,7 @@ import {
   type UsersSort,
 } from "./_lib/usersFilterSort";
 import { toUserFilters, toUserSort } from "./_lib/usersSearchCriteria";
-import { USERS_PAGE_SIZE_DEFAULT, type UsersPageSize } from "./_lib/paginate";
+import { USERS_PAGE_SIZE_DEFAULT, isUsersPageSize } from "./_lib/paginate";
 import {
   DEFAULT_VISIBLE_COLUMNS,
   USERS_COLUMNS_STORAGE_KEY,
@@ -346,7 +346,9 @@ export default function UsersListPage() {
                 />
               )}
               <UsersPagination
-                pageSize={query.pageSize as UsersPageSize}
+                pageSize={
+                  isUsersPageSize(query.pageSize) ? query.pageSize : USERS_PAGE_SIZE_DEFAULT
+                }
                 hasPrev={pagination?.hasPrev ?? false}
                 hasNext={pagination?.hasNext ?? false}
                 onPrev={() => {

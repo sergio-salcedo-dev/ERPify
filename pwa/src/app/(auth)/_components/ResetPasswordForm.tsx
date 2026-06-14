@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useZodForm } from "@/context/shared/infrastructure/Validation";
 import {
@@ -16,6 +16,10 @@ import { safeHref } from "@/lib/safeHref";
 
 export function ResetPasswordForm() {
   const router = useRouter();
+  // The reset token arrives in the link emailed to the user. Server-side
+  // validation (opaque-token check, expiry) lands with the real auth API; until
+  // then a missing token is the one case we can already reject.
+  const token = useSearchParams().get("token");
   const {
     register,
     handleSubmit,
@@ -29,6 +33,22 @@ export function ResetPasswordForm() {
     toastNotifier.success("Password updated — please sign in");
     router.push(safeHref(Routes.LOGIN));
   });
+
+  if (!token) {
+    return (
+      <div className="space-y-4" data-testid="reset-password-form__invalid">
+        <h1 className="text-foreground text-xl font-semibold">Invalid or expired link</h1>
+        <p className="text-muted-foreground text-sm">
+          This password reset link is invalid or has expired. Request a new one to continue.
+        </p>
+        <div className="text-sm">
+          <Link href={Routes.FORGOT_PASSWORD} className="text-brand">
+            Request a new link
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={onSubmit} className="space-y-4" noValidate data-testid="reset-password-form">

@@ -111,6 +111,11 @@ export function useResourceList<T extends { id: string }, F, TInput>(
   // successful load except while a bulk delete is in flight.
   const deletedIdsRef = useRef<Set<string>>(new Set());
   const bulkDeleteInFlightRef = useRef(false);
+  // Recovery links already followed since the last non-empty load — guards the
+  // empty-page recovery against re-issuing the same follow() if the server keeps
+  // returning an empty tail page (the in-memory mock clamps the cursor, a real
+  // API may not). Cleared whenever a load yields rows.
+  const recoveryLinksRef = useRef<Set<string>>(new Set());
 
   const { filter, sort, pageSize } = query;
 
@@ -135,6 +140,7 @@ export function useResourceList<T extends { id: string }, F, TInput>(
         if (!bulkDeleteInFlightRef.current) {
           deletedIdsRef.current = new Set();
         }
+        if (result.items.length > 0) recoveryLinksRef.current.clear();
         setItems(result.items);
         setPagination({
           hasNext: result.hasNext,
@@ -174,8 +180,10 @@ export function useResourceList<T extends { id: string }, F, TInput>(
   useEffect(() => {
     if (state !== ViewStatus.READY || items.length > 0 || reloadingRef.current) return;
     const recoveryLink = pagination?.links.prev ?? pagination?.links.next;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (recoveryLink) navigateTo(recoveryLink);
+    if (!recoveryLink || recoveryLinksRef.current.has(recoveryLink)) return;
+    recoveryLinksRef.current.add(recoveryLink);
+
+    navigateTo(recoveryLink);
   }, [state, items.length, pagination, navigateTo]);
 
   useEffect(() => {
