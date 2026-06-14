@@ -24,6 +24,7 @@ Feature: Search banks
     And the JSON node "pagination.count" should be null
     And the JSON node "pagination.links.next" should be null
     And the JSON node "pagination.links.prev" should be null
+    And a request contains "FROM bank" across all doctrine connections
     And 2 requests got executed only for doctrine connection "default"
 
   # The per-row account count is resolved with ONE batched aggregate query for the whole page
