@@ -92,6 +92,17 @@ describe("aggregateSystemStatus", () => {
       ]).status,
     ).toBe(SystemStatus.DISRUPTED);
   });
+
+  it("picks the chronologically-latest datetime across mixed UTC offsets", () => {
+    // 11:00+02:00 is 09:00Z; 10:00+00:00 is 10:00Z — the later instant despite
+    // sorting earlier lexicographically.
+    expect(
+      aggregateSystemStatus([
+        { status: SystemStatus.OPERATIONAL, datetime: "2026-06-02T11:00:00+02:00" },
+        { status: SystemStatus.OPERATIONAL, datetime: "2026-06-02T10:00:00+00:00" },
+      ]).datetime,
+    ).toBe("2026-06-02T10:00:00+00:00");
+  });
 });
 
 describe("systemHeadline", () => {

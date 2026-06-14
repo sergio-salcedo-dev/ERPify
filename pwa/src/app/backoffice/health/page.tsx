@@ -40,7 +40,7 @@ const MONITORED_COMPONENTS: readonly MonitoredComponent[] = [
     useCase: "BackOfficeCheckDatabaseHealth",
     scope: "backoffice-database-health",
   },
-] as const;
+];
 
 interface ComponentCheck {
   result: HealthCheck | null;
