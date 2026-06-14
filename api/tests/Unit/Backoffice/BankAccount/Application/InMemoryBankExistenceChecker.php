@@ -14,7 +14,7 @@ use Throwable;
  *
  * @internal
  */
-final class FakeBankExistenceChecker implements BankExistenceChecker
+final class InMemoryBankExistenceChecker implements BankExistenceChecker
 {
     public bool $called = false;
 

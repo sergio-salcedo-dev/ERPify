@@ -31,8 +31,8 @@ final class BankSearcherTest extends TestCase
             Bank::create(self::BANK_B, 'Bank B', 'BB'),
             Bank::create(self::BANK_C, 'Bank C', 'BC'),
         );
-        $accountCounts = new FakeAccountCountsByBank([self::BANK_A => 12, self::BANK_B => 3]);
-        $searcher = new BankSearcher(new FakeBankSearchRepository($page), $accountCounts);
+        $accountCounts = new InMemoryBankAccountCounter([self::BANK_A => 12, self::BANK_B => 3]);
+        $searcher = new BankSearcher(new InMemoryBankSearchRepository($page), $accountCounts);
 
         $result = $searcher->search(new SearchBanksQuery(new SearchCriteria()));
 
@@ -54,8 +54,8 @@ final class BankSearcherTest extends TestCase
             Bank::create(self::BANK_A, 'Bank A', 'BA'),
             Bank::create(self::BANK_B, 'Bank B', 'BB'),
         );
-        $accountCounts = new FakeAccountCountsByBank([self::BANK_A => 1, self::BANK_B => 2]);
-        $searcher = new BankSearcher(new FakeBankSearchRepository($page), $accountCounts);
+        $accountCounts = new InMemoryBankAccountCounter([self::BANK_A => 1, self::BANK_B => 2]);
+        $searcher = new BankSearcher(new InMemoryBankSearchRepository($page), $accountCounts);
 
         $searcher->search(new SearchBanksQuery(new SearchCriteria()));
 
@@ -68,9 +68,9 @@ final class BankSearcherTest extends TestCase
 
     public function testEmptyPageEnrichesNothingWithoutFailing(): void
     {
-        $accountCounts = new FakeAccountCountsByBank();
+        $accountCounts = new InMemoryBankAccountCounter();
         $searcher = new BankSearcher(
-            new FakeBankSearchRepository($this->pageOf()),
+            new InMemoryBankSearchRepository($this->pageOf()),
             $accountCounts,
         );
 

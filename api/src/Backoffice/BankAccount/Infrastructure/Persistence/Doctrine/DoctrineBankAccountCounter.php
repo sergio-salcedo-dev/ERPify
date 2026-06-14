@@ -6,7 +6,7 @@ namespace Erpify\Backoffice\BankAccount\Infrastructure\Persistence\Doctrine;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
-use Erpify\Backoffice\BankAccount\Domain\Repository\AccountCountsByBank;
+use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountCounter;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
@@ -16,8 +16,8 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  * {@see \Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository::countByBankId()}
  * loop would cause.
  */
-#[AsAlias(AccountCountsByBank::class)]
-final readonly class DoctrineAccountCountsByBank implements AccountCountsByBank
+#[AsAlias(BankAccountCounter::class)]
+final readonly class DoctrineBankAccountCounter implements BankAccountCounter
 {
     public function __construct(private EntityManagerInterface $entityManager)
     {

@@ -7,7 +7,7 @@ namespace Erpify\Backoffice\Bank\Application;
 use Erpify\Backoffice\Bank\Application\Query\SearchBanksQuery;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Repository\BankSearchRepository;
-use Erpify\Backoffice\BankAccount\Domain\Repository\AccountCountsByBank;
+use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountCounter;
 use Erpify\Shared\Domain\Search\Page;
 
 /**
@@ -18,7 +18,7 @@ final readonly class BankSearcher
 {
     public function __construct(
         private BankSearchRepository $bankSearchRepository,
-        private AccountCountsByBank $accountCounts,
+        private BankAccountCounter $accountCounts,
     ) {
     }
 

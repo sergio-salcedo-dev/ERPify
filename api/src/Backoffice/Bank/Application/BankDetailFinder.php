@@ -6,7 +6,7 @@ namespace Erpify\Backoffice\Bank\Application;
 
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Exception\BankNotFoundException;
-use Erpify\Backoffice\BankAccount\Domain\Repository\AccountCountsByBank;
+use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountCounter;
 use Erpify\Shared\Domain\Uuid\InvalidUuidException;
 
 /**
@@ -19,7 +19,7 @@ final readonly class BankDetailFinder
 {
     public function __construct(
         private BankFinder $bankFinder,
-        private AccountCountsByBank $accountCounts,
+        private BankAccountCounter $accountCounts,
     ) {
     }
 

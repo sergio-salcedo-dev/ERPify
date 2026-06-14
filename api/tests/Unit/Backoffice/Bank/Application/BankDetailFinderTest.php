@@ -69,8 +69,8 @@ final class BankDetailFinderTest extends TestCase
     private function makeFinder(?Bank $bank, array $counts): BankDetailFinder
     {
         return new BankDetailFinder(
-            new BankFinder(new FakeBankRepository($bank)),
-            new FakeAccountCountsByBank($counts),
+            new BankFinder(new InMemoryBankRepository($bank)),
+            new InMemoryBankAccountCounter($counts),
         );
     }
 

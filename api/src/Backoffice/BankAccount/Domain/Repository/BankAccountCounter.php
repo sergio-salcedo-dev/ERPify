@@ -10,7 +10,7 @@ namespace Erpify\Backoffice\BankAccount\Domain\Repository;
  * from the write-side lifecycle port {@see BankAccountRepository} — this surface is read-only and is
  * the only BankAccount capability wired into the banks read-path.
  */
-interface AccountCountsByBank
+interface BankAccountCounter
 {
     /**
      * @param list<string> $bankIds bank UUIDs of the page (or single bank) being assembled

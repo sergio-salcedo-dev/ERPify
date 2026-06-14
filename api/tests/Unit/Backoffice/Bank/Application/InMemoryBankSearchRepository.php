@@ -15,7 +15,7 @@ use Override;
  *
  * @internal
  */
-final readonly class FakeBankSearchRepository implements BankSearchRepository
+final readonly class InMemoryBankSearchRepository implements BankSearchRepository
 {
     /**
      * @param Page<\Erpify\Backoffice\Bank\Domain\Entity\Bank> $page

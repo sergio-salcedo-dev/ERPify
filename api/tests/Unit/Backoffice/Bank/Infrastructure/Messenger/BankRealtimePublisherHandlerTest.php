@@ -9,7 +9,7 @@ use Erpify\Backoffice\Bank\Domain\Event\BankDeletedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\MercureBankTopic;
 use Erpify\Backoffice\Bank\Infrastructure\Messenger\BankRealtimePublisherHandler;
-use Erpify\Backoffice\BankAccount\Domain\Repository\AccountCountsByBank;
+use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountCounter;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Mercure\HubInterface;
@@ -134,7 +134,7 @@ final class BankRealtimePublisherHandlerTest extends TestCase
             })
         ;
 
-        $accountCounts = $this->createStub(AccountCountsByBank::class);
+        $accountCounts = $this->createStub(BankAccountCounter::class);
         $accountCounts->method('countsByBankIds')->willReturn([self::BANK_ID => 3]);
 
         $handler = new BankRealtimePublisherHandler($hub, $accountCounts);
@@ -165,7 +165,7 @@ final class BankRealtimePublisherHandlerTest extends TestCase
             })
         ;
 
-        $accountCounts = $this->createStub(AccountCountsByBank::class);
+        $accountCounts = $this->createStub(BankAccountCounter::class);
         $accountCounts->method('countsByBankIds')->willReturn(
             $accountCount > 0 ? [self::BANK_ID => $accountCount] : [],
         );

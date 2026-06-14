@@ -16,6 +16,10 @@ Route names follow `<office>_<entity>_<action>` — **entity-first, then an inte
 
 `Bank` is the canonical reference: `backoffice_bank_search` / `_get` / `_create` / `_update` / `_delete`. Route names are server-internal identifiers (clients call by path, not by name), so renaming one has zero client blast radius — but keep the suffix vocabulary stable, because operators key off suffixes like `_search` for logs / metrics / tracing.
 
+## Behat feature file layout
+
+`api/features/` mirrors the `src/` bounded-context + module tree, lowercased: `src/Backoffice/BankAccount/` → `features/backoffice/bank_account/`. Path segments and `.feature` filenames are **snake_case** — multi-word module names, groupings, and file names join words with `_` (`bank_account/`, `error_contract/`, `rate_limiting/`, `create_with_logo.feature`, `query_stats.feature`), never solid-concatenated. A bounded context that is already a single (compound) token stays solid: `backoffice/`, `frontoffice/`, `shared/`. The suite registers only the three context roots (`features/backoffice`, `features/frontoffice`, `features/shared`) and recurses, so subdirectory names follow this convention freely without touching `tools/behat/behat.yml.dist`.
+
 ## Search endpoints
 
 The search-endpoint boundary is centralized — the shared `SearchQuery` DTO + the shared `SearchCriteria` + one ~12-line controller per entity. The original design (`adr-2026-04-29-search-controller-boundary.md`, recoverable from git history) used per-entity DTO/criteria subclasses; those were retired in favour of the generic `filters[]` contract. The architectural pattern and the "add a filterable list" recipe now live in [`../../docs/architecture-api.md`](../../docs/architecture-api.md#filterable-search-generic-filters-contract); `Bank` is the canonical pilot.

@@ -19,7 +19,7 @@ use Override;
  *
  * @internal
  */
-final class FakeBankRepository implements BankRepository
+final class InMemoryBankRepository implements BankRepository
 {
     public bool $removeCalled = false;
 

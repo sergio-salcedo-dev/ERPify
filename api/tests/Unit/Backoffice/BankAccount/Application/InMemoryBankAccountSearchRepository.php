@@ -16,7 +16,7 @@ use Override;
  *
  * @internal
  */
-final class FakeBankAccountSearchRepository implements BankAccountSearchRepository
+final class InMemoryBankAccountSearchRepository implements BankAccountSearchRepository
 {
     public bool $called = false;
 

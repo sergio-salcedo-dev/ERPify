@@ -57,8 +57,8 @@ final class BankAccountSearcherTest extends TestCase
     {
         // Access auditing is observability: a dispatch failure must not turn a good read into a 5xx.
         $searcher = new BankAccountSearcher(
-            new FakeBankExistenceChecker(),
-            new FakeBankAccountSearchRepository($this->pageWithOneAccount()),
+            new InMemoryBankExistenceChecker(),
+            new InMemoryBankAccountSearchRepository($this->pageWithOneAccount()),
             new ThrowingMessageBus(),
             new NullLogger(),
         );
@@ -71,9 +71,9 @@ final class BankAccountSearcherTest extends TestCase
     public function testRejectsAnAbsentBankWithoutSearchingOrAuditing(): void
     {
         $bus = new RecordingMessageBus();
-        $repository = new FakeBankAccountSearchRepository($this->emptyPage());
+        $repository = new InMemoryBankAccountSearchRepository($this->emptyPage());
         $searcher = new BankAccountSearcher(
-            new FakeBankExistenceChecker(BankNotFoundException::withId(self::BANK_ID)),
+            new InMemoryBankExistenceChecker(BankNotFoundException::withId(self::BANK_ID)),
             $repository,
             $bus,
             new NullLogger(),
@@ -91,9 +91,9 @@ final class BankAccountSearcherTest extends TestCase
     public function testRejectsAMalformedBankIdBeforeAnyWork(): void
     {
         $bus = new RecordingMessageBus();
-        $repository = new FakeBankAccountSearchRepository($this->emptyPage());
+        $repository = new InMemoryBankAccountSearchRepository($this->emptyPage());
         $searcher = new BankAccountSearcher(
-            new FakeBankExistenceChecker(new InvalidUuidException()),
+            new InMemoryBankExistenceChecker(new InvalidUuidException()),
             $repository,
             $bus,
             new NullLogger(),
@@ -115,8 +115,8 @@ final class BankAccountSearcherTest extends TestCase
     private function makeSearcher(Page $page, RecordingMessageBus $bus): BankAccountSearcher
     {
         return new BankAccountSearcher(
-            new FakeBankExistenceChecker(),
-            new FakeBankAccountSearchRepository($page),
+            new InMemoryBankExistenceChecker(),
+            new InMemoryBankAccountSearchRepository($page),
             $bus,
             new NullLogger(),
         );

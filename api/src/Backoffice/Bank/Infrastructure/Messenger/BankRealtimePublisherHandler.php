@@ -8,7 +8,7 @@ use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankDeletedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\MercureBankTopic;
-use Erpify\Backoffice\BankAccount\Domain\Repository\AccountCountsByBank;
+use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountCounter;
 use JsonException;
 use Symfony\Component\Mercure\HubInterface;
 use Symfony\Component\Mercure\Update;
@@ -27,7 +27,7 @@ final readonly class BankRealtimePublisherHandler
 {
     public function __construct(
         private HubInterface $hub,
-        private AccountCountsByBank $accountCountsByBank,
+        private BankAccountCounter $accountCountsByBank,
     ) {
     }
 

@@ -23,7 +23,7 @@ use Symfony\Component\Serializer\Exception\ExceptionInterface;
 #[Route('/banks/{id}/accounts', name: self::ROUTE_NAME, methods: ['GET'])]
 final readonly class BankAccountSearchController
 {
-    public const string ROUTE_NAME = 'backoffice_bankaccount_search';
+    public const string ROUTE_NAME = 'backoffice_bank_account_search';
 
     public function __construct(
         private BankAccountSearcher $bankAccountSearcher,

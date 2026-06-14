@@ -59,7 +59,7 @@ final class Bank extends AggregateRoot
     /**
      * Read-projection: number of bank accounts that reference this bank. Not persisted — it is a
      * derived count assembled at read time (list and detail) by the application layer through the
-     * BankAccount read port {@see \Erpify\Backoffice\BankAccount\Domain\Repository\AccountCountsByBank},
+     * BankAccount read port {@see \Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountCounter},
      * never by Bank itself. Defaults to 0 so the field is always a non-null integer, even before
      * enrichment.
      */

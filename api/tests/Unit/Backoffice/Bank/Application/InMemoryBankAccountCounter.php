@@ -4,17 +4,17 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Backoffice\Bank\Application;
 
-use Erpify\Backoffice\BankAccount\Domain\Repository\AccountCountsByBank;
+use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountCounter;
 use Override;
 
 /**
- * In-memory {@see AccountCountsByBank} returning a fixed bankId => count map and recording the ids it
+ * In-memory {@see BankAccountCounter} returning a fixed bankId => count map and recording the ids it
  * was queried with, so a test can assert both the enrichment result and the batched call shape
  * (e.g. an empty page passes an empty id list).
  *
  * @internal
  */
-final class FakeAccountCountsByBank implements AccountCountsByBank
+final class InMemoryBankAccountCounter implements BankAccountCounter
 {
     /** @var list<list<string>> every argument the port was called with, in order */
     public array $receivedBankIds = [];

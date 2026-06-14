@@ -16,7 +16,7 @@ use Override;
  *
  * @internal
  */
-final class FakeBankAccountRepository implements BankAccountRepository
+final class InMemoryBankAccountRepository implements BankAccountRepository
 {
     private bool $firstCallDone = false;
 
