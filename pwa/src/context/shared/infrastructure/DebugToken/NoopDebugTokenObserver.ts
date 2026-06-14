@@ -9,7 +9,9 @@ import type { DebugTokenObserver } from "@/context/shared/domain/DebugToken/Debu
  */
 @injectable()
 export class NoopDebugTokenObserver implements DebugTokenObserver {
-  publish(_token: DebugToken): void {}
+  publish(_token: DebugToken): void {
+    // Inert by design: production has no debug toolbar to notify.
+  }
 
   subscribe(_listener: (token: DebugToken) => void): () => void {
     return () => {};

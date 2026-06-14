@@ -16,7 +16,7 @@ const WDT_PATH = "/_dev/wdt-loader";
  * dev-only, same-origin, trusted Symfony output.
  */
 function mountFragment(host: HTMLElement, html: string): void {
-  while (host.firstChild) host.removeChild(host.firstChild);
+  while (host.firstChild) host.firstChild.remove();
   const parsed = new DOMParser().parseFromString(html, "text/html");
   for (const node of Array.from(parsed.body.childNodes)) {
     host.appendChild(reviveNode(node));
@@ -48,9 +48,9 @@ function reviveNode(node: Node): Node {
  */
 export function SymfonyDebugToolbar({
   observer,
-}: {
+}: Readonly<{
   observer?: DebugTokenObserver;
-}): React.ReactElement | null {
+}>): React.ReactElement | null {
   const debugToken = useLatestDebugToken(observer);
   const hostRef = useRef<HTMLDivElement>(null);
   const token = debugToken?.token ?? null;
