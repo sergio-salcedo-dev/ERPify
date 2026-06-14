@@ -51,7 +51,7 @@ final class BankLogoUrlNormalizer implements NormalizerInterface, NormalizerAwar
             $normalizedData['logoUrl'] = $logo instanceof Media
                 ? $this->mediaPublicUrlGenerator->urlForContentHash($logo->getContentHash())
                 : null;
-            $storedHash = $data->getStoredObjectContentHash();
+            $storedHash = $data->getStoredObject()?->contentHash;
             $normalizedData['storedObjectUrl'] = null !== $storedHash
                 ? $this->storedObjectPublicUrlGenerator->urlForContentHash($storedHash)
                 : null;

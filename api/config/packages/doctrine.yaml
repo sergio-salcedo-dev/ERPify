@@ -26,6 +26,12 @@ doctrine:
                 dir: '%kernel.project_dir%/src/Shared/Media/Domain/Entity'
                 prefix: 'Erpify\Shared\Media\Domain\Entity'
                 alias: SharedMedia
+            SharedStorage:
+                type: attribute
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Shared/Storage/Domain'
+                prefix: 'Erpify\Shared\Storage\Domain'
+                alias: SharedStorage
 
 when@prod:
     doctrine:
