@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Infrastructure\Http\EventListener;
 
+use Erpify\Shared\Domain\Clock\Clock;
 use Erpify\Shared\Domain\Exception\RateLimitExceeded;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
@@ -111,6 +112,7 @@ final readonly class RateLimitListener
     public function __construct(
         #[Autowire(service: 'limiter.anonymous_api')]
         private RateLimiterFactoryInterface $anonymousApiLimiter,
+        private Clock $clock,
     ) {
     }
 
@@ -189,7 +191,7 @@ final readonly class RateLimitListener
 
     private function retryAfterSeconds(RateLimit $rateLimit): int
     {
-        return \max(1, $rateLimit->getRetryAfter()->getTimestamp() - \time());
+        return \max(1, $rateLimit->getRetryAfter()->getTimestamp() - $this->clock->now()->getTimestamp());
     }
 
     /**

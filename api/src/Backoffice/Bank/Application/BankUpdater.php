@@ -9,6 +9,7 @@ use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Exception\BankNotFoundException;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Shared\Application\Validation\Validator;
+use Erpify\Shared\Domain\Clock\Clock;
 use Erpify\Shared\Domain\Uuid\InvalidUuidException;
 use Symfony\Component\Messenger\Exception\ExceptionInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
@@ -21,6 +22,7 @@ final readonly class BankUpdater
         private BankFinder $bankFinder,
         private MessageBusInterface $messageBus,
         private Validator $validator,
+        private Clock $clock,
     ) {
     }
 
@@ -34,7 +36,7 @@ final readonly class BankUpdater
     {
         $bank = $this->bankFinder->find($id);
 
-        $bank->rename($bankCommand->name, $bankCommand->shortName);
+        $bank->rename($bankCommand->name, $bankCommand->shortName, $this->clock->now());
 
         $this->validator->ensure($bank);
 

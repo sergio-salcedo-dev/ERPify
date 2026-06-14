@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Erpify\Frontoffice\Mercure\Infrastructure\Controller;
 
-use DateTimeImmutable;
 use DateTimeInterface;
 use Erpify\Frontoffice\Mercure\Domain\MercureDemoTopic;
+use Erpify\Shared\Domain\Clock\Clock;
 use JsonException;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -20,6 +20,7 @@ final readonly class MercurePublishDemoController
 {
     public function __construct(
         private HubInterface $hub,
+        private Clock $clock,
         #[Autowire('%kernel.environment%')]
         private string $environment,
     ) {
@@ -36,7 +37,7 @@ final readonly class MercurePublishDemoController
 
         $payload = [
             'message' => 'Mercure demo publish',
-            'at' => (new DateTimeImmutable())->format(DateTimeInterface::ATOM),
+            'at' => $this->clock->now()->format(DateTimeInterface::ATOM),
         ];
 
         $this->hub->publish(new Update(

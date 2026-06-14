@@ -93,8 +93,9 @@ final class Bank extends AggregateRoot
          */
         #[ORM\Embedded(class: StoredObject::class, columnPrefix: 'stored_object_')]
         private StoredObject $storedObject,
+        ?DateTimeImmutable $now = null,
     ) {
-        parent::__construct();
+        parent::__construct($now);
 
         $this->id = $id;
     }
@@ -105,6 +106,7 @@ final class Bank extends AggregateRoot
         string $shortName,
         ?Media $media = null,
         ?StoredObject $storedObject = null,
+        ?DateTimeImmutable $now = null,
     ): self {
         $normalizedText = NormalizedText::from($name);
 
@@ -115,6 +117,7 @@ final class Bank extends AggregateRoot
             NormalizedText::toAsciiUpper($shortName),
             $media,
             $storedObject ?? new StoredObject(),
+            $now,
         );
 
         $createdAt = $bank->createdAt->format(DateTimeInterface::ATOM);
@@ -129,6 +132,7 @@ final class Bank extends AggregateRoot
             $media?->getContentHash(),
             $storedObject?->contentHash,
             $storedObject?->mimeType,
+            $bank->createdAt,
         ));
 
         return $bank;
@@ -179,14 +183,14 @@ final class Bank extends AggregateRoot
         return $this->storedObject->isEmpty() ? null : $this->storedObject;
     }
 
-    public function rename(string $name, string $shortName): void
+    public function rename(string $name, string $shortName, ?DateTimeImmutable $now = null): void
     {
         $normalizedText = NormalizedText::from($name);
 
         $this->name = $normalizedText->display;
         $this->nameNormalized = $normalizedText->normalized;
         $this->shortName = NormalizedText::toAsciiUpper($shortName);
-        $now = new DateTimeImmutable();
+        $now ??= new DateTimeImmutable();
         $this->updatedAt = $now;
 
         $this->record(new BankUpdatedDomainEvent(
@@ -199,12 +203,13 @@ final class Bank extends AggregateRoot
             $this->media?->getContentHash(),
             $this->storedObject->contentHash,
             $this->storedObject->mimeType,
+            $now,
         ));
     }
 
-    public function delete(): void
+    public function delete(?DateTimeImmutable $now = null): void
     {
-        $this->record(new BankDeletedDomainEvent($this->id()));
+        $this->record(new BankDeletedDomainEvent($this->id(), $now));
     }
 
     /**

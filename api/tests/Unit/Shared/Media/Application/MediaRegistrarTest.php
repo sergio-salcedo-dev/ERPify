@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Shared\Media\Application;
 
 use Erpify\Shared\Application\Validation\Validator;
+use Erpify\Shared\Infrastructure\Clock\SymfonyClock;
 use Erpify\Shared\Media\Application\Dto\NormalizedImage;
 use Erpify\Shared\Media\Application\Dto\UploadedImage;
 use Erpify\Shared\Media\Application\MediaRegistrar;
@@ -12,6 +13,7 @@ use Erpify\Shared\Media\Application\Port\ImageNormalizer;
 use Erpify\Shared\Media\Domain\Entity\Media;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Validator\Validation;
 
 /**
@@ -76,6 +78,7 @@ final class MediaRegistrarTest extends TestCase
             $imageNormalizer,
             $mediaRepository,
             new Validator(Validation::createValidator()),
+            new SymfonyClock(new MockClock()),
         );
     }
 }

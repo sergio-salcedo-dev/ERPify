@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Backoffice\Bank\Domain\Entity;
 
+use DateTimeImmutable;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
@@ -67,5 +68,37 @@ final class BankTest extends TestCase
         $event = $events[0];
         $this->assertInstanceOf(BankUpdatedDomainEvent::class, $event);
         $this->assertSame(self::BANK_ID, $event->aggregateId());
+    }
+
+    public function testCreateStampsTimestampsAndEventOccurredOnFromTheProvidedInstant(): void
+    {
+        $now = new DateTimeImmutable('2026-06-14T09:30:00+00:00');
+
+        $bank = Bank::create(self::BANK_ID, 'Acme Savings', 'ACME', null, null, $now);
+
+        $this->assertEquals($now, $bank->getCreatedAt());
+        $this->assertEquals($now, $bank->getUpdatedAt());
+
+        $event = $bank->pullDomainEvents()[0];
+        $this->assertInstanceOf(BankCreatedDomainEvent::class, $event);
+        $this->assertEquals($now, $event->occurredOn());
+    }
+
+    public function testRenameStampsUpdatedAtAndEventOccurredOnFromTheProvidedInstant(): void
+    {
+        $createdAt = new DateTimeImmutable('2026-06-14T09:30:00+00:00');
+        $renamedAt = new DateTimeImmutable('2026-06-15T11:00:00+00:00');
+
+        $bank = Bank::create(self::BANK_ID, 'Acme Savings', 'ACME', null, null, $createdAt);
+        $bank->pullDomainEvents(); // drain the creation event
+
+        $bank->rename('Acme Renamed', 'ACME', $renamedAt);
+
+        $this->assertEquals($createdAt, $bank->getCreatedAt());
+        $this->assertEquals($renamedAt, $bank->getUpdatedAt());
+
+        $event = $bank->pullDomainEvents()[0];
+        $this->assertInstanceOf(BankUpdatedDomainEvent::class, $event);
+        $this->assertEquals($renamedAt, $event->occurredOn());
     }
 }

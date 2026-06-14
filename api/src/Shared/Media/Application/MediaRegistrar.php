@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Shared\Media\Application;
 
 use Erpify\Shared\Application\Validation\Validator;
+use Erpify\Shared\Domain\Clock\Clock;
 use Erpify\Shared\Domain\Uuid\Uuid;
 use Erpify\Shared\Media\Application\Dto\UploadedImage;
 use Erpify\Shared\Media\Application\Port\ImageNormalizer;
@@ -17,6 +18,7 @@ final readonly class MediaRegistrar
         private ImageNormalizer $imageNormalizer,
         private MediaRepository $mediaRepository,
         private Validator $validator,
+        private Clock $clock,
     ) {
     }
 
@@ -36,6 +38,7 @@ final readonly class MediaRegistrar
             $normalizedImage->mimeType,
             \strlen($normalizedImage->bytes),
             $normalizedImage->bytes,
+            $this->clock->now(),
         );
 
         $this->validator->ensure($media);

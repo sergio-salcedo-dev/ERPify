@@ -12,9 +12,11 @@ use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Shared\Domain\Search\Page;
 use Erpify\Shared\Domain\Search\SearchCriteria;
 use Erpify\Shared\Domain\Uuid\InvalidUuidException;
+use Erpify\Shared\Infrastructure\Clock\SymfonyClock;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use Symfony\Component\Clock\MockClock;
 
 /**
  * @internal
@@ -61,6 +63,7 @@ final class BankAccountSearcherTest extends TestCase
             new InMemoryBankAccountSearchRepository($this->pageWithOneAccount()),
             new ThrowingMessageBus(),
             new NullLogger(),
+            new SymfonyClock(new MockClock()),
         );
 
         $page = $searcher->search(self::BANK_ID, new SearchBankAccountsQuery(new SearchCriteria()));
@@ -77,6 +80,7 @@ final class BankAccountSearcherTest extends TestCase
             $repository,
             $bus,
             new NullLogger(),
+            new SymfonyClock(new MockClock()),
         );
 
         try {
@@ -97,6 +101,7 @@ final class BankAccountSearcherTest extends TestCase
             $repository,
             $bus,
             new NullLogger(),
+            new SymfonyClock(new MockClock()),
         );
 
         $this->expectException(InvalidUuidException::class);
@@ -119,6 +124,7 @@ final class BankAccountSearcherTest extends TestCase
             new InMemoryBankAccountSearchRepository($page),
             $bus,
             new NullLogger(),
+            new SymfonyClock(new MockClock()),
         );
     }
 

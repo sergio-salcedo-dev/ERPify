@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Media\Domain\Entity;
 
+use DateTimeImmutable;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Erpify\Shared\Domain\Aggregate\AggregateRoot;
@@ -31,8 +32,9 @@ final class Media extends AggregateRoot
         /** @var resource|string */
         #[ORM\Column(name: 'raw_bytes', type: Types::BLOB)]
         private mixed $rawBytes,
+        ?DateTimeImmutable $now = null,
     ) {
-        parent::__construct();
+        parent::__construct($now);
 
         $this->id = $id;
     }
@@ -43,8 +45,9 @@ final class Media extends AggregateRoot
         string $mimeType,
         int $byteSize,
         string $rawBytes,
+        ?DateTimeImmutable $now = null,
     ): self {
-        return new self($id, $contentHash, $mimeType, $byteSize, $rawBytes);
+        return new self($id, $contentHash, $mimeType, $byteSize, $rawBytes, $now);
     }
 
     public function getContentHash(): string

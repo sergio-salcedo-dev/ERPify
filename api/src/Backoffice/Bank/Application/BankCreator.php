@@ -8,6 +8,7 @@ use Erpify\Backoffice\Bank\Application\Command\CreateBankCommand;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Shared\Application\Validation\Validator;
+use Erpify\Shared\Domain\Clock\Clock;
 use Erpify\Shared\Domain\Uuid\Uuid;
 use Erpify\Shared\Media\Application\Dto\UploadedImage;
 use Erpify\Shared\Media\Application\MediaRegistrar;
@@ -24,6 +25,7 @@ final readonly class BankCreator
         private MediaRegistrar $mediaRegistrar,
         private StoredImageObjectWriter $storedImageObjectWriter,
         private Validator $validator,
+        private Clock $clock,
     ) {
     }
 
@@ -50,6 +52,7 @@ final readonly class BankCreator
             $bankCommand->shortName,
             $logoMedia,
             $bankStoredObject,
+            $this->clock->now(),
         );
 
         $this->validator->ensure($newBank);

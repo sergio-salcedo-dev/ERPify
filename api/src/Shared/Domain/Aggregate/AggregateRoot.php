@@ -22,9 +22,9 @@ abstract class AggregateRoot
     /** @var list<DomainEvent> */
     private array $domainEvents = [];
 
-    protected function __construct()
+    protected function __construct(?DateTimeImmutable $now = null)
     {
-        $now = new DateTimeImmutable();
+        $now ??= new DateTimeImmutable();
         $this->createdAt = $now;
         $this->updatedAt = $now;
     }

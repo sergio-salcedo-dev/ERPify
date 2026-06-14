@@ -10,8 +10,10 @@ use Erpify\Backoffice\Bank\Application\BankFinder;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Event\BankDeletedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Exception\BankInUseException;
+use Erpify\Shared\Infrastructure\Clock\SymfonyClock;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Clock\MockClock;
 
 /**
  * @internal
@@ -125,6 +127,7 @@ final class BankDeleterTest extends TestCase
             new BankFinder($bankRepository),
             new InMemoryBankAccountRepository($accountCount, $recount),
             $messageBus ?? new RecordingMessageBus(),
+            new SymfonyClock(new MockClock()),
         );
     }
 

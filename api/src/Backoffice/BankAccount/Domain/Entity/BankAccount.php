@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\BankAccount\Domain\Entity;
 
+use DateTimeImmutable;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountStatus;
@@ -69,8 +70,9 @@ final class BankAccount extends AggregateRoot
         #[ORM\Column(type: Types::SMALLINT, enumType: BankAccountStatus::class)]
         #[EnumType(BankAccountStatus::class)]
         private BankAccountStatus $status,
+        ?DateTimeImmutable $now = null,
     ) {
-        parent::__construct();
+        parent::__construct($now);
 
         $this->id = $id;
     }
@@ -84,6 +86,7 @@ final class BankAccount extends AggregateRoot
         ?string $alias = null,
         Currency $currency = Currency::EUR,
         BankAccountStatus $status = BankAccountStatus::ACTIVE,
+        ?DateTimeImmutable $now = null,
     ): self {
         Uuid::ensure($bankId);
 
@@ -96,6 +99,7 @@ final class BankAccount extends AggregateRoot
             $alias,
             $currency,
             $status,
+            $now,
         );
     }
 

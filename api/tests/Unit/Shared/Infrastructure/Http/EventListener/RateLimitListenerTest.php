@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Shared\Infrastructure\Http\EventListener;
 
 use Erpify\Shared\Domain\Exception\RateLimitExceeded;
+use Erpify\Shared\Infrastructure\Clock\SymfonyClock;
 use Erpify\Shared\Infrastructure\Http\EventListener\RateLimitListener;
 use LogicException;
 use Override;
@@ -12,6 +13,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use ReflectionMethod;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
@@ -224,7 +226,7 @@ final class RateLimitListenerTest extends TestCase
             new InMemoryStorage(),
         );
 
-        return new RateLimitListener($rateLimiterFactory);
+        return new RateLimitListener($rateLimiterFactory, new SymfonyClock(new MockClock()));
     }
 
     private function makeRequestEvent(string $path, string $clientIp): RequestEvent

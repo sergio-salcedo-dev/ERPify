@@ -20,8 +20,8 @@ final readonly class BankAccountsViewedAuditEvent
     ) {
     }
 
-    public static function record(string $bankId): self
+    public static function record(string $bankId, ?DateTimeImmutable $occurredOn = null): self
     {
-        return new self($bankId, new DateTimeImmutable());
+        return new self($bankId, $occurredOn ?? new DateTimeImmutable());
     }
 }
