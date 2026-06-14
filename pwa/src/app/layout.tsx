@@ -9,6 +9,7 @@ import { Theme, THEME_STORAGE_KEY } from "@/context/shared/domain/types/theme";
 import { SonnerToaster } from "@/context/shared/infrastructure/Notification/Toast/SonnerToaster";
 import { AuthProvider } from "@/context/shared/access/infrastructure/ui";
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
+import { isAutomatedTestRequest } from "@/context/shared/dev-tools/infrastructure/isAutomatedTestRequest";
 import { SymfonyDebugToolbar } from "@/context/shared/dev-tools/infrastructure/ui/SymfonyDebugToolbar";
 import Script from "next/script";
 
@@ -34,6 +35,10 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const frankenHotReloadUrl = await fetchFrankenPhpHotReloadSubscribeUrl();
+  // Skip the dev toolbar under Playwright: its injected profiler DOM (the AJAX
+  // panel grows a row per /api call) otherwise pollutes document-wide e2e
+  // locators. `&&` short-circuits in prod so `headers()` is never read there.
+  const showDebugToolbar = isDevToolsAvailable() && !(await isAutomatedTestRequest());
 
   return (
     <html
@@ -64,7 +69,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         >
           <AuthProvider>{children}</AuthProvider>
           <SonnerToaster />
-          {isDevToolsAvailable() ? <SymfonyDebugToolbar /> : null}
+          {showDebugToolbar ? <SymfonyDebugToolbar /> : null}
         </ThemeProvider>
       </body>
     </html>
