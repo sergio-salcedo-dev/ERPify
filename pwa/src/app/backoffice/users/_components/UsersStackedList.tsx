@@ -68,7 +68,10 @@ export function UsersStackedList({
     const hi = Math.max(anchor, toIndex);
     const next = new Set(baseline);
     for (let i = lo; i <= hi; i++) {
-      next.add(users[i].id);
+      // Guard the ref-captured range against an array that shrank under it
+      // (e.g. an optimistic delete between anchor capture and extension).
+      const row = users[i];
+      if (row) next.add(row.id);
     }
     rangeEmittedRef.current = next;
     onSelectionChange(next);

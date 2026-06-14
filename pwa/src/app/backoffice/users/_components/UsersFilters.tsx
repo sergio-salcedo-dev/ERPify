@@ -17,6 +17,7 @@ import {
   type UsersFilter,
   type UsersSort,
 } from "../_lib/usersFilterSort";
+import { ROLE_LABEL, STATUS_LABEL } from "../_lib/userLabels";
 
 interface UsersFiltersProps {
   filter: UsersFilter;
@@ -31,19 +32,6 @@ interface UsersFiltersProps {
 
 const NONE_SORT_VALUE = "__none__" as const;
 const FILTER_DEBOUNCE_MS = 300;
-
-const ROLE_LABEL: Record<Role, string> = {
-  SUPER_ADMIN: "Super Admin",
-  ADMIN: "Admin",
-  EMPLOYEE: "Employee",
-  CUSTOMER: "Customer",
-  SUPPLIER: "Supplier",
-};
-const STATUS_LABEL: Record<UserStatus, string> = {
-  [UserStatus.ACTIVE]: "Active",
-  [UserStatus.PENDING]: "Pending",
-  [UserStatus.BLOCKED]: "Blocked",
-};
 
 function countPanelFilters(filter: UsersFilter): number {
   return (filter.role !== "" ? 1 : 0) + (filter.status !== "" ? 1 : 0);

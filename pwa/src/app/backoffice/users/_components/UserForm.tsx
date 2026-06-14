@@ -26,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { safeHref } from "@/lib/safeHref";
 import { userRoutes } from "../_lib/userRoutes";
+import { ROLE_LABEL, STATUS_LABEL } from "../_lib/userLabels";
 
 export type UserFormMode = typeof PersistenceAction.CREATING | typeof PersistenceAction.UPDATING;
 
@@ -43,19 +44,6 @@ interface UserFormProps {
   /** Edit-only recovery hook for a stale 404 (`user-not-found`). */
   onStaleUser?: () => void;
 }
-
-const ROLE_LABEL: Record<Role, string> = {
-  SUPER_ADMIN: "Super Admin",
-  ADMIN: "Admin",
-  EMPLOYEE: "Employee",
-  CUSTOMER: "Customer",
-  SUPPLIER: "Supplier",
-};
-const STATUS_LABEL: Record<UserStatus, string> = {
-  [UserStatus.ACTIVE]: "Active",
-  [UserStatus.PENDING]: "Pending",
-  [UserStatus.BLOCKED]: "Blocked",
-};
 
 const USER_FIELD_NAMES = ["email", "roles", "status", "permissions"] as const;
 type UserFieldName = (typeof USER_FIELD_NAMES)[number];

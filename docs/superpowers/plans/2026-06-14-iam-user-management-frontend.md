@@ -2287,3 +2287,31 @@ git commit -m "docs(pwa): document access + resource toolkits and user module"
 - `localeCompare` on ISO dates / sort tie nondeterminism — fixed-width UTC seed + stable `Array.sort`; deterministic for the mock.
 - 250ms latency, mock-as-prod, seed `users.read` on all roles — intentional mock/dev-seed; DI documents the shared instance.
 - Password complexity, `confirmPassword.min(1)` — backend concern / matched via `refine`.
+
+---
+
+## Review Findings — Group 3: app/backoffice/users (2026-06-14)
+
+> Adversarial review (Blind Hunter + Edge Case Hunter + Acceptance Auditor), DDD/Codely lens. Scope: the User management UI (list/detail/create/edit pages, `_components/*`, `_lib/*`). Auditor: 0 Critical/High spec violations — `safeHref` everywhere, `<Can>` gating, `Routes`/`userRoutes` constants, no `maxLength`, disabled-not-hidden keyset pagination, no dangerous DOM sinks — all confirmed compliant. No decision-needed.
+
+### Patch — APPLIED
+
+- [x] [Review][Patch] Dead `_lib/userRecency.ts` removed (zero importers).
+- [x] [Review][Patch] `ROLE_LABEL`/`STATUS_LABEL` centralized into `_lib/userLabels.ts` with exhaustive `Record<Role,string>`/`Record<UserStatus,string>` typing; `RolesBadges`/`UserForm`/`UsersFilters` import it (the loose `Record<string,string>` footgun in `RolesBadges` is gone).
+- [x] [Review][Patch] `extendRange` now bounds-guards `users[i]` before reading `.id` [UsersStackedList.tsx].
+
+### Deferred
+
+- [x] [Review][Defer] Stale `focusedRow` after an optimistic delete in the stacked list — roving `tabIndex=0` can land past the shrunk array, losing keyboard focus [UsersStackedList.tsx:46,155]. Pre-existing pattern shared verbatim with `BanksStackedList` (the reference, not modified). Clamp `focusedRow` on `users.length` change in both as a cross-cutting a11y fix.
+- [x] [Review][Defer] `query.pageSize as UsersPageSize` launders the type [page.tsx] — safe now (page size only set from the constrained dropdown, no URL/storage hydration). Replace the cast with a `USERS_PAGE_SIZE_OPTIONS` membership guard if/when page size becomes URL/storage-hydrated.
+
+### Dismissed (verified false-positive or by-design)
+
+- Bulk-delete confirm count vs actual selection — the confirm `Dialog` is modal (focus-trap + backdrop), so selection is frozen while open; count matches the deletion set.
+- `UsersStackedList` Shift+Arrow crash — the `useEffect([users])` resets the range anchor before the next keydown; the stale index cannot survive an array shrink (hardened anyway by the patch above).
+- Two selection consumers (table + stacked both mounted across the `md` breakpoint) — the `[selectedIds]` reset effects keep each view's range in sync; mirrors Bank.
+- `isDefaultSort(null)` reports "None" as non-default — correct: an explicit None differs from the email-ASC default, so offering reset is intended.
+- Detail/edit pages hand-roll view states instead of `AsyncBoundary` — consistent with the Bank reference (its detail page hand-rolls too); the list page uses `AsyncBoundary`.
+- Email `readOnly` round-trips on update — `applyInput` ignores `input.email` (covered in group 2); a real API rejects it.
+- Edit form stale-404 without `onStaleUser` — `onStaleUser={reload}` is wired (edit/page.tsx:111).
+- RHF checkbox-array registration, dynamic `aria-label` on delete/detail — standard pattern / consistent with the Bank reference.

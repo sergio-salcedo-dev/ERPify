@@ -65,3 +65,8 @@ deriva los campos del `SortFieldMap` de producción) — todos retirados. El res
 ## Deferred from: code review of iam-user-management-frontend plan — group 2 user module (2026-06-14)
 
 - `UserEditSchema` (pwa/src/context/backoffice/user/application/schemas/UserEditSchema.ts) is unused — referenced only in a `UserFormSchema` comment; the form validates with `UserFormSchema`. It documents the intended API edit contract but is dead per "minimum code, nothing speculative." Decide later: wire edit-mode validation to it, or remove it.
+
+## Deferred from: code review of iam-user-management-frontend plan — group 3 users UI (2026-06-14)
+
+- Stale `focusedRow` after an optimistic delete in `UsersStackedList`/`BanksStackedList` (roving tabindex can land past the shrunk array, losing keyboard focus). Pre-existing pattern shared with the Bank reference — clamp `focusedRow` on `users.length` change in both as a cross-cutting a11y fix.
+- `query.pageSize as UsersPageSize` cast in the users list page launders the type; safe today (page size only set from the constrained dropdown). Replace with a `USERS_PAGE_SIZE_OPTIONS` membership guard if/when page size becomes URL/storage-hydrated.
