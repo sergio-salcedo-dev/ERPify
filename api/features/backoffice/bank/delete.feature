@@ -3,17 +3,13 @@ Feature: Delete a bank
   In order to manage banks
   I need to be able to delete a bank
 
+  # Seed the bank out-of-band via raw SQL on a side connection the query counter ignores, so the
+  # asserted budget isolates the delete path from the cost of creating the bank.
   Scenario: Successfully delete a bank
-    Given I add "Content-Type" header equal to "application/json"
-    And I add "Accept" header equal to "application/json"
-    And I send a POST request to "/backoffice/banks" with body:
-    """
-    {"name": "Bank To Delete", "shortName": "BTD"}
-    """
-    And the response status code should be 201
-    When I send a "DELETE" request to "/backoffice/banks/{value}" using the JSON node "data.id" from the previous response
+    Given I execute the SQL query "INSERT INTO bank (id, name, name_normalized, short_name, created_at, updated_at) VALUES ('de1e7e00-0000-7000-8000-000000000001', 'Bank To Delete', 'bank to delete', 'BTD', NOW(), NOW())" on connection "seed"
+    When I send a "DELETE" request to "/backoffice/banks/de1e7e00-0000-7000-8000-000000000001"
     Then the response status code should be 204
-    And 16 requests got executed only for doctrine connection "default"
+    And 8 requests got executed only for doctrine connection "default"
 
   Scenario: Delete a bank that does not exist returns a 404 bank-not-found Problem Details body
     When I send a "DELETE" request to "/backoffice/banks/2e6d865c-17b0-476a-85f2-037bf6d3b3dc"
