@@ -116,6 +116,8 @@ The `Observability` module provides a non-user-facing diagnostic channel for inf
 - Server-side fetches use `SYMFONY_INTERNAL_URL` (Compose-internal); client-side fetches use the public URL.
 - Mercure SSE consumed at `/.well-known/mercure` (same origin, JWT subscribed).
 
+Every `/api/*` response is read once in `FetchHttpClient`, which publishes the Symfony profiler token from the `X-Debug-Token` / `X-Debug-Token-Link` headers through the `DebugTokenObserver` domain port (`context/shared/domain/DebugToken/`). A dev-only `<SymfonyDebugToolbar>`, mounted in `app/layout.tsx` behind `isDevToolsAvailable()`, subscribes to that port and on each new token fetches Symfony's `/_dev/wdt-loader/{token}` loader to mount the real interactive toolbar inside the PWA. In production the container binds an inert `NoopDebugTokenObserver` and the component is never mounted (dead-code-eliminated), and the prod API emits no debug-token headers. Under automated e2e the live-stack runs the PWA in dev mode, so the toolbar would mount and its profiler DOM (the AJAX panel grows a `<tbody><tr>` per `/api/*` call) would inflate document-wide Playwright locators such as `tbody tr`; Playwright therefore sends an `x-erpify-e2e` request header and the layout suppresses the toolbar for those runs via `isAutomatedTestRequest()`. Design record: [`2026-06-14-pwa-symfony-debug-toolbar-design.md`](superpowers/specs/2026-06-14-pwa-symfony-debug-toolbar-design.md).
+
 ### Server-driven filtered search
 
 Filterable lists are **server-driven**: filtering, sorting, and keyset pagination are resolved by the API, not in the browser. The shared vocabulary mirrors the API's generic `filters[]` contract:

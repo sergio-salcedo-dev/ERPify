@@ -8,8 +8,15 @@ when@dev:
         prefix: /_profiler
 
 when@test:
-    # Only `_profiler` is needed under test: the `print the web profiler link` step generates a
-    # URL for this route. The `_wdt` toolbar route is dev-only since the toolbar is never rendered.
+    # `_wdt` is registered under test so the dev_wdt_loader route's functional test can render
+    # toolbar_js.html.twig, whose body generates URLs for `_wdt` and `_wdt_stylesheet`. The toolbar
+    # itself is still never rendered into a test response (no listener injection on JSON).
+    web_profiler_wdt:
+        resource: '@WebProfilerBundle/Resources/config/routing/wdt.php'
+        prefix: /_wdt
+
+    # `_profiler` is also needed under test: the `print the web profiler link` step generates a
+    # URL for this route.
     web_profiler_profiler:
         resource: '@WebProfilerBundle/Resources/config/routing/profiler.php'
         prefix: /_profiler

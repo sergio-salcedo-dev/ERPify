@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { BanksTable } from "@/app/backoffice/banks/_components/BanksTable";
 import BankDetailPage from "@/app/backoffice/banks/[id]/page";
+import { BANK_COLUMN_KEYS } from "@/app/backoffice/banks/_lib/bankColumns";
 import { Bank } from "@/context/backoffice/bank/domain/Bank";
 
 vi.mock("next/navigation", () => ({
@@ -24,7 +25,13 @@ const WITHOUT_ACCOUNTS = Bank.fromPrimitives({ ...BASE, accountCount: 0 });
 
 describe("BanksTable — ACCOUNTS column", () => {
   it("renders a link when accountCount > 0", () => {
-    render(<BanksTable onBankDeleteFailed={() => {}} banks={[WITH_ACCOUNTS]} />);
+    render(
+      <BanksTable
+        onBankDeleteFailed={() => {}}
+        banks={[WITH_ACCOUNTS]}
+        visible={[...BANK_COLUMN_KEYS]}
+      />,
+    );
     const cell = screen.getByTestId(`banks-table__accounts-${WITH_ACCOUNTS.id}`);
     expect(cell.tagName.toLowerCase()).toBe("a");
     expect(cell).toHaveTextContent("5");
@@ -32,7 +39,13 @@ describe("BanksTable — ACCOUNTS column", () => {
   });
 
   it("renders a non-navigable cell when accountCount === 0 (invariant #1)", () => {
-    render(<BanksTable onBankDeleteFailed={() => {}} banks={[WITHOUT_ACCOUNTS]} />);
+    render(
+      <BanksTable
+        onBankDeleteFailed={() => {}}
+        banks={[WITHOUT_ACCOUNTS]}
+        visible={[...BANK_COLUMN_KEYS]}
+      />,
+    );
     const cell = screen.getByTestId(`banks-table__accounts-${WITHOUT_ACCOUNTS.id}`);
     expect(cell).toHaveTextContent("0");
     // A 0 count must not navigate by ANY mechanism, not merely lack an <a href>:
