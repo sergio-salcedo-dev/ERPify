@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Backoffice\Bank\Infrastructure\Messenger;
 
+use Erpify\Backoffice\Bank\Application\BankAccountCountEnricher;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankDeletedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
@@ -137,7 +138,7 @@ final class BankRealtimePublisherHandlerTest extends TestCase
         $accountCounts = $this->createStub(BankAccountCounter::class);
         $accountCounts->method('countsByBankIds')->willReturn([self::BANK_ID => 3]);
 
-        $handler = new BankRealtimePublisherHandler($hub, $accountCounts);
+        $handler = new BankRealtimePublisherHandler($hub, new BankAccountCountEnricher($accountCounts));
         $event = new BankUpdatedDomainEvent(
             self::BANK_ID,
             'Acme Savings',
@@ -170,7 +171,7 @@ final class BankRealtimePublisherHandlerTest extends TestCase
             $accountCount > 0 ? [self::BANK_ID => $accountCount] : [],
         );
 
-        return new BankRealtimePublisherHandler($hub, $accountCounts);
+        return new BankRealtimePublisherHandler($hub, new BankAccountCountEnricher($accountCounts));
     }
 
     private function capturedUpdate(): Update

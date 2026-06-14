@@ -71,6 +71,10 @@ explícito en DQL dentro del repositorio Doctrine de `BankAccount` (DQL admite j
 sin asociación mapeada) hacia un **DTO de proyección**. Read models alimentados por eventos quedan
 diferidos hasta que existan contextos o almacenes separados de verdad.
 
+El ciclo de vida de estas *projection policies* (cuándo un enricher de lectura deja de ser policy y
+debe reubicarse en un read-model explícito o materializado) se rige por los cinco invariantes de
+[`../rules/read-side-projections.md`](../rules/read-side-projections.md).
+
 ### D4 — Las entidades siguen en `Domain/` con metadato pasivo
 
 Se confirma la excepción documentada de
@@ -92,14 +96,14 @@ jerarquías), (c) escala de equipo que justifique gate automático de pureza.
 secuencia append-only de eventos y el estado se reconstruye rejugándolos (`apply()` como única vía
 de mutación, snapshots a partir de cierto volumen, proyecciones obligatorias para toda lectura).
 
-| Criterio | Orientado a estado (default) | Event sourcing (candidato) |
-|---|---|---|
-| Qué importa al negocio | La foto actual | La historia *es* el negocio |
-| Ejemplos | Catálogos, referenciales, configuración (`Bank`) | Movimientos bancarios, stock, contabilidad |
-| Auditoría | Tabla de auditoría aparte (`StoredDomainEvent`) | Nativa e infalsificable: el log *es* el modelo |
-| Consultas temporales ("saldo a 31/03") | Reconstrucción manual / no disponible | Gratis: rejugar hasta la fecha |
-| Correcciones | UPDATE sobreescribe | Evento compensatorio (como contabilidad real) |
-| Coste | Bajo (Doctrine estándar) | Event store, versionado/upcasting de eventos eternos, snapshots, CQRS obligatorio, consistencia eventual |
+| Criterio                               | Orientado a estado (default)                     | Event sourcing (candidato)                                                                               |
+|----------------------------------------|--------------------------------------------------|----------------------------------------------------------------------------------------------------------|
+| Qué importa al negocio                 | La foto actual                                   | La historia *es* el negocio                                                                              |
+| Ejemplos                               | Catálogos, referenciales, configuración (`Bank`) | Movimientos bancarios, stock, contabilidad                                                               |
+| Auditoría                              | Tabla de auditoría aparte (`StoredDomainEvent`)  | Nativa e infalsificable: el log *es* el modelo                                                           |
+| Consultas temporales ("saldo a 31/03") | Reconstrucción manual / no disponible            | Gratis: rejugar hasta la fecha                                                                           |
+| Correcciones                           | UPDATE sobreescribe                              | Evento compensatorio (como contabilidad real)                                                            |
+| Coste                                  | Bajo (Doctrine estándar)                         | Event store, versionado/upcasting de eventos eternos, snapshots, CQRS obligatorio, consistencia eventual |
 
 **El mismo concepto puede merecer estrategias distintas según el contexto.** Ejemplo canónico —
 "cuenta bancaria":

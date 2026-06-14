@@ -30,17 +30,14 @@
 # docs/adr/bank-bankaccount-modeling.md (inverse direction, "el patrón correcto").
 src/Backoffice/Bank/Application/BankDeleter.php => Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository
 
-# Bank · account-count read model. BankSearcher and BankDetailFinder (Bank/Application)
-# consume BankAccountCounter — a read-only port defined in the BankAccount context —
-# for the batched anti-N+1 GROUP-BY query. The Bank domain never queries bank_account
-# directly (CE-3, CE-4). Pattern: cross-context read composition via a read-only port,
-# same family as the referential-integrity check above.
-src/Backoffice/Bank/Application/BankDetailFinder.php => Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountCounter
-src/Backoffice/Bank/Application/BankSearcher.php => Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountCounter
-# BankRealtimePublisherHandler (Bank/Infrastructure) enriches Mercure event payloads
-# with the current account count so the PWA never receives accountCount=undefined.
-# Same read-only port, same family as BankDetailFinder/BankSearcher above.
-src/Backoffice/Bank/Infrastructure/Messenger/BankRealtimePublisherHandler.php => Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountCounter
+# Bank · account-count read model. BankAccountCountEnricher (Bank/Application) is the SINGLE
+# read-side seam that consumes BankAccountCounter — a read-only port defined in the BankAccount
+# context — for the batched anti-N+1 GROUP-BY query. BankSearcher, BankDetailFinder and
+# BankRealtimePublisherHandler all compose their counts through it, so the cross-context surface is
+# one import (not three) and a future switch to a denormalized bank.account_count localizes to that
+# class. The Bank domain never queries bank_account directly (CE-3, CE-4). Pattern: cross-context
+# read composition via a read-only port, same family as the referential-integrity check above.
+src/Backoffice/Bank/Application/BankAccountCountEnricher.php => Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountCounter
 
 # BankAccount → Bank existence guard. BankAccountSearcher (BankAccount/Application)
 # guards the parent bank's existence before listing its accounts via the published

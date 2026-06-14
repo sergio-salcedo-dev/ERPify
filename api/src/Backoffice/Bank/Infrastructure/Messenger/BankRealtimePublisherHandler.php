@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\Bank\Infrastructure\Messenger;
 
+use Erpify\Backoffice\Bank\Application\BankAccountCountEnricher;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankDeletedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\MercureBankTopic;
-use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountCounter;
 use JsonException;
 use Symfony\Component\Mercure\HubInterface;
 use Symfony\Component\Mercure\Update;
@@ -27,7 +27,7 @@ final readonly class BankRealtimePublisherHandler
 {
     public function __construct(
         private HubInterface $hub,
-        private BankAccountCounter $accountCountsByBank,
+        private BankAccountCountEnricher $accountCountEnricher,
     ) {
     }
 
@@ -98,9 +98,7 @@ final readonly class BankRealtimePublisherHandler
     private function bankPayload(array $primitives): array
     {
         $bankId = $primitives['bankId'] ?? null;
-        $count = null !== $bankId
-            ? ($this->accountCountsByBank->countsByBankIds([$bankId])[$bankId] ?? 0)
-            : 0;
+        $count = null !== $bankId ? $this->accountCountEnricher->countFor($bankId) : 0;
 
         return [
             'id' => $bankId,

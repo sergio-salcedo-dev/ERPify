@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Backoffice\Bank\Application;
 
+use Erpify\Backoffice\Bank\Application\BankAccountCountEnricher;
 use Erpify\Backoffice\Bank\Application\BankDetailFinder;
 use Erpify\Backoffice\Bank\Application\BankFinder;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
@@ -70,7 +71,7 @@ final class BankDetailFinderTest extends TestCase
     {
         return new BankDetailFinder(
             new BankFinder(new InMemoryBankRepository($bank)),
-            new InMemoryBankAccountCounter($counts),
+            new BankAccountCountEnricher(new InMemoryBankAccountCounter($counts)),
         );
     }
 

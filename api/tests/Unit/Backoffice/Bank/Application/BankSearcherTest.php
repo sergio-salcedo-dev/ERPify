@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Backoffice\Bank\Application;
 
+use Erpify\Backoffice\Bank\Application\BankAccountCountEnricher;
 use Erpify\Backoffice\Bank\Application\BankSearcher;
 use Erpify\Backoffice\Bank\Application\Query\SearchBanksQuery;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
@@ -32,7 +33,10 @@ final class BankSearcherTest extends TestCase
             Bank::create(self::BANK_C, 'Bank C', 'BC'),
         );
         $accountCounts = new InMemoryBankAccountCounter([self::BANK_A => 12, self::BANK_B => 3]);
-        $searcher = new BankSearcher(new InMemoryBankSearchRepository($page), $accountCounts);
+        $searcher = new BankSearcher(
+            new InMemoryBankSearchRepository($page),
+            new BankAccountCountEnricher($accountCounts),
+        );
 
         $result = $searcher->search(new SearchBanksQuery(new SearchCriteria()));
 
@@ -55,7 +59,10 @@ final class BankSearcherTest extends TestCase
             Bank::create(self::BANK_B, 'Bank B', 'BB'),
         );
         $accountCounts = new InMemoryBankAccountCounter([self::BANK_A => 1, self::BANK_B => 2]);
-        $searcher = new BankSearcher(new InMemoryBankSearchRepository($page), $accountCounts);
+        $searcher = new BankSearcher(
+            new InMemoryBankSearchRepository($page),
+            new BankAccountCountEnricher($accountCounts),
+        );
 
         $searcher->search(new SearchBanksQuery(new SearchCriteria()));
 
@@ -71,7 +78,7 @@ final class BankSearcherTest extends TestCase
         $accountCounts = new InMemoryBankAccountCounter();
         $searcher = new BankSearcher(
             new InMemoryBankSearchRepository($this->pageOf()),
-            $accountCounts,
+            new BankAccountCountEnricher($accountCounts),
         );
 
         $result = $searcher->search(new SearchBanksQuery(new SearchCriteria()));
