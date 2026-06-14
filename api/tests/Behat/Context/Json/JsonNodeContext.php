@@ -16,6 +16,7 @@ use Erpify\Tests\Behat\Support\PostProcess\JsonToolTrait;
 use Exception;
 use JsonException;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
+use Symfony\Component\Uid\UuidV7;
 
 /**
  * Validates individual JSON nodes of the last HTTP response (equality, nullability,
@@ -146,6 +147,24 @@ class JsonNodeContext extends AbstractContext
     public function theJsonNodeShouldMatch(string $node, string $pattern): void
     {
         $this->jsonPropertyShouldMatch($this->getJson(), $node, $pattern);
+    }
+
+    /**
+     * Validate the JSON property `node` is an RFC 9562 UUID version 7 (the variant minted by
+     * {@see \Erpify\Shared\Domain\Uuid\Uuid::generate()} for `instance` / `correlation-id`).
+     * `UuidV7::isValid()` checks format, variant and version in one pass — stricter than a regex.
+     *
+     * @throws JsonException
+     */
+    #[Then('the JSON node :node should be a UUID v7')]
+    public function theJsonNodeShouldBeAUuidV7(string $node): void
+    {
+        $value = $this->getJsonInspector()->evaluate($this->getJson(), $node);
+        self::assertIsString($value, \sprintf('JSON node "%s" is not a string.', $node));
+        self::assertTrue(
+            UuidV7::isValid($value),
+            \sprintf('JSON node "%s" value "%s" is not a UUID v7.', $node, $value),
+        );
     }
 
     /**

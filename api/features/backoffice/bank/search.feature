@@ -37,6 +37,8 @@ Feature: Search banks
     And the JSON node "data[0].name" should be equal to "JPMorgan Chase"
     And the JSON node "data[0].accountCount" should be equal to the number 1
     And 2 requests got executed only for doctrine connection "default"
+    And a "Erpify\Backoffice\Bank\Domain\Entity\Bank" entity found by "shortName=JPM" should match:
+      | name | JPMorgan Chase |
 
   # Default limit is 25 (not the whole dataset): a full first page flags hasNext and exposes a next
   # link but no prev. Pins the wire default after the flip away from the unbounded page-based default.

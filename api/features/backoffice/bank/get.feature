@@ -16,6 +16,9 @@ Feature: Get banks
     And the JSON node "data.storedObjectUrl" should be null
     And the JSON node "data.accountCount" should be equal to the number 1
     And 2 requests got executed only for doctrine connection "default"
+    And a "Erpify\Backoffice\Bank\Domain\Entity\Bank" entity found by "id=11111111-1111-7000-8000-000000000001" should match:
+      | name      | JPMorgan Chase |
+      | shortName | JPM            |
 
   Scenario: Get a bank with no associated accounts reports a zero account count
     When I send a "GET" request to "/backoffice/banks/11111111-1111-7000-8000-000000000003"
@@ -34,8 +37,8 @@ Feature: Get banks
     And the JSON node "title" should be equal to "The provided value is not a valid UUID."
     And the JSON node "status" should be equal to the number 400
     And the JSON node "violations" should not exist
-    And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
-    And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
+    And the JSON node "instance" should be a UUID v7
+    And the JSON node "correlation-id" should be a UUID v7
     And the JSON node "debug" should have 5 elements
     And 0 requests got executed across all doctrine connections
     Examples:
@@ -53,8 +56,8 @@ Feature: Get banks
     And the JSON node "title" should be equal to "Bank with id <2e6d865c-17b0-476a-85f2-037bf6d3b3dc> not found."
     And the JSON node "status" should be equal to the number 404
     And the JSON node "bankId" should be equal to "2e6d865c-17b0-476a-85f2-037bf6d3b3dc"
-    And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
-    And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
+    And the JSON node "instance" should be a UUID v7
+    And the JSON node "correlation-id" should be a UUID v7
     And the JSON node "debug" should have 5 elements
     And the JSON node "debug.exception_class" should exist
     And the JSON node "debug.message" should exist

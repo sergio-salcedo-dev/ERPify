@@ -32,8 +32,8 @@ Feature: ValidationFailedException surfaces as a 422 Problem Details with a stru
     And the JSON node "violations[2].field" should be equal to "age"
     And the JSON node "violations[2].message" should be equal to "This value should be greater than or equal to 18."
     And the JSON node "violations[2].code" should be equal to "ea4e51d1-3342-48bd-87f1-9e672cd90cad"
-    And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
-    And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
+    And the JSON node "instance" should be a UUID v7
+    And the JSON node "correlation-id" should be a UUID v7
     And 0 requests got executed across all doctrine connections
 
   Scenario: ValidationFailedException with no violations still produces a conforming 422 body with an empty violations array
@@ -50,8 +50,8 @@ Feature: ValidationFailedException surfaces as a 422 Problem Details with a stru
     # (testValidationFailedExceptionWithEmptyListProducesEmptyViolationsArray) — Behat 3.31
     # cannot embed double-quotes in step args, so a raw `"violations":[]` substring assertion
     # is not expressible here. The unit test layer covers the JSON-array shape end-to-end.
-    And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
-    And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
+    And the JSON node "instance" should be a UUID v7
+    And the JSON node "correlation-id" should be a UUID v7
     And 0 requests got executed across all doctrine connections
 
   Scenario: ValidationFailedException violation entries omit invalid value and root from the wire body

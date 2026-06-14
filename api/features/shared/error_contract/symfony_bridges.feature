@@ -23,8 +23,8 @@ Feature: Symfony framework exceptions surface through the RFC 9457 error contrac
     And the JSON node "type" should be equal to "forbidden"
     And the JSON node "status" should be equal to the number 403
     And the JSON node "title" should be equal to "Access denied to bank."
-    And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
-    And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
+    And the JSON node "instance" should be a UUID v7
+    And the JSON node "correlation-id" should be a UUID v7
     And 0 requests got executed across all doctrine connections
 
   Scenario: Symfony UnauthorizedHttpException is mapped to a 401 unauthenticated Problem Details body
@@ -36,8 +36,8 @@ Feature: Symfony framework exceptions surface through the RFC 9457 error contrac
     And the JSON node "type" should be equal to "unauthenticated"
     And the JSON node "status" should be equal to the number 401
     And the JSON node "title" should be equal to "Token expired."
-    And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
-    And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
+    And the JSON node "instance" should be a UUID v7
+    And the JSON node "correlation-id" should be a UUID v7
     And 0 requests got executed across all doctrine connections
 
   Scenario: Symfony HttpException with an unmapped status code falls back to the generic http-error type
@@ -48,8 +48,8 @@ Feature: Symfony framework exceptions surface through the RFC 9457 error contrac
     And the JSON node "type" should be equal to "http-error"
     And the JSON node "status" should be equal to the number 410
     And the JSON node "title" should be equal to "Resource gone."
-    And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
-    And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
+    And the JSON node "instance" should be a UUID v7
+    And the JSON node "correlation-id" should be a UUID v7
     And 0 requests got executed across all doctrine connections
 
   Scenario: Security Core AccessDeniedException (unwrapped) is mapped to forbidden
@@ -60,8 +60,8 @@ Feature: Symfony framework exceptions surface through the RFC 9457 error contrac
     And the JSON node "type" should be equal to "forbidden"
     And the JSON node "status" should be equal to the number 403
     And the JSON node "title" should be equal to "Forbidden."
-    And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
-    And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
+    And the JSON node "instance" should be a UUID v7
+    And the JSON node "correlation-id" should be a UUID v7
     And 0 requests got executed across all doctrine connections
 
   Scenario: Security Core AuthenticationException (unwrapped) is mapped to unauthenticated
@@ -72,8 +72,8 @@ Feature: Symfony framework exceptions surface through the RFC 9457 error contrac
     And the JSON node "type" should be equal to "unauthenticated"
     And the JSON node "status" should be equal to the number 401
     And the JSON node "title" should be equal to "Bad credentials."
-    And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
-    And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
+    And the JSON node "instance" should be a UUID v7
+    And the JSON node "correlation-id" should be a UUID v7
     And 0 requests got executed across all doctrine connections
 
   Scenario: An unhandled RuntimeException still maps to the generic 500 unhandled-exception type
@@ -84,6 +84,6 @@ Feature: Symfony framework exceptions surface through the RFC 9457 error contrac
     And the JSON node "type" should be equal to "unhandled-exception"
     And the JSON node "status" should be equal to the number 500
     And the JSON node "title" should be equal to "boom"
-    And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
-    And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
+    And the JSON node "instance" should be a UUID v7
+    And the JSON node "correlation-id" should be a UUID v7
     And 0 requests got executed across all doctrine connections

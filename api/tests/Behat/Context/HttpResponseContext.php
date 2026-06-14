@@ -11,6 +11,7 @@ use Erpify\Tests\Behat\Context\Abstraction\AbstractContext;
 use Erpify\Tests\Behat\State\HttpResponseContainer;
 use Erpify\Tests\Behat\Support\Transport\HttpResponseAwareTrait;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\Uid\UuidV7;
 
 /**
  * Assertions over the last HTTP response: status code, body, headers and streaming,
@@ -217,6 +218,25 @@ class HttpResponseContext extends AbstractContext
             $regex,
             $actual,
             \sprintf('The header "%s" should match "%s", but it is: "%s"', $name, $regex, $actual),
+        );
+    }
+
+    /**
+     * Check that the response header `name` is an RFC 9562 UUID version 7 (the `X-Correlation-Id`
+     * minted via {@see \Erpify\Shared\Domain\Uuid\Uuid::generate()}). Validates format, variant and
+     * version in one pass — stricter than a regex.
+     */
+    #[Then('the header :name should be a UUID v7')]
+    public function theHeaderShouldBeAUuidV7(string $name): void
+    {
+        $response = $this->getLastResponse();
+
+        $actual = $response->headers->get($name);
+
+        self::assertNotNull($actual, \sprintf(self::HEADER_NOT_NULL_MESSAGE, $name));
+        self::assertTrue(
+            UuidV7::isValid($actual),
+            \sprintf('The header "%s" should be a UUID v7, but it is: "%s"', $name, $actual),
         );
     }
 

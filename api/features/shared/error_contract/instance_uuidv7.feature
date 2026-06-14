@@ -15,8 +15,8 @@ Feature: Per-error `instance` UUIDv7 and body↔header correlation-id reconcilia
     When I send a "GET" request to "http://localhost/api/test/_throw-not-found"
     Then the response status code should be 404
     And the header "Content-Type" should be equal to "application/problem+json"
-    And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/"
-    And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/"
+    And the JSON node "instance" should be a UUID v7
+    And the JSON node "correlation-id" should be a UUID v7
     And the JSON node "instance" should not be equal to the JSON node "correlation-id"
     And 0 requests got executed across all doctrine connections
 
@@ -39,6 +39,6 @@ Feature: Per-error `instance` UUIDv7 and body↔header correlation-id reconcilia
     When I send a "GET" request to "http://localhost/api/test/_throw-runtime"
     Then the response status code should be 500
     And the header "Content-Type" should be equal to "application/problem+json"
-    And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/"
+    And the JSON node "instance" should be a UUID v7
     And the JSON node "correlation-id" should be equal to the response header "X-Correlation-Id"
     And 0 requests got executed across all doctrine connections
