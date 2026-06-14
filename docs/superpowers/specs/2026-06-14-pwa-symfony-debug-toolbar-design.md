@@ -129,6 +129,8 @@ and styles → inject directly: **Approach A, recommended**) or requires the
 first implementation step. Either way, the PWA-side seam (`DebugTokenObserver` → hook →
 `<SymfonyDebugToolbar>`) is unchanged; only the toolbar component's injection source differs.
 
+**Spike outcome (2026-06-14): Approach B.** The Symfony 8.0.13 `/_wdt/{token}` fragment is bare markup — a real fetch of a live token returned 17 KB of `sf-toolbar-*` HTML with **zero** `<script>`, `<style>`, or `Sfjs` tokens; it ships no loader and no inline styles. The `Sfjs` definition + inline styles live in `@WebProfiler/Profiler/toolbar_js.html.twig` (injected separately by `WebDebugToolbarListener`), and a separate `_wdt_stylesheet` route (`/_wdt/styles`) confirms styling is not embedded. We will therefore add the dev-only loader route per Approach B.
+
 ## Out of scope
 
 - Any production toolbar surface.
