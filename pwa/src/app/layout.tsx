@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { ThemeProvider } from "@/lib/ThemeProvider";
 import { Theme, THEME_STORAGE_KEY } from "@/context/shared/domain/types/theme";
 import { SonnerToaster } from "@/context/shared/infrastructure/Notification/Toast/SonnerToaster";
+import { AuthProvider } from "@/context/shared/access/infrastructure/ui";
 import Script from "next/script";
 
 const geistSans = Geist({
@@ -59,7 +60,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           storageKey={THEME_STORAGE_KEY}
           disableTransitionOnChange
         >
-          {children}
+          <AuthProvider>{children}</AuthProvider>
           <SonnerToaster />
         </ThemeProvider>
       </body>

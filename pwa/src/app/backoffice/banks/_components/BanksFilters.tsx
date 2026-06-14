@@ -2,11 +2,11 @@
 
 import { useEffect, useId, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
+import { useSlashFocus } from "@/lib/useSlashFocus";
 import { Search, SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { DatePickerField, FormField } from "@/components/erpify";
-import { KeyboardKey } from "@/context/shared/domain/types/keyboard";
 import { SortDirection } from "@/context/shared/domain/types/sorting";
 import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
 import {
@@ -101,27 +101,7 @@ export function BanksFilters({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedName, debouncedShortName]);
 
-  // Documented DataTable keyboard contract: `/` focuses the list search.
-  // Document-level so it works wherever focus rests on the page; inert while
-  // the user is typing elsewhere or interacting with a transient layer.
-  useEffect(() => {
-    const handleSlash = (event: globalThis.KeyboardEvent): void => {
-      if (event.key !== KeyboardKey.SLASH || event.defaultPrevented) return;
-      const target = event.target;
-      if (
-        target instanceof HTMLElement &&
-        target.closest(
-          "input, textarea, select, [contenteditable='true'], [role='dialog'], [role='alertdialog'], [role='menu']",
-        )
-      ) {
-        return;
-      }
-      event.preventDefault();
-      searchRef.current?.focus();
-    };
-    document.addEventListener("keydown", handleSlash);
-    return () => document.removeEventListener("keydown", handleSlash);
-  }, []);
+  useSlashFocus(searchRef);
 
   const updateText =
     (field: "name" | "shortName") =>

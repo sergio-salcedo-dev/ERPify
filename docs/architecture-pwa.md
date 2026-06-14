@@ -53,6 +53,15 @@ pwa/src/context/
 
 `src/lib/` is glue/utility only — never business logic.
 
+### Shared execution toolkits — access (IAM) & resource (CRUD)
+
+Two `context/shared/` modules abstract repeated **logic**, not repeated **structure**: entity modules keep owning their tables, forms, columns, and badges explicitly, and wire that UI into these hooks. The Bank module is the reference and is deliberately left untouched by them.
+
+- **`context/shared/access/`** — the mocked IAM core. `domain/` holds the access primitives (`UserStatus`, `Role`, `Permission` + `*` wildcard, `AccessContext`) plus the `Session`/`Identity` types and the pure `authorize(session, permission)` evaluator (`ALLOW = status===ACTIVE ∧ hasPermission ∧ roleContextValid ∧ domainPolicyAllow`). `AccessPolicyRegistry` is an intentionally empty seam for a future ABAC engine. `infrastructure/ui/` provides the `AuthProvider` (seeds an ADMIN session, persists to `localStorage` under `erpify:session` — identity only, never a password), the `<Can permission|role>` hide-guard, the `RequireAuth` redirect guard (non-ACTIVE → `/login`), and a dev-only `DevSessionSwitcher`. `application/` exposes `useSession` and `useCan`/`useCanRole`. Access-level `UserStatus` is an auth primitive and is kept separate from any business status of the same name.
+- **`context/shared/resource/`** — the generic CRUD execution core. `domain/` defines the `CrudRepository<T,TInput>` port, the cursor-only `ResourceSearchCriteria`/`ResourceSearchPage<T>` (reusing the shared `PageEnvelope`), and the `ResourceSearchNavigator`. `infrastructure/` ships an `InMemoryCrudRepository` + `InMemoryResourceNavigator` over opaque base64 offset links (the client forwards links verbatim, mirroring the real keyset contract). `application/` provides `useQueryState`, `useResourceItem`, `useResourceMutations`, and `useResourceList` — the list state machine generalized from the Bank list page (two load paths, monotonic request guard, query-reset-on-change, optimistic single + bulk delete, record peek, empty-page recovery) **minus** the Mercure realtime block.
+
+The first consumer is the **User module** (`context/backoffice/user/` + `app/backoffice/users/` + the public `app/(auth)/` pages), which binds an `InMemoryUserRepository` into the DI container and is backend-swap-safe: an `Api*Repository` later fills the same ports with no consumer change. Design record: [`docs/superpowers/specs/2026-06-14-iam-user-management-frontend-design.md`](superpowers/specs/2026-06-14-iam-user-management-frontend-design.md).
+
 ### Where shared code goes (decision rule)
 
 Cross-cutting code has several homes; pick by **purpose**, not just "is it reused". Mirrored in [`pwa/CLAUDE.md`](../pwa/CLAUDE.md).

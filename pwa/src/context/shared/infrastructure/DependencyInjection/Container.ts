@@ -15,6 +15,8 @@ import { DeleteBank } from "../../../backoffice/bank/application/DeleteBank";
 import { ApiBankAccountRepository } from "../../../backoffice/bankaccount/infrastructure/ApiBankAccountRepository";
 import { ApiBankAccountSearchNavigator } from "../../../backoffice/bankaccount/infrastructure/ApiBankAccountSearchNavigator";
 import { SearchBankAccounts } from "../../../backoffice/bankaccount/application/SearchBankAccounts";
+import { InMemoryUserRepository } from "../../../backoffice/user/infrastructure/InMemoryUserRepository";
+import { InMemoryResourceNavigator } from "../../../shared/resource/infrastructure/InMemoryResourceNavigator";
 
 const container = new Container();
 
@@ -68,5 +70,13 @@ container
   .inSingletonScope();
 
 container.bind<SearchBankAccounts>("BackOfficeSearchBankAccounts").to(SearchBankAccounts);
+
+// User module (mocked). The navigator shares the SAME repository instance so it
+// reads the same in-memory store — a singleton class binding would create two.
+const userRepository = new InMemoryUserRepository();
+container.bind("BackOfficeUserRepository").toConstantValue(userRepository);
+container
+  .bind("BackOfficeUserSearchNavigator")
+  .toConstantValue(new InMemoryResourceNavigator(userRepository));
 
 export { container };
