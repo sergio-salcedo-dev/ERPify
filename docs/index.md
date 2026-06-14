@@ -45,6 +45,7 @@
 - **[adr/filters-search-criteria.md](./adr/filters-search-criteria.md)** — ADR: generic `filters[]` search vocabulary (SearchQuery/SearchCriteria), rationale and FR/NFR inventory
 - **[adr/keyset-pagination.md](./adr/keyset-pagination.md)** — ADR: cursor-only keyset pagination + repositories by composition (IMPLEMENTATION LOCKED, with post-D-1 override note)
 - **[adr/domain-event-handler-idempotency.md](./adr/domain-event-handler-idempotency.md)** — ADR: Messenger handler idempotency — raw-DBAL claim table (`handled_domain_event`) + `postGenerateSchema` listener; ORM-entity and `schema_filter` alternatives rejected
+- **[adr/audit-activity-log.md](./adr/audit-activity-log.md)** — ADR: operational/actor audit (`AuditEvent` → `audit_log`) as a separate axis from the domain-event stream; hybrid capture + `AuditPolicy`, async Messenger persistence, level-based retention + GDPR, `Shared` backbone / `Backoffice/Audit` read model
 - **[api-error-contract.md](./api-error-contract.md)** — RFC 9457 Problem Details: marker→status map, correlation-id, instance UUIDv7, logging tiers, `exception_category` SRE taxonomy
 - **[troubleshooting/sentry-domain-error-filtering.md](./troubleshooting/sentry-domain-error-filtering.md)** — deferred: drop/sample `domain_error` noise in Sentry (`ignore_exceptions` vs `before_send`), with the trade-off
 - **[troubleshooting/sentry-boot-probe-noise.md](./troubleshooting/sentry-boot-probe-noise.md)** — fixed: silencing the container boot DB-probe flood (`SENTRY_DSN=` on the entrypoint `SELECT 1` wait), safe in dev + prod
@@ -73,7 +74,7 @@ Detailed exhaustive analysis of specific areas:
 - [CLAUDE.md](../CLAUDE.md) — Repo-wide Claude Code guidance
 - [api/CLAUDE.md](../api/CLAUDE.md) · [api/README.md](../api/README.md) · `api/docs/` — API-specific docs
 - [pwa/CLAUDE.md](../pwa/CLAUDE.md) · [pwa/README.md](../pwa/README.md) · `pwa/docs/` — PWA-specific docs
-- `docs/rules/*.md` — Authoritative coding rules (architecture, clean-code, database, frontend, php-standards, security, solid-principles, testing)
+- `docs/rules/*.md` — Authoritative coding rules (architecture, clean-code, database, frontend, php-standards, read-side-projections, security, solid-principles, testing)
 
 ## Getting started
 

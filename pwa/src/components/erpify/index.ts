@@ -30,7 +30,7 @@ export { initials } from "./initials";
 export { ProblemDisplay } from "./ProblemDisplay";
 export { RecordSheet } from "./RecordSheet";
 export { DeleteResourceButton } from "./DeleteResourceButton";
-export type { DeleteResourceButtonProps } from "./DeleteResourceButton";
+export type { DeleteResourceButtonProps, ResourceDeleteGuard } from "./DeleteResourceButton";
 export { ResourceBulkBar } from "./ResourceBulkBar";
 export { ResourceViewToggle } from "./ResourceViewToggle";
 export type { ResourceView } from "./ResourceViewToggle";

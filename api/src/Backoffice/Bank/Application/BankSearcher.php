@@ -15,8 +15,10 @@ use Erpify\Shared\Domain\Search\Page;
  */
 final readonly class BankSearcher
 {
-    public function __construct(private BankSearchRepository $bankSearchRepository)
-    {
+    public function __construct(
+        private BankSearchRepository $bankSearchRepository,
+        private BankAccountCountEnricher $accountCountEnricher,
+    ) {
     }
 
     /**
@@ -24,6 +26,10 @@ final readonly class BankSearcher
      */
     public function search(SearchBanksQuery $query): Page
     {
-        return $this->bankSearchRepository->search($query->criteria);
+        $page = $this->bankSearchRepository->search($query->criteria);
+
+        $this->accountCountEnricher->enrichAll($page->items);
+
+        return $page;
     }
 }

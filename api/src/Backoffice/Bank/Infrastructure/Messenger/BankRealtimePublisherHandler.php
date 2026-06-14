@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\Bank\Infrastructure\Messenger;
 
+use Erpify\Backoffice\Bank\Application\BankAccountCountEnricher;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankDeletedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
@@ -26,6 +27,7 @@ final readonly class BankRealtimePublisherHandler
 {
     public function __construct(
         private HubInterface $hub,
+        private BankAccountCountEnricher $accountCountEnricher,
     ) {
     }
 
@@ -87,19 +89,24 @@ final readonly class BankRealtimePublisherHandler
     /**
      * Maps domain-event primitives to the PWA `BankPrimitives` shape. Safe `??`
      * access keeps the contract resilient if the event payload ever changes.
+     * `accountCount` is resolved at publish time so the PWA never receives `undefined`.
      *
      * @param array<string, string|null> $primitives
      *
-     * @return array<string, string|null>
+     * @return array<string, string|int|null>
      */
     private function bankPayload(array $primitives): array
     {
+        $bankId = $primitives['bankId'] ?? null;
+        $count = null !== $bankId ? $this->accountCountEnricher->countFor($bankId) : 0;
+
         return [
-            'id' => $primitives['bankId'] ?? null,
+            'id' => $bankId,
             'name' => $primitives['name'] ?? null,
             'shortName' => $primitives['shortName'] ?? null,
             'createdAt' => $primitives['createdAt'] ?? null,
             'updatedAt' => $primitives['updatedAt'] ?? null,
+            'accountCount' => $count,
         ];
     }
 }

@@ -12,6 +12,7 @@ const primitives = {
   shortName: "ACME",
   createdAt: "2026-01-01T00:00:00+00:00",
   updatedAt: "2026-01-02T00:00:00+00:00",
+  accountCount: 3,
 };
 
 // Cursor-only envelope v2 (PR3): directional flags, optional count, verbatim links.
@@ -158,16 +159,61 @@ describe("ApiBankRepository response guards", () => {
     await repository.create(input);
     await repository.update(primitives.id, input);
 
-    for (const guard of [
-      vi.mocked(httpClient.get).mock.calls[0][1],
-      vi.mocked(httpClient.post).mock.calls[0][2],
-      vi.mocked(httpClient.put).mock.calls[0][2],
-    ]) {
+    const findGuard = vi.mocked(httpClient.get).mock.calls[0][1];
+    const createGuard = vi.mocked(httpClient.post).mock.calls[0][2];
+    const updateGuard = vi.mocked(httpClient.put).mock.calls[0][2];
+
+    // All three guards accept a full response with accountCount.
+    for (const guard of [findGuard, createGuard, updateGuard]) {
       if (!guard) throw new Error("expected a single-envelope response guard");
       expect(guard({ data: primitives })).toBe(true);
       expect(guard(primitives)).toBe(false); // unwrapped payload
       expect(guard({ data: { ...primitives, id: 42 } })).toBe(false);
       expect(guard(null)).toBe(false);
+    }
+
+    // find() uses the strict read guard: accountCount must be a number.
+    if (!findGuard) throw new Error("expected find guard");
+    const { accountCount: _, ...withoutCount } = primitives;
+    expect(findGuard({ data: withoutCount })).toBe(false);
+
+    // create()/update() use the write-path guard: accountCount is optional.
+    for (const guard of [createGuard, updateGuard]) {
+      if (!guard) throw new Error("expected write guard");
+      expect(guard({ data: withoutCount })).toBe(true);
+    }
+  });
+
+  it("rejects a present accountCount that is not a non-negative integer", async () => {
+    const httpClient: HttpClient = {
+      get: vi.fn().mockResolvedValue({ data: primitives }),
+      post: vi.fn().mockResolvedValue({ data: primitives }),
+      put: vi.fn().mockResolvedValue({ data: primitives }),
+      delete: vi.fn(),
+    };
+    const repository = new ApiBankRepository(httpClient);
+    const input = { name: primitives.name, shortName: primitives.shortName };
+
+    await repository.find(primitives.id);
+    await repository.create(input);
+    await repository.update(primitives.id, input);
+
+    const findGuard = vi.mocked(httpClient.get).mock.calls[0][1];
+    const createGuard = vi.mocked(httpClient.post).mock.calls[0][2];
+    const updateGuard = vi.mocked(httpClient.put).mock.calls[0][2];
+
+    // `typeof NaN === "number"`, so NaN/Infinity/negative/non-integer counts would slip
+    // past a bare typeof check and render as "None"; the guard must reject them at the
+    // boundary, while a legitimate 0 (not "absent") must still pass.
+    for (const guard of [findGuard, createGuard, updateGuard]) {
+      if (!guard) throw new Error("expected a single-envelope response guard");
+      expect(guard({ data: { ...primitives, accountCount: Number.NaN } })).toBe(false);
+      expect(guard({ data: { ...primitives, accountCount: Number.POSITIVE_INFINITY } })).toBe(
+        false,
+      );
+      expect(guard({ data: { ...primitives, accountCount: -1 } })).toBe(false);
+      expect(guard({ data: { ...primitives, accountCount: 1.5 } })).toBe(false);
+      expect(guard({ data: { ...primitives, accountCount: 0 } })).toBe(true);
     }
   });
 });

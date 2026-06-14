@@ -24,6 +24,13 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+// `accountCount` is a count: a present value must be a non-negative integer.
+// `typeof NaN === "number"` and floats/negatives would otherwise pass and render
+// as "None", so the guard — not the `?? 0` mapping (which only catches null) — rejects them.
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0;
+}
+
 function isBankPrimitives(value: unknown): value is BankPrimitives {
   return (
     isObjectRecord(value) &&
@@ -31,7 +38,8 @@ function isBankPrimitives(value: unknown): value is BankPrimitives {
     typeof value.name === "string" &&
     typeof value.shortName === "string" &&
     typeof value.createdAt === "string" &&
-    typeof value.updatedAt === "string"
+    typeof value.updatedAt === "string" &&
+    isNonNegativeInteger(value.accountCount)
   );
 }
 
@@ -71,6 +79,26 @@ export function isBankSearchResponse(value: unknown): value is BankSearchRespons
 
 export function isBankSingleResponse(value: unknown): value is BankSingleResponse {
   return isObjectRecord(value) && isBankPrimitives(value.data);
+}
+
+// Write-path responses (POST/PUT) omit accountCount — the serialization groups on
+// those controllers don't include GROUP_ACCOUNT_COUNT, which is reserved for reads.
+// Default to 0 when the field is absent so create()/update() never throw a guard error.
+function isBankWriteSingleResponse(
+  value: unknown,
+): value is { data: Omit<BankPrimitives, "accountCount"> & { accountCount?: number } } {
+  if (!isObjectRecord(value) || !isObjectRecord(value.data)) {
+    return false;
+  }
+  const d = value.data;
+  return (
+    typeof d.id === "string" &&
+    typeof d.name === "string" &&
+    typeof d.shortName === "string" &&
+    typeof d.createdAt === "string" &&
+    typeof d.updatedAt === "string" &&
+    (d.accountCount === undefined || isNonNegativeInteger(d.accountCount))
+  );
 }
 
 /**
@@ -129,18 +157,18 @@ export class ApiBankRepository implements BankRepository {
     const response = await this.httpClient.post(
       API_ENDPOINTS.BACKOFFICE.BANKS.CREATE,
       input,
-      isBankSingleResponse,
+      isBankWriteSingleResponse,
     );
-    return Bank.fromPrimitives(response.data);
+    return Bank.fromPrimitives({ ...response.data, accountCount: response.data.accountCount ?? 0 });
   }
 
   async update(id: string, input: BankInput): Promise<Bank> {
     const response = await this.httpClient.put(
       API_ENDPOINTS.BACKOFFICE.BANKS.UPDATE(id),
       input,
-      isBankSingleResponse,
+      isBankWriteSingleResponse,
     );
-    return Bank.fromPrimitives(response.data);
+    return Bank.fromPrimitives({ ...response.data, accountCount: response.data.accountCount ?? 0 });
   }
 
   async delete(id: string): Promise<void> {

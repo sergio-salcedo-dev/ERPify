@@ -12,6 +12,7 @@ const GAMMA = Bank.fromPrimitives({
   shortName: "GAMMA",
   createdAt: "2026-01-03T10:00:00Z",
   updatedAt: "2026-04-17T14:30:00Z",
+  accountCount: 0,
 });
 
 /**

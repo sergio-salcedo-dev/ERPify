@@ -113,6 +113,15 @@ you change anything here.
       these routes — and when an API firewall lands, these two paths need an
       explicit `PUBLIC_ACCESS` exemption. Tracked in
       [#222](https://github.com/sergio-salcedo-dev/ERPify/issues/222).
+- [ ] `GET /api/v1/backoffice/banks/{id}/accounts` returns the **full canonical
+      IBAN** (PII) and is **consciously public** like the rest of `/backoffice`
+      (the API has no auth layer yet). The masking is presentational on the PWA
+      only — the backend never masks. Two invariants: the IBAN value is **never
+      logged** (the access-audit message carries only `bankId` + timestamp), and
+      when the API firewall lands this route must require authentication (it is
+      **not** a public-by-design endpoint, unlike health). Tracked in
+      [#240](https://github.com/sergio-salcedo-dev/ERPify/issues/240) (auth rollout,
+      sibling of the health exemption #222).
 
 ## 7. Deploy & verify
 

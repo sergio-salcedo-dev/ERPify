@@ -47,6 +47,8 @@ interface BankRowActionsProps {
   name: string;
   /** Drives the testid prefix (`banks-table__…` / `banks-cards__…`). */
   surface: BankRowActionsSurface;
+  /** Associated-account count — drives the optimistic delete-guard (`> 0`). */
+  accountCount: number;
   /** Hover/focus reveal scope for Copy/Edit; `⋯` is always visible. */
   reveal?: BankRowActionsReveal;
   onBankDeleted?: (id: string) => void;
@@ -67,6 +69,7 @@ export function BankRowActions({
   id,
   name,
   surface,
+  accountCount,
   reveal = "none",
   onBankDeleted,
   onBankDeleteFailed,
@@ -128,6 +131,7 @@ export function BankRowActions({
       <DeleteBankButton
         id={id}
         name={name}
+        accountCount={accountCount}
         onDeleted={onBankDeleted}
         onError={(problem) => onBankDeleteFailed(id, problem)}
         open={deleteOpen}

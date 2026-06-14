@@ -15,6 +15,7 @@ const BANKS = [
     shortName: "UNO",
     createdAt: "2026-01-01T10:00:00Z",
     updatedAt: "2026-01-01T10:00:00Z",
+    accountCount: 0,
   }),
   Bank.fromPrimitives({
     id: "22222222-2222-4222-8222-222222222222",
@@ -22,6 +23,7 @@ const BANKS = [
     shortName: "DOS",
     createdAt: "2026-01-01T10:00:00Z",
     updatedAt: "2026-01-01T10:00:00Z",
+    accountCount: 0,
   }),
 ];
 

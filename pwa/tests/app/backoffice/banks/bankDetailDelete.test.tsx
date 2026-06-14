@@ -96,7 +96,7 @@ describe("BankDetailPage — failed delete lands in the persistent error surface
     findRun.mockResolvedValue(BANK);
   });
 
-  it("409 bank-in-use: the dialog closes, the error persists under the header with no recovery action", async () => {
+  it("409 bank-in-use: the dialog closes, the error persists under the header with a View accounts recovery", async () => {
     deleteRun.mockRejectedValue(new HttpError(IN_USE_PROBLEM));
     render(<BankDetailPage />);
     await screen.findByTestId("banks-detail__name");
@@ -107,7 +107,12 @@ describe("BankDetailPage — failed delete lands in the persistent error surface
     const surface = await screen.findByTestId("banks-detail__delete-error");
     expect(screen.queryByTestId("banks-detail__delete-dialog")).toBeNull();
     expect(surface).toHaveTextContent(IN_USE_PROBLEM.title);
+    // A raced 409 recovers by routing to the accounts surface, not a refresh.
     expect(screen.queryByTestId("banks-detail__delete-error-refresh")).toBeNull();
+    expect(screen.getByTestId("banks-detail__delete-error-view-accounts")).toHaveAttribute(
+      "href",
+      `/backoffice/banks/${BANK.id}/accounts`,
+    );
     expect(surface).toHaveFocus();
     // The detail stays put: no redirect, no success toast.
     expect(push).not.toHaveBeenCalled();

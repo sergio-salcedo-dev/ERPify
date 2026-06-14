@@ -16,6 +16,10 @@ Route names follow `<office>_<entity>_<action>` — **entity-first, then an inte
 
 `Bank` is the canonical reference: `backoffice_bank_search` / `_get` / `_create` / `_update` / `_delete`. Route names are server-internal identifiers (clients call by path, not by name), so renaming one has zero client blast radius — but keep the suffix vocabulary stable, because operators key off suffixes like `_search` for logs / metrics / tracing.
 
+## Behat feature file layout
+
+`api/features/` mirrors the `src/` bounded-context + module tree, lowercased: `src/Backoffice/BankAccount/` → `features/backoffice/bank_account/`. Path segments and `.feature` filenames are **snake_case** — multi-word module names, groupings, and file names join words with `_` (`bank_account/`, `error_contract/`, `rate_limiting/`, `create_with_logo.feature`, `query_stats.feature`), never solid-concatenated. A bounded context that is already a single (compound) token stays solid: `backoffice/`, `frontoffice/`, `shared/`. The suite registers only the three context roots (`features/backoffice`, `features/frontoffice`, `features/shared`) and recurses, so subdirectory names follow this convention freely without touching `tools/behat/behat.yml.dist`.
+
 ## Search endpoints
 
 The search-endpoint boundary is centralized — the shared `SearchQuery` DTO + the shared `SearchCriteria` + one ~12-line controller per entity. The original design (`adr-2026-04-29-search-controller-boundary.md`, recoverable from git history) used per-entity DTO/criteria subclasses; those were retired in favour of the generic `filters[]` contract. The architectural pattern and the "add a filterable list" recipe now live in [`../../docs/architecture-api.md`](../../docs/architecture-api.md#filterable-search-generic-filters-contract); `Bank` is the canonical pilot.
@@ -114,3 +118,15 @@ GET /api/v1/backoffice/banks?limit=25&sort=name&before=<cursor># previous page �
 - `ValidationFailedException` from the DTO is automatically mapped to a **422** `validation-failed` RFC 9457 Problem Details body (Symfony's `RequestPayloadValueResolver` wraps it in an `HttpException(422)`; `Erpify\Shared\Application\Problem\ProblemDetailsFactory` walks `getPrevious()` and re-emits it as 422 with the structured `violations` extension in place of Symfony's generic body). See [`../../docs/api-error-contract.md`](../../docs/api-error-contract.md).
 - The page-size **ceiling** lives on `SearchCriteria::MAX_LIMIT` (100) — the domain single source of truth that `SearchQuery`'s `#[Assert]` reads and `WirePaginationPolicy` mirrors. The **default** page size is a policy choice, not a domain invariant: an omitted `limit` is carried as `null` and the engine resolves it from the active `WirePaginationPolicy::$defaultLimit` (an adapter picks its default by handing the engine a different policy). `SearchCriteria::DEFAULT_LIMIT` (25) is the wire-surface value the HTTP DTO and links advertise. There is no `MAX_PAGE`: cursor-only navigation has no page number, so the only pagination invariant `SearchCriteria` enforces is an explicit `limit ∈ [1, MAX_LIMIT]` (→ `invalid-pagination` for non-HTTP adapters; the DTO rejects it earlier as `validation-failed`).
 - `SearchQuery` and `SearchCriteria` are final on purpose: per-entity typed filter params (the old `names[]`/`ids[]`) were retired before any production deployment. Expose new filterable fields through the repository's `searchFieldMap()` — never through new wire params or subclasses.
+
+### Nested (child-resource) search endpoints
+
+A keyset endpoint under a parent path (e.g. `GET /banks/{id}/accounts`) follows the same skeleton with two additions:
+
+- **Scope the base query, not a filter.** The parent id is a fixed route constraint, so the repository's `search(string $parentId, SearchCriteria $criteria)` adds `WHERE child.parentId = :parentId` to the base query builder before handing it to the engine — it is not a client-tunable `filters[]` entry.
+- **Pass the route params to the responder.** `SearchResponder::respond(..., array $routeParams)` merges them into every `links.next`/`links.prev` so the cursor links stay valid for a parameterised route (`['id' => $id]`). Flat routes omit the argument.
+- **Guard the parent's existence first.** Reuse the published `BankExistenceChecker::ensureExists($id)` (it validates the UUID shape → `400 invalid-uuid` before any query, then existence → `404`) rather than re-implementing a `find`-then-search pre-read per endpoint.
+
+### IBAN wire contract
+
+The IBAN is always serialized **canonical**: upper-case, no spaces, no separators (`ES9121000418450200051332`) — the form it is persisted in. Masking is presentational on the client only; the backend never masks, and the value (classified PII) is **never logged**. A future `iban` filter must canonicalize the input the same way before matching.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
@@ -610,25 +610,56 @@ export default function BanksListPage() {
     },
   });
 
-  // Typed recovery: only a stale `bank-not-found` heals from here. The
-  // refresh recalculates the selection and re-derives the confirm phrase.
-  const deleteRecoveryAction =
-    deleteError?.problem.type === BankProblemType.NOT_FOUND ? (
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => {
-          // Fire-and-forget: the handler resolves all errors internally.
-          handleDeleteErrorRefresh();
-        }}
-        aria-label="Refresh list"
-        title="Refresh the banks list"
-        data-testid="banks-list__delete-error-refresh"
-      >
-        Refresh list
-      </Button>
-    ) : undefined;
+  // Typed recovery in the persistent error surface, keyed off the problem type:
+  // a stale `bank-not-found` heals in place via a refresh (recalculates the
+  // selection and re-derives the confirm phrase); a single `bank-in-use` (the
+  // count raced the backend) deep-links to that bank's accounts surface. A
+  // bulk delete can reject several banks at once, so a per-bank deep-link
+  // would silently address only the first — the in-use rows are restored to
+  // the list below, each carrying its own optimistic guard, which is the
+  // precise per-bank recovery. Other types carry no action.
+  const deleteRecoveryAction = ((): ReactNode => {
+    switch (deleteError?.problem.type) {
+      case BankProblemType.NOT_FOUND:
+        return (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              // Fire-and-forget: the handler resolves all errors internally.
+              handleDeleteErrorRefresh();
+            }}
+            aria-label="Refresh list"
+            title="Refresh the banks list"
+            data-testid="banks-list__delete-error-refresh"
+          >
+            Refresh list
+          </Button>
+        );
+      case BankProblemType.IN_USE:
+        return deleteError.scope === "single" ? (
+          <Link
+            href={safeHref(bankRoutes.accounts(deleteError.bankId))}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+            aria-label="View associated accounts"
+            title="View the accounts associated with this bank"
+            data-testid="banks-list__delete-error-view-accounts"
+          >
+            View accounts
+          </Link>
+        ) : (
+          <span
+            className="text-muted-foreground text-sm"
+            data-testid="banks-list__delete-error-in-use-hint"
+          >
+            Open each flagged bank below to view its accounts.
+          </span>
+        );
+      default:
+        return undefined;
+    }
+  })();
 
   // Keep the filters toolbar mounted whenever the user is actively filtering or
   // sorting, not only when READY. Each filter/sort change refetches and flips

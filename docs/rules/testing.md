@@ -15,7 +15,22 @@
 - Use integration tests for testing component interactions
 - Write tests that are easy to understand and maintain
 - Follow AAA pattern (Arrange, Act, Assert)
-- Use test doubles (mocks, stubs, fakes) appropriately
+- Use test doubles appropriately, named per the convention below
+
+## Test double naming convention
+
+Name **ports by capability** and **implementations by technology/strategy** — the same naming axis holds in `src/` and `tests/`, so a port's production and test adapters read as siblings.
+
+| Role | Convention | Example |
+| --- | --- | --- |
+| Port (capability) | `<Capability>` | `BankAccountCounter`, `BankRepository`, `BankExistenceChecker` |
+| Production adapter | `<Technology><Port>` | `DoctrineBankAccountCounter`, `DoctrineBankRepository` |
+| Test double that is an in-memory implementation of the port | `InMemory<Port>` | `InMemoryBankAccountCounter`, `InMemoryBankRepository` |
+| Test double that is a test-double pattern, not a port implementation | `Spy*` / `Stub*` / `Dummy*` | `StubDriverException`, `SpyMailer`, `StubClock` |
+
+- An in-memory test implementation of a port is `InMemory<Port>`, never `Fake<Port>`: it stays symmetric with the `Doctrine<Port>` adapter and states *how* it works rather than the uninformative "fake".
+- An in-memory double that also records the calls it received still uses `InMemory<Port>` — the implementation nature dominates the incidental spying.
+- Reserve `Spy*` / `Stub*` / `Dummy*` for doubles that embody a test-double pattern instead of an alternative implementation of a domain port (a stubbed framework exception, a spy mailer, a stub clock).
 
 ## Error Handling in Tests
 - Use exceptions for error handling, not return codes

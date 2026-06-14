@@ -226,137 +226,189 @@ export default function BankDetailPage() {
       ) : null}
 
       {!redirecting && state === ViewStatus.READY && bank ? (
-        <>
-          <header
-            className="banks-detail__header flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
-            data-testid="banks-detail__header"
-          >
-            <div className="flex min-w-0 items-start gap-3">
-              <div className="min-w-0">
-                {/* The detail page is the canonical home of the full value:
-                    the title wraps the whole name, however many lines it
-                    takes — no clamp here by contract. */}
-                <h1
-                  className="text-foreground min-w-0 text-xl font-semibold tracking-tight break-words sm:text-2xl"
-                  data-testid="banks-detail__name"
-                >
-                  {bank.name}
-                </h1>
-                <div className="mt-1 flex min-w-0 items-center gap-2">
-                  <p
-                    className="text-muted-foreground font-mono text-sm uppercase break-words"
-                    data-testid="banks-detail__shortname"
-                  >
-                    {bank.shortName}
-                  </p>
-                  {isRecentlyCreated(bank.createdAt, dateTimeProvider) ? (
-                    <StatusBadge
-                      variant="success"
-                      label="New"
-                      className="banks-detail__new flex-none"
-                      testId="banks-detail__new-badge"
-                    />
-                  ) : null}
-                </div>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
-              <Link
-                href={safeHref(bankRoutes.edit(bank.id))}
-                className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-                data-icon="inline-start"
-                data-testid="banks-detail__edit-button"
-                aria-label={`Edit bank ${bank.name}`}
-                title={`Edit bank ${bank.name}`}
-              >
-                <Pencil className="size-3.5" aria-hidden="true" />
-                Edit
-              </Link>
-              <DeleteBankButton
-                id={bank.id}
-                name={bank.name}
-                onDeleted={handleDeleted}
-                onError={setDeleteProblem}
-              />
-            </div>
-          </header>
-
-          {deleteProblem ? (
-            <DeleteErrorPanel
-              problem={deleteProblem}
-              onDismiss={() => setDeleteProblem(null)}
-              onRefresh={() => {
-                // A stale 404 heals by re-fetching: the load lands on the
-                // not-found empty state with "Back to banks".
-                setDeleteProblem(null);
-                pendingRefreshFocusRef.current = true;
-                // Fire-and-forget: loadBank handles its own errors.
-                loadBank();
-              }}
-            />
-          ) : null}
-
-          <dl
-            className="banks-detail__meta border-border bg-card grid grid-cols-1 gap-4 rounded-lg border p-4 sm:grid-cols-2"
-            data-testid="banks-detail__meta"
-          >
-            <Field label="Name" value={bank.name} testId="banks-detail__field-name" />
-            <Field
-              label="Code"
-              value={bank.shortName}
-              valueClassName="font-mono text-xs uppercase"
-              testId="banks-detail__field-shortname"
-            />
-            <Field
-              label="Created"
-              value={dateTimeProvider.formatIsoToRelative(bank.createdAt)}
-              valueTitle={dateTimeProvider.formatIsoToLocalDateTime(bank.createdAt)}
-              icon={<Clock className="size-3.5" aria-hidden="true" />}
-              testId="banks-detail__field-created"
-            />
-            <Field
-              label="Updated"
-              value={dateTimeProvider.formatIsoToRelative(bank.updatedAt)}
-              valueTitle={dateTimeProvider.formatIsoToLocalDateTime(bank.updatedAt)}
-              icon={<RefreshCw className="size-3.5" aria-hidden="true" />}
-              testId="banks-detail__field-updated"
-            />
-            <div className="banks-detail__field sm:col-span-2">
-              <dt className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-                Identifier
-              </dt>
-              <dd className="mt-1 flex items-center gap-2">
-                <span
-                  className="banks-detail__id text-foreground min-w-0 truncate font-mono text-xs"
-                  data-testid="banks-detail__id"
-                >
-                  {bank.id}
-                </span>
-                <CopyButton
-                  value={bank.id}
-                  iconOnly
-                  size="icon-sm"
-                  label="Copy ID"
-                  copiedLabel="ID copied"
-                  errorLabel="Copy failed"
-                  title={`Copy bank ID ${bank.id}`}
-                  testId="banks-detail__id-copy"
-                />
-              </dd>
-            </div>
-          </dl>
-        </>
+        <BankDetailReady
+          bank={bank}
+          deleteProblem={deleteProblem}
+          onDeleted={handleDeleted}
+          onDeleteError={setDeleteProblem}
+          onDismissDeleteError={() => setDeleteProblem(null)}
+          onRefresh={() => {
+            // A stale 404 heals by re-fetching: the load lands on the
+            // not-found empty state with "Back to banks".
+            setDeleteProblem(null);
+            pendingRefreshFocusRef.current = true;
+            // Fire-and-forget: loadBank handles its own errors.
+            loadBank();
+          }}
+        />
       ) : null}
     </div>
   );
 }
 
+function BankDetailReady({
+  bank,
+  deleteProblem,
+  onDeleted,
+  onDeleteError,
+  onDismissDeleteError,
+  onRefresh,
+}: Readonly<{
+  bank: Bank;
+  deleteProblem: ProblemDetails | null;
+  onDeleted: () => void;
+  onDeleteError: (problem: ProblemDetails) => void;
+  onDismissDeleteError: () => void;
+  onRefresh: () => void;
+}>) {
+  return (
+    <>
+      <header
+        className="banks-detail__header flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
+        data-testid="banks-detail__header"
+      >
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="min-w-0">
+            {/* The detail page is the canonical home of the full value:
+                the title wraps the whole name, however many lines it
+                takes — no clamp here by contract. */}
+            <h1
+              className="text-foreground min-w-0 text-xl font-semibold tracking-tight break-words sm:text-2xl"
+              data-testid="banks-detail__name"
+            >
+              {bank.name}
+            </h1>
+            <div className="mt-1 flex min-w-0 items-center gap-2">
+              <p
+                className="text-muted-foreground font-mono text-sm uppercase break-words"
+                data-testid="banks-detail__shortname"
+              >
+                {bank.shortName}
+              </p>
+              {isRecentlyCreated(bank.createdAt, dateTimeProvider) ? (
+                <StatusBadge
+                  variant="success"
+                  label="New"
+                  className="banks-detail__new flex-none"
+                  testId="banks-detail__new-badge"
+                />
+              ) : null}
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+          <Link
+            href={safeHref(bankRoutes.edit(bank.id))}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+            data-icon="inline-start"
+            data-testid="banks-detail__edit-button"
+            aria-label={`Edit bank ${bank.name}`}
+            title={`Edit bank ${bank.name}`}
+          >
+            <Pencil className="size-3.5" aria-hidden="true" />
+            Edit
+          </Link>
+          <DeleteBankButton
+            id={bank.id}
+            name={bank.name}
+            accountCount={bank.accountCount}
+            onDeleted={onDeleted}
+            onError={onDeleteError}
+          />
+        </div>
+      </header>
+
+      {deleteProblem ? (
+        <DeleteErrorPanel
+          problem={deleteProblem}
+          bankId={bank.id}
+          onDismiss={onDismissDeleteError}
+          onRefresh={onRefresh}
+        />
+      ) : null}
+
+      <dl
+        className="banks-detail__meta border-border bg-card grid grid-cols-1 gap-4 rounded-lg border p-4 sm:grid-cols-2"
+        data-testid="banks-detail__meta"
+      >
+        <Field label="Name" value={bank.name} testId="banks-detail__field-name" />
+        <Field
+          label="Code"
+          value={bank.shortName}
+          valueClassName="font-mono text-xs uppercase"
+          testId="banks-detail__field-shortname"
+        />
+        <Field
+          label="Created"
+          value={dateTimeProvider.formatIsoToRelative(bank.createdAt)}
+          valueTitle={dateTimeProvider.formatIsoToLocalDateTime(bank.createdAt)}
+          icon={<Clock className="size-3.5" aria-hidden="true" />}
+          testId="banks-detail__field-created"
+        />
+        <Field
+          label="Updated"
+          value={dateTimeProvider.formatIsoToRelative(bank.updatedAt)}
+          valueTitle={dateTimeProvider.formatIsoToLocalDateTime(bank.updatedAt)}
+          icon={<RefreshCw className="size-3.5" aria-hidden="true" />}
+          testId="banks-detail__field-updated"
+        />
+        <div className="banks-detail__field sm:col-span-2">
+          <dt className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+            Associated accounts
+          </dt>
+          <dd className="mt-1 text-sm" data-testid="banks-detail__field-accounts">
+            {bank.accountCount > 0 ? (
+              <>
+                {bank.accountCount}
+                {" · "}
+                <Link
+                  href={safeHref(bankRoutes.accounts(bank.id))}
+                  className="text-[var(--erpify-brand)] hover:underline"
+                >
+                  View accounts
+                </Link>
+              </>
+            ) : (
+              <span className="text-muted-foreground">None</span>
+            )}
+          </dd>
+        </div>
+        <div className="banks-detail__field sm:col-span-2">
+          <dt className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+            Identifier
+          </dt>
+          <dd className="mt-1 flex items-center gap-2">
+            <span
+              className="banks-detail__id text-foreground min-w-0 truncate font-mono text-xs"
+              data-testid="banks-detail__id"
+            >
+              {bank.id}
+            </span>
+            <CopyButton
+              value={bank.id}
+              iconOnly
+              size="icon-sm"
+              label="Copy ID"
+              copiedLabel="ID copied"
+              errorLabel="Copy failed"
+              title={`Copy bank ID ${bank.id}`}
+              testId="banks-detail__id-copy"
+            />
+          </dd>
+        </div>
+      </dl>
+    </>
+  );
+}
+
 function DeleteErrorPanel({
   problem,
+  bankId,
   onDismiss,
   onRefresh,
 }: Readonly<{
   problem: ProblemDetails;
+  bankId: string;
   onDismiss: () => void;
   onRefresh: () => void;
 }>) {
@@ -364,24 +416,50 @@ function DeleteErrorPanel({
     <MutationError
       problem={problem}
       onDismiss={onDismiss}
-      action={
-        problem.type === BankProblemType.NOT_FOUND ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onRefresh}
-            aria-label="Refresh"
-            title="Refresh this bank"
-            data-testid="banks-detail__delete-error-refresh"
-          >
-            Refresh
-          </Button>
-        ) : undefined
-      }
+      action={deleteErrorRecovery(problem, bankId, onRefresh)}
       testId="banks-detail__delete-error"
     />
   );
+}
+
+// Typed recovery for a failed detail-page delete: a stale `bank-not-found`
+// heals by re-fetching; a `bank-in-use` (the count raced the backend) routes
+// to the accounts surface. Other types carry no action.
+function deleteErrorRecovery(
+  problem: ProblemDetails,
+  bankId: string,
+  onRefresh: () => void,
+): ReactNode {
+  switch (problem.type) {
+    case BankProblemType.NOT_FOUND:
+      return (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onRefresh}
+          aria-label="Refresh"
+          title="Refresh this bank"
+          data-testid="banks-detail__delete-error-refresh"
+        >
+          Refresh
+        </Button>
+      );
+    case BankProblemType.IN_USE:
+      return (
+        <Link
+          href={safeHref(bankRoutes.accounts(bankId))}
+          className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+          aria-label="View associated accounts"
+          title="View the accounts associated with this bank"
+          data-testid="banks-detail__delete-error-view-accounts"
+        >
+          View accounts
+        </Link>
+      );
+    default:
+      return undefined;
+  }
 }
 
 function BackLink() {
