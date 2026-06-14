@@ -28,6 +28,10 @@ import {
   FolderArchive,
   LayoutTemplate,
   Smartphone,
+  Layers,
+  Scale,
+  DoorOpen,
+  Percent,
 } from "lucide-react";
 
 /**
@@ -374,6 +378,7 @@ export const roadmapPhases: RoadmapPhase[] = [
           "Seguir cada oportunidad por sus fases hasta cerrarla.",
           "Registrar llamadas, tareas, emails y notas sin perder el hilo.",
           "No olvidarme nunca de un seguimiento comercial.",
+          "Seguir licitaciones públicas: plazos, pliegos y la decisión de presentarme o no.",
         ],
         boundedContext: "frontoffice",
         dependsOn: ["1.1"],
@@ -382,6 +387,9 @@ export const roadmapPhases: RoadmapPhase[] = [
           { name: "Contacts & Companies CRM" },
           { name: "Pipeline (stages configurables)" },
           { name: "Opportunities (deals)" },
+          { name: "Tender / bid management (licitaciones públicas)" },
+          { name: "Tender deadlines & documents (pliegos, plazos)" },
+          { name: "Bid / no-bid decision + award tracking" },
           { name: "Activities (llamadas, tareas, emails)" },
           { name: "Notes & attachments" },
           { name: "Documentos comerciales", note: "sobre el core 0.8" },
@@ -427,6 +435,7 @@ export const roadmapPhases: RoadmapPhase[] = [
           "Hacer presupuestos por obra con sus partidas de coste.",
           "Reutilizar plantillas para no empezar de cero cada vez.",
           "Comparar lo previsto frente a lo real y ver el margen.",
+          "Estudiar la viabilidad económica de una licitación antes de presentarla.",
         ],
         boundedContext: "operations",
         dependsOn: ["1.3"],
@@ -437,6 +446,10 @@ export const roadmapPhases: RoadmapPhase[] = [
           { name: "Versioning of budgets" },
           { name: "Margin calculation" },
           { name: "Forecast vs actual structure" },
+          {
+            name: "Estudio económico previo (pre-bid)",
+            note: "presupuesto borrador para licitación, antes de adjudicar",
+          },
         ],
       },
       {
@@ -464,13 +477,37 @@ export const roadmapPhases: RoadmapPhase[] = [
           { name: "Reorder logic (futura automatización)" },
         ],
       },
+      {
+        code: "1.6",
+        name: "Configurator & Dynamic Pricing",
+        icon: Layers,
+        priority: "medium",
+        complexity: "high",
+        objective:
+          "Configurador visual por capas (pavimentos como primer vertical) que calcula coste y precio y genera partidas de presupuesto.",
+        userNeeds: [
+          "Configurar una estructura por capas y ver al instante su coste de material, mano de obra y transporte.",
+          "Reutilizar configuraciones tipo y ajustar precios por reglas, no a mano.",
+          "Volcar la configuración directamente a un presupuesto sin recalcular nada.",
+        ],
+        boundedContext: "operations",
+        dependsOn: ["1.4"],
+        submodules: [
+          { name: "Visual layer/structure configurator (pavimentos)" },
+          { name: "Component & layer catalog (materiales por capa)" },
+          { name: "Cost computation (material + mano de obra + transporte)" },
+          { name: "Productivity ratios (rendimientos)" },
+          { name: "Dynamic pricing rules engine" },
+          { name: "Output → budget line generation", note: "alimenta 1.4" },
+        ],
+      },
     ],
   },
   {
     code: "2",
     label: "Operaciones avanzadas",
     summary:
-      "Capacidades operativas que apalancan el core: personas, documentos y el núcleo financiero.",
+      "Capacidades operativas que apalancan el core: personas, documentos, el núcleo financiero, la imputación de costes, los portales de actor externo y las comisiones.",
     modules: [
       {
         code: "2.1",
@@ -569,6 +606,86 @@ export const roadmapPhases: RoadmapPhase[] = [
           { name: "Modo offline + sincronización" },
           { name: "Aprobaciones desde el móvil" },
           { name: "Mediciones de campo → certificación", note: "alimenta 1.3 y 2.3" },
+        ],
+      },
+      {
+        code: "2.5",
+        name: "Cost Allocation Engine",
+        icon: Scale,
+        priority: "high",
+        complexity: "high",
+        objective:
+          "Centros de coste y reglas de imputación auditables que reparten costes reales (horas, compras, indirectos) sobre obras y objetos de coste.",
+        userNeeds: [
+          "Definir centros de coste y repartir los costes indirectos con reglas, no a ojo.",
+          "Imputar cada hora, compra y gasto a la obra correcta de forma automática.",
+          "Auditar cómo se calculó cada imputación, paso a paso.",
+        ],
+        boundedContext: "cost-allocation",
+        dependsOn: ["1.3", "2.3"],
+        submodules: [
+          { name: "Cost centers (jerárquicos)" },
+          {
+            name: "Cost drivers registry (event-driven)",
+            note: "time.logged, goods.received, cost-accrued",
+          },
+          {
+            name: "Allocation rules engine",
+            note: "directa / indirecta / % / volumen / horas / consumo / fórmula",
+          },
+          { name: "Allocation runs (on-event + batch)" },
+          { name: "Overhead / indirect cost distribution" },
+          { name: "Auditable allocation trail" },
+        ],
+      },
+      {
+        code: "2.6",
+        name: "External Portals",
+        icon: DoorOpen,
+        priority: "high",
+        complexity: "high",
+        objective:
+          "Superficies self-service por tipo de actor (cliente, proveedor, subcontrata, empleado); cada una expone solo sus datos y flujos vía RBAC + ABAC.",
+        userNeeds: [
+          "Como cliente, ver mis proyectos, certificaciones y facturas y aprobar lo que me toca.",
+          "Como proveedor o subcontrata, consultar pedidos y subir partes o facturas sin llamar a oficina.",
+          "Como empleado, registrar mis horas y acceder a mis documentos desde mi propio acceso.",
+        ],
+        boundedContext: "portals",
+        dependsOn: ["0.4", "1.2", "2.1", "2.3"],
+        submodules: [
+          {
+            name: "Portal shell + ABAC gating",
+            note: "BusinessContext: employeeStatus / customerStatus",
+          },
+          { name: "Client Portal (proyectos, certificaciones, facturas, aprobaciones)" },
+          { name: "Provider Portal (pedidos, albaranes, facturas)" },
+          { name: "Subcontractor Portal (partes de trabajo, certificaciones)" },
+          { name: "Employee Portal (partes, horas, documentos)" },
+          { name: "Portal invitations & scoped sessions" },
+        ],
+      },
+      {
+        code: "2.7",
+        name: "Commission Engine",
+        icon: Percent,
+        priority: "medium",
+        complexity: "high",
+        objective:
+          "Planes de comisión por beneficiario (cliente, proveedor, empleado, empresa) con devengo por evento y liquidación.",
+        userNeeds: [
+          "Definir comisiones por porcentaje, importe fijo o tramos de volumen.",
+          "Que la comisión se calcule sola cuando se gana una venta o se cobra una factura.",
+          "Liquidar comisiones con un desglose claro de cómo se calcularon.",
+        ],
+        boundedContext: "commissions",
+        dependsOn: ["1.2", "2.3"],
+        submodules: [
+          { name: "Commission plans", note: "% / fijo / escalado por volumen" },
+          { name: "Beneficiaries (clientes / proveedores / empleados / empresas)" },
+          { name: "Trigger events", note: "opportunity.won, invoice.paid" },
+          { name: "Accrual & settlement (devengo + liquidación)" },
+          { name: "Commission statements (liquidaciones)" },
         ],
       },
     ],
