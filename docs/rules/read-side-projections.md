@@ -51,3 +51,19 @@ a broken invariant.
 Which materialization to choose is a per-aggregate persistence-strategy decision (state-oriented
 default; event sourcing opt-in), presented to the user before modeling — see
 [`../adr/bank-bankaccount-modeling.md`](../adr/bank-bankaccount-modeling.md).
+
+## Enforcement
+
+Two of the five invariants are statically checkable and gated by
+`tests/Unit/Shared/Architecture/ReadSideProjectionGateTest.php`; the other three are review-only.
+
+- **Invariant 1** — an aggregate carries at most one non-persisted derived attribute, counted by its
+  read-time `assign<Name>()` mutators (the materialization seam, e.g. `Bank::assignAccountCount`).
+- **Invariant 4** — a projection policy (class named `*Enricher`) may never be listed as a
+  cross-context seam target in `api/.bounded-context-allowlist`. General cross-module import
+  enforcement stays with the bounded-context gate (`database.md`); this only closes the escape hatch.
+
+The gate keys on two conventions: derived attributes are materialized through `assign<Name>()`
+mutators, and projection policies are named `*Enricher`. Invariants 2 (query participation), 3
+(freshness SLA) and 5 (temporal fan-out) are semantic / runtime and cannot be seen statically — they
+stay a review responsibility.
