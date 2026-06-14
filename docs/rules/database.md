@@ -55,3 +55,120 @@
 - **Assign the id before persist.** Every `Identifiable` user (aggregates and the `StoredDomainEvent`
   audit row) must set its id prior to `persist()`/flush; a null id is a bug, not a Doctrine cue.
 - Validate inbound ids as UUIDs (`#[Assert\Uuid(strict: true)]`) — version-agnostic, so v7 passes.
+
+## Bounded-context data isolation (modular monolith)
+
+ERPify is a **modular monolith on one physical PostgreSQL database**. The goal is
+to **enforce context boundaries, not total isolation** — FKs and imports are not
+bad *per se*; the defect is coupling to another context's **domain internals**.
+The tool isn't the problem, the boundary it crosses is. Guiding principle:
+
+> **Los contextos no pueden conocer las interioridades de otro, pero sí pueden
+> referenciar sus identidades y reaccionar a sus eventos.** DDD no prohíbe
+> dependencias; prohíbe el *conocimiento directo del dominio ajeno*.
+
+Each context owns its tables under a schema or a strong naming convention
+(`<context>_<table>`) and never reads/writes another's tables directly. Beyond
+that, classify coupling in **three levels** — only Level 1 is review-blocking.
+Complements the context map in [`../bounded-contexts.md`](../bounded-contexts.md)
+and the data-modeling strategy in [`../product-roadmap.md`](../product-roadmap.md).
+
+**🔴 Level 1 — prohibido (defecto que bloquea revisión):**
+
+- **Cross-context domain import.** A file under `src/<Top>/<ContextA>/` importing
+  `Erpify\<Top>\<ContextB>\Domain\…`, `…\Application\…`, or `…\Infrastructure\…`
+  — i.e. knowing the foreign context's internals (a concrete adapter is as much
+  an internal as the domain model). The **only** allowed seams are that context's
+  **published Application service interface** and its **integration-event**
+  classes.
+- **Cross-context repository query.** Injecting/using another context's
+  repository, or a `JOIN` across contexts in a hot query
+  (`$leadRepository->find($project->leadId)` from Projects ❌). Foreign data
+  comes from a published Application service or a **read model fed by events**.
+
+**🟡 Level 2 — desaconsejado (soft rule; default = referencia por ID):**
+
+- **Cross-context FK between two business contexts** (`project.lead_id →
+  crm_lead.id`). Prefer a bare **UUID v7 column with no `FOREIGN KEY`**;
+  integrity is upheld by events/policies/ACL. A genuine FK here is a warning to
+  **justify in the PR**, not an automatic block — it avoids the "ERPIFY_CORE
+  giant graph" where a CRM change breaks Projects.
+
+**🟢 Level 3 — permitido:**
+
+- **Shared kernel** — identity (`User`), tenant (`company_id`), `Money`, `Uuid`,
+  shared VOs. An FK toward an identity/tenant/shared table is fine.
+- **ID-only references** across contexts (`project.leadId`) — no JOIN, no entity
+  association, no foreign repository.
+- **Integration via events** — `ProjectCreated → CRM updates its projection`.
+  This is the canonical cross-context channel; Symfony **Messenger is the
+  boundary enforcer**.
+- **Read models** owned by the consumer, rebuilt from the emitter's events.
+
+**One shared EntityManager — the boundary is the domain model, not the EM.**
+ERPify uses a **single `EntityManager`** (one DB, one EM): it simplifies
+transactions, Messenger + outbox, and migrations. It is a *modular monolith*, not
+microservices, so it is **not** split into multiple EntityManagers. The informal
+phrase "don't share EntityManagers between contexts" is **not a Doctrine term**;
+what it really means is **don't share domain models between contexts**. The
+defect is not the shared EM — it is one context **importing, mutating and
+persisting** another's entities:
+
+```php
+// ❌ Projects knows, mutates and persists a CRM entity
+use Erpify\Frontoffice\Crm\Domain\Entity\Lead;   // cross-context import (Level 1)
+$lead = $this->leadRepository->find($leadId);     // foreign repository (Level 1)
+$lead->markAsConverted();                          // mutating another context's domain
+```
+
+Even with the same EntityManager, that breaks the boundary. The conversion is
+done by **CRM reacting to an event** (`projects.project.created`), not by Projects.
+
+**Doctrine relations — two options:**
+
+- **Strict (default between business contexts):** no association — store the id
+  and communicate via events.
+  ```php
+  class Project { private string $leadId; }        // ✅ reference by id
+  ```
+- **Pragmatic (only toward the Platform / shared kernel):** a controlled
+  `#[ORM\ManyToOne]` is acceptable **only** toward identity/platform, because
+  every context references that core.
+  ```php
+  class Project {
+      #[ORM\ManyToOne] private User $manager;       // ✅ User ∈ shared kernel
+  }
+  ```
+  A `#[ORM\ManyToOne]` toward **another business context's** entity
+  (`Project → Lead`) is Level 2 — discouraged; prefer the id.
+
+**Platform / shared kernel** = the special context every context may reference:
+`User`, `Tenant`/`company_id`, `Role`, `Permission`, `FeatureFlag`. An FK or a
+`ManyToOne` toward it is Level 3 (allowed); a business context never gets that
+treatment.
+
+Don't over-tighten: a dogmatic "zero coupling" gate freezes development, forces
+needless data duplication, and fights the framework. Symfony gives the
+structural base (PSR-4 autoload, service isolation, Messenger event boundary,
+per-context Doctrine mapping) — the gate itself is custom (see below).
+
+**Tenant scoping is orthogonal and also at query level.** When `company_id`
+lands (multi-tenant, Phase H of [`../saas-production-roadmap.md`](../saas-production-roadmap.md)),
+every tenant-owned table carries it and every query is tenant-scoped via a
+Doctrine filter / mandatory repository scope — never left to per-call discipline.
+Indexes are tenant-led composites (`(company_id, …)`).
+
+> **Enforcement status:** a 3-level static gate is wired into `make php.quality`
+> as `make php.lint.bounded-context` (PHPUnit gate that tokenizes imports —
+> `api/tests/Unit/Shared/Architecture/BoundedContextGateTest.php`). **Level 1**
+> (cross-context `Domain\`/`Application\`/`Infrastructure\` import — including
+> injecting a foreign repository) **fails** the build; imports are read via
+> `token_get_all` so grouped/aliased/multiline `use` cannot evade it.
+> `Erpify\Shared\…` is always importable, and genuinely published seams (a
+> context's Application service interface, its integration-event classes) are
+> declared in `api/.bounded-context-allowlist`. **Level 2** (a cross-context
+> Doctrine FK whose `targetEntity` resolves to another business context) is
+> printed as a non-blocking warning — justify it in the PR. **Level 3** is
+> allowed. ID-only references are plain strings with no import and are invisible
+> to the gate by construction; the gate enforces the import seam, not total
+> runtime independence.

@@ -7,7 +7,7 @@ namespace Erpify\Backoffice\Bank\Application;
 use Erpify\Backoffice\Bank\Application\Query\SearchBanksQuery;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Repository\BankSearchRepository;
-use Erpify\Shared\Domain\Search\PaginatedResult;
+use Erpify\Shared\Domain\Search\Page;
 
 /**
  * Read-side handler for {@see SearchBanksQuery} — the query counterpart of the
@@ -15,15 +15,21 @@ use Erpify\Shared\Domain\Search\PaginatedResult;
  */
 final readonly class BankSearcher
 {
-    public function __construct(private BankSearchRepository $bankSearchRepository)
-    {
+    public function __construct(
+        private BankSearchRepository $bankSearchRepository,
+        private BankAccountCountEnricher $accountCountEnricher,
+    ) {
     }
 
     /**
-     * @return PaginatedResult<Bank>
+     * @return Page<Bank>
      */
-    public function search(SearchBanksQuery $query): PaginatedResult
+    public function search(SearchBanksQuery $query): Page
     {
-        return $this->bankSearchRepository->search($query->criteria);
+        $page = $this->bankSearchRepository->search($query->criteria);
+
+        $this->accountCountEnricher->enrichAll($page->items);
+
+        return $page;
     }
 }

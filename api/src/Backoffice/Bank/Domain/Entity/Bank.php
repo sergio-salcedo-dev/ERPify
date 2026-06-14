@@ -22,12 +22,10 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'bank')]
-// btree indexes for the temporal range filters (story 1.7). Declared here at the Bank table
-// level, never on the shared Timestamped trait, so only this entity pays for the indexes.
-#[ORM\Index(name: 'idx_bank_created_at', columns: ['created_at'])]
-#[ORM\Index(name: 'idx_bank_updated_at', columns: ['updated_at'])]
+#[ORM\Index(name: 'idx_bank_created_at_id', columns: ['created_at', 'id'])]
+#[ORM\Index(name: 'idx_bank_updated_at_id', columns: ['updated_at', 'id'])]
 #[UniqueEntity(fields: ['nameNormalized'], message: 'This bank name is already in use.', errorPath: 'name')]
-#[UniqueEntity(fields: ['shortName'], message: 'This short name is already in use.')]
+#[UniqueEntity(fields: ['shortName'], message: 'This code is already in use.')]
 final class Bank extends AggregateRoot
 {
     /**
@@ -49,6 +47,24 @@ final class Bank extends AggregateRoot
      * synthesized by {@see \Erpify\Backoffice\Bank\Infrastructure\Serializer\BankLogoUrlNormalizer}.
      */
     public const string GROUP_READ_URLS = 'bank:read:urls';
+
+    /**
+     * Serialization group that opts a READ response (list and single-bank detail) into the derived
+     * {@see $accountCount}. Deliberately distinct from {@see GROUP_DETAIL} so the write-path responses
+     * (create/update) — which also serialize with {@see GROUP_DETAIL} but never enrich the count —
+     * do not emit a stale `accountCount: 0`.
+     */
+    public const string GROUP_ACCOUNT_COUNT = 'bank:account-count';
+
+    /**
+     * Read-projection: number of bank accounts that reference this bank. Not persisted — it is a
+     * derived count assembled at read time (list and detail) by the application layer through the
+     * BankAccount read port {@see \Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountCounter},
+     * never by Bank itself. Defaults to 0 so the field is always a non-null integer, even before
+     * enrichment.
+     */
+    #[Groups([self::GROUP_ACCOUNT_COUNT])]
+    private int $accountCount = 0;
 
     private function __construct(
         string $id,
@@ -145,6 +161,21 @@ final class Bank extends AggregateRoot
     public function getShortName(): string
     {
         return $this->shortName;
+    }
+
+    public function getAccountCount(): int
+    {
+        return $this->accountCount;
+    }
+
+    /**
+     * Enrich this read-projection with the number of accounts referencing the bank, computed by the
+     * application layer via the BankAccount read port. Read-only concern: it never participates in
+     * the aggregate's write invariants or domain events.
+     */
+    public function assignAccountCount(int $accountCount): void
+    {
+        $this->accountCount = $accountCount;
     }
 
     public function getLogo(): ?Media

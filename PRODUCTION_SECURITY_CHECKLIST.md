@@ -101,9 +101,34 @@ you change anything here.
       `beforeSend` denylist scrub in parity with the API's `SentryEventScrubber`
       (`scrubSentryEvent` / shared `redaction` keys); deliberate `telemetry.*`
       causes pass through `serializeCause` (PII-scrubbed). No replay enabled.
+- [ ] The public `/monitoring` Sentry tunnel (`tunnelRoute`, relays anonymous
+      browser POSTs to ingest) is rate-limited per client IP in `pwa/src/proxy.ts`
+      (`monitoringTunnelRateLimiter`, 60 POSTs / 60s; over-limit → `429` +
+      `Retry-After`), so one source can't burn the Sentry quota. The IP is the
+      rightmost (Caddy-appended, unspoofable) `X-Forwarded-For` entry; state is
+      per-process/in-memory (single PWA instance — revisit for horizontal scale).
+      Sentry's server-side limits remain the second line of defence.
 - [ ] Migrations are reversible (`down()`); no PII/secrets seeded; no
       `DROP TABLE` outside an explicit destructive migration.
 - [ ] Messenger handlers idempotent (at-least-once delivery).
+- [ ] The health endpoints (`/api/v1/health`, `/api/v1/backoffice/health`) are
+      **consciously public and liveness-only**: static payload (status, service
+      name, server time) with no DB / Mercure / Messenger probing, no PII, no
+      versions. Anonymous access is required by the §7 smoke test and the PWA
+      dashboard health check. Two invariants: any *deep* health check
+      (dependency status) must be authenticated or internal-only — never on
+      these routes — and when an API firewall lands, these two paths need an
+      explicit `PUBLIC_ACCESS` exemption. Tracked in
+      [#222](https://github.com/sergio-salcedo-dev/ERPify/issues/222).
+- [ ] `GET /api/v1/backoffice/banks/{id}/accounts` returns the **full canonical
+      IBAN** (PII) and is **consciously public** like the rest of `/backoffice`
+      (the API has no auth layer yet). The masking is presentational on the PWA
+      only — the backend never masks. Two invariants: the IBAN value is **never
+      logged** (the access-audit message carries only `bankId` + timestamp), and
+      when the API firewall lands this route must require authentication (it is
+      **not** a public-by-design endpoint, unlike health). Tracked in
+      [#240](https://github.com/sergio-salcedo-dev/ERPify/issues/240) (auth rollout,
+      sibling of the health exemption #222).
 
 ## 7. Deploy & verify
 

@@ -95,7 +95,7 @@ test.describe("BackOffice - Banks real-time sync via Mercure (real API)", () => 
     const created = await createBank(
       api,
       `${runPrefix} LIVE-CREATE`,
-      `${runPrefix.slice(-40)}-LC`.slice(0, 50).toLocaleUpperCase(),
+      `${runPrefix.slice(-40)}-LC`.slice(0, 50),
     );
     trackedIds.push(created.id);
 
@@ -136,7 +136,7 @@ test.describe("BackOffice - Banks real-time sync via Mercure (real API)", () => 
     const victim = await createBank(
       api,
       `${runPrefix} LIVE-DELETE`,
-      `${runPrefix.slice(-40)}-LD`.slice(0, 50).toLocaleUpperCase(),
+      `${runPrefix.slice(-40)}-LD`.slice(0, 50),
     );
     trackedIds.push(victim.id);
 
@@ -188,7 +188,7 @@ test.describe("BackOffice - Banks real-time sync via Mercure (real API)", () => 
     const victim = await createBank(
       api,
       `${runPrefix} DETAIL-DELETE`,
-      `${runPrefix.slice(-40)}-DD`.slice(0, 50).toLocaleUpperCase(),
+      `${runPrefix.slice(-40)}-DD`.slice(0, 50),
     );
     trackedIds.push(victim.id);
 

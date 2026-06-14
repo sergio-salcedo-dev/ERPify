@@ -21,8 +21,8 @@ final readonly class CreateBankCommand
         #[Assert\NotBlank(message: 'The name field is required.')]
         #[Assert\Length(max: 255, maxMessage: 'The name must not exceed {{ limit }} characters.')]
         public string $name = '',
-        #[Assert\NotBlank(message: 'The shortName field is required.')]
-        #[Assert\Length(max: 50, maxMessage: 'The shortName must not exceed {{ limit }} characters.')]
+        #[Assert\NotBlank(message: 'The code field is required.')]
+        #[Assert\Length(max: 50, maxMessage: 'The code must not exceed {{ limit }} characters.')]
         public string $shortName = '',
     ) {
     }

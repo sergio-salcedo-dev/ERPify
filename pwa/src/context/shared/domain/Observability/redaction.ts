@@ -17,19 +17,25 @@ export const REDACTION_DENYLIST = [
   "cookie",
   "ssn",
   "iban",
+  "email",
+  "phone_number",
+  "address",
 ] as const;
 
-const DENIED = new Set<string>(REDACTION_DENYLIST.map((key) => key.toLowerCase()));
+/** True when a key name contains a denylisted substring (case-insensitive ASCII). */
+
+const NORMALIZED_DENYLIST: string[] = REDACTION_DENYLIST.map((d: string) => d.toLowerCase());
+
+export function isDenylistedKey(key: string): boolean {
+  const lowerKey: string = key.toLowerCase();
+
+  return NORMALIZED_DENYLIST.some((denied: string) => lowerKey.includes(denied));
+}
 
 /** Bounds recursion against pathological / cyclic structures. */
 const MAX_DEPTH = 8;
 /** Bounds the total work per scrub to prevent blocking the main thread. */
 const MAX_NODES = 1000;
-
-/** True when a key name is denylisted (exact match, case-insensitive ASCII). */
-export function isDenylistedKey(key: string): boolean {
-  return DENIED.has(key.toLowerCase());
-}
 
 /**
  * Recursively strips denylisted keys from a value at every depth — unlike the
@@ -70,11 +76,23 @@ export function scrubDeep(value: unknown, depth = 0, state?: { nodes: number }):
   }
 
   if (Array.isArray(value)) {
-    return value.map((item) => scrubDeep(item, depth + 1, actualState));
+    const scrubbedArray: unknown[] = [];
+    for (const item of value) {
+      if (actualState.nodes >= MAX_NODES) {
+        scrubbedArray.push("[node-limited]");
+        break;
+      }
+      scrubbedArray.push(scrubDeep(item, depth + 1, actualState));
+    }
+    return scrubbedArray;
   }
 
   const scrubbed: Record<string, unknown> = {};
   for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+    if (actualState.nodes >= MAX_NODES) {
+      scrubbed["[truncated]"] = "[node-limited]";
+      break;
+    }
     if (isDenylistedKey(key)) {
       continue;
     }

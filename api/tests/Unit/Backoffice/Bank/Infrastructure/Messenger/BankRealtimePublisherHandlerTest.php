@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Backoffice\Bank\Infrastructure\Messenger;
 
+use Erpify\Backoffice\Bank\Application\BankAccountCountEnricher;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankDeletedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\MercureBankTopic;
 use Erpify\Backoffice\Bank\Infrastructure\Messenger\BankRealtimePublisherHandler;
+use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountCounter;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Mercure\HubInterface;
@@ -37,7 +39,7 @@ final class BankRealtimePublisherHandlerTest extends TestCase
     public function testPublishesCreatedToCollectionTopicAsPrivate(): void
     {
         // Pass the optional logo / stored-object metadata to prove it never
-        // leaves the handler — only the five public bank fields ship.
+        // leaves the handler — only the six public bank fields ship.
         $this->handler()->onBankCreated(new BankCreatedDomainEvent(
             self::BANK_ID,
             'Acme Savings',
@@ -61,6 +63,7 @@ final class BankRealtimePublisherHandlerTest extends TestCase
                 'shortName' => 'ACME',
                 'createdAt' => self::CREATED_AT,
                 'updatedAt' => self::UPDATED_AT,
+                'accountCount' => 0,
             ],
         ], $this->decoded($update));
     }
@@ -93,6 +96,7 @@ final class BankRealtimePublisherHandlerTest extends TestCase
                 'shortName' => 'ACME',
                 'createdAt' => self::CREATED_AT,
                 'updatedAt' => self::UPDATED_AT,
+                'accountCount' => 0,
             ],
         ], $this->decoded($update));
     }
@@ -114,9 +118,9 @@ final class BankRealtimePublisherHandlerTest extends TestCase
     }
 
     /**
-     * At-least-once delivery may replay the same event. The handler is a pure
-     * function of the event, so re-handling must publish a byte-identical Update
-     * (the client then reconciles by id — re-applying is a no-op once in sync).
+     * At-least-once delivery may replay the same event. Re-handling with the same
+     * DB state must publish a byte-identical Update (the client reconciles by id —
+     * re-applying is a no-op once in sync).
      */
     public function testRehandlingTheSameEventPublishesAnIdenticalUpdate(): void
     {
@@ -131,7 +135,10 @@ final class BankRealtimePublisherHandlerTest extends TestCase
             })
         ;
 
-        $handler = new BankRealtimePublisherHandler($hub);
+        $accountCounts = $this->createStub(BankAccountCounter::class);
+        $accountCounts->method('countsByBankIds')->willReturn([self::BANK_ID => 3]);
+
+        $handler = new BankRealtimePublisherHandler($hub, new BankAccountCountEnricher($accountCounts));
         $event = new BankUpdatedDomainEvent(
             self::BANK_ID,
             'Acme Savings',
@@ -147,7 +154,7 @@ final class BankRealtimePublisherHandlerTest extends TestCase
         $this->assertCount(1, \array_unique($payloads), 're-handling must publish a byte-identical payload');
     }
 
-    private function handler(): BankRealtimePublisherHandler
+    private function handler(int $accountCount = 0): BankRealtimePublisherHandler
     {
         $hub = $this->createMock(HubInterface::class);
         $hub->expects($this->once())
@@ -159,7 +166,12 @@ final class BankRealtimePublisherHandlerTest extends TestCase
             })
         ;
 
-        return new BankRealtimePublisherHandler($hub);
+        $accountCounts = $this->createStub(BankAccountCounter::class);
+        $accountCounts->method('countsByBankIds')->willReturn(
+            $accountCount > 0 ? [self::BANK_ID => $accountCount] : [],
+        );
+
+        return new BankRealtimePublisherHandler($hub, new BankAccountCountEnricher($accountCounts));
     }
 
     private function capturedUpdate(): Update

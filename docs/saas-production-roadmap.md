@@ -8,6 +8,16 @@
 > **Status:** planning only — nothing here is implemented yet. Each phase is a
 > short-lived branch off `main` delivered in small Conventional-Commits slices,
 > matching the cadence used by the prod-hardening work.
+>
+> **Related roadmaps.** This is the *delivery/infra* plan — the "how" of
+> shipping. The **product/feature** roadmap is
+> [`product-roadmap.md`](product-roadmap.md), whose module-by-module source of
+> truth is the typed data in
+> [`pwa/src/app/backoffice/roadmap/_lib/roadmap.ts`](../pwa/src/app/backoffice/roadmap/_lib/roadmap.ts),
+> rendered as the live in-app backlog at `/backoffice/roadmap`. That page also
+> carries this plan as its phase **6 — Platform Ops (CI/CD + Delivery)**, a
+> summary that points back here (phases A–H) for the detail — keep the two in
+> sync when phases land.
 
 ## Where we are today (baseline — already shipped)
 
@@ -240,7 +250,7 @@ level, so two customers can never see each other's data.
 - **Pagination interplay** — keyset cursors must be bound to the tenant via
   the signed cursor fingerprint so a cursor minted under one company is
   rejected under another (see the keyset-pagination ADR in
-  `_bmad-output/planning-artifacts/architecture-keyset-pagination.md`).
+  [`adr/keyset-pagination.md`](./adr/keyset-pagination.md)).
 
 **Commit slices:** `feat(shared): company aggregate + tenant column expand` ·
 `feat(shared): tenant-led composite indexes` · `feat(shared): query-level

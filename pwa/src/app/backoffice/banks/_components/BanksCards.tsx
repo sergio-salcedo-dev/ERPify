@@ -120,6 +120,7 @@ export function BanksCards({
                   id={bank.id}
                   name={bank.name}
                   surface="cards"
+                  accountCount={bank.accountCount}
                   reveal="card"
                   onBankDeleted={onBankDeleted}
                   onBankDeleteFailed={onBankDeleteFailed}

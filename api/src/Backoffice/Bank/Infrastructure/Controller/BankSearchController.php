@@ -15,9 +15,11 @@ use Symfony\Component\HttpKernel\Attribute\MapQueryString;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Serializer\Exception\ExceptionInterface;
 
-#[Route('/banks', name: 'backoffice_bank_search', methods: ['GET'])]
+#[Route('/banks', name: self::ROUTE_NAME, methods: ['GET'])]
 final readonly class BankSearchController
 {
+    public const string ROUTE_NAME = 'backoffice_bank_search';
+
     public function __construct(
         private BankSearcher $bankSearcher,
         private SearchResponder $searchResponder,
@@ -34,10 +36,13 @@ final readonly class BankSearchController
     ): Response {
         return $this->searchResponder->respond(
             $this->bankSearcher->search(new SearchBanksQuery($query->toCriteria())),
+            $query,
+            self::ROUTE_NAME,
             [
                 Bank::GROUP_IDENTIFIABLE,
                 Bank::GROUP_TIMESTAMPED,
                 Bank::GROUP_LIST,
+                Bank::GROUP_ACCOUNT_COUNT,
             ],
         );
     }

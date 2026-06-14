@@ -4,54 +4,54 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Infrastructure\Http\Responder;
 
-use Erpify\Shared\Domain\Search\PaginatedResult;
+use Erpify\Shared\Domain\Search\Page;
 
 /**
- * Typed wire shape of the `pagination` envelope siblings emitted alongside the
- * `data` array on collection responses. Centralizes the response contract that
- * the PWA, Behat scenarios, and metrics key off, so the keys live in one place
- * instead of an inline literal in {@see SearchResponder}.
+ * Typed wire shape of the cursor-only `pagination` envelope emitted alongside the
+ * `data` array on collection responses (PR3). Centralizes the contract the PWA,
+ * Behat scenarios and metrics key off, so the keys live in one place instead of an
+ * inline literal in {@see SearchResponder}.
  *
- * Cursor encoding (HMAC + base64) stays in infrastructure: the caller passes
- * the already-encoded string, this value object never touches the encoder.
+ * Shape is CONSTANT (W1): `{hasNext, hasPrev, count, links: {next, prev}}`.
+ * `links.next`/`links.prev` are ALWAYS present — `null` when the affordance does not
+ * apply — and `count` is `null` in light pagination. The nulls are emitted EXPLICITLY:
+ * `skip_null_values` is forbidden here (AR20), so the client always sees the full shape.
+ *
+ * The links are pre-built relative URLs supplied by {@see SearchResponder} (the single
+ * envelope compositor, W9); this value object never touches URL generation or cursors.
  */
 final readonly class PaginationMeta
 {
     public function __construct(
-        public int $currentPage,
-        public ?int $pageCount,
+        public bool $hasNext,
+        public bool $hasPrev,
         public ?int $count,
-        public bool $hasMorePages,
-        public string $cursor,
+        public ?string $nextLink,
+        public ?string $prevLink,
     ) {
     }
 
     /**
-     * @param PaginatedResult<object> $result
-     * @param string                  $cursor the encoded cursor string for the next page
+     * @param Page<object> $page
      */
-    public static function fromPaginatedResult(PaginatedResult $result, string $cursor): self
+    public static function fromPage(Page $page, ?string $nextLink, ?string $prevLink): self
     {
-        return new self(
-            $result->getCurrentPage(),
-            $result->getPageCount(),
-            $result->getCount(),
-            $result->hasMorePages(),
-            $cursor,
-        );
+        return new self($page->hasNext, $page->hasPrev, $page->count, $nextLink, $prevLink);
     }
 
     /**
-     * @return array{currentPage: int, pageCount: int|null, count: int|null, hasMorePages: bool, cursor: string}
+     * @return array{hasNext: bool, hasPrev: bool, count: int|null, links: array{next: string|null, prev: string|null}}
      */
     public function toArray(): array
     {
         return [
-            'currentPage' => $this->currentPage,
-            'pageCount' => $this->pageCount,
+            'hasNext' => $this->hasNext,
+            'hasPrev' => $this->hasPrev,
             'count' => $this->count,
-            'hasMorePages' => $this->hasMorePages,
-            'cursor' => $this->cursor,
+            'links' => [
+                'next' => $this->nextLink,
+                'prev' => $this->prevLink,
+            ],
         ];
     }
 }

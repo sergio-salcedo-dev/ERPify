@@ -23,14 +23,22 @@ type BankRowActionsSurface = "table" | "cards" | "stacked";
 /**
  * Static class map per reveal scope — Tailwind cannot build variants from
  * template literals. Copy/Edit stay hidden at rest and reveal on hover or
- * focus-within of the enclosing row/card; coarse pointers always see them
- * (a hover affordance does not exist on touch).
+ * keyboard focus within the enclosing row/card; coarse pointers always see
+ * them (a hover affordance does not exist on touch).
+ *
+ * Reveal keys off `:focus-visible`, not `:focus-within`: the overflow (⋯) menu
+ * restores focus to its trigger — which lives inside this row/card — when it
+ * closes, so a `:focus-within` rule kept the cluster shown after a mouse
+ * dismissal even though the pointer had left. `:focus-visible` matches only
+ * keyboard focus, so the cluster reveals for keyboard users yet hides again
+ * after a click-away. `group-focus-visible` covers a focused row `<tr>`;
+ * `group-has-[:focus-visible]` covers a focused control (Copy/Edit/⋯) within.
  */
 type BankRowActionsReveal = "row" | "card" | "none";
 
 const REVEAL_CLASS: Record<BankRowActionsReveal, string> = {
-  row: "flex items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100",
-  card: "flex items-center gap-0.5 opacity-0 transition-opacity group-hover/card:opacity-100 group-focus-within/card:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100",
+  row: "flex items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-visible/row:opacity-100 group-has-[:focus-visible]/row:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100",
+  card: "flex items-center gap-0.5 opacity-0 transition-opacity group-hover/card:opacity-100 group-focus-visible/card:opacity-100 group-has-[:focus-visible]/card:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100",
   none: "flex items-center gap-0.5",
 };
 
@@ -39,6 +47,8 @@ interface BankRowActionsProps {
   name: string;
   /** Drives the testid prefix (`banks-table__…` / `banks-cards__…`). */
   surface: BankRowActionsSurface;
+  /** Associated-account count — drives the optimistic delete-guard (`> 0`). */
+  accountCount: number;
   /** Hover/focus reveal scope for Copy/Edit; `⋯` is always visible. */
   reveal?: BankRowActionsReveal;
   onBankDeleted?: (id: string) => void;
@@ -59,6 +69,7 @@ export function BankRowActions({
   id,
   name,
   surface,
+  accountCount,
   reveal = "none",
   onBankDeleted,
   onBankDeleteFailed,
@@ -120,6 +131,7 @@ export function BankRowActions({
       <DeleteBankButton
         id={id}
         name={name}
+        accountCount={accountCount}
         onDeleted={onBankDeleted}
         onError={(problem) => onBankDeleteFailed(id, problem)}
         open={deleteOpen}

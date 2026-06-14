@@ -1,0 +1,8 @@
+# Dev-only HTML landing page so the Web Debug Toolbar (HTML-only) is visible for an
+# otherwise JSON API. Uses the framework's built-in TemplateController — no domain code.
+when@dev:
+    dev_home:
+        path: /_dev
+        controller: Symfony\Bundle\FrameworkBundle\Controller\TemplateController
+        defaults:
+            template: dev/home.html.twig

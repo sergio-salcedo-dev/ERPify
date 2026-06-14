@@ -38,6 +38,27 @@ make composer c='behat-tools-install'
 
 Switch overlay: `make docker.up ENV=ci|staging|prod` (default `dev`).
 
+## Profiler & debug toolbar (dev only)
+
+The Symfony Profiler is enabled only in `dev` (never prod, and not `test` — the bundles are
+registered `['dev'=>true]`). It stays out of `test` so its Doctrine instrumentation can't
+perturb the per-scenario query-count assertions in Behat. Because the API returns JSON, the
+floating toolbar can't inject into `/api/*` responses; the surfaces are:
+
+- **`/_profiler`** — full Profiler web UI (Doctrine queries, timeline, Messenger,
+  serializer, logs). `make profiler.open` opens `/_profiler/latest` in your browser
+  (resolves this checkout's HTTPS port, including worktrees). Every response also carries
+  an `X-Debug-Token` / `X-Debug-Token-Link` header.
+- **`/_dev`** — a dev-only HTML page where the floating toolbar renders. Its
+  "Run sample API call" button fetches `/api/*`, and those calls show up in the toolbar's
+  AJAX panel with profiler links.
+- **`dump()`** — run `make profiler.dump-server` in a spare terminal to collect dumps
+  out-of-band (so they never corrupt JSON responses); they also appear in the profiler's
+  Debug/Dump panel. Without the server running, dumps fall back to inline output.
+
+Want the toolbar on the real Next.js app instead? That's tracked as a follow-up (PWA
+reads `X-Debug-Token` and loads `/_wdt/{token}`); it's intentionally not wired here.
+
 ## Logs
 
 | Env                       | Destination                                              | Format |
@@ -102,7 +123,7 @@ make php.behat                             # Behat (isolated tree)
 ## Lint / analyze
 
 ```bash
-make php.quality                  # PHPStan + Rector + PHP-CS-Fixer + PHPMD + PHPCS + Psalm (aggregate)
+make php.quality                  # PHPStan + Rector + PHP-CS-Fixer + PHPMD + PHPCS (aggregate)
 make php.stan
 make php.rector                # apply
 make php.rector.dry-run
@@ -111,12 +132,10 @@ make php.cs-fixer.dry-run
 make php.md
 make php.cs                    # apply
 make php.cs.dry-run
-make php.psalm
-make php.psalm.taint
-make php.psalm.baseline
+make php.psalm.taint           # Psalm security dataflow → SARIF (api-taint CI job)
 ```
 
-Tool configs live at `api/.php-cs-fixer.php`, `api/phpstan.neon`, `api/psalm.xml`, `api/rector.php`.
+Tool configs live at `api/.php-cs-fixer.php`, `api/tools/phpstan/phpstan.neon`, `api/tools/psalm/psalm-taint.xml`, `api/rector.php`. PHPStan (`level: max`) is the sole type-checking gate; Psalm's general analysis was retired — it now runs taint-only.
 
 ## Directory discipline
 

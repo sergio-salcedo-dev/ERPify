@@ -10,7 +10,7 @@ namespace Erpify\Tests\Unit\Behat\Support\Tool\TypeHint\Fixtures;
  */
 final class StringValueObject
 {
-    /** @psalm-suppress PossiblyUnusedMethod reached only via the resolver's dynamic `new $type()` */
+    /** Reached only via the resolver's dynamic `new $type()`. */
     public function __construct(public string $value)
     {
     }

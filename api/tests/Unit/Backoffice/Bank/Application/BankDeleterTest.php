@@ -24,7 +24,7 @@ final class BankDeleterTest extends TestCase
 
     public function testDeletesBankAndDispatchesDeletedEventWhenNoAccountsReferenceIt(): void
     {
-        $bankRepository = new FakeBankRepository($this->makeBank());
+        $bankRepository = new InMemoryBankRepository($this->makeBank());
         $messageBus = new RecordingMessageBus();
         $bankDeleter = $this->makeBankDeleter($bankRepository, accountCount: 0, messageBus: $messageBus);
 
@@ -38,7 +38,7 @@ final class BankDeleterTest extends TestCase
     public function testThrowsBankInUseExceptionWhenAccountsReferenceTheBank(): void
     {
         $bankDeleter = $this->makeBankDeleter(
-            new FakeBankRepository($this->makeBank()),
+            new InMemoryBankRepository($this->makeBank()),
             accountCount: 3,
         );
 
@@ -60,7 +60,7 @@ final class BankDeleterTest extends TestCase
 
     public function testDispatchesNoEventAndRemovesNothingWhenDeletionIsRejected(): void
     {
-        $bankRepository = new FakeBankRepository($this->makeBank());
+        $bankRepository = new InMemoryBankRepository($this->makeBank());
         $messageBus = new RecordingMessageBus();
         $bankDeleter = $this->makeBankDeleter($bankRepository, accountCount: 1, messageBus: $messageBus);
 
@@ -77,7 +77,7 @@ final class BankDeleterTest extends TestCase
 
     public function testMapsForeignKeyViolationOnRemoveToBankInUseException(): void
     {
-        $bankRepository = new FakeBankRepository($this->makeBank(), removeFailure: $this->makeFkViolation());
+        $bankRepository = new InMemoryBankRepository($this->makeBank(), removeFailure: $this->makeFkViolation());
         $messageBus = new RecordingMessageBus();
         // First count 0 (guard passes), recount 2 after the flush-time FK violation.
         $bankDeleter = $this->makeBankDeleter($bankRepository, accountCount: 0, messageBus: $messageBus, recount: 2);
@@ -98,7 +98,7 @@ final class BankDeleterTest extends TestCase
 
     public function testReportsAtLeastOneAccountWhenRecountAfterForeignKeyViolationIsZero(): void
     {
-        $bankRepository = new FakeBankRepository($this->makeBank(), removeFailure: $this->makeFkViolation());
+        $bankRepository = new InMemoryBankRepository($this->makeBank(), removeFailure: $this->makeFkViolation());
         // Reverse double-race: the violating account vanished again before the recount.
         // The FK violation itself proves >= 1 account existed at flush time.
         $bankDeleter = $this->makeBankDeleter($bankRepository, accountCount: 0, recount: 0);
@@ -115,7 +115,7 @@ final class BankDeleterTest extends TestCase
     }
 
     private function makeBankDeleter(
-        FakeBankRepository $bankRepository,
+        InMemoryBankRepository $bankRepository,
         int $accountCount,
         ?RecordingMessageBus $messageBus = null,
         ?int $recount = null,
@@ -123,7 +123,7 @@ final class BankDeleterTest extends TestCase
         return new BankDeleter(
             $bankRepository,
             new BankFinder($bankRepository),
-            new FakeBankAccountRepository($accountCount, $recount),
+            new InMemoryBankAccountRepository($accountCount, $recount),
             $messageBus ?? new RecordingMessageBus(),
         );
     }

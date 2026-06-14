@@ -86,27 +86,29 @@ test.describe("BackOffice - Banks CRUD (real API)", () => {
     );
 
     // -----------------------------------------------------------------
-    // Pagination — 26 rows fit on two pages of 25.
+    // Pagination — 26 rows fit on two cursor pages of 25. Cursor-only keyset
+    // navigation: prev/next are always rendered and disabled (never hidden)
+    // when the envelope link is null; there is no page-number indicator.
     // -----------------------------------------------------------------
-    await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 1");
     await expect(page.getByTestId("banks-pagination__page-size")).toHaveValue("25");
     await expect(page.locator("tbody tr")).toHaveCount(25);
     await expect(page.getByRole("cell", { name: firstSeeded, exact: true })).toBeVisible();
     await expect(page.getByRole("cell", { name: lastSeeded, exact: true })).toBeHidden();
-    await expect(page.getByTestId("banks-pagination__prev")).toBeHidden();
+    await expect(page.getByTestId("banks-pagination__prev")).toBeDisabled();
+    await expect(page.getByTestId("banks-pagination__next")).toBeEnabled();
 
     await page.getByTestId("banks-pagination__next").click();
-    await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 2");
     await expect(page.locator("tbody tr")).toHaveCount(1);
     await expect(page.getByRole("cell", { name: lastSeeded, exact: true })).toBeVisible();
-    await expect(page.getByTestId("banks-pagination__next")).toBeHidden();
+    await expect(page.getByTestId("banks-pagination__next")).toBeDisabled();
+    await expect(page.getByTestId("banks-pagination__prev")).toBeEnabled();
 
-    // Bumping the page size collapses the seeded set onto a single page.
+    // Bumping the page size collapses the seeded set onto a single page
+    // (cursors discarded, back to the first page).
     await page.getByTestId("banks-pagination__page-size").selectOption("50");
-    await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 1");
     await expect(page.locator("tbody tr")).toHaveCount(SEED_COUNT);
-    await expect(page.getByTestId("banks-pagination__next")).toBeHidden();
-    await expect(page.getByTestId("banks-pagination__prev")).toBeHidden();
+    await expect(page.getByTestId("banks-pagination__next")).toBeDisabled();
+    await expect(page.getByTestId("banks-pagination__prev")).toBeDisabled();
 
     // -----------------------------------------------------------------
     // Sort — flip name to descending; first row should now be `… 026`.

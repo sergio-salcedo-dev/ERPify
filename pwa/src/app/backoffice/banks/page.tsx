@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
 import { SearchBanks } from "@/context/backoffice/bank/application/SearchBanks";
+import type { BankSearchNavigator } from "@/context/backoffice/bank/application/BankSearchNavigator";
 import { DeleteBank } from "@/context/backoffice/bank/application/DeleteBank";
 import { FindBank } from "@/context/backoffice/bank/application/FindBank";
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
@@ -12,6 +13,7 @@ import { BankProblemType } from "@/context/backoffice/bank/domain/BankProblemTyp
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
 import { toastNotifier } from "@/context/shared/infrastructure/Notification/Toast";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
+import type { PageEnvelope } from "@/context/shared/domain/Search";
 import { HttpStatus } from "@/context/shared/domain/types/http";
 import {
   AsyncBoundary,
@@ -93,12 +95,10 @@ function isNotFoundError(reason: unknown): boolean {
 export default function BanksListPage() {
   const [state, setState] = useState<State>(ViewStatus.LOADING);
   const [banks, setBanks] = useState<Bank[]>([]);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [hasMorePages, setHasMorePages] = useState(false);
+  const [pagination, setPagination] = useState<PageEnvelope | null>(null);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
   const [filter, setFilter] = useState<BanksFilter>(EMPTY_FILTER);
   const [sort, setSort] = useState<BanksSort>(DEFAULT_SORT);
-  const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<BanksPageSize>(BANKS_PAGE_SIZE_DEFAULT);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [deleteError, setDeleteError] = useState<DeleteErrorState | null>(null);
@@ -124,10 +124,15 @@ export default function BanksListPage() {
   }, []);
 
   const reloadingRef = useRef(false);
-  // The opaque cursor from the last response, replayed verbatim to navigate
-  // (only sent when page > 1; page 1 needs none). A change in filter/sort/
-  // pageSize resets page to 1, so the stale cursor is naturally dropped.
-  const cursorRef = useRef<string | undefined>(undefined);
+  // The server-issued link that produced the current view, or null for the
+  // first page (a plain query). State, not a ref: navigation re-runs the load
+  // effect by changing it, and the query-change reset clears it during render
+  // (a ref write during render is disallowed). A silent reconcile / retry
+  // replays it via the navigator so the user keeps their position; a
+  // filter/sort/pageSize change resets it to null (back to the first page —
+  // both cursors dropped, W8). The link is an opaque transport token: the
+  // client forwards it verbatim and never parses it (W11).
+  const [activeLink, setActiveLink] = useState<string | null>(null);
   // Monotonic request token: a slow in-flight response whose token is no longer
   // current is discarded, so a debounced filter + a page click never let an
   // older result overwrite a newer one (the debounce↔pagination race).
@@ -159,24 +164,33 @@ export default function BanksListPage() {
       }
       reloadingRef.current = true;
       try {
-        const useCase = container.get<SearchBanks>("BackOfficeSearchBanks");
-        const result = await useCase.run({
-          filters: toBankFilters(filter),
-          sort: toBankSort(sort),
-          page,
-          cursor: page === 1 ? undefined : cursorRef.current,
-          limit: pageSize,
-        });
-        // A newer request superseded this one (e.g. a fast page click after a
+        // Two load paths (Modelo A2). The first page / a query change runs a
+        // criteria search (no cursor); any other position replays the link that
+        // produced it, verbatim, through the navigator. The cursor never enters
+        // this client — it only ever travels inside the server-composed link.
+        const result =
+          activeLink === null
+            ? await container.get<SearchBanks>("BackOfficeSearchBanks").run({
+                filters: toBankFilters(filter),
+                sort: toBankSort(sort),
+                limit: pageSize,
+              })
+            : await container
+                .get<BankSearchNavigator>("BackOfficeBankSearchNavigator")
+                .follow(activeLink);
+        // A newer request superseded this one (e.g. a fast nav click after a
         // debounced filter) — drop the stale result.
         if (!mountedRef.current || seq !== seqRef.current) return;
         if (!bulkDeleteInFlightRef.current) {
           deletedIdsRef.current = new Set();
         }
-        cursorRef.current = result.cursor;
         setBanks(result.banks);
-        setCurrentPage(result.currentPage);
-        setHasMorePages(result.hasMorePages);
+        setPagination({
+          hasNext: result.hasNext,
+          hasPrev: result.hasPrev,
+          count: result.count,
+          links: result.links,
+        });
         // Selection is scoped to the visible page: ids absent from the new
         // result (a different page, or a row deleted server-side) drop out, so
         // the bulk count never counts phantoms or rows the user cannot see.
@@ -197,8 +211,31 @@ export default function BanksListPage() {
         if (seq === seqRef.current) reloadingRef.current = false;
       }
     },
-    [filter, sort, page, pageSize],
+    [filter, sort, pageSize, activeLink],
   );
+
+  // Navigate to an adjacent page by replaying a server link VERBATIM (W11): mark
+  // it the active position and let the load effect (activeLink in deps) fetch
+  // it. Disabled controls never call this — W10 guarantees a non-null link
+  // whenever the matching flag is true.
+  const navigateTo = useCallback((link: string) => {
+    setActiveLink(link);
+  }, []);
+
+  // Recover from an emptied page beyond the first. When an optimistic delete (or
+  // a cursor walk into a gap) drains every row but the envelope still offers a
+  // step — a backward link from deleting a last page's rows, or a forward link
+  // from a `before` walk — follow it so the user lands on real rows instead of
+  // the filtered-to-zero panel (whose only escape, Clear all, is a no-op when no
+  // filter is active). Gated on READY + not mid-load so it never fires during a
+  // skeleton or fights an in-flight request; it walks back page by page until a
+  // populated page or the first page (no affordance) ends the chain.
+  useEffect(() => {
+    if (state !== ViewStatus.READY || banks.length > 0 || reloadingRef.current) return;
+    const recoveryLink = pagination?.links.prev ?? pagination?.links.next;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (recoveryLink) navigateTo(recoveryLink);
+  }, [state, banks.length, pagination, navigateTo]);
 
   useEffect(() => {
     // The query is server-driven: re-run whenever filter/sort/page/pageSize
@@ -215,13 +252,21 @@ export default function BanksListPage() {
   // it so a delete that empties the page does not strand a stale "ready" state.
   const boundaryState = useMemo<State>(() => {
     if (state === ViewStatus.LOADING || state === ViewStatus.ERROR) return state;
-    return banks.length === 0 && !hasActiveFilter(filter) ? ViewStatus.EMPTY : ViewStatus.READY;
-  }, [state, banks.length, filter]);
+    // Genuinely empty (no rows, no filter, AND no prev/next affordance) reads as
+    // the first-run "No banks yet". An empty page that still offers navigation —
+    // a gap from deleted rows, carrying hasPrev/hasNext — stays READY so the
+    // pagination controls render and the user can step back to real rows.
+    const hasNavAffordance = (pagination?.hasPrev ?? false) || (pagination?.hasNext ?? false);
+    return banks.length === 0 && !hasActiveFilter(filter) && !hasNavAffordance
+      ? ViewStatus.EMPTY
+      : ViewStatus.READY;
+  }, [state, banks.length, filter, pagination]);
 
-  // Reset to page 1 when the query (filters/sort/pageSize) changes, adjusting
-  // state during render. Page 1 sends no cursor, so the stale cursor from the
-  // previous query is discarded by construction (the cursor is only replayed
-  // for page > 1).
+  // Reset to the first page when the query (filters/sort/pageSize) changes,
+  // adjusting state during render. Dropping the active link discards BOTH
+  // cursors before the next request (W8) — the stale cursor from the previous
+  // query never reaches the wire (the API would 422 it anyway). loadBanks then
+  // re-runs (its identity changes with these deps) as a cursor-less query.
   const [prevFilter, setPrevFilter] = useState(filter);
   const [prevSort, setPrevSort] = useState(sort);
   const [prevPageSize, setPrevPageSize] = useState(pageSize);
@@ -229,21 +274,13 @@ export default function BanksListPage() {
     setPrevFilter(filter);
     setPrevSort(sort);
     setPrevPageSize(pageSize);
-    setPage(1);
+    setActiveLink(null);
   }
 
-  // Stepping off the end of the list — the last row on a page beyond the first
-  // was deleted (optimistically or via a reconcile) — would otherwise strand the
-  // user on an empty page rendered as the first-run "No banks yet" state, with no
-  // Prev control to escape. Fall back one page so they land on real rows (or, at
-  // page 1, the genuine empty state). Page numbers only ever decrease here, so it
-  // settles in at most a few hops; loadBanks (page in deps) refetches each step.
-  useEffect(() => {
-    if (state === ViewStatus.READY && banks.length === 0 && page > 1) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setPage((current) => Math.max(1, current - 1));
-    }
-  }, [state, banks.length, page]);
+  // No page-number fallback effect any more: an empty page beyond the first is
+  // governed by the envelope (hasPrev/hasNext + items:[]) — a `before` walk into
+  // a gap reports hasNext=true so the user steps forward to real rows, and the
+  // controls render because `boundaryState` keeps a navigable empty page READY.
 
   const resetFilters = (): void => {
     setFilter(EMPTY_FILTER);
@@ -573,25 +610,56 @@ export default function BanksListPage() {
     },
   });
 
-  // Typed recovery: only a stale `bank-not-found` heals from here. The
-  // refresh recalculates the selection and re-derives the confirm phrase.
-  const deleteRecoveryAction =
-    deleteError?.problem.type === BankProblemType.NOT_FOUND ? (
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => {
-          // Fire-and-forget: the handler resolves all errors internally.
-          handleDeleteErrorRefresh();
-        }}
-        aria-label="Refresh list"
-        title="Refresh the banks list"
-        data-testid="banks-list__delete-error-refresh"
-      >
-        Refresh list
-      </Button>
-    ) : undefined;
+  // Typed recovery in the persistent error surface, keyed off the problem type:
+  // a stale `bank-not-found` heals in place via a refresh (recalculates the
+  // selection and re-derives the confirm phrase); a single `bank-in-use` (the
+  // count raced the backend) deep-links to that bank's accounts surface. A
+  // bulk delete can reject several banks at once, so a per-bank deep-link
+  // would silently address only the first — the in-use rows are restored to
+  // the list below, each carrying its own optimistic guard, which is the
+  // precise per-bank recovery. Other types carry no action.
+  const deleteRecoveryAction = ((): ReactNode => {
+    switch (deleteError?.problem.type) {
+      case BankProblemType.NOT_FOUND:
+        return (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              // Fire-and-forget: the handler resolves all errors internally.
+              handleDeleteErrorRefresh();
+            }}
+            aria-label="Refresh list"
+            title="Refresh the banks list"
+            data-testid="banks-list__delete-error-refresh"
+          >
+            Refresh list
+          </Button>
+        );
+      case BankProblemType.IN_USE:
+        return deleteError.scope === "single" ? (
+          <Link
+            href={safeHref(bankRoutes.accounts(deleteError.bankId))}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+            aria-label="View associated accounts"
+            title="View the accounts associated with this bank"
+            data-testid="banks-list__delete-error-view-accounts"
+          >
+            View accounts
+          </Link>
+        ) : (
+          <span
+            className="text-muted-foreground text-sm"
+            data-testid="banks-list__delete-error-in-use-hint"
+          >
+            Open each flagged bank below to view its accounts.
+          </span>
+        );
+      default:
+        return undefined;
+    }
+  })();
 
   // Keep the filters toolbar mounted whenever the user is actively filtering or
   // sorting, not only when READY. Each filter/sort change refetches and flips
@@ -764,11 +832,17 @@ export default function BanksListPage() {
                 />
               )}
               <BanksPagination
-                page={currentPage}
                 pageSize={pageSize}
-                hasPrev={currentPage > 1}
-                hasNext={hasMorePages}
-                onPageChange={setPage}
+                hasPrev={pagination?.hasPrev ?? false}
+                hasNext={pagination?.hasNext ?? false}
+                onPrev={() => {
+                  const link = pagination?.links.prev;
+                  if (link) navigateTo(link);
+                }}
+                onNext={() => {
+                  const link = pagination?.links.next;
+                  if (link) navigateTo(link);
+                }}
                 onPageSizeChange={setPageSize}
               />
             </>
@@ -820,7 +894,7 @@ export default function BanksListPage() {
               </dd>
             </div>
             <div className="banks-peek__field">
-              <dt className="text-muted-foreground text-xs font-medium uppercase">Short name</dt>
+              <dt className="text-muted-foreground text-xs font-medium uppercase">Code</dt>
               <dd className="mt-0.5 font-mono uppercase" data-testid="banks-peek__shortname">
                 {peekBank.shortName}
               </dd>

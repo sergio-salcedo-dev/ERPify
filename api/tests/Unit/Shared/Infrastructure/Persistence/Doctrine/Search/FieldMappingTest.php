@@ -70,6 +70,34 @@ final class FieldMappingTest extends TestCase
         );
     }
 
+    public function testDateTimeFieldRejectsEqAmongExplicitOperators(): void
+    {
+        $this->assertConstructionRejected(static fn (): FieldMapping => new FieldMapping(
+            'b.createdAt',
+            operators: [FilterOperator::Eq, FilterOperator::Gte],
+            requiresDateTimeValues: true,
+        ));
+    }
+
+    public function testDateTimeFieldRejectsInAmongExplicitOperators(): void
+    {
+        $this->assertConstructionRejected(static fn (): FieldMapping => new FieldMapping(
+            'b.createdAt',
+            operators: [FilterOperator::In, FilterOperator::Gte],
+            requiresDateTimeValues: true,
+        ));
+    }
+
+    public function testFieldRejectsRequiringBothUuidAndDateTimeValues(): void
+    {
+        $this->assertConstructionRejected(static fn (): FieldMapping => new FieldMapping(
+            'b.createdAt',
+            operators: [FilterOperator::Gt],
+            requiresUuidValues: true,
+            requiresDateTimeValues: true,
+        ));
+    }
+
     public function testDateTimeFieldAllowsRangeOperators(): void
     {
         $mapping = new FieldMapping(

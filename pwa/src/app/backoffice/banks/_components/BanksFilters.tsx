@@ -2,14 +2,17 @@
 
 import { useEffect, useId, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
+import { useSlashFocus } from "@/lib/useSlashFocus";
 import { Search, SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { DatePickerField, FormField } from "@/components/erpify";
-import { KeyboardKey } from "@/context/shared/domain/types/keyboard";
 import { SortDirection } from "@/context/shared/domain/types/sorting";
+import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
 import {
   BANKS_SORTABLE_COLUMNS,
+  DEFAULT_SORT,
+  buildActiveFilterChips,
   countPanelFilters,
   hasActiveFilter,
   hasActivePanelFilter,
@@ -17,7 +20,9 @@ import {
   type BanksFilter,
   type BanksSort,
   type BanksSortableColumn,
+  type FilterChipKey,
 } from "../_lib/banksFilterSort";
+import { BanksActiveFilters } from "./BanksActiveFilters";
 
 interface BanksFiltersProps {
   filter: BanksFilter;
@@ -59,6 +64,8 @@ export function BanksFilters({
     defaultOpen ?? (hasActivePanelFilter(filter) || !isDefaultSort(sort)),
   );
   const searchRef = useRef<HTMLInputElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const pendingToggleFocus = useRef(false);
 
   // Local mirror of the text filters so typing stays instant while the
   // (expensive) parent re-filter is debounced. Synced back down when the
@@ -94,27 +101,7 @@ export function BanksFilters({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedName, debouncedShortName]);
 
-  // Documented DataTable keyboard contract: `/` focuses the list search.
-  // Document-level so it works wherever focus rests on the page; inert while
-  // the user is typing elsewhere or interacting with a transient layer.
-  useEffect(() => {
-    const handleSlash = (event: globalThis.KeyboardEvent): void => {
-      if (event.key !== KeyboardKey.SLASH || event.defaultPrevented) return;
-      const target = event.target;
-      if (
-        target instanceof HTMLElement &&
-        target.closest(
-          "input, textarea, select, [contenteditable='true'], [role='dialog'], [role='alertdialog'], [role='menu']",
-        )
-      ) {
-        return;
-      }
-      event.preventDefault();
-      searchRef.current?.focus();
-    };
-    document.addEventListener("keydown", handleSlash);
-    return () => document.removeEventListener("keydown", handleSlash);
-  }, []);
+  useSlashFocus(searchRef);
 
   const updateText =
     (field: "name" | "shortName") =>
@@ -136,6 +123,42 @@ export function BanksFilters({
     setNameInput("");
     setShortNameInput("");
     onReset();
+  };
+
+  const chips = buildActiveFilterChips(filter, sort, dateTimeProvider);
+
+  const willEmptyAfter = (nextFilter: BanksFilter, nextSort: BanksSort): boolean =>
+    !hasActiveFilter(nextFilter) && isDefaultSort(nextSort);
+
+  const handleClearAll = (): void => {
+    pendingToggleFocus.current = true;
+    handleReset();
+  };
+
+  const handleRemoveChip = (key: FilterChipKey): void => {
+    let nextFilter = filter;
+    let nextSort = sort;
+    switch (key) {
+      case "name":
+        nextFilter = { ...filter, name: "" };
+        setNameInput("");
+        break;
+      case "shortName":
+        nextFilter = { ...filter, shortName: "" };
+        setShortNameInput("");
+        break;
+      case "created":
+        nextFilter = { ...filter, createdFrom: "", createdTo: "" };
+        break;
+      case "sort":
+        nextSort = DEFAULT_SORT;
+        break;
+    }
+    if (willEmptyAfter(nextFilter, nextSort)) {
+      pendingToggleFocus.current = true;
+    }
+    if (nextSort !== sort) onSortChange(nextSort);
+    if (nextFilter !== filter) onFilterChange(nextFilter);
   };
 
   const updateDate =
@@ -165,7 +188,17 @@ export function BanksFilters({
   // Reset clears the toolbar name search too, so its visibility must track
   // ALL filters — not just the panel-only count behind the badge.
   const canReset = hasActiveFilter(filter) || sortDrift;
-  const toggleLabel = hasActive ? `Filters, ${activeCount} active` : "Filters";
+  // Panel-scoped wording on purpose: the badge counts only panel-hosted filters
+  // (the name search lives in the toolbar and is summarised by the chip bar), so
+  // "in this panel" avoids reading as a grand total of every active filter.
+  const toggleLabel = hasActive ? `Filters, ${activeCount} in this panel` : "Filters";
+
+  useEffect(() => {
+    if (!canReset && pendingToggleFocus.current) {
+      pendingToggleFocus.current = false;
+      toggleRef.current?.focus();
+    }
+  }, [canReset]);
 
   const sortColumnValue = sort?.columnId ?? NONE_SORT_VALUE;
   const sortDirectionValue = sort?.direction ?? SortDirection.ASC;
@@ -209,6 +242,7 @@ export function BanksFilters({
         </div>
         <Button
           type="button"
+          ref={toggleRef}
           variant="outline"
           size="sm"
           onClick={() => setOpen((prev) => !prev)}
@@ -234,6 +268,10 @@ export function BanksFilters({
         </Button>
       </div>
 
+      {canReset ? (
+        <BanksActiveFilters chips={chips} onRemove={handleRemoveChip} onClearAll={handleClearAll} />
+      ) : null}
+
       {/*
         Animated expand/collapse via the grid-rows 0fr→1fr trick. INVARIANT:
         keep all box-model (padding / border / margin) on `__panel-fields`,
@@ -252,7 +290,7 @@ export function BanksFilters({
         <div className="banks-filters__panel-inner overflow-hidden">
           <div className="banks-filters__panel-fields border-border bg-muted/20 mt-3 rounded-md border p-3 sm:p-4">
             <div className="banks-filters__grid grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <FormField name="banks-filters-short-name" label="Short name">
+              <FormField name="banks-filters-short-name" label="Code">
                 <Input
                   type="text"
                   value={shortNameInput}
@@ -315,23 +353,6 @@ export function BanksFilters({
                 </select>
               </FormField>
             </div>
-
-            {canReset ? (
-              <div className="banks-filters__actions mt-3 flex justify-end">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleReset}
-                  aria-label="Reset filters and sort"
-                  title="Reset filters and sort"
-                  className="w-full sm:w-auto"
-                  data-testid="banks-filters__reset"
-                >
-                  Reset
-                </Button>
-              </div>
-            ) : null}
           </div>
         </div>
       </section>

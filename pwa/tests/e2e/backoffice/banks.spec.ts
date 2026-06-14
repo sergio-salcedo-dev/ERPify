@@ -50,6 +50,49 @@ test.describe("BackOffice - Banks CRUD", () => {
       await expect(page.getByTestId(`banks-table__delete-${SAMPLE_BANK_A.id}`)).toBeVisible();
     });
 
+    test("dismissing the overflow menu by an outside click does not leave the row actions revealed", async ({
+      page,
+    }) => {
+      await mockBanksApi(page, { list: "happy" });
+      await page.goto("/backoffice/banks");
+
+      const reveal = page
+        .getByTestId(`banks-table__row-${SAMPLE_BANK_A.id}`)
+        .locator(".banks-row-actions__reveal");
+
+      // At rest, on a fine pointer, the Copy/Edit cluster is hidden (opacity 0).
+      await expect(reveal).toHaveCSS("opacity", "0");
+
+      // Open the per-row overflow (⋯) menu…
+      await page.getByTestId(`banks-table__actions-${SAMPLE_BANK_A.id}`).click();
+      await expect(page.getByTestId(`banks-table__delete-${SAMPLE_BANK_A.id}`)).toBeVisible();
+
+      // …then dismiss it with a pointer click on neutral page space (top-left,
+      // away from row A so hover never keeps the cluster shown). The menu's
+      // inert backdrop consumes the click to close; this is a mouse dismissal,
+      // so the trigger regains focus without :focus-visible.
+      await page.mouse.click(2, 2);
+      await expect(page.getByTestId(`banks-table__delete-${SAMPLE_BANK_A.id}`)).toBeHidden();
+
+      // The menu restores focus to the always-visible ⋯ trigger, but that
+      // mouse-driven focus must not keep Copy/Edit revealed once the pointer
+      // has left the row.
+      await expect(reveal).toHaveCSS("opacity", "0");
+    });
+
+    test("hovering a row still reveals its copy and edit actions", async ({ page }) => {
+      await mockBanksApi(page, { list: "happy" });
+      await page.goto("/backoffice/banks");
+
+      const reveal = page
+        .getByTestId(`banks-table__row-${SAMPLE_BANK_A.id}`)
+        .locator(".banks-row-actions__reveal");
+
+      await expect(reveal).toHaveCSS("opacity", "0");
+      await page.getByTestId(`banks-table__row-${SAMPLE_BANK_A.id}`).hover();
+      await expect(reveal).toHaveCSS("opacity", "1");
+    });
+
     test("clicking the inline edit button navigates to the edit page", async ({ page }) => {
       await mockBanksApi(page, { list: "happy", get: "happy", bank: SAMPLE_BANK_A });
       await page.goto("/backoffice/banks");
@@ -233,7 +276,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       await page.getByTestId("bank-form__short-name").fill(overlong);
       await page.getByTestId("bank-form__submit").click();
 
-      await expect(page.getByText("The shortName must not exceed 50 characters.")).toBeVisible();
+      await expect(page.getByText("The code must not exceed 50 characters.")).toBeVisible();
     });
   });
 
@@ -328,22 +371,21 @@ test.describe("BackOffice - Banks CRUD", () => {
       await expect(panel).toBeHidden();
     });
 
-    test("Reset button is hidden when no filters are active and appears once a filter is set", async ({
+    test("Clear all button is hidden when no filters are active and appears once a filter is set", async ({
       page,
     }) => {
       await mockBanksApi(page, { list: "happy", list_banks: allBanks });
       await page.goto("/backoffice/banks");
 
-      await page.getByTestId("banks-filters__toggle").click();
-      // Reset is removed from the DOM (not just disabled) when nothing to reset.
-      await expect(page.getByTestId("banks-filters__reset")).toHaveCount(0);
+      // Clear all is removed from the DOM (not just disabled) when nothing to reset.
+      await expect(page.getByTestId("banks-filters__clear-all")).toHaveCount(0);
 
       await page.getByTestId("banks-filters__name").fill("cosmos");
-      await expect(page.getByTestId("banks-filters__reset")).toBeVisible();
+      await expect(page.getByTestId("banks-filters__clear-all")).toBeVisible();
 
-      await page.getByTestId("banks-filters__reset").click();
+      await page.getByTestId("banks-filters__clear-all").click();
       await expect(page.getByTestId("banks-filters__name")).toHaveValue("");
-      await expect(page.getByTestId("banks-filters__reset")).toHaveCount(0);
+      await expect(page.getByTestId("banks-filters__clear-all")).toHaveCount(0);
     });
 
     test("toggle button shows a count badge with the number of active filters", async ({
@@ -380,7 +422,6 @@ test.describe("BackOffice - Banks CRUD", () => {
       await expect(page.getByRole("cell", { name: "Acme Savings" })).toBeVisible();
       await expect(page.getByRole("cell", { name: "Cosmos Bank" })).toBeVisible();
 
-      await page.getByTestId("banks-filters__toggle").click();
       await page.getByTestId("banks-filters__name").fill("cosmos");
       await expect(page.getByRole("cell", { name: "Cosmos Bank" })).toBeVisible();
       await expect(page.getByRole("cell", { name: "Acme Savings" })).toBeHidden();
@@ -388,7 +429,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       // AC: filter input does not change the URL.
       await expect(page).toHaveURL(/\/backoffice\/banks$/);
 
-      await page.getByTestId("banks-filters__reset").click();
+      await page.getByTestId("banks-filters__clear-all").click();
       await expect(page.getByTestId("banks-filters__name")).toHaveValue("");
       await expect(page.getByRole("cell", { name: "Acme Savings" })).toBeVisible();
       await expect(page.getByRole("cell", { name: "Brookline Trust" })).toBeVisible();
@@ -530,14 +571,13 @@ test.describe("BackOffice - Banks CRUD", () => {
       await page.goto("/backoffice/banks");
 
       // Drift away from the defaults.
-      await page.getByTestId("banks-filters__toggle").click();
       await page.getByTestId("banks-filters__name").fill("cosmos");
       const nameHeader = page
         .getByRole("columnheader", { name: "Name", exact: true })
         .getByRole("button");
       await nameHeader.click(); // asc → desc
 
-      await page.getByTestId("banks-filters__reset").click();
+      await page.getByTestId("banks-filters__clear-all").click();
 
       await expect(page.getByTestId("banks-filters__name")).toHaveValue("");
       await expect(page.getByRole("columnheader", { name: "Name", exact: true })).toHaveAttribute(
@@ -655,22 +695,22 @@ test.describe("BackOffice - Banks CRUD", () => {
       );
     });
 
-    test("Reset button appears when sort drifts even without an active filter", async ({
+    test("Clear all button appears when sort drifts even without an active filter", async ({
       page,
     }) => {
       await mockBanksApi(page, { list: "happy", list_banks: allBanks });
       await page.goto("/backoffice/banks");
 
+      await expect(page.getByTestId("banks-filters__clear-all")).toHaveCount(0);
+
       await page.getByTestId("banks-filters__toggle").click();
-      await expect(page.getByTestId("banks-filters__reset")).toHaveCount(0);
-
       await page.getByTestId("banks-filters__sort-direction").selectOption("desc");
-      await expect(page.getByTestId("banks-filters__reset")).toBeVisible();
+      await expect(page.getByTestId("banks-filters__clear-all")).toBeVisible();
 
-      await page.getByTestId("banks-filters__reset").click();
+      await page.getByTestId("banks-filters__clear-all").click();
       await expect(page.getByTestId("banks-filters__sort-by")).toHaveValue("name");
       await expect(page.getByTestId("banks-filters__sort-direction")).toHaveValue("asc");
-      await expect(page.getByTestId("banks-filters__reset")).toHaveCount(0);
+      await expect(page.getByTestId("banks-filters__clear-all")).toHaveCount(0);
     });
 
     test("sort selected in the panel applies to the cards view as well", async ({ page }) => {
@@ -690,17 +730,36 @@ test.describe("BackOffice - Banks CRUD", () => {
         `banks-cards__item-${SAMPLE_BANK_D.id}`,
       );
     });
+
+    test("active-filter chips appear in the bar and remove individually", async ({ page }) => {
+      await mockBanksApi(page, { list: "happy", list_banks: allBanks });
+      await page.goto("/backoffice/banks");
+
+      await page.getByTestId("banks-filters__name").fill("cosmos");
+      // The chip bar is visible without opening the panel.
+      await expect(page.getByTestId("banks-filters__active")).toBeVisible();
+      await expect(page.getByTestId("banks-filters__chip-name")).toBeVisible();
+
+      await page.getByTestId("banks-filters__chip-name").click();
+      await expect(page.getByTestId("banks-filters__name")).toHaveValue("");
+      await expect(page.getByTestId("banks-filters__active")).toHaveCount(0);
+    });
   });
 
   test.describe("pagination", () => {
-    test("defaults to 25 rows on page 1, with Prev hidden and Next visible", async ({ page }) => {
+    // Cursor-only keyset navigation (PR3): there is no page number, so the prev/
+    // next pair is ALWAYS rendered and `disabled` when the envelope link is null
+    // (the D-A11y exception). Tests assert that state via toBeDisabled()/
+    // toBeEnabled() and the visible row set, never a "Page N" indicator.
+    test("defaults to 25 rows on the first page, with Prev disabled and Next enabled", async ({
+      page,
+    }) => {
       await mockBanksApi(page, { list: "happy", list_banks: makeBanks(60) });
       await page.goto("/backoffice/banks");
 
-      await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 1");
       await expect(page.getByTestId("banks-pagination__page-size")).toHaveValue("25");
-      await expect(page.getByTestId("banks-pagination__prev")).toBeHidden();
-      await expect(page.getByTestId("banks-pagination__next")).toBeVisible();
+      await expect(page.getByTestId("banks-pagination__prev")).toBeDisabled();
+      await expect(page.getByTestId("banks-pagination__next")).toBeEnabled();
       await expect(page.getByRole("cell", { name: "Bank 001", exact: true })).toBeVisible();
       await expect(page.getByRole("cell", { name: "Bank 025", exact: true })).toBeVisible();
       await expect(page.getByRole("cell", { name: "Bank 026", exact: true })).toBeHidden();
@@ -708,20 +767,21 @@ test.describe("BackOffice - Banks CRUD", () => {
       await expect(page.locator("tbody tr")).toHaveCount(25);
     });
 
-    test("Next advances to page 2 with a fresh row set", async ({ page }) => {
+    test("Next advances to the second page with a fresh row set and enables Prev", async ({
+      page,
+    }) => {
       await mockBanksApi(page, { list: "happy", list_banks: makeBanks(60) });
       await page.goto("/backoffice/banks");
 
       await page.getByTestId("banks-pagination__next").click();
 
-      await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 2");
-      await expect(page.getByTestId("banks-pagination__prev")).toBeVisible();
+      await expect(page.getByTestId("banks-pagination__prev")).toBeEnabled();
       await expect(page.getByRole("cell", { name: "Bank 026", exact: true })).toBeVisible();
       await expect(page.getByRole("cell", { name: "Bank 050", exact: true })).toBeVisible();
       await expect(page.getByRole("cell", { name: "Bank 025", exact: true })).toBeHidden();
     });
 
-    test("walks to the last page and hides Next; Prev returns to the previous page", async ({
+    test("walks to the last page and disables Next; Prev returns to the previous page", async ({
       page,
     }) => {
       await mockBanksApi(page, { list: "happy", list_banks: makeBanks(60) });
@@ -731,13 +791,12 @@ test.describe("BackOffice - Banks CRUD", () => {
       await nextBtn.click();
       await nextBtn.click();
 
-      await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 3");
-      await expect(nextBtn).toBeHidden();
       await expect(page.getByRole("cell", { name: "Bank 060", exact: true })).toBeVisible();
+      await expect(nextBtn).toBeDisabled();
 
       await page.getByTestId("banks-pagination__prev").click();
-      await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 2");
       await expect(page.getByRole("cell", { name: "Bank 050", exact: true })).toBeVisible();
+      await expect(nextBtn).toBeEnabled();
     });
 
     test("changing the page size to 50 collapses 60 rows into two pages", async ({ page }) => {
@@ -747,29 +806,30 @@ test.describe("BackOffice - Banks CRUD", () => {
       await page.getByTestId("banks-pagination__page-size").selectOption("50");
 
       await expect(page.locator("tbody tr")).toHaveCount(50);
-      await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 1");
-      await expect(page.getByTestId("banks-pagination__next")).toBeVisible();
+      await expect(page.getByTestId("banks-pagination__prev")).toBeDisabled();
+      await expect(page.getByTestId("banks-pagination__next")).toBeEnabled();
       await page.getByTestId("banks-pagination__next").click();
-      await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 2");
-      await expect(page.getByTestId("banks-pagination__next")).toBeHidden();
+      await expect(page.getByTestId("banks-pagination__next")).toBeDisabled();
       await expect(page.locator("tbody tr")).toHaveCount(10);
     });
 
-    test("changing the page size resets to page 1", async ({ page }) => {
+    test("changing the page size resets to the first page (cursors discarded)", async ({
+      page,
+    }) => {
       await mockBanksApi(page, { list: "happy", list_banks: makeBanks(60) });
       await page.goto("/backoffice/banks");
 
       await page.getByTestId("banks-pagination__next").click();
-      await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 2");
+      await expect(page.getByTestId("banks-pagination__prev")).toBeEnabled();
 
       await page.getByTestId("banks-pagination__page-size").selectOption("100");
-      await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 1");
-      await expect(page.getByTestId("banks-pagination__next")).toBeHidden();
-      await expect(page.getByTestId("banks-pagination__prev")).toBeHidden();
+      await expect(page.getByTestId("banks-pagination__prev")).toBeDisabled();
+      await expect(page.getByTestId("banks-pagination__next")).toBeDisabled();
+      await expect(page.getByRole("cell", { name: "Bank 001", exact: true })).toBeVisible();
       await expect(page.locator("tbody tr")).toHaveCount(60);
     });
 
-    test("offers 25, 50, 100, 500, and 1000 in the page-size dropdown", async ({ page }) => {
+    test("offers 25, 50, and 100 in the page-size dropdown (all <= wire cap)", async ({ page }) => {
       await mockBanksApi(page, { list: "happy", list_banks: makeBanks(30) });
       await page.goto("/backoffice/banks");
 
@@ -782,62 +842,67 @@ test.describe("BackOffice - Banks CRUD", () => {
       const optionValues = await select.evaluate((node) =>
         Array.from((node as HTMLSelectElement).options).map((option) => option.value),
       );
-      expect(optionValues).toEqual(["25", "50", "100", "500", "1000"]);
+      // Cursor-only (D-Cap): the former 500/1000 were dropped — every option is
+      // <= WIRE_MAX_LIMIT (100), so the UI can never request a page the API caps.
+      expect(optionValues).toEqual(["25", "50", "100"]);
 
-      // Sanity-check selecting each value still applies and clamps to page 1.
-      for (const v of ["25", "50", "100", "500", "1000"]) {
+      // Sanity-check selecting each value still applies and resets to the first page.
+      for (const v of ["25", "50", "100"]) {
         await select.selectOption(v);
         await expect(select).toHaveValue(v);
       }
     });
 
-    test("typing a filter that narrows below the page size hides Prev and Next and resets to page 1", async ({
+    test("typing a filter that narrows below the page size disables Prev and Next and resets to the first page", async ({
       page,
     }) => {
       await mockBanksApi(page, { list: "happy", list_banks: makeBanks(60) });
       await page.goto("/backoffice/banks");
 
-      // Move off page 1 first to prove the filter resets it.
+      // Move off the first page first to prove the filter resets it (cursors dropped).
       await page.getByTestId("banks-pagination__next").click();
-      await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 2");
+      await expect(page.getByTestId("banks-pagination__prev")).toBeEnabled();
 
-      // "Bank 005" is unique → 1 match → both nav buttons hidden, indicator on page 1.
+      // "Bank 005" is unique → 1 match → both nav buttons disabled, back on the first page.
       await page.getByTestId("banks-filters__toggle").click();
       await page.getByTestId("banks-filters__name").fill("Bank 005");
 
-      await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 1");
-      await expect(page.getByTestId("banks-pagination__prev")).toBeHidden();
-      await expect(page.getByTestId("banks-pagination__next")).toBeHidden();
+      await expect(page.getByTestId("banks-pagination__prev")).toBeDisabled();
+      await expect(page.getByTestId("banks-pagination__next")).toBeDisabled();
       await expect(page.getByRole("cell", { name: "Bank 005", exact: true })).toBeVisible();
       await expect(page.getByRole("cell", { name: "Bank 015", exact: true })).toBeHidden();
     });
 
-    test("sorting resets the indicator to page 1", async ({ page }) => {
+    test("sorting resets to the first page (Prev disabled, cursors discarded)", async ({
+      page,
+    }) => {
       await mockBanksApi(page, { list: "happy", list_banks: makeBanks(60) });
       await page.goto("/backoffice/banks");
 
       await page.getByTestId("banks-pagination__next").click();
-      await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 2");
+      await expect(page.getByTestId("banks-pagination__prev")).toBeEnabled();
 
+      // Toggle Name to descending — the query changes, cursors drop, the first
+      // page reloads from the top of the new ordering (Bank 060 leads).
       await page
         .getByRole("columnheader", { name: "Name", exact: true })
         .getByRole("button")
         .click();
 
-      await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 1");
+      await expect(page.getByTestId("banks-pagination__prev")).toBeDisabled();
+      await expect(page.getByRole("cell", { name: "Bank 060", exact: true })).toBeVisible();
     });
 
-    test("renders the pagination bar with no nav buttons when the list fits on one page", async ({
+    test("renders the pagination bar with prev/next disabled when the list fits on one page", async ({
       page,
     }) => {
       await mockBanksApi(page, { list: "happy", list_banks: makeBanks(5) });
       await page.goto("/backoffice/banks");
 
       await expect(page.getByRole("cell", { name: "Bank 005", exact: true })).toBeVisible();
-      await expect(page.getByTestId("banks-pagination__indicator")).toHaveText("Page 1");
       await expect(page.getByTestId("banks-pagination__page-size")).toBeVisible();
-      await expect(page.getByTestId("banks-pagination__prev")).toBeHidden();
-      await expect(page.getByTestId("banks-pagination__next")).toBeHidden();
+      await expect(page.getByTestId("banks-pagination__prev")).toBeDisabled();
+      await expect(page.getByTestId("banks-pagination__next")).toBeDisabled();
     });
   });
 
@@ -1021,16 +1086,16 @@ test.describe("BackOffice - Banks CRUD", () => {
 
       // Panel collapsed by default on mobile too.
       await expect(page.getByTestId("banks-filters__panel")).toBeHidden();
-      await expect(page.getByTestId("banks-filters__reset")).toHaveCount(0);
+      await expect(page.getByTestId("banks-filters__clear-all")).toHaveCount(0);
 
       await toggle.click();
       await expect(page.getByTestId("banks-filters__panel")).toBeVisible();
 
       // Name is a toolbar search — it does NOT contribute to the panel badge.
-      // Use a panel field (short name) to verify the badge and reset button.
+      // Use a panel field (short name) to verify the badge and clear-all button.
       await page.getByTestId("banks-filters__short-name").fill("acm");
       await expect(page.getByTestId("banks-filters__count")).toHaveText("1");
-      await expect(page.getByTestId("banks-filters__reset")).toBeVisible();
+      await expect(page.getByTestId("banks-filters__clear-all")).toBeVisible();
     });
 
     test("on mobile, switching to cards renders a single-column stack", async ({ page }) => {
@@ -1051,11 +1116,16 @@ test.describe("BackOffice - Banks CRUD", () => {
   });
 
   test.describe("nav", () => {
-    test("Banking > Banks appears in the sidebar and links to the list", async ({ page }) => {
+    test("Finance > Treasury > Banks appears in the sidebar and links to the list", async ({
+      page,
+    }) => {
       await mockBanksApi(page, { list: "empty" });
       await page.goto("/backoffice");
 
       const aside = page.locator("aside");
+      const treasuryItem = aside.getByRole("button", { name: "Treasury" });
+      await expect(treasuryItem).toBeVisible();
+      await treasuryItem.click();
       const banksItem = aside.getByRole("button", { name: "Banks" });
       await expect(banksItem).toBeVisible();
       await banksItem.click();

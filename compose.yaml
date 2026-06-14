@@ -146,7 +146,7 @@ services:
       DD_ENV: ${DD_ENV:-dev}
       DD_SERVICE: ${DD_WORKER_SERVICE:-erpify-messenger-worker}
       DD_VERSION: ${DD_VERSION:-dev}
-    command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600"]
+    command: ["php", "bin/console", "messenger:consume", "async", "scheduler_maintenance", "--time-limit=3600"]
 
   # Datadog Agent — OFF by default. Gated behind the "datadog" compose profile so the default
   # `make app.dev` / `make docker.up` never starts it: the image crash-loops without DD_API_KEY,

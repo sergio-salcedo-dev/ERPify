@@ -13,6 +13,14 @@
 export const Routes = {
   /** Public landing page. */
   HOME: "/",
+  /** Public login page. */
+  LOGIN: "/login",
+  /** Public registration page. */
+  REGISTER: "/register",
+  /** Public forgot-password page. */
+  FORGOT_PASSWORD: "/forgot-password",
+  /** Public reset-password page. */
+  RESET_PASSWORD: "/reset-password",
   /** Authenticated BackOffice root — every `/backoffice/*` path lives under this prefix. */
   BACKOFFICE: "/backoffice",
   /** Public service status page (Atlassian-style). Unauthenticated, like {@link HOME}. */
@@ -24,6 +32,6 @@ export const Routes = {
    * The route is gated behind `isDevToolsAvailable()` and short-
    * circuited by the proxy in production.
    */
-  DEV_TOOLS: "/dev-tools",
+  DEV_TOOLS: "/backoffice/dev-tools",
 } as const;
 export type Routes = (typeof Routes)[keyof typeof Routes];

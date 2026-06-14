@@ -30,18 +30,42 @@ export interface BankRealtimeHandlers {
   onReconnect?: () => void;
 }
 
-function isBankPrimitives(value: unknown): value is BankPrimitives {
+/** A count is valid only as a non-negative integer; everything else normalizes to 0. */
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0;
+}
+
+/**
+ * Validates the identity/lifecycle core of a bank payload and normalizes it to
+ * `BankPrimitives`. `accountCount` is a display-only signal: a payload from a
+ * pre-`accountCount` API pod (rolling deploy) or a replayed older event may omit
+ * it, so a missing or non-conforming value (not a non-negative integer) defaults
+ * to 0 rather than dropping the whole event — losing a created/updated delivery
+ * over a cosmetic field is the worse failure. The next list/detail fetch
+ * reconciles the count (stale-tolerant).
+ */
+function toBankPrimitives(value: unknown): BankPrimitives | null {
   if (typeof value !== "object" || value === null) {
-    return false;
+    return null;
   }
   const v = value as Record<string, unknown>;
-  return (
-    typeof v.id === "string" &&
-    typeof v.name === "string" &&
-    typeof v.shortName === "string" &&
-    typeof v.createdAt === "string" &&
-    typeof v.updatedAt === "string"
-  );
+  if (
+    typeof v.id !== "string" ||
+    typeof v.name !== "string" ||
+    typeof v.shortName !== "string" ||
+    typeof v.createdAt !== "string" ||
+    typeof v.updatedAt !== "string"
+  ) {
+    return null;
+  }
+  return {
+    id: v.id,
+    name: v.name,
+    shortName: v.shortName,
+    createdAt: v.createdAt,
+    updatedAt: v.updatedAt,
+    accountCount: isNonNegativeInteger(v.accountCount) ? v.accountCount : 0,
+  };
 }
 
 /** Parses a raw Mercure payload into a typed bank event, or null when unusable. */
@@ -51,14 +75,14 @@ export function parseBankRealtimeEvent(data: unknown): BankRealtimeEvent | null 
   }
   const payload = data as { type: unknown; bank?: unknown; id?: unknown };
   switch (payload.type) {
-    case "bank.created":
-      return isBankPrimitives(payload.bank)
-        ? { kind: "created", bank: Bank.fromPrimitives(payload.bank) }
-        : null;
-    case "bank.updated":
-      return isBankPrimitives(payload.bank)
-        ? { kind: "updated", bank: Bank.fromPrimitives(payload.bank) }
-        : null;
+    case "bank.created": {
+      const bank = toBankPrimitives(payload.bank);
+      return bank ? { kind: "created", bank: Bank.fromPrimitives(bank) } : null;
+    }
+    case "bank.updated": {
+      const bank = toBankPrimitives(payload.bank);
+      return bank ? { kind: "updated", bank: Bank.fromPrimitives(bank) } : null;
+    }
     case "bank.deleted":
       return typeof payload.id === "string" ? { kind: "deleted", id: payload.id } : null;
     default:

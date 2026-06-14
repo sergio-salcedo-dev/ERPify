@@ -1,0 +1,50 @@
+# bounded-context isolation gate allowlist.
+#
+# The gate (tests/Unit/Shared/Architecture/BoundedContextGateTest.php) fails the
+# build when a file in one business context imports another business context's
+# `Domain\`, `Application\`, or `Infrastructure\` namespace — see the Level 1 rule
+# in docs/rules/database.md#bounded-context-data-isolation-modular-monolith.
+# `Erpify\Shared\…` is always importable (shared kernel) and never needs listing.
+#
+# Lines starting with `#` and blank lines are ignored. Three entry forms:
+#
+#   <relative/path.php>
+#       Exempt the whole importer file. Coarse escape hatch — prefer a seam
+#       entry so a *new* bad import in the same file is still caught.
+#
+#   <relative/path.php> => <Imported\Fqcn>
+#       Exempt one specific (importer file, imported FQCN) seam. Preferred.
+#
+#   * => <Imported\Fqcn>
+#       A globally published seam: a context's published Application service
+#       interface or an integration-event class, importable from any context.
+#
+# Paths are POSIX, relative to api/, with no leading slash. Adding an entry is a
+# deliberate, reviewable exception: the only legitimate reasons are a published
+# cross-context seam (Application service interface / integration event) or a
+# coupling explicitly justified in an ADR.
+
+# Bank → BankAccount referential-integrity check. BankDeleter (Bank/Application)
+# consumes the BankAccountRepository *interface* to block deleting a bank that
+# still has accounts (clean 409 before the FK fires). Blessed by
+# docs/adr/bank-bankaccount-modeling.md (inverse direction, "el patrón correcto").
+src/Backoffice/Bank/Application/BankDeleter.php => Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository
+
+# Bank · account-count read model. BankAccountCountEnricher (Bank/Application) is the SINGLE
+# read-side seam that consumes BankAccountCounter — a read-only port defined in the BankAccount
+# context — for the batched anti-N+1 GROUP-BY query. BankSearcher, BankDetailFinder and
+# BankRealtimePublisherHandler all compose their counts through it, so the cross-context surface is
+# one import (not three) and a future switch to a denormalized bank.account_count localizes to that
+# class. The Bank domain never queries bank_account directly (CE-3, CE-4). Pattern: cross-context
+# read composition via a read-only port, same family as the referential-integrity check above.
+src/Backoffice/Bank/Application/BankAccountCountEnricher.php => Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountCounter
+
+# BankAccount → Bank existence guard. BankAccountSearcher (BankAccount/Application)
+# guards the parent bank's existence before listing its accounts via the published
+# BankExistenceChecker port (UUID-shape → 400, existence → 404 before any account
+# query) — the reusable cross-context existence seam documented in
+# api/docs/adding-endpoints.md. The port's own contract throws BankNotFoundException,
+# which the searcher propagates (and declares in its @throws), so the port and the
+# exception it raises are exempted together as one published contract.
+src/Backoffice/BankAccount/Application/BankAccountSearcher.php => Erpify\Backoffice\Bank\Domain\Repository\BankExistenceChecker
+src/Backoffice/BankAccount/Application/BankAccountSearcher.php => Erpify\Backoffice\Bank\Domain\Exception\BankNotFoundException

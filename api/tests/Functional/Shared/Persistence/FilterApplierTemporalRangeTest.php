@@ -244,6 +244,9 @@ final class FilterApplierTemporalRangeTest extends KernelTestCase
         // The real-world offset span is asymmetric (UTC-12..UTC+14), so both +25:00 and the
         // non-existent -13:00 are rejected. All are client input → a 422, never a 5xx.
         yield 'malformed' => ['not-a-date'];
+        // Parses warning-free (createFromFormat tolerates a missing leading zero) but is not the
+        // canonical byte form of any supported format — only the round-trip gate catches it.
+        yield 'non-canonical single-digit month' => ['2026-6-01T00:00:00+00:00'];
         yield 'lax relative form' => ['now'];
         yield 'date without time' => ['2026-01-01'];
         yield 'null byte' => ["2026-01-01T00:00:00+00:00\0evil"];
@@ -322,8 +325,8 @@ final class FilterApplierTemporalRangeTest extends KernelTestCase
 
     /**
      * Always rolls the transaction back, so persisted rows never leak into the shared dev
-     * database. A helper rather than a tearDown() override — rector and Psalm disagree on
-     * #[Override] for hooks with parent calls; the helper avoids the override entirely.
+     * database. A helper rather than a tearDown() override — rector strips #[Override] from
+     * hooks with parent calls; the helper avoids the override entirely.
      *
      * @param callable(): void $testBody
      */

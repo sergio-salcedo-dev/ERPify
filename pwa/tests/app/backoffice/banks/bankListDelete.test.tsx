@@ -6,6 +6,7 @@ import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
 import { toastNotifier } from "@/context/shared/infrastructure/Notification/Toast";
 import { ACME, BETA, searchPage } from "./_fixtures";
+import { confirmDeleteOf } from "./_interactions";
 
 /**
  * Counterpart to `bankDetailDelete.test.tsx`: deleting a bank from the LIST
@@ -119,34 +120,13 @@ const STALE_PROBLEM: ProblemDetails = {
   "correlation-id": "01926e7e-7b8a-7c4e-9f30-000000000404",
 };
 
-// The row menu is a Radix dropdown rendered through a portal: under jsdom
-// churn a just-opened menu can close again before its items render, so the
-// OPEN is retried (never the assertions — those stay single-shot).
-async function openDeleteItem(id: string): Promise<HTMLElement> {
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    fireEvent.click(screen.getByTestId(`banks-table__actions-${id}`));
-    try {
-      return await screen.findByTestId(`banks-table__delete-${id}`);
-    } catch {
-      // The item never rendered — the open lost the race; re-open the menu.
-    }
-  }
-  fireEvent.click(screen.getByTestId(`banks-table__actions-${id}`));
-  return screen.findByTestId(`banks-table__delete-${id}`);
-}
-
-async function confirmDeleteOf(id: string): Promise<void> {
-  fireEvent.click(await openDeleteItem(id));
-  fireEvent.click(await screen.findByTestId("banks-detail__delete-confirm"));
-}
-
 describe("BanksListPage — failed delete lands in the persistent error surface", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     searchRun.mockResolvedValue(searchPage([ACME, BETA]));
   });
 
-  it("409 bank-in-use: the dialog closes, the error persists above the list with no recovery action, the row stays", async () => {
+  it("409 bank-in-use: the dialog closes, the error persists above the list with a View accounts recovery, the row stays", async () => {
     deleteRun.mockRejectedValue(new HttpError(IN_USE_PROBLEM));
     render(<BanksListPage />);
     await screen.findByTestId(`banks-table__row-${ACME.id}`);
@@ -158,8 +138,12 @@ describe("BanksListPage — failed delete lands in the persistent error surface"
     expect(screen.queryByTestId("banks-detail__delete-dialog")).toBeNull();
     expect(surface).toHaveTextContent(IN_USE_PROBLEM.title);
     expect(screen.getByTestId("problem-display__type")).toHaveTextContent("bank-in-use");
-    // 409 carries no recovery action — recovery lives outside the list.
+    // A raced 409 recovers by routing to the bank's accounts surface, not a refresh.
     expect(screen.queryByTestId("banks-list__delete-error-refresh")).toBeNull();
+    expect(screen.getByTestId("banks-list__delete-error-view-accounts")).toHaveAttribute(
+      "href",
+      `/backoffice/banks/${ACME.id}/accounts`,
+    );
     // Copy affordances are present; the row was never removed.
     expect(screen.getByTestId("banks-list__delete-error__copy-json")).toBeInTheDocument();
     expect(screen.getByTestId(`banks-table__row-${ACME.id}`)).toBeInTheDocument();

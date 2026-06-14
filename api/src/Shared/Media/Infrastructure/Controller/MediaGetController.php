@@ -6,6 +6,7 @@ namespace Erpify\Shared\Media\Infrastructure\Controller;
 
 use Erpify\Shared\Infrastructure\Http\ContentAddressedHttpCache;
 use Erpify\Shared\Media\Domain\Entity\Media;
+use Erpify\Shared\Media\Domain\Exception\MediaNotFoundException;
 use Erpify\Shared\Media\Domain\Repository\MediaRepository;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -35,7 +36,7 @@ final readonly class MediaGetController
         $media = $this->mediaRepository->findByContentHash($hash);
 
         if (!$media instanceof Media) {
-            return new Response('Not Found', Response::HTTP_NOT_FOUND);
+            throw MediaNotFoundException::withContentHash($hash);
         }
 
         $response = new Response($media->getRawBytes());

@@ -12,14 +12,18 @@ const primitives = {
   shortName: "ACME",
   createdAt: "2026-01-01T00:00:00+00:00",
   updatedAt: "2026-01-02T00:00:00+00:00",
+  accountCount: 3,
 };
 
+// Cursor-only envelope v2 (PR3): directional flags, optional count, verbatim links.
 const pagination = {
-  currentPage: 2,
-  pageCount: 5,
+  hasNext: true,
+  hasPrev: true,
   count: 42,
-  hasMorePages: true,
-  cursor: "cursor-1",
+  links: {
+    next: "/api/v1/backoffice/banks?limit=25&after=cursor-next",
+    prev: "/api/v1/backoffice/banks?limit=25&before=cursor-prev",
+  },
 };
 
 function httpClientReturning(response: unknown): HttpClient {
@@ -36,10 +40,10 @@ function queryOf(httpClient: HttpClient): URLSearchParams {
   return new URLSearchParams(url.split("?")[1] ?? "");
 }
 
-const BASE_CRITERIA: BankSearchCriteria = { filters: [], sort: null, page: 1, limit: 25 };
+const BASE_CRITERIA: BankSearchCriteria = { filters: [], sort: null, limit: 25 };
 
 describe("ApiBankRepository.search", () => {
-  it("serializes filters, sort, page, cursor and limit into the request", async () => {
+  it("serializes filters, sort and limit — never a page or cursor (W11)", async () => {
     const httpClient = httpClientReturning({ data: [primitives], pagination });
     await new ApiBankRepository(httpClient).search({
       filters: [
@@ -47,8 +51,6 @@ describe("ApiBankRepository.search", () => {
         { field: "shortName", operator: "in", value: ["ES", "PT"] },
       ],
       sort: { field: "createdAt", direction: SortDirection.DESC },
-      page: 2,
-      cursor: "cursor-1",
       limit: 50,
     });
 
@@ -62,42 +64,48 @@ describe("ApiBankRepository.search", () => {
     expect(q.getAll("filters[1][value][]")).toEqual(["ES", "PT"]);
     expect(q.get("sort")).toBe("createdAt");
     expect(q.get("direction")).toBe("DESC"); // PWA enum is lowercase; the wire is uppercase
-    expect(q.get("page")).toBe("2");
-    expect(q.get("cursor")).toBe("cursor-1");
     expect(q.get("limit")).toBe("50");
+    // The query path NEVER serializes a cursor or page — continuing pages is the
+    // navigator following server links verbatim (W11). One serialization (W2).
+    expect(q.has("page")).toBe(false);
+    expect(q.has("cursor")).toBe(false);
+    expect(q.has("after")).toBe(false);
+    expect(q.has("before")).toBe(false);
     // No `paginationMode` is sent — the API defaults to LIGHT (no COUNT(*)).
     expect(q.has("paginationMode")).toBe(false);
   });
 
-  it("omits sort and cursor when absent", async () => {
+  it("omits sort when absent and clamps limit to the wire ceiling (D-Cap)", async () => {
     const httpClient = httpClientReturning({ data: [primitives], pagination });
-    await new ApiBankRepository(httpClient).search(BASE_CRITERIA);
+    await new ApiBankRepository(httpClient).search({ filters: [], sort: null, limit: 1000 });
 
     const q = queryOf(httpClient);
     expect(q.has("sort")).toBe(false);
     expect(q.has("direction")).toBe(false);
-    expect(q.has("cursor")).toBe(false);
-    expect(q.get("page")).toBe("1");
-    expect(q.get("limit")).toBe("25");
+    // A UI that somehow asks for 1000 is clamped to 100 before the wire — hard
+    // client enforcement complementary to the backend 422.
+    expect(q.get("limit")).toBe("100");
   });
 
-  it("maps the pagination envelope to a BankSearchPage", async () => {
+  it("maps the cursor-only envelope to a BankSearchPage", async () => {
     const httpClient = httpClientReturning({ data: [primitives], pagination });
     const page = await new ApiBankRepository(httpClient).search(BASE_CRITERIA);
 
     expect(page.banks).toHaveLength(1);
     expect(page.banks[0]).toBeInstanceOf(Bank);
     expect(page.banks[0].name).toBe("Acme Savings");
-    expect(page.cursor).toBe("cursor-1");
-    expect(page.currentPage).toBe(2);
-    expect(page.hasMorePages).toBe(true);
+    expect(page.hasNext).toBe(true);
+    expect(page.hasPrev).toBe(true);
+    expect(page.count).toBe(42);
+    // Links travel through verbatim — never rebuilt client-side (W2/W9).
+    expect(page.links).toEqual(pagination.links);
   });
 });
 
 describe("ApiBankRepository response guards", () => {
   const searchEnvelope = { data: [primitives], pagination };
 
-  it("passes a search guard that accepts the full envelope and rejects drifted shapes", async () => {
+  it("accepts the cursor-only envelope and rejects the legacy page-based shape", async () => {
     const httpClient = httpClientReturning(searchEnvelope);
     await new ApiBankRepository(httpClient).search(BASE_CRITERIA);
 
@@ -105,13 +113,35 @@ describe("ApiBankRepository response guards", () => {
     if (!guard) throw new Error("expected search() to pass a response guard");
 
     expect(guard(searchEnvelope)).toBe(true);
+    // Null links are valid (affordance absent) — the shape stays constant.
+    expect(
+      guard({
+        data: [primitives],
+        pagination: {
+          hasNext: false,
+          hasPrev: false,
+          count: null,
+          links: { next: null, prev: null },
+        },
+      }),
+    ).toBe(true);
     expect(guard({ data: [primitives] })).toBe(false); // pagination missing
-    expect(guard({ data: [primitives], pagination: { cursor: "c", hasMorePages: true } })).toBe(
-      false,
-    ); // currentPage missing
+    // The legacy page-based envelope MUST be rejected (drift guard).
+    expect(
+      guard({
+        data: [primitives],
+        pagination: { currentPage: 1, hasMorePages: true, cursor: "c" },
+      }),
+    ).toBe(false);
+    // links.next must be string | null, never another type.
+    expect(
+      guard({
+        data: [primitives],
+        pagination: { hasNext: true, hasPrev: false, count: null, links: { next: 1, prev: null } },
+      }),
+    ).toBe(false);
     expect(guard({ data: null, pagination })).toBe(false);
     expect(guard({ data: [{ id: 1 }], pagination })).toBe(false);
-    expect(guard({ data: { nested: [primitives] }, pagination: {} })).toBe(false); // old nested shape
     expect(guard(undefined)).toBe(false);
   });
 
@@ -129,16 +159,61 @@ describe("ApiBankRepository response guards", () => {
     await repository.create(input);
     await repository.update(primitives.id, input);
 
-    for (const guard of [
-      vi.mocked(httpClient.get).mock.calls[0][1],
-      vi.mocked(httpClient.post).mock.calls[0][2],
-      vi.mocked(httpClient.put).mock.calls[0][2],
-    ]) {
+    const findGuard = vi.mocked(httpClient.get).mock.calls[0][1];
+    const createGuard = vi.mocked(httpClient.post).mock.calls[0][2];
+    const updateGuard = vi.mocked(httpClient.put).mock.calls[0][2];
+
+    // All three guards accept a full response with accountCount.
+    for (const guard of [findGuard, createGuard, updateGuard]) {
       if (!guard) throw new Error("expected a single-envelope response guard");
       expect(guard({ data: primitives })).toBe(true);
       expect(guard(primitives)).toBe(false); // unwrapped payload
       expect(guard({ data: { ...primitives, id: 42 } })).toBe(false);
       expect(guard(null)).toBe(false);
+    }
+
+    // find() uses the strict read guard: accountCount must be a number.
+    if (!findGuard) throw new Error("expected find guard");
+    const { accountCount: _, ...withoutCount } = primitives;
+    expect(findGuard({ data: withoutCount })).toBe(false);
+
+    // create()/update() use the write-path guard: accountCount is optional.
+    for (const guard of [createGuard, updateGuard]) {
+      if (!guard) throw new Error("expected write guard");
+      expect(guard({ data: withoutCount })).toBe(true);
+    }
+  });
+
+  it("rejects a present accountCount that is not a non-negative integer", async () => {
+    const httpClient: HttpClient = {
+      get: vi.fn().mockResolvedValue({ data: primitives }),
+      post: vi.fn().mockResolvedValue({ data: primitives }),
+      put: vi.fn().mockResolvedValue({ data: primitives }),
+      delete: vi.fn(),
+    };
+    const repository = new ApiBankRepository(httpClient);
+    const input = { name: primitives.name, shortName: primitives.shortName };
+
+    await repository.find(primitives.id);
+    await repository.create(input);
+    await repository.update(primitives.id, input);
+
+    const findGuard = vi.mocked(httpClient.get).mock.calls[0][1];
+    const createGuard = vi.mocked(httpClient.post).mock.calls[0][2];
+    const updateGuard = vi.mocked(httpClient.put).mock.calls[0][2];
+
+    // `typeof NaN === "number"`, so NaN/Infinity/negative/non-integer counts would slip
+    // past a bare typeof check and render as "None"; the guard must reject them at the
+    // boundary, while a legitimate 0 (not "absent") must still pass.
+    for (const guard of [findGuard, createGuard, updateGuard]) {
+      if (!guard) throw new Error("expected a single-envelope response guard");
+      expect(guard({ data: { ...primitives, accountCount: Number.NaN } })).toBe(false);
+      expect(guard({ data: { ...primitives, accountCount: Number.POSITIVE_INFINITY } })).toBe(
+        false,
+      );
+      expect(guard({ data: { ...primitives, accountCount: -1 } })).toBe(false);
+      expect(guard({ data: { ...primitives, accountCount: 1.5 } })).toBe(false);
+      expect(guard({ data: { ...primitives, accountCount: 0 } })).toBe(true);
     }
   });
 });

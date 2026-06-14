@@ -6,6 +6,12 @@ export interface BankFixture {
   shortName: string;
   createdAt: string;
   updatedAt: string;
+  /**
+   * Associated-account count — the read-model field the API serializes on
+   * reads (GROUP_ACCOUNT_COUNT) and the list/single response guards require.
+   * Defaults to 0 (no accounts → the optimistic delete-guard stays inactive).
+   */
+  accountCount: number;
 }
 
 export const SAMPLE_BANK_A: BankFixture = {
@@ -14,6 +20,7 @@ export const SAMPLE_BANK_A: BankFixture = {
   shortName: "ACME",
   createdAt: "2026-01-01T10:00:00Z",
   updatedAt: "2026-04-15T14:30:00Z",
+  accountCount: 0,
 };
 
 export const SAMPLE_BANK_B: BankFixture = {
@@ -22,6 +29,7 @@ export const SAMPLE_BANK_B: BankFixture = {
   shortName: "BRT",
   createdAt: "2026-02-12T09:00:00Z",
   updatedAt: "2026-04-20T16:00:00Z",
+  accountCount: 0,
 };
 
 export const SAMPLE_BANK_C: BankFixture = {
@@ -30,6 +38,7 @@ export const SAMPLE_BANK_C: BankFixture = {
   shortName: "COSM",
   createdAt: "2026-03-20T08:00:00Z",
   updatedAt: "2026-04-22T12:00:00Z",
+  accountCount: 0,
 };
 
 export const SAMPLE_BANK_D: BankFixture = {
@@ -38,6 +47,7 @@ export const SAMPLE_BANK_D: BankFixture = {
   shortName: "DCU",
   createdAt: "2026-04-05T11:30:00Z",
   updatedAt: "2026-04-25T09:00:00Z",
+  accountCount: 0,
 };
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -60,6 +70,7 @@ export function makeBanks(count: number): BankFixture[] {
       shortName: `BNK${padded}`,
       createdAt: created,
       updatedAt: created,
+      accountCount: 0,
     };
   });
 }
@@ -80,8 +91,6 @@ export interface BanksApiScenario {
   bank?: BankFixture;
   /** Banks returned by the list endpoint when scenario.list === "happy". */
   list_banks?: BankFixture[];
-  /** When set, the happy list response carries `meta.nextCursor`. */
-  list_next_cursor?: string;
   /** Ids whose GET/{id} answers 404 `bank-not-found` (stale rows for the bulk pre-check). */
   stale_ids?: string[];
   /** Ids whose DELETE answers 409 `bank-in-use` regardless of `scenario.delete`. */
@@ -223,7 +232,8 @@ function compareField(a: BankFixture, b: BankFixture, field: string): number {
  * Emulates the server-driven search contract over the in-memory fixtures:
  * applies the wire `filters[]` then `sort`/`direction`. The PWA is now
  * server-driven, so the mock must do what the real endpoint does instead of
- * returning the whole list; pagination (page/limit) is applied by the caller.
+ * returning the whole list; the cursor-only slice (`limit` + opaque
+ * `after`/`before`) is applied by the caller.
  */
 function applyMockQuery(banks: BankFixture[], params: URLSearchParams): BankFixture[] {
   let result = [...banks];
@@ -238,6 +248,42 @@ function applyMockQuery(banks: BankFixture[], params: URLSearchParams): BankFixt
     result.sort((a, b) => direction * compareField(a, b, sort));
   }
   return result;
+}
+
+/**
+ * The mock's opaque cursor: the absolute start offset of the target page,
+ * base64url-encoded. The client treats it as opaque — it forwards the whole
+ * server-issued link verbatim and never decodes it; only this mock, standing in
+ * for the API's `CursorCodec`, reads it to compute the slice. `next` advances
+ * one page (`after`), `prev` steps back one page (`before`); both decode to the
+ * target page's start offset, so a next→prev round-trip lands on the same rows.
+ */
+function encodeCursorOffset(offset: number): string {
+  return Buffer.from(String(offset)).toString("base64url");
+}
+
+function decodeCursorOffset(params: URLSearchParams): number {
+  const raw = params.get("after") ?? params.get("before");
+  if (raw === null) {
+    return 0;
+  }
+  const decoded = Number(Buffer.from(raw, "base64url").toString());
+  return Number.isInteger(decoded) && decoded > 0 ? decoded : 0;
+}
+
+/**
+ * Build a server-composed relative pagination link: the current query with the
+ * cursor swapped for an `after`/`before` pointing at `offset`. Same shape the
+ * real `SearchResponder` emits — relative, same-origin, preserving
+ * `limit`/`sort`/`direction`/`filters[]` — so {@link ApiBankSearchNavigator}'s
+ * same-origin guard accepts it and the client replays it untouched (W9/W11).
+ */
+function buildCursorLink(url: URL, param: "after" | "before", offset: number): string {
+  const next = new URLSearchParams(url.searchParams);
+  next.delete("after");
+  next.delete("before");
+  next.set(param, encodeCursorOffset(offset));
+  return `${url.pathname}?${next.toString()}`;
 }
 
 export async function mockBanksApi(page: Page, scenario: BanksApiScenario): Promise<void> {
@@ -261,24 +307,30 @@ export async function mockBanksApi(page: Page, scenario: BanksApiScenario): Prom
           return;
         }
 
-        // Server-driven: apply the wire filters/sort, then slice by page/limit.
-        // The cursor is opaque — the client replays it but never reads it.
+        // Cursor-only (PR3): the opaque `after`/`before` cursor decodes to the
+        // target page's start offset; the envelope carries directional flags +
+        // verbatim `links`. No page number, no total (LIGHT → count null), no
+        // legacy `currentPage`/`pageCount`/`hasMorePages`/`cursor`.
         const base = scenario.list === "empty" ? [] : listBanks;
-        const params = new URL(route.request().url()).searchParams;
+        const url = new URL(route.request().url());
+        const params = url.searchParams;
         const matched = applyMockQuery(base, params);
         const limit = Number(params.get("limit")) || 25;
-        const currentPage = Number(params.get("page")) || 1;
-        const start = (currentPage - 1) * limit;
+        const start = decodeCursorOffset(params);
         const slice = matched.slice(start, start + limit);
+        const hasPrev = start > 0;
+        const hasNext = start + limit < matched.length;
 
         await fulfillJson(route, 200, {
           data: slice,
           pagination: {
-            currentPage,
-            pageCount: Math.max(1, Math.ceil(matched.length / limit)),
-            count: matched.length,
-            hasMorePages: start + limit < matched.length,
-            cursor: scenario.list_next_cursor ?? "cursor-hmac",
+            hasNext,
+            hasPrev,
+            count: null,
+            links: {
+              next: hasNext ? buildCursorLink(url, "after", start + limit) : null,
+              prev: hasPrev ? buildCursorLink(url, "before", Math.max(0, start - limit)) : null,
+            },
           },
         });
         return;
@@ -378,7 +430,7 @@ export async function mockBanksApi(page: Page, scenario: BanksApiScenario): Prom
                 violations: [
                   {
                     field: "shortName",
-                    message: "The shortName must not exceed 50 characters.",
+                    message: "The code must not exceed 50 characters.",
                   },
                 ],
               }),

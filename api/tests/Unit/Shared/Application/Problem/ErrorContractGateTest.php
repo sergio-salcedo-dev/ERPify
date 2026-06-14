@@ -4,12 +4,9 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Application\Problem;
 
-use FilesystemIterator;
+use Erpify\Tests\Support\ApiSourceFiles;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
-use RecursiveDirectoryIterator;
-use RecursiveIteratorIterator;
-use SplFileInfo;
 
 /**
  * Pins two error-contract drift invariants:
@@ -100,7 +97,7 @@ final class ErrorContractGateTest extends TestCase
     {
         // Pins that the iterator wiring resolves to a non-empty set — a silent
         // zero-file scan would make the contract vacuous and let drift merge.
-        $count = \iterator_count($this->phpFiles($this->apiSrcRoot()));
+        $count = \iterator_count(ApiSourceFiles::phpFiles($this->apiSrcRoot()));
 
         $this->assertGreaterThan(0, $count, 'Error-contract gate scanned zero files.');
     }
@@ -228,7 +225,7 @@ final class ErrorContractGateTest extends TestCase
         $apiPrefix = $apiRoot . '/';
         $hits = [];
 
-        foreach ($this->phpFiles($this->apiSrcRoot()) as $file) {
+        foreach (ApiSourceFiles::phpFiles($this->apiSrcRoot()) as $file) {
             $absolute = $file->getPathname();
             $relative = \str_starts_with($absolute, $apiPrefix)
                 ? \substr($absolute, \strlen($apiPrefix))
@@ -336,36 +333,6 @@ final class ErrorContractGateTest extends TestCase
         return \str_starts_with($trimmed, '//')
             || \str_starts_with($trimmed, '*')
             || \str_starts_with($trimmed, '#');
-    }
-
-    /**
-     * @return iterable<SplFileInfo>
-     */
-    private function phpFiles(string $root): iterable
-    {
-        if (!\is_dir($root)) {
-            return;
-        }
-
-        $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS),
-        );
-
-        foreach ($iterator as $file) {
-            if (!$file instanceof SplFileInfo) {
-                continue;
-            }
-
-            if (!$file->isFile()) {
-                continue;
-            }
-
-            if ('php' !== $file->getExtension()) {
-                continue;
-            }
-
-            yield $file;
-        }
     }
 
     /**

@@ -6,7 +6,7 @@
 export const BankProblemType = {
   /** The bank no longer exists (stale row) — recoverable with a list refresh. */
   NOT_FOUND: "bank-not-found",
-  /** The bank still has associated accounts (409) — recovery lives outside the list. */
+  /** The bank still has associated accounts (409) — recovery is a "View accounts" action on the mutation-error surface (a single delete deep-links; a bulk delete orients to the per-row guard). */
   IN_USE: "bank-in-use",
 } as const;
 

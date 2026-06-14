@@ -16,6 +16,7 @@ use Erpify\Shared\Domain\Search\Filter;
 use Erpify\Shared\Domain\Search\FilterOperator;
 use Erpify\Shared\Domain\Search\Filters;
 use Erpify\Shared\Domain\Uuid\Uuid;
+use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\Keyset\AppliedFilters;
 use InvalidArgumentException;
 use ValueError;
 
@@ -23,8 +24,8 @@ use ValueError;
  * Translates domain {@see Filters} into `andWhere` conditions with bound parameters, governed
  * by the repository's mandatory {@see SearchFieldMap} allow-list — the required parameter makes
  * it impossible to filter without one. Only conditions are added here: pagination, ordering,
- * joins and COUNT remain the monopoly of the Paginator and each repository's
- * `getSearchQueryBuilder()`.
+ * joins and COUNT remain the monopoly of the {@see DoctrineSearchEngine} and each repository's
+ * base query builder.
  *
  * Client input is never interpolated into DQL: the only interpolated fragments are the map's
  * `dqlPath` (repository-authored) and the generated parameter name; values always travel as
@@ -54,11 +55,22 @@ final readonly class FilterApplier
     /** Westernmost real-world UTC offset (UTC-12, e.g. Baker Island); west of it a bound is nonsensical. */
     private const int MIN_UTC_OFFSET_WEST_SECONDS = -12 * 3600;
 
-    public function apply(QueryBuilder $queryBuilder, Filters $filters, SearchFieldMap $fieldMap): void
+    /**
+     * Applies the allow-listed filters to the query builder and returns the receipt of what was
+     * actually applied — the {@see AppliedFilters} that feed step 4 of the engine pipeline (the
+     * sealed {@see Keyset\QueryExecutionTrace}) and therefore the cursor fingerprint (AR22). The
+     * receipt is the post-allow-list truth, never the raw request: every filter either passes the
+     * map and is translated, or throws, so a drift between "requested" and "applied" can never
+     * silently corrupt a cursor. The mutation of the query builder (`andWhere` + binds, LIKE
+     * escaping) is unchanged — only the return type is widened from `void`.
+     */
+    public function apply(QueryBuilder $queryBuilder, Filters $filters, SearchFieldMap $fieldMap): AppliedFilters
     {
         if ($filters->isEmpty()) {
-            return;
+            return AppliedFilters::none();
         }
+
+        $applied = [];
 
         foreach ($filters as $filter) {
             $mapping = $fieldMap->mappingFor($filter->field)
@@ -73,7 +85,10 @@ final readonly class FilterApplier
             }
 
             $this->applyFilter($queryBuilder, $mapping, $filter);
+            $applied[] = $filter;
         }
+
+        return new AppliedFilters(...$applied);
     }
 
     /**
@@ -224,10 +239,12 @@ final readonly class FilterApplier
     }
 
     /**
-     * Strict single-format parse: returns the datetime only when the value matches the format
-     * exactly (no trailing data, no warnings) and carries a real-world UTC offset. A value with
-     * a null byte makes `createFromFormat` throw a `ValueError`; that is client input too, so it
-     * is caught and reported as a 400 rather than escaping as an engine 500.
+     * Strict single-format parse: returns the datetime only when the parse yields a real
+     * instant, that instant carries a real-world UTC offset, and the value round-trips
+     * byte-identically under the format ({@see self::isCanonicalUnder()} — the deterministic
+     * canonicality gate). A value with a null byte makes `createFromFormat` throw a
+     * `ValueError`; that is client input too, so it is caught and reported as a 400 rather
+     * than escaping as an engine 500.
      */
     private function parseStrict(string $format, string $value): ?DateTimeImmutable
     {
@@ -237,22 +254,47 @@ final readonly class FilterApplier
             return null;
         }
 
-        $errors = DateTimeImmutable::getLastErrors();
-        $hasParseProblem = false !== $errors && ($errors['warning_count'] > 0 || $errors['error_count'] > 0);
+        // A real instant is required before any offset read; createFromFormat returns false on
+        // an unparseable value (and on a hard error), so this also subsumes the error path.
+        if (false === $dateTime) {
+            return null;
+        }
 
-        // `false === $dateTime` is kept first so the offset read only runs on a real instant.
         // The real-world offset span is asymmetric (UTC-12 to UTC+14), so each side is checked
         // separately; a symmetric abs() would admit the non-existent -13/-14h offsets.
         if (
-            false === $dateTime
-            || $hasParseProblem
-            || $dateTime->getOffset() > self::MAX_UTC_OFFSET_EAST_SECONDS
+            $dateTime->getOffset() > self::MAX_UTC_OFFSET_EAST_SECONDS
             || $dateTime->getOffset() < self::MIN_UTC_OFFSET_WEST_SECONDS
         ) {
             return null;
         }
 
+        if (!$this->isCanonicalUnder($dateTime, $format, $value)) {
+            return null;
+        }
+
         return $dateTime;
+    }
+
+    /**
+     * Round-trip gate — the sole canonicality check: the value is canonical under `$format`
+     * only if formatting the parsed instant reproduces it byte-identically. This is what makes
+     * the parse strict without trusting either of two unreliable signals — `createFromFormat()`
+     * tolerates non-canonical digit widths (e.g. a single-digit month) without raising a
+     * warning, and `getLastErrors()` exposes global state any adjacent datetime call may
+     * clobber. A byte-identical reproduction is immune to both: trailing data, calendar
+     * rollover and defaulted-missing fields all shift the render away from the input. UTC has
+     * two canonical spellings: `P` parses both but only emits `+00:00`, while `p` emits the
+     * literal `Z` a JS toISOString() client sends — so the round-trip accepts either spelling
+     * of the same instant.
+     */
+    private function isCanonicalUnder(DateTimeImmutable $dateTime, string $format, string $value): bool
+    {
+        if ($dateTime->format($format) === $value) {
+            return true;
+        }
+
+        return $dateTime->format(\str_replace('P', 'p', $format)) === $value;
     }
 
     /**
@@ -298,11 +340,11 @@ final readonly class FilterApplier
 
     private function uniqueParameterName(QueryBuilder $queryBuilder): string
     {
-        // Same stable naming scheme as AbstractDoctrineRepository::generateUniqueParameterName
-        // (private there; the applier is not a repository): deriving the name from the current
-        // DQL + parameter count keeps it consistent across requests so Doctrine reuses SQL
-        // cache files instead of minting ever-new ones. xxh128 is a fast non-cryptographic
-        // digest — it never guards a secret.
+        // A generated parameter name must be STABLE across executions of the same logical query:
+        // deriving it from the current DQL + parameter count keeps it consistent across requests so
+        // Doctrine reuses SQL cache files instead of minting an ever-new one per request (an unstable
+        // name grows the cache until it exhausts disk). xxh128 is a fast non-cryptographic digest —
+        // it never guards a secret.
         return 'p' . \hash('xxh128', $queryBuilder->getDQL()) . \count($queryBuilder->getParameters());
     }
 }

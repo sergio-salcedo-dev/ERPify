@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Shared\Application\Problem;
 
 use Erpify\Shared\Application\Problem\ProblemDetailsFactory;
+use Erpify\Shared\Domain\Exception\ClientError;
 use Erpify\Shared\Domain\Exception\Conflict;
 use Erpify\Shared\Domain\Exception\DomainException;
 use Erpify\Shared\Domain\Exception\Forbidden;
@@ -14,12 +15,14 @@ use Erpify\Shared\Domain\Exception\InvariantViolation;
 use Erpify\Shared\Domain\Exception\NotFound;
 use Erpify\Shared\Domain\Exception\RateLimited;
 use Erpify\Shared\Domain\Exception\Unauthenticated;
+use Erpify\Tests\Support\ApiSourceFiles;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use ReflectionClass;
+use Throwable;
 
 /**
  * Per-marker contract pin.
@@ -190,6 +193,145 @@ final class MarkerStatusMapContractTest extends TestCase
             $defaultTypeKeys,
             'MARKER_DEFAULT_TYPE_MAP keys must equal MARKER_STATUS_MAP keys.',
         );
+    }
+
+    /**
+     * Couples the RFC 9457 marker→status table to observability. A marker is a
+     * {@see ClientError} — and so is suppressed from Sentry by
+     * {@see \Erpify\Shared\Monitoring\Infrastructure\Sentry\SentryEventFilter} — IF AND ONLY IF
+     * its mapped HTTP status is 4xx. This encodes the rule "4xx are expected client errors, 5xx
+     * are server faults", not the weaker "every marker we have today is 4xx": the day a 5xx
+     * marker joins the map it fails UNLESS that marker deliberately does NOT extend ClientError,
+     * forcing a conscious "should this reach Sentry?" decision rather than silently leaking a 4xx
+     * (noise) or hiding a 5xx (lost error).
+     */
+    public function testMarkerIsClientErrorIffStatusIs4xx(): void
+    {
+        $statusMap = self::reflectConstant('MARKER_STATUS_MAP');
+
+        foreach ($statusMap as $markerClass => $status) {
+            $isClientStatus = \is_int($status) && $status >= 400 && $status < 500;
+
+            $this->assertSame(
+                $isClientStatus,
+                \is_subclass_of((string) $markerClass, ClientError::class),
+                \sprintf(
+                    'Marker %s maps to status %s, so it must %sextend ClientError.',
+                    (string) $markerClass,
+                    \is_int($status) ? (string) $status : \get_debug_type($status),
+                    $isClientStatus ? '' : 'NOT ',
+                ),
+            );
+        }
+    }
+
+    /**
+     * Dual-marker gate: every CONCRETE class under `api/src` implementing {@see Throwable} and
+     * two or more of the canonical markers MUST pin its `type` explicitly, so the wire
+     * `type`/`status` never silently depend on implements-clause order
+     * (`firstMatchingMarker` resolves by `class_implements` order when `type()` is empty).
+     *
+     * Detection is reflection-metadata ONLY — the file walk autoloads each class (definition,
+     * never construction) and no inspected class is instantiated or invoked. "Explicit type"
+     * means the class hierarchy below the {@see DomainException} base contributes either:
+     *   - a `TYPE` class constant holding a non-empty string (the codebase convention — the
+     *     base declares no `TYPE`, so any visible one was pinned by a subclass), or
+     *   - a `type()` override declared by a class other than {@see DomainException} (the base
+     *     method just echoes the constructor argument, whose empty-string default is the
+     *     "no explicit type" representation).
+     */
+    public function testDualMarkerThrowablesDeclareAnExplicitType(): void
+    {
+        $markerClasses = \array_keys(self::reflectConstant('MARKER_STATUS_MAP'));
+        $scanned = 0;
+        $violations = [];
+
+        foreach ($this->concreteThrowableClassesUnderApiSrc() as $reflectionClass) {
+            ++$scanned;
+
+            $markers = \array_values(\array_intersect($reflectionClass->getInterfaceNames(), $markerClasses));
+
+            if (\count($markers) < 2) {
+                continue;
+            }
+
+            if ($this->declaresExplicitType($reflectionClass)) {
+                continue;
+            }
+
+            $violations[] = \sprintf(
+                '%s implements markers [%s] without an explicit type — declare a non-empty TYPE '
+                . 'constant or override type(), so the mapped status/type cannot silently follow '
+                . 'the implements-clause order.',
+                $reflectionClass->getName(),
+                \implode(', ', $markers),
+            );
+        }
+
+        $this->assertGreaterThan(0, $scanned, 'Dual-marker gate scanned zero throwable classes under api/src.');
+        $this->assertSame(
+            [],
+            $violations,
+            "Dual-marker exceptions without an explicit type:\n" . \implode("\n", $violations),
+        );
+    }
+
+    /**
+     * Walks `api/src` and yields a {@see ReflectionClass} for every concrete (non-abstract,
+     * non-interface) class implementing {@see Throwable}. FQCNs are derived from the PSR-4
+     * mapping `Erpify\` → `src/`; files whose path does not resolve to a loadable class are
+     * skipped. The directory sweep is the shared {@see ApiSourceFiles} walk that
+     * {@see ErrorContractGateTest} also uses; this gate layers FQCN + reflection on top.
+     *
+     * @return iterable<ReflectionClass<object>>
+     */
+    private function concreteThrowableClassesUnderApiSrc(): iterable
+    {
+        $srcRoot = ApiSourceFiles::root();
+
+        foreach (ApiSourceFiles::phpFiles($srcRoot) as $file) {
+            $relative = \substr($file->getPathname(), \strlen($srcRoot) + 1, -\strlen('.php'));
+            $fqcn = 'Erpify\\' . \str_replace('/', '\\', $relative);
+
+            if (!\class_exists($fqcn)) {
+                continue;
+            }
+
+            $reflectionClass = new ReflectionClass($fqcn);
+
+            if ($reflectionClass->isAbstract()) {
+                continue;
+            }
+
+            if ($reflectionClass->isInterface()) {
+                continue;
+            }
+
+            if (!$reflectionClass->implementsInterface(Throwable::class)) {
+                continue;
+            }
+
+            yield $reflectionClass;
+        }
+    }
+
+    /**
+     * @param ReflectionClass<object> $reflectionClass
+     */
+    private function declaresExplicitType(ReflectionClass $reflectionClass): bool
+    {
+        $typeConstant = $reflectionClass->getReflectionConstant('TYPE');
+
+        if (false !== $typeConstant) {
+            $value = $typeConstant->getValue();
+
+            if (\is_string($value) && '' !== $value) {
+                return true;
+            }
+        }
+
+        return $reflectionClass->hasMethod('type')
+            && DomainException::class !== $reflectionClass->getMethod('type')->getDeclaringClass()->getName();
     }
 
     /**

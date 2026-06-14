@@ -6,12 +6,14 @@ namespace Erpify\Backoffice\BankAccount\Domain\Entity;
 
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
-use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountStatus;
 use Erpify\Shared\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Domain\Enum\Currency;
+use Erpify\Shared\Domain\Uuid\Uuid;
 use Erpify\Shared\Infrastructure\Validator\EnumType;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
+use Symfony\Component\Serializer\Attribute\Groups;
+use Symfony\Component\Serializer\Attribute\SerializedName;
 use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity]
@@ -19,15 +21,23 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[UniqueEntity(fields: ['iban'], message: 'This IBAN is already in use.')]
 final class BankAccount extends AggregateRoot
 {
+    /**
+     * Serialization group for the account read projection (the accounts-by-bank surface). It exposes
+     * the FULL canonical IBAN (upper-case, no separators): masking is a client concern, never the
+     * backend's — the value is classified PII and must never be logged.
+     */
+    public const string GROUP_READ = 'bankaccount:read';
+
     private function __construct(
         string $id,
-        #[ORM\ManyToOne(targetEntity: Bank::class)]
-        #[ORM\JoinColumn(name: 'bank_id', referencedColumnName: 'id', nullable: false)]
-        #[Assert\NotNull]
-        private Bank $bank,
+        #[ORM\Column(name: 'bank_id', type: Types::GUID)]
+        #[Assert\NotBlank]
+        #[Assert\Uuid]
+        private string $bankId,
         #[ORM\Column(length: 255)]
         #[Assert\NotBlank]
         #[Assert\Length(max: 255)]
+        #[Groups([self::GROUP_READ])]
         private string $holderName,
         /**
          * Stored canonicalized: upper-case, no whitespace (see {@see canonicalizeIban()}). The unique
@@ -42,15 +52,19 @@ final class BankAccount extends AggregateRoot
         #[Assert\NotBlank]
         #[Assert\Iban]
         #[Assert\Length(max: 34)]
+        #[Groups([self::GROUP_READ])]
         private string $iban,
         #[ORM\Column(length: 11, nullable: true)]
         #[Assert\Bic(ibanPropertyPath: 'iban')]
+        #[Groups([self::GROUP_READ])]
         private ?string $bic,
         #[ORM\Column(length: 100, nullable: true)]
         #[Assert\Length(max: 100)]
+        #[Groups([self::GROUP_READ])]
         private ?string $alias,
         #[ORM\Column(length: 3, enumType: Currency::class)]
         #[EnumType(Currency::class)]
+        #[Groups([self::GROUP_READ])]
         private Currency $currency,
         #[ORM\Column(type: Types::SMALLINT, enumType: BankAccountStatus::class)]
         #[EnumType(BankAccountStatus::class)]
@@ -63,7 +77,7 @@ final class BankAccount extends AggregateRoot
 
     public static function create(
         string $id,
-        Bank $bank,
+        string $bankId,
         string $holderName,
         string $iban,
         ?string $bic = null,
@@ -71,9 +85,11 @@ final class BankAccount extends AggregateRoot
         Currency $currency = Currency::EUR,
         BankAccountStatus $status = BankAccountStatus::ACTIVE,
     ): self {
+        Uuid::ensure($bankId);
+
         return new self(
             $id,
-            $bank,
+            $bankId,
             $holderName,
             self::canonicalizeIban($iban),
             null === $bic ? null : \strtoupper($bic),
@@ -83,9 +99,9 @@ final class BankAccount extends AggregateRoot
         );
     }
 
-    public function getBank(): Bank
+    public function getBankId(): string
     {
-        return $this->bank;
+        return $this->bankId;
     }
 
     public function getIban(): string
@@ -116,6 +132,18 @@ final class BankAccount extends AggregateRoot
     public function getStatus(): BankAccountStatus
     {
         return $this->status;
+    }
+
+    /**
+     * Wire projection of {@see $status}: the human-readable label (`active`/`inactive`/`closed`)
+     * under the `status` key, never the raw backing int. The enum property itself carries no
+     * serializer group so only this accessor reaches the payload.
+     */
+    #[Groups([self::GROUP_READ])]
+    #[SerializedName('status')]
+    public function getStatusLabel(): string
+    {
+        return $this->status->getLabel();
     }
 
     private static function canonicalizeIban(string $iban): string

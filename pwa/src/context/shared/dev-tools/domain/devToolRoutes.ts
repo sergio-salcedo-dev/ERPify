@@ -2,8 +2,8 @@ import { Routes } from "@/context/shared/domain/types/routes";
 
 /**
  * Top-level URL prefixes that belong to the dev-tools surface. The hub at
- * `/dev-tools` (sourced from {@link Routes.DEV_TOOLS}) covers itself plus
- * every nested tool (`/dev-tools/error-gallery`, future tools, …) via the
+ * `/backoffice/dev-tools` (sourced from {@link Routes.DEV_TOOLS}) covers itself plus
+ * every nested tool (`/backoffice/dev-tools/error-gallery`, future tools, …) via the
  * `:path*` matcher; `/dev-throw` is a sibling fixture used by the E2E
  * spec, not a tool entry, so it gets its own prefix.
  *

@@ -18,24 +18,30 @@ Filterable lists resolve filtering, sorting, and pagination on the **server**, t
    inclusive ISO bounds via `dateTimeProvider` (`formatToISO(startOfDay(parseISO(v)))` for `gte`,
    `endOfDay` for `lte`). Map the UI sort to `{ field, direction }`.
 
-2. **Give the repository a `search(criteria)`.** Criteria carries `{ filters, sort, page, cursor?, limit }`.
-   In the API adapter, `buildSearchParams(filters)` then append `sort` + `direction`
-   (`direction.toUpperCase()` — the API enum is `ASC`/`DESC`), `page`, `cursor` (only when navigating
-   beyond page 1), and `limit`. Send **no** `paginationMode` for a prev/next cursor list — the API defaults to
-   `LIGHT` (no `COUNT(*)`; `hasMorePages` from a single fetch). Return
-   `{ banks, cursor, currentPage, hasMorePages }` from the `{ data, pagination }` envelope. Only a view that
+2. **Give the repository a link-free `search(criteria)` + a navigator (cursor-only, W11).** The **domain**
+   port `search(criteria)` carries `{ filters, sort, direction, limit }` — **no** `page`/`cursor`. In the
+   API adapter, `buildSearchParams(filters)` then append `sort` + `direction` (`direction.toUpperCase()` —
+   the API enum is `ASC`/`DESC`) and `limit` (clamped to `WIRE_MAX_LIMIT` = 100). Send **no** `paginationMode`
+   for a prev/next list — the API defaults to `LIGHT` (no `COUNT(*)`; `count: null`). Return
+   `{ banks } & PageEnvelope` (`{ hasNext, hasPrev, count, links: { next, prev } }`) from the
+   `{ data, pagination }` envelope. For **next/prev**, the **application** port
+   `BankSearchNavigator.follow(link)` (impl `ApiBankSearchNavigator`) re-sends `links.next!`/`links.prev!`
+   **verbatim** after a same-origin/relative `safeHref` check — it never parses the link. Only a view that
    renders a real total appends `paginationMode=detailed` and surfaces `pagination.count` as `totalCount`.
 
-3. **Wire the page.** The list state holds `filter`, `sort`, `pageSize`, `page`, and the last response's
-   `cursor` (in a ref). Refetch whenever `filter`/`sort`/`page`/`pageSize` change. Use a monotonic request
-   token so a slow response can never overwrite a newer one (the debounce↔pagination race). Drive `hasNext`
-   from `hasMorePages` and `hasPrev` from `currentPage > 1` (no total under `LIGHT`).
+3. **Wire the page.** The list state holds `filter`, `sort`, `pageSize`, the current `PageEnvelope`, and the
+   `activeLink` (state — writing a ref during render is banned by the repo's React rules). First page / any
+   query change → `search(criteria)` (no cursor); next/prev → `setActiveLink(envelope.links.next)` and load
+   via `navigator.follow(activeLink)`. Use a monotonic request token so a slow response can never overwrite a
+   newer one (the debounce↔pagination race). Drive `hasNext`/`hasPrev` straight from the envelope flags; a
+   `null` link renders a **disabled (not hidden)** prev/next control (D-A11y).
 
 ## Load-bearing rules
 
-- **Discard the cursor on any query change.** A change to a filter, the sort, or the page size resets to
-  page 1 — which sends no cursor — so the stale cursor is dropped by construction. Only sequential prev/next
-  replays the last cursor. The cursor is opaque: never interpret or fabricate it client-side.
+- **Discard the cursor on any query change (W8).** A change to a filter, the sort, or the page size resets
+  to the first page via `search(criteria)` — which sends no cursor — so the stale cursor is dropped by
+  construction. Only sequential prev/next follows the last response's `links`. The cursor is opaque and lives
+  **inside** `links.next`/`links.prev`: never parse, interpret or fabricate it client-side (W11).
 - **Reconcile realtime by refetching.** A Mercure `created`/`updated`/`deleted` cannot be placed on the
   current page client-side (the filter/sort/keyset live on the server), so each event triggers a coalesced
   silent refetch of the current page. Suppress the refetch while an optimistic bulk delete owns the page.

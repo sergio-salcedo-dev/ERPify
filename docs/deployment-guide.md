@@ -28,7 +28,8 @@ Defined in `compose.prod.yaml` on top of the base stack:
 - `php` — FrankenPHP + Symfony API (terminates TLS, reverse-proxies `/` to `pwa:3000`).
 - `pwa` — Next.js production (`next start -p 80` inside the container).
 - `postgres` — PostgreSQL.
-- `messenger_worker` — **separate** Symfony Messenger consumer (handlers must be idempotent; at-least-once delivery).
+- `messenger_worker` — **separate** Symfony Messenger consumer of the `async` transport (handlers must be idempotent; at-least-once delivery). Safe to scale horizontally (`ENV=prod make docker.up` then `docker compose … up -d --scale messenger_worker=N`): the Doctrine transport's `FOR UPDATE SKIP LOCKED` hands each queued message to exactly one replica.
+- `scheduler_worker` — **single-replica** consumer of the `scheduler_maintenance` transport (the daily `handled_domain_event` prune). Symfony Scheduler derives ticks from an in-process clock, so it is isolated here to fire once; on the scaled `messenger_worker` pool it would emit one tick per replica. **Must stay at `replicas: 1`** — the lock-based single-pool alternative is tracked in #261.
 - Mailer pipeline (async via Messenger).
 - Mercure Hub — behind `/.well-known/mercure` (JWT-signed).
 
@@ -131,6 +132,11 @@ This leaves only real HTTP requests traced. **Dev** traces at `traces_sample_rat
 (100% — cheap locally, full DB/HTTP waterfall, N+1 visible) opt-in via the
 `SENTRY_DSN` in `api/.env.local`; **prod** stays at `~0.2`. If you add a *new*
 long-running console command, exclude it here too.
+
+A second, **dev-only** worker gotcha (the same long-lived process, a different
+failure mode) is documented separately: the worker can crash on a dev DI
+container that the web `php` container recompiled out from under it — see
+[`troubleshooting/sentry-messenger-worker-dev-cache-crash.md`](./troubleshooting/sentry-messenger-worker-dev-cache-crash.md).
 
 ## Observability — Datadog APM (optional, off by default)
 
@@ -240,10 +246,12 @@ Step-by-step (incl. internal-CA trust and `/etc/hosts`) and VPS promotion:
 
 - Images are immutable (digest-pinned). Redeploy the previous image tag.
 - Roll back DB changes only if the migration is reversible — otherwise restore from the most recent Postgres backup and replay.
+- A restore must pair the Postgres backup with the **`storage_data`** volume snapshot from the same point in time — `bank.stored_object_*` rows reference `objects/{hash}` files in that volume (see the backups item in [`docs-info/object-storage.md`](../docs-info/object-storage.md)).
 
 ## Operational notes
 
-- `make docker.down.clean-volumes` drops volumes and is **destructive** — never on prod without explicit confirmation.
+- `make docker.down.clean-volumes` drops volumes and is **destructive** — never on prod without explicit confirmation. On prod that includes the two stateful volumes: `database_data` **and** `storage_data` (uploaded stored-objects).
 - Do not run `db.reset` outside dev/ci.
 - DNS, CORS origins, and Mercure cookie/CORS config: see [`pwa/docs/production-deployment.md`](../pwa/docs/production-deployment.md).
+- Backups: `make backup.prod` takes the paired Postgres dump + object-storage archive; cron, offsite sync, restore and the quarterly drill are in [`vps-deployment.md`](./vps-deployment.md) § Backups.
 - Xdebug must be disabled in prod images.

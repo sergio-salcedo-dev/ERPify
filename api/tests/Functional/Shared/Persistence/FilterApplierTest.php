@@ -16,6 +16,7 @@ use Erpify\Shared\Domain\Search\Filters;
 use Erpify\Shared\Domain\Uuid\Uuid;
 use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\FieldMapping;
 use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\FilterApplier;
+use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\Keyset\AppliedFilters;
 use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\NormalizedTextFieldNormalizer;
 use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\SearchFieldMap;
 use InvalidArgumentException;
@@ -43,6 +44,7 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 #[CoversClass(SearchFieldMap::class)]
 #[CoversClass(FieldMapping::class)]
 #[CoversClass(NormalizedTextFieldNormalizer::class)]
+#[CoversClass(AppliedFilters::class)]
 final class FilterApplierTest extends KernelTestCase
 {
     private EntityManagerInterface $entityManager;
@@ -231,10 +233,30 @@ final class FilterApplierTest extends KernelTestCase
         $queryBuilder = $this->bankQueryBuilder();
         $dqlBefore = $queryBuilder->getDQL();
 
-        $this->filterApplier->apply($queryBuilder, Filters::none(), $this->bankFieldMap());
+        $receipt = $this->filterApplier->apply($queryBuilder, Filters::none(), $this->bankFieldMap());
 
         $this->assertSame($dqlBefore, $queryBuilder->getDQL());
         $this->assertCount(0, $queryBuilder->getParameters());
+        // The receipt of an empty input is the empty receipt — the trace's filters segment is blank.
+        $this->assertSame([], $receipt->all());
+    }
+
+    public function testReturnsTheReceiptOfTheFiltersActuallyApplied(): void
+    {
+        $queryBuilder = $this->bankQueryBuilder();
+        $name = Filter::eq('name', 'BBVA');
+        $shortName = Filter::contains('shortName', 'BB');
+
+        $receipt = $this->filterApplier->apply(
+            $queryBuilder,
+            Filters::fromList([$name, $shortName]),
+            $this->bankFieldMap(),
+        );
+
+        // The receipt is the post-allow-list truth that feeds the trace/fingerprint (AR22): every
+        // passing filter, preserving the domain objects — not the raw request, not a dropped subset.
+        $this->assertSame([$name, $shortName], $receipt->all());
+        $this->assertCount(2, $queryBuilder->getParameters());
     }
 
     public function testFieldOutsideTheAllowListIsRejected(): void
@@ -317,7 +339,7 @@ final class FilterApplierTest extends KernelTestCase
     /**
      * Runs the test body inside a transaction that is always rolled back, so persisted rows
      * never leak into the shared dev database. Deliberately not a tearDown() override —
-     * rector and Psalm disagree on #[Override] for hooks with parent calls; a helper avoids
+     * rector strips #[Override] from hooks with parent calls; a helper avoids
      * the override entirely.
      *
      * @param callable(): void $testBody

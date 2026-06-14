@@ -8,7 +8,7 @@ Feature: Doctrine query stats on bank CRUD
     When I send a "GET" request to "/backoffice/banks/11111111-1111-7000-8000-000000000001"
     Then the response status code should be 200
     And a request contains "SELECT" for doctrine connection "default"
-    And 1 request got executed only for doctrine connection "default"
+    And 2 requests got executed only for doctrine connection "default"
 
   Scenario: Listing banks issues a SELECT on the default connection
     When I send a "GET" request to "/backoffice/banks"

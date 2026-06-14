@@ -11,7 +11,7 @@ namespace Erpify\Shared\Infrastructure\Persistence\Doctrine\Search;
  * or vice versa), and ordering only needs name → DQL path — no operators, normalizers or flags.
  *
  * Built exclusively inside each concrete repository, where the schema knowledge lives. A field
- * without an entry is not sortable: {@see AbstractDoctrineSearchRepository} rejects it with an
+ * without an entry is not sortable: {@see DoctrineSearchEngine} rejects it with an
  * `UnknownSortField` (400) rather than ever interpolating the client value into DQL.
  */
 final readonly class SortFieldMap

@@ -104,12 +104,13 @@ jobs:
         run: make php.behat.install
 
       # Check-only sweep (fails on drift instead of auto-fixing) fanned out
-      # read-only. phpstan + psalm are the two CPU-heavy targets; the rest are light
+      # read-only. phpstan is the CPU-heavy target; the rest are light
       # or I/O-bound (doctrine + error-contract hit the DB/console). -j4 deliberately
       # oversubscribes the 2-core runner so the light targets fill the gaps while the
-      # analyzers run — GitHub runners have ~7GB RAM, so 4 PHP processes fit easily.
+      # analyzer runs — GitHub runners have ~7GB RAM, so 4 PHP processes fit easily.
       # Revisit from the step timing if a run shows it's purely CPU-bound (then -j2/3).
-      # --output-sync keeps logs grouped per-tool. (phpcs + psalm both gated — see #97.)
+      # --output-sync keeps logs grouped per-tool. (phpcs gated via php.cs.dry-run.
+      # Psalm general analysis retired — taint-only now runs in the api-taint job.)
       - name: PHP lint (check, parallel)
         run: make -j4 --output-sync=target php.quality.dry-run
 

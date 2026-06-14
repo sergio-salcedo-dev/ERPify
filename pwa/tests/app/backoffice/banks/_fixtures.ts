@@ -3,15 +3,17 @@ import type { BankSearchPage } from "@/context/backoffice/bank/domain/BankReposi
 
 /**
  * Builds a `BankSearchPage` in the shape `BackOfficeSearchBanks.run` resolves to
- * under the server-driven contract. Defaults to a complete single page (page 1,
- * no further pages); pass `overrides` to vary any field.
+ * under the cursor-only contract (PR3). Defaults to a complete single page (no
+ * prev/next affordance, null links, LIGHT `count`); pass `overrides` to vary any
+ * field — e.g. `{ hasNext: true, links: { next: "/api/...", prev: null } }`.
  */
 export function searchPage(banks: Bank[], overrides: Partial<BankSearchPage> = {}): BankSearchPage {
   return {
     banks,
-    cursor: "",
-    currentPage: 1,
-    hasMorePages: false,
+    hasNext: false,
+    hasPrev: false,
+    count: null,
+    links: { next: null, prev: null },
     ...overrides,
   };
 }
@@ -28,6 +30,7 @@ export const ACME = Bank.fromPrimitives({
   shortName: "ACME",
   createdAt: "2026-01-01T10:00:00Z",
   updatedAt: "2026-04-15T14:30:00Z",
+  accountCount: 0,
 });
 
 export const BETA = Bank.fromPrimitives({
@@ -36,4 +39,5 @@ export const BETA = Bank.fromPrimitives({
   shortName: "BETA",
   createdAt: "2026-01-02T10:00:00Z",
   updatedAt: "2026-04-16T14:30:00Z",
+  accountCount: 0,
 });

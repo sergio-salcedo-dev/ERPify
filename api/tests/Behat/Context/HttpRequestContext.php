@@ -30,6 +30,8 @@ use UnexpectedValueException;
  *
  * @SuppressWarnings("PHPMD.TooManyPublicMethods")
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
+ * @SuppressWarnings("PHPMD.ExcessiveClassComplexity")
+ * @SuppressWarnings("PHPMD.ExcessiveClassLength")
  */
 class HttpRequestContext extends AbstractContext
 {
@@ -338,8 +340,114 @@ class HttpRequestContext extends AbstractContext
     #[Given('I send a :method request to :url using the JSON node :node from the previous response')]
     public function iSendARequestUsingJsonNodeFromPreviousResponse(string $method, string $url, string $node): void
     {
-        $payload = JsonDecoder::decodeArray((string) $this->getLastResponse()->getContent());
-        $value = $payload;
+        $value = $this->jsonNodeFromPreviousResponse($node);
+
+        if (!\is_scalar($value)) {
+            throw new UnexpectedValueException(
+                \sprintf('JSON node "%s" is not a scalar (got %s).', $node, \get_debug_type($value)),
+            );
+        }
+
+        $this->iSendARequestTo($method, \str_replace('{value}', \rawurlencode((string) $value), $url));
+    }
+
+    /**
+     * Follow a server-supplied navigation link VERBATIM (cursor-only pagination, W11): JSON node
+     * `$node` (e.g. `pagination.links.next`) is a complete relative path already carrying the opaque
+     * cursor and preserved params — navigated AS-IS, never decoded/re-encoded/rebuilt. It includes
+     * the full route path (`/api/v1/...`), so `baseUrl` is NOT re-applied (sent host-relative). A
+     * `null` link is unfollowable — the step fails loudly rather than degrade silently.
+     *
+     * @throws JsonException
+     */
+    #[Given('I follow the :node link from the previous response')]
+    public function iFollowTheLinkFromThePreviousResponse(string $node): void
+    {
+        $this->iSendARequestTo('GET', 'http://localhost' . $this->followableLinkFromPreviousResponse($node));
+    }
+
+    /**
+     * Follow a navigation link as above, but with EXACTLY ONE query param's value replaced.
+     * Every other param — the opaque `after`/`before` cursor included — and the path travel
+     * byte-identical: the query string is never decoded and rebuilt as a whole, so a rejection
+     * of the resulting request provably targets the overridden-param MISMATCH (e.g. a cursor
+     * fingerprint minted under a different `sort`), never accidental cursor corruption.
+     */
+    #[Given('I follow the :node link from the previous response overriding the :param query param with :value')]
+    public function iFollowTheLinkFromThePreviousResponseOverridingAQueryParam(
+        string $node,
+        string $param,
+        string $value,
+    ): void {
+        $link = $this->followableLinkFromPreviousResponse($node);
+
+        $this->iSendARequestTo('GET', 'http://localhost' . $this->withOverriddenQueryParam($link, $param, $value));
+    }
+
+    /**
+     * Resolves JSON node `$node` from the previous response and validates it is a followable
+     * (non-empty string) link. Shared by the verbatim and the param-overriding follow steps.
+     */
+    private function followableLinkFromPreviousResponse(string $node): string
+    {
+        $value = $this->jsonNodeFromPreviousResponse($node);
+
+        if (!\is_string($value) || '' === $value) {
+            throw new UnexpectedValueException(
+                \sprintf('JSON node "%s" is not a followable link (got %s).', $node, \get_debug_type($value)),
+            );
+        }
+
+        return $value;
+    }
+
+    /**
+     * Replaces the value of every occurrence of `$param` in the link's raw query string,
+     * splitting only on `&` and the first `=` of each pair so all other pairs keep their
+     * original bytes. A link without the param fails loudly — silently appending would test a
+     * different request than the scenario states.
+     */
+    private function withOverriddenQueryParam(string $link, string $param, string $value): string
+    {
+        $separatorPosition = \strpos($link, '?');
+
+        if (false === $separatorPosition) {
+            throw new UnexpectedValueException(
+                \sprintf('Link "%s" carries no query string to override "%s" in.', $link, $param),
+            );
+        }
+
+        $pairs = \explode('&', \substr($link, $separatorPosition + 1));
+        $overridden = false;
+
+        foreach ($pairs as $index => $pair) {
+            if (\explode('=', $pair, 2)[0] !== $param) {
+                continue;
+            }
+
+            $pairs[$index] = $param . '=' . \rawurlencode($value);
+            $overridden = true;
+        }
+
+        if (!$overridden) {
+            throw new UnexpectedValueException(
+                \sprintf('Query param "%s" not found in link "%s".', $param, $link),
+            );
+        }
+
+        return \substr($link, 0, $separatorPosition + 1) . \implode('&', $pairs);
+    }
+
+    /**
+     * Resolve a (possibly nested, dot-separated) JSON node from the previous response's decoded
+     * body — e.g. `pagination.links.next`. Throws if any path segment is missing. Shared by the
+     * cursor-substitution and link-following steps above.
+     *
+     * @throws JsonException
+     */
+    private function jsonNodeFromPreviousResponse(string $node): mixed
+    {
+        $value = JsonDecoder::decodeArray((string) $this->getLastResponse()->getContent());
 
         foreach (\explode('.', $node) as $segment) {
             if (!\is_array($value) || !\array_key_exists($segment, $value)) {
@@ -351,13 +459,7 @@ class HttpRequestContext extends AbstractContext
             $value = $value[$segment];
         }
 
-        if (!\is_scalar($value)) {
-            throw new UnexpectedValueException(
-                \sprintf('JSON node "%s" is not a scalar (got %s).', $node, \get_debug_type($value)),
-            );
-        }
-
-        $this->iSendARequestTo($method, \str_replace('{value}', \rawurlencode((string) $value), $url));
+        return $value;
     }
 
     // THEN SCENARIOS
