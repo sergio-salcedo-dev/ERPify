@@ -2,7 +2,7 @@
 
 This guide describes how to run **ERPify** in production: **FrankenPHP** (Symfony API + TLS), **Next.js PWA**, **PostgreSQL**, **Symfony Messenger** (async workers), and **mail delivery**. It assumes Docker Compose at the **repository root** (`compose.yaml` + `compose.prod.yaml`).
 
-For deeper topics, use the linked guides in [`api/docs/production-ready/`](../api/docs/production-ready/production.md) (TLS, secrets, database, hardening) and [pwa/docs/production-deployment.md](../pwa/docs/production-deployment.md) (PWA build args). Domain-event and queue behaviour is detailed in [domain-events-and-messenger.md](domain-events-and-messenger.md).
+For deeper topics, use the linked guides in [`api/docs/production-ready/`](../api/docs/production-ready/production.md) (TLS, secrets, database, hardening) and [pwa/docs/production-deployment.md](../pwa/docs/production-deployment.md) (PWA build args). Domain-event and queue behaviour is detailed in [architecture-api.md](../docs/architecture-api.md#async--messaging).
 
 **Flysystem object storage** (bank `storedObjectUrl`, future modules): full configuration, volume mount example, backups, and smoke tests — **[object-storage.md](object-storage.md)**.
 
@@ -92,7 +92,7 @@ Full variable tables: [api/docs/production-ready/secrets.md](../api/docs/product
 - **Scaling**
   You may run **multiple** worker replicas **if** they all consume the same Doctrine queue (competing consumers). Monitor DB load and processing lag.
 
-More detail: [domain-events-and-messenger.md](domain-events-and-messenger.md).
+More detail: [architecture-api.md](../docs/architecture-api.md#async--messaging).
 
 ---
 
@@ -160,6 +160,6 @@ See **[`scripts/deploy/README.md`](../scripts/deploy/README.md)** for full detai
 | DNS, starting the stack                        | [api/docs/production-ready/server-setup.md](../api/docs/production-ready/server-setup.md) |
 | Secrets & env reference                        | [api/docs/production-ready/secrets.md](../api/docs/production-ready/secrets.md)           |
 | PWA build / public API URL                     | [pwa/docs/production-deployment.md](../pwa/docs/production-deployment.md)                 |
-| Domain events, audit table, Messenger flow     | [domain-events-and-messenger.md](domain-events-and-messenger.md)                          |
+| Domain events, audit table, Messenger flow     | [architecture-api.md](../docs/architecture-api.md#async--messaging)                          |
 | Flysystem paths, prod volumes, backups, URLs   | [object-storage.md](object-storage.md)                                                    |
 | Local traffic (FrankenPHP → Next)              | [local-fullstack-traffic.md](local-fullstack-traffic.md)                                  |

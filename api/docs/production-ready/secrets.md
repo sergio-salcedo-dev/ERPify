@@ -107,7 +107,7 @@ interpolation.
 | `MAILER_FROM`                | Symfony Mailer            | Must be authorised by your mail provider.                                                                 |
 | `DEFAULT_NOTIFICATION_EMAIL` | Notification handler      | Recipient for bank create/update emails.                                                                  |
 
-Overview: [docs-info/production-deployment.md](../../../docs-info/production-deployment.md) and [domain-events-and-messenger.md](../../../docs-info/domain-events-and-messenger.md).
+Overview: [docs-info/production-deployment.md](../../../docs-info/production-deployment.md) and [architecture-api.md](../../../docs/architecture-api.md#async--messaging).
 
 ---
 
