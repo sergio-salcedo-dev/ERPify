@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { BanksTable } from "@/app/backoffice/banks/_components/BanksTable";
+import { BANK_COLUMN_KEYS } from "@/app/backoffice/banks/_lib/bankColumns";
 import { Bank } from "@/context/backoffice/bank/domain/Bank";
 
 vi.mock("next/navigation", () => ({
@@ -27,13 +28,21 @@ const OLD = Bank.fromPrimitives({
 
 describe("BanksTable — identity cell", () => {
   it("shows a New badge for a recently created bank and not for an old one", () => {
-    render(<BanksTable onBankDeleteFailed={() => {}} banks={[RECENT, OLD]} />);
+    render(
+      <BanksTable
+        onBankDeleteFailed={() => {}}
+        banks={[RECENT, OLD]}
+        visible={[...BANK_COLUMN_KEYS]}
+      />,
+    );
     expect(screen.getByTestId(`banks-table__new-${RECENT.id}`)).toHaveTextContent("New");
     expect(screen.queryByTestId(`banks-table__new-${OLD.id}`)).toBeNull();
   });
 
   it("renders the created cell as relative text with the absolute value in the title", () => {
-    render(<BanksTable onBankDeleteFailed={() => {}} banks={[OLD]} />);
+    render(
+      <BanksTable onBankDeleteFailed={() => {}} banks={[OLD]} visible={[...BANK_COLUMN_KEYS]} />,
+    );
     const cell = screen.getByTestId(`banks-table__created-${OLD.id}`);
     expect(cell.textContent).toMatch(/ago$/);
     // Absolute dd/mm/yyyy value lives in the tooltip.
