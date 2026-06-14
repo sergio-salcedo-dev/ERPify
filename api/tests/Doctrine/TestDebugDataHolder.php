@@ -46,8 +46,22 @@ class TestDebugDataHolder extends DebugDataHolder
     /** @var array<string, array<int, array<int, array<string, mixed>>>> */
     private static array $backtraces = [];
 
+    /**
+     * Intentionally a no-op. When the profiler is enabled, Symfony's DoctrineDataCollector::reset()
+     * calls this on the holder every time the KernelBrowser reboots the kernel between requests —
+     * which would wipe the cross-request accumulator that per-scenario query assertions rely on.
+     * Scenario-boundary clearing goes through {@see resetScenario()} instead.
+     */
     #[Override]
     public function reset(): void
+    {
+    }
+
+    /**
+     * Explicit scenario-level reset of the static accumulator. Driven only by DoctrineContext at
+     * scenario start, so it is decoupled from the profiler's per-request collector resets.
+     */
+    public function resetScenario(): void
     {
         self::$data = [];
         self::$backtraces = [];

@@ -357,11 +357,14 @@ class HttpResponseContext extends AbstractContext
         $link = $this->getLastResponseHeaders()['x-debug-token-link'] ?? null;
 
         if (null === $link) {
-            self::fail('Web profiler bundle not configured correctly. Enable `toolbar: true`.');
+            self::fail(
+                'No web profiler token on the last response. Add the '
+                . '"Given I enable the web profiler" step before the request you want to inspect.',
+            );
         }
 
         if (null === $this->serverPort) {
-            self::fail('Add server port in your config/services_test.yaml');
+            self::fail('Add $serverPort to the HttpResponseContext arguments in config/services_behat.yaml');
         }
 
         echo \str_replace('http://localhost', \sprintf('http://localhost:%s', $this->serverPort), $link);
