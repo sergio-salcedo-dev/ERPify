@@ -69,8 +69,9 @@ function capitalize(word: string): string {
  * guard, query-reset-on-change, derived boundary state, page selection,
  * optimistic single + bulk delete (with existence re-probe), record peek,
  * empty-page recovery, and focus/announcement management. There is no realtime
- * channel; `silentReload` is exposed for callers that want a manual background
- * refresh.
+ * channel of its own; callers that drive their own reconciliation use
+ * `silentReload` (manual background refresh) and `markDeleted` (tombstone an
+ * out-of-band deletion so the bulk restore won't resurrect it).
  */
 export function useResourceList<T extends { id: string }, F, TInput>(
   config: UseResourceListConfig<T, F>,
@@ -298,6 +299,19 @@ export function useResourceList<T extends { id: string }, F, TInput>(
 
   const clearSelection = useCallback((): void => setSelectedIds(new Set()), []);
 
+  // Tombstone an id deleted out-of-band (e.g. a realtime `deleted` event): record
+  // it so the bulk restore won't resurrect a row deleted mid-flight, and drop it
+  // from the selection. It does not refetch — callers pair it with `silentReload`.
+  const markDeleted = useCallback((id: string): void => {
+    deletedIdsRef.current.add(id);
+    setSelectedIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }, []);
+
   // Esc clears the selection when no transient layer is open.
   useEffect(() => {
     const el = listContainerRef.current;
@@ -456,6 +470,7 @@ export function useResourceList<T extends { id: string }, F, TInput>(
     setSelectedIds,
     toggleSelect,
     clearSelection,
+    markDeleted,
     navigateTo,
     reload: loadItems,
     silentReload,

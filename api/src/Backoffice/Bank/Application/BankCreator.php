@@ -11,11 +11,11 @@ use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Shared\Application\Validation\Validator;
 use Erpify\Shared\Domain\Bus\Event\EventBus;
 use Erpify\Shared\Domain\Uuid\Uuid;
+use Erpify\Shared\Media\Application\Dto\UploadedImage;
 use Erpify\Shared\Media\Application\MediaRegistrar;
 use Erpify\Shared\Storage\Application\Dto\StoredObjectWriteResult;
 use Erpify\Shared\Storage\Application\StoredImageObjectWriter;
 use Erpify\Shared\Storage\Domain\StoredObject;
-use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 final readonly class BankCreator
 {
@@ -31,27 +31,27 @@ final readonly class BankCreator
 
     public function create(
         CreateBankCommand $bankCommand,
-        ?UploadedFile $logoFile = null,
-        ?UploadedFile $storedObjectFile = null,
+        ?UploadedImage $logo = null,
+        ?UploadedImage $storedObject = null,
     ): Bank {
-        $stored = $storedObjectFile instanceof UploadedFile
-            ? $this->storedImageObjectWriter->storeFromUploadedFile($storedObjectFile, 'storedObject')
+        $stored = $storedObject instanceof UploadedImage
+            ? $this->storedImageObjectWriter->store($storedObject, 'storedObject')
             : null;
 
-        $storedObject = $stored instanceof StoredObjectWriteResult
+        $bankStoredObject = $stored instanceof StoredObjectWriteResult
             ? new StoredObject($stored->objectKey, $stored->mimeType, $stored->byteSize, $stored->contentHash)
             : null;
 
-        $logo = $logoFile instanceof UploadedFile
-            ? $this->mediaRegistrar->registerFromUploadedFile($logoFile)
+        $logoMedia = $logo instanceof UploadedImage
+            ? $this->mediaRegistrar->register($logo)
             : null;
 
         $newBank = Bank::create(
             Uuid::generate(),
             $bankCommand->name,
             $bankCommand->shortName,
-            $logo,
-            $storedObject,
+            $logoMedia,
+            $bankStoredObject,
         );
 
         $this->validator->ensure($newBank);
