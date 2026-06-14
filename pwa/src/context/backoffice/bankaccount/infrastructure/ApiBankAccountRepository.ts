@@ -32,8 +32,8 @@ function isNumberOrNull(value: unknown): value is number | null {
   return value === null || typeof value === "number";
 }
 
-const CURRENCIES: readonly BankAccountCurrency[] = ["EUR"];
-const STATUSES: readonly BankAccountStatus[] = ["active", "inactive", "closed"];
+const CURRENCIES: ReadonlySet<BankAccountCurrency> = new Set(["EUR"]);
+const STATUSES: ReadonlySet<BankAccountStatus> = new Set(["active", "inactive", "closed"]);
 
 function isBankAccountPrimitives(value: unknown): value is BankAccountPrimitives {
   return (
@@ -44,9 +44,9 @@ function isBankAccountPrimitives(value: unknown): value is BankAccountPrimitives
     isStringOrNull(value.bic) &&
     isStringOrNull(value.alias) &&
     typeof value.currency === "string" &&
-    CURRENCIES.includes(value.currency as BankAccountCurrency) &&
+    CURRENCIES.has(value.currency as BankAccountCurrency) &&
     typeof value.status === "string" &&
-    STATUSES.includes(value.status as BankAccountStatus)
+    STATUSES.has(value.status as BankAccountStatus)
   );
 }
 

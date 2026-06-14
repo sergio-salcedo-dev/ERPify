@@ -54,6 +54,8 @@ export function IbanCell({ iban, revealed, onReveal, onHide, testId }: Readonly<
 
   return (
     <div
+      role="group"
+      aria-label="IBAN"
       className="iban-cell flex items-center gap-1.5"
       data-testid={testId}
       onMouseLeave={() => {

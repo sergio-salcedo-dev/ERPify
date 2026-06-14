@@ -30,31 +30,21 @@ interface BankAccountsTableProps {
   density?: ListDensity;
 }
 
-/**
- * Read-only table of a bank's associated accounts: Holder, IBAN (masked with a
- * per-row reveal), Alias, Currency, Status. Rows do not navigate (v1). The IBAN
- * reveal is single-flight — the table holds one `revealedId`, so revealing one
- * row re-masks the rest — and it resets whenever the page (the `accounts` array)
- * changes, so paginating always re-masks (PII).
- */
-export function BankAccountsTable({ accounts, density }: Readonly<BankAccountsTableProps>) {
-  const [revealedId, setRevealedId] = useState<string | null>(null);
+interface ColumnContext {
+  revealedId: string | null;
+  onReveal: (id: string) => void;
+  onHide: () => void;
+}
 
-  // A new page (or a reconcile) replaces the array — re-mask any revealed IBAN.
-  // Adjusted during render (not an effect) so the re-mask is applied before the
-  // new rows ever paint a stale revealed state.
-  const [prevAccounts, setPrevAccounts] = useState(accounts);
-  if (accounts !== prevAccounts) {
-    setPrevAccounts(accounts);
-    setRevealedId(null);
-  }
-
-  // Stable identity: IbanCell keys its ~10s auto-hide timer on `onHide`, so a
-  // fresh closure each render would restart the countdown on every ancestor
-  // re-render and keep the IBAN visible past the intended window.
-  const hideRevealed = useCallback(() => setRevealedId(null), []);
-
-  const columns: DataTableColumn<BankAccount>[] = [
+// Built outside the component so the cell renderers are not re-declared as
+// nested components on every render — the table's reveal state flows in as
+// `ColumnContext`.
+function buildColumns({
+  revealedId,
+  onReveal,
+  onHide,
+}: ColumnContext): DataTableColumn<BankAccount>[] {
+  return [
     {
       id: "holder",
       header: "Holder",
@@ -69,8 +59,8 @@ export function BankAccountsTable({ accounts, density }: Readonly<BankAccountsTa
         <IbanCell
           iban={account.iban}
           revealed={revealedId === account.id}
-          onReveal={() => setRevealedId(account.id)}
-          onHide={hideRevealed}
+          onReveal={() => onReveal(account.id)}
+          onHide={onHide}
           testId={`bank-accounts-table__iban-${account.id}`}
         />
       ),
@@ -101,6 +91,33 @@ export function BankAccountsTable({ accounts, density }: Readonly<BankAccountsTa
       ),
     },
   ];
+}
+
+/**
+ * Read-only table of a bank's associated accounts: Holder, IBAN (masked with a
+ * per-row reveal), Alias, Currency, Status. Rows do not navigate (v1). The IBAN
+ * reveal is single-flight — the table holds one `revealedId`, so revealing one
+ * row re-masks the rest — and it resets whenever the page (the `accounts` array)
+ * changes, so paginating always re-masks (PII).
+ */
+export function BankAccountsTable({ accounts, density }: Readonly<BankAccountsTableProps>) {
+  const [revealedId, setRevealedId] = useState<string | null>(null);
+
+  // A new page (or a reconcile) replaces the array — re-mask any revealed IBAN.
+  // Adjusted during render (not an effect) so the re-mask is applied before the
+  // new rows ever paint a stale revealed state.
+  const [prevAccounts, setPrevAccounts] = useState(accounts);
+  if (accounts !== prevAccounts) {
+    setPrevAccounts(accounts);
+    setRevealedId(null);
+  }
+
+  // Stable identity: IbanCell keys its ~10s auto-hide timer on `onHide`, so a
+  // fresh closure each render would restart the countdown on every ancestor
+  // re-render and keep the IBAN visible past the intended window.
+  const hideRevealed = useCallback(() => setRevealedId(null), []);
+
+  const columns = buildColumns({ revealedId, onReveal: setRevealedId, onHide: hideRevealed });
 
   return (
     <DataTable

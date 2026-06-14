@@ -83,7 +83,7 @@ function isBankWriteSingleResponse(
   if (!isObjectRecord(value) || !isObjectRecord(value.data)) {
     return false;
   }
-  const d = value.data as Record<string, unknown>;
+  const d = value.data;
   return (
     typeof d.id === "string" &&
     typeof d.name === "string" &&
