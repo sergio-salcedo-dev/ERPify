@@ -70,3 +70,9 @@ deriva los campos del `SortFieldMap` de producción) — todos retirados. El res
 
 - Stale `focusedRow` after an optimistic delete in `UsersStackedList`/`BanksStackedList` (roving tabindex can land past the shrunk array, losing keyboard focus). Pre-existing pattern shared with the Bank reference — clamp `focusedRow` on `users.length` change in both as a cross-cutting a11y fix.
 - `query.pageSize as UsersPageSize` cast in the users list page launders the type; safe today (page size only set from the constrained dropdown). Replace with a `USERS_PAGE_SIZE_OPTIONS` membership guard if/when page size becomes URL/storage-hydrated.
+
+## Deferred from: code review of iam-user-management-frontend plan — group 4 auth + wiring (2026-06-14)
+
+- Auth forms (login/register/forgot/reset) lack the server-violation `setError(field,{type:"server"})` API-ready seam the spec lists; pure mocks emit no violations, so it would be dead scaffolding now. Wire it when the real auth API lands (UserForm has the pattern).
+- No `?next=`/return-URL after login: RequireAuth redirects to /login without preserving the target and LoginForm always pushes Routes.BACKOFFICE; deep-links are lost. When added, validate the target same-origin/relative (no open redirect).
+- Reset-password flow ignores any token: needs useSearchParams under a Suspense boundary (Next 16) + opaque-token validation + missing/expired-token boundary when wired to the real API.

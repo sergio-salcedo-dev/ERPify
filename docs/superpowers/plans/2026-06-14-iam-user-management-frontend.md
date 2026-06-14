@@ -2315,3 +2315,33 @@ git commit -m "docs(pwa): document access + resource toolkits and user module"
 - Email `readOnly` round-trips on update — `applyInput` ignores `input.email` (covered in group 2); a real API rejects it.
 - Edit form stale-404 without `onStaleUser` — `onStaleUser={reload}` is wired (edit/page.tsx:111).
 - RHF checkbox-array registration, dynamic `aria-label` on delete/detail — standard pattern / consistent with the Bank reference.
+
+---
+
+## Review Findings — Group 4: app/(auth) + IAM wiring (2026-06-14)
+
+> Adversarial review (Blind Hunter + Edge Case Hunter + Acceptance Auditor), DDD/Codely lens. Scope: public auth pages (mocked) + wiring (layout/routes/DI). Auditor: 0 Critical/High spec violations — routes, mounts, `safeHref`, no `maxLength`, `useZodForm`, gated `DevSessionSwitcher`, no-password-persisted/non-enumerating-forgot semantics, single-shared-instance DI — all compliant; the hydration-gated `RequireAuth` and shared-instance binding are stricter than the plan.
+
+### Decision needed — RESOLVED & APPLIED
+
+- [x] [Review][Decision] `RequireAuth` depth → **Resolved: Option A (wrap the whole shell).** `RequireAuth` now wraps the entire `BackOfficeLayoutClient` return (sidebar, topbar, switcher, content), so nothing renders until authenticated — no nav-chrome flash for an unauthenticated user, blank during `hydrating`. Consistent with D2.
+
+### Patch — APPLIED
+
+- [x] [Review][Patch] Logout wired to the real `logout()` — `handleNavigation(Routes.HOME)` now calls `useSession().logout()` then redirects, clearing the session instead of the cosmetic `setTimeout` push [BackOfficeLayoutClient.tsx].
+- [x] [Review][Patch] `(auth)/layout.tsx` Logo now uses `Routes.HOME` instead of the `"/"` literal.
+
+### Deferred
+
+- [x] [Review][Defer] Server-violation `setError(field,{type:"server"})` API-ready seam absent from the four auth forms (the spec lists it as API-readiness). Pure mocks emit no violations, so it would be dead scaffolding now ("nothing speculative"); wire it when the real auth API lands (UserForm already has the pattern to copy).
+- [x] [Review][Defer] No `?next=`/return-URL after login — `RequireAuth` redirects to `/login` without preserving the target and `LoginForm` always pushes `Routes.BACKOFFICE`, so a deep-link is lost after sign-in. No open-redirect today (nothing consumes untrusted input); when added, the target MUST be validated same-origin/relative.
+- [x] [Review][Defer] Reset-password ignores any token — `ResetPasswordForm`/page read no `?token=`; when wired this needs `useSearchParams` under a `<Suspense>` boundary (Next 16) + opaque-token validation and a missing/expired-token boundary.
+
+### Dismissed (verified false-positive or by-design)
+
+- `DevSessionSwitcher` shipping to prod — `isDevToolsAvailable()` is `process.env.NODE_ENV !== PRODUCTION`, inlined at build time (not client-spoofable); the `{false ? … : null}` branch is dead in prod.
+- Mocked login mints ADMIN+wildcard — the entire auth surface is an intentional mock; password is never persisted; documented.
+- `safeHref` on static `Routes` constants — harmless defense-in-depth, not a defect.
+- Already-authenticated user can visit `/login` — minor UX, not required for the mock.
+- `AuthProvider` inside `ThemeProvider` — the plan explicitly permits either nesting.
+- Eager singleton Container binding — the documented single-shared-instance intent (a class binding would split the store).
