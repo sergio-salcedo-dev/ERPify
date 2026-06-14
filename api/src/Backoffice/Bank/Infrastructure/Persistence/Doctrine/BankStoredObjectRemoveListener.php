@@ -22,6 +22,6 @@ final readonly class BankStoredObjectRemoveListener
 
     public function removeStoredObjectIfOrphaned(Bank $bank): void
     {
-        $this->storedObjectOrphanCleaner->cleanupAfterRemoval($bank->getStoredObjectContentHash());
+        $this->storedObjectOrphanCleaner->cleanupAfterRemoval($bank->getStoredObject()?->contentHash);
     }
 }

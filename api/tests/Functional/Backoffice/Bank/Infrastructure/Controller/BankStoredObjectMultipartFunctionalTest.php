@@ -74,4 +74,49 @@ final class BankStoredObjectMultipartFunctionalTest extends WebTestCase
         );
         $this->assertNotNull($kernelBrowser->getResponse()->headers->get('ETag'));
     }
+
+    /**
+     * A bank persisted without an image stores an all-NULL embeddable. Reloading it from the database
+     * (fresh hydration, not the in-memory create instance) must yield an empty StoredObject so the
+     * read serialization exposes `storedObjectUrl: null` — the invariant the embeddable mapping rests on.
+     *
+     * @throws JsonException
+     */
+    public function testReloadedImagelessBankExposesNullStoredObjectUrl(): void
+    {
+        $kernelBrowser = self::createClient();
+
+        $suffix = \bin2hex(\random_bytes(4));
+
+        $kernelBrowser->request(
+            Request::METHOD_POST,
+            '/api/v1/backoffice/banks',
+            [
+                'name' => 'Imageless Bank ' . $suffix,
+                'shortName' => 'IMG' . $suffix,
+            ],
+        );
+        self::assertResponseStatusCodeSame(201);
+        $created = \json_decode((string) $kernelBrowser->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertIsArray($created);
+        $this->assertArrayHasKey('data', $created);
+        $createdData = $created['data'];
+        $this->assertIsArray($createdData);
+        $this->assertArrayHasKey('id', $createdData);
+        $id = $createdData['id'];
+        $this->assertIsString($id);
+
+        $kernelBrowser->request(Request::METHOD_GET, '/api/v1/backoffice/banks/' . $id);
+
+        self::assertResponseIsSuccessful();
+        $fetched = \json_decode((string) $kernelBrowser->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertIsArray($fetched);
+        $this->assertArrayHasKey('data', $fetched);
+        $fetchedData = $fetched['data'];
+        $this->assertIsArray($fetchedData);
+        $this->assertArrayHasKey('storedObjectUrl', $fetchedData);
+        $this->assertArrayHasKey('logoUrl', $fetchedData);
+        $this->assertNull($fetchedData['storedObjectUrl']);
+        $this->assertNull($fetchedData['logoUrl']);
+    }
 }

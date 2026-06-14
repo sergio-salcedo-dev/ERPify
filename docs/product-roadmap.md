@@ -215,20 +215,27 @@ el **flujo de usuario** antes de comprometer agregados, relaciones y tablas.
 
 ## Buckets de complejidad (para estimar)
 
-Las ~35 funcionalidades pendientes del menú backoffice no cuestan lo mismo.
+Las ~39 funcionalidades pendientes del menú backoffice no cuestan lo mismo.
 Asumiendo que se reutiliza la plantilla Banks. Cada módulo de `roadmap.ts`
 declara su bucket en el campo `complexity` (`low` = CRUD sin relaciones en DB,
 `medium` = relaciones + reglas, `high` = motores/integraciones/UI interactiva),
 visible como chip en la página — la regla para elegir tarea es **prioridad alta
 + complejidad baja primero**:
 
-| Bucket | Ejemplos | Días/módulo | Nº aprox. | Total |
-|--------|----------|-------------|-----------|-------|
-| Simple (CRUD calcado de Banks) | Clients, Companies, Employees, Departments, Brands, Products, Tasks | ~2 | 8 | 16 d |
-| Medio (CRUD + relaciones + reglas) | Quotes, Work Orders, Delivery Notes, Stock, Projects, Invoicing, Users | ~3,5 | 12 | 42 d |
-| Complejo (motores, integraciones, UI interactiva) | Configurador, Dynamic Pricing, Commissions, Automation Engine, Reporting, Portales, Dashboard | ~6 | 13 | 78 d |
-| Fundacional | Auth/RBAC, multi-tenant, notificaciones, perfil/ajustes | — | — | ~27 d |
-| **Total trabajo efectivo** | | | | **~163 d** |
+| Bucket                                            | Ejemplos                                                                                                                                              | Días/módulo | Nº aprox. | Total      |
+|---------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|-------------|-----------|------------|
+| Simple (CRUD calcado de Banks)                    | Clients, Companies, Employees, Departments, Brands, Products, Tasks                                                                                   | ~2          | 8         | 16 d       |
+| Medio (CRUD + relaciones + reglas)                | Quotes, Work Orders, Delivery Notes, Stock, Projects, Invoicing, Users (CRM incluye licitaciones; Budgeting, el estudio previo)                       | ~3,5        | 12        | 42 d       |
+| Complejo (motores, integraciones, UI interactiva) | Configurator & Dynamic Pricing (1.6), Cost Allocation (2.5), External Portals (2.6), Commission Engine (2.7), Automation Engine, Reporting, Dashboard | ~6          | 14        | 84 d       |
+| Fundacional                                       | Auth/RBAC, multi-tenant, notificaciones, perfil/ajustes                                                                                               | —           | —         | ~27 d      |
+| **Total trabajo efectivo**                        |                                                                                                                                                       |             |           | **~169 d** |
+
+> **Reconciliación (2026-06-14).** Configurator & Dynamic Pricing, Cost Allocation,
+> External Portals y Commission Engine —antes solo nombrados en estos buckets— son
+> ahora módulos reales de `roadmap.ts` (1.6, 2.5–2.7) con su contexto modelado en
+> [`bounded-contexts.md`](bounded-contexts.md); Tender y el estudio previo entran
+> como submódulos de CRM (1.2) y Budgeting (1.4). Cost Allocation es el único
+> alcance nuevo respecto a la estimación previa (+1 módulo complejo, +6 d).
 
 ## Estimación de calendario
 
@@ -240,13 +247,13 @@ Claude Code asistiendo y la plantilla Banks ya existente.
   día; mezclarás Opus + Sonnet con ratos throttled. Inflación de calendario
   estimada **~1,3×**.
 
-`163 d × 1,3 ≈ 210 días laborables ≈ 10 meses` para paridad completa a nivel
+`169 d × 1,3 ≈ 220 días laborables ≈ 10,5 meses` para paridad completa a nivel
 Banks (incluyendo auth/RBAC).
 
-| Alcance | Calendario aprox. |
-|---------|-------------------|
-| MVP funcional por entrada de menú (CRUD básico, sin todo el pulido de Banks) | **~5-6 meses** |
-| Paridad completa "grade Banks" + auth/RBAC en los ~35 módulos | **~9-10 meses** |
+| Alcance                                                                      | Calendario aprox. |
+|------------------------------------------------------------------------------|-------------------|
+| MVP funcional por entrada de menú (CRUD básico, sin todo el pulido de Banks) | **~5-6 meses**    |
+| Paridad completa "grade Banks" + auth/RBAC en los ~39 módulos                | **~10-11 meses**  |
 
 Tres factores que mueven mucho la cifra:
 

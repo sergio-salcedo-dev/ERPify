@@ -110,7 +110,7 @@ final readonly class DoctrineBankRepository implements
         return (int) $this->entityManager->createQueryBuilder()
             ->select('COUNT(b.id)')
             ->from(Bank::class, 'b')
-            ->where('b.storedObjectContentHash = :contentHash')
+            ->where('b.storedObject.contentHash = :contentHash')
             ->setParameter('contentHash', $contentHash)
             ->getQuery()
             ->getSingleScalarResult()
@@ -124,14 +124,14 @@ final readonly class DoctrineBankRepository implements
         $bank = $this->entityManager->createQueryBuilder()
             ->select('b')
             ->from(Bank::class, 'b')
-            ->where('b.storedObjectContentHash = :h')
+            ->where('b.storedObject.contentHash = :h')
             ->setParameter('h', $contentHash)
             ->setMaxResults(1)
             ->getQuery()
             ->getOneOrNullResult()
         ;
 
-        return $bank?->getStoredObjectMimeType();
+        return $bank?->getStoredObject()?->mimeType;
     }
 
     /**

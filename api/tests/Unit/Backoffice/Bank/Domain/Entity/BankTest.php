@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Backoffice\Bank\Domain\Entity;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
+use Erpify\Shared\Storage\Domain\StoredObject;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -35,6 +36,22 @@ final class BankTest extends TestCase
         $event = $events[0];
         $this->assertInstanceOf(BankCreatedDomainEvent::class, $event);
         $this->assertSame($bank->getId(), $event->aggregateId());
+    }
+
+    public function testGetStoredObjectReturnsNullWhenNoImageIsStored(): void
+    {
+        $bank = Bank::create(self::BANK_ID, 'Acme Savings', 'ACME');
+
+        $this->assertNotInstanceOf(StoredObject::class, $bank->getStoredObject());
+    }
+
+    public function testGetStoredObjectReturnsTheValueObjectWhenAnImageIsStored(): void
+    {
+        $storedObject = new StoredObject('object/key', 'image/webp', 1024, 'abc123');
+
+        $bank = Bank::create(self::BANK_ID, 'Acme Savings', 'ACME', null, $storedObject);
+
+        $this->assertSame($storedObject, $bank->getStoredObject());
     }
 
     public function testRenameRecordsUpdatedEventWhoseAggregateIdEqualsTheEntityId(): void

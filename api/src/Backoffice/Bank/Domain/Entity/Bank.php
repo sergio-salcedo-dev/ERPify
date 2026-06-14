@@ -6,7 +6,6 @@ namespace Erpify\Backoffice\Bank\Domain\Entity;
 
 use DateTimeImmutable;
 use DateTimeInterface;
-use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankDeletedDomainEvent;
@@ -89,16 +88,11 @@ final class Bank extends AggregateRoot
         #[ORM\JoinColumn(name: 'logo_media_id', referencedColumnName: 'id', nullable: true)]
         private ?Media $media,
         /**
-         * {@see \Erpify\Shared\Storage\Domain\ContentAddressableObjectKey} path (distinct from BYTEA {@see $logo}).
+         * Object-storage handle (key + metadata), distinct from the BYTEA-backed {@see $media}.
+         * Mapped inline under the `stored_object_` prefix; an absent image is the empty value object.
          */
-        #[ORM\Column(name: 'stored_object_key', length: 512, nullable: true)]
-        private ?string $storedObjectKey,
-        #[ORM\Column(name: 'stored_object_mime_type', length: 64, nullable: true)]
-        private ?string $storedObjectMimeType,
-        #[ORM\Column(name: 'stored_object_byte_size', type: Types::INTEGER, nullable: true)]
-        private ?int $storedObjectByteSize,
-        #[ORM\Column(name: 'stored_object_content_hash', length: 64, nullable: true)]
-        private ?string $storedObjectContentHash,
+        #[ORM\Embedded(class: StoredObject::class, columnPrefix: 'stored_object_')]
+        private StoredObject $storedObject,
     ) {
         parent::__construct();
 
@@ -120,10 +114,7 @@ final class Bank extends AggregateRoot
             $normalizedText->normalized,
             NormalizedText::toAsciiUpper($shortName),
             $media,
-            $storedObject?->objectKey,
-            $storedObject?->mimeType,
-            $storedObject?->byteSize,
-            $storedObject?->contentHash,
+            $storedObject ?? new StoredObject(),
         );
 
         $createdAt = $bank->createdAt->format(DateTimeInterface::ATOM);
@@ -183,24 +174,9 @@ final class Bank extends AggregateRoot
         return $this->media;
     }
 
-    public function getStoredObjectKey(): ?string
+    public function getStoredObject(): ?StoredObject
     {
-        return $this->storedObjectKey;
-    }
-
-    public function getStoredObjectMimeType(): ?string
-    {
-        return $this->storedObjectMimeType;
-    }
-
-    public function getStoredObjectByteSize(): ?int
-    {
-        return $this->storedObjectByteSize;
-    }
-
-    public function getStoredObjectContentHash(): ?string
-    {
-        return $this->storedObjectContentHash;
+        return $this->storedObject->isEmpty() ? null : $this->storedObject;
     }
 
     public function rename(string $name, string $shortName): void
@@ -221,8 +197,8 @@ final class Bank extends AggregateRoot
             $now->format(DateTimeInterface::ATOM),
             $this->media?->getId(),
             $this->media?->getContentHash(),
-            $this->storedObjectContentHash,
-            $this->storedObjectMimeType,
+            $this->storedObject->contentHash,
+            $this->storedObject->mimeType,
         ));
     }
 
