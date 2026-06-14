@@ -10,11 +10,11 @@
 The PWA never passes through Symfony's `WebDebugToolbarListener` (that listener injects the
 toolbar into HTML responses Symfony itself renders; PWA HTML is rendered by Next). The toolbar is
 therefore reconstructed client-side from the per-request profiler token that Symfony already emits
-on every `/api/*` response in dev (`X-Debug-Token`, `X-Debug-Link`), then loaded from Symfony's own
+on every `/api/*` response in dev (`X-Debug-Token`, `X-Debug-Token-Link`), then loaded from Symfony's own
 `/_wdt/{token}` endpoint — which already routes through FrankenPHP.
 
 ```
-/api/* response ──(X-Debug-Token, X-Debug-Link headers)──> FetchHttpClient
+/api/* response ──(X-Debug-Token, X-Debug-Token-Link headers)──> FetchHttpClient
         │  this.debugTokens.publish({ token, profilerUrl })
         ▼
 DebugTokenObserver  (domain port)
@@ -50,7 +50,7 @@ Each unit has one purpose, a defined interface, and is testable in isolation.
 
 ### API side (`api/`) — expected zero code change
 
-The profiler already emits `X-Debug-Token` / `X-Debug-Link` on `/api/*` in dev/test (PR #260), and
+The profiler already emits `X-Debug-Token` / `X-Debug-Token-Link` on `/api/*` in dev/test (PR #260), and
 `/_wdt/{token}` already routes through FrankenPHP. No controller, route, or config change is planned.
 The single contingency is **Approach B** below (a tiny dev-only loader route), taken only if the
 spike proves it necessary.
@@ -63,7 +63,7 @@ spike proves it necessary.
 | `EventTargetDebugTokenObserver` (dev adapter) | `context/shared/infrastructure/DebugToken/` | `EventTarget`-backed pub/sub; retains the latest `DebugToken` and replays it to subscribers that attach after the first publish. |
 | `NoopDebugTokenObserver` (prod adapter) | `context/shared/infrastructure/DebugToken/` | `publish` is a no-op; `subscribe` returns a no-op unsubscribe. |
 | DI binding | existing Inversify container module | Binds `DebugTokenObserver` to the dev adapter when `isDevToolsAvailable()`, else the no-op. |
-| `FetchHttpClient` (edit) | `context/shared/infrastructure/HttpClient/HttpClient.ts` | Constructor-injects `DebugTokenObserver`; a private `request()` wrapper around `fetch` reads `X-Debug-Token` / `X-Debug-Link` off every response (success **and** error) and publishes once. `MockHttpClient` is injected the no-op. |
+| `FetchHttpClient` (edit) | `context/shared/infrastructure/HttpClient/HttpClient.ts` | Constructor-injects `DebugTokenObserver`; a private `request()` wrapper around `fetch` reads `X-Debug-Token` / `X-Debug-Token-Link` off every response (success **and** error) and publishes once. `MockHttpClient` is injected the no-op. |
 | `useLatestDebugToken()` | `context/shared/infrastructure/ui/` | React hook subscribing to the observer; returns the current `DebugToken \| null`. |
 | `<SymfonyDebugToolbar>` | `context/shared/dev-tools/infrastructure/ui/` | `"use client"`, dev-only. Fixed-bottom container; on token change fetches `/_wdt/{token}` and injects the fragment, re-creating `<script>` nodes so they execute. Mounted once in the root layout behind `isDevToolsAvailable()`. |
 
@@ -134,5 +134,5 @@ first implementation step. Either way, the PWA-side seam (`DebugTokenObserver` �
 - Any production toolbar surface.
 - Replacing or removing the `/_dev` page from PR #260 (it stays as the Symfony-served playground).
 - Cross-origin dev setups: if a future dev config serves the PWA and API on different origins, the
-  API must add `Access-Control-Expose-Headers: X-Debug-Token, X-Debug-Link`; the default
+  API must add `Access-Control-Expose-Headers: X-Debug-Token, X-Debug-Token-Link`; the default
   same-origin (FrankenPHP) setup needs nothing. Noted, not built.
