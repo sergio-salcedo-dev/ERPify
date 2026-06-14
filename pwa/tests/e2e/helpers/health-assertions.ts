@@ -19,4 +19,8 @@ export async function expectBackOfficeHealthOk(page: Page): Promise<void> {
   const component = page.getByTestId("backoffice-health__component-backoffice");
   await expect(component).toContainText(/BackOffice API/i);
   await expect(component).toContainText(/Operational/i);
+
+  const database = page.getByTestId("backoffice-health__component-database");
+  await expect(database).toContainText(/Database/i);
+  await expect(database).toContainText(/Operational/i);
 }

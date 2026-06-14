@@ -3,8 +3,10 @@ import { Container } from "inversify";
 import { FetchHttpClient, MockHttpClient, type HttpClient } from "../HttpClient/HttpClient";
 import { ApiHealthCheckRepository as FrontOfficeApiHealthCheckRepository } from "../../../frontoffice/health/infrastructure/ApiHealthCheckRepository";
 import { ApiHealthCheckRepository as BackOfficeApiHealthCheckRepository } from "../../../backoffice/health/infrastructure/ApiHealthCheckRepository";
+import { ApiDatabaseHealthCheckRepository as BackOfficeApiDatabaseHealthCheckRepository } from "../../../backoffice/health/infrastructure/ApiDatabaseHealthCheckRepository";
 import { CheckHealth as FrontOfficeCheckHealth } from "../../../frontoffice/health/application/CheckHealth";
 import { CheckHealth as BackOfficeCheckHealth } from "../../../backoffice/health/application/CheckHealth";
+import { CheckDatabaseHealth as BackOfficeCheckDatabaseHealth } from "../../../backoffice/health/application/CheckDatabaseHealth";
 import { ApiBankRepository } from "../../../backoffice/bank/infrastructure/ApiBankRepository";
 import { ApiBankSearchNavigator } from "../../../backoffice/bank/infrastructure/ApiBankSearchNavigator";
 import { BankCrudRepository } from "../../../backoffice/bank/infrastructure/BankCrudRepository";
@@ -40,8 +42,16 @@ container
   .to(BackOfficeApiHealthCheckRepository)
   .inSingletonScope();
 
+container
+  .bind<BackOfficeApiDatabaseHealthCheckRepository>("BackOfficeDatabaseHealthCheckRepository")
+  .to(BackOfficeApiDatabaseHealthCheckRepository)
+  .inSingletonScope();
+
 container.bind<FrontOfficeCheckHealth>("FrontOfficeCheckHealth").to(FrontOfficeCheckHealth);
 container.bind<BackOfficeCheckHealth>("BackOfficeCheckHealth").to(BackOfficeCheckHealth);
+container
+  .bind<BackOfficeCheckDatabaseHealth>("BackOfficeCheckDatabaseHealth")
+  .to(BackOfficeCheckDatabaseHealth);
 
 container
   .bind<ApiBankRepository>("BackOfficeBankRepository")

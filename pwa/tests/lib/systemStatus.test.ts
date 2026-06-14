@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   SystemStatus,
+  aggregateSystemStatus,
   componentStatusLabel,
   deriveSystemStatus,
   systemHeadline,
@@ -55,6 +56,41 @@ describe("deriveSystemStatus", () => {
     expect(deriveSystemStatus({ checking: false, failed: false, result: null }).status).toBe(
       SystemStatus.DISRUPTED,
     );
+  });
+});
+
+describe("aggregateSystemStatus", () => {
+  const operational = { status: SystemStatus.OPERATIONAL, datetime: "2026-06-02T10:00:00+02:00" };
+  const laterOperational = {
+    status: SystemStatus.OPERATIONAL,
+    datetime: "2026-06-02T11:00:00+02:00",
+  };
+
+  it("reports CHECKING when there are no component views", () => {
+    expect(aggregateSystemStatus([])).toEqual({ status: SystemStatus.CHECKING, datetime: null });
+  });
+
+  it("stays OPERATIONAL when every component is operational and keeps the latest datetime", () => {
+    expect(aggregateSystemStatus([operational, laterOperational])).toEqual({
+      status: SystemStatus.OPERATIONAL,
+      datetime: "2026-06-02T11:00:00+02:00",
+    });
+  });
+
+  it("degrades when one component is degraded while another is operational", () => {
+    expect(
+      aggregateSystemStatus([operational, { status: SystemStatus.DEGRADED, datetime: null }])
+        .status,
+    ).toBe(SystemStatus.DEGRADED);
+  });
+
+  it("disruption wins over degradation", () => {
+    expect(
+      aggregateSystemStatus([
+        { status: SystemStatus.DEGRADED, datetime: null },
+        { status: SystemStatus.DISRUPTED, datetime: null },
+      ]).status,
+    ).toBe(SystemStatus.DISRUPTED);
   });
 });
 
