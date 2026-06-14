@@ -26,15 +26,19 @@ The application follows Clean Architecture with these layers:
 - No dependencies on other layers
 - Pure business rules and value objects
 
-#### Documented exception — passive metadata attributes on entities
+#### Documented exception — passive metadata attributes on entities and embeddables
 
-Domain entities and aggregates MAY carry framework **metadata attributes**: `#[ORM\…]` mapping,
-`#[Assert\…]` constraints (including `UniqueEntity` and `#[Assert\Callback]` hooks), and serializer
-`#[Groups]`. Rationale: one source of truth for persistence shape and invariants, enforced via the
-shared `Validator::ensure($entity)` right before save; `UniqueEntity` inherently needs the database.
-The prohibition stays absolute for **behavioral** framework code in `Domain/`: no `Request`/`Response`,
-no `EntityManagerInterface`, no `HttpException`, no Messenger envelopes, no service or HTTP calls.
-Example: `api/src/Backoffice/Bank/Domain/Entity/Bank.php`.
+Domain entities, aggregates, and mapped value objects (`#[ORM\Embeddable]`) MAY carry framework
+**metadata attributes**: `#[ORM\…]` mapping, `#[Assert\…]` constraints (including `UniqueEntity` and
+`#[Assert\Callback]` hooks), and serializer `#[Groups]`. Rationale: one source of truth for persistence
+shape and invariants, enforced via the shared `Validator::ensure($entity)` right before save;
+`UniqueEntity` inherently needs the database. An embeddable keeps a repeated cluster of columns (e.g. an
+image's key + metadata) as one inline value object reused across aggregates under a per-owner
+`columnPrefix`, instead of duplicating the columns by hand. The prohibition stays absolute for
+**behavioral** framework code in `Domain/`: no `Request`/`Response`, no `EntityManagerInterface`, no
+`HttpException`, no Messenger envelopes, no service or HTTP calls. Examples:
+`api/src/Backoffice/Bank/Domain/Entity/Bank.php` (entity),
+`api/src/Shared/Storage/Domain/StoredObject.php` (embeddable value object).
 
 #### Documented exception — symfony/uid value objects in Domain
 
