@@ -91,21 +91,27 @@ clasifica, no se prohíbe en bloque:
 
    Automation ── escucha eventos de cualquier contexto y dispara acciones (comandos)
    Integration ── traduce eventos ⇄ sistemas externos (webhooks/conectores)
+   Cost Allocation ── consume eventos de coste (horas, compras) y los reparte sobre obras
+   Commissions ── devenga sobre opportunity.won / payment.received
+   Portals ── expone (RBAC+ABAC) datos de otros contextos al actor externo dueño
 ```
 
 **Tipos de relación:**
 
-| Upstream → Downstream | Tipo | Integración |
-|---|---|---|
-| Organization → todos | Customer/Supplier | tenant id + `UserInvited`/`CompanyRegistered` |
-| CRM → Projects, Finance | Customer/Supplier (ACL en downstream) | `OpportunityWon` |
-| Projects → Budgeting, Procurement, Workforce, Finance | Partnership | `ProjectCreated`, `TaskCompleted` |
-| Budgeting → Procurement, Finance | Customer/Supplier | `BudgetApproved` |
-| Procurement → Finance | Customer/Supplier | `GoodsReceived`, `StockMovementRegistered` |
-| Workforce → Finance, Projects | Customer/Supplier | `TimeLogged` |
-| Finance → Reporting, Notifications | Publisher/Subscriber | `InvoiceIssued`, `PaymentReceived` |
-| (todos) → Audit, Notifications, Reporting | Publisher/Subscriber (conformist) | bus de eventos |
-| Automation → (todos) | Orquestador | escucha eventos / emite comandos |
+| Upstream → Downstream                                 | Tipo                                  | Integración                                                  |
+|-------------------------------------------------------|---------------------------------------|--------------------------------------------------------------|
+| Organization → todos                                  | Customer/Supplier                     | tenant id + `UserInvited`/`CompanyRegistered`                |
+| CRM → Projects, Finance                               | Customer/Supplier (ACL en downstream) | `OpportunityWon`                                             |
+| Projects → Budgeting, Procurement, Workforce, Finance | Partnership                           | `ProjectCreated`, `TaskCompleted`                            |
+| Budgeting → Procurement, Finance                      | Customer/Supplier                     | `BudgetApproved`                                             |
+| Procurement → Finance                                 | Customer/Supplier                     | `GoodsReceived`, `StockMovementRegistered`                   |
+| Workforce → Finance, Projects                         | Customer/Supplier                     | `TimeLogged`                                                 |
+| Finance → Reporting, Notifications                    | Publisher/Subscriber                  | `InvoiceIssued`, `PaymentReceived`                           |
+| (todos) → Audit, Notifications, Reporting             | Publisher/Subscriber (conformist)     | bus de eventos                                               |
+| Automation → (todos)                                  | Orquestador                           | escucha eventos / emite comandos                             |
+| Workforce, Procurement, Finance → Cost Allocation     | Publisher/Subscriber                  | `TimeLogged`, `GoodsReceived`, `ProjectCostAccrued`          |
+| CRM, Finance → Commissions                            | Publisher/Subscriber                  | `OpportunityWon`, `PaymentReceived`                          |
+| (varios) → Portals                                    | Conformist (read/command acotado)     | Application services + read models, gobernados por RBAC+ABAC |
 
 ---
 
@@ -158,20 +164,26 @@ Dos caras del mismo núcleo compartido:
 
 - **Responsabilidad:** captación y gestión comercial hasta el cierre.
 - **Agregados/entidades:** ⬢ `Lead` · ⬢ `Contact` · ⬢ `Account` (cliente/empresa
-  CRM) · ⬢ `Opportunity` (deal) · `Activity` (llamada/tarea/email) · `Note` ·
-  `Attachment` · `Pipeline`/`Stage` (configurable).
+  CRM) · ⬢ `Opportunity` (deal) · ⬢ `Tender` (licitación pública) ·
+  `Activity` (llamada/tarea/email) · `Note` · `Attachment` ·
+  `Pipeline`/`Stage` (configurable).
 - **Value objects:** `PipelineStage`, `Money` + `Currency`, `Probability`,
-  `ContactChannel`.
+  `ContactChannel`, `TenderDeadline`, `BidDecision` (bid/no-bid), `AwardStatus`.
 - **Invariantes:** una oportunidad pertenece a un `Account`; su `Stage` avanza por
-  la máquina del `Pipeline`; cerrar como ganada exige importe y cliente.
+  la máquina del `Pipeline`; cerrar como ganada exige importe y cliente. Una
+  licitación tiene fecha límite; presentarse referencia un estudio económico
+  (Budgeting, por id) y su adjudicación (ganada/perdida) es terminal.
 - **Emite:** `lead.captured`, `lead.qualified`, `opportunity.created`,
   `opportunity.stage-changed`, `opportunity.won`, `opportunity.lost`,
-  `activity.logged`.
+  `activity.logged`, `tender.registered`, `tender.bid-submitted`,
+  `tender.awarded`, `tender.lost`.
 - **Consume:** `organization.company.registered` (provisión de tenant),
   `organization.user.invited` (propietario comercial).
-- **Read models:** pipeline board, embudo por fase, próximas actividades.
+- **Read models:** pipeline board, embudo por fase, próximas actividades, agenda de
+  licitaciones por fecha límite.
 - **Necesidad:** todo el cliente en un sitio, seguir oportunidades, no olvidar
-  seguimientos. *(roadmap 1.2)*
+  seguimientos, seguir licitaciones públicas (plazos, pliegos, bid/no-bid,
+  adjudicación). *(roadmap 1.2)*
 
 ### Projects / Construction (`erpify.backoffice.projects.*`)
 
@@ -193,19 +205,29 @@ Dos caras del mismo núcleo compartido:
 ### Budgeting & Estimation (`erpify.backoffice.budgeting.*`)
 
 - **Responsabilidad:** presupuestos y estimación por obra, con versionado y
-  márgenes.
+  márgenes. Incluye el **configurador por capas** (pavimentos como primer vertical)
+  como sub-motor de estimación y el **estudio económico previo** (presupuesto
+  borrador para una licitación, antes de adjudicar).
 - **Agregados/entidades:** ⬢ `Budget` · `BudgetLine` (partida) · `EstimationTemplate`
-  · `BudgetVersion`.
+  · `BudgetVersion` · ⬢ `Configuration` (configurador por capas) ·
+  `PreBidStudy` (estudio previo).
 - **Value objects:** `Money`/`Currency`, `Markup`/`Margin`, `Quantity`+`Unit`,
-  `CostType`.
+  `CostType`, `LayerSpec`, `ProductivityRatio` (rendimiento), `PricingRule`.
 - **Invariantes:** un presupuesto referencia una obra (UUID, sin FK); el total es
-  la suma de líneas × cantidades; aprobar congela una versión inmutable.
+  la suma de líneas × cantidades; aprobar congela una versión inmutable. Una
+  configuración deriva su coste de sus capas (material + mano de obra + transporte)
+  y genera líneas de presupuesto; un estudio previo referencia una **licitación**
+  (no una obra) por id, hasta que se adjudica.
 - **Emite:** `budget.created`, `budget.line-added`, `budget.version-created`,
-  `budget.approved`, `budget.rejected`.
-- **Consume:** `projects.project.created` (a qué obra presupuestar).
-- **Read models:** previsto vs. real por partida, margen por obra.
+  `budget.approved`, `budget.rejected`, `configuration.priced`,
+  `budget.line-generated`, `study.completed`.
+- **Consume:** `projects.project.created` (a qué obra presupuestar),
+  `crm.tender.registered` (qué licitación estudiar).
+- **Read models:** previsto vs. real por partida, margen por obra, coste por
+  configuración.
 - **Necesidad:** presupuestar por obra, reutilizar plantillas, comparar previsto
-  vs. real y margen. *(roadmap 1.4)*
+  vs. real y margen, configurar estructuras por capas con su coste, estudiar una
+  licitación antes de presentarla. *(roadmap 1.4, 1.6)*
 
 ### Procurement & Inventory (`erpify.backoffice.procurement.*`)
 
@@ -281,6 +303,45 @@ Dos caras del mismo núcleo compartido:
 - **Necesidad:** facturar a cliente/proveedor, seguir cobros y pagos, ver cashflow,
   saber margen por proyecto. *(roadmap 2.3)*
 
+### Cost Allocation (`erpify.backoffice.cost-allocation.*`)
+
+- **Responsabilidad:** centros de coste y reglas de imputación que reparten costes
+  reales sobre obras y objetos de coste. Motor **event-driven**: consume eventos de
+  coste y produce imputaciones auditables; no posee el coste, lo distribuye.
+- **Agregados/entidades:** ⬢ `CostCenter` (jerárquico) · ⬢ `AllocationRule`
+  (driver + método) · `AllocationRun` · `AllocationEntry` (resultado) · `CostPool`.
+- **Value objects:** `AllocationMethod` (directa/indirecta/%/volumen/horas/
+  consumo/fórmula), `CostDriver`, `Weight`, `Money`/`Currency`.
+- **Invariantes:** la suma de las imputaciones de un pool = el coste del pool (sin
+  fugas ni duplicados); una regla es idempotente por `eventId`; toda imputación
+  guarda su traza de cálculo (driver, método, factor).
+- **Emite:** `cost-center.created`, `allocation-rule.defined`, `allocation.run`,
+  `cost.allocated`.
+- **Consume:** `workforce.time.logged`, `procurement.goods.received`,
+  `finance.project.cost-accrued` (ACL → driver de coste).
+- **Read models:** coste por centro/obra, indirectos repartidos, deriva de coste.
+- **Necesidad:** repartir indirectos con reglas, imputar cada coste a su obra,
+  auditar cómo se calculó. *(roadmap 2.5)*
+
+### Commissions (`erpify.backoffice.commissions.*`)
+
+- **Responsabilidad:** planes de comisión por beneficiario, con devengo por evento
+  y liquidación. Suscriptor del bus comercial/financiero.
+- **Agregados/entidades:** ⬢ `CommissionPlan` (reglas) · `Beneficiary`
+  (cliente/proveedor/empleado/empresa, por id) · ⬢ `CommissionAccrual` (devengo) ·
+  `Settlement` (liquidación).
+- **Value objects:** `CommissionRate` (%/fijo/escalado), `Tier`, `Money`/`Currency`,
+  `AccrualStatus`.
+- **Invariantes:** un devengo referencia su hecho origen (`opportunity`/`invoice`,
+  por id) y es idempotente por `eventId`; una liquidación congela los devengos que
+  incluye; no se devenga dos veces el mismo hecho.
+- **Emite:** `commission.accrued`, `commission.settled`, `commission-plan.updated`.
+- **Consume:** `crm.opportunity.won`, `finance.payment.received` (ACL → base de
+  cálculo).
+- **Read models:** comisiones devengadas por beneficiario, pendientes de liquidar.
+- **Necesidad:** definir comisiones %/fijo/escalado, calcularlas solas al ganar o
+  cobrar, liquidar con desglose. *(roadmap 2.7)*
+
 ### Automation Engine (`erpify.backoffice.automation.*`)
 
 - **Responsabilidad:** reglas y workflows que reaccionan a eventos del dominio y
@@ -324,6 +385,27 @@ Dos caras del mismo núcleo compartido:
 - **Consume:** `organization.company.registered` (defaults por tenant).
 - **Necesidad:** activar/desactivar funciones por empresa sin desplegar, probar con
   un grupo antes que todos. *(roadmap 3.3)*
+
+### External Portals (`erpify.backoffice.portals.*`)
+
+- **Responsabilidad:** superficies self-service por tipo de actor externo (cliente,
+  proveedor, subcontrata, empleado). **No posee dominio de negocio**: expone, vía
+  RBAC + ABAC, vistas y comandos acotados de otros contextos al actor dueño de esos
+  datos. Cada portal es un *conformist* de los contextos que consume.
+- **Agregados/entidades:** ⬢ `PortalAccess` (actor↔alcance) · `PortalInvitation` ·
+  `ScopedSession`.
+- **Value objects:** `ActorType` (client/provider/subcontractor/employee),
+  `AccessScope`, `BusinessContext` (employeeStatus/customerStatus — ya en el front).
+- **Invariantes:** un acceso solo ve los datos de su actor (tenant + propietario);
+  el alcance lo decide una policy ABAC, no la pantalla; una invitación caduca.
+- **Emite:** `portal-access.granted`, `portal-invitation.sent`,
+  `portal.action-submitted` (parte, aprobación o factura subida).
+- **Consume:** `organization.user.invited`, y por portal los Application services /
+  read models de Projects y Finance (certificaciones, facturas), Procurement
+  (pedidos, albaranes) y Workforce (partes).
+- **Read models:** «mis proyectos / facturas / pedidos / partes» por actor.
+- **Necesidad:** que cada actor externo opere lo suyo sin pasar por oficina.
+  *(roadmap 2.6)*
 
 ### Reporting & Analytics (`erpify.backoffice.reporting.*`)
 
@@ -387,20 +469,23 @@ Dos caras del mismo núcleo compartido:
 Tabla maestra de los eventos **de integración** que cruzan fronteras. El payload
 lista los campos clave (IDs siempre UUID v7); el resto es interno al emisor.
 
-| Evento | Emite | Payload (clave) | Consumidores |
-|---|---|---|---|
-| `organization.company.registered` | Organization | companyId, name, locale | todos (provisión tenant) |
-| `organization.user.invited` | Organization | userId, companyId, role | CRM, Projects, Notifications |
-| `crm.opportunity.won` | CRM | opportunityId, accountId, amount, companyId | Projects, Finance |
-| `projects.project.created` | Projects | projectId, accountId, companyId | Budgeting, Procurement, Workforce, DMS |
-| `projects.task.completed` | Projects | taskId, projectId | Workforce, Reporting |
-| `budgeting.budget.approved` | Budgeting | budgetId, projectId, total | Procurement, Finance |
-| `procurement.goods.received` | Procurement | poId, projectId, lines[] | Finance, Reporting |
-| `procurement.stock.below-reorder-point` | Procurement | materialId, locationId | Notifications, Automation |
-| `workforce.time.logged` | Workforce | timeEntryId, taskId, projectId, hours, cost | Finance, Projects, Reporting |
-| `finance.invoice.issued` | Finance | invoiceId, accountId, projectId, total | Reporting, Notifications |
-| `finance.payment.received` | Finance | paymentId, invoiceId, amount | Reporting, Notifications |
-| `*` (cualquiera) | todos | — | Audit, Reporting, Automation, Notifications |
+| Evento                                  | Emite           | Payload (clave)                                    | Consumidores                                |
+|-----------------------------------------|-----------------|----------------------------------------------------|---------------------------------------------|
+| `organization.company.registered`       | Organization    | companyId, name, locale                            | todos (provisión tenant)                    |
+| `organization.user.invited`             | Organization    | userId, companyId, role                            | CRM, Projects, Notifications                |
+| `crm.opportunity.won`                   | CRM             | opportunityId, accountId, amount, companyId        | Projects, Finance, Commissions              |
+| `projects.project.created`              | Projects        | projectId, accountId, companyId                    | Budgeting, Procurement, Workforce, DMS      |
+| `projects.task.completed`               | Projects        | taskId, projectId                                  | Workforce, Reporting                        |
+| `budgeting.budget.approved`             | Budgeting       | budgetId, projectId, total                         | Procurement, Finance                        |
+| `procurement.goods.received`            | Procurement     | poId, projectId, lines[]                           | Finance, Reporting                          |
+| `procurement.stock.below-reorder-point` | Procurement     | materialId, locationId                             | Notifications, Automation                   |
+| `workforce.time.logged`                 | Workforce       | timeEntryId, taskId, projectId, hours, cost        | Finance, Projects, Reporting                |
+| `finance.invoice.issued`                | Finance         | invoiceId, accountId, projectId, total             | Reporting, Notifications                    |
+| `finance.payment.received`              | Finance         | paymentId, invoiceId, amount                       | Reporting, Notifications, Commissions       |
+| `crm.tender.awarded`                    | CRM             | tenderId, accountId, studyId                       | Projects, Notifications                     |
+| `cost-allocation.cost.allocated`        | Cost Allocation | allocationEntryId, costCenterId, projectId, amount | Reporting, Finance                          |
+| `commissions.commission.accrued`        | Commissions     | accrualId, beneficiaryId, sourceId, amount         | Finance, Reporting, Notifications           |
+| `*` (cualquiera)                        | todos           | —                                                  | Audit, Reporting, Automation, Notifications |
 
 > Cada consumidor traduce el evento ajeno en su propio modelo mediante un ACL; no
 > comparte tipos con el emisor más allá de este contrato.
