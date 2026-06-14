@@ -61,6 +61,19 @@ describe("parseBankRealtimeEvent", () => {
     }
   });
 
+  it("defaults a malformed accountCount (NaN, Infinity, negative, non-integer) to 0", () => {
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, -1, 1.5]) {
+      const event = parseBankRealtimeEvent({
+        type: "bank.created",
+        bank: { ...primitives, accountCount: bad },
+      });
+      expect(event?.kind).toBe("created");
+      if (event?.kind === "created") {
+        expect(event.bank.accountCount).toBe(0);
+      }
+    }
+  });
+
   it("still rejects a payload missing a core identity field", () => {
     const { id: _, ...withoutId } = primitives;
     expect(parseBankRealtimeEvent({ type: "bank.created", bank: withoutId })).toBeNull();

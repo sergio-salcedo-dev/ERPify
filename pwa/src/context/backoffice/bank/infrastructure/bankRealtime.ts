@@ -30,13 +30,19 @@ export interface BankRealtimeHandlers {
   onReconnect?: () => void;
 }
 
+/** A count is valid only as a non-negative integer; everything else normalizes to 0. */
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0;
+}
+
 /**
  * Validates the identity/lifecycle core of a bank payload and normalizes it to
  * `BankPrimitives`. `accountCount` is a display-only signal: a payload from a
  * pre-`accountCount` API pod (rolling deploy) or a replayed older event may omit
- * it, so a missing/non-numeric value defaults to 0 rather than dropping the whole
- * event — losing a created/updated delivery over a cosmetic field is the worse
- * failure. The next list/detail fetch reconciles the count (stale-tolerant).
+ * it, so a missing or non-conforming value (not a non-negative integer) defaults
+ * to 0 rather than dropping the whole event — losing a created/updated delivery
+ * over a cosmetic field is the worse failure. The next list/detail fetch
+ * reconciles the count (stale-tolerant).
  */
 function toBankPrimitives(value: unknown): BankPrimitives | null {
   if (typeof value !== "object" || value === null) {
@@ -58,7 +64,7 @@ function toBankPrimitives(value: unknown): BankPrimitives | null {
     shortName: v.shortName,
     createdAt: v.createdAt,
     updatedAt: v.updatedAt,
-    accountCount: typeof v.accountCount === "number" ? v.accountCount : 0,
+    accountCount: isNonNegativeInteger(v.accountCount) ? v.accountCount : 0,
   };
 }
 

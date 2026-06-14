@@ -24,6 +24,13 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+// `accountCount` is a count: a present value must be a non-negative integer.
+// `typeof NaN === "number"` and floats/negatives would otherwise pass and render
+// as "None", so the guard — not the `?? 0` mapping (which only catches null) — rejects them.
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0;
+}
+
 function isBankPrimitives(value: unknown): value is BankPrimitives {
   return (
     isObjectRecord(value) &&
@@ -32,7 +39,7 @@ function isBankPrimitives(value: unknown): value is BankPrimitives {
     typeof value.shortName === "string" &&
     typeof value.createdAt === "string" &&
     typeof value.updatedAt === "string" &&
-    typeof value.accountCount === "number"
+    isNonNegativeInteger(value.accountCount)
   );
 }
 
@@ -90,7 +97,7 @@ function isBankWriteSingleResponse(
     typeof d.shortName === "string" &&
     typeof d.createdAt === "string" &&
     typeof d.updatedAt === "string" &&
-    (d.accountCount === undefined || typeof d.accountCount === "number")
+    (d.accountCount === undefined || isNonNegativeInteger(d.accountCount))
   );
 }
 
