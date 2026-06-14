@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\Bank\Domain\Event;
 
-use DateTimeImmutable;
 use Erpify\Shared\Domain\Event\DomainEvent;
 use Override;
 
@@ -24,12 +23,8 @@ abstract class AbstractBankChangedDomainEvent extends DomainEvent
         private readonly ?string $logoContentHash = null,
         private readonly ?string $storedObjectContentHash = null,
         private readonly ?string $storedObjectMimeType = null,
-        ?DateTimeImmutable $occurredOn = null,
     ) {
-        parent::__construct(
-            $bankId,
-            $occurredOn ?? self::now(),
-        );
+        parent::__construct($bankId, self::now());
     }
 
     /**

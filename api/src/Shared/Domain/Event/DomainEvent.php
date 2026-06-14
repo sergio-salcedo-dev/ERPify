@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Shared\Domain\Event;
 
 use DateTimeImmutable;
+use Erpify\Shared\Domain\Clock\SystemClock;
 use Erpify\Shared\Domain\Uuid\Uuid;
 
 /**
@@ -45,6 +46,6 @@ abstract class DomainEvent
 
     protected static function now(): DateTimeImmutable
     {
-        return new DateTimeImmutable();
+        return SystemClock::now();
     }
 }

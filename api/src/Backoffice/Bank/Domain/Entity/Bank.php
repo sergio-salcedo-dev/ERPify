@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\Bank\Domain\Entity;
 
-use DateTimeImmutable;
 use DateTimeInterface;
 use Doctrine\ORM\Mapping as ORM;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankDeletedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
 use Erpify\Shared\Domain\Aggregate\AggregateRoot;
+use Erpify\Shared\Domain\Clock\SystemClock;
 use Erpify\Shared\Domain\ValueObject\NormalizedText;
 use Erpify\Shared\Media\Domain\Entity\Media;
 use Erpify\Shared\Storage\Domain\StoredObject;
@@ -186,7 +186,7 @@ final class Bank extends AggregateRoot
         $this->name = $normalizedText->display;
         $this->nameNormalized = $normalizedText->normalized;
         $this->shortName = NormalizedText::toAsciiUpper($shortName);
-        $now = new DateTimeImmutable();
+        $now = SystemClock::now();
         $this->updatedAt = $now;
 
         $this->record(new BankUpdatedDomainEvent(
