@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Shared\Storage\Infrastructure\Controller;
 
 use Erpify\Shared\Infrastructure\Http\ContentAddressedHttpCache;
-use Erpify\Shared\Storage\Application\Port\ObjectStoragePort;
+use Erpify\Shared\Storage\Application\Port\StoragePort;
 use Erpify\Shared\Storage\Application\Port\StoredObjectAccessPort;
 use Erpify\Shared\Storage\Infrastructure\Controller\StoredObjectGetController;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -64,7 +64,7 @@ final class StoredObjectGetControllerTest extends TestCase
         bool $blobExists,
         string $mime = 'application/octet-stream',
     ): StoredObjectGetController {
-        $objectStorage = $this->createStub(ObjectStoragePort::class);
+        $objectStorage = $this->createStub(StoragePort::class);
         $objectStorage->method('exists')->willReturn($blobExists);
         $objectStorage->method('read')->willReturn('PDF');
 

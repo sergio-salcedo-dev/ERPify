@@ -44,7 +44,8 @@ New bounded contexts/modules follow the same three-layer split. Cross-context ca
 -   **Don't skip** `make php.quality` locally — CI runs it and the fixers (`cs-fixer`, `rector`) mutate files, so running them first keeps diffs clean.
 -   **PHPStan (`level: max`) is the sole type-checking gate.** Psalm's general analysis was retired (the redundant second type-checker disagreed with PHPStan, and its `--alter` auto-fix / ~492-issue baseline were pure friction). Psalm now runs **taint-only** via `make php.psalm.taint` (security dataflow → SARIF, its own `api-taint` CI job, config `tools/psalm/psalm-taint.xml`). There is no general psalm config or baseline anymore.
 -   **PostgreSQL Migrations:**
-    -   Use `CONCURRENTLY` for indices in prod (requires `isTransactional() => false`) to avoid blocking writes.
+    -   Migrations are **transactional** (the default). The migrate pipeline runs `--all-or-nothing` and the `php` entrypoint migrates on boot — doctrine-migrations **rejects** `isTransactional() => false` under all-or-nothing (`MigrationConfigurationConflict` breaks stack boot). Plain `CREATE INDEX` is fine at current table sizes.
+    -   `CREATE INDEX CONCURRENTLY` (which requires `isTransactional() => false`) is reserved for a genuinely large, write-hot table, and runs **out-of-band**: a deliberate one-off `doctrine:migrations:migrate --no-all-or-nothing` for that deploy — never by weakening the default pipeline.
     -   Use `IF [NOT] EXISTS` for idempotency and resilient rollbacks.
     -   Review lock impact of non-concurrent operations (e.g., `ALTER TABLE`).
     -   Always verify migrations in staging before production.

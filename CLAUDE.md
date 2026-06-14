@@ -94,6 +94,7 @@ Both sides follow **DDD + Hexagonal / Clean Architecture**, dependencies pointin
 - **HTTP error responses** → never bypass the RFC 9457 pipeline with manual `JsonResponse` error bodies. Adding a marker interface or changing its mapping requires updating [`docs/api-error-contract.md`](docs/api-error-contract.md) (NFR26). Drift gate: `make php.lint.error-contract`.
 - **Bounded-context isolation** → never import another business context's `Domain\`/`Application\`/`Infrastructure\` (inject foreign repositories, know its internals) — reference identities and react to events instead (`Erpify\Shared\…` is always importable). A genuine published cross-context seam goes in `api/.bounded-context-allowlist`. Gate: `make php.lint.bounded-context` (Level 1 fails; cross-context FKs are Level 2 warnings). Rule: [`docs/rules/database.md`](docs/rules/database.md).
 - **Migrations** → generate via `make db.diff`. You may edit a migration created on the current feature branch; once merged into `main` it is immutable — create a new one instead.
+- **Local browser checks** → when a Playwright/browser navigation to the local HTTPS stack fails with `ERR_CERT_AUTHORITY_INVALID` (self-signed dev cert), don't silently downgrade to curl-only: say you hit it and pause — the user accepts the cert manually in the browser, then you retry the navigation. `curl -k` stays the hard gate, but the live visual check is recoverable this way, not abandoned.
 
 ---
 
