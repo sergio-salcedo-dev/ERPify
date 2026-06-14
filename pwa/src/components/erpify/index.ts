@@ -32,6 +32,7 @@ export { RecordSheet } from "./RecordSheet";
 export { DeleteResourceButton } from "./DeleteResourceButton";
 export type { DeleteResourceButtonProps, ResourceDeleteGuard } from "./DeleteResourceButton";
 export { ResourceBulkBar } from "./ResourceBulkBar";
+export { ResourceColumnPicker } from "./ResourceColumnPicker";
 export { ResourceViewToggle } from "./ResourceViewToggle";
 export type { ResourceView } from "./ResourceViewToggle";
 export { Spinner } from "./Spinner";
