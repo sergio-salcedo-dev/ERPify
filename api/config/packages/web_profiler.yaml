@@ -6,3 +6,22 @@ when@dev:
     framework:
         profiler:
             only_exceptions: false
+            # Shared, env-agnostic storage path: Behat collects profiles in the in-process
+            # `test` kernel, but the `print the web profiler link` step points the browser at
+            # the dev server's `/_profiler` route — both must read the same store to resolve a token.
+            dsn: 'file:%kernel.project_dir%/var/profiler'
+
+when@test:
+    web_profiler:
+        # Must be on: WebProfilerBundle only registers the listener that emits the
+        # `X-Debug-Token-Link` header when the toolbar is enabled. The toolbar HTML itself is
+        # never injected into Behat's JSON responses (injection is gated on a text/html body).
+        toolbar: true
+        intercept_redirects: false
+
+    framework:
+        profiler:
+            # Opt-in: a profile is only collected on requests preceded by the
+            # `I enable the web profiler` Behat step, keeping the suite fast by default.
+            collect: false
+            dsn: 'file:%kernel.project_dir%/var/profiler'

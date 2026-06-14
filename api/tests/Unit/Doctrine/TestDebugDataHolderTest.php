@@ -30,7 +30,7 @@ final class TestDebugDataHolderTest extends TestCase
     protected function setUp(): void
     {
         $this->testDebugDataHolder = new TestDebugDataHolder();
-        $this->testDebugDataHolder->reset();
+        $this->testDebugDataHolder->resetScenario();
     }
 
     public function testForceFlagBypassesFilter(): void
@@ -46,14 +46,23 @@ final class TestDebugDataHolderTest extends TestCase
         $this->assertSame('SELECT 1', $data['default'][0]['sql']);
     }
 
-    public function testResetClearsBothDataAndBacktraces(): void
+    public function testResetScenarioClearsBothDataAndBacktraces(): void
     {
         $this->testDebugDataHolder->addQuery('default', $this->makeQuery('SELECT 1'), true);
         $this->assertNotEmpty($this->testDebugDataHolder->getData());
 
-        $this->testDebugDataHolder->reset();
+        $this->testDebugDataHolder->resetScenario();
 
         $this->assertSame([], $this->testDebugDataHolder->getData());
+    }
+
+    public function testResetIsNoOpSoProfilerCollectorCannotWipeAccumulator(): void
+    {
+        $this->testDebugDataHolder->addQuery('default', $this->makeQuery('SELECT 1'), true);
+
+        $this->testDebugDataHolder->reset();
+
+        $this->assertNotEmpty($this->testDebugDataHolder->getData());
     }
 
     public function testStaticStatePersistsAcrossInstances(): void
@@ -64,7 +73,7 @@ final class TestDebugDataHolderTest extends TestCase
 
         $this->assertArrayHasKey('default', $testDebugDataHolder->getData());
 
-        $testDebugDataHolder->reset();
+        $testDebugDataHolder->resetScenario();
 
         $this->assertSame([], $this->testDebugDataHolder->getData());
     }

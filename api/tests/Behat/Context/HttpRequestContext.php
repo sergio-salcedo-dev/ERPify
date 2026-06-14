@@ -486,6 +486,17 @@ class HttpRequestContext extends AbstractContext
 
     // DEBUG SCENARIOS
     /**
+     * Opt the next request into profiler collection so {@see HttpResponseContext::printTheWebProfilerLink}
+     * has a token to resolve. The test kernel does not collect profiles by default (web_profiler.yaml
+     * sets `collect: false`); place this step before the request you want to inspect.
+     */
+    #[Given('I enable the web profiler')]
+    public function iEnableTheWebProfiler(): void
+    {
+        $this->getClient()->enableProfiler();
+    }
+
+    /**
      * print last request curl command.
      */
     #[Then('print the corresponding curl command')]

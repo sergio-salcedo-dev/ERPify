@@ -15,8 +15,11 @@ $bundles = [
     League\FlysystemBundle\FlysystemBundle::class => ['all' => true],
     Symfony\Bundle\MonologBundle\MonologBundle::class => ['all' => true],
     Sentry\SentryBundle\SentryBundle::class => ['dev' => true, 'prod' => true],
-    Symfony\Bundle\TwigBundle\TwigBundle::class => ['dev' => true],
-    Symfony\Bundle\WebProfilerBundle\WebProfilerBundle::class => ['dev' => true],
+    // Twig and the profiler are also enabled under `test` so the Behat `print the web profiler
+    // link` debug step can collect a profile and resolve the `_profiler` URL (WebProfilerBundle
+    // pulls in Twig for its templates). Collection stays opt-in per scenario — see web_profiler.yaml.
+    Symfony\Bundle\TwigBundle\TwigBundle::class => ['dev' => true, 'test' => true],
+    Symfony\Bundle\WebProfilerBundle\WebProfilerBundle::class => ['dev' => true, 'test' => true],
     Symfony\Bundle\DebugBundle\DebugBundle::class => ['dev' => true],
 ];
 
