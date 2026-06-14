@@ -7,6 +7,8 @@ import { CheckHealth as FrontOfficeCheckHealth } from "../../../frontoffice/heal
 import { CheckHealth as BackOfficeCheckHealth } from "../../../backoffice/health/application/CheckHealth";
 import { ApiBankRepository } from "../../../backoffice/bank/infrastructure/ApiBankRepository";
 import { ApiBankSearchNavigator } from "../../../backoffice/bank/infrastructure/ApiBankSearchNavigator";
+import { BankCrudRepository } from "../../../backoffice/bank/infrastructure/BankCrudRepository";
+import { BankResourceNavigator } from "../../../backoffice/bank/infrastructure/BankResourceNavigator";
 import { SearchBanks } from "../../../backoffice/bank/application/SearchBanks";
 import { FindBank } from "../../../backoffice/bank/application/FindBank";
 import { CreateBank } from "../../../backoffice/bank/application/CreateBank";
@@ -49,6 +51,19 @@ container
 container
   .bind<ApiBankSearchNavigator>("BackOfficeBankSearchNavigator")
   .to(ApiBankSearchNavigator)
+  .inSingletonScope();
+
+// Generic resource-toolkit adapters over the bank ports: the banks list page
+// runs on `useResourceList`, which consumes `{ items }`-shaped pages through the
+// `CrudRepository`/`ResourceSearchNavigator` contracts.
+container
+  .bind<BankCrudRepository>("BackOfficeBankCrudRepository")
+  .to(BankCrudRepository)
+  .inSingletonScope();
+
+container
+  .bind<BankResourceNavigator>("BackOfficeBankResourceNavigator")
+  .to(BankResourceNavigator)
   .inSingletonScope();
 
 container.bind<SearchBanks>("BackOfficeSearchBanks").to(SearchBanks);
