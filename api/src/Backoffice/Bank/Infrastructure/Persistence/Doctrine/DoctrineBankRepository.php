@@ -58,9 +58,9 @@ final readonly class DoctrineBankRepository implements
     #[Override]
     public function save(Bank $bank): void
     {
-        // D-3 (FR12): the port contract no longer mandates the implicit flush, but the observable
-        // semantics stay persist+flush so POST/PUT/DELETE Behat is unaffected. Transaction-boundary
-        // ownership is a separate, out-of-scope decision.
+        // The port keeps persist+flush as its observable contract (POST/PUT/DELETE Behat depends on
+        // it). When a use case wraps this in a transaction the flush synchronizes but does not commit
+        // until that transaction commits. See docs/adr/event-driven-architecture.md.
         $this->entityManager->persist($bank);
         $this->entityManager->flush();
     }

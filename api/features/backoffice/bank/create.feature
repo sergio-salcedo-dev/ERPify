@@ -22,7 +22,7 @@ Feature: Create a bank
     And the response should contain "Test Bank"
     And the response should contain "TB"
     And the JSON node "data.accountCount" should not exist
-    And 6 requests got executed only for doctrine connection "default"
+    And 8 requests got executed only for doctrine connection "default"
 
   Scenario: Fail to create a bank with missing fields
     When I send a POST request to "/backoffice/banks" with body:

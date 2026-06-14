@@ -42,4 +42,4 @@ Feature: Doctrine query stats on bank CRUD
     """
     Then the response status code should be 201
     And a request contains "INSERT" for doctrine connection "default"
-    And 6 requests got executed only for doctrine connection "default"
+    And 8 requests got executed only for doctrine connection "default"

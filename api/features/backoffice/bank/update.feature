@@ -11,7 +11,7 @@ Feature: Update a bank
     {"name": "Original Bank", "shortName": "OB"}
     """
     Then the response status code should be 201
-    And 6 requests got executed only for doctrine connection "default"
+    And 8 requests got executed only for doctrine connection "default"
 #    And I remember the JSON field "id" as "bankId"
 #
 #    And I send a PUT request to "/backoffice/banks/{bankId}" with body:

@@ -13,7 +13,7 @@ Feature: Delete a bank
     And the response status code should be 201
     When I send a "DELETE" request to "/backoffice/banks/{value}" using the JSON node "data.id" from the previous response
     Then the response status code should be 204
-    And 12 requests got executed only for doctrine connection "default"
+    And 16 requests got executed only for doctrine connection "default"
 
   Scenario: Delete a bank that does not exist returns a 404 bank-not-found Problem Details body
     When I send a "DELETE" request to "/backoffice/banks/2e6d865c-17b0-476a-85f2-037bf6d3b3dc"
