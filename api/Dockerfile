@@ -8,7 +8,7 @@
 # https://docs.docker.com/build/building/multi-stage/#stop-at-a-specific-build-stage
 # https://docs.docker.com/reference/compose-file/build/#target
 
-FROM dunglas/frankenphp@sha256:932495e768c843729b043bfb0e40af6143b1bac98862d16aa93ea10d7338f8ed AS frankenphp_upstream
+FROM dunglas/frankenphp@sha256:7cb336a623b3117e4051cf514a5a89f75023aa3815be054fa1898b7cd9299130 AS frankenphp_upstream
 
 # Base FrankenPHP image
 FROM frankenphp_upstream AS frankenphp_base
