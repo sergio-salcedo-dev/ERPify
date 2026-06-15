@@ -204,7 +204,7 @@ export const backofficeMenuGroups: NavGroup[] = [
           { name: "Users", path: `${BASE}/users`, icon: Users },
           { name: "Features & Modules", path: `${BASE}/settings/features`, icon: SlidersVertical },
           { name: "Audit Logs", path: `${BASE}/audit`, icon: History },
-          { name: "Service Health", path: `${BASE}/health`, icon: Activity },
+          { name: "System Health", path: `${BASE}/health`, icon: Activity },
         ],
       },
     ],

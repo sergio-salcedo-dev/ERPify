@@ -65,7 +65,17 @@ export class MockHttpClient implements HttpClient {
   async get<T>(url: string, _validate?: ResponseGuard<T>): Promise<T> {
     return new Promise((resolve) => {
       setTimeout(() => {
-        if (url.includes(API_ENDPOINTS.FRONTOFFICE.HEALTH)) {
+        if (url.includes(API_ENDPOINTS.BACKOFFICE.HEALTH_DATABASE)) {
+          // why: matched before BACKOFFICE.HEALTH — the database path is a
+          // superstring of `/health`, so the broader branch would shadow it.
+          resolve({
+            data: {
+              status: "ok",
+              service: "Database",
+              datetime: new Date().toISOString(),
+            },
+          } as T);
+        } else if (url.includes(API_ENDPOINTS.FRONTOFFICE.HEALTH)) {
           resolve({
             data: {
               status: "ok",
