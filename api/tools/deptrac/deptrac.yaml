@@ -37,7 +37,12 @@ parameters:
     paths:
         - ../../src
     exclude_files:
-        - '#.*[Tt]est.*#'
+        # Anchored to real test files (a Tests/ or Test/ path segment, or a
+        # *Test.php class). An unanchored substring match (#.*[Tt]est.*#) would
+        # also drop production classes whose path merely contains "test" —
+        # Latest, Attestation, Contest, …
+        - '#(^|/)Tests?/#'
+        - '#Test\.php$#'
 
 deptrac:
     layers:
