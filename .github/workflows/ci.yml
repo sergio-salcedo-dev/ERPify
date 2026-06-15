@@ -24,6 +24,10 @@ env:
   FRANKENPHP_WORKER_CONFIG: ""
   FRANKENPHP_SITE_CONFIG: ""
 
+# Restrictive default: any job that forgets its own block inherits read-only.
+permissions:
+  contents: read
+
 jobs:
 
   # -------------------------
@@ -37,7 +41,7 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v6.0.3
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
 
@@ -73,7 +77,7 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v6.0.3
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
 
@@ -144,7 +148,7 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v6.0.3
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
 
@@ -200,7 +204,7 @@ jobs:
       security-events: write # upload taint SARIF to code scanning
 
     steps:
-      - uses: actions/checkout@v6.0.3
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
 
@@ -237,7 +241,7 @@ jobs:
       - name: Upload taint SARIF
         if: always()
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v4.36.2
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
         with:
           sarif_file: api/tools/psalm/psalm-taint.sarif
           category: psalm-taint
@@ -254,11 +258,12 @@ jobs:
   pwa-node:
     name: PWA (Node)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
 
     steps:
-      - uses: actions/checkout@v6.0.3
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
 
@@ -288,7 +293,7 @@ jobs:
         shard: [1]
 
     steps:
-      - uses: actions/checkout@v6.0.3
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
 
@@ -322,7 +327,7 @@ jobs:
         run: echo "version=$(node -p "require('./pwa/package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
 
       - name: Cache Playwright Browsers
-        uses: actions/cache@v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
@@ -342,11 +347,15 @@ jobs:
         env:
           CI: true
           PLAYWRIGHT_BASE_URL: https://localhost
-        run: make pwa.test.e2e CI_SHARD=${{ matrix.shard }} CI_TOTAL_SHARDS=${{ strategy.job-total }}
+          # Indirect through env (not inline ${{ }}) so the run block never expands
+          # a workflow expression into shell — the safe pattern used in ci-summary.
+          SHARD: ${{ matrix.shard }}
+          TOTAL_SHARDS: ${{ strategy.job-total }}
+        run: make pwa.test.e2e CI_SHARD="$SHARD" CI_TOTAL_SHARDS="$TOTAL_SHARDS"
 
       - name: Upload blob report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: blob-report-${{ matrix.shard }}
           path: pwa/blob-report/
@@ -379,7 +388,7 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v6.0.3
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
 
@@ -389,7 +398,7 @@ jobs:
         run: make pwa.install
 
       - name: Download blob reports
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: pwa/all-blob-reports
           pattern: blob-report-*
@@ -405,7 +414,7 @@ jobs:
           cd pwa && npx playwright merge-reports --reporter html ./all-blob-reports
 
       - name: Upload merged HTML report
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-report--attempt-${{ github.run_attempt }}
           path: pwa/playwright-report/
@@ -425,7 +434,7 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v6.0.3
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
 
@@ -459,7 +468,7 @@ jobs:
         run: echo "version=$(node -p "require('./pwa/package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
 
       - name: Cache Playwright Browsers
-        uses: actions/cache@v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
@@ -485,7 +494,7 @@ jobs:
 
       - name: Upload burn-in artifacts
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: burn-in-report--attempt-${{ github.run_attempt }}
           path: |
@@ -508,12 +517,46 @@ jobs:
           echo "=== inspect database ==="; docker inspect "$(docker compose ps -q database)" --format '{{json .State}}' || true
 
   # -------------------------
+  # SONARCLOUD (static analysis — informational, non-gating)
+  # -------------------------
+  # CI-based analysis on SonarCloud (sergio-salcedo-dev_ERPify). Requires the
+  # project's "Automatic Analysis" to be turned OFF in the SonarCloud UI
+  # (Project Settings ▸ Analysis Method) — the two are mutually exclusive and a
+  # scan errors out while AA is enabled. Deliberately kept out of the ci-success
+  # gate: a red Quality Gate informs, it does not block merges.
+  #
+  # Token hygiene: SONAR_TOKEN (a project-scoped analysis token) is a repo
+  # secret, injected only into the scan step's env, never echoed and never placed
+  # in sonar-project.properties. The job is skipped on fork PRs, where the secret
+  # is absent by design — so it can never leak to untrusted PR code. We use the
+  # plain `pull_request` trigger (never pull_request_target) for the same reason.
+  sonar:
+    name: SonarCloud
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          # Full history so SonarCloud can attribute new code / blame accurately.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # v8.1.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  # -------------------------
   # CI SUMMARY (aggregate — always renders)
   # -------------------------
   ci-summary:
     name: CI Summary
     if: always()
-    needs: [api-build, api-test, api-behat, api-taint, pwa-node, pwa-e2e, pwa-burn-in]
+    needs: [api-build, api-test, api-behat, api-taint, pwa-node, pwa-e2e, pwa-burn-in, sonar]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions: {}
@@ -528,6 +571,7 @@ jobs:
           R_PWA_NODE: ${{ needs.pwa-node.result }}
           R_PWA_E2E: ${{ needs.pwa-e2e.result }}
           R_PWA_BURNIN: ${{ needs.pwa-burn-in.result }}
+          R_SONAR: ${{ needs.sonar.result }}
         run: |
           {
             echo "## CI Execution Summary"
@@ -541,9 +585,13 @@ jobs:
             echo "| PWA (Node)      | $R_PWA_NODE |"
             echo "| PWA (E2E)       | $R_PWA_E2E |"
             echo "| PWA (Burn-In)   | $R_PWA_BURNIN |"
+            echo "| SonarCloud      | $R_SONAR |"
             echo ""
             if [ "$R_PWA_BURNIN" = "failure" ]; then
               echo "> ⚠️ **Flaky tests detected** — review the burn-in artifact."
+            fi
+            if [ "$R_SONAR" = "failure" ]; then
+              echo "> ⚠️ **SonarCloud quality gate failed** — informational only, does not block merge. See the SonarCloud dashboard."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 

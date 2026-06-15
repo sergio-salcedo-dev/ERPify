@@ -3,10 +3,7 @@ description: Node + Docker
 runs:
   using: "composite"
   steps:
-    - uses: actions/setup-node@v6
-      with:
-        node-version: "24"
-        cache: npm
-        cache-dependency-path: pwa/package-lock.json
-
-    - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+    # Compose the single-purpose setups so each pinned action SHA lives in exactly
+    # one place — full-setup is just node-setup + docker-setup, never a second copy.
+    - uses: ./.github/actions/node-setup
+    - uses: ./.github/actions/docker-setup
