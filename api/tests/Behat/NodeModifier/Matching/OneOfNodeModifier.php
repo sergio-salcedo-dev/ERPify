@@ -12,7 +12,7 @@ use Override;
  * Useful for fields whose valid values are non-deterministic (e.g. randomised ordering).
  *
  * Example (Gherkin):
- *   And the JSON node "status" should be equal to "<oneOf>active,pending,archived"
+ *   And the JSON node "status::oneOf" should be equal to "active,pending,archived"
  */
 class OneOfNodeModifier extends AbstractNodeModifier
 {

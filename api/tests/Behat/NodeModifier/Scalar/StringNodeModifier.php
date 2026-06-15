@@ -13,7 +13,7 @@ use Override;
  * feature file writes it as a raw scalar.
  *
  * Example (Gherkin):
- *   And the JSON node "accountNumber" should be equal to "<string>1234567890"
+ *   And the JSON node "accountNumber::string" should be equal to "1234567890"
  */
 class StringNodeModifier extends AbstractNodeModifier
 {

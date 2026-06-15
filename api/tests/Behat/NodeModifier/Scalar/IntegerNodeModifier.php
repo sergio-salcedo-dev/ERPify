@@ -12,7 +12,7 @@ use Override;
  * as strings in feature files still match integers returned by the API.
  *
  * Example (Gherkin):
- *   And the JSON node "bank.employees" should be equal to "<int>42"
+ *   And the JSON node "bank.employees::int" should be equal to "42"
  */
 class IntegerNodeModifier extends AbstractNodeModifier
 {

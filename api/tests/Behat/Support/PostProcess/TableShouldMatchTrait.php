@@ -20,7 +20,8 @@ trait TableShouldMatchTrait
      * Path syntax:
      *   - "field" — strict equals
      *   - "field?" — equals, but missing path is allowed (treated as null)
-     *   - "field::<modifier>" — apply a registered NodeModifier (e.g. ::date, ::amount)
+     *   - "field::<modifier>" — apply a registered NodeModifier (e.g. ::date, ::regex, ::uuid, ::amount).
+     *     An unknown modifier name is a loud {@see UnknownNodeModifierException}, not a silent fallthrough.
      */
     public function valueShouldMatch(mixed $entity, TableNode $table): void
     {
