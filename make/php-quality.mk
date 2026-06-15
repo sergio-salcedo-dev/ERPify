@@ -120,12 +120,12 @@ DEPTRAC = vendor/bin/deptrac --config-file=tools/deptrac/deptrac.yaml --cache-fi
 php.deptrac: ## Deptrac architecture gate (layering + bounded-context + dep allowlist); pass c= for extra args
 	@$(PHP_TEST) $(DEPTRAC) analyse $(c)
 
-# Regenerates the grandfathered inner-layer dependency baseline. Re-dumps the
-# published cross-context seams too (they live in skip_violations in deptrac.yaml);
-# strip any cross-context lines this re-merges so the seam allowlist stays the single
-# source — see the header of tools/deptrac/deptrac.baseline.yaml.
-php.deptrac.baseline: ## Regenerate the deptrac baseline (grandfathered inner-layer deps)
-	@$(PHP_TEST) $(DEPTRAC) analyse --formatter=baseline --output=tools/deptrac/deptrac.baseline.yaml
+# Regenerates the grandfathered inner-layer dependency baseline. The wrapper script
+# strips the published cross-context seams that deptrac's baseline formatter re-dumps
+# (they stay single-sourced in skip_violations in deptrac.yaml) and re-prepends the
+# header — see tools/deptrac/regen-baseline.sh.
+php.deptrac.baseline: ## Regenerate the deptrac baseline (grandfathered inner-layer deps; seams stripped)
+	@$(PHP_TEST) sh tools/deptrac/regen-baseline.sh
 
 ## —— Aggregates ——————————————————————————————————————————————————————————
 

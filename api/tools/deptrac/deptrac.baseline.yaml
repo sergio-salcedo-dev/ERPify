@@ -1,23 +1,16 @@
 # Deptrac baseline — pre-existing inner-layer framework dependencies, grandfathered.
 #
-# This is a RATCHET, not a blessing: every entry is a Domain/Application class that
-# touches a framework runtime the architecture confines to Infrastructure (ADR
-# docs/adr/external-dependencies-in-domain.md, issue #301). They predate the gate;
-# the gate stays green today and fails on any NEW inner-layer framework leak.
+# GENERATED — regenerate with `make php.deptrac.baseline` (do not hand-edit; the
+# regen strips cross-context seams and re-prepends this header). Each entry is a
+# Domain/Application class touching a framework runtime the architecture confines to
+# Infrastructure (ADR docs/adr/external-dependencies-in-domain.md, issue #301). They
+# predate the gate; it stays green today and fails on any NEW inner-layer leak.
+# Paying this down is tracked in issue #305.
 #
 # Published cross-context seams are NOT here — they live in `skip_violations` in
-# deptrac.yaml, mirrored from api/.bounded-context-allowlist. Do not add cross-context
-# entries to this file; a new cross-context import must fail, not be grandfathered.
-#
-# Notable debt worth a follow-up (see ADR D2): the Symfony Messenger MessageBus is
-# used directly in *.Application instead of a domain MessageBus port; the Symfony
-# Validator runtime leaks into Shared/Application (Validator, ProblemDetailsFactory);
-# BankAccount/Bank entities reference Shared\Infrastructure\Validator\EnumType and the
-# Serializer DateTimeNormalizer from inside Domain.
-#
-# Regenerate (debt only — then re-strip any seam lines this would re-merge from
-# deptrac.yaml):
-#   make php.deptrac.baseline
+# deptrac.yaml (mirror of api/.bounded-context-allowlist). A new cross-context import
+# must FAIL the gate, never be grandfathered; that is why regen strips seam targets
+# (Erpify\Backoffice\* / Erpify\Frontoffice\*) back out of this file.
 deptrac:
   skip_violations:
     Erpify\Backoffice\BankAccount\Application\BankAccountSearcher:

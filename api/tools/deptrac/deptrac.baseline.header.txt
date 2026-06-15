@@ -1,0 +1,13 @@
+# Deptrac baseline — pre-existing inner-layer framework dependencies, grandfathered.
+#
+# GENERATED — regenerate with `make php.deptrac.baseline` (do not hand-edit; the
+# regen strips cross-context seams and re-prepends this header). Each entry is a
+# Domain/Application class touching a framework runtime the architecture confines to
+# Infrastructure (ADR docs/adr/external-dependencies-in-domain.md, issue #301). They
+# predate the gate; it stays green today and fails on any NEW inner-layer leak.
+# Paying this down is tracked in issue #305.
+#
+# Published cross-context seams are NOT here — they live in `skip_violations` in
+# deptrac.yaml (mirror of api/.bounded-context-allowlist). A new cross-context import
+# must FAIL the gate, never be grandfathered; that is why regen strips seam targets
+# (Erpify\Backoffice\* / Erpify\Frontoffice\*) back out of this file.
