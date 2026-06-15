@@ -123,10 +123,16 @@ php.lint.event-bus: ## Event-dispatch boundary gate
 # dependency allowlist (issue #301 / ADR external-dependencies-in-domain). Analyse
 # is read-only, so it is safe in the parallel php.quality.dry-run fan-out. The cache
 # lives under var/cache so it never litters the api root.
+#
+# --fail-on-uncovered: a dependency whose target matches no layer (a vendor not in
+# the allowlist) fails the gate instead of passing as a silent "uncovered" count.
+# Every framework an inner/Infrastructure layer touches must be modelled as a
+# Vendor.* layer and explicitly permitted — so adding a new third-party dependency
+# is a conscious, reviewable change, not an invisible leak.
 DEPTRAC = vendor/bin/deptrac --config-file=tools/deptrac/deptrac.yaml --cache-file=var/cache/.deptrac.cache --no-progress
 
 php.deptrac: ## Deptrac architecture gate (layering + bounded-context + dep allowlist); pass c= for extra args
-	@$(PHP_TEST) $(DEPTRAC) analyse $(c)
+	@$(PHP_TEST) $(DEPTRAC) analyse --fail-on-uncovered $(c)
 
 # Regenerates the grandfathered inner-layer dependency baseline. The wrapper script
 # strips the published cross-context seams that deptrac's baseline formatter re-dumps

@@ -12,7 +12,8 @@ set -eu
 cd "$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)" # -> api root
 
 raw="$(mktemp)"
-trap 'rm -f "$raw"' EXIT
+out="$(mktemp)"
+trap 'rm -f "$raw" "$out"' EXIT
 
 # deptrac exits non-zero whenever it dumps violations into the baseline — that is the
 # expected outcome here, so don't let `set -e` abort. Validate the output instead.
@@ -33,6 +34,14 @@ grep -q '^  skip_violations:' "$raw" || {
                              { if (key != "" && n > 0) { print key; for (i = 0; i < n; i++) print item[i] } key = ""; n = 0; print }
         END                  { if (key != "" && n > 0) { print key; for (i = 0; i < n; i++) print item[i] } }
     ' "$raw"
-} > tools/deptrac/deptrac.baseline.yaml
+} > "$out"
+
+# Only overwrite the committed baseline once the new content is fully built and
+# non-empty, so a mid-pipeline failure (awk/cat error under `set -e`) leaves the
+# existing baseline intact. Write *through* the existing file rather than `mv`-ing
+# a tmpfile in: the container runs as root, and an mv'd /tmp file would leave a
+# root-owned baseline on the host bind mount.
+test -s "$out"
+cat "$out" > tools/deptrac/deptrac.baseline.yaml
 
 echo "Regenerated tools/deptrac/deptrac.baseline.yaml (cross-context seams stripped)."

@@ -16,7 +16,8 @@
 #      PSR interop contracts, symfony/uid, and the passive-metadata attribute
 #      namespaces (#[ORM\Mapping], #[Assert], #[Groups]); every framework with a
 #      runtime (Doctrine DBAL/ORM/Persistence, Symfony beyond uid, Monolog, API
-#      Platform, Guzzle, Flysystem) is confined to Infrastructure. Inner-layer
+#      Platform, Guzzle, Flysystem, Twig, Sentry, Intervention Image) is confined
+#      to Infrastructure, each permitted only in the layers that use it. Inner-layer
 #      framework usage that predates this gate is grandfathered in the baseline
 #      (deptrac.baseline.yaml) — a ratchet, not a blessing.
 #
@@ -124,6 +125,12 @@ deptrac:
           collectors: [{ type: classLike, value: ^GuzzleHttp\\.* }]
         - name: Vendor.Flysystem
           collectors: [{ type: classLike, value: ^League\\Flysystem\\.* }]
+        - name: Vendor.Twig
+          collectors: [{ type: classLike, value: ^Twig\\.* }]
+        - name: Vendor.InterventionImage
+          collectors: [{ type: classLike, value: ^Intervention\\Image\\.* }]
+        - name: Vendor.Sentry
+          collectors: [{ type: classLike, value: ^Sentry\\.* }]
 
     ruleset:
         # Domain rule is identical for every module: only the shared-kernel Domain
@@ -227,6 +234,7 @@ deptrac:
             - Vendor.ApiPlatform
             - Vendor.Guzzle
             - Vendor.Flysystem
+            - Vendor.Twig
         Frontoffice.Health.Infrastructure:
             - Shared.Domain
             - Shared.Application
@@ -266,6 +274,8 @@ deptrac:
             - Vendor.ApiPlatform
             - Vendor.Guzzle
             - Vendor.Flysystem
+            - Vendor.InterventionImage
+            - Vendor.Sentry
 
     # Published cross-context seams — the exact (importer => imported) pairs blessed
     # in api/.bounded-context-allowlist. Keep the two lists in sync.
