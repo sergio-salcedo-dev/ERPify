@@ -54,7 +54,11 @@ class DateNodeModifier extends AbstractNodeModifier
             return $value->format($format);
         }
 
-        \assert(\is_string($value));
+        // Only a string can be parsed into a DateTime here; a non-string actual is not a date,
+        // so return null and let the comparison fail cleanly.
+        if (!\is_string($value)) {
+            return null;
+        }
 
         return (new DateTime($value))->format($format);
     }

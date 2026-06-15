@@ -8,7 +8,7 @@ use DateTime;
 use Override;
 
 /**
- * Resolves the `date` type hint into a mutable {@see DateTime}, matching the pre-extraction behavior.
+ * Resolves the `date` type hint into a mutable {@see DateTime}.
  */
 final class DateValueResolver implements ValueResolverInterface
 {
@@ -21,7 +21,11 @@ final class DateValueResolver implements ValueResolverInterface
     #[Override]
     public function resolve(mixed $value, ?string $type): mixed
     {
-        \assert(\is_scalar($value));
+        // supports() matches on the type only, not the value: a non-scalar value cannot become
+        // a DateTime, so pass it through unchanged for a later resolver/caller to handle.
+        if (!\is_scalar($value)) {
+            return $value;
+        }
 
         return new DateTime((string) $value);
     }

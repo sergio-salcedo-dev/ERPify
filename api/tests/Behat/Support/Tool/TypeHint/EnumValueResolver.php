@@ -28,14 +28,15 @@ final class EnumValueResolver implements ValueResolverInterface
             $resolved = [];
 
             foreach ($value as $index => $label) {
-                \assert(\is_string($label));
-                $resolved[$index] = $type::fromLabel($label) ?? $label;
+                $resolved[$index] = \is_string($label) ? ($type::fromLabel($label) ?? $label) : $label;
             }
 
             return $resolved;
         }
 
-        \assert(\is_string($value));
+        if (!\is_string($value)) {
+            return $value;
+        }
 
         return $type::fromLabel($value) ?? $value;
     }
