@@ -1,0 +1,16 @@
+# event-dispatch boundary gate allowlist.
+#
+# The gate (tests/Unit/Shared/Architecture/EventDispatchGateTest.php) fails the build when a file
+# under */Application/ imports Symfony\Component\Messenger\MessageBusInterface directly instead of
+# publishing domain events through the Erpify\Shared\Domain\Bus\Event\EventBus port. Full rationale:
+# docs/adr/event-driven-architecture.md.
+#
+# Lines starting with `#` and blank lines are ignored. Each remaining line is an api-relative path
+# (POSIX, no leading slash) of an Application file exempted from the rule. Adding an entry is a
+# deliberate, reviewable exception.
+
+# Audit axis — NOT the domain-event stream. BankAccountSearcher dispatches BankAccountsViewedAuditEvent,
+# a best-effort, non-DomainEvent observability message that must not travel the transactional EventBus.
+# It moves to the AuditLogger port when that subsystem is built (docs/adr/audit-activity-log.md), at
+# which point this entry is removed (revisit trigger (b) in docs/adr/event-driven-architecture.md).
+src/Backoffice/BankAccount/Application/BankAccountSearcher.php

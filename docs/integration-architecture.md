@@ -52,7 +52,7 @@ browser → localhost ──▶│     FrankenPHP (Caddy)      │
 | 5 | Next client → Symfony API | Client-side fetch | HTTP | Uses `NEXT_PUBLIC_API_BASE_URL`. In the Docker dev flow this is same-origin. |
 | 6 | Symfony → PostgreSQL | Doctrine DBAL | TCP (Compose network) | — |
 | 7 | Symfony → Messenger transport | Internal | Doctrine transport | At-least-once delivery; handlers must be idempotent. |
-| 8 | `messenger_worker` → Mailer | Async | Symfony Messenger + Mailer | Email is async — see `domain-events-and-messenger.md`. |
+| 8 | `messenger_worker` → Mailer | Async | Symfony Messenger + Mailer | Email is async — see [`architecture-api.md`](./architecture-api.md#async--messaging). |
 | 9 | Symfony → Mercure Hub | Publish | HTTP + JWT | Server-side publish; topics scoped per bounded context. |
 | 10 | Symfony → Browser/PWA | Error contract | HTTP (`application/problem+json`) | All `/api/*` non-2xx responses are RFC 9457 Problem Details with stable `type`, per-request `correlation-id`, per-error `instance`. PWA routes UI by `type` only. See [`api-error-contract.md`](./api-error-contract.md). |
 
@@ -87,9 +87,9 @@ _(Quick scan — not read from source. Cross-check against `api/src/**` controll
 2. Messenger transport persists the message (Doctrine transport).
 3. `messenger_worker` consumes the message asynchronously.
 4. Handler orchestrates a mailer action (and/or publishes a Mercure update).
-5. Audit entry written per `docs/domain-events-and-messenger.md`.
+5. Audit entry written per [`architecture-api.md`](./architecture-api.md#async--messaging).
 
-See `api/docs/domain-events-and-messenger/` for the full contract.
+See [`adr/event-driven-architecture.md`](./adr/event-driven-architecture.md) for the full contract.
 
 ## Shared dependencies
 

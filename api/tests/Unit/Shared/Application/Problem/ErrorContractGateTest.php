@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Application\Problem;
 
+use Erpify\Tests\Support\AllowlistFile;
 use Erpify\Tests\Support\ApiSourceFiles;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
@@ -340,35 +341,7 @@ final class ErrorContractGateTest extends TestCase
      */
     private function loadAllowlist(): array
     {
-        $path = $this->apiRoot() . '/.error-contract-allowlist';
-
-        if (!\is_file($path)) {
-            return [];
-        }
-
-        $raw = \file_get_contents($path);
-
-        if (false === $raw) {
-            return [];
-        }
-
-        $entries = [];
-
-        foreach (\preg_split('/\R/', $raw) ?: [] as $line) {
-            $trimmed = \trim($line);
-
-            if ('' === $trimmed) {
-                continue;
-            }
-
-            if (\str_starts_with($trimmed, '#')) {
-                continue;
-            }
-
-            $entries[] = $trimmed;
-        }
-
-        return $entries;
+        return AllowlistFile::entries($this->apiRoot() . '/.error-contract-allowlist');
     }
 
     private function apiRoot(): string

@@ -24,6 +24,7 @@ Feature: Search banks
     And the JSON node "pagination.count" should be null
     And the JSON node "pagination.links.next" should be null
     And the JSON node "pagination.links.prev" should be null
+    And a request contains "FROM bank" across all doctrine connections
     And 2 requests got executed only for doctrine connection "default"
 
   # The per-row account count is resolved with ONE batched aggregate query for the whole page
@@ -59,11 +60,33 @@ Feature: Search banks
   Scenario: Unknown pagination mode returns 422
     When I send a "GET" request to "/backoffice/banks?paginationMode=unknownPaginationMode"
     Then the response status code should be 422
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
+    And the JSON node "type" should be equal to "validation-failed"
+    And the JSON node "title" should be equal to "Validation failed."
+    And the JSON node "status" should be equal to the number 422
+    And the JSON node "violations" should have 1 element
+    And the JSON node "violations[0]" should have 3 elements
+    And the JSON node "violations[0].field" should be equal to "paginationMode"
+    And the JSON node "violations[0].message" should be equal to "This value should be of type int|string."
+    And the JSON node "instance" should be a valid UUID
+    And the JSON node "correlation-id" should be a valid UUID
     And 0 requests got executed across all doctrine connections
 
   Scenario: Array-form pagination mode returns 422
     When I send a "GET" request to "/backoffice/banks?paginationMode[]=light"
     Then the response status code should be 422
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
+    And the JSON node "type" should be equal to "validation-failed"
+    And the JSON node "title" should be equal to "Validation failed."
+    And the JSON node "status" should be equal to the number 422
+    And the JSON node "violations" should have 1 element
+    And the JSON node "violations[0]" should have 3 elements
+    And the JSON node "violations[0].field" should be equal to "paginationMode"
+    And the JSON node "violations[0].message" should be equal to "This value should be of type int|string."
+    And the JSON node "instance" should be a valid UUID
+    And the JSON node "correlation-id" should be a valid UUID
     And 0 requests got executed across all doctrine connections
 
   # `limit` ∉ [1, 100] is a 422 validation-failed; 101 is the smallest value over the new ceiling,
@@ -71,13 +94,24 @@ Feature: Search banks
   Scenario Outline: Invalid limit returns 422
     When I send a "GET" request to "/backoffice/banks?limit=<limit>"
     Then the response status code should be 422
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
+    And the JSON node "type" should be equal to "validation-failed"
+    And the JSON node "title" should be equal to "Validation failed."
+    And the JSON node "status" should be equal to the number 422
+    And the JSON node "violations" should have 1 element
+    And the JSON node "violations[0]" should have 3 elements
+    And the JSON node "violations[0].field" should be equal to "limit"
+    And the JSON node "violations[0].message" should be equal to "<message>"
+    And the JSON node "instance" should be a valid UUID
+    And the JSON node "correlation-id" should be a valid UUID
     And 0 requests got executed across all doctrine connections
     Examples:
-      | limit |
-      | 0     |
-      | -1    |
-      | 101   |
-      | abc   |
+      | limit | message                                       |
+      | 0     | This value should be positive.                |
+      | -1    | This value should be positive.                |
+      | 101   | This value should be less than or equal to 100. |
+      | abc   | This value should be of type int.             |
 
   # Cursor navigation (W4/W11): the direction is fixed by the param the link carries (after/before);
   # the client follows links.next/links.prev VERBATIM and never decodes or fabricates a cursor.
@@ -168,7 +202,17 @@ Feature: Search banks
   Scenario: Providing both after and before returns 422 validation-failed
     When I send a "GET" request to "/backoffice/banks?after=AAAA&before=BBBB"
     Then the response status code should be 422
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
     And the JSON node "type" should be equal to "validation-failed"
+    And the JSON node "title" should be equal to "Validation failed."
+    And the JSON node "status" should be equal to the number 422
+    And the JSON node "violations" should have 1 element
+    And the JSON node "violations[0]" should have 3 elements
+    And the JSON node "violations[0].field" should be equal to "after"
+    And the JSON node "violations[0].message" should be equal to "Provide either `after` or `before`, never both."
+    And the JSON node "instance" should be a valid UUID
+    And the JSON node "correlation-id" should be a valid UUID
     And 0 requests got executed across all doctrine connections
 
   # W5: every cursor invalidity (signature/version/payload/fingerprint) surfaces as the SAME 422
@@ -177,7 +221,12 @@ Feature: Search banks
     When I send a "GET" request to "/backoffice/banks?after=not-a-real-cursor"
     Then the response status code should be 422
     And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
     And the JSON node "type" should be equal to "invalid-cursor"
+    And the JSON node "title" should be equal to "The pagination cursor is invalid."
+    And the JSON node "status" should be equal to the number 422
+    And the JSON node "instance" should be a valid UUID
+    And the JSON node "correlation-id" should be a valid UUID
     And 0 requests got executed across all doctrine connections
 
   # Fingerprint contract: a cursor is valid only against the exact canonical chain that minted it
@@ -193,7 +242,12 @@ Feature: Search banks
     When I follow the "pagination.links.next" link from the previous response overriding the "sort" query param with "createdAt"
     Then the response status code should be 422
     And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
     And the JSON node "type" should be equal to "invalid-cursor"
+    And the JSON node "title" should be equal to "The pagination cursor is invalid."
+    And the JSON node "status" should be equal to the number 422
+    And the JSON node "instance" should be a valid UUID
+    And the JSON node "correlation-id" should be a valid UUID
     And 2 requests got executed only for doctrine connection "default"
 
   # W7 / fix #3: navigating before into a logical gap (rows deleted under the cursor) is not an error.
@@ -265,16 +319,27 @@ Feature: Search banks
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=storedObjectKey&filters[0][operator]=eq&filters[0][value]=BBVA"
     Then the response status code should be 422
     And the header "Content-Type" should be equal to "application/problem+json"
-    And the response should be in JSON
+    And the header "Cache-Control" should contain "no-store"
     And the JSON node "type" should be equal to "unknown-search-field"
+    And the JSON node "title" should be equal to "Unknown search field."
     And the JSON node "status" should be equal to the number 422
+    And the JSON node "field" should be equal to "storedObjectKey"
+    And the JSON node "instance" should be a valid UUID
+    And the JSON node "correlation-id" should be a valid UUID
     And 0 requests got executed across all doctrine connections
 
   Scenario: Generic filter with an operator the field does not allow returns a 422 unsupported-search-operator Problem Details body
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=id&filters[0][operator]=contains&filters[0][value]=1111"
     Then the response status code should be 422
     And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
     And the JSON node "type" should be equal to "unsupported-search-operator"
+    And the JSON node "title" should be equal to "Unsupported search operator."
+    And the JSON node "status" should be equal to the number 422
+    And the JSON node "field" should be equal to "id"
+    And the JSON node "operator" should be equal to "contains"
+    And the JSON node "instance" should be a valid UUID
+    And the JSON node "correlation-id" should be a valid UUID
     And 0 requests got executed across all doctrine connections
 
   # Shape 422s come from mapping (validation-failed + violations[]); operator tokens are
@@ -282,6 +347,17 @@ Feature: Search banks
   Scenario Outline: Invalid generic filter operator returns 422
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=<operator>&filters[0][value]=x"
     Then the response status code should be 422
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
+    And the JSON node "type" should be equal to "validation-failed"
+    And the JSON node "title" should be equal to "Validation failed."
+    And the JSON node "status" should be equal to the number 422
+    And the JSON node "violations" should have 1 element
+    And the JSON node "violations[0]" should have 3 elements
+    And the JSON node "violations[0].field" should be equal to "filters[0].operator"
+    And the JSON node "violations[0].message" should be equal to "This value should be of type int|string."
+    And the JSON node "instance" should be a valid UUID
+    And the JSON node "correlation-id" should be a valid UUID
     And 0 requests got executed across all doctrine connections
     Examples:
       | operator |
@@ -292,14 +368,33 @@ Feature: Search banks
   Scenario: Generic in filter with a scalar value returns a 422 validation-failed Problem Details body
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=in&filters[0][value]=BBVA"
     Then the response status code should be 422
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
     And the JSON node "type" should be equal to "validation-failed"
+    And the JSON node "title" should be equal to "Validation failed."
+    And the JSON node "status" should be equal to the number 422
+    And the JSON node "violations" should have 1 element
+    And the JSON node "violations[0]" should have 3 elements
     And the JSON node "violations[0].field" should be equal to "filters[0].value"
+    And the JSON node "violations[0].message" should be equal to "The in operator requires a non-empty list of values."
+    And the JSON node "instance" should be a valid UUID
+    And the JSON node "correlation-id" should be a valid UUID
     And 0 requests got executed across all doctrine connections
 
   Scenario: Generic eq filter with a list value returns a 422 validation-failed Problem Details body
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=eq&filters[0][value][]=BBVA"
     Then the response status code should be 422
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
     And the JSON node "type" should be equal to "validation-failed"
+    And the JSON node "title" should be equal to "Validation failed."
+    And the JSON node "status" should be equal to the number 422
+    And the JSON node "violations" should have 1 element
+    And the JSON node "violations[0]" should have 3 elements
+    And the JSON node "violations[0].field" should be equal to "filters[0].value"
+    And the JSON node "violations[0].message" should be equal to "This operator requires a single string value."
+    And the JSON node "instance" should be a valid UUID
+    And the JSON node "correlation-id" should be a valid UUID
     And 0 requests got executed across all doctrine connections
 
   # A malformed uuid bound against the UUID column must surface as input error, never as a
@@ -308,9 +403,14 @@ Feature: Search banks
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=id&filters[0][operator]=eq&filters[0][value]=not-a-uuid"
     Then the response status code should be 422
     And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
     And the JSON node "type" should be equal to "invalid-search-value"
+    And the JSON node "title" should be equal to "Search value must be a valid UUID."
+    And the JSON node "status" should be equal to the number 422
     And the JSON node "field" should be equal to "id"
     And the JSON node "position" should be equal to the number 0
+    And the JSON node "instance" should be a valid UUID
+    And the JSON node "correlation-id" should be a valid UUID
     And 0 requests got executed across all doctrine connections
 
   # Exact-id pins (story 1.5): result identity — not just counts — plus multi-filter AND
@@ -425,7 +525,14 @@ Feature: Search banks
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=createdAt&filters[0][operator]=gte&filters[0][value]=2026-01-01T00:00:00%2B25:00"
     Then the response status code should be 422
     And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
     And the JSON node "type" should be equal to "invalid-search-value"
+    And the JSON node "title" should be equal to "Search value must be a valid ISO-8601 datetime."
+    And the JSON node "status" should be equal to the number 422
+    And the JSON node "field" should be equal to "createdAt"
+    And the JSON node "position" should be equal to the number 0
+    And the JSON node "instance" should be a valid UUID
+    And the JSON node "correlation-id" should be a valid UUID
     And 0 requests got executed across all doctrine connections
 
   # gte+lte over the same field compose with AND into a closed range — the documented
@@ -442,7 +549,14 @@ Feature: Search banks
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=gt&filters[0][value]=x"
     Then the response status code should be 422
     And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
     And the JSON node "type" should be equal to "unsupported-search-operator"
+    And the JSON node "title" should be equal to "Unsupported search operator."
+    And the JSON node "status" should be equal to the number 422
+    And the JSON node "field" should be equal to "name"
+    And the JSON node "operator" should be equal to "gt"
+    And the JSON node "instance" should be a valid UUID
+    And the JSON node "correlation-id" should be a valid UUID
     And 0 requests got executed across all doctrine connections
 
   # A malformed datetime is client input: it must surface as 422 invalid-search-value, never as
@@ -451,16 +565,31 @@ Feature: Search banks
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=createdAt&filters[0][operator]=gte&filters[0][value]=not-a-date"
     Then the response status code should be 422
     And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
     And the JSON node "type" should be equal to "invalid-search-value"
+    And the JSON node "title" should be equal to "Search value must be a valid ISO-8601 datetime."
+    And the JSON node "status" should be equal to the number 422
     And the JSON node "field" should be equal to "createdAt"
     And the JSON node "position" should be equal to the number 0
+    And the JSON node "instance" should be a valid UUID
+    And the JSON node "correlation-id" should be a valid UUID
     And 0 requests got executed across all doctrine connections
 
   # Range operators are scalar: a list value is a shape error caught at mapping (validation-failed).
   Scenario: A range operator with a list value returns 422 validation-failed
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=createdAt&filters[0][operator]=gt&filters[0][value][]=2026-01-01T00:00:00%2B00:00"
     Then the response status code should be 422
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
     And the JSON node "type" should be equal to "validation-failed"
+    And the JSON node "title" should be equal to "Validation failed."
+    And the JSON node "status" should be equal to the number 422
+    And the JSON node "violations" should have 1 element
+    And the JSON node "violations[0]" should have 3 elements
+    And the JSON node "violations[0].field" should be equal to "filters[0].value"
+    And the JSON node "violations[0].message" should be equal to "This operator requires a single string value."
+    And the JSON node "instance" should be a valid UUID
+    And the JSON node "correlation-id" should be a valid UUID
     And 0 requests got executed across all doctrine connections
 
   # Story 1.8: server-side ordering. `sort` resolves against the repository's sort allow-list
@@ -505,8 +634,13 @@ Feature: Search banks
     When I send a "GET" request to "/backoffice/banks?sort=id&direction=ASC"
     Then the response status code should be 422
     And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
     And the JSON node "type" should be equal to "unknown-sort-field"
+    And the JSON node "title" should be equal to "Unknown sort field."
     And the JSON node "status" should be equal to the number 422
+    And the JSON node "field" should be equal to "id"
+    And the JSON node "instance" should be a valid UUID
+    And the JSON node "correlation-id" should be a valid UUID
     And 0 requests got executed across all doctrine connections
 
   # Shape 422: an invalid direction is caught at mapping by the enum (validation-failed), exactly
@@ -514,14 +648,34 @@ Feature: Search banks
   Scenario: An invalid sort direction returns 422 validation-failed
     When I send a "GET" request to "/backoffice/banks?sort=name&direction=sideways"
     Then the response status code should be 422
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
     And the JSON node "type" should be equal to "validation-failed"
+    And the JSON node "title" should be equal to "Validation failed."
+    And the JSON node "status" should be equal to the number 422
+    And the JSON node "violations" should have 1 element
+    And the JSON node "violations[0]" should have 3 elements
+    And the JSON node "violations[0].field" should be equal to "direction"
+    And the JSON node "violations[0].message" should be equal to "This value should be of type int|string."
+    And the JSON node "instance" should be a valid UUID
+    And the JSON node "correlation-id" should be a valid UUID
     And 0 requests got executed across all doctrine connections
 
   # Lowercase direction tokens are not the enum backing values (ASC/DESC); rejected at mapping.
   Scenario: A lowercase sort direction returns 422 validation-failed
     When I send a "GET" request to "/backoffice/banks?sort=name&direction=asc"
     Then the response status code should be 422
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
     And the JSON node "type" should be equal to "validation-failed"
+    And the JSON node "title" should be equal to "Validation failed."
+    And the JSON node "status" should be equal to the number 422
+    And the JSON node "violations" should have 1 element
+    And the JSON node "violations[0]" should have 3 elements
+    And the JSON node "violations[0].field" should be equal to "direction"
+    And the JSON node "violations[0].message" should be equal to "This value should be of type int|string."
+    And the JSON node "instance" should be a valid UUID
+    And the JSON node "correlation-id" should be a valid UUID
     And 0 requests got executed across all doctrine connections
 
   # Without sort the default order is unchanged (createdAt asc, id tiebreak) — full backward compat.
@@ -539,7 +693,17 @@ Feature: Search banks
   Scenario: An array-form sort direction returns 422 validation-failed
     When I send a "GET" request to "/backoffice/banks?sort=name&direction[]=ASC"
     Then the response status code should be 422
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
     And the JSON node "type" should be equal to "validation-failed"
+    And the JSON node "title" should be equal to "Validation failed."
+    And the JSON node "status" should be equal to the number 422
+    And the JSON node "violations" should have 1 element
+    And the JSON node "violations[0]" should have 3 elements
+    And the JSON node "violations[0].field" should be equal to "direction"
+    And the JSON node "violations[0].message" should be equal to "This value should be of type int|string."
+    And the JSON node "instance" should be a valid UUID
+    And the JSON node "correlation-id" should be a valid UUID
     And 0 requests got executed across all doctrine connections
 
   # Story 1.8 code-review (P2): a SQL/DQL-injection-shaped sort is just another value outside the sort
@@ -550,7 +714,13 @@ Feature: Search banks
     When I send a "GET" request to "/backoffice/banks?sort=createdAt%29%3B%20DROP%20TABLE%20bank%3B%20--&direction=ASC"
     Then the response status code should be 422
     And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
     And the JSON node "type" should be equal to "unknown-sort-field"
+    And the JSON node "title" should be equal to "Unknown sort field."
+    And the JSON node "status" should be equal to the number 422
+    And the JSON node "field" should be equal to "createdAt); DROP TABLE bank; --"
+    And the JSON node "instance" should be a valid UUID
+    And the JSON node "correlation-id" should be a valid UUID
     And 0 requests got executed across all doctrine connections
 
   # Story 1.8 code-review (P4): an empty sort= on the wire means "no sort" — SearchQuery::toCriteria()

@@ -11,6 +11,7 @@ use Erpify\Tests\Behat\Context\Abstraction\AbstractContext;
 use Erpify\Tests\Behat\State\HttpResponseContainer;
 use Erpify\Tests\Behat\Support\Transport\HttpResponseAwareTrait;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\Uid\Uuid;
 
 /**
  * Assertions over the last HTTP response: status code, body, headers and streaming,
@@ -183,7 +184,7 @@ class HttpResponseContext extends AbstractContext
         $actual = $response->headers->get($name);
         self::assertNotNull(
             $actual,
-            \sprintf('The header %s does not exists', $response->getContent()),
+            \sprintf('The header %s does not exist', $response->getContent()),
         );
     }
 
@@ -198,7 +199,7 @@ class HttpResponseContext extends AbstractContext
         $actual = $response->headers->get($name);
         self::assertNull(
             $actual,
-            \sprintf('The header %s does not exists', $response->getContent()),
+            \sprintf('The header %s does not exist', $response->getContent()),
         );
     }
 
@@ -217,6 +218,39 @@ class HttpResponseContext extends AbstractContext
             $regex,
             $actual,
             \sprintf('The header "%s" should match "%s", but it is: "%s"', $name, $regex, $actual),
+        );
+    }
+
+    /**
+     * Check that the response header `name` is a valid RFC 9562 UUID — any version when `version` is
+     * omitted, or that exact version otherwise (e.g. the UUID v7 `X-Correlation-Id` minted via
+     * {@see \Erpify\Shared\Domain\Uuid\Uuid::generate()}). `Uuid::isValid()` checks format and variant
+     * in one pass — stricter than a regex.
+     */
+    #[Then('the header :name should be a valid UUID')]
+    #[Then('the header :name should be a valid UUID version :version')]
+    public function theHeaderShouldBeAValidUuid(string $name, ?string $version = null): void
+    {
+        $response = $this->getLastResponse();
+
+        $actual = $response->headers->get($name);
+
+        self::assertNotNull($actual, \sprintf(self::HEADER_NOT_NULL_MESSAGE, $name));
+        self::assertTrue(
+            Uuid::isValid($actual),
+            \sprintf('The header "%s" should be a valid UUID, but it is: "%s"', $name, $actual),
+        );
+
+        if (null === $version) {
+            return;
+        }
+
+        // Uuid::fromString() resolves the version-specific subclass (UuidV7, …); comparing its class
+        // pins the version through the library rather than by parsing offsets by hand.
+        self::assertSame(
+            Uuid::fromString($actual)::class,
+            \sprintf('Symfony\Component\Uid\UuidV%s', $version),
+            \sprintf('The header "%s" should be a UUID v%s, but it is: "%s"', $name, $version, $actual),
         );
     }
 

@@ -29,13 +29,12 @@ Feature: Get banks
     Then the response status code should be 400
     And the header "Content-Type" should be equal to "application/problem+json"
     And the header "Cache-Control" should contain "no-store"
-    And the response should be in JSON
     And the JSON node "type" should be equal to "invalid-uuid"
     And the JSON node "title" should be equal to "The provided value is not a valid UUID."
     And the JSON node "status" should be equal to the number 400
     And the JSON node "violations" should not exist
-    And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
-    And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
+    And the JSON node "instance" should be a valid UUID
+    And the JSON node "correlation-id" should be a valid UUID
     And the JSON node "debug" should have 5 elements
     And 0 requests got executed across all doctrine connections
     Examples:
@@ -48,13 +47,12 @@ Feature: Get banks
     Then the response status code should be 404
     And the header "Content-Type" should be equal to "application/problem+json"
     And the header "Cache-Control" should contain "no-store"
-    And the response should be in JSON
     And the JSON node "type" should be equal to "bank-not-found"
     And the JSON node "title" should be equal to "Bank with id <2e6d865c-17b0-476a-85f2-037bf6d3b3dc> not found."
     And the JSON node "status" should be equal to the number 404
     And the JSON node "bankId" should be equal to "2e6d865c-17b0-476a-85f2-037bf6d3b3dc"
-    And the JSON node "instance" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
-    And the JSON node "correlation-id" should match "/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/"
+    And the JSON node "instance" should be a valid UUID
+    And the JSON node "correlation-id" should be a valid UUID
     And the JSON node "debug" should have 5 elements
     And the JSON node "debug.exception_class" should exist
     And the JSON node "debug.message" should exist

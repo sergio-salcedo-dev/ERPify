@@ -71,8 +71,12 @@ Feature: List the accounts of a bank
     When I send a "GET" request to "/backoffice/banks/<bankId>/accounts"
     Then the response status code should be 400
     And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
     And the JSON node "type" should be equal to "invalid-uuid"
+    And the JSON node "title" should be equal to "The provided value is not a valid UUID."
     And the JSON node "status" should be equal to the number 400
+    And the JSON node "instance" should be a valid UUID
+    And the JSON node "correlation-id" should be a valid UUID
     And 0 requests got executed across all doctrine connections
     Examples:
       | bankId      |
@@ -83,7 +87,11 @@ Feature: List the accounts of a bank
     When I send a "GET" request to "/backoffice/banks/2e6d865c-17b0-476a-85f2-037bf6d3b3dc/accounts"
     Then the response status code should be 404
     And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
     And the JSON node "type" should be equal to "bank-not-found"
+    And the JSON node "title" should be equal to "Bank with id <2e6d865c-17b0-476a-85f2-037bf6d3b3dc> not found."
     And the JSON node "status" should be equal to the number 404
     And the JSON node "bankId" should be equal to "2e6d865c-17b0-476a-85f2-037bf6d3b3dc"
+    And the JSON node "instance" should be a valid UUID
+    And the JSON node "correlation-id" should be a valid UUID
     And 1 request got executed only for doctrine connection "default"

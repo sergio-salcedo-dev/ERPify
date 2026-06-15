@@ -18,7 +18,7 @@ Route names follow `<office>_<entity>_<action>` — **entity-first, then an inte
 
 ## Behat feature file layout
 
-`api/features/` mirrors the `src/` bounded-context + module tree, lowercased: `src/Backoffice/BankAccount/` → `features/backoffice/bank_account/`. Path segments and `.feature` filenames are **snake_case** — multi-word module names, groupings, and file names join words with `_` (`bank_account/`, `error_contract/`, `rate_limiting/`, `create_with_logo.feature`, `query_stats.feature`), never solid-concatenated. A bounded context that is already a single (compound) token stays solid: `backoffice/`, `frontoffice/`, `shared/`. The suite registers only the three context roots (`features/backoffice`, `features/frontoffice`, `features/shared`) and recurses, so subdirectory names follow this convention freely without touching `tools/behat/behat.yml.dist`.
+`api/features/` mirrors the `src/` bounded-context + module tree, lowercased: `src/Backoffice/BankAccount/` → `features/backoffice/bank_account/`. Path segments and `.feature` filenames are **snake_case** — multi-word module names, groupings, and file names join words with `_` (`bank_account/`, `error_contract/`, `rate_limiting/`, `create_with_logo.feature`, `create_with_stored_object.feature`), never solid-concatenated. A bounded context that is already a single (compound) token stays solid: `backoffice/`, `frontoffice/`, `shared/`. The suite registers only the three context roots (`features/backoffice`, `features/frontoffice`, `features/shared`) and recurses, so subdirectory names follow this convention freely without touching `tools/behat/behat.yml.dist`.
 
 ## Search endpoints
 
