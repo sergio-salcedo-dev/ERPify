@@ -17,7 +17,7 @@
         pwa.production.build pwa.production.start \
         pwa.quality.dry-run pwa.quality \
         pwa.lint.dry-run pwa.lint pwa.format.dry-run pwa.format pwa.typecheck \
-        pwa.test pwa.test.unit pwa.test.unit.watch pwa.test.e2e pwa.test.e2e.reports npm.dev.e2e \
+        pwa.test pwa.test.unit pwa.test.unit.coverage pwa.test.unit.watch pwa.test.e2e pwa.test.e2e.reports npm.dev.e2e \
         pwa.util.extract.testids pwa.chown.next pwa.clean.soft pwa.clean.all pwa.clean.sudo
 
 ## —— PWA install / dev / build ——
@@ -86,6 +86,12 @@ pwa.typecheck: pwa.install.if-missing ## Typecheck PWA (tsc --noEmit)
 
 pwa.test.unit: pwa.install.if-missing ## Run unit tests with Vitest (run once); pass c='…' for extra args (e.g. c='path/to/file.test.ts')
 	@$(call pwa_cmd,npm run test:unit -- $(c))
+
+pwa.test.unit.coverage: pwa.install.if-missing ## Vitest with coverage → pwa/coverage/lcov.info (SonarCloud import)
+	@$(call pwa_cmd,npm run test:unit -- --coverage $(c))
+	@# Vitest writes SF: paths relative to pwa/; rewrite to repo-root-relative
+	@# (pwa/src/…) so SonarCloud's projectBaseDir resolves them against pwa/src.
+	@sed -i 's#^SF:src/#SF:pwa/src/#' $(PWA_ROOT)/coverage/lcov.info
 
 pwa.test.unit.watch: pwa.install.if-missing ## Run unit tests (Vitest) watch mode
 	@$(call pwa_cmd,npm run test:watch)
