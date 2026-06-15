@@ -14,14 +14,14 @@ Feature: X-Correlation-Id response header on every API response
   Scenario: A 2xx response carries a freshly-minted X-Correlation-Id header
     When I send a "GET" request to "/health"
     Then the response status code should be 200
-    And the header "X-Correlation-Id" should be a UUID v7
+    And the header "X-Correlation-Id" should be a valid UUID version 7
     And 0 requests got executed across all doctrine connections
 
   Scenario: A 4xx response carries a freshly-minted X-Correlation-Id header
     When I send a "GET" request to "http://localhost/api/test/_throw-not-found"
     Then the response status code should be 404
     And the header "Content-Type" should be equal to "application/problem+json"
-    And the header "X-Correlation-Id" should be a UUID v7
+    And the header "X-Correlation-Id" should be a valid UUID version 7
     And 0 requests got executed across all doctrine connections
 
   Scenario: A valid inbound X-Correlation-Id header is echoed verbatim on a 2xx
@@ -42,7 +42,7 @@ Feature: X-Correlation-Id response header on every API response
     Given I add "X-Correlation-Id" header equal to "not-a-uuid"
     When I send a "GET" request to "/health"
     Then the response status code should be 200
-    And the header "X-Correlation-Id" should be a UUID v7
+    And the header "X-Correlation-Id" should be a valid UUID version 7
     And the header "X-Correlation-Id" should not be equal to "not-a-uuid"
     And 0 requests got executed across all doctrine connections
 
@@ -50,6 +50,6 @@ Feature: X-Correlation-Id response header on every API response
     Given I add "X-Correlation-Id" header equal to "0190E9C2-7B5A-7D40-9C8F-2F9B5D3E1A2C"
     When I send a "GET" request to "/health"
     Then the response status code should be 200
-    And the header "X-Correlation-Id" should be a UUID v7
+    And the header "X-Correlation-Id" should be a valid UUID version 7
     And the header "X-Correlation-Id" should not be equal to "0190E9C2-7B5A-7D40-9C8F-2F9B5D3E1A2C"
     And 0 requests got executed across all doctrine connections

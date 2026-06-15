@@ -43,6 +43,6 @@ Feature: Anonymous API rate limiting
     And the JSON node "limit" should be equal to the number 5
     And the JSON node "remaining" should be equal to the number 0
     And the JSON node "retryAfterSeconds" should exist
-    And the JSON node "instance" should be a UUID v7
-    And the JSON node "correlation-id" should be a UUID v7
+    And the JSON node "instance" should be a valid UUID version 7
+    And the JSON node "correlation-id" should be a valid UUID version 7
     And 0 requests got executed across all doctrine connections

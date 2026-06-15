@@ -10,7 +10,7 @@ Feature: Delete a bank
     When I send a "DELETE" request to "/backoffice/banks/de1e7e00-0000-7000-8000-000000000001"
     Then the response status code should be 204
     And 8 requests got executed only for doctrine connection "default"
-    And the "Erpify\Backoffice\Bank\Domain\Entity\Bank" entity found by "id=de1e7e00-0000-7000-8000-000000000001" does not exist
+    And the "Bank" entity found by "id=de1e7e00-0000-7000-8000-000000000001" does not exist
     And there should have 1 "Erpify\Shared\Infrastructure\Persistence\Entity\StoredDomainEvent" entity found by "aggregateId=de1e7e00-0000-7000-8000-000000000001&name=erpify.backoffice.bank.deleted"
 
   Scenario: Delete a bank that does not exist returns a 404 bank-not-found Problem Details body
@@ -23,8 +23,8 @@ Feature: Delete a bank
     And the JSON node "title" should be equal to "Bank with id <2e6d865c-17b0-476a-85f2-037bf6d3b3dc> not found."
     And the JSON node "status" should be equal to the number 404
     And the JSON node "bankId" should be equal to "2e6d865c-17b0-476a-85f2-037bf6d3b3dc"
-    And the JSON node "instance" should be a UUID v7
-    And the JSON node "correlation-id" should be a UUID v7
+    And the JSON node "instance" should be a valid UUID version 7
+    And the JSON node "correlation-id" should be a valid UUID version 7
     And 1 request got executed only for doctrine connection "default"
 
   Scenario: Delete a bank referenced by accounts returns a 409 bank-in-use Problem Details body
@@ -38,6 +38,6 @@ Feature: Delete a bank
     And the JSON node "status" should be equal to the number 409
     And the JSON node "bankId" should be equal to "11111111-1111-7000-8000-000000000001"
     And the JSON node "accountCount" should be equal to the number 1
-    And the JSON node "instance" should be a UUID v7
-    And the JSON node "correlation-id" should be a UUID v7
+    And the JSON node "instance" should be a valid UUID version 7
+    And the JSON node "correlation-id" should be a valid UUID version 7
     And 2 requests got executed only for doctrine connection "default"
