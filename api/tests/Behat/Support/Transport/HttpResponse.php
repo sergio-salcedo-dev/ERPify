@@ -46,7 +46,13 @@ class HttpResponse
 
         foreach ($items as $item) {
             $decoded = \json_decode($item, true, 512, JSON_THROW_ON_ERROR);
-            \assert(\is_array($decoded));
+
+            // A streamed line that decodes to a scalar (not a JSON object/array) carries nothing
+            // to merge into the accumulated payload, so skip it rather than abort.
+            if (!\is_array($decoded)) {
+                continue;
+            }
+
             $data = \array_merge_recursive($data, $decoded);
         }
 

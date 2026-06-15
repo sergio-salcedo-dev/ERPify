@@ -37,7 +37,10 @@ class BackedEnumNodeModifier extends AbstractNodeModifier
     #[Override]
     public function getProcessedValue(mixed $value): BackedEnum
     {
-        \assert(\is_string($value));
+        if (!\is_string($value)) {
+            throw new AssertionFailedError(\sprintf('Expected a "Fqcn::CASE" string, got %s', \get_debug_type($value)));
+        }
+
         $parts = \explode('::', $value);
         $classString = $parts[0];
 

@@ -31,7 +31,9 @@ class OneOfNodeModifier extends AbstractNodeModifier
     #[Override]
     public function compare(mixed $expected, mixed $value): bool
     {
-        \assert(\is_scalar($expected));
+        if (!\is_scalar($expected)) {
+            return false;
+        }
 
         return \in_array($value, \explode(',', (string) $expected), true);
     }

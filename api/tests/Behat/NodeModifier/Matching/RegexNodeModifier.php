@@ -33,8 +33,12 @@ class RegexNodeModifier extends AbstractNodeModifier
     #[Override]
     public function compare(mixed $expected, mixed $value): bool
     {
-        \assert(\is_string($expected));
-        \assert(\is_scalar($value));
+        // The expected side must be a PCRE pattern and the actual a scalar to match against;
+        // anything else is a non-match rather than an aborting assertion.
+        if (!\is_string($expected) || !\is_scalar($value)) {
+            return false;
+        }
+
         $result = \preg_match($expected, (string) $value);
 
         return false !== $result && $result > 0;

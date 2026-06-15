@@ -31,8 +31,11 @@ class PasswordVerifyNodeModifier extends AbstractNodeModifier
     #[Override]
     public function compare(mixed $expected, mixed $value): bool
     {
-        \assert(\is_scalar($expected));
-        \assert(\is_scalar($value));
+        // Both the plaintext and the hash must be scalar to run password_verify(); a non-scalar
+        // side is a non-match rather than an aborting assertion.
+        if (!\is_scalar($expected) || !\is_scalar($value)) {
+            return false;
+        }
 
         return \password_verify((string) $expected, (string) $value);
     }

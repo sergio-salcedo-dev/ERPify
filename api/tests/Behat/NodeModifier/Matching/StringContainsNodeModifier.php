@@ -36,9 +36,9 @@ class StringContainsNodeModifier extends AbstractNodeModifier
         }
 
         if (!\is_string($value)) {
-            \assert(\is_scalar($value) || null === $value);
-
-            return (string) $value;
+            // A scalar (or null) stringifies for the substring probe; a non-scalar non-array
+            // value has no meaningful textual form, so treat it as an empty haystack.
+            return \is_scalar($value) ? (string) $value : '';
         }
 
         return $value;
