@@ -56,8 +56,10 @@ floating toolbar can't inject into `/api/*` responses; the surfaces are:
   out-of-band (so they never corrupt JSON responses); they also appear in the profiler's
   Debug/Dump panel. Without the server running, dumps fall back to inline output.
 
-Want the toolbar on the real Next.js app instead? That's tracked as a follow-up (PWA
-reads `X-Debug-Token` and loads `/_wdt/{token}`); it's intentionally not wired here.
+The toolbar also renders on the real Next.js app: the PWA reads each `X-Debug-Token` and
+loads `/_dev/wdt-loader/{token}` **once per session** (not per token, to avoid re-wiping the
+toolbar DOM under sfjs's global AJAX handlers) — see «Symfony debug toolbar (real PWA)» in
+[`pwa/CLAUDE.md`](../pwa/CLAUDE.md).
 
 ## Logs
 
