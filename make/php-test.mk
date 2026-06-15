@@ -5,7 +5,7 @@
 # Target names match CI (.github/workflows/ci.yml):
 #   php.unit / php.behat / php.behat.install / php.test
 
-.PHONY: php.unit \
+.PHONY: php.unit php.unit.coverage \
 		php.behat php.behat.install \
 		php.test \
 		php.bench
@@ -16,6 +16,22 @@
 # install (api/tools/phpunit holds only bootstrap.php + phpunit.dist.xml).
 php.unit: ## PHPUnit; pass c='…' for extra args (e.g. c='--filter SomeTest')
 	@$(PHP_TEST) bin/phpunit $(c)
+
+# Clover report for SonarCloud (sonar.php.coverage.reportPaths). Runs with
+# XDEBUG_MODE=coverage (the image ships Xdebug off). PHPUnit writes absolute
+# in-container file names (/app/api/src/…); rewrite them to repo-root-relative
+# (api/src/…) so SonarCloud's projectBaseDir resolves them in its own checkout.
+#
+# --do-not-fail-on-phpunit-warning: coverage mode validates every #[CoversClass]
+# target against the coverage source scope (src/), so tests covering test-tree
+# support utilities raise PHPUnit warnings ("not a valid target for code
+# coverage") that the no-coverage `php.unit` gate never sees. This is a
+# report-generation target, not the gate — `php.unit` keeps failOnWarning strict.
+# Warnings still print, only the exit code is relaxed.
+COVERAGE_CLOVER := var/coverage/clover.xml
+php.unit.coverage: ## PHPUnit with clover coverage → api/var/coverage/clover.xml (Xdebug coverage mode; report only — php.unit is the gate)
+	@$(PHP_TEST_COVERAGE) bin/phpunit --coverage-clover $(COVERAGE_CLOVER) --do-not-fail-on-phpunit-warning $(c)
+	@sed -i 's#name="[^"]*/api/src/#name="api/src/#g' $(API_ROOT)/$(COVERAGE_CLOVER)
 
 ## —— Behat ——
 
