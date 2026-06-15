@@ -145,7 +145,11 @@ final class DeptracSeamSyncGateTest extends TestCase
         foreach (\preg_split('/\R/', $raw) ?: [] as $line) {
             $trimmed = \trim($line);
 
-            if ('' === $trimmed || \str_starts_with($trimmed, '#')) {
+            if ('' === $trimmed) {
+                continue;
+            }
+
+            if (\str_starts_with($trimmed, '#')) {
                 continue;
             }
 
