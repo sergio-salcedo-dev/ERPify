@@ -9,7 +9,6 @@ use Erpify\Shared\Domain\Search\Exception\InvalidCursor;
 use Erpify\Shared\Infrastructure\Http\CorrelationIdListener;
 use Erpify\Shared\Infrastructure\Http\EventListener\ExceptionResponder;
 use Erpify\Shared\Infrastructure\Http\EventListener\SearchObservabilityListener;
-use Erpify\Shared\Infrastructure\Logging\PsrLogger;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -48,7 +47,7 @@ final class SearchObservabilityListenerTest extends TestCase
     public function testEmitsKeysetSearchEventOnSuccessfulSearchResponse(): void
     {
         $logger = new BufferingLogger();
-        (new SearchObservabilityListener(new PsrLogger($logger)))->onResponse($this->responseEvent(
+        (new SearchObservabilityListener($logger))->onResponse($this->responseEvent(
             query: 'limit=5&after=opaque-cursor&paginationMode=detailed',
             body: self::FULL_PAGE_BODY,
         ));
@@ -76,7 +75,7 @@ final class SearchObservabilityListenerTest extends TestCase
         int $expectedLimit,
     ): void {
         $logger = new BufferingLogger();
-        (new SearchObservabilityListener(new PsrLogger($logger)))->onResponse($this->responseEvent(
+        (new SearchObservabilityListener($logger))->onResponse($this->responseEvent(
             query: $query,
             body: self::LONE_PAGE_BODY,
         ));
@@ -109,7 +108,7 @@ final class SearchObservabilityListenerTest extends TestCase
     public function testIgnoresNonSearchRoute(): void
     {
         $logger = new BufferingLogger();
-        (new SearchObservabilityListener(new PsrLogger($logger)))->onResponse(
+        (new SearchObservabilityListener($logger))->onResponse(
             $this->responseEvent(query: '', body: '{"data":{}}', route: 'backoffice_bank_get'),
         );
 
@@ -119,7 +118,7 @@ final class SearchObservabilityListenerTest extends TestCase
     public function testIgnoresSubRequest(): void
     {
         $logger = new BufferingLogger();
-        (new SearchObservabilityListener(new PsrLogger($logger)))->onResponse(
+        (new SearchObservabilityListener($logger))->onResponse(
             $this->responseEvent(query: '', body: '{"data":[],"pagination":{}}', main: false),
         );
 
@@ -129,7 +128,7 @@ final class SearchObservabilityListenerTest extends TestCase
     public function testIgnoresUnsuccessfulResponse(): void
     {
         $logger = new BufferingLogger();
-        (new SearchObservabilityListener(new PsrLogger($logger)))->onResponse(
+        (new SearchObservabilityListener($logger))->onResponse(
             $this->responseEvent(
                 query: '',
                 body: '{"type":"invalid-cursor"}',
@@ -143,7 +142,7 @@ final class SearchObservabilityListenerTest extends TestCase
     public function testStaysSilentWhenBodyHasNoPaginationEnvelope(): void
     {
         $logger = new BufferingLogger();
-        (new SearchObservabilityListener(new PsrLogger($logger)))->onResponse(
+        (new SearchObservabilityListener($logger))->onResponse(
             $this->responseEvent(query: '', body: 'not-json'),
         );
 
@@ -153,7 +152,7 @@ final class SearchObservabilityListenerTest extends TestCase
     public function testEmitsInvalidCursorEventWithCause(): void
     {
         $logger = new BufferingLogger();
-        (new SearchObservabilityListener(new PsrLogger($logger)))->onException(
+        (new SearchObservabilityListener($logger))->onException(
             $this->exceptionEvent(InvalidCursor::version()),
         );
 
@@ -173,7 +172,7 @@ final class SearchObservabilityListenerTest extends TestCase
         $logger = new BufferingLogger();
         $wrapped = new RuntimeException('framework wrapper', 0, InvalidCursor::signature());
 
-        (new SearchObservabilityListener(new PsrLogger($logger)))->onException($this->exceptionEvent($wrapped));
+        (new SearchObservabilityListener($logger))->onException($this->exceptionEvent($wrapped));
 
         [, $message, $context] = $this->singleLog($logger);
         $this->assertSame('invalid_cursor', $message);
@@ -183,7 +182,7 @@ final class SearchObservabilityListenerTest extends TestCase
     public function testIgnoresExceptionsThatAreNotInvalidCursor(): void
     {
         $logger = new BufferingLogger();
-        (new SearchObservabilityListener(new PsrLogger($logger)))->onException(
+        (new SearchObservabilityListener($logger))->onException(
             $this->exceptionEvent(new RuntimeException('unrelated')),
         );
 

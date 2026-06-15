@@ -28,12 +28,10 @@ ERPify/
 │   │       │   └── Validation/     # Shared validator helper
 │   │       ├── Domain/
 │   │       │   ├── Aggregate/ Entity/ Enum/ Event/ Search/ Uuid/
-│   │       │   ├── Logging/        # Logger port + LogLevel enum + NullLogger (no Psr\Log import)
 │   │       │   └── Exception/      # DomainException base + marker interfaces (NotFound, Conflict, …)
 │   │       ├── Guzzle/             # Shared HTTP client utilities (Enum)
 │   │       ├── Infrastructure/
 │   │       │   ├── Http/           # CorrelationIdListener, ProblemDetailsResponder, EventListener/ExceptionResponder, Controller/, Responder/
-│   │       │   ├── Logging/        # PsrLogger — single PSR-3 binding of the Logger port
 │   │       │   ├── Mailer/         # Mailer adapter
 │   │       │   ├── Messenger/      # Messenger middleware/handlers
 │   │       │   ├── Persistence/    # Entity, Repository, Doctrine/Search (keyset engine + FilterApplier + per-repo field maps)

@@ -9,12 +9,12 @@ use Erpify\Backoffice\BankAccount\Application\Audit\BankAccountsViewedAuditEvent
 use Erpify\Backoffice\BankAccount\Application\BankAccountSearcher;
 use Erpify\Backoffice\BankAccount\Application\Query\SearchBankAccountsQuery;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
-use Erpify\Shared\Domain\Logging\NullLogger;
 use Erpify\Shared\Domain\Search\Page;
 use Erpify\Shared\Domain\Search\SearchCriteria;
 use Erpify\Shared\Domain\Uuid\InvalidUuidException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 
 /**
  * @internal

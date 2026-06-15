@@ -9,7 +9,7 @@ use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
 use Erpify\Shared\Application\DomainEvent\DomainEventHandlerDeduplicator;
 use Erpify\Shared\Application\Mailer\NotificationMailer;
 use Erpify\Shared\Domain\Event\DomainEvent;
-use Erpify\Shared\Domain\Logging\Logger;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Throwable;
@@ -22,7 +22,7 @@ final readonly class BankChangedNotifyEmailHandler
     public function __construct(
         private DomainEventHandlerDeduplicator $domainEventHandlerDeduplicator,
         private NotificationMailer $notificationMailer,
-        private Logger $logger,
+        private LoggerInterface $logger,
         #[Autowire('%env(DEFAULT_NOTIFICATION_EMAIL)%')]
         private string $notifyTo,
     ) {
