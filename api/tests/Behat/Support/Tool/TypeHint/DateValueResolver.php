@@ -22,7 +22,8 @@ final class DateValueResolver implements ValueResolverInterface
     public function resolve(mixed $value, ?string $type): mixed
     {
         // supports() matches on the type only, not the value: a non-scalar value cannot become
-        // a DateTime, so pass it through unchanged for a later resolver/caller to handle.
+        // a DateTime. This is the terminal resolver, so return it unchanged for the caller to
+        // surface on use rather than aborting resolution here.
         if (!\is_scalar($value)) {
             return $value;
         }
