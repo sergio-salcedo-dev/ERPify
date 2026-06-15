@@ -1,5 +1,16 @@
 # ADR — Contextos Behat para los seams de eventos y observabilidad
 
+> **⚠️ SUPERSEDIDO en parte (2026-06-15).** El seam de test se rediseñó — ver
+> [`docs/superpowers/specs/2026-06-15-behat-event-observability-contexts-design.md`](../superpowers/specs/2026-06-15-behat-event-observability-contexts-design.md).
+> Cambios frente a lo que describe este ADR (el estado de #277): `OutboxContext` ahora asevera el
+> **transporte/outbox por nombre lógico de cola** sobre el `InMemoryTransport` (cola pendiente `get()`),
+> no el store `domain_event` (ese se asevera con los pasos genéricos de `EntityManagerContext`);
+> `MessengerContext` se **borró**; `MessengerConsumeContext` → `MessengerConsumerContext`, que consume
+> vía la clase `Worker` real (no `messenger:consume`, que resetea el transporte in-memory); se añadieron
+> `NotificationContext` y `MercureContext` con dobles grabadores en `services_test.yaml`; y
+> `features/shared/domain_events/event_publication.feature` se disolvió inline en
+> `create`/`update`/`delete.feature`. `LoggerContext` sigue igual. Lo de abajo describe el estado de #277.
+
 > **Estado:** aceptado (implementado) · **Fecha:** 2026-06-14 · **Ámbito:**
 > `api/tests/Behat/Context/{Messenger,MessengerConsume,Outbox,Logger}Context` + su registro en
 > `tools/behat/behat.yml.dist` + `features/shared/domain_events/event_publication.feature`.

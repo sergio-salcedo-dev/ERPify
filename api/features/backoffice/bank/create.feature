@@ -33,10 +33,27 @@ Feature: Create a bank
       | shortName      | TB        |
       | logo           | null      |
       | storedObject   | null      |
-    And there should have 1 "StoredDomainEvent" entity found by "name=erpify.backoffice.bank.created"
-    And 1 domain event named "erpify.backoffice.bank.created" should be stored
-    And the stored domain event "erpify.backoffice.bank.created" body "name" should be equal to "Test Bank"
-    And the stored domain event "erpify.backoffice.bank.created" body "shortName" should be equal to "TB"
+    And there should have 1 "StoredDomainEvent" entities found by "name=erpify.backoffice.bank.created"
+    # The outbox is the async transport, addressed by queue name. The event is pending until consumed.
+    And 1 outbox event was created on the queue "async"
+    And I got the event number 1 on queue "async" from the outbox
+    And The outbox event should be of type "Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent"
+    And The outbox event property "name" should be equal to "Test Bank"
+    And The outbox event property "shortName" should be equal to "TB"
+    # Consuming runs the async handlers and acks, draining the queue and producing the observable effects.
+    And I consume 1 message from the "async" transport
+    And the command should succeed
+    And 0 outbox events were created on the queue "async"
+    And 1 notification email was sent
+    And The notification email subject should be equal to "[ERPify] Bank created"
+    And The notification email recipient should be "notifications@erpify.test"
+    And The notification email body should contain "Test Bank"
+    And 1 Mercure update was published
+    And The Mercure update should have 1 topic
+    And The Mercure update topic 1 should be equal to "urn:erpify:backoffice:banks"
+    And The Mercure update property "type" should be equal to "bank.created"
+    And The Mercure update property "bank.name" should be equal to "Test Bank"
+    And The Mercure update property "bank.shortName" should be equal to "TB"
 
   # The fixture DB restores per feature, not per scenario, so the earlier "Successfully create a
   # bank" scenario's stored event would survive into the create-422 scenarios. Each rejection
@@ -67,6 +84,10 @@ Feature: Create a bank
     And the JSON node "violations[1].code" should be equal to "c1051bb4-d103-4f74-8988-acbcafc7fdc3"
     And 0 requests got executed across all doctrine connections
     And there should have 0 "StoredDomainEvent" entities found by "name=erpify.backoffice.bank.created"
+    And the logger logged a log entry as "warning" with message "API error response built"
+    And the logger logged a log entry as "warning" with message "API error response built" and context contains:
+      | type   | validation-failed |
+      | status | 422               |
 
   Scenario: Fail to create a bank with missing fields
     Given the "StoredDomainEvent" entities found by "" are deleted

@@ -47,3 +47,18 @@ services:
     Erpify\Shared\Infrastructure\Http\EventListener\ExceptionResponder:
         arguments:
             $logger: '@Symfony\Component\ErrorHandler\BufferingLogger'
+
+    # Recording Mercure hub: captures the realtime Updates a consumed bank event publishes, instead of
+    # reaching the live hub (which has no test double and hangs ~5s per consume). Overriding the
+    # MercureBundle's HubInterface alias makes BankRealtimePublisherHandler and MercureContext share it.
+    Erpify\Tests\Behat\Support\Mercure\RecordingHub: ~
+
+    Symfony\Component\Mercure\HubInterface:
+        alias: Erpify\Tests\Behat\Support\Mercure\RecordingHub
+        public: true
+
+    # Recording mailer subscriber: captures every Email handed to Symfony Mailer (null transport in
+    # test) so NotificationContext can assert the notification effect of a consumed bank event.
+    Erpify\Tests\Behat\Support\Notification\RecordingMailerSubscriber:
+        tags:
+            - { name: kernel.event_subscriber }

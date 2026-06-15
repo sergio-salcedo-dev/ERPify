@@ -16,7 +16,6 @@
 #    And the JSON field "storedObjectUrl" in the last response should be a stored object URL
 #    And I remember the JSON field "id" as "bankId"
 #    And I remember the JSON field "storedObjectUrl" as "storedObjectUrl"
-#    And a domain event named "erpify.backoffice.bank.created" should be recorded for aggregate {bankId}
 #    And I GET the URL from the JSON field "storedObjectUrl" in the last response
 #    And the response status code should be 200
 #    And the response header "Content-Type" should be "image/png"
