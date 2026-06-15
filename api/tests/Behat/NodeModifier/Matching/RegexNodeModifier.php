@@ -12,7 +12,9 @@ use Override;
  * for fields with unpredictable shape such as UUIDs, slugs, or generated identifiers.
  *
  * Example (Gherkin):
- *   And the JSON node "id" should be equal to "<regex>/^[0-9a-f-]{36}$/"
+ *   And the JSON node "id::regex" should be equal to "/^[0-9a-f-]{36}$/"
+ *   And the last inserted "Bank" entity should match:
+ *     | id::regex | /^[0-9a-f-]{36}$/ |
  */
 class RegexNodeModifier extends AbstractNodeModifier
 {

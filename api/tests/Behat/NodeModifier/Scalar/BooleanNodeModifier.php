@@ -13,7 +13,7 @@ use Override;
  * response. The literal string `null` (or actual `null`) short-circuits to `null`.
  *
  * Example (Gherkin):
- *   And the JSON node "isActive" should be equal to "<bool>true"
+ *   And the JSON node "isActive::bool" should be equal to "true"
  */
 class BooleanNodeModifier extends AbstractNodeModifier
 {

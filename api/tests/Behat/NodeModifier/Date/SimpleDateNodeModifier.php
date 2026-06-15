@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Erpify\Tests\Behat\NodeModifier\Date;
 
 use DateTimeInterface;
-use Erpify\Tests\Behat\NodeModifier\AbstractNodeModifier;
 use Override;
 
 /**
@@ -13,7 +12,7 @@ use Override;
  * time component is ignored. Use when only the calendar day matters.
  *
  * Example (Gherkin):
- *   And the JSON node "birthday" should be equal to "<simple_date>1990-01-15"
+ *   And the JSON node "birthday::simple_date" should be equal to "1990-01-15"
  */
 class SimpleDateNodeModifier extends DateNodeModifier
 {
@@ -23,10 +22,14 @@ class SimpleDateNodeModifier extends DateNodeModifier
         return 'simple_date';
     }
 
+    /**
+     * Reachable only through the explicit `::simple_date` suffix: date-shaped values are claimed
+     * by {@see DateNodeModifier} auto-detection, so the date-only variant never sniffs by value.
+     */
     #[Override]
-    public function support(string $path, mixed $value): bool
+    public function supportsValue(mixed $value): bool
     {
-        return AbstractNodeModifier::support($path, $value);
+        return false;
     }
 
     #[Override]
