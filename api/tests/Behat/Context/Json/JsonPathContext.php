@@ -468,13 +468,16 @@ class JsonPathContext extends AbstractContext
      * (e.g. a non-numeric amount); letting it through would compare as 0 or vacuously satisfy a
      * numeric/negative assertion, silently masking a test-author error.
      *
+     * The literal string 'null' is exempt: it is an explicit null sentinel a modifier may map to
+     * null on purpose (e.g. AmountNodeModifier), so it is a legitimate expected value, not garbage.
+     *
      * @throws JsonException
      */
     private function processExpectedOrFail(NodeModifierInterface $nodeModifier, mixed $expected): mixed
     {
         $processed = $nodeModifier->getProcessedValue($expected);
 
-        if (null === $processed && null !== $expected) {
+        if (null === $processed && null !== $expected && 'null' !== $expected) {
             self::fail(\sprintf(
                 'The "%s" modifier could not process the expected value %s.',
                 $nodeModifier->getModifier(),
