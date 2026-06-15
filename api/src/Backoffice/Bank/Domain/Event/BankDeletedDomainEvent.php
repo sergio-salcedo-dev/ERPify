@@ -9,11 +9,6 @@ use Override;
 
 final class BankDeletedDomainEvent extends DomainEvent
 {
-    public function __construct(string $bankId)
-    {
-        parent::__construct($bankId, self::now());
-    }
-
     #[Override]
     public static function eventName(): string
     {
