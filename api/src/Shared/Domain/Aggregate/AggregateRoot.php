@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Domain\Aggregate;
 
-use DateTimeImmutable;
+use Erpify\Shared\Domain\Clock\SystemClock;
 use Erpify\Shared\Domain\Entity\Identifiable;
 use Erpify\Shared\Domain\Entity\Timestamped;
 use Erpify\Shared\Domain\Event\DomainEvent;
@@ -24,7 +24,7 @@ abstract class AggregateRoot
 
     protected function __construct()
     {
-        $now = new DateTimeImmutable();
+        $now = SystemClock::now();
         $this->createdAt = $now;
         $this->updatedAt = $now;
     }
