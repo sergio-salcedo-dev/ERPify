@@ -508,12 +508,46 @@ jobs:
           echo "=== inspect database ==="; docker inspect "$(docker compose ps -q database)" --format '{{json .State}}' || true
 
   # -------------------------
+  # SONARCLOUD (static analysis — informational, non-gating)
+  # -------------------------
+  # CI-based analysis on SonarCloud (sergio-salcedo-dev_ERPify). Requires the
+  # project's "Automatic Analysis" to be turned OFF in the SonarCloud UI
+  # (Project Settings ▸ Analysis Method) — the two are mutually exclusive and a
+  # scan errors out while AA is enabled. Deliberately kept out of the ci-success
+  # gate: a red Quality Gate informs, it does not block merges.
+  #
+  # Token hygiene: SONAR_TOKEN (a project-scoped analysis token) is a repo
+  # secret, injected only into the scan step's env, never echoed and never placed
+  # in sonar-project.properties. The job is skipped on fork PRs, where the secret
+  # is absent by design — so it can never leak to untrusted PR code. We use the
+  # plain `pull_request` trigger (never pull_request_target) for the same reason.
+  sonar:
+    name: SonarCloud
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6.0.3
+        with:
+          # Full history so SonarCloud can attribute new code / blame accurately.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # v8.1.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  # -------------------------
   # CI SUMMARY (aggregate — always renders)
   # -------------------------
   ci-summary:
     name: CI Summary
     if: always()
-    needs: [api-build, api-test, api-behat, api-taint, pwa-node, pwa-e2e, pwa-burn-in]
+    needs: [api-build, api-test, api-behat, api-taint, pwa-node, pwa-e2e, pwa-burn-in, sonar]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions: {}
@@ -528,6 +562,7 @@ jobs:
           R_PWA_NODE: ${{ needs.pwa-node.result }}
           R_PWA_E2E: ${{ needs.pwa-e2e.result }}
           R_PWA_BURNIN: ${{ needs.pwa-burn-in.result }}
+          R_SONAR: ${{ needs.sonar.result }}
         run: |
           {
             echo "## CI Execution Summary"
@@ -541,6 +576,7 @@ jobs:
             echo "| PWA (Node)      | $R_PWA_NODE |"
             echo "| PWA (E2E)       | $R_PWA_E2E |"
             echo "| PWA (Burn-In)   | $R_PWA_BURNIN |"
+            echo "| SonarCloud      | $R_SONAR |"
             echo ""
             if [ "$R_PWA_BURNIN" = "failure" ]; then
               echo "> ⚠️ **Flaky tests detected** — review the burn-in artifact."
