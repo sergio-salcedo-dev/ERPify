@@ -10,6 +10,7 @@ use Erpify\Backoffice\Health\Infrastructure\Controller\DatabaseHealthController;
 use Erpify\Shared\Infrastructure\Clock\SymfonyClock;
 use Erpify\Shared\Infrastructure\Http\Responder\JsonResponder;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MockClock;
@@ -24,11 +25,15 @@ final class DatabaseHealthControllerTest extends TestCase
     private const string FROZEN_INSTANT = '2026-06-14T12:00:00+00:00';
 
     #[Test]
-    public function itReportsTheClockInstantAsTheHealthDatetime(): void
+    #[DataProvider('provideItReportsTheProbeOutcomeWithTheClockInstantCases')]
+    public function itReportsTheProbeOutcomeWithTheClockInstant(bool $reachable, string $expectedStatus): void
     {
+        $checker = $this->createStub(DatabaseHealthChecker::class);
+        $checker->method('isHealthy')->willReturn($reachable);
+
         $controller = new DatabaseHealthController(
             new JsonResponder(),
-            new CheckDatabaseHealth($this->reachableDatabase()),
+            new CheckDatabaseHealth($checker),
             new SymfonyClock(new MockClock(self::FROZEN_INSTANT)),
         );
 
@@ -38,18 +43,17 @@ final class DatabaseHealthControllerTest extends TestCase
 
         $this->assertSame(Response::HTTP_OK, $response->getStatusCode(), (string) $response->getContent());
         $this->assertSame(
-            ['data' => ['status' => 'ok', 'service' => 'Database', 'datetime' => self::FROZEN_INSTANT]],
+            ['data' => ['status' => $expectedStatus, 'service' => 'Database', 'datetime' => self::FROZEN_INSTANT]],
             $payload,
         );
     }
 
-    private function reachableDatabase(): DatabaseHealthChecker
+    /**
+     * @return iterable<string, array{bool, string}>
+     */
+    public static function provideItReportsTheProbeOutcomeWithTheClockInstantCases(): iterable
     {
-        return new class implements DatabaseHealthChecker {
-            public function isHealthy(): bool
-            {
-                return true;
-            }
-        };
+        yield 'reachable database reports ok' => [true, 'ok'];
+        yield 'unreachable database reports error' => [false, 'error'];
     }
 }
