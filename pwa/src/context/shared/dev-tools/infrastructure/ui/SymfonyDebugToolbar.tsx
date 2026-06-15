@@ -66,6 +66,11 @@ export function SymfonyDebugToolbar({
     // (`renderAjaxRequests` reading `.style` of null). A stable DOM avoids that;
     // the latch only flips on a successful mount, so a failed load still retries
     // on the next token.
+    //
+    // Conscious trade-off: the toolbar's main bar stays bound to the session's
+    // first request (sfjs's AJAX panel still tracks later ones). For a dev-only
+    // tool that beats re-introducing unmount/remount churn around Symfony JS we
+    // don't own — which is what caused the crash.
     if (!host || !token || mountedRef.current) return;
 
     let cancelled = false;

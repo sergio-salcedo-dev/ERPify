@@ -51,10 +51,10 @@ describe("SymfonyDebugToolbar", () => {
     render(<SymfonyDebugToolbar observer={observer} />);
     observer.publish({ token: "first", profilerUrl: "/_profiler/first" });
 
+    let mounted: Element | null = null;
     await waitFor(() => {
-      expect(
-        screen.getByTestId("dev-tools__symfony-toolbar").querySelector("#sfwdt-marker"),
-      ).not.toBeNull();
+      mounted = screen.getByTestId("dev-tools__symfony-toolbar").querySelector("#sfwdt-marker");
+      expect(mounted).not.toBeNull();
     });
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(fetchSpy).toHaveBeenCalledWith(
@@ -63,15 +63,85 @@ describe("SymfonyDebugToolbar", () => {
     );
 
     // A later request publishes a fresh token; Symfony's own AJAX panel tracks
-    // it, so the host must not re-fetch or re-wipe (the source of the null-deref
-    // crash in the toolbar's global AJAX handlers).
+    // it, so the host must not re-fetch or re-wipe. Asserting node identity (not
+    // just non-null) is what proves "no re-wipe" — a re-mount with the same HTML
+    // would replace the node and still be non-null, yet that is exactly the
+    // detached-DOM churn that crashed the toolbar's global AJAX handlers.
     observer.publish({ token: "second", profilerUrl: "/_profiler/second" });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("dev-tools__symfony-toolbar").querySelector("#sfwdt-marker")).toBe(
+      mounted,
+    );
+  });
+
+  it("does not re-wipe the toolbar when an earlier in-flight load resolves after a later one", async () => {
+    const observer = new EventTargetDebugTokenObserver();
+    const resolvers: Array<(html: string) => void> = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolvers.push((html) =>
+            resolve(new Response(html, { status: 200, headers: { "Content-Type": "text/html" } })),
+          );
+        }),
+    );
+
+    render(<SymfonyDebugToolbar observer={observer} />);
+    observer.publish({ token: "first", profilerUrl: "/_profiler/first" });
+    await waitFor(() => expect(resolvers).toHaveLength(1));
+
+    // A second token arrives while the first load is still in flight.
+    observer.publish({ token: "second", profilerUrl: "/_profiler/second" });
+    await waitFor(() => expect(resolvers).toHaveLength(2));
+
+    // The later token's load resolves first and mounts the toolbar.
+    resolvers[1]("<div id='sfwdt-marker'>second</div>");
+    let mounted: Element | null = null;
+    await waitFor(() => {
+      mounted = screen.getByTestId("dev-tools__symfony-toolbar").querySelector("#sfwdt-marker");
+      expect(mounted?.textContent).toBe("second");
+    });
+
+    // The earlier, now-superseded load resolves late: it must not wipe/replace
+    // the mounted node — that detached-DOM write is the crash this fix prevents.
+    resolvers[0]("<div id='sfwdt-marker'>first</div>");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const after = screen.getByTestId("dev-tools__symfony-toolbar").querySelector("#sfwdt-marker");
+    expect(after).toBe(mounted);
+    expect(after?.textContent).toBe("second");
+  });
+
+  it("retries on a later token after an initial load failure", async () => {
+    const observer = new EventTargetDebugTokenObserver();
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValueOnce(
+        new Response("<div id='sfwdt-marker'>ok</div>", {
+          status: 200,
+          headers: { "Content-Type": "text/html" },
+        }),
+      );
+
+    render(<SymfonyDebugToolbar observer={observer} />);
+    observer.publish({ token: "first", profilerUrl: "/_profiler/first" });
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+    // First load failed: nothing mounted and the latch stayed unset.
     expect(
       screen.getByTestId("dev-tools__symfony-toolbar").querySelector("#sfwdt-marker"),
-    ).not.toBeNull();
+    ).toBeNull();
+
+    // A later request publishes a fresh token → the toolbar retries and mounts.
+    observer.publish({ token: "second", profilerUrl: "/_profiler/second" });
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("dev-tools__symfony-toolbar").querySelector("#sfwdt-marker"),
+      ).not.toBeNull();
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 
   it("renders nothing and does not throw when the fragment fetch fails", async () => {
