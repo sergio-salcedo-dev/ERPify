@@ -137,11 +137,10 @@ jobs:
         if: failure()
         run: |
           echo "=== ps ==="; docker compose ps
-          echo "=== database (last 200 lines) ==="; docker compose logs --tail=200 database || true
-          echo "=== php (last 200 lines) ==="; docker compose logs --tail=200 php || true
-          echo "=== messenger_worker (last 100 lines) ==="; docker compose logs --tail=100 messenger_worker || true
-          echo "=== mailpit (last 50 lines) ==="; docker compose logs --tail=50 mailpit || true
-          echo "=== inspect database ==="; docker inspect "$(docker compose ps -q database)" --format '{{json .State}}' || true
+          echo "=== database state ==="; docker inspect "$(docker compose ps -q database)" --format '{{json .State}}' || true
+          echo "=== php (last 50 lines) ==="; docker compose logs --tail=50 php || true
+          echo "=== database (last 50 lines) ==="; docker compose logs --tail=50 database || true
+          echo "=== messenger_worker (last 50 lines) ==="; docker compose logs --tail=50 messenger_worker || true
 
       - name: Security check
         uses: symfonycorp/security-checker-action@258311ef7ac571f1310780ef3d79fc5abef642b5 # v5
@@ -197,11 +196,10 @@ jobs:
         if: failure()
         run: |
           echo "=== ps ==="; docker compose ps
-          echo "=== database (last 200 lines) ==="; docker compose logs --tail=200 database || true
-          echo "=== php (last 200 lines) ==="; docker compose logs --tail=200 php || true
-          echo "=== messenger_worker (last 100 lines) ==="; docker compose logs --tail=100 messenger_worker || true
-          echo "=== mailpit (last 50 lines) ==="; docker compose logs --tail=50 mailpit || true
-          echo "=== inspect database ==="; docker inspect "$(docker compose ps -q database)" --format '{{json .State}}' || true
+          echo "=== database state ==="; docker inspect "$(docker compose ps -q database)" --format '{{json .State}}' || true
+          echo "=== php (last 50 lines) ==="; docker compose logs --tail=50 php || true
+          echo "=== database (last 50 lines) ==="; docker compose logs --tail=50 database || true
+          echo "=== messenger_worker (last 50 lines) ==="; docker compose logs --tail=50 messenger_worker || true
 
   # -------------------------
   # API TAINT (Psalm security flow analysis — parallel, gating)
@@ -262,7 +260,7 @@ jobs:
         if: failure()
         run: |
           echo "=== ps ==="; docker compose ps
-          echo "=== php (last 200 lines) ==="; docker compose logs --tail=200 php || true
+          echo "=== php (last 50 lines) ==="; docker compose logs --tail=50 php || true
 
   # -------------------------
   # PWA NODE (isolated, fast)
@@ -389,12 +387,11 @@ jobs:
           COMPOSE_PROJECT_NAME: erpify-e2e
         run: |
           echo "=== ps ==="; docker compose ps
-          echo "=== database (last 200 lines) ==="; docker compose logs --tail=200 database || true
-          echo "=== php (last 200 lines) ==="; docker compose logs --tail=200 php || true
-          echo "=== pwa (last 100 lines) ==="; docker compose logs --tail=100 pwa || true
-          echo "=== messenger_worker (last 100 lines) ==="; docker compose logs --tail=100 messenger_worker || true
-          echo "=== mailpit (last 50 lines) ==="; docker compose logs --tail=50 mailpit || true
-          echo "=== inspect database ==="; docker inspect "$(docker compose ps -q database)" --format '{{json .State}}' || true
+          echo "=== database state ==="; docker inspect "$(docker compose ps -q database)" --format '{{json .State}}' || true
+          echo "=== php (last 50 lines) ==="; docker compose logs --tail=50 php || true
+          echo "=== pwa (last 50 lines) ==="; docker compose logs --tail=50 pwa || true
+          echo "=== database (last 50 lines) ==="; docker compose logs --tail=50 database || true
+          echo "=== messenger_worker (last 50 lines) ==="; docker compose logs --tail=50 messenger_worker || true
 
   # -------------------------
   # PWA E2E REPORT (merge blob reports — always)
@@ -530,12 +527,11 @@ jobs:
           COMPOSE_PROJECT_NAME: erpify-burnin
         run: |
           echo "=== ps ==="; docker compose ps
-          echo "=== database (last 200 lines) ==="; docker compose logs --tail=200 database || true
-          echo "=== php (last 200 lines) ==="; docker compose logs --tail=200 php || true
-          echo "=== pwa (last 100 lines) ==="; docker compose logs --tail=100 pwa || true
-          echo "=== messenger_worker (last 100 lines) ==="; docker compose logs --tail=100 messenger_worker || true
-          echo "=== mailpit (last 50 lines) ==="; docker compose logs --tail=50 mailpit || true
-          echo "=== inspect database ==="; docker inspect "$(docker compose ps -q database)" --format '{{json .State}}' || true
+          echo "=== database state ==="; docker inspect "$(docker compose ps -q database)" --format '{{json .State}}' || true
+          echo "=== php (last 50 lines) ==="; docker compose logs --tail=50 php || true
+          echo "=== pwa (last 50 lines) ==="; docker compose logs --tail=50 pwa || true
+          echo "=== database (last 50 lines) ==="; docker compose logs --tail=50 database || true
+          echo "=== messenger_worker (last 50 lines) ==="; docker compose logs --tail=50 messenger_worker || true
 
   # -------------------------
   # SONARCLOUD (static analysis — informational, non-gating)
