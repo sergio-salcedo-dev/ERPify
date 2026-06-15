@@ -26,7 +26,11 @@ class StringNodeModifier extends AbstractNodeModifier
     #[Override]
     public function getProcessedValue(mixed $value): ?string
     {
-        \assert(\is_scalar($value) || null === $value);
+        // A non-scalar actual (array/object) is not a string: return null so the comparison
+        // fails cleanly instead of aborting on the cast.
+        if (null !== $value && !\is_scalar($value)) {
+            return null;
+        }
 
         return (string) $value;
     }
