@@ -71,7 +71,7 @@ function parseStoredSession(raw: string): Session | null {
   const candidate = value as Partial<Session>;
   const user = candidate.user;
   if (!user || typeof user !== "object") return null;
-  const knownStatus = Object.values(UserStatus).includes(user.status as UserStatus);
+  const knownStatus = Object.values(UserStatus).includes(user.status);
   if (typeof user.id !== "string" || typeof user.email !== "string" || !knownStatus) return null;
   if (
     !Array.isArray(user.roles) ||
@@ -134,7 +134,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const override = useCallback(
     (patch: Omit<Partial<Session>, "user"> & { user?: Partial<Identity> }): void => {
       const base = sessionRef.current ?? SEED_SESSION;
-      const user: Identity = { ...base.user, ...(patch.user ?? {}) };
+      const user: Identity = { ...base.user, ...patch.user };
       persist({
         ...base,
         ...patch,
@@ -148,9 +148,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
 
   const status = useMemo<AuthStatus>(() => {
     if (!hydrated) return "hydrating";
-    return session && session.user.status === UserStatus.ACTIVE
-      ? "authenticated"
-      : "unauthenticated";
+    return session?.user.status === UserStatus.ACTIVE ? "authenticated" : "unauthenticated";
   }, [hydrated, session]);
 
   const value = useMemo<AuthContextValue>(

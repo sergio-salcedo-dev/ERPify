@@ -76,27 +76,39 @@ export function scrubDeep(value: unknown, depth = 0, state?: { nodes: number }):
   }
 
   if (Array.isArray(value)) {
-    const scrubbedArray: unknown[] = [];
-    for (const item of value) {
-      if (actualState.nodes >= MAX_NODES) {
-        scrubbedArray.push("[node-limited]");
-        break;
-      }
-      scrubbedArray.push(scrubDeep(item, depth + 1, actualState));
-    }
-    return scrubbedArray;
+    return scrubArray(value, depth, actualState);
   }
 
+  return scrubObject(value as Record<string, unknown>, depth, actualState);
+}
+
+function scrubArray(value: unknown[], depth: number, state: { nodes: number }): unknown[] {
+  const scrubbedArray: unknown[] = [];
+  for (const item of value) {
+    if (state.nodes >= MAX_NODES) {
+      scrubbedArray.push("[node-limited]");
+      break;
+    }
+    scrubbedArray.push(scrubDeep(item, depth + 1, state));
+  }
+  return scrubbedArray;
+}
+
+function scrubObject(
+  value: Record<string, unknown>,
+  depth: number,
+  state: { nodes: number },
+): Record<string, unknown> {
   const scrubbed: Record<string, unknown> = {};
-  for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
-    if (actualState.nodes >= MAX_NODES) {
+  for (const [key, nested] of Object.entries(value)) {
+    if (state.nodes >= MAX_NODES) {
       scrubbed["[truncated]"] = "[node-limited]";
       break;
     }
     if (isDenylistedKey(key)) {
       continue;
     }
-    scrubbed[key] = scrubDeep(nested, depth + 1, actualState);
+    scrubbed[key] = scrubDeep(nested, depth + 1, state);
   }
   return scrubbed;
 }

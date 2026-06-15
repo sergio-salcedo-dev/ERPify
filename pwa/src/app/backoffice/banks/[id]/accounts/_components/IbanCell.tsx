@@ -53,8 +53,7 @@ export function IbanCell({ iban, revealed, onReveal, onHide, testId }: Readonly<
   }, [revealed, onHide]);
 
   return (
-    <div
-      role="group"
+    <fieldset
       aria-label="IBAN"
       className="iban-cell flex items-center gap-1.5"
       data-testid={testId}
@@ -99,6 +98,6 @@ export function IbanCell({ iban, revealed, onReveal, onHide, testId }: Readonly<
         className="iban-cell__copy size-10"
         testId={testId ? `${testId}__copy` : undefined}
       />
-    </div>
+    </fieldset>
   );
 }
