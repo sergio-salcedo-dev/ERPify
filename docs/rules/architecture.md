@@ -48,6 +48,23 @@ validating UUIDs across versions (v4, v7). The prohibition stays absolute for **
 code in `Domain/`: this exception covers only `symfony/uid`, not `Erpify\Shared\Infrastructure\…` or any
 other framework service. Example: `api/src/Shared/Domain/Uuid/Uuid.php`.
 
+#### Documented exception — PSR interface-only interop contracts
+
+`Domain/` and `Application/` MAY depend directly on **interface-only PSR interop contracts** —
+`psr/log`, `psr/cache`, `psr/http-message`, `psr/event-dispatcher`, `psr/clock`, `psr/container` (as a
+contract). The discriminant is **runtime, not vendor**: a package that ships only interfaces (no
+implementation, no transitive framework deps) introduces no runtime coupling, so it is admissible in the
+inner layers — strictly more so than `symfony/uid`, which ships code. Frameworks/implementations with a
+runtime (Symfony beyond `uid`, Doctrine, Monolog, Messenger, API Platform) stay in `Infrastructure/`.
+
+**Do not wrap a permitted PSR contract in a 1:1 domain port.** A pass-through interface that mirrors the
+standard method-for-method adds maintenance surface (interface + null object + adapter + DI + contract
+test + docs) with no semantic gain — the PSR contract already *is* the port (Rule of Three). Create a
+domain port only when the domain needs a **narrower/different contract** (e.g. `Clock`: "now" is a domain
+concept wanting a test seam; `MessageBus`: no PSR exists). When the auxiliary types of an eliminated
+wrapper have no real consumers and express no independent domain semantics, delete them too. Full
+decision record and the per-dependency table: [`../adr/external-dependencies-in-domain.md`](../adr/external-dependencies-in-domain.md).
+
 ### Application Layer
 - Contains use cases and application services
 - Depends only on Domain layer

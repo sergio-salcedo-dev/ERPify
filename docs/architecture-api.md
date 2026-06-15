@@ -35,6 +35,8 @@ Full constraint table (version gotchas, Doctrine 3 API deltas, polyfill `replace
 
 **DDD + Hexagonal (Ports & Adapters) + Clean Architecture.** Dependencies point inward: `Infrastructure → Application → Domain`. `Domain/` is framework-free — no Symfony, Doctrine, HTTP, or DI-container types. Ports (interfaces) are declared in `Domain/` or `Application/`; adapters live in `Infrastructure/`.
 
+**External dependencies in the inner layers** follow a deliberate policy — interface-only interop contracts (PSR: `psr/log`, `psr/cache`, `psr/http-message`) and neutral value-object libraries (`symfony/uid`) are allowed in `Domain/Application`; frameworks/runtimes (Symfony, Doctrine, Monolog, Messenger) stay in `Infrastructure/`; no 1:1 wrapper over a permitted PSR contract. Full decision record: [`adr/external-dependencies-in-domain.md`](./adr/external-dependencies-in-domain.md).
+
 ### Bounded contexts
 
 ```text
