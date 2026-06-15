@@ -1,0 +1,47 @@
+#!/bin/sh
+# Regenerate the deptrac baseline (grandfathered inner-layer framework deps).
+#
+# `make php.deptrac.baseline` calls this. deptrac's baseline formatter re-dumps the
+# whole active skip_violations — including the published cross-context seams that
+# live in skip_violations in deptrac.yaml (mirror of api/.bounded-context-allowlist).
+# This script strips those seams back out so the baseline stays debt-only and the
+# seam allowlist stays single-sourced in deptrac.yaml. A seam is any skipped target
+# in another business module's namespace (Erpify\Backoffice\* / Erpify\Frontoffice\*);
+# inner-layer framework debt targets vendors or Erpify\Shared\*, never a sibling module.
+set -eu
+cd "$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)" # -> api root
+
+raw="$(mktemp)"
+out="$(mktemp)"
+trap 'rm -f "$raw" "$out"' EXIT
+
+# deptrac exits non-zero whenever it dumps violations into the baseline — that is the
+# expected outcome here, so don't let `set -e` abort. Validate the output instead.
+vendor/bin/deptrac --config-file=tools/deptrac/deptrac.yaml \
+    --cache-file=var/cache/.deptrac.cache --no-progress \
+    analyse --formatter=baseline --output="$raw" || true
+grep -q '^  skip_violations:' "$raw" || {
+    echo "deptrac produced no usable baseline (config/parse error?)." >&2
+    exit 1
+}
+
+{
+    cat tools/deptrac/deptrac.baseline.header.txt
+    # Drop cross-context seam item lines, and any importer key left with no items.
+    awk '
+        /^    [^ ].*:$/      { if (key != "" && n > 0) { print key; for (i = 0; i < n; i++) print item[i] } key = $0; n = 0; next }
+        /^      - /          { if ($0 ~ /^      - Erpify\\(Backoffice|Frontoffice)\\/) next; item[n++] = $0; next }
+                             { if (key != "" && n > 0) { print key; for (i = 0; i < n; i++) print item[i] } key = ""; n = 0; print }
+        END                  { if (key != "" && n > 0) { print key; for (i = 0; i < n; i++) print item[i] } }
+    ' "$raw"
+} > "$out"
+
+# Only overwrite the committed baseline once the new content is fully built and
+# non-empty, so a mid-pipeline failure (awk/cat error under `set -e`) leaves the
+# existing baseline intact. Write *through* the existing file rather than `mv`-ing
+# a tmpfile in: the container runs as root, and an mv'd /tmp file would leave a
+# root-owned baseline on the host bind mount.
+test -s "$out"
+cat "$out" > tools/deptrac/deptrac.baseline.yaml
+
+echo "Regenerated tools/deptrac/deptrac.baseline.yaml (cross-context seams stripped)."

@@ -1,0 +1,294 @@
+# Deptrac — architectural boundary gate for api/src.
+#
+# Enforces three orthogonal concerns in one ruleset (run via `make php.deptrac`):
+#
+#   1. Hexagonal layering — within every module, dependencies point inward:
+#      Infrastructure -> Application -> Domain. Domain depends on nothing but the
+#      shared kernel + the blessed value-object / passive-metadata namespaces.
+#   2. Bounded-context isolation — a business module (e.g. Backoffice/Bank) never
+#      reaches into another module's Domain/Application/Infrastructure. This is the
+#      AST-aware sibling of tests/Unit/Shared/Architecture/BoundedContextGateTest.php
+#      (the text-walk gate stays the primary, auto-discovering check; deptrac is
+#      defence-in-depth). The three published seams blessed in
+#      api/.bounded-context-allowlist are mirrored in `skip_violations` below.
+#   3. External-dependency allowlist in Domain/Application (issue #301, ADR
+#      docs/adr/external-dependencies-in-domain.md D4) — inner layers may only touch
+#      PSR interop contracts, symfony/uid, and the passive-metadata attribute
+#      namespaces (#[ORM\Mapping], #[Assert], #[Groups]); every framework with a
+#      runtime (Doctrine DBAL/ORM/Persistence, Symfony beyond uid, Monolog, API
+#      Platform, Guzzle, Flysystem, Twig, Sentry, Intervention Image) is confined
+#      to Infrastructure, each permitted only in the layers that use it. Inner-layer
+#      framework usage that predates this gate is grandfathered in the baseline
+#      (deptrac.baseline.yaml) — a ratchet, not a blessing.
+#
+# The `Shared` kernel is always importable (it is the shared kernel, never a
+# bounded context), so every layer may depend on its matching Shared layer.
+#
+# New modules must be added here. They are still covered for cross-context by the
+# auto-discovering BoundedContextGateTest even before they are listed; deptrac adds
+# the layering + dependency-allowlist coverage once registered.
+
+# Pre-existing inner-layer framework dependencies are grandfathered here (ratchet).
+imports:
+    - deptrac.baseline.yaml
+
+parameters:
+    # Paths resolve relative to this config file's directory (api/tools/deptrac/).
+    paths:
+        - ../../src
+    exclude_files:
+        # Anchored to real test files (a Tests/ or Test/ path segment, or a
+        # *Test.php class). An unanchored substring match (#.*[Tt]est.*#) would
+        # also drop production classes whose path merely contains "test" —
+        # Latest, Attestation, Contest, …
+        - '#(^|/)Tests?/#'
+        - '#Test\.php$#'
+
+deptrac:
+    layers:
+        # ---- Backoffice / Bank --------------------------------------------------
+        - name: Backoffice.Bank.Domain
+          collectors: [{ type: directory, value: src/Backoffice/Bank/Domain/.* }]
+        - name: Backoffice.Bank.Application
+          collectors: [{ type: directory, value: src/Backoffice/Bank/Application/.* }]
+        - name: Backoffice.Bank.Infrastructure
+          collectors: [{ type: directory, value: src/Backoffice/Bank/Infrastructure/.* }]
+
+        # ---- Backoffice / BankAccount -------------------------------------------
+        - name: Backoffice.BankAccount.Domain
+          collectors: [{ type: directory, value: src/Backoffice/BankAccount/Domain/.* }]
+        - name: Backoffice.BankAccount.Application
+          collectors: [{ type: directory, value: src/Backoffice/BankAccount/Application/.* }]
+        - name: Backoffice.BankAccount.Infrastructure
+          collectors: [{ type: directory, value: src/Backoffice/BankAccount/Infrastructure/.* }]
+
+        # ---- Backoffice / Health ------------------------------------------------
+        - name: Backoffice.Health.Domain
+          collectors: [{ type: directory, value: src/Backoffice/Health/Domain/.* }]
+        - name: Backoffice.Health.Application
+          collectors: [{ type: directory, value: src/Backoffice/Health/Application/.* }]
+        - name: Backoffice.Health.Infrastructure
+          collectors: [{ type: directory, value: src/Backoffice/Health/Infrastructure/.* }]
+
+        # ---- Frontoffice / Dev --------------------------------------------------
+        - name: Frontoffice.Dev.Infrastructure
+          collectors: [{ type: directory, value: src/Frontoffice/Dev/Infrastructure/.* }]
+
+        # ---- Frontoffice / Health -----------------------------------------------
+        - name: Frontoffice.Health.Infrastructure
+          collectors: [{ type: directory, value: src/Frontoffice/Health/Infrastructure/.* }]
+
+        # ---- Frontoffice / Mercure ----------------------------------------------
+        - name: Frontoffice.Mercure.Domain
+          collectors: [{ type: directory, value: src/Frontoffice/Mercure/Domain/.* }]
+        - name: Frontoffice.Mercure.Infrastructure
+          collectors: [{ type: directory, value: src/Frontoffice/Mercure/Infrastructure/.* }]
+
+        # ---- Shared kernel (always importable; nested modules folded in) --------
+        - name: Shared.Domain
+          collectors: [{ type: directory, value: src/Shared/(.*/)?Domain/.* }]
+        - name: Shared.Application
+          collectors: [{ type: directory, value: src/Shared/(.*/)?Application/.* }]
+        - name: Shared.Infrastructure
+          collectors: [{ type: directory, value: src/Shared/(.*/)?Infrastructure/.* }]
+
+        # ---- Allowed external dependencies for inner layers ---------------------
+        # PSR interop contracts (interface-only) and symfony/uid value objects.
+        # classLike values are unanchored regexes — anchor with ^ so a vendor name
+        # appearing mid-FQCN (e.g. our own ...\Persistence\Doctrine\Foo) is not
+        # swept into the vendor layer.
+        - name: Vendor.Psr
+          collectors: [{ type: classLike, value: ^Psr\\.* }]
+        - name: Vendor.SymfonyUid
+          collectors: [{ type: classLike, value: ^Symfony\\Component\\Uid\\.* }]
+        # Passive-metadata attributes blessed by docs/rules/architecture.md: ORM
+        # mapping, column-type constants, validation constraints, serializer groups.
+        - name: Vendor.PassiveMetadata
+          collectors:
+              - type: classLike
+                value: >-
+                    ^(Doctrine\\ORM\\Mapping|Doctrine\\DBAL\\Types|Symfony\\Component\\Validator\\Constraints|Symfony\\Bridge\\Doctrine\\Validator\\Constraints|Symfony\\Component\\Serializer\\Attribute)\\.*
+
+        # ---- Framework vendors confined to Infrastructure (ADR Cat-1) -----------
+        - name: Vendor.Doctrine
+          collectors:
+              - type: bool
+                must: [{ type: classLike, value: ^Doctrine\\.* }]
+                must_not: [{ type: layer, value: Vendor.PassiveMetadata }]
+        - name: Vendor.Symfony
+          collectors:
+              - type: bool
+                must: [{ type: classLike, value: ^Symfony\\.* }]
+                must_not:
+                    - { type: layer, value: Vendor.SymfonyUid }
+                    - { type: layer, value: Vendor.PassiveMetadata }
+        - name: Vendor.Monolog
+          collectors: [{ type: classLike, value: ^Monolog\\.* }]
+        - name: Vendor.ApiPlatform
+          collectors: [{ type: classLike, value: ^ApiPlatform\\.* }]
+        - name: Vendor.Guzzle
+          collectors: [{ type: classLike, value: ^GuzzleHttp\\.* }]
+        - name: Vendor.Flysystem
+          collectors: [{ type: classLike, value: ^League\\Flysystem\\.* }]
+        - name: Vendor.Twig
+          collectors: [{ type: classLike, value: ^Twig\\.* }]
+        - name: Vendor.InterventionImage
+          collectors: [{ type: classLike, value: ^Intervention\\Image\\.* }]
+        - name: Vendor.Sentry
+          collectors: [{ type: classLike, value: ^Sentry\\.* }]
+
+    ruleset:
+        # Domain rule is identical for every module: only the shared-kernel Domain
+        # and the blessed external namespaces. No sibling layer, no framework runtime.
+        Backoffice.Bank.Domain: &domain
+            - Shared.Domain
+            - Vendor.Psr
+            - Vendor.SymfonyUid
+            - Vendor.PassiveMetadata
+        Backoffice.BankAccount.Domain: *domain
+        Backoffice.Health.Domain: *domain
+        Frontoffice.Mercure.Domain: *domain
+        Shared.Domain: *domain
+
+        # Application may orchestrate its own Domain + the shared kernel, plus the
+        # declarative-validation / serializer attribute namespaces (Assert on DTOs).
+        Backoffice.Bank.Application:
+            - Backoffice.Bank.Domain
+            - Shared.Domain
+            - Shared.Application
+            - Vendor.Psr
+            - Vendor.SymfonyUid
+            - Vendor.PassiveMetadata
+        Backoffice.BankAccount.Application:
+            - Backoffice.BankAccount.Domain
+            - Shared.Domain
+            - Shared.Application
+            - Vendor.Psr
+            - Vendor.SymfonyUid
+            - Vendor.PassiveMetadata
+        Backoffice.Health.Application:
+            - Backoffice.Health.Domain
+            - Shared.Domain
+            - Shared.Application
+            - Vendor.Psr
+            - Vendor.SymfonyUid
+            - Vendor.PassiveMetadata
+        Shared.Application:
+            - Shared.Domain
+            - Vendor.Psr
+            - Vendor.SymfonyUid
+            - Vendor.PassiveMetadata
+
+        # Infrastructure wires the framework: it may use its own Domain + Application,
+        # the whole shared kernel, and every framework vendor.
+        Backoffice.Bank.Infrastructure: &infra
+            - Backoffice.Bank.Domain
+            - Backoffice.Bank.Application
+            - Shared.Domain
+            - Shared.Application
+            - Shared.Infrastructure
+            - Vendor.Psr
+            - Vendor.SymfonyUid
+            - Vendor.PassiveMetadata
+            - Vendor.Doctrine
+            - Vendor.Symfony
+            - Vendor.Monolog
+            - Vendor.ApiPlatform
+            - Vendor.Guzzle
+            - Vendor.Flysystem
+        Backoffice.BankAccount.Infrastructure:
+            - Backoffice.BankAccount.Domain
+            - Backoffice.BankAccount.Application
+            - Shared.Domain
+            - Shared.Application
+            - Shared.Infrastructure
+            - Vendor.Psr
+            - Vendor.SymfonyUid
+            - Vendor.PassiveMetadata
+            - Vendor.Doctrine
+            - Vendor.Symfony
+            - Vendor.Monolog
+            - Vendor.ApiPlatform
+            - Vendor.Guzzle
+            - Vendor.Flysystem
+        Backoffice.Health.Infrastructure:
+            - Backoffice.Health.Domain
+            - Backoffice.Health.Application
+            - Shared.Domain
+            - Shared.Application
+            - Shared.Infrastructure
+            - Vendor.Psr
+            - Vendor.SymfonyUid
+            - Vendor.PassiveMetadata
+            - Vendor.Doctrine
+            - Vendor.Symfony
+            - Vendor.Monolog
+            - Vendor.ApiPlatform
+            - Vendor.Guzzle
+            - Vendor.Flysystem
+        Frontoffice.Dev.Infrastructure:
+            - Shared.Domain
+            - Shared.Application
+            - Shared.Infrastructure
+            - Vendor.Psr
+            - Vendor.SymfonyUid
+            - Vendor.PassiveMetadata
+            - Vendor.Doctrine
+            - Vendor.Symfony
+            - Vendor.Monolog
+            - Vendor.ApiPlatform
+            - Vendor.Guzzle
+            - Vendor.Flysystem
+            - Vendor.Twig
+        Frontoffice.Health.Infrastructure:
+            - Shared.Domain
+            - Shared.Application
+            - Shared.Infrastructure
+            - Vendor.Psr
+            - Vendor.SymfonyUid
+            - Vendor.PassiveMetadata
+            - Vendor.Doctrine
+            - Vendor.Symfony
+            - Vendor.Monolog
+            - Vendor.ApiPlatform
+            - Vendor.Guzzle
+            - Vendor.Flysystem
+        Frontoffice.Mercure.Infrastructure:
+            - Frontoffice.Mercure.Domain
+            - Shared.Domain
+            - Shared.Application
+            - Shared.Infrastructure
+            - Vendor.Psr
+            - Vendor.SymfonyUid
+            - Vendor.PassiveMetadata
+            - Vendor.Doctrine
+            - Vendor.Symfony
+            - Vendor.Monolog
+            - Vendor.ApiPlatform
+            - Vendor.Guzzle
+            - Vendor.Flysystem
+        Shared.Infrastructure:
+            - Shared.Domain
+            - Shared.Application
+            - Vendor.Psr
+            - Vendor.SymfonyUid
+            - Vendor.PassiveMetadata
+            - Vendor.Doctrine
+            - Vendor.Symfony
+            - Vendor.Monolog
+            - Vendor.ApiPlatform
+            - Vendor.Guzzle
+            - Vendor.Flysystem
+            - Vendor.InterventionImage
+            - Vendor.Sentry
+
+    # Published cross-context seams — the exact (importer => imported) pairs blessed
+    # in api/.bounded-context-allowlist. Keep the two lists in sync.
+    skip_violations:
+        Erpify\Backoffice\Bank\Application\BankDeleter:
+            - Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository
+        Erpify\Backoffice\Bank\Application\BankAccountCountEnricher:
+            - Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountCounter
+        Erpify\Backoffice\BankAccount\Application\BankAccountSearcher:
+            - Erpify\Backoffice\Bank\Domain\Repository\BankExistenceChecker
+            - Erpify\Backoffice\Bank\Domain\Exception\BankNotFoundException

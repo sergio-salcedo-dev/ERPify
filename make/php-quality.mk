@@ -114,6 +114,33 @@ php.lint.bounded-context: ## Bounded-context isolation gate
 php.lint.event-bus: ## Event-dispatch boundary gate
 	@$(PHP_TEST) bin/phpunit --filter=EventDispatchGateTest
 
+## —— Deptrac (architectural boundaries) ————————————————————————————————————
+
+# Static, AST-aware gate over api/src enforcing three concerns in one ruleset
+# (tools/deptrac/deptrac.yaml): hexagonal layering (Infrastructure -> Application
+# -> Domain), bounded-context isolation (defence-in-depth alongside the
+# auto-discovering php.lint.bounded-context), and the Domain/Application external-
+# dependency allowlist (issue #301 / ADR external-dependencies-in-domain). Analyse
+# is read-only, so it is safe in the parallel php.quality.dry-run fan-out. The cache
+# lives under var/cache so it never litters the api root.
+#
+# --fail-on-uncovered: a dependency whose target matches no layer (a vendor not in
+# the allowlist) fails the gate instead of passing as a silent "uncovered" count.
+# Every framework an inner/Infrastructure layer touches must be modelled as a
+# Vendor.* layer and explicitly permitted — so adding a new third-party dependency
+# is a conscious, reviewable change, not an invisible leak.
+DEPTRAC = vendor/bin/deptrac --config-file=tools/deptrac/deptrac.yaml --cache-file=var/cache/.deptrac.cache --no-progress
+
+php.deptrac: ## Deptrac architecture gate (layering + bounded-context + dep allowlist); pass c= for extra args
+	@$(PHP_TEST) $(DEPTRAC) analyse --fail-on-uncovered $(c)
+
+# Regenerates the grandfathered inner-layer dependency baseline. The wrapper script
+# strips the published cross-context seams that deptrac's baseline formatter re-dumps
+# (they stay single-sourced in skip_violations in deptrac.yaml) and re-prepends the
+# header — see tools/deptrac/regen-baseline.sh.
+php.deptrac.baseline: ## Regenerate the deptrac baseline (grandfathered inner-layer deps; seams stripped)
+	@$(PHP_TEST) sh tools/deptrac/regen-baseline.sh
+
 ## —— Aggregates ——————————————————————————————————————————————————————————
 
 # `php.cs.dry-run` is appended LAST (after every mutating fixer) on purpose:
@@ -122,7 +149,7 @@ php.lint.event-bus: ## Event-dispatch boundary gate
 # masked here and only fails later in CI's `php.quality.dry-run`. Re-running the
 # strict, read-only `php.cs.dry-run` at the end makes `make php.quality` FAIL on
 # that drift locally, so it is caught before commit/push instead of on CI. History: long-line drift slipped through on the keyset PR.
-php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.cs.dry-run ## Full PHP lint sweep
+php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.deptrac php.cs.dry-run ## Full PHP lint sweep
 
 # Check-only sweep for CI / pre-push: the read-only subset of php.quality that is
 # currently green, fanned out in parallel. Two wins over php.quality:
@@ -141,7 +168,7 @@ php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint
 # Psalm's general analysis is no longer part of this sweep (chore/remove-psalm-general):
 # PHPStan `level: max` is the sole type-checking gate. Psalm now runs taint-only,
 # in its own CI job (`api-taint` → `make php.psalm.taint`), not here.
-php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
+php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.deptrac ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
 
 .PHONY: php.stan php.stan.baseline \
         php.rector php.rector.dry-run \
@@ -151,4 +178,5 @@ php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php
         php.gherkin php.gherkin.rules \
         php.lint.doctrine php.lint.yaml \
         php.lint.error-contract php.lint.bounded-context php.lint.event-bus \
+        php.deptrac php.deptrac.baseline \
         php.quality php.quality.dry-run
