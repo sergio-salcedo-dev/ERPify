@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Behat\NodeModifier\Identifier;
 
 use Erpify\Tests\Behat\NodeModifier\AbstractNodeModifier;
+use InvalidArgumentException;
 use Override;
 use Stringable;
 
@@ -39,7 +40,11 @@ class UuidNodeModifier extends AbstractNodeModifier
             return null;
         }
 
-        \assert(\is_scalar($value) || $value instanceof Stringable);
+        // A non-stringable actual (array/object) is simply not a UUID: fail the comparison
+        // cleanly rather than aborting the scenario with an AssertionError under zend.assertions.
+        if (!\is_scalar($value) && !$value instanceof Stringable) {
+            return null;
+        }
 
         return (string) $value;
     }
@@ -74,6 +79,11 @@ class UuidNodeModifier extends AbstractNodeModifier
             return (int) $matches[1];
         }
 
-        return null;
+        // Fail loud on a malformed version token (e.g. `v9`, `version7`) instead of silently
+        // degrading to "any valid UUID", which would let a typo pass unnoticed.
+        throw new InvalidArgumentException(\sprintf(
+            'Unsupported UUID version token "%s" for ::uuid. Use v1–v8, or any/uuid/true for any version.',
+            $expected,
+        ));
     }
 }

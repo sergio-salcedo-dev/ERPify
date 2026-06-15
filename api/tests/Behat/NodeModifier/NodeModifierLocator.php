@@ -63,13 +63,17 @@ readonly class NodeModifierLocator
      */
     public function getFor(string $path, mixed $value): ?NodeModifierInterface
     {
-        $name = self::explicitModifierName($path);
+        $name = $this->explicitModifierName($path);
 
         if (null !== $name) {
             return $this->byName[$name]
                 ?? throw new UnknownNodeModifierException($name, \array_keys($this->byName));
         }
 
+        // why: with no explicit suffix the first value-aware modifier (in name-sorted order)
+        // wins — there is no real tie-break. Value-aware modifiers must therefore claim
+        // disjoint value shapes; e.g. SimpleDateNodeModifier opts out of supportsValue() so it
+        // never competes with DateNodeModifier for a date-shaped value.
         foreach ($this->byName as $nodeModifier) {
             if ($nodeModifier->supportsValue($value)) {
                 return $nodeModifier;
@@ -79,7 +83,7 @@ readonly class NodeModifierLocator
         return null;
     }
 
-    private static function explicitModifierName(string $path): ?string
+    private function explicitModifierName(string $path): ?string
     {
         $position = \strrpos($path, '::');
 
@@ -87,6 +91,10 @@ readonly class NodeModifierLocator
             return null;
         }
 
-        return \substr($path, $position + 2);
+        $name = \substr($path, $position + 2);
+
+        // A bare trailing `::` carries no modifier name: treat the path literally rather
+        // than raising UnknownNodeModifierException for an empty name.
+        return '' === $name ? null : $name;
     }
 }

@@ -9,9 +9,9 @@ use RuntimeException;
 /**
  * Raised when the `test.node_modifier` iterable is empty — i.e. no modifier reached the
  * locator. This guards the wiring (the `_instanceof` tag in `config/services_behat.yaml`):
- * a regression that stops tagging the modifiers surfaces here as an explicit failure at
- * container build time, instead of every `::<modifier>` assertion silently degrading to a
- * raw `NoSuchPropertyException`.
+ * a regression that stops tagging the modifiers surfaces here as an explicit failure when
+ * the locator is constructed, instead of every `::<modifier>` assertion silently degrading
+ * to a raw `NoSuchPropertyException`.
  */
 final class EmptyNodeModifierRegistryException extends RuntimeException
 {
