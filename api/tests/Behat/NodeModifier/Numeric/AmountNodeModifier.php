@@ -12,7 +12,7 @@ use Override;
  * are treated as equal regardless of how they were stored or serialized.
  *
  * Example (Gherkin):
- *   And the JSON node "balance" should be equal to "<amount>1.5"
+ *   And the JSON node "balance::amount" should be equal to "1.5"
  */
 class AmountNodeModifier extends AbstractNodeModifier
 {

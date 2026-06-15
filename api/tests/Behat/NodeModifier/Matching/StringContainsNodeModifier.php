@@ -14,8 +14,8 @@ use Override;
  * structural equality.
  *
  * Example (Gherkin):
- *   And the JSON node "message" should be equal to "<contains>successfully created"
- *   And the JSON node "errors" should be equal to "<contains>must not be blank"
+ *   And the JSON node "message::contains" should be equal to "successfully created"
+ *   And the JSON node "errors::contains" should be equal to "must not be blank"
  */
 class StringContainsNodeModifier extends AbstractNodeModifier
 {

@@ -13,8 +13,11 @@ use PHPUnit\Framework\AssertionFailedError;
  * Resolves a string like `App\Enum\StatusEnum::ACTIVE` into the matching BackedEnum case
  * and compares it against an actual BackedEnum instance or its backing scalar value.
  *
+ * Resolves by value auto-detection (a `Fqcn::CASE` string) or the explicit `field::BackedEnum`
+ * suffix.
+ *
  * Example (Gherkin):
- *   And the JSON node "status" should be equal to "<BackedEnum>App\Enum\StatusEnum::ACTIVE"
+ *   And the JSON node "status" should be equal to "App\Enum\StatusEnum::ACTIVE"
  *   // matches either an ActiveEnum instance or the scalar "active" in the response.
  */
 class BackedEnumNodeModifier extends AbstractNodeModifier
@@ -25,11 +28,8 @@ class BackedEnumNodeModifier extends AbstractNodeModifier
         return 'BackedEnum';
     }
 
-    /**
-     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
-     */
     #[Override]
-    public function support(string $path, mixed $value): bool
+    public function supportsValue(mixed $value): bool
     {
         return \is_string($value) && \enum_exists(\explode('::', $value)[0]);
     }

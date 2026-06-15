@@ -12,7 +12,7 @@ use Override;
  * actual `null`, so feature files can assert nullability without type hackery.
  *
  * Example (Gherkin):
- *   And the JSON node "deletedAt" should be equal to "<null>null"
+ *   And the JSON node "deletedAt::null" should be equal to "null"
  */
 class NullNodeModifier extends AbstractNodeModifier
 {

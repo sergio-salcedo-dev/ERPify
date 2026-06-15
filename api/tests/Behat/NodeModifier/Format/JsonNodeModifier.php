@@ -14,7 +14,7 @@ use Override;
  * structures can be asserted without caring about array key/element ordering.
  *
  * Example (Gherkin):
- *   And the JSON node "metadata" should be equal to '<json>{"tags":["b","a"],"count":2}'
+ *   And the JSON node "metadata::json" should be equal to '{"tags":["b","a"],"count":2}'
  *   // matches a response where "tags" arrives as ["a","b"] in any order.
  */
 class JsonNodeModifier extends AbstractNodeModifier

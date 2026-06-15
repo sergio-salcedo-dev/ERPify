@@ -14,8 +14,10 @@ use Override;
  * formatted timestamp so the compared sides always share the same shape, ignoring seconds.
  *
  * Example (Gherkin):
- *   And the JSON node "createdAt" should be equal to "<date>now"
- *   And the JSON node "createdAt" should be equal to "<date>2026-04-23 10:00:00"
+ *   And the JSON node "createdAt::date" should be equal to "now"
+ *   And the JSON node "createdAt::date" should be equal to "2026-04-23 10:00:00"
+ *   And the last inserted "Bank" entity should match:
+ *     | createdAt::date | now |
  */
 class DateNodeModifier extends AbstractNodeModifier
 {
@@ -26,12 +28,8 @@ class DateNodeModifier extends AbstractNodeModifier
     }
 
     #[Override]
-    public function support(string $path, mixed $value): bool
+    public function supportsValue(mixed $value): bool
     {
-        if (parent::support($path, $value)) {
-            return true;
-        }
-
         if ('now' === $value) {
             return true;
         }
