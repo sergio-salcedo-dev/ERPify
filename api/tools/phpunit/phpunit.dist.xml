@@ -44,5 +44,6 @@
     </source>
 
     <extensions>
+        <bootstrap class="Erpify\Tests\Support\PHPUnit\ResetSystemClockExtension" />
     </extensions>
 </phpunit>

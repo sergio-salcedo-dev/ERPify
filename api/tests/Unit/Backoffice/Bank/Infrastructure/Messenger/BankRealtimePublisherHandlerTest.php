@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Backoffice\Bank\Infrastructure\Messenger;
 
+use DateTimeImmutable;
 use Erpify\Backoffice\Bank\Application\BankAccountCountEnricher;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankDeletedDomainEvent;
@@ -42,6 +43,7 @@ final class BankRealtimePublisherHandlerTest extends TestCase
         // leaves the handler — only the six public bank fields ship.
         $this->handler()->onBankCreated(new BankCreatedDomainEvent(
             self::BANK_ID,
+            new DateTimeImmutable(self::CREATED_AT),
             'Acme Savings',
             'ACME',
             self::CREATED_AT,
@@ -72,6 +74,7 @@ final class BankRealtimePublisherHandlerTest extends TestCase
     {
         $this->handler()->onBankUpdated(new BankUpdatedDomainEvent(
             self::BANK_ID,
+            new DateTimeImmutable(self::UPDATED_AT),
             'Acme Renamed',
             'ACME',
             self::CREATED_AT,
@@ -103,7 +106,9 @@ final class BankRealtimePublisherHandlerTest extends TestCase
 
     public function testPublishesDeletedWithIdOnlyToCollectionAndPerBankTopics(): void
     {
-        $this->handler()->onBankDeleted(new BankDeletedDomainEvent(self::BANK_ID));
+        $this->handler()->onBankDeleted(
+            new BankDeletedDomainEvent(self::BANK_ID, new DateTimeImmutable(self::UPDATED_AT)),
+        );
 
         $update = $this->capturedUpdate();
         $this->assertSame(
@@ -141,6 +146,7 @@ final class BankRealtimePublisherHandlerTest extends TestCase
         $handler = new BankRealtimePublisherHandler($hub, new BankAccountCountEnricher($accountCounts));
         $event = new BankUpdatedDomainEvent(
             self::BANK_ID,
+            new DateTimeImmutable(self::UPDATED_AT),
             'Acme Savings',
             'ACME',
             self::CREATED_AT,
