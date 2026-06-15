@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\BankAccount\Application\Audit;
 
 use DateTimeImmutable;
+use Erpify\Shared\Domain\Clock\SystemClock;
 
 /**
  * Audit / observability message: a bank's accounts (which carry the PII IBAN) were read. Deliberately
@@ -22,6 +23,6 @@ final readonly class BankAccountsViewedAuditEvent
 
     public static function record(string $bankId): self
     {
-        return new self($bankId, new DateTimeImmutable());
+        return new self($bankId, SystemClock::now());
     }
 }

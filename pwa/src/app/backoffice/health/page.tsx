@@ -3,20 +3,51 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
-import { CheckHealth } from "@/context/backoffice/health/application/CheckHealth";
 import type { HealthCheck } from "@/context/backoffice/health/domain/HealthCheck";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
 import { apiScope } from "@/context/shared/domain/Observability/TelemetryScope";
 import { telemetry } from "@/context/shared/infrastructure/Observability";
-import { deriveSystemStatus } from "@/lib/systemStatus";
+import { aggregateSystemStatus, deriveSystemStatus } from "@/lib/systemStatus";
 import { uuidV7 } from "@/lib/uuidV7";
 import { Button } from "@/components/ui/button";
 import { ProblemDisplay } from "@/components/erpify";
 import { SystemStatusBanner } from "./_components/SystemStatusBanner";
 import { HealthComponentRow } from "./_components/HealthComponentRow";
 
-const MONITORED_COMPONENTS = [{ key: "backoffice", name: "BackOffice API" }] as const;
+/** Structural view of any back-office health use case (API or database). */
+interface HealthUseCase {
+  run(): Promise<HealthCheck>;
+}
+
+interface MonitoredComponent {
+  key: string;
+  name: string;
+  useCase: string;
+  scope: string;
+}
+
+const MONITORED_COMPONENTS: readonly MonitoredComponent[] = [
+  {
+    key: "backoffice",
+    name: "BackOffice API",
+    useCase: "BackOfficeCheckHealth",
+    scope: "backoffice-health",
+  },
+  {
+    key: "database",
+    name: "Database",
+    useCase: "BackOfficeCheckDatabaseHealth",
+    scope: "backoffice-database-health",
+  },
+];
+
+interface ComponentCheck {
+  result: HealthCheck | null;
+  problem: ProblemDetails | null;
+}
+
+const PENDING: ComponentCheck = { result: null, problem: null };
 
 function transportFailureProblem(detail: string): ProblemDetails {
   return {
@@ -29,32 +60,36 @@ function transportFailureProblem(detail: string): ProblemDetails {
   };
 }
 
+async function runComponentCheck(useCase: string, scope: string): Promise<ComponentCheck> {
+  try {
+    const result = await container.get<HealthUseCase>(useCase).run();
+    return { result, problem: null };
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : "Unknown error";
+    telemetry.warn("BackOffice health check failed", { scope: apiScope(scope), cause: err });
+    return {
+      result: null,
+      problem: err instanceof HttpError ? err.problem : transportFailureProblem(detail),
+    };
+  }
+}
+
 export default function HealthPage() {
-  const [result, setResult] = useState<HealthCheck | null>(null);
+  const [checks, setChecks] = useState<Record<string, ComponentCheck>>({});
   const [checking, setChecking] = useState(true);
-  const [problem, setProblem] = useState<ProblemDetails | null>(null);
   const mountedRef = useRef(true);
 
   const runCheck = useCallback(async () => {
     setChecking(true);
-    setProblem(null);
-    try {
-      const useCase = container.get<CheckHealth>("BackOfficeCheckHealth");
-      const next = await useCase.run();
-      if (!mountedRef.current) return;
-      setResult(next);
-    } catch (err) {
-      if (!mountedRef.current) return;
-      const detail = err instanceof Error ? err.message : "Unknown error";
-      telemetry.warn("BackOffice health check failed", {
-        scope: apiScope("backoffice-health"),
-        cause: err,
-      });
-      setResult(null);
-      setProblem(err instanceof HttpError ? err.problem : transportFailureProblem(detail));
-    } finally {
-      if (mountedRef.current) setChecking(false);
-    }
+    const settled = await Promise.all(
+      MONITORED_COMPONENTS.map(async (component) => {
+        const check = await runComponentCheck(component.useCase, component.scope);
+        return [component.key, check] as const;
+      }),
+    );
+    if (!mountedRef.current) return;
+    setChecks(Object.fromEntries(settled));
+    setChecking(false);
   }, []);
 
   useEffect(() => {
@@ -66,19 +101,34 @@ export default function HealthPage() {
     };
   }, [runCheck]);
 
-  const view = deriveSystemStatus({ checking, failed: problem !== null, result });
+  const componentViews = MONITORED_COMPONENTS.map((component) => {
+    const check = checks[component.key] ?? PENDING;
+    const view = deriveSystemStatus({
+      checking,
+      failed: check.problem !== null,
+      result: check.result,
+    });
+    return { component, check, view };
+  });
+
+  const bannerView = checking
+    ? {
+        status: deriveSystemStatus({ checking, failed: false, result: null }).status,
+        datetime: null,
+      }
+    : aggregateSystemStatus(componentViews.map(({ view }) => view));
 
   return (
     <div className="health-page space-y-8">
       <header className="health-page__header flex flex-col gap-1">
-        <h1 className="text-foreground text-2xl font-semibold tracking-tight">Service Health</h1>
+        <h1 className="text-foreground text-2xl font-semibold tracking-tight">System Health</h1>
         <p className="text-muted-foreground text-sm">Live health of your back-office services.</p>
       </header>
 
       <section className="health-page__status bg-card border-border space-y-6 rounded-lg border p-6">
         <SystemStatusBanner
-          status={view.status}
-          datetime={view.datetime}
+          status={bannerView.status}
+          datetime={bannerView.datetime}
           testId="backoffice-health__banner"
         />
 
@@ -86,7 +136,7 @@ export default function HealthPage() {
           <h2 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wide uppercase">
             Components
           </h2>
-          {MONITORED_COMPONENTS.map((component) => (
+          {componentViews.map(({ component, view }) => (
             <HealthComponentRow
               key={component.key}
               name={component.name}
@@ -96,7 +146,11 @@ export default function HealthPage() {
           ))}
         </div>
 
-        {problem ? <ProblemDisplay variant="inline" problem={problem} /> : null}
+        {componentViews.map(({ component, check }) =>
+          check.problem ? (
+            <ProblemDisplay key={component.key} variant="inline" problem={check.problem} />
+          ) : null,
+        )}
 
         <div className="health-page__actions flex justify-end">
           <Button

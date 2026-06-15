@@ -33,6 +33,7 @@ function bankAccountsPath(bankId: string): string {
 export const API_ENDPOINTS = {
   BACKOFFICE: {
     HEALTH: `${BACKOFFICE_PREFIX}/health`,
+    HEALTH_DATABASE: `${BACKOFFICE_PREFIX}/health/database`,
     BANKS: {
       LIST: `${BACKOFFICE_PREFIX}/banks`,
       CREATE: `${BACKOFFICE_PREFIX}/banks`,

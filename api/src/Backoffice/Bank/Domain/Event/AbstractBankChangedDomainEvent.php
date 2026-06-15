@@ -16,6 +16,7 @@ abstract class AbstractBankChangedDomainEvent extends DomainEvent
 {
     public function __construct(
         string $bankId,
+        DateTimeImmutable $occurredOn,
         private readonly string $name,
         private readonly string $shortName,
         private readonly string $createdAt,
@@ -24,12 +25,8 @@ abstract class AbstractBankChangedDomainEvent extends DomainEvent
         private readonly ?string $logoContentHash = null,
         private readonly ?string $storedObjectContentHash = null,
         private readonly ?string $storedObjectMimeType = null,
-        ?DateTimeImmutable $occurredOn = null,
     ) {
-        parent::__construct(
-            $bankId,
-            $occurredOn ?? self::now(),
-        );
+        parent::__construct($bankId, $occurredOn);
     }
 
     /**

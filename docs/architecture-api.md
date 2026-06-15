@@ -35,13 +35,15 @@ Full constraint table (version gotchas, Doctrine 3 API deltas, polyfill `replace
 
 **DDD + Hexagonal (Ports & Adapters) + Clean Architecture.** Dependencies point inward: `Infrastructure → Application → Domain`. `Domain/` is framework-free — no Symfony, Doctrine, HTTP, or DI-container types. Ports (interfaces) are declared in `Domain/` or `Application/`; adapters live in `Infrastructure/`.
 
+**External dependencies in the inner layers** follow a deliberate policy — interface-only interop contracts (PSR: `psr/log`, `psr/cache`, `psr/http-message`) and neutral value-object libraries (`symfony/uid`) are allowed in `Domain/Application`; frameworks/runtimes (Symfony, Doctrine, Monolog, Messenger) stay in `Infrastructure/`; no 1:1 wrapper over a permitted PSR contract. Full decision record: [`adr/external-dependencies-in-domain.md`](./adr/external-dependencies-in-domain.md).
+
 ### Bounded contexts
 
 ```text
 api/src/
 ├── Backoffice/
 │   ├── Bank/       { Application, Domain, Infrastructure }
-│   └── Health/     { Infrastructure/Controller }
+│   └── Health/     { Application, Domain, Infrastructure }
 ├── Frontoffice/
 │   ├── Dev/        { Infrastructure/Controller }
 │   ├── Health/     { Infrastructure/Controller }
@@ -88,7 +90,7 @@ Golden rule: *contexts reference each other's identities and react to each other
 - Attribute-only routing (`#[Route]`) on controllers under each bounded context's `Infrastructure/Controller/`.
 - Controllers are thin — delegate to Application-layer use cases and return via `AbstractController::json()` so Serializer groups apply.
 - CORS configured in `api/config/packages/nelmio_cors.php` (PHP, not YAML); no wildcard `*` for credentialed origins.
-- Public health endpoints exposed from `Frontoffice/Health/` and `Backoffice/Health/`.
+- Public health endpoints exposed from `Frontoffice/Health/` and `Backoffice/Health/`. The backoffice context adds `GET /api/v1/backoffice/health/database`, a database-reachability probe (`SELECT 1` behind the `DatabaseHealthChecker` port) that reports `data.status` `ok`/`error` while always answering 200 — a graceful health outcome, not an RFC 9457 error.
 - Search endpoints share plumbing in `Shared/Application/Http/Search/` (the `SearchQuery` DTO) and `Shared/Infrastructure/Http/Responder/SearchResponder.php` (the cursor-only envelope compositor); each controller is a thin `final readonly` class delegating to its `<Entity>Searcher`. (The legacy `AbstractSearchController` is decoupled and removed in PR4.)
 
 ## Filterable search (generic `filters[]` contract)

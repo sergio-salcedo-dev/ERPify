@@ -43,6 +43,35 @@ export function deriveSystemStatus({
   };
 }
 
+/**
+ * Worst-wins severity used to fold several component views into one banner:
+ * any disruption dominates a degradation, which dominates an in-flight check,
+ * which dominates the all-clear. The aggregate `datetime` is the most recent
+ * server-reported timestamp among the components that have one.
+ */
+const SEVERITY: Record<SystemStatus, number> = {
+  [SystemStatus.OPERATIONAL]: 0,
+  [SystemStatus.CHECKING]: 1,
+  [SystemStatus.DEGRADED]: 2,
+  [SystemStatus.DISRUPTED]: 3,
+};
+
+export function aggregateSystemStatus(views: readonly SystemStatusView[]): SystemStatusView {
+  if (views.length === 0) return { status: SystemStatus.CHECKING, datetime: null };
+
+  const status = views.reduce((worst, view) =>
+    SEVERITY[view.status] > SEVERITY[worst.status] ? view : worst,
+  ).status;
+
+  const datetime = views
+    .map((view) => view.datetime)
+    .filter((value): value is string => value !== null)
+    .sort((a, b) => Date.parse(a) - Date.parse(b))
+    .at(-1);
+
+  return { status, datetime: datetime ?? null };
+}
+
 /** Headline shown in the aggregate banner. */
 export function systemHeadline(status: SystemStatus): string {
   switch (status) {
