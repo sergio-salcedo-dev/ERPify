@@ -6,7 +6,7 @@ namespace Erpify\Backoffice\BankAccount\Infrastructure\Audit;
 
 use DateTimeInterface;
 use Erpify\Backoffice\BankAccount\Application\Audit\BankAccountsViewedAuditEvent;
-use Psr\Log\LoggerInterface;
+use Erpify\Shared\Domain\Logging\Logger;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
 /**
@@ -16,7 +16,7 @@ use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 #[AsMessageHandler]
 final readonly class BankAccountsViewedAuditHandler
 {
-    public function __construct(private LoggerInterface $logger)
+    public function __construct(private Logger $logger)
     {
     }
 

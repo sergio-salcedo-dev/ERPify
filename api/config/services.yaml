@@ -19,3 +19,15 @@ services:
         exclude:
             - '../src/{DependencyInjection,Migrations,Tests,Kernel.php}'
             - '../src/**/Domain/Entity/'
+
+    # Domain logging port → its single PSR-3 (Monolog) binding on the default `app` channel.
+    # Explicit alias because the port has a second implementation in the container (the no-op
+    # NullLogger in Domain), so the singly-implemented-interface autowiring alias does not apply.
+    Erpify\Shared\Domain\Logging\Logger: '@Erpify\Shared\Infrastructure\Logging\PsrLogger'
+
+    # observability-channel logger as a domain port: wraps the dedicated always-on Monolog channel
+    # so the cursor-pagination metric lines never hit the prod `fingers_crossed` `app` handler.
+    erpify.logging.observability:
+        class: Erpify\Shared\Infrastructure\Logging\PsrLogger
+        arguments:
+            $logger: '@monolog.logger.observability'

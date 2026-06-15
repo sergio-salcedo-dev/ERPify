@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Infrastructure\Http\EventListener;
 
+use Erpify\Shared\Domain\Logging\Logger;
 use Erpify\Shared\Domain\Search\Exception\InvalidCursor;
 use Erpify\Shared\Domain\Search\SearchCriteria;
 use Erpify\Shared\Infrastructure\Http\CorrelationIdListener;
 use Erpify\Shared\Infrastructure\Serializer\JsonDecoder;
 use JsonException;
-use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\Request;
@@ -48,13 +48,14 @@ final readonly class SearchObservabilityListener
     private const string CORRELATION_ATTRIBUTE = CorrelationIdListener::ATTRIBUTE_KEY;
 
     /**
-     * The `observability`-channel logger (Monolog auto-creates `monolog.logger.observability` for
-     * the channel registered in `monolog.yaml`) — bound explicitly so the metrics land on the
-     * dedicated always-on stream, never the `fingers_crossed` `app` handler.
+     * The `observability`-channel logger as the domain {@see Logger} port — bound to the
+     * `erpify.logging.observability` adapter (a {@see \Erpify\Shared\Infrastructure\Logging\PsrLogger}
+     * wrapping Monolog's `monolog.logger.observability` channel) so the metrics land on the dedicated
+     * always-on stream, never the `fingers_crossed` `app` handler.
      */
     public function __construct(
-        #[Autowire(service: 'monolog.logger.observability')]
-        private LoggerInterface $logger,
+        #[Autowire(service: 'erpify.logging.observability')]
+        private Logger $logger,
     ) {
     }
 

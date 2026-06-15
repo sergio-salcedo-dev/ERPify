@@ -35,6 +35,8 @@ Full constraint table (version gotchas, Doctrine 3 API deltas, polyfill `replace
 
 **DDD + Hexagonal (Ports & Adapters) + Clean Architecture.** Dependencies point inward: `Infrastructure → Application → Domain`. `Domain/` is framework-free — no Symfony, Doctrine, HTTP, or DI-container types. Ports (interfaces) are declared in `Domain/` or `Application/`; adapters live in `Infrastructure/`.
 
+**Logging is a domain port.** Application and domain code depend on `Shared/Domain/Logging/Logger` (mirroring the eight PSR-3 levels, with a `LogLevel` enum and a no-op `NullLogger`), never on `Psr\Log\LoggerInterface` directly. The single PSR-3 binding is `Shared/Infrastructure/Logging/PsrLogger`, aliased in `config/services.yaml`; a second `erpify.logging.observability` instance wraps the dedicated `observability` Monolog channel for `SearchObservabilityListener`. **Exception:** the RFC 9457 error path (`ProblemDetailsFactory`, `ExceptionResponder`) stays pinned to `Psr\Log\LoggerInterface` by NFR5 — see [`api-error-contract.md`](./api-error-contract.md) and `LoggerInterfaceContractTest`.
+
 ### Bounded contexts
 
 ```text
@@ -48,9 +50,9 @@ api/src/
 │   └── Mercure/    { Domain, Infrastructure/Controller }
 └── Shared/
     ├── Application/    { DomainEvent, Http/Search, Mailer, Problem, UseCase, Validation }
-    ├── Domain/         { Aggregate, Entity, Enum, Event, Exception, Search, Uuid }
+    ├── Domain/         { Aggregate, Entity, Enum, Event, Exception, Logging, Search, Uuid }
     ├── Guzzle/         { Enum }
-    ├── Infrastructure/ { Http, Mailer, Messenger, Persistence, Serializer, Uuid }
+    ├── Infrastructure/ { Http, Logging, Mailer, Messenger, Persistence, Serializer, Uuid }
     ├── Media/          { Application, Domain, Infrastructure }
     └── Storage/        { (Flysystem adapters) }
 ```

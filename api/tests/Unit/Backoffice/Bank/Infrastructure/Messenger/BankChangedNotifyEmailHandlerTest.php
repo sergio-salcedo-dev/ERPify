@@ -7,10 +7,10 @@ namespace Erpify\Tests\Unit\Backoffice\Bank\Infrastructure\Messenger;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
 use Erpify\Backoffice\Bank\Infrastructure\Messenger\BankChangedNotifyEmailHandler;
+use Erpify\Shared\Domain\Logging\NullLogger;
 use Erpify\Shared\Domain\Uuid\Uuid;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use Psr\Log\NullLogger;
 use RuntimeException;
 use Throwable;
 
