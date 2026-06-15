@@ -590,6 +590,9 @@ jobs:
             if [ "$R_PWA_BURNIN" = "failure" ]; then
               echo "> ⚠️ **Flaky tests detected** — review the burn-in artifact."
             fi
+            if [ "$R_SONAR" = "failure" ]; then
+              echo "> ⚠️ **SonarCloud quality gate failed** — informational only, does not block merge. See the SonarCloud dashboard."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
   # -------------------------
