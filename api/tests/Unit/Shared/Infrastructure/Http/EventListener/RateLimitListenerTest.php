@@ -24,6 +24,10 @@ use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
 
 /**
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects") Exercising the listener end-to-end legitimately
+ * wires up both kernel events, a test kernel, the rate-limiter factory plus storage, reflection and
+ * the injected clock — the collaborator count is the test surface, not a design smell.
  */
 #[CoversClass(RateLimitListener::class)]
 final class RateLimitListenerTest extends TestCase

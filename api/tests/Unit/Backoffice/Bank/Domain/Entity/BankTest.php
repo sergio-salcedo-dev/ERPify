@@ -76,12 +76,15 @@ final class BankTest extends TestCase
 
         $bank = Bank::create(self::BANK_ID, 'Acme Savings', 'ACME', null, null, $now);
 
-        $this->assertEquals($now, $bank->getCreatedAt());
-        $this->assertEquals($now, $bank->getUpdatedAt());
+        $this->assertSame($now, $bank->getCreatedAt());
+        $this->assertSame($now, $bank->getUpdatedAt());
 
-        $event = $bank->pullDomainEvents()[0];
+        $events = $bank->pullDomainEvents();
+        $this->assertCount(1, $events);
+
+        $event = $events[0];
         $this->assertInstanceOf(BankCreatedDomainEvent::class, $event);
-        $this->assertEquals($now, $event->occurredOn());
+        $this->assertSame($now, $event->occurredOn());
     }
 
     public function testRenameStampsUpdatedAtAndEventOccurredOnFromTheProvidedInstant(): void
@@ -94,11 +97,14 @@ final class BankTest extends TestCase
 
         $bank->rename('Acme Renamed', 'ACME', $renamedAt);
 
-        $this->assertEquals($createdAt, $bank->getCreatedAt());
-        $this->assertEquals($renamedAt, $bank->getUpdatedAt());
+        $this->assertSame($createdAt, $bank->getCreatedAt());
+        $this->assertSame($renamedAt, $bank->getUpdatedAt());
 
-        $event = $bank->pullDomainEvents()[0];
+        $events = $bank->pullDomainEvents();
+        $this->assertCount(1, $events);
+
+        $event = $events[0];
         $this->assertInstanceOf(BankUpdatedDomainEvent::class, $event);
-        $this->assertEquals($renamedAt, $event->occurredOn());
+        $this->assertSame($renamedAt, $event->occurredOn());
     }
 }

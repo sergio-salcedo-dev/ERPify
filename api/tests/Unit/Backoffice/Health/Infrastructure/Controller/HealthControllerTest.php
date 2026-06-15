@@ -11,6 +11,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * @internal
@@ -32,8 +33,12 @@ final class HealthControllerTest extends TestCase
 
         $payload = \json_decode((string) $response->getContent(), true, flags: JSON_THROW_ON_ERROR);
 
-        self::assertSame(200, $response->getStatusCode());
-        self::assertSame(
+        $this->assertSame(
+            Response::HTTP_OK,
+            $response->getStatusCode(),
+            (string) $response->getContent(),
+        );
+        $this->assertSame(
             ['data' => ['status' => 'ok', 'service' => 'Back office', 'datetime' => self::FROZEN_INSTANT]],
             $payload,
         );
