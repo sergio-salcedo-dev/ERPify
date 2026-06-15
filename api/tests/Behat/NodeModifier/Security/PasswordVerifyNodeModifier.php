@@ -12,7 +12,7 @@ use Override;
  * using `password_verify()` — hashes are non-deterministic so direct equality would fail.
  *
  * Example (Gherkin):
- *   And the JSON node "user.passwordHash" should be equal to "<password_verify>s3cret!"
+ *   And the JSON node "user.passwordHash::password_verify" should be equal to "s3cret!"
  */
 class PasswordVerifyNodeModifier extends AbstractNodeModifier
 {

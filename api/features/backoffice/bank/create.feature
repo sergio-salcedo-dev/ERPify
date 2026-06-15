@@ -28,11 +28,14 @@ Feature: Create a bank
     And a request contains "INSERT" for doctrine connection "default"
     And 8 requests got executed only for doctrine connection "default"
     And the last inserted "Bank" entity found by "shortName=TB" should match:
-      | name           | Test Bank |
-      | nameNormalized | test bank |
-      | shortName      | TB        |
-      | logo           | null      |
-      | storedObject   | null      |
+      | name             | Test Bank  |
+      | nameNormalized   | test bank  |
+      | shortName        | TB         |
+      | logo             | null       |
+      | storedObject     | null       |
+      | id::uuid         | v7         |
+      | shortName::regex | /^[A-Z]+$/ |
+      | createdAt::date  | now        |
     And there should have 1 "StoredDomainEvent" entity found by "name=erpify.backoffice.bank.created"
     And 1 domain event named "erpify.backoffice.bank.created" should be stored
     And the stored domain event "erpify.backoffice.bank.created" body "name" should be equal to "Test Bank"
