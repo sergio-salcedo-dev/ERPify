@@ -37,7 +37,7 @@ final readonly class DoctrineDatabaseHealthChecker implements DatabaseHealthChec
     }
 
     #[Override]
-    public function isAvailable(): bool
+    public function isHealthy(): bool
     {
         try {
             $this->connection->beginTransaction();

@@ -20,6 +20,6 @@ final readonly class CheckDatabaseHealth
 
     public function run(): bool
     {
-        return $this->checker->isAvailable();
+        return $this->checker->isHealthy();
     }
 }
