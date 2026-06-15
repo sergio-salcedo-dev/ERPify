@@ -235,7 +235,7 @@ class EntityManagerContext extends AbstractContext
         $this->entityManager->flush();
     }
 
-    #[Then('/^(?:A|The|a|the) "([^"]*)" entity found by "([^"]*)" does not exists?$/')]
+    #[Then('/^(?:A|The|a|the) "([^"]*)" entity found by "([^"]*)" does not exist?$/')]
     public function anEntityFindByDoesNotExists(string $entityClass, string $findByQueryString): void
     {
         $this->entityManager->clear();

@@ -18,7 +18,6 @@ Feature: ValidationFailedException surfaces as a 422 Problem Details with a stru
     Then the response status code should be 422
     And the header "Content-Type" should be equal to "application/problem+json"
     And the header "Cache-Control" should contain "no-store"
-    And the response should be in JSON
     And the JSON node "type" should be equal to "validation-failed"
     And the JSON node "status" should be equal to the number 422
     And the JSON node "title" should be equal to "Validation failed."
@@ -41,7 +40,6 @@ Feature: ValidationFailedException surfaces as a 422 Problem Details with a stru
     Then the response status code should be 422
     And the header "Content-Type" should be equal to "application/problem+json"
     And the header "Cache-Control" should contain "no-store"
-    And the response should be in JSON
     And the JSON node "type" should be equal to "validation-failed"
     And the JSON node "status" should be equal to the number 422
     And the JSON node "title" should be equal to "Validation failed."
@@ -57,7 +55,6 @@ Feature: ValidationFailedException surfaces as a 422 Problem Details with a stru
   Scenario: ValidationFailedException violation entries omit invalid value and root from the wire body
     When I send a "GET" request to "http://localhost/api/test/_throw-validation-with-sensitive-payload"
     Then the response status code should be 422
-    And the response should be in JSON
     And the JSON node "type" should be equal to "validation-failed"
     And the JSON node "violations" should have 1 elements
     And the JSON node "violations[0].field" should be equal to "name"
@@ -74,7 +71,6 @@ Feature: ValidationFailedException surfaces as a 422 Problem Details with a stru
   Scenario: ValidationFailedException violation entries serialize message verbatim, never the template form
     When I send a "GET" request to "http://localhost/api/test/_throw-validation-template"
     Then the response status code should be 422
-    And the response should be in JSON
     And the JSON node "type" should be equal to "validation-failed"
     And the JSON node "violations[0].field" should be equal to "age"
     And the JSON node "violations[0].message" should be equal to "This value should be greater than or equal to 18."
@@ -84,7 +80,6 @@ Feature: ValidationFailedException surfaces as a 422 Problem Details with a stru
   Scenario: ValidationFailedException violation entries are reachable via JSON path under violations[N]
     When I send a "GET" request to "http://localhost/api/test/_throw-validation"
     Then the response status code should be 422
-    And the response should be in JSON
     And the JSON node "violations[0].field" should be equal to "name"
     And the JSON node "violations[0].message" should be equal to "This value should not be blank."
     And the JSON node "violations[0].code" should be equal to "c1051bb4-d103-4f74-8988-acbcafc7fdc3"
@@ -99,7 +94,6 @@ Feature: ValidationFailedException surfaces as a 422 Problem Details with a stru
   Scenario: InvariantViolation shares the 422 status but is distinguished by type and the absence of violations[]
     When I send a "GET" request to "http://localhost/api/test/_throw-invariant-violation"
     Then the response status code should be 422
-    And the response should be in JSON
     And the JSON node "type" should be equal to "invariant-violation"
     And the JSON node "status" should be equal to the number 422
     And the JSON node "title" should be equal to "Account already settled"

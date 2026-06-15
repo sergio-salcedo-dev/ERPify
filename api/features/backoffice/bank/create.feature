@@ -41,8 +41,11 @@ Feature: Create a bank
     {}
     """
     Then the response status code should be 422
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
     And the JSON node "type" should be equal to "validation-failed"
     And the JSON node "title" should be equal to "Validation failed."
+    And the JSON node "status" should be equal to the number 422
     And the JSON node "instance" should be a valid UUID
     And the JSON node "correlation-id" should be a valid UUID
     And the JSON node "violations" should have 2 elements
@@ -63,8 +66,11 @@ Feature: Create a bank
     }
     """
     Then the response status code should be 422
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
     And the JSON node "type" should be equal to "validation-failed"
     And the JSON node "title" should be equal to "Validation failed."
+    And the JSON node "status" should be equal to the number 422
     And the JSON node "instance" should be a valid UUID
     And the JSON node "correlation-id" should be a valid UUID
     And the JSON node "violations" should have 1 element
@@ -83,8 +89,11 @@ Feature: Create a bank
     }
     """
     Then the response status code should be 422
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
     And the JSON node "type" should be equal to "validation-failed"
     And the JSON node "title" should be equal to "Validation failed."
+    And the JSON node "status" should be equal to the number 422
     And the JSON node "instance" should be a valid UUID
     And the JSON node "correlation-id" should be a valid UUID
     And the JSON node "violations" should have 1 element
@@ -103,8 +112,11 @@ Feature: Create a bank
     }
     """
     Then the response status code should be 422
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
     And the JSON node "type" should be equal to "validation-failed"
     And the JSON node "title" should be equal to "Validation failed."
+    And the JSON node "status" should be equal to the number 422
     And the JSON node "instance" should be a valid UUID
     And the JSON node "correlation-id" should be a valid UUID
     And the JSON node "violations" should have 1 element
@@ -123,8 +135,11 @@ Feature: Create a bank
     }
     """
     Then the response status code should be 422
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
     And the JSON node "type" should be equal to "validation-failed"
     And the JSON node "title" should be equal to "Validation failed."
+    And the JSON node "status" should be equal to the number 422
     And the JSON node "instance" should be a valid UUID
     And the JSON node "correlation-id" should be a valid UUID
     And the JSON node "violations" should have 1 element

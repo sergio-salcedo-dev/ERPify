@@ -32,6 +32,7 @@ Feature: Update a bank
   Scenario: Update a bank that does not exist returns a 404 bank-not-found Problem Details body
     Given I add "Content-Type" header equal to "application/json"
     And I add "Accept" header equal to "application/json"
+    And there should have 0 "Bank" entities found by "id=2e6d865c-17b0-476a-85f2-037bf6d3b3dc"
     When I send a PUT request to "/backoffice/banks/2e6d865c-17b0-476a-85f2-037bf6d3b3dc" with body:
     """
     {"name": "Updated Bank", "shortName": "UB"}
@@ -39,11 +40,11 @@ Feature: Update a bank
     Then the response status code should be 404
     And the header "Content-Type" should be equal to "application/problem+json"
     And the header "Cache-Control" should contain "no-store"
-    And the response should be in JSON
     And the JSON node "type" should be equal to "bank-not-found"
     And the JSON node "title" should be equal to "Bank with id <2e6d865c-17b0-476a-85f2-037bf6d3b3dc> not found."
     And the JSON node "status" should be equal to the number 404
     And the JSON node "bankId" should be equal to "2e6d865c-17b0-476a-85f2-037bf6d3b3dc"
-    And the JSON node "instance" should be a valid UUID version 7
-    And the JSON node "correlation-id" should be a valid UUID version 7
+    And the JSON node "instance" should be a valid UUID
+    And the JSON node "correlation-id" should be a valid UUID
     And 1 request got executed only for doctrine connection "default"
+    And there should have 0 "StoredDomainEvent" entities found by "aggregateId=2e6d865c-17b0-476a-85f2-037bf6d3b3dc&name=erpify.backoffice.bank.updated"

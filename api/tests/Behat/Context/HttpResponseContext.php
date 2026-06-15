@@ -184,7 +184,7 @@ class HttpResponseContext extends AbstractContext
         $actual = $response->headers->get($name);
         self::assertNotNull(
             $actual,
-            \sprintf('The header %s does not exists', $response->getContent()),
+            \sprintf('The header %s does not exist', $response->getContent()),
         );
     }
 
@@ -199,7 +199,7 @@ class HttpResponseContext extends AbstractContext
         $actual = $response->headers->get($name);
         self::assertNull(
             $actual,
-            \sprintf('The header %s does not exists', $response->getContent()),
+            \sprintf('The header %s does not exist', $response->getContent()),
         );
     }
 

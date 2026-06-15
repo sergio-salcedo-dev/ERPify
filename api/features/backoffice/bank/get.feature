@@ -29,7 +29,6 @@ Feature: Get banks
     Then the response status code should be 400
     And the header "Content-Type" should be equal to "application/problem+json"
     And the header "Cache-Control" should contain "no-store"
-    And the response should be in JSON
     And the JSON node "type" should be equal to "invalid-uuid"
     And the JSON node "title" should be equal to "The provided value is not a valid UUID."
     And the JSON node "status" should be equal to the number 400
@@ -48,7 +47,6 @@ Feature: Get banks
     Then the response status code should be 404
     And the header "Content-Type" should be equal to "application/problem+json"
     And the header "Cache-Control" should contain "no-store"
-    And the response should be in JSON
     And the JSON node "type" should be equal to "bank-not-found"
     And the JSON node "title" should be equal to "Bank with id <2e6d865c-17b0-476a-85f2-037bf6d3b3dc> not found."
     And the JSON node "status" should be equal to the number 404
