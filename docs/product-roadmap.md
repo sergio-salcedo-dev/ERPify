@@ -58,7 +58,7 @@ Dos verticales completas validan los cimientos de la Fase 0:
   subida de ficheros, eventos de dominio, realtime Mercure) en ambos lados,
   con DDD + hexagonal, tests (PHPUnit/Behat/Vitest/Playwright), PHPStan y el
   contrato de error RFC 9457. Es la **plantilla de oro** que acelera el resto.
-- **Service Health** — endpoint + página de estado.
+- **System Health** — endpoint + página de estado.
 
 Cimientos compartidos ya operativos: API Response Standard (RFC 9457),
 paginación/orden/filtros componibles, dispatcher de eventos de dominio,

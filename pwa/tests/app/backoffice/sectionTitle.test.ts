@@ -4,7 +4,7 @@ import { sectionTitleFor } from "@/app/backoffice/_lib/sectionTitle";
 describe("sectionTitleFor", () => {
   it.each([
     ["/backoffice", "Dashboard"],
-    ["/backoffice/health", "Service Health"],
+    ["/backoffice/health", "System Health"],
   ])("maps the top-level route %s to %s", (pathname, title) => {
     expect(sectionTitleFor(pathname)).toBe(title);
   });

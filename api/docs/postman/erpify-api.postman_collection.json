@@ -32,6 +32,20 @@
           "response": []
         },
         {
+          "name": "Database health",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/backoffice/health/database",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "backoffice", "health", "database"]
+            },
+            "description": "Database reachability probe (SELECT 1). Returns data.status 'ok' when the database responds, 'error' otherwise; HTTP 200 either way."
+          },
+          "response": []
+        },
+        {
           "name": "Banks",
           "description": "Banks context (Backoffice/Bank)",
           "item": [

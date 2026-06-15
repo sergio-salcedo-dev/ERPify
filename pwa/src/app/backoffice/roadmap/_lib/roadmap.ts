@@ -119,7 +119,7 @@ export const roadmapPhases: RoadmapPhase[] = [
     code: "0",
     label: "Fundación de plataforma",
     summary:
-      "La base enterprise-grade sobre la que se apoya todo lo demás. Probada por las dos verticales ya entregadas (Banks, Service Health); lo que falta es generalizarla en capacidades reutilizables.",
+      "La base enterprise-grade sobre la que se apoya todo lo demás. Probada por las dos verticales ya entregadas (Banks, System Health); lo que falta es generalizarla en capacidades reutilizables.",
     modules: [
       {
         code: "0.1",
