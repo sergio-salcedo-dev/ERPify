@@ -35,8 +35,8 @@ Feature: Create a bank
       | storedObject   | null      |
     And there should have 1 "StoredDomainEvent" entity found by "name=erpify.backoffice.bank.created"
     And 1 domain event named "erpify.backoffice.bank.created" should be stored
-    And the stored domain event "erpify.backoffice.bank.created" body "name" should be equal to "Event Bus Bank"
-    And the stored domain event "erpify.backoffice.bank.created" body "shortName" should be equal to "EBB"
+    And the stored domain event "erpify.backoffice.bank.created" body "name" should be equal to "Test Bank"
+    And the stored domain event "erpify.backoffice.bank.created" body "shortName" should be equal to "TB"
 
   # The fixture DB restores per feature, not per scenario, so the earlier "Successfully create a
   # bank" scenario's stored event would survive into the create-422 scenarios. Each rejection

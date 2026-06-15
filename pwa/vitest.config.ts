@@ -10,6 +10,15 @@ export default defineConfig({
     setupFiles: ["./tests/setup.ts"],
     exclude: ["**/node_modules/**", "**/dist/**", "**/tests/e2e/**"],
     reporters: ["default", ["junit", { outputFile: "reports/vitest/junit.xml" }]],
+    coverage: {
+      // SonarCloud imports the lcov report (sonar.javascript/typescript.lcov.reportPaths
+      // → pwa/coverage/lcov.info). v8 is the native provider; text keeps a local summary.
+      provider: "v8",
+      reporter: ["text", "lcov"],
+      reportsDirectory: "./coverage",
+      include: ["src/**/*.{ts,tsx}"],
+      exclude: ["src/**/*.d.ts"],
+    },
   },
   resolve: {
     alias: {
