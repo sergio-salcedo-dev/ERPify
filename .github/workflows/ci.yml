@@ -118,8 +118,20 @@ jobs:
       - name: PHP lint (check, parallel)
         run: make -j4 --output-sync=target php.quality.dry-run
 
-      - name: PHPUnit
-        run: make php.unit
+      # Runs the unit suite under Xdebug coverage and emits the Clover report the
+      # sonar job imports. Still the unit-test gate: failures, deprecations and
+      # notices fail it — only PHPUnit's own coverage-target warnings (inherent
+      # to coverage mode) are relaxed.
+      - name: PHPUnit (+ Clover coverage)
+        run: make php.unit.coverage
+
+      - name: Upload PHP coverage (clover)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: php-coverage
+          path: api/var/coverage/clover.xml
+          retention-days: 1
+          if-no-files-found: error
 
       - name: Debug
         if: failure()
@@ -271,8 +283,17 @@ jobs:
 
       - run: make pwa.install
       - run: make pwa.quality.dry-run
-      - run: make pwa.test.unit
+      # Unit suite + v8 coverage → pwa/coverage/lcov.info for the sonar job.
+      - run: make pwa.test.unit.coverage
       - run: make pwa.production.build
+
+      - name: Upload PWA coverage (lcov)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pwa-coverage
+          path: pwa/coverage/lcov.info
+          retention-days: 1
+          if-no-files-found: error
 
   # -------------------------
   # PWA E2E (sharded — depends on build)
@@ -530,8 +551,13 @@ jobs:
   # in sonar-project.properties. The job is skipped on fork PRs, where the secret
   # is absent by design — so it can never leak to untrusted PR code. We use the
   # plain `pull_request` trigger (never pull_request_target) for the same reason.
+  # Imports the coverage reports produced by api-test (Clover) and pwa-node
+  # (lcov) as build artifacts, so the scan reports Coverage on New Code. Both
+  # reports carry repo-root-relative file paths (api/src/…, pwa/src/…) that
+  # resolve against this job's checkout. Still non-gating.
   sonar:
     name: SonarCloud
+    needs: [api-test, pwa-node]
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -544,6 +570,18 @@ jobs:
           # Full history so SonarCloud can attribute new code / blame accurately.
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Download PHP coverage (clover)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: php-coverage
+          path: api/var/coverage
+
+      - name: Download PWA coverage (lcov)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: pwa-coverage
+          path: pwa/coverage
 
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # v8.1.0
