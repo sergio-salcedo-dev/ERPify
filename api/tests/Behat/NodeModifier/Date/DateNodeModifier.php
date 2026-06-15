@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Behat\NodeModifier\Date;
 
+use DateMalformedStringException;
 use DateTime;
 use DateTimeInterface;
 use Erpify\Tests\Behat\NodeModifier\AbstractNodeModifier;
@@ -58,7 +59,13 @@ class DateNodeModifier extends AbstractNodeModifier
             return null;
         }
 
-        return (new DateTime($value))->format($format);
+        // An unparseable string is not a date either: return null so the comparison fails cleanly,
+        // rather than letting DateTime's constructor throw and abort the run far from the cause.
+        try {
+            return (new DateTime($value))->format($format);
+        } catch (DateMalformedStringException) {
+            return null;
+        }
     }
 
     #[Override]
