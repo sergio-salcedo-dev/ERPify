@@ -39,7 +39,12 @@ const SEED_SESSION: Session = {
  * session is `authenticated`; anything else (no session, BLOCKED, PENDING) is
  * `unauthenticated`.
  */
-export type AuthStatus = "hydrating" | "authenticated" | "unauthenticated";
+export const AuthStatus = {
+  HYDRATING: "hydrating",
+  AUTHENTICATED: "authenticated",
+  UNAUTHENTICATED: "unauthenticated",
+} as const;
+export type AuthStatus = (typeof AuthStatus)[keyof typeof AuthStatus];
 
 export interface AuthContextValue {
   status: AuthStatus;
@@ -147,8 +152,10 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   );
 
   const status = useMemo<AuthStatus>(() => {
-    if (!hydrated) return "hydrating";
-    return session?.user.status === UserStatus.ACTIVE ? "authenticated" : "unauthenticated";
+    if (!hydrated) return AuthStatus.HYDRATING;
+    return session?.user.status === UserStatus.ACTIVE
+      ? AuthStatus.AUTHENTICATED
+      : AuthStatus.UNAUTHENTICATED;
   }, [hydrated, session]);
 
   const value = useMemo<AuthContextValue>(
