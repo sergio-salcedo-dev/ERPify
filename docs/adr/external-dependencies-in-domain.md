@@ -51,4 +51,4 @@ Allowlist explícita de namespaces permitidos en `Domain/Application` (patrón h
 
 ## Implementación
 
-Reversión del wrapper de #299 y este ADR aterrizan juntos en la rama del propio PR. El gate de lint de la allowlist (D4) queda como follow-up: hasta que exista, la regla se sostiene por revisión humana y por este ADR.
+Reversión del wrapper de #299 y este ADR aterrizan juntos en la rama del propio PR. El gate de lint de la allowlist (D4) queda como follow-up rastreado en el issue **#301** (prioridad baja-media, no bloqueante): hasta que exista, la regla se sostiene por revisión humana y por este ADR.
