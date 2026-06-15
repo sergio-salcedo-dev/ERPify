@@ -53,11 +53,20 @@ export function SymfonyDebugToolbar({
 }>): React.ReactElement | null {
   const debugToken = useLatestDebugToken(observer);
   const hostRef = useRef<HTMLDivElement>(null);
+  const mountedRef = useRef(false);
   const token = debugToken?.token ?? null;
 
   useEffect(() => {
     const host = hostRef.current;
-    if (!host || !token) return;
+    // Load the toolbar loader exactly once. Symfony's sfjs installs *global*
+    // XHR/fetch hooks that render every subsequent request into its own AJAX
+    // panel, so re-fetching + re-wiping the host on each new profiler token is
+    // redundant and racy: wiping the toolbar DOM out from under those still-live
+    // handlers makes the next in-flight AJAX completion deref a detached node
+    // (`renderAjaxRequests` reading `.style` of null). A stable DOM avoids that;
+    // the latch only flips on a successful mount, so a failed load still retries
+    // on the next token.
+    if (!host || !token || mountedRef.current) return;
 
     let cancelled = false;
     fetch(`${WDT_PATH}/${encodeURIComponent(token)}`, { cache: "no-store" })
@@ -66,7 +75,9 @@ export function SymfonyDebugToolbar({
         return res.text();
       })
       .then((html) => {
-        if (!cancelled && hostRef.current) mountFragment(hostRef.current, html);
+        if (cancelled || mountedRef.current || !hostRef.current) return;
+        mountFragment(hostRef.current, html);
+        mountedRef.current = true;
       })
       .catch((cause: unknown) => {
         telemetry.warn("Failed to load the Symfony debug toolbar loader", {

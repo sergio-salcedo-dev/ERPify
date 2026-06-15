@@ -39,6 +39,41 @@ describe("SymfonyDebugToolbar", () => {
     });
   });
 
+  it("loads the toolbar once and ignores later tokens, never re-wiping the mounted DOM", async () => {
+    const observer = new EventTargetDebugTokenObserver();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("<div id='sfwdt-marker'>toolbar</div>", {
+        status: 200,
+        headers: { "Content-Type": "text/html" },
+      }),
+    );
+
+    render(<SymfonyDebugToolbar observer={observer} />);
+    observer.publish({ token: "first", profilerUrl: "/_profiler/first" });
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("dev-tools__symfony-toolbar").querySelector("#sfwdt-marker"),
+      ).not.toBeNull();
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/_dev/wdt-loader/first",
+      expect.objectContaining({ cache: "no-store" }),
+    );
+
+    // A later request publishes a fresh token; Symfony's own AJAX panel tracks
+    // it, so the host must not re-fetch or re-wipe (the source of the null-deref
+    // crash in the toolbar's global AJAX handlers).
+    observer.publish({ token: "second", profilerUrl: "/_profiler/second" });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByTestId("dev-tools__symfony-toolbar").querySelector("#sfwdt-marker"),
+    ).not.toBeNull();
+  });
+
   it("renders nothing and does not throw when the fragment fetch fails", async () => {
     const observer = new EventTargetDebugTokenObserver();
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network"));
