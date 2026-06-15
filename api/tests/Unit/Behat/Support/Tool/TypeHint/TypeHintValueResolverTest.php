@@ -58,6 +58,18 @@ final class TypeHintValueResolverTest extends TestCase
         yield 'no type passes the raw value through' => ['raw', null, 'raw'];
 
         yield 'builtin type passes the raw value through' => ['raw', 'string', 'raw'];
+
+        // null is "absent", not malformed: it passes through unchanged rather than being rejected
+        // like a non-scalar array/object — consistent with how the date node modifier treats null.
+        yield 'absent value passes through the date hint' => [null, 'date', null];
+
+        yield 'absent value passes through an enum hint' => [null, FullyLabeledIntEnum::class, null];
+
+        yield 'absent enum label element passes through preserving keys' => [
+            ['first', null],
+            FullyLabeledIntEnum::class,
+            [FullyLabeledIntEnum::FIRST, null],
+        ];
     }
 
     #[Test]

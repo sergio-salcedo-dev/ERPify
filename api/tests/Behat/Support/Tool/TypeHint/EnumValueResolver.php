@@ -43,6 +43,12 @@ final class EnumValueResolver implements ValueResolverInterface
      */
     private function resolveLabel(string $type, mixed $label): mixed
     {
+        // An absent label (null) is not malformed input: pass it through unchanged, mirroring how
+        // the date node modifier treats null as "absent" rather than as garbage.
+        if (null === $label) {
+            return null;
+        }
+
         if (\is_string($label)) {
             return $type::fromLabel($label) ?? $label;
         }
