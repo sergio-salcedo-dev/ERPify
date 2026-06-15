@@ -39,4 +39,25 @@ final class DateNodeModifierTest extends TestCase
     {
         $this->assertFalse((new DateNodeModifier())->compare('2026-04-23 10:00:00', 123));
     }
+
+    #[Test]
+    public function itDoesNotMatchTwoUnparseableValuesAsEqual(): void
+    {
+        $modifier = new DateNodeModifier();
+
+        // Both sides collapse to null because neither is a date — that is "unparseable", not
+        // "absent", so it must not be reported as a match (a null === null false positive).
+        $this->assertFalse($modifier->compare(123, 456));
+        $this->assertFalse($modifier->compare([], []));
+    }
+
+    #[Test]
+    public function itMatchesTwoAbsentValuesButNotAbsentAgainstPresent(): void
+    {
+        $modifier = new DateNodeModifier();
+
+        $this->assertTrue($modifier->compare(null, null));
+        $this->assertFalse($modifier->compare(null, new DateTime('2026-04-23 10:00:00')));
+        $this->assertFalse($modifier->compare(new DateTime('2026-04-23 10:00:00'), null));
+    }
 }

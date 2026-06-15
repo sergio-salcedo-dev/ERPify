@@ -9,6 +9,7 @@ use GuzzleHttp\Psr7\Response as GuzzleResponse;
 use JsonException;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use UnexpectedValueException;
 
 class HttpResponse
 {
@@ -47,10 +48,14 @@ class HttpResponse
         foreach ($items as $item) {
             $decoded = \json_decode($item, true, 512, JSON_THROW_ON_ERROR);
 
-            // A streamed line that decodes to a scalar (not a JSON object/array) carries nothing
-            // to merge into the accumulated payload, so skip it rather than abort.
+            // Every streamed line is expected to be a JSON object/array that contributes to the
+            // accumulated payload. A line that decodes to a bare scalar is malformed stream data;
+            // silently dropping it would yield a misleadingly-empty body, so fail loudly instead.
             if (!\is_array($decoded)) {
-                continue;
+                throw new UnexpectedValueException(\sprintf(
+                    'Streamed response line "%s" did not decode to a JSON object or array.',
+                    $item,
+                ));
             }
 
             $data = \array_merge_recursive($data, $decoded);

@@ -64,6 +64,16 @@ class DateNodeModifier extends AbstractNodeModifier
     #[Override]
     public function compare(mixed $expected, mixed $value): bool
     {
-        return $this->getProcessedValue($expected, 'Y-m-d H:i') === $this->getProcessedValue($value, 'Y-m-d H:i');
+        // A null *input* means "absent"; two absent sides match. A null *result* from a non-null
+        // input means "unparseable" and can never equal anything — so guard against treating two
+        // unparseable sides as equal (the null === null false positive).
+        if (null === $expected || null === $value) {
+            return null === $expected && null === $value;
+        }
+
+        $processedExpected = $this->getProcessedValue($expected, 'Y-m-d H:i');
+
+        return null !== $processedExpected
+            && $processedExpected === $this->getProcessedValue($value, 'Y-m-d H:i');
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Behat\Support\Tool\TypeHint;
 
 use Erpify\Shared\Domain\Enum\Abstraction\HumanReadableIntEnumInterface;
+use InvalidArgumentException;
 use Override;
 
 /**
@@ -24,22 +25,39 @@ final class EnumValueResolver implements ValueResolverInterface
     {
         \assert(null !== $type && \is_a($type, HumanReadableIntEnumInterface::class, true));
 
-        // Only string labels can be looked up; a non-string element (or whole value) is returned
-        // unchanged so a malformed input surfaces downstream instead of aborting here.
         if (\is_array($value)) {
             $resolved = [];
 
             foreach ($value as $index => $label) {
-                $resolved[$index] = \is_string($label) ? ($type::fromLabel($label) ?? $label) : $label;
+                $resolved[$index] = $this->resolveLabel($type, $label);
             }
 
             return $resolved;
         }
 
-        if (!\is_string($value)) {
-            return $value;
+        return $this->resolveLabel($type, $value);
+    }
+
+    /**
+     * @param class-string<HumanReadableIntEnumInterface> $type
+     */
+    private function resolveLabel(string $type, mixed $label): mixed
+    {
+        if (\is_string($label)) {
+            return $type::fromLabel($label) ?? $label;
         }
 
-        return $type::fromLabel($value) ?? $value;
+        // Only string labels can be looked up. A non-scalar label can never be an enum label, so
+        // reject it here rather than letting it flow on and surface as an opaque TypeError
+        // downstream. A non-string scalar carries no label to look up — pass it through unchanged.
+        if (!\is_scalar($label)) {
+            throw new InvalidArgumentException(\sprintf(
+                'The "%s" enum hint requires string labels, got %s.',
+                $type,
+                \get_debug_type($label),
+            ));
+        }
+
+        return $label;
     }
 }

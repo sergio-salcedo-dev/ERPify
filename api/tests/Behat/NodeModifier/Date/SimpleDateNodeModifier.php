@@ -37,10 +37,4 @@ class SimpleDateNodeModifier extends DateNodeModifier
     {
         return parent::getProcessedValue($value, 'Y-m-d');
     }
-
-    #[Override]
-    public function compare(mixed $expected, mixed $value): bool
-    {
-        return $this->getProcessedValue($expected, 'Y-m-d') === $this->getProcessedValue($value, 'Y-m-d');
-    }
 }
