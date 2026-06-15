@@ -42,9 +42,4 @@ abstract class DomainEvent
     {
         return $this->occurredOn;
     }
-
-    protected static function now(): DateTimeImmutable
-    {
-        return new DateTimeImmutable();
-    }
 }

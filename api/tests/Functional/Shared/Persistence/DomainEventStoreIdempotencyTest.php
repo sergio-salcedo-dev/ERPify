@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Shared\Persistence;
 
+use DateTimeImmutable;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
@@ -42,7 +43,14 @@ final class DomainEventStoreIdempotencyTest extends KernelTestCase
             $bankId = Uuid::generate();
             $now = '2026-06-06T00:00:00+00:00';
 
-            $event = new BankCreatedDomainEvent($bankId, 'Idempotent Bank', 'IDEM', $now, $now);
+            $event = new BankCreatedDomainEvent(
+                $bankId,
+                new DateTimeImmutable($now),
+                'Idempotent Bank',
+                'IDEM',
+                $now,
+                $now,
+            );
 
             $store->append($event);
             $this->assertSame(
