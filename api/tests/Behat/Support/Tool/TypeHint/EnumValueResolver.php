@@ -24,18 +24,21 @@ final class EnumValueResolver implements ValueResolverInterface
     {
         \assert(null !== $type && \is_a($type, HumanReadableIntEnumInterface::class, true));
 
+        // Only string labels can be looked up; a non-string element (or whole value) is returned
+        // unchanged so a malformed input surfaces downstream instead of aborting here.
         if (\is_array($value)) {
             $resolved = [];
 
             foreach ($value as $index => $label) {
-                \assert(\is_string($label));
-                $resolved[$index] = $type::fromLabel($label) ?? $label;
+                $resolved[$index] = \is_string($label) ? ($type::fromLabel($label) ?? $label) : $label;
             }
 
             return $resolved;
         }
 
-        \assert(\is_string($value));
+        if (!\is_string($value)) {
+            return $value;
+        }
 
         return $type::fromLabel($value) ?? $value;
     }

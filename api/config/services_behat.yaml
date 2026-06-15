@@ -8,6 +8,14 @@ services:
         autoconfigure: true
         public: true
 
+    # Every NodeModifier is tagged explicitly here rather than via an attribute on the
+    # interface: _instanceof is independent of attribute autoconfiguration, so the
+    # NodeModifierLocator iterable can never silently end up empty (guarded at build time
+    # by EmptyNodeModifierRegistryException).
+    _instanceof:
+        Erpify\Tests\Behat\NodeModifier\NodeModifierInterface:
+            tags: ['test.node_modifier']
+
     Erpify\Tests\Behat\Context\:
         resource: '../tests/Behat/Context/*'
         exclude: '../tests/Behat/Context/Abstraction/*'
@@ -17,6 +25,7 @@ services:
         exclude:
             - '../tests/Behat/NodeModifier/AbstractNodeModifier.php'
             - '../tests/Behat/NodeModifier/NodeModifierInterface.php'
+            - '../tests/Behat/NodeModifier/Exception/*'
 
     Erpify\Tests\Behat\State\:
         resource: '../tests/Behat/State/*'

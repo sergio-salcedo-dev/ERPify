@@ -12,7 +12,7 @@ use Override;
  * Useful for fields whose valid values are non-deterministic (e.g. randomised ordering).
  *
  * Example (Gherkin):
- *   And the JSON node "status" should be equal to "<oneOf>active,pending,archived"
+ *   And the JSON node "status::oneOf" should be equal to "active,pending,archived"
  */
 class OneOfNodeModifier extends AbstractNodeModifier
 {
@@ -31,7 +31,9 @@ class OneOfNodeModifier extends AbstractNodeModifier
     #[Override]
     public function compare(mixed $expected, mixed $value): bool
     {
-        \assert(\is_scalar($expected));
+        if (!\is_scalar($expected)) {
+            return false;
+        }
 
         return \in_array($value, \explode(',', (string) $expected), true);
     }

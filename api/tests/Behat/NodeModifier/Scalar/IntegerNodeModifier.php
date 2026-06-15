@@ -12,7 +12,7 @@ use Override;
  * as strings in feature files still match integers returned by the API.
  *
  * Example (Gherkin):
- *   And the JSON node "bank.employees" should be equal to "<int>42"
+ *   And the JSON node "bank.employees::int" should be equal to "42"
  */
 class IntegerNodeModifier extends AbstractNodeModifier
 {
@@ -25,11 +25,11 @@ class IntegerNodeModifier extends AbstractNodeModifier
     #[Override]
     public function getProcessedValue(mixed $value): ?int
     {
-        if (null === $value) {
+        // A non-scalar actual (array/object) cannot be coerced to an int: return null so the
+        // comparison fails cleanly instead of aborting on the cast.
+        if (null === $value || !\is_scalar($value)) {
             return null;
         }
-
-        \assert(\is_scalar($value));
 
         return (int) $value;
     }

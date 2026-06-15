@@ -12,7 +12,7 @@ use Override;
  * are treated as equal regardless of how they were stored or serialized.
  *
  * Example (Gherkin):
- *   And the JSON node "balance" should be equal to "<amount>1.5"
+ *   And the JSON node "balance::amount" should be equal to "1.5"
  */
 class AmountNodeModifier extends AbstractNodeModifier
 {
@@ -31,7 +31,9 @@ class AmountNodeModifier extends AbstractNodeModifier
             return null;
         }
 
-        return \bcmul($this->toNumericString($value), '1', self::SCALE);
+        $numeric = $this->toNumericString($value);
+
+        return null === $numeric ? null : \bcmul($numeric, '1', self::SCALE);
     }
 
     #[Override]
@@ -40,18 +42,26 @@ class AmountNodeModifier extends AbstractNodeModifier
         $left = null === $value ? '0' : $this->toNumericString($value);
         $right = null === $expected ? '0' : $this->toNumericString($expected);
 
+        // A non-numeric side can never compare equal to a numeric amount: fail the comparison
+        // rather than feeding bccomp() a non-numeric string.
+        if (null === $left || null === $right) {
+            return false;
+        }
+
         return 0 === \bccomp($left, $right, self::SCALE);
     }
 
     /**
-     * @phpstan-return numeric-string
+     * @phpstan-return numeric-string|null
      */
-    private function toNumericString(mixed $value): string
+    private function toNumericString(mixed $value): ?string
     {
-        \assert(\is_scalar($value));
-        $string = (string) $value;
-        \assert(\is_numeric($string));
+        if (!\is_scalar($value)) {
+            return null;
+        }
 
-        return $string;
+        $string = (string) $value;
+
+        return \is_numeric($string) ? $string : null;
     }
 }

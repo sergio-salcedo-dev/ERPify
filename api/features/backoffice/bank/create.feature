@@ -28,11 +28,14 @@ Feature: Create a bank
     And a request contains "INSERT" for doctrine connection "default"
     And 8 requests got executed only for doctrine connection "default"
     And the last inserted "Bank" entity found by "shortName=TB" should match:
-      | name           | Test Bank |
-      | nameNormalized | test bank |
-      | shortName      | TB        |
-      | logo           | null      |
-      | storedObject   | null      |
+      | name             | Test Bank  |
+      | nameNormalized   | test bank  |
+      | shortName        | TB         |
+      | logo             | null       |
+      | storedObject     | null       |
+      | id::uuid         | v7         |
+      | shortName::regex | /^[A-Z]+$/ |
+      | createdAt::date  | now        |
     And there should have 1 "StoredDomainEvent" entities found by "name=erpify.backoffice.bank.created"
     # The outbox is the async transport, addressed by queue name. The event is pending until consumed.
     And 1 outbox event was created on the queue "async"
