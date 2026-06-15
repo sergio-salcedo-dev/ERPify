@@ -20,6 +20,7 @@ All targets are ENV-aware (`ENV=dev|ci|staging|prod`) and default to `IN_CONTAIN
 -   `make php.quality` — full sweep (PHPStan, Rector, PHP-CS-Fixer, PHPMD, PHPCS).
 -   Individual: `php.stan[.baseline]`, `php.rector[.dry-run]`, `php.cs-fixer[.dry-run]`, `php.md`, `php.cs[.dry-run]`, `php.psalm.taint` (Psalm security dataflow → SARIF; runs in the `api-taint` CI job, not in `php.quality`).
 -   Drift gates (in `php.quality`): `php.lint.error-contract`; `php.lint.bounded-context` (bounded-context isolation — Level 1 cross-context `Domain`/`Application`/`Infrastructure` import fails, Level 2 cross-context FK warns; seams in `api/.bounded-context-allowlist`).
+-   `php.deptrac` (in `php.quality`) — deptrac architecture-boundary gate: hexagonal layering (Infrastructure → Application → Domain), bounded-context isolation (defence-in-depth alongside `php.lint.bounded-context`), and the Domain/Application external-dependency allowlist (PSR / `symfony/uid` / passive-metadata attributes inward; frameworks confined to `Infrastructure/`). Config `tools/deptrac/deptrac.yaml`; grandfathered inner-layer deps in `tools/deptrac/deptrac.baseline.yaml` (regen with `php.deptrac.baseline`).
 
 ## Database (Doctrine)
 

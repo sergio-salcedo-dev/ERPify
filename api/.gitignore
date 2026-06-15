@@ -45,3 +45,7 @@ phpstan.neon
 # the compose `ulimits` guard. Never commit them.
 /core.*
 ###< core dumps ###
+
+###> deptrac/deptrac ###
+/.deptrac.cache
+###< deptrac/deptrac ###

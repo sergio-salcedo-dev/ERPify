@@ -1,0 +1,68 @@
+# Deptrac baseline — pre-existing inner-layer framework dependencies, grandfathered.
+#
+# This is a RATCHET, not a blessing: every entry is a Domain/Application class that
+# touches a framework runtime the architecture confines to Infrastructure (ADR
+# docs/adr/external-dependencies-in-domain.md, issue #301). They predate the gate;
+# the gate stays green today and fails on any NEW inner-layer framework leak.
+#
+# Published cross-context seams are NOT here — they live in `skip_violations` in
+# deptrac.yaml, mirrored from api/.bounded-context-allowlist. Do not add cross-context
+# entries to this file; a new cross-context import must fail, not be grandfathered.
+#
+# Notable debt worth a follow-up (see ADR D2): the Symfony Messenger MessageBus is
+# used directly in *.Application instead of a domain MessageBus port; the Symfony
+# Validator runtime leaks into Shared/Application (Validator, ProblemDetailsFactory);
+# BankAccount/Bank entities reference Shared\Infrastructure\Validator\EnumType and the
+# Serializer DateTimeNormalizer from inside Domain.
+#
+# Regenerate (debt only — then re-strip any seam lines this would re-merge from
+# deptrac.yaml):
+#   make php.deptrac.baseline
+deptrac:
+  skip_violations:
+    Erpify\Backoffice\BankAccount\Application\BankAccountSearcher:
+      - Symfony\Component\Messenger\Exception\ExceptionInterface
+      - Symfony\Component\Messenger\MessageBusInterface
+    Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount:
+      - Erpify\Shared\Infrastructure\Validator\EnumType
+      - Symfony\Component\Serializer\Normalizer\DateTimeNormalizer
+    Erpify\Backoffice\Bank\Application\BankCreator:
+      - Symfony\Component\Messenger\MessageBusInterface
+    Erpify\Backoffice\Bank\Application\BankDeleter:
+      - Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException
+      - Symfony\Component\Messenger\Exception\ExceptionInterface
+      - Symfony\Component\Messenger\MessageBusInterface
+    Erpify\Backoffice\Bank\Application\BankUpdater:
+      - Symfony\Component\Messenger\Exception\ExceptionInterface
+      - Symfony\Component\Messenger\MessageBusInterface
+      - Symfony\Component\Validator\Exception\ValidationFailedException
+    Erpify\Backoffice\Bank\Domain\Entity\Bank:
+      - Symfony\Component\Serializer\Normalizer\DateTimeNormalizer
+      - Symfony\Component\Validator\Context\ExecutionContextInterface
+    Erpify\Shared\Application\Http\Search\FilterQuery:
+      - Symfony\Component\Validator\Context\ExecutionContextInterface
+    Erpify\Shared\Application\Http\Search\SearchQuery:
+      - Symfony\Component\Validator\Context\ExecutionContextInterface
+    Erpify\Shared\Application\Problem\ProblemDetailsFactory:
+      - Symfony\Component\DependencyInjection\Attribute\Autowire
+      - Symfony\Component\HttpFoundation\Response
+      - Symfony\Component\HttpKernel\Exception\HttpExceptionInterface
+      - Symfony\Component\Security\Core\Exception\AccessDeniedException
+      - Symfony\Component\Security\Core\Exception\AuthenticationException
+      - Symfony\Component\Validator\ConstraintViolationInterface
+      - Symfony\Component\Validator\Exception\ValidationFailedException
+    Erpify\Shared\Application\Validation\Validator:
+      - Symfony\Component\Validator\Constraint
+      - Symfony\Component\Validator\ConstraintViolation
+      - Symfony\Component\Validator\ConstraintViolationList
+      - Symfony\Component\Validator\ConstraintViolationListInterface
+      - Symfony\Component\Validator\Exception\ValidationFailedException
+      - Symfony\Component\Validator\Validator\ValidatorInterface
+    Erpify\Shared\Domain\Aggregate\AggregateRoot:
+      - Symfony\Component\Serializer\Normalizer\DateTimeNormalizer
+    Erpify\Shared\Domain\Entity\Timestamped:
+      - Symfony\Component\Serializer\Normalizer\DateTimeNormalizer
+    Erpify\Shared\Media\Domain\Entity\Media:
+      - Symfony\Component\Serializer\Normalizer\DateTimeNormalizer
+    Erpify\Shared\Storage\Application\StoredObjectOrphanCleaner:
+      - Symfony\Component\DependencyInjection\Attribute\AutowireIterator
