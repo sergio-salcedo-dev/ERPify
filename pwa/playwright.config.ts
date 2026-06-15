@@ -105,6 +105,10 @@ export default defineConfig({
     baseURL: playwrightBaseURL,
     trace: "on-first-retry",
     ignoreHTTPSErrors: true,
+    // Marks every request as automated so the dev server skips the Symfony debug
+    // toolbar (its profiler DOM would pollute document-wide locators). Header name
+    // mirrors E2E_REQUEST_HEADER in context/shared/dev-tools/infrastructure/isAutomatedTestRequest.ts.
+    extraHTTPHeaders: { "x-erpify-e2e": "1" },
   },
   projects: [
     {
