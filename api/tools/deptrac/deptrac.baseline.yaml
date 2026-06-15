@@ -20,14 +20,13 @@ deptrac:
       - Erpify\Shared\Infrastructure\Validator\EnumType
       - Symfony\Component\Serializer\Normalizer\DateTimeNormalizer
     Erpify\Backoffice\Bank\Application\BankCreator:
-      - Symfony\Component\Messenger\MessageBusInterface
+      - Doctrine\ORM\EntityManagerInterface
     Erpify\Backoffice\Bank\Application\BankDeleter:
       - Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException
-      - Symfony\Component\Messenger\Exception\ExceptionInterface
-      - Symfony\Component\Messenger\MessageBusInterface
+      - Doctrine\ORM\EntityManagerInterface
+      - Doctrine\Persistence\ManagerRegistry
     Erpify\Backoffice\Bank\Application\BankUpdater:
-      - Symfony\Component\Messenger\Exception\ExceptionInterface
-      - Symfony\Component\Messenger\MessageBusInterface
+      - Doctrine\ORM\EntityManagerInterface
       - Symfony\Component\Validator\Exception\ValidationFailedException
     Erpify\Backoffice\Bank\Domain\Entity\Bank:
       - Symfony\Component\Serializer\Normalizer\DateTimeNormalizer

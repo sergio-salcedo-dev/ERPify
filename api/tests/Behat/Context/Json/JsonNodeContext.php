@@ -16,6 +16,7 @@ use Erpify\Tests\Behat\Support\PostProcess\JsonToolTrait;
 use Exception;
 use JsonException;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
+use Symfony\Component\Uid\Uuid;
 
 /**
  * Validates individual JSON nodes of the last HTTP response (equality, nullability,
@@ -146,6 +147,38 @@ class JsonNodeContext extends AbstractContext
     public function theJsonNodeShouldMatch(string $node, string $pattern): void
     {
         $this->jsonPropertyShouldMatch($this->getJson(), $node, $pattern);
+    }
+
+    /**
+     * Validate the JSON property `node` is a valid RFC 9562 UUID — any version when `version` is
+     * omitted, or that exact version otherwise (e.g. the UUID v7 minted by
+     * {@see \Erpify\Shared\Domain\Uuid\Uuid::generate()} for `instance` / `correlation-id`).
+     * `Uuid::isValid()` checks format and variant in one pass — stricter than a regex.
+     *
+     * @throws JsonException
+     */
+    #[Then('the JSON node :node should be a valid UUID')]
+    #[Then('the JSON node :node should be a valid UUID version :version')]
+    public function theJsonNodeShouldBeAValidUuid(string $node, ?string $version = null): void
+    {
+        $value = $this->getJsonInspector()->evaluate($this->getJson(), $node);
+        self::assertIsString($value, \sprintf('JSON node "%s" is not a string.', $node));
+        self::assertTrue(
+            Uuid::isValid($value),
+            \sprintf('JSON node "%s" value "%s" is not a valid UUID.', $node, $value),
+        );
+
+        if (null === $version) {
+            return;
+        }
+
+        // Uuid::fromString() resolves the version-specific subclass (UuidV7, …); comparing its class
+        // pins the version through the library rather than by parsing offsets by hand.
+        self::assertSame(
+            Uuid::fromString($value)::class,
+            \sprintf('Symfony\Component\Uid\UuidV%s', $version),
+            \sprintf('JSON node "%s" value "%s" is not a UUID v%s.', $node, $value, $version),
+        );
     }
 
     /**

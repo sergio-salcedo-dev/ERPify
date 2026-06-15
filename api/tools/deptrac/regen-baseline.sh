@@ -14,9 +14,15 @@ cd "$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)" # -> api root
 raw="$(mktemp)"
 trap 'rm -f "$raw"' EXIT
 
+# deptrac exits non-zero whenever it dumps violations into the baseline — that is the
+# expected outcome here, so don't let `set -e` abort. Validate the output instead.
 vendor/bin/deptrac --config-file=tools/deptrac/deptrac.yaml \
     --cache-file=var/cache/.deptrac.cache --no-progress \
-    analyse --formatter=baseline --output="$raw"
+    analyse --formatter=baseline --output="$raw" || true
+grep -q '^  skip_violations:' "$raw" || {
+    echo "deptrac produced no usable baseline (config/parse error?)." >&2
+    exit 1
+}
 
 {
     cat tools/deptrac/deptrac.baseline.header.txt

@@ -20,19 +20,21 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(BankInUseException::class)]
 final class BankDeleterTest extends TestCase
 {
+    use InlineTransactionStubs;
+
     private const string BANK_ID = '0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c';
 
     public function testDeletesBankAndDispatchesDeletedEventWhenNoAccountsReferenceIt(): void
     {
         $bankRepository = new InMemoryBankRepository($this->makeBank());
-        $messageBus = new RecordingMessageBus();
-        $bankDeleter = $this->makeBankDeleter($bankRepository, accountCount: 0, messageBus: $messageBus);
+        $eventBus = new RecordingEventBus();
+        $bankDeleter = $this->makeBankDeleter($bankRepository, accountCount: 0, eventBus: $eventBus);
 
         $bankDeleter->delete(self::BANK_ID);
 
         $this->assertTrue($bankRepository->removeCalled);
-        $this->assertCount(1, $messageBus->dispatchedMessages);
-        $this->assertInstanceOf(BankDeletedDomainEvent::class, $messageBus->dispatchedMessages[0]);
+        $this->assertCount(1, $eventBus->publishedEvents);
+        $this->assertInstanceOf(BankDeletedDomainEvent::class, $eventBus->publishedEvents[0]);
     }
 
     public function testThrowsBankInUseExceptionWhenAccountsReferenceTheBank(): void
@@ -61,8 +63,8 @@ final class BankDeleterTest extends TestCase
     public function testDispatchesNoEventAndRemovesNothingWhenDeletionIsRejected(): void
     {
         $bankRepository = new InMemoryBankRepository($this->makeBank());
-        $messageBus = new RecordingMessageBus();
-        $bankDeleter = $this->makeBankDeleter($bankRepository, accountCount: 1, messageBus: $messageBus);
+        $eventBus = new RecordingEventBus();
+        $bankDeleter = $this->makeBankDeleter($bankRepository, accountCount: 1, eventBus: $eventBus);
 
         try {
             $bankDeleter->delete(self::BANK_ID);
@@ -72,15 +74,15 @@ final class BankDeleterTest extends TestCase
 
         $this->assertFalse($bankRepository->removeCalled);
         $this->assertSame([], $bankRepository->saved);
-        $this->assertSame([], $messageBus->dispatchedMessages);
+        $this->assertSame([], $eventBus->publishedEvents);
     }
 
     public function testMapsForeignKeyViolationOnRemoveToBankInUseException(): void
     {
         $bankRepository = new InMemoryBankRepository($this->makeBank(), removeFailure: $this->makeFkViolation());
-        $messageBus = new RecordingMessageBus();
+        $eventBus = new RecordingEventBus();
         // First count 0 (guard passes), recount 2 after the flush-time FK violation.
-        $bankDeleter = $this->makeBankDeleter($bankRepository, accountCount: 0, messageBus: $messageBus, recount: 2);
+        $bankDeleter = $this->makeBankDeleter($bankRepository, accountCount: 0, eventBus: $eventBus, recount: 2);
 
         try {
             $bankDeleter->delete(self::BANK_ID);
@@ -93,7 +95,7 @@ final class BankDeleterTest extends TestCase
             );
         }
 
-        $this->assertSame([], $messageBus->dispatchedMessages);
+        $this->assertSame([], $eventBus->publishedEvents);
     }
 
     public function testReportsAtLeastOneAccountWhenRecountAfterForeignKeyViolationIsZero(): void
@@ -117,14 +119,16 @@ final class BankDeleterTest extends TestCase
     private function makeBankDeleter(
         InMemoryBankRepository $bankRepository,
         int $accountCount,
-        ?RecordingMessageBus $messageBus = null,
+        ?RecordingEventBus $eventBus = null,
         ?int $recount = null,
     ): BankDeleter {
         return new BankDeleter(
             $bankRepository,
             new BankFinder($bankRepository),
             new InMemoryBankAccountRepository($accountCount, $recount),
-            $messageBus ?? new RecordingMessageBus(),
+            $eventBus ?? new RecordingEventBus(),
+            $this->inlineTransactionEntityManager(),
+            $this->noopManagerRegistry(),
         );
     }
 

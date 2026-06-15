@@ -175,12 +175,7 @@ trait EntityManagerToolTrait
             return $entityClass;
         }
 
-        self::assertNotNull($this->entityNamespace, 'Please configure the entityNamespace for service ' . self::class);
-        $fqcn = $this->entityNamespace . '\\' . $entityClass;
-        self::assertTrue(\class_exists($fqcn), \sprintf('Entity %s does not exist', $fqcn));
-
-        /** @var class-string<object> $fqcn */
-        return $fqcn;
+        return (new EntityClassResolver($this->entityManager))->resolve($entityClass, $this->entityNamespace);
     }
 
     /**
