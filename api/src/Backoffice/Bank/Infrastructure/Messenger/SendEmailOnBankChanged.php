@@ -17,7 +17,7 @@ use Throwable;
 /**
  * Bank-specific routing: recipient and subjects. Formatting is delegated to {@see NotificationMailer}.
  */
-final readonly class BankChangedNotifyEmailHandler
+final readonly class SendEmailOnBankChanged
 {
     public function __construct(
         private DomainEventHandlerDeduplicator $domainEventHandlerDeduplicator,

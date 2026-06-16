@@ -13,7 +13,7 @@ Lo evita el puerto `Shared/Application/DomainEvent/DomainEventHandlerDeduplicato
 **reclama** su par `(eventId, handler)` antes de actuar y **libera** la reclamación si falla, para que
 el retry del transporte siga abierto. La reclamación persiste en la tabla
 `handled_domain_event (event_id, handler, claimed_at)`, PK compuesta `(event_id, handler)` (migración
-`Version20260612221100`). Consumidor de ejemplo: `BankChangedNotifyEmailHandler`.
+`Version20260612221100`). Consumidor de ejemplo: `SendEmailOnBankChanged`.
 
 ## Decisiones
 

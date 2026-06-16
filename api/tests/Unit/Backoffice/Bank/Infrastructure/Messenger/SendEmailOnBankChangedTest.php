@@ -7,7 +7,7 @@ namespace Erpify\Tests\Unit\Backoffice\Bank\Infrastructure\Messenger;
 use DateTimeImmutable;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
-use Erpify\Backoffice\Bank\Infrastructure\Messenger\BankChangedNotifyEmailHandler;
+use Erpify\Backoffice\Bank\Infrastructure\Messenger\SendEmailOnBankChanged;
 use Erpify\Shared\Domain\Uuid\Uuid;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -18,8 +18,8 @@ use Throwable;
 /**
  * @internal
  */
-#[CoversClass(BankChangedNotifyEmailHandler::class)]
-final class BankChangedNotifyEmailHandlerTest extends TestCase
+#[CoversClass(SendEmailOnBankChanged::class)]
+final class SendEmailOnBankChangedTest extends TestCase
 {
     private const string NOTIFY_TO = 'ops@erpify.test';
 
@@ -82,8 +82,8 @@ final class BankChangedNotifyEmailHandlerTest extends TestCase
     private function makeHandler(
         RecordingDomainEventHandlerDeduplicator $deduplicator,
         RecordingNotificationMailer $mailer,
-    ): BankChangedNotifyEmailHandler {
-        return new BankChangedNotifyEmailHandler($deduplicator, $mailer, new NullLogger(), self::NOTIFY_TO);
+    ): SendEmailOnBankChanged {
+        return new SendEmailOnBankChanged($deduplicator, $mailer, new NullLogger(), self::NOTIFY_TO);
     }
 
     private function bankCreatedEvent(): BankCreatedDomainEvent

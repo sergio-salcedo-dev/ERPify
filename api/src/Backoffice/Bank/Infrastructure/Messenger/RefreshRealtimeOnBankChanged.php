@@ -20,10 +20,10 @@ use Symfony\Component\Messenger\Attribute\AsMessageHandler;
  *
  * Duplicate-safe: at-least-once delivery may re-publish an Update, but clients
  * reconcile by id (re-applying an update or a delete is a no-op once in sync).
- * Only the public {@see BankCreatedDomainEvent::toPrimitives()} shape leaves
- * here — logo / stored-object metadata is intentionally dropped.
+ * Created/updated publish the public `toPrimitives()` shape (logo / stored-object
+ * metadata is intentionally dropped); deleted publishes the bank id alone.
  */
-final readonly class BankRealtimePublisherHandler
+final readonly class RefreshRealtimeOnBankChanged
 {
     public function __construct(
         private HubInterface $hub,

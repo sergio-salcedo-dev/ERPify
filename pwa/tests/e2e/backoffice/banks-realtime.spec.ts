@@ -21,7 +21,7 @@ import {
  * - The **browser page** is the observing user (the one who must update live).
  * - The **`APIRequestContext`** plays the acting user: it POST/PUT/DELETEs
  *   against the live Symfony API, which records a domain event, the
- *   `messenger_worker` consumes it, and `BankRealtimePublisherHandler`
+ *   `messenger_worker` consumes it, and `RefreshRealtimeOnBankChanged`
  *   publishes a private Mercure `Update`. This is deterministic and avoids the
  *   flakiness of coordinating two real browser contexts.
  *

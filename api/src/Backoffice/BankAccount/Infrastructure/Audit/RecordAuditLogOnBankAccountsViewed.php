@@ -14,7 +14,7 @@ use Symfony\Component\Messenger\Attribute\AsMessageHandler;
  * scrubbed of PII: it logs WHAT (bankId) and WHEN only — never the IBAN or any account field.
  */
 #[AsMessageHandler]
-final readonly class BankAccountsViewedAuditHandler
+final readonly class RecordAuditLogOnBankAccountsViewed
 {
     public function __construct(private LoggerInterface $logger)
     {

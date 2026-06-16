@@ -11,7 +11,7 @@ ERPify/
 │   │   │   ├── Bank/               # Bank bounded context
 │   │   │   │   ├── Application/    # Use cases, DTOs (Application/Http/)
 │   │   │   │   ├── Domain/         # Entity, Event, Exception, Repository (framework-free)
-│   │   │   │   └── Infrastructure/ # Controller, Messenger, Persistence, Request, Serializer, Storage
+│   │   │   │   └── Infrastructure/ # Controller, Messenger (event subscribers `<Effect>On<Event>`, see docs/rules/cqrs-naming.md), Persistence, Request, Serializer, Storage
 │   │   │   └── Health/
 │   │   │       └── Infrastructure/Controller
 │   │   ├── Frontoffice/

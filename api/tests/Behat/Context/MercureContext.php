@@ -18,7 +18,7 @@ use Symfony\Component\Mercure\Update;
 
 /**
  * Asserts the realtime {@see Update}s that the bank realtime publisher handler
- * (`Erpify\Backoffice\Bank\Infrastructure\Messenger\BankRealtimePublisherHandler`) publishes when a
+ * (`Erpify\Backoffice\Bank\Infrastructure\Messenger\RefreshRealtimeOnBankChanged`) publishes when a
  * bank event is consumed — the structured downstream sink, read off the recording hub
  * ({@see RecordingHub}) bound in `services_test.yaml`. Topics are the addressing (collection +
  * per-bank), `getData()` is the JSON payload, inspected with the shared {@see JsonToolTrait} dot-path.
