@@ -180,13 +180,26 @@ export function useResourceList<T extends { id: string }, F, TInput>(
   // envelope link and following it is derived knowledge the hook already owns
   // (it holds `pagination` and `navigateTo`). Consumers get ready affordances;
   // the per-entity pagination components stay pure representation.
-  const hasPrev = pagination?.hasPrev ?? false;
-  const hasNext = pagination?.hasNext ?? false;
+  //
+  // The in-flight guard mirrors the recovery effect: until a load resolves and
+  // replaces the envelope, `pagination` still holds the current page's links, so
+  // a second click would re-follow the same cursor (skipping/repeating a page) or
+  // race the empty-page recovery navigation. Ignoring clicks while loading keeps
+  // one step per settled page.
+  // Gate the affordance on the link being present, not just the flag: a control
+  // is enabled only when there is a cursor to follow. If the envelope ever
+  // reports `hasNext` while `links.next` is null, the button would otherwise
+  // render enabled yet no-op on click (the D-A11y contract disables on a null
+  // link). The `&&` only ever tightens the flag — never enables what it denied.
+  const hasPrev = (pagination?.hasPrev ?? false) && pagination?.links.prev != null;
+  const hasNext = (pagination?.hasNext ?? false) && pagination?.links.next != null;
   const goPrev = useCallback(() => {
+    if (reloadingRef.current) return;
     const link = pagination?.links.prev;
     if (link) navigateTo(link);
   }, [pagination, navigateTo]);
   const goNext = useCallback(() => {
+    if (reloadingRef.current) return;
     const link = pagination?.links.next;
     if (link) navigateTo(link);
   }, [pagination, navigateTo]);
