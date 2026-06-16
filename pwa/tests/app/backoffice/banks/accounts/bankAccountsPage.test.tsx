@@ -32,7 +32,7 @@ const ACCOUNT = BankAccount.fromPrimitives({
   bic: null,
   alias: "Payroll",
   currency: "EUR",
-  status: "active",
+  status: "ACTIVE",
 });
 
 function page(

@@ -16,14 +16,18 @@ import type {
 import { IbanCell } from "./IbanCell";
 
 const STATUS_VARIANT: Record<BankAccountStatus, StatusBadgeVariant> = {
-  active: "success",
-  inactive: "warning",
-  closed: "neutral",
+  ACTIVE: "success",
+  INACTIVE: "warning",
+  CLOSED: "neutral",
 };
 
-function statusLabel(status: BankAccountStatus): string {
-  return status.charAt(0).toUpperCase() + status.slice(1);
-}
+// Display text lives here, keyed by the wire identity value — the API sends the
+// enum identity (`ACTIVE`), never a label. This map is the localization seam.
+const STATUS_LABEL: Record<BankAccountStatus, string> = {
+  ACTIVE: "Active",
+  INACTIVE: "Inactive",
+  CLOSED: "Closed",
+};
 
 interface BankAccountsTableProps {
   accounts: BankAccount[];
@@ -87,7 +91,10 @@ function buildColumns({
       header: "Status",
       colClassName: "w-[12%]",
       cell: (account) => (
-        <StatusBadge variant={STATUS_VARIANT[account.status]} label={statusLabel(account.status)} />
+        <StatusBadge
+          variant={STATUS_VARIANT[account.status]}
+          label={STATUS_LABEL[account.status]}
+        />
       ),
     },
   ];

@@ -17,7 +17,7 @@ const ACCOUNT = {
   bic: null as string | null,
   alias: "Payroll",
   currency: "EUR",
-  status: "active",
+  status: "ACTIVE",
 };
 
 type Scenario = "happy" | "empty" | "server-error";

@@ -10,7 +10,7 @@ const WITH_ALIAS = BankAccount.fromPrimitives({
   bic: "CAIXESBBXXX",
   alias: "Payroll",
   currency: "EUR",
-  status: "active",
+  status: "ACTIVE",
 });
 
 const NO_ALIAS = BankAccount.fromPrimitives({
@@ -20,7 +20,7 @@ const NO_ALIAS = BankAccount.fromPrimitives({
   bic: null,
   alias: null,
   currency: "EUR",
-  status: "closed",
+  status: "CLOSED",
 });
 
 describe("BankAccountsTable", () => {

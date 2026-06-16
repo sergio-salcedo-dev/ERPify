@@ -33,7 +33,7 @@ function isNumberOrNull(value: unknown): value is number | null {
 }
 
 const CURRENCIES: ReadonlySet<BankAccountCurrency> = new Set(["EUR"]);
-const STATUSES: ReadonlySet<BankAccountStatus> = new Set(["active", "inactive", "closed"]);
+const STATUSES: ReadonlySet<BankAccountStatus> = new Set(["ACTIVE", "INACTIVE", "CLOSED"]);
 
 function isBankAccountPrimitives(value: unknown): value is BankAccountPrimitives {
   return (
