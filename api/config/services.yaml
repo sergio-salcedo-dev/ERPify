@@ -14,8 +14,18 @@ services:
         autowire: true
         autoconfigure: true
 
+    # Every projector is collected into the ProjectionRunner's tagged iterator (the tag keeps the
+    # AutowireIterator attribute out of the Application layer).
+    _instanceof:
+        Erpify\Shared\Event\Application\Projector:
+            tags: ['erpify.projector']
+
     Erpify\:
         resource: '../src/'
         exclude:
             - '../src/{DependencyInjection,Migrations,Tests,Kernel.php}'
             - '../src/**/Domain/Entity/'
+
+    Erpify\Shared\Event\Application\ProjectionRunner:
+        arguments:
+            $projectors: !tagged_iterator erpify.projector

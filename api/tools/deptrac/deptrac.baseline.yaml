@@ -54,6 +54,8 @@ deptrac:
       - Symfony\Component\Serializer\Normalizer\DateTimeNormalizer
     Erpify\Shared\Domain\Entity\Timestamped:
       - Symfony\Component\Serializer\Normalizer\DateTimeNormalizer
+    Erpify\Shared\Event\Application\ProjectionRunner:
+      - Doctrine\ORM\EntityManagerInterface
     Erpify\Shared\Media\Domain\Entity\Media:
       - Symfony\Component\Serializer\Normalizer\DateTimeNormalizer
     Erpify\Shared\Storage\Application\StoredObjectOrphanCleaner:

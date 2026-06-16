@@ -7,7 +7,7 @@ namespace Erpify\Shared\Domain\Aggregate;
 use Erpify\Shared\Domain\Clock\SystemClock;
 use Erpify\Shared\Domain\Entity\Identifiable;
 use Erpify\Shared\Domain\Entity\Timestamped;
-use Erpify\Shared\Domain\Event\DomainEvent;
+use Erpify\Shared\Event\Domain\DomainEvent;
 use LogicException;
 
 /**
