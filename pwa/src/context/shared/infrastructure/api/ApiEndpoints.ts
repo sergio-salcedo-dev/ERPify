@@ -36,6 +36,7 @@ export const API_ENDPOINTS = {
     HEALTH_DATABASE: `${BACKOFFICE_PREFIX}/health/database`,
     BANKS: {
       LIST: `${BACKOFFICE_PREFIX}/banks`,
+      COUNT: `${BACKOFFICE_PREFIX}/banks/count`,
       CREATE: `${BACKOFFICE_PREFIX}/banks`,
       DETAILS: bankPath,
       UPDATE: bankPath,
