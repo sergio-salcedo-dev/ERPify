@@ -31,7 +31,7 @@
    publica por Messenger. La integración entre contextos es **siempre** vía esos
    eventos.
 5. **Convención de nombres de evento:** `erpify.<contexto>.<entidad>.<acción>`
-   (ej. `erpify.backoffice.crm.opportunity.won`). Pasado, en minúsculas.
+   (ej. `erpify.frontoffice.commercial.opportunity.won`). Pasado, en minúsculas.
 6. **Identidad y borrado:** UUID v7 asignado en la capa de aplicación;
    **hard delete por defecto** (estados de negocio como `archived`/`cancelled` se
    modelan como estado del agregado, no como soft delete) — ver
@@ -68,23 +68,29 @@ clasifica, no se prohíbe en bloque:
 ## Context map (relaciones)
 
 ```text
-                 ┌─────────────────────────────────────────────┐
-                 │  Shared Kernel (identidad, eventos, auditoría,│
-                 │  UUID, ProblemDetails, búsqueda/paginación)   │
-                 └─────────────────────────────────────────────┘
+                 ┌──────────────────────────────────────────────────┐
+                 │  Shared Kernel (identidad, Party (directorio de    │
+                 │  actores), eventos, auditoría, UUID,               │
+                 │  ProblemDetails, búsqueda/paginación)              │
+                 └──────────────────────────────────────────────────┘
                                    ▲ usado por todos
    Organization ──(tenant/usuarios, upstream de TODO)──► (todos)
         │
         ▼ eventos
-      CRM ──OpportunityWon──► Projects ──ProjectCreated──► Budgeting
-        │                        │  │                          │
-        │                        │  └─► Workforce              ▼ BudgetApproved
-        │                        ▼                          Procurement
-        │                   Procurement ◄──────────────────────┘
-        ▼                        │
-     Finance ◄──ProjectCostAccrued / TimeLogged / GoodsReceived──┘
+   Commercial ──opportunity.won──► Projects ──project.created──► Budgeting
+      │  ▲                            │  │                          │
+      │  │ tender.awarded             │  └─► Workforce / Resources  ▼ budget.approved
+      │  └── TenderManagement ──study previo──► Budgeting        Procurement
+      │                                │                            ▲
+      ▼ proposal.accepted              ▼                            │
+   CommercialProposal ──► Projects   Procurement ◄──────────────────┘
+                                       │
+   Projects ──project.created──► SiteOperations (diario, certificaciones, calidad, PRL)
+                                       │ certification.approved
+                                       ▼
+     Finance ◄──cost-accrued / time.logged / goods.received / certification.approved──┘
         │
-        ▼ InvoiceIssued / PaymentReceived
+        ▼ invoice.issued / invoice.paid / payment.received / budget.exceeded
    Reporting (read models)   Notifications (fan-out)   Audit (todos los eventos)
         ▲                          ▲                        ▲
         └───── suscriptores genéricos del bus de eventos ───┘
@@ -92,7 +98,7 @@ clasifica, no se prohíbe en bloque:
    Automation ── escucha eventos de cualquier contexto y dispara acciones (comandos)
    Integration ── traduce eventos ⇄ sistemas externos (webhooks/conectores)
    Cost Allocation ── consume eventos de coste (horas, compras) y los reparte sobre obras
-   Commissions ── devenga sobre opportunity.won / payment.received
+   Commissions ── devenga sobre opportunity.won / invoice.paid
    Portals ── expone (RBAC+ABAC) datos de otros contextos al actor externo dueño
 ```
 
@@ -101,16 +107,20 @@ clasifica, no se prohíbe en bloque:
 | Upstream → Downstream                                 | Tipo                                  | Integración                                                  |
 |-------------------------------------------------------|---------------------------------------|--------------------------------------------------------------|
 | Organization → todos                                  | Customer/Supplier                     | tenant id + `UserInvited`/`CompanyRegistered`                |
-| CRM → Projects, Finance                               | Customer/Supplier (ACL en downstream) | `OpportunityWon`                                             |
-| Projects → Budgeting, Procurement, Workforce, Finance | Partnership                           | `ProjectCreated`, `TaskCompleted`                            |
-| Budgeting → Procurement, Finance                      | Customer/Supplier                     | `BudgetApproved`                                             |
+| Commercial → Projects, Finance, Commissions           | Customer/Supplier (ACL en downstream) | `OpportunityWon`                                             |
+| TenderManagement → Projects, Budgeting                | Customer/Supplier                     | `TenderRegistered`, `TenderAwarded`                          |
+| CommercialProposal → Projects, Finance                | Customer/Supplier                     | `ProposalAccepted`                                           |
+| Projects → Budgeting, Procurement, Workforce, SiteOps | Partnership                           | `ProjectCreated`, `TaskCompleted`                            |
+| Budgeting → Procurement, Finance                      | Customer/Supplier                     | `BudgetApproved`, `BudgetExceeded`                           |
 | Procurement → Finance                                 | Customer/Supplier                     | `GoodsReceived`, `StockMovementRegistered`                   |
 | Workforce → Finance, Projects                         | Customer/Supplier                     | `TimeLogged`                                                 |
-| Finance → Reporting, Notifications                    | Publisher/Subscriber                  | `InvoiceIssued`, `PaymentReceived`                           |
+| Resources → Projects, Cost Allocation                 | Customer/Supplier                     | `ResourceAssigned`                                           |
+| SiteOperations → Finance, Reporting                   | Customer/Supplier (ACL en downstream) | `CertificationApproved`, `IncidentRaised`                   |
+| Finance → Reporting, Notifications, Commissions       | Publisher/Subscriber                  | `InvoiceIssued`, `InvoicePaid`, `PaymentReceived`            |
 | (todos) → Audit, Notifications, Reporting             | Publisher/Subscriber (conformist)     | bus de eventos                                               |
 | Automation → (todos)                                  | Orquestador                           | escucha eventos / emite comandos                             |
-| Workforce, Procurement, Finance → Cost Allocation     | Publisher/Subscriber                  | `TimeLogged`, `GoodsReceived`, `ProjectCostAccrued`          |
-| CRM, Finance → Commissions                            | Publisher/Subscriber                  | `OpportunityWon`, `PaymentReceived`                          |
+| Workforce, Procurement, Resources → Cost Allocation   | Publisher/Subscriber                  | `TimeLogged`, `GoodsReceived`, `ResourceAssigned`           |
+| Commercial, Finance → Commissions                     | Publisher/Subscriber                  | `OpportunityWon`, `InvoicePaid`                              |
 | (varios) → Portals                                    | Conformist (read/command acotado)     | Application services + read models, gobernados por RBAC+ABAC |
 
 ---
@@ -136,6 +146,19 @@ Dos caras del mismo núcleo compartido:
   una **FK / `ManyToOne` está permitida** (Level 3). Su CRUD/gestión vive en sus
   módulos del roadmap (Organization para users/roles, Feature Flags), pero como
   *referencia* actúan como shared kernel.
+- **Party (directorio de actores, identidad fina compartida)** — la **identidad
+  legal mínima** de cualquier actor del negocio: ⬢ `Party` (`id` UUID v7,
+  `LegalName`, `TaxId` (NIF/CIF), `kinds`) + `PartyRole`
+  (`customer`/`supplier`/`subcontractor`/`employee`/`autónomo`/`lead`/`prospect`,
+  varios a la vez sobre la **misma** Party — habitual en construcción: una empresa
+  es a la vez cliente y proveedor). Es la **resolución del dilema "actor único vs
+  por contexto"** (ver [`adr`](adr/bank-bankaccount-modeling.md) para el patrón de
+  referencia por id): la Party es identidad compartida y referenciable por id;
+  cada contexto de negocio **posee su rol** (Commercial → `Account`/`Lead`,
+  Procurement → `Supplier`, Workforce → `Employee`/`Subcontractor`, Finance
+  referencia `partyId`) y nunca conoce el modelo de rol de otro. Evita el
+  god-context `Party` sin perder la vista 360°. Emite `party.registered`,
+  `party.role-assigned`, `party.merged`.
 - **Regla:** estable y mínimo. Un contexto de negocio **no** se referencia por
   asociación Doctrine desde otro (eso es por id + eventos); solo el Platform
   recibe ese trato. Detalle y ejemplos en
@@ -160,30 +183,79 @@ Dos caras del mismo núcleo compartido:
 - **Necesidad:** gestionar usuarios/equipos, invitar y asignar roles, perfil y
   preferencias. *(roadmap 1.1)*
 
-### CRM (`erpify.frontoffice.crm.*`)
+> **Sin "CRM" genérico — modelado por subdominios reales.** El comercial de
+> construcción no piensa en "CRM"; piensa en *leads*, *licitaciones*, *propuestas*
+> y *clientes*. El área comercial se descompone (split moderado) en tres contextos
+> de lenguaje del dominio en lugar de un `CRM` que mezcla procesos con ciclos de
+> vida distintos: **Commercial** (prospección + embudo privado + interacción),
+> **TenderManagement** (licitación pública, ciclo propio) y **CommercialProposal**
+> (oferta económica/técnica al cliente). Un `SalesModule` o un `CRM` serían
+> abstracciones técnicas, no del negocio.
 
-- **Responsabilidad:** captación y gestión comercial hasta el cierre.
-- **Agregados/entidades:** ⬢ `Lead` · ⬢ `Contact` · ⬢ `Account` (cliente/empresa
-  CRM) · ⬢ `Opportunity` (deal) · ⬢ `Tender` (licitación pública) ·
-  `Activity` (llamada/tarea/email) · `Note` · `Attachment` ·
-  `Pipeline`/`Stage` (configurable).
+### Commercial (`erpify.frontoffice.commercial.*`)
+
+- **Responsabilidad:** prospección, embudo de venta privada e historial de
+  relación con el cliente (LeadManagement + OpportunityTracking +
+  ClientInteraction).
+- **Agregados/entidades:** ⬢ `Lead` · ⬢ `Contact` · ⬢ `Account` (rol comercial de
+  una `Party`, por id) · ⬢ `Opportunity` (deal) · ⬢ `Campaign` (marketing) ·
+  `Activity`/`Interaction` (llamada/tarea/email/reunión) · `Note` · `Attachment` ·
+  `Pipeline`/`Stage` (configurable) · `LeadSource`.
 - **Value objects:** `PipelineStage`, `Money` + `Currency`, `Probability`,
-  `ContactChannel`, `TenderDeadline`, `BidDecision` (bid/no-bid), `AwardStatus`.
-- **Invariantes:** una oportunidad pertenece a un `Account`; su `Stage` avanza por
-  la máquina del `Pipeline`; cerrar como ganada exige importe y cliente. Una
-  licitación tiene fecha límite; presentarse referencia un estudio económico
-  (Budgeting, por id) y su adjudicación (ganada/perdida) es terminal.
+  `ContactChannel`, `LeadStatus`, `CampaignChannel`.
+- **Invariantes:** una oportunidad pertenece a un `Account` (→ `Party` por id); su
+  `Stage` avanza por la máquina del `Pipeline`; cerrar como ganada exige importe y
+  cliente; una campaña no mezcla leads de otro tenant.
 - **Emite:** `lead.captured`, `lead.qualified`, `opportunity.created`,
   `opportunity.stage-changed`, `opportunity.won`, `opportunity.lost`,
-  `activity.logged`, `tender.registered`, `tender.bid-submitted`,
-  `tender.awarded`, `tender.lost`.
+  `activity.logged`, `interaction.logged`, `campaign.launched`,
+  `campaign.lead-attributed`.
 - **Consume:** `organization.company.registered` (provisión de tenant),
-  `organization.user.invited` (propietario comercial).
-- **Read models:** pipeline board, embudo por fase, próximas actividades, agenda de
-  licitaciones por fecha límite.
+  `organization.user.invited` (propietario comercial), `party.registered`.
+- **Read models:** pipeline board, embudo por fase, próximas actividades, ROI por
+  campaña, ficha 360° del cliente (interacciones).
 - **Necesidad:** todo el cliente en un sitio, seguir oportunidades, no olvidar
-  seguimientos, seguir licitaciones públicas (plazos, pliegos, bid/no-bid,
-  adjudicación). *(roadmap 1.2)*
+  seguimientos, atribuir leads a campañas. *(roadmap 1.2)*
+
+### TenderManagement (`erpify.frontoffice.tender.*`)
+
+- **Responsabilidad:** seguimiento de **licitaciones públicas** — un ciclo de vida
+  propio (convocatoria → estudio → propuesta → adjudicación) con plazos y
+  documentación reglada, distinto del embudo privado.
+- **Agregados/entidades:** ⬢ `PublicTender` · `SubmissionDeadline` ·
+  `TenderDocument` (pliegos) · `BidDecision` (bid/no-bid).
+- **Value objects:** `TenderDeadline`, `AwardStatus` (ganada/perdida/desierta),
+  `TenderReference`, `CpvCode`.
+- **Invariantes:** una licitación tiene fecha límite; presentarse referencia un
+  **estudio económico previo** (Budgeting, por id) y una `CommercialProposal`;
+  la adjudicación es terminal; no se presenta sin decisión bid registrada.
+- **Emite:** `tender.registered`, `tender.deadline-approaching`,
+  `tender.bid-submitted`, `tender.awarded`, `tender.lost`.
+- **Consume:** `budgeting.study.completed` (estudio previo listo),
+  `proposal.issued` (oferta a adjuntar).
+- **Read models:** agenda de licitaciones por fecha límite, tablero Kanban
+  (convocatoria → estudio → propuesta → adjudicación), tasa de adjudicación.
+- **Necesidad:** no perder un plazo, gestionar pliegos, decidir bid/no-bid y seguir
+  la adjudicación. *(roadmap 1.2b)*
+
+### CommercialProposal (`erpify.frontoffice.proposal.*`)
+
+- **Responsabilidad:** generación de la **oferta económica y técnica al cliente** —
+  cara a cliente y con validez, distinta del presupuesto interno de Budgeting.
+- **Agregados/entidades:** ⬢ `Proposal` (`ProposalDocument`) · `ProposalLine` ·
+  `CostEstimate` (resumen cara a cliente, derivado de un `Budget` por id).
+- **Value objects:** `ValidityPeriod`, `Money`/`Currency`, `ProposalStatus`
+  (draft/issued/accepted/rejected/expired).
+- **Invariantes:** una propuesta referencia una `Opportunity` o un `PublicTender`
+  (por id) y un `Budget` interno (por id); emitida es inmutable (se versiona);
+  aceptarla es terminal y dispara la creación de obra.
+- **Emite:** `proposal.issued`, `proposal.accepted`, `proposal.rejected`,
+  `proposal.expired`.
+- **Consume:** `budgeting.budget.approved` (base económica),
+  `commercial.opportunity.won` / `tender.awarded` (contexto de la oferta).
+- **Read models:** propuestas por estado, valor en juego, ratio de aceptación.
+- **Necesidad:** mandar una oferta profesional ligada al estudio económico, con
+  validez y seguimiento de su aceptación. *(roadmap 1.2c)*
 
 ### Projects / Construction (`erpify.backoffice.projects.*`)
 
@@ -196,8 +268,12 @@ Dos caras del mismo núcleo compartido:
   sus fases/tareas; no se cierra una obra con tareas abiertas.
 - **Emite:** `project.created`, `project.status-changed`, `phase.started`,
   `phase.completed`, `task.assigned`, `task.completed`, `progress.updated`.
-- **Consume:** `crm.opportunity.won` (ACL → crea borrador de obra),
-  `organization.member.added` (asignables).
+- **Consume:** `proposal.accepted` / `tender.awarded` (ACL → crea borrador de
+  obra), `commercial.opportunity.won` (deal privado sin propuesta formal),
+  `organization.member.added` (asignables). La **ejecución física** de la obra
+  (diario, certificaciones, mediciones, calidad, PRL) vive en su contexto hermano
+  **SiteOperations**, no aquí — Projects modela estructura y avance, SiteOps el
+  día a día de campo.
 - **Read models:** tablero de obra, timeline de hitos, carga por persona.
 - **Necesidad:** controlar la obra, ver avance real, saber quién hace qué.
   *(roadmap 1.3)*
@@ -222,7 +298,7 @@ Dos caras del mismo núcleo compartido:
   `budget.approved`, `budget.rejected`, `configuration.priced`,
   `budget.line-generated`, `study.completed`.
 - **Consume:** `projects.project.created` (a qué obra presupuestar),
-  `crm.tender.registered` (qué licitación estudiar).
+  `tender.registered` (qué licitación estudiar).
 - **Read models:** previsto vs. real por partida, margen por obra, coste por
   configuración.
 - **Necesidad:** presupuestar por obra, reutilizar plantillas, comparar previsto
@@ -263,6 +339,52 @@ Dos caras del mismo núcleo compartido:
 - **Necesidad:** registrar horas por obra, partes de empleados/subcontratas, coste
   real de mano de obra, planificar carga. *(roadmap 2.1)*
 
+### Resources / Plant & Equipment (`erpify.backoffice.resources.*`)
+
+- **Responsabilidad:** **activos** de la empresa (maquinaria y vehículos), su
+  asignación a obra y su coste/mantenimiento. Hermano de Workforce: un activo no
+  es ni persona (Workforce) ni material fungible (Procurement).
+- **Agregados/entidades:** ⬢ `Machine` · ⬢ `Vehicle` · `Assignment` (activo↔obra/
+  tarea, por id) · `MaintenanceLog`.
+- **Value objects:** `AssetCode`, `MachineType`, `HourMeter`/`Odometer`,
+  `InternalRate` (`Money`/hora o /día), `MaintenanceInterval`, `AssetStatus`.
+- **Invariantes:** un activo no está asignado a dos obras en el mismo periodo; el
+  coste imputado = horas/días × tarifa interna; un activo en mantenimiento no es
+  asignable.
+- **Emite:** `resource.registered`, `resource.assigned`, `resource.released`,
+  `resource.maintenance-due`, `resource.maintenance-completed`.
+- **Consume:** `projects.project.created` (a qué obra asignar).
+- **Read models:** disponibilidad por activo, coste de maquinaria por obra,
+  próximos mantenimientos.
+- **Necesidad:** saber qué maquinaria/vehículos tengo y dónde, asignarlos a obra,
+  su coste real y sus mantenimientos. *(roadmap 2.8)*
+
+### SiteOperations / Construction Execution (`erpify.backoffice.site-operations.*`)
+
+- **Responsabilidad:** el **día a día de la obra en campo** — diario, mediciones,
+  **certificaciones** (a origen), incidencias, calidad y seguridad (PRL). Estos
+  procesos son **núcleo** de un ERP de construcción (más que un marketing
+  genérico); van en su contexto, no inflando Projects.
+- **Agregados/entidades:** ⬢ `SiteDiary` (parte diario) · ⬢ `Certification`
+  (certificación de avance) · `Measurement` (medición) · ⬢ `Incident` ·
+  `QualityCheck` · `SafetyRecord` (PRL) · `SitePlanning`.
+- **Value objects:** `MeasurementUnit`, `CertificationStatus`
+  (draft/submitted/approved/billed), `ProgressPercentage`, `IncidentSeverity`,
+  `SafetyInspectionResult`, `WeatherCondition`.
+- **Invariantes:** una certificación referencia obra+periodo (por id), deriva de
+  **mediciones aprobadas**, y aprobarla la **congela** y dispara facturación a
+  origen (Finance); una medición aprobada no se edita; una incidencia es terminal
+  al resolverse.
+- **Emite:** `site-diary.recorded`, `measurement.approved`,
+  `certification.submitted`, `certification.approved`, `incident.raised`,
+  `incident.resolved`, `quality-check.failed`, `safety.inspection-recorded`.
+- **Consume:** `projects.project.created` (qué obra), `resources.resource.assigned`
+  y `workforce.time.logged` (para el diario), partes de Mobile Field Ops (2.4).
+- **Read models:** certificaciones por obra (previsto/certificado/pendiente),
+  diario por obra, incidencias abiertas, KPIs de calidad/seguridad.
+- **Necesidad:** llevar el diario de obra, certificar avance para poder facturar,
+  registrar mediciones, incidencias, calidad y PRL. *(roadmap 1.3b)*
+
 ### Document Management (`erpify.backoffice.dms.*`)
 
 - **Responsabilidad:** documentos ligados a entidades (obra, cliente…), con
@@ -294,11 +416,14 @@ Dos caras del mismo núcleo compartido:
 - **Invariantes:** una factura referencia cliente y (opcional) obra por UUID; total
   = líneas + impuestos; un pago no supera el pendiente; no se edita una factura
   emitida (se rectifica).
-- **Emite:** `invoice.drafted`, `invoice.issued`, `payment.received`,
-  `project.cost-accrued`, `bank.created`/`updated`/`deleted` *(ya activos)*.
-- **Consume:** `crm.opportunity.won` (borrador de factura),
-  `procurement.goods.received` + `workforce.time.logged` (coste por obra),
-  `budgeting.budget.approved`.
+- **Emite:** `invoice.drafted`, `invoice.issued`, `invoice.paid`,
+  `payment.received`, `project.cost-accrued`, `project.budget-exceeded`
+  (coste real > presupuesto aprobado), `bank.created`/`updated`/`deleted`
+  *(ya activos)*.
+- **Consume:** `proposal.accepted` / `commercial.opportunity.won` (borrador de
+  factura), `site-operations.certification.approved` (factura a origen),
+  `procurement.goods.received` + `workforce.time.logged` + `resource.assigned`
+  (coste por obra), `budgeting.budget.approved`.
 - **Read models:** cashflow, coste/margen por proyecto, aging de cobros.
 - **Necesidad:** facturar a cliente/proveedor, seguir cobros y pagos, ver cashflow,
   saber margen por proyecto. *(roadmap 2.3)*
@@ -336,7 +461,7 @@ Dos caras del mismo núcleo compartido:
   por id) y es idempotente por `eventId`; una liquidación congela los devengos que
   incluye; no se devenga dos veces el mismo hecho.
 - **Emite:** `commission.accrued`, `commission.settled`, `commission-plan.updated`.
-- **Consume:** `crm.opportunity.won`, `finance.payment.received` (ACL → base de
+- **Consume:** `commercial.opportunity.won`, `finance.invoice.paid` (ACL → base de
   cálculo).
 - **Read models:** comisiones devengadas por beneficiario, pendientes de liquidar.
 - **Necesidad:** definir comisiones %/fijo/escalado, calcularlas solas al ganar o
@@ -401,8 +526,8 @@ Dos caras del mismo núcleo compartido:
 - **Emite:** `portal-access.granted`, `portal-invitation.sent`,
   `portal.action-submitted` (parte, aprobación o factura subida).
 - **Consume:** `organization.user.invited`, y por portal los Application services /
-  read models de Projects y Finance (certificaciones, facturas), Procurement
-  (pedidos, albaranes) y Workforce (partes).
+  read models de Projects + SiteOperations (avance, certificaciones), Finance
+  (facturas), Procurement (pedidos, albaranes) y Workforce (partes).
 - **Read models:** «mis proyectos / facturas / pedidos / partes» por actor.
 - **Necesidad:** que cada actor externo opere lo suyo sin pasar por oficina.
   *(roadmap 2.6)*
@@ -469,23 +594,32 @@ Dos caras del mismo núcleo compartido:
 Tabla maestra de los eventos **de integración** que cruzan fronteras. El payload
 lista los campos clave (IDs siempre UUID v7); el resto es interno al emisor.
 
-| Evento                                  | Emite           | Payload (clave)                                    | Consumidores                                |
-|-----------------------------------------|-----------------|----------------------------------------------------|---------------------------------------------|
-| `organization.company.registered`       | Organization    | companyId, name, locale                            | todos (provisión tenant)                    |
-| `organization.user.invited`             | Organization    | userId, companyId, role                            | CRM, Projects, Notifications                |
-| `crm.opportunity.won`                   | CRM             | opportunityId, accountId, amount, companyId        | Projects, Finance, Commissions              |
-| `projects.project.created`              | Projects        | projectId, accountId, companyId                    | Budgeting, Procurement, Workforce, DMS      |
-| `projects.task.completed`               | Projects        | taskId, projectId                                  | Workforce, Reporting                        |
-| `budgeting.budget.approved`             | Budgeting       | budgetId, projectId, total                         | Procurement, Finance                        |
-| `procurement.goods.received`            | Procurement     | poId, projectId, lines[]                           | Finance, Reporting                          |
-| `procurement.stock.below-reorder-point` | Procurement     | materialId, locationId                             | Notifications, Automation                   |
-| `workforce.time.logged`                 | Workforce       | timeEntryId, taskId, projectId, hours, cost        | Finance, Projects, Reporting                |
-| `finance.invoice.issued`                | Finance         | invoiceId, accountId, projectId, total             | Reporting, Notifications                    |
-| `finance.payment.received`              | Finance         | paymentId, invoiceId, amount                       | Reporting, Notifications, Commissions       |
-| `crm.tender.awarded`                    | CRM             | tenderId, accountId, studyId                       | Projects, Notifications                     |
-| `cost-allocation.cost.allocated`        | Cost Allocation | allocationEntryId, costCenterId, projectId, amount | Reporting, Finance                          |
-| `commissions.commission.accrued`        | Commissions     | accrualId, beneficiaryId, sourceId, amount         | Finance, Reporting, Notifications           |
-| `*` (cualquiera)                        | todos           | —                                                  | Audit, Reporting, Automation, Notifications |
+| Evento                                     | Emite             | Payload (clave)                                    | Consumidores                                        |
+|--------------------------------------------|-------------------|----------------------------------------------------|-----------------------------------------------------|
+| `organization.company.registered`          | Organization      | companyId, name, locale                            | todos (provisión tenant)                            |
+| `organization.user.invited`                | Organization      | userId, companyId, role                            | Commercial, Projects, Notifications                 |
+| `party.registered`                         | Party (kernel)    | partyId, legalName, taxId, kinds[]                 | Commercial, Procurement, Workforce, Finance         |
+| `commercial.opportunity.won`               | Commercial        | opportunityId, partyId, amount, companyId          | CommercialProposal, Projects, Finance, Commissions  |
+| `commercial.campaign.launched`             | Commercial        | campaignId, channel, companyId                     | Reporting, Notifications                            |
+| `tender.awarded`                           | TenderManagement  | tenderId, partyId, studyId, proposalId             | Projects, Budgeting, Notifications                  |
+| `proposal.accepted`                        | CommercialProposal| proposalId, opportunityId/tenderId, budgetId, total| Projects, Finance                                   |
+| `projects.project.created`                 | Projects          | projectId, partyId, companyId                      | Budgeting, Procurement, Workforce, Resources, SiteOps, DMS |
+| `projects.task.completed`                  | Projects          | taskId, projectId                                  | Workforce, Reporting                                |
+| `budgeting.budget.approved`                | Budgeting         | budgetId, projectId, total                         | Procurement, Finance, CommercialProposal            |
+| `site-operations.certification.approved`   | SiteOperations    | certificationId, projectId, period, amount         | Finance, Reporting                                  |
+| `site-operations.incident.raised`          | SiteOperations    | incidentId, projectId, severity                    | Notifications, Automation                           |
+| `procurement.goods.received`               | Procurement       | poId, projectId, lines[]                           | Finance, Reporting                                  |
+| `procurement.delivery.scheduled`           | Procurement       | poId, projectId, expectedDate                      | Notifications, SiteOperations                       |
+| `procurement.stock.below-reorder-point`    | Procurement       | materialId, locationId                             | Notifications, Automation                           |
+| `workforce.time.logged`                    | Workforce         | timeEntryId, taskId, projectId, hours, cost        | Finance, Projects, Cost Allocation, Reporting       |
+| `resource.assigned`                        | Resources         | assignmentId, resourceId, projectId, rate          | Finance, Cost Allocation, SiteOperations            |
+| `finance.invoice.issued`                   | Finance           | invoiceId, partyId, projectId, total               | Reporting, Notifications                            |
+| `finance.invoice.paid`                     | Finance           | invoiceId, partyId, amount                         | Commissions, Reporting, Notifications               |
+| `finance.payment.received`                 | Finance           | paymentId, invoiceId, amount                       | Reporting, Notifications                            |
+| `finance.project.budget-exceeded`          | Finance           | projectId, budget, actual                          | Notifications, Automation, Reporting                |
+| `cost-allocation.cost.allocated`           | Cost Allocation   | allocationEntryId, costCenterId, projectId, amount | Reporting, Finance                                  |
+| `commissions.commission.accrued`           | Commissions       | accrualId, beneficiaryId, sourceId, amount         | Finance, Reporting, Notifications                   |
+| `*` (cualquiera)                           | todos             | —                                                  | Audit, Reporting, Automation, Notifications         |
 
 > Cada consumidor traduce el evento ajeno en su propio modelo mediante un ACL; no
 > comparte tipos con el emisor más allá de este contrato.

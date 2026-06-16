@@ -73,7 +73,7 @@ Lo grande que **falta** y condiciona todo: **autenticación / RBAC / multi-tenan
 | Fase | Tema | Prioridad | Estado |
 |------|------|-----------|--------|
 | 0 | Fundación de plataforma | Crítica | En curso |
-| 1 | Core ERP/CRM operativo | Alta | Pendiente |
+| 1 | Core ERP operativo | Alta | Pendiente |
 | 2 | Operaciones avanzadas | Media-Alta | Parcial (Finance: Banks hecho) |
 | 3 | Automation & Intelligence | Alta-Baja | Parcial (notificaciones en curso) |
 | 4 | Analytics & Decision Layer | Media-Baja | Pendiente |
@@ -237,6 +237,20 @@ visible como chip en la página — la regla para elegir tarea es **prioridad al
 > como submódulos de CRM (1.2) y Budgeting (1.4). Cost Allocation es el único
 > alcance nuevo respecto a la estimación previa (+1 módulo complejo, +6 d).
 
+> **Reconciliación (2026-06-16) — modelado por subdominios reales.** El área
+> comercial deja de ser un `CRM` genérico y se descompone (split moderado) en
+> **Commercial** (leads/embudo/interacción + **Campaign**), **TenderManagement**
+> (licitación pública, ciclo propio) y **CommercialProposal** (oferta a cliente).
+> La **ejecución física de obra** sale de Projects a un contexto propio
+> **SiteOperations** (diario, certificaciones, mediciones, incidencias, calidad,
+> PRL). Se añaden **Resources** (maquinaria/vehículos como activos) y una
+> identidad fina compartida **`Party`** + roles por contexto (resuelve el dilema
+> cliente/proveedor/subcontrata/empleado sin god-entity). Alcance nuevo neto vs.
+> estimación previa: **SiteOperations** (+1 complejo, ~6 d), **Resources**,
+> **CommercialProposal** y **Campaign** (+3 medios, ~10,5 d); el split comercial y
+> `Party` son reorganización, no trabajo nuevo. Modelo completo en
+> [`bounded-contexts.md`](bounded-contexts.md).
+
 ## Estimación de calendario
 
 Dev en solitario, 8 h/día de lunes a viernes (~21 días laborables/mes), con
@@ -266,6 +280,35 @@ Tres factores que mueven mucho la cifra:
 
 > Si el proyecto tuviera plazo, saltar al plan Max 20× (~200 €) probablemente se
 > paga solo: quita el throttle y recorta ~1,5-2 meses de calendario.
+
+## UX & transversal (dominio construcción)
+
+Temas que cruzan módulos (no son un contexto): se aplican como NFR/UX sobre las
+fases, no como bloque aparte. Detalle de submódulos en `roadmap.ts` donde aplique.
+
+- **Mapa de obras** — geolocalización de proyectos (MapLibre) con estado superpuesto
+  (en curso / retrasado / finalizado); útil para comercial e ingeniería.
+- **Dashboards por persona** — comercial (pipeline, valor en juego, tasa de
+  conversión), ingeniero (estudios pendientes, coste por m²), financiero (cashflow
+  proyectado, alertas de liquidez).
+- **Configurador interactivo de pavimentos** — arrastrar capas (base/firme/rodadura),
+  coste total en vivo, export a PDF con memoria de cálculo (módulo 1.6).
+- **Kanban de licitaciones** — convocatoria → estudio → propuesta → adjudicación,
+  con alerta automática 72 h antes del cierre (TenderManagement).
+- **Exportación** — CSV / Excel / PDF en todas las tablas; plantillas de informe de
+  obra.
+- **i18n (es/en) desde el inicio** — términos del dominio traducidos
+  (`PublicTender` → "Licitación pública", `Certification` → "Certificación"); hoy la
+  superficie no está internacionalizada — es trabajo transversal (módulo 0.6).
+- **Accesibilidad WCAG 2.1 AA** — `aria-label`/`role`/contraste; hoy parcial vía
+  jsx-a11y + Sonar; elevar a objetivo explícito y verificar con axe/Lighthouse.
+- **Regresión visual** — Storybook + Chromatic sobre componentes clave
+  (`PavementConfigurator`, `PipelineVisualization`, `CostAllocationForm`); añade
+  tooling, evaluar coste/beneficio antes de adoptar.
+- **Feature flags en caliente** — activar/desactivar funciones sin recargar
+  (refina el módulo de Feature Flags).
+- **Mock de eventos del dominio en tests** — simular `commercial.opportunity.won` /
+  `proposal.accepted` en e2e para verificar la creación de obra.
 
 ## Cómo mantenerlo
 
