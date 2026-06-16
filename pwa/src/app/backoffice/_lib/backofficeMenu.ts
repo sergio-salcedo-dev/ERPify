@@ -40,6 +40,7 @@ import {
   LogOut,
   User,
   Wrench,
+  Info,
 } from "lucide-react";
 import { Routes } from "@/context/shared/domain/types/routes";
 import { bankRoutes } from "@/app/backoffice/banks/_lib/bankRoutes";
@@ -212,6 +213,7 @@ export const backofficeMenuGroups: NavGroup[] = [
   {
     label: "Help & Guides",
     items: [
+      { name: "About ERPify", icon: Info, path: `${BASE}/about` },
       { name: "How ERPify Works", icon: BookOpen, path: `${BASE}/docs/flow` },
       { name: "Product Roadmap", icon: Rocket, path: `${BASE}/roadmap` },
       { name: "Technical Explorer", icon: Code, path: `${BASE}/docs` },
