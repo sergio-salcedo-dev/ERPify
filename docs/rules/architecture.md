@@ -84,18 +84,12 @@ decision record and the per-dependency table: [`../adr/external-dependencies-in-
 ### Encapsulation
 - Keep logic internal to the context.
 
-### Domain–presentation separation (no display text in the inner layers)
+### Domain–presentation separation
 
-Presentation — display text, formatting, i18n — never lives in `Domain/` or in an `Application/`
-DTO/mapper. No `Domain` type (enum, value object, entity, domain service) exposes labels, UI formatting,
-i18n strings, or label-by-reflection; no `Application` mapper turns identity into human prose. Readable
-text belongs to the presentation layer, **keyed by the identity value**: the PWA (`Record<Key, label>` /
-i18n dictionary) or, for a backend that must localize (PDF, email, export), a catalog in
-`Application`/`Infrastructure` keyed by the value — never back in the `Domain` type. The line is
-display-text-OUT vs business-rules-IN: predicates, invariants, and state transitions (`isTerminal()`,
-`canTransitionTo()`) stay in; `format()`, `*Label()`, `humanReadable()`, `display*()`, `caption()`,
-localization, and `#[*Label*]` / `#[HumanReadable*]` metadata stay out. Enforced by the
-`DomainPresentationSeparationGateTest` arch-test (name-visible half) plus review (a localized string
-under a neutral name). Full decision record:
-[`../adr/domain-presentation-separation.md`](../adr/domain-presentation-separation.md), generalizing the
-enum case in [`../adr/domain-enums.md`](../adr/domain-enums.md).
+Presentation — display text, formatting, i18n — never lives in the inner layers: no `Domain/` type
+(enum, value object, entity) and no `Application/` DTO/mapper carries labels, UI formatting, or i18n.
+Readable text belongs to the presentation layer, keyed by the identity value. The line is
+display-text-OUT vs business-rules-IN — predicates/invariants/transitions (`isTerminal()`,
+`canTransitionTo()`) stay in. Enforced by the `DomainPresentationSeparationGateTest` arch-test plus
+review. Decision record:
+[`../adr/domain-presentation-separation.md`](../adr/domain-presentation-separation.md).
