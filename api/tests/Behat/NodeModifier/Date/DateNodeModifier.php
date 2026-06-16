@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Behat\NodeModifier\Date;
 
+use DateMalformedStringException;
 use DateTime;
 use DateTimeInterface;
 use Erpify\Tests\Behat\NodeModifier\AbstractNodeModifier;
@@ -58,12 +59,28 @@ class DateNodeModifier extends AbstractNodeModifier
             return null;
         }
 
-        return (new DateTime($value))->format($format);
+        // An unparseable string is not a date either: return null so the comparison fails cleanly,
+        // rather than letting DateTime's constructor throw and abort the run far from the cause.
+        try {
+            return (new DateTime($value))->format($format);
+        } catch (DateMalformedStringException) {
+            return null;
+        }
     }
 
     #[Override]
     public function compare(mixed $expected, mixed $value): bool
     {
-        return $this->getProcessedValue($expected, 'Y-m-d H:i') === $this->getProcessedValue($value, 'Y-m-d H:i');
+        // A null *input* means "absent"; two absent sides match. A null *result* from a non-null
+        // input means "unparseable" and can never equal anything — so guard against treating two
+        // unparseable sides as equal (the null === null false positive).
+        if (null === $expected || null === $value) {
+            return null === $expected && null === $value;
+        }
+
+        $processedExpected = $this->getProcessedValue($expected, 'Y-m-d H:i');
+
+        return null !== $processedExpected
+            && $processedExpected === $this->getProcessedValue($value, 'Y-m-d H:i');
     }
 }

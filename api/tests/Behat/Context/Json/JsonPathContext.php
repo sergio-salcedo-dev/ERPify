@@ -67,7 +67,7 @@ class JsonPathContext extends AbstractContext
         $nodeModifier = $this->nodeModifierLocator->getFor($nodeSelector, $expected);
 
         if ($nodeModifier instanceof NodeModifierInterface) {
-            $expected = $nodeModifier->getProcessedValue($expected);
+            $expected = $this->processExpectedOrFail($nodeModifier, $expected);
             $nodeSelector = $nodeModifier->getPathCleaned($nodeSelector);
         }
 
@@ -118,7 +118,7 @@ class JsonPathContext extends AbstractContext
         $nodeModifier = $this->nodeModifierLocator->getFor($nodeSelector, $expected);
 
         if ($nodeModifier instanceof NodeModifierInterface) {
-            $expected = $nodeModifier->getProcessedValue($expected);
+            $expected = $this->processExpectedOrFail($nodeModifier, $expected);
             $nodeSelector = $nodeModifier->getPathCleaned($nodeSelector);
         }
 
@@ -189,7 +189,7 @@ class JsonPathContext extends AbstractContext
         $nodeModifier = $this->nodeModifierLocator->getFor($nodeSelector, $expected);
 
         if ($nodeModifier instanceof NodeModifierInterface) {
-            $expected = $nodeModifier->getProcessedValue($expected);
+            $expected = $this->processExpectedOrFail($nodeModifier, $expected);
             $nodeSelector = $nodeModifier->getPathCleaned($nodeSelector);
         }
 
@@ -248,8 +248,8 @@ class JsonPathContext extends AbstractContext
             throw new UnexpectedValueException('NodeModifier not found');
         }
 
-        $from = $nodeModifier->getProcessedValue($expectedFrom);
-        $to = $nodeModifier->getProcessedValue($expectedTo);
+        $from = $this->processExpectedOrFail($nodeModifier, $expectedFrom);
+        $to = $this->processExpectedOrFail($nodeModifier, $expectedTo);
         $nodeSelector = $nodeModifier->getPathCleaned($nodeSelector);
         $values = $this->getValues($nodeSelector);
 
@@ -460,6 +460,32 @@ class JsonPathContext extends AbstractContext
                 ),
             );
         }
+    }
+
+    /**
+     * Apply a node modifier to an expected value, failing loudly when the modifier collapses a
+     * non-null input to null. A null result means the modifier could not interpret the value
+     * (e.g. a non-numeric amount); letting it through would compare as 0 or vacuously satisfy a
+     * numeric/negative assertion, silently masking a test-author error.
+     *
+     * The literal string 'null' is exempt: it is an explicit null sentinel a modifier may map to
+     * null on purpose (e.g. AmountNodeModifier), so it is a legitimate expected value, not garbage.
+     *
+     * @throws JsonException
+     */
+    private function processExpectedOrFail(NodeModifierInterface $nodeModifier, mixed $expected): mixed
+    {
+        $processed = $nodeModifier->getProcessedValue($expected);
+
+        if (null === $processed && null !== $expected && 'null' !== $expected) {
+            self::fail(\sprintf(
+                'The "%s" modifier could not process the expected value %s.',
+                $nodeModifier->getModifier(),
+                $this->scalarToString($expected),
+            ));
+        }
+
+        return $processed;
     }
 
     /** @throws JsonException */
