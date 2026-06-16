@@ -7,7 +7,7 @@ namespace Erpify\Tests\Unit\Shared\Infrastructure\Validator;
 use BackedEnum;
 use Erpify\Shared\Infrastructure\Validator\EnumType;
 use Erpify\Shared\Infrastructure\Validator\EnumTypeValidator;
-use Erpify\Tests\Unit\Shared\Infrastructure\Validator\Fixtures\FixtureLabeledEnum;
+use Erpify\Tests\Unit\Shared\Infrastructure\Validator\Fixtures\FixtureOtherStringEnum;
 use Erpify\Tests\Unit\Shared\Infrastructure\Validator\Fixtures\FixtureStringEnum;
 use Override;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -68,7 +68,7 @@ final class EnumTypeValidatorTest extends ConstraintValidatorTestCase
         yield 'null without allowNull' => [null, new EnumType(FixtureStringEnum::class), '"a", "b", "c"'];
         yield 'raw backing scalar' => ['a', new EnumType(FixtureStringEnum::class), '"a", "b", "c"'];
         yield 'instance of another enum' => [
-            FixtureLabeledEnum::ONE,
+            FixtureOtherStringEnum::ONE,
             new EnumType(FixtureStringEnum::class),
             '"a", "b", "c"',
         ];
@@ -76,16 +76,6 @@ final class EnumTypeValidatorTest extends ConstraintValidatorTestCase
             FixtureStringEnum::C,
             new EnumType(FixtureStringEnum::class, cases: [FixtureStringEnum::A, FixtureStringEnum::B]),
             '"a", "b"',
-        ];
-        yield 'human-readable labels listed' => [
-            'nope',
-            new EnumType(FixtureLabeledEnum::class),
-            '"one", "two", "three"',
-        ];
-        yield 'human-readable subset lists labels' => [
-            FixtureLabeledEnum::THREE,
-            new EnumType(FixtureLabeledEnum::class, cases: [FixtureLabeledEnum::ONE, FixtureLabeledEnum::TWO]),
-            '"one", "two"',
         ];
     }
 

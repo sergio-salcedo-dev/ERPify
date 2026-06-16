@@ -8,14 +8,12 @@ use DateTime;
 use Erpify\Tests\Behat\Support\Tool\TypeHint\TypeHintValueResolver;
 use Erpify\Tests\Unit\Behat\Support\Tool\TypeHint\Fixtures\StringValueObject;
 use Erpify\Tests\Unit\Behat\Support\Tool\TypeHint\Fixtures\ThrowingValueObject;
-use Erpify\Tests\Unit\Shared\Domain\Enum\Abstraction\Fixtures\FullyLabeledIntEnum;
 use Generator;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
-use stdClass;
 
 /**
  * @internal
@@ -39,21 +37,7 @@ final class TypeHintValueResolverTest extends TestCase
      */
     public static function provideItResolvesValueTypePairToTheExpectedResultCases(): iterable
     {
-        yield 'null literal short-circuits any type' => ['null', FullyLabeledIntEnum::class, null];
-
-        yield 'enum label resolves to its case' => ['first', FullyLabeledIntEnum::class, FullyLabeledIntEnum::FIRST];
-
-        yield 'enum label without a match falls back to the raw label' => [
-            'unknown',
-            FullyLabeledIntEnum::class,
-            'unknown',
-        ];
-
-        yield 'enum label array resolves item by item preserving keys' => [
-            ['a' => 'first', 'b' => 'second', 'c' => 'unknown'],
-            FullyLabeledIntEnum::class,
-            ['a' => FullyLabeledIntEnum::FIRST, 'b' => FullyLabeledIntEnum::SECOND, 'c' => 'unknown'],
-        ];
+        yield 'null literal short-circuits any type' => ['null', StringValueObject::class, null];
 
         yield 'no type passes the raw value through' => ['raw', null, 'raw'];
 
@@ -62,14 +46,6 @@ final class TypeHintValueResolverTest extends TestCase
         // null is "absent", not malformed: it passes through unchanged rather than being rejected
         // like a non-scalar array/object — consistent with how the date node modifier treats null.
         yield 'absent value passes through the date hint' => [null, 'date', null];
-
-        yield 'absent value passes through an enum hint' => [null, FullyLabeledIntEnum::class, null];
-
-        yield 'absent enum label element passes through preserving keys' => [
-            ['first', null],
-            FullyLabeledIntEnum::class,
-            [FullyLabeledIntEnum::FIRST, null],
-        ];
     }
 
     #[Test]
@@ -112,25 +88,5 @@ final class TypeHintValueResolverTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
 
         $resolver->resolve(['not', 'scalar'], 'date');
-    }
-
-    #[Test]
-    public function itRejectsANonScalarEnumValue(): void
-    {
-        $resolver = new TypeHintValueResolver();
-
-        $this->expectException(InvalidArgumentException::class);
-
-        $resolver->resolve(new stdClass(), FullyLabeledIntEnum::class);
-    }
-
-    #[Test]
-    public function itRejectsANonScalarEnumLabelElement(): void
-    {
-        $resolver = new TypeHintValueResolver();
-
-        $this->expectException(InvalidArgumentException::class);
-
-        $resolver->resolve(['first', ['nested']], FullyLabeledIntEnum::class);
     }
 }

@@ -16,7 +16,7 @@ Feature: List the accounts of a bank
     And the JSON node "data[0].bic" should be equal to "DEUTDEFFXXX"
     And the JSON node "data[0].alias" should be equal to "Globex Treasury"
     And the JSON node "data[0].currency" should be equal to "EUR"
-    And the JSON node "data[0].status" should be equal to "inactive"
+    And the JSON node "data[0].status" should be equal to "INACTIVE"
     And the JSON node "pagination" should have 4 elements
     And the JSON node "pagination.hasNext" should be false
     And the JSON node "pagination.hasPrev" should be false
@@ -25,14 +25,14 @@ Feature: List the accounts of a bank
     And the JSON node "pagination.links.prev" should be null
     And 2 requests got executed only for doctrine connection "default"
 
-  Scenario: The status is serialized as its human-readable label and absent optional fields are null
+  Scenario: The status is serialized as its identity wire value and absent optional fields are null
     When I send a "GET" request to "/backoffice/banks/11111111-1111-7000-8000-000000000002/accounts?limit=100"
     Then the response status code should be 200
     And the JSON node "data" should have 1 elements
     And the JSON node "data[0].holderName" should be equal to "Initech LLC"
     And the JSON node "data[0].iban" should be equal to "FR1420041010050500013M02606"
     And the JSON node "data[0].currency" should be equal to "EUR"
-    And the JSON node "data[0].status" should be equal to "active"
+    And the JSON node "data[0].status" should be equal to "ACTIVE"
     And the JSON node "data[0].bic" should be null
     And the JSON node "data[0].alias" should be null
     And 2 requests got executed only for doctrine connection "default"

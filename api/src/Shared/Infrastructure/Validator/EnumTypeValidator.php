@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Erpify\Shared\Infrastructure\Validator;
 
 use BackedEnum;
-use Erpify\Shared\Domain\Enum\Abstraction\HumanReadableIntEnumInterface;
 use Override;
 use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\ConstraintValidator;
@@ -51,37 +50,11 @@ final class EnumTypeValidator extends ConstraintValidator
 
     private function formatChoices(EnumType $constraint): string
     {
-        if ([] !== $constraint->cases) {
-            return $this->formatValues($this->labelsFromCases($constraint->cases));
-        }
-
-        $enumClass = $constraint->enumClass;
-
-        if (\is_a($enumClass, HumanReadableIntEnumInterface::class, true)) {
-            return $this->formatValues($enumClass::getLabels());
-        }
+        $cases = [] !== $constraint->cases ? $constraint->cases : $constraint->enumClass::cases();
 
         return $this->formatValues(\array_map(
             static fn (BackedEnum $case): string => (string) $case->value,
-            $enumClass::cases(),
+            $cases,
         ));
-    }
-
-    /**
-     * @param list<BackedEnum> $cases
-     *
-     * @return list<string>
-     */
-    private function labelsFromCases(array $cases): array
-    {
-        $labels = [];
-
-        foreach ($cases as $case) {
-            $labels[] = $case instanceof HumanReadableIntEnumInterface
-                ? $case->getLabel()
-                : (string) $case->value;
-        }
-
-        return $labels;
     }
 }
