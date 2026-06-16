@@ -24,8 +24,11 @@ boundary it builds on is enforced by `make php.lint.event-bus`.
 | 4 | **Audit / observability subscriber** | `<Effect>On<X>` | `*/Infrastructure/Audit/` | **Yes** — `#[AsMessageHandler]`; message is **not** a `DomainEvent` | `RecordAuditLogOnBankAccountsViewed` |
 | 5 | **Scheduled / maintenance handler** | `<Verb><Noun>Handler` | `Shared/Infrastructure/Messenger/Maintenance/` | **Yes** — reacts to a Scheduler tick / command-style message (1:1) | `PruneHandledDomainEventsHandler` |
 
-- Category 3's `On<Event>` may name a concrete event or a change supertype — `OnBankChanged` is honest
-  because `AbstractBankChangedDomainEvent` exists, so one subscriber legibly covers created/updated/deleted.
+- Category 3's `On<Event>` may name a concrete event or the change umbrella a subscriber covers —
+  `OnBankChanged` is honest because one class carries an `#[AsMessageHandler]` method per lifecycle event
+  (`onBankCreated`/`onBankUpdated`/`onBankDeleted`), legibly grouping the reaction instead of splitting
+  into three classes. The `AbstractBankChangedDomainEvent` supertype groups the created/updated pair
+  (delete extends `DomainEvent` directly), letting those two collapse to one method where wanted.
 - Category 4's producer is an explicit, reviewed exception in `api/.event-dispatch-allowlist`
   (`BankAccountSearcher` → `BankAccountsViewedAuditEvent`): best-effort, must **not** ride the
   transactional `EventBus`. It migrates to an `AuditLogger` port when that subsystem is built.
