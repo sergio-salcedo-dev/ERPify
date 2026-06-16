@@ -54,7 +54,7 @@ make ci                             # Full CI (ci.quality + ci.test).
 
 ### Worktrees
 
-**Hard rule — every new feature (or any multi-edit task) starts in a worktree**, never in the primary `main` checkout (a live shared surface where concurrent git ops can wipe uncommitted/branch work). Create it *first*. `/feature <scope> <slug>` wraps the mechanics; fixes/chores follow the same rule with their branch prefix. Per-worktree stacks are isolated — `make/config.mk` derives `COMPOSE_PROJECT_NAME` per checkout (primary keeps bare `erpify` with fixed ports `80/443/15432/8025`; a worktree gets `erpify-<slug>` with ephemeral host ports), so they never collide. Run `make` targets from inside the worktree and they exec into *that* stack (checks/tests see the worktree's code, over the internal network — random host ports don't matter).
+**Hard rule — every new feature (or any multi-edit task) starts in a worktree**, never in the primary `main` checkout (a live shared surface where concurrent git ops can wipe uncommitted/branch work). Once authorized (see *Confirm branch creation & topology* below), create it *first*. `/feature <scope> <slug>` wraps the mechanics; fixes/chores follow the same rule with their branch prefix. Per-worktree stacks are isolated — `make/config.mk` derives `COMPOSE_PROJECT_NAME` per checkout (primary keeps bare `erpify` with fixed ports `80/443/15432/8025`; a worktree gets `erpify-<slug>` with ephemeral host ports), so they never collide. Run `make` targets from inside the worktree and they exec into *that* stack (checks/tests see the worktree's code, over the internal network — random host ports don't matter).
 
 - **Create** — `make worktree.create BRANCH=<branch>`: linked worktree under `.claude/worktrees/`, new branch off `BASE=` (default `main`), random 4-char suffix on branch+dir+project so re-running is always safe. `NAME=<dir-base>` overrides the dir slug; `START=true` also runs `make app.dev`. Seeds `bmad-*` skills automatically.
 - **Remove** — `make worktree.remove NAME=<dir>` (stack + volumes + worktree + branch; **local only**). `make worktree.remove-all`; `make worktree.list` for `NAME` values. `FORCE=true` discards a dirty worktree / deletes a not-fully-merged branch (squash-merged PRs look unmerged → need `FORCE=true`). On `Permission denied` (root-owned bind mounts: `pwa/.next`, `node_modules`, `api/var`) run `make worktree.chown` (sudo, dev/test) and retry.
@@ -157,6 +157,14 @@ Do **not** spawn subagents for tasks that share state mid-flight — two agents 
 
 - **Never force-push `main`** — no `git push --force` / `--force-with-lease` / `--force-if-includes` to `main`, ever.
 - **Never merge into `main` without explicit per-merge permission from the user** — neither a local `git merge`/`git rebase` onto `main` nor merging a PR (web UI, `gh pr merge`, MCP). Prepare the branch/PR and stop. Approval for one PR/branch does not carry over to the next.
+
+### Confirm branch creation & topology (hard rule for agents)
+
+- **Get explicit authorization before creating a new branch**, and before **splitting one task across multiple branches** (e.g. a `docs/` branch plus a separate `feat/` branch for related work). Don't decide branch topology unilaterally.
+- Propose a branch plan (name, base, how the work is sliced) and wait for the user's OK before running `git checkout -b` / `make worktree.create`.
+- "Edit on a branch" approval is **not** a blanket OK to spin up *additional* branches later — re-confirm each new branch.
+- Default to **one branch / one PR** unless the user asks to split.
+- This is a confirmation gate on the *number/topology* of branches; it does not loosen the worktree rule (feature/multi-edit work still belongs in an isolated worktree — just confirm the plan before creating it) or "Protected `main`" above.
 
 ### Branch naming
 
