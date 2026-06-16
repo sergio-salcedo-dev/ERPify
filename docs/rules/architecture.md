@@ -83,3 +83,13 @@ decision record and the per-dependency table: [`../adr/external-dependencies-in-
 
 ### Encapsulation
 - Keep logic internal to the context.
+
+### Domain–presentation separation
+
+Presentation — display text, formatting, i18n — never lives in the inner layers: no `Domain/` type
+(enum, value object, entity) and no `Application/` DTO/mapper carries labels, UI formatting, or i18n.
+Readable text belongs to the presentation layer, keyed by the identity value. The line is
+display-text-OUT vs business-rules-IN — predicates/invariants/transitions (`isTerminal()`,
+`canTransitionTo()`) stay in. Enforced by the `DomainPresentationSeparationGateTest` arch-test plus
+review. Decision record:
+[`../adr/domain-presentation-separation.md`](../adr/domain-presentation-separation.md).

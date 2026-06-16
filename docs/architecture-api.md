@@ -75,6 +75,8 @@ Golden rule: *contexts reference each other's identities and react to each other
 | `Application/`    | Use cases (command/query handlers), DTOs, orchestration, validators over DTOs                                                                            | Infrastructure implementations (only their interfaces) |
 | `Infrastructure/` | Doctrine mappings, repository implementations, Symfony controllers, Messenger handlers, Mercure publishers, Flysystem adapters, external-service clients | — (outermost layer)                                    |
 
+**No presentation in the inner layers.** No `Domain/` type (enum, value object, entity) and no `Application/` DTO/mapper carries display text, formatting, or i18n — that is presentation, owned by the presentation layer keyed by the identity value (the PWA `Record<Key, label>` / i18n dictionary, or an `Application`/`Infrastructure` localizing catalog). A domain enum is the canonical case: it carries identity and business rules (`isTerminal()`, transitions), never labels; its `->value` (`SCREAMING_SNAKE`) **is** the wire contract the API serializes, and enum backing is per-aggregate (string-backed by default, int-backed only for hot-path aggregates). Enforced by the `DomainPresentationSeparationGateTest` arch-test (the name-visible half) plus review. Decision records: [`adr/domain-presentation-separation.md`](./adr/domain-presentation-separation.md) (general rule) and [`adr/domain-enums.md`](./adr/domain-enums.md) (the enum case).
+
 ## Data architecture
 
 - **Primary store**: PostgreSQL 18 via Doctrine ORM.

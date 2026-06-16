@@ -14,7 +14,7 @@ const primitives = {
   bic: "CAIXESBBXXX",
   alias: "Payroll",
   currency: "EUR",
-  status: "active",
+  status: "ACTIVE",
 };
 
 // Cursor-only envelope v2 (PR3): directional flags, optional count, verbatim links.
@@ -99,7 +99,7 @@ describe("ApiBankAccountRepository.search", () => {
     expect(page.accounts[0]).toBeInstanceOf(BankAccount);
     expect(page.accounts[0].holderName).toBe("Acme Corp");
     expect(page.accounts[0].iban).toBe("ES9121000418450200051332");
-    expect(page.accounts[0].status).toBe("active");
+    expect(page.accounts[0].status).toBe("ACTIVE");
     expect(page.hasNext).toBe(true);
     expect(page.hasPrev).toBe(true);
     expect(page.count).toBe(42);

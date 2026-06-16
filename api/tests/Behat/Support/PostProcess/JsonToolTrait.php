@@ -7,7 +7,6 @@ namespace Erpify\Tests\Behat\Support\PostProcess;
 use BackedEnum;
 use DateMalformedStringException;
 use DateTime;
-use Erpify\Shared\Domain\Enum\Abstraction\HumanReadableIntEnumInterface;
 use Erpify\Tests\Behat\Support\Json\Json;
 use Erpify\Tests\Behat\Support\Json\JsonInspector;
 use Erpify\Tests\Behat\Support\Json\JsonSchema;
@@ -61,10 +60,6 @@ trait JsonToolTrait
     public function jsonPropertyShouldBeEqualTo(Json $json, string $property, mixed $expectedValue): void
     {
         $expectedValue = $this->propertyPostProcessValue($property, $expectedValue);
-
-        if ($expectedValue instanceof HumanReadableIntEnumInterface) {
-            $expectedValue = $expectedValue->getLabel();
-        }
 
         if ($expectedValue instanceof BackedEnum) {
             $expectedValue = $expectedValue->value;

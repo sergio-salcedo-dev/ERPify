@@ -174,6 +174,46 @@ For a deeper, machine-generated tree, see [`source-tree-analysis.md`](source-tre
 
 See [`../api/docs/adding-endpoints.md`](../api/docs/adding-endpoints.md) for the search-endpoint walkthrough.
 
+### New domain status / closed-set enum
+
+The pattern for any status (`UserStatus`, `ClientStatus`, `BudgetStatus`, …) or other closed set. Why: [`adr/domain-enums.md`](adr/domain-enums.md) (enum = identity) + [`adr/domain-presentation-separation.md`](adr/domain-presentation-separation.md) (no display text inside). Enforced by `DomainPresentationSeparationGateTest`.
+
+1. **Pick the backing first (per-aggregate).** Default **string-backed**; `int`-backed only for hot-path / high-cardinality aggregates under real volume/write/index pressure. It is a conscious call — **stop and present it** (root [`../CLAUDE.md`](../CLAUDE.md), "Per-aggregate persistence strategy").
+2. **Domain enum** in `<Module>/Domain/Enum/` — pure identity, `value == name` in `SCREAMING_SNAKE`. Predicates/transitions are allowed; display text is not:
+
+   ```php
+   enum BudgetStatus: string
+   {
+       case DRAFT = 'DRAFT';
+       case APPROVED = 'APPROVED';
+       case REJECTED = 'REJECTED';
+
+       public function isTerminal(): bool { return self::REJECTED === $this; } // OK; no getLabel()/format()
+   }
+   ```
+
+3. **Entity mapping** — `text` column, value hydrated to the enum:
+
+   ```php
+   #[ORM\Column(type: Types::TEXT, enumType: BudgetStatus::class)]
+   #[EnumType(BudgetStatus::class)]
+   private BudgetStatus $status,
+   ```
+
+   Use `Types::TEXT`, **not** `Types::STRING`/`varchar(n)`: the enum is the constraint, there is no length semantics, and `varchar`'s metadata would drift from the column (`doctrine:schema:validate` fails). Reserve `varchar(n)` for a real domain limit (cf. `iban`/`bic`/`currency`).
+4. **Serialize `->value`, never a label.** Exactly one accessor emits the wire field — `#[Groups([self::GROUP_READ])]` + `#[SerializedName('status')]` on `getStatus(): BudgetStatus` (Symfony emits `->value` for a `BackedEnum`). Output: `{ "status": "DRAFT" }`.
+5. **Migration** — `make db.diff` yields a `text` column for a new field. For an `int`→`string` swap of an existing column, hand-write it (`ALTER … USING CASE …`; `down()` fails loud on an unexpected value) — see `api/migrations/2026/Version20260616120000.php`.
+6. **PWA contract** — TS union of the wire values + presentation maps keyed by value, in the table/component (never in the API/domain):
+
+   ```ts
+   type BudgetStatus = "DRAFT" | "APPROVED" | "REJECTED";
+   const STATUS_LABEL: Record<BudgetStatus, string> = { DRAFT: "Draft", APPROVED: "Approved", REJECTED: "Rejected" };
+   const STATUS_VARIANT: Record<BudgetStatus, StatusBadgeVariant> = { DRAFT: "neutral", APPROVED: "success", REJECTED: "warning" };
+   ```
+
+   Labels live in the PWA (a `Record` now, an i18n dictionary later). Validate the incoming value against the closed set at the adapter boundary.
+7. **Gates** — `make php.stan`, `make php.quality` (runs the gate + `schema:validate`), `make pwa.quality`.
+
 ### New async job
 
 1. Define a Messenger message DTO under `<Module>/Application/` (or `Infrastructure/Messaging/`).

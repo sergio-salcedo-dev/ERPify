@@ -9,7 +9,7 @@ const primitives = {
   bic: "CAIXESBBXXX",
   alias: "Payroll",
   currency: "EUR",
-  status: "active",
+  status: "ACTIVE",
 };
 
 const envelope = {

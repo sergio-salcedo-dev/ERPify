@@ -66,7 +66,7 @@ final class BankAccount extends AggregateRoot
         #[EnumType(Currency::class)]
         #[Groups([self::GROUP_READ])]
         private Currency $currency,
-        #[ORM\Column(type: Types::SMALLINT, enumType: BankAccountStatus::class)]
+        #[ORM\Column(type: Types::TEXT, enumType: BankAccountStatus::class)]
         #[EnumType(BankAccountStatus::class)]
         private BankAccountStatus $status,
     ) {
@@ -129,21 +129,16 @@ final class BankAccount extends AggregateRoot
         return $this->bic;
     }
 
-    public function getStatus(): BankAccountStatus
-    {
-        return $this->status;
-    }
-
     /**
-     * Wire projection of {@see $status}: the human-readable label (`active`/`inactive`/`closed`)
-     * under the `status` key, never the raw backing int. The enum property itself carries no
-     * serializer group so only this accessor reaches the payload.
+     * Serializes as `->value` (`ACTIVE`/`INACTIVE`/`CLOSED`) under the `status` key — the wire
+     * contract is the enum identity, never a display label. The property carries no serializer
+     * group, so this accessor is the single source of the `status` field.
      */
     #[Groups([self::GROUP_READ])]
     #[SerializedName('status')]
-    public function getStatusLabel(): string
+    public function getStatus(): BankAccountStatus
     {
-        return $this->status->getLabel();
+        return $this->status;
     }
 
     private static function canonicalizeIban(string $iban): string

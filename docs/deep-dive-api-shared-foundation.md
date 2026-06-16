@@ -124,15 +124,6 @@ api/src/Shared/
 - **LOC:** 49 — `createdAt`/`updatedAt` audit trait.
 - **Imports (FRAMEWORK LEAK):** Same as `Identifiable.php` plus `DateTimeNormalizer` (forces ATOM / ISO8601 wire format).
 
-#### `api/src/Shared/Domain/Enum/Abstraction/HumanReadableIntEnumInterface.php`
-- **LOC:** 21 — extends `\BackedEnum`. Methods: `getLabel()`, `getLabelOrFail()`, `static getLabels()`, `static fromLabel()`, `static fromLabelOrFail()`.
-
-#### `api/src/Shared/Domain/Enum/Abstraction/HumanReadableIntEnumTrait.php`
-- **LOC:** 133 — implements the interface via reflection + `SplObjectStorage` cache (lazy on first call). Utilities: `getKeysFromValues()`, `getValues()`, `getValuesNotIn()`. `*OrFail` variants throw `\InvalidArgumentException`.
-
-#### `api/src/Shared/Domain/Enum/Attribute/HumanReadableIntEnumValue.php`
-- **LOC:** 16 — `Attribute::TARGET_CLASS_CONSTANT` marker carrying a `?string $label`.
-
 #### `api/src/Shared/Domain/Event/DomainEvent.php`
 - **LOC:** 50 — abstract base. Constructor takes `aggregateId`, `occurredOn` (readonly); `eventId` is no longer a parameter — it is minted in the constructor via `Shared/Domain/Uuid/Uuid::generate()` (UUID v7). Abstract: `static eventName(): string`, `toPrimitives(): array`. Helper: `protected static now(): DateTimeImmutable`.
 - **Subclassed by:** `Backoffice/Bank/Domain/Event/BankCreatedDomainEvent`, `BankUpdatedDomainEvent` (and future events).
@@ -493,7 +484,6 @@ StoredObjectOrphanCleaner::cleanupAfterRemoval($hash)
 - `Domain/Aggregate/AggregateRoot.php` (depends only on `DateTimeImmutable` + `DomainEvent` + the two leaky traits).
 - `Domain/Search/NavigationDirection.php`, `PaginationMode.php`.
 - `Domain/Uuid/Uuid.php`.
-- `Domain/Enum/Attribute/HumanReadableIntEnumValue.php`.
 - `Application/UseCase/Result.php`, `Application/Problem/RedactionDenylist.php`.
 - `Infrastructure/Persistence/QueryParam.php`, `SortDirection.php`.
 - `Infrastructure/Persistence/Doctrine/Search/PaginatorConfig.php`.

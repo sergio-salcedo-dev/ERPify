@@ -16,7 +16,7 @@ const PAGE: BankAccountSearchPage = {
       bic: null,
       alias: null,
       currency: "EUR",
-      status: "active",
+      status: "ACTIVE",
     }),
   ],
   hasNext: false,

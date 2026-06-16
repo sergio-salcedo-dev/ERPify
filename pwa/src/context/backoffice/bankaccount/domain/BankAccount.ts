@@ -6,10 +6,12 @@
 export type BankAccountCurrency = "EUR";
 
 /**
- * Account lifecycle as the human-readable label the API emits under `status`
- * (the enum's label, never its backing int).
+ * Account lifecycle as the API emits it under `status`: the enum's identity
+ * value in SCREAMING_SNAKE (`BankAccountStatus->value`), never a display label.
+ * Human-readable text is the presentation layer's job (see `STATUS_LABEL` in
+ * `BankAccountsTable`).
  */
-export type BankAccountStatus = "active" | "inactive" | "closed";
+export type BankAccountStatus = "ACTIVE" | "INACTIVE" | "CLOSED";
 
 export interface BankAccountPrimitives {
   id: string;
