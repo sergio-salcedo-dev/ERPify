@@ -10,10 +10,12 @@ use Erpify\Tests\Unit\Behat\Support\Tool\TypeHint\Fixtures\StringValueObject;
 use Erpify\Tests\Unit\Behat\Support\Tool\TypeHint\Fixtures\ThrowingValueObject;
 use Erpify\Tests\Unit\Shared\Domain\Enum\Abstraction\Fixtures\FullyLabeledIntEnum;
 use Generator;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use stdClass;
 
 /**
  * @internal
@@ -56,6 +58,18 @@ final class TypeHintValueResolverTest extends TestCase
         yield 'no type passes the raw value through' => ['raw', null, 'raw'];
 
         yield 'builtin type passes the raw value through' => ['raw', 'string', 'raw'];
+
+        // null is "absent", not malformed: it passes through unchanged rather than being rejected
+        // like a non-scalar array/object — consistent with how the date node modifier treats null.
+        yield 'absent value passes through the date hint' => [null, 'date', null];
+
+        yield 'absent value passes through an enum hint' => [null, FullyLabeledIntEnum::class, null];
+
+        yield 'absent enum label element passes through preserving keys' => [
+            ['first', null],
+            FullyLabeledIntEnum::class,
+            [FullyLabeledIntEnum::FIRST, null],
+        ];
     }
 
     #[Test]
@@ -88,5 +102,35 @@ final class TypeHintValueResolverTest extends TestCase
         $resolved = $resolver->resolve('rejected', ThrowingValueObject::class);
 
         $this->assertSame('rejected', $resolved);
+    }
+
+    #[Test]
+    public function itRejectsANonScalarValueForTheDateHint(): void
+    {
+        $resolver = new TypeHintValueResolver();
+
+        $this->expectException(InvalidArgumentException::class);
+
+        $resolver->resolve(['not', 'scalar'], 'date');
+    }
+
+    #[Test]
+    public function itRejectsANonScalarEnumValue(): void
+    {
+        $resolver = new TypeHintValueResolver();
+
+        $this->expectException(InvalidArgumentException::class);
+
+        $resolver->resolve(new stdClass(), FullyLabeledIntEnum::class);
+    }
+
+    #[Test]
+    public function itRejectsANonScalarEnumLabelElement(): void
+    {
+        $resolver = new TypeHintValueResolver();
+
+        $this->expectException(InvalidArgumentException::class);
+
+        $resolver->resolve(['first', ['nested']], FullyLabeledIntEnum::class);
     }
 }

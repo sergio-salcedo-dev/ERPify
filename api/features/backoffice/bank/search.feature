@@ -38,6 +38,21 @@ Feature: Search banks
     And the JSON node "data[0].accountCount" should be equal to the number 1
     And 2 requests got executed only for doctrine connection "default"
 
+  # The negative/numeric "the JSON nodes matching ... should "<operator>" value ..." assertions all
+  # route through processExpectedOrFail. The operator is a quoted placeholder, so multi-word
+  # operators (not be equal to, not contain, be greater than, be between) match. The "null" sentinel
+  # (NullNodeModifier maps "null" -> a real null) is honoured rather than rejected as unprocessable;
+  # the amount modifier exercises the numeric/between branches. JPMorgan has name="JPMorgan Chase"
+  # (non-null) and accountCount=1.
+  Scenario: Negative and numeric node-modifier assertions route through processExpectedOrFail
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=shortName&filters[0][operator]=in&filters[0][value][]=JPM&limit=100"
+    Then the response status code should be 200
+    And the JSON node "data" should have 1 elements
+    And the JSON nodes matching "data[0].name::null" should "not be equal to" value "null"
+    And the JSON nodes matching "data[0].name::null" should "not contain" value "null"
+    And the JSON nodes matching "data[0].accountCount::amount" should "be greater than" value "0"
+    And the JSON nodes matching "data[0].accountCount::amount" should "be between" value "[0, 5]"
+
   # Default limit is 25 (not the whole dataset): a full first page flags hasNext and exposes a next
   # link but no prev. Pins the wire default after the flip away from the unbounded page-based default.
   Scenario: The default page returns 25 banks with a forward-only affordance
