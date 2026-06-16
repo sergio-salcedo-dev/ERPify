@@ -20,6 +20,7 @@ Feature: Delete a bank
     And The outbox event property "bankId" should be equal to "de1e7e00-0000-7000-8000-000000000001"
     And I consume 1 message from the "async" transport
     And the command should succeed
+    And the output should contain "handled successfully (acknowledging to transport)"
     And 0 outbox events were created on the queue "async"
     # The delete handler skips email; only the realtime delete update is published.
     And 0 notification emails were sent

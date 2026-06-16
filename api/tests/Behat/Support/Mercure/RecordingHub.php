@@ -16,9 +16,8 @@ use Symfony\Component\Mercure\Update;
  * unchanged when a bank event is consumed — without it the publisher would reach the live hub and
  * hang ~5s in Behat, gating every consume-based assertion.
  *
- * State is static so the captured updates survive whichever container the publisher resolves from
- * (the consume worker boots its own command application) and stay readable from
- * {@see \Erpify\Tests\Behat\Context\MercureContext}.
+ * State is static so {@see \Erpify\Tests\Behat\Context\MercureContext} reads the captured updates
+ * directly, regardless of which container instance the publisher resolves the hub from.
  */
 final class RecordingHub implements HubInterface
 {

@@ -329,6 +329,18 @@ final class OutboxContext extends AbstractContext
      */
     private function messagesOnQueue(string $queueName): array
     {
+        // Fail loudly on a queue that is not an inspectable in-memory outbox queue (a typo, or `sync`):
+        // without this it would silently count 0, so `0 outbox events … on queue "<typo>"` would pass.
+        self::assertContains(
+            $queueName,
+            self::INSPECTABLE_QUEUES,
+            \sprintf(
+                'Queue "%s" is not an inspectable outbox queue; expected one of: %s',
+                $queueName,
+                \implode(', ', self::INSPECTABLE_QUEUES),
+            ),
+        );
+
         return \array_values(\array_filter(
             $this->messages(),
             static fn (array $message): bool => $message['queue'] === $queueName,
