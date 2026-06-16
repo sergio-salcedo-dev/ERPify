@@ -176,6 +176,21 @@ export function useResourceList<T extends { id: string }, F, TInput>(
     setActiveLink(link);
   }, []);
 
+  // Cursor navigation lives here, not at each call site: resolving the prev/next
+  // envelope link and following it is derived knowledge the hook already owns
+  // (it holds `pagination` and `navigateTo`). Consumers get ready affordances;
+  // the per-entity pagination components stay pure representation.
+  const hasPrev = pagination?.hasPrev ?? false;
+  const hasNext = pagination?.hasNext ?? false;
+  const goPrev = useCallback(() => {
+    const link = pagination?.links.prev;
+    if (link) navigateTo(link);
+  }, [pagination, navigateTo]);
+  const goNext = useCallback(() => {
+    const link = pagination?.links.next;
+    if (link) navigateTo(link);
+  }, [pagination, navigateTo]);
+
   // Recover from an emptied page beyond the first: follow a remaining step so
   // the user lands on real rows instead of the filtered-to-zero panel.
   useEffect(() => {
@@ -465,6 +480,7 @@ export function useResourceList<T extends { id: string }, F, TInput>(
     state: boundaryState,
     items,
     pagination,
+    paginationActions: { hasPrev, hasNext, goPrev, goNext },
     problem,
     selectedIds,
     setSelectedIds,
