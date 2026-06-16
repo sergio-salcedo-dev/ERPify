@@ -23,7 +23,7 @@ use Symfony\Component\Messenger\Attribute\AsMessageHandler;
  * Only the public {@see BankCreatedDomainEvent::toPrimitives()} shape leaves
  * here — logo / stored-object metadata is intentionally dropped.
  */
-final readonly class BankRealtimePublisherHandler
+final readonly class RefreshRealtimeOnBankChanged
 {
     public function __construct(
         private HubInterface $hub,

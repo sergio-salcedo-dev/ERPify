@@ -2,7 +2,8 @@
 
 > **Estado:** aceptado · **Fecha:** 2026-06-14 · **Ámbito:** `api/src/Shared/{Domain,Infrastructure}/Bus/Event`
 > + casos de uso de escritura de `Backoffice/Bank/Application` + gate `php.lint.event-bus`
-> + `config/packages/messenger.yaml` (nombrado de buses, D6).
+> + `config/packages/messenger.yaml` (nombrado de buses, D6)
+> + [`../rules/cqrs-naming.md`](../rules/cqrs-naming.md) (estándar de nombrado «CQRS-shaped pre-bus», D5).
 >
 > Contexto temporal: la aplicación **no está en producción**, así que cerrar la fuga de eventos de
 > este ADR no arrastra recuperación de datos históricos. El cambio es **corrección del modelo de
@@ -105,14 +106,48 @@ introducir ya un `AuditLogger` para evitar la allowlist (abre una épica congela
 Descartado gate semántico sobre el tipo despachado (`DomainEvent`) en vez del importado (frágil de
 detectar estáticamente).
 
-### D5 — CQRS queda desacoplado de este trabajo
+### D5 — CQRS desacoplado de este trabajo; modelo de nombrado «CQRS-shaped pre-bus»
 
 Introducir `EventBus` + outbox **no es** adoptar CQRS: el `EventBus` es frontera hexagonal (DIP) para
 eventos, no la indirección de ejecución de un `CommandBus`. El controller sigue invocando el caso de
 uso directamente. `CommandBus`/`QueryBus` quedan diferidos a #263 con sus disparadores intactos: nº de
 casos de uso más allá de Bank, divergencia real read/write o varios read-models, o necesidad de
-middleware transversal uniforme en el borde de escritura. El `wrapInTransaction` de D3 es el escalón que
-ese día se sustituye por el middleware del bus, sin tirar trabajo.
+middleware transversal uniforme en el borde de escritura.
+
+Pero "desacoplado" no es "sin criterio de nombrado". El estándar operativo (5 categorías de mensaje,
+plantilla de nueva entidad, lista de prohibidos) vive en [`../rules/cqrs-naming.md`](../rules/cqrs-naming.md);
+aquí quedan la decisión y el porqué.
+
+**Dos planos.** Semántica (intención write/read) vs ejecución (runtime: llamada directa vs dispatch por
+bus). El sufijo `Handler` afirma "lo despacha un bus/transporte", así que el nombre sigue al plano de
+ejecución y **nunca lo precede**: un `*CommandHandler` sin `CommandBus` es *atrezo* — nombra una capacidad
+ausente. CQRS separa *ejecución*, no *nombres*. Por eso hoy se nombran las **intenciones** (carpetas
+`Command/`/`Query/`) mientras los casos de uso siguen siendo `Creator`/`Finder` (ejecución directa) y los
+suscriptores de evento son `<Efecto>OnEvento` (`#[AsMessageHandler]`, dispatch real), no `*Handler` genéricos.
+
+**Invariantes por-path (un hogar a la vez; el nombre puede ir por detrás, nunca por delante):** **I1 ·
+límite transaccional** — hoy `wrapInTransaction` inline en cada caso de uso (D3); migra al middleware
+`doctrine_transaction` + `dispatch_after_current_bus` del `CommandBus` al aterrizar el bus. **I2 ·
+enforcement transversal** (auth/validación) — hoy por-path; se uniforma en el borde del bus cuando exista.
+**I3 · frontera de publicación de eventos** — **ya uniforme y enforced** (puerto `EventBus` D2 + gate
+`php.lint.event-bus` D4): la única de las tres ya cerrada.
+
+**Tres fases.** (1) *Pre-bus* (hoy): intención nombrada, ejecución directa, suscriptores `<Efecto>OnEvento`.
+(2) *Aterrizaje del bus* (#263): strangler controlado, unidad = caso de uso (seguro porque el repo es
+single-aggregate-por-operación; un process-manager multi-agregado migraría entero); I1 sale del
+`wrapInTransaction` y entra en el middleware — nombre y runtime migran juntos, sustitución aditiva sin
+retrabajo. (3) *Convergencia*: espacio de creación cerrado mono-dialecto + legacy cerrado y menguante.
+
+**Ratchet de convergencia (ni barrido, ni coexistencia infinita).** Primario (obligatorio, gate estilo
+`deptrac.baseline`): control de generación — post-bus no nace ningún `Creator`/`Finder` nuevo. Secundario
+(oportunista, gratis): boy-scout — el legacy *tocado* convierte a handler; es lo único que **encoge** el
+legacy (congelar la generación solo lo fosiliza). Nunca: barrido fechado de código frío. `Bank` es
+**ejemplo de referencia, no plantilla obligatoria** — la estrategia de persistencia sigue siendo
+por-agregado ([`bank-bankaccount-modeling.md`](./bank-bankaccount-modeling.md)).
+
+Descartado: full-CQRS naming ya (`Creator → CommandHandler`) — atrezo, nombra una capacidad ausente.
+Descartado: dejar la ejecución sin criterio de nombrado "hasta el bus" — intenciones y suscriptores ya
+tienen forma estable y se nombran hoy.
 
 ### D6 — Nombrado del bus de Messenger: convención del default hoy, rol al dividir
 
@@ -170,8 +205,9 @@ roto, peor observabilidad que `failed`). Descartado: `allow_no_handlers: true` g
 
 ## Triggers de revisita
 
-(a) Adopción de `CommandBus` (#263) → el límite transaccional migra del `wrapInTransaction` al
+(a) Adopción de `CommandBus` (#263) → el límite transaccional (I1) migra del `wrapInTransaction` al
 middleware y D3 se reescribe; los buses pasan a nombrarse por rol (`command.bus`/`query.bus`/`event.bus`)
-y D6 se actualiza. (b) Construcción de la épica de auditoría → `BankAccountSearcher` pasa a
+y D6 se actualiza; se activa el ratchet de generación-control de D5 y los `Creator`/`Finder` empiezan a
+converger a handlers (`cqrs-naming.md`). (b) Construcción de la épica de auditoría → `BankAccountSearcher` pasa a
 `AuditLogger` y **sale** de la allowlist. (c) Adopción de un broker externo → se añade el relay aguas
 abajo del outbox (D1) sin tocar productor ni atomicidad.

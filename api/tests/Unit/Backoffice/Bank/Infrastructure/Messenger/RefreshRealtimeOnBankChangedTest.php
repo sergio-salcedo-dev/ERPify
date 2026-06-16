@@ -10,7 +10,7 @@ use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankDeletedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\MercureBankTopic;
-use Erpify\Backoffice\Bank\Infrastructure\Messenger\BankRealtimePublisherHandler;
+use Erpify\Backoffice\Bank\Infrastructure\Messenger\RefreshRealtimeOnBankChanged;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountCounter;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
@@ -27,7 +27,7 @@ use Symfony\Component\Mercure\Update;
  * @internal
  */
 #[CoversNothing]
-final class BankRealtimePublisherHandlerTest extends TestCase
+final class RefreshRealtimeOnBankChangedTest extends TestCase
 {
     private const string BANK_ID = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b';
 
@@ -143,7 +143,7 @@ final class BankRealtimePublisherHandlerTest extends TestCase
         $accountCounts = $this->createStub(BankAccountCounter::class);
         $accountCounts->method('countsByBankIds')->willReturn([self::BANK_ID => 3]);
 
-        $handler = new BankRealtimePublisherHandler($hub, new BankAccountCountEnricher($accountCounts));
+        $handler = new RefreshRealtimeOnBankChanged($hub, new BankAccountCountEnricher($accountCounts));
         $event = new BankUpdatedDomainEvent(
             self::BANK_ID,
             new DateTimeImmutable(self::UPDATED_AT),
@@ -160,7 +160,7 @@ final class BankRealtimePublisherHandlerTest extends TestCase
         $this->assertCount(1, \array_unique($payloads), 're-handling must publish a byte-identical payload');
     }
 
-    private function handler(int $accountCount = 0): BankRealtimePublisherHandler
+    private function handler(int $accountCount = 0): RefreshRealtimeOnBankChanged
     {
         $hub = $this->createMock(HubInterface::class);
         $hub->expects($this->once())
@@ -177,7 +177,7 @@ final class BankRealtimePublisherHandlerTest extends TestCase
             $accountCount > 0 ? [self::BANK_ID => $accountCount] : [],
         );
 
-        return new BankRealtimePublisherHandler($hub, new BankAccountCountEnricher($accountCounts));
+        return new RefreshRealtimeOnBankChanged($hub, new BankAccountCountEnricher($accountCounts));
     }
 
     private function capturedUpdate(): Update

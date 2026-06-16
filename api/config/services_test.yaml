@@ -50,7 +50,7 @@ services:
 
     # Recording Mercure hub: captures the realtime Updates a consumed bank event publishes, instead of
     # reaching the live hub (which has no test double and hangs ~5s per consume). Overriding the
-    # MercureBundle's HubInterface alias makes BankRealtimePublisherHandler and MercureContext share it.
+    # MercureBundle's HubInterface alias makes RefreshRealtimeOnBankChanged and MercureContext share it.
     Erpify\Tests\Behat\Support\Mercure\RecordingHub: ~
 
     Symfony\Component\Mercure\HubInterface:

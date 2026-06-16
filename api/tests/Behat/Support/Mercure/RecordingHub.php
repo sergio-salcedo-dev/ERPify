@@ -12,7 +12,7 @@ use Symfony\Component\Mercure\Update;
 /**
  * Recording {@see HubInterface} test double: captures published {@see Update}s in process-static
  * state instead of doing network I/O. Bound as the `HubInterface` in `services_test.yaml`, so the
- * real {@see \Erpify\Backoffice\Bank\Infrastructure\Messenger\BankRealtimePublisherHandler} runs
+ * real {@see \Erpify\Backoffice\Bank\Infrastructure\Messenger\RefreshRealtimeOnBankChanged} runs
  * unchanged when a bank event is consumed — without it the publisher would reach the live hub and
  * hang ~5s in Behat, gating every consume-based assertion.
  *

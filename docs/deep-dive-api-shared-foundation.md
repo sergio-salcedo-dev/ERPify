@@ -58,7 +58,7 @@ api/src/Shared/
 #### `api/src/Shared/Application/Mailer/NotificationMailer.php`
 - **LOC:** 20 — **Type:** outbound port interface.
 - **Exports:** `send(string $to, string $subject, array $fields, ?string $correlationLabel = null): void`.
-- **Used by:** `Backoffice/Bank/Infrastructure/Messenger/BankChangedNotifyEmailHandler`.
+- **Used by:** `Backoffice/Bank/Infrastructure/Messenger/SendEmailOnBankChanged`.
 - **Implementation:** `Infrastructure/Mailer/PlainTextNotificationMailer` (autowired via `#[AsAlias]`).
 
 #### `api/src/Shared/Application/Problem/ProblemBodyTooLargeException.php`
@@ -424,7 +424,7 @@ $messengerBus->dispatch($event)                   ← messenger.bus.default
             └─ Doctrine transport (dev/test) / AMQP-style transport (prod)
                    ▼
               messenger_worker container
-                   └─ handlers (e.g. BankChangedNotifyEmailHandler)
+                   └─ handlers (e.g. SendEmailOnBankChanged)
                           └─ NotificationMailer::send()
 ```
 
