@@ -73,14 +73,13 @@ export default function BanksListPage() {
   const {
     state: boundaryState,
     items,
-    pagination,
+    paginationActions,
     problem,
     selectedIds,
     setSelectedIds,
     toggleSelect,
     clearSelection,
     markDeleted,
-    navigateTo,
     reload,
     silentReload,
     deleteItem,
@@ -397,16 +396,10 @@ export default function BanksListPage() {
                 pageSize={
                   isBanksPageSize(query.pageSize) ? query.pageSize : BANKS_PAGE_SIZE_DEFAULT
                 }
-                hasPrev={pagination?.hasPrev ?? false}
-                hasNext={pagination?.hasNext ?? false}
-                onPrev={() => {
-                  const link = pagination?.links.prev;
-                  if (link) navigateTo(link);
-                }}
-                onNext={() => {
-                  const link = pagination?.links.next;
-                  if (link) navigateTo(link);
-                }}
+                hasPrev={paginationActions.hasPrev}
+                hasNext={paginationActions.hasNext}
+                onPrev={paginationActions.goPrev}
+                onNext={paginationActions.goNext}
                 onPageSizeChange={query.setPageSize}
               />
             </>
