@@ -72,30 +72,26 @@ export function aggregateSystemStatus(views: readonly SystemStatusView[]): Syste
   return { status, datetime: datetime ?? null };
 }
 
+const HEADLINE: Record<SystemStatus, string> = {
+  [SystemStatus.OPERATIONAL]: "All Systems Operational",
+  [SystemStatus.DEGRADED]: "Partial Service Disruption",
+  [SystemStatus.DISRUPTED]: "Service Disruption",
+  [SystemStatus.CHECKING]: "Checking system status…",
+};
+
 /** Headline shown in the aggregate banner. */
 export function systemHeadline(status: SystemStatus): string {
-  switch (status) {
-    case SystemStatus.OPERATIONAL:
-      return "All Systems Operational";
-    case SystemStatus.DEGRADED:
-      return "Partial Service Disruption";
-    case SystemStatus.DISRUPTED:
-      return "Service Disruption";
-    default:
-      return "Checking system status…";
-  }
+  return HEADLINE[status];
 }
+
+const COMPONENT_LABEL: Record<SystemStatus, string> = {
+  [SystemStatus.OPERATIONAL]: "Operational",
+  [SystemStatus.DEGRADED]: "Degraded",
+  [SystemStatus.DISRUPTED]: "Disrupted",
+  [SystemStatus.CHECKING]: "Checking…",
+};
 
 /** Short label shown in a component's status pill. */
 export function componentStatusLabel(status: SystemStatus): string {
-  switch (status) {
-    case SystemStatus.OPERATIONAL:
-      return "Operational";
-    case SystemStatus.DEGRADED:
-      return "Degraded";
-    case SystemStatus.DISRUPTED:
-      return "Disrupted";
-    default:
-      return "Checking…";
-  }
+  return COMPONENT_LABEL[status];
 }
