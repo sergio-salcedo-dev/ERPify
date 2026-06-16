@@ -20,25 +20,22 @@ ERPify/
 │   │   │   └── Mercure/            # Mercure publishing & JWT (Domain + Infrastructure/Controller)
 │   │   └── Shared/
 │   │       ├── Application/
-│   │       │   ├── DomainEvent/    # Cross-context domain-event publishing
 │   │       │   ├── Http/Search/    # Shared search-endpoint plumbing
 │   │       │   ├── Mailer/         # Async mail use-cases
 │   │       │   ├── Problem/        # ProblemDetails VO + ProblemDetailsFactory (RFC 9457 mapping)
 │   │       │   ├── UseCase/        # Result value object + use-case base
 │   │       │   └── Validation/     # Shared validator helper
 │   │       ├── Domain/
-│   │       │   ├── Aggregate/ Entity/ Enum/ Event/ Search/ Uuid/ ValueObject/
-│   │       │   ├── Bus/Event/      # EventBus port — publish(DomainEvent …); see docs/adr/event-driven-architecture.md
+│   │       │   ├── Aggregate/ Entity/ Enum/ Search/ Uuid/ ValueObject/
 │   │       │   ├── Clock/          # Clock port + ambient SystemClock (domain time source)
 │   │       │   └── Exception/      # DomainException base + marker interfaces (NotFound, Conflict, …)
+│   │       ├── Event/              # Event backbone (Domain/Application/Infrastructure): DomainEvent + EventBus, raw-DBAL event_store, mapper/serializer/upcaster, projection runner; see docs/adr/event-store-and-projections.md
 │   │       ├── Guzzle/             # Shared HTTP client utilities (Enum)
 │   │       ├── Infrastructure/
-│   │       │   ├── Bus/Event/      # SymfonyMessengerEventBus — publishes domain events to the Doctrine-transport outbox
 │   │       │   ├── Clock/          # Symfony clock adapter + ambient SystemClock initializer
 │   │       │   ├── Http/           # CorrelationIdListener, ProblemDetailsResponder, EventListener/ExceptionResponder, Controller/, Responder/
 │   │       │   ├── Mailer/         # Mailer adapter
-│   │       │   ├── Messenger/      # Messenger middleware/handlers
-│   │       │   ├── Persistence/    # Entity, Repository, Doctrine/Search (keyset engine + FilterApplier + per-repo field maps)
+│   │       │   ├── Persistence/    # Repository, Doctrine/Search (keyset engine + FilterApplier + per-repo field maps)
 │   │       │   ├── Serializer/     # Symfony serializer adapters
 │   │       │   └── Validator/      # Doctrine enum DBAL type + constraint validator
 │   │       ├── Media/              # Image processing (Intervention Image) — full DDD layering
@@ -144,7 +141,7 @@ All browser traffic terminates at **FrankenPHP on `localhost`**. `/` is reverse-
 | `api/src/{Backoffice,Frontoffice,Shared}/*/Domain/`          | Pure domain — no framework imports                                                                  |
 | `api/src/Shared/Domain/Exception/`                           | Marker interfaces + `DomainException` base — see [`api-error-contract.md`](./api-error-contract.md) |
 | `api/src/Shared/Application/Problem/`                        | `ProblemDetails` VO + `ProblemDetailsFactory` (single throwable→wire mapping site)                  |
-| `api/src/Shared/{Domain,Infrastructure}/Bus/Event/`          | `EventBus` port + `SymfonyMessengerEventBus` — domain events published to the Doctrine-transport outbox, committed atomically with persistence at the use-case boundary; gate `make php.lint.event-bus`, see [`adr/event-driven-architecture.md`](./adr/event-driven-architecture.md) |
+| `api/src/Shared/Event/{Domain,Application,Infrastructure}/`   | Event backbone: `EventBus` port + `SymfonyMessengerEventBus`, hardened `DomainEvent` (`fromPrimitives` + injectable identity), raw-DBAL reproducible `event_store` (mapper/serializer/upcaster), and the projection runner (projector ≠ reactor, checkpointed catch-up + rebuild). Committed atomically with persistence at the use-case boundary; gate `make php.lint.event-bus`, see [`adr/event-store-and-projections.md`](./adr/event-store-and-projections.md) |
 | `api/src/Shared/Infrastructure/Http/`                        | `CorrelationIdListener`, `ProblemDetailsResponder`, `EventListener/ExceptionResponder`              |
 | `api/src/Shared/Infrastructure/Persistence/Doctrine/Search/` | `FilterApplier` + `SearchFieldMap` — shared search-filter plumbing (mandatory allow-list); `DoctrineSearchEngine` (the sole keyset query-shaper, 8-step pipeline) + `RowUniquenessGuard`, composing the pure `Keyset/` kernel. It governs the live HTTP read-path (Bank), producing a link-agnostic `Page` with opaque cursors; `Shared/Infrastructure/Http/Responder/SearchResponder` is the single compositor of the cursor-only envelope |
 | `api/src/*/Application/`                                     | Use cases, DTOs, orchestration                                                                      |
