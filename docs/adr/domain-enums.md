@@ -1,45 +1,44 @@
-# ADR — Diseño de enums de dominio y separación de i18n
+# ADR — Domain enum design and i18n separation
 
-> **Estado:** propuesto (→ aceptado al aterrizar el contract swap) · **Fecha:** 2026-06-16 · **Ámbito:** todos los enums de `*/Domain/Enum/`; primera migración `api/src/Backoffice/BankAccount` + sync `pwa`.
+> **Status:** proposed (→ accepted once the contract swap lands) · **Date:** 2026-06-16 · **Scope:** every enum under `*/Domain/Enum/`; first migration `api/src/Backoffice/BankAccount` + `pwa` sync.
 >
-> Contexto temporal: la aplicación **no está en producción**, así que el cambio de contrato de
-> wire y de persistencia no arrastra compatibilidad hacia atrás. Aun así el flip es **atómico**:
-> el `enumType` de Doctrine ata el backing del enum a los bytes de la columna (ver D6), no hay
-> fase híbrida posible.
+> Temporal context: the application is **not in production**, so the wire- and persistence-contract
+> change carries no backward compatibility. The flip is still **atomic**: Doctrine's `enumType` binds
+> the enum backing to the column bytes (see D6), so no hybrid phase is possible.
 
-## Contexto
+## Context
 
-`BankAccountStatus` arrastra una infraestructura genérica de "enum legible":
+`BankAccountStatus` drags a generic "human-readable enum" infrastructure:
 
 ```php
 // api/src/Shared/Domain/Enum/Abstraction/
-HumanReadableIntEnumInterface   // contrato getLabel()/getLabels()/fromLabel()
-HumanReadableIntEnumTrait       // resolución de label por reflexión + atributo, cacheada
-HumanReadableIntEnumValue       // #[…(label: 'active')] por case
+HumanReadableIntEnumInterface   // getLabel()/getLabels()/fromLabel() contract
+HumanReadableIntEnumTrait       // label resolution by reflection + attribute, cached
+HumanReadableIntEnumValue       // #[…(label: 'active')] per case
 ```
 
-La evidencia desmiente el nombre. El único consumidor de dominio es `BankAccount::getStatusLabel()`,
-que serializa la "label" `'active'` bajo la clave `status`; y la PWA (`BankAccountsTable.tsx`)
-**ya** reimplementa su presentación (`STATUS_VARIANT` + title-casing). O sea: la label del dominio
-no llega al usuario como texto humano — llega como **código de wire** (`'active'`) que el front
-re-mapea, y en un ERP español produce *"Active"*, no *"Activa"*. La pieza que justifica todo el
-aparato `HumanReadable*` ni siquiera cumple su nombre. De los 7 métodos del trait solo se usan 2;
-`fromLabel`/`fromLabelOrFail`/`getKeysFromValues`/`getValues`/`getValuesNotIn` son código muerto.
-`Currency` (`enum Currency: string { case EUR = 'EUR'; }`) ya es el patrón anémico correcto que
-este ADR generaliza.
+The evidence contradicts the name. The only domain consumer is `BankAccount::getStatusLabel()`, which
+serializes the "label" `'active'` under the `status` key; and the PWA (`BankAccountsTable.tsx`)
+**already** reimplements its presentation (`STATUS_VARIANT` + title-casing). In other words: the
+domain label never reaches the user as human text — it reaches the front as a **wire code**
+(`'active'`) that the front re-maps, and in a Spanish ERP it produces *"Active"*, not *"Activa"*. The
+one piece that justifies the whole `HumanReadable*` apparatus does not even fulfil its name. Of the
+trait's 7 methods only 2 are used; `fromLabel`/`fromLabelOrFail`/`getKeysFromValues`/`getValues`/
+`getValuesNotIn` are dead code. `Currency` (`enum Currency: string { case EUR = 'EUR'; }`) is already
+the correct anaemic pattern that this ADR generalizes.
 
-El problema de raíz no es el trait ni la reflexión: es **presentación filtrándose al dominio**.
+The root problem is not the trait or the reflection: it is **presentation leaking into the domain**.
 
-## Decisión
+## Decision
 
-### D1 — El enum de dominio es identidad pura
+### D1 — A domain enum is pure identity
 
-Un enum de dominio representa identidad de negocio estable, no texto. Prohibido dentro del enum:
-labels legibles, formateo de UI, strings de i18n, resolución de label por reflexión.
+A domain enum represents stable business identity, not text. Forbidden inside the enum: readable
+labels, UI formatting, i18n strings, label resolution by reflection.
 
-### D2 — El contrato de wire es `->value`
+### D2 — The wire contract is `->value`
 
-El `value` del enum **es** el contrato público, en `SCREAMING_SNAKE_CASE`:
+The enum `value` **is** the public contract, in `SCREAMING_SNAKE_CASE`:
 
 ```php
 enum BankAccountStatus: string
@@ -50,68 +49,68 @@ enum BankAccountStatus: string
 }
 ```
 
-Coincide con `->name`, elimina la ambigüedad mayúscula/minúscula y evita transformación implícita
-en el front. El `value` es inmutable: cambiarlo es romper el contrato (igual que renumerar un int).
-*Alternativa descartada:* `->name` directo — gratis, pero acopla la API pública a cómo se deletrea
-el identificador PHP; un `value` explícito desacopla contrato de identificador.
+It coincides with `->name`, removes upper/lower-case ambiguity, and avoids implicit transformation in
+the front. The `value` is immutable: changing it breaks the contract (just like renumbering an int).
+*Discarded alternative:* `->name` directly — free, but it couples the public API to how the PHP
+identifier is spelled; an explicit `value` decouples contract from identifier.
 
-### D3 — La API serializa `->value`, nunca labels
+### D3 — The API serializes `->value`, never labels
 
-El serializer expone `$status->value` (Symfony emite `->value` para todo `BackedEnum`). Nunca
-`getLabel()` ni getters derivados. Salida: `{ "status": "ACTIVE" }`.
+The serializer exposes `$status->value` (Symfony emits `->value` for every `BackedEnum`). Never
+`getLabel()` or derived getters. Output: `{ "status": "ACTIVE" }`.
 
-### D4 — La presentación vive fuera del dominio (regla anti-regresión generalizada)
+### D4 — Presentation lives outside the domain (generalized anti-regression rule)
 
-El texto legible es responsabilidad de la capa de presentación, **tecleado por `->value`**:
+Readable text is the presentation layer's responsibility, **keyed by `->value`**:
 
-- **PWA** → diccionarios i18n (`t(\`bankAccountStatus.${status}\`)`) y mapeo de UI (badges, colores).
-- **Backend que deba localizar** (PDF, email, exportaciones) → catálogo i18n en
-  `Application`/`Infrastructure`, **nunca** de vuelta en el enum. La identidad es la clave; la
-  traducción es un adaptador de presentación, exista en PWA o en un adaptador de la API.
+- **PWA** → a presentation-layer `Record<Status, label>` map (and UI mapping: badges, colors). A real
+  i18n dictionary (`t(\`bankAccountStatus.${status}\`)`) slots in behind the same seam when locales land.
+- **Backend that must localize** (PDF, email, exports) → an i18n catalog in
+  `Application`/`Infrastructure`, **never** back in the enum. Identity is the key; translation is a
+  presentation adapter, whether it lives in the PWA or in an API adapter.
 
-Esta regla **no es solo de enums**: cierra el vector de recaída completo. Ningún tipo de `Domain/`
-(enum, Value Object, entidad) ni ningún DTO/mapper de `Application/` puede contener texto de
-display, formateo o localización "para simplificar el front". El día que un VO tenga `format()` o
-un mapper arrastre una label, es el mismo error con otro nombre.
+This rule is **not enum-only**: it closes the full regression vector. No `Domain/` type (enum, Value
+Object, entity) and no `Application/` DTO/mapper may carry display text, formatting, or localization
+"to simplify the front". The day a VO has `format()` or a mapper drags a label, it is the same mistake
+under another name.
 
-### D5 — Backing por agregado (no global)
+### D5 — Backing per aggregate (not global)
 
-Espejo de la estrategia de persistencia por agregado del repo
+Mirrors the repo's per-aggregate persistence strategy
 ([`bank-bankaccount-modeling.md`](./bank-bankaccount-modeling.md)):
 
-- **Default: string-backed**, `value == código de wire`. DB autodescriptiva, resiliente a añadir
-  casos, sin maquinaria.
-- **Excepción: int/`smallint`-backed** SOLO en agregados *hot-path / alta cardinalidad* con presión
-  real de volumen, escritura e indexación (no roadmap abstracto). El roadmap nombra los candidatos
-  —*stock movements*, *asientos automáticos* de la Finance Layer— pero ninguno está shipped ni a
-  corto plazo, así que la excepción existe en el modelo sin dominar el default. Un enum `int`-backed
-  expone su código de wire vía `value` string solo si necesita desacoplarlo del número.
+- **Default: string-backed**, `value == wire code`. Self-describing DB, resilient to adding cases, no
+  machinery.
+- **Exception: int/`smallint`-backed** ONLY in *hot-path / high-cardinality* aggregates under real
+  volume, write, and indexing pressure (not an abstract roadmap). The roadmap names the candidates
+  —*stock movements*, *automatic ledger entries* of the Finance Layer— but none is shipped or near
+  term, so the exception exists in the model without dominating the default. An `int`-backed enum
+  exposes its wire code via a string `value` only if it needs to decouple it from the number.
 
-### D6 — Reglas de negocio dentro del enum, presentación fuera
+### D6 — Business rules inside the enum, presentation outside
 
-La línea divisoria no es "anémico vs rico", es **texto-de-display-FUERA vs reglas-de-negocio-DENTRO**.
-Permitido en el enum: predicados e invariantes (`isTerminal()`, `canTransitionTo()`), transiciones
-de estado. Prohibido: formateo, localización, labels.
+The dividing line is not "anaemic vs rich", it is **display-text-OUT vs business-rules-IN**. Allowed
+in the enum: predicates and invariants (`isTerminal()`, `canTransitionTo()`), state transitions.
+Forbidden: formatting, localization, labels.
 
-## Consecuencias
+## Consequences
 
-**Positivas:** separación de responsabilidades alineada con DDD/hexagonal; única fuente de verdad de
-i18n; dominio más simple; cero reflexión; contrato de API explícito y estable.
+**Positive:** separation of concerns aligned with DDD/hexagonal; single source of truth for i18n;
+simpler domain; zero reflection; explicit, stable API contract.
 
-**Negativas:** cambio de contrato de API que exige sync coordinado del front en el mismo PR;
-migración de datos `smallint → text`; se pierden helpers de conveniencia en backend (eran código
-muerto).
+**Negative:** an API contract change that requires a coordinated front sync in the same PR; a
+`smallint → text` data migration; convenience backend helpers are lost (they were dead code).
 
-## Estrategia de migración (flip atómico, no strangler)
+## Migration strategy (atomic flip, not strangler)
 
-El `enumType` de Doctrine ata el backing del enum a la columna: un enum string-backed sobre columna
-`smallint` lanza `ValueError` en la primera hidratación. **No hay coexistencia de modelos**; el
-swap es indivisible. Secuencia de commits dentro del PR único:
+Doctrine's `enumType` binds the enum backing to the column: a string-backed enum over a `smallint`
+column throws `ValueError` on the first hydration. **There is no model coexistence**; the swap is
+indivisible. Commit sequence within the single PR:
 
-1. **Contract swap (un commit, indivisible):** enum → string-backed; `#[ORM\Column(type: Types::STRING)]`;
-   serializer → `->value` (borrar `getStatusLabel()`); borrar `HumanReadableIntEnum{Interface,Trait}` +
-   `HumanReadableIntEnumValue`; simplificar `EnumTypeValidator` (sin ramas `HumanReadable*`, formateo
-   por `->value`); migración hand-written (no `make db.diff`):
+1. **Contract swap (one commit, indivisible):** enum → string-backed; `#[ORM\Column(type: Types::TEXT)]`;
+   serializer → `->value` (delete `getStatusLabel()`); delete `HumanReadableIntEnum{Interface,Trait}` +
+   `HumanReadableIntEnumValue`; simplify `EnumTypeValidator` (no `HumanReadable*` branches, format by
+   `->value`); hand-written migration (not `make db.diff`):
 
    ```sql
    ALTER TABLE bank_account ALTER COLUMN status TYPE text
@@ -119,18 +118,21 @@ swap es indivisible. Secuencia de commits dentro del PR único:
                        ELSE NULL END;
    ```
 
-   `down()` inverso con `ELSE` que **falle ruidoso** (un valor inesperado no debe degradarse a `NULL`
-   en silencio). Tipo de columna `text`, no `varchar(n)`: en PostgreSQL el storage es idéntico y el
-   `n` solo añade un check y un riesgo de `ALTER` futuro — la única fuente de cardinalidad es el enum.
+   `down()` is the inverse, with an `ELSE` that **fails loud** (an unexpected value must not silently
+   degrade to `NULL`). Column type `text`, not `varchar(n)`: in PostgreSQL the storage is identical and
+   the `n` only adds a check and a future `ALTER` risk — the enum is the single source of cardinality.
+   The ORM mapping uses `Types::TEXT` to match (a bare `Types::STRING` would map to `varchar(255)` and
+   drift from the column).
 
-2. **Sync PWA (mismo PR):** claves de `STATUS_VARIANT` a `SCREAMING_SNAKE`; unión TS en mayúsculas;
-   sustituir el title-casing por diccionario i18n.
+2. **PWA sync (same PR):** `STATUS_VARIANT` keys to `SCREAMING_SNAKE`; TS union uppercased; the
+   title-casing replaced by a presentation-layer `Record<Status, label>` keyed by the wire value
+   (display copy; localization deferred behind the same seam per D4).
 
-3. **Guardrail:** arch-test que prohíba `getLabel`/atributos `HumanReadable*` en `*/Domain/Enum/*`;
-   asserts contractuales API/PWA.
+3. **Guardrail:** an arch-test that forbids `getLabel`/`HumanReadable*` attributes in `*/Domain/`
+   enums; contractual API/PWA assertions.
 
-## Resultado
+## Result
 
-Enums de dominio = identidad pura. API = contrato explícito (`->value`). PWA = única fuente de i18n.
-DB = almacén de códigos estables. Validator = simple chequeo de pertenencia. La categoría
-"human readable enum" desaparece del sistema, y la regla D4 impide que reaparezca como VO o mapper.
+Domain enums = pure identity. API = explicit contract (`->value`). PWA = single source of i18n. DB =
+store of stable codes. Validator = a simple membership check. The "human readable enum" category
+disappears from the system, and rule D4 keeps it from reappearing as a VO or a mapper.

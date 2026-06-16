@@ -22,7 +22,9 @@ const STATUS_VARIANT: Record<BankAccountStatus, StatusBadgeVariant> = {
 };
 
 // Display text lives here, keyed by the wire identity value — the API sends the
-// enum identity (`ACTIVE`), never a label. This map is the localization seam.
+// enum identity (`ACTIVE`), never a label. Presentation is the PWA's responsibility:
+// the user never sees the raw wire code. Localization is a later concern; the
+// labels stay English for now.
 const STATUS_LABEL: Record<BankAccountStatus, string> = {
   ACTIVE: "Active",
   INACTIVE: "Inactive",

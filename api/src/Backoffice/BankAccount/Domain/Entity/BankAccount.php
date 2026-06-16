@@ -66,7 +66,7 @@ final class BankAccount extends AggregateRoot
         #[EnumType(Currency::class)]
         #[Groups([self::GROUP_READ])]
         private Currency $currency,
-        #[ORM\Column(type: Types::STRING, enumType: BankAccountStatus::class)]
+        #[ORM\Column(type: Types::TEXT, enumType: BankAccountStatus::class)]
         #[EnumType(BankAccountStatus::class)]
         private BankAccountStatus $status,
     ) {

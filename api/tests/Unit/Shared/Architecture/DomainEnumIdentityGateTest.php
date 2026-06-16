@@ -35,9 +35,18 @@ use PHPUnit\Framework\TestCase;
 #[CoversNothing]
 final class DomainEnumIdentityGateTest extends TestCase
 {
-    /** Method-name stems that read as presentation, not identity — banned on a domain enum. */
-    private const string PRESENTATION_METHOD
-        = '/\bfunction\s+\w*(?:label|humanReadable|display|format|caption)\w*\s*\(/i';
+    /**
+     * A method whose NAME reads as a presentation accessor — banned on a domain enum. Matched against
+     * the bare method name (never the raw file), so the stems can be anchored precisely:
+     *   - exact display verbs/nouns: `label()`, `format()`, `display()`, `caption()`, `humanReadable()`;
+     *   - a CamelCase display word as a name segment: `getStatusLabel()`, `displayName()`, `toCaption()`.
+     * Identifiers that merely embed a stem in a different word do NOT match — `relabel`, `isLabelled`,
+     * `displayOrder`, `reformat`, `formatVersion` are legitimate and stay allowed (D6 predicates too).
+     */
+    private const string PRESENTATION_NAME_EXACT
+        = '/^(?:label|labels|caption|format|formatted|display|humanreadable)$/i';
+
+    private const string PRESENTATION_NAME_CAMEL = '/(?:Label|Caption|Format|Display|HumanReadable)s?(?=[A-Z]|$)/';
 
     /** A `#[HumanReadable*]` or `#[*Label*]` attribute — presentation metadata on a case. */
     private const string PRESENTATION_ATTRIBUTE = '/#\[\s*[\w\\\]*(?:HumanReadable|Label)/i';
@@ -63,7 +72,11 @@ final class DomainEnumIdentityGateTest extends TestCase
                 continue;
             }
 
-            if (1 !== \preg_match('/^\s*enum\s+\w+/m', $contents)) {
+            // Scan code only: comments, docblocks and string literals are stripped first, so a
+            // docblock that merely mentions "label"/"format" never trips the gate — only real code does.
+            $code = $this->codeOnly($contents);
+
+            if (1 !== \preg_match('/\benum\s+\w+/', $code)) {
                 continue;
             }
 
@@ -71,15 +84,18 @@ final class DomainEnumIdentityGateTest extends TestCase
 
             $reasons = [];
 
-            if (1 === \preg_match(self::PRESENTATION_METHOD, $contents)) {
-                $reasons[] = 'presentation accessor (label/humanReadable/display/format/caption method)';
+            if ([] !== $this->presentationMethods($code)) {
+                $reasons[] = \sprintf(
+                    'presentation accessor(s): %s',
+                    \implode(', ', $this->presentationMethods($code)),
+                );
             }
 
-            if (1 === \preg_match(self::PRESENTATION_ATTRIBUTE, $contents)) {
+            if (1 === \preg_match(self::PRESENTATION_ATTRIBUTE, $code)) {
                 $reasons[] = 'presentation attribute (#[HumanReadable*] / #[*Label*])';
             }
 
-            if (1 === \preg_match(self::HUMAN_READABLE_ABSTRACTION, $contents)) {
+            if (1 === \preg_match(self::HUMAN_READABLE_ABSTRACTION, $code)) {
                 $reasons[] = 'HumanReadable* abstraction (implements/use)';
             }
 
@@ -98,5 +114,66 @@ final class DomainEnumIdentityGateTest extends TestCase
             . "Application/Infrastructure adapter (backend); keep business predicates/transitions (D6):\n"
             . \implode("\n", $offenders),
         );
+    }
+
+    /**
+     * Rebuild the file's source with comments, docblocks and string-literal contents removed, so the
+     * name scans see only real code. Avoids the classic false positive where a docblock or a string
+     * mentioning "label"/"format" trips a raw-text regex.
+     */
+    private function codeOnly(string $contents): string
+    {
+        $code = '';
+
+        foreach (\token_get_all($contents) as $token) {
+            if (!\is_array($token)) {
+                $code .= $token;
+
+                continue;
+            }
+
+            [$id, $text] = $token;
+
+            if (T_COMMENT === $id) {
+                continue;
+            }
+
+            if (T_DOC_COMMENT === $id) {
+                continue;
+            }
+
+            if (T_CONSTANT_ENCAPSED_STRING === $id || T_ENCAPSED_AND_WHITESPACE === $id) {
+                $code .= "''";
+
+                continue;
+            }
+
+            $code .= $text;
+        }
+
+        return $code;
+    }
+
+    /**
+     * Names of methods declared in $code whose name reads as a presentation accessor.
+     *
+     * @return list<string>
+     */
+    private function presentationMethods(string $code): array
+    {
+        \preg_match_all('/\bfunction\s+(\w+)\s*\(/i', $code, $matches);
+
+        $offenders = [];
+
+        foreach ($matches[1] as $name) {
+            $isPresentation = 1 === \preg_match(self::PRESENTATION_NAME_EXACT, $name)
+                || 1 === \preg_match(self::PRESENTATION_NAME_CAMEL, $name);
+
+            if ($isPresentation) {
+                $offenders[] = $name;
+            }
+        }
+
+        return $offenders;
     }
 }
