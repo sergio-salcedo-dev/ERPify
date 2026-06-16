@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Domain\Event;
 
-use DateTimeImmutable;
-use Erpify\Shared\Domain\Event\DomainEvent;
+use Erpify\Shared\Event\Domain\DomainEvent;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -19,7 +18,7 @@ final class DomainEventTest extends TestCase
     {
         // Messenger's default PhpSerializer transports events via serialize()/unserialize(), which
         // bypasses the constructor — the id minted at construction must reach consumers unchanged.
-        $event = new SerializableTestDomainEvent('aggregate-id', new DateTimeImmutable());
+        $event = new SerializableTestDomainEvent('aggregate-id');
 
         $roundTripped = \unserialize(\serialize($event));
 

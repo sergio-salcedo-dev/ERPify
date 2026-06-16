@@ -11,7 +11,7 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * Prescriptive gate for the event-dispatch boundary: a use case publishes domain events through the
- * `Erpify\Shared\Domain\Bus\Event\EventBus` port, never by importing Symfony's MessageBusInterface
+ * `Erpify\Shared\Event\Domain\EventBus` port, never by importing Symfony's MessageBusInterface
  * directly. That coupling is the dual-write / hexagonal-purity smell the EventBus closes; this gate
  * stops it reappearing. Full rationale: docs/adr/event-driven-architecture.md.
  *
@@ -35,7 +35,7 @@ final class EventDispatchGateTest extends TestCase
      * literal string.
      */
     public const string FAILURE_PREAMBLE
-        = 'Application code must publish domain events through Erpify\Shared\Domain\Bus\Event\EventBus, '
+        = 'Application code must publish domain events through Erpify\Shared\Event\Domain\EventBus, '
         . 'not by importing Symfony\Component\Messenger\MessageBusInterface directly. '
         . 'See docs/adr/event-driven-architecture.md';
 
@@ -99,7 +99,7 @@ final class EventDispatchGateTest extends TestCase
         $clean = <<<'PHP'
             <?php
             namespace Erpify\Backoffice\Bank\Application;
-            use Erpify\Shared\Domain\Bus\Event\EventBus;
+            use Erpify\Shared\Event\Domain\EventBus;
             use function Symfony\Component\Messenger\some_helper;
             final class Sample {}
             PHP;

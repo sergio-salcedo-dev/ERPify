@@ -12,12 +12,12 @@ Feature: Delete a bank
     Then the response status code should be 204
     And 8 requests got executed only for doctrine connection "default"
     And the "Bank" entity found by "id=de1e7e00-0000-7000-8000-000000000001" does not exist
-    And there should have 1 "StoredDomainEvent" entities found by "aggregateId=de1e7e00-0000-7000-8000-000000000001&name=erpify.backoffice.bank.deleted"
+    And there should be 1 event stored for aggregate "de1e7e00-0000-7000-8000-000000000001" named "erpify.backoffice.bank.deleted"
     And there should have 0 "Bank" entities found by "id=de1e7e00-0000-7000-8000-000000000001"
     And 1 outbox event was created on the queue "async"
     And I got the event number 1 on queue "async" from the outbox
     And The outbox event should be of type "Erpify\Backoffice\Bank\Domain\Event\BankDeletedDomainEvent"
-    And The outbox event property "bankId" should be equal to "de1e7e00-0000-7000-8000-000000000001"
+    And The outbox event aggregate id should be equal to "de1e7e00-0000-7000-8000-000000000001"
     And I consume 1 message from the "async" transport
     And the command should succeed
     And the output should contain "handled successfully (acknowledging to transport)"
@@ -43,7 +43,7 @@ Feature: Delete a bank
     And the JSON node "instance" should be a valid UUID
     And the JSON node "correlation-id" should be a valid UUID
     And 1 request got executed only for doctrine connection "default"
-    And there should have 0 "StoredDomainEvent" entities found by "aggregateId=2e6d865c-17b0-476a-85f2-037bf6d3b3dc&name=erpify.backoffice.bank.deleted"
+    And there should be 0 events stored for aggregate "2e6d865c-17b0-476a-85f2-037bf6d3b3dc" named "erpify.backoffice.bank.deleted"
 
   Scenario: Delete a bank referenced by accounts returns a 409 bank-in-use Problem Details body
     Given there should have 1 "Bank" entities found by "id=11111111-1111-7000-8000-000000000001"
@@ -60,4 +60,4 @@ Feature: Delete a bank
     And the JSON node "correlation-id" should be a valid UUID
     And 2 requests got executed only for doctrine connection "default"
     And there should have 1 "Bank" entities found by "id=11111111-1111-7000-8000-000000000001"
-    And there should have 0 "StoredDomainEvent" entities found by "aggregateId=11111111-1111-7000-8000-000000000001&name=erpify.backoffice.bank.deleted"
+    And there should be 0 events stored for aggregate "11111111-1111-7000-8000-000000000001" named "erpify.backoffice.bank.deleted"

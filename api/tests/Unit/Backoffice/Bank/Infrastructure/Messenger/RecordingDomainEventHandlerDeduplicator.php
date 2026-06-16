@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Backoffice\Bank\Infrastructure\Messenger;
 
-use Erpify\Shared\Application\DomainEvent\DomainEventHandlerDeduplicator;
+use Erpify\Shared\Event\Application\DomainEventHandlerDeduplicator;
 use Override;
 use Throwable;
 

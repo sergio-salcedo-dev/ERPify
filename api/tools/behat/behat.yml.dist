@@ -35,6 +35,7 @@ default:
                 - Erpify\Tests\Behat\Context\RateLimitContext
                 - Erpify\Tests\Behat\Context\SqlQueryContext
                 - Erpify\Tests\Behat\Context\OutboxContext
+                - Erpify\Tests\Behat\Context\EventStoreContext
                 - Erpify\Tests\Behat\Context\MessengerConsumerContext
                 - Erpify\Tests\Behat\Context\NotificationContext
                 - Erpify\Tests\Behat\Context\MercureContext

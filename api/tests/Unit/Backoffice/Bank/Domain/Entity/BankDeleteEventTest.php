@@ -32,6 +32,7 @@ final class BankDeleteEventTest extends TestCase
         $this->assertInstanceOf(BankDeletedDomainEvent::class, $event);
         $this->assertSame(self::BANK_ID, $event->aggregateId());
         $this->assertSame('erpify.backoffice.bank.deleted', $event::eventName());
-        $this->assertSame(['bankId' => self::BANK_ID], $event->toPrimitives());
+        // The deletion carries no snapshot; its identity is the aggregate id on the envelope.
+        $this->assertSame([], $event->toPrimitives());
     }
 }

@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Backoffice\Bank\Application;
 
-use Erpify\Shared\Domain\Bus\Event\EventBus;
-use Erpify\Shared\Domain\Event\DomainEvent;
+use Erpify\Shared\Event\Domain\DomainEvent;
+use Erpify\Shared\Event\Domain\EventBus;
 use Override;
 
 /**

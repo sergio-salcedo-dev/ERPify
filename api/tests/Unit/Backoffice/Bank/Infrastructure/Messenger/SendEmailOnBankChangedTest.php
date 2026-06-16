@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Backoffice\Bank\Infrastructure\Messenger;
 
-use DateTimeImmutable;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
 use Erpify\Backoffice\Bank\Infrastructure\Messenger\SendEmailOnBankChanged;
@@ -90,7 +89,6 @@ final class SendEmailOnBankChangedTest extends TestCase
     {
         return new BankCreatedDomainEvent(
             Uuid::generate(),
-            new DateTimeImmutable(self::TIMESTAMP),
             'Acme',
             'ACM',
             self::TIMESTAMP,
@@ -102,7 +100,6 @@ final class SendEmailOnBankChangedTest extends TestCase
     {
         return new BankUpdatedDomainEvent(
             Uuid::generate(),
-            new DateTimeImmutable(self::TIMESTAMP),
             'Acme',
             'ACM',
             self::TIMESTAMP,

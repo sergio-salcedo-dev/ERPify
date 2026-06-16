@@ -36,7 +36,7 @@ Feature: Create a bank
       | id::uuid         | v7         |
       | shortName::regex | /^[A-Z]+$/ |
       | createdAt::date  | now        |
-    And there should have 1 "StoredDomainEvent" entities found by "name=erpify.backoffice.bank.created"
+    And there should be 1 event stored named "erpify.backoffice.bank.created"
     # The outbox is the async transport, addressed by queue name. The event is pending until consumed.
     And 1 outbox event was created on the queue "async"
     And I got the event number 1 on queue "async" from the outbox
@@ -61,10 +61,10 @@ Feature: Create a bank
 
   # The fixture DB restores per feature, not per scenario, so the earlier "Successfully create a
   # bank" scenario's stored event would survive into the create-422 scenarios. Each rejection
-  # scenario empties the domain_event outbox first, then resets the query counter (the deletes run
-  # on the default connection) before asserting the rejected request stored no bank-created event.
+  # scenario empties the event_store first, then resets the query counter (the delete runs on the
+  # default connection) before asserting the rejected request stored no bank-created event.
   Scenario: It should fail when payload is empty
-    Given the "StoredDomainEvent" entities found by "" are deleted
+    Given the stored events are cleared
     And I reset the stats for all doctrine connections
     When I send a POST request to "/backoffice/banks" with body:
     """
@@ -87,14 +87,14 @@ Feature: Create a bank
     And the JSON node "violations[1].message" should be equal to "The code field is required."
     And the JSON node "violations[1].code" should be equal to "c1051bb4-d103-4f74-8988-acbcafc7fdc3"
     And 0 requests got executed across all doctrine connections
-    And there should have 0 "StoredDomainEvent" entities found by "name=erpify.backoffice.bank.created"
+    And there should be 0 events stored named "erpify.backoffice.bank.created"
     And the logger logged a log entry as "warning" with message "API error response built"
     And the logger logged a log entry as "warning" with message "API error response built" and context contains:
       | type   | validation-failed |
       | status | 422               |
 
   Scenario: Fail to create a bank with missing fields
-    Given the "StoredDomainEvent" entities found by "" are deleted
+    Given the stored events are cleared
     And I reset the stats for all doctrine connections
     When I send a POST request to "/backoffice/banks" with body:
     """
@@ -116,10 +116,10 @@ Feature: Create a bank
     And the JSON node "violations[0].message" should be equal to "The code field is required."
     And the JSON node "violations[0].code" should be equal to "c1051bb4-d103-4f74-8988-acbcafc7fdc3"
     And 0 requests got executed across all doctrine connections
-    And there should have 0 "StoredDomainEvent" entities found by "name=erpify.backoffice.bank.created"
+    And there should be 0 events stored named "erpify.backoffice.bank.created"
 
   Scenario: Fail to create a bank whose name only differs in case from an existing one
-    Given the "StoredDomainEvent" entities found by "" are deleted
+    Given the stored events are cleared
     And I reset the stats for all doctrine connections
     When I send a POST request to "/backoffice/banks" with body:
     """
@@ -142,10 +142,10 @@ Feature: Create a bank
     And the JSON node "violations[0].message" should be equal to "This bank name is already in use."
     And the JSON node "violations[0].code" should be equal to "23bd9dbf-6b9b-41cd-a99e-4844bcf3077f"
     And 2 requests got executed only for doctrine connection "default"
-    And there should have 0 "StoredDomainEvent" entities found by "name=erpify.backoffice.bank.created"
+    And there should be 0 events stored named "erpify.backoffice.bank.created"
 
   Scenario: Fail to create a bank whose short name only differs in case from an existing one
-    Given the "StoredDomainEvent" entities found by "" are deleted
+    Given the stored events are cleared
     And I reset the stats for all doctrine connections
     When I send a POST request to "/backoffice/banks" with body:
     """
@@ -168,10 +168,10 @@ Feature: Create a bank
     And the JSON node "violations[0].message" should be equal to "This code is already in use."
     And the JSON node "violations[0].code" should be equal to "23bd9dbf-6b9b-41cd-a99e-4844bcf3077f"
     And 2 requests got executed only for doctrine connection "default"
-    And there should have 0 "StoredDomainEvent" entities found by "name=erpify.backoffice.bank.created"
+    And there should be 0 events stored named "erpify.backoffice.bank.created"
 
   Scenario: Fail to create a bank whose name only differs in diacritics from an existing one
-    Given the "StoredDomainEvent" entities found by "" are deleted
+    Given the stored events are cleared
     And I reset the stats for all doctrine connections
     When I send a POST request to "/backoffice/banks" with body:
     """
@@ -194,7 +194,7 @@ Feature: Create a bank
     And the JSON node "violations[0].message" should be equal to "This bank name is already in use."
     And the JSON node "violations[0].code" should be equal to "23bd9dbf-6b9b-41cd-a99e-4844bcf3077f"
     And 2 requests got executed only for doctrine connection "default"
-    And there should have 0 "StoredDomainEvent" entities found by "name=erpify.backoffice.bank.created"
+    And there should be 0 events stored named "erpify.backoffice.bank.created"
 
   Scenario Outline: A created bank stores a normalized name distinct from its display form
     When I send a POST request to "/backoffice/banks" with body:

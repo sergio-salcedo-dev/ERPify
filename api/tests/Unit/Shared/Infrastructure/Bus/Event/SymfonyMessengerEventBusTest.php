@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Infrastructure\Bus\Event;
 
-use Erpify\Shared\Domain\Event\DomainEvent;
-use Erpify\Shared\Infrastructure\Bus\Event\SymfonyMessengerEventBus;
+use Erpify\Shared\Event\Domain\DomainEvent;
+use Erpify\Shared\Event\Infrastructure\Bus\SymfonyMessengerEventBus;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
