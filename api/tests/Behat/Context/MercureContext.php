@@ -11,6 +11,7 @@ use Erpify\Tests\Behat\Context\Abstraction\AbstractContext;
 use Erpify\Tests\Behat\Support\Json\Json;
 use Erpify\Tests\Behat\Support\Mercure\RecordingHub;
 use Erpify\Tests\Behat\Support\PostProcess\JsonToolTrait;
+use Erpify\Tests\Behat\Support\RecordedItemSelector;
 use JsonException;
 use Symfony\Component\Mercure\HubInterface;
 use Symfony\Component\Mercure\Update;
@@ -156,15 +157,6 @@ final class MercureContext extends AbstractContext
 
     private function selectedUpdate(): Update
     {
-        $updates = RecordingHub::updates();
-        $index = $this->selectedIndex ?? \array_key_last($updates);
-
-        self::assertNotNull($index, 'No Mercure update has been published');
-
-        $update = $updates[$index] ?? null;
-
-        self::assertInstanceOf(Update::class, $update, \sprintf('No Mercure update number %d', $index + 1));
-
-        return $update;
+        return (new RecordedItemSelector())->select(RecordingHub::updates(), $this->selectedIndex, 'Mercure update');
     }
 }

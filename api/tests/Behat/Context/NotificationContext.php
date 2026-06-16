@@ -9,6 +9,7 @@ use Behat\Step\Given;
 use Behat\Step\Then;
 use Erpify\Tests\Behat\Context\Abstraction\AbstractContext;
 use Erpify\Tests\Behat\Support\Notification\RecordedEmails;
+use Erpify\Tests\Behat\Support\RecordedItemSelector;
 use Symfony\Component\Mime\Address;
 use Symfony\Component\Mime\Email;
 
@@ -83,15 +84,6 @@ final class NotificationContext extends AbstractContext
 
     private function selectedEmail(): Email
     {
-        $emails = RecordedEmails::all();
-        $index = $this->selectedIndex ?? \array_key_last($emails);
-
-        self::assertNotNull($index, 'No notification email has been sent');
-
-        $email = $emails[$index] ?? null;
-
-        self::assertInstanceOf(Email::class, $email, \sprintf('No notification email number %d', $index + 1));
-
-        return $email;
+        return (new RecordedItemSelector())->select(RecordedEmails::all(), $this->selectedIndex, 'notification email');
     }
 }
