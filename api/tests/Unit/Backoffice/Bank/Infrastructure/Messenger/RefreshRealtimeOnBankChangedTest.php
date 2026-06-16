@@ -12,7 +12,7 @@ use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\MercureBankTopic;
 use Erpify\Backoffice\Bank\Infrastructure\Messenger\RefreshRealtimeOnBankChanged;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountCounter;
-use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Mercure\HubInterface;
 use Symfony\Component\Mercure\Update;
@@ -26,7 +26,7 @@ use Symfony\Component\Mercure\Update;
  *
  * @internal
  */
-#[CoversNothing]
+#[CoversClass(RefreshRealtimeOnBankChanged::class)]
 final class RefreshRealtimeOnBankChangedTest extends TestCase
 {
     private const string BANK_ID = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b';
