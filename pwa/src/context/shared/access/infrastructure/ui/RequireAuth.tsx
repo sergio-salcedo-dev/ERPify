@@ -3,6 +3,7 @@
 import { useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "../../application/useSession";
+import { AuthStatus } from "./AuthProvider";
 import { Routes } from "@/context/shared/domain/types/routes";
 import { safeInternalPath } from "@/lib/safeInternalPath";
 
@@ -19,7 +20,7 @@ export function RequireAuth({ children }: Readonly<{ children: ReactNode }>) {
   const { status } = useSession();
 
   useEffect(() => {
-    if (status !== "unauthenticated") return;
+    if (status !== AuthStatus.UNAUTHENTICATED) return;
     // Read the live location inside the effect (client-only) so the deep link is
     // preserved without pulling useSearchParams + a Suspense boundary into the
     // guard. safeInternalPath keeps a tampered target from becoming an open
@@ -31,6 +32,6 @@ export function RequireAuth({ children }: Readonly<{ children: ReactNode }>) {
     router.replace(`${Routes.LOGIN}?next=${encodeURIComponent(target)}`);
   }, [status, router]);
 
-  if (status !== "authenticated") return null;
+  if (status !== AuthStatus.AUTHENTICATED) return null;
   return <>{children}</>;
 }

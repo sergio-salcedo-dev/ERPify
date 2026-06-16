@@ -154,6 +154,10 @@ export function UserForm({ mode, initial, onStaleUser }: Readonly<UserFormProps>
       </Button>
     ) : undefined;
 
+  const idleSubmitLabel = isCreating ? "Create user" : "Save changes";
+  const cancelLabel = isCreating ? "Cancel and go back" : "Cancel and go back to user";
+  const submitActionLabel = isCreating ? "Create user" : "Save user changes";
+
   return (
     <form
       ref={formRef}
@@ -214,7 +218,7 @@ export function UserForm({ mode, initial, onStaleUser }: Readonly<UserFormProps>
         </select>
       </FormField>
 
-      {!isCreating ? (
+      {isCreating ? null : (
         <FormField
           name="permissions"
           label="Permissions"
@@ -237,14 +241,14 @@ export function UserForm({ mode, initial, onStaleUser }: Readonly<UserFormProps>
             ))}
           </fieldset>
         </FormField>
-      ) : null}
+      )}
 
       <footer className="user-form__footer flex flex-col-reverse items-stretch gap-2 pt-2 sm:flex-row sm:items-center sm:justify-end">
         <Link
           href={cancelHref}
           aria-disabled={submitting || undefined}
-          aria-label={isCreating ? "Cancel and go back" : "Cancel and go back to user"}
-          title={isCreating ? "Cancel and go back" : "Cancel and go back to user"}
+          aria-label={cancelLabel}
+          title={cancelLabel}
           tabIndex={submitting ? -1 : undefined}
           onClick={(event) => {
             if (submitting) event.preventDefault();
@@ -262,8 +266,8 @@ export function UserForm({ mode, initial, onStaleUser }: Readonly<UserFormProps>
           size="sm"
           disabled={submitting}
           data-icon={submitting ? "inline-start" : undefined}
-          aria-label={isCreating ? "Create user" : "Save user changes"}
-          title={isCreating ? "Create user" : "Save user changes"}
+          aria-label={submitActionLabel}
+          title={submitActionLabel}
           className="w-full sm:w-auto"
           data-testid="user-form__submit"
         >
@@ -272,10 +276,8 @@ export function UserForm({ mode, initial, onStaleUser }: Readonly<UserFormProps>
               <Spinner className="size-3.5" testId="user-form__submit-spinner" />
               Saving…
             </>
-          ) : isCreating ? (
-            "Create user"
           ) : (
-            "Save changes"
+            idleSubmitLabel
           )}
         </Button>
       </footer>

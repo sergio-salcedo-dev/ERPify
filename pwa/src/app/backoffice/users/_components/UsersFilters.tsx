@@ -34,7 +34,7 @@ const NONE_SORT_VALUE = "__none__" as const;
 const FILTER_DEBOUNCE_MS = 300;
 
 function countPanelFilters(filter: UsersFilter): number {
-  return (filter.role !== "" ? 1 : 0) + (filter.status !== "" ? 1 : 0);
+  return (filter.role === "" ? 0 : 1) + (filter.status === "" ? 0 : 1);
 }
 
 export function UsersFilters({

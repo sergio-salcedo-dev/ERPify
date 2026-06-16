@@ -64,20 +64,13 @@ function ProgressBar({
   testId,
 }: Readonly<{ percent: number; label: string; testId?: string }>) {
   return (
-    <div
-      className="roadmap__progress-track bg-muted h-1.5 w-full overflow-hidden rounded-full"
-      role="progressbar"
+    <progress
+      className="roadmap__progress-track bg-muted h-1.5 w-full appearance-none overflow-hidden rounded-full [&::-moz-progress-bar]:bg-status-dot-success [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:bg-status-dot-success"
+      max={100}
+      value={percent}
       aria-label={label}
-      aria-valuenow={percent}
-      aria-valuemin={0}
-      aria-valuemax={100}
       data-testid={testId}
-    >
-      <div
-        className="roadmap__progress-fill bg-status-dot-success h-full rounded-full"
-        style={{ width: `${percent}%` }}
-      />
-    </div>
+    />
   );
 }
 
