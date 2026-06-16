@@ -186,8 +186,13 @@ export function useResourceList<T extends { id: string }, F, TInput>(
   // a second click would re-follow the same cursor (skipping/repeating a page) or
   // race the empty-page recovery navigation. Ignoring clicks while loading keeps
   // one step per settled page.
-  const hasPrev = pagination?.hasPrev ?? false;
-  const hasNext = pagination?.hasNext ?? false;
+  // Gate the affordance on the link being present, not just the flag: a control
+  // is enabled only when there is a cursor to follow. If the envelope ever
+  // reports `hasNext` while `links.next` is null, the button would otherwise
+  // render enabled yet no-op on click (the D-A11y contract disables on a null
+  // link). The `&&` only ever tightens the flag — never enables what it denied.
+  const hasPrev = (pagination?.hasPrev ?? false) && pagination?.links.prev != null;
+  const hasNext = (pagination?.hasNext ?? false) && pagination?.links.next != null;
   const goPrev = useCallback(() => {
     if (reloadingRef.current) return;
     const link = pagination?.links.prev;
