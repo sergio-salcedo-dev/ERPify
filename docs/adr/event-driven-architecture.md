@@ -1,7 +1,8 @@
 # ADR — Arquitectura dirigida por eventos: `EventBus`, outbox transaccional y los tres ejes
 
 > **Estado:** aceptado · **Fecha:** 2026-06-14 · **Ámbito:** `api/src/Shared/{Domain,Infrastructure}/Bus/Event`
-> + casos de uso de escritura de `Backoffice/Bank/Application` + gate `php.lint.event-bus`.
+> + casos de uso de escritura de `Backoffice/Bank/Application` + gate `php.lint.event-bus`
+> + `config/packages/messenger.yaml` (nombrado de buses, D6).
 >
 > Contexto temporal: la aplicación **no está en producción**, así que cerrar la fuga de eventos de
 > este ADR no arrastra recuperación de datos históricos. El cambio es **corrección del modelo de
@@ -113,6 +114,52 @@ casos de uso más allá de Bank, divergencia real read/write o varios read-model
 middleware transversal uniforme en el borde de escritura. El `wrapInTransaction` de D3 es el escalón que
 ese día se sustituye por el middleware del bus, sin tirar trabajo.
 
+### D6 — Nombrado del bus de Messenger: convención del default hoy, rol al dividir
+
+El id de un bus bajo `framework.messenger.buses` es arbitrario: `messenger.bus.default` no es palabra
+reservada, es la convención que trae la receta de Symfony. Hoy hay **un solo bus** y `MessageBusInterface`
+se autocablea al **bus por defecto**, no a un id literal — con `default_bus: null` y un único bus, ese bus
+*es* el default. Por eso `SymfonyMessengerEventBus` (D2) y `BankAccountSearcher` lo reciben sin nombrar el
+id (el literal solo aparece en `messenger.yaml`).
+
+**Decisión:** mientras exista un único bus se mantiene `messenger.bus.default`. Renombrarlo a
+`erpify.bus.default` es cosmético — el significado de negocio ya vive en el puerto `EventBus` y su adaptador
+(D2); el id del contenedor es detalle de infraestructura invisible a `Domain/Application`. El cambio solo
+desviaría de lo idiomático sin ganancia.
+
+El rename que **sí** paga llega al dividir en varios buses para CQRS (#263, D5): se nombran **por rol** —
+`command.bus` / `query.bus` / `event.bus` — con autowiring por nombre de argumento
+(`MessageBusInterface $commandBus`/`$queryBus`/`$eventBus`), no con un genérico `erpify.bus.default`. El id
+revela *qué hace* el bus, lo cual solo importa cuando hay más de uno.
+
+Descartado: `erpify.bus.default` ahora (prefijo de marca, no de rol; rompe la convención del default-bus a
+cambio de nada). Descartado: fijar `default_bus` explícito teniendo un único bus (redundante — ese bus ya es
+el default).
+
+### D7 — No-handler: tolerancia por config, fail-fast deliberado, política por bus
+
+**Cero-handlers se tolera por config, nunca por catch.** Que un evento no tenga suscriptores es semántica
+legítima de un event bus, pero se expresa con `allow_no_handlers` del bus — **no** con un `try/catch` en
+`SymfonyMessengerEventBus`. Ese catch correría **dentro del `wrapInTransaction` de D3** y tragaría también un
+fallo real del transporte (DB caída → el `INSERT` del outbox falla), commiteando el agregado **sin** su evento
+→ reintroduce el dual-write que D3 cerró. El adaptador traduce el puerto `EventBus`, no es un punto de política.
+
+**Fail-fast deliberado.** El bus por defecto mantiene `allow_no_handlers: false`: un evento que se **olvidó
+enrutar** y no tiene handler revienta síncrono dentro del wrap → rollback. Es fail-fast contra cableado
+incompleto, ruidoso en dev/test antes de prod, no un defecto. La observabilidad de los fallos de handler en el
+worker va por el transporte `failed` (visible y replayable), **nunca** por un `warning` tragado.
+
+**Política por bus al dividir (D5/#263).** `allow_no_handlers: true` pertenecerá **solo** al `event.bus`
+(relación evento↔handler **N:M**, 0..N suscriptores); el `command.bus` mantiene `false` — un comando debe tener
+**exactamente un** handler, contrato **1:1**. Por eso el flag no se flipea hoy sobre el bus único.
+
+Descartado: `try/catch` + `warning`/`info` en el adaptador (traga fallos reales del outbox, oculta cableado
+roto, peor observabilidad que `failed`). Descartado: `allow_no_handlers: true` global hoy (rompería el contrato
+1:1 del command bus cuando el bus único cargue también comandos).
+
+> Mecánica y estado actual — enrutado `async` → outbox → worker → `failed`, y la tabla N:M con los ejemplos
+> vivos de `Bank`: [`../architecture-api.md`](../architecture-api.md), sección *Async & messaging*.
+
 ## Verificación
 
 - Behat de `Bank` (POST/PUT/DELETE) 100% verde, contrato RFC 9457 intacto; el delete con FK TOCTOU
@@ -124,6 +171,7 @@ ese día se sustituye por el middleware del bus, sin tirar trabajo.
 ## Triggers de revisita
 
 (a) Adopción de `CommandBus` (#263) → el límite transaccional migra del `wrapInTransaction` al
-middleware y D3 se reescribe. (b) Construcción de la épica de auditoría → `BankAccountSearcher` pasa a
+middleware y D3 se reescribe; los buses pasan a nombrarse por rol (`command.bus`/`query.bus`/`event.bus`)
+y D6 se actualiza. (b) Construcción de la épica de auditoría → `BankAccountSearcher` pasa a
 `AuditLogger` y **sale** de la allowlist. (c) Adopción de un broker externo → se añade el relay aguas
 abajo del outbox (D1) sin tocar productor ni atomicidad.
