@@ -12,8 +12,23 @@ Feature: Delete a bank
     Then the response status code should be 204
     And 8 requests got executed only for doctrine connection "default"
     And the "Bank" entity found by "id=de1e7e00-0000-7000-8000-000000000001" does not exist
-    And there should have 1 "StoredDomainEvent" entity found by "aggregateId=de1e7e00-0000-7000-8000-000000000001&name=erpify.backoffice.bank.deleted"
+    And there should have 1 "StoredDomainEvent" entities found by "aggregateId=de1e7e00-0000-7000-8000-000000000001&name=erpify.backoffice.bank.deleted"
     And there should have 0 "Bank" entities found by "id=de1e7e00-0000-7000-8000-000000000001"
+    And 1 outbox event was created on the queue "async"
+    And I got the event number 1 on queue "async" from the outbox
+    And The outbox event should be of type "Erpify\Backoffice\Bank\Domain\Event\BankDeletedDomainEvent"
+    And The outbox event property "bankId" should be equal to "de1e7e00-0000-7000-8000-000000000001"
+    And I consume 1 message from the "async" transport
+    And the command should succeed
+    And the output should contain "handled successfully (acknowledging to transport)"
+    And 0 outbox events were created on the queue "async"
+    # The delete handler skips email; only the realtime delete update is published.
+    And 0 notification emails were sent
+    And 1 Mercure update was published
+    And The Mercure update should have 2 topics
+    And The Mercure update property "type" should be equal to "bank.deleted"
+    And The Mercure update property "id" should be equal to "de1e7e00-0000-7000-8000-000000000001"
+    And The Mercure update property "bank" should not exist
 
   Scenario: Delete a bank that does not exist returns a 404 bank-not-found Problem Details body
     Given there should have 0 "Bank" entities found by "id=2e6d865c-17b0-476a-85f2-037bf6d3b3dc"

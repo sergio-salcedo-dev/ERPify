@@ -27,7 +27,24 @@ Feature: Update a bank
     And the last updated "Bank" entity found by "id=ed17ed00-0000-7000-8000-000000000001" should match:
       | name      | Updated Bank |
       | shortName | UB           |
-    And there should have 1 "StoredDomainEvent" entity found by "aggregateId=ed17ed00-0000-7000-8000-000000000001&name=erpify.backoffice.bank.updated"
+    And there should have 1 "StoredDomainEvent" entities found by "aggregateId=ed17ed00-0000-7000-8000-000000000001&name=erpify.backoffice.bank.updated"
+    And 1 outbox event was created on the queue "async"
+    And I got the event number 1 on queue "async" from the outbox
+    And The outbox event should be of type "Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent"
+    And The outbox event property "shortName" should be equal to "UB"
+    And I consume 1 message from the "async" transport
+    And the command should succeed
+    And the output should contain "handled successfully (acknowledging to transport)"
+    And 0 outbox events were created on the queue "async"
+    And 1 notification email was sent
+    And The notification email subject should be equal to "[ERPify] Bank updated"
+    # Update publishes to both the collection topic and the per-bank topic.
+    And 1 Mercure update was published
+    And The Mercure update should have 2 topics
+    And The Mercure update topic 1 should be equal to "urn:erpify:backoffice:banks"
+    And The Mercure update topic 2 should be equal to "urn:erpify:backoffice:bank:ed17ed00-0000-7000-8000-000000000001"
+    And The Mercure update property "type" should be equal to "bank.updated"
+    And The Mercure update property "bank.shortName" should be equal to "UB"
 
   Scenario: Update a bank that does not exist returns a 404 bank-not-found Problem Details body
     Given I add "Content-Type" header equal to "application/json"

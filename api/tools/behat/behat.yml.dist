@@ -34,9 +34,10 @@ default:
                 - Erpify\Tests\Behat\Context\Json\JsonSchemaContext
                 - Erpify\Tests\Behat\Context\RateLimitContext
                 - Erpify\Tests\Behat\Context\SqlQueryContext
-                - Erpify\Tests\Behat\Context\MessengerContext
-                - Erpify\Tests\Behat\Context\MessengerConsumeContext
                 - Erpify\Tests\Behat\Context\OutboxContext
+                - Erpify\Tests\Behat\Context\MessengerConsumerContext
+                - Erpify\Tests\Behat\Context\NotificationContext
+                - Erpify\Tests\Behat\Context\MercureContext
                 - Erpify\Tests\Behat\Context\LoggerContext
 
     extensions:
