@@ -75,6 +75,8 @@ Golden rule: *contexts reference each other's identities and react to each other
 | `Application/`    | Use cases (command/query handlers), DTOs, orchestration, validators over DTOs                                                                            | Infrastructure implementations (only their interfaces) |
 | `Infrastructure/` | Doctrine mappings, repository implementations, Symfony controllers, Messenger handlers, Mercure publishers, Flysystem adapters, external-service clients | — (outermost layer)                                    |
 
+**Domain enums are identity-only.** A `Domain/Enum/` enum carries identity and business rules (`isTerminal()`, transitions), never display text or i18n; its `->value` (`SCREAMING_SNAKE`) **is** the wire contract the API serializes, and presentation lives in the PWA (or an `Application`/`Infrastructure` i18n catalog keyed by `->value`). The same anti-regression rule extends to Domain value objects and Application mappers. Backing is per-aggregate: string-backed by default, int-backed only for hot-path aggregates. Full decision record: [`adr/domain-enums.md`](./adr/domain-enums.md).
+
 ## Data architecture
 
 - **Primary store**: PostgreSQL 18 via Doctrine ORM.
