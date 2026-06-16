@@ -9,8 +9,8 @@ use Erpify\Shared\Domain\Clock\SystemClock;
 
 /**
  * Audit / observability message: a bank's accounts (which carry the PII IBAN) were read. Deliberately
- * NOT a {@see \Erpify\Shared\Domain\Event\DomainEvent} — no business fact occurred, so it stays out of
- * the domain language and out of the domain-event store. It carries only WHAT (bankId) and WHEN; never
+ * NOT a {@see \Erpify\Shared\Event\Domain\DomainEvent} — no business fact occurred, so it stays out of
+ * the domain language and out of the event store. It carries only WHAT (bankId) and WHEN; never
  * the IBAN or any account value. The actor (WHO) is deferred until authentication exists.
  */
 final readonly class BankAccountsViewedAuditEvent

@@ -121,7 +121,6 @@ final class Bank extends AggregateRoot
 
         $bank->record(new BankCreatedDomainEvent(
             $id,
-            $bank->createdAt,
             $bank->name,
             $bank->shortName,
             $createdAt,
@@ -130,6 +129,8 @@ final class Bank extends AggregateRoot
             $media?->getContentHash(),
             $storedObject?->contentHash,
             $storedObject?->mimeType,
+            null,
+            $bank->createdAt,
         ));
 
         return $bank;
@@ -192,7 +193,6 @@ final class Bank extends AggregateRoot
 
         $this->record(new BankUpdatedDomainEvent(
             $this->id(),
-            $now,
             $this->name,
             $this->shortName,
             $this->createdAt->format(DateTimeInterface::ATOM),
@@ -201,12 +201,14 @@ final class Bank extends AggregateRoot
             $this->media?->getContentHash(),
             $this->storedObject->contentHash,
             $this->storedObject->mimeType,
+            null,
+            $now,
         ));
     }
 
     public function delete(): void
     {
-        $this->record(new BankDeletedDomainEvent($this->id(), SystemClock::now()));
+        $this->record(new BankDeletedDomainEvent($this->id(), null, SystemClock::now()));
     }
 
     /**

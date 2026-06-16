@@ -11,8 +11,8 @@ use Erpify\Backoffice\Bank\Domain\Exception\BankInUseException;
 use Erpify\Backoffice\Bank\Domain\Exception\BankNotFoundException;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository;
-use Erpify\Shared\Domain\Bus\Event\EventBus;
 use Erpify\Shared\Domain\Uuid\InvalidUuidException;
+use Erpify\Shared\Event\Domain\EventBus;
 
 final readonly class BankDeleter
 {
@@ -48,7 +48,7 @@ final readonly class BankDeleter
 
         try {
             // remove + publish in one transaction (closes the dual-write window).
-            // See docs/adr/event-driven-architecture.md.
+            // See docs/adr/event-store-and-projections.md.
             $this->entityManager->wrapInTransaction(function () use ($bank, $domainEvents): void {
                 $this->bankRepository->remove($bank);
                 $this->eventBus->publish(...$domainEvents);

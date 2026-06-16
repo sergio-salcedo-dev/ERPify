@@ -6,9 +6,9 @@ namespace Erpify\Backoffice\Bank\Infrastructure\Messenger;
 
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
-use Erpify\Shared\Application\DomainEvent\DomainEventHandlerDeduplicator;
 use Erpify\Shared\Application\Mailer\NotificationMailer;
-use Erpify\Shared\Domain\Event\DomainEvent;
+use Erpify\Shared\Event\Application\DomainEventHandlerDeduplicator;
+use Erpify\Shared\Event\Domain\DomainEvent;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
