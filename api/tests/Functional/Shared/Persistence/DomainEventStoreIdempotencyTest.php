@@ -7,6 +7,7 @@ namespace Erpify\Tests\Functional\Shared\Persistence;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
+use Erpify\Backoffice\Bank\Domain\Event\BankSnapshot;
 use Erpify\Shared\Domain\Uuid\Uuid;
 use Erpify\Shared\Event\Application\EventStore;
 use PHPUnit\Framework\Attributes\CoversNothing;
@@ -43,7 +44,7 @@ final class DomainEventStoreIdempotencyTest extends KernelTestCase
             $bankId = Uuid::generate();
             $now = '2026-06-06T00:00:00+00:00';
 
-            $event = new BankCreatedDomainEvent($bankId, 'Idempotent Bank', 'IDEM', $now, $now);
+            $event = new BankCreatedDomainEvent($bankId, new BankSnapshot('Idempotent Bank', 'IDEM', $now, $now));
 
             $store->append($event);
             $this->assertSame(

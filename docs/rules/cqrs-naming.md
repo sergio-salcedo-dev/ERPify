@@ -27,8 +27,9 @@ boundary it builds on is enforced by `make php.lint.event-bus`.
 - Category 3's `On<Event>` may name a concrete event or the change umbrella a subscriber covers —
   `OnBankChanged` is honest because one class carries an `#[AsMessageHandler]` method per lifecycle event
   (`onBankCreated`/`onBankUpdated`/`onBankDeleted`), legibly grouping the reaction instead of splitting
-  into three classes. The `AbstractBankChangedDomainEvent` supertype groups the created/updated pair
-  (delete extends `DomainEvent` directly), letting those two collapse to one method where wanted.
+  into three classes. The grouping is a naming choice on the *subscriber*, not an event hierarchy: each
+  lifecycle event extends `DomainEvent` directly, and the created/updated pair share their payload by
+  composing a `BankSnapshot` value object (delete carries none) rather than inheriting a common supertype.
 - Category 4's producer is an explicit, reviewed exception in `api/.event-dispatch-allowlist`
   (`BankAccountSearcher` → `BankAccountsViewedAuditEvent`): best-effort, must **not** ride the
   transactional `EventBus`. It migrates to an `AuditLogger` port when that subsystem is built.

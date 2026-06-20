@@ -8,6 +8,7 @@ use DateTimeInterface;
 use Doctrine\ORM\Mapping as ORM;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankDeletedDomainEvent;
+use Erpify\Backoffice\Bank\Domain\Event\BankSnapshot;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
 use Erpify\Shared\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Domain\Clock\SystemClock;
@@ -121,14 +122,16 @@ final class Bank extends AggregateRoot
 
         $bank->record(new BankCreatedDomainEvent(
             $id,
-            $bank->name,
-            $bank->shortName,
-            $createdAt,
-            $createdAt,
-            $media?->getId(),
-            $media?->getContentHash(),
-            $storedObject?->contentHash,
-            $storedObject?->mimeType,
+            new BankSnapshot(
+                $bank->name,
+                $bank->shortName,
+                $createdAt,
+                $createdAt,
+                $media?->getId(),
+                $media?->getContentHash(),
+                $storedObject?->contentHash,
+                $storedObject?->mimeType,
+            ),
             null,
             $bank->createdAt,
         ));
@@ -193,14 +196,16 @@ final class Bank extends AggregateRoot
 
         $this->record(new BankUpdatedDomainEvent(
             $this->id(),
-            $this->name,
-            $this->shortName,
-            $this->createdAt->format(DateTimeInterface::ATOM),
-            $now->format(DateTimeInterface::ATOM),
-            $this->media?->getId(),
-            $this->media?->getContentHash(),
-            $this->storedObject->contentHash,
-            $this->storedObject->mimeType,
+            new BankSnapshot(
+                $this->name,
+                $this->shortName,
+                $this->createdAt->format(DateTimeInterface::ATOM),
+                $now->format(DateTimeInterface::ATOM),
+                $this->media?->getId(),
+                $this->media?->getContentHash(),
+                $this->storedObject->contentHash,
+                $this->storedObject->mimeType,
+            ),
             null,
             $now,
         ));

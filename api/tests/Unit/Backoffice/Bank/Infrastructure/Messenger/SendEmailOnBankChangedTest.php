@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Backoffice\Bank\Infrastructure\Messenger;
 
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
+use Erpify\Backoffice\Bank\Domain\Event\BankSnapshot;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
 use Erpify\Backoffice\Bank\Infrastructure\Messenger\SendEmailOnBankChanged;
 use Erpify\Shared\Domain\Uuid\Uuid;
@@ -89,10 +90,7 @@ final class SendEmailOnBankChangedTest extends TestCase
     {
         return new BankCreatedDomainEvent(
             Uuid::generate(),
-            'Acme',
-            'ACM',
-            self::TIMESTAMP,
-            self::TIMESTAMP,
+            new BankSnapshot('Acme', 'ACM', self::TIMESTAMP, self::TIMESTAMP),
         );
     }
 
@@ -100,10 +98,7 @@ final class SendEmailOnBankChangedTest extends TestCase
     {
         return new BankUpdatedDomainEvent(
             Uuid::generate(),
-            'Acme',
-            'ACM',
-            self::TIMESTAMP,
-            self::TIMESTAMP,
+            new BankSnapshot('Acme', 'ACM', self::TIMESTAMP, self::TIMESTAMP),
         );
     }
 }

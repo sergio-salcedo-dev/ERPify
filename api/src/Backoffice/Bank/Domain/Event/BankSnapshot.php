@@ -4,45 +4,30 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\Bank\Domain\Event;
 
-use DateTimeImmutable;
-use Erpify\Shared\Event\Domain\DomainEvent;
-use Override;
-
 /**
- * Shared payload and serialization for bank lifecycle events that carry the full bank snapshot.
- * Concrete subclasses differ only in {@see eventName()}. The aggregate id lives on the envelope
- * (it is {@see aggregateId()}, not payload), so it is no longer part of {@see toPrimitives()}.
- *
- * @phpstan-consistent-constructor
+ * Immutable payload shared by the bank lifecycle events that carry a full snapshot (created, updated).
+ * It owns the serialization contract — {@see toPrimitives()} / {@see fromPrimitives()} — so those two
+ * events stay byte-identical in the reproducible event store by composing the same value object rather
+ * than inheriting a common supertype. The aggregate id and envelope (eventId/occurredOn) live on the
+ * event row, never here.
  */
-abstract class AbstractBankChangedDomainEvent extends DomainEvent
+final readonly class BankSnapshot
 {
     public function __construct(
-        string $bankId,
-        private readonly string $name,
-        private readonly string $shortName,
-        private readonly string $createdAt,
-        private readonly string $updatedAt,
-        private readonly ?string $logoMediaId = null,
-        private readonly ?string $logoContentHash = null,
-        private readonly ?string $storedObjectContentHash = null,
-        private readonly ?string $storedObjectMimeType = null,
-        ?string $eventId = null,
-        ?DateTimeImmutable $occurredOn = null,
+        public string $name,
+        public string $shortName,
+        public string $createdAt,
+        public string $updatedAt,
+        public ?string $logoMediaId = null,
+        public ?string $logoContentHash = null,
+        public ?string $storedObjectContentHash = null,
+        public ?string $storedObjectMimeType = null,
     ) {
-        parent::__construct($bankId, $eventId, $occurredOn);
-    }
-
-    #[Override]
-    public static function aggregateType(): string
-    {
-        return 'Backoffice.Bank';
     }
 
     /**
      * @return array<string, string|null>
      */
-    #[Override]
     public function toPrimitives(): array
     {
         return [
@@ -60,15 +45,9 @@ abstract class AbstractBankChangedDomainEvent extends DomainEvent
     /**
      * @param array<string, mixed> $body
      */
-    #[Override]
-    public static function fromPrimitives(
-        string $aggregateId,
-        array $body,
-        string $eventId,
-        string $occurredOn,
-    ): static {
-        return new static(
-            $aggregateId,
+    public static function fromPrimitives(array $body): self
+    {
+        return new self(
             self::stringField($body, 'name'),
             self::stringField($body, 'shortName'),
             self::stringField($body, 'createdAt'),
@@ -77,8 +56,6 @@ abstract class AbstractBankChangedDomainEvent extends DomainEvent
             self::nullableStringField($body, 'logoContentHash'),
             self::nullableStringField($body, 'storedObjectContentHash'),
             self::nullableStringField($body, 'storedObjectMimeType'),
-            $eventId,
-            new DateTimeImmutable($occurredOn),
         );
     }
 
