@@ -38,10 +38,10 @@ final class DbalEventStoreStreamTest extends KernelTestCase
         $connection->beginTransaction();
 
         try {
-            $bankId = Uuid::generate();
+            $aggregateId = Uuid::generate();
             $occurredOn = '2026-06-06T08:00:00+00:00';
             $snapshot = new BankSnapshot('Stream Bank', 'STRM', $occurredOn, $occurredOn);
-            $event = new BankCreatedDomainEvent($bankId, $snapshot);
+            $event = new BankCreatedDomainEvent($aggregateId, $snapshot);
 
             $store->append($event);
             $sequence = $this->sequenceOf($connection, $event->eventId());
@@ -50,7 +50,7 @@ final class DbalEventStoreStreamTest extends KernelTestCase
             $found = $this->locate($streamed, $event->eventId());
 
             $this->assertSame($sequence, $found->sequence);
-            $this->assertSame($bankId, $found->aggregateId);
+            $this->assertSame($aggregateId, $found->aggregateId);
             $this->assertSame('Backoffice.Bank', $found->aggregateType);
             $this->assertSame(BankCreatedDomainEvent::eventName(), $found->eventName);
             $this->assertSame(1, $found->eventVersion);

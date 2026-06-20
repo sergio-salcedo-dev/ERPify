@@ -11,12 +11,12 @@ use Override;
 final class BankCreatedDomainEvent extends DomainEvent
 {
     public function __construct(
-        string $bankId,
+        string $aggregateId,
         private readonly BankSnapshot $snapshot,
         ?string $eventId = null,
         ?DateTimeImmutable $occurredOn = null,
     ) {
-        parent::__construct($bankId, $eventId, $occurredOn);
+        parent::__construct($aggregateId, $eventId, $occurredOn);
     }
 
     #[Override]

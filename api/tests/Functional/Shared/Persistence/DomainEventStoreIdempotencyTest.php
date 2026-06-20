@@ -42,10 +42,10 @@ final class DomainEventStoreIdempotencyTest extends KernelTestCase
         $connection->beginTransaction();
 
         try {
-            $bankId = Uuid::generate();
+            $aggregateId = Uuid::generate();
             $now = '2026-06-06T00:00:00+00:00';
 
-            $event = new BankCreatedDomainEvent($bankId, new BankSnapshot('Idempotent Bank', 'IDEM', $now, $now));
+            $event = new BankCreatedDomainEvent($aggregateId, new BankSnapshot('Idempotent Bank', 'IDEM', $now, $now));
 
             $store->append($event);
             $this->assertSame(
