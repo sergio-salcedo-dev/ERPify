@@ -8,6 +8,7 @@ use Erpify\Shared\Event\Domain\DomainEvent;
 use Erpify\Shared\Event\Domain\EventBus;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
+use Symfony\Component\Messenger\Exception\ExceptionInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
 
 /**
@@ -22,6 +23,14 @@ final readonly class SymfonyMessengerEventBus implements EventBus
     {
     }
 
+    /**
+     * Failure propagates by design: callers invoke this inside the use-case `wrapInTransaction`, so a
+     * rejected dispatch aborts the aggregate save too (no dual write) and surfaces as an RFC 9457 500.
+     * The framework exception type stays here — the {@see EventBus} port declares no throws, so
+     * Application code never couples to it. See docs/adr/event-store-and-projections.md (D8).
+     *
+     * @throws ExceptionInterface transport send failure on the Doctrine outbox, or a sync-routed handler throwing
+     */
     #[Override]
     public function publish(DomainEvent ...$events): void
     {

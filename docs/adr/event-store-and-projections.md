@@ -193,6 +193,16 @@ entrega viva (worker, retries, `failed` transport). Un broker externo / BI / DW 
 directo (un `send` de red no se une a la transacción de DB y reintroduce el dual-write). El `sequence` es la
 primitiva que mantiene abierta esa evolución (y un eventual Pattern-1 log-as-queue) sin retrabajo.
 
+**Contrato de fallo de `publish()`:** la excepción de `MessageBusInterface::dispatch`
+(`Symfony\Component\Messenger\Exception\ExceptionInterface`) **propaga sin capturar** — al ir dentro del
+`wrapInTransaction`, aborta también el `save` del agregado (sin dual-write) y llega al handler RFC 9457 global
+→ 500. El tipo de framework **muere en el adaptador** (`SymfonyMessengerEventBus`, documentado con `@throws`);
+el puerto `EventBus` no declara throws, así que la capa Application no se acopla a él (ni necesita propagar la
+anotación a `BankCreator`/`Updater`/`Deleter`). Descartado tragarlo (reintroduce el dual-write); descartado
+envolverlo hoy en una excepción de dominio (`EventPublishingFailedException`): con un único adaptador
+productivo y cero callers que capturen el fallo, el envoltorio no se gana el mantenimiento (Regla de Tres). Se
+gradúa con el trigger (g).
+
 ### D9 — Metadata de trazado preparada, no implementada
 
 `metadata` reserva `correlation_id` y `causation_id` (qué evento/comando causó este — lineage para debugging y
@@ -233,4 +243,8 @@ observabilidad de eventos repuntado a `event_store`.
 externo (CRM/BI/DW/API pública) → relay aguas abajo del `event_store` por `sequence`. (c) Primer agregado
 event-sourced o per-stream replay → se consume `aggregate_version`. (d) Primera evolución de `eventVersion` →
 primer `Upcaster` real. (e) Volumen → particionado por `recorded_on`. (f) Adopción de `CommandBus` (#263) → el
-límite transaccional migra del `wrapInTransaction` al middleware (hereda el trigger del ADR anterior).
+límite transaccional migra del `wrapInTransaction` al middleware (hereda el trigger del ADR anterior). (g)
+Segundo adaptador productivo de `EventBus` con excepciones nativas distintas, **o** un caller que capture el
+fallo de publicación → envolver en el borde con `Shared\Event\Domain\EventPublishingFailedException` (con
+`$previous`) para estabilizar el contrato de fallo frente al cambio de adaptador y mapearlo en el pipeline RFC
+9457 — hasta entonces, propagación cruda (D8).
