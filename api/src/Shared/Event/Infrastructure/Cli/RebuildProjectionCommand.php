@@ -36,6 +36,28 @@ final class RebuildProjectionCommand extends Command
         $this
             ->addArgument('name', InputArgument::OPTIONAL, 'Projection name to rebuild')
             ->addOption('all', null, InputOption::VALUE_NONE, 'Rebuild every registered projection')
+            ->addUsage('bank_count')
+            ->addUsage('--all')
+            ->setHelp(<<<'HELP'
+                The <info>%command.name%</info> command replays the event store into a projection read model:
+                it truncates the read model, resets the projection checkpoint to <comment>0</comment>, then
+                applies every stored event in <comment>sequence</comment> order.
+
+                Rebuild a single projection by name:
+
+                  <info>php %command.full_name% bank_count</info>
+
+                Rebuild every registered projection in one pass:
+
+                  <info>php %command.full_name% --all</info>
+
+                Inside the dev stack the console runs in the <comment>php</comment> container:
+
+                  <info>make sf c='%command.name% bank_count'</info>
+
+                Reproducibility is the contract: after a rebuild, the <comment>bank_count</comment> read model
+                must equal <comment>COUNT(*)</comment> of the <comment>bank</comment> table.
+                HELP)
         ;
     }
 
