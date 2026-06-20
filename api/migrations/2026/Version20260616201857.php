@@ -7,9 +7,6 @@ namespace DoctrineMigrations;
 use Doctrine\DBAL\Schema\Schema;
 use Doctrine\Migrations\AbstractMigration;
 
-/**
- * Auto-generated Migration: Please modify to your needs!
- */
 final class Version20260616201857 extends AbstractMigration
 {
     public function getDescription(): string
@@ -19,7 +16,6 @@ final class Version20260616201857 extends AbstractMigration
 
     public function up(Schema $schema): void
     {
-        // this up() migration is auto-generated, please modify it to your needs
         $this->addSql('CREATE TABLE bank (name VARCHAR(255) NOT NULL, name_normalized VARCHAR(255) NOT NULL, short_name VARCHAR(50) NOT NULL, id UUID NOT NULL, created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, updated_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, stored_object_key VARCHAR(512) DEFAULT NULL, stored_object_mime_type VARCHAR(64) DEFAULT NULL, stored_object_byte_size INT DEFAULT NULL, stored_object_content_hash VARCHAR(64) DEFAULT NULL, logo_media_id UUID DEFAULT NULL, PRIMARY KEY (id))');
         // Byte-wise COLLATE "C" on the keyset sort columns (byte-ordered uniqueness + correct cursor
         // pagination). Doctrine's entity mapping does not model collation, so it is applied here, before
@@ -54,7 +50,6 @@ final class Version20260616201857 extends AbstractMigration
 
     public function down(Schema $schema): void
     {
-        // this down() migration is auto-generated, please modify it to your needs
         $this->addSql('ALTER TABLE bank DROP CONSTRAINT FK_D860BF7ABAAE86A3');
         $this->addSql('ALTER TABLE bank_account DROP CONSTRAINT FK_53A23E0A11C8FB41');
         $this->addSql('DROP TABLE bank');

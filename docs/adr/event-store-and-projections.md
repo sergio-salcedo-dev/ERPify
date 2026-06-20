@@ -183,6 +183,24 @@ Read endpoint `GET /api/backoffice/banks/count` → `{ "total": N }` servido **d
 `COUNT(*)`). El listado PWA de bancos muestra el total desde ese endpoint. Rebuild verificable: truncar
 `bank_count`, `rebuild`, el total cuadra con `COUNT(*)` de `bank` — prueba viva de reproducibilidad.
 
+**Read model raw DBAL + schema listener, no `#[ORM\Entity]`** (mismo criterio que el log en D4, otra categoría):
+una proyección es estado **derivado y desechable**, no un agregado — marcarla `#[ORM\Entity]` la disfrazaría de
+concepto de dominio (en este repo `#[ORM\Entity]` ⇒ entidad de dominio, y el read model vive en
+`Application`/`Infrastructure` `Projection`, no en `Domain/Entity`). Además el write del read model **debe
+commitar en la misma transacción** que el `advance` del checkpoint (D6): `DbalBankCountReadModel` inyecta la
+conexión DBAL **default** y un upsert `INSERT … ON CONFLICT (id) DO UPDATE SET total = total + :delta` que
+resuelve *insert-or-increment* y el seed-clamp-a-0 en una sola sentencia atómica, uniéndose a esa transacción sin
+pasar por la UoW del EM. Con una entidad ORM habría que orquestar el `flush()` en el punto exacto, mezclar
+escrituras ORM-managed y DBAL-managed en una transacción, y un `total += 1` en PHP sería read-modify-write — todo
+coste sin beneficio para una fila singleton (la hidratación/DQL/change-tracking del ORM no compran nada aquí).
+`BankCountSchemaListener` (`postGenerateSchema`) la mantiene schema-aware para que `make db.diff` la genere y no
+la borre — la gestión de esquema vía migración **sin** acoplar la proyección al ORM. Mismo patrón que el resto
+del backbone (`event_store`, `projection_checkpoint`, `handled_domain_event`: todos raw DBAL + schema listener).
+Descartado `#[ORM\Entity]`; se reevalúa en el trigger (h): si la proyección deja de ser un contador singleton y
+se vuelve un read model **multi-fila consultable/ordenable/paginable/serializable** (p.ej. `SearchProjection`,
+`DashboardProjection`), ahí sí pesa una entidad ORM de lectura vs. un repositorio de lectura dedicado — lo
+dispara la *forma de consumo*, no la incomodidad de no tener entidad.
+
 ### D8 — Convivencia con Messenger: entrega viva intacta, relay externo aguas abajo
 
 La escritura sigue siendo **atómica** (D3 del ADR anterior): el caso de uso envuelve `save()` + `EventBus.publish()`
@@ -247,4 +265,6 @@ límite transaccional migra del `wrapInTransaction` al middleware (hereda el tri
 Segundo adaptador productivo de `EventBus` con excepciones nativas distintas, **o** un caller que capture el
 fallo de publicación → envolver en el borde con `Shared\Event\Domain\EventPublishingFailedException` (con
 `$previous`) para estabilizar el contrato de fallo frente al cambio de adaptador y mapearlo en el pipeline RFC
-9457 — hasta entonces, propagación cruda (D8).
+9457 — hasta entonces, propagación cruda (D8). (h) Un read model de proyección crece de contador singleton a
+multi-fila **consultable/ordenable/paginable/serializable** → se reevalúa entidad ORM de lectura (con metadata
+pasiva) vs. repositorio de lectura dedicado, frente al raw-DBAL + schema-listener actual (D7).

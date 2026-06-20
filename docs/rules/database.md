@@ -56,6 +56,45 @@
   audit row) must set its id prior to `persist()`/flush; a null id is a bug, not a Doctrine cue.
 - Validate inbound ids as UUIDs (`#[Assert\Uuid(strict: true)]`) — version-agnostic, so v7 passes.
 
+## Persistence mechanism (ORM-mapped entity vs raw-DBAL table)
+
+The persistence mechanism is chosen **per aggregate / per table**, not globally — see the criteria
+table in [`../adr/bank-bankaccount-modeling.md`](../adr/bank-bankaccount-modeling.md). Two mechanisms
+coexist; pick by what the row *is*:
+
+- **Business aggregate → Doctrine ORM entity (the default).** A row whose **current state** you load,
+  mutate and flush is an `#[ORM\Entity]` (e.g. `Bank`, `BankAccount`), persisted through the shared
+  EntityManager. New aggregates use ORM — this is unchanged and remains the norm.
+- **Append-only log / projection / counter / checkpoint → raw DBAL, no ORM entity.** `event_store`,
+  `projection_checkpoint`, `bank_count` and `handled_domain_event` are read/written through the DBAL
+  **`default`** `Connection` (so they join the aggregate's write transaction) and mapped by hand to
+  readonly DTOs (`StoredEvent`) — never hydrated as managed objects. Full design:
+  [`../adr/event-store-and-projections.md`](../adr/event-store-and-projections.md).
+
+**Why a log is deliberately *not* an ORM entity** (an omission would be a bug; this is a choice): an
+append-only log is immutable, so the ORM's whole reason to exist — UnitOfWork change-tracking,
+dirty-checking, the identity map — is dead weight over rows that never mutate; idempotent append needs
+`INSERT … ON CONFLICT (event_id) DO NOTHING` (a Postgres upsert, awkward through the UnitOfWork); the
+payload is opaque JSON with no per-event class to map; and replay must stream rows to lightweight DTOs,
+not hydrate thousands of managed objects.
+
+**Schema stays known to Doctrine via a `postGenerateSchema` listener, not a mapping.** Each raw-DBAL
+table owns a `*SchemaListener` (`EventStoreSchemaListener`, `ProjectionCheckpointSchemaListener`,
+`BankCountSchemaListener`, `HandledDomainEventSchemaListener`) that injects the table + indexes into the
+in-memory schema, so `make db.diff` generates and keeps its migration. These tables are deliberately
+**absent** from the `config/packages/doctrine.yaml` ORM mappings — the schema tool sees them, the ORM
+does not.
+
+**`auto_mapping: false` is intentional — the mapping list is an allowlist of what the ORM owns.**
+`config/packages/doctrine.yaml` declares each ORM tree by hand (`Backoffice`, `SharedMedia`,
+`SharedStorage`); Doctrine does **not** auto-discover `#[ORM\Entity]` anywhere under `src/`. Two
+reasons: the DDD layout scatters entities across contexts (there is no conventional `src/Entity` for
+auto-mapping to find), and — the deciding one — keeping the list explicit makes *what Doctrine ORM
+manages* a reviewable line in the diff instead of a side effect of an attribute appearing somewhere.
+When an aggregate stops being ORM-persisted (as the domain-event log did when it became the raw-DBAL
+`event_store`), its entity **and** its `doctrine.yaml` mapping are removed together — a mapping pointing
+at an entity-less directory is dead config Doctrine rejects.
+
 ## Bounded-context data isolation (modular monolith)
 
 ERPify is a **modular monolith on one physical PostgreSQL database**. The goal is
