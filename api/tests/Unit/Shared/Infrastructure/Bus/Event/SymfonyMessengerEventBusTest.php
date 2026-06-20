@@ -6,13 +6,14 @@ namespace Erpify\Tests\Unit\Shared\Infrastructure\Bus\Event;
 
 use Erpify\Shared\Event\Domain\DomainEvent;
 use Erpify\Shared\Event\Infrastructure\Bus\SymfonyMessengerEventBus;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 /**
  * @internal
  */
-#[\PHPUnit\Framework\Attributes\CoversNothing]
+#[CoversClass(SymfonyMessengerEventBus::class)]
 final class SymfonyMessengerEventBusTest extends TestCase
 {
     #[Test]

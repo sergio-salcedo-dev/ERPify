@@ -10,7 +10,8 @@ use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankSnapshot;
 use Erpify\Shared\Domain\Uuid\Uuid;
 use Erpify\Shared\Event\Application\EventStore;
-use PHPUnit\Framework\Attributes\CoversNothing;
+use Erpify\Shared\Event\Infrastructure\Persistence\DbalEventStore;
+use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 /**
@@ -25,7 +26,7 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  *
  * @internal
  */
-#[CoversNothing]
+#[CoversClass(DbalEventStore::class)]
 final class DomainEventStoreIdempotencyTest extends KernelTestCase
 {
     public function testDoubleAppendOfTheSameEventWritesExactlyOneRow(): void

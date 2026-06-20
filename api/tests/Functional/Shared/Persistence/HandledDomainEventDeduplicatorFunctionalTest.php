@@ -10,7 +10,9 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Shared\Domain\Uuid\Uuid;
 use Erpify\Shared\Event\Application\DomainEventHandlerDeduplicator;
 use Erpify\Shared\Event\Application\HandledDomainEventPruner;
-use PHPUnit\Framework\Attributes\CoversNothing;
+use Erpify\Shared\Event\Infrastructure\Messenger\DbalDomainEventHandlerDeduplicator;
+use Erpify\Shared\Event\Infrastructure\Messenger\DbalHandledDomainEventPruner;
+use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 /**
@@ -23,7 +25,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  *
  * @internal
  */
-#[CoversNothing]
+#[CoversClass(DbalDomainEventHandlerDeduplicator::class)]
+#[CoversClass(DbalHandledDomainEventPruner::class)]
 final class HandledDomainEventDeduplicatorFunctionalTest extends KernelTestCase
 {
     private const string HANDLER = 'test-handler';
