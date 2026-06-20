@@ -36,3 +36,47 @@ Feature: Dispatch a bank domain event onto the outbox
     And 1 Mercure update was published
     And The Mercure update property "type" should be equal to "bank.created"
     And The Mercure update property "bank.shortName" should be equal to "DB"
+
+  # Consumer idempotency under at-least-once delivery: the same event (pinned eventId) is dispatched
+  # twice, so the worker receives two messages but the append is a no-op the second time
+  # (event_store ON CONFLICT (event_id)). On consume the handlers diverge by design: the non-idempotent
+  # email handler claims (eventId, handler) and sends once (SendEmailOnBankChanged), while the realtime
+  # handler is deliberately not deduplicated and re-publishes, because clients reconcile by id
+  # (RefreshRealtimeOnBankChanged).
+  Scenario: Redelivering the same event sends the email once but re-publishes realtime, with one stored row
+    When I dispatch the "Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent" outbox event with:
+    """
+    {
+      "aggregateId": "01970000-0000-7000-8000-000000000009",
+      "eventId": "01970000-0000-7000-8000-0000000000a1",
+      "occurredOn": "2026-06-16T10:00:00+00:00",
+      "payload": {
+        "name": "Redelivered Bank",
+        "shortName": "RDB",
+        "createdAt": "2026-06-16T10:00:00+00:00",
+        "updatedAt": "2026-06-16T10:00:00+00:00"
+      }
+    }
+    """
+    And I dispatch the "Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent" outbox event with:
+    """
+    {
+      "aggregateId": "01970000-0000-7000-8000-000000000009",
+      "eventId": "01970000-0000-7000-8000-0000000000a1",
+      "occurredOn": "2026-06-16T10:00:00+00:00",
+      "payload": {
+        "name": "Redelivered Bank",
+        "shortName": "RDB",
+        "createdAt": "2026-06-16T10:00:00+00:00",
+        "updatedAt": "2026-06-16T10:00:00+00:00"
+      }
+    }
+    """
+    Then 2 outbox events were created on the queue "async"
+    And there should be 1 event stored for aggregate "01970000-0000-7000-8000-000000000009" named "erpify.backoffice.bank.created"
+    And I consume 2 messages from the "async" transport
+    And the command should succeed
+    And 0 outbox events were created on the queue "async"
+    And 1 notification email was sent
+    And The notification email subject should be equal to "[ERPify] Bank created"
+    And 2 Mercure updates were published
