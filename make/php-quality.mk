@@ -109,7 +109,7 @@ php.lint.bounded-context: ## Bounded-context isolation gate
 ## —— Event-dispatch boundary gate ——————————————————————————————————————————
 
 # Fails CI when a file under */Application/ imports Symfony\Component\Messenger\MessageBusInterface
-# directly instead of publishing domain events through the Erpify\Shared\Domain\Bus\Event\EventBus
+# directly instead of publishing domain events through the Erpify\Shared\Event\Domain\EventBus
 # port (skipping api/.event-dispatch-allowlist). ADR: docs/adr/event-driven-architecture.md.
 php.lint.event-bus: ## Event-dispatch boundary gate
 	@$(PHP_TEST) bin/phpunit --filter=EventDispatchGateTest

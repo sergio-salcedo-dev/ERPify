@@ -122,6 +122,14 @@ final class FixturesContext implements Context
             '--purge-with-truncate' => true,
             '--quiet' => true,
         ], $scope);
+
+        // Hautelook's purge truncates ORM-entity tables only. The event-store backbone tables are raw
+        // DBAL (no entity), so they would carry rows across suite runs into the cloned backup and
+        // pollute event-count assertions. Truncate them here so the backup — and every per-feature
+        // restore cloned from it — starts empty, exactly as the old ORM-entity domain_event table did.
+        $this->entityManager->getConnection()->executeStatement(
+            'TRUNCATE event_store, projection_checkpoint, bank_count, handled_domain_event RESTART IDENTITY',
+        );
     }
 
     /**

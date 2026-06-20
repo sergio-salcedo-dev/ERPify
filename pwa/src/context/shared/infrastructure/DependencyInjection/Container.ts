@@ -8,10 +8,12 @@ import { CheckHealth as FrontOfficeCheckHealth } from "../../../frontoffice/heal
 import { CheckHealth as BackOfficeCheckHealth } from "../../../backoffice/health/application/CheckHealth";
 import { CheckDatabaseHealth as BackOfficeCheckDatabaseHealth } from "../../../backoffice/health/application/CheckDatabaseHealth";
 import { ApiBankRepository } from "../../../backoffice/bank/infrastructure/ApiBankRepository";
+import { ApiBankCountReader } from "../../../backoffice/bank/infrastructure/ApiBankCountReader";
 import { ApiBankSearchNavigator } from "../../../backoffice/bank/infrastructure/ApiBankSearchNavigator";
 import { BankCrudRepository } from "../../../backoffice/bank/infrastructure/BankCrudRepository";
 import { BankResourceNavigator } from "../../../backoffice/bank/infrastructure/BankResourceNavigator";
 import { SearchBanks } from "../../../backoffice/bank/application/SearchBanks";
+import { CountBanks } from "../../../backoffice/bank/application/CountBanks";
 import { FindBank } from "../../../backoffice/bank/application/FindBank";
 import { CreateBank } from "../../../backoffice/bank/application/CreateBank";
 import { UpdateBank } from "../../../backoffice/bank/application/UpdateBank";
@@ -70,6 +72,13 @@ container
   .to(ApiBankRepository)
   .inSingletonScope();
 
+// Narrow read port for the banks total (projection read model) — deliberately
+// separate from the search/CRUD repository so that contract stays untouched.
+container
+  .bind<ApiBankCountReader>("BackOfficeBankCountReader")
+  .to(ApiBankCountReader)
+  .inSingletonScope();
+
 container
   .bind<ApiBankSearchNavigator>("BackOfficeBankSearchNavigator")
   .to(ApiBankSearchNavigator)
@@ -89,6 +98,7 @@ container
   .inSingletonScope();
 
 container.bind<SearchBanks>("BackOfficeSearchBanks").to(SearchBanks);
+container.bind<CountBanks>("BackOfficeCountBanks").to(CountBanks);
 container.bind<FindBank>("BackOfficeFindBank").to(FindBank);
 container.bind<CreateBank>("BackOfficeCreateBank").to(CreateBank);
 container.bind<UpdateBank>("BackOfficeUpdateBank").to(UpdateBank);

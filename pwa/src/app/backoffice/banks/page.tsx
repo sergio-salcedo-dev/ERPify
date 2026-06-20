@@ -8,6 +8,7 @@ import type { BankInput } from "@/context/backoffice/bank/domain/BankRepository"
 import { BankProblemType } from "@/context/backoffice/bank/domain/BankProblemType";
 import { useQueryState } from "@/context/shared/resource/application/createQueryState";
 import { useResourceList } from "@/context/shared/resource/application/useResourceList";
+import { useBanksCount } from "@/context/backoffice/bank/application/useBanksCount";
 import { ViewStatus } from "@/context/shared/domain/types/status";
 import {
   AsyncBoundary,
@@ -110,6 +111,11 @@ export default function BanksListPage() {
     bulkDeleteTestId: BULK_DELETE_TESTID,
   });
 
+  // Total banks from the projection read model (not the page envelope `count`,
+  // which is null under LIGHT pagination). Auxiliary: a failed fetch never
+  // crashes the list, and the realtime callbacks refresh it on create/delete.
+  const { count: totalBanks, refresh: refreshBankCount } = useBanksCount();
+
   // Hydration-safe persisted preferences: SSR and first client paint always
   // render the defaults; the stored values apply after hydration.
   const [view, setView] = useStoredPreference<BanksView>(
@@ -151,6 +157,7 @@ export default function BanksListPage() {
   useBankRealtime([bankTopics.collection], {
     onCreated: () => {
       silentReload();
+      refreshBankCount();
     },
     onUpdated: () => {
       silentReload();
@@ -158,9 +165,11 @@ export default function BanksListPage() {
     onDeleted: (deletedId) => {
       markDeleted(deletedId);
       silentReload();
+      refreshBankCount();
     },
     onReconnect: () => {
       silentReload();
+      refreshBankCount();
     },
   });
 
@@ -263,6 +272,12 @@ export default function BanksListPage() {
           </h1>
           <p className="text-muted-foreground mt-1 text-sm" data-testid="banks-list__subtitle">
             Manage the banks available in the back office.
+          </p>
+          <p
+            className="banks-list__count text-muted-foreground mt-1 text-xs"
+            data-testid="banks-list__count"
+          >
+            {totalBanks === 1 ? "1 bank total" : `${totalBanks} banks total`}
           </p>
         </div>
         <Link

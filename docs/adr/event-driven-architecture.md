@@ -5,6 +5,12 @@
 > + `config/packages/messenger.yaml` (nombrado de buses, D6)
 > + [`../rules/cqrs-naming.md`](../rules/cqrs-naming.md) (estándar de nombrado «CQRS-shaped pre-bus», D5).
 >
+> **Supersedida parcialmente por** [`event-store-and-projections.md`](./event-store-and-projections.md):
+> conserva el modelo de tres ejes, el invariante «un `DomainEvent` se publica solo por `EventBus`, que
+> solo escribe al outbox» y el gate `php.lint.event-bus`; **revisa** la ubicación de los puertos
+> (`EventBus`/`DomainEvent` se reorganizan bajo `Shared/Event/`) y sustituye el *audit log* `domain_event`
+> por el `event_store` reproducible con proyecciones.
+>
 > Contexto temporal: la aplicación **no está en producción**, así que cerrar la fuga de eventos de
 > este ADR no arrastra recuperación de datos históricos. El cambio es **corrección del modelo de
 > consistencia**, no preparación de CQRS — esa distinción es la decisión D5.

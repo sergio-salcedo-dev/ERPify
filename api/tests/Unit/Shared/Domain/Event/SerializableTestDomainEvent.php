@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Domain\Event;
 
-use Erpify\Shared\Domain\Event\DomainEvent;
+use DateTimeImmutable;
+use Erpify\Shared\Event\Domain\DomainEvent;
 use Override;
 
 /**
@@ -19,6 +20,12 @@ final class SerializableTestDomainEvent extends DomainEvent
         return 'test.event.occurred';
     }
 
+    #[Override]
+    public static function aggregateType(): string
+    {
+        return 'Test.Aggregate';
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -26,5 +33,18 @@ final class SerializableTestDomainEvent extends DomainEvent
     public function toPrimitives(): array
     {
         return ['aggregateId' => $this->aggregateId()];
+    }
+
+    /**
+     * @param array<string, mixed> $body
+     */
+    #[Override]
+    public static function fromPrimitives(
+        string $aggregateId,
+        array $body,
+        string $eventId,
+        string $occurredOn,
+    ): static {
+        return new self($aggregateId, $eventId, new DateTimeImmutable($occurredOn));
     }
 }

@@ -1,0 +1,18 @@
+{
+  "schema_version": "0.1.0",
+  "evaluated_at": "2026-06-21",
+  "repo": "ERPify",
+  "target": { "type": "feature", "id": "bank-banks-bankaccount-bankcount", "label": "Bank domains E2E coverage" },
+  "collection_status": "COLLECTED",
+  "gate_basis": "priority_thresholds",
+  "gate_status": "FAIL",
+  "gate_practical_reading": "CONCERNS",
+  "rationale": "P0 coverage is 100% and P1 is 92%, but overall fully-E2E-covered requirements = 64% (< 80% minimum) due to non-core gaps: bank_count display/projection/realtime, bank-account read edges, IBAN PII auto-remask, and a few list-chrome/error states. Synthetic oracle, medium confidence → advisory.",
+  "p0_status": "MET",
+  "p1_status": "MET",
+  "overall_status": "NOT_MET",
+  "critical_open": 0,
+  "links": {
+    "trace_report_path": "_bmad-output/test-artifacts/traceability-matrix.md"
+  }
+}

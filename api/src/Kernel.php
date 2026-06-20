@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify;
 
+use Erpify\Shared\Event\Infrastructure\DependencyInjection\RegisterDomainEventsPass;
 use Override;
 use Symfony\Bundle\FrameworkBundle\Kernel\MicroKernelTrait;
 use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
@@ -21,6 +22,10 @@ class Kernel extends BaseKernel
     #[Override]
     protected function build(ContainerBuilder $container): void
     {
+        // Builds the (eventName, eventVersion) ⇒ class map for the event store from a compile-time scan
+        // of every concrete DomainEvent, failing the build on an eventName collision.
+        $container->addCompilerPass(new RegisterDomainEventsPass());
+
         // The isolated Behat toolchain (tools/behat/vendor) pulls in symfony/translation, which the
         // app itself does not depend on — so the Behat kernel registers a TranslationDataCollector
         // and serialises it into every profile. The `print the web profiler link` debug step targets

@@ -9,8 +9,8 @@ use Erpify\Backoffice\Bank\Application\Command\CreateBankCommand;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Shared\Application\Validation\Validator;
-use Erpify\Shared\Domain\Bus\Event\EventBus;
 use Erpify\Shared\Domain\Uuid\Uuid;
+use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Media\Application\Dto\UploadedImage;
 use Erpify\Shared\Media\Application\MediaRegistrar;
 use Erpify\Shared\Storage\Application\Dto\StoredObjectWriteResult;
@@ -56,8 +56,8 @@ final readonly class BankCreator
 
         $this->validator->ensure($newBank);
 
-        // save + publish in one transaction so the aggregate, its domain_event rows and the outbox
-        // commit atomically (closes the dual-write window). See docs/adr/event-driven-architecture.md.
+        // save + publish in one transaction so the aggregate, its event_store rows and the outbox
+        // commit atomically (closes the dual-write window). See docs/adr/event-store-and-projections.md.
         $this->entityManager->wrapInTransaction(function () use ($newBank): void {
             $this->bankRepository->save($newBank);
             $this->eventBus->publish(...$newBank->pullDomainEvents());

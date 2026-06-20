@@ -27,7 +27,7 @@ Feature: Update a bank
     And the last updated "Bank" entity found by "id=ed17ed00-0000-7000-8000-000000000001" should match:
       | name      | Updated Bank |
       | shortName | UB           |
-    And there should have 1 "StoredDomainEvent" entities found by "aggregateId=ed17ed00-0000-7000-8000-000000000001&name=erpify.backoffice.bank.updated"
+    And there should be 1 event stored for aggregate "ed17ed00-0000-7000-8000-000000000001" named "erpify.backoffice.bank.updated"
     And 1 outbox event was created on the queue "async"
     And I got the event number 1 on queue "async" from the outbox
     And The outbox event should be of type "Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent"
@@ -64,4 +64,4 @@ Feature: Update a bank
     And the JSON node "instance" should be a valid UUID
     And the JSON node "correlation-id" should be a valid UUID
     And 1 request got executed only for doctrine connection "default"
-    And there should have 0 "StoredDomainEvent" entities found by "aggregateId=2e6d865c-17b0-476a-85f2-037bf6d3b3dc&name=erpify.backoffice.bank.updated"
+    And there should be 0 events stored for aggregate "2e6d865c-17b0-476a-85f2-037bf6d3b3dc" named "erpify.backoffice.bank.updated"

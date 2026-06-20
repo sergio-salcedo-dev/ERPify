@@ -9,10 +9,12 @@ use Behat\Gherkin\Node\TableNode;
 use Behat\Hook\BeforeScenario;
 use Behat\Step\Given;
 use Behat\Step\Then;
+use DateTimeImmutable;
+use DateTimeInterface;
 use Doctrine\ORM\EntityManagerInterface;
-use Erpify\Shared\Domain\Event\DomainEvent;
+use Erpify\Shared\Domain\Uuid\Uuid;
+use Erpify\Shared\Event\Domain\DomainEvent;
 use Erpify\Tests\Behat\Context\Abstraction\AbstractContext;
-use Erpify\Tests\Behat\Support\EventHydrator;
 use Erpify\Tests\Behat\Support\Json\Json;
 use Erpify\Tests\Behat\Support\PostProcess\JsonToolTrait;
 use JsonException;
@@ -33,12 +35,13 @@ use Throwable;
  * the message, letting a scenario assert the full publish→consume→ack cycle. `sync` (`sync://`) is a
  * `SyncTransport` with no queue and is never inspectable, so aggregation instanceof-filters it out.
  *
- * The persisted `domain_event` store (an audit log a posteriori, not the outbox) is asserted with the
- * generic {@see EntityManagerContext} steps; nested payload fields are read here, on the pending event.
+ * The permanent `event_store` (the append-only log, not the outbox) is asserted with raw-SQL steps;
+ * nested payload fields are read here, on the pending event.
  *
  * @SuppressWarnings("PHPMD.TooManyPublicMethods")
  * @SuppressWarnings("PHPMD.TooManyMethods")
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
+ * @SuppressWarnings("PHPMD.ExcessiveClassComplexity")
  */
 final class OutboxContext extends AbstractContext
 {
@@ -123,6 +126,15 @@ final class OutboxContext extends AbstractContext
         self::assertInstanceOf($fullyQualifiedClassName, $this->selectedEvent());
     }
 
+    #[Then('The outbox event aggregate id should be equal to :id')]
+    public function outboxEventAggregateIdShouldBeEqualTo(string $id): void
+    {
+        $event = $this->selectedEvent();
+
+        self::assertInstanceOf(DomainEvent::class, $event);
+        self::assertSame($id, $event->aggregateId());
+    }
+
     /**
      * @throws JsonException
      */
@@ -201,18 +213,39 @@ final class OutboxContext extends AbstractContext
     }
 
     /**
-     * Reconstructs the typed event from JSON via reflection ({@see EventHydrator}) and dispatches it
-     * on the default bus inside a transaction, so the persist-domain-event middleware still writes the
-     * `domain_event` row and the in-memory transport receives the message.
+     * Reconstructs the typed event from a stored-row-shaped JSON via the domain's own
+     * {@see DomainEvent::fromPrimitives()} and dispatches it on the default bus inside a transaction, so
+     * the persist-domain-event middleware writes the `event_store` row and the in-memory transport
+     * receives the message. The JSON carries `aggregateId`, optional `eventId`/`occurredOn`, and a
+     * `payload` object (the domain data, the same shape `toPrimitives()` returns).
      *
      * @throws JsonException
      */
     #[Then('I dispatch the :fullyQualifiedClassName outbox event with:')]
     public function dispatchOutboxEvent(string $fullyQualifiedClassName, PyStringNode $jsonPayload): void
     {
-        /** @var array<array-key, mixed> $payload */
-        $payload = (array) \json_decode($jsonPayload->getRaw(), true, 512, JSON_THROW_ON_ERROR);
-        $event = (new EventHydrator())->hydrate($fullyQualifiedClassName, $payload);
+        if (!\is_a($fullyQualifiedClassName, DomainEvent::class, true)) {
+            self::fail(\sprintf('"%s" is not a %s', $fullyQualifiedClassName, DomainEvent::class));
+        }
+
+        /** @var array<string, mixed> $decoded */
+        $decoded = (array) \json_decode($jsonPayload->getRaw(), true, 512, JSON_THROW_ON_ERROR);
+
+        $aggregateId = \is_string($decoded['aggregateId'] ?? null) ? $decoded['aggregateId'] : '';
+        $eventId = \is_string($decoded['eventId'] ?? null) ? $decoded['eventId'] : Uuid::generate();
+        $occurredOn = \is_string($decoded['occurredOn'] ?? null)
+            ? $decoded['occurredOn']
+            : (new DateTimeImmutable())->format(DateTimeInterface::ATOM);
+
+        $payload = [];
+
+        if (\is_array($decoded['payload'] ?? null)) {
+            foreach ($decoded['payload'] as $key => $value) {
+                $payload[(string) $key] = $value;
+            }
+        }
+
+        $event = $fullyQualifiedClassName::fromPrimitives($aggregateId, $payload, $eventId, $occurredOn);
 
         $this->entityManager->wrapInTransaction(function () use ($event): void {
             $this->messageBus->dispatch($event);

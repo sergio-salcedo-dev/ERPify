@@ -22,7 +22,7 @@ framework:
         buses:
             messenger.bus.default:
                 middleware:
-                    - Erpify\Shared\Infrastructure\Messenger\PersistDomainEventMiddleware
+                    - Erpify\Shared\Event\Infrastructure\Messenger\PersistDomainEventMiddleware
 
 # Test env: in-memory queues. serialize=true runs messages through the Messenger serializer
 # (encode/decode) like Doctrine/AMQP would, so tests can catch non-serializable payloads or

@@ -10,8 +10,8 @@ use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Exception\BankNotFoundException;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Shared\Application\Validation\Validator;
-use Erpify\Shared\Domain\Bus\Event\EventBus;
 use Erpify\Shared\Domain\Uuid\InvalidUuidException;
+use Erpify\Shared\Event\Domain\EventBus;
 use Symfony\Component\Validator\Exception\ValidationFailedException;
 
 final readonly class BankUpdater
@@ -38,8 +38,8 @@ final readonly class BankUpdater
 
         $this->validator->ensure($bank);
 
-        // save + publish in one transaction so the aggregate, its domain_event rows and the outbox
-        // commit atomically (closes the dual-write window). See docs/adr/event-driven-architecture.md.
+        // save + publish in one transaction so the aggregate, its event_store rows and the outbox
+        // commit atomically (closes the dual-write window). See docs/adr/event-store-and-projections.md.
         $this->entityManager->wrapInTransaction(function () use ($bank): void {
             $this->bankRepository->save($bank);
             $this->eventBus->publish(...$bank->pullDomainEvents());

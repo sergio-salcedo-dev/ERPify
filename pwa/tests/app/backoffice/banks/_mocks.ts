@@ -51,6 +51,12 @@ function followOf(handler: object | undefined): ((link: string) => Promise<unkno
  * keep asserting on the same `searchRun`/`deleteRun`/`findRun`/`follow` spies.
  */
 function synthesizeAdapter(token: string, handlers: Record<string, object>): object | undefined {
+  if (token === "BackOfficeCountBanks") {
+    // The list header reads the banks total through this use case. Specs that
+    // don't care about the count get a stub resolving to 0; one that does wires
+    // its own `BackOfficeCountBanks` stub, which `containerMock` returns first.
+    return { run: async () => 0 };
+  }
   if (token === "BackOfficeBankCrudRepository") {
     const search = runOf(handlers.BackOfficeSearchBanks);
     const find = runOf(handlers.BackOfficeFindBank);

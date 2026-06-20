@@ -39,7 +39,7 @@ final readonly class RefreshRealtimeOnBankChanged
     {
         $this->publish(
             [MercureBankTopic::COLLECTION],
-            ['type' => 'bank.created', 'bank' => $this->bankPayload($event->toPrimitives())],
+            ['type' => 'bank.created', 'bank' => $this->bankPayload($event->aggregateId(), $event->toPrimitives())],
         );
     }
 
@@ -53,7 +53,7 @@ final readonly class RefreshRealtimeOnBankChanged
 
         $this->publish(
             [MercureBankTopic::COLLECTION, MercureBankTopic::forBank($bankId)],
-            ['type' => 'bank.updated', 'bank' => $this->bankPayload($event->toPrimitives())],
+            ['type' => 'bank.updated', 'bank' => $this->bankPayload($bankId, $event->toPrimitives())],
         );
     }
 
@@ -87,26 +87,24 @@ final readonly class RefreshRealtimeOnBankChanged
     }
 
     /**
-     * Maps domain-event primitives to the PWA `BankPrimitives` shape. Safe `??`
-     * access keeps the contract resilient if the event payload ever changes.
-     * `accountCount` is resolved at publish time so the PWA never receives `undefined`.
+     * Maps the event id and domain-event primitives to the PWA `BankPrimitives` shape. The id is the
+     * aggregate id (envelope), no longer part of the payload. Safe `??` access keeps the contract
+     * resilient if the event payload ever changes; `accountCount` is resolved at publish time so the
+     * PWA never receives `undefined`.
      *
      * @param array<string, string|null> $primitives
      *
      * @return array<string, string|int|null>
      */
-    private function bankPayload(array $primitives): array
+    private function bankPayload(string $bankId, array $primitives): array
     {
-        $bankId = $primitives['bankId'] ?? null;
-        $count = null !== $bankId ? $this->accountCountEnricher->countFor($bankId) : 0;
-
         return [
             'id' => $bankId,
             'name' => $primitives['name'] ?? null,
             'shortName' => $primitives['shortName'] ?? null,
             'createdAt' => $primitives['createdAt'] ?? null,
             'updatedAt' => $primitives['updatedAt'] ?? null,
-            'accountCount' => $count,
+            'accountCount' => $this->accountCountEnricher->countFor($bankId),
         ];
     }
 }

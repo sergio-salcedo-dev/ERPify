@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Backoffice\Bank\Infrastructure\Messenger;
 
-use DateTimeImmutable;
 use Erpify\Backoffice\Bank\Application\BankAccountCountEnricher;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankDeletedDomainEvent;
+use Erpify\Backoffice\Bank\Domain\Event\BankSnapshot;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\MercureBankTopic;
 use Erpify\Backoffice\Bank\Infrastructure\Messenger\RefreshRealtimeOnBankChanged;
@@ -43,15 +43,16 @@ final class RefreshRealtimeOnBankChangedTest extends TestCase
         // leaves the handler — only the six public bank fields ship.
         $this->handler()->onBankCreated(new BankCreatedDomainEvent(
             self::BANK_ID,
-            new DateTimeImmutable(self::CREATED_AT),
-            'Acme Savings',
-            'ACME',
-            self::CREATED_AT,
-            self::UPDATED_AT,
-            'logo-media-id',
-            'logo-content-hash',
-            'stored-object-content-hash',
-            'image/png',
+            new BankSnapshot(
+                'Acme Savings',
+                'ACME',
+                self::CREATED_AT,
+                self::UPDATED_AT,
+                'logo-media-id',
+                'logo-content-hash',
+                'stored-object-content-hash',
+                'image/png',
+            ),
         ));
 
         $update = $this->capturedUpdate();
@@ -74,15 +75,16 @@ final class RefreshRealtimeOnBankChangedTest extends TestCase
     {
         $this->handler()->onBankUpdated(new BankUpdatedDomainEvent(
             self::BANK_ID,
-            new DateTimeImmutable(self::UPDATED_AT),
-            'Acme Renamed',
-            'ACME',
-            self::CREATED_AT,
-            self::UPDATED_AT,
-            'logo-media-id',
-            'logo-content-hash',
-            'stored-object-content-hash',
-            'image/png',
+            new BankSnapshot(
+                'Acme Renamed',
+                'ACME',
+                self::CREATED_AT,
+                self::UPDATED_AT,
+                'logo-media-id',
+                'logo-content-hash',
+                'stored-object-content-hash',
+                'image/png',
+            ),
         ));
 
         $update = $this->capturedUpdate();
@@ -107,7 +109,7 @@ final class RefreshRealtimeOnBankChangedTest extends TestCase
     public function testPublishesDeletedWithIdOnlyToCollectionAndPerBankTopics(): void
     {
         $this->handler()->onBankDeleted(
-            new BankDeletedDomainEvent(self::BANK_ID, new DateTimeImmutable(self::UPDATED_AT)),
+            new BankDeletedDomainEvent(self::BANK_ID),
         );
 
         $update = $this->capturedUpdate();
@@ -146,11 +148,7 @@ final class RefreshRealtimeOnBankChangedTest extends TestCase
         $handler = new RefreshRealtimeOnBankChanged($hub, new BankAccountCountEnricher($accountCounts));
         $event = new BankUpdatedDomainEvent(
             self::BANK_ID,
-            new DateTimeImmutable(self::UPDATED_AT),
-            'Acme Savings',
-            'ACME',
-            self::CREATED_AT,
-            self::UPDATED_AT,
+            new BankSnapshot('Acme Savings', 'ACME', self::CREATED_AT, self::UPDATED_AT),
         );
 
         $handler->onBankUpdated($event);
