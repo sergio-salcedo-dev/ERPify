@@ -57,8 +57,8 @@ final readonly class BankCountProjector implements Projector
     }
 
     #[Override]
-    public function truncate(): void
+    public function reset(): void
     {
-        $this->readModel->truncate();
+        $this->readModel->reset();
     }
 }

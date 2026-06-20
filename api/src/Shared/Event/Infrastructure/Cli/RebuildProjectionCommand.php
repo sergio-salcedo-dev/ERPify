@@ -15,7 +15,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 /**
- * Rebuilds a projection read model from `sequence` 0: truncate the read model, reset the checkpoint,
+ * Rebuilds a projection read model from `sequence` 0: reset the read model and the checkpoint,
  * replay the event store. Reproducibility is the proof — a rebuilt `bank_count` must equal
  * `COUNT(*)` of `bank`.
  */
@@ -40,7 +40,7 @@ final class RebuildProjectionCommand extends Command
             ->addUsage('--all')
             ->setHelp(<<<'HELP'
                 The <info>%command.name%</info> command replays the event store into a projection read model:
-                it truncates the read model, resets the projection checkpoint to <comment>0</comment>, then
+                it resets the read model and the projection checkpoint to <comment>0</comment>, then
                 applies every stored event in <comment>sequence</comment> order.
 
                 Rebuild a single projection by name:

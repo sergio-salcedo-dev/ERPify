@@ -94,12 +94,12 @@ final class ProjectionRunnerTest extends TestCase
     }
 
     #[Test]
-    public function rebuildResetsTheCheckpointTruncatesTheReadModelAndReplaysFromZero(): void
+    public function rebuildResetsTheCheckpointAndTheReadModelAndReplaysFromZero(): void
     {
         $projector = $this->createMock(Projector::class);
         $projector->method('name')->willReturn(self::NAME);
         $projector->method('subscribedTo')->willReturn(self::NAMES);
-        $projector->expects($this->once())->method('truncate');
+        $projector->expects($this->once())->method('reset');
 
         $checkpointStore = $this->createMock(ProjectionCheckpointStore::class);
         $checkpointStore->expects($this->once())->method('reset')->with(self::NAME);

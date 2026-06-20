@@ -66,12 +66,12 @@ final class BankCountProjectorTest extends TestCase
     }
 
     #[Test]
-    public function truncateEmptiesTheReadModel(): void
+    public function resetEmptiesTheReadModel(): void
     {
         $readModel = $this->readModel();
-        $readModel->expects($this->once())->method('truncate');
+        $readModel->expects($this->once())->method('reset');
 
-        (new BankCountProjector($readModel))->truncate();
+        (new BankCountProjector($readModel))->reset();
     }
 
     private function readModel(): BankCountReadModel&MockObject

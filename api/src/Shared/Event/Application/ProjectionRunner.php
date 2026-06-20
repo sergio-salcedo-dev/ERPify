@@ -10,7 +10,7 @@ use InvalidArgumentException;
 /**
  * Drives projection catch-up over the event log by `sequence`, governed by a checkpoint. The same
  * mechanism serves both live (a reactor fires {@see catchUpAll()} after each delivered event) and
- * rebuild (CLI: {@see rebuild()} truncates the read model, resets the checkpoint to 0 and replays).
+ * rebuild (CLI: {@see rebuild()} resets the read model and the checkpoint to 0 and replays).
  *
  * Each run is one transaction (sanctioned EM `wrapInTransaction` at the orchestration boundary, like
  * the write-side use cases): the checkpoint row is locked `FOR UPDATE`, the read-model writes and the
@@ -58,10 +58,11 @@ final readonly class ProjectionRunner
         $projector = $this->projector($name);
 
         $this->entityManager->wrapInTransaction(function () use ($projector, $name): void {
-            // reset() locks/zeroes the checkpoint row inside this transaction; truncate() clears the
-            // read model. Replaying from 0 in the same transaction makes the rebuild atomic.
+            // checkpointStore->reset() locks/zeroes the checkpoint row inside this transaction;
+            // projector->reset() clears the read model. Replaying from 0 in the same transaction
+            // makes the rebuild atomic.
             $this->checkpointStore->reset($name);
-            $projector->truncate();
+            $projector->reset();
             $this->project($projector, $name, 0);
         });
     }

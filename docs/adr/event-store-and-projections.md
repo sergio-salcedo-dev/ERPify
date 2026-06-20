@@ -241,7 +241,7 @@ ESCRITURA (una transacción atómica)
 ENTREGA VIVA (Messenger worker)                 LOG PERMANENTE (event_store, por `sequence`)
   REACTORES <Efecto>OnEvento (solo live)        ProjectionRunner.catchUp (checkpoint FOR UPDATE)
     email · Mercure · integraciones               └─ Deserializer(+Upcaster) → Projector.project → read model
-    idempotencia por claim · NUNCA replay         REBUILD: truncate + checkpoint=0 + catchUp
+    idempotencia por claim · NUNCA replay         REBUILD: reset + checkpoint=0 + catchUp
   RunProjectionsOnDomainEvent → dispara catchUp   relay futuro → BI / DW / CRM / API pública (por `sequence`)
 ```
 

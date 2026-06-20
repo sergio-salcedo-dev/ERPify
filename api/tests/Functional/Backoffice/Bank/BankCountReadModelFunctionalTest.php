@@ -12,7 +12,7 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 /**
  * End-to-end checks for the singleton `bank_count` read model: increment/decrement maintain the running
- * total on the `id = 1` row and {@see DbalBankCountReadModel::truncate()} empties it. Runs under a
+ * total on the `id = 1` row and {@see DbalBankCountReadModel::reset()} empties it. Runs under a
  * transaction that is always rolled back (it clears the singleton first to get a deterministic baseline),
  * so the real total on the shared dev database is restored on rollback.
  *
@@ -21,7 +21,7 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 #[CoversClass(DbalBankCountReadModel::class)]
 final class BankCountReadModelFunctionalTest extends KernelTestCase
 {
-    public function testIncrementDecrementTotalAndTruncate(): void
+    public function testIncrementDecrementTotalAndReset(): void
     {
         self::bootKernel();
 
@@ -35,7 +35,7 @@ final class BankCountReadModelFunctionalTest extends KernelTestCase
         $connection->beginTransaction();
 
         try {
-            $readModel->truncate();
+            $readModel->reset();
             $this->assertSame(0, $readModel->total(), 'an empty read model totals 0');
 
             $readModel->increment();
@@ -45,8 +45,8 @@ final class BankCountReadModelFunctionalTest extends KernelTestCase
             $readModel->decrement();
             $this->assertSame(1, $readModel->total(), 'a deletion brings the total back to 1');
 
-            $readModel->truncate();
-            $this->assertSame(0, $readModel->total(), 'truncate empties the read model');
+            $readModel->reset();
+            $this->assertSame(0, $readModel->total(), 'reset empties the read model');
         } finally {
             if ($connection->isTransactionActive()) {
                 $connection->rollBack();

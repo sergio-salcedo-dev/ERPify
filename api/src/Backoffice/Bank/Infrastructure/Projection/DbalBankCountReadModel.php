@@ -42,7 +42,7 @@ final readonly class DbalBankCountReadModel implements BankCountReadModel
     }
 
     #[Override]
-    public function truncate(): void
+    public function reset(): void
     {
         $this->connection->executeStatement('DELETE FROM bank_count');
     }

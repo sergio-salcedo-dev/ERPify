@@ -29,7 +29,7 @@ interface Projector
     public function project(DomainEvent $event): void;
 
     /**
-     * Empties the read model to its zero state, for a rebuild before replaying from `sequence` 0.
+     * Resets the read model to its zero state, for a rebuild before replaying from `sequence` 0.
      */
-    public function truncate(): void;
+    public function reset(): void;
 }

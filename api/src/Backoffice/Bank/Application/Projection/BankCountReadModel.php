@@ -6,7 +6,7 @@ namespace Erpify\Backoffice\Bank\Application\Projection;
 
 /**
  * Read-model port for the `bank_count` projection: a single running total maintained by
- * {@see BankCountProjector} and read by the count endpoint. {@see truncate()} exists for a rebuild,
+ * {@see BankCountProjector} and read by the count endpoint. {@see reset()} exists for a rebuild,
  * which empties it before replaying the event store from `sequence` 0.
  */
 interface BankCountReadModel
@@ -17,5 +17,5 @@ interface BankCountReadModel
 
     public function total(): int;
 
-    public function truncate(): void;
+    public function reset(): void;
 }
