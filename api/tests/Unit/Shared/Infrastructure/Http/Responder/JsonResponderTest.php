@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Infrastructure\Http\Responder;
 
-use Erpify\Shared\Application\UseCase\Result;
+use Erpify\Shared\Kernel\Application\Result;
 use Erpify\Shared\Infrastructure\Http\Responder\JsonResponder;
 use JsonException;
 use PHPUnit\Framework\Attributes\CoversClass;

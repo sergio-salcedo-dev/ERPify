@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Tests\Unit\Shared\Application\UseCase;
+namespace Erpify\Tests\Unit\Shared\Kernel\Application;
 
-use Erpify\Shared\Application\UseCase\Result;
+use Erpify\Shared\Kernel\Application\Result;
 use Generator;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;

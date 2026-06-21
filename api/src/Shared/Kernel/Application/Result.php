@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Shared\Application\UseCase;
+namespace Erpify\Shared\Kernel\Application;
 
 /**
  * It describes the result of a use case.

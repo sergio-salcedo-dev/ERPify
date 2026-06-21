@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Tests\Unit\Shared\Domain\Aggregate;
+namespace Erpify\Tests\Unit\Shared\Kernel\Domain\Aggregate;
 
-use Erpify\Shared\Domain\Aggregate\AggregateRoot;
+use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
 
 /**
  * Minimal concrete {@see AggregateRoot} for unit-testing shared aggregate behaviour.

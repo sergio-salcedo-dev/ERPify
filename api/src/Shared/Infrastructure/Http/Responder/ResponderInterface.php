@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Infrastructure\Http\Responder;
 
-use Erpify\Shared\Application\UseCase\Result;
+use Erpify\Shared\Kernel\Application\Result;
 use Symfony\Component\HttpFoundation\Response;
 
 interface ResponderInterface

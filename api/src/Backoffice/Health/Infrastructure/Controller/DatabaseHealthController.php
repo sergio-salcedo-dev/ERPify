@@ -6,7 +6,7 @@ namespace Erpify\Backoffice\Health\Infrastructure\Controller;
 
 use DateTimeInterface;
 use Erpify\Backoffice\Health\Application\CheckDatabaseHealth;
-use Erpify\Shared\Application\UseCase\Result;
+use Erpify\Shared\Kernel\Application\Result;
 use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Infrastructure\Http\Responder\ResponderInterface;
 use Symfony\Component\HttpFoundation\Response;

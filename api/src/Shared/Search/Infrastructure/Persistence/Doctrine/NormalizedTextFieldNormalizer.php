@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Search\Infrastructure\Persistence\Doctrine;
 
-use Erpify\Shared\Domain\ValueObject\NormalizedText;
+use Erpify\Shared\Kernel\Domain\ValueObject\NormalizedText;
 use Override;
 
 /**

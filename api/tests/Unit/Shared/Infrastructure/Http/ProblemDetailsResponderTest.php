@@ -161,7 +161,7 @@ final class ProblemDetailsResponderTest extends TestCase
         $this->assertNotFalse($contents);
 
         $banned = [
-            'use Erpify\Shared\Application\UseCase\\',
+            'use Erpify\Shared\Kernel\Application\\',
             'use Erpify\Shared\Infrastructure\Http\Responder\ResponderInterface',
             'use Symfony\Component\HttpFoundation\JsonResponse',
             'use Doctrine\\',

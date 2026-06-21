@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Shared\Domain\Entity;
+namespace Erpify\Shared\Kernel\Domain\Entity;
 
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;

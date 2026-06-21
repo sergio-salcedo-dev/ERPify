@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Tests\Unit\Shared\Domain\Aggregate;
+namespace Erpify\Tests\Unit\Shared\Kernel\Domain\Aggregate;
 
-use Erpify\Shared\Domain\Aggregate\AggregateRoot;
+use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;

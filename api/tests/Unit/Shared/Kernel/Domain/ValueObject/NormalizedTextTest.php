@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Tests\Unit\Shared\Domain\ValueObject;
+namespace Erpify\Tests\Unit\Shared\Kernel\Domain\ValueObject;
 
-use Erpify\Shared\Domain\ValueObject\NormalizedText;
+use Erpify\Shared\Kernel\Domain\ValueObject\NormalizedText;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;

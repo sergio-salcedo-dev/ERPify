@@ -10,7 +10,7 @@ use DateTimeInterface;
 use Doctrine\ORM\EntityRepository;
 use Doctrine\ORM\Mapping\ClassMetadata;
 use Doctrine\ORM\QueryBuilder;
-use Erpify\Shared\Domain\Entity\Timestamped;
+use Erpify\Shared\Kernel\Domain\Entity\Timestamped;
 use Erpify\Tests\Behat\Support\Tool\TypeHint\TypeHintValueResolver;
 use ReflectionException;
 use ReflectionNamedType;

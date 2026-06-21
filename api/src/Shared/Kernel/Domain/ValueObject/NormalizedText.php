@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Shared\Domain\ValueObject;
+namespace Erpify\Shared\Kernel\Domain\ValueObject;
 
 use LogicException;
 use Transliterator;

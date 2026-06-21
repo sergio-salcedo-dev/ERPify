@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Frontoffice\Health\Infrastructure\Controller;
 
 use DateTimeInterface;
-use Erpify\Shared\Application\UseCase\Result;
+use Erpify\Shared\Kernel\Application\Result;
 use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Infrastructure\Http\Responder\ResponderInterface;
 use Symfony\Component\HttpFoundation\Response;

@@ -16,7 +16,7 @@ use Symfony\Component\HttpFoundation\Response;
  *
  * Parallel to {@see Responder\JsonResponder}; intentionally does NOT implement
  * {@see Responder\ResponderInterface} because that interface's input is the success-path
- * `Erpify\Shared\Application\UseCase\Result` value object. Forcing them to share a method
+ * `Erpify\Shared\Kernel\Application\Result` value object. Forcing them to share a method
  * signature would either leak error semantics into the success-path DTO or widen the
  * interface to `respond(object): Response`, weakening the type guarantee for every existing
  * caller. Keeping them as parallel-named classes preserves both contracts.

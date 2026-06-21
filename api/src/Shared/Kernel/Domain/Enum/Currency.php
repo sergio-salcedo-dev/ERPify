@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Shared\Domain\Enum;
+namespace Erpify\Shared\Kernel\Domain\Enum;
 
 /**
  * ISO 4217 alphabetic currency codes.

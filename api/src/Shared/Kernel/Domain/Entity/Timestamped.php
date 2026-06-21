@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Shared\Domain\Entity;
+namespace Erpify\Shared\Kernel\Domain\Entity;
 
 use DateTimeImmutable;
 use DateTimeInterface;
