@@ -10,8 +10,8 @@ import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetail
 import { useResourceItem } from "@/context/shared/resource/application/useResourceItem";
 import { CopyButton, EmptyState, MutationError } from "@/components/erpify";
 import { buttonVariants } from "@/components/ui/button-variants";
-import { cn } from "@/lib/utils";
-import { safeHref } from "@/lib/safeHref";
+import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import { dateTimeProvider } from "@/context/shared/date-time-provider/infrastructure";
 import { ViewStatus } from "@/context/shared/view-state/domain/ViewState";
 import { Can } from "@/context/shared/access/infrastructure/ui";

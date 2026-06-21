@@ -2,7 +2,7 @@
 
 import { LayoutGrid, Rows3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn } from "@/context/shared/styling/infrastructure/classNames";
 
 export type ResourceView = "table" | "cards";
 

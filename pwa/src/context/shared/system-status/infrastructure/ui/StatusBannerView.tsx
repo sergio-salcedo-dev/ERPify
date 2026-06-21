@@ -1,6 +1,6 @@
 import { AlertTriangle, CheckCircle2, Loader2, XCircle, type LucideIcon } from "lucide-react";
 import { dateTimeProvider } from "@/context/shared/date-time-provider/infrastructure";
-import { cn } from "@/lib/utils";
+import { cn } from "@/context/shared/styling/infrastructure/classNames";
 import { SystemStatus, systemHeadline } from "@/context/shared/system-status/domain/SystemStatus";
 
 const ICONS: Record<SystemStatus, LucideIcon> = {

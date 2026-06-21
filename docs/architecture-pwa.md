@@ -51,7 +51,7 @@ pwa/src/context/
 - `ui/` — Shadcn primitives.
 - `erpify/` — entity-agnostic backoffice design-system primitives, barrel-exported from `@/components/erpify`.
 
-`src/lib/` is glue/utility only — never business logic.
+Pure cross-cutting helpers/hooks live as capability modules under `src/context/shared/<capability>/` (the former `src/lib/` bucket was dissolved) — never business logic.
 
 ### Shared execution toolkits — access (IAM) & resource (CRUD)
 
@@ -72,7 +72,7 @@ Cross-cutting code has several homes; pick by **purpose**, not just "is it reuse
 | `app/_components/` (or a route's own `_components/`) | a **landing/marketing** presentational component (its own raw-palette + `tw-animate-css` / CSS language) used only by its `app/` route — co-located, not shared | `Navbar`, `Footer`, `FeatureCard` |
 | `components/erpify/` | an **entity-agnostic backoffice / app-shell design-system primitive**, reused across surfaces, barrel-exported from `@/components/erpify` | `DataTable`, `AsyncBoundary`, `EmptyState`, `StatusBadge`, `Spinner`, `Logo`, `SidebarItem`, `StatCard` |
 | `components/ui/` | a raw **Shadcn** primitive | `button`, `dialog`, `input` |
-| `src/lib/` | a **pure helper or generic hook** with no domain identity | `safeHref`, `useDebouncedValue`, `utils` |
+| `context/shared/<capability>/` | a **pure helper or generic hook** with no domain identity (promoted from the former `src/lib/`) | `cn` (`styling/`), `safeHref` (`navigation/`), `uuidV7` (`uuid/`), `useDebouncedValue` (`search/`) |
 
 The back-office (token-driven Shadcn + `@/components/erpify`) and the landing/marketing surface (raw-palette + `tw-animate-css` / CSS, under `app/_components/`) are two deliberate design languages — use the one matching the surface; don't cross-import. App-shell primitives reused by both (e.g. `Logo`) live in `@/components/erpify`. The former `context/shared/infrastructure/ui/components/` folder (atomic-design `atoms`/`molecules`/`organisms`) was retired: app-shell primitives → `@/components/erpify`, marketing components → `app/_components/`.
 

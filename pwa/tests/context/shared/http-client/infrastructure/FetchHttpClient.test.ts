@@ -5,12 +5,12 @@ import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import { isProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 
-// v7-shaped: ProblemDetails.instance / correlation-id are UUID v7, minted via @/lib/uuidV7.
+// v7-shaped: ProblemDetails.instance / correlation-id are UUID v7, minted via @/context/shared/uuid/infrastructure/uuidV7.
 const { STUB_UUID } = vi.hoisted(() => ({
   STUB_UUID: "00000000-0000-7000-8000-000000000000",
 }));
 
-vi.mock("@/lib/uuidV7", () => ({
+vi.mock("@/context/shared/uuid/infrastructure/uuidV7", () => ({
   uuidV7: () => STUB_UUID,
 }));
 

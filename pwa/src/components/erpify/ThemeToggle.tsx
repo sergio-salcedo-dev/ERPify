@@ -5,7 +5,7 @@ import { useTheme } from "next-themes";
 import { Sun, Moon, Monitor, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Theme } from "@/context/shared/theme/domain/Theme";
-import { cn } from "@/lib/utils";
+import { cn } from "@/context/shared/styling/infrastructure/classNames";
 
 export interface ThemeToggleProps {
   /** Forwarded to the rendered button as `data-testid`. */

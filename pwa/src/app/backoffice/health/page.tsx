@@ -12,7 +12,7 @@ import {
   aggregateSystemStatus,
   deriveSystemStatus,
 } from "@/context/shared/system-status/domain/SystemStatus";
-import { uuidV7 } from "@/lib/uuidV7";
+import { uuidV7 } from "@/context/shared/uuid/infrastructure/uuidV7";
 import { Button } from "@/components/ui/button";
 import { ProblemDisplay } from "@/components/erpify";
 import { SystemStatusBanner } from "./_components/SystemStatusBanner";

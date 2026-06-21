@@ -16,9 +16,9 @@ import { Role } from "@/context/shared/access/domain/Role";
 import { PERMISSION_WILDCARD } from "@/context/shared/access/domain/Permission";
 import { Routes } from "@/context/shared/routing/domain/Routes";
 import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
-import { uuidV7 } from "@/lib/uuidV7";
-import { safeHref } from "@/lib/safeHref";
-import { safeInternalPath } from "@/lib/safeInternalPath";
+import { uuidV7 } from "@/context/shared/uuid/infrastructure/uuidV7";
+import { safeHref } from "@/context/shared/navigation/domain/safeHref";
+import { safeInternalPath } from "@/context/shared/navigation/domain/safeInternalPath";
 
 export function LoginForm() {
   const router = useRouter();

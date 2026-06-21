@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { safeInternalPath } from "@/lib/safeInternalPath";
+import { safeInternalPath } from "@/context/shared/navigation/domain/safeInternalPath";
 
 const FALLBACK = "/backoffice";
 

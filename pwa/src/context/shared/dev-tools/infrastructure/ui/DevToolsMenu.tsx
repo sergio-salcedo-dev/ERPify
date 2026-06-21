@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowLeft, Wrench } from "lucide-react";
 import { Routes } from "@/context/shared/routing/domain/Routes";
 import { buttonVariants } from "@/components/ui/button-variants";
-import { cn } from "@/lib/utils";
+import { cn } from "@/context/shared/styling/infrastructure/classNames";
 import { DEV_TOOL_GROUPS } from "./devToolGroups";
 
 /**

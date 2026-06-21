@@ -12,8 +12,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
-import { safeHref } from "@/lib/safeHref";
+import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { Can } from "@/context/shared/access/infrastructure/ui";
 import { Permission } from "@/context/shared/access/domain/Permission";

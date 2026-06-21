@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { safeHref } from "@/lib/safeHref";
+import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 
 describe("safeHref", () => {
   it("returns relative paths unchanged", () => {

@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { type LucideIcon } from "lucide-react";
 import { IconTone } from "@/context/shared/error/domain/IconTone";
 import { Logo } from "@/components/erpify";
-import { cn } from "@/lib/utils";
+import { cn } from "@/context/shared/styling/infrastructure/classNames";
 
 const iconToneClasses: Record<IconTone, { wrap: string; icon: string }> = {
   [IconTone.PRIMARY]: { wrap: "bg-primary/10", icon: "text-primary" },

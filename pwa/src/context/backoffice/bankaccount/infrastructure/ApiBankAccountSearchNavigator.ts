@@ -1,5 +1,5 @@
 import { inject, injectable } from "inversify";
-import { safeHref } from "@/lib/safeHref";
+import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import type { HttpClient } from "../../../shared/http-client/domain/HttpClient";
 import type { BankAccountSearchNavigator } from "../application/BankAccountSearchNavigator";
 import type { BankAccountSearchPage } from "../domain/BankAccountRepository";

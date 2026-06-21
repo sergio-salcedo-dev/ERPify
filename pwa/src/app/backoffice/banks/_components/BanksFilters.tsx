@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type ChangeEvent, type ReactNode } from "react";
-import { useDebouncedValue } from "@/lib/useDebouncedValue";
-import { useSlashFocus } from "@/lib/useSlashFocus";
+import { useDebouncedValue } from "@/context/shared/search/infrastructure/useDebouncedValue";
+import { useSlashFocus } from "@/context/shared/keyboard/infrastructure/useSlashFocus";
 import { Search, SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";

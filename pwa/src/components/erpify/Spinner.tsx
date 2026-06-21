@@ -1,5 +1,5 @@
 import { Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/context/shared/styling/infrastructure/classNames";
 
 interface SpinnerProps {
   /** Extra classes; defaults to a 1rem icon. */

@@ -6,7 +6,7 @@ import {
 } from "@/context/shared/resource/infrastructure/InMemoryCrudRepository";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
-import { uuidV7 } from "@/lib/uuidV7";
+import { uuidV7 } from "@/context/shared/uuid/infrastructure/uuidV7";
 import { User } from "../domain/User";
 import type { UserInput } from "../domain/UserRepository";
 import { UserProblemType } from "../domain/UserProblemType";

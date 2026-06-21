@@ -20,11 +20,12 @@ import {
 } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
-import { cn } from "@/lib/utils";
-import { isUuid, uuidV7 } from "@/lib/uuidV7";
+import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { uuidV7 } from "@/context/shared/uuid/infrastructure/uuidV7";
+import { isUuid } from "@/context/shared/uuid/infrastructure/isUuid";
 import { dateTimeProvider } from "@/context/shared/date-time-provider/infrastructure";
 import { isRecentlyCreated } from "../_lib/bankRecency";
-import { safeHref } from "@/lib/safeHref";
+import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
 import { ViewStatus } from "@/context/shared/view-state/domain/ViewState";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";

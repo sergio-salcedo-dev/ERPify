@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "@/context/shared/styling/infrastructure/classNames";
 import { initials } from "./initials";
 
 interface MonogramAvatarProps {

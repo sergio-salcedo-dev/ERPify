@@ -141,7 +141,7 @@ Treat every task as a chance to *improve* what you touch, not merely satisfy the
 Every PR — even a "small" one — MUST be self-reviewed for the common attack classes BEFORE human review and BEFORE the final commit, across both `api/` and `pwa/`. If a class doesn't apply, say so in the PR description; don't silently skip. Walk this checklist per diffed file:
 
 **Frontend (`pwa/`)**
-- **XSS** — never `dangerouslySetInnerHTML`, `innerHTML`, `document.write`, `eval`, `new Function(string)`. Wrap every dynamic `href` / `src` / `router.push` URL in `safeHref(...)` (`@/lib/safeHref`) and `encodeURIComponent` the dynamic path segment. Static `aria-label` / `title` only — full list in `pwa/CLAUDE.md`.
+- **XSS** — never `dangerouslySetInnerHTML`, `innerHTML`, `document.write`, `eval`, `new Function(string)`. Wrap every dynamic `href` / `src` / `router.push` URL in `safeHref(...)` (`@/context/shared/navigation/domain/safeHref`) and `encodeURIComponent` the dynamic path segment. Static `aria-label` / `title` only — full list in `pwa/CLAUDE.md`.
 - **CSRF / Open redirect** — validate any URL from query params, location state, or API payload is same-origin or relative before navigating; reject `data:`, `javascript:`, `file:`, `vbscript:`.
 - **Untrusted input → DOM attributes** — explicit allowlists for `target`, `rel`, `download`. External `target="_blank"` always pairs with `rel="noopener noreferrer"`.
 - **Storage / clipboard** — never put secrets, JWTs, or PII into `localStorage` / `sessionStorage` (use httpOnly cookies). Clipboard writes go through `<CopyButton>`, which never trusts the value as HTML.

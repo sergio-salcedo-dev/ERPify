@@ -152,7 +152,7 @@ scripts/        Utility scripts
 | Bounded contexts (DDD)     | `pwa/src/context/<bounded-context>/{domain,application,infrastructure}/` |
 | Cross-cutting kernel       | `pwa/src/context/shared/`                                                |
 | Reusable UI (Shadcn-based) | `pwa/src/components/`                                                    |
-| Framework glue             | `pwa/src/lib/`                                                           |
+| Pure helpers / hooks       | `pwa/src/context/shared/<capability>/`                                  |
 | Unit tests (Vitest)        | `pwa/tests/` (mirrors `src/`)                                            |
 | E2E tests (Playwright)     | `pwa/tests/e2e/`                                                         |
 

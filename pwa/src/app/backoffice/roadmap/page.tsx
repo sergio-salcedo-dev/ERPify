@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Check } from "lucide-react";
 import { StatusBadge, type StatusBadgeVariant } from "@/components/erpify";
-import { cn } from "@/lib/utils";
+import { cn } from "@/context/shared/styling/infrastructure/classNames";
 import {
   roadmapPhases,
   computeRoadmapProgress,

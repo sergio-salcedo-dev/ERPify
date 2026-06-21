@@ -8,7 +8,7 @@ import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetail
 import { DataTable, StatusBadge, TruncatedText } from "@/components/erpify";
 import type { DataTableColumn, DataTableSelection, DataTableSort } from "@/components/erpify";
 import { dateTimeProvider } from "@/context/shared/date-time-provider/infrastructure";
-import { safeHref } from "@/lib/safeHref";
+import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import { isRecentlyCreated } from "../_lib/bankRecency";
 import { bankRoutes } from "../_lib/bankRoutes";
 import type { BankColumnKey } from "../_lib/bankColumns";

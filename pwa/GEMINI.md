@@ -19,7 +19,7 @@ Specific guidance for the Next.js PWA. Reference the root [GEMINI.md](../GEMINI.
 - **Folder Structure:**
   - `src/app/`: Next.js App Router (routes, layouts). Keep logic minimal.
   - `src/context/`: DDD core logic split by bounded context.
-  - `src/lib/`: Framework-specific glue.
+  - `src/context/shared/<capability>/`: cross-cutting capability modules (helpers, hooks, ports + adapters). No `src/lib/` bucket.
 
 ## Essential Commands
 
@@ -33,4 +33,4 @@ Run from the repository root:
 ## File Constraints
 
 - **Node Modules:** `pwa/node_modules/` is managed by npm; never edit manually.
-- **Context Boundaries:** Do not flatten domain logic into `src/app/` or `src/lib/`. New bounded contexts must follow the three-layer split.
+- **Context Boundaries:** Do not flatten domain logic into `src/app/`, and never reintroduce a generic `src/lib`/`utils` bucket (cross-cutting code is a capability module under `src/context/shared/`). New bounded contexts must follow the three-layer split.

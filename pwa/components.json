@@ -14,9 +14,9 @@
   "rtl": false,
   "aliases": {
     "components": "@/components",
-    "utils": "@/lib/utils",
+    "utils": "@/context/shared/styling/infrastructure/classNames",
     "ui": "@/components/ui",
-    "lib": "@/lib",
+    "lib": "@/context/shared",
     "hooks": "@/hooks"
   },
   "menuColor": "default",

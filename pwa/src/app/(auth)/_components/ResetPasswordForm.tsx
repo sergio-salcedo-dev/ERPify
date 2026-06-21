@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Routes } from "@/context/shared/routing/domain/Routes";
 import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
-import { safeHref } from "@/lib/safeHref";
+import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 
 export function ResetPasswordForm() {
   const router = useRouter();

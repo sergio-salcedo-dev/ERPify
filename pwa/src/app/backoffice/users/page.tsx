@@ -21,9 +21,9 @@ import {
 import type { DataTableSelection, DataTableSort, ListDensity } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
-import { cn } from "@/lib/utils";
-import { safeHref } from "@/lib/safeHref";
-import { useStoredPreference } from "@/lib/useStoredPreference";
+import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { safeHref } from "@/context/shared/navigation/domain/safeHref";
+import { useStoredPreference } from "@/context/shared/storage/infrastructure/useStoredPreference";
 import { dateTimeProvider } from "@/context/shared/date-time-provider/infrastructure";
 import { Can } from "@/context/shared/access/infrastructure/ui";
 import { Permission } from "@/context/shared/access/domain/Permission";

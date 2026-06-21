@@ -144,7 +144,7 @@ All browser traffic terminates at **FrankenPHP on `localhost`**. `/` is reverse-
 | `pwa/src/components/ui/`                                     | Shadcn primitives                                                                                   |
 | `pwa/src/components/erpify/`                                 | Project-specific components                                                                         |
 | `pwa/src/context/shared/dependency-injection/infrastructure/` | Inversify container wiring                                                                          |
-| `pwa/src/lib/`                                               | Glue / utilities only                                                                               |
+| `pwa/src/context/shared/<capability>/`                       | Pure cross-cutting helpers/hooks (capability modules)                                               |
 | `docs/`                                                      | Primary AI retrieval source — start at `index.md`                                                   |
 | `docs/rules/`                                                | Authoritative coding rules                                                                          |
 | `make/`                                                      | Make modules included by root `Makefile`                                                            |

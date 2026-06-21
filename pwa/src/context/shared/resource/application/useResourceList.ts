@@ -7,7 +7,7 @@ import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import { ViewStatus } from "@/context/shared/view-state/domain/ViewState";
 import { KeyboardKey } from "@/context/shared/keyboard/domain/KeyboardKey";
 import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
-import { uuidV7 } from "@/lib/uuidV7";
+import { uuidV7 } from "@/context/shared/uuid/infrastructure/uuidV7";
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import type { PageEnvelope } from "@/context/shared/search/domain";
 import type { CrudRepository, ResourceSearchCriteria } from "../domain/CrudRepository";

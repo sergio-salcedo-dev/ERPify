@@ -7,7 +7,7 @@ import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetail
 import { DataTable, TruncatedText } from "@/components/erpify";
 import type { DataTableColumn, DataTableSelection, DataTableSort } from "@/components/erpify";
 import { dateTimeProvider } from "@/context/shared/date-time-provider/infrastructure";
-import { safeHref } from "@/lib/safeHref";
+import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import { userRoutes } from "../_lib/userRoutes";
 import type { UserColumnKey } from "../_lib/userColumns";
 import { UserStatusBadge } from "./UserStatusBadge";

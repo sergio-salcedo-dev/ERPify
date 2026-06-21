@@ -11,7 +11,7 @@ import {
 } from "../domain/HttpClient";
 import type { DebugTokenObserver } from "@/context/shared/debug-token/domain/DebugTokenObserver";
 import { NoopDebugTokenObserver } from "@/context/shared/debug-token/infrastructure/NoopDebugTokenObserver";
-import { uuidV7 } from "@/lib/uuidV7";
+import { uuidV7 } from "@/context/shared/uuid/infrastructure/uuidV7";
 
 function trimBase(url: string): string {
   return url.replace(/\/$/, "");
