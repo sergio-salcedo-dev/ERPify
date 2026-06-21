@@ -34,7 +34,7 @@ sobre el seam + Parallel Change (expand–migrate–contract) en fases 0→3, un
 
 **Funcionales:**
 
-- **FR1 — Vocabulario en dominio**: `Shared/Domain/Search` gana `Filter`, `FilterOperator` (enum)
+- **FR1 — Vocabulario en dominio**: `Shared/Search/Domain` gana `Filter`, `FilterOperator` (enum)
   y `Filters`; `SearchCriteria` los transporta retrocompatible. Operadores solo con consumidor
   real (`EQ`, `IN`, `CONTAINS` normalizado); el enum es el punto de extensión.
 - **FR2 — Contrato HTTP genérico validado**: `filters[N][field|operator|value]` como DTOs anidados

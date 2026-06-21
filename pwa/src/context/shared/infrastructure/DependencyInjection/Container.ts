@@ -23,9 +23,9 @@ import { ApiBankAccountSearchNavigator } from "../../../backoffice/bankaccount/i
 import { SearchBankAccounts } from "../../../backoffice/bankaccount/application/SearchBankAccounts";
 import { InMemoryUserRepository } from "../../../backoffice/user/infrastructure/InMemoryUserRepository";
 import { InMemoryResourceNavigator } from "../../../shared/resource/infrastructure/InMemoryResourceNavigator";
-import type { DebugTokenObserver } from "../../domain/DebugToken/DebugTokenObserver";
-import { EventTargetDebugTokenObserver } from "../DebugToken/EventTargetDebugTokenObserver";
-import { NoopDebugTokenObserver } from "../DebugToken/NoopDebugTokenObserver";
+import type { DebugTokenObserver } from "@/context/shared/DebugToken/domain/DebugTokenObserver";
+import { EventTargetDebugTokenObserver } from "@/context/shared/DebugToken/infrastructure/EventTargetDebugTokenObserver";
+import { NoopDebugTokenObserver } from "@/context/shared/DebugToken/infrastructure/NoopDebugTokenObserver";
 import { isDevToolsAvailable } from "../../dev-tools/domain/isDevToolsAvailable";
 
 const container = new Container();

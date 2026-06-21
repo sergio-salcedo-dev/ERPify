@@ -6,8 +6,8 @@ namespace Erpify\Tests\Unit\Backoffice\BankAccount\Application;
 
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountSearchRepository;
-use Erpify\Shared\Domain\Search\Page;
-use Erpify\Shared\Domain\Search\SearchCriteria;
+use Erpify\Shared\Search\Domain\Page;
+use Erpify\Shared\Search\Domain\SearchCriteria;
 use Override;
 
 /**

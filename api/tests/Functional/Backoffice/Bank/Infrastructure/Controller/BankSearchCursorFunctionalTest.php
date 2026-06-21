@@ -16,7 +16,7 @@ use Symfony\Component\Uid\Uuid;
 
 /**
  * Proof-of-wire for the PR3 cursor-only flip against REAL Postgres: it asserts that
- * `Page<Bank>` + {@see \Erpify\Shared\Infrastructure\Http\Responder\SearchResponder} + the keyset
+ * `Page<Bank>` + {@see \Erpify\Shared\Search\Infrastructure\Http\SearchResponder} + the keyset
  * engine survive real navigation, not just compilation. Navigation uses ONLY the server-composed
  * `links.next`/`links.prev` (verbatim) + the opaque cursor — never client-side query reconstruction
  * (W2/W9). `SearchResponder` is the sole envelope compositor.

@@ -14,7 +14,7 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  * BankAccount persistence by COMPOSITION (PR3): implements only its domain port with an injected
  * {@see EntityManagerInterface} — no `ServiceEntityRepository` inheritance, no
  * `getEntityClassName()`. It has no paginated read-path, so it does NOT use the
- * {@see \Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\DoctrineSearchEngine}; only the
+ * {@see \Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\DoctrineSearchEngine}; only the
  * referential-integrity count is exposed.
  */
 #[AsAlias(BankAccountRepository::class)]

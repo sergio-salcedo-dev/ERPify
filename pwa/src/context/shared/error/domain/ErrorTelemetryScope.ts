@@ -1,7 +1,7 @@
 import {
   TelemetrySurface,
   telemetryScope,
-} from "@/context/shared/domain/Observability/TelemetryScope";
+} from "@/context/shared/Observability/domain/TelemetryScope";
 
 /**
  * {@link TelemetryContext.scope} tags for the Next.js error boundaries, passed to

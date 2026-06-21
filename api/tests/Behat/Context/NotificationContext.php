@@ -15,7 +15,7 @@ use Symfony\Component\Mime\Email;
 
 /**
  * Asserts the outbound-notification effect of consuming a bank event, via the real mailer path
- * (handler → {@see \Erpify\Shared\Infrastructure\Mailer\PlainTextNotificationMailer} → `MailerInterface`,
+ * (handler → {@see \Erpify\Shared\Mailer\Infrastructure\PlainTextNotificationMailer} → `MailerInterface`,
  * `MAILER_DSN=null://null`). Emails are captured off Symfony Mailer's `MessageEvent` by
  * {@see \Erpify\Tests\Behat\Support\Notification\RecordingMailerSubscriber} into {@see RecordedEmails}.
  *

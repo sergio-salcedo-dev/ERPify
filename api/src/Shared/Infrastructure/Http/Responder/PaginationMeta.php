@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Infrastructure\Http\Responder;
 
-use Erpify\Shared\Domain\Search\Page;
+use Erpify\Shared\Search\Domain\Page;
 
 /**
  * Typed wire shape of the cursor-only `pagination` envelope emitted alongside the

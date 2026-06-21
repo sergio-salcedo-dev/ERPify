@@ -18,29 +18,18 @@ ERPify/
 │   │   │   ├── Dev/Infrastructure/Controller
 │   │   │   ├── Health/Infrastructure/Controller
 │   │   │   └── Mercure/            # Mercure publishing & JWT (Domain + Infrastructure/Controller)
-│   │   └── Shared/
-│   │       ├── Application/
-│   │       │   ├── Http/Search/    # Shared search-endpoint plumbing
-│   │       │   ├── Mailer/         # Async mail use-cases
-│   │       │   ├── Problem/        # ProblemDetails VO + ProblemDetailsFactory (RFC 9457 mapping)
-│   │       │   ├── UseCase/        # Result value object + use-case base
-│   │       │   └── Validation/     # Shared validator helper
-│   │       ├── Domain/
-│   │       │   ├── Aggregate/ Entity/ Enum/ Search/ Uuid/ ValueObject/
-│   │       │   ├── Clock/          # Clock port + ambient SystemClock (domain time source)
-│   │       │   └── Exception/      # DomainException base + marker interfaces (NotFound, Conflict, …)
-│   │       ├── Event/              # Event backbone (Domain/Application/Infrastructure): DomainEvent + EventBus, raw-DBAL event_store, mapper/serializer/upcaster, projection runner; see docs/adr/event-store-and-projections.md
-│   │       ├── Guzzle/             # Shared HTTP client utilities (Enum)
-│   │       ├── Infrastructure/
-│   │       │   ├── Clock/          # Symfony clock adapter + ambient SystemClock initializer
-│   │       │   ├── Http/           # CorrelationIdListener, ProblemDetailsResponder, EventListener/ExceptionResponder, Controller/, Responder/
-│   │       │   ├── Mailer/         # Mailer adapter
-│   │       │   ├── Persistence/    # Repository, Doctrine/Search (keyset engine + FilterApplier + per-repo field maps)
-│   │       │   ├── Serializer/     # Symfony serializer adapters
-│   │       │   └── Validator/      # Doctrine enum DBAL type + constraint validator
-│   │       ├── Media/              # Image processing (Intervention Image) — full DDD layering
-│   │       ├── Monitoring/         # Sentry error-monitoring adapters (event scrubbing/filtering)
-│   │       └── Storage/            # Flysystem adapters
+│   │   └── Shared/                 # kernel trio + capability modules — see docs/adr/shared-module-organization.md
+│   │       ├── Application/        # kernel: Problem (RFC 9457 mapping), UseCase (Result)
+│   │       ├── Domain/             # kernel: Aggregate, Entity, Enum, Exception (base + markers), Uuid, ValueObject
+│   │       ├── Infrastructure/     # kernel: Http (CorrelationId + Problem responders, ExceptionResponder), Persistence, Serializer
+│   │       ├── Clock/              # time: Clock port (Domain) + Symfony/native adapters (Infrastructure)
+│   │       ├── Event/              # event backbone (Domain/Application/Infrastructure): DomainEvent + EventBus, raw-DBAL event_store, mapper/serializer/upcaster, projection runner; see docs/adr/event-store-and-projections.md
+│   │       ├── Mailer/             # notification mail: port (Application) + plain-text adapter (Infrastructure)
+│   │       ├── Media/              # in-DB media (Intervention Image) — full DDD layering
+│   │       ├── Monitoring/         # Sentry before_send adapters (event scrubbing/filtering)
+│   │       ├── Search/             # filters + keyset engine + cursor envelope (Domain/Application/Infrastructure)
+│   │       ├── Storage/            # Flysystem object storage (Domain/Application/Infrastructure)
+│   │       └── Validation/         # Validator helper (Application) + EnumType constraint (Infrastructure)
 │   ├── config/
 │   │   ├── bundles.php
 │   │   ├── services.yaml           # DI autoconfigure defaults
@@ -143,7 +132,7 @@ All browser traffic terminates at **FrankenPHP on `localhost`**. `/` is reverse-
 | `api/src/Shared/Application/Problem/`                        | `ProblemDetails` VO + `ProblemDetailsFactory` (single throwable→wire mapping site)                  |
 | `api/src/Shared/Event/{Domain,Application,Infrastructure}/`   | Event backbone: `EventBus` port + `SymfonyMessengerEventBus`, hardened `DomainEvent` (`fromPrimitives` + injectable identity), raw-DBAL reproducible `event_store` (mapper/serializer/upcaster), and the projection runner (projector ≠ reactor, checkpointed catch-up + rebuild). Committed atomically with persistence at the use-case boundary; gate `make php.lint.event-bus`, see [`adr/event-store-and-projections.md`](./adr/event-store-and-projections.md) |
 | `api/src/Shared/Infrastructure/Http/`                        | `CorrelationIdListener`, `ProblemDetailsResponder`, `EventListener/ExceptionResponder`              |
-| `api/src/Shared/Infrastructure/Persistence/Doctrine/Search/` | `FilterApplier` + `SearchFieldMap` — shared search-filter plumbing (mandatory allow-list); `DoctrineSearchEngine` (the sole keyset query-shaper, 8-step pipeline) + `RowUniquenessGuard`, composing the pure `Keyset/` kernel. It governs the live HTTP read-path (Bank), producing a link-agnostic `Page` with opaque cursors; `Shared/Infrastructure/Http/Responder/SearchResponder` is the single compositor of the cursor-only envelope |
+| `api/src/Shared/Search/Infrastructure/Persistence/Doctrine/` | `FilterApplier` + `SearchFieldMap` — shared search-filter plumbing (mandatory allow-list); `DoctrineSearchEngine` (the sole keyset query-shaper, 8-step pipeline) + `RowUniquenessGuard`, composing the pure `Keyset/` kernel. It governs the live HTTP read-path (Bank), producing a link-agnostic `Page` with opaque cursors; `Shared/Search/Infrastructure/Http/SearchResponder` is the single compositor of the cursor-only envelope |
 | `api/src/*/Application/`                                     | Use cases, DTOs, orchestration                                                                      |
 | `api/src/*/Infrastructure/`                                  | Doctrine, HTTP, Messenger adapters                                                                  |
 | `api/config/packages/`                                       | All bundle config (Doctrine, Messenger, Mercure, …)                                                 |

@@ -11,7 +11,7 @@ use Symfony\Component\Mime\Email;
 
 /**
  * Captures every {@see Email} handed to Symfony Mailer into {@see RecordedEmails}, exercising the
- * full real path (handler → {@see \Erpify\Shared\Infrastructure\Mailer\PlainTextNotificationMailer}
+ * full real path (handler → {@see \Erpify\Shared\Mailer\Infrastructure\PlainTextNotificationMailer}
  * → `MailerInterface`) with `MAILER_DSN=null://null` so nothing leaves the process.
  *
  * The mailer is async (a `message_bus` is configured), so `MessageEvent` fires twice per email: once

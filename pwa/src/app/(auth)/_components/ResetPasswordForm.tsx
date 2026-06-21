@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useZodForm } from "@/context/shared/infrastructure/Validation";
+import { useZodForm } from "@/context/shared/Validation/infrastructure";
 import {
   ResetPasswordSchema,
   type ResetPasswordFormValues,
@@ -11,7 +11,7 @@ import { FormField } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Routes } from "@/context/shared/domain/types/routes";
-import { toastNotifier } from "@/context/shared/infrastructure/Notification/Toast";
+import { toastNotifier } from "@/context/shared/Notification/infrastructure/Toast";
 import { safeHref } from "@/lib/safeHref";
 
 export function ResetPasswordForm() {

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Backoffice\Bank\Application;
 
 use Erpify\Backoffice\Bank\Domain\Repository\BankSearchRepository;
-use Erpify\Shared\Domain\Search\Page;
-use Erpify\Shared\Domain\Search\SearchCriteria;
+use Erpify\Shared\Search\Domain\Page;
+use Erpify\Shared\Search\Domain\SearchCriteria;
 use Override;
 
 /**

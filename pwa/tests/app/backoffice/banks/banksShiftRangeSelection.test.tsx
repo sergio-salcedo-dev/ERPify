@@ -26,7 +26,7 @@ const mocks = await vi.hoisted(async () => (await import("./_mocks")).banksListP
 
 vi.mock("next/navigation", mocks.navigation);
 vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", mocks.container);
-vi.mock("@/context/shared/infrastructure/Notification/Toast", mocks.toast);
+vi.mock("@/context/shared/Notification/infrastructure/Toast", mocks.toast);
 vi.mock("@/context/backoffice/bank/infrastructure/bankRealtime", mocks.bankRealtime);
 
 const { searchRun, realtime } = mocks;

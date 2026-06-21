@@ -7,7 +7,7 @@ namespace Erpify\Tests\Unit\Backoffice\Health\Infrastructure\Controller;
 use Erpify\Backoffice\Health\Application\CheckDatabaseHealth;
 use Erpify\Backoffice\Health\Domain\DatabaseHealthChecker;
 use Erpify\Backoffice\Health\Infrastructure\Controller\DatabaseHealthController;
-use Erpify\Shared\Infrastructure\Clock\SymfonyClock;
+use Erpify\Shared\Clock\Infrastructure\SymfonyClock;
 use Erpify\Shared\Infrastructure\Http\Responder\JsonResponder;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;

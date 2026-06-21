@@ -1,6 +1,6 @@
 import type { DataTableSort } from "@/components/erpify";
 import { SortDirection } from "@/context/shared/domain/types/sorting";
-import type { DateTimeProvider } from "@/context/shared/domain/DateTimeProvider/DateTimeProvider";
+import type { DateTimeProvider } from "@/context/shared/DateTimeProvider/domain/DateTimeProvider";
 
 export interface BanksFilter {
   name: string;

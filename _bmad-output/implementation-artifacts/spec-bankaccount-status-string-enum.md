@@ -39,7 +39,7 @@ No labels anywhere in the domain.
    - `down()`: inverse `CASE` back to `smallint` with a `USING ... ::smallint`; the `ELSE` must **fail
      loud** on an unexpected value (raise, never silently `NULL`).
 
-4. **`api/src/Shared/Infrastructure/Validator/EnumTypeValidator.php`** — remove every `HumanReadable*`
+4. **`api/src/Shared/Validation/Infrastructure/EnumTypeValidator.php`** — remove every `HumanReadable*`
    branch: drop the import, the `is_a(..., HumanReadableIntEnumInterface)` branch in `formatChoices()`,
    and the whole `labelsFromCases()` method. `formatChoices()` formats by `->value` for both the
    subset (`$constraint->cases`) and the full-enum path.
@@ -54,10 +54,10 @@ No labels anywhere in the domain.
    - Remove the now-empty `Abstraction/` and `Attribute/` dirs (`Enum/Currency.php` stays).
 
 6. **Validator test + fixtures**:
-   - `tests/Unit/Shared/Infrastructure/Validator/EnumTypeValidatorTest.php` — drop the two
+   - `tests/Unit/Shared/Validation/Infrastructure/EnumTypeValidatorTest.php` — drop the two
      `human-readable*` data-provider cases; repoint the `instance of another enum` case to a second
      plain string enum.
-   - `tests/Unit/Shared/Infrastructure/Validator/Fixtures/FixtureLabeledEnum.php` — delete; replace with
+   - `tests/Unit/Shared/Validation/Infrastructure/Fixtures/FixtureLabeledEnum.php` — delete; replace with
      `FixtureOtherStringEnum` (plain string-backed) for the `instance of another enum` case.
 
 7. **`features/backoffice/bank_account/search.feature`** (contract test of THIS commit) — flip status

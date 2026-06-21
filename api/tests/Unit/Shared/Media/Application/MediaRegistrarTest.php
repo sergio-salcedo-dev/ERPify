@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Media\Application;
 
-use Erpify\Shared\Application\Validation\Validator;
 use Erpify\Shared\Media\Application\Dto\NormalizedImage;
 use Erpify\Shared\Media\Application\Dto\UploadedImage;
 use Erpify\Shared\Media\Application\MediaRegistrar;
 use Erpify\Shared\Media\Application\Port\ImageNormalizer;
 use Erpify\Shared\Media\Domain\Entity\Media;
+use Erpify\Shared\Validation\Application\Validator;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Validator\Validation;

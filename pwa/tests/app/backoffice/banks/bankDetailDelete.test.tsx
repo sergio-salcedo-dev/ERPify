@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import BankDetailPage from "@/app/backoffice/banks/[id]/page";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
-import { toastNotifier } from "@/context/shared/infrastructure/Notification/Toast";
+import { toastNotifier } from "@/context/shared/Notification/infrastructure/Toast";
 import { ACME as BANK } from "./_fixtures";
 
 /**
@@ -28,7 +28,7 @@ vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", async (
   }),
 );
 
-vi.mock("@/context/shared/infrastructure/Notification/Toast", async () =>
+vi.mock("@/context/shared/Notification/infrastructure/Toast", async () =>
   (await import("./_mocks")).toastNotifierMock(),
 );
 
