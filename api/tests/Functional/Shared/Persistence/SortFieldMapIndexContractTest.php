@@ -9,7 +9,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Mapping\ClassMetadata;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
-use Erpify\Shared\Infrastructure\Persistence\Doctrine\Search\SortFieldMap;
+use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\SortFieldMap;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;

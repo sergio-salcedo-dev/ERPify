@@ -8,8 +8,8 @@ use Erpify\Backoffice\Bank\Application\BankAccountCountEnricher;
 use Erpify\Backoffice\Bank\Application\BankSearcher;
 use Erpify\Backoffice\Bank\Application\Query\SearchBanksQuery;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
-use Erpify\Shared\Domain\Search\Page;
-use Erpify\Shared\Domain\Search\SearchCriteria;
+use Erpify\Shared\Search\Domain\Page;
+use Erpify\Shared\Search\Domain\SearchCriteria;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 

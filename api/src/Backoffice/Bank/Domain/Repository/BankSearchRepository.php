@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\Bank\Domain\Repository;
 
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
-use Erpify\Shared\Domain\Search\Page;
-use Erpify\Shared\Domain\Search\SearchCriteria;
+use Erpify\Shared\Search\Domain\Page;
+use Erpify\Shared\Search\Domain\SearchCriteria;
 
 /**
  * Read-side search port — the swappable surface. Implementations may be backed

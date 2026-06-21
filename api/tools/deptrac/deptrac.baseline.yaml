@@ -17,7 +17,7 @@ deptrac:
       - Symfony\Component\Messenger\Exception\ExceptionInterface
       - Symfony\Component\Messenger\MessageBusInterface
     Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount:
-      - Erpify\Shared\Infrastructure\Validator\EnumType
+      - Erpify\Shared\Validation\Infrastructure\EnumType
       - Symfony\Component\Serializer\Normalizer\DateTimeNormalizer
     Erpify\Backoffice\Bank\Application\BankCreator:
       - Doctrine\ORM\EntityManagerInterface
@@ -31,9 +31,9 @@ deptrac:
     Erpify\Backoffice\Bank\Domain\Entity\Bank:
       - Symfony\Component\Serializer\Normalizer\DateTimeNormalizer
       - Symfony\Component\Validator\Context\ExecutionContextInterface
-    Erpify\Shared\Application\Http\Search\FilterQuery:
+    Erpify\Shared\Search\Application\Http\FilterQuery:
       - Symfony\Component\Validator\Context\ExecutionContextInterface
-    Erpify\Shared\Application\Http\Search\SearchQuery:
+    Erpify\Shared\Search\Application\Http\SearchQuery:
       - Symfony\Component\Validator\Context\ExecutionContextInterface
     Erpify\Shared\Application\Problem\ProblemDetailsFactory:
       - Symfony\Component\DependencyInjection\Attribute\Autowire
@@ -43,7 +43,7 @@ deptrac:
       - Symfony\Component\Security\Core\Exception\AuthenticationException
       - Symfony\Component\Validator\ConstraintViolationInterface
       - Symfony\Component\Validator\Exception\ValidationFailedException
-    Erpify\Shared\Application\Validation\Validator:
+    Erpify\Shared\Validation\Application\Validator:
       - Symfony\Component\Validator\Constraint
       - Symfony\Component\Validator\ConstraintViolation
       - Symfony\Component\Validator\ConstraintViolationList
