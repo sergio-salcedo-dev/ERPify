@@ -18,7 +18,7 @@ use UnexpectedValueException;
 #[CoversClass(ResourceNormalizer::class)]
 final class ResourceNormalizerTest extends TestCase
 {
-    public function testDelegatesToNormalizerWithFormatAndGroupsAndReturnsArrayUnchanged(): void
+    public function testDelegatesToInnerNormalizerWithFormatAndReturnsArrayUnchanged(): void
     {
         $resource = new stdClass();
         $expected = ['id' => '7d4d', 'name' => 'Acme'];
@@ -27,16 +27,13 @@ final class ResourceNormalizerTest extends TestCase
         $innerNormalizer
             ->expects($this->once())
             ->method('normalize')
-            ->with($resource, 'json', ['groups' => ['identifiable', 'bank:detail']])
+            ->with($resource, 'json')
             ->willReturn($expected)
         ;
 
         $resourceNormalizer = new ResourceNormalizer($innerNormalizer);
 
-        $this->assertSame(
-            $expected,
-            $resourceNormalizer->toArray($resource, ['identifiable', 'bank:detail']),
-        );
+        $this->assertSame($expected, $resourceNormalizer->toArray($resource));
     }
 
     public function testPassesCustomFormatThroughAndReturnsInnerArray(): void
@@ -48,13 +45,13 @@ final class ResourceNormalizerTest extends TestCase
         $innerNormalizer
             ->expects($this->once())
             ->method('normalize')
-            ->with($resource, 'xml', ['groups' => []])
+            ->with($resource, 'xml')
             ->willReturn($expected)
         ;
 
         $this->assertSame(
             $expected,
-            (new ResourceNormalizer($innerNormalizer))->toArray($resource, [], 'xml'),
+            (new ResourceNormalizer($innerNormalizer))->toArray($resource, 'xml'),
         );
     }
 
@@ -71,7 +68,7 @@ final class ResourceNormalizerTest extends TestCase
 
         $this->assertSame(
             ['key' => 'value'],
-            (new ResourceNormalizer($innerNormalizer))->toArray($resource, []),
+            (new ResourceNormalizer($innerNormalizer))->toArray($resource),
         );
     }
 
@@ -88,6 +85,6 @@ final class ResourceNormalizerTest extends TestCase
         $this->expectException(UnexpectedValueException::class);
         $this->expectExceptionMessage('Expected normalize() to return array, got string.');
 
-        $resourceNormalizer->toArray(new stdClass(), ['some-group']);
+        $resourceNormalizer->toArray(new stdClass());
     }
 }

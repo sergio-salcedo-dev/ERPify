@@ -78,7 +78,7 @@ Browser → FrankenPHP :80/:443 ──┬─ /api/*                 → Symfony 
 
 Full request-routing diagram and host/container trade-offs in [`docs/integration-architecture.md`](docs/integration-architecture.md).
 
-Both sides follow **DDD + Hexagonal / Clean Architecture**, dependencies pointing inward. **Do not** import frameworks (Symfony, Doctrine, Next, Inversify, HTTP clients, ORM) inside `Domain/` — adapters go in `Infrastructure/`, orchestration in `Application/`. Documented exceptions: API domain entities may carry passive metadata attributes (`#[ORM]`, `#[Assert]`, `#[Groups]`), and `Domain/` may import `symfony/uid` as a UUID value-object library (e.g. `api/src/Shared/Uuid/Domain/Uuid.php`) — see [`docs/rules/architecture.md`](docs/rules/architecture.md). Full rule set: `docs/rules/*.md` (architecture, clean-code, commits, cqrs-naming, database, frontend, php-standards, read-side-projections, security, testing).
+Both sides follow **DDD + Hexagonal / Clean Architecture**, dependencies pointing inward. **Do not** import frameworks (Symfony, Doctrine, Next, Inversify, HTTP clients, ORM) inside `Domain/` — adapters go in `Infrastructure/`, orchestration in `Application/`. Documented exceptions: API domain entities may carry passive **persistence/validation** metadata (`#[ORM]`, `#[Assert]`) — the HTTP wire contract lives in per-view Resource DTOs (`Application/Resource/`) mapped in `Infrastructure/Http/`, not in serializer `#[Groups]` on the entity — and `Domain/` may import `symfony/uid` as a UUID value-object library (e.g. `api/src/Shared/Uuid/Domain/Uuid.php`) — see [`docs/rules/architecture.md`](docs/rules/architecture.md) and [`docs/adr/api-resource-dtos.md`](docs/adr/api-resource-dtos.md). Full rule set: `docs/rules/*.md` (architecture, clean-code, commits, cqrs-naming, database, frontend, php-standards, read-side-projections, security, testing).
 
 ### Per-aggregate persistence strategy (conscious decision)
 
@@ -247,6 +247,7 @@ Fix violations you spot while editing a file for another reason.
 
 `docs/` is durable reference, and every line there is maintenance debt — high density is the rule:
 
+- **Which folder a doc belongs to and how its file is named** → [`docs/rules/documentation.md`](docs/rules/documentation.md): the folder taxonomy plus kebab-case-by-topic filenames, never sequence-numbered (ADRs included).
 - **State decisions and constraints, not the process that produced them.** No workflow narrative, step scaffolding, readiness checklists, or "this document builds collaboratively" boilerplate — that belongs in `_bmad-output/` working artifacts and dies with them. BMAD/workflow output gets **distilled** before landing under `docs/`, never copied verbatim.
 - **Prefer extending the doc that owns the topic over creating a new `.md`.** A new file must answer a question no existing doc owns; it gets an entry in `docs/index.md`. Point-in-time reports and plans whose work shipped get deleted (git preserves them).
 - **ADRs (`docs/adr/`)** follow the style of [`docs/adr/bank-bankaccount-modeling.md`](docs/adr/bank-bankaccount-modeling.md): context, numbered decisions with discarded alternatives inline, the non-obvious why — target ≤ ~150 lines. The current-state description belongs in the architecture docs, not the ADR.

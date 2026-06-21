@@ -1,10 +1,10 @@
 # ADR — Event Store reproducible y proyecciones: el salto de *audit log* a *log replayable*
 
-> **Estado:** aceptado · **Fecha:** 2026-06-16 · **Ámbito:** nuevo subsistema `api/src/Shared/Event/{Domain,Application,Infrastructure}`
-> + esquema `event_store` (sustituye `domain_event`) + `projection_checkpoint` + read model `bank_count`
-> + proyector de referencia `BankCountProjection` + endpoint y listado PWA de bancos.
+> **Status:** accepted · **Date:** 2026-06-16 · **Scope:** new subsystem `api/src/Shared/Event/{Domain,Application,Infrastructure}`
+> + `event_store` schema (replaces `domain_event`) + `projection_checkpoint` + `bank_count` read model
+> + reference projector `BankCountProjection` + bank endpoint and PWA listing.
 >
-> **Supersede parcialmente** [`event-driven-architecture.md`](./event-driven-architecture.md): conserva su
+> **Supersedes in part** [`event-driven-architecture.md`](./event-driven-architecture.md): conserva su
 > modelo de tres ejes (D1), el invariante "un `DomainEvent` se publica solo por `EventBus`, que solo escribe
 > al outbox" y el gate `php.lint.event-bus`; **revisa** la ubicación de los puertos (D2/D6 de aquel ADR) al
 > reorganizar todo el backbone bajo `Shared/Event/`. La idempotencia de consumo

@@ -6,7 +6,7 @@ namespace Erpify\Backoffice\Bank\Infrastructure\Controller;
 
 use Erpify\Backoffice\Bank\Application\BankUpdater;
 use Erpify\Backoffice\Bank\Application\Command\UpdateBankCommand;
-use Erpify\Backoffice\Bank\Domain\Entity\Bank;
+use Erpify\Backoffice\Bank\Infrastructure\Http\BankResourceMapper;
 use Erpify\Shared\Http\Infrastructure\Responder\ResourceResponder;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
@@ -19,6 +19,7 @@ final readonly class BankPutController
 {
     public function __construct(
         private BankUpdater $bankUpdater,
+        private BankResourceMapper $bankResourceMapper,
         private ResourceResponder $resourceResponder,
     ) {
     }
@@ -35,8 +36,7 @@ final readonly class BankPutController
         $bank = $this->bankUpdater->update($id, $bankCommand);
 
         return $this->resourceResponder->respond(
-            $bank,
-            [Bank::GROUP_IDENTIFIABLE, Bank::GROUP_TIMESTAMPED, Bank::GROUP_DETAIL],
+            $this->bankResourceMapper->toUpdateResource($bank),
         );
     }
 }

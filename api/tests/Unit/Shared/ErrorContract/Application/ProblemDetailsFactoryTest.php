@@ -1032,7 +1032,6 @@ final class ProblemDetailsFactoryTest extends TestCase
                 root: null,
                 propertyPath: 'name',
                 invalidValue: '',
-                plural: null,
                 code: 'c1051bb4-d103-4f74-8988-acbcafc7fdc3',
             ),
             new ConstraintViolation(
@@ -1042,7 +1041,6 @@ final class ProblemDetailsFactoryTest extends TestCase
                 root: null,
                 propertyPath: 'email',
                 invalidValue: 'invalid',
-                plural: null,
                 code: 'bd79c0ab-ddba-46cc-a703-a7a4b08de310',
             ),
             new ConstraintViolation(
@@ -1052,7 +1050,6 @@ final class ProblemDetailsFactoryTest extends TestCase
                 root: null,
                 propertyPath: 'age',
                 invalidValue: 17,
-                plural: null,
                 code: 'ea4e51d1-3342-48bd-87f1-9e672cd90cad',
             ),
         ]);
@@ -1107,7 +1104,6 @@ final class ProblemDetailsFactoryTest extends TestCase
                 root: null,
                 propertyPath: 'p',
                 invalidValue: null,
-                plural: null,
                 code: 'C',
             ),
         ]);
@@ -1161,7 +1157,6 @@ final class ProblemDetailsFactoryTest extends TestCase
                 root: null,
                 propertyPath: 'p',
                 invalidValue: null,
-                plural: null,
                 code: '',
             ),
         ]);
@@ -1189,7 +1184,6 @@ final class ProblemDetailsFactoryTest extends TestCase
                 root: null,
                 propertyPath: '',
                 invalidValue: null,
-                plural: null,
                 code: 'C',
             ),
         ]);
@@ -1303,7 +1297,6 @@ final class ProblemDetailsFactoryTest extends TestCase
                 root: ['password' => 'leaked-secret'],
                 propertyPath: 'name',
                 invalidValue: 'super-secret-payload',
-                plural: null,
                 code: 'c1051bb4-d103-4f74-8988-acbcafc7fdc3',
             ),
         ]);
@@ -1334,7 +1327,6 @@ final class ProblemDetailsFactoryTest extends TestCase
                 root: null,
                 propertyPath: 'age',
                 invalidValue: 17,
-                plural: null,
                 code: 'ea4e51d1-3342-48bd-87f1-9e672cd90cad',
             ),
         ]);
@@ -1920,7 +1912,6 @@ final class ProblemDetailsFactoryTest extends TestCase
                 root: null,
                 propertyPath: 'name',
                 invalidValue: '',
-                plural: null,
                 code: 'c1051bb4-d103-4f74-8988-acbcafc7fdc3',
             ),
             new ConstraintViolation(
@@ -1930,7 +1921,6 @@ final class ProblemDetailsFactoryTest extends TestCase
                 root: null,
                 propertyPath: 'email',
                 invalidValue: '',
-                plural: null,
                 code: '9ff3fdc4-b214-49db-8718-39c315e33d45',
             ),
         ]);
@@ -2266,7 +2256,6 @@ final class ProblemDetailsFactoryTest extends TestCase
                 root: null,
                 propertyPath: \sprintf('items[%d].value', $i),
                 invalidValue: null,
-                plural: null,
                 code: \sprintf('aaaaaaaa-bbbb-cccc-dddd-eeeeeeee%04d', $i),
             );
         }
@@ -2324,7 +2313,6 @@ final class ProblemDetailsFactoryTest extends TestCase
                 root: null,
                 propertyPath: \sprintf('field_%04d', $i),
                 invalidValue: null,
-                plural: null,
                 code: \sprintf('determ-%04d', $i),
             );
         }
@@ -2506,7 +2494,6 @@ final class ProblemDetailsFactoryTest extends TestCase
                 root: null,
                 propertyPath: \sprintf('field_%04d', $i),
                 invalidValue: null,
-                plural: null,
                 code: 'O',
             );
         }

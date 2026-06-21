@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\Bank\Application;
 
-use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Exception\BankNotFoundException;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 
@@ -26,12 +25,8 @@ final readonly class BankDetailFinder
      * @throws InvalidUuidException  when $id is not a well-formed RFC 4122 UUID (400 invalid-input)
      * @throws BankNotFoundException when no bank exists for the given $id (404)
      */
-    public function find(string $id): Bank
+    public function find(string $id): BankWithAccountCount
     {
-        $bank = $this->bankFinder->find($id);
-
-        $this->accountCountEnricher->enrich($bank);
-
-        return $bank;
+        return $this->accountCountEnricher->enrich($this->bankFinder->find($id));
     }
 }

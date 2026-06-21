@@ -1,9 +1,6 @@
----
-status: 'complete — shipped (stories 1.5–1.7, PR #180; fase contract ejecutada: names[]/ids[] retirados del wire)'
-date: '2026-06-06'
----
-
 # ADR — Vocabulario genérico de búsqueda `filters[]` (SearchQuery / SearchCriteria)
+
+> **Status:** complete — shipped (stories 1.5–1.7, PR #180; contract phase executed: names[]/ids[] removed from the wire) · **Date:** 2026-06-06 · **Scope:** the generic search vocabulary — `SearchQuery`/`SearchCriteria` and the `filters[]` wire contract.
 
 Registro de decisión: rationale, alternativas e inventario FR/NFR citado por ID desde los docs
 vivos. El estado actual del sistema (y la receta "añadir una lista filtrable") vive en

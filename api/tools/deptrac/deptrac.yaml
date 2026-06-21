@@ -102,7 +102,17 @@ deptrac:
         - name: Vendor.SymfonyUid
           collectors: [{ type: classLike, value: ^Symfony\\Component\\Uid\\.* }]
         # Passive-metadata attributes blessed by docs/rules/architecture.md: ORM
-        # mapping, column-type constants, validation constraints, serializer groups.
+        # mapping, column-type constants, validation constraints.
+        #
+        # Serializer attributes (Symfony\Component\Serializer\Attribute) are NO LONGER
+        # a wire-contract carrier inward: per-view Resource DTOs own serialization
+        # (ADR docs/adr/api-resource-dtos.md), so #[Groups] is gone from Domain. The
+        # namespace stays in this collector only for one survivor — the #[Serializer\
+        # Context] ATOM-format pin on the Timestamped trait (dormant: no entity is
+        # serialized). TARGET STATE: drop Symfony\Component\Serializer\Attribute from
+        # this collector once that pin moves onto the DTO timestamps, at which point it
+        # falls through to Vendor.Symfony (Infrastructure-only). Governance and this
+        # collector move together — keep in sync with external-dependencies-in-domain.md D4.
         - name: Vendor.PassiveMetadata
           collectors:
               - type: classLike

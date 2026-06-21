@@ -11,7 +11,7 @@ use Symfony\Component\Serializer\Exception\ExceptionInterface;
 
 /**
  * Composes the normalize-then-respond two-step shared by resource endpoints:
- * it turns a domain entity (or a collection of them) into a serialized payload
+ * it turns a resource DTO (or a collection of them) into a serialized payload
  * via {@see ResourceNormalizer} and hands the result to the format-agnostic
  * {@see ResponderInterface}. Controllers — and {@see SearchResponder} for the
  * paginated collection case — depend on this single collaborator instead of
@@ -26,21 +26,19 @@ final readonly class ResourceResponder
     }
 
     /**
-     * @param list<string> $groups serializer groups projecting the resource
-     * @param int          $status Symfony HTTP status code (e.g. Response::HTTP_CREATED)
+     * @param int $status Symfony HTTP status code (e.g. Response::HTTP_CREATED)
      *
      * @throws ExceptionInterface when normalization fails
      */
-    public function respond(object $resource, array $groups, int $status = Response::HTTP_OK): Response
+    public function respond(object $resource, int $status = Response::HTTP_OK): Response
     {
         return $this->responder->respond(
-            new Result($this->normalizer->toArray($resource, $groups), $status),
+            new Result($this->normalizer->toArray($resource), $status),
         );
     }
 
     /**
      * @param iterable<object>     $resources collection to serialize as the `data` array
-     * @param list<string>         $groups    serializer groups projecting each resource
      * @param array<string, mixed> $meta      envelope keys emitted alongside `data` (e.g. `pagination`)
      * @param int                  $status    Symfony HTTP status code
      *
@@ -48,12 +46,11 @@ final readonly class ResourceResponder
      */
     public function respondCollection(
         iterable $resources,
-        array $groups,
         array $meta = [],
         int $status = Response::HTTP_OK,
     ): Response {
         return $this->responder->respond(
-            new Result($this->normalizer->toList($resources, $groups), $status, $meta),
+            new Result($this->normalizer->toList($resources), $status, $meta),
         );
     }
 }

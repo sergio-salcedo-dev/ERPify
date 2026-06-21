@@ -29,7 +29,7 @@ API-scoped guidance. Root [`../CLAUDE.md`](../CLAUDE.md) is authoritative for mo
 
 ## Layer rules (load-bearing)
 
-Dependencies point inward toward `Domain/`. **No** Symfony/Doctrine/HTTP/Messenger imports inside `Domain/` — put adapters in `Infrastructure/` and orchestration in `Application/`. Domain entities and value objects are pure PHP + interfaces. Documented exceptions: entities may carry passive metadata attributes (`#[ORM]`, `#[Assert]`, `#[Groups]`), and `Domain/` may import `symfony/uid` as a UUID value-object library (`Shared/Uuid/Domain/`) — see [`../docs/rules/architecture.md`](../docs/rules/architecture.md).
+Dependencies point inward toward `Domain/`. **No** Symfony/Doctrine/HTTP/Messenger imports inside `Domain/` — put adapters in `Infrastructure/` and orchestration in `Application/`. Domain entities and value objects are pure PHP + interfaces. Documented exceptions: entities may carry passive **persistence/validation** metadata (`#[ORM]`, `#[Assert]`) — serializer `#[Groups]` are **not** carried on entities; the HTTP wire contract is owned by per-view Resource DTOs (`Application/Resource/`) mapped in `Infrastructure/Http/` (see [`../docs/adr/api-resource-dtos.md`](../docs/adr/api-resource-dtos.md)) — and `Domain/` may import `symfony/uid` as a UUID value-object library (`Shared/Uuid/Domain/`) — see [`../docs/rules/architecture.md`](../docs/rules/architecture.md).
 
 -   `Domain/` — entities, value objects, domain events, repository **interfaces**, domain services.
 -   `Application/` — use cases / command + query handlers, DTOs, transaction boundaries. Orchestrates domain; consumes repository interfaces.

@@ -43,10 +43,10 @@ final class BankSearcherTest extends TestCase
 
         $counts = [];
 
-        foreach ($result->items as $bank) {
-            $id = $bank->getId();
+        foreach ($result->items as $enriched) {
+            $id = $enriched->bank->getId();
             $this->assertNotNull($id);
-            $counts[$id] = $bank->getAccountCount();
+            $counts[$id] = $enriched->accountCount;
         }
 
         // A bank with no accounts (BANK_C, absent from the map) defaults to 0.
