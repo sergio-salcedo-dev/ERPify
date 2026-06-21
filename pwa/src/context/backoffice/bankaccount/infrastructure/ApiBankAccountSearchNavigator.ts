@@ -1,6 +1,6 @@
 import { inject, injectable } from "inversify";
 import { safeHref } from "@/lib/safeHref";
-import type { HttpClient } from "../../../shared/infrastructure/HttpClient/HttpClient";
+import type { HttpClient } from "../../../shared/http-client/domain/HttpClient";
 import type { BankAccountSearchNavigator } from "../application/BankAccountSearchNavigator";
 import type { BankAccountSearchPage } from "../domain/BankAccountRepository";
 import { isBankAccountSearchResponse, toBankAccountSearchPage } from "./ApiBankAccountRepository";

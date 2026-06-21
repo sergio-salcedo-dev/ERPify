@@ -1,6 +1,6 @@
 import { LayoutGrid } from "lucide-react";
 import type { DevToolGroup } from "@/context/shared/dev-tools/domain/DevTool";
-import { Routes } from "@/context/shared/domain/types/routes";
+import { Routes } from "@/context/shared/routing/domain/Routes";
 
 /**
  * Authoritative registry of every dev / QA tool the PWA ships. Imported by

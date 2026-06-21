@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { AsyncBoundary } from "@/components/erpify";
-import { ViewStatus } from "@/context/shared/domain/types/status";
-import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
+import { ViewStatus } from "@/context/shared/view-state/domain/ViewState";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 
 const problem: ProblemDetails = {
   type: "about:blank",

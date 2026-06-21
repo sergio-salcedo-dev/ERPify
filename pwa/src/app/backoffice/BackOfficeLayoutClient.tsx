@@ -12,7 +12,7 @@ import { backofficeMenuGroups, accountMenuItem, type NavItem } from "./_lib/back
 import { RequireAuth, DevSessionSwitcher } from "@/context/shared/access/infrastructure/ui";
 import { useSession } from "@/context/shared/access/application/useSession";
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
-import { Routes } from "@/context/shared/domain/types/routes";
+import { Routes } from "@/context/shared/routing/domain/Routes";
 
 const SIDEBAR_STORAGE_KEY = "erpify:sidebar-open";
 

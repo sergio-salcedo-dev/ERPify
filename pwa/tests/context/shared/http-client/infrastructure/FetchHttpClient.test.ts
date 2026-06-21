@@ -1,11 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
-import {
-  FetchHttpClient,
-  MALFORMED_RESPONSE_ENVELOPE,
-} from "@/context/shared/infrastructure/HttpClient/HttpClient";
-import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
-import { isProblemDetails } from "@/context/shared/domain/ProblemDetails";
-import { HttpStatus } from "@/context/shared/domain/types/http";
+import { FetchHttpClient } from "@/context/shared/http-client/infrastructure/FetchHttpClient";
+import { MALFORMED_RESPONSE_ENVELOPE } from "@/context/shared/http-client/domain/HttpClient";
+import { HttpError } from "@/context/shared/http-client/domain/HttpError";
+import { isProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
+import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 
 // v7-shaped: ProblemDetails.instance / correlation-id are UUID v7, minted via @/lib/uuidV7.
 const { STUB_UUID } = vi.hoisted(() => ({

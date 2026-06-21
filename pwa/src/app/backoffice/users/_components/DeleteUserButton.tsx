@@ -2,8 +2,8 @@
 
 import { type ReactElement } from "react";
 import { useRouter } from "next/navigation";
-import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
-import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
+import { container } from "@/context/shared/dependency-injection/infrastructure/Container";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import type { UserRepository } from "@/context/backoffice/user/domain/UserRepository";
 import { DeleteResourceButton } from "@/components/erpify";
 import { userRoutes } from "../_lib/userRoutes";

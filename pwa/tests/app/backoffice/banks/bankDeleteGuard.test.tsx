@@ -7,7 +7,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 const deleteRun = vi.fn();
-vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", () => ({
+vi.mock("@/context/shared/dependency-injection/infrastructure/Container", () => ({
   container: {
     get: (token: string) => {
       if (token === "BackOfficeDeleteBank") return { run: deleteRun };

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
+import { container } from "@/context/shared/dependency-injection/infrastructure/Container";
 import type { DebugToken } from "@/context/shared/debug-token/domain/DebugToken";
 import type { DebugTokenObserver } from "@/context/shared/debug-token/domain/DebugTokenObserver";
 

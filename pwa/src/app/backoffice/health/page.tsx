@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
-import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
+import { container } from "@/context/shared/dependency-injection/infrastructure/Container";
 import type { HealthCheck } from "@/context/backoffice/health/domain/HealthCheck";
-import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
-import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
+import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import { apiScope } from "@/context/shared/observability/domain/TelemetryScope";
 import { telemetry } from "@/context/shared/observability/infrastructure";
 import { aggregateSystemStatus, deriveSystemStatus } from "@/lib/systemStatus";

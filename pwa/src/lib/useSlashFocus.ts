@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, type RefObject } from "react";
-import { KeyboardKey } from "@/context/shared/domain/types/keyboard";
+import { KeyboardKey } from "@/context/shared/keyboard/domain/KeyboardKey";
 
 /**
  * Documented DataTable keyboard contract: `/` focuses the list search. The

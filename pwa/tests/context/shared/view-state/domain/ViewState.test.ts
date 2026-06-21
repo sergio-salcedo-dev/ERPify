@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { ApiStatus, PersistenceAction, ViewStatus } from "@/context/shared/domain/types/status";
+import {
+  ApiStatus,
+  PersistenceAction,
+  ViewStatus,
+} from "@/context/shared/view-state/domain/ViewState";
 
 describe("ApiStatus", () => {
   it("exposes idle / pending / fulfilled / rejected", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SortDirection } from "@/context/shared/domain/types/sorting";
+import { SortDirection } from "@/context/shared/search/domain/SortDirection";
 
 describe("SortDirection", () => {
   it("exposes ASC and DESC", () => {

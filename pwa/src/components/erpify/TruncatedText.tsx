@@ -4,7 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useIsTruncated } from "@/lib/useIsTruncated";
 import { cn } from "@/lib/utils";
-import { KeyboardKey } from "@/context/shared/domain/types/keyboard";
+import { KeyboardKey } from "@/context/shared/keyboard/domain/KeyboardKey";
 
 export type TruncatedTextLines = 1 | 2;
 

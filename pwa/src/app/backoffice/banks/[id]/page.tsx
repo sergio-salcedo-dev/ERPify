@@ -4,12 +4,12 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ChevronLeft, Clock, Pencil, RefreshCw } from "lucide-react";
-import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
+import { container } from "@/context/shared/dependency-injection/infrastructure/Container";
 import { FindBank } from "@/context/backoffice/bank/application/FindBank";
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
 import { BankProblemType } from "@/context/backoffice/bank/domain/BankProblemType";
-import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
-import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
+import { HttpError } from "@/context/shared/http-client/domain/HttpError";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import {
   CopyButton,
   CorrelationIdChip,
@@ -26,8 +26,8 @@ import { dateTimeProvider } from "@/context/shared/date-time-provider/infrastruc
 import { isRecentlyCreated } from "../_lib/bankRecency";
 import { safeHref } from "@/lib/safeHref";
 import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
-import { ViewStatus } from "@/context/shared/domain/types/status";
-import { HttpStatus } from "@/context/shared/domain/types/http";
+import { ViewStatus } from "@/context/shared/view-state/domain/ViewState";
+import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import { bankRoutes } from "../_lib/bankRoutes";
 import { DeleteBankButton } from "../_components/DeleteBankButton";
 import { bankTopics, useBankRealtime } from "@/context/backoffice/bank/infrastructure/bankRealtime";

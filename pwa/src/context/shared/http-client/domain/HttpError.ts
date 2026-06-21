@@ -1,4 +1,4 @@
-import type { ProblemDetails } from "../../domain/ProblemDetails";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 
 export class HttpError extends Error {
   readonly problem: ProblemDetails;

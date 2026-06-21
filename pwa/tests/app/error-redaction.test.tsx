@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render } from "@testing-library/react";
 import GlobalError from "@/app/global-error";
 import ErrorBoundary from "@/app/error";
-import { NodeEnv } from "@/context/shared/domain/types/nodeEnv";
+import { NodeEnv } from "@/context/shared/environment/domain/NodeEnv";
 
 /**
  * Locks the production redaction rule for the Next.js error boundaries:

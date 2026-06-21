@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Compass, Users, Boxes, Radio, ArrowUpRight, type LucideIcon } from "lucide-react";
-import { Routes } from "@/context/shared/domain/types/routes";
+import { Routes } from "@/context/shared/routing/domain/Routes";
 import {
   erpifyOverview,
   domainContexts,

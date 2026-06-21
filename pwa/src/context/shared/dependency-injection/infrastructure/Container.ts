@@ -1,6 +1,8 @@
 import "reflect-metadata";
 import { Container } from "inversify";
-import { FetchHttpClient, MockHttpClient, type HttpClient } from "../HttpClient/HttpClient";
+import { FetchHttpClient } from "@/context/shared/http-client/infrastructure/FetchHttpClient";
+import { MockHttpClient } from "@/context/shared/http-client/infrastructure/MockHttpClient";
+import type { HttpClient } from "@/context/shared/http-client/domain/HttpClient";
 import { ApiHealthCheckRepository as FrontOfficeApiHealthCheckRepository } from "../../../frontoffice/health/infrastructure/ApiHealthCheckRepository";
 import { ApiHealthCheckRepository as BackOfficeApiHealthCheckRepository } from "../../../backoffice/health/infrastructure/ApiHealthCheckRepository";
 import { ApiDatabaseHealthCheckRepository as BackOfficeApiDatabaseHealthCheckRepository } from "../../../backoffice/health/infrastructure/ApiDatabaseHealthCheckRepository";

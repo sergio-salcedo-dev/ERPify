@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
-import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
-import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
-import { ViewStatus } from "@/context/shared/domain/types/status";
+import { container } from "@/context/shared/dependency-injection/infrastructure/Container";
+import { HttpError } from "@/context/shared/http-client/domain/HttpError";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
+import { ViewStatus } from "@/context/shared/view-state/domain/ViewState";
 import type { CrudRepository } from "../domain/CrudRepository";
 
 /** Single-item fetch lifecycle for detail/edit pages. */

@@ -1,4 +1,4 @@
-import { API_ENDPOINTS } from "@/context/shared/infrastructure/api/ApiEndpoints";
+import { API_ENDPOINTS } from "@/context/shared/http-client/infrastructure/ApiEndpoints";
 
 /**
  * Build absolute Mercure URL for FrankenPHP file-watch hot reload in the browser.

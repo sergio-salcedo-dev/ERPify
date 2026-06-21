@@ -7,9 +7,9 @@ import type {
   BankSearchPage,
 } from "@/context/backoffice/bank/domain/BankRepository";
 import type { ResourceSearchCriteria } from "@/context/shared/resource/domain/CrudRepository";
-import { SortDirection } from "@/context/shared/domain/types/sorting";
-import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
-import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
+import { SortDirection } from "@/context/shared/search/domain/SortDirection";
+import { HttpError } from "@/context/shared/http-client/domain/HttpError";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 
 const ACME = Bank.fromPrimitives({
   id: "11111111-1111-4111-8111-111111111111",

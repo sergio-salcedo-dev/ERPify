@@ -1,23 +1,17 @@
 import { inject, injectable } from "inversify";
-import { isProblemDetails, type ProblemDetails } from "../../domain/ProblemDetails";
-import { API_ENDPOINTS } from "../api/ApiEndpoints";
-import { HttpError } from "./HttpError";
+import {
+  isProblemDetails,
+  type ProblemDetails,
+} from "@/context/shared/error/domain/ProblemDetails";
+import { HttpError } from "../domain/HttpError";
+import {
+  MALFORMED_RESPONSE_ENVELOPE,
+  type HttpClient,
+  type ResponseGuard,
+} from "../domain/HttpClient";
 import type { DebugTokenObserver } from "@/context/shared/debug-token/domain/DebugTokenObserver";
 import { NoopDebugTokenObserver } from "@/context/shared/debug-token/infrastructure/NoopDebugTokenObserver";
 import { uuidV7 } from "@/lib/uuidV7";
-
-/** Runtime shape check applied to a 2xx JSON body at the HTTP boundary. */
-export type ResponseGuard<T> = (body: unknown) => body is T;
-
-/** `ProblemDetails.type` minted when a 2xx body fails its {@link ResponseGuard}. */
-export const MALFORMED_RESPONSE_ENVELOPE = "malformed-response-envelope";
-
-export interface HttpClient {
-  get<T>(url: string, validate?: ResponseGuard<T>): Promise<T>;
-  post<TBody, T>(url: string, body: TBody, validate?: ResponseGuard<T>): Promise<T>;
-  put<TBody, T>(url: string, body: TBody, validate?: ResponseGuard<T>): Promise<T>;
-  delete(url: string): Promise<void>;
-}
 
 function trimBase(url: string): string {
   return url.replace(/\/$/, "");
@@ -56,61 +50,6 @@ function serverApiBase(): string {
       "(internal SSR target, e.g. http://php:80) or NEXT_PUBLIC_API_BASE_URL " +
       "(public override). Neither is set.",
   );
-}
-
-@injectable()
-export class MockHttpClient implements HttpClient {
-  // why: the mock returns surface-specific fake bodies, so it deliberately
-  // ignores response guards — enforcing real envelopes is FetchHttpClient's job.
-  async get<T>(url: string, _validate?: ResponseGuard<T>): Promise<T> {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        if (url.includes(API_ENDPOINTS.BACKOFFICE.HEALTH_DATABASE)) {
-          // why: matched before BACKOFFICE.HEALTH — the database path is a
-          // superstring of `/health`, so the broader branch would shadow it.
-          resolve({
-            data: {
-              status: "ok",
-              service: "Database",
-              datetime: new Date().toISOString(),
-            },
-          } as T);
-        } else if (url.includes(API_ENDPOINTS.FRONTOFFICE.HEALTH)) {
-          resolve({
-            data: {
-              status: "ok",
-              service: "Front office",
-              datetime: new Date().toISOString(),
-            },
-          } as T);
-        } else if (url.includes(API_ENDPOINTS.BACKOFFICE.HEALTH)) {
-          resolve({
-            data: {
-              status: "ok",
-              service: "Back office",
-              datetime: new Date().toISOString(),
-            },
-          } as T);
-        } else {
-          resolve({
-            data: { status: "ok", service: "Unknown", datetime: new Date().toISOString() },
-          } as T);
-        }
-      }, 500);
-    });
-  }
-
-  async post<TBody, T>(_url: string, _body: TBody, _validate?: ResponseGuard<T>): Promise<T> {
-    return {} as T;
-  }
-
-  async put<TBody, T>(_url: string, _body: TBody, _validate?: ResponseGuard<T>): Promise<T> {
-    return {} as T;
-  }
-
-  async delete(_url: string): Promise<void> {
-    return;
-  }
 }
 
 @injectable()

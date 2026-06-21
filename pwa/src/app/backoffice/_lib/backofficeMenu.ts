@@ -42,7 +42,7 @@ import {
   Wrench,
   Info,
 } from "lucide-react";
-import { Routes } from "@/context/shared/domain/types/routes";
+import { Routes } from "@/context/shared/routing/domain/Routes";
 import { bankRoutes } from "@/app/backoffice/banks/_lib/bankRoutes";
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
 

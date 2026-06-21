@@ -106,7 +106,7 @@ The `Observability` module provides a non-user-facing diagnostic channel for inf
 
 ## Dependency injection
 
-- Inversify 8 container assembled in `src/context/shared/infrastructure/DependencyInjection/`.
+- Inversify 8 container assembled in `src/context/shared/dependency-injection/infrastructure/`.
 - `tsconfig.json`: `strict: true`, `experimentalDecorators: true`, `emitDecoratorMetadata: true` (required for Inversify class decorators).
 - `reflect-metadata` imported once at the React entry point (`app/layout.tsx`).
 

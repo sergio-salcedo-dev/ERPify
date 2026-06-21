@@ -8,7 +8,7 @@ import type { UserInput } from "@/context/backoffice/user/domain/UserRepository"
 import { UserProblemType } from "@/context/backoffice/user/domain/UserProblemType";
 import { useQueryState } from "@/context/shared/resource/application/createQueryState";
 import { useResourceList } from "@/context/shared/resource/application/useResourceList";
-import { ViewStatus } from "@/context/shared/domain/types/status";
+import { ViewStatus } from "@/context/shared/view-state/domain/ViewState";
 import {
   AsyncBoundary,
   DensityToggle,

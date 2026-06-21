@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SortDirection } from "@/context/shared/domain/types/sorting";
+import { SortDirection } from "@/context/shared/search/domain/SortDirection";
 import { EMPTY_FILTER } from "@/app/backoffice/banks/_lib/banksFilterSort";
 import { toBankFilters, toBankSort } from "@/app/backoffice/banks/_lib/banksSearchCriteria";
 

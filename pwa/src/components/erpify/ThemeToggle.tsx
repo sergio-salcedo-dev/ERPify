@@ -4,7 +4,7 @@ import { useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
 import { Sun, Moon, Monitor, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Theme } from "@/context/shared/domain/types/theme";
+import { Theme } from "@/context/shared/theme/domain/Theme";
 import { cn } from "@/lib/utils";
 
 export interface ThemeToggleProps {

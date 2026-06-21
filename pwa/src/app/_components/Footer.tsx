@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Logo } from "@/components/erpify";
-import { Routes } from "@/context/shared/domain/types/routes";
+import { Routes } from "@/context/shared/routing/domain/Routes";
 
 export function Footer() {
   const footerLinks = [

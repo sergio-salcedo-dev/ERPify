@@ -37,7 +37,7 @@ const mocks = await vi.hoisted(async () => {
 });
 
 vi.mock("next/navigation", mocks.navigation);
-vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", mocks.container);
+vi.mock("@/context/shared/dependency-injection/infrastructure/Container", mocks.container);
 vi.mock("@/context/shared/notification/infrastructure/Toast", mocks.toast);
 vi.mock("@/context/backoffice/bank/infrastructure/bankRealtime", mocks.bankRealtime);
 

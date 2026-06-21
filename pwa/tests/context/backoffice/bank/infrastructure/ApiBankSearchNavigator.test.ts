@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { ApiBankSearchNavigator } from "@/context/backoffice/bank/infrastructure/ApiBankSearchNavigator";
-import type { HttpClient } from "@/context/shared/infrastructure/HttpClient/HttpClient";
+import type { HttpClient } from "@/context/shared/http-client/domain/HttpClient";
 
 const primitives = {
   id: "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",

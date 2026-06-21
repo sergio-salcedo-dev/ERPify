@@ -1,8 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
-import { ApiStatus, ViewStatus } from "@/context/shared/domain/types/status";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
+import { ApiStatus, ViewStatus } from "@/context/shared/view-state/domain/ViewState";
 import { EmptyState } from "./EmptyState";
 import { ProblemDisplay } from "./ProblemDisplay";
 

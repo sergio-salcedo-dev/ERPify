@@ -5,7 +5,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { fetchFrankenPhpHotReloadSubscribeUrl } from "@/lib/frankenphp-hot-reload";
 import { cn } from "@/lib/utils";
 import { ThemeProvider } from "@/lib/ThemeProvider";
-import { Theme, THEME_STORAGE_KEY } from "@/context/shared/domain/types/theme";
+import { Theme, THEME_STORAGE_KEY } from "@/context/shared/theme/domain/Theme";
 import { SonnerToaster } from "@/context/shared/notification/infrastructure/Toast/SonnerToaster";
 import { AuthProvider } from "@/context/shared/access/infrastructure/ui";
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";

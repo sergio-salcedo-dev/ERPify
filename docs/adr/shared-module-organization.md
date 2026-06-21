@@ -61,11 +61,33 @@ colectores `src/Shared/(.*/)?{Domain,Application,Infrastructure}` auto-pliegan l
 `deptrac.baseline.yaml` solo renombra las claves FQCN de las deudas reubicadas (no añade deuda nueva); el
 gate sigue en verde (`Violations 0`).
 
+**D7 — PWA: disolución total del kernel (evolución de D5).** Tras completar el casing en #333, se revisó la
+frontera kernel/capacidad de D2 *en el PWA* y se concluyó que ahí no sobrevive kernel transversal alguno: a
+diferencia de la API (que sí conserva primitivas fundacionales — `AggregateRoot`, `Uuid`, taxonomía de
+`Exception`…), el "kernel" PWA era casi todo capacidad mal ubicada bajo los buckets `domain/types` e
+`infrastructure/`. Se disuelven por completo — `context/shared/` pasa a ser **solo capacidades hermanas**, sin
+`domain/` ni `infrastructure/` horizontales:
+
+- `ProblemDetails` → `error/domain` (contrato de error del front: vive con su capacidad, no en un bucket suelto).
+- `http`/`HttpClient`/`HttpError`/`ApiEndpoints` → `http-client/` (puerto en `domain`, adaptadores en
+  `infrastructure`; el fichero agrupado `HttpClient.ts` se parte para seguir el patrón hexagonal del resto).
+- `types/{routes,theme,appEnv+nodeEnv,status,sorting,keyboard}` → `routing/`, `theme/`, `environment/`,
+  `view-state/`, `search/` (`SortDirection` es vocabulario de búsqueda) y `keyboard/`.
+- El contenedor Inversify (única infra-kernel real, raíz de composición) → capacidad infra-only
+  `dependency-injection/infrastructure/`, igual que `Monitoring`/`Validation`.
+- `ValueObject` se **borra**: cero referencias en todo el PWA (precedente D4 — no se reubica código muerto).
+
+*Alternativa descartada:* dejar un `domain/` slim con las primitivas "sin identidad" (`HttpStatus`,
+`SortDirection`, `KeyboardKey`, `ViewState`) — reintroduce el layer-first que D1 eliminó: cada una tiene un
+dueño cohesivo. *Asimetría consciente:* la frontera de D2 es por-deployable — la API mantiene su trío kernel,
+el PWA no (no tenía primitivas fundacionales propias).
+
 ## Consecuencias y no-objetivos
 
 - `InvalidSearchCriteria` se queda en el kernel `Domain/Exception/` (es un marcador del contrato de error,
   no interno de Search) — distinto de las excepciones de `Search/Domain/Exception/`.
-- Diferido explícitamente: la verticalización agresiva de `Problem`/`Http`/`Serializer`/`RateLimit`, y la
-  unificación de casing en PWA. Promover una de estas exige nueva justificación (Regla de Tres).
+- Diferido explícitamente **en la API**: la verticalización agresiva de `Problem`/`Http`/`Serializer`/`RateLimit`
+  (kernel HTTP/error transversal); promover una exige nueva justificación (Regla de Tres). En el PWA esa
+  verticalización ya se ejecutó (D7) y el casing se completó en #333.
 - El estado-actual estructural vive en [`architecture-api.md`](../architecture-api.md) /
   [`architecture-pwa.md`](../architecture-pwa.md); este ADR solo fija la decisión y sus alternativas.

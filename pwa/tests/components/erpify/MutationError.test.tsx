@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MutationError } from "@/components/erpify/MutationError";
-import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
-import { NodeEnv } from "@/context/shared/domain/types/nodeEnv";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
+import { NodeEnv } from "@/context/shared/environment/domain/NodeEnv";
 
 const IN_USE_PROBLEM: ProblemDetails = {
   type: "bank-in-use",

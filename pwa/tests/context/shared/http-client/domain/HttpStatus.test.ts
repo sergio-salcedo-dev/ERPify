@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { HttpStatus } from "@/context/shared/domain/types/http";
+import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 
 describe("HttpStatus", () => {
   it("pins the codes the codebase compares against", () => {

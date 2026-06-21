@@ -1,4 +1,4 @@
-import { Routes } from "@/context/shared/domain/types/routes";
+import { Routes } from "@/context/shared/routing/domain/Routes";
 import { sectionTitleRules } from "@/app/backoffice/_lib/backofficeMenu";
 
 /**

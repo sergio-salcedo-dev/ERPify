@@ -1,4 +1,4 @@
-import { Routes } from "@/context/shared/domain/types/routes";
+import { Routes } from "@/context/shared/routing/domain/Routes";
 
 /**
  * Top-level URL prefixes that belong to the dev-tools surface. The hub at

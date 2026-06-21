@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { MutationError } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
-import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 
 /**
  * Client island for the gallery: `<MutationError>` needs a dismiss handler,

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { NodeEnv } from "@/context/shared/domain/types/nodeEnv";
+import { NodeEnv } from "@/context/shared/environment/domain/NodeEnv";
 import {
   DEV_TOOL_ROUTE_PREFIXES,
   isDevToolRoute,
