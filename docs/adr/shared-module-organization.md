@@ -86,7 +86,7 @@ el PWA no (no tenía primitivas fundacionales propias).
 
 ## D8 — Shared kernel verticalization & the error-representation contract
 
-> **Status:** Proposed · **Date:** 2026-06-21 · **Scope:** `api/src/Shared` restructuring (Kernel / ErrorContract / Uuid within the Domain layer) · **Supersedes:** D2 (partial — `Uuid`, the `Exception` taxonomy, and the `Http` error responders only)
+> **Status:** Accepted · **Date:** 2026-06-21 · **Scope:** `api/src/Shared` restructuring (Kernel / ErrorContract / Uuid within the Domain layer) · **Supersedes:** D2 (partial — `Uuid`, the `Exception` taxonomy, and the `Http` error responders only)
 
 ### 0. Why this reopens D2
 
@@ -190,10 +190,11 @@ mechanism governs all three; the ADR's job is to say which mechanism owns which 
 
 When the relocation is applied:
 
-- `ErrorContractGateTest` **must** be updated: the hardcoded `src/Shared/Domain/Exception/` literal in
-  its doc-sync sub-check (`testNewMarkerExceptionWithoutDocsUpdateIsRejected`) — **only that sub-check
-  breaks; the `JsonResponse` scan is path-independent and survives.** A stale path silently no-ops → green-but-blind.
-- If the test file relocates to mirror source, recompute `dirname(__DIR__, 5)` — path resolution is depth-coupled.
+- `ErrorContractGateTest` was updated: the hardcoded exception-dir literal (now
+  `src/Shared/ErrorContract/Domain/Exception/`) in its doc-sync sub-check
+  (`testNewMarkerExceptionWithoutDocsUpdateIsRejected`) — **only that sub-check was path-coupled;
+  the `JsonResponse` scan is path-independent.** A stale path would silently no-op → green-but-blind.
+- Tests that relocated a level deeper had their `dirname(__DIR__, N)` recomputed — path resolution is depth-coupled.
 - Validate CI green *after* the path fix before considering enforcement intact.
 
 ### 9. Decision summary

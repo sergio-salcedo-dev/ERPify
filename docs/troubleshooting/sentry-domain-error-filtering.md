@@ -69,7 +69,7 @@ ignore_exceptions:
     - 'Symfony\Component\ErrorHandler\Error\FatalError'
     - 'Symfony\Component\Debug\Exception\FatalErrorException'
     - 'Symfony\Component\HttpKernel\Exception\NotFoundHttpException'
-    - 'Erpify\Shared\Domain\Exception\DomainException'   # covers ALL markers
+    - 'Erpify\Shared\ErrorContract\Domain\Exception\DomainException'   # covers ALL markers
 ```
 
 The SDK matches with `is_a($className, $pattern, true)`
@@ -105,7 +105,7 @@ This unlocks what Option A can't:
 
 The base class is
 [`DomainException`](../../api/src/Shared/Domain/Exception/DomainException.php)
-(`Erpify\Shared\Domain\Exception\DomainException`).
+(`Erpify\Shared\ErrorContract\Domain\Exception\DomainException`).
 
 ## The trade-off — why this is deferred, not a default
 

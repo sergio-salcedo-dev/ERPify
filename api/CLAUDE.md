@@ -18,7 +18,7 @@ API-scoped guidance. Root [`../CLAUDE.md`](../CLAUDE.md) is authoritative for mo
 -   `src/<BoundedContext>/<Module>/{Domain,Application,Infrastructure}/` — DDD + Hexagonal. Current top-level contexts:
     -   `Backoffice/` — internal modules (e.g. `Bank/`, `Health/`), each with its own `Domain`/`Application`/`Infrastructure`.
     -   `Frontoffice/` — client-facing modules.
-    -   `Shared/` — cross-cutting kernel (`Application`, `Domain`, `Infrastructure`, plus `Media`, `Storage`). Put truly reusable code here; don't scatter it across modules.
+    -   `Shared/` — vertical-slice capability modules over a minimal `Kernel/` (DDD building blocks). Capabilities each carry only the layers they need: `ErrorContract/` (RFC 9457 pipeline), `Uuid/`, `Http/`, `Serialization/`, `Persistence/`, `Clock/`, `Event/`, `Mailer/`, `Media/`, `Monitoring/`, `Search/`, `Storage/`, `Validation/`. No global `Domain`/`Application`/`Infrastructure` buckets — see [`../docs/adr/shared-module-organization.md`](../docs/adr/shared-module-organization.md). Put truly reusable code here; don't scatter it across modules.
 -   `config/` — Symfony config (services, routes, packages, Messenger transports).
 -   `migrations/` — Doctrine migrations (never edit applied migrations; generate new ones via `make db.diff`).
 -   `tests/` — `Unit/`, `Functional/`, `Behat/`, `DataFixtures/`.
@@ -29,7 +29,7 @@ API-scoped guidance. Root [`../CLAUDE.md`](../CLAUDE.md) is authoritative for mo
 
 ## Layer rules (load-bearing)
 
-Dependencies point inward toward `Domain/`. **No** Symfony/Doctrine/HTTP/Messenger imports inside `Domain/` — put adapters in `Infrastructure/` and orchestration in `Application/`. Domain entities and value objects are pure PHP + interfaces. Documented exceptions: entities may carry passive metadata attributes (`#[ORM]`, `#[Assert]`, `#[Groups]`), and `Domain/` may import `symfony/uid` as a UUID value-object library (`Shared/Domain/Uuid/`) — see [`../docs/rules/architecture.md`](../docs/rules/architecture.md).
+Dependencies point inward toward `Domain/`. **No** Symfony/Doctrine/HTTP/Messenger imports inside `Domain/` — put adapters in `Infrastructure/` and orchestration in `Application/`. Domain entities and value objects are pure PHP + interfaces. Documented exceptions: entities may carry passive metadata attributes (`#[ORM]`, `#[Assert]`, `#[Groups]`), and `Domain/` may import `symfony/uid` as a UUID value-object library (`Shared/Uuid/Domain/`) — see [`../docs/rules/architecture.md`](../docs/rules/architecture.md).
 
 -   `Domain/` — entities, value objects, domain events, repository **interfaces**, domain services.
 -   `Application/` — use cases / command + query handlers, DTOs, transaction boundaries. Orchestrates domain; consumes repository interfaces.
