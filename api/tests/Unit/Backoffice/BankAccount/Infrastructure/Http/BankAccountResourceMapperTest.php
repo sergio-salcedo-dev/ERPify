@@ -25,6 +25,8 @@ final class BankAccountResourceMapperTest extends TestCase
 {
     private const string ACCOUNT_ID = '33333333-3333-7000-8000-000000000001';
 
+    private const string OTHER_ACCOUNT_ID = '33333333-3333-7000-8000-000000000002';
+
     public function testListResourcePinsSevenKeysWithEnumValuesAndOmitsBankId(): void
     {
         $account = BankAccountMother::create(
@@ -54,7 +56,7 @@ final class BankAccountResourceMapperTest extends TestCase
 
     public function testListResourceEmitsNullForAbsentOptionalFields(): void
     {
-        $account = BankAccountMother::create(bic: null, alias: null, status: BankAccountStatus::ACTIVE);
+        $account = BankAccountMother::create(status: BankAccountStatus::ACTIVE);
 
         $resource = (new BankAccountResourceMapper())->toListResource($account);
 
@@ -63,15 +65,42 @@ final class BankAccountResourceMapperTest extends TestCase
         $this->assertSame('ACTIVE', $resource->status);
     }
 
-    public function testToListPagePreservesNavigationAndMapsItems(): void
+    public function testToListPagePreservesNavigationAndMapsEachItemInOrder(): void
     {
-        $page = new Page([BankAccountMother::create()], hasNext: false, hasPrev: false);
+        $page = new Page(
+            [
+                BankAccountMother::create(id: self::ACCOUNT_ID),
+                BankAccountMother::create(id: self::OTHER_ACCOUNT_ID),
+            ],
+            hasNext: true,
+            hasPrev: false,
+            count: 7,
+            nextCursor: 'next-cursor',
+        );
 
         $mapped = (new BankAccountResourceMapper())->toListPage($page);
 
+        $this->assertTrue($mapped->hasNext);
+        $this->assertFalse($mapped->hasPrev);
+        $this->assertSame(7, $mapped->count);
+        $this->assertSame('next-cursor', $mapped->nextCursor);
+        $this->assertNull($mapped->prevCursor);
+        $this->assertContainsOnlyInstancesOf(BankAccountListResource::class, $mapped->items);
+        $this->assertSame(
+            [self::ACCOUNT_ID, self::OTHER_ACCOUNT_ID],
+            \array_map(static fn (BankAccountListResource $resource): string => $resource->id, $mapped->items),
+        );
+    }
+
+    public function testToListPageMapsAnEmptyPageToNoItems(): void
+    {
+        $page = new Page([], hasNext: false, hasPrev: false);
+
+        $mapped = (new BankAccountResourceMapper())->toListPage($page);
+
+        $this->assertSame([], $mapped->items);
         $this->assertFalse($mapped->hasNext);
         $this->assertFalse($mapped->hasPrev);
         $this->assertNull($mapped->count);
-        $this->assertContainsOnlyInstancesOf(BankAccountListResource::class, $mapped->items);
     }
 }
