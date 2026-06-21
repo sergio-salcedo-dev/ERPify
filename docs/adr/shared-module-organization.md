@@ -118,9 +118,18 @@ sub-layer governance is rule-scoped (test-driven), never graph-scoped.**
 
 ### 2. Kernel (closed set)
 
-Residual building blocks with no cohesive owner and no protocol role:
-`AggregateRoot`, entity contracts (`Identifiable`, `Timestamped`), `Result`, `NormalizedText`,
-`Currency` (low-usage VO, kept here until a second use).
+Residual building blocks with no cohesive owner and no protocol role, kept under their original DDD
+sub-categories within the layer:
+
+- **Domain** — `Aggregate/AggregateRoot`, entity contracts `Entity/{Identifiable, Timestamped}`,
+  `ValueObject/NormalizedText`, and `Enum/Currency` (a PHP `enum`, low-usage, kept here until a second
+  use). **`Currency` is classified as an enum, not a value object** — filing it under `ValueObject/`
+  would misrepresent the type, so it lives in `Enum/`.
+- **Application** — `Result`.
+
+The `Aggregate/` / `Entity/` / `Enum/` / `ValueObject/` sub-folders are legitimate DDD sub-categories
+preserved from the pre-move layout — not flattened. Minimal churn, no semantic loss; the only change is
+the `Shared/Kernel/` prefix.
 
 Invariants (convention): Kernel defines no workflow or protocol; no capability depends *solely*
 on Kernel; Kernel depends on nothing in `Shared`.
@@ -132,8 +141,12 @@ The error-representation protocol, spanning three layers:
 - **Domain** — `Exception` taxonomy (`DomainException`, `ClientError` + markers); `InvalidSearchCriteria`
   (a protocol marker, **not** Search feature logic).
 - **Application** — `ProblemDetailsFactory`, `ProblemDetails`, `RedactionDenylist`, `ProblemBodyTooLargeException`.
-- **Infrastructure** — `ProblemDetailsResponder`, `ExceptionResponder`, `RateLimitListener`, and the
-  `CorrelationIdListener::ATTRIBUTE_KEY` integration (use of the HTTP edge, not ownership).
+- **Infrastructure** — under `Infrastructure/Http/`: `ProblemDetailsResponder` (a plain responder, kept
+  flat) and `EventListener/{ExceptionResponder, RateLimitListener}` (Symfony event listeners, grouped
+  under `EventListener/` so the tree states what they are); plus the `CorrelationIdListener::ATTRIBUTE_KEY`
+  integration (use of the HTTP edge, not ownership). **The listener/responder split is deliberate** —
+  only `ProblemDetailsResponder` is a non-listener responder, so flattening all three (as an earlier draft
+  proposed) would erase that distinction.
 
 #### 3.1 Dependency rules (by enforcement mechanism)
 
@@ -196,6 +209,14 @@ When the relocation is applied:
   the `JsonResponse` scan is path-independent.** A stale path would silently no-op → green-but-blind.
 - Tests that relocated a level deeper had their `dirname(__DIR__, N)` recomputed — path resolution is depth-coupled.
 - Validate CI green *after* the path fix before considering enforcement intact.
+
+**Migration sequencing is guidance, not invariant.** The step-by-step commit plan that drove this move
+(promote one module per commit, keep each commit CI-green, co-locate the `docs/api-error-contract.md`
+update with the exception move) was *execution guidance to minimise risk*, not part of the target
+architecture. The implementation diverged from that exact sequence — modules were promoted in a different
+commit grouping and the doc update landed in a separate commit. The final architecture above satisfies all
+success criteria and CI gates; the sequencing therefore stays **migration guidance, not an architectural
+invariant**, and is not reconstructed retroactively (no history rewrite of a shipped PR).
 
 ### 9. Decision summary
 
