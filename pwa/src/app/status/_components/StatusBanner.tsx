@@ -1,5 +1,8 @@
-import { SystemStatus } from "@/lib/systemStatus";
-import { StatusBannerView, type BannerTheme } from "@/components/status/StatusBannerView";
+import { SystemStatus } from "@/context/shared/system-status/domain/SystemStatus";
+import {
+  StatusBannerView,
+  type BannerTheme,
+} from "@/context/shared/system-status/infrastructure/ui/StatusBannerView";
 
 interface StatusBannerProps {
   status: SystemStatus;

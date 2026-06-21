@@ -1,4 +1,4 @@
-import { AppEnv } from "@/context/shared/domain/types/appEnv";
+import { AppEnv } from "@/context/shared/environment/domain/AppEnv";
 import { scrubSentryEvent } from "./scrubSentryEvent";
 
 /** Full tracing in dev (only the developer hits `erpify-pwa-dev`) for local verification. */

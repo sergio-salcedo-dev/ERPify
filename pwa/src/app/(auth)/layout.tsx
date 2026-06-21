@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Logo } from "@/components/erpify";
-import { Routes } from "@/context/shared/domain/types/routes";
+import { Routes } from "@/context/shared/routing/domain/Routes";
 
 export const metadata: Metadata = {
   robots: { index: false },

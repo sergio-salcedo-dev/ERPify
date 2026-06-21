@@ -10,9 +10,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cva, type VariantProps } from "class-variance-authority";
-import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
-import { HttpStatus } from "@/context/shared/domain/types/http";
-import { NodeEnv } from "@/context/shared/domain/types/nodeEnv";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
+import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
+import { NodeEnv } from "@/context/shared/environment/domain/NodeEnv";
 import { cn } from "@/lib/utils";
 import { CorrelationIdChip } from "./CorrelationIdChip";
 

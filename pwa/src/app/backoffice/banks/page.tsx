@@ -9,7 +9,7 @@ import { BankProblemType } from "@/context/backoffice/bank/domain/BankProblemTyp
 import { useQueryState } from "@/context/shared/resource/application/createQueryState";
 import { useResourceList } from "@/context/shared/resource/application/useResourceList";
 import { useBanksCount } from "@/context/backoffice/bank/application/useBanksCount";
-import { ViewStatus } from "@/context/shared/domain/types/status";
+import { ViewStatus } from "@/context/shared/view-state/domain/ViewState";
 import {
   AsyncBoundary,
   DensityToggle,

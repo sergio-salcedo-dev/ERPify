@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { BankForm } from "@/app/backoffice/banks/_components/BankForm";
 import { Bank } from "@/context/backoffice/bank/domain/Bank";
-import { PersistenceAction } from "@/context/shared/domain/types/status";
+import { PersistenceAction } from "@/context/shared/view-state/domain/ViewState";
 import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
 import { ACME } from "./_fixtures";
 
@@ -11,7 +11,7 @@ const CREATED = Bank.fromPrimitives({ ...ACME, updatedAt: ACME.createdAt });
 
 const mocks = await vi.hoisted(async () => (await import("./_mocks")).bankFormMocks());
 vi.mock("next/navigation", () => mocks.navigation);
-vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", () => mocks.container);
+vi.mock("@/context/shared/dependency-injection/infrastructure/Container", () => mocks.container);
 vi.mock("@/context/shared/notification/infrastructure/Toast", () => mocks.toast);
 
 const { push, createRun } = mocks;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
+import { container } from "@/context/shared/dependency-injection/infrastructure/Container";
 import type { CountBanks } from "./CountBanks";
 
 /**

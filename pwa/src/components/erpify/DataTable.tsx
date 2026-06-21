@@ -12,8 +12,8 @@ import {
 } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { SortDirection } from "@/context/shared/domain/types/sorting";
-import { KeyboardKey } from "@/context/shared/domain/types/keyboard";
+import { SortDirection } from "@/context/shared/search/domain/SortDirection";
+import { KeyboardKey } from "@/context/shared/keyboard/domain/KeyboardKey";
 import type { ListDensity } from "./DensityToggle";
 
 export const SelectionMode = {

@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { BankAccount } from "@/context/backoffice/bankaccount/domain/BankAccount";
 import { ApiBankAccountRepository } from "@/context/backoffice/bankaccount/infrastructure/ApiBankAccountRepository";
-import type { HttpClient } from "@/context/shared/infrastructure/HttpClient/HttpClient";
-import { SortDirection } from "@/context/shared/domain/types/sorting";
+import type { HttpClient } from "@/context/shared/http-client/domain/HttpClient";
+import { SortDirection } from "@/context/shared/search/domain/SortDirection";
 import type { BankAccountSearchCriteria } from "@/context/backoffice/bankaccount/domain/BankAccountRepository";
 
 const BANK_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b";

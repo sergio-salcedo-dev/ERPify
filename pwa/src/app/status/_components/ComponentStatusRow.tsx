@@ -1,5 +1,8 @@
 import { cn } from "@/lib/utils";
-import { SystemStatus, componentStatusLabel } from "@/lib/systemStatus";
+import {
+  SystemStatus,
+  componentStatusLabel,
+} from "@/context/shared/system-status/domain/SystemStatus";
 
 interface ComponentStatusRowProps {
   name: string;

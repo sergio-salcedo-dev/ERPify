@@ -1,6 +1,6 @@
 import { injectable, inject } from "inversify";
-import { API_ENDPOINTS } from "../../../shared/infrastructure/api/ApiEndpoints";
-import type { HttpClient } from "../../../shared/infrastructure/HttpClient/HttpClient";
+import { API_ENDPOINTS } from "../../../shared/http-client/infrastructure/ApiEndpoints";
+import type { HttpClient } from "../../../shared/http-client/domain/HttpClient";
 import { HealthCheck, HealthCheckData } from "../domain/HealthCheck";
 import type { HealthCheckRepository } from "../domain/HealthCheckRepository";
 

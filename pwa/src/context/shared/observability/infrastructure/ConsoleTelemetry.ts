@@ -1,4 +1,4 @@
-import { AppEnv } from "@/context/shared/domain/types/appEnv";
+import { AppEnv } from "@/context/shared/environment/domain/AppEnv";
 import type { Telemetry, TelemetryContext } from "@/context/shared/observability/domain/Telemetry";
 
 /**

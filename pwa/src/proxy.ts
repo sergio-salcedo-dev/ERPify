@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { isDevToolRoute } from "@/context/shared/dev-tools/domain/devToolRoutes";
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
-import { HttpStatus } from "@/context/shared/domain/types/http";
+import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import { evaluateMonitoringTunnelRequest } from "@/context/shared/rate-limit/infrastructure/monitoringTunnelRateLimiter";
 
 /**

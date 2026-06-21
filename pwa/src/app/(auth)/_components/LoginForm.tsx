@@ -14,7 +14,7 @@ import { useSession } from "@/context/shared/access/application/useSession";
 import { UserStatus } from "@/context/shared/access/domain/UserStatus";
 import { Role } from "@/context/shared/access/domain/Role";
 import { PERMISSION_WILDCARD } from "@/context/shared/access/domain/Permission";
-import { Routes } from "@/context/shared/domain/types/routes";
+import { Routes } from "@/context/shared/routing/domain/Routes";
 import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
 import { uuidV7 } from "@/lib/uuidV7";
 import { safeHref } from "@/lib/safeHref";

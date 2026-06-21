@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ProblemDisplay } from "@/components/erpify/ProblemDisplay";
-import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
-import { NodeEnv } from "@/context/shared/domain/types/nodeEnv";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
+import { NodeEnv } from "@/context/shared/environment/domain/NodeEnv";
 
 const baseProblem: ProblemDetails = {
   type: "bank-not-found",

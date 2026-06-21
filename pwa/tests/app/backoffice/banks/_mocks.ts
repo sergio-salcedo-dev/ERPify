@@ -165,7 +165,7 @@ export async function bankRealtimeMock(capture?: (handlers: BankRealtimeHandlers
  * ```ts
  * const mocks = await vi.hoisted(async () => (await import("./_mocks")).banksListPageMocks());
  * vi.mock("next/navigation", mocks.navigation);
- * vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", mocks.container);
+ * vi.mock("@/context/shared/dependency-injection/infrastructure/Container", mocks.container);
  * vi.mock("@/context/shared/notification/infrastructure/Toast", mocks.toast);
  * vi.mock("@/context/backoffice/bank/infrastructure/bankRealtime", mocks.bankRealtime);
  * ```

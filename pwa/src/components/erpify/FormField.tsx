@@ -11,7 +11,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import type { ProblemViolation } from "@/context/shared/domain/ProblemDetails";
+import type { ProblemViolation } from "@/context/shared/error/domain/ProblemDetails";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 

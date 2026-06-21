@@ -1,4 +1,4 @@
-import { NodeEnv } from "@/context/shared/domain/types/nodeEnv";
+import { NodeEnv } from "@/context/shared/environment/domain/NodeEnv";
 
 /**
  * Whether the dev-tools surface (the `/backoffice/dev-tools` page, the navbar entry

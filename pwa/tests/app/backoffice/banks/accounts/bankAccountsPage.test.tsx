@@ -15,7 +15,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), back: vi.fn() }),
 }));
 
-vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", () => ({
+vi.mock("@/context/shared/dependency-injection/infrastructure/Container", () => ({
   container: {
     get: (token: string) => {
       if (token === "BackOfficeSearchBankAccounts") return { run: searchRun };

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
-import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { StatusBadge, TruncatedText } from "@/components/erpify";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Card, CardContent } from "@/components/ui/card";

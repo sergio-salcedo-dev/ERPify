@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { User } from "@/context/backoffice/user/domain/User";
-import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";

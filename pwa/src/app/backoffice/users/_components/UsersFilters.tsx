@@ -7,7 +7,7 @@ import { Search, SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/erpify";
-import { SortDirection } from "@/context/shared/domain/types/sorting";
+import { SortDirection } from "@/context/shared/search/domain/SortDirection";
 import { ALL_ROLES, type Role } from "@/context/shared/access/domain/Role";
 import { UserStatus } from "@/context/shared/access/domain/UserStatus";
 import {

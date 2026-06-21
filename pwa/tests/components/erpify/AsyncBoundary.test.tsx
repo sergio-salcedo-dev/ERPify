@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { AsyncBoundary } from "@/components/erpify/AsyncBoundary";
-import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 
 const problem: ProblemDetails = {
   type: "internal-error",

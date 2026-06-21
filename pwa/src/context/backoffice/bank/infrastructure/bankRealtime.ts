@@ -2,7 +2,7 @@
 
 import { Bank, type BankPrimitives } from "@/context/backoffice/bank/domain/Bank";
 import { realtimeScope } from "@/context/shared/observability/domain/TelemetryScope";
-import { API_ENDPOINTS } from "@/context/shared/infrastructure/api/ApiEndpoints";
+import { API_ENDPOINTS } from "@/context/shared/http-client/infrastructure/ApiEndpoints";
 import { useMercureRealtime } from "@/context/shared/real-time/infrastructure/useMercureRealtime";
 
 /**

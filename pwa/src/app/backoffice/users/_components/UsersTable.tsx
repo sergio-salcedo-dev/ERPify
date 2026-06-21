@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import type { User } from "@/context/backoffice/user/domain/User";
-import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { DataTable, TruncatedText } from "@/components/erpify";
 import type { DataTableColumn, DataTableSelection, DataTableSort } from "@/components/erpify";
 import { dateTimeProvider } from "@/context/shared/date-time-provider/infrastructure";

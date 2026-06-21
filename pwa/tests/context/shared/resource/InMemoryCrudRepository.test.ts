@@ -4,7 +4,7 @@ import {
   type InMemoryEntityConfig,
 } from "@/context/shared/resource/infrastructure/InMemoryCrudRepository";
 import { InMemoryResourceNavigator } from "@/context/shared/resource/infrastructure/InMemoryResourceNavigator";
-import { SortDirection } from "@/context/shared/domain/types/sorting";
+import { SortDirection } from "@/context/shared/search/domain/SortDirection";
 import { FilterOperator, type Filter } from "@/context/shared/search/domain";
 
 interface Row {

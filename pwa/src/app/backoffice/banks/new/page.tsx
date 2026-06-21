@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
-import { PersistenceAction } from "@/context/shared/domain/types/status";
+import { PersistenceAction } from "@/context/shared/view-state/domain/ViewState";
 import { bankRoutes } from "../_lib/bankRoutes";
 import { BankForm } from "../_components/BankForm";
 

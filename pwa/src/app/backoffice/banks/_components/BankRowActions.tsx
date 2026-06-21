@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { safeHref } from "@/lib/safeHref";
-import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { bankRoutes } from "../_lib/bankRoutes";
 import { DeleteBankButton } from "./DeleteBankButton";
 

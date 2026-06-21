@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { BankForm } from "@/app/backoffice/banks/_components/BankForm";
-import { PersistenceAction } from "@/context/shared/domain/types/status";
+import { PersistenceAction } from "@/context/shared/view-state/domain/ViewState";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), back: vi.fn() }),

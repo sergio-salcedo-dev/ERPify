@@ -3,10 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
-import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
-import { HttpStatus } from "@/context/shared/domain/types/http";
-import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
+import { container } from "@/context/shared/dependency-injection/infrastructure/Container";
+import { HttpError } from "@/context/shared/http-client/domain/HttpError";
+import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { useZodForm } from "@/context/shared/validation/infrastructure";
 import {
   UserFormSchema,
@@ -14,7 +14,7 @@ import {
 } from "@/context/backoffice/user/application/schemas/UserFormSchema";
 import type { UserInput, UserRepository } from "@/context/backoffice/user/domain/UserRepository";
 import { UserProblemType } from "@/context/backoffice/user/domain/UserProblemType";
-import { PersistenceAction } from "@/context/shared/domain/types/status";
+import { PersistenceAction } from "@/context/shared/view-state/domain/ViewState";
 import { ALL_ROLES, type Role } from "@/context/shared/access/domain/Role";
 import { ALL_PERMISSIONS } from "@/context/shared/access/domain/Permission";
 import { UserStatus } from "@/context/shared/access/domain/UserStatus";

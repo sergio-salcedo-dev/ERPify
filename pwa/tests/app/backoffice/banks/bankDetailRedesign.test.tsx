@@ -18,7 +18,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 const run = vi.fn();
-vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", () => ({
+vi.mock("@/context/shared/dependency-injection/infrastructure/Container", () => ({
   container: { get: () => ({ run }) },
 }));
 

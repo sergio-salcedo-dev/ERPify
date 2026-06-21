@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
-import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
+import { container } from "@/context/shared/dependency-injection/infrastructure/Container";
 import {
   InMemoryCrudRepository,
   type InMemoryEntityConfig,

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { User } from "@/context/backoffice/user/domain/User";
-import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { TruncatedText } from "@/components/erpify";
 import { useRowKeyboardNavigation } from "@/context/shared/resource/application/useRowKeyboardNavigation";
 import { cn } from "@/lib/utils";

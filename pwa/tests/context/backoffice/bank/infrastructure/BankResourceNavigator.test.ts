@@ -3,8 +3,8 @@ import { BankResourceNavigator } from "@/context/backoffice/bank/infrastructure/
 import { Bank } from "@/context/backoffice/bank/domain/Bank";
 import type { BankSearchPage } from "@/context/backoffice/bank/domain/BankRepository";
 import type { BankSearchNavigator } from "@/context/backoffice/bank/application/BankSearchNavigator";
-import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
-import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
+import { HttpError } from "@/context/shared/http-client/domain/HttpError";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 
 const BETA = Bank.fromPrimitives({
   id: "22222222-2222-4222-8222-222222222222",

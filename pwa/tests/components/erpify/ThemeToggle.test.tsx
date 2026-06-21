@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { ThemeProvider } from "next-themes";
 import { ThemeToggle } from "@/components/erpify/ThemeToggle";
-import { Theme, THEME_STORAGE_KEY } from "@/context/shared/domain/types/theme";
+import { Theme, THEME_STORAGE_KEY } from "@/context/shared/theme/domain/Theme";
 
 const TEST_ID = "theme-toggle-test";
 

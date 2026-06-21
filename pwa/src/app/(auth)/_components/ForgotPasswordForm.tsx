@@ -9,7 +9,7 @@ import {
 import { FormField } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Routes } from "@/context/shared/domain/types/routes";
+import { Routes } from "@/context/shared/routing/domain/Routes";
 import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
 
 export function ForgotPasswordForm() {

@@ -10,7 +10,7 @@ import { EmptyState } from "@/components/erpify";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 import { safeHref } from "@/lib/safeHref";
-import { PersistenceAction, ViewStatus } from "@/context/shared/domain/types/status";
+import { PersistenceAction, ViewStatus } from "@/context/shared/view-state/domain/ViewState";
 import { Can } from "@/context/shared/access/infrastructure/ui";
 import { Permission } from "@/context/shared/access/domain/Permission";
 import { userRoutes } from "../../_lib/userRoutes";

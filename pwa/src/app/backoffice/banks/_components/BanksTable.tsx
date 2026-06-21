@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
-import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { DataTable, StatusBadge, TruncatedText } from "@/components/erpify";
 import type { DataTableColumn, DataTableSelection, DataTableSort } from "@/components/erpify";
 import { dateTimeProvider } from "@/context/shared/date-time-provider/infrastructure";
