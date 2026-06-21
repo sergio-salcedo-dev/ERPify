@@ -21,7 +21,7 @@ import { toastNotifier } from "@/context/shared/notification/infrastructure/Toas
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { cn } from "@/components/cn";
 import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import { bankRoutes } from "../_lib/bankRoutes";

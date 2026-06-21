@@ -85,7 +85,11 @@ const eslintConfig = [
               message:
                 "components/ui must not depend on app/ — dependencies point toward the lowest layer.",
             },
-            // TODO PR2: add { group: ["@/context/**"] } once `cn` moves out of context/shared/styling (closes R5).
+            {
+              group: ["@/context", "@/context/**"],
+              message:
+                "components/ui is the foundational vendor layer: it must not reach into the DDD context tree. Foundational presentation helpers it needs (e.g. cn) live at @/components, below the context tree.",
+            },
           ],
         },
       ],

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ChevronLeft, Home, LayoutDashboard } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Routes } from "@/context/shared/routing/domain/Routes";
-import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { cn } from "@/components/cn";
 
 /**
  * Shared sizing for every action button in the error module. Exported so the

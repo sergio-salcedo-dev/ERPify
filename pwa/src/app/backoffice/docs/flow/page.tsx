@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { ArrowRight } from "lucide-react";
-import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { cn } from "@/components/cn";
 import { flows, type Flow, type FlowDiagramNode, type FlowTone } from "./_lib/flows";
 
 export const metadata: Metadata = {

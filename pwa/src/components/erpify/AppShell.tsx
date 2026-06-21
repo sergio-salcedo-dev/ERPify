@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { cn } from "@/components/cn";
 
 const SIDEBAR_STORAGE_KEY = "erpify:sidebar-open";
 

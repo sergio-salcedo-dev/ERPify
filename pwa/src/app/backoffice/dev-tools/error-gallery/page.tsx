@@ -13,7 +13,7 @@ import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetail
 import { Routes } from "@/context/shared/routing/domain/Routes";
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
 import { buttonVariants } from "@/components/ui/button-variants";
-import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { cn } from "@/components/cn";
 import { MutationErrorDemo } from "./MutationErrorDemo";
 
 interface RouteCase {

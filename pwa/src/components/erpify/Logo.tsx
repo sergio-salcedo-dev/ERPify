@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
-import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { cn } from "@/components/cn";
 
 export type LogoSize = "sm" | "md" | "lg";
 export type LogoVariant = "plain" | "badge";

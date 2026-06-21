@@ -20,7 +20,7 @@ import {
 } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
-import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { cn } from "@/components/cn";
 import { uuidV7 } from "@/context/shared/uuid/infrastructure/uuidV7";
 import { isUuid } from "@/context/shared/uuid/infrastructure/isUuid";
 import { dateTimeProvider } from "@/context/shared/date-time-provider/infrastructure";

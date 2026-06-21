@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button-variants";
-import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { cn } from "@/components/cn";
 import type { FilterChipDescriptor, FilterChipKey } from "../_lib/banksFilterSort";
 
 interface BanksActiveFiltersProps {

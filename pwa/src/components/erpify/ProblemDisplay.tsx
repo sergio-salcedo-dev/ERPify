@@ -13,7 +13,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import { NodeEnv } from "@/context/shared/environment/domain/NodeEnv";
-import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { cn } from "@/components/cn";
 import { CorrelationIdChip } from "./CorrelationIdChip";
 
 /**

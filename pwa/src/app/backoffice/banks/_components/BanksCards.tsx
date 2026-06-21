@@ -6,7 +6,7 @@ import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetail
 import { StatusBadge, TruncatedText, useIsTruncated } from "@/components/erpify";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Card, CardContent } from "@/components/ui/card";
-import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { cn } from "@/components/cn";
 import { dateTimeProvider } from "@/context/shared/date-time-provider/infrastructure";
 import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import { bankRoutes } from "../_lib/bankRoutes";

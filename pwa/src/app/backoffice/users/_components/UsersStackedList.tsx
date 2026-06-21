@@ -5,7 +5,7 @@ import type { User } from "@/context/backoffice/user/domain/User";
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { TruncatedText } from "@/components/erpify";
 import { useRowKeyboardNavigation } from "@/context/shared/resource/application/useRowKeyboardNavigation";
-import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { cn } from "@/components/cn";
 import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import { userRoutes } from "../_lib/userRoutes";
 import { UserStatusBadge } from "./UserStatusBadge";

@@ -1,5 +1,5 @@
 import { cva, type VariantProps } from "class-variance-authority";
-import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { cn } from "@/components/cn";
 
 export type StatusBadgeVariant = "success" | "warning" | "danger" | "info" | "neutral";
 
