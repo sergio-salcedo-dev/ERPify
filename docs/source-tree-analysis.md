@@ -94,8 +94,7 @@ ERPify/
 │   ├── development-guide-api.md
 │   ├── development-guide-pwa.md
 │   ├── deployment-guide.md
-│   ├── contribution-guide.md
-│   └── project-scan-report.json    # Workflow state (machine-readable)
+│   └── contribution-guide.md
 │
 ├── .github/workflows/
 │   └── ci.yml                      # Lint + test pipeline
