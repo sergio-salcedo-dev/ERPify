@@ -10,7 +10,7 @@ import type { BankAccountSearchNavigator } from "@/context/backoffice/bankaccoun
 import type { BankAccount } from "@/context/backoffice/bankaccount/domain/BankAccount";
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
-import type { PageEnvelope } from "@/context/shared/Search/domain";
+import type { PageEnvelope } from "@/context/shared/search/domain";
 import { HttpStatus } from "@/context/shared/domain/types/http";
 import { ViewStatus } from "@/context/shared/domain/types/status";
 import { AsyncBoundary } from "@/components/erpify";

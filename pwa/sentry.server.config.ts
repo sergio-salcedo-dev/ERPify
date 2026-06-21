@@ -1,5 +1,5 @@
 import * as Sentry from "@sentry/nextjs";
-import { sentryInitOptions } from "@/context/shared/Observability/infrastructure/sentryInitOptions";
+import { sentryInitOptions } from "@/context/shared/observability/infrastructure/sentryInitOptions";
 
 // Node.js runtime Sentry init (SSR, Server Components, route handlers). Imported
 // by instrumentation.ts#register(). Inert when no DSN is configured.

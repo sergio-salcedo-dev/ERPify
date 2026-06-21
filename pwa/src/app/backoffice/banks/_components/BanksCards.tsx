@@ -8,7 +8,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { useIsTruncated } from "@/lib/useIsTruncated";
-import { dateTimeProvider } from "@/context/shared/DateTimeProvider/infrastructure";
+import { dateTimeProvider } from "@/context/shared/date-time-provider/infrastructure";
 import { safeHref } from "@/lib/safeHref";
 import { bankRoutes } from "../_lib/bankRoutes";
 import { isRecentlyCreated } from "../_lib/bankRecency";

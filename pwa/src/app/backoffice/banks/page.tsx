@@ -25,7 +25,7 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 import { safeHref } from "@/lib/safeHref";
 import { useStoredPreference } from "@/lib/useStoredPreference";
-import { dateTimeProvider } from "@/context/shared/DateTimeProvider/infrastructure";
+import { dateTimeProvider } from "@/context/shared/date-time-provider/infrastructure";
 import { bankTopics, useBankRealtime } from "@/context/backoffice/bank/infrastructure/bankRealtime";
 import { BanksTable } from "./_components/BanksTable";
 import { BanksColumnPicker } from "./_components/BanksColumnPicker";

@@ -6,10 +6,10 @@ import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError"
 import { HttpStatus } from "@/context/shared/domain/types/http";
 import { ViewStatus } from "@/context/shared/domain/types/status";
 import { KeyboardKey } from "@/context/shared/domain/types/keyboard";
-import { toastNotifier } from "@/context/shared/Notification/infrastructure/Toast";
+import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
 import { uuidV7 } from "@/lib/uuidV7";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
-import type { PageEnvelope } from "@/context/shared/Search/domain";
+import type { PageEnvelope } from "@/context/shared/search/domain";
 import type { CrudRepository, ResourceSearchCriteria } from "../domain/CrudRepository";
 import type { ResourceSearchNavigator } from "../domain/ResourceSearchNavigator";
 import type { QueryState } from "./createQueryState";

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { DateTimeProvider } from "@/context/shared/DateTimeProvider/domain/DateTimeProvider";
-import { DateFnsDateTimeProvider } from "@/context/shared/DateTimeProvider/infrastructure/DateFnsDateTimeProvider";
+import type { DateTimeProvider } from "@/context/shared/date-time-provider/domain/DateTimeProvider";
+import { DateFnsDateTimeProvider } from "@/context/shared/date-time-provider/infrastructure/DateFnsDateTimeProvider";
 import { isRecentlyCreated } from "@/app/backoffice/banks/_lib/bankRecency";
 
 // A provider whose "now" is pinned, so the test is deterministic.

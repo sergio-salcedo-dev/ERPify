@@ -1,4 +1,4 @@
-import type { Filter, PageEnvelope } from "@/context/shared/Search/domain";
+import type { Filter, PageEnvelope } from "@/context/shared/search/domain";
 import type { SortDirection } from "@/context/shared/domain/types/sorting";
 import type { BankAccount } from "./BankAccount";
 

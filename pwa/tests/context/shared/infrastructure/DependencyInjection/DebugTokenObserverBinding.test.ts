@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
-import { EventTargetDebugTokenObserver } from "@/context/shared/DebugToken/infrastructure/EventTargetDebugTokenObserver";
-import type { DebugTokenObserver } from "@/context/shared/DebugToken/domain/DebugTokenObserver";
+import { EventTargetDebugTokenObserver } from "@/context/shared/debug-token/infrastructure/EventTargetDebugTokenObserver";
+import type { DebugTokenObserver } from "@/context/shared/debug-token/domain/DebugTokenObserver";
 
 describe("DebugTokenObserver binding", () => {
   it("resolves the live EventTarget adapter outside production (test env)", () => {

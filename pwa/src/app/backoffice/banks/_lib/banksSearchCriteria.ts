@@ -1,6 +1,6 @@
-import type { Filter } from "@/context/shared/Search/domain";
+import type { Filter } from "@/context/shared/search/domain";
 import type { BankSort } from "@/context/backoffice/bank/domain/BankRepository";
-import { dateTimeProvider } from "@/context/shared/DateTimeProvider/infrastructure";
+import { dateTimeProvider } from "@/context/shared/date-time-provider/infrastructure";
 import type { BanksFilter, BanksSort } from "./banksFilterSort";
 
 const CREATED_AT_FIELD = "createdAt";

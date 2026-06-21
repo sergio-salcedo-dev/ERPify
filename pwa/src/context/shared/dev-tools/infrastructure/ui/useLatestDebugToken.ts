@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
-import type { DebugToken } from "@/context/shared/DebugToken/domain/DebugToken";
-import type { DebugTokenObserver } from "@/context/shared/DebugToken/domain/DebugTokenObserver";
+import type { DebugToken } from "@/context/shared/debug-token/domain/DebugToken";
+import type { DebugTokenObserver } from "@/context/shared/debug-token/domain/DebugTokenObserver";
 
 /**
  * Subscribes to the latest Symfony profiler {@link DebugToken}. Returns `null`
