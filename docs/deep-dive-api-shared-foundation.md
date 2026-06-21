@@ -12,18 +12,26 @@
 
 `api/src/Shared/` is the cross-context spine of the Symfony API. It owns the framework-free domain primitives, the application-layer ports/use-case scaffolding, and the infrastructure adapters (HTTP, persistence, messaging, storage, image processing, mail, telemetry) that every bounded context layers on. The most load-bearing surface is the **RFC 9457 Problem Details error pipeline** — every uncaught `/api/*` exception flows through `ProblemDetailsFactory` → `ExceptionResponder` → `ProblemDetailsResponder`, and most unit/functional test mass here pins those guarantees.
 
-**Top-level layout (7 subtrees, file counts in parentheses):**
+**Top-level layout (kernel trio + 8 capability modules, file counts in parentheses):**
 
 ```
 api/src/Shared/
-├── Application/      (12)  ports, use-case Result, search/validation DTOs, Problem layer, domain-event dedup ports
-├── Domain/           (38)  framework-free aggregates, value objects, clock, generic filters, marker + search exceptions
-├── Infrastructure/   (54)  Symfony adapters: HTTP listeners, responders, keyset engine, Messenger, serializer, validator
-├── Media/            (16)  in-DB media (images stored as BLOB) — full DDD layering, concurrent-insert dedup
-├── Storage/          (13)  Flysystem-backed object storage with content-addressing + orphan cleanup
+├── Application/      (5)   kernel: use-case Result, Problem (RFC 9457) layer
+├── Domain/           (18)  kernel: aggregates, value objects, entity contracts, Uuid, marker + base exceptions
+├── Infrastructure/   (14)  kernel: HTTP listeners/responders, Doctrine + serializer helpers
+├── Clock/            (5)   time port + Symfony/native adapters
+├── Event/            (32)  event backbone: EventBus, reproducible event_store, projections
+├── Mailer/           (2)   notification-mail port + plain-text adapter
+├── Media/            (16)  in-DB media (BLOB) — full DDD layering, concurrent-insert dedup
 ├── Monitoring/        (3)  Sentry before_send: client-error/worker-noise filter + PII/secret scrubber
-└── Guzzle/            (1)  forward-compat enum (currently unused)
+├── Search/           (40)  generic filters + keyset engine + cursor envelope (Domain/Application/Infrastructure)
+├── Storage/          (13)  Flysystem object storage: content-addressing + orphan cleanup
+└── Validation/        (3)  Validator helper/port + EnumType constraint
 ```
+
+Each capability module nests its own `{Domain,Application,Infrastructure}` (only the layers it needs); the
+`Application`/`Domain`/`Infrastructure` trio holds the genuinely cross-cutting kernel primitives every module
+and bounded context builds on. See [`adr/shared-module-organization.md`](./adr/shared-module-organization.md).
 
 **Architectural posture (high level):**
 - DDD + Hexagonal: Domain → Application → Infrastructure dependency direction, enforced by deptrac (`make php.deptrac`).
@@ -63,19 +71,19 @@ api/src/Shared/
 - **Used by:** `Infrastructure/Messenger/Maintenance/PruneHandledDomainEventsHandler`; impl `DbalHandledDomainEventPruner`.
 - **Key detail:** Idempotent cleanup of stale idempotency claims so the `handled_domain_event` table stays bounded.
 
-#### `api/src/Shared/Application/Http/Search/SearchQuery.php`
+#### `api/src/Shared/Search/Application/Http/SearchQuery.php`
 - **LOC:** 129 — **Type:** HTTP-boundary `final readonly` DTO. **Exports:** `#[Assert\*]`-constrained constructor; `validateFilterIndexes()` (contiguous-from-0 callback); `toCriteria(): SearchCriteria`.
 - **Used by:** every search controller (`BankSearchController`, `BankAccountSearchController`), `SearchResponder`; bound via `#[MapQueryString]`.
 - **Contributor note:** The single shared search DTO — do **not** subclass per entity. Cursor-only (`after`/`before` mutually exclusive); `limit` capped at `MAX_LIMIT = 100`; filtering is the generic `filters[]` grammar resolved per-repository against a `SearchFieldMap` (recipe: [`architecture-api.md`](./architecture-api.md#filterable-search-generic-filters-contract)). Validation failures → 400.
-- **Verification:** `api/tests/Unit/Shared/Application/Http/Search/SearchQueryTest.php`.
+- **Verification:** `api/tests/Unit/Shared/Search/Application/Http/SearchQueryTest.php`.
 
-#### `api/src/Shared/Application/Http/Search/FilterQuery.php`
+#### `api/src/Shared/Search/Application/Http/FilterQuery.php`
 - **LOC:** 190 — **Type:** HTTP-boundary `final readonly` DTO (one entry of the `filters[]` list). **Exports:** constructor, `validateValueShape()` callback, `toFilter(): Filter`.
 - **Used by:** `SearchQuery` (maps each `filters[N][field|operator|value]`).
 - **Key detail:** Validates wire **shape** at mapping time (known operator token, value coherence, length ≤ 255, no Unicode-whitespace-only values). Field/operator **semantics** (the allowlist) are the applier's job downstream, against the repository field map.
-- **Verification:** `api/tests/Unit/Shared/Application/Http/Search/FilterQueryTest.php`.
+- **Verification:** `api/tests/Unit/Shared/Search/Application/Http/FilterQueryTest.php`.
 
-#### `api/src/Shared/Application/Mailer/NotificationMailer.php`
+#### `api/src/Shared/Mailer/Application/NotificationMailer.php`
 - **LOC:** 21 — **Type:** outbound port interface. **Exports:** `send(string $to, string $subject, array $fields, ?string $correlationLabel = null): void`.
 - **Used by:** `Backoffice/Bank/.../SendEmailOnBankChanged`; impl `Infrastructure/Mailer/PlainTextNotificationMailer`.
 
@@ -111,10 +119,10 @@ api/src/Shared/
 - **Used by:** controllers across bounded contexts; the responder family decides wire format.
 - **Verification:** `api/tests/Unit/Shared/Application/UseCase/ResultTest.php`.
 
-#### `api/src/Shared/Application/Validation/Validator.php`
+#### `api/src/Shared/Validation/Application/Validator.php`
 - **LOC:** 86 — **Type:** `final readonly` thin wrapper over Symfony `ValidatorInterface`. **Exports:** `ensure(mixed $value, ?Constraint|array, …): void` — validate-or-throw `ValidationFailedException`; rebinds empty `propertyPath` to a supplied name so scalar-root violations (e.g. a route id) never emit a blank `violations[].field`.
 - **Contributor note:** Application-layer programmatic / nested validation. HTTP DTOs rely on `#[MapQueryString]`/`#[MapRequestPayload]` instead.
-- **Verification:** `api/tests/Unit/Shared/Application/Validation/ValidatorTest.php`.
+- **Verification:** `api/tests/Unit/Shared/Validation/Application/ValidatorTest.php`.
 
 ---
 
@@ -134,9 +142,9 @@ api/src/Shared/
 #### `api/src/Shared/Domain/Entity/Timestamped.php`
 - **LOC:** 52 — `createdAt`/`updatedAt` audit trait. **Imports:** same passive attributes as `Identifiable`, **plus `DateTimeNormalizer`** (referenced via `FORMAT_KEY` inside `#[Serializer\Context]` to pin ATOM/ISO-8601). The `DateTimeNormalizer` runtime class is the residual framework leak (deptrac baseline, issue #305). See Known issues.
 
-#### `api/src/Shared/Domain/Clock/Clock.php` · `NativeClock.php` · `SystemClock.php`
+#### `api/src/Shared/Clock/Domain/Clock.php` · `NativeClock.php` · `SystemClock.php`
 - 17 + 21 + 37 LOC. `Clock` is the domain port (`now(): DateTimeImmutable`). `NativeClock` reads the host wall clock. `SystemClock` is the **ambient static facade** (`set()/reset()/now()`) lazily defaulting to `NativeClock` — the way aggregates and domain events (which the container cannot construct) read "now". Application/Infrastructure code that DI can reach injects `Clock` directly; the static is for the layers DI can't.
-- **Verification:** `api/tests/Unit/Shared/Domain/Clock/SystemClockTest.php`.
+- **Verification:** `api/tests/Unit/Shared/Clock/Domain/SystemClockTest.php`.
 
 #### `api/src/Shared/Domain/Bus/Event/EventBus.php`
 - **LOC:** 21 — outbound port: `publish(DomainEvent ...$events): void`. Single adapter is `Infrastructure/Bus/Event/SymfonyMessengerEventBus`.
@@ -162,7 +170,7 @@ api/src/Shared/
 - **LOC:** 50 — concrete exception implementing `RateLimited` (429). Carries `retryAfterSeconds`, `limit`, `remaining` (0 on this path), `limiterKey`. Framework-free; the transport surface (Retry-After / RateLimit headers) is owned by `RateLimitListener`.
 - **Verification:** `api/tests/Unit/Shared/Domain/Exception/RateLimitExceededTest.php`.
 
-#### `api/src/Shared/Domain/Search/Exception/*` (InvalidCursor, InvalidPagination, InvalidSearchValue, UnknownSearchField, UnknownSortField, UnsupportedSearchOperator, InvalidCursorCause)
+#### `api/src/Shared/Search/Domain/Exception/*` (InvalidCursor, InvalidPagination, InvalidSearchValue, UnknownSearchField, UnknownSortField, UnsupportedSearchOperator, InvalidCursorCause)
 - 26–56 LOC each. All concrete exceptions implement `InvalidSearchCriteria` → **422** with field/position/operator in `context` but **never the raw value or cursor**:
   - `InvalidCursor` — named constructors (signature / version / payload / fingerprint) tagged by the internal `InvalidCursorCause` enum; wire response is identical for all causes (no info leak), the cause feeds observability only.
   - `InvalidPagination` — limit out of `[1, MAX_LIMIT]`.
@@ -171,15 +179,15 @@ api/src/Shared/
   - `UnsupportedSearchOperator` — operator not allowed for that field.
 - **Verification:** `UnknownSearchFieldTest`, `UnknownSortFieldTest`, `UnsupportedSearchOperatorTest`.
 
-#### `api/src/Shared/Domain/Search/Filter.php` · `Filters.php` · `FilterOperator.php`
+#### `api/src/Shared/Search/Domain/Filter.php` · `Filters.php` · `FilterOperator.php`
 - 82 + 68 + 29 LOC. `FilterOperator` is the wire-contract enum (`Eq, In, Contains, Gt, Gte, Lt, Lte` — the backing strings ARE the `filters[N][operator]` API, append-only). `Filter` is a value object (public field name — never a DQL path — operator, scalar|list value; blank-value guard post-trim). `Filters` is an immutable `Countable`/`IteratorAggregate` collection; multiple filters on one field compose with AND downstream.
 - **Verification:** `FilterTest`, `FiltersTest`, `FilterOperatorTest`.
 
-#### `api/src/Shared/Domain/Search/SearchCriteria.php`
+#### `api/src/Shared/Search/Domain/SearchCriteria.php`
 - **LOC:** 56 — `final readonly`. `DEFAULT_LIMIT = 25`, `MAX_LIMIT = 100`. Constructor `(?cursor, routingDirection=After, ?limit, paginationMode=LIGHT, filters=Filters::none(), ?sort, ?direction)`. Cursor-only; `routingDirection` is the sole navigation authority (the cursor's own `dir` is integrity-binding only). Carries the generic `Filters`, never typed per-entity properties.
-- **Verification:** `api/tests/Unit/Shared/Domain/Search/SearchCriteriaTest.php`.
+- **Verification:** `api/tests/Unit/Shared/Search/Domain/SearchCriteriaTest.php`.
 
-#### `api/src/Shared/Domain/Search/Page.php` · `PaginationMode.php` · `NavigationDirection.php` · `SortDirection.php`
+#### `api/src/Shared/Search/Domain/Page.php` · `PaginationMode.php` · `NavigationDirection.php` · `SortDirection.php`
 - 50 + 27 + 25 + 17 LOC. `Page<T>` is the read-model envelope (`items`, `hasNext`, `hasPrev`, `count`, `nextCursor`, `prevCursor`; opaque cursor strings; **no** framework imports). `PaginationMode` (`DETAILED` runs `COUNT(*)`, `LIGHT` uses the +1-fetch trick). `NavigationDirection` (`After`/`Before`). `SortDirection` (`ASC`/`DESC`).
 - **Verification:** `PageTest`, `SortDirectionTest`.
 
@@ -213,7 +221,7 @@ api/src/Shared/
 - **LOC:** 269 — two listeners in one class. **`REQUEST_PRIORITY = 512`** (consumes a token from the `anonymous_api` sliding-window limiter keyed by client IP; throws `RateLimitExceeded` on rejection) + **`RESPONSE_PRIORITY = -128`** (stamps IETF draft `RateLimit-*` + legacy `X-RateLimit-*` on accepted and rejected; `Retry-After` only on rejection, 1-second floor). Scoped to `/api/*` main requests; **skips CORS preflight**; limits **before routing** (404s included) to blunt enumeration. The per-request snapshot lives on a request attribute, not instance state. `RateLimitExceeded` → `ExceptionResponder` → 429 Problem Details, then the response listener attaches headers.
 - **Verification:** `RateLimitListenerTest`, `RateLimitListenerFunctionalTest`, Behat `anonymous_api.feature`.
 
-#### `api/src/Shared/Infrastructure/Http/EventListener/SearchObservabilityListener.php`
+#### `api/src/Shared/Search/Infrastructure/Http/EventListener/SearchObservabilityListener.php`
 - **LOC:** 204 — two listeners. `kernel.response` (priority 0) emits a `keyset_search` line on successful `*_search` responses (`route, limit, direction, pagination_mode, count_mode, has_next, has_prev, correlation_id`); `kernel.exception` (priority 32, ahead of `ExceptionResponder`) emits `invalid_cursor` (`cursor_cause, route, correlation_id`) by walking the `getPrevious()` chain. Uses a dedicated always-on `observability` Monolog channel (so info/warning metrics survive non-error requests); **never logs the raw cursor**; logger throws are swallowed (observability is never load-bearing).
 - **Verification:** `SearchObservabilityListenerTest`.
 
@@ -229,7 +237,7 @@ api/src/Shared/
 - 43 + 50 LOC. `ContentAddressedHttpCache` centralizes the immutable-asset HTTP contract (`ETag` = content hash, `If-None-Match` 304, `Cache-Control: public, max-age=31536000, immutable`, `X-Content-Type-Options: nosniff`) — shared by the Media and Storage GET controllers. `ContentHashUrlGenerator` is the **single** content-addressed URL builder (`MEDIA_PUBLIC_BASE_URL` env → router → relative fallback); both `Configurable{Media,StoredObject}PublicUrlGenerator` delegate to it (the former per-generator duplication is gone).
 - **Verification:** `ContentAddressedHttpCacheTest`.
 
-#### `api/src/Shared/Infrastructure/Clock/SymfonyClock.php` · `SystemClockInitializer.php`
+#### `api/src/Shared/Clock/Infrastructure/SymfonyClock.php` · `SystemClockInitializer.php`
 - 29 + 46 LOC. `SymfonyClock` is the production `Clock` adapter (wraps Symfony's `ClockInterface`). `SystemClockInitializer` pins `SystemClock::set()` to the injected clock at **priority 4096** on `kernel.request`, `console.command`, and `WorkerMessageReceivedEvent` — so domain code reads a consistent (and test-freezable) "now" at every entry point. Idempotent static write, safe for the FrankenPHP worker loop.
 - **Verification:** `SymfonyClockTest`, `SystemClockInitializerTest`.
 
@@ -264,7 +272,7 @@ api/src/Shared/
 - 39 + 83 LOC. `JsonDecoder` (`decodeArray()`/`decodeResponse()`, `JSON_THROW_ON_ERROR`, refuses non-array). `ResourceNormalizer` wraps Symfony Serializer, applies groups, normalizes `ArrayObject` → array, throws on non-array results. Only `ResourceResponder` consumes the normalizer.
 - **Verification:** `ResourceNormalizerTest`.
 
-#### `api/src/Shared/Infrastructure/Validator/EnumType.php` · `EnumTypeValidator.php`
+#### `api/src/Shared/Validation/Infrastructure/EnumType.php` · `EnumTypeValidator.php`
 - 39 + 60 LOC. Custom `#[EnumType(MyEnum::class, allowNull, cases)]` constraint + validator: asserts a value is a hydrated backed-enum instance (optionally restricted to a case subset). After the enum refactor it no longer formats labels (the `HumanReadable*` stack was retired — ADR [`domain-enums.md`](./adr/domain-enums.md)).
 - **Verification:** `EnumTypeValidatorTest`.
 
@@ -378,13 +386,6 @@ api/src/Shared/
 #### `api/src/Shared/Monitoring/Infrastructure/Sentry/SentryEventScrubber.php`
 - **LOC:** 99 — second layer behind `send_default_pii: false`: recursively strips `RedactionDenylist` keys from `event.extra`, `event.request.{headers,cookies,data,env}`, and the parsed `query_string` (substring, case-insensitive, key removed not masked). Keeps scrub parity with the RFC 9457 error body.
 - **Verification:** `SentryBeforeSendTest`, `SentryEventFilterTest`, `SentryEventScrubberTest`.
-
----
-
-### Subtree: `Guzzle/` (1 file)
-
-#### `api/src/Shared/Guzzle/Enum/GuzzleContextTypeEnum.php`
-- **LOC:** 20 — string-backed enum mirroring Guzzle's `RequestOptions` keys. **Currently unreferenced** — forward-compat placeholder for a future HTTP-client adapter. See Known issues.
 
 ---
 
@@ -560,12 +561,11 @@ Belt-and-braces with `send_default_pii: false`; reuses the same `RedactionDenyli
 
 **Leaf nodes** (depend on no other `Shared/` files; pure or framework-only):
 - All marker interfaces under `Domain/Exception/` (+ `ClientError`).
-- `Domain/Clock/*`, `Domain/Uuid/Uuid.php`, `Domain/ValueObject/NormalizedText.php`, `Domain/Enum/Currency.php`.
-- `Domain/Search/{Page,PaginationMode,NavigationDirection,SortDirection,FilterOperator}.php`.
+- `Clock/Domain/*`, `Domain/Uuid/Uuid.php`, `Domain/ValueObject/NormalizedText.php`, `Domain/Enum/Currency.php`.
+- `Search/Domain/{Page,PaginationMode,NavigationDirection,SortDirection,FilterOperator}.php`.
 - `Application/UseCase/Result.php`, `Application/Problem/RedactionDenylist.php`.
-- `Infrastructure/Persistence/QueryParam.php`, `Infrastructure/Persistence/Doctrine/Search/Keyset/{Cursor,Applied*,WirePaginationPolicy}.php`.
+- `Infrastructure/Persistence/QueryParam.php`, `Search/Infrastructure/Persistence/Doctrine/Keyset/{Cursor,Applied*,WirePaginationPolicy}.php`.
 - `Storage/Domain/ContentAddressableObjectKey.php`.
-- `Guzzle/Enum/GuzzleContextTypeEnum.php` (no callers either).
 
 **No circular dependencies detected.** The identity/audit traits (`Identifiable`, `Timestamped`) point outward into Doctrine/Symfony via attributes rather than back into Domain, so they don't introduce cycles; only `Timestamped`'s `DateTimeNormalizer` runtime reference is residual debt (Known issues #1).
 
@@ -621,11 +621,9 @@ Belt-and-braces with `send_default_pii: false`; reuses the same `RedactionDenyli
 
 3. **Storage orphan-cleanup wiring is opt-in per aggregate.** `StoredObjectOrphanCleaner::cleanupAfterRemoval()` now has its first production caller (`Backoffice/Bank/.../BankStoredObjectRemoveListener` + `BankStoredObjectReferenceInspector`), but there is **no global enforcement**: every new object-storing domain must independently implement + tag a `StoredObjectReferenceInspector` and wire a removal listener — miss either and orphaned blobs leak silently.
 
-4. **`Infrastructure/Mailer/PlainTextNotificationMailer` has no size cap.** `renderFieldValue()` coerces booleans/`null` and marks unserializable values, but a pathological deeply-nested `$fields` array still produces an unbounded body. Acceptable today (callers control inputs); worth a max-bytes guard before exposing the port to user-driven content.
+4. **`Mailer/Infrastructure/PlainTextNotificationMailer` has no size cap.** `renderFieldValue()` coerces booleans/`null` and marks unserializable values, but a pathological deeply-nested `$fields` array still produces an unbounded body. Acceptable today (callers control inputs); worth a max-bytes guard before exposing the port to user-driven content.
 
-5. **`Guzzle/Enum/GuzzleContextTypeEnum.php` has no callers.** Forward-compat placeholder. Either land the consuming HTTP-client adapter or delete to keep the tree honest.
-
-6. **`QueryExecutionTrace` tenant slot is a single-tenant placeholder** (`__erpify_single_tenant__`). When the multi-tenant phase lands, promoting it to a real per-tenant value is a deliberate central change here that forces a cursor-version bump (every in-flight cursor invalidates — clients restart from page 1, acceptable).
+5. **`QueryExecutionTrace` tenant slot is a single-tenant placeholder** (`__erpify_single_tenant__`). When the multi-tenant phase lands, promoting it to a real per-tenant value is a deliberate central change here that forces a cursor-version bump (every in-flight cursor invalidates — clients restart from page 1, acceptable).
 
 ---
 

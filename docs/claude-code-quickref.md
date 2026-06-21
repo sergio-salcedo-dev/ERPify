@@ -132,7 +132,7 @@ scripts/        Utility scripts
 | Application layer (use cases, DTOs)                                          | `<Module>/Application/`                                                  |
 | Infrastructure (Doctrine, controllers, Messenger handlers, mailers, clients) | `<Module>/Infrastructure/`                                               |
 | Cross-cutting kernel                                                         | `api/src/Shared/`                                                        |
-| Shared search-filter plumbing (applier + per-repo field maps)                | `api/src/Shared/Infrastructure/Persistence/Doctrine/Search/`             |
+| Shared search-filter plumbing (applier + per-repo field maps)                | `api/src/Shared/Search/Infrastructure/Persistence/Doctrine/`             |
 | Symfony config (services, routes, packages, Messenger transports)            | `api/config/`                                                            |
 | Doctrine migrations                                                          | `api/migrations/` (generate via `make db.diff`, never edit applied ones) |
 | Test fixtures (Hautelook Alice)                                              | `api/tests/DataFixtures/` and `api/tests/Fixtures/`                      |

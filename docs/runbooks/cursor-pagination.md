@@ -6,8 +6,8 @@ contract, the observability events, how to diagnose `invalid-cursor`, and how to
 - **Contract / design**: [`docs/adr/keyset-pagination.md`](../adr/keyset-pagination.md)
 - **Error contract**: [`docs/api-error-contract.md`](../api-error-contract.md) (`invalid-cursor` row)
 - **API architecture**: [`docs/architecture-api.md`](../architecture-api.md)
-- **Wire composer**: [`api/src/Shared/Infrastructure/Http/Responder/SearchResponder.php`](../../api/src/Shared/Infrastructure/Http/Responder/SearchResponder.php)
-- **Observability listener**: [`api/src/Shared/Infrastructure/Http/EventListener/SearchObservabilityListener.php`](../../api/src/Shared/Infrastructure/Http/EventListener/SearchObservabilityListener.php)
+- **Wire composer**: [`api/src/Shared/Search/Infrastructure/Http/SearchResponder.php`](../../api/src/Shared/Search/Infrastructure/Http/SearchResponder.php)
+- **Observability listener**: [`api/src/Shared/Search/Infrastructure/Http/EventListener/SearchObservabilityListener.php`](../../api/src/Shared/Search/Infrastructure/Http/EventListener/SearchObservabilityListener.php)
 
 > **No metrics backend.** There is no Prometheus / StatsD / OpenTelemetry / Grafana in this stack. The
 > "metrics" and "dashboards" below are **structured JSON log lines** on a dedicated Monolog channel,

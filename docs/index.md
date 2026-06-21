@@ -42,6 +42,7 @@
 - **[architecture-pwa.md](./architecture-pwa.md)** — PWA layering, Next.js, Inversify DI, testing
 - **[integration-architecture.md](./integration-architecture.md)** — How API and PWA share `localhost`
 - **[adr/bank-bankaccount-modeling.md](./adr/bank-bankaccount-modeling.md)** — ADR: id-based cross-module references (Bank/BankAccount), schema-aware FK, per-aggregate persistence strategy (state vs event sourcing)
+- **[adr/shared-module-organization.md](./adr/shared-module-organization.md)** — ADR: `Shared` as vertical-slice capability modules over a cross-cutting kernel trio (`Clock`/`Mailer`/`Search`/`Validation` promoted on API; 8 PWA capabilities consolidated); conservative kernel boundary; dead `Guzzle` enum removed
 - **[adr/filters-search-criteria.md](./adr/filters-search-criteria.md)** — ADR: generic `filters[]` search vocabulary (SearchQuery/SearchCriteria), rationale and FR/NFR inventory
 - **[adr/keyset-pagination.md](./adr/keyset-pagination.md)** — ADR: cursor-only keyset pagination + repositories by composition (IMPLEMENTATION LOCKED, with post-D-1 override note)
 - **[adr/domain-event-handler-idempotency.md](./adr/domain-event-handler-idempotency.md)** — ADR: Messenger handler idempotency — raw-DBAL claim table (`handled_domain_event`) + `postGenerateSchema` listener; ORM-entity and `schema_filter` alternatives rejected
