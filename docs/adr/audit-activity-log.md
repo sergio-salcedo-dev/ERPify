@@ -1,9 +1,9 @@
 # ADR — Auditoría operativa / de actor (`AuditEvent`), eje separado del stream de dominio
 
-> **Estado:** aceptado · diseño congelado, implementación pendiente · **Fecha:** 2026-06-14
-> · **Ámbito:** subsistema transversal `Shared` (captura + contrato) + módulo `Backoffice/Audit`
-> (consulta). `BankAccountsViewed` es su primer consumidor; la **implementación del subsistema** es
-> una épica propia y no se mezcla con el código de la feature que la hizo aflorar.
+> **Status:** accepted · design frozen, implementation pending · **Date:** 2026-06-14
+> · **Scope:** cross-cutting `Shared` subsystem (capture + contract) + `Backoffice/Audit` module
+> (read side). `BankAccountsViewed` is its first consumer; the **subsystem implementation** is
+> its own epic and is not mixed with the code of the feature that surfaced it.
 >
 > Contexto temporal: la aplicación **no está en producción**; las tablas y políticas de retención
 > de este ADR nacen sin compatibilidad hacia atrás.

@@ -1,6 +1,6 @@
 # ADR — Modelado Bank/BankAccount: referencia por ID y estrategia de persistencia por agregado
 
-> **Estado:** aceptado · **Fecha:** 2026-06-11 · **Ámbito:** `api/src/Backoffice/{Bank,BankAccount}` + guía transversal para agregados futuros.
+> **Status:** accepted · **Date:** 2026-06-11 · **Scope:** `api/src/Backoffice/{Bank,BankAccount}` + cross-cutting guidance for future aggregates.
 >
 > Contexto temporal: la aplicación **no está en producción**, por lo que el cambio de mapping no
 > arrastra requisitos de compatibilidad hacia atrás. Aun así, ninguna decisión de este ADR
