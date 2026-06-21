@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Search\Infrastructure\Http\EventListener;
 
-use Erpify\Shared\Search\Domain\Exception\InvalidCursor;
-use Erpify\Shared\Search\Domain\SearchCriteria;
 use Erpify\Shared\Infrastructure\Http\CorrelationIdListener;
 use Erpify\Shared\Infrastructure\Serializer\JsonDecoder;
+use Erpify\Shared\Search\Domain\Exception\InvalidCursor;
+use Erpify\Shared\Search\Domain\SearchCriteria;
 use JsonException;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;

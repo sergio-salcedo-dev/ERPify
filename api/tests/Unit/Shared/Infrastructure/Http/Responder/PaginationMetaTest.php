@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Infrastructure\Http\Responder;
 
-use Erpify\Shared\Search\Domain\Page;
 use Erpify\Shared\Infrastructure\Http\Responder\PaginationMeta;
+use Erpify\Shared\Search\Domain\Page;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
