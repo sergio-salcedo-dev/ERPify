@@ -26,7 +26,6 @@ final class ThrowValidationFailedSensitivePayloadController
                 root: ['password' => 'leaked-secret'],
                 propertyPath: 'name',
                 invalidValue: 'super-secret-payload',
-                plural: null,
                 code: 'c1051bb4-d103-4f74-8988-acbcafc7fdc3',
             ),
         ]);

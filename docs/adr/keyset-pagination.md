@@ -1,17 +1,8 @@
----
-status: 'IMPLEMENTATION LOCKED 2026-06-10 — shipped (epic-1, stories 1.1–1.5, PR1–PR4)'
-date: '2026-06-10'
-scope: >-
-  Rediseño de la paginación a cursor/keyset puro (contrato API limit+cursor,
-  prev/next sin números de página, modos LIGHT/DETAILED, cursor HMAC corto con
-  fingerprint de query, ordenación estable, índices, "ir a fecha", exportaciones
-  async) + reestructuración de AbstractDoctrineRepository y
-  AbstractDoctrineSearchRepository de herencia a composición.
-relatedDecisions:
-  - 'docs/adr/filters-search-criteria.md (filtros genéricos filters[], 2026-06-06 — cerrado, restricciones heredadas)'
----
-
 # ADR — Keyset Pagination & Repository Restructuring
+
+> **Status:** IMPLEMENTATION LOCKED 2026-06-10 — shipped (epic-1, stories 1.1–1.5, PR1–PR4) · **Date:** 2026-06-10 · **Scope:** redesign of pagination to pure cursor/keyset (limit+cursor API contract, prev/next without page numbers, LIGHT/DETAILED modes, short HMAC cursor with query fingerprint, stable ordering, indexes, "jump to date", async exports) + restructuring of `AbstractDoctrineRepository` and `AbstractDoctrineSearchRepository` from inheritance to composition.
+>
+> Related: [`filters-search-criteria.md`](./filters-search-criteria.md) (generic `filters[]`, 2026-06-06 — closed, inherited constraints).
 
 Registro de decisión: rationale e inventario FR/K citado por ID desde los docs vivos
 ([`architecture-api.md`](../architecture-api.md) y

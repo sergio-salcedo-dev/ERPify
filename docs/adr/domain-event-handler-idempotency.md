@@ -1,6 +1,6 @@
 # ADR — Idempotencia de handlers de eventos de dominio: claim por DBAL + schema listener
 
-> **Estado:** aceptado · **Fecha:** 2026-06-13 · **Ámbito:** `api/src/Shared` (DomainEvent + Messenger + Persistence).
+> **Status:** accepted · **Date:** 2026-06-13 · **Scope:** `api/src/Shared` (DomainEvent + Messenger + Persistence).
 
 ## Contexto
 

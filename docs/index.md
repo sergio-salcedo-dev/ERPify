@@ -23,13 +23,28 @@
 - **Entry point:** `pwa/src/app/layout.tsx` + `pwa/src/app/page.tsx`
 - **Bounded contexts:** `backoffice/{health}`, `frontoffice/{health}`, `shared/{domain, infrastructure}`
 
+## How `docs/` is organized
+
+Folders are typed by *kind of document*; file names are kebab-case by topic, never sequence-numbered
+(ADRs included). Full rule: [`rules/documentation.md`](./rules/documentation.md).
+
+| Folder | Kind of document |
+|--------|------------------|
+| root | Entry points (`index.md`, `project-context.md`, `project-overview.md`) |
+| `adr/` | Decision records — the *why* behind a choice |
+| `rules/` | Prescriptive coding & convention rules |
+| `architecture/` | Current-state system design |
+| `guides/` | How-to / workflow / contribution |
+| `operations/` | Deploy, run, troubleshoot |
+| `roadmap/` | Living forward plans |
+| `.archive/` | Frozen point-in-time reports |
+
 ## Files
 
 ### AI agent context (load first)
 
 - **[project-context.md](./project-context.md)** — Authoritative constraints for AI code generation
 - **[claude-code-quickref.md](./claude-code-quickref.md)** — Full command catalog, repo layout tables, "adding new code" recipes, gotchas (companion to root `CLAUDE.md`)
-- **[project-scan-report.json](./project-scan-report.json)** — Scan metadata from initial doc generation
 
 ### Project overview
 
@@ -81,7 +96,7 @@ Detailed exhaustive analysis of specific areas:
 - [CLAUDE.md](../CLAUDE.md) — Repo-wide Claude Code guidance
 - [api/CLAUDE.md](../api/CLAUDE.md) · [api/README.md](../api/README.md) · `api/docs/` — API-specific docs
 - [pwa/CLAUDE.md](../pwa/CLAUDE.md) · [pwa/README.md](../pwa/README.md) · `pwa/docs/` — PWA-specific docs
-- `docs/rules/*.md` — Authoritative coding rules (architecture, clean-code, commits, cqrs-naming, database, frontend, php-standards, read-side-projections, security, testing)
+- `docs/rules/*.md` — Authoritative coding rules (architecture, clean-code, commits, cqrs-naming, database, documentation, frontend, php-standards, read-side-projections, security, testing)
 
 ## Getting started
 

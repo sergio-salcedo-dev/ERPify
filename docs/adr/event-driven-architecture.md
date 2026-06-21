@@ -1,11 +1,11 @@
 # ADR — Arquitectura dirigida por eventos: `EventBus`, outbox transaccional y los tres ejes
 
-> **Estado:** aceptado · **Fecha:** 2026-06-14 · **Ámbito:** `api/src/Shared/{Domain,Infrastructure}/Bus/Event`
-> + casos de uso de escritura de `Backoffice/Bank/Application` + gate `php.lint.event-bus`
-> + `config/packages/messenger.yaml` (nombrado de buses, D6)
-> + [`../rules/cqrs-naming.md`](../rules/cqrs-naming.md) (estándar de nombrado «CQRS-shaped pre-bus», D5).
+> **Status:** accepted · **Date:** 2026-06-14 · **Scope:** `api/src/Shared/{Domain,Infrastructure}/Bus/Event`
+> + write use cases of `Backoffice/Bank/Application` + `php.lint.event-bus` gate
+> + `config/packages/messenger.yaml` (bus naming, D6)
+> + [`../rules/cqrs-naming.md`](../rules/cqrs-naming.md) (the "CQRS-shaped pre-bus" naming standard, D5).
 >
-> **Supersedida parcialmente por** [`event-store-and-projections.md`](./event-store-and-projections.md):
+> **Superseded in part by** [`event-store-and-projections.md`](./event-store-and-projections.md):
 > conserva el modelo de tres ejes, el invariante «un `DomainEvent` se publica solo por `EventBus`, que
 > solo escribe al outbox» y el gate `php.lint.event-bus`; **revisa** la ubicación de los puertos
 > (`EventBus`/`DomainEvent` se reorganizan bajo `Shared/Event/`) y sustituye el *audit log* `domain_event`

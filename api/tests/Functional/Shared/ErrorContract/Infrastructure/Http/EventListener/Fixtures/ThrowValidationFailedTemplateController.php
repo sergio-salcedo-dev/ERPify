@@ -26,7 +26,6 @@ final class ThrowValidationFailedTemplateController
                 root: null,
                 propertyPath: 'age',
                 invalidValue: 17,
-                plural: null,
                 code: 'ea4e51d1-3342-48bd-87f1-9e672cd90cad',
             ),
         ]);

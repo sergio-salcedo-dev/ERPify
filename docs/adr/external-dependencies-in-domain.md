@@ -1,6 +1,6 @@
 # ADR — Dependencias externas en Domain/Application: PSR interface-only vs frameworks
 
-> **Estado:** aceptado · **Fecha:** 2026-06-15 · **Ámbito:** `api/src/**/Domain`, `api/src/**/Application` — guía transversal para toda dependencia externa de las capas internas.
+> **Status:** accepted · **Date:** 2026-06-15 · **Scope:** `api/src/**/Domain`, `api/src/**/Application` — cross-cutting guidance for every external dependency of the inner layers.
 >
 > Disparador: el PR #299 introdujo un puerto `Shared/Domain/Logging/Logger` (+ `LogLevel`, `NullLogger`, adaptador `PsrLogger`, wiring DI, test de contrato y docs) que envolvía `Psr\Log\LoggerInterface` 1:1. La pregunta de fondo no es el Logger, sino qué precedente sienta para `Clock`, `Cache`, `EventBus`, `MessageBus`, etc.
 
