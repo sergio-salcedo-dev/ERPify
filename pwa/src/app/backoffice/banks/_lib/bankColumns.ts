@@ -1,4 +1,4 @@
-import { createColumnPreference } from "@/lib/columnPreference";
+import { createColumnPreference } from "@/context/shared/resource/domain/ColumnPreference";
 
 export const BANK_COLUMN_KEYS = [
   "shortName",

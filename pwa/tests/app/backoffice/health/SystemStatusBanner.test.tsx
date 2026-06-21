@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { SystemStatusBanner } from "@/app/backoffice/health/_components/SystemStatusBanner";
-import { SystemStatus } from "@/lib/systemStatus";
+import { SystemStatus } from "@/context/shared/system-status/domain/SystemStatus";
 
 describe("SystemStatusBanner", () => {
   it("shows the operational headline and an 'as of' subline with the datetime", () => {

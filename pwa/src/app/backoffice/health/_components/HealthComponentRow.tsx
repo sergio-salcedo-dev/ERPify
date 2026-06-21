@@ -1,5 +1,8 @@
 import { StatusBadge, type StatusBadgeVariant } from "@/components/erpify";
-import { SystemStatus, componentStatusLabel } from "@/lib/systemStatus";
+import {
+  SystemStatus,
+  componentStatusLabel,
+} from "@/context/shared/system-status/domain/SystemStatus";
 
 const BADGE_VARIANT: Record<SystemStatus, StatusBadgeVariant> = {
   [SystemStatus.CHECKING]: "neutral",

@@ -1,4 +1,4 @@
-import { createColumnPreference } from "@/lib/columnPreference";
+import { createColumnPreference } from "@/context/shared/resource/domain/ColumnPreference";
 
 export const USER_COLUMN_KEYS = ["email", "roles", "status", "createdAt", "updatedAt"] as const;
 export type UserColumnKey = (typeof USER_COLUMN_KEYS)[number];

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { HealthComponentRow } from "@/app/backoffice/health/_components/HealthComponentRow";
-import { SystemStatus } from "@/lib/systemStatus";
+import { SystemStatus } from "@/context/shared/system-status/domain/SystemStatus";
 
 describe("HealthComponentRow", () => {
   it("renders the component name and its operational label", () => {

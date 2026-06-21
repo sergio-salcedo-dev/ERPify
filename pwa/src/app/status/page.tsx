@@ -14,7 +14,7 @@ import { Footer } from "@/app/_components/Footer";
 import { Button } from "@/components/ui/button";
 import { StatusBanner } from "./_components/StatusBanner";
 import { ComponentStatusRow } from "./_components/ComponentStatusRow";
-import { deriveSystemStatus } from "@/lib/systemStatus";
+import { deriveSystemStatus } from "@/context/shared/system-status/domain/SystemStatus";
 
 const MONITORED_COMPONENTS = [{ key: "frontoffice", name: "FrontOffice API" }] as const;
 

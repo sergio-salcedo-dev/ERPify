@@ -5,7 +5,7 @@ import {
   componentStatusLabel,
   deriveSystemStatus,
   systemHeadline,
-} from "@/lib/systemStatus";
+} from "@/context/shared/system-status/domain/SystemStatus";
 
 const okResult = { status: "ok", datetime: "2026-06-02T10:00:00+02:00" };
 

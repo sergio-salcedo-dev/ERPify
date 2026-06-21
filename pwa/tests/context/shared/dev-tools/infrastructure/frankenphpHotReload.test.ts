@@ -2,7 +2,7 @@ import { describe, expect, it, vi, afterEach } from "vitest";
 import {
   fetchFrankenPhpHotReloadSubscribeUrl,
   joinPublicOrigin,
-} from "@/lib/frankenphp-hot-reload";
+} from "@/context/shared/dev-tools/infrastructure/frankenphpHotReload";
 
 describe("joinPublicOrigin", () => {
   it("joins base without trailing slash and path with leading slash", () => {
