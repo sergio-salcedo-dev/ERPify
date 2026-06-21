@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Media\Application;
 
-use Erpify\Shared\Application\Validation\Validator;
+use Erpify\Shared\Validation\Application\Validator;
 use Erpify\Shared\Domain\Uuid\Uuid;
 use Erpify\Shared\Media\Application\Dto\UploadedImage;
 use Erpify\Shared\Media\Application\Port\ImageNormalizer;

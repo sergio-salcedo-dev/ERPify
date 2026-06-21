@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Shared\Infrastructure\Mailer;
+namespace Erpify\Shared\Mailer\Infrastructure;
 
-use Erpify\Shared\Application\Mailer\NotificationMailer;
+use Erpify\Shared\Mailer\Application\NotificationMailer;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;

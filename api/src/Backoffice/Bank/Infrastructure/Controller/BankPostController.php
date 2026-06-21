@@ -7,7 +7,7 @@ namespace Erpify\Backoffice\Bank\Infrastructure\Controller;
 use Erpify\Backoffice\Bank\Application\BankCreator;
 use Erpify\Backoffice\Bank\Application\Command\CreateBankCommand;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
-use Erpify\Shared\Application\Validation\Validator;
+use Erpify\Shared\Validation\Application\Validator;
 use Erpify\Shared\Infrastructure\Http\Responder\ResourceResponder;
 use Erpify\Shared\Media\Application\Dto\UploadedImage;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;

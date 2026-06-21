@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Tests\Unit\Shared\Infrastructure\Mailer;
+namespace Erpify\Tests\Unit\Shared\Mailer\Infrastructure;
 
-use Erpify\Shared\Infrastructure\Mailer\PlainTextNotificationMailer;
+use Erpify\Shared\Mailer\Infrastructure\PlainTextNotificationMailer;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 

@@ -10,7 +10,7 @@ use Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountStatus;
 use Erpify\Shared\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Domain\Enum\Currency;
 use Erpify\Shared\Domain\Uuid\Uuid;
-use Erpify\Shared\Infrastructure\Validator\EnumType;
+use Erpify\Shared\Validation\Infrastructure\EnumType;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Serializer\Attribute\SerializedName;

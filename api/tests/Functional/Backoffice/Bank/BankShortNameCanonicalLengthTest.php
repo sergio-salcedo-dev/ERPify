@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Functional\Backoffice\Bank;
 
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
-use Erpify\Shared\Application\Validation\Validator;
+use Erpify\Shared\Validation\Application\Validator;
 use Erpify\Shared\Domain\Uuid\Uuid as DomainUuid;
 use Erpify\Shared\Domain\ValueObject\NormalizedText;
 use PHPUnit\Framework\Attributes\CoversClass;

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Tests\Unit\Shared\Infrastructure\Validator\Fixtures;
+namespace Erpify\Tests\Unit\Shared\Validation\Infrastructure\Fixtures;
 
 /**
  * A second, distinct string-backed enum. Drives the "instance of another enum" rejection branch of

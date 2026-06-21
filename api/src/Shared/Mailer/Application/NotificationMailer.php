@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Shared\Application\Mailer;
+namespace Erpify\Shared\Mailer\Application;
 
 /**
  * Outbound port: send operational / transactional notifications.

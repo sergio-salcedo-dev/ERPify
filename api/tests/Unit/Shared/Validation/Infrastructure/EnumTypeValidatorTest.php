@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Tests\Unit\Shared\Infrastructure\Validator;
+namespace Erpify\Tests\Unit\Shared\Validation\Infrastructure;
 
 use BackedEnum;
-use Erpify\Shared\Infrastructure\Validator\EnumType;
-use Erpify\Shared\Infrastructure\Validator\EnumTypeValidator;
-use Erpify\Tests\Unit\Shared\Infrastructure\Validator\Fixtures\FixtureOtherStringEnum;
-use Erpify\Tests\Unit\Shared\Infrastructure\Validator\Fixtures\FixtureStringEnum;
+use Erpify\Shared\Validation\Infrastructure\EnumType;
+use Erpify\Shared\Validation\Infrastructure\EnumTypeValidator;
+use Erpify\Tests\Unit\Shared\Validation\Infrastructure\Fixtures\FixtureOtherStringEnum;
+use Erpify\Tests\Unit\Shared\Validation\Infrastructure\Fixtures\FixtureStringEnum;
 use Override;
 use PHPUnit\Framework\Attributes\DataProvider;
 use stdClass;

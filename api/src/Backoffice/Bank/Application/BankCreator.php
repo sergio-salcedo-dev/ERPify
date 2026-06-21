@@ -8,7 +8,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\Bank\Application\Command\CreateBankCommand;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
-use Erpify\Shared\Application\Validation\Validator;
+use Erpify\Shared\Validation\Application\Validator;
 use Erpify\Shared\Domain\Uuid\Uuid;
 use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Media\Application\Dto\UploadedImage;

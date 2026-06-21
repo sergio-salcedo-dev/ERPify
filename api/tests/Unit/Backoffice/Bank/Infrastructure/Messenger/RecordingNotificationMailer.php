@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Backoffice\Bank\Infrastructure\Messenger;
 
-use Erpify\Shared\Application\Mailer\NotificationMailer;
+use Erpify\Shared\Mailer\Application\NotificationMailer;
 use Override;
 use Throwable;
 

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Tests\Unit\Shared\Infrastructure\Mailer;
+namespace Erpify\Tests\Unit\Shared\Mailer\Infrastructure;
 
 use Override;
 use Symfony\Component\Mailer\Envelope;

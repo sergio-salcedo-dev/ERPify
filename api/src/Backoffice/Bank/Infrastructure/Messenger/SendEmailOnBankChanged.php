@@ -6,7 +6,7 @@ namespace Erpify\Backoffice\Bank\Infrastructure\Messenger;
 
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
-use Erpify\Shared\Application\Mailer\NotificationMailer;
+use Erpify\Shared\Mailer\Application\NotificationMailer;
 use Erpify\Shared\Event\Application\DomainEventHandlerDeduplicator;
 use Erpify\Shared\Event\Domain\DomainEvent;
 use Psr\Log\LoggerInterface;
