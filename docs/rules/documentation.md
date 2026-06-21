@@ -43,8 +43,8 @@ Decision vs. description: an ADR is the only place the discarded alternatives an
 
 - Filename: topic in kebab-case (see above).
 - First lines: a header blockquote carrying lifecycle —
-  `> **Estado:** … · **Fecha:** YYYY-MM-DD · **Ámbito:** …`, plus
-  `> **Supersedida por** [other-adr.md](./other-adr.md)` when a later ADR overrides it.
+  `> **Status:** … · **Date:** YYYY-MM-DD · **Scope:** …`, plus
+  `> **Superseded by** [other-adr.md](./other-adr.md)` when a later ADR overrides it.
 - Body: numbered in-file decisions (`D1`, `D2`, …) with discarded alternatives inline, target
   ≤ ~150 lines. Full internal style: root `CLAUDE.md` → *Docs density → ADRs*.
 

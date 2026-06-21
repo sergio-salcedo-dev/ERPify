@@ -1,6 +1,6 @@
 # ADR — Organización de `Shared`: módulos vertical-slice por capacidad + kernel transversal
 
-> **Estado:** aceptado · **Fecha:** 2026-06-21 · **Ámbito:** `api/src/Shared` + `pwa/src/context/shared`.
+> **Status:** accepted · **Date:** 2026-06-21 · **Scope:** `api/src/Shared` + `pwa/src/context/shared`.
 >
 > Contexto temporal: la aplicación **no está en producción**. El cambio es puramente estructural
 > (reubicación de ficheros + reescritura de FQCN/imports); sin cambio de comportamiento, sin migración
