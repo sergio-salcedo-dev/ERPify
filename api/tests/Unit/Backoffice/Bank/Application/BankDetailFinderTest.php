@@ -9,7 +9,7 @@ use Erpify\Backoffice\Bank\Application\BankDetailFinder;
 use Erpify\Backoffice\Bank\Application\BankFinder;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Exception\BankNotFoundException;
-use Erpify\Shared\Domain\Uuid\InvalidUuidException;
+use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Tests\Unit\Backoffice\Bank\Domain\Entity\Mother\BankMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;

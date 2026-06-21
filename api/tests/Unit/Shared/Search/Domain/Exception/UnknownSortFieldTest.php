@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Search\Domain\Exception;
 
-use Erpify\Shared\Domain\Exception\DomainException;
-use Erpify\Shared\Domain\Exception\InvalidSearchCriteria;
+use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
+use Erpify\Shared\ErrorContract\Domain\Exception\InvalidSearchCriteria;
 use Erpify\Shared\Search\Domain\Exception\UnknownSortField;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;

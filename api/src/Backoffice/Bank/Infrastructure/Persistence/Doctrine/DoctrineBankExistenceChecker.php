@@ -8,7 +8,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Exception\BankNotFoundException;
 use Erpify\Backoffice\Bank\Domain\Repository\BankExistenceChecker;
-use Erpify\Shared\Domain\Uuid\Uuid;
+use Erpify\Shared\Uuid\Domain\Uuid;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 

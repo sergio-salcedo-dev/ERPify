@@ -8,13 +8,13 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\Bank\Application\Command\CreateBankCommand;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
-use Erpify\Shared\Domain\Uuid\Uuid;
 use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Media\Application\Dto\UploadedImage;
 use Erpify\Shared\Media\Application\MediaRegistrar;
 use Erpify\Shared\Storage\Application\Dto\StoredObjectWriteResult;
 use Erpify\Shared\Storage\Application\StoredImageObjectWriter;
 use Erpify\Shared\Storage\Domain\StoredObject;
+use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Shared\Validation\Application\Validator;
 
 final readonly class BankCreator

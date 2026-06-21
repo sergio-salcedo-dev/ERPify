@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Shared\Search\Infrastructure\Http\EventListener;
 
 use BadMethodCallException;
-use Erpify\Shared\Infrastructure\Http\CorrelationIdListener;
-use Erpify\Shared\Infrastructure\Http\EventListener\ExceptionResponder;
+use Erpify\Shared\ErrorContract\Infrastructure\Http\EventListener\ExceptionResponder;
+use Erpify\Shared\Http\Infrastructure\CorrelationIdListener;
 use Erpify\Shared\Search\Domain\Exception\InvalidCursor;
 use Erpify\Shared\Search\Infrastructure\Http\EventListener\SearchObservabilityListener;
 use Override;

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Media\Infrastructure\Controller;
 
-use Erpify\Shared\Infrastructure\Http\ContentAddressedHttpCache;
+use Erpify\Shared\Http\Infrastructure\ContentAddressedHttpCache;
 use Erpify\Shared\Media\Domain\Entity\Media;
 use Erpify\Shared\Media\Domain\Exception\MediaNotFoundException;
 use Erpify\Shared\Media\Domain\Repository\MediaRepository;

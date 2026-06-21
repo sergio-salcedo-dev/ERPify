@@ -6,7 +6,7 @@ namespace Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity;
 
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountStatus;
-use Erpify\Shared\Domain\Uuid\InvalidUuidException;
+use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity\Mother\BankAccountMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;

@@ -10,7 +10,7 @@ use Behat\Step\Given;
 use Behat\Step\Then;
 use DateTime;
 use DateTimeInterface;
-use Erpify\Shared\Infrastructure\Serializer\JsonDecoder;
+use Erpify\Shared\Serialization\Infrastructure\JsonDecoder;
 use Erpify\Tests\Behat\Context\Abstraction\AbstractContext;
 use Erpify\Tests\Behat\State\HttpResponseContainer;
 use Erpify\Tests\Behat\Support\Transport\HttpResponse;

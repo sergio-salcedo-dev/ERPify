@@ -13,7 +13,7 @@ use Symfony\Component\ErrorHandler\BufferingLogger;
 /**
  * Asserts the structured log line of the RFC 9457 error contract declaratively. Reads the
  * {@see BufferingLogger} that `services_test.yaml` injects into
- * {@see \Erpify\Shared\Infrastructure\Http\EventListener\ExceptionResponder} — the same instance
+ * {@see \Erpify\Shared\ErrorContract\Infrastructure\Http\EventListener\ExceptionResponder} — the same instance
  * the listener writes its one-line-per-error record to, so a scenario can pin the level, message
  * and SRE context fields (`exception_category`, `type`, …) without parsing log files.
  *

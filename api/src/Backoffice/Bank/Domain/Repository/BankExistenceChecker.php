@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\Bank\Domain\Repository;
 
 use Erpify\Backoffice\Bank\Domain\Exception\BankNotFoundException;
-use Erpify\Shared\Domain\Uuid\InvalidUuidException;
+use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 
 /**
  * Published existence guard for the bank aggregate, consumed by child-resource read endpoints

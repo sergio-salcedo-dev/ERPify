@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Media\Infrastructure\Controller;
 
-use Erpify\Shared\Infrastructure\Http\ContentAddressedHttpCache;
+use Erpify\Shared\Http\Infrastructure\ContentAddressedHttpCache;
 use Erpify\Shared\Media\Domain\Exception\MediaNotFoundException;
 use Erpify\Shared\Media\Infrastructure\Controller\MediaGetController;
 use Erpify\Tests\Unit\Shared\Media\Application\RecordingMediaRepository;

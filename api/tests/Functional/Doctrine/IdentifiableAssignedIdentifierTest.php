@@ -7,7 +7,7 @@ namespace Erpify\Tests\Functional\Doctrine;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Mapping\ClassMetadata;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
-use Erpify\Shared\Domain\Entity\Identifiable;
+use Erpify\Shared\Kernel\Domain\Entity\Identifiable;
 use Erpify\Shared\Media\Domain\Entity\Media;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -58,7 +58,7 @@ final class IdentifiableAssignedIdentifierTest extends KernelTestCase
 
     /**
      * Walks parent classes too, since entities inherit the trait via their base (e.g. `Bank` via
-     * {@see \Erpify\Shared\Domain\Aggregate\AggregateRoot}) as well as using it directly.
+     * {@see \Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot}) as well as using it directly.
      *
      * @param class-string $entityClass
      */

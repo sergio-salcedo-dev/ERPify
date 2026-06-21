@@ -6,7 +6,7 @@ namespace Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity\Mother;
 
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountStatus;
-use Erpify\Shared\Domain\Enum\Currency;
+use Erpify\Shared\Kernel\Domain\Enum\Currency;
 
 final class BankAccountMother
 {

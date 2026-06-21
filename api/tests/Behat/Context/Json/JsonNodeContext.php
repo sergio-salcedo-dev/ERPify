@@ -152,7 +152,7 @@ class JsonNodeContext extends AbstractContext
     /**
      * Validate the JSON property `node` is a valid RFC 9562 UUID — any version when `version` is
      * omitted, or that exact version otherwise (e.g. the UUID v7 minted by
-     * {@see \Erpify\Shared\Domain\Uuid\Uuid::generate()} for `instance` / `correlation-id`).
+     * {@see \Erpify\Shared\Uuid\Domain\Uuid::generate()} for `instance` / `correlation-id`).
      * `Uuid::isValid()` checks format and variant in one pass — stricter than a regex.
      *
      * @throws JsonException

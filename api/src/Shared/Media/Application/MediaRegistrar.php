@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Media\Application;
 
-use Erpify\Shared\Domain\Uuid\Uuid;
 use Erpify\Shared\Media\Application\Dto\UploadedImage;
 use Erpify\Shared\Media\Application\Port\ImageNormalizer;
 use Erpify\Shared\Media\Domain\Entity\Media;
 use Erpify\Shared\Media\Domain\Repository\MediaRepository;
+use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Shared\Validation\Application\Validator;
 
 final readonly class MediaRegistrar

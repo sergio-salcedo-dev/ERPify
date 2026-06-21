@@ -11,8 +11,8 @@ use Erpify\Backoffice\Bank\Domain\Exception\BankInUseException;
 use Erpify\Backoffice\Bank\Domain\Exception\BankNotFoundException;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository;
-use Erpify\Shared\Domain\Uuid\InvalidUuidException;
 use Erpify\Shared\Event\Domain\EventBus;
+use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 
 final readonly class BankDeleter
 {
