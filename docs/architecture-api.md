@@ -95,7 +95,7 @@ Golden rule: *contexts reference each other's identities and react to each other
 ## API design
 
 - Attribute-only routing (`#[Route]`) on controllers under each bounded context's `Infrastructure/Controller/`.
-- Controllers are thin — delegate to Application-layer use cases and return via `AbstractController::json()` so Serializer groups apply.
+- Controllers are thin — delegate to Application-layer use cases, map the resulting entity to a per-view **Resource DTO** via the context's `*ResourceMapper` (`Infrastructure/Http/`), and return that DTO through the shared `ResourceResponder` / `SearchResponder`. The domain entity is never serialized; its wire contract lives in the DTO, not in serializer `#[Groups]`. See [`adr/api-resource-dtos.md`](./adr/api-resource-dtos.md).
 - CORS configured in `api/config/packages/nelmio_cors.php` (PHP, not YAML); no wildcard `*` for credentialed origins.
 - Public health endpoints exposed from `Frontoffice/Health/` and `Backoffice/Health/`. The backoffice context adds `GET /api/v1/backoffice/health/database`, a database-reachability probe (`SELECT 1` behind the `DatabaseHealthChecker` port) that reports `data.status` `ok`/`error` while always answering 200 — a graceful health outcome, not an RFC 9457 error.
 - Search endpoints share plumbing in `Shared/Search/Application/Http/` (the `SearchQuery` DTO) and `Shared/Search/Infrastructure/Http/SearchResponder.php` (the cursor-only envelope compositor); each controller is a thin `final readonly` class delegating to its `<Entity>Searcher`. (The legacy `AbstractSearchController` is decoupled and removed in PR4.)
@@ -111,12 +111,13 @@ query string
   → #[MapQueryString] SearchQuery          (Search/Application/Http; base DTO, final; shape-validated: after XOR before, limit ∈ [1,100])
   → $query->toCriteria()                   (controller; the wire cursor that arrived fixes the NavigationDirection — AR21)
   → SearchCriteria(+Filters)               (Search/Domain; framework-free, final; opaque cursor + routingDirection, NO page number)
-  → BankSearcher::search(SearchBanksQuery) (Application; CQRS read-side wrapper)
+  → BankSearcher::search(SearchBanksQuery): Page<BankWithAccountCount> (Application; CQRS read-side wrapper; batches the account-count enrichment)
   → BankSearchRepository::search(criteria): Page<Bank>     (Domain port — implemented by DoctrineBankRepository, below)
   → DoctrineBankRepository                                 (composition: EntityManagerInterface + DoctrineSearchEngine)
        ├─ base QueryBuilder (SELECT b FROM Bank b; no joins) + searchFieldMap()/sortFieldMap()
        └─ DoctrineSearchEngine::paginate(...) → Page<Bank> (filters, keyset predicate, +1 trick, OPAQUE next/prev cursors)
-  → SearchResponder::respond(Page, SearchQuery, routeName, groups)   (single envelope compositor → {hasNext,hasPrev,count,links})
+  → BankResourceMapper::toListPage(...): Page<BankListResource> (Infrastructure/Http; entity + count → per-view DTO; the domain entity is never serialized)
+  → SearchResponder::respond(Page, SearchQuery, routeName)   (single envelope compositor → {hasNext,hasPrev,count,links})
 ```
 
 The repository is wired **by composition** (FR9/FR12): `DoctrineBankRepository` implements only its Domain ports, injects `EntityManagerInterface` + `DoctrineSearchEngine`, and its `search()` builds the base query builder and delegates to the engine. `DoctrineBankAccountRepository` is likewise composition-based but takes no engine (it has no paginated read-path).
@@ -216,7 +217,7 @@ protected function sortFieldMap(): SortFieldMap
 }
 ```
 
-When the order column is not the displayed one (here `name` → `nameNormalized`), the entity needs a plain read accessor for it (e.g. `getNameNormalized()`) — the keyset engine reads each order-by column from the result entity to build the cursor. Keep it out of the serializer groups so it does not leak into the payload.
+When the order column is not the displayed one (here `name` → `nameNormalized`), the entity needs a plain read accessor for it (e.g. `getNameNormalized()`) — the keyset engine reads each order-by column from the result entity to build the cursor. It never leaks into the payload: the view's Resource DTO carries only its declared fields, and the entity is never serialized.
 
 **Anti-patterns (forbidden):**
 

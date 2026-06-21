@@ -92,7 +92,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 - Early returns; max nesting 3–4 levels; functions small and single-purpose.
 - Never import framework/ORM/HTTP classes inside `Domain/` — domain stays pure (see `docs/rules/architecture.md`).
 - Namespace root is `Erpify\` → `api/src/`. Tests: `Erpify\Tests\` → `api/tests/`. Keep `Backoffice` / `Frontoffice` / `Shared` top-level boundaries.
-- Doctrine entities live in `Domain/Entity` and may carry **passive metadata attributes** (`#[ORM\…]`, `#[Assert\…]`, `#[Groups]`) — documented exception in `docs/rules/architecture.md` (canonical example: `api/src/Backoffice/Bank/Domain/Entity/Bank.php`). Behavioral framework code (`EntityManagerInterface`, `Request`/`Response`, Messenger envelopes) stays out of `Domain/`.
+- Doctrine entities live in `Domain/Entity` and may carry **passive persistence/validation metadata** (`#[ORM\…]`, `#[Assert\…]`) — documented exception in `docs/rules/architecture.md` (example: `api/src/Backoffice/Bank/Domain/Entity/Bank.php`). Serializer `#[Groups]` are **not** carried on entities: the HTTP wire contract is owned by per-view Resource DTOs (`Application/Resource/`) mapped from the entity in `Infrastructure/Http/` — the entity is never serialized (see `docs/adr/api-resource-dtos.md`). Behavioral framework code (`EntityManagerInterface`, `Request`/`Response`, Messenger envelopes) stays out of `Domain/`.
 
 #### TypeScript (pwa/)
 

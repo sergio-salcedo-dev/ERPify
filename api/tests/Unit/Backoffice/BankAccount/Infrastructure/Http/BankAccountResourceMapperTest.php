@@ -65,7 +65,7 @@ final class BankAccountResourceMapperTest extends TestCase
 
     public function testToListPagePreservesNavigationAndMapsItems(): void
     {
-        $page = new Page([BankAccountMother::create()], hasNext: false, hasPrev: false, count: null);
+        $page = new Page([BankAccountMother::create()], hasNext: false, hasPrev: false);
 
         $mapped = (new BankAccountResourceMapper())->toListPage($page);
 

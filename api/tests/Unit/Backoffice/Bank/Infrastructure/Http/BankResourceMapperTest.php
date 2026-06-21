@@ -114,7 +114,6 @@ final class BankResourceMapperTest extends TestCase
             hasPrev: false,
             count: 31,
             nextCursor: 'next-cursor',
-            prevCursor: null,
         );
 
         $mapped = $this->mapper()->toListPage($page);
