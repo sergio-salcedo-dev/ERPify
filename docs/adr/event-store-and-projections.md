@@ -229,6 +229,38 @@ BI a 10 años). **`causation_id` se documenta hoy y se puebla cuando existan pro
 promoverse de `metadata` JSONB a columnas indexadas cuando una consulta de trazado lo pida. No se inventa hoy
 el cableado (CLAUDE.md: nada especulativo) — solo el hueco en el sobre.
 
+### D10 — Payload content: state event by default, delta only when a consumer needs the diff
+
+A domain event carries the data of the change it represents, and different actions carry different fields
+(`BankCreatedDomainEvent` ≠ `BankDeletedDomainEvent`). Two shapes answer "what data": a **state event** (full
+snapshot of what the action affected, self-contained) vs a **delta/intent event** (only what changed, or the
+bare fact). The default here is the **state event**; the discriminator for leaving it is *a real consumer that
+asks "what changed?"*.
+
+- **State by default is what reproducibility (D6/D7) needs.** A `Projector` replaying from `sequence` 0 must
+  rebuild the read model from the `payload` alone — a state event lets it do so without reading prior aggregate
+  state (which, mid-rebuild, may not exist). It is also self-contained for any future sink (D8) and byte-stable
+  in the store. A delta event would force every projector to hold the prior state, coupling the log's readers to
+  live aggregate state and defeating replay.
+- **Envelope ⊥ payload — already the contract (D3/D4).** `aggregateId`/`eventId`/`occurredOn` live in the
+  `event_store` row, **never** in `toPrimitives()`; the payload carries only domain state.
+- **Lived shape.** `BankCreatedDomainEvent`/`BankUpdatedDomainEvent` carry the full `BankSnapshot`;
+  `BankDeletedDomainEvent` carries an **empty payload** (the id is in the envelope row) — the canonical "the
+  action only needs the id" case. `BankUpdatedDomainEvent` is a full snapshot *by design*, not a delta: its only
+  consumer, `RefreshRealtimeOnBankChanged` (Mercure), pushes the whole new state to the client — a delta would
+  force it to re-read the aggregate to recompose the view. Fat is justified **by the consumer that exists**, not
+  by inertia.
+- **Shared shape → shared value object, not a supertype.** When two events share a payload shape (`BankSnapshot`
+  across created/updated), share the VO; a supertype *over events* would couple their schemas and threaten the
+  byte-stability the store depends on.
+- **Security (repo checklist).** No secrets, no client-editable audit fields in the payload; the snapshot must be
+  state already public to its consumers.
+
+Discarded: **fat by inertia** — a snapshot whose fields no consumer's shape needs is byte-bloat; name the
+consumer or trim it. Discarded: **thin/delta by default** — breaks replay self-containment (D6) and the rebuild
+guarantee (D7). Discarded: a speculative global `changedFields` on every event — YAGNI; it is added to *the one
+event* whose consumer needs the diff, when that consumer exists (trigger (i)).
+
 ## Flujo completo
 
 ```
@@ -267,4 +299,10 @@ fallo de publicación → envolver en el borde con `Shared\Event\Domain\EventPub
 `$previous`) para estabilizar el contrato de fallo frente al cambio de adaptador y mapearlo en el pipeline RFC
 9457 — hasta entonces, propagación cruda (D8). (h) Un read model de proyección crece de contador singleton a
 multi-fila **consultable/ordenable/paginable/serializable** → se reevalúa entidad ORM de lectura (con metadata
-pasiva) vs. repositorio de lectura dedicado, frente al raw-DBAL + schema-listener actual (D7).
+pasiva) vs. repositorio de lectura dedicado, frente al raw-DBAL + schema-listener actual (D7). (i) First
+consumer whose interest is *what changed* (selective notification, a field-level change log, a partial-resync
+integration) → that **one** event gains a delta shape or a `changedFields` entry in its `payload`, never a global
+field; until then, state snapshots (D10). (j) Event catalog scale/drift → the hand-maintained
+`docs/architecture/event-catalog.md` is generated from the `RegisterDomainEventsPass` registry (plus a drift
+gate) once the events outgrow a hand-kept list, or a first external integrator consumes the contract; until
+then it stays hand-written, pointing at the pass as its source of truth.
