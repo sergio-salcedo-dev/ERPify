@@ -68,6 +68,50 @@ const eslintConfig = [
       },
     },
   },
+  {
+    files: ["src/components/ui/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/components/erpify", "@/components/erpify/**"],
+              message:
+                "components/ui is the foundational vendor layer: it must not depend on components/erpify. The design system builds on ui, not the other way round.",
+            },
+            {
+              group: ["@/app", "@/app/**"],
+              message:
+                "components/ui must not depend on app/ — dependencies point toward the lowest layer.",
+            },
+            // TODO PR2: add { group: ["@/context/**"] } once `cn` moves out of context/shared/styling (closes R5).
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/components/erpify/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/context/backoffice/**", "@/context/frontoffice/**"],
+              message:
+                "components/erpify is a business-agnostic design system: it must not depend on a bounded context (backoffice/frontoffice). Pass data in via props/composition.",
+            },
+            {
+              group: ["@/app", "@/app/**"],
+              message: "components/erpify must not depend on app/.",
+            },
+          ],
+        },
+      ],
+    },
+  },
   prettierConfig,
 ];
 
