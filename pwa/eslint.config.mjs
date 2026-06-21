@@ -88,7 +88,7 @@ const eslintConfig = [
             {
               group: ["@/context", "@/context/**"],
               message:
-                "components/ui is the foundational vendor layer: it must not reach into the DDD context tree. Foundational presentation helpers it needs (e.g. cn) live at @/components, below the context tree.",
+                "components/ui is the foundational vendor layer: it must not reach into the DDD context tree. Foundational presentation helpers it needs (e.g. cn) live at @/components/cn, below the context tree.",
             },
           ],
         },
@@ -103,7 +103,12 @@ const eslintConfig = [
         {
           patterns: [
             {
-              group: ["@/context/backoffice/**", "@/context/frontoffice/**"],
+              group: [
+                "@/context/backoffice",
+                "@/context/backoffice/**",
+                "@/context/frontoffice",
+                "@/context/frontoffice/**",
+              ],
               message:
                 "components/erpify is a business-agnostic design system: it must not depend on a bounded context (backoffice/frontoffice). Pass data in via props/composition.",
             },
