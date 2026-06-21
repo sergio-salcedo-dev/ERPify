@@ -302,4 +302,7 @@ multi-fila **consultable/ordenable/paginable/serializable** → se reevalúa ent
 pasiva) vs. repositorio de lectura dedicado, frente al raw-DBAL + schema-listener actual (D7). (i) First
 consumer whose interest is *what changed* (selective notification, a field-level change log, a partial-resync
 integration) → that **one** event gains a delta shape or a `changedFields` entry in its `payload`, never a global
-field; until then, state snapshots (D10).
+field; until then, state snapshots (D10). (j) Event catalog scale/drift → the hand-maintained
+`docs/architecture/event-catalog.md` is generated from the `RegisterDomainEventsPass` registry (plus a drift
+gate) once the events outgrow a hand-kept list, or a first external integrator consumes the contract; until
+then it stays hand-written, pointing at the pass as its source of truth.
