@@ -16,9 +16,9 @@ use PHPUnit\Framework\TestCase;
  *
  *   Invariant 1 (cardinality) — an aggregate must not accrete more than MAX_DERIVED_ATTRIBUTES
  *     non-persisted derived attributes. Each is materialized at read time through one
- *     `assign<Name>()` mutator (e.g. Bank::assignAccountCount), so the mutator count bounds the
- *     derived-attribute cardinality without a full attribute parse. Crossing it means the entity is
- *     becoming a projection carrier (a DTO disguised as an entity) → promote to a read-model DTO.
+ *     `assign<Name>()` mutator, so the mutator count bounds the derived-attribute cardinality
+ *     without a full attribute parse. Crossing it means the entity is becoming a projection
+ *     carrier (a DTO disguised as an entity) → promote to a read-model DTO.
  *
  *   Invariant 4 (single-aggregate scope) — a projection policy must not be shared across module
  *     boundaries. General cross-context import enforcement is owned by BoundedContextGateTest (an
