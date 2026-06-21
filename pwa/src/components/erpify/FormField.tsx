@@ -13,7 +13,7 @@ import {
 } from "react";
 import type { ProblemViolation } from "@/context/shared/error/domain/ProblemDetails";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { cn } from "@/components/cn";
 
 interface FormFieldContextValue {
   id: string;

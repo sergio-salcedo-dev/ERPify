@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
-import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { cn } from "@/components/cn";
 import { SortDirection } from "@/context/shared/search/domain/SortDirection";
 import { KeyboardKey } from "@/context/shared/keyboard/domain/KeyboardKey";
 import type { ListDensity } from "./DensityToggle";

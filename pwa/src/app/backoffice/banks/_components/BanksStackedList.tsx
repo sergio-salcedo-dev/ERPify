@@ -5,7 +5,7 @@ import type { Bank } from "@/context/backoffice/bank/domain/Bank";
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { StatusBadge, TruncatedText } from "@/components/erpify";
 import { useRowKeyboardNavigation } from "@/context/shared/resource/application/useRowKeyboardNavigation";
-import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { cn } from "@/components/cn";
 import { dateTimeProvider } from "@/context/shared/date-time-provider/infrastructure";
 import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import { bankRoutes } from "../_lib/bankRoutes";

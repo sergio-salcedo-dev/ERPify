@@ -8,7 +8,7 @@ import { DeleteBank } from "@/context/backoffice/bank/application/DeleteBank";
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { DeleteResourceButton } from "@/components/erpify";
 import { buttonVariants } from "@/components/ui/button-variants";
-import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { cn } from "@/components/cn";
 import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import { bankRoutes } from "../_lib/bankRoutes";
 

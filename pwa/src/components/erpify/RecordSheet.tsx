@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 import { XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { cn } from "@/components/cn";
 
 interface RecordSheetProps {
   open: boolean;

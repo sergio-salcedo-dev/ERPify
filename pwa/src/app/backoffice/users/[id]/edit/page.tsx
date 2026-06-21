@@ -8,7 +8,7 @@ import type { UserInput } from "@/context/backoffice/user/domain/UserRepository"
 import { useResourceItem } from "@/context/shared/resource/application/useResourceItem";
 import { EmptyState } from "@/components/erpify";
 import { buttonVariants } from "@/components/ui/button-variants";
-import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { cn } from "@/components/cn";
 import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import { PersistenceAction, ViewStatus } from "@/context/shared/view-state/domain/ViewState";
 import { Can } from "@/context/shared/access/infrastructure/ui";

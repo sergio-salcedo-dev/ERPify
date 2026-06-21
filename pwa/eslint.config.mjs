@@ -68,6 +68,59 @@ const eslintConfig = [
       },
     },
   },
+  {
+    files: ["src/components/ui/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/components/erpify", "@/components/erpify/**"],
+              message:
+                "components/ui is the foundational vendor layer: it must not depend on components/erpify. The design system builds on ui, not the other way round.",
+            },
+            {
+              group: ["@/app", "@/app/**"],
+              message:
+                "components/ui must not depend on app/ — dependencies point toward the lowest layer.",
+            },
+            {
+              group: ["@/context", "@/context/**"],
+              message:
+                "components/ui is the foundational vendor layer: it must not reach into the DDD context tree. Foundational presentation helpers it needs (e.g. cn) live at @/components/cn, below the context tree.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/components/erpify/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: [
+                "@/context/backoffice",
+                "@/context/backoffice/**",
+                "@/context/frontoffice",
+                "@/context/frontoffice/**",
+              ],
+              message:
+                "components/erpify is a business-agnostic design system: it must not depend on a bounded context (backoffice/frontoffice). Pass data in via props/composition.",
+            },
+            {
+              group: ["@/app", "@/app/**"],
+              message: "components/erpify must not depend on app/.",
+            },
+          ],
+        },
+      ],
+    },
+  },
   prettierConfig,
 ];
 

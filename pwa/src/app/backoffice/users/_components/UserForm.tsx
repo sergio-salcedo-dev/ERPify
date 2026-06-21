@@ -23,7 +23,7 @@ import { toastNotifier } from "@/context/shared/notification/infrastructure/Toas
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { cn } from "@/components/cn";
 import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import { userRoutes } from "../_lib/userRoutes";
 import { ROLE_LABEL, STATUS_LABEL } from "../_lib/userLabels";

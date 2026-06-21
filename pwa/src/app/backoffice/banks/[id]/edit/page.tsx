@@ -11,7 +11,7 @@ import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { CorrelationIdChip, EmptyState, ProblemDisplay } from "@/components/erpify";
 import { buttonVariants } from "@/components/ui/button-variants";
-import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { cn } from "@/components/cn";
 import { uuidV7 } from "@/context/shared/uuid/infrastructure/uuidV7";
 import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import { PersistenceAction, ViewStatus } from "@/context/shared/view-state/domain/ViewState";

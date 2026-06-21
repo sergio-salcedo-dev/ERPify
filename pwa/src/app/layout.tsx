@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Geist, Geist_Mono } from "next/font/google";
 import { fetchFrankenPhpHotReloadSubscribeUrl } from "@/context/shared/dev-tools/infrastructure/frankenphpHotReload";
-import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { cn } from "@/components/cn";
 import { ThemeProvider } from "@/context/shared/theme/infrastructure/ThemeProvider";
 import { Theme, THEME_STORAGE_KEY } from "@/context/shared/theme/domain/Theme";
 import { SonnerToaster } from "@/context/shared/notification/infrastructure/Toast/SonnerToaster";
