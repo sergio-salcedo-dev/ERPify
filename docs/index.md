@@ -63,7 +63,6 @@
 
 Detailed exhaustive analysis of specific areas:
 
-- **[deep-dive-api-shared-foundation.md](./deep-dive-api-shared-foundation.md)** — Exhaustive analysis of `api/src/Shared/` (Application, Domain, Infrastructure, Media, Storage, Guzzle; 80 files, ~4,517 LOC) — Generated 2026-05-08
 
 ### Development & contribution
 
