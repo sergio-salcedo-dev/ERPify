@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Tests\Functional\Shared\Http\Infrastructure;
+namespace Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http;
 
 use JsonException;
 use JsonSchema\Validator as JsonSchemaValidator;
@@ -51,7 +51,7 @@ final class ProblemDetailsApiSchemaSweepTest extends WebTestCase
 {
     private const string UUID_V7_REGEX = '/\A[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/';
 
-    private const string SCHEMA_FIXTURE = '/../../../../Fixtures/Problem/rfc-9457.schema.json';
+    private const string SCHEMA_FIXTURE = '/../../../../../Fixtures/Problem/rfc-9457.schema.json';
 
     /**
      * The full universe of HTTP methods the router can advertise. The test picks an UNALLOWED
