@@ -78,7 +78,7 @@ Browser → FrankenPHP :80/:443 ──┬─ /api/*                 → Symfony 
 
 Full request-routing diagram and host/container trade-offs in [`docs/integration-architecture.md`](docs/integration-architecture.md).
 
-Both sides follow **DDD + Hexagonal / Clean Architecture**, dependencies pointing inward. **Do not** import frameworks (Symfony, Doctrine, Next, Inversify, HTTP clients, ORM) inside `Domain/` — adapters go in `Infrastructure/`, orchestration in `Application/`. Documented exceptions: API domain entities may carry passive metadata attributes (`#[ORM]`, `#[Assert]`, `#[Groups]`), and `Domain/` may import `symfony/uid` as a UUID value-object library (e.g. `api/src/Shared/Domain/Uuid/Uuid.php`) — see [`docs/rules/architecture.md`](docs/rules/architecture.md). Full rule set: `docs/rules/*.md` (architecture, clean-code, database, frontend, php-standards, security, solid-principles, testing).
+Both sides follow **DDD + Hexagonal / Clean Architecture**, dependencies pointing inward. **Do not** import frameworks (Symfony, Doctrine, Next, Inversify, HTTP clients, ORM) inside `Domain/` — adapters go in `Infrastructure/`, orchestration in `Application/`. Documented exceptions: API domain entities may carry passive metadata attributes (`#[ORM]`, `#[Assert]`, `#[Groups]`), and `Domain/` may import `symfony/uid` as a UUID value-object library (e.g. `api/src/Shared/Domain/Uuid/Uuid.php`) — see [`docs/rules/architecture.md`](docs/rules/architecture.md). Full rule set: `docs/rules/*.md` (architecture, clean-code, commits, cqrs-naming, database, frontend, php-standards, read-side-projections, security, testing).
 
 ### Per-aggregate persistence strategy (conscious decision)
 
@@ -106,6 +106,33 @@ Both sides follow **DDD + Hexagonal / Clean Architecture**, dependencies pointin
 3. Touch only what you must. Clean up only your own mess.
 4. Define success criteria. Loop until verified.
 5. Learn from your errors; don't repeat them. Follow up with a plan or doc when warranted.
+
+---
+
+## Question the status quo — argued improvement
+
+Treat every task as a chance to *improve* what you touch, not merely satisfy the literal ask. **Distrust the existing design of the code in scope**: look for the real improvement toward clean architecture, Clean Code, SOLID, and DDD ([`docs/rules/clean-code.md`](docs/rules/clean-code.md), [`docs/rules/architecture.md`](docs/rules/architecture.md), [`docs/rules/php-standards.md`](docs/rules/php-standards.md)) — with **justified flexibility**: a deliberate, argued deviation beats dogma. Tie every suggestion to a concrete end — **scalability, maintainability, performance, or speed**. This lens is *orthogonal* to the Working principles above, not a loophole around them: *minimum code* and *touch only what you must* still bind.
+
+**Operating mode — propose first, never refactor unilaterally.**
+
+- Scrutinise the code **you touch**, not code you don't. The lens rides on the task in scope; it is never a pretext for repo-wide sweeps or speculative rewrites.
+- When you spot a real improvement beyond the immediate change, **surface it with its argument and stop** — the user decides whether it lands now, lands later, or becomes a tracking issue. Don't silently grow the diff.
+- An improvement **inside the files you already touch** that is low-risk may be folded in under the boy-scout rule — but *name it* in your summary / commit so it's reviewable. Never smuggle a refactor.
+
+**What counts as "argued" (no naked opinions).** A proposal earns consideration only when it states all three:
+
+1. **Principle at stake** — which SOLID rule, DDD boundary, or Clean-Code smell the current code breaks (e.g. "SRP: this handler mixes I/O and policy"; "DIP: the domain depends on a concrete adapter"; "leaky aggregate boundary — an object graph crosses a module").
+2. **Objective it buys** — the concrete win in scalability / maintainability / performance / speed (e.g. "unit-test the rule with no DB"; "kills an N+1"; "unblocks a second consumer").
+3. **Cost and the discarded alternative** — what the change costs and why the simpler option loses. If you can't fill all three, it isn't ripe — keep working, don't propose.
+
+**Calibration — flexibility is expected, dogma is the smell.**
+
+- **Rule of Three / YAGNI gate every abstraction.** Don't abstract for one caller or a hypothetical future; two similar lines beat a premature abstraction. "Justified flexibility" cuts both ways — bending hexagonal/DDD purity is legitimate *when argued* (the documented `#[ORM]`-on-entity and `symfony/uid`-in-`Domain` exceptions are exactly this; see [`docs/adr/external-dependencies-in-domain.md`](docs/adr/external-dependencies-in-domain.md)), and so is *declining* a textbook abstraction that buys nothing here.
+- **Boring over clever.** Prefer the change a future reader understands without you in the room.
+- **Performance is measured, not asserted.** "Faster" needs a query plan, a benchmark, or a complexity argument — never a hunch.
+- **Persistence-strategy and aggregate-boundary calls stay user decisions** (see Architecture below) — scrutiny may *raise* them, never *settle* them unilaterally.
+
+**Scope hygiene.** Keep *improvement in scope* (do it with the task) separate from *debt found in passing* (propose it, or file a follow-up issue). Never let the second silently inflate the PR.
 
 ---
 

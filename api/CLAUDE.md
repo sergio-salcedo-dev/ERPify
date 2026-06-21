@@ -1,6 +1,6 @@
 # api/CLAUDE.md — ERPify API (Symfony + FrankenPHP)
 
-API-scoped guidance. Root [`../CLAUDE.md`](../CLAUDE.md) is authoritative for monorepo conventions, the Docker stack, and the full `make` target list — this file only covers API specifics. Also consult `../docs/rules/*.md` (especially `architecture`, `php-standards`, `database`, `security`, `solid-principles`, `testing`).
+API-scoped guidance. Root [`../CLAUDE.md`](../CLAUDE.md) is authoritative for monorepo conventions, the Docker stack, and the full `make` target list — this file only covers API specifics. Also consult `../docs/rules/*.md` (especially `architecture`, `php-standards`, `database`, `security`, `clean-code`, `testing`).
 
 ## Stack
 
@@ -36,6 +36,8 @@ Dependencies point inward toward `Domain/`. **No** Symfony/Doctrine/HTTP/Messeng
 -   `Infrastructure/` — Doctrine repositories, HTTP controllers / API Platform resources, Messenger handlers, mailers, external clients, persistence mappings.
 
 New bounded contexts/modules follow the same three-layer split. Cross-context calls go through `Application/` ports, not direct class references across `Domain/` boundaries.
+
+**Question the status quo** (root [`../CLAUDE.md`](../CLAUDE.md) → "Question the status quo — argued improvement"): on every API change, distrust the existing design *of the code you touch* and look for the real improvement toward SOLID/DDD/hexagonal — leaky aggregate boundaries (object graph crossing a module), an anaemic handler mixing I/O and policy, a `Domain/` that reaches a framework, a missed read-side projection. Propose with principle + objective (maintainability / performance / scalability) + cost; let the user decide scope. Justified flexibility (the passive-metadata / `symfony/uid` exceptions) is the model, not an excuse for dogma or for unilateral refactors.
 
 ## Rules that bite
 
