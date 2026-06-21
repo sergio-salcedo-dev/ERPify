@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Backoffice\Bank\Application;
 
 use Erpify\Backoffice\Bank\Application\BankAccountCountEnricher;
-use Erpify\Backoffice\Bank\Domain\Entity\Bank;
+use Erpify\Tests\Unit\Backoffice\Bank\Domain\Entity\Mother\BankMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -25,9 +25,9 @@ final class BankAccountCountEnricherTest extends TestCase
     {
         $counter = new InMemoryBankAccountCounter([self::BANK_A => 12, self::BANK_B => 3]);
         $banks = [
-            Bank::create(self::BANK_A, 'Bank A', 'BA'),
-            Bank::create(self::BANK_B, 'Bank B', 'BB'),
-            Bank::create(self::BANK_C, 'Bank C', 'BC'),
+            BankMother::create(self::BANK_A, 'Bank A', 'BA'),
+            BankMother::create(self::BANK_B, 'Bank B', 'BB'),
+            BankMother::create(self::BANK_C, 'Bank C', 'BC'),
         ];
 
         (new BankAccountCountEnricher($counter))->enrichAll($banks);
@@ -55,7 +55,7 @@ final class BankAccountCountEnricherTest extends TestCase
     public function testEnrichAssignsTheSingleBankItsCount(): void
     {
         $counter = new InMemoryBankAccountCounter([self::BANK_A => 7]);
-        $bank = Bank::create(self::BANK_A, 'Bank A', 'BA');
+        $bank = BankMother::create(self::BANK_A, 'Bank A', 'BA');
 
         (new BankAccountCountEnricher($counter))->enrich($bank);
 

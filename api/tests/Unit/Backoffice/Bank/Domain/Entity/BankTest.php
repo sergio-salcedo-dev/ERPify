@@ -11,6 +11,7 @@ use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Clock\Infrastructure\SymfonyClock;
 use Erpify\Shared\Storage\Domain\StoredObject;
+use Erpify\Tests\Unit\Backoffice\Bank\Domain\Entity\Mother\BankMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MockClock;
@@ -21,8 +22,6 @@ use Symfony\Component\Clock\MockClock;
 #[CoversClass(Bank::class)]
 final class BankTest extends TestCase
 {
-    private const string BANK_ID = '0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c';
-
     protected function tearDown(): void
     {
         SystemClock::reset();
@@ -32,14 +31,12 @@ final class BankTest extends TestCase
 
     public function testCreateRecordsCreatedEventWhoseAggregateIdEqualsTheEntityId(): void
     {
-        // Domain-level invariant: the create event's aggregate id is the entity id. (The persist-time
-        // divergence the fix removes is locked separately by IdentifiableAssignedIdentifierTest, which
-        // asserts Doctrine no longer overwrites this id at flush.)
-        $id = self::BANK_ID;
+        // Domain-level invariant: the create event's aggregate id is the entity id. Persist-time id
+        // stability is locked separately by IdentifiableAssignedIdentifierTest, which asserts Doctrine
+        // does not overwrite this id at flush.
+        $bank = BankMother::create();
 
-        $bank = Bank::create($id, 'Acme Savings', 'ACME');
-
-        $this->assertSame($id, $bank->getId());
+        $this->assertSame(BankMother::DEFAULT_ID, $bank->getId());
 
         $events = $bank->pullDomainEvents();
         $this->assertCount(1, $events);
@@ -51,7 +48,7 @@ final class BankTest extends TestCase
 
     public function testGetStoredObjectReturnsNullWhenNoImageIsStored(): void
     {
-        $bank = Bank::create(self::BANK_ID, 'Acme Savings', 'ACME');
+        $bank = BankMother::create();
 
         $this->assertNotInstanceOf(StoredObject::class, $bank->getStoredObject());
     }
@@ -60,15 +57,14 @@ final class BankTest extends TestCase
     {
         $storedObject = new StoredObject('object/key', 'image/webp', 1024, 'abc123');
 
-        $bank = Bank::create(self::BANK_ID, 'Acme Savings', 'ACME', null, $storedObject);
+        $bank = BankMother::create(storedObject: $storedObject);
 
         $this->assertSame($storedObject, $bank->getStoredObject());
     }
 
     public function testRenameRecordsUpdatedEventWhoseAggregateIdEqualsTheEntityId(): void
     {
-        $bank = Bank::create(self::BANK_ID, 'Acme Savings', 'ACME');
-        $bank->pullDomainEvents(); // drain the creation event
+        $bank = BankMother::drained();
 
         $bank->rename('Acme Renamed', 'ACME');
 
@@ -77,7 +73,7 @@ final class BankTest extends TestCase
 
         $event = $events[0];
         $this->assertInstanceOf(BankUpdatedDomainEvent::class, $event);
-        $this->assertSame(self::BANK_ID, $event->aggregateId());
+        $this->assertSame(BankMother::DEFAULT_ID, $event->aggregateId());
     }
 
     public function testCreateStampsTimestampsAndEventOccurredOnFromTheAmbientClock(): void
@@ -85,7 +81,7 @@ final class BankTest extends TestCase
         $instant = '2026-06-14T09:30:00+00:00';
         SystemClock::set(new SymfonyClock(new MockClock($instant)));
 
-        $bank = Bank::create(self::BANK_ID, 'Acme Savings', 'ACME');
+        $bank = BankMother::create();
 
         $this->assertSame($instant, $bank->getCreatedAt()->format(DateTimeInterface::ATOM));
         $this->assertSame($instant, $bank->getUpdatedAt()->format(DateTimeInterface::ATOM));
@@ -103,8 +99,7 @@ final class BankTest extends TestCase
         $renamedAt = '2026-06-15T11:00:00+00:00';
 
         SystemClock::set(new SymfonyClock(new MockClock($createdAt)));
-        $bank = Bank::create(self::BANK_ID, 'Acme Savings', 'ACME');
-        $bank->pullDomainEvents(); // drain the creation event
+        $bank = BankMother::drained();
 
         SystemClock::set(new SymfonyClock(new MockClock($renamedAt)));
         $bank->rename('Acme Renamed', 'ACME');

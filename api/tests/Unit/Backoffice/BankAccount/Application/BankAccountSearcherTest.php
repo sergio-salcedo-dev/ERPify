@@ -12,6 +12,7 @@ use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Shared\Search\Domain\Page;
 use Erpify\Shared\Search\Domain\SearchCriteria;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
+use Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity\Mother\BankAccountMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -24,9 +25,7 @@ use Psr\Log\NullLogger;
 #[CoversClass(BankAccountSearcher::class)]
 final class BankAccountSearcherTest extends TestCase
 {
-    private const string BANK_ID = '11111111-1111-7000-8000-000000000001';
-
-    private const string ACCOUNT_ID = '33333333-3333-7000-8000-000000000001';
+    private const string BANK_ID = BankAccountMother::DEFAULT_BANK_ID;
 
     public function testReturnsThePageAndEmitsExactlyOneAccessAuditEvent(): void
     {
@@ -127,14 +126,7 @@ final class BankAccountSearcherTest extends TestCase
      */
     private function pageWithOneAccount(): Page
     {
-        $account = BankAccount::create(
-            self::ACCOUNT_ID,
-            self::BANK_ID,
-            'Globex Corporation',
-            'DE89370400440532013000',
-        );
-
-        return new Page(items: [$account], hasNext: false, hasPrev: false);
+        return new Page(items: [BankAccountMother::create()], hasNext: false, hasPrev: false);
     }
 
     /**

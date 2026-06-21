@@ -4,11 +4,9 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Backoffice\Bank\Infrastructure\Messenger;
 
-use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
-use Erpify\Backoffice\Bank\Domain\Event\BankSnapshot;
-use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
 use Erpify\Backoffice\Bank\Infrastructure\Messenger\SendEmailOnBankChanged;
-use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Unit\Backoffice\Bank\Domain\Event\Mother\BankCreatedDomainEventMother;
+use Erpify\Tests\Unit\Backoffice\Bank\Domain\Event\Mother\BankUpdatedDomainEventMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -23,14 +21,12 @@ final class SendEmailOnBankChangedTest extends TestCase
 {
     private const string NOTIFY_TO = 'ops@erpify.test';
 
-    private const string TIMESTAMP = '2026-06-13T00:00:00+00:00';
-
     public function testSendsNotificationWhenClaimSucceeds(): void
     {
         $mailer = new RecordingNotificationMailer();
         $handler = $this->makeHandler(RecordingDomainEventHandlerDeduplicator::granting(), $mailer);
 
-        $handler->onBankCreated($this->bankCreatedEvent());
+        $handler->onBankCreated(BankCreatedDomainEventMother::create());
 
         $this->assertSame(1, $mailer->sendCalls);
         $this->assertSame('[ERPify] Bank created', $mailer->lastSubject);
@@ -41,7 +37,7 @@ final class SendEmailOnBankChangedTest extends TestCase
         $mailer = new RecordingNotificationMailer();
         $handler = $this->makeHandler(RecordingDomainEventHandlerDeduplicator::rejecting(), $mailer);
 
-        $handler->onBankUpdated($this->bankUpdatedEvent());
+        $handler->onBankUpdated(BankUpdatedDomainEventMother::create());
 
         $this->assertSame(0, $mailer->sendCalls);
     }
@@ -53,7 +49,7 @@ final class SendEmailOnBankChangedTest extends TestCase
         $handler = $this->makeHandler($deduplicator, new RecordingNotificationMailer(sendFailure: $sendFailure));
 
         try {
-            $handler->onBankCreated($this->bankCreatedEvent());
+            $handler->onBankCreated(BankCreatedDomainEventMother::create());
             $this->fail('Expected the send failure to propagate.');
         } catch (Throwable $throwable) {
             $this->assertSame($sendFailure, $throwable);
@@ -71,7 +67,7 @@ final class SendEmailOnBankChangedTest extends TestCase
         $handler = $this->makeHandler($deduplicator, new RecordingNotificationMailer(sendFailure: $sendFailure));
 
         try {
-            $handler->onBankCreated($this->bankCreatedEvent());
+            $handler->onBankCreated(BankCreatedDomainEventMother::create());
             $this->fail('Expected the original send failure to propagate.');
         } catch (Throwable $throwable) {
             // The release failure must not mask the real cause the transport needs to record.
@@ -84,21 +80,5 @@ final class SendEmailOnBankChangedTest extends TestCase
         RecordingNotificationMailer $mailer,
     ): SendEmailOnBankChanged {
         return new SendEmailOnBankChanged($deduplicator, $mailer, new NullLogger(), self::NOTIFY_TO);
-    }
-
-    private function bankCreatedEvent(): BankCreatedDomainEvent
-    {
-        return new BankCreatedDomainEvent(
-            Uuid::generate(),
-            new BankSnapshot('Acme', 'ACM', self::TIMESTAMP, self::TIMESTAMP),
-        );
-    }
-
-    private function bankUpdatedEvent(): BankUpdatedDomainEvent
-    {
-        return new BankUpdatedDomainEvent(
-            Uuid::generate(),
-            new BankSnapshot('Acme', 'ACM', self::TIMESTAMP, self::TIMESTAMP),
-        );
     }
 }
