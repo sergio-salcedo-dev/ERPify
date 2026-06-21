@@ -24,16 +24,16 @@ final class BankDetailFinderTest extends TestCase
     {
         $finder = $this->makeFinder(BankMother::create(), [BankMother::DEFAULT_ID => 3]);
 
-        $bank = $finder->find(BankMother::DEFAULT_ID);
+        $enriched = $finder->find(BankMother::DEFAULT_ID);
 
-        $this->assertSame(3, $bank->getAccountCount());
+        $this->assertSame(3, $enriched->accountCount);
     }
 
     public function testReportsZeroWhenTheBankHasNoAccounts(): void
     {
         $finder = $this->makeFinder(BankMother::create(), []);
 
-        $this->assertSame(0, $finder->find(BankMother::DEFAULT_ID)->getAccountCount());
+        $this->assertSame(0, $finder->find(BankMother::DEFAULT_ID)->accountCount);
     }
 
     public function testCountsByTheCanonicalAggregateIdNotTheRouteCasing(): void
@@ -42,7 +42,7 @@ final class BankDetailFinderTest extends TestCase
         // valid UUID and still finds the bank, so the count must follow the aggregate, not the URL.
         $finder = $this->makeFinder(BankMother::create(), [BankMother::DEFAULT_ID => 7]);
 
-        $this->assertSame(7, $finder->find(\strtoupper(BankMother::DEFAULT_ID))->getAccountCount());
+        $this->assertSame(7, $finder->find(\strtoupper(BankMother::DEFAULT_ID))->accountCount);
     }
 
     public function testPropagatesNotFoundForAWellFormedButAbsentId(): void

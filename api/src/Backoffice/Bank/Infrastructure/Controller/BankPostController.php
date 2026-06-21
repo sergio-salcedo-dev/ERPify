@@ -6,7 +6,7 @@ namespace Erpify\Backoffice\Bank\Infrastructure\Controller;
 
 use Erpify\Backoffice\Bank\Application\BankCreator;
 use Erpify\Backoffice\Bank\Application\Command\CreateBankCommand;
-use Erpify\Backoffice\Bank\Domain\Entity\Bank;
+use Erpify\Backoffice\Bank\Infrastructure\Http\BankResourceMapper;
 use Erpify\Shared\Http\Infrastructure\Responder\ResourceResponder;
 use Erpify\Shared\Media\Application\Dto\UploadedImage;
 use Erpify\Shared\Validation\Application\Validator;
@@ -23,6 +23,7 @@ final readonly class BankPostController
 {
     public function __construct(
         private BankCreator $bankCreator,
+        private BankResourceMapper $bankResourceMapper,
         private ResourceResponder $resourceResponder,
         private Validator $validator,
         #[Autowire('%erpify.media.max_upload_bytes%')]
@@ -48,8 +49,7 @@ final readonly class BankPostController
         );
 
         return $this->resourceResponder->respond(
-            $bank,
-            [Bank::GROUP_IDENTIFIABLE, Bank::GROUP_TIMESTAMPED, Bank::GROUP_DETAIL, Bank::GROUP_READ_URLS],
+            $this->bankResourceMapper->toCreateResource($bank),
             Response::HTTP_CREATED,
         );
     }

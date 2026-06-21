@@ -16,7 +16,6 @@ use Erpify\Shared\Kernel\Domain\ValueObject\NormalizedText;
 use Erpify\Shared\Media\Domain\Entity\Media;
 use Erpify\Shared\Storage\Domain\StoredObject;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
-use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Validator\Constraints as Assert;
 use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
@@ -36,42 +35,11 @@ final class Bank extends AggregateRoot
      */
     private const int MAX_NAME_LENGTH = 255;
 
-    /** Serialization group for the single-resource detail projection (GET one, POST, PUT responses). */
-    public const string GROUP_DETAIL = 'bank:detail';
-
-    /** Serialization group for the collection projection (search / list responses). */
-    public const string GROUP_LIST = 'bank:list';
-
-    /**
-     * Serialization group that opts a response into the computed logo / stored-object URLs
-     * synthesized by {@see \Erpify\Backoffice\Bank\Infrastructure\Serializer\BankLogoUrlNormalizer}.
-     */
-    public const string GROUP_READ_URLS = 'bank:read:urls';
-
-    /**
-     * Serialization group that opts a READ response (list and single-bank detail) into the derived
-     * {@see $accountCount}. Deliberately distinct from {@see GROUP_DETAIL} so the write-path responses
-     * (create/update) — which also serialize with {@see GROUP_DETAIL} but never enrich the count —
-     * do not emit a stale `accountCount: 0`.
-     */
-    public const string GROUP_ACCOUNT_COUNT = 'bank:account-count';
-
-    /**
-     * Read-projection: number of bank accounts that reference this bank. Not persisted — it is a
-     * derived count assembled at read time (list and detail) by the application layer through the
-     * BankAccount read port {@see \Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountCounter},
-     * never by Bank itself. Defaults to 0 so the field is always a non-null integer, even before
-     * enrichment.
-     */
-    #[Groups([self::GROUP_ACCOUNT_COUNT])]
-    private int $accountCount = 0;
-
     private function __construct(
         string $id,
         #[ORM\Column]
         #[Assert\NotBlank]
         #[Assert\Length(max: self::MAX_NAME_LENGTH)]
-        #[Groups([self::GROUP_DETAIL, self::GROUP_LIST])]
         private string $name,
         #[ORM\Column(unique: true)]
         private string $nameNormalized,
@@ -83,7 +51,6 @@ final class Bank extends AggregateRoot
         #[ORM\Column(length: 50, unique: true)]
         #[Assert\NotBlank]
         #[Assert\Length(max: 50)]
-        #[Groups([self::GROUP_DETAIL, self::GROUP_LIST])]
         private string $shortName,
         #[ORM\ManyToOne(targetEntity: Media::class, cascade: ['persist'])]
         #[ORM\JoinColumn(name: 'logo_media_id', referencedColumnName: 'id', nullable: true)]
@@ -145,9 +112,9 @@ final class Bank extends AggregateRoot
     }
 
     /**
-     * Read accessor for the accent-folded, lower-cased name. Carries no serializer group, so it
-     * stays out of the HTTP payload; it exists so the keyset paginator can read the order-by
-     * column when the list is sorted by `name` (which maps to the indexed `nameNormalized`).
+     * Read accessor for the accent-folded, lower-cased name. It exists so the keyset paginator can
+     * read the order-by column when the list is sorted by `name`, which maps to the indexed
+     * `nameNormalized`.
      */
     public function getNameNormalized(): string
     {
@@ -157,21 +124,6 @@ final class Bank extends AggregateRoot
     public function getShortName(): string
     {
         return $this->shortName;
-    }
-
-    public function getAccountCount(): int
-    {
-        return $this->accountCount;
-    }
-
-    /**
-     * Enrich this read-projection with the number of accounts referencing the bank, computed by the
-     * application layer via the BankAccount read port. Read-only concern: it never participates in
-     * the aggregate's write invariants or domain events.
-     */
-    public function assignAccountCount(int $accountCount): void
-    {
-        $this->accountCount = $accountCount;
     }
 
     public function getLogo(): ?Media

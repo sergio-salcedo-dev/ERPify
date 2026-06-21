@@ -29,8 +29,8 @@ The application follows Clean Architecture with these layers:
 #### Documented exception — passive metadata attributes on entities and embeddables
 
 Domain entities, aggregates, and mapped value objects (`#[ORM\Embeddable]`) MAY carry framework
-**metadata attributes**: `#[ORM\…]` mapping, `#[Assert\…]` constraints (including `UniqueEntity` and
-`#[Assert\Callback]` hooks), and serializer `#[Groups]`. Rationale: one source of truth for persistence
+**persistence and validation metadata**: `#[ORM\…]` mapping and `#[Assert\…]` constraints (including
+`UniqueEntity` and `#[Assert\Callback]` hooks). Rationale: one source of truth for persistence
 shape and invariants, enforced via the shared `Validator::ensure($entity)` right before save;
 `UniqueEntity` inherently needs the database. An embeddable keeps a repeated cluster of columns (e.g. an
 image's key + metadata) as one inline value object reused across aggregates under a per-owner
@@ -39,6 +39,16 @@ image's key + metadata) as one inline value object reused across aggregates unde
 `HttpException`, no Messenger envelopes, no service or HTTP calls. Examples:
 `api/src/Backoffice/Bank/Domain/Entity/Bank.php` (entity),
 `api/src/Shared/Storage/Domain/StoredObject.php` (embeddable value object).
+
+**Serializer `#[Groups]` are NOT blessed metadata — the entity is never the HTTP wire contract.** Each
+exposed view is served from a dedicated **per-view Resource DTO** (`Application/Resource/<Entity><View>Resource`,
+flat `readonly` data with no logic), mapped from the entity by an Infrastructure `*ResourceMapper` service;
+the domain entity never crosses the HTTP boundary. A reviewer reads the view's exact JSON off its DTO without
+crossing the entity or any serializer group, and a change to one view cannot leak into another through a
+shared group. The only serializer attribute still admissible inward is `#[Serializer\Context]` on the
+`Timestamped` trait (it pins the ATOM timestamp format, not a projection) — dormant while no entity is
+serialized, and slated for removal once the DTO timestamps own that format. Decision record:
+[`../adr/api-resource-dtos.md`](../adr/api-resource-dtos.md).
 
 #### Documented exception — symfony/uid value objects in Domain
 

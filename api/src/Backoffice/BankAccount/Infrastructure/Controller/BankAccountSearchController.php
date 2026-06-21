@@ -6,7 +6,7 @@ namespace Erpify\Backoffice\BankAccount\Infrastructure\Controller;
 
 use Erpify\Backoffice\BankAccount\Application\BankAccountSearcher;
 use Erpify\Backoffice\BankAccount\Application\Query\SearchBankAccountsQuery;
-use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
+use Erpify\Backoffice\BankAccount\Infrastructure\Http\BankAccountResourceMapper;
 use Erpify\Shared\Search\Application\Http\SearchQuery;
 use Erpify\Shared\Search\Infrastructure\Http\SearchResponder;
 use JsonException;
@@ -27,6 +27,7 @@ final readonly class BankAccountSearchController
 
     public function __construct(
         private BankAccountSearcher $bankAccountSearcher,
+        private BankAccountResourceMapper $bankAccountResourceMapper,
         private SearchResponder $searchResponder,
     ) {
     }
@@ -42,13 +43,11 @@ final readonly class BankAccountSearchController
         SearchQuery $query = new SearchQuery(),
     ): Response {
         return $this->searchResponder->respond(
-            $this->bankAccountSearcher->search($id, new SearchBankAccountsQuery($query->toCriteria())),
+            $this->bankAccountResourceMapper->toListPage(
+                $this->bankAccountSearcher->search($id, new SearchBankAccountsQuery($query->toCriteria())),
+            ),
             $query,
             self::ROUTE_NAME,
-            [
-                BankAccount::GROUP_IDENTIFIABLE,
-                BankAccount::GROUP_READ,
-            ],
             ['id' => $id],
         );
     }

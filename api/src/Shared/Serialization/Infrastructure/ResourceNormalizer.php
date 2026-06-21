@@ -16,29 +16,26 @@ final readonly class ResourceNormalizer
     }
 
     /**
-     * @param list<string> $groups
-     *
      * @throws ExceptionInterface       when the inner normalizer fails
      * @throws UnexpectedValueException when the inner normalizer yields a non-array, non-ArrayObject value
      *
      * @return array<string, mixed>
      */
-    public function toArray(object $resource, array $groups, string $format = 'json'): array
+    public function toArray(object $resource, string $format = 'json'): array
     {
         /** @var array<string, mixed> */
-        return $this->normalizeToArray($resource, $groups, $format);
+        return $this->normalizeToArray($resource, $format);
     }
 
     /**
      * @param iterable<object> $resources
-     * @param list<string>     $groups
      *
      * @throws ExceptionInterface       when the inner normalizer fails
      * @throws UnexpectedValueException when the inner normalizer yields a non-array value
      *
      * @return list<mixed>
      */
-    public function toList(iterable $resources, array $groups, string $format = 'json'): array
+    public function toList(iterable $resources, string $format = 'json'): array
     {
         $items = \is_array($resources) ? $resources : \iterator_to_array($resources);
 
@@ -46,7 +43,6 @@ final readonly class ResourceNormalizer
         return \array_values(
             $this->normalizeToArray(
                 \array_values($items),
-                $groups,
                 $format,
             ),
         );
@@ -56,16 +52,14 @@ final readonly class ResourceNormalizer
      * Normalizes a payload and guarantees an array result, unwrapping the {@see ArrayObject}
      * the inner normalizer emits for property-less objects (to preserve a `{}` JSON body).
      *
-     * @param list<string> $groups
-     *
      * @throws ExceptionInterface       when the inner normalizer fails
      * @throws UnexpectedValueException when the inner normalizer yields a non-array, non-ArrayObject value
      *
      * @return array<array-key, mixed>
      */
-    private function normalizeToArray(mixed $payload, array $groups, string $format): array
+    private function normalizeToArray(mixed $payload, string $format): array
     {
-        $normalized = $this->normalizer->normalize($payload, $format, ['groups' => $groups]);
+        $normalized = $this->normalizer->normalize($payload, $format);
 
         if ($normalized instanceof ArrayObject) {
             /** @var array<array-key, mixed> */

@@ -78,10 +78,13 @@ debe reubicarse en un read-model explícito o materializado) se rige por los cin
 ### D4 — Las entidades siguen en `Domain/` con metadato pasivo
 
 Se confirma la excepción documentada de
-[`rules/architecture.md`](../rules/architecture.md): entidades en `Domain/Entity` con atributos
-`#[ORM]`/`#[Assert]`/`#[Groups]` pasivos; prohibición absoluta de framework *conductual* en
-`Domain/`. Se corrigió la contradicción que [`project-context.md`](../project-context.md) mantenía
-con esa regla (decía "entities live in Infrastructure, domain objects are POPOs").
+[`rules/architecture.md`](../rules/architecture.md): entidades en `Domain/Entity` con metadato
+**pasivo de persistencia/validación** (`#[ORM]`/`#[Assert]`); prohibición absoluta de framework
+*conductual* en `Domain/`. Se corrigió la contradicción que [`project-context.md`](../project-context.md)
+mantenía con esa regla (decía "entities live in Infrastructure, domain objects are POPOs"). El metadato
+de serializador `#[Groups]` **ya no** vive en las entidades: el contrato HTTP lo poseen DTOs de recurso
+por vista (`Application/Resource/`), mapeados desde la entidad en `Infrastructure/Http/`; la entidad no
+se serializa (ADR [`api-resource-dtos.md`](api-resource-dtos.md)).
 
 Descartado hoy: modelo dual POPO+entidad (peaje de mappers/UnitOfWork sin beneficio actual) y
 mapping XML/PHP externo (drift de mapping, pérdida de co-localización de invariantes).

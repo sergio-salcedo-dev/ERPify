@@ -13,17 +13,12 @@ use Symfony\Component\Serializer\Normalizer\DateTimeNormalizer;
 
 trait Timestamped
 {
-    /** Serialization group exposing the createdAt / updatedAt audit timestamps. */
-    final public const string GROUP_TIMESTAMPED = 'timestamped';
-
     #[ORM\Column(name: 'created_at', type: Types::DATETIME_IMMUTABLE)]
     #[Serializer\Context([DateTimeNormalizer::FORMAT_KEY => DateTimeInterface::ATOM])]
-    #[Serializer\Groups([self::GROUP_TIMESTAMPED])]
     protected DateTimeImmutable $createdAt;
 
     #[ORM\Column(name: 'updated_at', type: Types::DATETIME_IMMUTABLE)]
     #[Serializer\Context([DateTimeNormalizer::FORMAT_KEY => DateTimeInterface::ATOM])]
-    #[Serializer\Groups([self::GROUP_TIMESTAMPED])]
     protected DateTimeImmutable $updatedAt;
 
     public function getCreatedAt(): DateTimeImmutable
