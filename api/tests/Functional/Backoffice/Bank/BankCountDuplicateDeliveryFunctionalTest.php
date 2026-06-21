@@ -8,7 +8,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\Bank\Application\Projection\BankCountReadModel;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankSnapshot;
-use Erpify\Shared\Domain\Uuid\Uuid;
+use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Shared\Event\Application\EventStore;
 use Erpify\Shared\Event\Application\ProjectionRunner;
 use PHPUnit\Framework\Attributes\CoversClass;
