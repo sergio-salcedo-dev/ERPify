@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Tests\Unit\Shared\Domain\Clock;
+namespace Erpify\Tests\Unit\Shared\Clock\Domain;
 
 use DateTimeImmutable;
 use DateTimeInterface;
-use Erpify\Shared\Domain\Clock\NativeClock;
-use Erpify\Shared\Domain\Clock\SystemClock;
-use Erpify\Shared\Infrastructure\Clock\SymfonyClock;
+use Erpify\Shared\Clock\Domain\NativeClock;
+use Erpify\Shared\Clock\Domain\SystemClock;
+use Erpify\Shared\Clock\Infrastructure\SymfonyClock;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;

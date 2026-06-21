@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Shared\Infrastructure\Clock;
+namespace Erpify\Shared\Clock\Infrastructure;
 
 use DateTimeImmutable;
-use Erpify\Shared\Domain\Clock\Clock;
+use Erpify\Shared\Clock\Domain\Clock;
 use Override;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;

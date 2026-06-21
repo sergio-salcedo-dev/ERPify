@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Shared\Domain\Clock;
+namespace Erpify\Shared\Clock\Domain;
 
 use DateTimeImmutable;
 use Override;

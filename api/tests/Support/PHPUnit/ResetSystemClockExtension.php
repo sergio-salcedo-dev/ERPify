@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Support\PHPUnit;
 
-use Erpify\Shared\Domain\Clock\SystemClock;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use PHPUnit\Event\Test\Finished;
 use PHPUnit\Event\Test\FinishedSubscriber;
 use PHPUnit\Runner\Extension\Extension;

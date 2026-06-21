@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Shared\Infrastructure\Clock;
+namespace Erpify\Shared\Clock\Infrastructure;
 
-use Erpify\Shared\Domain\Clock\Clock;
-use Erpify\Shared\Domain\Clock\SystemClock;
+use Erpify\Shared\Clock\Domain\Clock;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Symfony\Component\Console\ConsoleEvents;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpKernel\KernelEvents;

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Frontoffice\Health\Infrastructure\Controller;
 
 use Erpify\Frontoffice\Health\Infrastructure\Controller\HealthController;
-use Erpify\Shared\Infrastructure\Clock\SymfonyClock;
+use Erpify\Shared\Clock\Infrastructure\SymfonyClock;
 use Erpify\Shared\Infrastructure\Http\Responder\JsonResponder;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
