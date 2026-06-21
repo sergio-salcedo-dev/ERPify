@@ -9,7 +9,7 @@ import { BankProblemType } from "@/context/backoffice/bank/domain/BankProblemTyp
 import { useQueryState } from "@/context/shared/resource/application/createQueryState";
 import { useResourceList } from "@/context/shared/resource/application/useResourceList";
 import { useBanksCount } from "@/context/backoffice/bank/application/useBanksCount";
-import { ViewStatus } from "@/context/shared/domain/types/status";
+import { ViewStatus } from "@/context/shared/view-state/domain/ViewState";
 import {
   AsyncBoundary,
   DensityToggle,
@@ -22,10 +22,10 @@ import {
 import type { DataTableSelection, DataTableSort, ListDensity } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
-import { cn } from "@/lib/utils";
-import { safeHref } from "@/lib/safeHref";
-import { useStoredPreference } from "@/lib/useStoredPreference";
-import { dateTimeProvider } from "@/context/shared/DateTimeProvider/infrastructure";
+import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { safeHref } from "@/context/shared/navigation/domain/safeHref";
+import { useStoredPreference } from "@/context/shared/storage/infrastructure/useStoredPreference";
+import { dateTimeProvider } from "@/context/shared/date-time-provider/infrastructure";
 import { bankTopics, useBankRealtime } from "@/context/backoffice/bank/infrastructure/bankRealtime";
 import { BanksTable } from "./_components/BanksTable";
 import { BanksColumnPicker } from "./_components/BanksColumnPicker";

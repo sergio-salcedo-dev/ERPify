@@ -6,7 +6,7 @@ namespace Erpify\Shared\Media\Domain\Entity;
 
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
-use Erpify\Shared\Domain\Aggregate\AggregateRoot;
+use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Media\Domain\Exception\MediaBytesUnreadableException;
 use Erpify\Shared\Media\Domain\Repository\MediaRepository;
 

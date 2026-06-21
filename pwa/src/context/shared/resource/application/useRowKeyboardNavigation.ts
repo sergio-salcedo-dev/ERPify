@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { KeyboardKey } from "@/context/shared/domain/types/keyboard";
+import { KeyboardKey } from "@/context/shared/keyboard/domain/KeyboardKey";
 
 interface UseRowKeyboardNavigationConfig<T extends { id: string }> {
   items: readonly T[];

@@ -1,6 +1,6 @@
 import { inject, injectable } from "inversify";
-import { API_ENDPOINTS } from "../../../shared/infrastructure/api/ApiEndpoints";
-import type { HttpClient } from "../../../shared/infrastructure/HttpClient/HttpClient";
+import { API_ENDPOINTS } from "../../../shared/http-client/infrastructure/ApiEndpoints";
+import type { HttpClient } from "../../../shared/http-client/domain/HttpClient";
 import type { BankCountReader } from "../domain/BankCountReader";
 
 interface BankCountResponse {

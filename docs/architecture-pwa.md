@@ -51,7 +51,7 @@ pwa/src/context/
 - `ui/` — Shadcn primitives.
 - `erpify/` — entity-agnostic backoffice design-system primitives, barrel-exported from `@/components/erpify`.
 
-`src/lib/` is glue/utility only — never business logic.
+Pure cross-cutting helpers/hooks live as capability modules under `src/context/shared/<capability>/` (the former `src/lib/` bucket was dissolved) — never business logic.
 
 ### Shared execution toolkits — access (IAM) & resource (CRUD)
 
@@ -72,7 +72,7 @@ Cross-cutting code has several homes; pick by **purpose**, not just "is it reuse
 | `app/_components/` (or a route's own `_components/`) | a **landing/marketing** presentational component (its own raw-palette + `tw-animate-css` / CSS language) used only by its `app/` route — co-located, not shared | `Navbar`, `Footer`, `FeatureCard` |
 | `components/erpify/` | an **entity-agnostic backoffice / app-shell design-system primitive**, reused across surfaces, barrel-exported from `@/components/erpify` | `DataTable`, `AsyncBoundary`, `EmptyState`, `StatusBadge`, `Spinner`, `Logo`, `SidebarItem`, `StatCard` |
 | `components/ui/` | a raw **Shadcn** primitive | `button`, `dialog`, `input` |
-| `src/lib/` | a **pure helper or generic hook** with no domain identity | `safeHref`, `useDebouncedValue`, `utils` |
+| `context/shared/<capability>/` | a **pure helper or generic hook** with no domain identity (promoted from the former `src/lib/`) | `cn` (`styling/`), `safeHref` (`navigation/`), `uuidV7` (`uuid/`), `useDebouncedValue` (`search/`) |
 
 The back-office (token-driven Shadcn + `@/components/erpify`) and the landing/marketing surface (raw-palette + `tw-animate-css` / CSS, under `app/_components/`) are two deliberate design languages — use the one matching the surface; don't cross-import. App-shell primitives reused by both (e.g. `Logo`) live in `@/components/erpify`. The former `context/shared/infrastructure/ui/components/` folder (atomic-design `atoms`/`molecules`/`organisms`) was retired: app-shell primitives → `@/components/erpify`, marketing components → `app/_components/`.
 
@@ -101,12 +101,12 @@ The `Observability` module provides a non-user-facing diagnostic channel for inf
 - **App Router** under `src/app/`.
 - Entry: `app/layout.tsx` (root layout) + `app/page.tsx` (root page).
 - `app/globals.css` holds Tailwind 4's CSS-first `@theme` / `@config` directives.
-- `app/backoffice/` is the backoffice route segment. `/backoffice/health` is the internal admin health page: same Atlassian-style status presentation as `/status`, but in the backoffice design language (design tokens + `@/components/erpify`, never the marketing palette). It auto-runs `BackOfficeCheckHealth` on mount, renders an aggregate `SystemStatusBanner` plus a per-component `<StatusBadge>` row, and — being an internal diagnostic surface — keeps surfacing the technical `ProblemDetails` / correlation id on failure. Both status pages reuse the pure status model in `@/lib/systemStatus` (`SystemStatus`, `deriveSystemStatus`, `systemHeadline`, `componentStatusLabel`) and the styling-agnostic `StatusBannerView` (`@/components/status/`), each passing its own design-language theme (palette + layout) so structure is shared without crossing palettes.
+- `app/backoffice/` is the backoffice route segment. `/backoffice/health` is the internal admin health page: same Atlassian-style status presentation as `/status`, but in the backoffice design language (design tokens + `@/components/erpify`, never the marketing palette). It auto-runs `BackOfficeCheckHealth` on mount, renders an aggregate `SystemStatusBanner` plus a per-component `<StatusBadge>` row, and — being an internal diagnostic surface — keeps surfacing the technical `ProblemDetails` / correlation id on failure. Both status pages reuse the pure status model in `@/context/shared/system-status/domain/SystemStatus` (`SystemStatus`, `deriveSystemStatus`, `systemHeadline`, `componentStatusLabel`) and the styling-agnostic `StatusBannerView` (`@/context/shared/system-status/infrastructure/ui/`), each passing its own design-language theme (palette + layout) so structure is shared without crossing palettes.
 - `app/status/` — public, unauthenticated service status page (Atlassian-style). Auto-runs the existing `FrontOfficeCheckHealth` use case on mount, renders an aggregate banner and per-component rows. Presentation components live in `app/status/_components/` in the marketing design language (raw Tailwind palette, not `@/components/erpify`). Linked from the navbar and footer. Distinct from the internal admin `app/backoffice/health/` page.
 
 ## Dependency injection
 
-- Inversify 8 container assembled in `src/context/shared/infrastructure/DependencyInjection/`.
+- Inversify 8 container assembled in `src/context/shared/dependency-injection/infrastructure/`.
 - `tsconfig.json`: `strict: true`, `experimentalDecorators: true`, `emitDecoratorMetadata: true` (required for Inversify class decorators).
 - `reflect-metadata` imported once at the React entry point (`app/layout.tsx`).
 

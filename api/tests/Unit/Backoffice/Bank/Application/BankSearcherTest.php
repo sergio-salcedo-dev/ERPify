@@ -10,6 +10,7 @@ use Erpify\Backoffice\Bank\Application\Query\SearchBanksQuery;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Shared\Search\Domain\Page;
 use Erpify\Shared\Search\Domain\SearchCriteria;
+use Erpify\Tests\Unit\Backoffice\Bank\Domain\Entity\Mother\BankMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -28,9 +29,9 @@ final class BankSearcherTest extends TestCase
     public function testEnrichesEachBankWithItsAccountCountAndZeroWhenAbsent(): void
     {
         $page = $this->pageOf(
-            Bank::create(self::BANK_A, 'Bank A', 'BA'),
-            Bank::create(self::BANK_B, 'Bank B', 'BB'),
-            Bank::create(self::BANK_C, 'Bank C', 'BC'),
+            BankMother::create(self::BANK_A, 'Bank A', 'BA'),
+            BankMother::create(self::BANK_B, 'Bank B', 'BB'),
+            BankMother::create(self::BANK_C, 'Bank C', 'BC'),
         );
         $accountCounts = new InMemoryBankAccountCounter([self::BANK_A => 12, self::BANK_B => 3]);
         $searcher = new BankSearcher(
@@ -55,8 +56,8 @@ final class BankSearcherTest extends TestCase
     public function testResolvesAllPageIdsInASingleBatchedCall(): void
     {
         $page = $this->pageOf(
-            Bank::create(self::BANK_A, 'Bank A', 'BA'),
-            Bank::create(self::BANK_B, 'Bank B', 'BB'),
+            BankMother::create(self::BANK_A, 'Bank A', 'BA'),
+            BankMother::create(self::BANK_B, 'Bank B', 'BB'),
         );
         $accountCounts = new InMemoryBankAccountCounter([self::BANK_A => 1, self::BANK_B => 2]);
         $searcher = new BankSearcher(

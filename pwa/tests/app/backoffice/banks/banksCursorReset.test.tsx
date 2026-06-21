@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
-import { SortDirection } from "@/context/shared/domain/types/sorting";
+import { SortDirection } from "@/context/shared/search/domain/SortDirection";
 import { BANKS_PAGE_SIZE_DEFAULT } from "@/app/backoffice/banks/_lib/paginate";
 import { ACME, BETA, searchPage } from "./_fixtures";
 import { renderWithRows } from "./_render";
@@ -8,14 +8,14 @@ import { renderWithRows } from "./_render";
 vi.mock("next/navigation", async () => (await import("./_mocks")).routerMock());
 
 const { searchRun, follow } = vi.hoisted(() => ({ searchRun: vi.fn(), follow: vi.fn() }));
-vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", async () =>
+vi.mock("@/context/shared/dependency-injection/infrastructure/Container", async () =>
   (await import("./_mocks")).containerMock({
     BackOfficeSearchBanks: { run: searchRun },
     BackOfficeBankSearchNavigator: { follow },
   }),
 );
 
-vi.mock("@/context/shared/Notification/infrastructure/Toast", async () =>
+vi.mock("@/context/shared/notification/infrastructure/Toast", async () =>
   (await import("./_mocks")).toastNotifierMock(),
 );
 

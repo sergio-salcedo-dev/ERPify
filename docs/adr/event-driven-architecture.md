@@ -63,7 +63,7 @@ en `Domain/` porque su firma solo referencia `DomainEvent` (tipo de dominio) —
 importa framework. El call-site queda variádico: `$this->eventBus->publish(...$bank->pullDomainEvents())`;
 el bucle de `dispatch` vive en el adaptador, no en cada caso de uso.
 
-Adaptador único `Shared/Infrastructure/Bus/Event/SymfonyMessengerEventBus` (`#[AsAlias(EventBus::class)]`),
+Adaptador único `Shared/Event/Infrastructure/Bus/SymfonyMessengerEventBus` (`#[AsAlias(EventBus::class)]`),
 inyecta `MessageBusInterface` y despacha cada evento. Coexiste con `DomainEventStore` (puerto de
 auditoría/replay): el `EventBus` **publica/encola**; el store **persiste el log** (lo hace
 `PersistDomainEventMiddleware` al pasar el evento por el bus, sin cambios).

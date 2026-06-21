@@ -2,7 +2,7 @@
 
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/context/shared/styling/infrastructure/classNames";
 
 /**
  * Shared tooltip provider. The 200ms delay is the design-system contract for

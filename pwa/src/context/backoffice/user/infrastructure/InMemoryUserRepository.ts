@@ -1,12 +1,12 @@
 import { injectable } from "inversify";
-import { FilterOperator, type Filter } from "@/context/shared/Search/domain";
+import { FilterOperator, type Filter } from "@/context/shared/search/domain";
 import {
   InMemoryCrudRepository,
   type InMemoryEntityConfig,
 } from "@/context/shared/resource/infrastructure/InMemoryCrudRepository";
-import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
-import { HttpStatus } from "@/context/shared/domain/types/http";
-import { uuidV7 } from "@/lib/uuidV7";
+import { HttpError } from "@/context/shared/http-client/domain/HttpError";
+import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
+import { uuidV7 } from "@/context/shared/uuid/infrastructure/uuidV7";
 import { User } from "../domain/User";
 import type { UserInput } from "../domain/UserRepository";
 import { UserProblemType } from "../domain/UserProblemType";

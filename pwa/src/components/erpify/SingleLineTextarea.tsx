@@ -1,8 +1,8 @@
 "use client";
 
 import { useLayoutEffect, useRef, type ChangeEvent, type KeyboardEvent, type Ref } from "react";
-import { cn } from "@/lib/utils";
-import { KeyboardKey } from "@/context/shared/domain/types/keyboard";
+import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { KeyboardKey } from "@/context/shared/keyboard/domain/KeyboardKey";
 
 interface SingleLineTextareaProps extends Omit<React.ComponentProps<"textarea">, "rows"> {
   ref?: Ref<HTMLTextAreaElement>;

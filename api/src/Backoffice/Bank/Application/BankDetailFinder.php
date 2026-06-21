@@ -6,7 +6,7 @@ namespace Erpify\Backoffice\Bank\Application;
 
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Exception\BankNotFoundException;
-use Erpify\Shared\Domain\Uuid\InvalidUuidException;
+use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 
 /**
  * Read-side handler for the single-bank DETAIL projection: loads the aggregate via {@see BankFinder}

@@ -3,7 +3,7 @@ import {
   BankSchema,
   type BankFormValues,
 } from "@/context/backoffice/bank/application/schemas/BankSchema";
-import { ZodValidatorAdapter } from "@/context/shared/Validation/infrastructure/ZodValidatorAdapter";
+import { ZodValidatorAdapter } from "@/context/shared/validation/infrastructure/ZodValidatorAdapter";
 
 const validator = new ZodValidatorAdapter<BankFormValues>(BankSchema);
 

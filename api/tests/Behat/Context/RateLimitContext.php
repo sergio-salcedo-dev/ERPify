@@ -23,7 +23,7 @@ use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
  * consumed tokens are visible to the very next HTTP step before any reset fires.
  *
  * Mirrors the autowire binding declared on
- * {@see \Erpify\Shared\Infrastructure\Http\EventListener\RateLimitListener::__construct}.
+ * {@see \Erpify\Shared\ErrorContract\Infrastructure\Http\EventListener\RateLimitListener::__construct}.
  */
 final class RateLimitContext extends AbstractContext implements Context
 {

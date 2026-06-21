@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
-import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { StatusBadge, TruncatedText } from "@/components/erpify";
 import { useRowKeyboardNavigation } from "@/context/shared/resource/application/useRowKeyboardNavigation";
-import { cn } from "@/lib/utils";
-import { dateTimeProvider } from "@/context/shared/DateTimeProvider/infrastructure";
-import { safeHref } from "@/lib/safeHref";
+import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { dateTimeProvider } from "@/context/shared/date-time-provider/infrastructure";
+import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import { bankRoutes } from "../_lib/bankRoutes";
 import { isRecentlyCreated } from "../_lib/bankRecency";
 import { BankRowActions } from "./BankRowActions";

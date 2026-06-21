@@ -8,9 +8,9 @@ import type { UserInput } from "@/context/backoffice/user/domain/UserRepository"
 import { useResourceItem } from "@/context/shared/resource/application/useResourceItem";
 import { EmptyState } from "@/components/erpify";
 import { buttonVariants } from "@/components/ui/button-variants";
-import { cn } from "@/lib/utils";
-import { safeHref } from "@/lib/safeHref";
-import { PersistenceAction, ViewStatus } from "@/context/shared/domain/types/status";
+import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { safeHref } from "@/context/shared/navigation/domain/safeHref";
+import { PersistenceAction, ViewStatus } from "@/context/shared/view-state/domain/ViewState";
 import { Can } from "@/context/shared/access/infrastructure/ui";
 import { Permission } from "@/context/shared/access/domain/Permission";
 import { userRoutes } from "../../_lib/userRoutes";

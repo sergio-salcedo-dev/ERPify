@@ -8,10 +8,10 @@ use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankSnapshot;
-use Erpify\Shared\Domain\Uuid\Uuid;
 use Erpify\Shared\Event\Application\EventStore;
 use Erpify\Shared\Event\Application\StoredEvent;
 use Erpify\Shared\Event\Infrastructure\Persistence\DbalEventStore;
+use Erpify\Shared\Uuid\Domain\Uuid;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 

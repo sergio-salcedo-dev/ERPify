@@ -2,9 +2,9 @@
 
 import { useState, type ReactElement, type ReactNode } from "react";
 import { Ban, TriangleAlert, Trash2 } from "lucide-react";
-import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
-import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
-import { toastNotifier } from "@/context/shared/Notification/infrastructure/Toast";
+import { HttpError } from "@/context/shared/http-client/domain/HttpError";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
+import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
 import { Spinner } from "./Spinner";
 import { Button } from "@/components/ui/button";
 import {

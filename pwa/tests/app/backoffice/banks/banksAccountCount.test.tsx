@@ -62,7 +62,7 @@ describe("BanksTable — ACCOUNTS column", () => {
 // --- BankDetailPage "Associated accounts" field ---
 
 const run = vi.fn();
-vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", () => ({
+vi.mock("@/context/shared/dependency-injection/infrastructure/Container", () => ({
   container: { get: () => ({ run }) },
 }));
 

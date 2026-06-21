@@ -1,4 +1,4 @@
-import { Routes } from "@/context/shared/domain/types/routes";
+import { Routes } from "@/context/shared/routing/domain/Routes";
 
 /**
  * Users **UI navigation** routes — the paths the user navigates to via

@@ -1,4 +1,4 @@
-import type { Filter, PageEnvelope } from "@/context/shared/Search/domain";
+import type { Filter, PageEnvelope } from "@/context/shared/search/domain";
 import type { ResourceSort } from "./ResourceSort";
 
 /** Cursor-only search request: filters + optional sort + page size. No cursor here. */

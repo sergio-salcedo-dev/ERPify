@@ -1,10 +1,10 @@
-import type { Filter } from "@/context/shared/Search/domain";
+import type { Filter } from "@/context/shared/search/domain";
 import type {
   CrudRepository,
   ResourceSearchCriteria,
   ResourceSearchPage,
 } from "../domain/CrudRepository";
-import { SortDirection } from "@/context/shared/domain/types/sorting";
+import { SortDirection } from "@/context/shared/search/domain/SortDirection";
 import { encodeCursorLink } from "./cursorLink";
 
 /** Per-entity hooks the generic base needs (the only entity-specific logic). */

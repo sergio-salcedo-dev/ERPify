@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Logo, ThemeToggle } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
-import { Routes } from "@/context/shared/domain/types/routes";
+import { Routes } from "@/context/shared/routing/domain/Routes";
 
 interface NavbarProps {
   goToBackoffice: () => void;

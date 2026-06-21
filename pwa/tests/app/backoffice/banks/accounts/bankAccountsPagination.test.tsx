@@ -5,7 +5,7 @@ import {
   BANK_ACCOUNTS_PAGE_SIZE_OPTIONS,
   BANK_ACCOUNTS_PAGE_SIZE_DEFAULT,
 } from "@/app/backoffice/banks/[id]/accounts/_lib/paginate";
-import { WIRE_MAX_LIMIT } from "@/context/shared/Search/domain";
+import { WIRE_MAX_LIMIT } from "@/context/shared/search/domain";
 
 describe("bank-accounts paginate options", () => {
   it("keeps every page-size option within the wire ceiling (D-Cap)", () => {

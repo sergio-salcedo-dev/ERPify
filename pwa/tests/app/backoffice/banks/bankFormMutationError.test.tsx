@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { BankForm } from "@/app/backoffice/banks/_components/BankForm";
 import { Bank } from "@/context/backoffice/bank/domain/Bank";
-import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
-import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
-import { PersistenceAction } from "@/context/shared/domain/types/status";
+import { HttpError } from "@/context/shared/http-client/domain/HttpError";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
+import { PersistenceAction } from "@/context/shared/view-state/domain/ViewState";
 import { ACME } from "./_fixtures";
 
 // Same bank as ACME but freshly persisted, so updatedAt collapses onto createdAt.
@@ -14,8 +14,8 @@ const INITIAL = { id: UPDATED.id, name: "Acme Savings", shortName: "ACME" };
 
 const mocks = await vi.hoisted(async () => (await import("./_mocks")).bankFormMocks());
 vi.mock("next/navigation", () => mocks.navigation);
-vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", () => mocks.container);
-vi.mock("@/context/shared/Notification/infrastructure/Toast", () => mocks.toast);
+vi.mock("@/context/shared/dependency-injection/infrastructure/Container", () => mocks.container);
+vi.mock("@/context/shared/notification/infrastructure/Toast", () => mocks.toast);
 
 const { push, createRun, updateRun } = mocks;
 

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useZodForm } from "@/context/shared/Validation/infrastructure";
+import { useZodForm } from "@/context/shared/validation/infrastructure";
 import {
   RegisterSchema,
   type RegisterFormValues,
@@ -10,9 +10,9 @@ import {
 import { FormField } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Routes } from "@/context/shared/domain/types/routes";
-import { toastNotifier } from "@/context/shared/Notification/infrastructure/Toast";
-import { safeHref } from "@/lib/safeHref";
+import { Routes } from "@/context/shared/routing/domain/Routes";
+import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
+import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 
 export function RegisterForm() {
   const router = useRouter();

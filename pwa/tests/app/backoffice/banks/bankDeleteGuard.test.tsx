@@ -7,7 +7,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 const deleteRun = vi.fn();
-vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", () => ({
+vi.mock("@/context/shared/dependency-injection/infrastructure/Container", () => ({
   container: {
     get: (token: string) => {
       if (token === "BackOfficeDeleteBank") return { run: deleteRun };
@@ -16,7 +16,7 @@ vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", () => (
   },
 }));
 
-vi.mock("@/context/shared/Notification/infrastructure/Toast", () => ({
+vi.mock("@/context/shared/notification/infrastructure/Toast", () => ({
   toastNotifier: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
 }));
 

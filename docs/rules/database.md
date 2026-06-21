@@ -44,7 +44,7 @@
   4. Unique constraints account for it (PostgreSQL partial unique indexes: `… WHERE deleted_at IS NULL`).
 
 ## Identifiers (UUID v7, app-assigned)
-- **All entity ids are UUID v7**, generated in the application layer (`Uuid::generate()` (`Shared/Domain/Uuid`)
+- **All entity ids are UUID v7**, generated in the application layer (`Uuid::generate()` (`Shared/Uuid/Domain`)
   on the API; the `uuidV7()` helper on the PWA). v7 keeps ids time-ordered for index locality and lets
   the whole stack — PKs, domain-event `aggregate_id`, correlation ids — share one version.
 - **The application owns the id; Doctrine must not generate or overwrite it.** Entities using the shared

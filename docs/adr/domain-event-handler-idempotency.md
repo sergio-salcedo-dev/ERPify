@@ -37,7 +37,7 @@ del EM cerrado y el coste de hidratación/UoW para algo que solo hace claim/rele
 ### D2 — Tabla schema-aware vía `postGenerateSchema` listener
 
 Al no haber entidad ORM, Doctrine no conoce la tabla: `make db.diff` la vería huérfana y generaría un
-`DROP TABLE handled_domain_event`. Para evitarlo, `Shared/Infrastructure/Persistence/HandledDomainEventSchemaListener`
+`DROP TABLE handled_domain_event`. Para evitarlo, `Shared/Event/Infrastructure/Persistence/HandledDomainEventSchemaListener`
 la inyecta en el schema en memoria en `postGenerateSchema` — Doctrine queda *ORM-unaware* (dominio
 limpio) pero *schema-aware* (diffs limpios, sin migración manual recurrente). Es el **mismo patrón**
 que la FK física Bank/BankAccount: ver D2 de [`bank-bankaccount-modeling.md`](./bank-bankaccount-modeling.md).

@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { InMemoryUserRepository } from "@/context/backoffice/user/infrastructure/InMemoryUserRepository";
 import { UserProblemType } from "@/context/backoffice/user/domain/UserProblemType";
-import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
-import { HttpStatus } from "@/context/shared/domain/types/http";
+import { HttpError } from "@/context/shared/http-client/domain/HttpError";
+import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import { Role } from "@/context/shared/access/domain/Role";
 import { UserStatus } from "@/context/shared/access/domain/UserStatus";
 

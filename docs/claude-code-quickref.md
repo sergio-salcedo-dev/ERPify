@@ -131,7 +131,7 @@ scripts/        Utility scripts
 | Domain layer (entities, VOs, ports)                                          | `<Module>/Domain/`                                                       |
 | Application layer (use cases, DTOs)                                          | `<Module>/Application/`                                                  |
 | Infrastructure (Doctrine, controllers, Messenger handlers, mailers, clients) | `<Module>/Infrastructure/`                                               |
-| Cross-cutting kernel                                                         | `api/src/Shared/`                                                        |
+| Cross-cutting capabilities over a minimal `Kernel/`                          | `api/src/Shared/`                                                        |
 | Shared search-filter plumbing (applier + per-repo field maps)                | `api/src/Shared/Search/Infrastructure/Persistence/Doctrine/`             |
 | Symfony config (services, routes, packages, Messenger transports)            | `api/config/`                                                            |
 | Doctrine migrations                                                          | `api/migrations/` (generate via `make db.diff`, never edit applied ones) |
@@ -152,7 +152,7 @@ scripts/        Utility scripts
 | Bounded contexts (DDD)     | `pwa/src/context/<bounded-context>/{domain,application,infrastructure}/` |
 | Cross-cutting kernel       | `pwa/src/context/shared/`                                                |
 | Reusable UI (Shadcn-based) | `pwa/src/components/`                                                    |
-| Framework glue             | `pwa/src/lib/`                                                           |
+| Pure helpers / hooks       | `pwa/src/context/shared/<capability>/`                                  |
 | Unit tests (Vitest)        | `pwa/tests/` (mirrors `src/`)                                            |
 | E2E tests (Playwright)     | `pwa/tests/e2e/`                                                         |
 

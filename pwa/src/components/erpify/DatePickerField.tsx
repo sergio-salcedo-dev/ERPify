@@ -1,7 +1,7 @@
 "use client";
 
 import type { ChangeEvent } from "react";
-import type { ProblemViolation } from "@/context/shared/domain/ProblemDetails";
+import type { ProblemViolation } from "@/context/shared/error/domain/ProblemDetails";
 import { Input } from "@/components/ui/input";
 import { FormField } from "./FormField";
 

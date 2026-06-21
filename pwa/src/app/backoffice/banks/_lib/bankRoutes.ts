@@ -1,4 +1,4 @@
-import { Routes } from "@/context/shared/domain/types/routes";
+import { Routes } from "@/context/shared/routing/domain/Routes";
 
 /**
  * Banks **UI navigation** routes — the paths the user navigates to via
@@ -10,7 +10,7 @@ import { Routes } from "@/context/shared/domain/types/routes";
  *
  * Co-located with the banks module per the "entity-scoped paths live next to
  * the use case that builds them" rule (see
- * `src/context/shared/domain/types/routes.ts`). Mirrors the shape of
+ * `src/context/shared/routing/domain/Routes.ts`). Mirrors the shape of
  * `bankPath(id)` in `ApiEndpoints.ts`: the dynamic segment is
  * `encodeURIComponent`-d here so call sites can't forget. Wrap the result in
  * `safeHref(...)` at the call site exactly as before.

@@ -7,11 +7,11 @@ namespace Erpify\Tests\Functional\Shared\Persistence;
 use DateTimeImmutable;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
-use Erpify\Shared\Domain\Uuid\Uuid;
 use Erpify\Shared\Event\Application\DomainEventHandlerDeduplicator;
 use Erpify\Shared\Event\Application\HandledDomainEventPruner;
 use Erpify\Shared\Event\Infrastructure\Messenger\DbalDomainEventHandlerDeduplicator;
 use Erpify\Shared\Event\Infrastructure\Messenger\DbalHandledDomainEventPruner;
+use Erpify\Shared\Uuid\Domain\Uuid;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Shared\Event\Domain;
 
 use DateTimeImmutable;
-use Erpify\Shared\Domain\Uuid\Uuid;
+use Erpify\Shared\Uuid\Domain\Uuid;
 
 /**
  * Base type for domain events. The contract is hardened for a *reproducible* event store (not event

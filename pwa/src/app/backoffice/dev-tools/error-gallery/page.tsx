@@ -9,11 +9,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ProblemDisplay } from "@/components/erpify";
-import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
-import { Routes } from "@/context/shared/domain/types/routes";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
+import { Routes } from "@/context/shared/routing/domain/Routes";
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
 import { buttonVariants } from "@/components/ui/button-variants";
-import { cn } from "@/lib/utils";
+import { cn } from "@/context/shared/styling/infrastructure/classNames";
 import { MutationErrorDemo } from "./MutationErrorDemo";
 
 interface RouteCase {

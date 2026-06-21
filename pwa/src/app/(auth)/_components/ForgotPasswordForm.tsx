@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useZodForm } from "@/context/shared/Validation/infrastructure";
+import { useZodForm } from "@/context/shared/validation/infrastructure";
 import {
   ForgotPasswordSchema,
   type ForgotPasswordFormValues,
@@ -9,8 +9,8 @@ import {
 import { FormField } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Routes } from "@/context/shared/domain/types/routes";
-import { toastNotifier } from "@/context/shared/Notification/infrastructure/Toast";
+import { Routes } from "@/context/shared/routing/domain/Routes";
+import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
 
 export function ForgotPasswordForm() {
   const {

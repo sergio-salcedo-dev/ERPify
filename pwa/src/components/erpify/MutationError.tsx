@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
-import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
-import { cn } from "@/lib/utils";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
+import { cn } from "@/context/shared/styling/infrastructure/classNames";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "./CopyButton";
 import { ProblemDisplay, isProductionEnv } from "./ProblemDisplay";

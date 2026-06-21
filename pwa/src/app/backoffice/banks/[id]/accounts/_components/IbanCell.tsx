@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/erpify";
-import { cn } from "@/lib/utils";
+import { cn } from "@/context/shared/styling/infrastructure/classNames";
 
 /** How long a revealed IBAN stays visible before it re-masks itself. */
 const AUTO_HIDE_MS = 10_000;

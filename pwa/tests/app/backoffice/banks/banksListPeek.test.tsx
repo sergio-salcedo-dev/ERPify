@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
-import { dateTimeProvider } from "@/context/shared/DateTimeProvider/infrastructure";
+import { dateTimeProvider } from "@/context/shared/date-time-provider/infrastructure";
 import { ACME, BETA, searchPage } from "./_fixtures";
 import { renderWithRows } from "./_render";
 
@@ -15,8 +15,8 @@ import { renderWithRows } from "./_render";
 const mocks = await vi.hoisted(async () => (await import("./_mocks")).banksListPageMocks());
 
 vi.mock("next/navigation", mocks.navigation);
-vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", mocks.container);
-vi.mock("@/context/shared/Notification/infrastructure/Toast", mocks.toast);
+vi.mock("@/context/shared/dependency-injection/infrastructure/Container", mocks.container);
+vi.mock("@/context/shared/notification/infrastructure/Toast", mocks.toast);
 vi.mock("@/context/backoffice/bank/infrastructure/bankRealtime", mocks.bankRealtime);
 
 const { searchRun, realtime } = mocks;

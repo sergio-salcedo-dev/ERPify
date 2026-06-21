@@ -3,18 +3,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
-import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
+import { container } from "@/context/shared/dependency-injection/infrastructure/Container";
 import { CheckHealth } from "@/context/frontoffice/health/application/CheckHealth";
 import type { HealthCheck } from "@/context/frontoffice/health/domain/HealthCheck";
-import { Routes } from "@/context/shared/domain/types/routes";
-import { apiScope } from "@/context/shared/Observability/domain/TelemetryScope";
-import { telemetry } from "@/context/shared/Observability/infrastructure";
+import { Routes } from "@/context/shared/routing/domain/Routes";
+import { apiScope } from "@/context/shared/observability/domain/TelemetryScope";
+import { telemetry } from "@/context/shared/observability/infrastructure";
 import { Navbar } from "@/app/_components/Navbar";
 import { Footer } from "@/app/_components/Footer";
 import { Button } from "@/components/ui/button";
 import { StatusBanner } from "./_components/StatusBanner";
 import { ComponentStatusRow } from "./_components/ComponentStatusRow";
-import { deriveSystemStatus } from "@/lib/systemStatus";
+import { deriveSystemStatus } from "@/context/shared/system-status/domain/SystemStatus";
 
 const MONITORED_COMPONENTS = [{ key: "frontoffice", name: "FrontOffice API" }] as const;
 

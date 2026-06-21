@@ -3,27 +3,27 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
+import { container } from "@/context/shared/dependency-injection/infrastructure/Container";
 import { CreateBank } from "@/context/backoffice/bank/application/CreateBank";
 import { UpdateBank } from "@/context/backoffice/bank/application/UpdateBank";
-import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
-import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
-import { useZodForm } from "@/context/shared/Validation/infrastructure";
+import { HttpError } from "@/context/shared/http-client/domain/HttpError";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
+import { useZodForm } from "@/context/shared/validation/infrastructure";
 import {
   BANK_NAME_MAX_LENGTH,
   BankSchema,
   type BankFormValues,
 } from "@/context/backoffice/bank/application/schemas/BankSchema";
-import { PersistenceAction } from "@/context/shared/domain/types/status";
+import { PersistenceAction } from "@/context/shared/view-state/domain/ViewState";
 import { FormField, MutationError, SingleLineTextarea, Spinner } from "@/components/erpify";
 import { BankProblemType } from "@/context/backoffice/bank/domain/BankProblemType";
-import { toastNotifier } from "@/context/shared/Notification/infrastructure/Toast";
+import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
-import { safeHref } from "@/lib/safeHref";
-import { HttpStatus } from "@/context/shared/domain/types/http";
+import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { safeHref } from "@/context/shared/navigation/domain/safeHref";
+import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import { bankRoutes } from "../_lib/bankRoutes";
 
 /** The two `PersistenceAction` values this form can be in. */

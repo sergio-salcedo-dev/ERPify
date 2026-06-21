@@ -46,7 +46,7 @@ image's key + metadata) as one inline value object reused across aggregates unde
 component with no coupling to the framework runtime, and it is the best primitive for creating and
 validating UUIDs across versions (v4, v7). The prohibition stays absolute for **behavioral** framework
 code in `Domain/`: this exception covers only `symfony/uid`, not `Erpify\Shared\Infrastructure\…` or any
-other framework service. Example: `api/src/Shared/Domain/Uuid/Uuid.php`.
+other framework service. Example: `api/src/Shared/Uuid/Domain/Uuid.php`.
 
 #### Documented exception — PSR interface-only interop contracts
 

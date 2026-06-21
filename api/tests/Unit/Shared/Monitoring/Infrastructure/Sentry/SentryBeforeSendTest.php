@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Monitoring\Infrastructure\Sentry;
 
-use Erpify\Shared\Domain\Exception\Conflict;
-use Erpify\Shared\Domain\Exception\DomainException;
+use Erpify\Shared\ErrorContract\Domain\Exception\Conflict;
+use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
 use Erpify\Shared\Monitoring\Infrastructure\Sentry\SentryBeforeSend;
 use Erpify\Shared\Monitoring\Infrastructure\Sentry\SentryEventFilter;
 use Erpify\Shared\Monitoring\Infrastructure\Sentry\SentryEventScrubber;

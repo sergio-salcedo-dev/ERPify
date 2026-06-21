@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Lock, Search, Sparkles, type LucideIcon } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/context/shared/styling/infrastructure/classNames";
 
 type EmptyStateVariant = "first-run" | "filtered-to-zero" | "permission-denied";
 

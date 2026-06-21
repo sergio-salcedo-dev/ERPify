@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Media\Domain\Exception;
 
-use Erpify\Shared\Domain\Exception\DomainException;
-use Erpify\Shared\Domain\Exception\InvariantViolation;
+use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
+use Erpify\Shared\ErrorContract\Domain\Exception\InvariantViolation;
 
 final class InvalidImageException extends DomainException implements InvariantViolation
 {

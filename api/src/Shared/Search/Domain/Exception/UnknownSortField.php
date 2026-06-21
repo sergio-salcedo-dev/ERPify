@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Search\Domain\Exception;
 
-use Erpify\Shared\Domain\Exception\DomainException;
-use Erpify\Shared\Domain\Exception\InvalidSearchCriteria;
+use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
+use Erpify\Shared\ErrorContract\Domain\Exception\InvalidSearchCriteria;
 
 /**
  * Thrown when a search requests ordering by a public field with no entry in the repository's

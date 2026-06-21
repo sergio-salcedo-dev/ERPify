@@ -1,5 +1,5 @@
 import type { DataTableSort } from "@/components/erpify";
-import { SortDirection } from "@/context/shared/domain/types/sorting";
+import { SortDirection } from "@/context/shared/search/domain/SortDirection";
 import type { Role } from "@/context/shared/access/domain/Role";
 import type { UserStatus } from "@/context/shared/access/domain/UserStatus";
 

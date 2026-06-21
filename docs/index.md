@@ -78,8 +78,6 @@ Folders are typed by *kind of document*; file names are kebab-case by topic, nev
 
 Detailed exhaustive analysis of specific areas:
 
-- **[deep-dive-api-shared-foundation.md](./deep-dive-api-shared-foundation.md)** — Exhaustive analysis of `api/src/Shared/` (Application, Domain, Infrastructure, Media, Storage, Guzzle; 80 files, ~4,517 LOC) — Generated 2026-05-08
-- **[deep-dive-pwa-shared-infrastructure.md](./deep-dive-pwa-shared-infrastructure.md)** — Comprehensive analysis of PWA `shared/infrastructure` (DI container + HTTP transport + shared UI atoms/molecules/organisms; 11 files, ~640 LOC) — Generated 2026-05-08
 
 ### Development & contribution
 

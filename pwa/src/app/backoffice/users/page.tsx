@@ -8,7 +8,7 @@ import type { UserInput } from "@/context/backoffice/user/domain/UserRepository"
 import { UserProblemType } from "@/context/backoffice/user/domain/UserProblemType";
 import { useQueryState } from "@/context/shared/resource/application/createQueryState";
 import { useResourceList } from "@/context/shared/resource/application/useResourceList";
-import { ViewStatus } from "@/context/shared/domain/types/status";
+import { ViewStatus } from "@/context/shared/view-state/domain/ViewState";
 import {
   AsyncBoundary,
   DensityToggle,
@@ -21,10 +21,10 @@ import {
 import type { DataTableSelection, DataTableSort, ListDensity } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
-import { cn } from "@/lib/utils";
-import { safeHref } from "@/lib/safeHref";
-import { useStoredPreference } from "@/lib/useStoredPreference";
-import { dateTimeProvider } from "@/context/shared/DateTimeProvider/infrastructure";
+import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { safeHref } from "@/context/shared/navigation/domain/safeHref";
+import { useStoredPreference } from "@/context/shared/storage/infrastructure/useStoredPreference";
+import { dateTimeProvider } from "@/context/shared/date-time-provider/infrastructure";
 import { Can } from "@/context/shared/access/infrastructure/ui";
 import { Permission } from "@/context/shared/access/domain/Permission";
 import { UsersTable } from "./_components/UsersTable";

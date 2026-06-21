@@ -42,3 +42,4 @@ export { ThemeToggle } from "./ThemeToggle";
 export type { ThemeToggleProps } from "./ThemeToggle";
 export { TruncatedText } from "./TruncatedText";
 export type { TruncatedTextLines, TruncatedTextProps } from "./TruncatedText";
+export { useIsTruncated } from "./useIsTruncated";

@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Backoffice\Bank\Infrastructure\Messenger;
 
 use Erpify\Backoffice\Bank\Application\BankAccountCountEnricher;
-use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
-use Erpify\Backoffice\Bank\Domain\Event\BankDeletedDomainEvent;
-use Erpify\Backoffice\Bank\Domain\Event\BankSnapshot;
-use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\MercureBankTopic;
 use Erpify\Backoffice\Bank\Infrastructure\Messenger\RefreshRealtimeOnBankChanged;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountCounter;
+use Erpify\Tests\Unit\Backoffice\Bank\Domain\Entity\Mother\BankMother;
+use Erpify\Tests\Unit\Backoffice\Bank\Domain\Event\Mother\BankCreatedDomainEventMother;
+use Erpify\Tests\Unit\Backoffice\Bank\Domain\Event\Mother\BankDeletedDomainEventMother;
+use Erpify\Tests\Unit\Backoffice\Bank\Domain\Event\Mother\BankSnapshotMother;
+use Erpify\Tests\Unit\Backoffice\Bank\Domain\Event\Mother\BankUpdatedDomainEventMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Mercure\HubInterface;
@@ -29,7 +30,7 @@ use Symfony\Component\Mercure\Update;
 #[CoversClass(RefreshRealtimeOnBankChanged::class)]
 final class RefreshRealtimeOnBankChangedTest extends TestCase
 {
-    private const string BANK_ID = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b';
+    private const string BANK_ID = BankMother::DEFAULT_ID;
 
     private const string CREATED_AT = '2026-01-01T00:00:00+00:00';
 
@@ -41,9 +42,9 @@ final class RefreshRealtimeOnBankChangedTest extends TestCase
     {
         // Pass the optional logo / stored-object metadata to prove it never
         // leaves the handler — only the six public bank fields ship.
-        $this->handler()->onBankCreated(new BankCreatedDomainEvent(
+        $this->handler()->onBankCreated(BankCreatedDomainEventMother::create(
             self::BANK_ID,
-            new BankSnapshot(
+            BankSnapshotMother::create(
                 'Acme Savings',
                 'ACME',
                 self::CREATED_AT,
@@ -73,9 +74,9 @@ final class RefreshRealtimeOnBankChangedTest extends TestCase
 
     public function testPublishesUpdatedToCollectionAndPerBankTopics(): void
     {
-        $this->handler()->onBankUpdated(new BankUpdatedDomainEvent(
+        $this->handler()->onBankUpdated(BankUpdatedDomainEventMother::create(
             self::BANK_ID,
-            new BankSnapshot(
+            BankSnapshotMother::create(
                 'Acme Renamed',
                 'ACME',
                 self::CREATED_AT,
@@ -109,7 +110,7 @@ final class RefreshRealtimeOnBankChangedTest extends TestCase
     public function testPublishesDeletedWithIdOnlyToCollectionAndPerBankTopics(): void
     {
         $this->handler()->onBankDeleted(
-            new BankDeletedDomainEvent(self::BANK_ID),
+            BankDeletedDomainEventMother::create(self::BANK_ID),
         );
 
         $update = $this->capturedUpdate();
@@ -146,9 +147,9 @@ final class RefreshRealtimeOnBankChangedTest extends TestCase
         $accountCounts->method('countsByBankIds')->willReturn([self::BANK_ID => 3]);
 
         $handler = new RefreshRealtimeOnBankChanged($hub, new BankAccountCountEnricher($accountCounts));
-        $event = new BankUpdatedDomainEvent(
+        $event = BankUpdatedDomainEventMother::create(
             self::BANK_ID,
-            new BankSnapshot('Acme Savings', 'ACME', self::CREATED_AT, self::UPDATED_AT),
+            BankSnapshotMother::create(createdAt: self::CREATED_AT, updatedAt: self::UPDATED_AT),
         );
 
         $handler->onBankUpdated($event);

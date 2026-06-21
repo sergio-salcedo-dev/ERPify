@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { Bank } from "@/context/backoffice/bank/domain/Bank";
 import { ApiBankRepository } from "@/context/backoffice/bank/infrastructure/ApiBankRepository";
-import type { HttpClient } from "@/context/shared/infrastructure/HttpClient/HttpClient";
-import { API_ENDPOINTS } from "@/context/shared/infrastructure/api/ApiEndpoints";
-import { SortDirection } from "@/context/shared/domain/types/sorting";
+import type { HttpClient } from "@/context/shared/http-client/domain/HttpClient";
+import { API_ENDPOINTS } from "@/context/shared/http-client/infrastructure/ApiEndpoints";
+import { SortDirection } from "@/context/shared/search/domain/SortDirection";
 import type { BankSearchCriteria } from "@/context/backoffice/bank/domain/BankRepository";
 
 const primitives = {

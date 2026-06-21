@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import BanksListPage from "@/app/backoffice/banks/page";
 import type { BankRealtimeHandlers } from "@/context/backoffice/bank/infrastructure/bankRealtime";
-import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
-import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
-import { toastNotifier } from "@/context/shared/Notification/infrastructure/Toast";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
+import { HttpError } from "@/context/shared/http-client/domain/HttpError";
+import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
 import { ACME, BETA, searchPage } from "./_fixtures";
 import { confirmDeleteOf } from "./_interactions";
 
@@ -25,14 +25,14 @@ vi.mock("next/navigation", async () => (await import("./_mocks")).routerMock({ p
 
 const searchRun = vi.hoisted(() => vi.fn());
 const deleteRun = vi.hoisted(() => vi.fn());
-vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", async () =>
+vi.mock("@/context/shared/dependency-injection/infrastructure/Container", async () =>
   (await import("./_mocks")).containerMock({
     BackOfficeSearchBanks: { run: searchRun },
     BackOfficeDeleteBank: { run: deleteRun },
   }),
 );
 
-vi.mock("@/context/shared/Notification/infrastructure/Toast", async () =>
+vi.mock("@/context/shared/notification/infrastructure/Toast", async () =>
   (await import("./_mocks")).toastNotifierMock(),
 );
 

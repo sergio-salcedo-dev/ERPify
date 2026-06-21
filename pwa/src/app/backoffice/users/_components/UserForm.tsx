@@ -3,28 +3,28 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { container } from "@/context/shared/infrastructure/DependencyInjection/Container";
-import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
-import { HttpStatus } from "@/context/shared/domain/types/http";
-import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
-import { useZodForm } from "@/context/shared/Validation/infrastructure";
+import { container } from "@/context/shared/dependency-injection/infrastructure/Container";
+import { HttpError } from "@/context/shared/http-client/domain/HttpError";
+import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
+import { useZodForm } from "@/context/shared/validation/infrastructure";
 import {
   UserFormSchema,
   type UserFormValues,
 } from "@/context/backoffice/user/application/schemas/UserFormSchema";
 import type { UserInput, UserRepository } from "@/context/backoffice/user/domain/UserRepository";
 import { UserProblemType } from "@/context/backoffice/user/domain/UserProblemType";
-import { PersistenceAction } from "@/context/shared/domain/types/status";
+import { PersistenceAction } from "@/context/shared/view-state/domain/ViewState";
 import { ALL_ROLES, type Role } from "@/context/shared/access/domain/Role";
 import { ALL_PERMISSIONS } from "@/context/shared/access/domain/Permission";
 import { UserStatus } from "@/context/shared/access/domain/UserStatus";
 import { FormField, MutationError, Spinner } from "@/components/erpify";
-import { toastNotifier } from "@/context/shared/Notification/infrastructure/Toast";
+import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
-import { safeHref } from "@/lib/safeHref";
+import { cn } from "@/context/shared/styling/infrastructure/classNames";
+import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import { userRoutes } from "../_lib/userRoutes";
 import { ROLE_LABEL, STATUS_LABEL } from "../_lib/userLabels";
 

@@ -9,7 +9,6 @@ use DateTimeInterface;
 use DateTimeZone;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\QueryBuilder;
-use Erpify\Shared\Domain\Uuid\Uuid;
 use Erpify\Shared\Search\Domain\Exception\InvalidSearchValue;
 use Erpify\Shared\Search\Domain\Exception\UnknownSearchField;
 use Erpify\Shared\Search\Domain\Exception\UnsupportedSearchOperator;
@@ -17,6 +16,7 @@ use Erpify\Shared\Search\Domain\Filter;
 use Erpify\Shared\Search\Domain\FilterOperator;
 use Erpify\Shared\Search\Domain\Filters;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\AppliedFilters;
+use Erpify\Shared\Uuid\Domain\Uuid;
 use InvalidArgumentException;
 use ValueError;
 

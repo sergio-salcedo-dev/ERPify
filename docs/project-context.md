@@ -148,7 +148,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
     - `src/app/` — routing & UI shells only.
     - `src/components/` — presentational + shared UI (Shadcn primitives).
     - `src/context/<bc>/{domain,application,infrastructure}` — business logic. Shared cross-cutting code goes in `src/context/shared`, not ad-hoc folders.
-    - `src/lib/` — glue/util only.
+    - No `src/lib/` — pure helpers/hooks are capability modules under `src/context/shared/<capability>/`.
 - **UI**:
     - Shadcn UI + Tailwind 4 + BEM class naming (`block__element--modifier`). Mobile-first.
     - Icons from `lucide-react`; animations via `tw-animate-css` / CSS.
@@ -241,7 +241,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 #### Layout
 
 - **API (`api/src/`)**: `Backoffice/ | Frontoffice/ | Shared/` top-level, each with `Domain/ Application/ Infrastructure/`. New features choose a bounded context and create the three folders if needed — don't sprinkle files at the root of a context.
-- **PWA (`pwa/src/`)**: `app/` (routes), `components/` (UI), `context/<bc>/{domain,application,infrastructure}` (business logic), `lib/` (glue). Shared cross-cutting code lives in `src/context/shared`, not ad-hoc folders.
+- **PWA (`pwa/src/`)**: `app/` (routes), `components/` (UI), `context/<bc>/{domain,application,infrastructure}` (business logic). Shared cross-cutting code (helpers, hooks, ports + adapters) lives in `src/context/shared` capability modules, not ad-hoc folders.
 - Tests mirror source trees (`api/tests/`, `pwa/tests/`).
 
 #### Code Quality - Linting / Formatting — tools are authoritative

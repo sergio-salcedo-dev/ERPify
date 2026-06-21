@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { ApiBankCountReader } from "@/context/backoffice/bank/infrastructure/ApiBankCountReader";
-import type { HttpClient } from "@/context/shared/infrastructure/HttpClient/HttpClient";
-import { API_ENDPOINTS } from "@/context/shared/infrastructure/api/ApiEndpoints";
+import type { HttpClient } from "@/context/shared/http-client/domain/HttpClient";
+import { API_ENDPOINTS } from "@/context/shared/http-client/infrastructure/ApiEndpoints";
 
 function httpClientReturning(response: unknown): HttpClient {
   return {

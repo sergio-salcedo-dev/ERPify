@@ -6,9 +6,9 @@ import { CopyButton } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
 import { ErrorTelemetryScope } from "@/context/shared/error/domain/ErrorTelemetryScope";
 import { IconTone } from "@/context/shared/error/domain/IconTone";
-import { NodeEnv } from "@/context/shared/domain/types/nodeEnv";
-import { telemetry } from "@/context/shared/Observability/infrastructure";
-import { cn } from "@/lib/utils";
+import { NodeEnv } from "@/context/shared/environment/domain/NodeEnv";
+import { telemetry } from "@/context/shared/observability/infrastructure";
+import { cn } from "@/context/shared/styling/infrastructure/classNames";
 import { ERROR_ACTION_BTN_CLASSES, ErrorActions } from "./ErrorActions";
 import { ErrorScreen } from "./ErrorScreen";
 

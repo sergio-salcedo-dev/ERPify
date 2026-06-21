@@ -15,11 +15,11 @@ import { ACME, BETA, searchPage } from "./_fixtures";
 vi.mock("next/navigation", async () => (await import("./_mocks")).routerMock());
 
 const searchRun = vi.hoisted(() => vi.fn());
-vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", async () =>
+vi.mock("@/context/shared/dependency-injection/infrastructure/Container", async () =>
   (await import("./_mocks")).containerMock({ BackOfficeSearchBanks: { run: searchRun } }),
 );
 
-vi.mock("@/context/shared/Notification/infrastructure/Toast", async () =>
+vi.mock("@/context/shared/notification/infrastructure/Toast", async () =>
   (await import("./_mocks")).toastNotifierMock(),
 );
 
