@@ -49,7 +49,6 @@ final readonly class SearchResponder
     /**
      * @param Page<object>          $page
      * @param string                $routeName   the search endpoint's route name, for relative-link generation
-     * @param list<string>          $groups      serializer groups projecting each result
      * @param array<string, string> $routeParams path parameters of a nested route (e.g. `['id' => $bankId]`
      *                                           for `/banks/{id}/accounts`); empty for flat routes. Merged
      *                                           into every navigation link so the cursor link stays valid.
@@ -61,7 +60,6 @@ final readonly class SearchResponder
         Page $page,
         SearchQuery $query,
         string $routeName,
-        array $groups,
         array $routeParams = [],
     ): Response {
         $meta = PaginationMeta::fromPage(
@@ -70,7 +68,7 @@ final readonly class SearchResponder
             $this->linkFor($routeName, $query, self::BEFORE, $page->hasPrev, $page->prevCursor, $routeParams),
         );
 
-        return $this->resourceResponder->respondCollection($page->items, $groups, ['pagination' => $meta->toArray()]);
+        return $this->resourceResponder->respondCollection($page->items, ['pagination' => $meta->toArray()]);
     }
 
     /**

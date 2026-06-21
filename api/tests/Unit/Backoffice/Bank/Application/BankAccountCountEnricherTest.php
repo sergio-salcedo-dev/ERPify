@@ -21,7 +21,7 @@ final class BankAccountCountEnricherTest extends TestCase
 
     private const string BANK_C = '0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1b03';
 
-    public function testEnrichAllAssignsEachCountAndZeroWhenAbsentInOneBatchedCall(): void
+    public function testEnrichAllPairsEachBankWithItsCountAndZeroWhenAbsentInOneBatchedCall(): void
     {
         $counter = new InMemoryBankAccountCounter([self::BANK_A => 12, self::BANK_B => 3]);
         $banks = [
@@ -30,12 +30,17 @@ final class BankAccountCountEnricherTest extends TestCase
             BankMother::create(self::BANK_C, 'Bank C', 'BC'),
         ];
 
-        (new BankAccountCountEnricher($counter))->enrichAll($banks);
+        $enriched = (new BankAccountCountEnricher($counter))->enrichAll($banks);
 
-        $this->assertSame(12, $banks[0]->getAccountCount());
-        $this->assertSame(3, $banks[1]->getAccountCount());
+        $this->assertCount(3, $enriched);
+        $this->assertSame(12, $enriched[0]->accountCount);
+        $this->assertSame(3, $enriched[1]->accountCount);
         // BANK_C is absent from the count map -> no accounts -> 0.
-        $this->assertSame(0, $banks[2]->getAccountCount());
+        $this->assertSame(0, $enriched[2]->accountCount);
+        // The aggregates ride along unmutated, in the order they were passed.
+        $this->assertSame($banks[0], $enriched[0]->bank);
+        $this->assertSame($banks[1], $enriched[1]->bank);
+        $this->assertSame($banks[2], $enriched[2]->bank);
         $this->assertSame(
             [[self::BANK_A, self::BANK_B, self::BANK_C]],
             $counter->receivedBankIds,
@@ -47,19 +52,21 @@ final class BankAccountCountEnricherTest extends TestCase
     {
         $counter = new InMemoryBankAccountCounter();
 
-        (new BankAccountCountEnricher($counter))->enrichAll([]);
+        $enriched = (new BankAccountCountEnricher($counter))->enrichAll([]);
 
+        $this->assertSame([], $enriched);
         $this->assertSame([[]], $counter->receivedBankIds);
     }
 
-    public function testEnrichAssignsTheSingleBankItsCount(): void
+    public function testEnrichPairsTheSingleBankWithItsCount(): void
     {
         $counter = new InMemoryBankAccountCounter([self::BANK_A => 7]);
         $bank = BankMother::create(self::BANK_A, 'Bank A', 'BA');
 
-        (new BankAccountCountEnricher($counter))->enrich($bank);
+        $enriched = (new BankAccountCountEnricher($counter))->enrich($bank);
 
-        $this->assertSame(7, $bank->getAccountCount());
+        $this->assertSame(7, $enriched->accountCount);
+        $this->assertSame($bank, $enriched->bank);
     }
 
     public function testCountForReturnsTheCountForAPresentIdAndZeroForAnAbsentOne(): void

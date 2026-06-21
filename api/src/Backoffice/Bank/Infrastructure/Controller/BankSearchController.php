@@ -6,7 +6,7 @@ namespace Erpify\Backoffice\Bank\Infrastructure\Controller;
 
 use Erpify\Backoffice\Bank\Application\BankSearcher;
 use Erpify\Backoffice\Bank\Application\Query\SearchBanksQuery;
-use Erpify\Backoffice\Bank\Domain\Entity\Bank;
+use Erpify\Backoffice\Bank\Infrastructure\Http\BankResourceMapper;
 use Erpify\Shared\Search\Application\Http\SearchQuery;
 use Erpify\Shared\Search\Infrastructure\Http\SearchResponder;
 use JsonException;
@@ -22,6 +22,7 @@ final readonly class BankSearchController
 
     public function __construct(
         private BankSearcher $bankSearcher,
+        private BankResourceMapper $bankResourceMapper,
         private SearchResponder $searchResponder,
     ) {
     }
@@ -35,15 +36,11 @@ final readonly class BankSearchController
         SearchQuery $query = new SearchQuery(),
     ): Response {
         return $this->searchResponder->respond(
-            $this->bankSearcher->search(new SearchBanksQuery($query->toCriteria())),
+            $this->bankResourceMapper->toListPage(
+                $this->bankSearcher->search(new SearchBanksQuery($query->toCriteria())),
+            ),
             $query,
             self::ROUTE_NAME,
-            [
-                Bank::GROUP_IDENTIFIABLE,
-                Bank::GROUP_TIMESTAMPED,
-                Bank::GROUP_LIST,
-                Bank::GROUP_ACCOUNT_COUNT,
-            ],
         );
     }
 }

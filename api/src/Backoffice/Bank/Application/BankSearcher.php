@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\Bank\Application;
 
 use Erpify\Backoffice\Bank\Application\Query\SearchBanksQuery;
-use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Repository\BankSearchRepository;
 use Erpify\Shared\Search\Domain\Page;
 
@@ -22,14 +21,19 @@ final readonly class BankSearcher
     }
 
     /**
-     * @return Page<Bank>
+     * @return Page<BankWithAccountCount>
      */
     public function search(SearchBanksQuery $query): Page
     {
         $page = $this->bankSearchRepository->search($query->criteria);
 
-        $this->accountCountEnricher->enrichAll($page->items);
-
-        return $page;
+        return new Page(
+            $this->accountCountEnricher->enrichAll($page->items),
+            $page->hasNext,
+            $page->hasPrev,
+            $page->count,
+            $page->nextCursor,
+            $page->prevCursor,
+        );
     }
 }
