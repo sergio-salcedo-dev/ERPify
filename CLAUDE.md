@@ -220,6 +220,7 @@ Fix violations you spot while editing a file for another reason.
 
 `docs/` is durable reference, and every line there is maintenance debt — high density is the rule:
 
+- **Which folder a doc belongs to and how its file is named** → [`docs/rules/documentation.md`](docs/rules/documentation.md): the folder taxonomy plus kebab-case-by-topic filenames, never sequence-numbered (ADRs included).
 - **State decisions and constraints, not the process that produced them.** No workflow narrative, step scaffolding, readiness checklists, or "this document builds collaboratively" boilerplate — that belongs in `_bmad-output/` working artifacts and dies with them. BMAD/workflow output gets **distilled** before landing under `docs/`, never copied verbatim.
 - **Prefer extending the doc that owns the topic over creating a new `.md`.** A new file must answer a question no existing doc owns; it gets an entry in `docs/index.md`. Point-in-time reports and plans whose work shipped get deleted (git preserves them).
 - **ADRs (`docs/adr/`)** follow the style of [`docs/adr/bank-bankaccount-modeling.md`](docs/adr/bank-bankaccount-modeling.md): context, numbered decisions with discarded alternatives inline, the non-obvious why — target ≤ ~150 lines. The current-state description belongs in the architecture docs, not the ADR.
