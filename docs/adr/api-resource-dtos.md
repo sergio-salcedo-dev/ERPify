@@ -81,15 +81,18 @@ fired on `Bank` + `GROUP_READ_URLS`, which no longer happens once DTOs are seria
 dead: the class is removed **and** its `#[AutoconfigureTag('serializer.normalizer')]` service is
 deregistered — no normalizer left registered against a contract nothing produces.
 
-### D7 — Byte-stable wire, ATOM format pinned on the DTO
+### D7 — Byte-stable wire: ATOM owned by the mapper, flatness enforced by a test
 
 This is an internal refactor, not an API change: no field added, removed, or renamed in any response. The
-mapper pre-formats `createdAt` / `updatedAt` to ATOM strings on the DTO, so the format the `Timestamped`
-trait used to pin via `#[Serializer\Context]` survives without the entity being serialized. Nullable URL
-fields stay typed nullable so the serializer still emits `null`. A unit gate (`BankResourceMapperTest`)
-pins, per view, the exact ordered key set, the ATOM timestamp strings, and the synthesized URL strings (URL
-ports stubbed to echo the content hash) — the one logic-bearing transformation. Coverage is scoped to the
-mappers, not the logic-free DTOs.
+mapper pre-formats `createdAt` / `updatedAt` to ATOM strings on the DTO, so the ATOM format is owned by the
+Infrastructure mapper — not by a serializer attribute inward; the `Timestamped` trait carries only `#[ORM]`.
+Nullable URL fields stay typed nullable so the serializer still emits `null`. Two gates protect the wire:
+`BankResourceMapperTest` pins, per view, the exact ordered key set, the ATOM timestamp strings, and the
+synthesized URL strings (URL ports stubbed to echo the content hash) — the one logic-bearing transformation;
+and `ResourceDtoContractTest` enforces structurally that every `Application/Resource/` DTO is flat,
+immutable and scalar-only, so no raw `DateTimeImmutable` or object can reach the group-less, context-less
+`ResourceNormalizer` and silently drift the format. Coverage is scoped to the mappers, not the logic-free
+DTOs.
 
 ### D8 — The contradictory governance rule is retired repo-wide
 
@@ -100,16 +103,18 @@ owner), [`../project-context.md`](../project-context.md), [`../../CLAUDE.md`](..
 [`bank-bankaccount-modeling.md`](bank-bankaccount-modeling.md) and
 [`external-dependencies-in-domain.md`](external-dependencies-in-domain.md) (D4). Reconciling only some would
 leave the docs split for/against the new pattern — worse than before. The `Vendor.PassiveMetadata` collector
-in [`../../api/tools/deptrac/deptrac.yaml`](../../api/tools/deptrac/deptrac.yaml) still admits
-`Symfony\Component\Serializer\Attribute` only for the dormant `#[Serializer\Context]` on `Timestamped`; the
-documented target is to drop it once that pin lives on the DTO timestamps.
+in [`../../api/tools/deptrac/deptrac.yaml`](../../api/tools/deptrac/deptrac.yaml) no longer admits
+`Symfony\Component\Serializer\Attribute` inward: the dormant `#[Serializer\Context]` pin was removed from
+`Timestamped` (ATOM lives in the mapper, flatness in `ResourceDtoContractTest`), so the namespace falls
+through to `Vendor.Symfony` (Infrastructure-only) and any new inward use fails.
 
 ## Consequences
 
 - `Bank.php` and `BankAccount.php` are pure domain: no `use Symfony\Component\Serializer\…`, no `#[Groups]`,
   no `GROUP_*`, no `accountCount`/`assignAccountCount()`. Domain tests need no serialization context.
-- The only serializer attribute left inward is `Timestamped`'s `#[Serializer\Context]` (ATOM pin) — dormant
-  while nothing serializes the entity.
+- No serializer attribute is left inward: `Timestamped` carries only `#[ORM]`, and deptrac confines
+  `Symfony\Component\Serializer\Attribute` to `Infrastructure`. ATOM is owned by the mappers and the flat,
+  scalar-only DTO shape is enforced by `ResourceDtoContractTest`.
 - **Triggers to revisit:** (a) a third view or aggregate joins — re-evaluate extracting a shared base/VO
   (Rule of Three is now met); (b) `accountCount` needs to sort/filter/paginate, or read-time freshness stops
   being acceptable — promote it from a read-time enricher to a materialized read model (criteria in
