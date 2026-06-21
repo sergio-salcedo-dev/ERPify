@@ -80,7 +80,10 @@ final class SentryEventFilter
         // `ConnectionLost` extends `ConnectionException`, so one `instanceof` covers both the
         // mid-`LISTEN` kill and the `UNLISTEN` DNS failure. Matched anywhere in the chain — a
         // Messenger `TransportException` wraps the DBAL exception as its previous.
-        return \array_any($this->chain($throwable), static fn ($link): bool => $link instanceof ConnectionException);
+        return \array_any(
+            $this->chain($throwable),
+            static fn (Throwable $link): bool => $link instanceof ConnectionException,
+        );
     }
 
     private function chainTraceMentionsWorkerTransport(Throwable $throwable): bool

@@ -25,7 +25,6 @@ final class ThrowValidationFailedController
                 root: null,
                 propertyPath: 'name',
                 invalidValue: '',
-                plural: null,
                 code: 'c1051bb4-d103-4f74-8988-acbcafc7fdc3',
             ),
             new ConstraintViolation(
@@ -35,7 +34,6 @@ final class ThrowValidationFailedController
                 root: null,
                 propertyPath: 'email',
                 invalidValue: 'invalid',
-                plural: null,
                 code: 'bd79c0ab-ddba-46cc-a703-a7a4b08de310',
             ),
             new ConstraintViolation(
@@ -45,7 +43,6 @@ final class ThrowValidationFailedController
                 root: null,
                 propertyPath: 'age',
                 invalidValue: 17,
-                plural: null,
                 code: 'ea4e51d1-3342-48bd-87f1-9e672cd90cad',
             ),
         ]);
