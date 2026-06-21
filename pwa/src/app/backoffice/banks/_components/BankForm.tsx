@@ -8,7 +8,7 @@ import { CreateBank } from "@/context/backoffice/bank/application/CreateBank";
 import { UpdateBank } from "@/context/backoffice/bank/application/UpdateBank";
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
-import { useZodForm } from "@/context/shared/Validation/infrastructure";
+import { useZodForm } from "@/context/shared/validation/infrastructure";
 import {
   BANK_NAME_MAX_LENGTH,
   BankSchema,
@@ -17,7 +17,7 @@ import {
 import { PersistenceAction } from "@/context/shared/domain/types/status";
 import { FormField, MutationError, SingleLineTextarea, Spinner } from "@/components/erpify";
 import { BankProblemType } from "@/context/backoffice/bank/domain/BankProblemType";
-import { toastNotifier } from "@/context/shared/Notification/infrastructure/Toast";
+import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Input } from "@/components/ui/input";

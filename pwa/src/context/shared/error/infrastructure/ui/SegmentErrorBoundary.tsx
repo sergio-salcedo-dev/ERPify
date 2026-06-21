@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ErrorTelemetryScope } from "@/context/shared/error/domain/ErrorTelemetryScope";
 import { IconTone } from "@/context/shared/error/domain/IconTone";
 import { NodeEnv } from "@/context/shared/domain/types/nodeEnv";
-import { telemetry } from "@/context/shared/Observability/infrastructure";
+import { telemetry } from "@/context/shared/observability/infrastructure";
 import { cn } from "@/lib/utils";
 import { ERROR_ACTION_BTN_CLASSES, ErrorActions } from "./ErrorActions";
 import { ErrorScreen } from "./ErrorScreen";

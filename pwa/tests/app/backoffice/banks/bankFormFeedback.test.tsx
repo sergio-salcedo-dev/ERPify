@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { BankForm } from "@/app/backoffice/banks/_components/BankForm";
 import { Bank } from "@/context/backoffice/bank/domain/Bank";
 import { PersistenceAction } from "@/context/shared/domain/types/status";
-import { toastNotifier } from "@/context/shared/Notification/infrastructure/Toast";
+import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
 import { ACME } from "./_fixtures";
 
 // Same bank as ACME but freshly created, so updatedAt collapses onto createdAt.
@@ -12,7 +12,7 @@ const CREATED = Bank.fromPrimitives({ ...ACME, updatedAt: ACME.createdAt });
 const mocks = await vi.hoisted(async () => (await import("./_mocks")).bankFormMocks());
 vi.mock("next/navigation", () => mocks.navigation);
 vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", () => mocks.container);
-vi.mock("@/context/shared/Notification/infrastructure/Toast", () => mocks.toast);
+vi.mock("@/context/shared/notification/infrastructure/Toast", () => mocks.toast);
 
 const { push, createRun } = mocks;
 

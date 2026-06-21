@@ -1,5 +1,5 @@
 import { injectable } from "inversify";
-import { FilterOperator, type Filter } from "@/context/shared/Search/domain";
+import { FilterOperator, type Filter } from "@/context/shared/search/domain";
 import {
   InMemoryCrudRepository,
   type InMemoryEntityConfig,

@@ -6,7 +6,7 @@ import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { StatusBadge, TruncatedText } from "@/components/erpify";
 import { useRowKeyboardNavigation } from "@/context/shared/resource/application/useRowKeyboardNavigation";
 import { cn } from "@/lib/utils";
-import { dateTimeProvider } from "@/context/shared/DateTimeProvider/infrastructure";
+import { dateTimeProvider } from "@/context/shared/date-time-provider/infrastructure";
 import { safeHref } from "@/lib/safeHref";
 import { bankRoutes } from "../_lib/bankRoutes";
 import { isRecentlyCreated } from "../_lib/bankRecency";

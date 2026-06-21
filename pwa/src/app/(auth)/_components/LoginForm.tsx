@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useZodForm } from "@/context/shared/Validation/infrastructure";
+import { useZodForm } from "@/context/shared/validation/infrastructure";
 import {
   LoginSchema,
   type LoginFormValues,
@@ -15,7 +15,7 @@ import { UserStatus } from "@/context/shared/access/domain/UserStatus";
 import { Role } from "@/context/shared/access/domain/Role";
 import { PERMISSION_WILDCARD } from "@/context/shared/access/domain/Permission";
 import { Routes } from "@/context/shared/domain/types/routes";
-import { toastNotifier } from "@/context/shared/Notification/infrastructure/Toast";
+import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
 import { uuidV7 } from "@/lib/uuidV7";
 import { safeHref } from "@/lib/safeHref";
 import { safeInternalPath } from "@/lib/safeInternalPath";

@@ -7,8 +7,8 @@ import { container } from "@/context/shared/infrastructure/DependencyInjection/C
 import { CheckHealth } from "@/context/frontoffice/health/application/CheckHealth";
 import type { HealthCheck } from "@/context/frontoffice/health/domain/HealthCheck";
 import { Routes } from "@/context/shared/domain/types/routes";
-import { apiScope } from "@/context/shared/Observability/domain/TelemetryScope";
-import { telemetry } from "@/context/shared/Observability/infrastructure";
+import { apiScope } from "@/context/shared/observability/domain/TelemetryScope";
+import { telemetry } from "@/context/shared/observability/infrastructure";
 import { Navbar } from "@/app/_components/Navbar";
 import { Footer } from "@/app/_components/Footer";
 import { Button } from "@/components/ui/button";

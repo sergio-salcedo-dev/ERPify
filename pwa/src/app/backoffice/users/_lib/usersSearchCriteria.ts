@@ -1,4 +1,4 @@
-import { FilterOperator, type Filter } from "@/context/shared/Search/domain";
+import { FilterOperator, type Filter } from "@/context/shared/search/domain";
 import type { ResourceSort } from "@/context/shared/resource/domain/ResourceSort";
 import type { UsersFilter, UsersSort } from "./usersFilterSort";
 

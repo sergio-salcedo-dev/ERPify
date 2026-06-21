@@ -8,8 +8,8 @@ Filterable lists resolve filtering, sorting, and pagination on the **server**, t
 
 | Piece                        | Location                                | Role                                                                                                                                                                                                                                          |
 | ---------------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Filter` / `FilterOperator`  | `context/shared/Search/domain/`         | Typed, framework-free filter vocabulary. `FilterOperator` is a union + const (`eq \| in \| contains \| gte \| lte`) — never a TS `enum`. `Filter` is a discriminated union: scalar ops carry `value: string`, `in` carries `value: string[]`. |
-| `buildSearchParams(filters)` | `context/shared/Search/infrastructure/` | Serializes `Filter[]` → `URLSearchParams` in the exact wire grammar. Scalar → `filters[N][value]`; `in` → repeated `filters[N][value][]`. Empty list → no params. Composable with sort/pagination params.                                     |
+| `Filter` / `FilterOperator`  | `context/shared/search/domain/`         | Typed, framework-free filter vocabulary. `FilterOperator` is a union + const (`eq \| in \| contains \| gte \| lte`) — never a TS `enum`. `Filter` is a discriminated union: scalar ops carry `value: string`, `in` carries `value: string[]`. |
+| `buildSearchParams(filters)` | `context/shared/search/infrastructure/` | Serializes `Filter[]` → `URLSearchParams` in the exact wire grammar. Scalar → `filters[N][value]`; `in` → repeated `filters[N][value][]`. Empty list → no params. Composable with sort/pagination params.                                     |
 
 ## Recipe: make a list filterable
 

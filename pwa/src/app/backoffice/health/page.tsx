@@ -6,8 +6,8 @@ import { container } from "@/context/shared/infrastructure/DependencyInjection/C
 import type { HealthCheck } from "@/context/backoffice/health/domain/HealthCheck";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
-import { apiScope } from "@/context/shared/Observability/domain/TelemetryScope";
-import { telemetry } from "@/context/shared/Observability/infrastructure";
+import { apiScope } from "@/context/shared/observability/domain/TelemetryScope";
+import { telemetry } from "@/context/shared/observability/infrastructure";
 import { aggregateSystemStatus, deriveSystemStatus } from "@/lib/systemStatus";
 import { uuidV7 } from "@/lib/uuidV7";
 import { Button } from "@/components/ui/button";

@@ -1,4 +1,4 @@
-import type { DateTimeProvider } from "@/context/shared/DateTimeProvider/domain/DateTimeProvider";
+import type { DateTimeProvider } from "@/context/shared/date-time-provider/domain/DateTimeProvider";
 
 /** Default "recently created" window, in days, for the bank "New" badge. */
 export const BANK_NEW_WINDOW_DAYS = 7;

@@ -2,8 +2,8 @@ import { inject, injectable } from "inversify";
 import { isProblemDetails, type ProblemDetails } from "../../domain/ProblemDetails";
 import { API_ENDPOINTS } from "../api/ApiEndpoints";
 import { HttpError } from "./HttpError";
-import type { DebugTokenObserver } from "@/context/shared/DebugToken/domain/DebugTokenObserver";
-import { NoopDebugTokenObserver } from "@/context/shared/DebugToken/infrastructure/NoopDebugTokenObserver";
+import type { DebugTokenObserver } from "@/context/shared/debug-token/domain/DebugTokenObserver";
+import { NoopDebugTokenObserver } from "@/context/shared/debug-token/infrastructure/NoopDebugTokenObserver";
 import { uuidV7 } from "@/lib/uuidV7";
 
 /** Runtime shape check applied to a 2xx JSON body at the HTTP boundary. */

@@ -15,7 +15,7 @@ const INITIAL = { id: UPDATED.id, name: "Acme Savings", shortName: "ACME" };
 const mocks = await vi.hoisted(async () => (await import("./_mocks")).bankFormMocks());
 vi.mock("next/navigation", () => mocks.navigation);
 vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", () => mocks.container);
-vi.mock("@/context/shared/Notification/infrastructure/Toast", () => mocks.toast);
+vi.mock("@/context/shared/notification/infrastructure/Toast", () => mocks.toast);
 
 const { push, createRun, updateRun } = mocks;
 
