@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { Filter } from "@/context/shared/domain/Search";
-import { buildSearchParams } from "@/context/shared/infrastructure/Search";
+import type { Filter } from "@/context/shared/Search/domain";
+import { buildSearchParams } from "@/context/shared/Search/infrastructure";
 
 describe("buildSearchParams", () => {
   it("serializes a scalar eq filter into the wire grammar", () => {

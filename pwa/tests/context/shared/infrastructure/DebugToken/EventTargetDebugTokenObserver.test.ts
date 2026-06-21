@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { EventTargetDebugTokenObserver } from "@/context/shared/infrastructure/DebugToken/EventTargetDebugTokenObserver";
-import type { DebugToken } from "@/context/shared/domain/DebugToken/DebugToken";
+import { EventTargetDebugTokenObserver } from "@/context/shared/DebugToken/infrastructure/EventTargetDebugTokenObserver";
+import type { DebugToken } from "@/context/shared/DebugToken/domain/DebugToken";
 
 const tokenA: DebugToken = { token: "aaa", profilerUrl: "/_profiler/aaa" };
 const tokenB: DebugToken = { token: "bbb", profilerUrl: "/_profiler/bbb" };

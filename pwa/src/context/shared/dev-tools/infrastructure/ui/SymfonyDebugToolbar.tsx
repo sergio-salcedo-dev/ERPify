@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { telemetry } from "@/context/shared/infrastructure/Observability";
-import { apiScope } from "@/context/shared/domain/Observability/TelemetryScope";
-import type { DebugTokenObserver } from "@/context/shared/domain/DebugToken/DebugTokenObserver";
+import { telemetry } from "@/context/shared/Observability/infrastructure";
+import { apiScope } from "@/context/shared/Observability/domain/TelemetryScope";
+import type { DebugTokenObserver } from "@/context/shared/DebugToken/domain/DebugTokenObserver";
 import { useLatestDebugToken } from "./useLatestDebugToken";
 
 /** Dev-only Symfony endpoint serving the toolbar loader (routed via FrankenPHP). */

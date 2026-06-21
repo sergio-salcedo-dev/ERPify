@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { serializeCause } from "@/context/shared/domain/Observability/serializeCause";
+import { serializeCause } from "@/context/shared/Observability/domain/serializeCause";
 
 describe("serializeCause", () => {
   it("returns undefined for undefined / null", () => {

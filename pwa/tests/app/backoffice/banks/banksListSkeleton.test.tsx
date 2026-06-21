@@ -9,7 +9,7 @@ vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", async (
   (await import("./_mocks")).containerMock({ BackOfficeSearchBanks: { run: searchRun } }),
 );
 
-vi.mock("@/context/shared/infrastructure/Notification/Toast", async () =>
+vi.mock("@/context/shared/Notification/infrastructure/Toast", async () =>
   (await import("./_mocks")).toastNotifierMock(),
 );
 

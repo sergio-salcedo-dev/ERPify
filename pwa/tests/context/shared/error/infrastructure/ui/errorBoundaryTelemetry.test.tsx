@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render } from "@testing-library/react";
 import { RootErrorBoundary, SegmentErrorBoundary } from "@/context/shared/error/infrastructure/ui";
-import { telemetry } from "@/context/shared/infrastructure/Observability";
+import { telemetry } from "@/context/shared/Observability/infrastructure";
 
 /**
  * Locks the observability contract for the Next.js error boundaries: a caught

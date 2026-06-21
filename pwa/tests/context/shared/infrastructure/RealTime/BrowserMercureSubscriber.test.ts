@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BrowserMercureSubscriber,
   mercureSubscriber,
-} from "@/context/shared/infrastructure/RealTime/BrowserMercureSubscriber";
-import { useMercureRealtime } from "@/context/shared/infrastructure/RealTime/useMercureRealtime";
+} from "@/context/shared/RealTime/infrastructure/BrowserMercureSubscriber";
+import { useMercureRealtime } from "@/context/shared/RealTime/infrastructure/useMercureRealtime";
 
 /** Opened EventSource stand-ins for the current test (reset in `beforeEach`). */
 const sources: FakeEventSource[] = [];

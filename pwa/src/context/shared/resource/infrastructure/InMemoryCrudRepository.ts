@@ -1,4 +1,4 @@
-import type { Filter } from "@/context/shared/domain/Search";
+import type { Filter } from "@/context/shared/Search/domain";
 import type {
   CrudRepository,
   ResourceSearchCriteria,

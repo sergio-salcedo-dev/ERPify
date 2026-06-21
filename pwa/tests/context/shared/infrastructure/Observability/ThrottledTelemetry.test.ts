@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
-import { ThrottledTelemetry } from "@/context/shared/infrastructure/Observability/ThrottledTelemetry";
-import type { Telemetry, TelemetryContext } from "@/context/shared/domain/Observability/Telemetry";
+import { ThrottledTelemetry } from "@/context/shared/Observability/infrastructure/ThrottledTelemetry";
+import type { Telemetry, TelemetryContext } from "@/context/shared/Observability/domain/Telemetry";
 
 type TelemetryFn = (message: string, context?: TelemetryContext) => void;
 

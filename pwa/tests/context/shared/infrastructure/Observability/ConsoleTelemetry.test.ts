@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ConsoleTelemetry } from "@/context/shared/infrastructure/Observability/ConsoleTelemetry";
+import { ConsoleTelemetry } from "@/context/shared/Observability/infrastructure/ConsoleTelemetry";
 
 afterEach(() => {
   vi.unstubAllEnvs();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
+import { dateTimeProvider } from "@/context/shared/DateTimeProvider/infrastructure";
 
 describe("dateTimeProvider singleton — relative time", () => {
   it("exposes formatIsoToRelative and returns a non-empty string for a valid ISO", () => {

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
-import { SonnerToastNotifier } from "@/context/shared/infrastructure/Notification/Toast/SonnerToastNotifier";
-import { toastNotifier } from "@/context/shared/infrastructure/Notification/Toast";
+import { SonnerToastNotifier } from "@/context/shared/Notification/infrastructure/Toast/SonnerToastNotifier";
+import { toastNotifier } from "@/context/shared/Notification/infrastructure/Toast";
 
 vi.mock("sonner", () => ({
   toast: {

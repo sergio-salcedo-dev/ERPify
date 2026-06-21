@@ -1,9 +1,9 @@
 "use client";
 
 import { Bank, type BankPrimitives } from "@/context/backoffice/bank/domain/Bank";
-import { realtimeScope } from "@/context/shared/domain/Observability/TelemetryScope";
+import { realtimeScope } from "@/context/shared/Observability/domain/TelemetryScope";
 import { API_ENDPOINTS } from "@/context/shared/infrastructure/api/ApiEndpoints";
-import { useMercureRealtime } from "@/context/shared/infrastructure/RealTime/useMercureRealtime";
+import { useMercureRealtime } from "@/context/shared/RealTime/infrastructure/useMercureRealtime";
 
 /**
  * Mercure topic IRIs for back-office banks. MUST stay in lock-step with the API

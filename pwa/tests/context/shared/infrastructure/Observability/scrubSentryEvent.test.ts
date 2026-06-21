@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ErrorEvent } from "@sentry/nextjs";
-import { scrubSentryEvent } from "@/context/shared/infrastructure/Observability/scrubSentryEvent";
+import { scrubSentryEvent } from "@/context/shared/Observability/infrastructure/scrubSentryEvent";
 
 describe("scrubSentryEvent", () => {
   it("strips denylisted keys from extra and contexts (recursively)", () => {

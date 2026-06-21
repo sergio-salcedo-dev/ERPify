@@ -9,7 +9,7 @@ vi.mock("@sentry/nextjs", () => ({
   captureException: vi.fn(),
 }));
 
-import { createTelemetry } from "@/context/shared/infrastructure/Observability";
+import { createTelemetry } from "@/context/shared/Observability/infrastructure";
 
 afterEach(() => {
   vi.unstubAllEnvs();

@@ -12,7 +12,7 @@ vi.mock("@sentry/nextjs", () => ({
   captureMessage,
 }));
 
-import { SentryTelemetry } from "@/context/shared/infrastructure/Observability/SentryTelemetry";
+import { SentryTelemetry } from "@/context/shared/Observability/infrastructure/SentryTelemetry";
 
 afterEach(() => {
   vi.clearAllMocks();

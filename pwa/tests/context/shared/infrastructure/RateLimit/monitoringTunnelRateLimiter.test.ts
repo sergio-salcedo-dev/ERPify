@@ -3,7 +3,7 @@ import {
   MONITORING_TUNNEL_RATE_LIMIT,
   evaluateMonitoringTunnelRequest,
   resolveClientKey,
-} from "@/context/shared/infrastructure/RateLimit/monitoringTunnelRateLimiter";
+} from "@/context/shared/RateLimit/infrastructure/monitoringTunnelRateLimiter";
 
 describe("resolveClientKey", () => {
   it("keys on the rightmost X-Forwarded-For entry (proxy-appended, unspoofable)", () => {

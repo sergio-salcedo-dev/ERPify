@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FixedWindowRateLimiter } from "@/context/shared/domain/RateLimit/FixedWindowRateLimiter";
+import { FixedWindowRateLimiter } from "@/context/shared/RateLimit/domain/FixedWindowRateLimiter";
 
 describe("FixedWindowRateLimiter", () => {
   describe("construction guards", () => {

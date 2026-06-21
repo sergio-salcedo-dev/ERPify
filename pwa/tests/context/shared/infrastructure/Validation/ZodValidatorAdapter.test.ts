@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { ZodValidatorAdapter } from "@/context/shared/infrastructure/Validation/ZodValidatorAdapter";
-import type { Validator } from "@/context/shared/infrastructure/Validation/Validator";
+import { ZodValidatorAdapter } from "@/context/shared/Validation/infrastructure/ZodValidatorAdapter";
+import type { Validator } from "@/context/shared/Validation/infrastructure/Validator";
 
 const sampleSchema = z.object({
   name: z.string().min(1, "name required").max(10, "name too long"),

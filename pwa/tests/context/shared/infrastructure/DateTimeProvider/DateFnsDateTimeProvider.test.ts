@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { DateTimeProvider } from "@/context/shared/domain/DateTimeProvider/DateTimeProvider";
-import { DateFnsDateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider/DateFnsDateTimeProvider";
-import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
+import type { DateTimeProvider } from "@/context/shared/DateTimeProvider/domain/DateTimeProvider";
+import { DateFnsDateTimeProvider } from "@/context/shared/DateTimeProvider/infrastructure/DateFnsDateTimeProvider";
+import { dateTimeProvider } from "@/context/shared/DateTimeProvider/infrastructure";
 
 const provider: DateTimeProvider = new DateFnsDateTimeProvider();
 

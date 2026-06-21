@@ -1,8 +1,8 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { useMercureRealtime } from "@/context/shared/infrastructure/RealTime/useMercureRealtime";
-import { telemetry } from "@/context/shared/infrastructure/Observability";
-import { mercureSubscriber } from "@/context/shared/infrastructure/RealTime/BrowserMercureSubscriber";
+import { useMercureRealtime } from "@/context/shared/RealTime/infrastructure/useMercureRealtime";
+import { telemetry } from "@/context/shared/Observability/infrastructure";
+import { mercureSubscriber } from "@/context/shared/RealTime/infrastructure/BrowserMercureSubscriber";
 
 afterEach(() => {
   vi.restoreAllMocks();

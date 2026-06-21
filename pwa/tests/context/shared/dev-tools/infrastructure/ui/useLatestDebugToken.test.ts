@@ -1,8 +1,8 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { useLatestDebugToken } from "@/context/shared/dev-tools/infrastructure/ui/useLatestDebugToken";
-import { EventTargetDebugTokenObserver } from "@/context/shared/infrastructure/DebugToken/EventTargetDebugTokenObserver";
-import type { DebugToken } from "@/context/shared/domain/DebugToken/DebugToken";
+import { EventTargetDebugTokenObserver } from "@/context/shared/DebugToken/infrastructure/EventTargetDebugTokenObserver";
+import type { DebugToken } from "@/context/shared/DebugToken/domain/DebugToken";
 
 const token: DebugToken = { token: "ccc", profilerUrl: "/_profiler/ccc" };
 

@@ -5,7 +5,7 @@ import {
 } from "@/context/shared/resource/infrastructure/InMemoryCrudRepository";
 import { InMemoryResourceNavigator } from "@/context/shared/resource/infrastructure/InMemoryResourceNavigator";
 import { SortDirection } from "@/context/shared/domain/types/sorting";
-import { FilterOperator, type Filter } from "@/context/shared/domain/Search";
+import { FilterOperator, type Filter } from "@/context/shared/Search/domain";
 
 interface Row {
   id: string;

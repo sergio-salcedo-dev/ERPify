@@ -7,7 +7,7 @@ import { container } from "@/context/shared/infrastructure/DependencyInjection/C
 import { HttpError } from "@/context/shared/infrastructure/HttpClient/HttpError";
 import { HttpStatus } from "@/context/shared/domain/types/http";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
-import { useZodForm } from "@/context/shared/infrastructure/Validation";
+import { useZodForm } from "@/context/shared/Validation/infrastructure";
 import {
   UserFormSchema,
   type UserFormValues,
@@ -19,7 +19,7 @@ import { ALL_ROLES, type Role } from "@/context/shared/access/domain/Role";
 import { ALL_PERMISSIONS } from "@/context/shared/access/domain/Permission";
 import { UserStatus } from "@/context/shared/access/domain/UserStatus";
 import { FormField, MutationError, Spinner } from "@/components/erpify";
-import { toastNotifier } from "@/context/shared/infrastructure/Notification/Toast";
+import { toastNotifier } from "@/context/shared/Notification/infrastructure/Toast";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Input } from "@/components/ui/input";

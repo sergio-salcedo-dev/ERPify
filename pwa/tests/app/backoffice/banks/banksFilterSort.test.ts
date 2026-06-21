@@ -9,7 +9,7 @@ import {
   hasActivePanelFilter,
   isDefaultSort,
 } from "@/app/backoffice/banks/_lib/banksFilterSort";
-import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
+import { dateTimeProvider } from "@/context/shared/DateTimeProvider/infrastructure";
 
 describe("DEFAULT_SORT", () => {
   it("is alphabetical name ascending", () => {

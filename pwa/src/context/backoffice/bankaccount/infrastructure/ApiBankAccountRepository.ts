@@ -1,8 +1,8 @@
 import { inject, injectable } from "inversify";
 import { API_ENDPOINTS } from "../../../shared/infrastructure/api/ApiEndpoints";
 import type { HttpClient } from "../../../shared/infrastructure/HttpClient/HttpClient";
-import { buildSearchParams } from "@/context/shared/infrastructure/Search";
-import { WIRE_MAX_LIMIT, type PageEnvelope } from "@/context/shared/domain/Search";
+import { buildSearchParams } from "@/context/shared/Search/infrastructure";
+import { WIRE_MAX_LIMIT, type PageEnvelope } from "@/context/shared/Search/domain";
 import {
   BankAccount,
   type BankAccountCurrency,

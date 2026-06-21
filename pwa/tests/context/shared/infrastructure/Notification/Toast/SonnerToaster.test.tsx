@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render } from "@testing-library/react";
 import type { ToasterProps } from "sonner";
-import { SonnerToaster } from "@/context/shared/infrastructure/Notification/Toast/SonnerToaster";
+import { SonnerToaster } from "@/context/shared/Notification/infrastructure/Toast/SonnerToaster";
 
 const { toasterSpy } = vi.hoisted(() => ({
   toasterSpy: vi.fn((_props: unknown) => null),

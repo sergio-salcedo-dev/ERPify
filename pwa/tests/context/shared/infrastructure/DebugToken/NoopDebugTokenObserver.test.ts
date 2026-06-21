@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NoopDebugTokenObserver } from "@/context/shared/infrastructure/DebugToken/NoopDebugTokenObserver";
+import { NoopDebugTokenObserver } from "@/context/shared/DebugToken/infrastructure/NoopDebugTokenObserver";
 
 describe("NoopDebugTokenObserver", () => {
   it("never notifies a subscriber and publish is inert", () => {

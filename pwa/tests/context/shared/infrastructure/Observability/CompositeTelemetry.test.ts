@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Telemetry } from "@/context/shared/domain/Observability/Telemetry";
-import { CompositeTelemetry } from "@/context/shared/infrastructure/Observability/CompositeTelemetry";
+import type { Telemetry } from "@/context/shared/Observability/domain/Telemetry";
+import { CompositeTelemetry } from "@/context/shared/Observability/infrastructure/CompositeTelemetry";
 
 function fakeSink(): Telemetry {
   return { warn: vi.fn(), error: vi.fn() };

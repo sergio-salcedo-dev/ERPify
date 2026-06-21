@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { DatePickerField, FormField } from "@/components/erpify";
 import { SortDirection } from "@/context/shared/domain/types/sorting";
-import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
+import { dateTimeProvider } from "@/context/shared/DateTimeProvider/infrastructure";
 import {
   BANKS_SORTABLE_COLUMNS,
   DEFAULT_SORT,

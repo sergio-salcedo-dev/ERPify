@@ -7,7 +7,7 @@ import type { Bank } from "@/context/backoffice/bank/domain/Bank";
 import type { ProblemDetails } from "@/context/shared/domain/ProblemDetails";
 import { DataTable, StatusBadge, TruncatedText } from "@/components/erpify";
 import type { DataTableColumn, DataTableSelection, DataTableSort } from "@/components/erpify";
-import { dateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider";
+import { dateTimeProvider } from "@/context/shared/DateTimeProvider/infrastructure";
 import { safeHref } from "@/lib/safeHref";
 import { isRecentlyCreated } from "../_lib/bankRecency";
 import { bankRoutes } from "../_lib/bankRoutes";

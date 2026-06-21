@@ -3,7 +3,7 @@ import {
   REDACTION_DENYLIST,
   isDenylistedKey,
   scrubDeep,
-} from "@/context/shared/domain/Observability/redaction";
+} from "@/context/shared/Observability/domain/redaction";
 
 describe("redaction denylist", () => {
   it("mirrors the API key set", () => {

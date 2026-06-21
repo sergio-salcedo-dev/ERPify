@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DateFnsDateTimeProvider } from "@/context/shared/infrastructure/DateTimeProvider/DateFnsDateTimeProvider";
+import { DateFnsDateTimeProvider } from "@/context/shared/DateTimeProvider/infrastructure/DateFnsDateTimeProvider";
 
 const provider = new DateFnsDateTimeProvider();
 

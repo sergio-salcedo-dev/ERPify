@@ -16,7 +16,7 @@ vi.mock("@/context/shared/infrastructure/DependencyInjection/Container", () => (
   },
 }));
 
-vi.mock("@/context/shared/infrastructure/Notification/Toast", () => ({
+vi.mock("@/context/shared/Notification/infrastructure/Toast", () => ({
   toastNotifier: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
 }));
 

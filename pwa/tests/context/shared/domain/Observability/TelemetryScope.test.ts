@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { RealtimeTransport } from "@/context/shared/domain/RealTime/RealtimeTransport";
+import { RealtimeTransport } from "@/context/shared/RealTime/domain/RealtimeTransport";
 import {
   TelemetrySurface,
   apiScope,
   realtimeScope,
   telemetryScope,
-} from "@/context/shared/domain/Observability/TelemetryScope";
+} from "@/context/shared/Observability/domain/TelemetryScope";
 
 /**
  * Locks the `<surface>:<detail>` telemetry-scope convention and its two builders.
