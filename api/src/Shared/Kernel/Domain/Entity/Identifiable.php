@@ -16,7 +16,7 @@ trait Identifiable
 
     /**
      * Doctrine "assigned" identifier: the application layer generates the id (UUID v7 via
-     * {@see \Erpify\Shared\Domain\Uuid\Uuid::generate()}) and assigns it before persist.
+     * {@see \Erpify\Shared\Uuid\Domain\Uuid::generate()}) and assigns it before persist.
      * No {@see ORM\GeneratedValue} — Doctrine must not overwrite the app-assigned id (it previously
      * minted a divergent v7 PK, breaking id-based domain-event consumers on creation).
      */

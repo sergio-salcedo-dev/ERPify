@@ -7,7 +7,7 @@ namespace Erpify\Shared\Search\Infrastructure\Persistence\Doctrine;
 use Erpify\Shared\Search\Domain\PaginationMode;
 
 /**
- * Typed replacement for the stringly-typed {@see \Erpify\Shared\Infrastructure\Persistence\Doctrine\PaginatorOption}
+ * Typed replacement for the stringly-typed {@see \Erpify\Shared\Persistence\Infrastructure\Doctrine\PaginatorOption}
  * options bag. Lives at the search-seam root (`…\Doctrine\Search\`), NOT under
  * `Keyset/` — it configures the engine, not the keyset mechanism (AR12).
  *

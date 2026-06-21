@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\Bank\Domain\Exception;
 
-use Erpify\Shared\Domain\Exception\Conflict;
-use Erpify\Shared\Domain\Exception\DomainException;
+use Erpify\Shared\ErrorContract\Domain\Exception\Conflict;
+use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
 
 final class BankInUseException extends DomainException implements Conflict
 {

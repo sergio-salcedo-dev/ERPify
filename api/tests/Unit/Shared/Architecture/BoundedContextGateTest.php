@@ -184,7 +184,7 @@ final class BoundedContextGateTest extends TestCase
         $cleanSource = <<<'PHP'
             <?php
             namespace Erpify\Backoffice\BankAccount\Domain\Entity;
-            use Erpify\Shared\Domain\Uuid\Uuid;
+            use Erpify\Shared\Uuid\Domain\Uuid;
             use Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountStatus;
             final class BankAccount {}
             PHP;
@@ -209,7 +209,7 @@ final class BoundedContextGateTest extends TestCase
                 Repository\BankRepository
             };
             use Erpify\Backoffice\Bank\Infrastructure\Persistence\Doctrine\DoctrineBankRepository as Repo;
-            use Erpify\Shared\Domain\Uuid\Uuid;
+            use Erpify\Shared\Uuid\Domain\Uuid;
             use function Erpify\Backoffice\Bank\Application\helper;
             final class Service {
                 public function run(Uuid $id): callable {

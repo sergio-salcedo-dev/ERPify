@@ -9,8 +9,8 @@ use Erpify\Backoffice\Bank\Application\Command\UpdateBankCommand;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Exception\BankNotFoundException;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
-use Erpify\Shared\Domain\Uuid\InvalidUuidException;
 use Erpify\Shared\Event\Domain\EventBus;
+use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Shared\Validation\Application\Validator;
 use Symfony\Component\Validator\Exception\ValidationFailedException;
 

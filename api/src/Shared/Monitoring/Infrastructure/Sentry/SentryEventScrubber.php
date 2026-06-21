@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Monitoring\Infrastructure\Sentry;
 
-use Erpify\Shared\Application\Problem\RedactionDenylist;
+use Erpify\Shared\ErrorContract\Application\RedactionDenylist;
 use Sentry\Event;
 
 /**
@@ -24,7 +24,7 @@ use Sentry\Event;
  * breadcrumbs, exception messages, and secret-bearing keys NOT in the denylist.
  *
  * Reusing the SAME denylist as the RFC 9457 pipeline
- * ({@see \Erpify\Shared\Application\Problem\ProblemDetailsFactory}) keeps scrub
+ * ({@see \Erpify\Shared\ErrorContract\Application\ProblemDetailsFactory}) keeps scrub
  * parity between the HTTP error body and the Sentry event.
  *
  * Lives under the `Shared/Monitoring` module: vendor-specific glue (`Sentry/`)

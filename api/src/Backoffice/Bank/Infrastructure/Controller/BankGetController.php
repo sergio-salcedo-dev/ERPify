@@ -6,7 +6,7 @@ namespace Erpify\Backoffice\Bank\Infrastructure\Controller;
 
 use Erpify\Backoffice\Bank\Application\BankDetailFinder;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
-use Erpify\Shared\Infrastructure\Http\Responder\ResourceResponder;
+use Erpify\Shared\Http\Infrastructure\Responder\ResourceResponder;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 

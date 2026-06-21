@@ -35,7 +35,7 @@ deptrac:
       - Symfony\Component\Validator\Context\ExecutionContextInterface
     Erpify\Shared\Search\Application\Http\SearchQuery:
       - Symfony\Component\Validator\Context\ExecutionContextInterface
-    Erpify\Shared\Application\Problem\ProblemDetailsFactory:
+    Erpify\Shared\ErrorContract\Application\ProblemDetailsFactory:
       - Symfony\Component\DependencyInjection\Attribute\Autowire
       - Symfony\Component\HttpFoundation\Response
       - Symfony\Component\HttpKernel\Exception\HttpExceptionInterface

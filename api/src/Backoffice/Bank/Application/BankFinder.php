@@ -7,8 +7,8 @@ namespace Erpify\Backoffice\Bank\Application;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Exception\BankNotFoundException;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
-use Erpify\Shared\Domain\Uuid\InvalidUuidException;
-use Erpify\Shared\Domain\Uuid\Uuid;
+use Erpify\Shared\Uuid\Domain\InvalidUuidException;
+use Erpify\Shared\Uuid\Domain\Uuid;
 
 final readonly class BankFinder
 {

@@ -62,7 +62,7 @@ return RectorConfig::configure()
         // keep the explicit `readonly` on the inner property in the affected
         // file instead, so `make php.md` does not abort on a parser error.
         ReadOnlyAnonymousClassRector::class => [
-            __DIR__ . '/../../tests/Unit/Shared/Infrastructure/Http/EventListener/ExceptionResponderTest.php',
+            __DIR__ . '/../../tests/Unit/Shared/ErrorContract/Infrastructure/Http/EventListener/ExceptionResponderTest.php',
         ],
         RenamePropertyToMatchTypeRector::class,
         RenameVariableToMatchMethodCallReturnTypeRector::class,

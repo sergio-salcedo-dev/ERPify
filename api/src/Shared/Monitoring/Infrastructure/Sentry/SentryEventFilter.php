@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Shared\Monitoring\Infrastructure\Sentry;
 
 use Doctrine\DBAL\Exception\ConnectionException;
-use Erpify\Shared\Domain\Exception\ClientError;
+use Erpify\Shared\ErrorContract\Domain\Exception\ClientError;
 use Sentry\Event;
 use Sentry\EventHint;
 use Symfony\Component\Messenger\Bridge\Doctrine\Transport\PostgreSqlConnection;

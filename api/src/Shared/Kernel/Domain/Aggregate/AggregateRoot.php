@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Erpify\Shared\Kernel\Domain\Aggregate;
 
 use Erpify\Shared\Clock\Domain\SystemClock;
+use Erpify\Shared\Event\Domain\DomainEvent;
 use Erpify\Shared\Kernel\Domain\Entity\Identifiable;
 use Erpify\Shared\Kernel\Domain\Entity\Timestamped;
-use Erpify\Shared\Event\Domain\DomainEvent;
 use LogicException;
 
 /**

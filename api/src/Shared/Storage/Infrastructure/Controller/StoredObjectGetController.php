@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Storage\Infrastructure\Controller;
 
-use Erpify\Shared\Infrastructure\Http\ContentAddressedHttpCache;
+use Erpify\Shared\Http\Infrastructure\ContentAddressedHttpCache;
 use Erpify\Shared\Storage\Application\Port\StoragePort;
 use Erpify\Shared\Storage\Application\Port\StoredObjectAccessPort;
 use Erpify\Shared\Storage\Domain\ContentAddressableObjectKey;

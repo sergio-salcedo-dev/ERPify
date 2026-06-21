@@ -6,9 +6,9 @@ namespace Erpify\Backoffice\Health\Infrastructure\Controller;
 
 use DateTimeInterface;
 use Erpify\Backoffice\Health\Application\CheckDatabaseHealth;
-use Erpify\Shared\Kernel\Application\Result;
 use Erpify\Shared\Clock\Domain\Clock;
-use Erpify\Shared\Infrastructure\Http\Responder\ResponderInterface;
+use Erpify\Shared\Http\Infrastructure\Responder\ResponderInterface;
+use Erpify\Shared\Kernel\Application\Result;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 

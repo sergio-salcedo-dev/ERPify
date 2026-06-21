@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Erpify\Tests\Functional\Backoffice\Bank;
 
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
-use Erpify\Shared\Domain\Uuid\Uuid as DomainUuid;
 use Erpify\Shared\Kernel\Domain\ValueObject\NormalizedText;
+use Erpify\Shared\Uuid\Domain\Uuid as DomainUuid;
 use Erpify\Shared\Validation\Application\Validator;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;

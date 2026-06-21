@@ -3,70 +3,70 @@
 when@test:
     test_throw_not_found:
         path: /api/test/_throw-not-found
-        controller: Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\ThrowNotFoundController
+        controller: Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener\Fixtures\ThrowNotFoundController
         methods: [GET]
 
     test_throw_runtime:
         path: /api/test/_throw-runtime
-        controller: Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\ThrowRuntimeController
+        controller: Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener\Fixtures\ThrowRuntimeController
         methods: [GET]
 
     # Symfony framework exception bridges.
     test_throw_http_403:
         path: /api/test/_throw-http-403
-        controller: Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\ThrowHttpForbiddenController
+        controller: Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener\Fixtures\ThrowHttpForbiddenController
         methods: [GET]
 
     test_throw_http_401:
         path: /api/test/_throw-http-401
-        controller: Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\ThrowHttpUnauthorizedController
+        controller: Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener\Fixtures\ThrowHttpUnauthorizedController
         methods: [GET]
 
     test_throw_http_410:
         path: /api/test/_throw-http-410
-        controller: Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\ThrowHttpGoneController
+        controller: Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener\Fixtures\ThrowHttpGoneController
         methods: [GET]
 
     test_throw_security_access_denied:
         path: /api/test/_throw-security-access-denied
-        controller: Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\ThrowSecurityAccessDeniedController
+        controller: Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener\Fixtures\ThrowSecurityAccessDeniedController
         methods: [GET]
 
     test_throw_security_authentication:
         path: /api/test/_throw-security-authentication
-        controller: Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\ThrowSecurityAuthenticationController
+        controller: Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener\Fixtures\ThrowSecurityAuthenticationController
         methods: [GET]
 
     # ValidationFailedException violations[] coverage.
     test_throw_validation:
         path: /api/test/_throw-validation
-        controller: Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\ThrowValidationFailedController
+        controller: Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener\Fixtures\ThrowValidationFailedController
         methods: [GET]
 
     test_throw_validation_empty:
         path: /api/test/_throw-validation-empty
-        controller: Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\ThrowValidationFailedEmptyController
+        controller: Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener\Fixtures\ThrowValidationFailedEmptyController
         methods: [GET]
 
     test_throw_validation_with_sensitive_payload:
         path: /api/test/_throw-validation-with-sensitive-payload
-        controller: Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\ThrowValidationFailedSensitivePayloadController
+        controller: Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener\Fixtures\ThrowValidationFailedSensitivePayloadController
         methods: [GET]
 
     test_throw_validation_template:
         path: /api/test/_throw-validation-template
-        controller: Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\ThrowValidationFailedTemplateController
+        controller: Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener\Fixtures\ThrowValidationFailedTemplateController
         methods: [GET]
 
     test_throw_invariant_violation:
         path: /api/test/_throw-invariant-violation
-        controller: Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\ThrowInvariantViolationDomainExceptionController
+        controller: Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener\Fixtures\ThrowInvariantViolationDomainExceptionController
         methods: [GET]
 
     # denylisted context keys (password, token) must be stripped from the body.
     test_throw_denylisted_context:
         path: /api/test/_throw-denylisted-context
-        controller: Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\ThrowDenylistedContextController
+        controller: Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener\Fixtures\ThrowDenylistedContextController
         methods: [GET]
 
     # non-whitelisted context values (closure, stdClass, …) must be substituted
@@ -74,7 +74,7 @@ when@test:
     # no NUL byte from anonymous-class FQCNs.
     test_throw_unserializable_context:
         path: /api/test/_throw-unserializable-context
-        controller: Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\ThrowUnserializableContextController
+        controller: Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener\Fixtures\ThrowUnserializableContextController
         methods: [GET]
 
     # a `Doctrine\DBAL\Exception\ConnectionLost` thrown mid-controller must
@@ -83,7 +83,7 @@ when@test:
     # cascade through the listener.
     test_throw_doctrine_connection_lost:
         path: /api/test/_throw-doctrine-connection-lost
-        controller: Erpify\Tests\Functional\Shared\Infrastructure\Http\EventListener\Fixtures\ThrowDoctrineConnectionLostController
+        controller: Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener\Fixtures\ThrowDoctrineConnectionLostController
         methods: [GET]
 
     # Mirrors the dev-only dev_wdt_loader route (config/routes/dev.yaml) so its loader-rendering

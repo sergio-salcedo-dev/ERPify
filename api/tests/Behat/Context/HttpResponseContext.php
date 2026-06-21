@@ -224,7 +224,7 @@ class HttpResponseContext extends AbstractContext
     /**
      * Check that the response header `name` is a valid RFC 9562 UUID — any version when `version` is
      * omitted, or that exact version otherwise (e.g. the UUID v7 `X-Correlation-Id` minted via
-     * {@see \Erpify\Shared\Domain\Uuid\Uuid::generate()}). `Uuid::isValid()` checks format and variant
+     * {@see \Erpify\Shared\Uuid\Domain\Uuid::generate()}). `Uuid::isValid()` checks format and variant
      * in one pass — stricter than a regex.
      */
     #[Then('the header :name should be a valid UUID')]

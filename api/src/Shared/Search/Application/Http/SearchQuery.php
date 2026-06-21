@@ -18,9 +18,9 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
  *
  * Decorated with `#[Assert\…]`; consumed by Symfony `#[MapQueryString]`
  * and validated automatically — failures emit `ValidationFailedException`,
- * which {@see \Erpify\Shared\Application\Problem\ProblemDetailsFactory} maps
+ * which {@see \Erpify\Shared\ErrorContract\Application\ProblemDetailsFactory} maps
  * to a 422 `validation-failed` Problem Details body via
- * {@see \Erpify\Shared\Infrastructure\Http\EventListener\ExceptionResponder}.
+ * {@see \Erpify\Shared\ErrorContract\Infrastructure\Http\EventListener\ExceptionResponder}.
  *
  * Cursor-only navigation (PR3): `after`/`before` carry the OPAQUE keyset cursor
  * (base64url + HMAC); they are mutually exclusive (the callback below is layer 1

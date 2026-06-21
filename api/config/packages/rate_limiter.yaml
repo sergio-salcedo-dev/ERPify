@@ -31,7 +31,7 @@
 # assert the 429 path deterministically (api/.env.test).
 #
 # The kernel.request listener that consumes `anonymous_api` lives at
-# api/src/Shared/Infrastructure/Http/EventListener/RateLimitListener.php.
+# api/src/Shared/ErrorContract/Infrastructure/Http/EventListener/RateLimitListener.php.
 # It is path-scoped to /api/* and rejects with a domain exception
 # implementing the RateLimited marker so the existing ProblemDetailsFactory
 # pipeline emits an RFC 9457 429 response (type=rate-limited) without

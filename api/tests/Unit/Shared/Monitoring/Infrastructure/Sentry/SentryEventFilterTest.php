@@ -6,8 +6,8 @@ namespace Erpify\Tests\Unit\Shared\Monitoring\Infrastructure\Sentry;
 
 use Doctrine\DBAL\Exception\ConnectionException;
 use Doctrine\DBAL\Exception\ConnectionLost;
-use Erpify\Shared\Domain\Exception\Conflict;
-use Erpify\Shared\Domain\Exception\DomainException;
+use Erpify\Shared\ErrorContract\Domain\Exception\Conflict;
+use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
 use Erpify\Shared\Monitoring\Infrastructure\Sentry\SentryEventFilter;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;

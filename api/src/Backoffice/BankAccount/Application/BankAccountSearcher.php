@@ -10,8 +10,8 @@ use Erpify\Backoffice\BankAccount\Application\Audit\BankAccountsViewedAuditEvent
 use Erpify\Backoffice\BankAccount\Application\Query\SearchBankAccountsQuery;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountSearchRepository;
-use Erpify\Shared\Domain\Uuid\InvalidUuidException;
 use Erpify\Shared\Search\Domain\Page;
+use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Messenger\Exception\ExceptionInterface;
 use Symfony\Component\Messenger\MessageBusInterface;

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Media\Infrastructure\Http;
 
-use Erpify\Shared\Infrastructure\Http\ContentHashUrlGenerator;
+use Erpify\Shared\Http\Infrastructure\ContentHashUrlGenerator;
 use Erpify\Shared\Media\Application\Port\MediaPublicUrlGenerator;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;

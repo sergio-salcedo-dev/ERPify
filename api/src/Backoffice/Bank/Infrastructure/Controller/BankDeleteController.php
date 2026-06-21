@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\Bank\Infrastructure\Controller;
 
 use Erpify\Backoffice\Bank\Application\BankDeleter;
+use Erpify\Shared\Http\Infrastructure\Responder\ResponderInterface;
 use Erpify\Shared\Kernel\Application\Result;
-use Erpify\Shared\Infrastructure\Http\Responder\ResponderInterface;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 

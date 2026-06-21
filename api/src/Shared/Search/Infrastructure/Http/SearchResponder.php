@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Search\Infrastructure\Http;
 
-use Erpify\Shared\Infrastructure\Http\Responder\PaginationMeta;
-use Erpify\Shared\Infrastructure\Http\Responder\ResourceResponder;
+use Erpify\Shared\Http\Infrastructure\Responder\PaginationMeta;
+use Erpify\Shared\Http\Infrastructure\Responder\ResourceResponder;
 use Erpify\Shared\Search\Application\Http\SearchQuery;
 use Erpify\Shared\Search\Domain\Page;
 use Erpify\Shared\Search\Domain\SearchCriteria;

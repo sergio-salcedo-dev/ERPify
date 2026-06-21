@@ -9,7 +9,7 @@ use Doctrine\ORM\Mapping as ORM;
 use Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountStatus;
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Kernel\Domain\Enum\Currency;
-use Erpify\Shared\Domain\Uuid\Uuid;
+use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Shared\Validation\Infrastructure\EnumType;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Serializer\Attribute\Groups;
