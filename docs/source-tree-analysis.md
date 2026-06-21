@@ -113,8 +113,7 @@ ERPify/
 │   ├── claude-code-quickref.md     # Full command catalog & recipes
 │   ├── product-roadmap.md          # (+ saas-production-roadmap.md)
 │   ├── adr/                        # Architecture decision records (bank-bankaccount-modeling, event-store-and-projections, …)
-│   ├── rules/                      # Authoritative coding rules (architecture, security, testing, …)
-│   └── project-scan-report.json    # Workflow state (machine-readable)
+│   └── rules/                      # Authoritative coding rules (architecture, security, testing, …)
 │
 ├── .github/workflows/
 │   ├── ci.yml                      # Lint + test pipeline

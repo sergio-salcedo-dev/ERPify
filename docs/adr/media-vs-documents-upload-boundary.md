@@ -1,6 +1,6 @@
 # ADR — Frontera de subida: Media (imágenes) vs Documents (ficheros grandes)
 
-> **Estado:** aceptado · **Fecha:** 2026-06-14 · **Ámbito:** `api/src/Shared/{Media,Storage}` + el seam de subida que consumen `Backoffice/Bank` y futuros llamantes (logos de empresa, avatares de cliente/usuario, imágenes de producto).
+> **Status:** accepted · **Date:** 2026-06-14 · **Scope:** `api/src/Shared/{Media,Storage}` + the upload seam consumed by `Backoffice/Bank` and future callers (company logos, client/user avatars, product images).
 >
 > Contexto temporal: la aplicación **no está en producción**; ninguna decisión arrastra compatibilidad hacia atrás. Este ADR no requiere migración de esquema.
 
