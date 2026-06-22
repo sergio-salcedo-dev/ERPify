@@ -9,6 +9,7 @@ use Doctrine\ORM\Mapping as ORM;
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Media\Domain\Exception\MediaBytesUnreadableException;
 use Erpify\Shared\Media\Domain\Repository\MediaRepository;
+use Symfony\Component\Validator\Constraints as Assert;
 
 /**
  * (repositoryClass is the domain interface; the concrete repository implementation is wired via DI).
@@ -23,6 +24,11 @@ final class Media extends AggregateRoot
     private function __construct(
         string $id,
         #[ORM\Column(name: 'content_hash', length: 64)]
+        #[Assert\NotBlank]
+        #[Assert\Regex(
+            pattern: '/^[a-f0-9]{64}$/',
+            message: 'A media content hash must be a 64-character lowercase SHA-256 hex digest.',
+        )]
         private string $contentHash,
         #[ORM\Column(name: 'mime_type', length: 64)]
         private string $mimeType,
