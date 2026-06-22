@@ -26,13 +26,29 @@ final class ClearDedupClaimCommandTest extends TestCase
     public function itReleasesTheClaimForTheGivenEventAndHandler(): void
     {
         $deduplicator = $this->createMock(DomainEventHandlerDeduplicator::class);
-        $deduplicator->expects($this->once())->method('release')->with(self::EVENT_ID, self::HANDLER);
+        $deduplicator->expects($this->once())->method('release')->with(self::EVENT_ID, self::HANDLER)->willReturn(1);
 
         $tester = new CommandTester(new ClearDedupClaimCommand($deduplicator));
         $tester->execute(['eventId' => self::EVENT_ID, 'handler' => self::HANDLER]);
 
         $tester->assertCommandIsSuccessful();
         $this->assertStringContainsString('messenger:failed:retry', $tester->getDisplay());
+    }
+
+    #[Test]
+    public function itWarnsWhenNoClaimMatched(): void
+    {
+        $deduplicator = $this->createMock(DomainEventHandlerDeduplicator::class);
+        $deduplicator->expects($this->once())->method('release')->with(self::EVENT_ID, self::HANDLER)->willReturn(0);
+
+        $tester = new CommandTester(new ClearDedupClaimCommand($deduplicator));
+        $tester->execute(['eventId' => self::EVENT_ID, 'handler' => self::HANDLER]);
+
+        $tester->assertCommandIsSuccessful();
+
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString('No dedup claim found', $display);
+        $this->assertStringNotContainsString('Now run: messenger:failed:retry', $display);
     }
 
     #[Test]

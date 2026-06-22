@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Event\Infrastructure\Messenger\Maintenance;
 
+use DateTimeImmutable;
 use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Event\Application\DeadLetterReader;
+use Erpify\Shared\Event\Application\DeadLetterSummary;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
@@ -30,34 +32,32 @@ final readonly class ReportDeadLetterBacklogHandler
 
     public function __invoke(ReportDeadLetterBacklogMessage $message): void
     {
-        $total = $this->reader->count();
+        $summary = DeadLetterSummary::fromEntries($this->reader->count(), $this->reader->entries());
 
-        if (0 === $total) {
+        if ($summary->isEmpty()) {
             return;
         }
 
-        $oldestAgeHours = $this->oldestAgeHours();
+        $oldestAgeHours = $this->ageInHours($summary->oldestFailedAt);
 
-        if ($total <= $message->maxBacklog && $oldestAgeHours <= $message->maxAgeHours) {
+        if ($summary->total <= $message->maxBacklog && $oldestAgeHours <= $message->maxAgeHours) {
             return;
         }
 
         $this->logger->error('Dead-letter backlog over threshold.', [
-            'total' => $total,
+            'total' => $summary->total,
             'maxBacklog' => $message->maxBacklog,
             'oldestAgeHours' => $oldestAgeHours,
             'maxAgeHours' => $message->maxAgeHours,
         ]);
     }
 
-    private function oldestAgeHours(): int
+    private function ageInHours(?DateTimeImmutable $instant): int
     {
-        $oldest = $this->reader->entries(1)[0]->failedAt ?? null;
-
-        if (null === $oldest) {
+        if (!$instant instanceof DateTimeImmutable) {
             return 0;
         }
 
-        return \intdiv(\max(0, $this->clock->now()->getTimestamp() - $oldest->getTimestamp()), self::SECONDS_PER_HOUR);
+        return \intdiv(\max(0, $this->clock->now()->getTimestamp() - $instant->getTimestamp()), self::SECONDS_PER_HOUR);
     }
 }

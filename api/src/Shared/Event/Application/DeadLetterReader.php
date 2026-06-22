@@ -18,7 +18,11 @@ interface DeadLetterReader
     public function count(): int;
 
     /**
-     * Resting messages projected to {@see DeadLetterEntry}, oldest first, capped at $limit when given.
+     * Resting messages projected to {@see DeadLetterEntry}, capped at $limit when given.
+     *
+     * Order follows the underlying transport and is not guaranteed; a caller needing the oldest
+     * must compare {@see DeadLetterEntry::$failedAt} across the returned set (and read the whole
+     * queue, since a $limit returns an arbitrary window).
      *
      * @return list<DeadLetterEntry>
      */

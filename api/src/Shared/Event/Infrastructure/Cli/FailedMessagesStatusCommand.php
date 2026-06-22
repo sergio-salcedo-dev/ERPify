@@ -51,6 +51,9 @@ final class FailedMessagesStatusCommand extends Command
                   <info>php %command.full_name% --json</info>
                   <info>make sf c='%command.name%'</info>
 
+                With <info>--limit</info> only that many messages are inspected; the breakdown and
+                oldest-failure line then describe that sample, while the total count stays exact.
+
                 To re-send a stuck domain-event whose handler dedups (e.g. the notification email), clear
                 its claim first, then retry — see <info>event:dedup:clear</info>.
                 HELP)
@@ -124,8 +127,10 @@ final class FailedMessagesStatusCommand extends Command
         );
 
         if ($summary->oldestFailedAt instanceof DateTimeImmutable) {
+            $scope = \count($entries) < $summary->total ? ' (within the inspected sample)' : '';
             $io->writeln(\sprintf(
-                ' Oldest failure: <comment>%s</comment> (%s ago)',
+                ' Oldest failure%s: <comment>%s</comment> (%s ago)',
+                $scope,
                 $summary->oldestFailedAt->format(DateTimeImmutable::ATOM),
                 $this->humanAge($summary->oldestFailedAt),
             ));
@@ -155,7 +160,7 @@ final class FailedMessagesStatusCommand extends Command
             'countByType' => (object) $summary->countByType,
             'oldestFailedAt' => $summary->oldestFailedAt?->format(DateTimeImmutable::ATOM),
             'oldestAgeSeconds' => $summary->oldestFailedAt instanceof DateTimeImmutable
-                ? $this->clock->now()->getTimestamp() - $summary->oldestFailedAt->getTimestamp()
+                ? \max(0, $this->clock->now()->getTimestamp() - $summary->oldestFailedAt->getTimestamp())
                 : null,
             'messages' => \array_map(static fn (DeadLetterEntry $entry): array => [
                 'messageType' => $entry->messageType,

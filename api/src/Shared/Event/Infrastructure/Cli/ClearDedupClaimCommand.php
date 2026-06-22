@@ -66,7 +66,16 @@ final class ClearDedupClaimCommand extends Command
             return Command::INVALID;
         }
 
-        $this->deduplicator->release($eventId, $handler);
+        if (0 === $this->deduplicator->release($eventId, $handler)) {
+            $io->warning(\sprintf(
+                'No dedup claim found for event "%s" / handler "%s" — nothing to clear. '
+                . 'Verify the id and handler FQCN against messenger:failed:status before retrying.',
+                $eventId,
+                $handler,
+            ));
+
+            return Command::SUCCESS;
+        }
 
         $io->success(\sprintf(
             'Cleared dedup claim for event "%s" / handler "%s". Now run: messenger:failed:retry',
