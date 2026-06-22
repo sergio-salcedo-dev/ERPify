@@ -64,6 +64,27 @@ final class BankResourceMapperTest extends TestCase
         $this->assertSame(0, $resource->accountCount);
     }
 
+    public function testUrlBearingViewsEmitNullUrlsWhenContentHashIsEmpty(): void
+    {
+        // An empty content hash is treated as a missing one: synthesizing a URL from it would yield a
+        // malformed link (host with no hash) instead of a clean null. Both URL-bearing views (detail
+        // and create) must honour it.
+        $media = Media::create(self::MEDIA_ID, '', 'image/png', 70, 'png-bytes');
+        $storedObject = new StoredObject('banks/logo.png', 'image/png', 70, '');
+        $bank = Bank::create(self::BANK_ID, 'JPMorgan Chase', 'JPM', $media, $storedObject)
+            ->setCreatedAt(new DateTimeImmutable(self::CREATED_AT))
+            ->setUpdatedAt(new DateTimeImmutable(self::UPDATED_AT))
+        ;
+
+        $detail = $this->mapper()->toDetailResource(new BankWithAccountCount($bank, 0));
+        $this->assertNull($detail->logoUrl);
+        $this->assertNull($detail->storedObjectUrl);
+
+        $create = $this->mapper()->toCreateResource($bank);
+        $this->assertNull($create->logoUrl);
+        $this->assertNull($create->storedObjectUrl);
+    }
+
     public function testCreateResourceCarriesUrlsButOmitsTheAccountCountKey(): void
     {
         $resource = $this->mapper()->toCreateResource($this->bankWithImages());

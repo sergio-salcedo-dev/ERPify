@@ -12,7 +12,6 @@ use Erpify\Backoffice\Bank\Application\Resource\BankListResource;
 use Erpify\Backoffice\Bank\Application\Resource\BankUpdateResource;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Shared\Media\Application\Port\MediaPublicUrlGenerator;
-use Erpify\Shared\Media\Domain\Entity\Media;
 use Erpify\Shared\Search\Domain\Page;
 use Erpify\Shared\Storage\Application\Port\StoredObjectPublicUrlGenerator;
 use LogicException;
@@ -105,10 +104,10 @@ final readonly class BankResourceMapper
 
     private function logoUrl(Bank $bank): ?string
     {
-        $logo = $bank->getLogo();
+        $contentHash = $bank->getLogo()?->getContentHash();
 
-        return $logo instanceof Media
-            ? $this->mediaPublicUrlGenerator->urlForContentHash($logo->getContentHash())
+        return $this->isResolvableContentHash($contentHash)
+            ? $this->mediaPublicUrlGenerator->urlForContentHash($contentHash)
             : null;
     }
 
@@ -116,9 +115,20 @@ final readonly class BankResourceMapper
     {
         $contentHash = $bank->getStoredObject()?->contentHash;
 
-        return null !== $contentHash
+        return $this->isResolvableContentHash($contentHash)
             ? $this->storedObjectPublicUrlGenerator->urlForContentHash($contentHash)
             : null;
+    }
+
+    /**
+     * A content hash yields a public URL only when present and non-empty: an empty hash would
+     * synthesize a malformed, hostname-only URL, so it is treated the same as a missing one.
+     *
+     * @phpstan-assert-if-true non-empty-string $contentHash
+     */
+    private function isResolvableContentHash(?string $contentHash): bool
+    {
+        return null !== $contentHash && '' !== $contentHash;
     }
 
     private function requireId(Bank $bank): string
