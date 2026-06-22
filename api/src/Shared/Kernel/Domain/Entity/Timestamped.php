@@ -5,20 +5,15 @@ declare(strict_types=1);
 namespace Erpify\Shared\Kernel\Domain\Entity;
 
 use DateTimeImmutable;
-use DateTimeInterface;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
-use Symfony\Component\Serializer\Attribute as Serializer;
-use Symfony\Component\Serializer\Normalizer\DateTimeNormalizer;
 
 trait Timestamped
 {
     #[ORM\Column(name: 'created_at', type: Types::DATETIME_IMMUTABLE)]
-    #[Serializer\Context([DateTimeNormalizer::FORMAT_KEY => DateTimeInterface::ATOM])]
     protected DateTimeImmutable $createdAt;
 
     #[ORM\Column(name: 'updated_at', type: Types::DATETIME_IMMUTABLE)]
-    #[Serializer\Context([DateTimeNormalizer::FORMAT_KEY => DateTimeInterface::ATOM])]
     protected DateTimeImmutable $updatedAt;
 
     public function getCreatedAt(): DateTimeImmutable

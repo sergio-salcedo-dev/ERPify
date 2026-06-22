@@ -45,10 +45,10 @@ exposed view is served from a dedicated **per-view Resource DTO** (`Application/
 flat `readonly` data with no logic), mapped from the entity by an Infrastructure `*ResourceMapper` service;
 the domain entity never crosses the HTTP boundary. A reviewer reads the view's exact JSON off its DTO without
 crossing the entity or any serializer group, and a change to one view cannot leak into another through a
-shared group. The only serializer attribute still admissible inward is `#[Serializer\Context]` on the
-`Timestamped` trait (it pins the ATOM timestamp format, not a projection) — dormant while no entity is
-serialized, and slated for removal once the DTO timestamps own that format. Decision record:
-[`../adr/api-resource-dtos.md`](../adr/api-resource-dtos.md).
+shared group. No serializer attribute is admissible inward: the entity carries only `#[ORM]` / `#[Assert]`
+passive metadata, the ATOM timestamp format is owned by the Infrastructure mapper, and `ResourceDtoContractTest`
+holds every `Application/Resource/` DTO to a flat, immutable, scalar-only shape so nothing else can reach the
+group-less serializer. Decision record: [`../adr/api-resource-dtos.md`](../adr/api-resource-dtos.md).
 
 #### Documented exception — symfony/uid value objects in Domain
 
