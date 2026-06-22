@@ -11,8 +11,10 @@ use Symfony\Component\Scheduler\Schedule;
 use Symfony\Component\Scheduler\ScheduleProviderInterface;
 
 /**
- * Daily maintenance schedule. The messenger_worker consumes the generated ticks via the
- * `scheduler_maintenance` transport (added to its `messenger:consume` command in the compose files).
+ * Maintenance schedule. The messenger_worker consumes the generated ticks via the
+ * `scheduler_maintenance` transport (added to its `messenger:consume` command in the compose files):
+ * a daily prune of stale dedup claims, and an hourly dead-letter backlog check that alarms over
+ * threshold.
  */
 #[AsSchedule('maintenance')]
 final class HandledDomainEventMaintenanceSchedule implements ScheduleProviderInterface
@@ -20,8 +22,9 @@ final class HandledDomainEventMaintenanceSchedule implements ScheduleProviderInt
     #[Override]
     public function getSchedule(): Schedule
     {
-        return (new Schedule())->add(
-            RecurringMessage::every('1 day', new PruneHandledDomainEventsMessage()),
-        );
+        return (new Schedule())
+            ->add(RecurringMessage::every('1 day', new PruneHandledDomainEventsMessage()))
+            ->add(RecurringMessage::every('1 hour', new ReportDeadLetterBacklogMessage()))
+        ;
     }
 }

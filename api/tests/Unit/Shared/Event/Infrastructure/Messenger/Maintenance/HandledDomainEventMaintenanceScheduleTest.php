@@ -16,10 +16,10 @@ use PHPUnit\Framework\TestCase;
 final class HandledDomainEventMaintenanceScheduleTest extends TestCase
 {
     #[Test]
-    public function itSchedulesASingleRecurringMaintenanceMessage(): void
+    public function itSchedulesThePruneAndDeadLetterMaintenanceMessages(): void
     {
         $schedule = (new HandledDomainEventMaintenanceSchedule())->getSchedule();
 
-        $this->assertCount(1, $schedule->getRecurringMessages());
+        $this->assertCount(2, $schedule->getRecurringMessages());
     }
 }
