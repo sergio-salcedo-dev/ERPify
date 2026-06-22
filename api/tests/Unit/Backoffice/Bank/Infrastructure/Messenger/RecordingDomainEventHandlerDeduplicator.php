@@ -54,12 +54,14 @@ final class RecordingDomainEventHandlerDeduplicator implements DomainEventHandle
     }
 
     #[Override]
-    public function release(string $eventId, string $handlerKey): void
+    public function release(string $eventId, string $handlerKey): int
     {
         ++$this->releaseCalls;
 
         if ($this->releaseFailure instanceof Throwable) {
             throw $this->releaseFailure;
         }
+
+        return 1;
     }
 }

@@ -37,9 +37,9 @@ final readonly class DbalDomainEventHandlerDeduplicator implements DomainEventHa
     }
 
     #[Override]
-    public function release(string $eventId, string $handlerKey): void
+    public function release(string $eventId, string $handlerKey): int
     {
-        $this->connection->executeStatement(
+        return (int) $this->connection->executeStatement(
             'DELETE FROM handled_domain_event WHERE event_id = :event_id AND handler = :handler',
             ['event_id' => $eventId, 'handler' => $handlerKey],
         );

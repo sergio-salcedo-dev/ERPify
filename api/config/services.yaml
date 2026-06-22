@@ -29,3 +29,9 @@ services:
     Erpify\Shared\Event\Application\ProjectionRunner:
         arguments:
             $projectors: !tagged_iterator erpify.projector
+
+    # The dead-letter reader inspects the failure transport; bind the concrete `failed` transport
+    # (autowiring cannot pick one receiver among many).
+    Erpify\Shared\Event\Infrastructure\Messenger\MessengerDeadLetterReader:
+        arguments:
+            $failedTransport: '@messenger.transport.failed'

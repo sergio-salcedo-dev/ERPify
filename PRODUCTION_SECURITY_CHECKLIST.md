@@ -104,6 +104,12 @@ you change anything here.
 - [ ] Migrations are reversible (`down()`); no PII/secrets seeded; no
       `DROP TABLE` outside an explicit destructive migration.
 - [ ] Messenger handlers idempotent (at-least-once delivery).
+- [ ] Dead-letter tooling is **operator-console only**, not an HTTP surface:
+      `messenger:failed:status` reads the `failed` transport and may print stored
+      exception messages to the console (no client exposure); the hourly backlog
+      alarm (`ReportDeadLetterBacklogHandler`) logs **counts/ages only**, never
+      payloads; `event:dedup:clear` deletes a claim via parameterised DBAL
+      (`release()`), no string-interpolated SQL. No new auth surface.
 - [ ] The health endpoints (`/api/v1/health`, `/api/v1/backoffice/health`) are
       **consciously public and liveness-only**: static payload (status, service
       name, server time) with no DB / Mercure / Messenger probing, no PII, no

@@ -20,6 +20,8 @@ interface DomainEventHandlerDeduplicator
 
     /**
      * Releases a claim so a retry can claim it again (call only when the side effect failed).
+     *
+     * @return int the number of claims released — 0 when no matching claim existed
      */
-    public function release(string $eventId, string $handlerKey): void;
+    public function release(string $eventId, string $handlerKey): int;
 }
