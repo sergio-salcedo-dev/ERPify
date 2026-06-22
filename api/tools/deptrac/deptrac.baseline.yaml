@@ -18,7 +18,6 @@ deptrac:
       - Symfony\Component\Messenger\MessageBusInterface
     Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount:
       - Erpify\Shared\Validation\Infrastructure\EnumType
-      - Symfony\Component\Serializer\Normalizer\DateTimeNormalizer
     Erpify\Backoffice\Bank\Application\BankCreator:
       - Doctrine\ORM\EntityManagerInterface
     Erpify\Backoffice\Bank\Application\BankDeleter:
@@ -29,11 +28,6 @@ deptrac:
       - Doctrine\ORM\EntityManagerInterface
       - Symfony\Component\Validator\Exception\ValidationFailedException
     Erpify\Backoffice\Bank\Domain\Entity\Bank:
-      - Symfony\Component\Serializer\Normalizer\DateTimeNormalizer
-      - Symfony\Component\Validator\Context\ExecutionContextInterface
-    Erpify\Shared\Search\Application\Http\FilterQuery:
-      - Symfony\Component\Validator\Context\ExecutionContextInterface
-    Erpify\Shared\Search\Application\Http\SearchQuery:
       - Symfony\Component\Validator\Context\ExecutionContextInterface
     Erpify\Shared\ErrorContract\Application\ProblemDetailsFactory:
       - Symfony\Component\DependencyInjection\Attribute\Autowire
@@ -43,6 +37,14 @@ deptrac:
       - Symfony\Component\Security\Core\Exception\AuthenticationException
       - Symfony\Component\Validator\ConstraintViolationInterface
       - Symfony\Component\Validator\Exception\ValidationFailedException
+    Erpify\Shared\Event\Application\ProjectionRunner:
+      - Doctrine\ORM\EntityManagerInterface
+    Erpify\Shared\Search\Application\Http\FilterQuery:
+      - Symfony\Component\Validator\Context\ExecutionContextInterface
+    Erpify\Shared\Search\Application\Http\SearchQuery:
+      - Symfony\Component\Validator\Context\ExecutionContextInterface
+    Erpify\Shared\Storage\Application\StoredObjectOrphanCleaner:
+      - Symfony\Component\DependencyInjection\Attribute\AutowireIterator
     Erpify\Shared\Validation\Application\Validator:
       - Symfony\Component\Validator\Constraint
       - Symfony\Component\Validator\ConstraintViolation
@@ -50,13 +52,3 @@ deptrac:
       - Symfony\Component\Validator\ConstraintViolationListInterface
       - Symfony\Component\Validator\Exception\ValidationFailedException
       - Symfony\Component\Validator\Validator\ValidatorInterface
-    Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot:
-      - Symfony\Component\Serializer\Normalizer\DateTimeNormalizer
-    Erpify\Shared\Kernel\Domain\Entity\Timestamped:
-      - Symfony\Component\Serializer\Normalizer\DateTimeNormalizer
-    Erpify\Shared\Event\Application\ProjectionRunner:
-      - Doctrine\ORM\EntityManagerInterface
-    Erpify\Shared\Media\Domain\Entity\Media:
-      - Symfony\Component\Serializer\Normalizer\DateTimeNormalizer
-    Erpify\Shared\Storage\Application\StoredObjectOrphanCleaner:
-      - Symfony\Component\DependencyInjection\Attribute\AutowireIterator
