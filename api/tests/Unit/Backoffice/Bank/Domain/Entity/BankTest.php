@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Backoffice\Bank\Domain\Entity;
 use DateTimeInterface;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
+use Erpify\Backoffice\Bank\Domain\Event\BankDeletedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Clock\Infrastructure\SymfonyClock;
@@ -15,6 +16,8 @@ use Erpify\Tests\Unit\Backoffice\Bank\Domain\Entity\Mother\BankMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
+use Symfony\Component\Validator\Violation\ConstraintViolationBuilderInterface;
 
 /**
  * @internal
@@ -112,5 +115,57 @@ final class BankTest extends TestCase
         $event = $events[0];
         $this->assertInstanceOf(BankUpdatedDomainEvent::class, $event);
         $this->assertSame($renamedAt, $event->occurredOn()->format(DateTimeInterface::ATOM));
+    }
+
+    public function testGettersExposeTheDisplayCanonicalAndNormalizedForms(): void
+    {
+        $bank = BankMother::create(name: 'Café Society', shortName: 'café');
+
+        $this->assertSame('Café Society', $bank->getName());
+        $this->assertSame('cafe society', $bank->getNameNormalized());
+        $this->assertSame('CAFE', $bank->getShortName());
+    }
+
+    public function testDeleteRecordsADeletedEventForTheAggregate(): void
+    {
+        $bank = BankMother::drained();
+
+        $bank->delete();
+
+        $events = $bank->pullDomainEvents();
+        $this->assertCount(1, $events);
+        $this->assertInstanceOf(BankDeletedDomainEvent::class, $events[0]);
+        $this->assertSame(BankMother::DEFAULT_ID, $events[0]->aggregateId());
+    }
+
+    public function testValidateNormalizedNameLengthIsSilentWhenTheRawNameAlreadyExceedsTheLimit(): void
+    {
+        $bank = BankMother::create(name: \str_repeat('A', 256));
+
+        $context = $this->createMock(ExecutionContextInterface::class);
+        $context->expects($this->never())->method('buildViolation');
+
+        $bank->validateNormalizedNameLength($context);
+    }
+
+    public function testValidateNormalizedNameLengthFlagsAnOverLongNormalizedTwinOnThePathName(): void
+    {
+        // 200 "ß" stays within the 255-char raw limit yet folds to "ss" × 200 = 400 normalized chars,
+        // which would overflow the unique column — the entity rejects it as a clean violation on `name`.
+        $bank = BankMother::create(name: \str_repeat('ß', 200));
+
+        $builder = $this->createMock(ConstraintViolationBuilderInterface::class);
+        $builder->method('setParameter')->willReturnSelf();
+        $builder->expects($this->once())->method('atPath')->with('name')->willReturnSelf();
+        $builder->expects($this->once())->method('addViolation');
+
+        $context = $this->createMock(ExecutionContextInterface::class);
+        $context->expects($this->once())
+            ->method('buildViolation')
+            ->with('The name must not exceed {{ limit }} characters.')
+            ->willReturn($builder)
+        ;
+
+        $bank->validateNormalizedNameLength($context);
     }
 }

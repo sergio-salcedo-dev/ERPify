@@ -51,4 +51,17 @@ final class BankAccountTest extends TestCase
 
         BankAccountMother::create(bankId: 'not-a-uuid');
     }
+
+    public function testGetHolderNameReturnsTheHolder(): void
+    {
+        $account = BankAccountMother::create(holderName: 'Globex Corporation');
+
+        $this->assertSame('Globex Corporation', $account->getHolderName());
+    }
+
+    public function testGetAliasReturnsTheAliasWhenProvidedAndNullWhenAbsent(): void
+    {
+        $this->assertSame('Treasury', BankAccountMother::create(alias: 'Treasury')->getAlias());
+        $this->assertNull(BankAccountMother::create()->getAlias());
+    }
 }
