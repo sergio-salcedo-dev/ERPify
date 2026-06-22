@@ -11,7 +11,9 @@ use Erpify\Shared\Media\Application\Port\ImageNormalizer;
 use Erpify\Shared\Media\Domain\Entity\Media;
 use Erpify\Shared\Validation\Application\Validator;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Validator\Exception\ValidationFailedException;
 use Symfony\Component\Validator\Validation;
 
 /**
@@ -65,17 +67,51 @@ final class MediaRegistrarTest extends TestCase
         $this->assertSame(1, $mediaRepository->saveOrGetCalls);
     }
 
-    private function makeRegistrar(RecordingMediaRepository $mediaRepository): MediaRegistrar
+    #[DataProvider('provideRejectsMediaWhoseContentHashIsNotALowercaseSha256DigestCases')]
+    public function testRejectsMediaWhoseContentHashIsNotALowercaseSha256Digest(string $contentHash): void
     {
+        // The content hash is machine-computed (sha256 hex); an invalid one signals a corrupt pipeline,
+        // so the registrar must reject it before persistence rather than let a malformed public URL be
+        // synthesized from it downstream.
+        $mediaRepository = new RecordingMediaRepository();
+
+        try {
+            $this->makeRegistrar($mediaRepository, $contentHash)->register(
+                new UploadedImage('image/png', 'PNG.'),
+            );
+            $this->fail('expected the registrar to reject an invalid content hash');
+        } catch (ValidationFailedException) {
+            // Expected — the assertion below pins that nothing was persisted.
+        }
+
+        $this->assertSame(0, $mediaRepository->saveOrGetCalls, 'an invalid content hash must not be persisted');
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function provideRejectsMediaWhoseContentHashIsNotALowercaseSha256DigestCases(): iterable
+    {
+        yield 'empty' => [''];
+        yield 'whitespace' => [' '];
+        yield 'too short' => ['abc'];
+        yield 'uppercase hex' => [\strtoupper(self::CONTENT_HASH)];
+        yield 'non-hex characters' => [\str_repeat('z', 64)];
+    }
+
+    private function makeRegistrar(
+        RecordingMediaRepository $mediaRepository,
+        string $contentHash = self::CONTENT_HASH,
+    ): MediaRegistrar {
         $imageNormalizer = $this->createStub(ImageNormalizer::class);
         $imageNormalizer->method('normalize')->willReturn(
-            new NormalizedImage('PNG.', 'image/png', self::CONTENT_HASH),
+            new NormalizedImage('PNG.', 'image/png', $contentHash),
         );
 
         return new MediaRegistrar(
             $imageNormalizer,
             $mediaRepository,
-            new Validator(Validation::createValidator()),
+            new Validator(Validation::createValidatorBuilder()->enableAttributeMapping()->getValidator()),
         );
     }
 }
