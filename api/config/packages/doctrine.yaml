@@ -3,6 +3,9 @@ doctrine:
         url: '%env(resolve:DATABASE_URL)%'
         server_version: '18'
         profiling_collect_backtrace: '%kernel.debug%'
+        types:
+            datetimetz: Erpify\Shared\Persistence\Infrastructure\DateTimeTzMicrosType
+            datetimetz_immutable: Erpify\Shared\Persistence\Infrastructure\DateTimeTzMicrosType
     orm:
         validate_xml_mapping: true
         naming_strategy: doctrine.orm.naming_strategy.underscore_number_aware
