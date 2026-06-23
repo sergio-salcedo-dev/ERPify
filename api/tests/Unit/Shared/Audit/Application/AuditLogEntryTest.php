@@ -140,6 +140,21 @@ final class AuditLogEntryTest extends TestCase
         $this->assertSame($resourceType, $entry->resourceType);
     }
 
+    public function testTrimsActionAndNormalizesBlankResourceTypeToNull(): void
+    {
+        $entry = AuditLogEntry::create(
+            AuditLevel::ACTIVITY,
+            '  BANK_ACCOUNTS_VIEWED  ',
+            ActorContext::anonymous(),
+            Uuid::generate(),
+            new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
+            '   ',
+        );
+
+        $this->assertSame('BANK_ACCOUNTS_VIEWED', $entry->action);
+        $this->assertNull($entry->resourceType);
+    }
+
     private function anEntry(): AuditLogEntry
     {
         return AuditLogEntry::create(

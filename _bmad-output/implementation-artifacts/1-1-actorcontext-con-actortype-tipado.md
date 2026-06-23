@@ -4,7 +4,7 @@ baseline_commit: cb18570398d585c8fbacab655586dba5be0b1d23
 
 # Story 1.1: `ActorContext` con `ActorType` tipado
 
-Status: review
+Status: done
 
 <!-- Epic 1 — Registro de auditoría end-to-end (backbone + primer actor auditado).
      Primera historia del subsistema de auditoría operativa/de actor. Ver ADR docs/adr/audit-activity-log.md (D6, D7). -->

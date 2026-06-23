@@ -65,11 +65,15 @@ final readonly class AuditLogEntry
         ?string $ip = null,
         ?string $userAgent = null,
     ): self {
-        if ('' === \trim($action)) {
+        $action = \trim($action);
+
+        if ('' === $action) {
             throw InvalidAuditLogEntry::actionMustNotBeEmpty();
         }
 
         self::guardFieldLength('action', $action);
+
+        $resourceType = self::normalizeOptional($resourceType);
 
         if (null !== $resourceType) {
             self::guardFieldLength('resourceType', $resourceType);
@@ -88,6 +92,21 @@ final readonly class AuditLogEntry
             $ip,
             $userAgent,
         );
+    }
+
+    /**
+     * A value that is whitespace-only is treated as absent, so a blank `resourceType` is
+     * stored as `null` rather than as an ambiguous empty string.
+     */
+    private static function normalizeOptional(?string $value): ?string
+    {
+        if (null === $value) {
+            return null;
+        }
+
+        $trimmed = \trim($value);
+
+        return '' === $trimmed ? null : $trimmed;
     }
 
     private static function guardFieldLength(string $field, string $value): void

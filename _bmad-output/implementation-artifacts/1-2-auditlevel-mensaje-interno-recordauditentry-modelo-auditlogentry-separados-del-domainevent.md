@@ -4,7 +4,7 @@ baseline_commit: b2a674f22684ae130d6d4cc97dc2ef2cac634e15
 
 # Story 1.2: `AuditLevel` + mensaje interno `RecordAuditEntry` + modelo `AuditLogEntry`, separados del `DomainEvent`
 
-Status: review
+Status: done
 
 <!-- Epic 1 — Registro de auditoría end-to-end (backbone + primer actor auditado).
      Segunda historia del subsistema de auditoría operativa/de actor. Compone ActorContext (1.1).
@@ -252,3 +252,22 @@ claude-opus-4-8 (1M context)
 ### Change Log
 
 - 2026-06-23 — Implemented Story 1.2: `AuditLevel` enum + `AuditLogEntry` record (`create()` mints v7 `id`, enforces non-empty/≤100 field invariants via marker-less `InvalidAuditLogEntry`) + `RecordAuditEntry` transport message wrapping the record, all pure Domain/Application. Unit tests cover the surface, idempotency-anchor minting, invariants, the non-`DomainEvent` structural guarantee, and lossless transport serialization. Gates green (stan/unit/quality, full suite no regressions).
+
+### Review Findings
+
+_Code review 2026-06-23 (PR #365, stories 1.1 + 1.2; 3 adversarial layers). **Story 1.1 reviewed clean — no findings.** No AC violations found in either story; all findings below are quality/consistency/hardening on 1.2 code._
+
+#### Decision needed (resolved)
+
+- [x] [Review][Decision→Patch] Inconsistent blank/whitespace handling across fields. **Resolved: normalize.** `create()` now stores `\trim($action)` (blank still throws) and a private `normalizeOptional()` collapses a whitespace-only `resourceType` to `null` (removes the null-vs-`''` ambiguity). New test `testTrimsActionAndNormalizesBlankResourceTypeToNull`. [api/src/Shared/Audit/Application/AuditLogEntry.php]
+- [x] [Review][Decision→Patch] Mechanism-narration comments. **Resolved: trim.** Removed the 3-line comment in `RecordAuditEntryTest::testHasNoBaseClassSoTheEventBackboneNeverSeesIt` (the method name carries the intent) and condensed the `RecordAuditEntry` docblock to a tight "no base class is deliberate" why, dropping the registration-pass/middleware/EventBus narration. [api/src/Shared/Audit/Application/RecordAuditEntry.php, api/tests/Unit/Shared/Audit/Application/RecordAuditEntryTest.php]
+- [x] [Review][Decision] 11-param `create()` + `@SuppressWarnings(PHPMD.ExcessiveParameterList)`. **Resolved: keep flat (dismissed).** The flat record is the spec's deliberate choice (D-1.2.a — read by the 1.3 DBAL writer); named args mitigate the positional-swap risk. Revisit-trigger: group into VOs if the parameter list grows or a 2nd construction pattern appears.
+
+#### Patch (applied)
+
+- [x] [Review][Patch] Serialization round-trip test only exercised a minimal entry. **Applied:** `testSurvivesTransportSerializationWithoutLosingPrecision` now builds a fully-populated entry (`resourceType`/`resourceId`/nested `metadata`/`ip`/`userAgent`) before `serialize()` and asserts each after `unserialize()`, proving lossless transport of the optionals. [api/tests/Unit/Shared/Audit/Application/RecordAuditEntryTest.php]
+
+#### Deferred (cross-story — lands with 1.3 / Epic 2)
+
+- [x] [Review][Defer] `userAgent` is attacker-controlled and unbounded in `create()` — ensure 1.3's `user_agent` column is `TEXT`/unbounded (or the Epic-2 capture truncates) so a long UA fails fast in domain, not opaquely in the Postgres INSERT. [api/src/Shared/Audit/Application/AuditLogEntry.php:47] — deferred, pre-existing scope of 1.3/Epic 2
+- [x] [Review][Defer] `MAX_FIELD_LENGTH = 100` must track 1.3's `VARCHAR(100)` width for `action`/`resource_type` (documented coupling D-1.2.h) — verify (ideally a cross-reference test) when 1.3 lands. [api/src/Shared/Audit/Application/AuditLogEntry.php:29] — deferred, depends on 1.3 schema

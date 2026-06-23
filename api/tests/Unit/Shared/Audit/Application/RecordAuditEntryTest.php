@@ -32,9 +32,6 @@ final class RecordAuditEntryTest extends TestCase
 
     public function testHasNoBaseClassSoTheEventBackboneNeverSeesIt(): void
     {
-        // A class reaches the event backbone only by extending the DomainEvent base — the
-        // registration pass and the EventBus signature both key off that inheritance — so
-        // having no parent class is what keeps this transport message off it entirely.
         $reflection = new ReflectionClass(RecordAuditEntry::class);
 
         $this->assertFalse($reflection->getParentClass());
@@ -43,13 +40,20 @@ final class RecordAuditEntryTest extends TestCase
     public function testSurvivesTransportSerializationWithoutLosingPrecision(): void
     {
         $actor = ActorContext::forUser(Uuid::generate());
+        $resourceId = Uuid::generate();
         $occurredOn = new DateTimeImmutable('2026-01-01T12:34:56.789012+02:00');
+        $metadata = ['filters' => ['status' => 'active'], 'export_format' => 'xlsx'];
         $entry = AuditLogEntry::create(
             AuditLevel::SECURITY,
             'BANK_ACCOUNTS_VIEWED',
             $actor,
             Uuid::generate(),
             $occurredOn,
+            'bank_account',
+            $resourceId,
+            $metadata,
+            '203.0.113.7',
+            'Mozilla/5.0',
         );
         $message = new RecordAuditEntry($entry);
 
@@ -65,6 +69,11 @@ final class RecordAuditEntryTest extends TestCase
             $occurredOn->format('Y-m-d\TH:i:s.uP'),
             $round->entry->occurredOn->format('Y-m-d\TH:i:s.uP'),
         );
+        $this->assertSame('bank_account', $round->entry->resourceType);
+        $this->assertSame($resourceId, $round->entry->resourceId);
+        $this->assertSame($metadata, $round->entry->metadata);
+        $this->assertSame('203.0.113.7', $round->entry->ip);
+        $this->assertSame('Mozilla/5.0', $round->entry->userAgent);
     }
 
     private function anEntry(): AuditLogEntry
