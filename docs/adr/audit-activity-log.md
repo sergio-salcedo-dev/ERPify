@@ -1,6 +1,6 @@
 # ADR — Auditoría operativa / de actor (`AuditEvent`), eje separado del stream de dominio
 
-> **Status:** accepted · design frozen, implementation pending · **Date:** 2026-06-14
+> **Status:** accepted · design frozen, implementation pending · **Date:** 2026-06-14 · **Last reviewed:** 2026-06-23
 > · **Scope:** cross-cutting `Shared` subsystem (capture + contract) + `Backoffice/Audit` module
 > (read side). `BankAccountsViewed` is its first consumer; the **subsystem implementation** is
 > its own epic and is not mixed with the code of the feature that surfaced it.
@@ -119,13 +119,54 @@ especulativo, sin flujo que lo pida (CLAUDE.md: "nada especulativo"). **Trigger 
 cuando exista auth con sesiones y un caso de investigación que exija correlación de sesión explícita
 más allá de la agregación por `actor_id` + ventana temporal.
 
+### D7 — `ActorContext` tipado: `actor_type` obligatorio, `actor_id` nullable según el tipo
+
+D6 fija `actor_id` *nullable* hasta que exista auth, pero un `actor_id = null` es ambiguo: ¿ruta
+anónima, proceso de sistema (cron/scheduler), API key o webhook externo? Esa fuga semántica degrada
+justo la consulta forense que el subsistema existe para servir. Se cierra tipando el actor:
+
+```text
+ActorType  enum  anonymous | system | api_key | user
+```
+
+- `actor_type` es **obligatorio** en todo `AuditEvent` (nunca null).
+- `actor_id` es nullable y su presencia depende del tipo.
+
+| `actor_type` | `actor_id`       |
+|--------------|------------------|
+| `anonymous`  | `null`           |
+| `system`     | `null`           |
+| `api_key`    | `<api_key_uuid>` |
+| `user`       | `<user_uuid>`    |
+
+`ActorContext` (en `Shared/…/Audit/Domain`, value object de dominio, sin dependencias de framework):
+
+```php
+final readonly class ActorContext
+{
+    public function __construct(
+        public ActorType $type,
+        public ?string $actorId,
+    ) {}
+}
+```
+
+`actor_type` (quién) y `level` de D4 (`activity`/`security`, qué clase de auditoría) son ejes
+**ortogonales**; no se colapsan. Esto **completa** D6, no lo revoca: la correlación obligatoria y el
+`actor_id` nullable-hasta-auth siguen vigentes; solo se añade el discriminante de tipo.
+
+Descartado: derivar el tipo de `actor_id IS NULL` + heurística de ruta — no es consultable, es
+frágil y se rompe en cuanto entra `api_key`. Descartado: enum más rico (`cron`, `webhook`) hoy —
+`system` los cubre; se expande cuando un caso real lo exija (YAGNI).
+
 ## Esbozo de esquema (`audit_log`)
 
 ```text
 id              uuid v7  PK (Shared/Domain/Entity/Identifiable, id app-assigned)
 level           enum     activity | security
 action          string   p.ej. BANK_ACCOUNTS_VIEWED, UNAUTHORIZED_UPDATE_ATTEMPT
-actor_id        uuid     NULL hoy; NOT NULL cuando haya auth
+actor_type      enum     anonymous|system|api_key|user — obligatorio (D7)
+actor_id        uuid     NULL salvo api_key/user (D7)
 correlation_id  uuid     obligatorio (request id estable)
 resource_type   string   NULL  (p.ej. BankAccount)
 resource_id     uuid     NULL
@@ -137,6 +178,25 @@ occurred_on     timestamptz
 
 Índices previstos: `(actor_id, occurred_on)` (jornada), `(correlation_id)` (request), `(level,
 occurred_on)` (retención/prune), `(resource_type, resource_id)` (investigación por recurso).
+
+## Alcance de captura — Fase 1
+
+D2 fija el *mecanismo* (captura híbrida, la política decide); esto fija el *alcance* inicial para
+que no derive en criterios por desarrollador. La `AuditPolicy` clasifica por **categoría**; los
+`action` concretos aterrizan por módulo (hoy solo existe y está cableado `BANK_ACCOUNTS_VIEWED`; el
+resto son ejemplos, algunos de módulos futuros, marcados con \*).
+
+- **`activity`** — navegación a pantallas de backoffice, consultas de listado y de detalle,
+  búsquedas, filtros, exportaciones.
+  Ej.: `BANK_ACCOUNTS_VIEWED`, `BANK_ACCOUNT_VIEWED`\*, `CUSTOMERS_SEARCHED`\*, `INVOICES_EXPORTED`\*.
+- **`security`** — `AccessDeniedException`, accesos a recursos fuera de alcance, login/logout (cuando
+  exista auth), uso de API keys, elevaciones de permiso, operaciones admin sensibles.
+  Ej.: `ACCESS_DENIED`, `UNAUTHORIZED_UPDATE_ATTEMPT`\*, `ROLE_ELEVATION_ATTEMPT`\*.
+- **Nunca** — assets, health checks, Mercure, polling, requests técnicos y cualquier endpoint HTTP
+  genérico. En particular **no** existe un `action` `HTTP_REQUEST` (sería el *log explosion* que D2
+  rechaza: capturar todo y decidir tarde).
+
+(\* `action` aún no definido; aterriza cuando exista el módulo.)
 
 ## Triggers de revisita
 
@@ -152,3 +212,8 @@ feature que la originó. Secuencia sugerida: (1) `Shared` — `AuditEvent` + `Au
 `kernel.terminate` + listener de `AccessDeniedException` + `ActorContext`; (3) retención —
 `AuditLogPruner` (Scheduler) + estrategia de pseudonimización GDPR; (4) `Backoffice/Audit` — read
 model + UI de investigación. El estado de implementación vive en el issue/PR correspondiente.
+
+**Secuencia frente a auth (cerrada):** el backbone de auditoría se implementa **antes** de User/RBAC.
+`actor_id` permanece nullable (`actor_type` ∈ {`anonymous`, `system`, `api_key`}) hasta que exista
+autenticación; el día que entre User solo cambia el proveedor de `ActorContext` (`ActorContextFactory`)
+— schema, bus, storage, retención y read model no se tocan.
