@@ -10,23 +10,17 @@ use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Audit\Infrastructure\SymfonyAuditLogger;
-use Erpify\Shared\Http\Infrastructure\CorrelationIdListener;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FakeMessageBus;
-use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FixedActorContextFactory;
-use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FixedClock;
+use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FixedAuditEntryFactory;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\InMemoryAuditLogWriter;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
-use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpFoundation\RequestStack;
 
 /**
  * @internal
- *
- * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[CoversClass(SymfonyAuditLogger::class)]
 final class SymfonyAuditLoggerTest extends TestCase
@@ -35,12 +29,11 @@ final class SymfonyAuditLoggerTest extends TestCase
 
     private const string OCCURRED_ON = '2026-06-23T12:34:56.123456+00:00';
 
-    public function testActivitySealsTheContextAndDispatchesWithoutWriting(): void
+    public function testActivityRoutesTheSealedEntryToTheBusWithoutWriting(): void
     {
         $bus = new FakeMessageBus();
         $writer = new InMemoryAuditLogWriter();
-        $actor = ActorContext::system();
-        $auditLogger = $this->makeLogger($bus, $writer, new RecordingLogger(), $actor);
+        $auditLogger = $this->makeLogger($bus, $writer, new RecordingLogger());
 
         $resourceId = Uuid::generate();
         $auditLogger->log('BANK_ACCOUNTS_VIEWED', AuditLevel::ACTIVITY, AuditResource::of('Bank', $resourceId));
@@ -52,24 +45,21 @@ final class SymfonyAuditLoggerTest extends TestCase
         $this->assertInstanceOf(RecordAuditEntry::class, $message);
 
         $entry = $message->entry;
-        $this->assertSame('BANK_ACCOUNTS_VIEWED', $entry->action);
+        $this->assertSame('BANK_ACCOUNTS_VIEWED', $entry->action, 'the action is forwarded to the factory');
         $this->assertSame(AuditLevel::ACTIVITY, $entry->level);
         $this->assertSame('Bank', $entry->resourceType);
         $this->assertSame($resourceId, $entry->resourceId);
-        $this->assertSame($actor, $entry->actor, 'the actor is sealed in the request path, not in the worker');
-        $this->assertSame(self::CORRELATION_ID, $entry->correlationId);
-        $this->assertSame(self::OCCURRED_ON, $entry->occurredOn->format('Y-m-d\TH:i:s.uP'));
     }
 
-    public function testSecurityWritesSynchronouslyWithoutDispatching(): void
+    public function testSecurityWritesTheSealedEntrySynchronouslyWithoutDispatching(): void
     {
         $bus = new FakeMessageBus();
         $writer = new InMemoryAuditLogWriter();
-        $auditLogger = $this->makeLogger($bus, $writer, new RecordingLogger(), ActorContext::anonymous());
+        $auditLogger = $this->makeLogger($bus, $writer, new RecordingLogger());
 
         $auditLogger->log('ACCESS_DENIED', AuditLevel::SECURITY, AuditResource::of('Bank', Uuid::generate()));
 
-        $this->assertCount(1, $writer->written, 'security writes before send');
+        $this->assertCount(1, $writer->written, 'security writes the sealed entry before send');
         $this->assertSame([], $bus->dispatchedMessages, 'security does not enqueue');
     }
 
@@ -79,7 +69,7 @@ final class SymfonyAuditLoggerTest extends TestCase
         $bus = new FakeMessageBus($failure);
         $writer = new InMemoryAuditLogWriter();
         $recordingLogger = new RecordingLogger();
-        $auditLogger = $this->makeLogger($bus, $writer, $recordingLogger, ActorContext::anonymous());
+        $auditLogger = $this->makeLogger($bus, $writer, $recordingLogger);
 
         $auditLogger->log(
             'BANK_ACCOUNTS_VIEWED',
@@ -103,7 +93,7 @@ final class SymfonyAuditLoggerTest extends TestCase
         $bus = new FakeMessageBus();
         $writer = new InMemoryAuditLogWriter(new RuntimeException('audit_log unavailable'));
         $recordingLogger = new RecordingLogger();
-        $auditLogger = $this->makeLogger($bus, $writer, $recordingLogger, ActorContext::anonymous());
+        $auditLogger = $this->makeLogger($bus, $writer, $recordingLogger);
 
         try {
             $auditLogger->log('ACCESS_DENIED', AuditLevel::SECURITY, AuditResource::of('Bank', Uuid::generate()));
@@ -123,20 +113,15 @@ final class SymfonyAuditLoggerTest extends TestCase
         FakeMessageBus $bus,
         InMemoryAuditLogWriter $writer,
         RecordingLogger $logger,
-        ActorContext $actor,
     ): SymfonyAuditLogger {
-        $request = new Request();
-        $request->attributes->set(CorrelationIdListener::ATTRIBUTE_KEY, self::CORRELATION_ID);
-
-        $requestStack = new RequestStack();
-        $requestStack->push($request);
-
         return new SymfonyAuditLogger(
             $bus,
             $writer,
-            new FixedActorContextFactory($actor),
-            new FixedClock(new DateTimeImmutable(self::OCCURRED_ON)),
-            $requestStack,
+            new FixedAuditEntryFactory(
+                ActorContext::system(),
+                self::CORRELATION_ID,
+                new DateTimeImmutable(self::OCCURRED_ON),
+            ),
             $logger,
         );
     }
