@@ -1,6 +1,10 @@
+---
+baseline_commit: b0dadb140c111d3198828828ce102194a208b9e4
+---
+
 # Story 1.3: Tabla `audit_log` append-only + escritor idempotente (raw DBAL + schema listener)
 
-Status: ready-for-dev
+Status: review
 
 <!-- Epic 1 — Registro de auditoría end-to-end (backbone + primer actor auditado).
      Tercera historia del subsistema de auditoría operativa/de actor. Persiste el AuditLogEntry de 1.2.
@@ -79,13 +83,13 @@ Esta historia construye **la capa de almacenamiento** del eje de auditoría: la 
 
 ## Tasks / Subtasks
 
-- [ ] **T0 — Verificar prerequisitos en disco (1.1 + 1.2)** — bloqueante.
-  - [ ] Confirmar que existe `api/src/Shared/Audit/Domain/ActorContext.php` (props públicos `readonly` `type: ActorType`, `actorId: ?string`) y `ActorType`/`ActorContext` de la **Story 1.1**.
-  - [ ] Confirmar que existe `api/src/Shared/Audit/Application/AuditLogEntry.php` (props públicos `readonly`: `id`, `level: AuditLevel`, `action`, `actor: ActorContext`, `correlationId`, `occurredOn: DateTimeImmutable`, `resourceType: ?string`, `resourceId: ?string`, `metadata: array<string,mixed>`, `ip: ?string`, `userAgent: ?string`) y el enum `AuditLevel` de la **Story 1.2**. En la entrega de PR único los commits siguen la secuencia 1.1 → 1.2 → 1.3; **si 1.2 no está en disco, 1.3 está bloqueada** (el escritor lee los props de `AuditLogEntry`).
+- [x] **T0 — Verificar prerequisitos en disco (1.1 + 1.2)** — bloqueante.
+  - [x] Confirmar que existe `api/src/Shared/Audit/Domain/ActorContext.php` (props públicos `readonly` `type: ActorType`, `actorId: ?string`) y `ActorType`/`ActorContext` de la **Story 1.1**.
+  - [x] Confirmar que existe `api/src/Shared/Audit/Application/AuditLogEntry.php` (props públicos `readonly`: `id`, `level: AuditLevel`, `action`, `actor: ActorContext`, `correlationId`, `occurredOn: DateTimeImmutable`, `resourceType: ?string`, `resourceId: ?string`, `metadata: array<string,mixed>`, `ip: ?string`, `userAgent: ?string`) y el enum `AuditLevel` de la **Story 1.2**. En la entrega de PR único los commits siguen la secuencia 1.1 → 1.2 → 1.3; **si 1.2 no está en disco, 1.3 está bloqueada** (el escritor lee los props de `AuditLogEntry`).
 
-- [ ] **T1 — `AuditLogSchemaListener`** (AC1, AC2, AC8, AC10) → `api/src/Shared/Audit/Infrastructure/Persistence/AuditLogSchemaListener.php`
-  - [ ] `#[AsDoctrineListener(event: ToolEvents::postGenerateSchema)]` `final class AuditLogSchemaListener` con `private const string TABLE = 'audit_log';` y el guard `if ($schema->hasTable(self::TABLE)) { return; }`. Mirror exacto de `EventStoreSchemaListener`.
-  - [ ] Columnas (usar constantes `Doctrine\DBAL\Types\Types`):
+- [x] **T1 — `AuditLogSchemaListener`** (AC1, AC2, AC8, AC10) → `api/src/Shared/Audit/Infrastructure/Persistence/AuditLogSchemaListener.php`
+  - [x] `#[AsDoctrineListener(event: ToolEvents::postGenerateSchema)]` `final class AuditLogSchemaListener` con `private const string TABLE = 'audit_log';` y el guard `if ($schema->hasTable(self::TABLE)) { return; }`. Mirror exacto de `EventStoreSchemaListener`.
+  - [x] Columnas (usar constantes `Doctrine\DBAL\Types\Types`):
     - `id` → `Types::GUID`
     - `level` → `Types::STRING, ['length' => 16]`
     - `action` → `Types::STRING, ['length' => 100]`
@@ -98,18 +102,18 @@ Esta historia construye **la capa de almacenamiento** del eje de auditoría: la 
     - `ip` → `Types::STRING, ['length' => 45, 'notnull' => false]`
     - `user_agent` → `Types::STRING, ['length' => 512, 'notnull' => false]`
     - `occurred_on` → `Types::DATETIMETZ_IMMUTABLE`
-  - [ ] **Columnas no confiables (tainted):** `ip`, `user_agent` y `metadata` son **datos controlados por el cliente / no confiables** (provienen del request: cabeceras / payload). Persistirlos como evidencia es correcto, pero **deben escaparse al renderizarse** (UI admin de Epic 4) y **nunca tratarse como confiables**; no se interpolan en SQL aquí (todo va por `:placeholder`, ver T3).
-  - [ ] PK: `$table->addPrimaryKeyConstraint(PrimaryKeyConstraint::editor()->setUnquotedColumnNames('id')->create());`
-  - [ ] Índices (no únicos): `$table->addIndex(['actor_id', 'occurred_on'], 'audit_log_actor_idx');` · `addIndex(['correlation_id'], 'audit_log_correlation_idx');` · `addIndex(['level', 'occurred_on'], 'audit_log_level_idx');` · `addIndex(['resource_type', 'resource_id'], 'audit_log_resource_idx');`
-  - [ ] Docblock breve de clase en la línea del de `EventStoreSchemaListener`: append-only, sin entidad ORM, este listener es la fuente de verdad y de él se genera la baseline; Doctrine no modela `DEFAULT now()`/`CHECK`/enum nativo → los valores los aporta el escritor. **Sin** IDs de story/AC/NFR en el comentario (regla de comentarios de `CLAUDE.md`).
+  - [x] **Columnas no confiables (tainted):** `ip`, `user_agent` y `metadata` son **datos controlados por el cliente / no confiables** (provienen del request: cabeceras / payload). Persistirlos como evidencia es correcto, pero **deben escaparse al renderizarse** (UI admin de Epic 4) y **nunca tratarse como confiables**; no se interpolan en SQL aquí (todo va por `:placeholder`, ver T3).
+  - [x] PK: `$table->addPrimaryKeyConstraint(PrimaryKeyConstraint::editor()->setUnquotedColumnNames('id')->create());`
+  - [x] Índices (no únicos): `$table->addIndex(['actor_id', 'occurred_on'], 'audit_log_actor_idx');` · `addIndex(['correlation_id'], 'audit_log_correlation_idx');` · `addIndex(['level', 'occurred_on'], 'audit_log_level_idx');` · `addIndex(['resource_type', 'resource_id'], 'audit_log_resource_idx');`
+  - [x] Docblock breve de clase en la línea del de `EventStoreSchemaListener`: append-only, sin entidad ORM, este listener es la fuente de verdad y de él se genera la baseline; Doctrine no modela `DEFAULT now()`/`CHECK`/enum nativo → los valores los aporta el escritor. **Sin** IDs de story/AC/NFR en el comentario (regla de comentarios de `CLAUDE.md`).
 
-- [ ] **T2 — Puerto `AuditLogWriter`** (AC3) → `api/src/Shared/Audit/Application/AuditLogWriter.php`
-  - [ ] `interface AuditLogWriter { public function write(AuditLogEntry $entry): void; }`. Importa solo `Erpify\Shared\Audit\Application\AuditLogEntry` (misma capa). **Sin** método de lectura (write-only; las consultas son Epic 4 directo sobre la tabla). Mirror de `Shared/Event/Application/EventStore.php` (reducido a la escritura).
-  - [ ] Docblock breve: puerto de salida de la bitácora append-only `audit_log`; lo invoca el `RecordAuditEntryHandler`/inserción síncrona de **1.4**.
+- [x] **T2 — Puerto `AuditLogWriter`** (AC3) → `api/src/Shared/Audit/Application/AuditLogWriter.php`
+  - [x] `interface AuditLogWriter { public function write(AuditLogEntry $entry): void; }`. Importa solo `Erpify\Shared\Audit\Application\AuditLogEntry` (misma capa). **Sin** método de lectura (write-only; las consultas son Epic 4 directo sobre la tabla). Mirror de `Shared/Event/Application/EventStore.php` (reducido a la escritura).
+  - [x] Docblock breve: puerto de salida de la bitácora append-only `audit_log`; lo invoca el `RecordAuditEntryHandler`/inserción síncrona de **1.4**.
 
-- [ ] **T3 — Adaptador `DbalAuditLogWriter`** (AC3, AC4, AC5, AC8, AC9) → `api/src/Shared/Audit/Infrastructure/Persistence/DbalAuditLogWriter.php`
-  - [ ] `#[AsAlias(AuditLogWriter::class)] final readonly class DbalAuditLogWriter implements AuditLogWriter` con `public function __construct(private Connection $connection) {}` (DBAL `Connection` por defecto, autowired). `#[Override]` en `write()`.
-  - [ ] `INSERT INTO audit_log (...) VALUES (...) ON CONFLICT (id) DO NOTHING` vía `$this->connection->executeStatement(...)` con binding **nombrado** `:placeholder` (mirror del `VALUES … ON CONFLICT` de `DbalDomainEventHandlerDeduplicator`, no del `INSERT … SELECT` de `DbalEventStore` — `audit_log` no tiene columna calculada). Casts de tipo en SQL como en `DbalEventStore::append()`:
+- [x] **T3 — Adaptador `DbalAuditLogWriter`** (AC3, AC4, AC5, AC8, AC9) → `api/src/Shared/Audit/Infrastructure/Persistence/DbalAuditLogWriter.php`
+  - [x] `#[AsAlias(AuditLogWriter::class)] final readonly class DbalAuditLogWriter implements AuditLogWriter` con `public function __construct(private Connection $connection) {}` (DBAL `Connection` por defecto, autowired). `#[Override]` en `write()`.
+  - [x] `INSERT INTO audit_log (...) VALUES (...) ON CONFLICT (id) DO NOTHING` vía `$this->connection->executeStatement(...)` con binding **nombrado** `:placeholder` (mirror del `VALUES … ON CONFLICT` de `DbalDomainEventHandlerDeduplicator`, no del `INSERT … SELECT` de `DbalEventStore` — `audit_log` no tiene columna calculada). Casts de tipo en SQL como en `DbalEventStore::append()`:
     ```php
     $this->connection->executeStatement(
         'INSERT INTO audit_log '
@@ -135,45 +139,45 @@ Esta historia construye **la capa de almacenamiento** del eje de auditoría: la 
         ],
     );
     ```
-  - [ ] `metadata` se serializa con `json_encode(..., JSON_THROW_ON_ERROR)` (mirror del `encode()` de `DbalEventStore`); `occurred_on` con `->format('Y-m-d H:i:s.uP')` (microsegundos + offset). Los `actor_id`/`resource_id` nulos pasan como `null`: `CAST(:actor_id AS UUID)` con valor `null` rinde `NULL` (correcto).
-  - [ ] **No** capturar la excepción ni añadir lógica best-effort aquí — la frontera best-effort (que un fallo de auditoría nunca tumbe el caso de uso) es responsabilidad de **1.4**; el escritor falla ruidosamente si la BD falla. **No** abrir transacción propia (la transaccionalidad la decide el llamador de 1.4: `security` síncrono dentro del request, `activity` en el handler del worker).
+  - [x] `metadata` se serializa con `json_encode(..., JSON_THROW_ON_ERROR)` (mirror del `encode()` de `DbalEventStore`); `occurred_on` con `->format('Y-m-d H:i:s.uP')` (microsegundos + offset). Los `actor_id`/`resource_id` nulos pasan como `null`: `CAST(:actor_id AS UUID)` con valor `null` rinde `NULL` (correcto).
+  - [x] **No** capturar la excepción ni añadir lógica best-effort aquí — la frontera best-effort (que un fallo de auditoría nunca tumbe el caso de uso) es responsabilidad de **1.4**; el escritor falla ruidosamente si la BD falla. **No** abrir transacción propia (la transaccionalidad la decide el llamador de 1.4: `security` síncrono dentro del request, `activity` en el handler del worker).
 
-- [ ] **T4 — Generar y aplicar la migración** (AC1, AC2, AC10)
-  - [ ] Con el stack arriba (`make app.dev` o `make docker.up`), correr `make db.diff` → genera `api/migrations/2026/VersionYYYYMMDDHHMMSS.php` con el `CREATE TABLE audit_log` + los 4 `CREATE INDEX` derivados del listener T1.
-  - [ ] Revisar el `up()`: `CREATE TABLE audit_log (...)` con `id UUID NOT NULL`, `level VARCHAR(16) NOT NULL`, `action VARCHAR(100) NOT NULL`, `actor_type VARCHAR(16) NOT NULL`, `actor_id UUID DEFAULT NULL`, `correlation_id UUID NOT NULL`, `resource_type VARCHAR(100) DEFAULT NULL`, `resource_id UUID DEFAULT NULL`, `metadata JSONB NOT NULL`, `ip VARCHAR(45) DEFAULT NULL`, `user_agent VARCHAR(512) DEFAULT NULL`, `occurred_on TIMESTAMP(0) WITH TIME ZONE NOT NULL`, `PRIMARY KEY (id)` + los 4 índices. Plain `CREATE INDEX` (transaccional; **no** `CONCURRENTLY` — rompería `--all-or-nothing`, ver `api/CLAUDE.md`).
-  - [ ] Asegurar un `down()` real: `DROP TABLE IF EXISTS audit_log` (la baseline dropea explícitamente; usar `IF EXISTS` por resiliencia). Si `make db.diff` no emite el `down`, completarlo a mano (editar una migración de la rama actual está permitido).
-  - [ ] `make db.migrate` para aplicarla en la BD de dev (necesario para que el test funcional de T6 encuentre la tabla).
-  - [ ] Re-correr `make db.diff` → debe reportar **"No changes detected"** (cierra AC2). Si propone un diff sobre `audit_log`, alinear el listener T1 con lo que Doctrine espera (típicamente `length`/`notnull`) hasta que el round-trip sea estable.
+- [x] **T4 — Generar y aplicar la migración** (AC1, AC2, AC10)
+  - [x] Con el stack arriba (`make app.dev` o `make docker.up`), correr `make db.diff` → genera `api/migrations/2026/VersionYYYYMMDDHHMMSS.php` con el `CREATE TABLE audit_log` + los 4 `CREATE INDEX` derivados del listener T1.
+  - [x] Revisar el `up()`: `CREATE TABLE audit_log (...)` con `id UUID NOT NULL`, `level VARCHAR(16) NOT NULL`, `action VARCHAR(100) NOT NULL`, `actor_type VARCHAR(16) NOT NULL`, `actor_id UUID DEFAULT NULL`, `correlation_id UUID NOT NULL`, `resource_type VARCHAR(100) DEFAULT NULL`, `resource_id UUID DEFAULT NULL`, `metadata JSONB NOT NULL`, `ip VARCHAR(45) DEFAULT NULL`, `user_agent VARCHAR(512) DEFAULT NULL`, `occurred_on TIMESTAMP(0) WITH TIME ZONE NOT NULL`, `PRIMARY KEY (id)` + los 4 índices. Plain `CREATE INDEX` (transaccional; **no** `CONCURRENTLY` — rompería `--all-or-nothing`, ver `api/CLAUDE.md`).
+  - [x] Asegurar un `down()` real: `DROP TABLE IF EXISTS audit_log` (la baseline dropea explícitamente; usar `IF EXISTS` por resiliencia). Si `make db.diff` no emite el `down`, completarlo a mano (editar una migración de la rama actual está permitido).
+  - [x] `make db.migrate` para aplicarla en la BD de dev (necesario para que el test funcional de T6 encuentre la tabla).
+  - [x] Re-correr `make db.diff` → debe reportar **"No changes detected"** (cierra AC2). Si propone un diff sobre `audit_log`, alinear el listener T1 con lo que Doctrine espera (típicamente `length`/`notnull`) hasta que el round-trip sea estable.
 
-- [ ] **T5 — Test unitario del schema listener** (AC1, AC2) → `api/tests/Unit/Shared/Audit/Infrastructure/Persistence/AuditLogSchemaListenerTest.php`
-  - [ ] `extends PHPUnit\Framework\TestCase` (puro, sin kernel), `#[CoversClass(AuditLogSchemaListener::class)]`, `final`, `/** @internal */`. Mirror de `EventStoreSchemaListenerTest`.
-  - [ ] `itInjectsTheAppendOnlyAuditLogTable`: `new Schema()`, `(new AuditLogSchemaListener())->postGenerateSchema(new GenerateSchemaEventArgs($this->createStub(EntityManagerInterface::class), $schema))`; aserta `$schema->hasTable('audit_log')`, las **12** columnas (`hasColumn`), los **4** índices (`hasIndex('audit_log_actor_idx')`, …), y la nulabilidad-clave para fijar el contrato: `$table->getColumn('actor_id')->getNotnull()` **false**, `$table->getColumn('correlation_id')->getNotnull()` **true**, `$table->getColumn('metadata')->getNotnull()` **true** (PHPStan: `getNotnull()` devuelve `bool`).
-  - [ ] **Longitud por columna (reduce drift de schema, W7):** además de la nulabilidad, asertar la **longitud** declarada de las columnas string para fijarla en el contrato del test (no solo en `make db.diff`, que solo cazaría el drift a mano): `$table->getColumn('action')->getLength()` **100**, `$table->getColumn('resource_type')->getLength()` **100**, `$table->getColumn('ip')->getLength()` **45**, `$table->getColumn('user_agent')->getLength()` **512**, `$table->getColumn('level')->getLength()` **16**, `$table->getColumn('actor_type')->getLength()` **16** (PHPStan: `getLength()` devuelve `?int`). Así un cambio accidental de `length` rompe el unit, no se filtra hasta una revisión manual de la migración.
-  - [ ] `itLeavesAnExistingTableUntouched`: llamar `postGenerateSchema` **dos veces** con el mismo `$args` → el guard `hasTable` lo hace idempotente; `assertTrue($schema->hasTable('audit_log'))`.
+- [x] **T5 — Test unitario del schema listener** (AC1, AC2) → `api/tests/Unit/Shared/Audit/Infrastructure/Persistence/AuditLogSchemaListenerTest.php`
+  - [x] `extends PHPUnit\Framework\TestCase` (puro, sin kernel), `#[CoversClass(AuditLogSchemaListener::class)]`, `final`, `/** @internal */`. Mirror de `EventStoreSchemaListenerTest`.
+  - [x] `itInjectsTheAppendOnlyAuditLogTable`: `new Schema()`, `(new AuditLogSchemaListener())->postGenerateSchema(new GenerateSchemaEventArgs($this->createStub(EntityManagerInterface::class), $schema))`; aserta `$schema->hasTable('audit_log')`, las **12** columnas (`hasColumn`), los **4** índices (`hasIndex('audit_log_actor_idx')`, …), y la nulabilidad-clave para fijar el contrato: `$table->getColumn('actor_id')->getNotnull()` **false**, `$table->getColumn('correlation_id')->getNotnull()` **true**, `$table->getColumn('metadata')->getNotnull()` **true** (PHPStan: `getNotnull()` devuelve `bool`).
+  - [x] **Longitud por columna (reduce drift de schema, W7):** además de la nulabilidad, asertar la **longitud** declarada de las columnas string para fijarla en el contrato del test (no solo en `make db.diff`, que solo cazaría el drift a mano): `$table->getColumn('action')->getLength()` **100**, `$table->getColumn('resource_type')->getLength()` **100**, `$table->getColumn('ip')->getLength()` **45**, `$table->getColumn('user_agent')->getLength()` **512**, `$table->getColumn('level')->getLength()` **16**, `$table->getColumn('actor_type')->getLength()` **16** (PHPStan: `getLength()` devuelve `?int`). Así un cambio accidental de `length` rompe el unit, no se filtra hasta una revisión manual de la migración.
+  - [x] `itLeavesAnExistingTableUntouched`: llamar `postGenerateSchema` **dos veces** con el mismo `$args` → el guard `hasTable` lo hace idempotente; `assertTrue($schema->hasTable('audit_log'))`.
 
-- [ ] **T6 — Test funcional de integración del escritor** (AC4, AC5, AC6, AC9) → `api/tests/Functional/Shared/Persistence/AuditLogWriterIdempotencyTest.php`
-  - [ ] `extends Symfony\Bundle\FrameworkBundle\Test\KernelTestCase`, `#[CoversClass(DbalAuditLogWriter::class)]`, `final`, `/** @internal */`. Mirror de `DomainEventStoreIdempotencyTest` (misma carpeta `tests/Functional/Shared/Persistence/`, donde ya viven los tests funcionales de `Shared/Event`).
-  - [ ] Resolver el escritor por el puerto: `$writer = self::getContainer()->get(AuditLogWriter::class);` `assertInstanceOf(AuditLogWriter::class, $writer)`. Conexión vía `self::getContainer()->get(EntityManagerInterface::class)->getConnection()`.
-  - [ ] **Aislamiento**: `beginTransaction()` … todo el trabajo … `finally { if ($connection->isTransactionActive()) $connection->rollBack(); }` — la suite no tiene auto-rollback DAMA y comparte la conexión de la BD de dev; el test no debe dejar filas.
-  - [ ] **Idempotencia (AC5)**: construir `$entry = AuditLogEntry::create(AuditLevel::ACTIVITY, 'BANK_ACCOUNTS_VIEWED', ActorContext::anonymous(), Uuid::generate(), new DateTimeImmutable('2026-01-01T00:00:00+00:00'))`; `$writer->write($entry)` → `assertSame(1, $this->countRowsForId($connection, $entry->id))`; `$writer->write($entry)` otra vez → `assertSame(1, …, 'second write must be a no-op')`.
-  - [ ] **Id-scoped (AC6)**: crear un segundo `AuditLogEntry::create(...)` con los **mismos** datos de negocio (otra vez `Uuid::generate()` interno → `id` distinto), `write()`-arlo, y asertar que ahora hay **2** filas en total (p. ej. `SELECT COUNT(*) FROM audit_log WHERE correlation_id = :cid` con el mismo `correlationId` para ambos, o contar por los dos `id`).
-  - [ ] **Round-trip de columnas (AC9)**: en un test (o caso) aparte, construir un `AuditLogEntry::create(AuditLevel::SECURITY, 'ACCESS_DENIED', ActorContext::forUser(Uuid::generate()), Uuid::generate(), new DateTimeImmutable('2026-03-02T10:11:12+00:00'), resourceType: 'Bank', resourceId: Uuid::generate(), metadata: ['filters' => ['status' => 'active']], ip: '203.0.113.7', userAgent: 'Mozilla/5.0')`, `write()`-arlo y `fetchAssociative('SELECT * FROM audit_log WHERE id = :id', …)`; asertar columna por columna (`level === 'security'`, `actor_type === 'user'`, `actor_id` = el uuid, `json_decode($row['metadata'], true) === ['filters' => ['status' => 'active']]`, `occurred_on` parseable al instante original). Probar también el `AuditLogEntry` mínimo (anónimo, sin recurso, `metadata` `[]`) → `actor_id`/`resource_type`/`resource_id`/`ip`/`user_agent` `NULL`.
-  - [ ] Helper `countRowsForId(Connection $c, string $id): int` con `fetchOne('SELECT COUNT(*) FROM audit_log WHERE id = :id', ['id' => $id])` (`assertIsNumeric` + cast a int, mirror del helper de `DomainEventStoreIdempotencyTest`).
-  - [ ] **UUID en test**: generar con `Erpify\Shared\Uuid\Domain\Uuid::generate()`, nunca literales hardcodeados.
+- [x] **T6 — Test funcional de integración del escritor** (AC4, AC5, AC6, AC9) → `api/tests/Functional/Shared/Persistence/AuditLogWriterIdempotencyTest.php`
+  - [x] `extends Symfony\Bundle\FrameworkBundle\Test\KernelTestCase`, `#[CoversClass(DbalAuditLogWriter::class)]`, `final`, `/** @internal */`. Mirror de `DomainEventStoreIdempotencyTest` (misma carpeta `tests/Functional/Shared/Persistence/`, donde ya viven los tests funcionales de `Shared/Event`).
+  - [x] Resolver el escritor por el puerto: `$writer = self::getContainer()->get(AuditLogWriter::class);` `assertInstanceOf(AuditLogWriter::class, $writer)`. Conexión vía `self::getContainer()->get(EntityManagerInterface::class)->getConnection()`.
+  - [x] **Aislamiento**: `beginTransaction()` … todo el trabajo … `finally { if ($connection->isTransactionActive()) $connection->rollBack(); }` — la suite no tiene auto-rollback DAMA y comparte la conexión de la BD de dev; el test no debe dejar filas.
+  - [x] **Idempotencia (AC5)**: construir `$entry = AuditLogEntry::create(AuditLevel::ACTIVITY, 'BANK_ACCOUNTS_VIEWED', ActorContext::anonymous(), Uuid::generate(), new DateTimeImmutable('2026-01-01T00:00:00+00:00'))`; `$writer->write($entry)` → `assertSame(1, $this->countRowsForId($connection, $entry->id))`; `$writer->write($entry)` otra vez → `assertSame(1, …, 'second write must be a no-op')`.
+  - [x] **Id-scoped (AC6)**: crear un segundo `AuditLogEntry::create(...)` con los **mismos** datos de negocio (otra vez `Uuid::generate()` interno → `id` distinto), `write()`-arlo, y asertar que ahora hay **2** filas en total (p. ej. `SELECT COUNT(*) FROM audit_log WHERE correlation_id = :cid` con el mismo `correlationId` para ambos, o contar por los dos `id`).
+  - [x] **Round-trip de columnas (AC9)**: en un test (o caso) aparte, construir un `AuditLogEntry::create(AuditLevel::SECURITY, 'ACCESS_DENIED', ActorContext::forUser(Uuid::generate()), Uuid::generate(), new DateTimeImmutable('2026-03-02T10:11:12+00:00'), resourceType: 'Bank', resourceId: Uuid::generate(), metadata: ['filters' => ['status' => 'active']], ip: '203.0.113.7', userAgent: 'Mozilla/5.0')`, `write()`-arlo y `fetchAssociative('SELECT * FROM audit_log WHERE id = :id', …)`; asertar columna por columna (`level === 'security'`, `actor_type === 'user'`, `actor_id` = el uuid, `json_decode($row['metadata'], true) === ['filters' => ['status' => 'active']]`, `occurred_on` parseable al instante original). Probar también el `AuditLogEntry` mínimo (anónimo, sin recurso, `metadata` `[]`) → `actor_id`/`resource_type`/`resource_id`/`ip`/`user_agent` `NULL`.
+  - [x] Helper `countRowsForId(Connection $c, string $id): int` con `fetchOne('SELECT COUNT(*) FROM audit_log WHERE id = :id', ['id' => $id])` (`assertIsNumeric` + cast a int, mirror del helper de `DomainEventStoreIdempotencyTest`).
+  - [x] **UUID en test**: generar con `Erpify\Shared\Uuid\Domain\Uuid::generate()`, nunca literales hardcodeados.
 
-- [ ] **T7 — Gates** (AC10): orden importa →
+- [x] **T7 — Gates** (AC10): orden importa →
   1. `make php.stan` sobre los ficheros nuevos.
   2. Stack arriba + `make db.diff` + `make db.migrate` (crea `audit_log` en la BD de dev) + re-`make db.diff` ⇒ "No changes detected".
   3. `make php.unit` (corre Unit **y** Functional bajo la única "Project Test Suite" — el test de T6 necesita la tabla ya migrada).
   4. `make php.quality` (deptrac + bounded-context + phpmd + cs-fixer + rector).
   5. **Re-correr `make php.stan`** sobre los ficheros ya asentados (Rector puede reescribir asserts en `php.quality` — ver Testing). `api/config/reference.php` se regenera en `php.quality`: **commitea** el diff regenerado, no hagas `git checkout` de él.
-  - [ ] **Barrer del diff** cualquier comentario con IDs de story/AC/FR/NFR/`D-1.3.x` antes del commit final (regla de comentarios de `CLAUDE.md`).
+  - [x] **Barrer del diff** cualquier comentario con IDs de story/AC/FR/NFR/`D-1.3.x` antes del commit final (regla de comentarios de `CLAUDE.md`).
 
-- [ ] **T8 — Registrar `audit_log` como PII + política prevista** (AC11) → `PRODUCTION_SECURITY_CHECKLIST.md` y [`docs/rules/security.md`](../../docs/rules/security.md)
-  - [ ] En `PRODUCTION_SECURITY_CHECKLIST.md`: añadir `audit_log` al inventario de tablas/datos sensibles indicando que **contiene PII** — columnas `actor_id`, `ip`, `user_agent` — y la **política prevista**: retención por nivel (`activity` vs `security`) + pseudonimización/redacción GDPR de `ip`/`user_agent`/`actor_id`. Dejar explícito que la **implementación** (poda/erasure) es **Epic 3**; 1.3 solo documenta "esto contiene PII + política".
-  - [ ] En [`docs/rules/security.md`](../../docs/rules/security.md): registrar `audit_log` como tabla PII con la misma nota (columnas PII + política de retención/pseudonimización prevista, implementación en Epic 3), coherente con cómo el doc lista otros datos sensibles.
-  - [ ] *Justificación (no diferible):* NFR3 y el **ADR-D4** exigen que el registro documental acompañe a la introducción de la tabla; diferirlo a Epic 3 dejaría una tabla PII viva sin política documentada. Solo se adelanta la **documentación**, no la implementación de prune/erasure.
-  - [ ] **Markdown link style** (`CLAUDE.md`): enlazar solo a ficheros concretos; sin hrefs de directorio con barra final.
+- [x] **T8 — Registrar `audit_log` como PII + política prevista** (AC11) → `PRODUCTION_SECURITY_CHECKLIST.md` y [`docs/rules/security.md`](../../docs/rules/security.md)
+  - [x] En `PRODUCTION_SECURITY_CHECKLIST.md`: añadir `audit_log` al inventario de tablas/datos sensibles indicando que **contiene PII** — columnas `actor_id`, `ip`, `user_agent` — y la **política prevista**: retención por nivel (`activity` vs `security`) + pseudonimización/redacción GDPR de `ip`/`user_agent`/`actor_id`. Dejar explícito que la **implementación** (poda/erasure) es **Epic 3**; 1.3 solo documenta "esto contiene PII + política".
+  - [x] En [`docs/rules/security.md`](../../docs/rules/security.md): registrar `audit_log` como tabla PII con la misma nota (columnas PII + política de retención/pseudonimización prevista, implementación en Epic 3), coherente con cómo el doc lista otros datos sensibles.
+  - [x] *Justificación (no diferible):* NFR3 y el **ADR-D4** exigen que el registro documental acompañe a la introducción de la tabla; diferirlo a Epic 3 dejaría una tabla PII viva sin política documentada. Solo se adelanta la **documentación**, no la implementación de prune/erasure.
+  - [x] **Markdown link style** (`CLAUDE.md`): enlazar solo a ficheros concretos; sin hrefs de directorio con barra final.
 
 ## Dev Notes
 
@@ -300,8 +304,56 @@ Patrón de carpeta: el adaptador + listener en `Shared/Audit/Infrastructure/Pers
 
 ### Agent Model Used
 
+claude-opus-4-8[1m] (Claude Opus 4.8, 1M context) — bmad-dev-story workflow.
+
 ### Debug Log References
+
+- `make php.stan` — green (`[OK] No errors`) on the new files, both before and after the `php.quality` fixer pass.
+- `make db.diff` → migration `Version20260623164321`; `make db.migrate` applied it (CREATE TABLE + 4 índices); re-`make db.diff` ⇒ **"No changes detected"** (AC2 — sin DROP/diff espurio, sin entidad ORM).
+- `make php.unit` — suite completa **1164 tests, 5260 assertions, 0 fallos** (3 skips preexistentes); los 6 tests nuevos verdes.
+- `make php.quality` — deptrac **0 violaciones** (sin bloque nuevo ni allowlist), phpmd/cs-fixer/rector limpios; `api/config/reference.php` no cambió.
+- `make php.psalm.taint` — **No errors found** (el INSERT parametrizado no crea sink de taint para `ip`/`user_agent`/`metadata`).
 
 ### Completion Notes List
 
+- **Capa de almacenamiento de `audit_log` entregada** como calco de `event_store`: schema listener (fuente de verdad del esquema), puerto write-only `AuditLogWriter`, adaptador `DbalAuditLogWriter` (`#[AsAlias]`, `INSERT … ON CONFLICT (id) DO NOTHING`), migración generada por `make db.diff`, y registro PII documental. Las 11 ACs satisfechas.
+- **Decisiones cerradas aplicadas tal cual:** `level`/`actor_type` como `VARCHAR` guardando `$enum->value` (D-1.3.d); `ip` como `VARCHAR(45)` (D-1.3.e); `id` app-minted, sin default de servidor (D-1.3.c/f); `down()` destructivo con `DROP TABLE IF EXISTS` (D-1.3.g).
+- **Desviación del T6 (resolución del escritor):** el test funcional construye `new DbalAuditLogWriter($connection)` con la `Connection` real del contenedor en lugar de resolver el puerto vía `self::getContainer()->get(AuditLogWriter::class)`. Motivo: el alias autoconfigurado **no tiene consumidor de producción hasta 1.4**, así que el contenedor lo poda en compilación (`ServiceNotFoundException: removed or inlined`) — `EventStore` solo es resoluble porque sí tiene consumidores. La instanciación directa ejercita el SQL real contra Postgres (idempotencia, casts, round-trip, nulos) sin añadir config de test desechable (respeta el File List + "cero YAML" + mínimo código); el cableado `#[AsAlias]` quedará cubierto end-to-end cuando 1.4 añada el consumidor. Alternativa descartada: exponerlo `public: true` en `services_test.yaml` (config transitoria para un servicio aún sin uso). Verde sin ello.
+- **Pregunta pendiente (doc de arquitectura):** seguida la recomendación de la spec — `docs/architecture-api.md` se difiere a 1.4/1.5, cuando exista el flujo end-to-end (escritor cableado al transporte); no se documenta una tabla aún sin escritor cableado.
+- **Self-review de seguridad:** SQL 100% parametrizado (`:placeholder`, sin interpolación); `ip`/`user_agent`/`metadata` tainted documentados como tales; sin nueva superficie de auth (no hay controller/handler); migración reversible, sin PII/secretos sembrados; `audit_log` registrada como tabla PII. `php.psalm.taint` verde.
+
 ### File List
+
+- `api/src/Shared/Audit/Application/AuditLogWriter.php` (NEW — puerto write-only)
+- `api/src/Shared/Audit/Infrastructure/Persistence/AuditLogSchemaListener.php` (NEW — `postGenerateSchema`, fuente de verdad del esquema)
+- `api/src/Shared/Audit/Infrastructure/Persistence/DbalAuditLogWriter.php` (NEW — adaptador DBAL `#[AsAlias]`, INSERT idempotente)
+- `api/migrations/2026/Version20260623164321.php` (NEW — `CREATE TABLE audit_log` + 4 índices; `down()` = `DROP TABLE IF EXISTS`)
+- `api/tests/Unit/Shared/Audit/Infrastructure/Persistence/AuditLogSchemaListenerTest.php` (NEW — unit puro del listener: columnas, índices, nulabilidad, longitudes, idempotencia del guard)
+- `api/tests/Functional/Shared/Persistence/AuditLogWriterIdempotencyTest.php` (NEW — integración real Postgres: idempotencia por `id`, id-scoped, round-trip completo + caso mínimo nulo)
+- `PRODUCTION_SECURITY_CHECKLIST.md` (MOD — `audit_log` registrada como PII: `actor_id`/`ip`/`user_agent` + política prevista, impl diferida)
+- `docs/rules/security.md` (MOD — `audit_log` registrada como tabla PII con la misma nota)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (MOD — story 1-3 `ready-for-dev` → `in-progress` → `review`)
+
+### Change Log
+
+| Fecha       | Cambio                                                                                              |
+|-------------|-----------------------------------------------------------------------------------------------------|
+| 2026-06-23  | Implementada la capa de almacenamiento de `audit_log`: schema listener, puerto + adaptador DBAL idempotente, migración, tests unit + integración, registro PII. Gates verdes (stan/db.diff/unit 1164/quality/taint). Status → review. |
+
+## Review Findings
+
+_Code review 2026-06-23 (story 1.3, WIP sin commitear; 3 capas adversariales). **Sin violaciones de AC** — AC1–AC11 verificados satisfechos (AC9 con la salvedad de precisión de abajo). Los hallazgos son consistencia / honestidad-de-test / narración._
+
+### Decision needed
+
+- [ ] [Review][Decision] `occurred_on` se persiste con precisión de **segundo entero** (`TIMESTAMP(0) WITH TIME ZONE`, de `Types::DATETIMETZ_IMMUTABLE`) mientras el escritor formatea microsegundos (`->format('Y-m-d H:i:s.uP')`) y la Story 1.2 los preserva con esmero en el round-trip del transporte. Postgres redondea la fracción al insertar. Es **consistente con la plantilla `event_store`** (mismo `TIMESTAMP(0)` + `.uP` en `main`) y UUIDv7 `(occurred_on, id)` ya desempata el orden sub-segundo → segundo-entero es defendible. Pero el test de round-trip lo **enmascara** (compara solo `getTimestamp()` con un instante sin fracción). Decidir: (a) **mantener segundo-entero** (consistencia + desempate UUIDv7) y arreglar el test para que asierte el contrato real; o (b) ampliar a `TIMESTAMP(6)` para igualar la fidelidad de microsegundos de 1.2. **Recomiendo (a).** [migración `up()`, `DbalAuditLogWriter.php:54`, `AuditLogWriterIdempotencyTest.php:131-134`]
+- [ ] [Review][Decision] El docblock del puerto `AuditLogWriter` narra comportamiento aún inexistente de 1.4 ("inserts a `security` entry synchronously before the response is sent and an `activity` entry from the worker") — narración forward-looking de un flujo que no existe en 1.3, mismo patrón que recortaste en la review de 1.2 (D2). Recortar la frase forward-looking (manteniendo el "why" del write-only) o mantener. **Recomiendo recortar.** [`api/src/Shared/Audit/Application/AuditLogWriter.php:7-12`]
+
+### Patch (acoplado a la decisión de precisión)
+
+- [ ] [Review][Patch] `testItRoundTripsEveryColumnAgainstPostgres` no puede detectar la pérdida de precisión de `occurred_on` — usa un instante `.000000` y compara solo `getTimestamp()` (segundos enteros), así que pasaría aunque se descartaran los microsegundos. Usar un instante con microsegundos y asertar el valor realmente almacenado (truncado-a-segundo bajo (a), o microsegundos completos bajo (b)). [`api/tests/Functional/Shared/Persistence/AuditLogWriterIdempotencyTest.php:86-135`]
+
+### Deferred
+
+- [x] [Review][Defer] `user_agent` es atacante-controlado y la columna es `VARCHAR(512)`, pero nada lo trunca antes del INSERT — un UA >512 chars revienta la escritura (perdida en `activity`, propagada en `security`). La captura de Epic 2 debe truncar (o la columna pasar a `TEXT`). Misma familia que el defer de la review de 1.2, ahora concreto. [`DbalAuditLogWriter.php:53`, migración] — deferred, captura Epic 2
+- [x] [Review][Defer] El cableado `#[AsAlias(AuditLogWriter::class)]` queda sin test — el alias se poda (sin consumidor de producción hasta 1.4), así que el test funcional instancia `new DbalAuditLogWriter(...)` a mano. 1.4 debe añadir el test end-to-end que resuelve el puerto desde el contenedor. [`AuditLogWriterIdempotencyTest.php:167-194`] — deferred, aterriza con 1.4
