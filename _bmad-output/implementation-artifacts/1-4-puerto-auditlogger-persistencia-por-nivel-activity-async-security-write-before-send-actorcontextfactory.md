@@ -1,6 +1,10 @@
+---
+baseline_commit: 589c60f7c778e435b1c34291f5950a79b5c6c36c
+---
+
 # Story 1.4: Puerto `AuditLogger` + persistencia por nivel (activity async / security write-before-send) + `ActorContextFactory`
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Epic 1 — Registro de auditoría end-to-end (backbone + primer actor auditado).
      Cuarta historia del subsistema de auditoría operativa/de actor. Cierra el flujo de escritura:

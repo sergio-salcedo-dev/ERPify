@@ -62,3 +62,11 @@ services:
     Erpify\Tests\Behat\Support\Notification\RecordingMailerSubscriber:
         tags:
             - { name: kernel.event_subscriber }
+
+    # The audit write seam has no production consumer yet (the first auditing caller arrives later), so
+    # its autoconfigured private alias would be pruned at compile time and the branching functional test
+    # could not resolve it. Expose it — and with it the whole adapter graph — in test only, to exercise
+    # the real wiring. Removable once a production caller retains the alias.
+    Erpify\Shared\Audit\Application\AuditLogger:
+        alias: Erpify\Shared\Audit\Infrastructure\SymfonyAuditLogger
+        public: true
