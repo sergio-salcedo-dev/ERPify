@@ -92,7 +92,9 @@ durabilidad distintos:
   inserción **síncrona write-before-send** en el mismo ciclo de request: una denegación nunca se
   pierde en silencio si la request llegó a ejecutarse. Reutiliza el escritor DBAL idempotente
   (`INSERT … ON CONFLICT (id) DO NOTHING`), de modo que un eventual reintento async de respaldo es
-  un no-op por PK.
+  un no-op por PK. Si esa inserción síncrona falla, la **excepción se propaga** (la request denegada
+  no se completa en silencio): la frontera best-effort (swallow + warning) aplica **solo** a
+  `activity`, nunca a `security`.
 
 **Transporte `audit` dedicado** (no comparte el `async` de los `DomainEvent`): son dos modelos de
 cola distintos —el de dominio es *consistency-sensitive* (write-before-send/outbox), el de auditoría
@@ -131,6 +133,16 @@ el proceso de retención.
   de [`rules/database.md`](../rules/database.md); se registra en
   [`rules/security.md`](../rules/security.md) y `PRODUCTION_SECURITY_CHECKLIST.md`.
 - **Sin payload sensible** en `metadata` (IDs y discriminantes, no cuerpos de entidad).
+
+**Origen de `ip` (trust boundary).** El valor de `ip` se toma de la entrada *rightmost* de
+`X-Forwarded-For` —la que añade Caddy, no falsificable—, con trusted proxies configurados, heredando
+exactamente la decisión que ya usa el rate-limiter del PWA (ver `PRODUCTION_SECURITY_CHECKLIST.md`).
+**Nunca** el `X-Forwarded-For` crudo del cliente (spoofeable). La captura se ejecuta en Epic 2; aquí
+se fija el contrato del dato.
+
+**Input no confiable (*tainted*).** `ip`, `user_agent` y `metadata` son datos controlados por el
+cliente / no confiables: deben escaparse al renderizarse en la UI admin (Epic 4) —nunca
+`dangerouslySetInnerHTML` ni HTML sin escape, también en los exports—.
 
 Descartado: misma retención para todo (incumple separación legal de seguridad vs actividad).
 Descartado: borrado físico en *erasure* (destruye la auditoría de seguridad, que es justo lo que se
@@ -207,19 +219,26 @@ frágil y se rompe en cuanto entra `api_key`. Descartado: enum más rico (`cron`
 ## Esbozo de esquema (`audit_log`)
 
 ```text
-id              uuid v7  PK (Shared/Domain/Entity/Identifiable, id app-assigned)
-level           enum     activity | security
-action          string   p.ej. BANK_ACCOUNTS_VIEWED, UNAUTHORIZED_UPDATE_ATTEMPT
-actor_type      enum     anonymous|system|api_key|user — obligatorio (D7)
-actor_id        uuid     NULL salvo api_key/user (D7)
-correlation_id  uuid     obligatorio (request id estable)
-resource_type   string   NULL  (p.ej. BankAccount)
-resource_id     uuid     NULL
-metadata        jsonb    sin payload sensible
-ip              inet     NULL
-user_agent      string   NULL
+id              uuid v7      PK (Shared/Domain/Entity/Identifiable, id app-assigned)
+level           enum         activity | security
+action          string       p.ej. BANK_ACCOUNTS_VIEWED, UNAUTHORIZED_UPDATE_ATTEMPT
+actor_type      enum         anonymous|system|api_key|user — obligatorio (D7)
+actor_id        uuid         NULL salvo api_key/user (D7)
+correlation_id  uuid         obligatorio (request id estable)
+resource_type   string       NULL  (p.ej. BankAccount)
+resource_id     uuid         NULL
+metadata        jsonb        sin payload sensible
+ip              varchar(45)  NULL
+user_agent      string       NULL
 occurred_on     timestamptz
 ```
+
+`ip` se persiste como `varchar(45)` (cabe una IPv6) y no como `inet`: DBAL no modela el tipo `inet`
+y ninguna consulta usa operadores CIDR/subred — solo se almacena como evidencia.
+
+`level` y `actor_type` se persisten como `VARCHAR` guardando el `->value` de enums PHP
+string-backed (`EnumType` es una constraint de Symfony Validator, no un Doctrine `Type`; no se usan
+enums nativos de Postgres).
 
 Índices previstos: `(actor_id, occurred_on)` (jornada), `(correlation_id)` (request), `(level,
 occurred_on)` (retención/prune), `(resource_type, resource_id)` (investigación por recurso).

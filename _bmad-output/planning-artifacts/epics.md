@@ -87,7 +87,7 @@ NFR12: Idempotencia / orden de listeners: el listener de `security` sobre `Acces
 
 - Reutilizar `Shared/Http/Infrastructure/CorrelationIdListener` como fuente de `correlation_id` (ya emitido en cada línea PSR-3 y en `X-Correlation-Id`).
 - Reutilizar el patrón de mantenimiento del event-backbone para la poda: `HandledDomainEventMaintenanceSchedule` + `PruneHandledDomainEventsHandler` + transporte `scheduler_maintenance` (consumido por `scheduler_worker` dedicado en prod, plegado en `messenger_worker` en dev).
-- Reutilizar `Shared/Validation/Infrastructure/EnumType` + `EnumTypeValidator` para los enums Postgres/Doctrine `level` y `actor_type`.
+- Persistir los enums `level` y `actor_type` como `VARCHAR` guardando `$enum->value` de enums PHP string-backed; no se usan `EnumType`/`EnumTypeValidator` (es una constraint de Symfony Validator, no un Doctrine `Type`) ni enums nativos de Postgres.
 - Reutilizar `Shared/Kernel/Domain/Entity/Identifiable` (uuid v7) para la identidad de la fila.
 - Mantener `audit_log` **schema-aware** vía `postGenerateSchema` listener para que `make db.diff` no proponga `DROP TABLE audit_log` (mismo patrón que `EventStoreSchemaListener` / `HandledDomainEventSchemaListener`).
 - Cablear en `config/packages/messenger.yaml` un transporte **dedicado** `audit` (no el `async` de los `DomainEvent`) + el routing de `RecordAuditEntry` a ese transporte + su handler; en dev lo consume `messenger_worker`. Registrar además la `Scheduler` de poda.
@@ -233,7 +233,7 @@ para registrar acciones de forma duradera, inmutable y sin duplicados ante reent
 
 **Given** una migración generada con `make db.diff`,
 **When** se aplica,
-**Then** existe `audit_log` con el esquema del ADR (PK `id` UUIDv7; `level`, `action`, `actor_type`, `actor_id` null, `correlation_id`, `resource_type` null, `resource_id` null, `metadata` jsonb, `ip` inet null, `user_agent` null, `occurred_on` timestamptz) e índices `(actor_id, occurred_on)`, `(correlation_id)`, `(level, occurred_on)`, `(resource_type, resource_id)` (FR3, NFR9).
+**Then** existe `audit_log` con el esquema del ADR (PK `id` UUIDv7; `level`, `action`, `actor_type`, `actor_id` null, `correlation_id`, `resource_type` null, `resource_id` null, `metadata` jsonb, `ip` varchar(45) null, `user_agent` null, `occurred_on` timestamptz) e índices `(actor_id, occurred_on)`, `(correlation_id)`, `(level, occurred_on)`, `(resource_type, resource_id)` (FR3, NFR9).
 
 **Given** el `postGenerateSchema` listener,
 **When** se re-ejecuta `make db.diff` / `doctrine:schema:validate`,
@@ -256,8 +256,8 @@ para registrar acciones de forma duradera, inmutable y sin duplicados ante reent
 **Then** no existe salvo el proceso de retención (Epic 3): el escritor solo inserta (FR9).
 
 **Given** los enums `level`/`actor_type`,
-**When** se mapean a Postgres/Doctrine,
-**Then** reutilizan `EnumType`/`EnumTypeValidator`.
+**When** se persisten,
+**Then** se almacenan como `VARCHAR` guardando `$enum->value` de enums PHP string-backed; no se usan `EnumType`/`EnumTypeValidator` ni enums nativos de Postgres.
 
 ### Story 1.4: Puerto `AuditLogger` + persistencia por nivel (activity async / security write-before-send) + `ActorContextFactory`
 
