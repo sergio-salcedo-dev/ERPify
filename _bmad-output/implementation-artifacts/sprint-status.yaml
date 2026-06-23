@@ -44,7 +44,7 @@ story_location: "{project-root}/_bmad-output/implementation-artifacts"
 development_status:
   # Epic 1: Registro de auditoría end-to-end (backbone + primer actor auditado)
   epic-1: in-progress
-  1-1-actorcontext-con-actortype-tipado: ready-for-dev
+  1-1-actorcontext-con-actortype-tipado: review
   1-2-auditlevel-mensaje-interno-recordauditentry-modelo-auditlogentry-separados-del-domainevent: ready-for-dev
   1-3-tabla-audit-log-append-only-escritor-idempotente-raw-dbal-schema-listener: ready-for-dev
   1-4-puerto-auditlogger-persistencia-por-nivel-activity-async-security-write-before-send-actorcontextfactory: ready-for-dev

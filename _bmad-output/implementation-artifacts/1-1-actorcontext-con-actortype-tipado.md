@@ -1,6 +1,10 @@
+---
+baseline_commit: cb18570398d585c8fbacab655586dba5be0b1d23
+---
+
 # Story 1.1: `ActorContext` con `ActorType` tipado
 
-Status: ready-for-dev
+Status: review
 
 <!-- Epic 1 — Registro de auditoría end-to-end (backbone + primer actor auditado).
      Primera historia del subsistema de auditoría operativa/de actor. Ver ADR docs/adr/audit-activity-log.md (D6, D7). -->
@@ -43,21 +47,21 @@ Esta es la **primera pieza del backbone de auditoría** y es **dominio puro**: n
 
 ## Tasks / Subtasks
 
-- [ ] **T1 — Crear el enum `ActorType`** (AC1) → `api/src/Shared/Audit/Domain/ActorType.php`
-  - [ ] `enum ActorType: string` con casos `ANONYMOUS = 'anonymous'`, `SYSTEM = 'system'`, `API_KEY = 'api_key'`, `USER = 'user'` (backing **minúscula**, exactamente los tokens del esquema del ADR — Decisión D-1.1.c).
-  - [ ] Enum **case-only**, sin métodos: con las factorías nombradas de `ActorContext`, la regla "qué tipo lleva id" vive en cada factoría, no en un predicado del enum (Decisión D-1.1.d).
-  - [ ] `declare(strict_types=1);` y docblock breve sólo si el nombre no basta.
-- [ ] **T2 — Crear la excepción de dominio `InvalidActorContext`** (AC3) → `api/src/Shared/Audit/Domain/Exception/InvalidActorContext.php`
-  - [ ] `final class InvalidActorContext extends Erpify\Shared\ErrorContract\Domain\Exception\DomainException` — **sin** marcador (`InvalidInput`/`InvariantViolation`): es un error de programación server-side, no de cliente, y **nunca aflora como 500 al usuario** (lo aísla la frontera best-effort de 1.4 — Decisión D-1.1.b).
-  - [ ] **Un** constructor nombrado estático: `actorIdMustBeUuid(ActorType $type): self`. `type:` estable `'invalid-actor-context'`; `title:` corto; `context:` `['actorType' => $type->value]` (nunca el `actorId` ofensivo en claro). El emparejamiento tipo↔id ya no necesita excepción (es irrepresentable).
-- [ ] **T3 — Crear el value object `ActorContext`** (AC1, AC2, AC3, AC4) → `api/src/Shared/Audit/Domain/ActorContext.php`
-  - [ ] `final readonly class ActorContext` con **constructor privado** `private function __construct(public ActorType $type, public ?string $actorId)` — props públicas readonly para los consumidores (1.2/1.3); la construcción es solo por factorías.
-  - [ ] Cuatro factorías estáticas (estado ilegal irrepresentable): `anonymous(): self` → `new self(ActorType::ANONYMOUS, null)`; `system(): self` → idem con `SYSTEM`; `forUser(string $id): self` y `forApiKey(string $id): self` → `Uuid::isValid($id)` o `throw InvalidActorContext::actorIdMustBeUuid(ActorType::USER | API_KEY)`, luego `new self(...)`.
-  - [ ] **Sin** validación cruzada en el constructor (no hace falta: cada factoría conoce su forma). Reusar `Shared\Uuid\Domain\Uuid::isValid()` (predicado), nunca `ensure()` (Decisión D-1.1.a).
-- [ ] **T4 — Tests unitarios** (AC5) — mirror `api/tests/Unit/Shared/Audit/Domain/`
-  - [ ] `ActorContextTest.php` con `#[CoversClass(ActorContext::class)]` **y** `#[CoversClass(InvalidActorContext::class)]`: `anonymous()`/`system()` → `type` correcto y `actorId === null`; `forUser(Uuid::generate())` / `forApiKey(Uuid::generate())` → aceptan y exponen el id; `forUser('not-a-uuid')` / `forApiKey('not-a-uuid')` → `expectException(InvalidActorContext::class)`.
-  - [ ] `ActorTypeTest.php` con `#[CoversClass(ActorType::class)]`: fija los 4 backing values (`'anonymous'|'system'|'api_key'|'user'`) y el conteo de casos (mirror de `api/tests/Unit/Shared/Search/Domain/SortDirectionTest.php`, que testea un enum case-only).
-- [ ] **T5 — Gates** (AC4, AC5): `make php.stan` sobre los ficheros nuevos → `make php.unit` → `make php.quality` (incluye deptrac + bounded-context + phpmd + cs-fixer + rector). Verde antes de declarar done.
+- [x] **T1 — Crear el enum `ActorType`** (AC1) → `api/src/Shared/Audit/Domain/ActorType.php`
+  - [x] `enum ActorType: string` con casos `ANONYMOUS = 'anonymous'`, `SYSTEM = 'system'`, `API_KEY = 'api_key'`, `USER = 'user'` (backing **minúscula**, exactamente los tokens del esquema del ADR — Decisión D-1.1.c).
+  - [x] Enum **case-only**, sin métodos: con las factorías nombradas de `ActorContext`, la regla "qué tipo lleva id" vive en cada factoría, no en un predicado del enum (Decisión D-1.1.d).
+  - [x] `declare(strict_types=1);` y docblock breve sólo si el nombre no basta.
+- [x] **T2 — Crear la excepción de dominio `InvalidActorContext`** (AC3) → `api/src/Shared/Audit/Domain/Exception/InvalidActorContext.php`
+  - [x] `final class InvalidActorContext extends Erpify\Shared\ErrorContract\Domain\Exception\DomainException` — **sin** marcador (`InvalidInput`/`InvariantViolation`): es un error de programación server-side, no de cliente, y **nunca aflora como 500 al usuario** (lo aísla la frontera best-effort de 1.4 — Decisión D-1.1.b).
+  - [x] **Un** constructor nombrado estático: `actorIdMustBeUuid(ActorType $type): self`. `type:` estable `'invalid-actor-context'`; `title:` corto; `context:` `['actorType' => $type->value]` (nunca el `actorId` ofensivo en claro). El emparejamiento tipo↔id ya no necesita excepción (es irrepresentable).
+- [x] **T3 — Crear el value object `ActorContext`** (AC1, AC2, AC3, AC4) → `api/src/Shared/Audit/Domain/ActorContext.php`
+  - [x] `final readonly class ActorContext` con **constructor privado** `private function __construct(public ActorType $type, public ?string $actorId)` — props públicas readonly para los consumidores (1.2/1.3); la construcción es solo por factorías.
+  - [x] Cuatro factorías estáticas (estado ilegal irrepresentable): `anonymous(): self` → `new self(ActorType::ANONYMOUS, null)`; `system(): self` → idem con `SYSTEM`; `forUser(string $id): self` y `forApiKey(string $id): self` → `Uuid::isValid($id)` o `throw InvalidActorContext::actorIdMustBeUuid(ActorType::USER | API_KEY)`, luego `new self(...)`.
+  - [x] **Sin** validación cruzada en el constructor (no hace falta: cada factoría conoce su forma). Reusar `Shared\Uuid\Domain\Uuid::isValid()` (predicado), nunca `ensure()` (Decisión D-1.1.a).
+- [x] **T4 — Tests unitarios** (AC5) — mirror `api/tests/Unit/Shared/Audit/Domain/`
+  - [x] `ActorContextTest.php` con `#[CoversClass(ActorContext::class)]` **y** `#[CoversClass(InvalidActorContext::class)]`: `anonymous()`/`system()` → `type` correcto y `actorId === null`; `forUser(Uuid::generate())` / `forApiKey(Uuid::generate())` → aceptan y exponen el id; `forUser('not-a-uuid')` / `forApiKey('not-a-uuid')` → `expectException(InvalidActorContext::class)`.
+  - [x] `ActorTypeTest.php` con `#[CoversClass(ActorType::class)]`: fija los 4 backing values (`'anonymous'|'system'|'api_key'|'user'`) y el conteo de casos (mirror de `api/tests/Unit/Shared/Search/Domain/SortDirectionTest.php`, que testea un enum case-only).
+- [x] **T5 — Gates** (AC4, AC5): `make php.stan` sobre los ficheros nuevos → `make php.unit` → `make php.quality` (incluye deptrac + bounded-context + phpmd + cs-fixer + rector). Verde antes de declarar done.
 
 ## Dev Notes
 
@@ -156,8 +160,32 @@ Patrón de carpeta: enum **plano** en `Domain/` (mirror de `Shared/Search/Domain
 
 ### Agent Model Used
 
+claude-opus-4-8 (1M context)
+
 ### Debug Log References
+
+- `make php.stan` → **OK, no errors** (level max).
+- `make php.unit --filter "Actor(Context|Type)Test"` → **OK (11 tests, 15 assertions)**.
+- `make php.quality` → **EXIT 0**: cs-fixer "Fixed 0 of 545 files" (idempotent), deptrac "Violations 0", bounded-context "No violations". `reference.php` not touched (pure-domain change, no DI wiring).
+- Tooling: `make php.behat.install` was required before `php.stan` (the isolated Behat vendor autoload is a PHPStan bootstrap file and is not installed by `app.dev`).
 
 ### Completion Notes List
 
+- Created the audit-actor identity backbone as **pure domain** under `Shared/Audit/Domain` — no framework/ORM/HTTP/DI imports (only `ActorType`, `Shared\Uuid\Domain\Uuid`, `Shared\ErrorContract\Domain\Exception\DomainException`). Deptrac auto-folds the nested `Shared/Audit/Domain` module into the `Shared.*` layers, so no `deptrac.yaml`/allowlist edits were needed.
+- **Illegal states unrepresentable:** `ActorContext` has a private constructor; `anonymous()`/`system()` fix `actorId = null`, `forUser()`/`forApiKey()` require a `string` id validated via `Uuid::isValid()` (predicate, not `ensure()`) and throw the marker-less domain exception `InvalidActorContext` otherwise. No runtime cross-field validation.
+- **`InvalidActorContext` is marker-less by design** (extends `DomainException`, implements no marker): a server-side wiring fault that flows to Sentry as actionable, never a client 4xx and — via the best-effort audit boundary in 1.4 — never a user-facing 500. Error contract (`docs/api-error-contract.md`) unchanged (NFR26 not triggered).
+- **`ActorType` backing values are lowercase** (`anonymous|system|api_key|user`) — the exact tokens the `actor_type` column will persist in 1.3 (a conscious divergence from the uppercase wire enums, whose tokens are a transport contract).
+- **Test design:** replaced a tautological `assertCount(4, ActorType::cases())` (rejected by PHPStan `method.alreadyNarrowedType`) with the repo's sanctioned `FilterOperatorTest` pattern — build the case list from the data provider at runtime, then `assertSame(ActorType::cases(), $pinned)`, which pins set + order + count and ties the token map to the enum without a static tautology.
+- Boy-scout: none needed — all files are new.
+
 ### File List
+
+- `api/src/Shared/Audit/Domain/ActorType.php` (NEW)
+- `api/src/Shared/Audit/Domain/ActorContext.php` (NEW)
+- `api/src/Shared/Audit/Domain/Exception/InvalidActorContext.php` (NEW)
+- `api/tests/Unit/Shared/Audit/Domain/ActorTypeTest.php` (NEW)
+- `api/tests/Unit/Shared/Audit/Domain/ActorContextTest.php` (NEW)
+
+### Change Log
+
+- 2026-06-23 — Implemented Story 1.1: typed `ActorType` enum + `ActorContext` value object (named factories, illegal states unrepresentable) + marker-less `InvalidActorContext`, with pure-domain unit tests. Gates green (stan/unit/quality).
