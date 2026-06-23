@@ -440,9 +440,9 @@ para satisfacer el derecho de supresión preservando la traza de seguridad.
 **When** se ejecuta,
 **Then** todas sus filas en `audit_log` quedan con `actor_id` **pseudonimizado** (no borradas); la traza de seguridad (`action`, `level`, `occurred_on`, recurso) sobrevive (FR11).
 
-**Given** que el ADR (D4) congela únicamente la pseudonimización de `actor_id`,
-**When** se considera el tratamiento de `ip`/`user_agent` (también PII),
-**Then** se aplica **conforme a la política GDPR definida para `audit_log`**, a concretar en diseño técnico; si esa política excede lo que congela el ADR, **se actualiza el ADR antes** — no se introduce el cambio en silencio (NFR3, gobernanza documental).
+**Given** la misma solicitud de supresión,
+**When** se ejecuta,
+**Then** `ip` y `user_agent` de esas filas se redactan junto al `actor_id` mediante hash/truncado **irreversible** (Modelo 1): se **almacenan completos** en la inserción y **solo** se redactan en la supresión (minimización en el disparador GDPR, no en origen), preservando el valor forense hasta el "olvídame" (FR11, NFR3, D4 enmendado).
 
 **Given** la operación de supresión,
 **When** se repite,

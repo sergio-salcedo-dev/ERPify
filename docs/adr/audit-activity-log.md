@@ -123,15 +123,20 @@ el proceso de retención.
 - **Retención por nivel**: `security` se conserva más; `activity` rota agresivo. Prune por Symfony
   Scheduler, reutilizando el patrón `HandledDomainEventPruner` (ver
   [`domain-event-handler-idempotency.md`](./domain-event-handler-idempotency.md)).
-- **Borrado GDPR**: el "olvídame" **pseudonimiza** `actor_id` (la traza de seguridad sobrevive),
-  no borra filas. Coherente con "hard delete por defecto, salvo que el borrado rompa un requisito"
+- **Borrado GDPR**: el "olvídame" **pseudonimiza** `actor_id` **y redige `ip`/`user_agent`** (hash o
+  truncado **irreversible**) en las mismas filas — no borra filas; la traza de seguridad (`action`,
+  `level`, `occurred_on`, recurso) sobrevive. `ip`/`user_agent` se **almacenan completos** y solo se
+  redactan en la supresión (minimización en el **disparador GDPR**, no en origen), preservando el valor
+  forense hasta entonces. Coherente con "hard delete por defecto, salvo que el borrado rompa un requisito"
   de [`rules/database.md`](../rules/database.md); se registra en
   [`rules/security.md`](../rules/security.md) y `PRODUCTION_SECURITY_CHECKLIST.md`.
 - **Sin payload sensible** en `metadata` (IDs y discriminantes, no cuerpos de entidad).
 
 Descartado: misma retención para todo (incumple separación legal de seguridad vs actividad).
 Descartado: borrado físico en *erasure* (destruye la auditoría de seguridad, que es justo lo que se
-quiere preservar).
+quiere preservar). Descartado: minimización en origen (truncar `ip` a /24·/48 y normalizar `user_agent`
+al insertar) — degrada permanentemente la fidelidad forense del nivel `security`, que existe justo para
+investigar; la minimización se aplica en la supresión, no en la inserción.
 
 ### D5 — Ubicación: backbone en `Shared/`, consulta en `Backoffice/Audit/`
 
