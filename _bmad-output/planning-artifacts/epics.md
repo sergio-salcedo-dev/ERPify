@@ -16,7 +16,7 @@ inputDocuments:
 scope: 'Subsistema completo de auditoría operativa/de actor en un único PR (feat/shared-audit-actor-context): backbone Shared + captura + retención/GDPR + Backoffice/Audit read model + UI. Persistencia state-oriented append-only (no event sourcing), ya decidida en el ADR (D1/D4).'
 ---
 
-# ERPify — Auditoría operativa / de actor (`AuditEvent`) — Desglose de épicas
+# ERPify — Auditoría operativa / de actor (`AuditLogger` → `audit_log`) — Desglose de épicas
 
 ## Overview
 
@@ -26,8 +26,8 @@ operativa / de actor** definido en [`docs/adr/audit-activity-log.md`](../../docs
 persona?*), independiente del stream de dominio (`DomainEvent` → `event_store`, que audita *qué le pasó
 al agregado*) y de los logs/métricas de sistema.
 
-Estado del baseline (brownfield): **no existe** backbone `Shared/Audit` (ni `AuditEvent`, ni
-`AuditLogger`, ni `AuditPolicy`, ni `ActorContext`, ni tabla `audit_log`). El "primer consumidor"
+Estado del baseline (brownfield): **no existe** backbone `Shared/Audit` (ni `AuditLogger`, ni
+`RecordAuditEntry`/`AuditLogEntry`, ni `AuditPolicy`, ni `ActorContext`, ni tabla `audit_log`). El "primer consumidor"
 `BankAccountsViewed` existe como **placeholder provisional** que hoy solo escribe una línea de log
 (`RecordAuditLogOnBankAccountsViewed` → `logger->info('bank_accounts.viewed', …)`) y se despacha
 best-effort vía `MessageBusInterface` directo (excepción registrada en `api/.event-dispatch-allowlist`).
@@ -38,18 +38,19 @@ UI de investigación de `Backoffice/Audit`.
 
 **Nota de entrega (PR único):** Epic 1 es grande, Epic 3 pequeña; al ir todo en un PR, los commits
 **siguen exactamente la secuencia de historias** (`1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.1 → 2.2 → 2.3 →
-3.1 → 3.2 → 4.1 → 4.2`) para facilitar revisión y rollback. La separación de contrato
-(`AuditEvent`) e instancia persistible (`RecordedAuditEvent`/`AuditLogEntry`) deja abierta la puerta a
-múltiples adaptadores de almacenamiento sin tocar el contrato.
+3.1 → 3.2 → 4.1 → 4.2`) para facilitar revisión y rollback. El seam público es el puerto
+`AuditLogger`; detrás, el mensaje interno `RecordAuditEntry` y la fila persistida `AuditLogEntry`
+dejan abierta la puerta a múltiples adaptadores de almacenamiento sin tocar el seam, y **sin** exponer
+un tipo público `AuditEvent`.
 
 ## Requirements Inventory
 
 ### Functional Requirements
 
-FR1: Introducir el contrato `AuditEvent` en `Shared` como **eje independiente** del `DomainEvent`: no extiende `DomainEvent`, no viaja por el `EventBus` transaccional ni entra en `event_store`; `StoredDomainEvent` NO se renombra (D1).
-FR2: Definir el puerto `AuditLogger` (`->log(...)`) que acepta la acción + contexto y la despacha para persistencia asíncrona; es el seam de escritura que toda Application usa (D2/D3/D5).
+FR1: Introducir el eje de auditoría en `Shared` detrás del seam `AuditLogger`, **independiente** del `DomainEvent` y **sin un tipo público `AuditEvent`**: el mensaje interno `RecordAuditEntry` no extiende `DomainEvent`, no es evento de integración, no viaja por el `EventBus` transaccional ni entra en `event_store`, y no se publica fuera de `Shared/Audit`; `StoredDomainEvent` NO se renombra (D1).
+FR2: Definir el puerto `AuditLogger` (`->log(...)`) que acepta la acción + contexto y la persiste según el nivel (`activity` async, `security` write-before-send síncrona); es el **único** seam de escritura público que toda Application usa (D2/D3/D5).
 FR3: Crear el almacén `audit_log` **append-only** con el esquema del ADR (`id`, `level`, `action`, `actor_type`, `actor_id`, `correlation_id`, `resource_type`, `resource_id`, `metadata` jsonb, `ip`, `user_agent`, `occurred_on`) y sus índices `(actor_id, occurred_on)`, `(correlation_id)`, `(level, occurred_on)`, `(resource_type, resource_id)`. `id` (UUIDv7) es la **PK** y el ancla de idempotencia de la inserción (FR4).
-FR4: Persistencia **asíncrona** vía Messenger reutilizando `messenger_worker`: el `AuditEvent` lleva su propio `id` (UUIDv7) **generado antes de encolar**, se despacha a un bus y un handler hace el `INSERT … ON CONFLICT (id) DO NOTHING` en `audit_log`. La PK por `id` hace la inserción **idempotente**: un redelivery del transporte es un no-op (sin duplicados, sin ruido forense, sin deduplicación en consultas, append-only preservado). Modelo **best-effort** (acepta perder un registro si el proceso muere antes de encolar — no se grava la latencia con la garantía write-before-send de `PersistDomainEventMiddleware`) (D3).
+FR4: Persistencia de `activity` **asíncrona** vía Messenger en un transporte dedicado `audit` (consumido por `messenger_worker` en dev): el `RecordAuditEntry` lleva su propio `id` (UUIDv7) **generado antes de encolar**, se despacha al transporte `audit` y un `RecordAuditEntryHandler` hace el `INSERT … ON CONFLICT (id) DO NOTHING` en `audit_log`. La PK por `id` hace la inserción **idempotente**: un redelivery del transporte es un no-op (sin duplicados, sin ruido forense, sin deduplicación en consultas, append-only preservado). Modelo **best-effort para `activity`** (acepta perder un registro si el proceso muere antes de encolar). El nivel `security` usa, en cambio, la inserción síncrona write-before-send (durable) descrita en D3 (D3).
 FR5: Captura **híbrida**: (a) access-log genérico vía `EventSubscriber` sobre `kernel.terminate`, acotado a `/api/*`; (b) llamadas explícitas `AuditLogger->log(...)` en Application para acciones de fuerte semántica (exportaciones, vistas de datos sensibles, denegaciones) que el hook no conoce (D2).
 FR6: `AuditPolicy` genérica que decide **antes de emitir** si la interacción es auditable y a qué nivel; el hook de kernel **solo captura contexto**, la decisión de "qué se guarda" no vive en el hook (D2).
 FR7: Captura de nivel `security` para denegaciones de permiso mediante un listener sobre `AccessDeniedException`, enganchado al pipeline RFC 9457 existente (`ExceptionResponder` / `kernel.exception`), no esparcido por los handlers (D2).
@@ -58,23 +59,23 @@ FR9: `audit_log` es **append-only**: sin `UPDATE` ni `DELETE` desde la app salvo
 FR10: Retención **diferenciada por nivel** mediante un `AuditLogPruner` planificado con Symfony Scheduler, reutilizando el patrón `HandledDomainEventPruner` + `…MaintenanceSchedule` sobre el transporte `scheduler_maintenance`: `security` se conserva más, `activity` rota agresivo (D4).
 FR11: Borrado GDPR ("olvídame") que **pseudonimiza** `actor_id` (la traza de seguridad sobrevive) en lugar de borrar filas (D4).
 FR12: `metadata` (jsonb) sin payload sensible — solo IDs y discriminantes, nunca cuerpos de entidad ni la PII de negocio (p. ej. nunca el IBAN) (D4).
-FR13: Ubicación: backbone (`AuditEvent`, `AuditLogger`, `ActorContext`, `AuditPolicy` genérica, subscriber de captura, adaptador de storage, bus) en `Shared/`; lado de consulta (timeline, filtros, proyecciones, UI admin) en `Backoffice/Audit/`. **Backoffice consume, no escribe** auditoría (D5).
-FR14: Todo `AuditEvent` lleva, sin excepción, `correlation_id` (id de request estable, reutilizando `CorrelationIdListener`) y `actor_id` (nullable hasta que exista auth) desde el día 1; esto habilita la "reconstrucción de jornada" sin tabla de sesión (D6). `audit_session` queda **diferido**.
+FR13: Ubicación: backbone (`AuditLogger`, `RecordAuditEntry`/`AuditLogEntry`, `ActorContext`, `AuditPolicy` genérica, subscriber de captura, adaptador de storage, transporte `audit`) en `Shared/`; lado de consulta (timeline, filtros, proyecciones, UI admin) en `Backoffice/Audit/`. **Backoffice consume, no escribe** auditoría (D5).
+FR14: Toda entrada de auditoría (`AuditLogEntry`) lleva, sin excepción, `correlation_id` (id de request estable, reutilizando `CorrelationIdListener`) y `actor_id` (nullable hasta que exista auth) desde el día 1; esto habilita la "reconstrucción de jornada" sin tabla de sesión (D6). `audit_session` queda **diferido**.
 FR15: `ActorContext` como value object de dominio (`Shared/…/Audit/Domain`, sin dependencias de framework) con enum `ActorType` (`anonymous|system|api_key|user`): `actor_type` **obligatorio** (nunca null); `actor_id` nullable según el tipo (`anonymous`/`system` → null; `api_key`/`user` → uuid) (D7).
 FR16: Proveedor `ActorContextFactory` que produce el `ActorContext` actual; es **la única pieza que cambia** cuando entre auth real — schema, bus, storage, retención y read model no se tocan (D7 / secuencia frente a auth).
 FR17: Fijar el **alcance de captura Fase 1**: `activity` (navegación de backoffice, listados, detalle, búsquedas, filtros, exportaciones — hoy solo `BANK_ACCOUNTS_VIEWED` cableado) y `security` (`AccessDenied`, accesos fuera de alcance, uso de API keys, elevación de permisos, operaciones admin sensibles). **Nunca**: assets, health checks, Mercure, polling, requests técnicos. No existe un `action` `HTTP_REQUEST` (sería el log-explosion que D2 rechaza).
-FR18: **Migrar el primer consumidor** `BankAccountsViewed` del placeholder de log-line al subsistema real: emitir un `AuditEvent` (`action` `BANK_ACCOUNTS_VIEWED`, `level` `activity`) persistido en `audit_log` vía `AuditLogger`, eliminar la entrada de `api/.event-dispatch-allowlist` y actualizar `docs/architecture/event-catalog.md` (sección *Non-domain signals*).
+FR18: **Migrar el primer consumidor** `BankAccountsViewed` del placeholder de log-line al subsistema real: registrar la acción vía `AuditLogger->log(...)` (`action` `BANK_ACCOUNTS_VIEWED`, `level` `activity`) persistida en `audit_log`, eliminar la entrada de `api/.event-dispatch-allowlist` y actualizar `docs/architecture/event-catalog.md` (sección *Non-domain signals*).
 FR19: Lado de consulta (`Backoffice/Audit`): read model de investigación construido **directamente sobre `audit_log`** (consulta directa, sin tabla de proyección adicional en Fase 1) — timeline por actor / fecha / recurso con filtros, soportado por los índices de FR3. Una proyección materializada (`audit_timeline`) queda como **trigger de revisita** cuando exista un requisito de escala real, no antes (YAGNI).
 FR20: UI admin de investigación (PWA) sobre el read model: timeline navegable, filtros (actor / rango de fechas / recurso / nivel / acción) y vista de detalle de una entrada.
 
 ### NonFunctional Requirements
 
 NFR1: Latencia de request-path **nula** para el access-log genérico — `kernel.terminate` se ejecuta *tras* enviar la respuesta (D2).
-NFR2: Sin IO de auditoría en el camino de request: la persistencia es asíncrona (D3).
+NFR2: Camino de request libre de IO de auditoría para `activity` (persistencia asíncrona). El nivel `security` es la **única excepción consciente**: inserción síncrona write-before-send, rara y fuera del path caliente (D3).
 NFR3: `audit_log` **es PII** (`actor_id`, `ip`, `user_agent`) → debe satisfacer GDPR (retención por nivel + pseudonimización) y quedar registrado en `docs/rules/security.md` y `PRODUCTION_SECURITY_CHECKLIST.md` (D4, `rules/database.md`).
 NFR4: **Sin compatibilidad hacia atrás**: la app no está en producción; tablas y políticas de retención nacen limpias (cabecera del ADR).
 NFR5: Aislamiento de contextos (`make php.lint.bounded-context` + `make php.deptrac`): `Erpify\Shared\…` siempre importable; la captura no entra en el `Domain/` de ningún contexto; `Backoffice/Audit` no alcanza internals de otros contextos (D5).
-NFR6: La persistencia append-only usa **raw DBAL + schema listener `postGenerateSchema`** (sin entidad ORM para el log inmutable), patrón establecido `event_store`/`bank_count`/`handled_domain_event` (`rules/database.md`, `architecture-api.md`). El `INSERT … ON CONFLICT (id) DO NOTHING` de FR4 es propio de DBAL crudo; el `id` es el UUIDv7 app-minted que viaja en el `AuditEvent`, no una identidad generada por la BD.
+NFR6: La persistencia append-only usa **raw DBAL + schema listener `postGenerateSchema`** (sin entidad ORM para el log inmutable), patrón establecido `event_store`/`bank_count`/`handled_domain_event` (`rules/database.md`, `architecture-api.md`). El `INSERT … ON CONFLICT (id) DO NOTHING` de FR4 es propio de DBAL crudo; el `id` es el UUIDv7 app-minted que viaja en el `RecordAuditEntry` y sella el `AuditLogEntry`, no una identidad generada por la BD.
 NFR7: Tolerancia a entrega **at-least-once** del `messenger_worker` resuelta por diseño: la inserción es **idempotente por PK** (`ON CONFLICT (id) DO NOTHING`, FR4), de modo que un redelivery es un no-op. No se difiere ninguna decisión de deduplicación a las consultas ni se aceptan duplicados (D3, `architecture-api.md`).
 NFR8: `actor_type` (quién) y `level` (qué clase de auditoría) son ejes **ortogonales**; no se colapsan (D7).
 NFR9: Rendimiento de consulta forense soportado por los índices de FR3; sin `SELECT *`, columnas explícitas, paginación keyset si el volumen lo exige (triggers de revisita del ADR).
@@ -89,7 +90,7 @@ NFR12: Idempotencia / orden de listeners: el listener de `security` sobre `Acces
 - Reutilizar `Shared/Validation/Infrastructure/EnumType` + `EnumTypeValidator` para los enums Postgres/Doctrine `level` y `actor_type`.
 - Reutilizar `Shared/Kernel/Domain/Entity/Identifiable` (uuid v7) para la identidad de la fila.
 - Mantener `audit_log` **schema-aware** vía `postGenerateSchema` listener para que `make db.diff` no proponga `DROP TABLE audit_log` (mismo patrón que `EventStoreSchemaListener` / `HandledDomainEventSchemaListener`).
-- Cablear el bus/handler de auditoría en `config/packages/messenger.yaml` (transporte propio o `async`, según decisión de diseño) y registrar la `Scheduler` de poda.
+- Cablear en `config/packages/messenger.yaml` un transporte **dedicado** `audit` (no el `async` de los `DomainEvent`) + el routing de `RecordAuditEntry` a ese transporte + su handler; en dev lo consume `messenger_worker`. Registrar además la `Scheduler` de poda.
 - Actualizar documentación de arquitectura: `docs/architecture-api.md` (*Async & messaging* / nuevo eje de auditoría), `docs/architecture/event-catalog.md` (*Non-domain signals* — pasa de log-line a `audit_log`), y cualquier nuevo seam publicado en `api/.bounded-context-allowlist` que requiera `Backoffice/Audit`.
 - Actualizar `PRODUCTION_SECURITY_CHECKLIST.md`, `docs/rules/security.md` y la nota de excepción de borrado de `docs/rules/database.md` con la política de retención + pseudonimización GDPR de `audit_log`.
 - Eliminar la entrada de `BankAccountSearcher.php` en `api/.event-dispatch-allowlist` al completar la migración (FR18).
@@ -108,10 +109,10 @@ UX-DR5: Presentación **consciente de PII** — los actores pseudonimizados se m
 
 ### FR Coverage Map
 
-FR1: Epic 1 — contrato `AuditEvent` (eje separado de `DomainEvent`)
+FR1: Epic 1 — seam `AuditLogger` + internos `RecordAuditEntry`/`AuditLogEntry` (eje separado de `DomainEvent`, sin tipo público `AuditEvent`)
 FR2: Epic 1 — puerto `AuditLogger`
 FR3: Epic 1 — tabla `audit_log` append-only + índices (PK `id` UUIDv7)
-FR4: Epic 1 — persistencia async idempotente (`INSERT … ON CONFLICT (id) DO NOTHING`)
+FR4: Epic 1 — persistencia `activity` async idempotente (`INSERT … ON CONFLICT (id) DO NOTHING`) + `security` write-before-send
 FR5: Epic 2 — captura híbrida, vía genérica `kernel.terminate` (la vía explícita `AuditLogger->log` se estrena en Epic 1 con FR18)
 FR6: Epic 2 — `AuditPolicy` decide antes de persistir
 FR7: Epic 2 — listener sobre `AccessDeniedException` → nivel `security`
@@ -188,24 +189,28 @@ para que toda entrada de auditoría identifique sin ambigüedad quién actuó y 
 **When** se ejecuta,
 **Then** pasa sin contenedor ni BD (dominio puro).
 
-### Story 1.2: Contrato `AuditEvent` + `AuditLevel`, separado del `DomainEvent`
+### Story 1.2: `AuditLevel` + mensaje interno `RecordAuditEntry` + modelo `AuditLogEntry`, separados del `DomainEvent`
 
 Como desarrollador de un módulo,
-quiero un contrato `AuditEvent` (con `AuditLevel`) independiente del `DomainEvent`,
-para describir "qué hizo el actor" sin contaminar el stream de dominio ni el `event_store`.
+quiero el enum `AuditLevel`, un mensaje interno `RecordAuditEntry` y un modelo persistible `AuditLogEntry` (no un tipo público `AuditEvent`),
+para describir "qué hizo el actor" sin contaminar el stream de dominio ni el `event_store`, y sin exponer un tipo que invite a tratarlo como evento.
 
 **Acceptance Criteria:**
 
-**Given** `AuditEvent`,
+**Given** la superficie pública del subsistema,
+**When** se examina,
+**Then** **no existe un tipo público `AuditEvent`**: el único seam que tocan los módulos es `AuditLogger->log(...)` (Story 1.4); `RecordAuditEntry` y `AuditLogEntry` son internos de `Shared/Audit` (FR1, D1).
+
+**Given** `RecordAuditEntry`,
 **When** se examina su tipo,
-**Then** NO extiende `Shared\Event\Domain\DomainEvent`, no expone `aggregateId`, y `RegisterDomainEventsPass` no lo descubre ni lo enruta por `EventBus`/`event_store` (FR1).
+**Then** NO extiende `Shared\Event\Domain\DomainEvent`, no es evento de integración, no expone `aggregateId`, `RegisterDomainEventsPass` no lo descubre ni lo enruta por `EventBus`/`event_store`, y no se publica fuera de `Shared/Audit` (es solo el mensaje de transporte interno hacia el worker de auditoría) (FR1, D1).
 
-**Given** un `AuditEvent`,
+**Given** `RecordAuditEntry` / `AuditLogEntry`,
 **When** se examina su superficie,
-**Then** todo `AuditEvent` expone `id`, `level` (∈ {activity, security}), `action` (no vacío), `ActorContext`, `correlationId` (UUID), `occurredOn` y contexto opcional de recurso (`resourceType`/`resourceId`), más `metadata`/`ip`/`userAgent` opcionales (FR8, FR14);
-**And** la generación del `id` (UUIDv7) recae en el objeto concreto persistible (p. ej. `RecordedAuditEvent`/`AuditLogEntry`), no en el contrato.
+**Then** llevan `id` (UUIDv7), `level` (`AuditLevel` ∈ {activity, security}), `action` (no vacío), `ActorContext`, `correlationId` (UUID), `occurredOn` y contexto opcional de recurso (`resourceType`/`resourceId`), más `metadata`/`ip`/`userAgent` opcionales (FR8, FR14);
+**And** el `id` (UUIDv7) se genera al construir el mensaje/entrada, antes de encolar (ancla de idempotencia de FR4).
 
-**Given** dos `AuditEvent` con el mismo `id`,
+**Given** dos entradas con el mismo `id`,
 **When** se comparan,
 **Then** comparten identidad (ancla de idempotencia de FR4).
 
@@ -214,9 +219,9 @@ para describir "qué hizo el actor" sin contaminar el stream de dominio ni el `e
 **Then** admite estructuras JSON simples (escalares, arrays y objetos de **discriminantes** — p. ej. `{"filters":{"status":"active"}}`, `{"export_format":"xlsx"}`);
 **And** nunca contiene payloads de negocio ni PII sensible — la prohibición es el **contenido**, no la forma (FR12).
 
-**Given** la parte de dominio del contrato,
-**When** se ubica,
-**Then** no tiene dependencias de framework (`Shared/…/Audit/{Domain|Application}`).
+**Given** las piezas de dominio (`AuditLevel`, `ActorContext`),
+**When** se ubican,
+**Then** no tienen dependencias de framework (`Shared/…/Audit/{Domain|Application}`).
 
 ### Story 1.3: Tabla `audit_log` append-only + escritor idempotente (raw DBAL + schema listener)
 
@@ -234,17 +239,17 @@ para registrar acciones de forma duradera, inmutable y sin duplicados ante reent
 **When** se re-ejecuta `make db.diff` / `doctrine:schema:validate`,
 **Then** NO se propone `DROP TABLE audit_log` y el esquema queda in-sync, sin entidad ORM (NFR6).
 
-**Given** un `AuditEvent` persistido,
+**Given** un `RecordAuditEntry` a persistir,
 **When** se inserta en `audit_log`,
-**Then** el `id` utilizado es el generado por el `AuditEvent`, no uno generado por PostgreSQL (la idempotencia depende de ello) (FR4).
+**Then** el `id` utilizado es el generado por el `RecordAuditEntry` (sella el `AuditLogEntry`), no uno generado por PostgreSQL (la idempotencia depende de ello) (FR4).
 
 **Given** el escritor DBAL,
-**When** inserta un `AuditEvent` y luego reinserta el mismo `id`,
+**When** inserta un `AuditLogEntry` y luego reinserta el mismo `id`,
 **Then** la segunda inserción afecta 0 filas (`ON CONFLICT (id) DO NOTHING`), sin lanzar (FR4, NFR7) — integración contra Postgres real.
 
 **Given** el alcance de la idempotencia,
 **When** se razona sobre ella,
-**Then** se basa **exclusivamente** en la identidad del `AuditEvent` (mismo `id`): tolera el redelivery del **mismo** mensaje, pero un mensaje **regenerado** con un `id` nuevo produce una fila nueva — no hay deduplicación semántica (FR4).
+**Then** se basa **exclusivamente** en la identidad del `RecordAuditEntry` (mismo `id`): tolera el redelivery del **mismo** mensaje, pero un mensaje **regenerado** con un `id` nuevo produce una fila nueva — no hay deduplicación semántica (FR4).
 
 **Given** la app,
 **When** se busca una ruta de `UPDATE`/`DELETE` sobre `audit_log`,
@@ -254,25 +259,25 @@ para registrar acciones de forma duradera, inmutable y sin duplicados ante reent
 **When** se mapean a Postgres/Doctrine,
 **Then** reutilizan `EnumType`/`EnumTypeValidator`.
 
-### Story 1.4: Puerto `AuditLogger` + persistencia asíncrona (Messenger) + `ActorContextFactory`
+### Story 1.4: Puerto `AuditLogger` + persistencia por nivel (activity async / security write-before-send) + `ActorContextFactory`
 
 Como desarrollador de un módulo,
-quiero el puerto `AuditLogger` que sella actor + correlación y persiste asíncronamente,
-para registrar una acción con una sola llamada y sin IO en el camino de request.
+quiero el puerto `AuditLogger` que sella actor + correlación y persiste según el nivel,
+para registrar una acción con una sola llamada, sin IO en el camino de request para `activity` y con durabilidad write-before-send para `security`.
 
 **Acceptance Criteria:**
 
 **Given** `AuditLogger` (`Shared/…/Audit/Application`),
 **When** un caso de uso llama `log(action, level, resource?, metadata?)`,
-**Then** construye el `AuditEvent` concreto persistible (con su `id` UUIDv7) estampando `correlationId` (de `CorrelationIdListener`) y `ActorContext` (de `ActorContextFactory`) y lo despacha a un bus Messenger (FR2, FR14, FR16).
+**Then** construye la entrada (con su `id` UUIDv7) estampando `correlationId` (de `CorrelationIdListener`) y `ActorContext` (de `ActorContextFactory`); para `level=activity` despacha un `RecordAuditEntry` al transporte `audit`, para `level=security` ejecuta la inserción síncrona write-before-send (FR2, FR14, FR16, D3).
 
 **Given** `ActorContextFactory` antes de que exista auth,
 **When** resuelve una request `/api/*` sin autenticación,
 **Then** devuelve `actor_type=anonymous`;
 **And** en CLI/scheduler devuelve `actor_type=system` (FR16, NFR10).
 
-**Given** el handler sobre `async`/`messenger_worker`,
-**When** consume el `AuditEvent`,
+**Given** el `RecordAuditEntryHandler` sobre el transporte `audit` (consumido por `messenger_worker` en dev),
+**When** consume el `RecordAuditEntry`,
 **Then** invoca el escritor DBAL de 1.3 (insert idempotente) (FR4).
 
 **Given** un fallo del despacho de auditoría (incluidos errores de programación: configuración rota, serialización, servicio inexistente),
@@ -281,8 +286,9 @@ para registrar una acción con una sola llamada y sin IO en el camino de request
 **And** el fallo queda registrado mediante observabilidad técnica — la pérdida pre-encolado es aceptable, pero nunca silenciosa; no se manda tragarse toda excepción a ciegas, queda libertad de implementación (FR4, NFR2).
 
 **Given** el camino de request,
-**When** se observa `AuditLogger->log`,
-**Then** no hace IO de persistencia síncrono (solo encola) (NFR2).
+**When** se observa `AuditLogger->log` con `level=activity`,
+**Then** no hace IO de persistencia síncrono (solo encola en el transporte `audit`);
+**And** con `level=security` ejecuta una inserción síncrona write-before-send (rara, fuera del path caliente) — única excepción consciente a NFR2 (NFR2, D3).
 
 ### Story 1.5: Migrar `BANK_ACCOUNTS_VIEWED` al subsistema real (primer actor auditado)
 
@@ -331,7 +337,7 @@ para evitar el log-explosion y que el criterio no quede en manos de cada desarro
 
 **Given** una ruta de asset / health check / Mercure / polling / request técnico,
 **When** la `AuditPolicy` la clasifica,
-**Then** la marca no auditable y no se emite ningún `AuditEvent` (FR17, NFR11).
+**Then** la marca no auditable y no se emite ninguna entrada de auditoría (FR17, NFR11).
 
 **Given** una navegación/listado/detalle/búsqueda de backoffice,
 **When** la clasifica,
@@ -355,7 +361,7 @@ para auditar la actividad de `/api/*` con coste de latencia nulo.
 
 **Given** el subscriber,
 **When** se registra,
-**Then** escucha `kernel.terminate` (tras enviar la respuesta) y está acotado a `/api/*` (FR5a, NFR1).
+**Then** escucha `kernel.terminate` (tras enviar la respuesta), está acotado a `/api/*` y solo actúa sobre la request principal (`isMainRequest()`), nunca subrequests (FR5a, NFR1).
 
 **Given** una request,
 **When** termina,
@@ -379,7 +385,8 @@ para detectar accesos indebidos sin esparcir lógica de auditoría por los handl
 
 **Given** una `AccessDeniedException` en el pipeline RFC 9457,
 **When** se produce,
-**Then** se registra una fila en `audit_log` con `level=security`, `action=ACCESS_DENIED`, `correlation_id` de la request y el recurso si está disponible (FR7).
+**Then** se registra una fila en `audit_log` con `level=security`, `action=ACCESS_DENIED`, `correlation_id` de la request y el recurso si está disponible (FR7);
+**And** al ser `level=security`, la escritura es la inserción síncrona write-before-send de 1.4 (la denegación no se pierde aunque el proceso muera tras la respuesta) (D3).
 
 **Given** el orden de listeners,
 **When** se dispara la excepción,

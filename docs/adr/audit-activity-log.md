@@ -1,4 +1,4 @@
-# ADR — Auditoría operativa / de actor (`AuditEvent`), eje separado del stream de dominio
+# ADR — Auditoría operativa / de actor (`AuditLogger` → `audit_log`), eje separado del stream de dominio
 
 > **Status:** accepted · design frozen, implementation pending · **Date:** 2026-06-14 · **Last reviewed:** 2026-06-23
 > · **Scope:** cross-cutting `Shared` subsystem (capture + contract) + `Backoffice/Audit` module
@@ -22,25 +22,42 @@ lectura— hizo visible el hueco: una vista no es un cambio de estado de ningún
 
 ## Decisiones
 
-### D1 — Eje separado: `AuditEvent` ≠ `DomainEvent`; **no** se renombra `StoredDomainEvent`
+### D1 — Eje separado: `AuditLogger` ≠ `DomainEvent`; **no** se renombra `StoredDomainEvent`
 
-Se introduce un concepto nuevo, `AuditEvent` (auditoría operativa/de actor), independiente del bus
-de dominio. Tres ejes, sin solape:
+Se introduce un eje nuevo —auditoría operativa/de actor—, independiente del bus de dominio. La
+superficie pública es **un único seam**, el puerto `AuditLogger->log(action, level, resource?,
+metadata?)`; los módulos no conocen nada más. Tres ejes, sin solape:
 
 | Pregunta                           | Mecanismo                    | Tabla                                |
 |------------------------------------|------------------------------|--------------------------------------|
-| ¿Qué le pasó al agregado? (estado) | `DomainEvent` → bus          | `domain_event` (`StoredDomainEvent`) |
-| ¿Qué hizo el actor? (operación)    | `AuditEvent` → `AuditLogger` | `audit_log` (nuevo)                  |
+| ¿Qué le pasó al agregado? (estado) | `DomainEvent` → `EventBus`          | `domain_event` (`StoredDomainEvent`) |
+| ¿Qué hizo el actor? (operación)    | `AuditLogger->log(...)`      | `audit_log` (`AuditLogEntry`)        |
 | ¿Cómo funciona el sistema?         | logs / métricas              | —                                    |
+
+**No existe un tipo público `AuditEvent`.** Detrás del seam viven dos piezas internas de
+`Shared/Audit`, nunca expuestas a otros contextos:
+
+- `RecordAuditEntry` — mensaje interno de Messenger (la vía async; ver D3). **No** es `DomainEvent`,
+  **no** es evento de integración, **no** se publica fuera de `Shared/Audit`, **no** entra en el
+  *event catalog* y **no** lo escucha ningún otro bounded context: existe solo como transporte
+  interno hacia el worker de auditoría.
+- `AuditLogEntry` — el modelo persistido append-only de la fila de `audit_log` (DBAL crudo, sin
+  entidad ORM).
+
+El nombre verbo-imperativo (`RecordAuditEntry`) y la ausencia de un tipo `AuditEvent` hacen las dos
+fugas semánticas habituales —"parece evento → al event catalog", "va por un bus → lo escucho en otro
+contexto"— estructuralmente imposibles, no solo prohibidas por convención.
 
 `StoredDomainEvent` es la **foto en reposo de un `DomainEvent`**, no un "evento de auditoría
 genérico": el nombre es correcto y se mantiene.
 
-Descartado: que `BankAccountsViewedAuditEvent` extienda `DomainEvent` — lo despacharía al bus y lo
-persistiría en `domain_event` vía `PersistDomainEventMiddleware`, contaminando outbox/replay y lo
-que consumen otros contextos con telemetría de lectura; además `aggregateId` no aplica a una vista
-de lista. Descartado: renombrar `StoredDomainEvent → AuditEvent` — pierde precisión **y** colisiona
-con el concepto nuevo.
+Descartado: que `BankAccountsViewedAuditEvent` extienda `DomainEvent` — lo despacharía al `EventBus`
+y lo persistiría en `domain_event` vía `PersistDomainEventMiddleware`, contaminando outbox/replay y
+lo que consumen otros contextos con telemetría de lectura; además `aggregateId` no aplica a una
+vista de lista. Descartado: un tipo público `AuditEvent` o un sufijo `...Command`/`...Event` para el
+mensaje interno — arrastra semántica de event bus / CommandBus aunque no se use y reintroduce justo
+la fuga que este eje evita. Descartado: renombrar `StoredDomainEvent → AuditLogEntry` — pierde
+precisión **y** colisiona con el concepto nuevo.
 
 ### D2 — Captura híbrida; la **política decide antes de persistir**, no el hook
 
@@ -53,7 +70,7 @@ Dos puntos de captura, una sola decisión de "qué se guarda":
   conoce).
 
 El kernel **solo captura contexto**; un `AuditPolicy` decide si la interacción es auditable y a qué
-nivel **antes** de emitir el `AuditEvent`. Las denegaciones de permiso se enganchan al pipeline
+nivel **antes** de invocar `AuditLogger->log(...)`. Las denegaciones de permiso se enganchan al pipeline
 RFC 9457 existente (un listener sobre `AccessDeniedException`, ver
 [`api-error-contract.md`](../api-error-contract.md)), no esparcidas por los handlers.
 
@@ -62,16 +79,38 @@ reconstrucción de jornada. Descartado: *fine-grained* (cada request) → "log e
 proxy al PWA, Mercure, healthchecks). Descartado: capturar todo y **decidir en la persistencia** →
 IO desperdiciado y decisión tardía.
 
-### D3 — Persistencia **asíncrona** vía Messenger
+### D3 — Persistencia por nivel: `activity` async, `security` write-before-send; transporte `audit` dedicado
 
-El `AuditEvent` se despacha a un bus Messenger y un handler lo inserta en `audit_log`, reutilizando
-`messenger_worker`. Mantiene el *request path* libre de IO de auditoría.
+`AuditLogger->log(...)` **ramifica por `level`**, porque los dos niveles tienen contratos de
+durabilidad distintos:
 
-Descartado: `INSERT` síncrono dentro del ciclo de request → latencia p95 y contención de DB bajo
-carga del ERP. Matiz frente a `PersistDomainEventMiddleware` (que escribe **antes** de
-`SendMessage` para sobrevivir a un fallo de *enqueue*): el access-log tolera el modelo
-async-after-terminate y **acepta** la pérdida de un registro si el proceso muere antes de encolar —
-no se grava la latencia por una garantía que la auditoría operativa no necesita.
+- **`activity`** (alto volumen, observabilidad) — `AuditLogger` despacha un `RecordAuditEntry` al
+  transporte Messenger dedicado `audit` y un `RecordAuditEntryHandler` lo inserta en `audit_log`.
+  Modelo **best-effort**: el *request path* queda libre de IO de auditoría y **acepta** perder un
+  registro si el proceso muere antes de encolar.
+- **`security`** (denegaciones, elevaciones, uso de API keys — raro y fuera del path caliente) —
+  inserción **síncrona write-before-send** en el mismo ciclo de request: una denegación nunca se
+  pierde en silencio si la request llegó a ejecutarse. Reutiliza el escritor DBAL idempotente
+  (`INSERT … ON CONFLICT (id) DO NOTHING`), de modo que un eventual reintento async de respaldo es
+  un no-op por PK.
+
+**Transporte `audit` dedicado** (no comparte el `async` de los `DomainEvent`): son dos modelos de
+cola distintos —el de dominio es *consistency-sensitive* (write-before-send/outbox), el de auditoría
+es *loss-tolerant* y de mayor volumen—. Aislarlos fija tres invariantes operativas: auditoría no
+puede bloquear la propagación de `DomainEvent` (head-of-line coupling), no puede saturar el
+transporte `failed` de dominio, y su escalado no afecta a los consumidores de `event_store`. En dev
+se pliega en `messenger_worker`; en prod puede tener su propio worker (mismo patrón que
+`scheduler_maintenance` / `scheduler_worker`).
+
+El sistema es, por diseño, **observabilidad operativa con pérdida parcial tolerada en `activity`**,
+**no** logging forense uniforme: `security` es traza *compliance-grade* (durable), `activity` es
+telemetría de jornada (best-effort).
+
+Descartado: best-effort **uniforme** para ambos niveles — abre un *gap* silencioso justo en el nivel
+`security`, que es el que existe para la investigación forense y el cumplimiento (D4/D6). Descartado:
+`INSERT` síncrono **para todo** → latencia p95 y contención de DB en el alto volumen de `activity`.
+Descartado: compartir el transporte `async` con los `DomainEvent` → mezcla semánticas de
+retry/DLQ/throughput y reintroduce el acoplamiento de fallos que D1 evita en el tipo.
 
 ### D4 — Niveles, retención diferenciada, append-only y GDPR
 
@@ -96,8 +135,9 @@ quiere preservar).
 
 ### D5 — Ubicación: backbone en `Shared/`, consulta en `Backoffice/Audit/`
 
-- **`Shared/`** (transversal a todos los contextos): contrato `AuditEvent`, puerto `AuditLogger`,
-  `ActorContext`, `AuditPolicy` genérica, el subscriber de captura y el adaptador de storage.
+- **`Shared/`** (transversal a todos los contextos): puerto `AuditLogger` (seam), mensaje interno
+  `RecordAuditEntry`/modelo `AuditLogEntry`, `ActorContext`, `AuditPolicy` genérica, el subscriber de
+  captura, el adaptador de storage y el transporte `audit`.
 - **`Backoffice/Audit/`**: read model de investigación — timeline, filtros (actor / fecha /
   recurso), proyecciones, UI admin. **Backoffice no escribe auditoría, solo la consume.**
 
@@ -109,7 +149,7 @@ Descartado: todo en `Shared` (la vista/consulta admin es una feature de negocio,
 
 ### D6 — `ActorContext` + correlación obligatoria desde el día 1; `audit_session` diferido
 
-Todo `AuditEvent` lleva, sin excepción, `correlation_id` (id de request estable) y `actor_id`
+Toda entrada de auditoría (`AuditLogEntry`) lleva, sin excepción, `correlation_id` (id de request estable) y `actor_id`
 (*nullable* hoy —rutas públicas / acciones de sistema—, **no-null** en cuanto exista auth real).
 Esto es lo que habilita la "reconstrucción de jornada" sin tabla de sesión: `actor_id` +
 `correlation_id` + `occurred_on` reconstruyen el timeline.
@@ -129,7 +169,7 @@ justo la consulta forense que el subsistema existe para servir. Se cierra tipand
 ActorType  enum  anonymous | system | api_key | user
 ```
 
-- `actor_type` es **obligatorio** en todo `AuditEvent` (nunca null).
+- `actor_type` es **obligatorio** en toda entrada de auditoría (nunca null).
 - `actor_id` es nullable y su presencia depende del tipo.
 
 | `actor_type` | `actor_id`       |
@@ -207,9 +247,10 @@ Volumen de `activity` que exija particionado temporal o un *sink* externo (deja 
 ## Implementación
 
 Subsistema transversal: su construcción es una épica propia y no se mezcla con el código de la
-feature que la originó. Secuencia sugerida: (1) `Shared` — `AuditEvent` + `AuditLogger` +
-`AuditPolicy` + storage + bus Messenger + migración `audit_log`; (2) captura — subscriber
-`kernel.terminate` + listener de `AccessDeniedException` + `ActorContext`; (3) retención —
+feature que la originó. Secuencia sugerida: (1) `Shared` — `AuditLogger` (seam) + `ActorContext` +
+`AuditPolicy` + `RecordAuditEntry`/`RecordAuditEntryHandler` + escritor `AuditLogEntry` (DBAL) +
+transporte `audit` + migración `audit_log`; (2) captura — subscriber `kernel.terminate` + listener
+de `AccessDeniedException` (vía `security` síncrona) + `ActorContext`; (3) retención —
 `AuditLogPruner` (Scheduler) + estrategia de pseudonimización GDPR; (4) `Backoffice/Audit` — read
 model + UI de investigación. El estado de implementación vive en el issue/PR correspondiente.
 
