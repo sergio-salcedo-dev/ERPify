@@ -51,6 +51,12 @@ final class SentryEventFilter
     {
         $throwable = $hint?->exception;
 
+        // Deliberate: only the top-level throwable is inspected, not the getPrevious() chain.
+        // ClientError is thrown solely in HTTP request flows today, reaching the kernel
+        // unwrapped — so a top-level check suffices. A ClientError surfacing WRAPPED (e.g. a
+        // Messenger HandlerFailedException around one) is not self-evidently noise: in async it
+        // can signal a malformed message, a publisher bug, or cross-context drift worth seeing.
+        // Revisit (chain-walk vs. keep dropping) only when such a case actually occurs.
         if ($throwable instanceof ClientError) {
             return null;
         }
