@@ -34,6 +34,12 @@ use Throwable;
  *
  * The actor is sealed here, in the request cycle, and travels serialized inside the entry — never
  * re-resolved in the worker, which runs off-request and would mislabel every activity row as system.
+ *
+ * The coupling is the irreducible cost of the seam: it composes the six write-side ports plus the
+ * record and correlation types. Splitting it to satisfy the metric would invert the dependency it
+ * exists to centralise.
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[AsAlias(AuditLogger::class)]
 final readonly class SymfonyAuditLogger implements AuditLogger
@@ -60,8 +66,12 @@ final readonly class SymfonyAuditLogger implements AuditLogger
     /**
      * @param array<string, mixed> $metadata
      */
-    private function dispatchActivity(string $action, AuditLevel $level, ?AuditResource $resource, array $metadata): void
-    {
+    private function dispatchActivity(
+        string $action,
+        AuditLevel $level,
+        ?AuditResource $resource,
+        array $metadata,
+    ): void {
         try {
             $this->messageBus->dispatch(new RecordAuditEntry($this->buildEntry($action, $level, $resource, $metadata)));
         } catch (Throwable $throwable) {
@@ -76,8 +86,12 @@ final readonly class SymfonyAuditLogger implements AuditLogger
     /**
      * @param array<string, mixed> $metadata
      */
-    private function buildEntry(string $action, AuditLevel $level, ?AuditResource $resource, array $metadata): AuditLogEntry
-    {
+    private function buildEntry(
+        string $action,
+        AuditLevel $level,
+        ?AuditResource $resource,
+        array $metadata,
+    ): AuditLogEntry {
         return AuditLogEntry::create(
             $level,
             $action,

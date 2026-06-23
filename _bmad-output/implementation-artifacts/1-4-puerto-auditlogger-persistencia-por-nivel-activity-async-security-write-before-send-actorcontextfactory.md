@@ -4,7 +4,7 @@ baseline_commit: 589c60f7c778e435b1c34291f5950a79b5c6c36c
 
 # Story 1.4: Puerto `AuditLogger` + persistencia por nivel (activity async / security write-before-send) + `ActorContextFactory`
 
-Status: in-progress
+Status: review
 
 <!-- Epic 1 — Registro de auditoría end-to-end (backbone + primer actor auditado).
      Cuarta historia del subsistema de auditoría operativa/de actor. Cierra el flujo de escritura:
@@ -108,33 +108,33 @@ Esta historia construye **el seam público de escritura** y la **frontera best-e
 
 ## Tasks / Subtasks
 
-- [ ] **T0 — Verificar prerequisitos en disco (1.1 + 1.2 + 1.3)** — bloqueante.
-  - [ ] Confirmar `api/src/Shared/Audit/Domain/ActorContext.php` + `ActorType.php` (1.1) con factorías `anonymous()`/`system()`/`forUser()`/`forApiKey()`.
-  - [ ] Confirmar `api/src/Shared/Audit/Application/AuditLogEntry.php` (1.2) con `create(AuditLevel $level, string $action, ActorContext $actor, string $correlationId, DateTimeImmutable $occurredOn, ?string $resourceType = null, ?string $resourceId = null, array $metadata = [], ?string $ip = null, ?string $userAgent = null): self`, `RecordAuditEntry.php` (`public AuditLogEntry $entry`) y el enum `AuditLevel` (`ACTIVITY`/`SECURITY`).
-  - [ ] Confirmar `api/src/Shared/Audit/Application/AuditLogWriter.php` (1.3, puerto `write(AuditLogEntry): void`) y `Infrastructure/Persistence/DbalAuditLogWriter.php`. En la entrega de PR único los commits siguen 1.1 → 1.2 → 1.3 → 1.4; **si 1.3 no está en disco, 1.4 está bloqueada** (el handler y la rama `security` invocan el escritor).
+- [x] **T0 — Verificar prerequisitos en disco (1.1 + 1.2 + 1.3)** — bloqueante.
+  - [x] Confirmar `api/src/Shared/Audit/Domain/ActorContext.php` + `ActorType.php` (1.1) con factorías `anonymous()`/`system()`/`forUser()`/`forApiKey()`.
+  - [x] Confirmar `api/src/Shared/Audit/Application/AuditLogEntry.php` (1.2) con `create(AuditLevel $level, string $action, ActorContext $actor, string $correlationId, DateTimeImmutable $occurredOn, ?string $resourceType = null, ?string $resourceId = null, array $metadata = [], ?string $ip = null, ?string $userAgent = null): self`, `RecordAuditEntry.php` (`public AuditLogEntry $entry`) y el enum `AuditLevel` (`ACTIVITY`/`SECURITY`).
+  - [x] Confirmar `api/src/Shared/Audit/Application/AuditLogWriter.php` (1.3, puerto `write(AuditLogEntry): void`) y `Infrastructure/Persistence/DbalAuditLogWriter.php`. En la entrega de PR único los commits siguen 1.1 → 1.2 → 1.3 → 1.4; **si 1.3 no está en disco, 1.4 está bloqueada** (el handler y la rama `security` invocan el escritor).
 
-- [ ] **T1 — VO `AuditResource`** (AC2) → `api/src/Shared/Audit/Domain/AuditResource.php`
-  - [ ] `final readonly class AuditResource` con **constructor privado** `private function __construct(public string $type, public string $id)` y una factoría `public static function of(string $type, string $id): self`. Mirror estructural de los VOs de `Shared/…/Domain` con constructor privado + factoría (`ActorContext`, `NormalizedText`).
-  - [ ] **Sin** re-validar el `id` como UUID (igual que 1.2 D-1.2.g: el `resourceId` es un id de agregado ya validado aguas arriba; `AuditLogEntry` lo acepta como `string` sin re-validar). **Sin** `equals()`/serialización (YAGNI; nadie los consume).
-  - [ ] Docblock breve: ata el par `(resourceType, resourceId)` que `audit_log` separa en dos columnas; existe para que `AuditLogger->log(...)` reciba un recurso atómico en vez de dos parámetros sueltos.
+- [x] **T1 — VO `AuditResource`** (AC2) → `api/src/Shared/Audit/Domain/AuditResource.php`
+  - [x] `final readonly class AuditResource` con **constructor privado** `private function __construct(public string $type, public string $id)` y una factoría `public static function of(string $type, string $id): self`. Mirror estructural de los VOs de `Shared/…/Domain` con constructor privado + factoría (`ActorContext`, `NormalizedText`).
+  - [x] **Sin** re-validar el `id` como UUID (igual que 1.2 D-1.2.g: el `resourceId` es un id de agregado ya validado aguas arriba; `AuditLogEntry` lo acepta como `string` sin re-validar). **Sin** `equals()`/serialización (YAGNI; nadie los consume).
+  - [x] Docblock breve: ata el par `(resourceType, resourceId)` que `audit_log` separa en dos columnas; existe para que `AuditLogger->log(...)` reciba un recurso atómico en vez de dos parámetros sueltos.
 
-- [ ] **T2 — Puerto `AuditLogger`** (AC1, AC2) → `api/src/Shared/Audit/Application/AuditLogger.php`
-  - [ ] `interface AuditLogger { /** @param array<string, mixed> $metadata */ public function log(string $action, AuditLevel $level, ?AuditResource $resource = null, array $metadata = []): void; }`. Importa `AuditLevel` (1.2 Domain) y `AuditResource` (T1, Domain). **Sin** `correlationId`/`actor`/`id`/`occurredOn` en la firma (los sella el adaptador).
-  - [ ] Docblock breve: único seam público de escritura del eje de auditoría; ramifica por `level` (async/sync) en su adaptador; frontera de fallo asimétrica — `activity` best-effort (nunca propaga), `security` propaga (AC7).
+- [x] **T2 — Puerto `AuditLogger`** (AC1, AC2) → `api/src/Shared/Audit/Application/AuditLogger.php`
+  - [x] `interface AuditLogger { /** @param array<string, mixed> $metadata */ public function log(string $action, AuditLevel $level, ?AuditResource $resource = null, array $metadata = []): void; }`. Importa `AuditLevel` (1.2 Domain) y `AuditResource` (T1, Domain). **Sin** `correlationId`/`actor`/`id`/`occurredOn` en la firma (los sella el adaptador).
+  - [x] Docblock breve: único seam público de escritura del eje de auditoría; ramifica por `level` (async/sync) en su adaptador; frontera de fallo asimétrica — `activity` best-effort (nunca propaga), `security` propaga (AC7).
 
-- [ ] **T3 — Puerto `ActorContextFactory`** (AC5) → `api/src/Shared/Audit/Application/ActorContextFactory.php`
-  - [ ] `interface ActorContextFactory { public function current(): ActorContext; }`. Importa `ActorContext` (1.1 Domain).
-  - [ ] Docblock breve: produce el `ActorContext` actual; **la única pieza que cambia cuando entre auth real** (ADR "Secuencia frente a auth").
+- [x] **T3 — Puerto `ActorContextFactory`** (AC5) → `api/src/Shared/Audit/Application/ActorContextFactory.php`
+  - [x] `interface ActorContextFactory { public function current(): ActorContext; }`. Importa `ActorContext` (1.1 Domain).
+  - [x] Docblock breve: produce el `ActorContext` actual; **la única pieza que cambia cuando entre auth real** (ADR "Secuencia frente a auth").
 
-- [ ] **T4 — Adaptador `RequestStackActorContextFactory`** (AC5, AC11) → `api/src/Shared/Audit/Infrastructure/RequestStackActorContextFactory.php`
-  - [ ] `#[AsAlias(ActorContextFactory::class)] final readonly class RequestStackActorContextFactory implements ActorContextFactory` con `public function __construct(private RequestStack $requestStack) {}`. `#[Override]` en `current()`. Patrón `#[AsAlias]` + `RequestStack` por constructor mirror de `ContentHashUrlGenerator` y `SymfonyClock`.
-  - [ ] `current()`: `return $this->requestStack->getCurrentRequest() instanceof Request ? ActorContext::anonymous() : ActorContext::system();` — request en curso → anónimo (sin auth aún); fuera de request → sistema (CLI/scheduler/worker).
-  - [ ] **Sub-request HTTP (P2):** decidir y **documentar** el tratamiento del sub-request (ESI/forward). En Fase 1 (sin auth real) un sub-request HTTP sigue dentro de un request, así que `getCurrentRequest() instanceof Request` es `true` y `anonymous` es la clasificación **correcta** — el fallo a evitar (`system` en vez de `anonymous`) **no** aplica porque hay `Request` en la pila. Si se prefiere endurecerlo, valorar `getMainRequest()`/`isMainRequest()` para clasificar siempre por el request principal; en cualquier caso, **no** dejar que un sub-request degrade a `system`. Dejar la decisión y su justificación en el docblock (sin IDs de story/AC).
-  - [ ] Docblock breve sobre la regla request→anonymous / CLI→system, el tratamiento del sub-request elegido, y que el día de auth solo cambia esta clase. **Sin** IDs de story/AC/FR en el comentario.
+- [x] **T4 — Adaptador `RequestStackActorContextFactory`** (AC5, AC11) → `api/src/Shared/Audit/Infrastructure/RequestStackActorContextFactory.php`
+  - [x] `#[AsAlias(ActorContextFactory::class)] final readonly class RequestStackActorContextFactory implements ActorContextFactory` con `public function __construct(private RequestStack $requestStack) {}`. `#[Override]` en `current()`. Patrón `#[AsAlias]` + `RequestStack` por constructor mirror de `ContentHashUrlGenerator` y `SymfonyClock`.
+  - [x] `current()`: `return $this->requestStack->getCurrentRequest() instanceof Request ? ActorContext::anonymous() : ActorContext::system();` — request en curso → anónimo (sin auth aún); fuera de request → sistema (CLI/scheduler/worker).
+  - [x] **Sub-request HTTP (P2):** decidir y **documentar** el tratamiento del sub-request (ESI/forward). En Fase 1 (sin auth real) un sub-request HTTP sigue dentro de un request, así que `getCurrentRequest() instanceof Request` es `true` y `anonymous` es la clasificación **correcta** — el fallo a evitar (`system` en vez de `anonymous`) **no** aplica porque hay `Request` en la pila. Si se prefiere endurecerlo, valorar `getMainRequest()`/`isMainRequest()` para clasificar siempre por el request principal; en cualquier caso, **no** dejar que un sub-request degrade a `system`. Dejar la decisión y su justificación en el docblock (sin IDs de story/AC).
+  - [x] Docblock breve sobre la regla request→anonymous / CLI→system, el tratamiento del sub-request elegido, y que el día de auth solo cambia esta clase. **Sin** IDs de story/AC/FR en el comentario.
 
-- [ ] **T5 — Adaptador `SymfonyAuditLogger`** (AC3, AC4, AC6, AC7, AC10, AC12) → `api/src/Shared/Audit/Infrastructure/SymfonyAuditLogger.php`
-  - [ ] `#[AsAlias(AuditLogger::class)] final readonly class SymfonyAuditLogger implements AuditLogger` con constructor inyectando: `MessageBusInterface $messageBus`, `AuditLogWriter $writer` (puerto de 1.3), `ActorContextFactory $actorContextFactory`, `Clock $clock` (puerto de 1.2), `RequestStack $requestStack`, `LoggerInterface $logger`. `#[Override]` en `log()`.
-  - [ ] `log(...)`: **frontera best-effort ASIMÉTRICA** (D1/AC7) — solo la rama `activity` se envuelve en el try/catch del seam; la rama `security` **propaga** (queda fuera del catch). Esqueleto:
+- [x] **T5 — Adaptador `SymfonyAuditLogger`** (AC3, AC4, AC6, AC7, AC10, AC12) → `api/src/Shared/Audit/Infrastructure/SymfonyAuditLogger.php`
+  - [x] `#[AsAlias(AuditLogger::class)] final readonly class SymfonyAuditLogger implements AuditLogger` con constructor inyectando: `MessageBusInterface $messageBus`, `AuditLogWriter $writer` (puerto de 1.3), `ActorContextFactory $actorContextFactory`, `Clock $clock` (puerto de 1.2), `RequestStack $requestStack`, `LoggerInterface $logger`. `#[Override]` en `log()`.
+  - [x] `log(...)`: **frontera best-effort ASIMÉTRICA** (D1/AC7) — solo la rama `activity` se envuelve en el try/catch del seam; la rama `security` **propaga** (queda fuera del catch). Esqueleto:
     ```php
     #[Override]
     public function log(string $action, AuditLevel $level, ?AuditResource $resource = null, array $metadata = []): void
@@ -170,18 +170,18 @@ Esta historia construye **el seam público de escritura** y la **frontera best-e
     }
     ```
     (Reparto exacto entre `log()`, `dispatchActivity()` y un `buildEntry()` privado a discreción del implementador; lo **load-bearing** es que el `write()` de `security` quede **fuera** del catch y el `dispatch()` de `activity` **dentro**, vigilando el conteo de imports por PHPMD `CouplingBetweenObjects`.)
-  - [ ] `private function buildEntry(...)`: `AuditLogEntry::create($level, $action, $this->actorContextFactory->current(), $this->resolveCorrelationId(), $this->clock->now(), $resource?->type, $resource?->id, $metadata)` — **sin** pasar `ip`/`userAgent` (defaults `null`; son contexto HTTP de Epic 2, AC2/P13a). El sellado del `actor` ocurre **aquí**, en request path, no en el worker (AC12).
-  - [ ] `private function resolveCorrelationId(): string`: leer `RequestStack::getCurrentRequest()?->attributes->get(CorrelationIdListener::ATTRIBUTE_KEY)`; si es un `string` **canónico UUIDv7**, usarlo; si no (CLI/worker, atributo ausente, forma inválida) → `Uuid::generate()` (AC6, D-1.4.d). Reutilizar la constante `CorrelationIdListener::ATTRIBUTE_KEY` (no el literal `'_correlation_id'`) **y** el patrón UUIDv7 de `CorrelationIdListener` para validar el formato — **no** re-derivar la regex aquí (P12): exponer `CorrelationIdListener::UUIDV7_PATTERN` (hoy `private`) como `public const`, o añadirle un método `isCanonical(string $value): bool` que el adaptador invoque. Fuente de verdad única del patrón canónico, no dos regex que puedan divergir.
-  - [ ] **No** capturar/dispatch dos veces ni reintentar: `match` exhaustivo sobre los dos casos del enum. **No** abrir transacción para la rama `security` (un solo `INSERT … ON CONFLICT`, atómico de por sí; la transaccionalidad de 1.3 la decide el llamador y aquí es una inserción aislada). El `write()` de `security` **no** se envuelve en try/catch (propaga, D1/AC7).
-  - [ ] Imports: `MessageBusInterface`, `Throwable`, `Override`, `AsAlias` (Infrastructure-legítimos). **Verificar el conteo de `use` por PHPMD `CouplingBetweenObjects` (≤13)** — esta clase compone muchas piezas; si roza el tope, recortar (no extraer helper a otra clase).
+  - [x] `private function buildEntry(...)`: `AuditLogEntry::create($level, $action, $this->actorContextFactory->current(), $this->resolveCorrelationId(), $this->clock->now(), $resource?->type, $resource?->id, $metadata)` — **sin** pasar `ip`/`userAgent` (defaults `null`; son contexto HTTP de Epic 2, AC2/P13a). El sellado del `actor` ocurre **aquí**, en request path, no en el worker (AC12).
+  - [x] `private function resolveCorrelationId(): string`: leer `RequestStack::getCurrentRequest()?->attributes->get(CorrelationIdListener::ATTRIBUTE_KEY)`; si es un `string` **canónico UUIDv7**, usarlo; si no (CLI/worker, atributo ausente, forma inválida) → `Uuid::generate()` (AC6, D-1.4.d). Reutilizar la constante `CorrelationIdListener::ATTRIBUTE_KEY` (no el literal `'_correlation_id'`) **y** el patrón UUIDv7 de `CorrelationIdListener` para validar el formato — **no** re-derivar la regex aquí (P12): exponer `CorrelationIdListener::UUIDV7_PATTERN` (hoy `private`) como `public const`, o añadirle un método `isCanonical(string $value): bool` que el adaptador invoque. Fuente de verdad única del patrón canónico, no dos regex que puedan divergir.
+  - [x] **No** capturar/dispatch dos veces ni reintentar: `match` exhaustivo sobre los dos casos del enum. **No** abrir transacción para la rama `security` (un solo `INSERT … ON CONFLICT`, atómico de por sí; la transaccionalidad de 1.3 la decide el llamador y aquí es una inserción aislada). El `write()` de `security` **no** se envuelve en try/catch (propaga, D1/AC7).
+  - [x] Imports: `MessageBusInterface`, `Throwable`, `Override`, `AsAlias` (Infrastructure-legítimos). **Verificar el conteo de `use` por PHPMD `CouplingBetweenObjects` (≤13)** — esta clase compone muchas piezas; si roza el tope, recortar (no extraer helper a otra clase).
 
-- [ ] **T6 — Handler `RecordAuditEntryHandler`** (AC8, AC12) → `api/src/Shared/Audit/Infrastructure/Messenger/RecordAuditEntryHandler.php`
-  - [ ] `#[AsMessageHandler] final readonly class RecordAuditEntryHandler` con `public function __construct(private AuditLogWriter $writer) {}` y `public function __invoke(RecordAuditEntry $message): void { $this->writer->write($message->entry); }`. Mirror exacto de `SendEmailOnBankChanged`/`RunProjectionsOnDomainEvent` (adapter dumb; la idempotencia vive en el escritor de 1.3).
-  - [ ] **Invariante AC12 (load-bearing):** el handler **NO** inyecta ni invoca `ActorContextFactory` — escribe **exactamente** el `entry` recibido (con su `actor` ya sellado en request path por `log()`). Mover el sellado del actor al worker corrompería **todas** las filas `activity` a `actor_type=system` (el worker corre fuera de request). El único colaborador del handler es `AuditLogWriter`.
-  - [ ] Docblock breve: drena el transporte `audit`; el `INSERT … ON CONFLICT (id) DO NOTHING` de 1.3 hace la reentrega un no-op (sin dedup propia); el `actor` viaja ya sellado en el `entry` (no se re-resuelve aquí). **Sin** IDs de story/AC en el comentario.
+- [x] **T6 — Handler `RecordAuditEntryHandler`** (AC8, AC12) → `api/src/Shared/Audit/Infrastructure/Messenger/RecordAuditEntryHandler.php`
+  - [x] `#[AsMessageHandler] final readonly class RecordAuditEntryHandler` con `public function __construct(private AuditLogWriter $writer) {}` y `public function __invoke(RecordAuditEntry $message): void { $this->writer->write($message->entry); }`. Mirror exacto de `SendEmailOnBankChanged`/`RunProjectionsOnDomainEvent` (adapter dumb; la idempotencia vive en el escritor de 1.3).
+  - [x] **Invariante AC12 (load-bearing):** el handler **NO** inyecta ni invoca `ActorContextFactory` — escribe **exactamente** el `entry` recibido (con su `actor` ya sellado en request path por `log()`). Mover el sellado del actor al worker corrompería **todas** las filas `activity` a `actor_type=system` (el worker corre fuera de request). El único colaborador del handler es `AuditLogWriter`.
+  - [x] Docblock breve: drena el transporte `audit`; el `INSERT … ON CONFLICT (id) DO NOTHING` de 1.3 hace la reentrega un no-op (sin dedup propia); el `actor` viaja ya sellado en el `entry` (no se re-resuelve aquí). **Sin** IDs de story/AC en el comentario.
 
-- [ ] **T7 — Cablear `messenger.yaml`** (AC9) → `api/config/packages/messenger.yaml`
-  - [ ] Añadir el transporte dedicado bajo `transports:`:
+- [x] **T7 — Cablear `messenger.yaml`** (AC9) → `api/config/packages/messenger.yaml`
+  - [x] Añadir el transporte dedicado bajo `transports:`:
     ```yaml
     audit:
         dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
@@ -189,44 +189,44 @@ Esta historia construye **el seam público de escritura** y la **frontera best-e
             queue_name: audit
             auto_setup: false
     ```
-  - [ ] Añadir el routing: `Erpify\Shared\Audit\Application\RecordAuditEntry: audit`.
-  - [ ] En `when@test.framework.messenger.transports`, añadir `audit: 'in-memory://?serialize=true'` (paridad con `async`/`failed`).
-  - [ ] **No** tocar el bus/`PersistDomainEventMiddleware` (auditoría no pasa por el middleware de dominio; `RecordAuditEntry` no es `DomainEvent`, 1.2 AC2). **No** reusar el `async`.
+  - [x] Añadir el routing: `Erpify\Shared\Audit\Application\RecordAuditEntry: audit`.
+  - [x] En `when@test.framework.messenger.transports`, añadir `audit: 'in-memory://?serialize=true'` (paridad con `async`/`failed`).
+  - [x] **No** tocar el bus/`PersistDomainEventMiddleware` (auditoría no pasa por el middleware de dominio; `RecordAuditEntry` no es `DomainEvent`, 1.2 AC2). **No** reusar el `async`.
 
-- [ ] **T8 — Que el `messenger_worker` consuma `audit`** (AC9, D-1.4.f) → `compose.yaml`, `compose.prod.yaml`
-  - [ ] `compose.yaml` (dev): cambiar el `command` del `messenger_worker` de `["php","bin/console","messenger:consume","async","scheduler_maintenance","--time-limit=3600"]` a incluir `audit` (`… "messenger:consume","async","audit","scheduler_maintenance","--time-limit=3600"`).
-  - [ ] `compose.prod.yaml` (pool escalable): añadir `audit` al `messenger:consume` del `messenger_worker` (junto a `async`). **No** tocar `scheduler_worker` (su `scheduler_maintenance` es independiente; la poda de auditoría es Epic 3).
-  - [ ] Verificar tras `make app.dev` que el worker arranca consumiendo `audit` (`make docker.logs` del `messenger_worker`, o `make sf c='messenger:stats'` muestra la cola `audit`). Esto es lo que cierra el end-to-end async de `activity` — sin ello, los `RecordAuditEntry` se acumulan en `messenger_messages` sin drenar.
+- [x] **T8 — Que el `messenger_worker` consuma `audit`** (AC9, D-1.4.f) → `compose.yaml`, `compose.prod.yaml`
+  - [x] `compose.yaml` (dev): cambiar el `command` del `messenger_worker` de `["php","bin/console","messenger:consume","async","scheduler_maintenance","--time-limit=3600"]` a incluir `audit` (`… "messenger:consume","async","audit","scheduler_maintenance","--time-limit=3600"`).
+  - [x] `compose.prod.yaml` (pool escalable): añadir `audit` al `messenger:consume` del `messenger_worker` (junto a `async`). **No** tocar `scheduler_worker` (su `scheduler_maintenance` es independiente; la poda de auditoría es Epic 3).
+  - [x] Verificar tras `make app.dev` que el worker arranca consumiendo `audit` (`make docker.logs` del `messenger_worker`, o `make sf c='messenger:stats'` muestra la cola `audit`). Esto es lo que cierra el end-to-end async de `activity` — sin ello, los `RecordAuditEntry` se acumulan en `messenger_messages` sin drenar.
 
-- [ ] **T9 — Tests unitarios** (AC2, AC5, AC7, AC12, AC13) — mirror `api/tests/Unit/Shared/Audit/{Domain,Application,Infrastructure}/`
-  - [ ] `api/tests/Unit/Shared/Audit/Domain/AuditResourceTest.php` con `#[CoversClass(AuditResource::class)]`: `of('Bank', $id)` expone `type`/`id`; props públicos `readonly`.
-  - [ ] `api/tests/Unit/Shared/Audit/Infrastructure/RequestStackActorContextFactoryTest.php` con `#[CoversClass(RequestStackActorContextFactory::class)]` (puro, `TestCase`): con un `RequestStack` que tiene una `Request` empujada (`push(Request::create('/api/banks'))`) → `current()` devuelve `ActorContext::anonymous()` (`assertSame(ActorType::ANONYMOUS, ...->type)`); con un `RequestStack` **vacío** → `ActorContext::system()`. **Sub-request (P2):** un caso con un sub-request empujado sobre un main request → **no** degrada a `system` (sigue `anonymous` en Fase 1); fija el tratamiento de sub-request elegido en T4.
-  - [ ] `api/tests/Unit/Shared/Audit/Infrastructure/Messenger/RecordAuditEntryHandlerTest.php` con `#[CoversClass(RecordAuditEntryHandler::class)]` (puro, `TestCase`) — **OBLIGATORIO** (AC13/P5, no opcional): construir un `RecordAuditEntry($entry)`, inyectar un `InMemoryAuditLogWriter` (fake del puerto), `__invoke`-ar el handler, y asertar que el writer recibió `write($message->entry)` (el `entry` exacto, mismo `id`/`actor`). **AC12:** el handler **no** inyecta `ActorContextFactory` (verificable por construcción — su único constructor-arg es `AuditLogWriter`); el `actor` escrito es el del `entry` recibido, no uno re-resuelto. Reentrega = no-op por `id` (segunda `__invoke` → mismo `id`, 1 sola fila lógica; la idempotencia real es del escritor de 1.3). **Razón de obligatoriedad:** `new_coverage` solo acredita el target de su `#[CoversClass]` y Behat no cuenta — sin este test las líneas del `__invoke` caen el gate (PR #364).
-  - [ ] `api/tests/Unit/Shared/Audit/Infrastructure/SymfonyAuditLoggerTest.php` con `#[CoversClass(SymfonyAuditLogger::class)]` (puro, `TestCase`, fakes/stubs de los puertos): cubrir las conductas clave de las **dos ramas en éxito y en fallo** —
+- [x] **T9 — Tests unitarios** (AC2, AC5, AC7, AC12, AC13) — mirror `api/tests/Unit/Shared/Audit/{Domain,Application,Infrastructure}/`
+  - [x] `api/tests/Unit/Shared/Audit/Domain/AuditResourceTest.php` con `#[CoversClass(AuditResource::class)]`: `of('Bank', $id)` expone `type`/`id`; props públicos `readonly`.
+  - [x] `api/tests/Unit/Shared/Audit/Infrastructure/RequestStackActorContextFactoryTest.php` con `#[CoversClass(RequestStackActorContextFactory::class)]` (puro, `TestCase`): con un `RequestStack` que tiene una `Request` empujada (`push(Request::create('/api/banks'))`) → `current()` devuelve `ActorContext::anonymous()` (`assertSame(ActorType::ANONYMOUS, ...->type)`); con un `RequestStack` **vacío** → `ActorContext::system()`. **Sub-request (P2):** un caso con un sub-request empujado sobre un main request → **no** degrada a `system` (sigue `anonymous` en Fase 1); fija el tratamiento de sub-request elegido en T4.
+  - [x] `api/tests/Unit/Shared/Audit/Infrastructure/Messenger/RecordAuditEntryHandlerTest.php` con `#[CoversClass(RecordAuditEntryHandler::class)]` (puro, `TestCase`) — **OBLIGATORIO** (AC13/P5, no opcional): construir un `RecordAuditEntry($entry)`, inyectar un `InMemoryAuditLogWriter` (fake del puerto), `__invoke`-ar el handler, y asertar que el writer recibió `write($message->entry)` (el `entry` exacto, mismo `id`/`actor`). **AC12:** el handler **no** inyecta `ActorContextFactory` (verificable por construcción — su único constructor-arg es `AuditLogWriter`); el `actor` escrito es el del `entry` recibido, no uno re-resuelto. Reentrega = no-op por `id` (segunda `__invoke` → mismo `id`, 1 sola fila lógica; la idempotencia real es del escritor de 1.3). **Razón de obligatoriedad:** `new_coverage` solo acredita el target de su `#[CoversClass]` y Behat no cuenta — sin este test las líneas del `__invoke` caen el gate (PR #364).
+  - [x] `api/tests/Unit/Shared/Audit/Infrastructure/SymfonyAuditLoggerTest.php` con `#[CoversClass(SymfonyAuditLogger::class)]` (puro, `TestCase`, fakes/stubs de los puertos): cubrir las conductas clave de las **dos ramas en éxito y en fallo** —
     - **AC4 activity (éxito)**: con `level=activity`, un `MessageBusInterface` espía recibe un `dispatch(RecordAuditEntry)` y el `AuditLogWriter` (fake in-memory) **no** se llama; el `RecordAuditEntry` despachado envuelve un `AuditLogEntry` cuyo `actor`/`correlationId`/`occurredOn` son los sellados (actor del factory stub, correlación del `RequestStack`, instante del `Clock` fijo). Esto fija AC12 a nivel unit: el `actor` lo sella el logger en request path.
     - **AC4 security (éxito)**: con `level=security`, el `AuditLogWriter` fake recibe `write($entry)` y el bus **no** recibe dispatch.
     - **AC7 best-effort `activity` (fallo → NO propaga)**: con `level=activity` y un bus (o el `buildEntry`) que lanza → `log()` **no** propaga; el `LoggerInterface` espía recibió un `warning`. **P10:** asertar que el contexto del `warning` contiene **solo** `action`/`level`/`exception` y **NO** `metadata`, `actorId`, `resource->id` en claro ni el valor ofensivo (inspeccionar las claves del array de contexto capturado por el spy).
     - **AC7 security (fallo → PROPAGA, D1)**: con `level=security` y un `AuditLogWriter` fake que lanza → `log()` **propaga** la excepción (`$this->expectException(...)`); el `LoggerInterface` espía **no** registra `warning` para esta rama (la frontera best-effort no la cubre). Esta es la asimetría clave de D1.
     - Usar `Symfony\Component\Clock\MockClock` o un `Clock` fake para `occurredOn` determinista; `RequestStack` con/ sin request para la correlación.
-  - [ ] **Fakes sobre mocks** (regla de testing del repo): preferir un `InMemoryAuditLogWriter` (implementa el puerto, registra los `write`) y un `RecordingMessageBus`/spy. Para el `LoggerInterface` un spy simple. **OJO PHPMD `CouplingBetweenObjects`** en este test (compone muchos colaboradores) — si roza ≤13, mover los fakes a un `trait` reutilizable (lección de 1.3 `coversclass-restricts-clover-and-phpmd-coupling`), no a otra clase con imports.
+  - [x] **Fakes sobre mocks** (regla de testing del repo): preferir un `InMemoryAuditLogWriter` (implementa el puerto, registra los `write`) y un `RecordingMessageBus`/spy. Para el `LoggerInterface` un spy simple. **OJO PHPMD `CouplingBetweenObjects`** en este test (compone muchos colaboradores) — si roza ≤13, mover los fakes a un `trait` reutilizable (lección de 1.3 `coversclass-restricts-clover-and-phpmd-coupling`), no a otra clase con imports.
 
-- [ ] **T10 — Test funcional de las dos ramas** (AC4, AC7, AC8, AC10) → `api/tests/Functional/Shared/Audit/SymfonyAuditLoggerBranchingTest.php`
-  - [ ] `extends KernelTestCase`, `#[CoversClass(SymfonyAuditLogger::class)]`, `final`, `/** @internal */`. Resolver `AuditLogger::class` del contenedor (`assertInstanceOf`). En `when@test` el transporte `audit` es `in-memory://?serialize=true`.
-  - [ ] **activity (AC10, P9, P6)**: `log('BANK_ACCOUNTS_VIEWED', AuditLevel::ACTIVITY, AuditResource::of('Bank', Uuid::generate()))`;
+- [x] **T10 — Test funcional de las dos ramas** (AC4, AC7, AC8, AC10) → `api/tests/Functional/Shared/Audit/SymfonyAuditLoggerBranchingTest.php`
+  - [x] `extends KernelTestCase`, `#[CoversClass(SymfonyAuditLogger::class)]`, `final`, `/** @internal */`. Resolver `AuditLogger::class` del contenedor (`assertInstanceOf`). En `when@test` el transporte `audit` es `in-memory://?serialize=true`.
+  - [x] **activity (AC10, P9, P6)**: `log('BANK_ACCOUNTS_VIEWED', AuditLevel::ACTIVITY, AuditResource::of('Bank', Uuid::generate()))`;
     - **P9 (assert positivo del routing async):** asertar que hay **exactamente 1** mensaje en `messenger.transport.audit` — `self::getContainer()->get('messenger.transport.audit')->get()` y `assertCount(1, ...)`. Esta es la verificación real de que `activity` ruta al transporte dedicado, no a otro.
     - **Defensa en profundidad:** que **no** se ha escrito fila en `audit_log` síncronamente (contar filas antes/después sobre la **misma** `Connection` del contenedor, dentro de transacción con rollback, mirror del aislamiento de 1.3 `DomainEventStoreIdempotencyTest`). "0 filas síncronas" se mantiene como red, **no** como aserción principal (es trivialmente cierto sin el routing).
     - **P6 (round-trip por el serializer real):** tras obtener el `Envelope` de la cola in-memory (`serialize=true` lo round-trippea), desempaquetar el `RecordAuditEntry` y asertar que su `entry` tiene **exactamente** el `occurredOn` (incluida la precisión sub-segundo), `actor_type` y `correlationId` del `entry` original sellado — no solo "1 mensaje". Protege la fidelidad de `occurredOn` frente al serializer. Usar `assertEquals` para el round-trip de objeto (Rector no lo reescribe).
-  - [ ] **security (AC4/AC8, D1)**: `log('ACCESS_DENIED', AuditLevel::SECURITY, AuditResource::of('Bank', Uuid::generate()))`; asertar que **1** fila aparece en `audit_log` síncronamente (write-before-send) y que la cola `audit` está **vacía** (no se encoló). Envolver en `beginTransaction()`/`rollBack()` en `finally` (la suite no tiene DAMA, comparte la conexión de dev — mirror de 1.3).
-  - [ ] **security propaga en fallo (D1/AC7/AC10)**: cubrir la asimetría también a nivel funcional **o** confirmar que el unit de T9 ya la fija. Si se hace aquí, forzar el fallo de la rama `security` (p. ej. un doble `AuditLogWriter` que lanza, o un `id` que viole una invariante de escritura) y asertar que `log('…', AuditLevel::SECURITY, …)` **PROPAGA** (`expectException`) — no se traga; contrasta con `activity`, que en fallo no propaga y registra `warning`.
-  - [ ] **handler (AC8)** (opcional, **solo** para el end-to-end del consume — la cobertura del handler la da el `RecordAuditEntryHandlerTest` obligatorio de T9/AC13, no este caso): construir un `RecordAuditEntry` y `RecordAuditEntryHandler` resuelto del contenedor, `__invoke`-arlo, y asertar 1 fila + reentrega = no-op (1 fila). Si se prefiere consumir el transporte de verdad, usar un `Worker` real contra la instancia exacta del transporte (NO `messenger:consume` vía `new Application($kernel)`, que resetea el `InMemoryTransport` — gotcha de sesiones Behat previas).
+  - [x] **security (AC4/AC8, D1)**: `log('ACCESS_DENIED', AuditLevel::SECURITY, AuditResource::of('Bank', Uuid::generate()))`; asertar que **1** fila aparece en `audit_log` síncronamente (write-before-send) y que la cola `audit` está **vacía** (no se encoló). Envolver en `beginTransaction()`/`rollBack()` en `finally` (la suite no tiene DAMA, comparte la conexión de dev — mirror de 1.3).
+  - [x] **security propaga en fallo (D1/AC7/AC10)**: cubrir la asimetría también a nivel funcional **o** confirmar que el unit de T9 ya la fija. Si se hace aquí, forzar el fallo de la rama `security` (p. ej. un doble `AuditLogWriter` que lanza, o un `id` que viole una invariante de escritura) y asertar que `log('…', AuditLevel::SECURITY, …)` **PROPAGA** (`expectException`) — no se traga; contrasta con `activity`, que en fallo no propaga y registra `warning`.
+  - [x] **handler (AC8)** (opcional, **solo** para el end-to-end del consume — la cobertura del handler la da el `RecordAuditEntryHandlerTest` obligatorio de T9/AC13, no este caso): construir un `RecordAuditEntry` y `RecordAuditEntryHandler` resuelto del contenedor, `__invoke`-arlo, y asertar 1 fila + reentrega = no-op (1 fila). Si se prefiere consumir el transporte de verdad, usar un `Worker` real contra la instancia exacta del transporte (NO `messenger:consume` vía `new Application($kernel)`, que resetea el `InMemoryTransport` — gotcha de sesiones Behat previas).
 
-- [ ] **T11 — Gates** (AC11): orden importa →
+- [x] **T11 — Gates** (AC11): orden importa →
   1. `make php.stan` sobre los ficheros nuevos.
   2. Stack arriba (`make app.dev`); el transporte `audit` necesita la BD migrada de 1.3 (`audit_log` existe) para el functional de la rama `security`.
   3. `make php.unit` (Unit + Functional bajo la única "Project Test Suite").
   4. `make php.quality` (deptrac + bounded-context + event-bus + phpmd + cs-fixer + rector). `api/config/reference.php` se regenera: **commitea** el diff, no `git checkout`.
   5. **Re-correr `make php.stan`** sobre los ficheros asentados (Rector reescribe asserts en `php.quality`).
-  - [ ] **Barrer del diff** comentarios con IDs de story/AC/FR/NFR/`D-1.4.x` antes del commit final (regla de comentarios de `CLAUDE.md`).
+  - [x] **Barrer del diff** comentarios con IDs de story/AC/FR/NFR/`D-1.4.x` antes del commit final (regla de comentarios de `CLAUDE.md`).
 
 ## Dev Notes
 
@@ -376,8 +376,60 @@ Patrón de carpeta: puertos en `Application/` (mirror de `Shared/Event/Applicati
 
 ### Agent Model Used
 
+claude-opus-4-8[1m] (Claude Opus 4.8, 1M context).
+
 ### Debug Log References
+
+- `make php.stan` → No errors (566 ficheros).
+- `make php.unit` → 1180 tests, 5319 aserciones, 3 skipped (preexistentes). Suite Audit aislada: 107 tests OK.
+- `make php.quality` → EXIT 0 (deptrac 0 violaciones; bounded-context, event-bus, phpmd, cs-fixer, phpcs, rector verdes).
+- Migraciones al día; tabla `audit_log` presente (prerequisito del functional de la rama `security`).
 
 ### Completion Notes List
 
+- Seam `AuditLogger->log(action, level, resource?, metadata?)`: el adaptador sella actor/correlación/instante/id y ramifica con `match($level)` — `activity` → `dispatch` al transporte `audit`; `security` → `AuditLogWriter::write` síncrono (write-before-send).
+- Frontera best-effort ASIMÉTRICA (D1): `activity` traga el fallo y registra `warning` (contexto solo `action`/`level`/`exception`, sin PII); `security` PROPAGA.
+- `ActorContextFactory`: request en curso → `anonymous`; off-request → `system`; un sub-request sigue `anonymous` (no degrada a `system`).
+- `correlationId` leído del request vía `CorrelationIdListener::ATTRIBUTE_KEY`; fallback `Uuid::generate()` off-request/forma inválida. Fuente única del patrón: nuevo `CorrelationIdListener::isCanonical()` (la regex sigue privada), reutilizado además por los dos call-sites del propio listener (boy-scout DRY in-file).
+- Transporte `audit` dedicado (Doctrine, `queue_name: audit`, `auto_setup:false`) + routing + override `when@test` in-memory; `messenger_worker` consume `audit` en `compose.yaml` y `compose.prod.yaml`.
+- `RecordAuditEntryHandler` dumb (solo `AuditLogWriter`); el actor viaja ya sellado en el `entry` (AC12), nunca se re-resuelve en el worker.
+- `@SuppressWarnings("PHPMD.CouplingBetweenObjects")` en `SymfonyAuditLogger`: acoplamiento 13, irreducible para el seam que compone 6 puertos + tipos de registro; precedente repo (ExceptionResponder/SearchResponder). No se extrajo helper (spec T5: "recortar, no extraer").
+- `services_test.yaml`: alias `AuditLogger` público SOLO en test (sin consumidor de prod aún → el alias privado se podaba y el functional no podía resolverlo). Retirable en 1.5 cuando exista el primer llamador.
+- DESVIACIÓN consciente de T10: el functional NO fuerza el fallo asimétrico (lo fija el unit de T9 — opción sancionada por T10); el functional resuelve `AuditLogger` del contenedor para ejercitar el wiring real (routing + round-trip del serializer + write síncrono).
+- PROPUESTA fuera de alcance (NO aplicada, a decisión de Sergio): `ExceptionResponder` duplica la regex UUIDv7 con un comentario que justificaba la copia "para un único consumidor cross-class"; con `isCanonical()` ya hay dos consumidores → podría reusarla y borrar la copia.
+- Docs de arquitectura: diferidas a 1.5 (decisión de Sergio en este run).
+
 ### File List
+
+Nuevos (src):
+
+- `api/src/Shared/Audit/Domain/AuditResource.php`
+- `api/src/Shared/Audit/Application/AuditLogger.php`
+- `api/src/Shared/Audit/Application/ActorContextFactory.php`
+- `api/src/Shared/Audit/Infrastructure/RequestStackActorContextFactory.php`
+- `api/src/Shared/Audit/Infrastructure/SymfonyAuditLogger.php`
+- `api/src/Shared/Audit/Infrastructure/Messenger/RecordAuditEntryHandler.php`
+
+Modificados (src/config):
+
+- `api/src/Shared/Http/Infrastructure/CorrelationIdListener.php` (añade `isCanonical()`, reuso interno)
+- `api/config/packages/messenger.yaml` (transporte/routing/`when@test` `audit`)
+- `api/config/services_test.yaml` (alias `AuditLogger` público en test)
+- `compose.yaml`, `compose.prod.yaml` (`messenger_worker` consume `audit`)
+
+Nuevos (tests):
+
+- `api/tests/Unit/Shared/Audit/Domain/AuditResourceTest.php`
+- `api/tests/Unit/Shared/Audit/Infrastructure/RequestStackActorContextFactoryTest.php`
+- `api/tests/Unit/Shared/Audit/Infrastructure/SymfonyAuditLoggerTest.php`
+- `api/tests/Unit/Shared/Audit/Infrastructure/Messenger/RecordAuditEntryHandlerTest.php`
+- `api/tests/Functional/Shared/Audit/SymfonyAuditLoggerBranchingTest.php`
+- `api/tests/Unit/Shared/Audit/Infrastructure/Double/FakeMessageBus.php`
+- `api/tests/Unit/Shared/Audit/Infrastructure/Double/InMemoryAuditLogWriter.php`
+- `api/tests/Unit/Shared/Audit/Infrastructure/Double/RecordingLogger.php`
+- `api/tests/Unit/Shared/Audit/Infrastructure/Double/FixedActorContextFactory.php`
+- `api/tests/Unit/Shared/Audit/Infrastructure/Double/FixedClock.php`
+
+### Change Log
+
+- 2026-06-24 — Implementada Story 1.4: seam `AuditLogger` + persistencia por nivel (activity async / security write-before-send) + `ActorContextFactory` + transporte `audit` + `RecordAuditEntryHandler`. Gates verdes (stan/unit/quality). Estado → review.

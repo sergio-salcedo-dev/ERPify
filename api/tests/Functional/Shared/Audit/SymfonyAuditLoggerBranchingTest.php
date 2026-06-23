@@ -62,7 +62,7 @@ final class SymfonyAuditLoggerBranchingTest extends KernelTestCase
                 'activity writes no audit_log row in the request cycle',
             );
 
-            $message = reset($messages)->getMessage();
+            $message = \reset($messages)->getMessage();
             $this->assertInstanceOf(RecordAuditEntry::class, $message);
 
             $entry = $message->entry;
@@ -71,7 +71,10 @@ final class SymfonyAuditLoggerBranchingTest extends KernelTestCase
             $this->assertSame('Bank', $entry->resourceType);
             $this->assertSame($resourceId, $entry->resourceId);
             $this->assertSame(ActorType::SYSTEM, $entry->actor->type, 'off-request the sealed actor is system');
-            $this->assertTrue(CorrelationIdListener::isCanonical($entry->correlationId), 'a canonical fallback correlation id is minted');
+            $this->assertTrue(
+                CorrelationIdListener::isCanonical($entry->correlationId),
+                'a canonical fallback correlation id is minted',
+            );
             $this->assertGreaterThanOrEqual($before, $entry->occurredOn);
             $this->assertLessThanOrEqual($after, $entry->occurredOn);
             $this->assertMatchesRegularExpression(

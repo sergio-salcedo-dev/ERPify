@@ -81,7 +81,12 @@ final class SymfonyAuditLoggerTest extends TestCase
         $recordingLogger = new RecordingLogger();
         $auditLogger = $this->makeLogger($bus, $writer, $recordingLogger, ActorContext::anonymous());
 
-        $auditLogger->log('BANK_ACCOUNTS_VIEWED', AuditLevel::ACTIVITY, AuditResource::of('Bank', 'secret-id'), ['pii' => 'x']);
+        $auditLogger->log(
+            'BANK_ACCOUNTS_VIEWED',
+            AuditLevel::ACTIVITY,
+            AuditResource::of('Bank', 'secret-id'),
+            ['pii' => 'x'],
+        );
 
         $this->assertCount(1, $recordingLogger->records, 'the gap is recorded, never silent');
         $record = $recordingLogger->records[0];
@@ -107,7 +112,11 @@ final class SymfonyAuditLoggerTest extends TestCase
             // expected: a write-before-send failure is never swallowed
         }
 
-        $this->assertSame([], $recordingLogger->records, 'a security failure propagates; it is not downgraded to a warning');
+        $this->assertSame(
+            [],
+            $recordingLogger->records,
+            'a security failure propagates; it is not downgraded to a warning',
+        );
     }
 
     private function makeLogger(
@@ -118,6 +127,7 @@ final class SymfonyAuditLoggerTest extends TestCase
     ): SymfonyAuditLogger {
         $request = new Request();
         $request->attributes->set(CorrelationIdListener::ATTRIBUTE_KEY, self::CORRELATION_ID);
+
         $requestStack = new RequestStack();
         $requestStack->push($request);
 
