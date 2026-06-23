@@ -1,6 +1,10 @@
+---
+baseline_commit: b2a674f22684ae130d6d4cc97dc2ef2cac634e15
+---
+
 # Story 1.2: `AuditLevel` + mensaje interno `RecordAuditEntry` + modelo `AuditLogEntry`, separados del `DomainEvent`
 
-Status: ready-for-dev
+Status: review
 
 <!-- Epic 1 — Registro de auditoría end-to-end (backbone + primer actor auditado).
      Segunda historia del subsistema de auditoría operativa/de actor. Compone ActorContext (1.1).
@@ -72,28 +76,28 @@ Esta historia define **el contrato de datos** del eje de auditoría: el nivel (`
 
 ## Tasks / Subtasks
 
-- [ ] **T1 — Crear el enum `AuditLevel`** (AC7, AC8) → `api/src/Shared/Audit/Domain/AuditLevel.php`
-  - [ ] `enum AuditLevel: string` con `case ACTIVITY = 'activity';` y `case SECURITY = 'security';` (backing **minúscula**, exactamente los tokens del esquema del ADR — Decisión D-1.2.f).
-  - [ ] Enum **case-only**, sin métodos: el match async/sync es responsabilidad de `AuditLogger` (1.4), no del enum.
-  - [ ] `declare(strict_types=1);`; docblock breve solo si el nombre no basta. Mirror estructural de `api/src/Shared/Search/Domain/SortDirection.php` (enum plano en `Domain/`, no `Domain/Enum/`).
-- [ ] **T2 — Crear la excepción de dominio `InvalidAuditLogEntry`** (AC5) → `api/src/Shared/Audit/Domain/Exception/InvalidAuditLogEntry.php`
-  - [ ] `final class InvalidAuditLogEntry extends Erpify\Shared\ErrorContract\Domain\Exception\DomainException` — **sin** marcador (no `InvalidInput`/`InvariantViolation`): error server-side que fluye a Sentry, nunca 4xx (Decisión D-1.2.e; mismo razonamiento que `InvalidActorContext`, ver `1-1-...md` D-1.1.b).
-  - [ ] Constructores nombrados estáticos: `actionMustNotBeEmpty(): self` y `fieldExceedsMaxLength(string $field, int $max, int $actual): self` (cubre `action` y `resourceType` que exceden el ancho de columna de 1.3). `type:` estable `'invalid-audit-log-entry'`; `title:` corto; para `fieldExceedsMaxLength`, incluir en `context:` el nombre del campo + límite + longitud real (server-side, sin el valor ofensivo: el contenido puede llevar datos no confiables — ver AC3/T3); para `actionMustNotBeEmpty`, `context:` `[]` (no hay valor ofensivo). Mirror de `api/src/Shared/Search/Domain/Exception/InvalidSearchValue.php`.
-- [ ] **T3 — Crear el modelo `AuditLogEntry`** (AC3, AC4, AC5, AC6, AC8) → `api/src/Shared/Audit/Application/AuditLogEntry.php`
-  - [ ] `final readonly class AuditLogEntry` con **constructor privado** `private function __construct(public string $id, public AuditLevel $level, public string $action, public ActorContext $actor, public string $correlationId, public DateTimeImmutable $occurredOn, public ?string $resourceType, public ?string $resourceId, public array $metadata, public ?string $ip, public ?string $userAgent)`.
-  - [ ] Anotar `metadata` como `@param array<string, mixed>` / `@var array<string, mixed>` (AC6).
-  - [ ] Una factoría estática `create(AuditLevel $level, string $action, ActorContext $actor, string $correlationId, DateTimeImmutable $occurredOn, ?string $resourceType = null, ?string $resourceId = null, array $metadata = [], ?string $ip = null, ?string $userAgent = null): self` que: (1) **guarda** `trim($action) === ''` → `throw InvalidAuditLogEntry::actionMustNotBeEmpty()`; (2) **acota la longitud** de `action` y de `resourceType` (si no es null) a ≤ `self::MAX_FIELD_LENGTH` (= 100, el ancho de `VARCHAR(100)` de 1.3) → `throw InvalidAuditLogEntry::fieldExceedsMaxLength(...)` si excede (medir con `mb_strlen`); (3) acuña `id = Uuid::generate()`; (4) `new self(...)` con el `id` minted (Decisión D-1.2.d, D-1.2.h).
-  - [ ] Definir la constante `private const int MAX_FIELD_LENGTH = 100;` (espejo declarado del `VARCHAR(100)` de `action`/`resource_type` en 1.3 — un solo número, no re-derivado en cada guard).
-  - [ ] **Sin** `equals()`, **sin** `toPrimitives()`/`fromPrimitives()`, **sin** factoría de reconstitución con `id` explícito (Decisión D-1.2.d / YAGNI — ver alcance).
-  - [ ] `correlationId`/`resourceId` se aceptan como `string`/`?string` **sin** re-validar UUID (fuente fiable: `CorrelationIdListener` ya garantiza UUIDv7; los ids de recurso ya son ids de agregado validados — Decisión D-1.2.g).
-- [ ] **T4 — Crear el mensaje `RecordAuditEntry`** (AC2, AC3, AC8) → `api/src/Shared/Audit/Application/RecordAuditEntry.php`
-  - [ ] `final readonly class RecordAuditEntry` **sin clase base** con `public function __construct(public AuditLogEntry $entry) {}` — envuelve el registro, no duplica campos (Decisión D-1.2.a; patrón `BankCreatedDomainEvent`→`BankSnapshot`).
-  - [ ] **No** importar `DomainEvent`, ni `MessageBusInterface`, ni nada de Messenger/Symfony. **No** definir `aggregateId()`/`eventName()`. El `#[AsMessageHandler]`, el transporte `audit` y el routing son de la Story 1.4 — aquí solo el tipo de mensaje.
-- [ ] **T5 — Tests unitarios** (AC9) — mirror `api/tests/Unit/Shared/Audit/{Domain,Application}/`
-  - [ ] `api/tests/Unit/Shared/Audit/Domain/AuditLevelTest.php` con `#[CoversClass(AuditLevel::class)]`: fija los 2 backing values (`'activity'|'security'`) y el conteo de casos (mirror de `SortDirectionTest`).
-  - [ ] `api/tests/Unit/Shared/Audit/Application/AuditLogEntryTest.php` con `#[CoversClass(AuditLogEntry::class)]` **y** `#[CoversClass(InvalidAuditLogEntry::class)]`: `create(...)` mínimo acepta y expone todos los props; `id` minted es UUIDv7 válido (`Uuid::isValid($e->id)` + check v7 al estilo `UuidTest`); `metadata` default `[]`; recurso opcional (`null` por defecto, valores cuando se pasan); `action` vacío/espacios → `expectException(InvalidAuditLogEntry::class)`; **límite de longitud**: `action` de 101 chars y `resourceType` de 101 chars → `expectException(InvalidAuditLogEntry::class)`, y `action`/`resourceType` de exactamente 100 chars se aceptan (frontera ≤ 100).
-  - [ ] `api/tests/Unit/Shared/Audit/Application/RecordAuditEntryTest.php` con `#[CoversClass(RecordAuditEntry::class)]`: envuelve el `AuditLogEntry` (`assertSame($entry, $message->entry)`); **NO** es `DomainEvent` (`assertFalse(is_a(RecordAuditEntry::class, DomainEvent::class, true))` **y** `assertNotInstanceOf(DomainEvent::class, $message)`); round-trip `unserialize(serialize($message)) == $message` intacto (serializable para 1.4) **y, además**, igualdad campo-a-campo de la cadena anidada tras el round-trip —`->entry->actor->type`, `->entry->actor->actorId`, `->entry->level` y `->entry->occurredOn` (incl. microsegundos/zona del `DateTimeImmutable`)— para atrapar la degradación de precisión que el transporte real (`in-memory://?serialize=true`) podría introducir y un `==` superficial no detectaría.
-- [ ] **T6 — Gates** (AC8, AC9): `make php.stan` sobre los ficheros nuevos → `make php.unit` → `make php.quality` (incluye deptrac + bounded-context + phpmd + cs-fixer + rector). Verde antes de declarar done. Tras `php.quality`, re-correr `make php.stan` sobre los ficheros ya asentados (Rector puede reescribir asserts — ver Testing requirements).
+- [x] **T1 — Crear el enum `AuditLevel`** (AC7, AC8) → `api/src/Shared/Audit/Domain/AuditLevel.php`
+  - [x] `enum AuditLevel: string` con `case ACTIVITY = 'activity';` y `case SECURITY = 'security';` (backing **minúscula**, exactamente los tokens del esquema del ADR — Decisión D-1.2.f).
+  - [x] Enum **case-only**, sin métodos: el match async/sync es responsabilidad de `AuditLogger` (1.4), no del enum.
+  - [x] `declare(strict_types=1);`; docblock breve solo si el nombre no basta. Mirror estructural de `api/src/Shared/Search/Domain/SortDirection.php` (enum plano en `Domain/`, no `Domain/Enum/`).
+- [x] **T2 — Crear la excepción de dominio `InvalidAuditLogEntry`** (AC5) → `api/src/Shared/Audit/Domain/Exception/InvalidAuditLogEntry.php`
+  - [x] `final class InvalidAuditLogEntry extends Erpify\Shared\ErrorContract\Domain\Exception\DomainException` — **sin** marcador (no `InvalidInput`/`InvariantViolation`): error server-side que fluye a Sentry, nunca 4xx (Decisión D-1.2.e; mismo razonamiento que `InvalidActorContext`, ver `1-1-...md` D-1.1.b).
+  - [x] Constructores nombrados estáticos: `actionMustNotBeEmpty(): self` y `fieldExceedsMaxLength(string $field, int $max, int $actual): self` (cubre `action` y `resourceType` que exceden el ancho de columna de 1.3). `type:` estable `'invalid-audit-log-entry'`; `title:` corto; para `fieldExceedsMaxLength`, incluir en `context:` el nombre del campo + límite + longitud real (server-side, sin el valor ofensivo: el contenido puede llevar datos no confiables — ver AC3/T3); para `actionMustNotBeEmpty`, `context:` `[]` (no hay valor ofensivo). Mirror de `api/src/Shared/Search/Domain/Exception/InvalidSearchValue.php`.
+- [x] **T3 — Crear el modelo `AuditLogEntry`** (AC3, AC4, AC5, AC6, AC8) → `api/src/Shared/Audit/Application/AuditLogEntry.php`
+  - [x] `final readonly class AuditLogEntry` con **constructor privado** `private function __construct(public string $id, public AuditLevel $level, public string $action, public ActorContext $actor, public string $correlationId, public DateTimeImmutable $occurredOn, public ?string $resourceType, public ?string $resourceId, public array $metadata, public ?string $ip, public ?string $userAgent)`.
+  - [x] Anotar `metadata` como `@param array<string, mixed>` / `@var array<string, mixed>` (AC6).
+  - [x] Una factoría estática `create(AuditLevel $level, string $action, ActorContext $actor, string $correlationId, DateTimeImmutable $occurredOn, ?string $resourceType = null, ?string $resourceId = null, array $metadata = [], ?string $ip = null, ?string $userAgent = null): self` que: (1) **guarda** `trim($action) === ''` → `throw InvalidAuditLogEntry::actionMustNotBeEmpty()`; (2) **acota la longitud** de `action` y de `resourceType` (si no es null) a ≤ `self::MAX_FIELD_LENGTH` (= 100, el ancho de `VARCHAR(100)` de 1.3) → `throw InvalidAuditLogEntry::fieldExceedsMaxLength(...)` si excede (medir con `mb_strlen`); (3) acuña `id = Uuid::generate()`; (4) `new self(...)` con el `id` minted (Decisión D-1.2.d, D-1.2.h).
+  - [x] Definir la constante `private const int MAX_FIELD_LENGTH = 100;` (espejo declarado del `VARCHAR(100)` de `action`/`resource_type` en 1.3 — un solo número, no re-derivado en cada guard).
+  - [x] **Sin** `equals()`, **sin** `toPrimitives()`/`fromPrimitives()`, **sin** factoría de reconstitución con `id` explícito (Decisión D-1.2.d / YAGNI — ver alcance).
+  - [x] `correlationId`/`resourceId` se aceptan como `string`/`?string` **sin** re-validar UUID (fuente fiable: `CorrelationIdListener` ya garantiza UUIDv7; los ids de recurso ya son ids de agregado validados — Decisión D-1.2.g).
+- [x] **T4 — Crear el mensaje `RecordAuditEntry`** (AC2, AC3, AC8) → `api/src/Shared/Audit/Application/RecordAuditEntry.php`
+  - [x] `final readonly class RecordAuditEntry` **sin clase base** con `public function __construct(public AuditLogEntry $entry) {}` — envuelve el registro, no duplica campos (Decisión D-1.2.a; patrón `BankCreatedDomainEvent`→`BankSnapshot`).
+  - [x] **No** importar `DomainEvent`, ni `MessageBusInterface`, ni nada de Messenger/Symfony. **No** definir `aggregateId()`/`eventName()`. El `#[AsMessageHandler]`, el transporte `audit` y el routing son de la Story 1.4 — aquí solo el tipo de mensaje.
+- [x] **T5 — Tests unitarios** (AC9) — mirror `api/tests/Unit/Shared/Audit/{Domain,Application}/`
+  - [x] `api/tests/Unit/Shared/Audit/Domain/AuditLevelTest.php` con `#[CoversClass(AuditLevel::class)]`: fija los 2 backing values (`'activity'|'security'`) y el conteo de casos (mirror de `SortDirectionTest`).
+  - [x] `api/tests/Unit/Shared/Audit/Application/AuditLogEntryTest.php` con `#[CoversClass(AuditLogEntry::class)]` **y** `#[CoversClass(InvalidAuditLogEntry::class)]`: `create(...)` mínimo acepta y expone todos los props; `id` minted es UUIDv7 válido (`Uuid::isValid($e->id)` + check v7 al estilo `UuidTest`); `metadata` default `[]`; recurso opcional (`null` por defecto, valores cuando se pasan); `action` vacío/espacios → `expectException(InvalidAuditLogEntry::class)`; **límite de longitud**: `action` de 101 chars y `resourceType` de 101 chars → `expectException(InvalidAuditLogEntry::class)`, y `action`/`resourceType` de exactamente 100 chars se aceptan (frontera ≤ 100).
+  - [x] `api/tests/Unit/Shared/Audit/Application/RecordAuditEntryTest.php` con `#[CoversClass(RecordAuditEntry::class)]`: envuelve el `AuditLogEntry` (`assertSame($entry, $message->entry)`); **NO** es `DomainEvent` (`assertFalse(is_a(RecordAuditEntry::class, DomainEvent::class, true))` **y** `assertNotInstanceOf(DomainEvent::class, $message)`); round-trip `unserialize(serialize($message)) == $message` intacto (serializable para 1.4) **y, además**, igualdad campo-a-campo de la cadena anidada tras el round-trip —`->entry->actor->type`, `->entry->actor->actorId`, `->entry->level` y `->entry->occurredOn` (incl. microsegundos/zona del `DateTimeImmutable`)— para atrapar la degradación de precisión que el transporte real (`in-memory://?serialize=true`) podría introducir y un `==` superficial no detectaría.
+- [x] **T6 — Gates** (AC8, AC9): `make php.stan` sobre los ficheros nuevos → `make php.unit` → `make php.quality` (incluye deptrac + bounded-context + phpmd + cs-fixer + rector). Verde antes de declarar done. Tras `php.quality`, re-correr `make php.stan` sobre los ficheros ya asentados (Rector puede reescribir asserts — ver Testing requirements).
 
 ## Dev Notes
 
@@ -215,8 +219,36 @@ Patrón de carpeta: enum **plano** en `Domain/` (mirror de `Shared/Search/Domain
 
 ### Agent Model Used
 
+claude-opus-4-8 (1M context)
+
 ### Debug Log References
+
+- `make php.unit --filter Audit` → **OK (31 tests, 64 assertions)** (1.1 + 1.2 Audit suites).
+- `make php.stan` → **OK, no errors** (level max).
+- `make php.quality` → **EXIT 0**: cs-fixer idempotent on a second pass, deptrac "Violations 0", bounded-context "No violations", mapping correct. `reference.php` untouched (pure Domain/Application change, no DI wiring).
+- `make php.unit` (full suite) → **OK (1158 tests, 5199 assertions, 3 pre-existing skips)** — no regressions.
 
 ### Completion Notes List
 
+- Added the audit data contract as **pure Domain + Application** under `Shared/Audit`: `AuditLevel` (Domain enum), `InvalidAuditLogEntry` (Domain exception), `AuditLogEntry` + `RecordAuditEntry` (Application DTOs). No framework/ORM/HTTP/Messenger imports; deptrac auto-folds the nested `Shared/Audit/*` modules into the `Shared.*` layers, so no `deptrac.yaml`/allowlist edits were needed.
+- **`RecordAuditEntry` is invisible to the event backbone by non-inheritance:** it has no base class, so `RegisterDomainEventsPass`'s `is_a(..., DomainEvent::class, true)` gate never discovers it and `EventBus::publish(DomainEvent ...)` rejects it at the type level. That type-level guarantee is enforced statically by PHPStan (see deviation below).
+- **`id` minted in `AuditLogEntry::create()`** via `Uuid::generate()` (v7) as the sole idempotency anchor; no `equals()`, no `toPrimitives()`/`fromPrimitives()`, no reconstitution factory (YAGNI — the PK seals identity in 1.3). `occurredOn` is injected, not clock-read (testable, 1.4 passes the injected `Clock`).
+- **Field invariants in `create()`:** blank `action` and `action`/`resourceType` longer than `MAX_FIELD_LENGTH` (100, mirroring the `VARCHAR(100)` width of 1.3) throw the **marker-less** `InvalidAuditLogEntry` — a server-side fault that flows to Sentry, never a client 4xx. Error contract (`docs/api-error-contract.md`) unchanged (NFR26 not triggered). A private `guardFieldLength()` helper de-duplicates the two length checks (keeps the new-duplication gate clean).
+- **`ip`/`userAgent`/`metadata` documented as attacker-controlled (tainted)** in the `AuditLogEntry` docblock; only the field name/limit/length travel in the exception `context`, never the offending value.
+- **Deviation 1 (PHPStan, gate-forced):** the spec's `assertFalse(is_a(RecordAuditEntry::class, DomainEvent::class, true))` + `assertNotInstanceOf(DomainEvent::class, $message)` trip PHPStan level max (`function.impossibleType` / `method.alreadyNarrowedType`) — the type system already proves the negative. Replaced with a runtime reflection assertion that PHPStan cannot constant-fold (`(new ReflectionClass(...))->getParentClass()` is `false`), testing the same "no base class ⇒ off the event backbone" invariant without a suppression.
+- **Deviation 2 (Rector, gate-forced):** Rector flipped the round-trip `assertEquals($message, $round)` to `assertSame(...)` during `php.quality`, which would wrongly assert instance identity between an object and its unserialized copy. Reformulated as `assertSame(serialize($message), serialize($round))` — a string compare Rector leaves alone that proves the round-trip is lossless across **all** fields; the targeted field-by-field precision asserts (`occurredOn` microseconds/zone, `actor->type`, `actorId`, `level`) stay.
+- Boy-scout: none needed — all files are new; no `Backoffice/BankAccount/.../Audit/*` placeholder touched (that is 1.5).
+
 ### File List
+
+- `api/src/Shared/Audit/Domain/AuditLevel.php` (NEW)
+- `api/src/Shared/Audit/Domain/Exception/InvalidAuditLogEntry.php` (NEW)
+- `api/src/Shared/Audit/Application/AuditLogEntry.php` (NEW)
+- `api/src/Shared/Audit/Application/RecordAuditEntry.php` (NEW)
+- `api/tests/Unit/Shared/Audit/Domain/AuditLevelTest.php` (NEW)
+- `api/tests/Unit/Shared/Audit/Application/AuditLogEntryTest.php` (NEW)
+- `api/tests/Unit/Shared/Audit/Application/RecordAuditEntryTest.php` (NEW)
+
+### Change Log
+
+- 2026-06-23 — Implemented Story 1.2: `AuditLevel` enum + `AuditLogEntry` record (`create()` mints v7 `id`, enforces non-empty/≤100 field invariants via marker-less `InvalidAuditLogEntry`) + `RecordAuditEntry` transport message wrapping the record, all pure Domain/Application. Unit tests cover the surface, idempotency-anchor minting, invariants, the non-`DomainEvent` structural guarantee, and lossless transport serialization. Gates green (stan/unit/quality, full suite no regressions).
