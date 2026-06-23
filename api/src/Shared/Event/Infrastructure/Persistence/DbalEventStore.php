@@ -6,11 +6,14 @@ namespace Erpify\Shared\Event\Infrastructure\Persistence;
 
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\DBAL\Types\Types;
 use Erpify\Shared\Event\Application\DomainEventSerializer;
 use Erpify\Shared\Event\Application\EventStore;
 use Erpify\Shared\Event\Application\StoredEvent;
 use Erpify\Shared\Event\Domain\DomainEvent;
+use Erpify\Shared\Event\Domain\Exception\CorruptEventStoreRow;
+use Erpify\Shared\Event\Domain\Exception\EventStreamConcurrencyConflict;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
@@ -19,12 +22,14 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  * connection, so {@see append()} joins the use-case write transaction (aggregate row + this row +
  * outbox commit atomically). It is a log of infrastructure with no domain invariants and no ORM
  * entity — the `IDENTITY` sequence and the `aggregate_version` sub-select sit outside the ORM unit of
- * work (ADR D4). `tenant_id`/`metadata` are reserved and written as `NULL`/`{}` today.
+ * work (ADR D4). `tenant_id` is reserved and written `NULL`; `metadata` carries the serializer's
+ * envelope metadata (empty today). A concurrent append to the same stream loses the version race on
+ * the stream UNIQUE and surfaces as {@see EventStreamConcurrencyConflict} (a 409, not a 500).
  */
 #[AsAlias(EventStore::class)]
 final readonly class DbalEventStore implements EventStore
 {
-    private const int STREAM_COLUMNS_LIMIT = 512;
+    private const int JSON_MAX_DEPTH = 512;
 
     public function __construct(
         private Connection $connection,
@@ -44,30 +49,37 @@ final readonly class DbalEventStore implements EventStore
         // ON CONFLICT (event_id) DO NOTHING makes a re-append a silent no-op: the persist middleware
         // also runs when the worker re-dispatches the message on consume, and at-least-once redelivery
         // can replay it — neither must write a second row nor abort the surrounding transaction.
-        $this->connection->executeStatement(
-            'INSERT INTO event_store '
-            . '(event_id, aggregate_id, aggregate_type, aggregate_version, event_name, event_version, '
-            . 'payload, metadata, tenant_id, occurred_on, recorded_on) '
-            . 'SELECT CAST(:event_id AS UUID), CAST(:aggregate_id AS UUID), :aggregate_type, '
-            . 'COALESCE(MAX(aggregate_version), 0) + 1, :event_name, CAST(:event_version AS SMALLINT), '
-            . 'CAST(:payload AS JSONB), CAST(:metadata AS JSONB), CAST(:tenant_id AS UUID), '
-            . 'CAST(:occurred_on AS TIMESTAMPTZ), now() '
-            . 'FROM event_store '
-            . 'WHERE aggregate_id = CAST(:aggregate_id AS UUID) '
-            . 'AND tenant_id IS NOT DISTINCT FROM CAST(:tenant_id AS UUID) '
-            . 'ON CONFLICT (event_id) DO NOTHING',
-            [
-                'event_id' => $event->eventId(),
-                'aggregate_id' => $event->aggregateId(),
-                'aggregate_type' => $event::aggregateType(),
-                'event_name' => $event::eventName(),
-                'event_version' => $event::eventVersion(),
-                'payload' => $this->encode($envelope['payload']),
-                'metadata' => $this->encode($envelope['metadata']),
-                'tenant_id' => null,
-                'occurred_on' => $event->occurredOn()->format('Y-m-d H:i:s.uP'),
-            ],
-        );
+        try {
+            $this->connection->executeStatement(
+                'INSERT INTO event_store '
+                . '(event_id, aggregate_id, aggregate_type, aggregate_version, event_name, event_version, '
+                . 'payload, metadata, tenant_id, occurred_on, recorded_on) '
+                . 'SELECT CAST(:event_id AS UUID), CAST(:aggregate_id AS UUID), :aggregate_type, '
+                . 'COALESCE(MAX(aggregate_version), 0) + 1, :event_name, CAST(:event_version AS SMALLINT), '
+                . 'CAST(:payload AS JSONB), CAST(:metadata AS JSONB), CAST(:tenant_id AS UUID), '
+                . 'CAST(:occurred_on AS TIMESTAMPTZ), clock_timestamp() '
+                . 'FROM event_store '
+                . 'WHERE aggregate_id = CAST(:aggregate_id AS UUID) '
+                . 'AND tenant_id IS NOT DISTINCT FROM CAST(:tenant_id AS UUID) '
+                . 'ON CONFLICT (event_id) DO NOTHING',
+                [
+                    'event_id' => $event->eventId(),
+                    'aggregate_id' => $event->aggregateId(),
+                    'aggregate_type' => $event::aggregateType(),
+                    'event_name' => $event::eventName(),
+                    'event_version' => $event::eventVersion(),
+                    'payload' => $this->encode($envelope['payload']),
+                    'metadata' => $this->encode($envelope['metadata']),
+                    'tenant_id' => null,
+                    'occurred_on' => $event->occurredOn()->format('Y-m-d H:i:s.uP'),
+                ],
+            );
+        } catch (UniqueConstraintViolationException) {
+            // event_id conflicts are absorbed by ON CONFLICT above, so the only unique that can still
+            // be violated is the per-stream (aggregate_id, aggregate_version) — a concurrent append
+            // computed the same next version and lost the race. Surface it as a retryable 409.
+            throw EventStreamConcurrencyConflict::forAggregate($event->aggregateId(), $event::aggregateType());
+        }
     }
 
     #[Override]
@@ -124,7 +136,11 @@ final readonly class DbalEventStore implements EventStore
     {
         $value = $row[$key] ?? null;
 
-        return \is_numeric($value) ? (int) $value : 0;
+        if (!\is_numeric($value)) {
+            throw CorruptEventStoreRow::nonNumericColumn($key);
+        }
+
+        return (int) $value;
     }
 
     /**
@@ -164,7 +180,7 @@ final readonly class DbalEventStore implements EventStore
             return [];
         }
 
-        $decoded = \json_decode($json, true, self::STREAM_COLUMNS_LIMIT, JSON_THROW_ON_ERROR);
+        $decoded = \json_decode($json, true, self::JSON_MAX_DEPTH, JSON_THROW_ON_ERROR);
 
         if (!\is_array($decoded)) {
             return [];
