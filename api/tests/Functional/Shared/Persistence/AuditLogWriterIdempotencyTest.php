@@ -89,7 +89,7 @@ final class AuditLogWriterIdempotencyTest extends KernelTestCase
             $actorId = Uuid::generate();
             $resourceId = Uuid::generate();
             $correlationId = Uuid::generate();
-            $occurredOn = new DateTimeImmutable('2026-03-02T10:11:12+00:00');
+            $occurredOn = new DateTimeImmutable('2026-03-02T10:11:12.123456+00:00');
 
             $entry = AuditLogEntry::create(
                 AuditLevel::SECURITY,
@@ -128,9 +128,16 @@ final class AuditLogWriterIdempotencyTest extends KernelTestCase
 
             $storedOccurredOn = $row['occurred_on'] ?? null;
             $this->assertIsString($storedOccurredOn);
+            $stored = new DateTimeImmutable($storedOccurredOn);
             $this->assertSame(
                 $occurredOn->getTimestamp(),
-                (new DateTimeImmutable($storedOccurredOn))->getTimestamp(),
+                $stored->getTimestamp(),
+                'occurred_on round-trips to the same instant',
+            );
+            $this->assertSame(
+                $occurredOn->format('u'),
+                $stored->format('u'),
+                'occurred_on preserves microsecond precision (TIMESTAMP(6))',
             );
         });
     }
