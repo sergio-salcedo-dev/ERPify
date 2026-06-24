@@ -58,7 +58,10 @@ Feature: Symfony framework exceptions surface through the RFC 9457 error contrac
     And the JSON node "title" should be equal to "Forbidden."
     And the JSON node "instance" should be a valid UUID
     And the JSON node "correlation-id" should be a valid UUID
-    And 0 requests got executed across all doctrine connections
+    # A permission denial is the one error path that touches the DB: the access-denied listener records
+    # it as a synchronous write-before-send `security` audit row (see features/shared/audit). The sibling
+    # AccessDeniedHttpException path above stays DB-free — only the Security-Core denial is audited.
+    And 1 requests got executed across all doctrine connections
 
   Scenario: Security Core AuthenticationException (unwrapped) is mapped to unauthenticated
     When I send a "GET" request to "http://localhost/api/test/_throw-security-authentication"
