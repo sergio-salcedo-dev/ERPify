@@ -11,7 +11,7 @@ final class Version20260623164321 extends AbstractMigration
 {
     public function getDescription(): string
     {
-        return '';
+        return 'Create the append-only audit_log table with actor, correlation, level and resource indexes.';
     }
 
     public function up(Schema $schema): void
