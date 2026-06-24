@@ -6,29 +6,33 @@ namespace Erpify\Backoffice\BankAccount\Application;
 
 use Erpify\Backoffice\Bank\Domain\Exception\BankNotFoundException;
 use Erpify\Backoffice\Bank\Domain\Repository\BankExistenceChecker;
-use Erpify\Backoffice\BankAccount\Application\Audit\BankAccountsViewedAuditEvent;
 use Erpify\Backoffice\BankAccount\Application\Query\SearchBankAccountsQuery;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountSearchRepository;
+use Erpify\Shared\Audit\Application\AuditLogger;
+use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Search\Domain\Page;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
-use Psr\Log\LoggerInterface;
-use Symfony\Component\Messenger\Exception\ExceptionInterface;
-use Symfony\Component\Messenger\MessageBusInterface;
 
 /**
  * Read-side handler for the accounts of one bank. It guards the bank's existence first (so a
  * malformed/absent bank surfaces as 400/404 before any account work), paginates the accounts, and
- * records an access-audit message — dispatched only on success, even for an empty page (consulting an
- * existing bank's accounts is an auditable access regardless of how many accounts it has).
+ * records the access through the {@see AuditLogger} seam — only on success, even for an empty page
+ * (consulting an existing bank's accounts is an auditable access regardless of how many accounts it
+ * has). The call is direct: the best-effort boundary that keeps an audit miss from sinking the read
+ * lives inside {@see AuditLogger}, so the searcher never wraps it in a try/catch.
  */
 final readonly class BankAccountSearcher
 {
+    private const string AUDIT_ACTION = 'BANK_ACCOUNTS_VIEWED';
+
+    private const string RESOURCE_TYPE = 'Bank';
+
     public function __construct(
         private BankExistenceChecker $bankExistence,
         private BankAccountSearchRepository $bankAccountSearchRepository,
-        private MessageBusInterface $messageBus,
-        private LoggerInterface $logger,
+        private AuditLogger $auditLogger,
     ) {
     }
 
@@ -44,25 +48,12 @@ final readonly class BankAccountSearcher
 
         $page = $this->bankAccountSearchRepository->search($bankId, $query->criteria);
 
-        $this->recordAccess($bankId);
+        $this->auditLogger->log(
+            self::AUDIT_ACTION,
+            AuditLevel::ACTIVITY,
+            AuditResource::of(self::RESOURCE_TYPE, $bankId),
+        );
 
         return $page;
-    }
-
-    /**
-     * Access auditing is observability, not part of the read contract: a dispatch/handler hiccup must
-     * never turn an otherwise-successful read into a 5xx. The failure is itself logged (without any
-     * account value) so the gap stays visible.
-     */
-    private function recordAccess(string $bankId): void
-    {
-        try {
-            $this->messageBus->dispatch(BankAccountsViewedAuditEvent::record($bankId));
-        } catch (ExceptionInterface $exception) {
-            $this->logger->warning('Failed to record bank-accounts access audit.', [
-                'bankId' => $bankId,
-                'exception' => $exception->getMessage(),
-            ]);
-        }
     }
 }

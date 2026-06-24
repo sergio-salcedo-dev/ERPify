@@ -21,7 +21,7 @@ An event is observed on three independent surfaces; do not conflate their shapes
 |---------|-----------|----------------|
 | **`event_store`** | The permanent, append-only domain-event log (replay, projections, integrations). | `DomainEvent::toPrimitives()` + the row envelope (§ Domain events, § Stored event row). |
 | **Mercure** | The real-time wire message pushed to connected PWA clients. | The reactor `RefreshRealtimeOnBankChanged` — a **different** shape from the stored payload (§ Realtime wire contract). |
-| **Audit log** | Best-effort observability log lines for access auditing. | Non-`DomainEvent` messages (§ Non-domain signals). |
+| **Audit log** | Durable access-audit rows in `audit_log` (the operational / actor audit axis), written through the `AuditLogger` seam. | Non-`DomainEvent` messages (§ Non-domain signals). |
 
 Two invariants hold everywhere:
 
@@ -105,13 +105,13 @@ of the domain language, and never enter the `event_store`.
 
 | Message | Dispatched by | Transport | Consumer | Payload |
 |---------|---------------|-----------|----------|---------|
-| `BankAccountsViewedAuditEvent` | `BankAccountSearcher` (best-effort, in a `try/catch` so a hiccup never 5xxs the read) | **sync** (no routing entry; default bus) | `RecordAuditLogOnBankAccountsViewed` → log line `bank_accounts.viewed` | `bankId`, `occurredOn` — **PII-free** (never the IBAN); actor deferred until auth exists |
+| `RecordAuditEntry` (a `BANK_ACCOUNTS_VIEWED` activity entry) | `BankAccountSearcher` via `AuditLogger->log(...)` (best-effort isolated inside `AuditLogger`, so an audit miss never 5xxs the read) | **`audit`** (async, dedicated queue) | `RecordAuditEntryHandler` → durable row in `audit_log` | `AuditLogEntry`: `action`, `level=activity`, `actor_type`, `correlation_id`, `resource_type=Bank`/`resource_id`, `metadata` **PII-free** (never the IBAN) |
 
-Source: [`BankAccountsViewedAuditEvent.php`](../../api/src/Backoffice/BankAccount/Application/Audit/BankAccountsViewedAuditEvent.php).
-It is the documented exception on the `php.lint.event-bus` allowlist (`api/.event-dispatch-allowlist`)
-— it must dispatch `MessageBusInterface` directly because it is best-effort and cannot ride the
-transactional `EventBus`. The actor/operation audit axis is a separate, frozen epic
-([`audit-activity-log.md`](../adr/audit-activity-log.md)).
+Source: [`BankAccountSearcher.php`](../../api/src/Backoffice/BankAccount/Application/BankAccountSearcher.php)
+(producer) and the [`AuditLogger`](../../api/src/Shared/Audit/Application/AuditLogger.php) seam. The
+operational / actor audit axis — `AuditLogger` → `RecordAuditEntry` → the `audit` transport →
+`RecordAuditEntryHandler` → `audit_log` — is documented in
+[`audit-activity-log.md`](../adr/audit-activity-log.md).
 
 ## Read models & projections
 

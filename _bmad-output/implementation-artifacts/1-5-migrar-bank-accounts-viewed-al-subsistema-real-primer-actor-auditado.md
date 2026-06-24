@@ -1,6 +1,10 @@
+---
+baseline_commit: d0e6092eb98eebc5b8e80221d3ddb7cd02e224e8
+---
+
 # Story 1.5: Migrar `BANK_ACCOUNTS_VIEWED` al subsistema real (primer actor auditado)
 
-Status: ready-for-dev
+Status: review
 
 <!-- Epic 1 — Registro de auditoría end-to-end (backbone + primer actor auditado).
      Quinta y ÚLTIMA historia del Epic 1: la validación end-to-end del backbone (1.1→1.4) con un actor real.
@@ -66,15 +70,15 @@ Esta historia **cierra el Epic 1**: no añade superficie nueva del backbone — 
 
 ## Tasks / Subtasks
 
-- [ ] **T0 — Verificar prerequisitos en disco (1.1 → 1.4)** — bloqueante.
-  - [ ] Confirmar el seam de **1.4**: existe `api/src/Shared/Audit/Application/AuditLogger.php` (puerto público con `log(...)`), su adaptador, el `RecordAuditEntryHandler`, el transporte `audit` cableado en `config/packages/messenger.yaml` (+ routing de `RecordAuditEntry` → `audit`, y override `when@test` a `in-memory://?serialize=true`), y `ActorContextFactory` (resuelve `anonymous` en `/api/*` sin auth). **Si 1.4 no está en disco, 1.5 está bloqueada.**
-  - [ ] **Leer la firma real de `AuditLogger::log(...)`** en el fichero de 1.4 y reconciliarla con la llamada de T1. El AC del epic la describe como `log(action, level, resource?, metadata?)`. Verificar el orden de parámetros, los nombres (`resourceType`/`resourceId` vs un objeto/tupla de recurso), y si `metadata` es opcional con default `[]`. **Cualquier desajuste se eleva como Pregunta 1** y se ajusta T1 a la firma canónica de 1.4 — **no** se inventa una firma.
-  - [ ] Confirmar 1.1/1.2/1.3 en disco: `ActorContext`/`ActorType` (1.1), `AuditLevel`/`AuditLogEntry`/`RecordAuditEntry` (1.2), `audit_log` + `DbalAuditLogWriter` + migración aplicada (1.3, `make db.migrate` corrido). El escenario Behat de T5 necesita la tabla `audit_log` ya migrada en la BD de test.
+- [x] **T0 — Verificar prerequisitos en disco (1.1 → 1.4)** — bloqueante.
+  - [x] Confirmar el seam de **1.4**: existe `api/src/Shared/Audit/Application/AuditLogger.php` (puerto público con `log(...)`), su adaptador, el `RecordAuditEntryHandler`, el transporte `audit` cableado en `config/packages/messenger.yaml` (+ routing de `RecordAuditEntry` → `audit`, y override `when@test` a `in-memory://?serialize=true`), y `ActorContextFactory` (resuelve `anonymous` en `/api/*` sin auth). **Si 1.4 no está en disco, 1.5 está bloqueada.**
+  - [x] **Leer la firma real de `AuditLogger::log(...)`** en el fichero de 1.4 y reconciliarla con la llamada de T1. El AC del epic la describe como `log(action, level, resource?, metadata?)`. Verificar el orden de parámetros, los nombres (`resourceType`/`resourceId` vs un objeto/tupla de recurso), y si `metadata` es opcional con default `[]`. **Cualquier desajuste se eleva como Pregunta 1** y se ajusta T1 a la firma canónica de 1.4 — **no** se inventa una firma.
+  - [x] Confirmar 1.1/1.2/1.3 en disco: `ActorContext`/`ActorType` (1.1), `AuditLevel`/`AuditLogEntry`/`RecordAuditEntry` (1.2), `audit_log` + `DbalAuditLogWriter` + migración aplicada (1.3, `make db.migrate` corrido). El escenario Behat de T5 necesita la tabla `audit_log` ya migrada en la BD de test.
 
-- [ ] **T1 — Migrar `BankAccountSearcher` al puerto `AuditLogger`** (AC1, AC2, AC7) → `api/src/Backoffice/BankAccount/Application/BankAccountSearcher.php`
-  - [ ] **Reemplazar** la dependencia `private MessageBusInterface $messageBus` por `private AuditLogger $auditLogger` en el constructor. **Eliminar** `private LoggerInterface $logger` (hoy solo lo usa el warning de `recordAccess()`; tras la migración no tiene consumidor — verificar con un grep del cuerpo antes de borrar).
-  - [ ] **Eliminar** el método privado `recordAccess(string $bankId): void` íntegro (con su `try/catch` y el `logger->warning(...)`) y su docblock.
-  - [ ] En `search()`, sustituir `$this->recordAccess($bankId);` por la llamada directa al seam (ajustar a la firma confirmada en T0):
+- [x] **T1 — Migrar `BankAccountSearcher` al puerto `AuditLogger`** (AC1, AC2, AC7) → `api/src/Backoffice/BankAccount/Application/BankAccountSearcher.php`
+  - [x] **Reemplazar** la dependencia `private MessageBusInterface $messageBus` por `private AuditLogger $auditLogger` en el constructor. **Eliminar** `private LoggerInterface $logger` (hoy solo lo usa el warning de `recordAccess()`; tras la migración no tiene consumidor — verificar con un grep del cuerpo antes de borrar).
+  - [x] **Eliminar** el método privado `recordAccess(string $bankId): void` íntegro (con su `try/catch` y el `logger->warning(...)`) y su docblock.
+  - [x] En `search()`, sustituir `$this->recordAccess($bankId);` por la llamada directa al seam (ajustar a la firma confirmada en T0):
     ```php
     $this->auditLogger->log(
         self::AUDIT_ACTION,
@@ -83,31 +87,31 @@ Esta historia **cierra el Epic 1**: no añade superficie nueva del backbone — 
     );
     ```
     Mantener el orden actual del cuerpo de `search()`: guard de existencia → `search()` del repositorio → `log(...)` → `return $page` (la auditoría se registra **solo en el camino de éxito**, tras la lectura, también para una página vacía).
-  - [ ] Declarar las constantes de acción/recurso en el propio searcher (es su dueño semántico — la acción es propia de este caso de uso, no del backbone genérico): `private const string AUDIT_ACTION = 'BANK_ACCOUNTS_VIEWED';` y `private const string RESOURCE_TYPE = 'Bank';`. **No** crear un enum/registro central de acciones (D-1.2.e: las `action` son constantes open-ended por módulo; aquí solo hay una — Regla de Tres).
-  - [ ] Ajustar los `use`: **quitar** `Symfony\Component\Messenger\MessageBusInterface`, `Symfony\Component\Messenger\Exception\ExceptionInterface`, `Psr\Log\LoggerInterface` (si quedan sin uso) y `Erpify\Backoffice\BankAccount\Application\Audit\BankAccountsViewedAuditEvent`; **añadir** `Erpify\Shared\Audit\Application\AuditLogger`, `Erpify\Shared\Audit\Domain\AuditLevel` y `Erpify\Shared\Audit\Domain\AuditResource`. Verificar con `make php.stan` que no queda ningún `use` huérfano (también lo pillaría cs-fixer en `php.quality`).
-  - [ ] Actualizar el **docblock de clase** para que describa el comportamiento **actual** sin referencia al cambio: "…paginates the accounts, and records the access through the `AuditLogger` audit seam — only on success, even for an empty page (consulting an existing bank's accounts is an auditable access regardless of how many accounts it has)." Sin "previously"/"replaces" ni IDs de story/FR/AC (regla de comentarios de `CLAUDE.md`). **Metadata PII-free**: no pasar IBAN ni ningún campo de cuenta a `metadata` (no se pasa `metadata` en absoluto aquí; default `[]`) — FR12.
-  - [ ] **Seguridad / mass-assignment:** la acción y el `resourceType` son **constantes acuñadas por el código**, nunca input del cliente; `resourceId` es el `bankId` de la ruta, ya guardado por `Uuid::ensure()` aguas arriba (el `BankExistenceChecker::ensureExists()` corre primero). No hay nueva superficie de input.
+  - [x] Declarar las constantes de acción/recurso en el propio searcher (es su dueño semántico — la acción es propia de este caso de uso, no del backbone genérico): `private const string AUDIT_ACTION = 'BANK_ACCOUNTS_VIEWED';` y `private const string RESOURCE_TYPE = 'Bank';`. **No** crear un enum/registro central de acciones (D-1.2.e: las `action` son constantes open-ended por módulo; aquí solo hay una — Regla de Tres).
+  - [x] Ajustar los `use`: **quitar** `Symfony\Component\Messenger\MessageBusInterface`, `Symfony\Component\Messenger\Exception\ExceptionInterface`, `Psr\Log\LoggerInterface` (si quedan sin uso) y `Erpify\Backoffice\BankAccount\Application\Audit\BankAccountsViewedAuditEvent`; **añadir** `Erpify\Shared\Audit\Application\AuditLogger`, `Erpify\Shared\Audit\Domain\AuditLevel` y `Erpify\Shared\Audit\Domain\AuditResource`. Verificar con `make php.stan` que no queda ningún `use` huérfano (también lo pillaría cs-fixer en `php.quality`).
+  - [x] Actualizar el **docblock de clase** para que describa el comportamiento **actual** sin referencia al cambio: "…paginates the accounts, and records the access through the `AuditLogger` audit seam — only on success, even for an empty page (consulting an existing bank's accounts is an auditable access regardless of how many accounts it has)." Sin "previously"/"replaces" ni IDs de story/FR/AC (regla de comentarios de `CLAUDE.md`). **Metadata PII-free**: no pasar IBAN ni ningún campo de cuenta a `metadata` (no se pasa `metadata` en absoluto aquí; default `[]`) — FR12.
+  - [x] **Seguridad / mass-assignment:** la acción y el `resourceType` son **constantes acuñadas por el código**, nunca input del cliente; `resourceId` es el `bankId` de la ruta, ya guardado por `Uuid::ensure()` aguas arriba (el `BankExistenceChecker::ensureExists()` corre primero). No hay nueva superficie de input.
 
-- [ ] **T2 — Borrar el archetype placeholder** (AC3) →
-  - [ ] `rm api/src/Backoffice/BankAccount/Application/Audit/BankAccountsViewedAuditEvent.php`
-  - [ ] `rm api/src/Backoffice/BankAccount/Infrastructure/Audit/RecordAuditLogOnBankAccountsViewed.php`
-  - [ ] Eliminar los directorios `Application/Audit/` e `Infrastructure/Audit/` de `Backoffice/BankAccount` **si quedan vacíos** tras los borrados (no dejar carpetas huérfanas). Confirmar con un listado que no haya otros ficheros dentro.
-  - [ ] **Grep de referencias colgantes** antes de declarar T2 hecho: `git grep -nF 'BankAccountsViewedAuditEvent'` y `git grep -nF 'RecordAuditLogOnBankAccountsViewed'` no deben devolver nada en `api/src`, `api/tests`, `api/features`, `api/config` ni en `docs/` salvo lo que T3/T4 reescriban. Comprobar en particular `config/packages/messenger.yaml` (que el placeholder **no** tuviera routing — hoy se despacha **sync**, sin entrada de routing) y que ningún test unitario/funcional referenciaba el placeholder.
+- [x] **T2 — Borrar el archetype placeholder** (AC3) →
+  - [x] `rm api/src/Backoffice/BankAccount/Application/Audit/BankAccountsViewedAuditEvent.php`
+  - [x] `rm api/src/Backoffice/BankAccount/Infrastructure/Audit/RecordAuditLogOnBankAccountsViewed.php`
+  - [x] Eliminar los directorios `Application/Audit/` e `Infrastructure/Audit/` de `Backoffice/BankAccount` **si quedan vacíos** tras los borrados (no dejar carpetas huérfanas). Confirmar con un listado que no haya otros ficheros dentro.
+  - [x] **Grep de referencias colgantes** antes de declarar T2 hecho: `git grep -nF 'BankAccountsViewedAuditEvent'` y `git grep -nF 'RecordAuditLogOnBankAccountsViewed'` no deben devolver nada en `api/src`, `api/tests`, `api/features`, `api/config` ni en `docs/` salvo lo que T3/T4 reescriban. Comprobar en particular `config/packages/messenger.yaml` (que el placeholder **no** tuviera routing — hoy se despacha **sync**, sin entrada de routing) y que ningún test unitario/funcional referenciaba el placeholder.
 
-- [ ] **T3 — Retirar la entrada del event-dispatch allowlist** (AC3, AC7) → `api/.event-dispatch-allowlist`
-  - [ ] Borrar la línea `src/Backoffice/BankAccount/Application/BankAccountSearcher.php` (la única entrada de path hoy, línea 16) **y** su bloque de comentario explicativo inmediatamente anterior (líneas 12–16: el párrafo "# Audit axis — NOT the domain-event stream…"). Dejar la cabecera genérica del fichero (líneas 1–10) intacta.
-  - [ ] Verificar que el fichero queda **sin ninguna entrada de path activa** (solo cabecera + comentarios) — es lo correcto: ya no hay ninguna Application que importe `MessageBusInterface` directamente tras 1.5. El gate sigue verde (`EventDispatchGateTest`: `testNoMessageBusInterfaceImportInApplicationLayer` verde sin exenciones; `testAllowlistEntriesPointToExistingFiles` verde con cero entradas).
+- [x] **T3 — Retirar la entrada del event-dispatch allowlist** (AC3, AC7) → `api/.event-dispatch-allowlist`
+  - [x] Borrar la línea `src/Backoffice/BankAccount/Application/BankAccountSearcher.php` (la única entrada de path hoy, línea 16) **y** su bloque de comentario explicativo inmediatamente anterior (líneas 12–16: el párrafo "# Audit axis — NOT the domain-event stream…"). Dejar la cabecera genérica del fichero (líneas 1–10) intacta.
+  - [x] Verificar que el fichero queda **sin ninguna entrada de path activa** (solo cabecera + comentarios) — es lo correcto: ya no hay ninguna Application que importe `MessageBusInterface` directamente tras 1.5. El gate sigue verde (`EventDispatchGateTest`: `testNoMessageBusInterfaceImportInApplicationLayer` verde sin exenciones; `testAllowlistEntriesPointToExistingFiles` verde con cero entradas).
 
-- [ ] **T4 — Actualizar `docs/architecture/event-catalog.md`** (AC6) → `docs/architecture/event-catalog.md`
-  - [ ] **Fila de resumen "Audit log"** (tabla de § *Reading this catalog*, ~línea 24): cambiar "Best-effort observability log lines for access auditing." por una descripción de la fila durable — p. ej. "Durable access-audit rows in `audit_log` (the operational/actor audit axis), written through the `AuditLogger` seam." y, si procede, actualizar el "Contract owner" a la sección *Non-domain signals* / el ADR de auditoría.
-  - [ ] **Sección *Non-domain signals*** (~línea 101) + la **fila** de `BankAccountsViewedAuditEvent` (~línea 108): reescribir la fila para `BANK_ACCOUNTS_VIEWED` de modo que refleje: *Dispatched by* `BankAccountSearcher` (llamada directa a `AuditLogger->log`, best-effort aislado en `AuditLogger`); *Transport* el transporte **`audit`** dedicado (async, no `sync`/default bus); *Consumer* `RecordAuditEntryHandler` → `audit_log` (no la log-line `bank_accounts.viewed`); *Payload* la fila `AuditLogEntry` (`action`, `level=activity`, `actor_type`, `correlation_id`, `resource_type=Bank`/`resource_id`, `metadata` **PII-free**, sin IBAN). Considerar si la sección sigue describiendo un "non-`DomainEvent` signal" coherente (lo es: `RecordAuditEntry` no es `DomainEvent`) o si conviene un puntero a `audit-activity-log.md`.
-  - [ ] **Párrafo del allowlist** (~línea 111): **eliminar** "It is the documented exception on the `php.lint.event-bus` allowlist (`api/.event-dispatch-allowlist`) — it must dispatch `MessageBusInterface` directly…" (ya no aplica). Mantener/ajustar la frase de cierre que apunta al ADR `audit-activity-log.md` como el eje de auditoría (ahora **implementado**, no "frozen epic").
-  - [ ] **Source link** (~línea 110): el enlace a `BankAccountsViewedAuditEvent.php` queda roto al borrar el fichero (T2) → re-apuntarlo a una fuente viva (`BankAccountSearcher.php` o el puerto `AuditLogger`), nunca a un fichero inexistente (regla de Markdown links de `CLAUDE.md`: enlazar solo a ficheros concretos).
-  - [ ] **Boy-scout:** barrer en la sección tocada cualquier comentario change-relative o ID de story que encuentres. Mantener la densidad del doc (sin narrativa de proceso).
+- [x] **T4 — Actualizar `docs/architecture/event-catalog.md`** (AC6) → `docs/architecture/event-catalog.md`
+  - [x] **Fila de resumen "Audit log"** (tabla de § *Reading this catalog*, ~línea 24): cambiar "Best-effort observability log lines for access auditing." por una descripción de la fila durable — p. ej. "Durable access-audit rows in `audit_log` (the operational/actor audit axis), written through the `AuditLogger` seam." y, si procede, actualizar el "Contract owner" a la sección *Non-domain signals* / el ADR de auditoría.
+  - [x] **Sección *Non-domain signals*** (~línea 101) + la **fila** de `BankAccountsViewedAuditEvent` (~línea 108): reescribir la fila para `BANK_ACCOUNTS_VIEWED` de modo que refleje: *Dispatched by* `BankAccountSearcher` (llamada directa a `AuditLogger->log`, best-effort aislado en `AuditLogger`); *Transport* el transporte **`audit`** dedicado (async, no `sync`/default bus); *Consumer* `RecordAuditEntryHandler` → `audit_log` (no la log-line `bank_accounts.viewed`); *Payload* la fila `AuditLogEntry` (`action`, `level=activity`, `actor_type`, `correlation_id`, `resource_type=Bank`/`resource_id`, `metadata` **PII-free**, sin IBAN). Considerar si la sección sigue describiendo un "non-`DomainEvent` signal" coherente (lo es: `RecordAuditEntry` no es `DomainEvent`) o si conviene un puntero a `audit-activity-log.md`.
+  - [x] **Párrafo del allowlist** (~línea 111): **eliminar** "It is the documented exception on the `php.lint.event-bus` allowlist (`api/.event-dispatch-allowlist`) — it must dispatch `MessageBusInterface` directly…" (ya no aplica). Mantener/ajustar la frase de cierre que apunta al ADR `audit-activity-log.md` como el eje de auditoría (ahora **implementado**, no "frozen epic").
+  - [x] **Source link** (~línea 110): el enlace a `BankAccountsViewedAuditEvent.php` queda roto al borrar el fichero (T2) → re-apuntarlo a una fuente viva (`BankAccountSearcher.php` o el puerto `AuditLogger`), nunca a un fichero inexistente (regla de Markdown links de `CLAUDE.md`: enlazar solo a ficheros concretos).
+  - [x] **Boy-scout:** barrer en la sección tocada cualquier comentario change-relative o ID de story que encuentres. Mantener la densidad del doc (sin narrativa de proceso).
 
-- [ ] **T5 — Escenario Behat end-to-end** (AC4, AC5) → `api/features/backoffice/bank_account/audit.feature` (NEW)
-  - [ ] **Aislamiento de la tabla por feature:** añadir `audit_log` a la sentencia `TRUNCATE` de `api/tests/Behat/Context/FixturesContext.php` (línea 131: `'TRUNCATE event_store, projection_checkpoint, bank_count, handled_domain_event RESTART IDENTITY'` → añadir `, audit_log`), para que la fixture de cada feature empiece con `audit_log` vacío y los conteos reflejen solo la operación bajo prueba. (Mismo patrón que las demás tablas raw-DBAL del backbone.)
-  - [ ] **Escenario 1 — una fila forense correcta (AC4):**
+- [x] **T5 — Escenario Behat end-to-end** (AC4, AC5) → `api/features/backoffice/bank_account/audit.feature` (NEW)
+  - [x] **Aislamiento de la tabla por feature:** añadir `audit_log` a la sentencia `TRUNCATE` de `api/tests/Behat/Context/FixturesContext.php` (línea 131: `'TRUNCATE event_store, projection_checkpoint, bank_count, handled_domain_event RESTART IDENTITY'` → añadir `, audit_log`), para que la fixture de cada feature empiece con `audit_log` vacío y los conteos reflejen solo la operación bajo prueba. (Mismo patrón que las demás tablas raw-DBAL del backbone.)
+  - [x] **Escenario 1 — una fila forense correcta (AC4):**
     - Fijar la correlación de la request para poder asertarla: `Given I add "X-Correlation-Id" header equal to "<uuid-v7-canónico>"` (step `HttpRequestContext::I add :name header equal to :value`; usar un UUIDv7 canónico en minúscula que el `CorrelationIdListener` acepte tal cual — si no es canónico, el listener acuña uno nuevo y la aserción de igualdad fallaría).
     - `When I send a "GET" request to "/backoffice/banks/11111111-1111-7000-8000-000000000001/accounts?limit=100"` (mirror del escenario verde de `search.feature`; banco con 1 cuenta).
     - `Then the response status code should be 200` (la lectura no se ve afectada por la auditoría).
@@ -133,19 +137,19 @@ Esta historia **cierra el Epic 1**: no añade superficie nueva del backbone — 
         """
       ```
       El literal de `metadata` es `'[]'`: el `DbalAuditLogWriter` de 1.3 escribe `json_encode([])` = `'[]'` para el `metadata` vacío (no `'{}'`), y así lo devuelve `fetchAllAssociative`. **Aserción anti-PII explícita** (FR12): `And the SQL result as JSON should be:` no contiene IBAN ni campos de cuenta — el `metadata` vacío lo garantiza; opcionalmente añadir un assert `the SQL result ... should not contain "DE89370400440532013000"` si existe un step de no-contención, o dejarlo cubierto por el match exacto del JSON.
-  - [ ] **Escenario 2 — una única ejecución, una única fila (AC5):**
+  - [x] **Escenario 2 — una única ejecución, una única fila (AC5):**
     - Behat asserta **solo lo observable**: una única ejecución observable de la operación (la request + consumo del escenario 1) genera **una única** fila en `audit_log`. El escenario 1 ya lo cubre con su `Then there should have 1 records in SQL result`; un escenario 2 dedicado es opcional (mismo aserto, sin valor añadido) — si se añade, es un mirror explícito de "una ejecución → una fila" sin intentar forzar un redelivery.
     - **NO** escribir un escenario de reentrega: el transporte `in-memory` **drena la cola al consumir** y no existe un step de redelivery → un escenario end-to-end de redelivery **no es ejecutable**, y **no** se introduce un mecanismo artificial de reentrega (no bajar el transporte a `sync`, no reinyectar a mano un envelope con el mismo `id`).
     - La garantía técnica de idempotencia **por PK** (`INSERT … ON CONFLICT (id) DO NOTHING`, mismo `id` → no-op) queda **delegada al test de integración de 1.3** (`AuditLogWriterIdempotencyTest`), que la prueba directamente contra el escritor. Citarlo en *Completion Notes* como la cobertura de la idempotencia por-PK (decisión cerrada, ver nota de decisión bajo D-1.5.e).
-  - [ ] **Presupuesto de queries:** el escenario 1 NO debe añadir aserciones `N requests got executed only for doctrine connection "default"` sobre la request HTTP — la inserción de `activity` es **async** (la hace el worker, fuera del request path, NFR2), así que el conteo del request sigue siendo **2** (guard + página), idéntico a `search.feature`. La inserción `audit_log` ocurre en el consumo del transporte, no en la request. Si se añade un assert de presupuesto al request, mantenerlo en `2` (la auditoría no toca el request path).
-  - [ ] El `SqlQueryContext` (`I execute the SQL query …` en una **conexión nombrada/side**) **no** lo cuenta el `TestDebugDataHolder`; la inserción del worker se ve consultando la tabla, no por presupuesto. No mezclar el assert de filas con el de queries.
+  - [x] **Presupuesto de queries:** el escenario 1 NO debe añadir aserciones `N requests got executed only for doctrine connection "default"` sobre la request HTTP — la inserción de `activity` es **async** (la hace el worker, fuera del request path, NFR2), así que el conteo del request sigue siendo **2** (guard + página), idéntico a `search.feature`. La inserción `audit_log` ocurre en el consumo del transporte, no en la request. Si se añade un assert de presupuesto al request, mantenerlo en `2` (la auditoría no toca el request path).
+  - [x] El `SqlQueryContext` (`I execute the SQL query …` en una **conexión nombrada/side**) **no** lo cuenta el `TestDebugDataHolder`; la inserción del worker se ve consultando la tabla, no por presupuesto. No mezclar el assert de filas con el de queries.
 
-- [ ] **T6 — Gates** (AC7, AC8): orden importa →
+- [x] **T6 — Gates** (AC7, AC8): orden importa →
   1. `make php.stan` sobre `BankAccountSearcher.php` (único src tocado) — verde, sin `use` huérfanos.
   2. Stack arriba + `audit_log` migrada (1.3) + transporte `audit` cableado (1.4). `make php.behat` (corre el nuevo `audit.feature` + el `search.feature` existente, que **no** debe regresar — sigue dando 2 queries y 200).
   3. `make php.quality` — deptrac + bounded-context + **event-bus** (verde con la entrada del allowlist retirada) + phpmd + cs-fixer + rector. `api/config/reference.php` se regenera: **commitea** el diff, no `git checkout`.
   4. **Re-correr `make php.stan`** sobre los ficheros asentados (Rector puede reescribir en `php.quality`).
-  - [ ] **Barrer del diff** cualquier comentario con IDs de story/AC/FR/NFR/`D-1.5.x` antes del commit final (regla de comentarios de `CLAUDE.md`). Aplicar boy-scout a `BankAccountSearcher.php` y a la sección tocada de `event-catalog.md`.
+  - [x] **Barrer del diff** cualquier comentario con IDs de story/AC/FR/NFR/`D-1.5.x` antes del commit final (regla de comentarios de `CLAUDE.md`). Aplicar boy-scout a `BankAccountSearcher.php` y a la sección tocada de `event-catalog.md`.
 
 ## Dev Notes
 
@@ -276,8 +280,62 @@ Sin ficheros src nuevos (1.5 consume, no crea). El único src tocado es `BankAcc
 
 ### Agent Model Used
 
+Claude Opus 4.8 (1M context) — `claude-opus-4-8[1m]`.
+
 ### Debug Log References
+
+- `make php.stan` → 565 files, **No errors** (antes y después de los fixers de `php.quality`).
+- `make php.behat` → **136 escenarios / 1405 pasos** verdes (incluye el nuevo `audit.feature` + `search.feature` sin regresión: sigue en 2 queries).
+- `make php.unit` → **1179 tests / 5319 asserts** OK (3 skips preexistentes); incluye `EventDispatchGateTest` verde con cero entradas de path en la allowlist (AC7).
+- `make php.quality` → **exit 0** (deptrac · bounded-context · event-bus · phpmd · cs-fixer 0 fixes · rector · gherkin).
+- Dos incidencias encontradas y resueltas durante T6 (ver Completion Notes): doble-fetch del `SqlQueryContext` y baseline de deptrac obsoleto.
 
 ### Completion Notes List
 
+**ACs 1–8 satisfechos y verificados end-to-end.** `BankAccountSearcher` registra `BANK_ACCOUNTS_VIEWED` (activity, `AuditResource::of('Bank', $bankId)`) por `AuditLogger->log(...)` sólo en éxito; placeholder y entrada de allowlist retirados; `audit.feature` prueba la fila forense correcta (anonymous, `actor_id` null, correlation-id de la request, `Bank`/id, `metadata` `[]` sin IBAN).
+
+- **Pregunta 1 (firma/VO) — RESUELTA por evidencia en disco:** `log(string $action, AuditLevel $level, ?AuditResource $resource = null, array $metadata = [])` con `AuditResource::of(...)` coincide con la spec; se mantiene el VO. Sin desviación.
+- **Pregunta 2 — ABIERTA para Sergio (no asumida):** (a) **scope del commit** — recomiendo `backoffice` (el cambio de comportamiento vive ahí); aún **sin commit** (pendiente de tu OK). (b) **`docs/architecture-api.md`** NO documenta el eje `audit_log`/transporte `audit` (1.4 lo difirió) → lo **propongo como mejora en scope**; no lo añadí unilateralmente.
+
+**Trabajo más allá del File structure de la spec (nombrado por higiene de scope; forzado por el cambio):**
+
+- **Caída de tests (la spec lo anticipó en T2, pero no lo listó):** `BankAccountSearcherTest` reescrito contra un nuevo fake `RecordingAuditLogger`; **borrados** los dos tests de clases-placeholder (`BankAccountsViewedAuditEventTest`, `RecordAuditLogOnBankAccountsViewedTest`) y los dos fakes ahora huérfanos (`RecordingMessageBus`, `ThrowingMessageBus`). **Eliminado** el test de resiliencia del searcher ante fallo de auditoría: esa frontera best-effort vive ahora en `AuditLogger` (1.4, AC2/D-1.5.b), así que probarla en el searcher sería código muerto/mentira.
+- **Verdad documental más allá de `event-catalog.md`:** `event-driven-architecture.md` (el párrafo de la exención de allowlist — el propio ADR predijo esta migración → actualizado a hecho) y `audit-activity-log.md` (la alternativa descartada nombraba la clase borrada → reescrita al `RecordAuditEntry` vivo). **`cqrs-naming.md`: arreglo mínimo de verdad + FLAG (decisión tuya).**
+- **Baseline de deptrac regenerado** (`make php.deptrac.baseline`): cayeron las entradas obsoletas `BankAccountSearcher → MessageBusInterface/ExceptionInterface` (deuda saldada → mejora neta de aislamiento, AC7). El `skip_violations` de `deptrac.yaml` (seam cross-context a `Bank`) se mantiene: sigue siendo válido.
+- **Asserts SQL del Behat consolidados:** el `Result` de `SqlQueryContext` es de un solo fetch, así que `there should have 1 records` + `the SQL result as JSON should be:` sobre una misma query hace doble-fetch (el segundo da `[]`). Uso sólo el match exacto de JSON, que prueba a la vez AC4 (campos, PII-free) y AC5 (exactamente una fila). Escenario reestructurado a un único flujo `Given→When→Then` + docstring a 4 espacios para pasar el gherkin linter.
+
+**Idempotencia por-PK (AC5):** delegada a `AuditLogWriterIdempotencyTest` (1.3, `ON CONFLICT (id) DO NOTHING`); Behat sólo asserta lo observable (una ejecución → una fila). No se introdujo redelivery artificial (el `in-memory` drena la cola al consumir).
+
+**FLAG para Sergio — `docs/rules/cqrs-naming.md` Categoría 4:** su ejemplo (`RecordAuditLogOnBankAccountsViewed`) nombra una clase ya borrada y la categoría queda **sin instancia viva** (el eje audit pasó al seam genérico `Shared/Audit` `RecordAuditEntryHandler`, que es `<Verbo><Noun>Handler`, no `<Effect>On<X>`). Hice sólo el arreglo de verdad mínimo en el bullet; **reencuadrar/retirar la Categoría 4 es decisión tuya** (taxonomía que curas, con la PR #325 de naming de subscribers en vuelo). Es la única referencia al placeholder que queda dentro del alcance del grep de docs/ — deliberada, no un olvido.
+
 ### File List
+
+**Modificados**
+
+- `api/src/Backoffice/BankAccount/Application/BankAccountSearcher.php` — `MessageBusInterface`+`LoggerInterface` → `AuditLogger`; `recordAccess()`/try-catch fuera; `const` acción/recurso.
+- `api/tests/Unit/Backoffice/BankAccount/Application/BankAccountSearcherTest.php` — reescrito contra `RecordingAuditLogger`.
+- `api/tests/Behat/Context/FixturesContext.php` — `audit_log` añadido al `TRUNCATE`.
+- `api/.event-dispatch-allowlist` — entrada del searcher + comentario retirados (queda sólo cabecera).
+- `api/tools/deptrac/deptrac.baseline.yaml` — regenerado (entradas framework de `BankAccountSearcher` retiradas).
+- `docs/architecture/event-catalog.md` — fila resumen + *Non-domain signals* + source link al día.
+- `docs/adr/event-driven-architecture.md` — párrafo de exención al día (migración hecha).
+- `docs/adr/audit-activity-log.md` — alternativa descartada reescrita a `RecordAuditEntry`.
+- `docs/rules/cqrs-naming.md` — bullet Categoría 4 al día (+ FLAG pendiente de tu decisión).
+
+**Nuevos**
+
+- `api/features/backoffice/bank_account/audit.feature` — escenario end-to-end (GET → consume `audit` → 1 fila forense PII-free).
+- `api/tests/Unit/Backoffice/BankAccount/Application/RecordingAuditLogger.php` — fake/spy del puerto `AuditLogger`.
+
+**Borrados**
+
+- `api/src/Backoffice/BankAccount/Application/Audit/BankAccountsViewedAuditEvent.php` (+ dir `Audit/` vacío).
+- `api/src/Backoffice/BankAccount/Infrastructure/Audit/RecordAuditLogOnBankAccountsViewed.php` (+ dir `Audit/` vacío).
+- `api/tests/Unit/Backoffice/BankAccount/Application/Audit/BankAccountsViewedAuditEventTest.php` (+ dir vacío).
+- `api/tests/Unit/Backoffice/BankAccount/Infrastructure/Audit/RecordAuditLogOnBankAccountsViewedTest.php` (+ dir vacío).
+- `api/tests/Unit/Backoffice/BankAccount/Application/RecordingMessageBus.php` — fake huérfano.
+- `api/tests/Unit/Backoffice/BankAccount/Application/ThrowingMessageBus.php` — fake huérfano.
+
+### Change Log
+
+- 2026-06-24 — Story 1.5 implementada: `BANK_ACCOUNTS_VIEWED` migrado al seam `AuditLogger` (activity async sobre el transporte `audit`), placeholder + entrada de allowlist retirados, `audit.feature` end-to-end, baseline de deptrac saldado. Gates verdes (stan/quality/behat 136/136/unit 1179). Status → review.

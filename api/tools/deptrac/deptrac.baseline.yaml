@@ -13,9 +13,6 @@
 # (Erpify\Backoffice\* / Erpify\Frontoffice\*) back out of this file.
 deptrac:
   skip_violations:
-    Erpify\Backoffice\BankAccount\Application\BankAccountSearcher:
-      - Symfony\Component\Messenger\Exception\ExceptionInterface
-      - Symfony\Component\Messenger\MessageBusInterface
     Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount:
       - Erpify\Shared\Validation\Infrastructure\EnumType
     Erpify\Backoffice\Bank\Application\BankCreator:

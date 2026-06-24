@@ -51,7 +51,7 @@ contexto"— estructuralmente imposibles, no solo prohibidas por convención.
 `StoredDomainEvent` es la **foto en reposo de un `DomainEvent`**, no un "evento de auditoría
 genérico": el nombre es correcto y se mantiene.
 
-Descartado: que `BankAccountsViewedAuditEvent` extienda `DomainEvent` — lo despacharía al `EventBus`
+Descartado: que el mensaje de auditoría (`RecordAuditEntry`) extienda `DomainEvent` — lo despacharía al `EventBus`
 y lo persistiría en `domain_event` vía `PersistDomainEventMiddleware`, contaminando outbox/replay y
 lo que consumen otros contextos con telemetría de lectura; además `aggregateId` no aplica a una
 vista de lista. Descartado: un tipo público `AuditEvent` o un sufijo `...Command`/`...Event` para el

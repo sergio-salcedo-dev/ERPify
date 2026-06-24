@@ -30,9 +30,12 @@ boundary it builds on is enforced by `make php.lint.event-bus`.
   into three classes. The grouping is a naming choice on the *subscriber*, not an event hierarchy: each
   lifecycle event extends `DomainEvent` directly, and the created/updated pair share their payload by
   composing a `BankSnapshot` value object (delete carries none) rather than inheriting a common supertype.
-- Category 4's producer is an explicit, reviewed exception in `api/.event-dispatch-allowlist`
-  (`BankAccountSearcher` → `BankAccountsViewedAuditEvent`): best-effort, must **not** ride the
-  transactional `EventBus`. It migrates to an `AuditLogger` port when that subsystem is built.
+- Category 4's producer (`BankAccountSearcher`) was an explicit, reviewed exception in
+  `api/.event-dispatch-allowlist`: best-effort, must **not** ride the transactional `EventBus`. It has
+  since migrated to the `Shared/Audit` `AuditLogger` port — the access is recorded through the seam
+  (which enqueues a `RecordAuditEntry` consumed by `RecordAuditEntryHandler`), and the allowlist
+  exception was removed. The per-module `<Effect>On<X>` audit subscriber that named this category has no
+  live instance today.
 - Category 5 keeps `*Handler` because the suffix is *true* there — a transport-routed message with
   exactly one handler (1:1). It is the only `*Handler` that is honest pre-bus.
 
