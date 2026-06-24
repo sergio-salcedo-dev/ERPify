@@ -52,10 +52,10 @@ development_status:
   epic-1-retrospective: optional
 
   # Epic 2: Captura híbrida — cobertura activity + security
-  epic-2: backlog
-  2-1-auditpolicy-que-es-auditable-y-a-que-nivel-alcance-fase-1: backlog
-  2-2-subscriber-de-access-log-sobre-kernel-terminate: backlog
-  2-3-captura-security-sobre-accessdeniedexception: backlog
+  epic-2: done
+  2-1-auditpolicy-que-es-auditable-y-a-que-nivel-alcance-fase-1: done
+  2-2-subscriber-de-access-log-sobre-kernel-terminate: done
+  2-3-captura-security-sobre-accessdeniedexception: done
   epic-2-retrospective: optional
 
   # Epic 3: Retención diferenciada y borrado GDPR

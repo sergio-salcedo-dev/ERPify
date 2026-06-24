@@ -128,16 +128,18 @@ you change anything here.
       **not** a public-by-design endpoint, unlike health). Tracked in
       [#240](https://github.com/sergio-salcedo-dev/ERPify/issues/240) (auth rollout,
       sibling of the health exemption #222).
-- [ ] `audit_log` (raw-DBAL append-only table; only the storage layer exists so far,
-      no capture yet) **contains PII** the moment capture lands: `actor_id`, `ip`,
-      `user_agent`. Its `ip` / `user_agent` / `metadata` are **client-controlled
-      (tainted)** — escape on render in the future admin investigation UI, never use
-      in a trust or authorization decision; the writer parameterises every value (no
-      string-interpolated SQL). Planned but **not yet implemented**: retention by
-      level (`activity` vs `security`) plus GDPR pseudonymization / redaction of
-      `ip` / `user_agent` / `actor_id`. Recording the table as PII the moment it is
-      introduced is mandatory — a live PII table must never exist without a
-      documented retention/erasure policy.
+- [ ] `audit_log` (raw-DBAL append-only table) **contains live PII**: `actor_id`,
+      `ip`, `user_agent`. Capture is now wired: generic `/api` navigation on
+      `kernel.terminate` (→ `activity`) and permission denials on `kernel.exception`
+      (→ `security`), with `ip` (`Request::getClientIp()`, trusted-proxy aware so a
+      spoofed `X-Forwarded-For` cannot forge it) and `user_agent` (trimmed to the
+      column width) sealed onto every entry. Its `ip` / `user_agent` / `metadata` are
+      **client-controlled (tainted)** — escape on render in the future admin
+      investigation UI, never use in a trust or authorization decision; the writer
+      parameterises every value (no string-interpolated SQL). Planned but **not yet
+      implemented**: retention by level (`activity` vs `security`) plus GDPR
+      pseudonymization / redaction of `ip` / `user_agent` / `actor_id`. A live PII
+      table must never exist without a documented retention/erasure policy (epic 3).
 
 ## 7. Deploy & verify
 

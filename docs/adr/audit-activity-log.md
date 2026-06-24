@@ -301,6 +301,22 @@ contexto de confianza —actor (`ActorContextFactory`), `correlation_id` (Reques
 `buildEntry()` privado del logger, mantiene cada pieza testeable en aislamiento y hace que, cuando
 entre User/RBAC, sólo cambie el proveedor de actor, no el enrutado.
 
+**Captura híbrida — decisiones de Epic 2.** El *mecanismo* de D2 aterriza así: una `AuditPolicy` pura
+(`Audit/Domain`) clasifica la interacción por nombre de ruta y método; los hooks viven en
+`Audit/Infrastructure/Http`. La vía genérica (`AccessLogAuditListener` sobre `kernel.terminate`) deriva la
+`action` del nombre de ruta con prefijo `ROUTE_` (la identidad la pone cada módulo; nunca un `HTTP_REQUEST`
+genérico) y se **inhibe** en rutas con representación auditiva canónica explícita
+(`backoffice_bank_account_search` → `BANK_ACCOUNTS_VIEWED`), evitando filas duplicadas; sólo audita
+respuestas exitosas. `terminate` corre tras vaciarse el `RequestStack`, así que el listener
+**re-establece la request** para que el sellado resuelva actor `anonymous` + correlación + `ip`/`user_agent`
+reales, no un acto de `system`. La vía `security` (`AccessDeniedAuditListener` sobre `kernel.exception`,
+prioridad > `ExceptionResponder`, puramente aditivo) registra `ACCESS_DENIED` síncrono; satisface el
+invariante de D3 porque en `kernel.exception` cualquier transacción de negocio ya hizo rollback en su
+handler, de modo que la escritura `security` commitea independiente — una conexión DBAL dedicada queda como
+*trigger de revisita* si algún flujo registrara una denegación con una transacción de negocio aún abierta.
+El contrato de `ip` de D4 se cumple con `Request::getClientIp()` (misma decisión de *trusted proxies* que el
+rate-limiter), sellado en `SealedAuditEntryFactory` junto con `user_agent` (recortado al ancho de columna).
+
 **Secuencia frente a auth (cerrada):** el backbone de auditoría se implementa **antes** de User/RBAC.
 `actor_id` permanece nullable (`actor_type` ∈ {`anonymous`, `system`, `api_key`}) hasta que exista
 autenticación; el día que entre User solo cambia el proveedor de `ActorContext` (`ActorContextFactory`)

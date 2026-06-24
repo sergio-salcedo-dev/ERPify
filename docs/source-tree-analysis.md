@@ -31,6 +31,7 @@ ERPify/
 │   │       ├── Persistence/        # persistence adapters — [Infrastructure] DoctrineConnectionResetListener + QueryParam
 │   │       ├── Clock/              # time: Clock port (Domain) + Symfony/native adapters (Infrastructure)
 │   │       ├── Event/              # event backbone (Domain/Application/Infrastructure): DomainEvent + EventBus, raw-DBAL event_store, mapper/serializer/upcaster, projection runner; see docs/adr/event-store-and-projections.md
+│   │       ├── Audit/              # operational/actor audit axis (Domain/Application/Infrastructure): AuditLogger seam + AuditPolicy, raw-DBAL audit_log, hybrid capture (Infrastructure/Http: kernel.terminate access-log → activity, AccessDenied → security); see docs/adr/audit-activity-log.md
 │   │       ├── Mailer/             # notification mail: port (Application) + plain-text adapter (Infrastructure)
 │   │       ├── Media/              # in-DB media (Intervention Image) — full DDD layering
 │   │       ├── Monitoring/         # Sentry before_send adapters (event scrubbing/filtering)
