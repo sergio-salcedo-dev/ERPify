@@ -65,11 +65,21 @@ final readonly class CorrelationIdListener
         $inboundAll = $request->headers->all(self::HEADER_NAME);
         $inbound = (1 === \count($inboundAll)) ? $inboundAll[0] : null;
 
-        $resolved = (\is_string($inbound) && 1 === \preg_match(self::UUIDV7_PATTERN, $inbound))
+        $resolved = (\is_string($inbound) && self::isCanonical($inbound))
             ? $inbound
             : Uuid::v7()->toRfc4122();
 
         $request->attributes->set(self::ATTRIBUTE_KEY, $resolved);
+    }
+
+    /**
+     * Whether `$value` is a canonical lowercase UUIDv7 (RFC 9562 §6.10). The single definition of the
+     * correlation-id format, so every consumer that must validate it shares this anchor instead of
+     * carrying a second regex that could drift from the one used to mint and propagate the value.
+     */
+    public static function isCanonical(string $value): bool
+    {
+        return 1 === \preg_match(self::UUIDV7_PATTERN, $value);
     }
 
     #[AsEventListener(event: KernelEvents::RESPONSE, priority: self::RESPONSE_PRIORITY)]
@@ -81,7 +91,7 @@ final readonly class CorrelationIdListener
 
         $stored = $event->getRequest()->attributes->get(self::ATTRIBUTE_KEY);
 
-        $resolved = (\is_string($stored) && 1 === \preg_match(self::UUIDV7_PATTERN, $stored))
+        $resolved = (\is_string($stored) && self::isCanonical($stored))
             ? $stored
             : Uuid::v7()->toRfc4122();
 

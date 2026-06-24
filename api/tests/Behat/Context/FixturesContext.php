@@ -128,7 +128,7 @@ final class FixturesContext implements Context
         // pollute event-count assertions. Truncate them here so the backup — and every per-feature
         // restore cloned from it — starts empty, exactly as the old ORM-entity domain_event table did.
         $this->entityManager->getConnection()->executeStatement(
-            'TRUNCATE event_store, projection_checkpoint, bank_count, handled_domain_event RESTART IDENTITY',
+            'TRUNCATE event_store, projection_checkpoint, bank_count, handled_domain_event, audit_log RESTART IDENTITY',
         );
     }
 

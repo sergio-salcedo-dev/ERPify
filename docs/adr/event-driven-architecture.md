@@ -101,11 +101,12 @@ dual-write actual "porque casi nunca falla" (pérdida silenciosa, inaceptable en
 entrada en `api/.event-dispatch-allowlist`. Hace el invariante de D1 *load-bearing*: el acoplamiento no
 puede reaparecer en un PR sin una excepción revisada.
 
-`BankAccountSearcher` (eje **audit**) se exime en la allowlist con puntero a
-[`audit-activity-log.md`](./audit-activity-log.md): despacha `BankAccountsViewedAuditEvent`, que **no es
-un `DomainEvent`** y es best-effort, así que no puede ni debe viajar por el `EventBus` transaccional. La
-allowlist aquí no es un hack: es la **declaración explícita de una frontera temporal** — migrará al
-puerto `AuditLogger` cuando se construya esa épica (hoy congelada).
+El eje **audit** estrenó esa frontera temporal y la cerró: `BankAccountSearcher` ya **no** importa
+`MessageBusInterface` — registra el acceso por el puerto `AuditLogger`
+([`audit-activity-log.md`](./audit-activity-log.md)), que encola un `RecordAuditEntry` (**no** un
+`DomainEvent`, best-effort) por su transporte `audit` dedicado, fuera del `EventBus` transaccional.
+Construida esa épica, su entrada se retiró del `api/.event-dispatch-allowlist`, que queda sin entradas
+de path.
 
 Descartado: gate que prohíbe `MessageBusInterface` sin excepción (rompe el eje audit). Descartado
 introducir ya un `AuditLogger` para evitar la allowlist (abre una épica congelada → scope creep).

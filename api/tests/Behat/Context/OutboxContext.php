@@ -54,6 +54,17 @@ final class OutboxContext extends AbstractContext
      */
     private const array INSPECTABLE_QUEUES = ['async', 'failed'];
 
+    /**
+     * Queues drained before each scenario so in-memory pending messages don't leak across scenarios.
+     * Superset of {@see INSPECTABLE_QUEUES} plus the dedicated `audit` transport: a successful read
+     * records an access by enqueuing a `RecordAuditEntry` that no outbox assertion consumes, so it
+     * must be drained too — but `audit` stays OUT of INSPECTABLE_QUEUES so it never inflates the
+     * domain-event outbox count or becomes an inspectable outbox queue.
+     *
+     * @var list<string>
+     */
+    private const array RESETTABLE_QUEUES = ['async', 'failed', 'audit'];
+
     private ?object $selectedEvent = null;
 
     public function __construct(
@@ -74,7 +85,7 @@ final class OutboxContext extends AbstractContext
     {
         $this->selectedEvent = null;
 
-        foreach (self::INSPECTABLE_QUEUES as $queueName) {
+        foreach (self::RESETTABLE_QUEUES as $queueName) {
             $this->transport($queueName)?->reset();
         }
     }
