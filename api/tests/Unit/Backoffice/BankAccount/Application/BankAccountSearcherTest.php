@@ -56,7 +56,14 @@ final class BankAccountSearcherTest extends TestCase
         $searcher->search(self::BANK_ID, new SearchBankAccountsQuery(new SearchCriteria()));
 
         $this->assertCount(1, $auditLogger->records);
-        $this->assertSame('BANK_ACCOUNTS_VIEWED', $auditLogger->records[0]['action']);
+
+        $record = $auditLogger->records[0];
+        $this->assertSame('BANK_ACCOUNTS_VIEWED', $record['action']);
+
+        $resource = $record['resource'];
+        $this->assertInstanceOf(AuditResource::class, $resource);
+        $this->assertSame('Bank', $resource->type);
+        $this->assertSame(self::BANK_ID, $resource->id);
     }
 
     public function testRejectsAnAbsentBankWithoutSearchingOrAuditing(): void
