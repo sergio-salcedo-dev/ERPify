@@ -11,10 +11,10 @@ use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Audit\Infrastructure\SymfonyAuditLogger;
 use Erpify\Shared\Uuid\Domain\Uuid;
-use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FakeMessageBus;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FixedAuditEntryFactory;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\InMemoryAuditLogWriter;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingLogger;
+use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingMessageBus;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
@@ -31,7 +31,7 @@ final class SymfonyAuditLoggerTest extends TestCase
 
     public function testActivityRoutesTheSealedEntryToTheBusWithoutWriting(): void
     {
-        $bus = new FakeMessageBus();
+        $bus = new RecordingMessageBus();
         $writer = new InMemoryAuditLogWriter();
         $auditLogger = $this->makeLogger($bus, $writer, new RecordingLogger());
 
@@ -54,7 +54,7 @@ final class SymfonyAuditLoggerTest extends TestCase
 
     public function testSecurityWritesTheSealedEntrySynchronouslyWithoutDispatching(): void
     {
-        $bus = new FakeMessageBus();
+        $bus = new RecordingMessageBus();
         $writer = new InMemoryAuditLogWriter();
         $auditLogger = $this->makeLogger($bus, $writer, new RecordingLogger());
 
@@ -67,7 +67,7 @@ final class SymfonyAuditLoggerTest extends TestCase
     public function testAnActivityFailureIsSwallowedAndLoggedWithoutLeakingContext(): void
     {
         $failure = new RuntimeException('audit transport unavailable');
-        $bus = new FakeMessageBus($failure);
+        $bus = new RecordingMessageBus($failure);
         $writer = new InMemoryAuditLogWriter();
         $recordingLogger = new RecordingLogger();
         $auditLogger = $this->makeLogger($bus, $writer, $recordingLogger);
@@ -91,7 +91,7 @@ final class SymfonyAuditLoggerTest extends TestCase
 
     public function testASecurityFailurePropagatesAndIsNotSwallowed(): void
     {
-        $bus = new FakeMessageBus();
+        $bus = new RecordingMessageBus();
         $writer = new InMemoryAuditLogWriter(new RuntimeException('audit_log unavailable'));
         $recordingLogger = new RecordingLogger();
         $auditLogger = $this->makeLogger($bus, $writer, $recordingLogger);
@@ -111,7 +111,7 @@ final class SymfonyAuditLoggerTest extends TestCase
     }
 
     private function makeLogger(
-        FakeMessageBus $bus,
+        RecordingMessageBus $bus,
         InMemoryAuditLogWriter $writer,
         RecordingLogger $logger,
     ): SymfonyAuditLogger {

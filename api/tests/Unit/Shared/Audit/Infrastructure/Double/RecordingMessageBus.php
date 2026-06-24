@@ -11,13 +11,13 @@ use Symfony\Component\Messenger\Stamp\StampInterface;
 use Throwable;
 
 /**
- * Spy {@see MessageBusInterface} capturing every dispatched message, or — when constructed with a
- * failure — always throwing on dispatch, so one fake covers both the activity success path and its
+ * Spy {@see MessageBusInterface} recording every dispatched message, or — when constructed with a
+ * failure — always throwing on dispatch, so one double covers both the activity success path and its
  * best-effort failure path.
  *
  * @internal
  */
-final class FakeMessageBus implements MessageBusInterface
+final class RecordingMessageBus implements MessageBusInterface
 {
     /** @var list<object> */
     public array $dispatchedMessages = [];
