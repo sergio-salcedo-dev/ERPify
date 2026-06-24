@@ -15,6 +15,11 @@ use Throwable;
  *   via {@see Throwable::getMessage()}.
  * - {@see DomainException::context()} returns the app-defined extensions map; downstream
  *   layers are responsible for redaction before serialization.
+ *
+ * Every domain exception in the app maps through this single RFC 9457 base by design — one flat root
+ * is the intent, not a hierarchy to rebalance — so the child-count metric does not apply here.
+ *
+ * @SuppressWarnings("PHPMD.NumberOfChildren")
  */
 abstract class DomainException extends \DomainException
 {
