@@ -14,15 +14,14 @@ boundary it builds on is enforced by `make php.lint.event-bus`.
   ahead of it**. A `*CommandHandler` with no `CommandBus` is scenery (*atrezo*): a name promising a
   dispatch the system cannot perform. CQRS is separation of *execution*, not of *names*.
 
-## The five message categories
+## The four message categories
 
 | # | Category | Name shape | Lives in | Dispatched by a bus/transport today? | Example |
 |---|----------|-----------|----------|--------------------------------------|---------|
 | 1 | **Command** (write intent) | `<Verb><Noun>Command` | `*/Application/Command/` | No — data-carrying intent, consumed by a use case via direct call | `CreateBankCommand`, `UpdateBankCommand` |
 | 2 | **Query** (read intent) | `<Verb><Noun>Query` | `*/Application/Query/` | No — same, direct call | `SearchBanksQuery`, `SearchBankAccountsQuery` |
 | 3 | **Domain-event subscriber** | `<Effect>On<Event>` | `*/Infrastructure/Messenger/` | **Yes** — `#[AsMessageHandler]`, transport-routed (N:M) | `RefreshRealtimeOnBankChanged`, `SendEmailOnBankChanged` |
-| 4 | **Audit / observability subscriber** | `<Effect>On<X>` | `*/Infrastructure/Audit/` | **Yes** — `#[AsMessageHandler]`; message is **not** a `DomainEvent` | `RecordAuditLogOnBankAccountsViewed` |
-| 5 | **Scheduled / maintenance handler** | `<Verb><Noun>Handler` | `Shared/Infrastructure/Messenger/Maintenance/` | **Yes** — reacts to a Scheduler tick / command-style message (1:1) | `PruneHandledDomainEventsHandler` |
+| 4 | **Scheduled / maintenance handler** | `<Verb><Noun>Handler` | `Shared/Infrastructure/Messenger/Maintenance/` | **Yes** — reacts to a Scheduler tick / command-style message (1:1) | `PruneHandledDomainEventsHandler` |
 
 - Category 3's `On<Event>` may name a concrete event or the change umbrella a subscriber covers —
   `OnBankChanged` is honest because one class carries an `#[AsMessageHandler]` method per lifecycle event
@@ -30,13 +29,11 @@ boundary it builds on is enforced by `make php.lint.event-bus`.
   into three classes. The grouping is a naming choice on the *subscriber*, not an event hierarchy: each
   lifecycle event extends `DomainEvent` directly, and the created/updated pair share their payload by
   composing a `BankSnapshot` value object (delete carries none) rather than inheriting a common supertype.
-- Category 4's producer (`BankAccountSearcher`) was an explicit, reviewed exception in
-  `api/.event-dispatch-allowlist`: best-effort, must **not** ride the transactional `EventBus`. It has
-  since migrated to the `Shared/Audit` `AuditLogger` port — the access is recorded through the seam
-  (which enqueues a `RecordAuditEntry` consumed by `RecordAuditEntryHandler`), and the allowlist
-  exception was removed. The per-module `<Effect>On<X>` audit subscriber that named this category has no
-  live instance today.
-- Category 5 keeps `*Handler` because the suffix is *true* there — a transport-routed message with
+- Operational auditing is **not** a naming category: a use case records an access through the
+  `Shared/Audit` `AuditLogger` port (`->log(...)`), whose shared message backbone (`RecordAuditEntry` →
+  the `audit` transport → `RecordAuditEntryHandler` → `audit_log`) the caller never names. The former
+  per-module `<Effect>On<X>` audit subscriber was retired when that seam landed.
+- Category 4 keeps `*Handler` because the suffix is *true* there — a transport-routed message with
   exactly one handler (1:1). It is the only `*Handler` that is honest pre-bus.
 
 ## Direct-execution use cases — not a message category
@@ -55,7 +52,7 @@ migrating *together*, so the `wrapInTransaction` boundary moves to the bus middl
 - `*Subscriber` / `*Listener` for a Messenger consumer — collides with Symfony's `EventDispatcher`
   vocabulary; `#[AsMessageHandler]` *is* Messenger's "subscriber." Use `<Effect>On<Event>`.
 - A generic `*Handler` name for a **domain-event** subscriber — it hides the N:M event reaction that
-  `<Effect>On<Event>` makes legible (`*Handler` is reserved for category 5).
+  `<Effect>On<Event>` makes legible (`*Handler` is reserved for category 4).
 - Story / NFR / ticket IDs in any class or message name.
 
 ## New aggregate / use case — template
@@ -66,7 +63,8 @@ migrating *together*, so the `wrapInTransaction` boundary moves to the bus middl
 - read use case → `Application/<Noun>{Finder|Searcher}`
 - a side effect of a domain event → `Infrastructure/Messenger/<Effect>On<Event>` — `#[AsMessageHandler]`,
   idempotent, or claims via `DomainEventHandlerDeduplicator` for a non-idempotent external effect
-- an audit / observability trail → `Infrastructure/Audit/<Effect>On<X>` — producer allowlisted
+- an audit / observability trail → record it through the `Shared/Audit` `AuditLogger` port (no
+  per-aggregate class to name; the `RecordAuditEntry` → `audit` transport → `audit_log` backbone is shared)
 
 Persistence strategy (state-oriented default vs event-sourced) is a separate per-aggregate decision,
 presented to the user before modeling: [`../adr/bank-bankaccount-modeling.md`](../adr/bank-bankaccount-modeling.md).
