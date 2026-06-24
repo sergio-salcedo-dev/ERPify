@@ -20,7 +20,10 @@ use Symfony\Component\HttpFoundation\RequestStack;
  * Production {@see AuditEntryFactory}: seals the trusted context onto each entry inside the request
  * cycle. The actor comes from {@see ActorContextFactory} and the instant from {@see Clock}; the
  * correlation id is the request's canonical id when one is in flight, otherwise a fresh UUIDv7 so the
- * entry never carries a null correlation id.
+ * entry never carries a null correlation id. The client `ip` and `user_agent` are read from the same
+ * in-flight request — `ip` via `Request::getClientIp()`, the exact trust-boundary decision the
+ * rate-limiter already makes (honours `SYMFONY_TRUSTED_PROXIES`, so a spoofed `X-Forwarded-For` cannot
+ * forge it) — and are null off-request; both stay tainted downstream.
  *
  * Sealing here — in the request cycle, not in the off-request worker that persists the entry — is what
  * keeps an activity entry from being mislabelled as a system act.
@@ -28,6 +31,13 @@ use Symfony\Component\HttpFoundation\RequestStack;
 #[AsAlias(AuditEntryFactory::class)]
 final readonly class SealedAuditEntryFactory implements AuditEntryFactory
 {
+    /**
+     * Mirrors the `VARCHAR(512)` width of the `user_agent` column, so an over-long (attacker-controlled)
+     * header is trimmed to fit here rather than failing the INSERT — which on the synchronous `security`
+     * path would turn a denial into a 5xx.
+     */
+    private const int MAX_USER_AGENT_LENGTH = 512;
+
     public function __construct(
         private ActorContextFactory $actorContextFactory,
         private Clock $clock,
@@ -50,7 +60,21 @@ final readonly class SealedAuditEntryFactory implements AuditEntryFactory
             $this->clock->now(),
             $resource,
             $metadata,
+            $this->resolveClientIp(),
+            $this->resolveUserAgent(),
         );
+    }
+
+    private function resolveClientIp(): ?string
+    {
+        return $this->requestStack->getCurrentRequest()?->getClientIp();
+    }
+
+    private function resolveUserAgent(): ?string
+    {
+        $userAgent = $this->requestStack->getCurrentRequest()?->headers->get('User-Agent');
+
+        return null === $userAgent ? null : \mb_substr($userAgent, 0, self::MAX_USER_AGENT_LENGTH);
     }
 
     /**
