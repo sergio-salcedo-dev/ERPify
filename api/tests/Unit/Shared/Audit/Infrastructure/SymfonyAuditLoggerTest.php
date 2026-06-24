@@ -47,8 +47,9 @@ final class SymfonyAuditLoggerTest extends TestCase
         $entry = $message->entry;
         $this->assertSame('BANK_ACCOUNTS_VIEWED', $entry->action, 'the action is forwarded to the factory');
         $this->assertSame(AuditLevel::ACTIVITY, $entry->level);
-        $this->assertSame('Bank', $entry->resourceType);
-        $this->assertSame($resourceId, $entry->resourceId);
+        $this->assertInstanceOf(AuditResource::class, $entry->resource);
+        $this->assertSame('Bank', $entry->resource->type);
+        $this->assertSame($resourceId, $entry->resource->id);
     }
 
     public function testSecurityWritesTheSealedEntrySynchronouslyWithoutDispatching(): void

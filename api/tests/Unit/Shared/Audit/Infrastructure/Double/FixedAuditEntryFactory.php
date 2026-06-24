@@ -43,8 +43,7 @@ final readonly class FixedAuditEntryFactory implements AuditEntryFactory
             $this->actor,
             $this->correlationId,
             $this->occurredOn,
-            $resource?->type,
-            $resource?->id,
+            $resource,
             $metadata,
         );
     }

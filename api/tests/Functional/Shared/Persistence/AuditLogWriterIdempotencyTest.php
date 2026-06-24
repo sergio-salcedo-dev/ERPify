@@ -11,6 +11,7 @@ use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Application\AuditLogWriter;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditLogWriter;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -97,8 +98,7 @@ final class AuditLogWriterIdempotencyTest extends KernelTestCase
                 ActorContext::forUser($actorId),
                 $correlationId,
                 $occurredOn,
-                resourceType: 'Bank',
-                resourceId: $resourceId,
+                resource: AuditResource::of('Bank', $resourceId),
                 metadata: ['filters' => ['status' => 'active']],
                 ip: '203.0.113.7',
                 userAgent: 'Mozilla/5.0',

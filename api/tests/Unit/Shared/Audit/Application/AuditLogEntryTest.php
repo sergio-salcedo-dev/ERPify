@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Audit\Domain\Exception\InvalidAuditLogEntry;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -37,8 +38,7 @@ final class AuditLogEntryTest extends TestCase
             $actor,
             $correlationId,
             $occurredOn,
-            'bank_account',
-            $resourceId,
+            AuditResource::of('bank_account', $resourceId),
             $metadata,
             '203.0.113.7',
             'Mozilla/5.0',
@@ -49,8 +49,9 @@ final class AuditLogEntryTest extends TestCase
         $this->assertSame($actor, $entry->actor);
         $this->assertSame($correlationId, $entry->correlationId);
         $this->assertSame($occurredOn, $entry->occurredOn);
-        $this->assertSame('bank_account', $entry->resourceType);
-        $this->assertSame($resourceId, $entry->resourceId);
+        $this->assertInstanceOf(AuditResource::class, $entry->resource);
+        $this->assertSame('bank_account', $entry->resource->type);
+        $this->assertSame($resourceId, $entry->resource->id);
         $this->assertSame($metadata, $entry->metadata);
         $this->assertSame('203.0.113.7', $entry->ip);
         $this->assertSame('Mozilla/5.0', $entry->userAgent);
@@ -64,12 +65,11 @@ final class AuditLogEntryTest extends TestCase
         $this->assertInstanceOf(UuidV7::class, SymfonyUuid::fromString($entry->id));
     }
 
-    public function testOptionalContextDefaultsToNullAndEmptyMetadata(): void
+    public function testOmittingTheResourceLeavesItNullAlongsideTheOtherOptionalContext(): void
     {
         $entry = $this->anEntry();
 
-        $this->assertNull($entry->resourceType);
-        $this->assertNull($entry->resourceId);
+        $this->assertNotInstanceOf(AuditResource::class, $entry->resource);
         $this->assertSame([], $entry->metadata);
         $this->assertNull($entry->ip);
         $this->assertNull($entry->userAgent);
@@ -98,31 +98,34 @@ final class AuditLogEntryTest extends TestCase
         yield 'whitespace only' => ['   '];
     }
 
-    #[DataProvider('provideRejectsAFieldLongerThanTheColumnWidthCases')]
-    public function testRejectsAFieldLongerThanTheColumnWidth(string $action, ?string $resourceType): void
+    public function testRejectsAnActionLongerThanTheColumnWidth(): void
     {
         $this->expectException(InvalidAuditLogEntry::class);
 
         AuditLogEntry::create(
             AuditLevel::ACTIVITY,
-            $action,
+            \str_repeat('A', 101),
             ActorContext::anonymous(),
             Uuid::generate(),
             new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
-            $resourceType,
         );
     }
 
-    /**
-     * @return iterable<string, array{string, string|null}>
-     */
-    public static function provideRejectsAFieldLongerThanTheColumnWidthCases(): iterable
+    public function testRejectsAResourceTypeLongerThanTheColumnWidth(): void
     {
-        yield 'over-long action' => [\str_repeat('A', 101), null];
-        yield 'over-long resourceType' => ['BANK_ACCOUNTS_VIEWED', \str_repeat('A', 101)];
+        $this->expectException(InvalidAuditLogEntry::class);
+
+        AuditLogEntry::create(
+            AuditLevel::ACTIVITY,
+            'BANK_ACCOUNTS_VIEWED',
+            ActorContext::anonymous(),
+            Uuid::generate(),
+            new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
+            AuditResource::of(\str_repeat('A', 101), Uuid::generate()),
+        );
     }
 
-    public function testAcceptsFieldsAtTheColumnWidthBoundary(): void
+    public function testAcceptsAnActionAndResourceTypeAtTheColumnWidthBoundary(): void
     {
         $action = \str_repeat('A', 100);
         $resourceType = \str_repeat('B', 100);
@@ -133,14 +136,15 @@ final class AuditLogEntryTest extends TestCase
             ActorContext::anonymous(),
             Uuid::generate(),
             new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
-            $resourceType,
+            AuditResource::of($resourceType, Uuid::generate()),
         );
 
         $this->assertSame($action, $entry->action);
-        $this->assertSame($resourceType, $entry->resourceType);
+        $this->assertInstanceOf(AuditResource::class, $entry->resource);
+        $this->assertSame($resourceType, $entry->resource->type);
     }
 
-    public function testTrimsActionAndNormalizesBlankResourceTypeToNull(): void
+    public function testTrimsTheAction(): void
     {
         $entry = AuditLogEntry::create(
             AuditLevel::ACTIVITY,
@@ -148,11 +152,9 @@ final class AuditLogEntryTest extends TestCase
             ActorContext::anonymous(),
             Uuid::generate(),
             new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
-            '   ',
         );
 
         $this->assertSame('BANK_ACCOUNTS_VIEWED', $entry->action);
-        $this->assertNull($entry->resourceType);
     }
 
     private function anEntry(): AuditLogEntry

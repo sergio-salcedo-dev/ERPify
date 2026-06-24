@@ -43,8 +43,9 @@ final class SealedAuditEntryFactoryTest extends TestCase
         $this->assertSame('BANK_ACCOUNTS_VIEWED', $entry->action);
         $this->assertSame(AuditLevel::ACTIVITY, $entry->level);
         $this->assertSame($actor, $entry->actor, 'the actor is sealed from the factory, not re-resolved later');
-        $this->assertSame('Bank', $entry->resourceType);
-        $this->assertSame($resourceId, $entry->resourceId);
+        $this->assertInstanceOf(AuditResource::class, $entry->resource);
+        $this->assertSame('Bank', $entry->resource->type);
+        $this->assertSame($resourceId, $entry->resource->id);
         $this->assertSame(['page' => 2], $entry->metadata);
         $this->assertSame(self::CORRELATION_ID, $entry->correlationId, 'the request canonical id is adopted');
         $this->assertSame(self::OCCURRED_ON, $entry->occurredOn->format('Y-m-d\TH:i:s.uP'));

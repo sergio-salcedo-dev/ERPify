@@ -109,8 +109,9 @@ final class SymfonyAuditLoggerBranchingTest extends KernelTestCase
         $entry = $message->entry;
         $this->assertSame('BANK_ACCOUNTS_VIEWED', $entry->action);
         $this->assertSame(AuditLevel::ACTIVITY, $entry->level);
-        $this->assertSame('Bank', $entry->resourceType);
-        $this->assertSame($resourceId, $entry->resourceId);
+        $this->assertInstanceOf(AuditResource::class, $entry->resource);
+        $this->assertSame('Bank', $entry->resource->type);
+        $this->assertSame($resourceId, $entry->resource->id);
         $this->assertSame(
             ActorType::ANONYMOUS,
             $entry->actor->type,

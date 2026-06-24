@@ -7,6 +7,7 @@ namespace Erpify\Shared\Audit\Application;
 use DateTimeImmutable;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Audit\Domain\Exception\InvalidAuditLogEntry;
 use Erpify\Shared\Uuid\Domain\Uuid;
 
@@ -40,8 +41,7 @@ final readonly class AuditLogEntry
         public ActorContext $actor,
         public string $correlationId,
         public DateTimeImmutable $occurredOn,
-        public ?string $resourceType,
-        public ?string $resourceId,
+        public ?AuditResource $resource,
         public array $metadata,
         public ?string $ip,
         public ?string $userAgent,
@@ -59,8 +59,7 @@ final readonly class AuditLogEntry
         ActorContext $actor,
         string $correlationId,
         DateTimeImmutable $occurredOn,
-        ?string $resourceType = null,
-        ?string $resourceId = null,
+        ?AuditResource $resource = null,
         array $metadata = [],
         ?string $ip = null,
         ?string $userAgent = null,
@@ -73,10 +72,8 @@ final readonly class AuditLogEntry
 
         self::guardFieldLength('action', $action);
 
-        $resourceType = self::normalizeOptional($resourceType);
-
-        if (null !== $resourceType) {
-            self::guardFieldLength('resourceType', $resourceType);
+        if ($resource instanceof AuditResource) {
+            self::guardFieldLength('resourceType', $resource->type);
         }
 
         return new self(
@@ -86,27 +83,11 @@ final readonly class AuditLogEntry
             $actor,
             $correlationId,
             $occurredOn,
-            $resourceType,
-            $resourceId,
+            $resource,
             $metadata,
             $ip,
             $userAgent,
         );
-    }
-
-    /**
-     * A value that is whitespace-only is treated as absent, so a blank `resourceType` is
-     * stored as `null` rather than as an ambiguous empty string.
-     */
-    private static function normalizeOptional(?string $value): ?string
-    {
-        if (null === $value) {
-            return null;
-        }
-
-        $trimmed = \trim($value);
-
-        return '' === $trimmed ? null : $trimmed;
     }
 
     private static function guardFieldLength(string $field, string $value): void

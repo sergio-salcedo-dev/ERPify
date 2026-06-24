@@ -10,6 +10,7 @@ use Erpify\Shared\Audit\Application\RecordAuditEntry;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\ActorType;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -49,8 +50,7 @@ final class RecordAuditEntryTest extends TestCase
             $actor,
             Uuid::generate(),
             $occurredOn,
-            'bank_account',
-            $resourceId,
+            AuditResource::of('bank_account', $resourceId),
             $metadata,
             '203.0.113.7',
             'Mozilla/5.0',
@@ -69,8 +69,9 @@ final class RecordAuditEntryTest extends TestCase
             $occurredOn->format('Y-m-d\TH:i:s.uP'),
             $round->entry->occurredOn->format('Y-m-d\TH:i:s.uP'),
         );
-        $this->assertSame('bank_account', $round->entry->resourceType);
-        $this->assertSame($resourceId, $round->entry->resourceId);
+        $this->assertInstanceOf(AuditResource::class, $round->entry->resource);
+        $this->assertSame('bank_account', $round->entry->resource->type);
+        $this->assertSame($resourceId, $round->entry->resource->id);
         $this->assertSame($metadata, $round->entry->metadata);
         $this->assertSame('203.0.113.7', $round->entry->ip);
         $this->assertSame('Mozilla/5.0', $round->entry->userAgent);

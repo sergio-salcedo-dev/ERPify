@@ -48,8 +48,7 @@ final readonly class SealedAuditEntryFactory implements AuditEntryFactory
             $this->actorContextFactory->current(),
             $this->resolveCorrelationId(),
             $this->clock->now(),
-            $resource?->type,
-            $resource?->id,
+            $resource,
             $metadata,
         );
     }
