@@ -8,8 +8,8 @@ use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
 
 /**
  * Thrown when an {@see \Erpify\Shared\Audit\Application\AuditLogEntry} is built with an
- * invariant-breaking field: a blank `action`, or an `action`/`resourceType` longer than
- * the `audit_log` column width.
+ * invariant-breaking field: a blank `action` or `resourceType`, or an `action`/`resourceType`
+ * longer than the `audit_log` column width.
  *
  * Deliberately marker-less: the `action` is minted by the calling module as a constant, so
  * a blank or over-long value is a server-side programming fault, not bad client input.
@@ -29,6 +29,14 @@ final class InvalidAuditLogEntry extends DomainException
         return new self(
             type: self::TYPE,
             title: 'Audit log entry action must not be empty.',
+        );
+    }
+
+    public static function resourceTypeMustNotBeEmpty(): self
+    {
+        return new self(
+            type: self::TYPE,
+            title: 'Audit log entry resource type must not be empty.',
         );
     }
 

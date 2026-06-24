@@ -36,8 +36,8 @@ final readonly class AuditLogEntry
      */
     private function __construct(
         public string $id,
-        public AuditLevel $level,
         public string $action,
+        public AuditLevel $level,
         public ActorContext $actor,
         public string $correlationId,
         public DateTimeImmutable $occurredOn,
@@ -54,8 +54,8 @@ final readonly class AuditLogEntry
      * @SuppressWarnings("PHPMD.ExcessiveParameterList")
      */
     public static function create(
-        AuditLevel $level,
         string $action,
+        AuditLevel $level,
         ActorContext $actor,
         string $correlationId,
         DateTimeImmutable $occurredOn,
@@ -78,8 +78,8 @@ final readonly class AuditLogEntry
 
         return new self(
             Uuid::generate(),
-            $level,
             $action,
+            $level,
             $actor,
             $correlationId,
             $occurredOn,

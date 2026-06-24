@@ -38,8 +38,8 @@ final readonly class FixedAuditEntryFactory implements AuditEntryFactory
         array $metadata = [],
     ): AuditLogEntry {
         return AuditLogEntry::create(
-            $level,
             $action,
+            $level,
             $this->actor,
             $this->correlationId,
             $this->occurredOn,

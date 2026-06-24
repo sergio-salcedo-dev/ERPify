@@ -48,8 +48,8 @@ final class RecordAuditEntryHandlerTest extends TestCase
     private function entry(): AuditLogEntry
     {
         return AuditLogEntry::create(
-            AuditLevel::ACTIVITY,
             'BANK_ACCOUNTS_VIEWED',
+            AuditLevel::ACTIVITY,
             ActorContext::anonymous(),
             Uuid::generate(),
             new DateTimeImmutable('2026-06-23T12:00:00+00:00'),

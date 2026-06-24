@@ -43,8 +43,8 @@ final readonly class SealedAuditEntryFactory implements AuditEntryFactory
         array $metadata = [],
     ): AuditLogEntry {
         return AuditLogEntry::create(
-            $level,
             $action,
+            $level,
             $this->actorContextFactory->current(),
             $this->resolveCorrelationId(),
             $this->clock->now(),

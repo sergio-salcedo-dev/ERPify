@@ -34,8 +34,8 @@ final class AuditLogWriterIdempotencyTest extends KernelTestCase
     {
         $this->withWriter(function (AuditLogWriter $writer, Connection $connection): void {
             $entry = AuditLogEntry::create(
-                AuditLevel::ACTIVITY,
                 'BANK_ACCOUNTS_VIEWED',
+                AuditLevel::ACTIVITY,
                 ActorContext::anonymous(),
                 Uuid::generate(),
                 new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
@@ -56,15 +56,15 @@ final class AuditLogWriterIdempotencyTest extends KernelTestCase
             $occurredOn = new DateTimeImmutable('2026-01-02T00:00:00+00:00');
 
             $first = AuditLogEntry::create(
-                AuditLevel::ACTIVITY,
                 'BANK_ACCOUNTS_VIEWED',
+                AuditLevel::ACTIVITY,
                 ActorContext::anonymous(),
                 $correlationId,
                 $occurredOn,
             );
             $second = AuditLogEntry::create(
-                AuditLevel::ACTIVITY,
                 'BANK_ACCOUNTS_VIEWED',
+                AuditLevel::ACTIVITY,
                 ActorContext::anonymous(),
                 $correlationId,
                 $occurredOn,
@@ -93,8 +93,8 @@ final class AuditLogWriterIdempotencyTest extends KernelTestCase
             $occurredOn = new DateTimeImmutable('2026-03-02T10:11:12.123456+00:00');
 
             $entry = AuditLogEntry::create(
-                AuditLevel::SECURITY,
                 'ACCESS_DENIED',
+                AuditLevel::SECURITY,
                 ActorContext::forUser($actorId),
                 $correlationId,
                 $occurredOn,
@@ -146,8 +146,8 @@ final class AuditLogWriterIdempotencyTest extends KernelTestCase
     {
         $this->withWriter(function (AuditLogWriter $writer, Connection $connection): void {
             $entry = AuditLogEntry::create(
-                AuditLevel::ACTIVITY,
                 'BANK_ACCOUNTS_VIEWED',
+                AuditLevel::ACTIVITY,
                 ActorContext::anonymous(),
                 Uuid::generate(),
                 new DateTimeImmutable('2026-04-01T08:00:00+00:00'),

@@ -45,8 +45,8 @@ final class RecordAuditEntryTest extends TestCase
         $occurredOn = new DateTimeImmutable('2026-01-01T12:34:56.789012+02:00');
         $metadata = ['filters' => ['status' => 'active'], 'export_format' => 'xlsx'];
         $entry = AuditLogEntry::create(
-            AuditLevel::SECURITY,
             'BANK_ACCOUNTS_VIEWED',
+            AuditLevel::SECURITY,
             $actor,
             Uuid::generate(),
             $occurredOn,
@@ -80,8 +80,8 @@ final class RecordAuditEntryTest extends TestCase
     private function anEntry(): AuditLogEntry
     {
         return AuditLogEntry::create(
-            AuditLevel::ACTIVITY,
             'BANK_ACCOUNTS_VIEWED',
+            AuditLevel::ACTIVITY,
             ActorContext::anonymous(),
             Uuid::generate(),
             new DateTimeImmutable('2026-01-01T00:00:00+00:00'),

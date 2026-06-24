@@ -104,6 +104,20 @@ transporte `failed` de dominio, y su escalado no afecta a los consumidores de `e
 se pliega en `messenger_worker`; en prod puede tener su propio worker (mismo patrón que
 `scheduler_maintenance` / `scheduler_worker`).
 
+**Durabilidad de `security` frente a la transacción del llamador (invariante a cablear en Epic 2).**
+El escritor DBAL no abre transacción propia: usa la `Connection` por defecto, así que un `INSERT`
+`security` síncrono se enrola en la transacción que el request tenga abierta. En Epic 1 no existe
+productor `security` y el único camino vivo (`activity`) escribe en el worker, fuera de toda
+transacción de negocio, por lo que la garantía no está en riesgo todavía. Pero cuando Epic 2 capture
+`AccessDeniedException`, la denegación puede ocurrir dentro de un request con una transacción de
+negocio que luego haga rollback, que se llevaría consigo la fila `security` —rompiendo "una
+denegación nunca se pierde"—. Invariante de diseño que el productor `security` de Epic 2 **debe**
+satisfacer: o no hay transacción de negocio abierta al registrar la denegación, o la escritura
+`security` persiste **fuera** de la transacción ambiente y commitea aparte (p. ej. una segunda
+conexión DBAL o semántica `REQUIRES_NEW`). El mecanismo concreto se decide en Epic 2; aquí se fija
+que «escribir-antes-de-responder» sólo es durable si la escritura no comparte la transacción de
+negocio que puede revertirse.
+
 El sistema es, por diseño, **observabilidad operativa con pérdida parcial tolerada en `activity`**,
 **no** logging forense uniforme: `security` es traza *compliance-grade* (durable), `activity` es
 telemetría de jornada (best-effort).
@@ -277,6 +291,15 @@ transporte `audit` + migración `audit_log`; (2) captura — subscriber `kernel.
 de `AccessDeniedException` (vía `security` síncrona) + `ActorContext`; (3) retención —
 `AuditLogPruner` (Scheduler) + estrategia de pseudonimización GDPR; (4) `Backoffice/Audit` — read
 model + UI de investigación. El estado de implementación vive en el issue/PR correspondiente.
+
+**Estructura del adaptador (sellado ≠ enrutado).** El adaptador del seam separa dos
+responsabilidades con motivos de cambio distintos: `SymfonyAuditLogger` (puerto `AuditLogger`)
+**enruta por `level`** (activity async / security síncrono) y delega la **construcción sellada** de
+la entrada en un puerto aparte, `AuditEntryFactory` (`SealedAuditEntryFactory`), que sella el
+contexto de confianza —actor (`ActorContextFactory`), `correlation_id` (RequestStack), instante
+(`Clock`) e `id`— dentro del ciclo de request. Sellar fuera del seam de enrutado, y no en un
+`buildEntry()` privado del logger, mantiene cada pieza testeable en aislamiento y hace que, cuando
+entre User/RBAC, sólo cambie el proveedor de actor, no el enrutado.
 
 **Secuencia frente a auth (cerrada):** el backbone de auditoría se implementa **antes** de User/RBAC.
 `actor_id` permanece nullable (`actor_type` ∈ {`anonymous`, `system`, `api_key`}) hasta que exista

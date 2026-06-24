@@ -33,8 +33,8 @@ final class AuditLogEntryTest extends TestCase
         $metadata = ['filters' => ['status' => 'active']];
 
         $entry = AuditLogEntry::create(
-            AuditLevel::SECURITY,
             'BANK_ACCOUNTS_VIEWED',
+            AuditLevel::SECURITY,
             $actor,
             $correlationId,
             $occurredOn,
@@ -81,8 +81,8 @@ final class AuditLogEntryTest extends TestCase
         $this->expectException(InvalidAuditLogEntry::class);
 
         AuditLogEntry::create(
-            AuditLevel::ACTIVITY,
             $blank,
+            AuditLevel::ACTIVITY,
             ActorContext::anonymous(),
             Uuid::generate(),
             new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
@@ -103,8 +103,8 @@ final class AuditLogEntryTest extends TestCase
         $this->expectException(InvalidAuditLogEntry::class);
 
         AuditLogEntry::create(
-            AuditLevel::ACTIVITY,
             \str_repeat('A', 101),
+            AuditLevel::ACTIVITY,
             ActorContext::anonymous(),
             Uuid::generate(),
             new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
@@ -116,8 +116,8 @@ final class AuditLogEntryTest extends TestCase
         $this->expectException(InvalidAuditLogEntry::class);
 
         AuditLogEntry::create(
-            AuditLevel::ACTIVITY,
             'BANK_ACCOUNTS_VIEWED',
+            AuditLevel::ACTIVITY,
             ActorContext::anonymous(),
             Uuid::generate(),
             new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
@@ -131,8 +131,8 @@ final class AuditLogEntryTest extends TestCase
         $resourceType = \str_repeat('B', 100);
 
         $entry = AuditLogEntry::create(
-            AuditLevel::ACTIVITY,
             $action,
+            AuditLevel::ACTIVITY,
             ActorContext::anonymous(),
             Uuid::generate(),
             new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
@@ -147,8 +147,8 @@ final class AuditLogEntryTest extends TestCase
     public function testTrimsTheAction(): void
     {
         $entry = AuditLogEntry::create(
-            AuditLevel::ACTIVITY,
             '  BANK_ACCOUNTS_VIEWED  ',
+            AuditLevel::ACTIVITY,
             ActorContext::anonymous(),
             Uuid::generate(),
             new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
@@ -160,8 +160,8 @@ final class AuditLogEntryTest extends TestCase
     private function anEntry(): AuditLogEntry
     {
         return AuditLogEntry::create(
-            AuditLevel::ACTIVITY,
             'BANK_ACCOUNTS_VIEWED',
+            AuditLevel::ACTIVITY,
             ActorContext::anonymous(),
             Uuid::generate(),
             new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
