@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-23
-last_updated: 2026-06-23
+last_updated: 2026-06-24
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -46,8 +46,8 @@ development_status:
   epic-1: in-progress
   1-1-actorcontext-con-actortype-tipado: done
   1-2-auditlevel-mensaje-interno-recordauditentry-modelo-auditlogentry-separados-del-domainevent: done
-  1-3-tabla-audit-log-append-only-escritor-idempotente-raw-dbal-schema-listener: review
-  1-4-puerto-auditlogger-persistencia-por-nivel-activity-async-security-write-before-send-actorcontextfactory: review
+  1-3-tabla-audit-log-append-only-escritor-idempotente-raw-dbal-schema-listener: done
+  1-4-puerto-auditlogger-persistencia-por-nivel-activity-async-security-write-before-send-actorcontextfactory: done
   1-5-migrar-bank-accounts-viewed-al-subsistema-real-primer-actor-auditado: ready-for-dev
   epic-1-retrospective: optional
 

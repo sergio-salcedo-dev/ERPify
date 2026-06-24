@@ -17,6 +17,11 @@ use Erpify\Shared\Http\Infrastructure\CorrelationIdListener;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use Symfony\Component\Clock\Clock as SymfonyClockFacade;
+use Symfony\Component\Clock\MockClock;
+use Symfony\Component\Clock\NativeClock;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 
 /**
@@ -45,14 +50,22 @@ final class SymfonyAuditLoggerBranchingTest extends KernelTestCase
         $transport = self::getContainer()->get('messenger.transport.audit');
         $this->assertInstanceOf(InMemoryTransport::class, $transport);
 
+        // Drive the real web path: a request in flight makes the sealed actor anonymous (pre-auth)
+        // and its canonical correlation id is the one adopted onto the entry.
+        $correlationId = Uuid::generate();
+        $requestStack = $this->pushRequestWithCorrelationId($correlationId);
+
+        // Freeze the shared time source so the sealed instant is known to the microsecond; the
+        // serializer round-trip (serialize=true) must return it byte-for-byte, not truncated.
+        $sealedInstant = new DateTimeImmutable('2026-03-02T10:11:12.654321+00:00');
+        SymfonyClockFacade::set(new MockClock($sealedInstant));
+
         $connection = $this->connection();
         $connection->beginTransaction();
 
         try {
             $resourceId = Uuid::generate();
-            $before = new DateTimeImmutable();
             $auditLogger->log('BANK_ACCOUNTS_VIEWED', AuditLevel::ACTIVITY, AuditResource::of('Bank', $resourceId));
-            $after = new DateTimeImmutable();
 
             $messages = [...$transport->get()];
             $this->assertCount(1, $messages, 'activity routes to the dedicated audit transport');
@@ -64,29 +77,51 @@ final class SymfonyAuditLoggerBranchingTest extends KernelTestCase
 
             $message = \reset($messages)->getMessage();
             $this->assertInstanceOf(RecordAuditEntry::class, $message);
-
-            $entry = $message->entry;
-            $this->assertSame('BANK_ACCOUNTS_VIEWED', $entry->action);
-            $this->assertSame(AuditLevel::ACTIVITY, $entry->level);
-            $this->assertSame('Bank', $entry->resourceType);
-            $this->assertSame($resourceId, $entry->resourceId);
-            $this->assertSame(ActorType::SYSTEM, $entry->actor->type, 'off-request the sealed actor is system');
-            $this->assertTrue(
-                CorrelationIdListener::isCanonical($entry->correlationId),
-                'a canonical fallback correlation id is minted',
-            );
-            $this->assertGreaterThanOrEqual($before, $entry->occurredOn);
-            $this->assertLessThanOrEqual($after, $entry->occurredOn);
-            $this->assertMatchesRegularExpression(
-                '/\.\d{6}[+-]\d{2}:\d{2}$/',
-                $entry->occurredOn->format('Y-m-d\TH:i:s.uP'),
-                'sub-second precision survives the serializer round-trip',
-            );
+            $this->assertActivityEntrySealedInRequestPath($message, $resourceId, $correlationId, $sealedInstant);
         } finally {
             if ($connection->isTransactionActive()) {
                 $connection->rollBack();
             }
+
+            $requestStack->pop();
+            SymfonyClockFacade::set(new NativeClock());
         }
+    }
+
+    private function pushRequestWithCorrelationId(string $correlationId): RequestStack
+    {
+        $requestStack = self::getContainer()->get('request_stack');
+        $this->assertInstanceOf(RequestStack::class, $requestStack);
+        $request = Request::create('/api/banks');
+        $request->attributes->set(CorrelationIdListener::ATTRIBUTE_KEY, $correlationId);
+
+        $requestStack->push($request);
+
+        return $requestStack;
+    }
+
+    private function assertActivityEntrySealedInRequestPath(
+        RecordAuditEntry $message,
+        string $resourceId,
+        string $correlationId,
+        DateTimeImmutable $sealedInstant,
+    ): void {
+        $entry = $message->entry;
+        $this->assertSame('BANK_ACCOUNTS_VIEWED', $entry->action);
+        $this->assertSame(AuditLevel::ACTIVITY, $entry->level);
+        $this->assertSame('Bank', $entry->resourceType);
+        $this->assertSame($resourceId, $entry->resourceId);
+        $this->assertSame(
+            ActorType::ANONYMOUS,
+            $entry->actor->type,
+            'on the request path the sealed actor is anonymous (pre-auth)',
+        );
+        $this->assertSame($correlationId, $entry->correlationId, 'the request correlation id is adopted');
+        $this->assertSame(
+            $sealedInstant->format('Y-m-d\TH:i:s.uP'),
+            $entry->occurredOn->format('Y-m-d\TH:i:s.uP'),
+            'the sealed sub-second instant survives the serializer round-trip',
+        );
     }
 
     public function testSecurityWritesSynchronouslyAndEnqueuesNothing(): void

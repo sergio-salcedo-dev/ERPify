@@ -4,7 +4,7 @@ baseline_commit: 589c60f7c778e435b1c34291f5950a79b5c6c36c
 
 # Story 1.4: Puerto `AuditLogger` + persistencia por nivel (activity async / security write-before-send) + `ActorContextFactory`
 
-Status: review
+Status: done
 
 <!-- Epic 1 — Registro de auditoría end-to-end (backbone + primer actor auditado).
      Cuarta historia del subsistema de auditoría operativa/de actor. Cierra el flujo de escritura:
@@ -433,3 +433,17 @@ Nuevos (tests):
 ### Change Log
 
 - 2026-06-24 — Implementada Story 1.4: seam `AuditLogger` + persistencia por nivel (activity async / security write-before-send) + `ActorContextFactory` + transporte `audit` + `RecordAuditEntryHandler`. Gates verdes (stan/unit/quality). Estado → review.
+
+## Review Findings
+
+_Code review 2026-06-24 (stories 1.3 & 1.4; 3 capas adversariales: Blind Hunter sin contexto + Edge Case Hunter con acceso al repo + Acceptance Auditor con specs+ADR). **Sin violaciones de AC**: AC1–AC13 verificados satisfechos. La desviación de T5 (extraer el sellado a un puerto `AuditEntryFactory` + adaptador `SealedAuditEntryFactory`, en vez de un `buildEntry()` privado en `SymfonyAuditLogger`) cae dentro de la latitud que T5 concede ("reparto a discreción del implementador") y es una mejora SRP — AC3/AC5/AC6/AC12 siguen satisfechos, ahora verificados contra la factory. P12 (fuente única del patrón UUIDv7 vía `CorrelationIdListener::isCanonical()`) y P10 (el `warning` solo lleva `action`/`level`/`exception`, sin PII) confirmados. Falsos positivos descartados: el transporte `audit` hereda `failure_transport: failed` global; `match($level)` sin `default` es exhaustivo intencional (fail-loud); el alias público en `services_test.yaml` es cableado test-only documentado (retirable en 1.5)._
+
+#### Patch
+
+- [x] [Review][Patch] El functional de `activity` asertaba el valor de `occurred_on` solo por regex (un truncado a `.000000` pasaría). **Aplicado**: el test congela el reloj global (`MockClock` en un instante con microsegundos) y asierta el instante exacto tras el round-trip del serializer comparando `format('Y-m-d\TH:i:s.uP')` (string escalar — Rector no lo voltea a `assertSame` de objeto). Verificado: `php.quality` exit 0 + test verde. [`SymfonyAuditLoggerBranchingTest.php`]
+- [x] [Review][Patch] El functional de `activity` asertaba `actor = ActorType::SYSTEM` (sin request en `KernelTestCase`). **Aplicado**: el test empuja un `Request` con un `_correlation_id` canónico al `RequestStack` y asierta `ActorType::ANONYMOUS` (camino web real) + que se adopta el `correlationId` del request, no uno re-minteado. Setup extraído a helpers para no superar el límite de líneas de PHPMD. Verificado verde. [`SymfonyAuditLoggerBranchingTest.php`]
+
+#### Deferred
+
+- [x] [Review][Defer] **Durabilidad de la rama `security` (write-before-send) frente a una transacción del llamador.** El `INSERT` síncrono va por la `Connection` DBAL compartida sin transacción propia; si el llamador de Epic 2 mantiene una transacción de negocio abierta que luego hace rollback, la fila de la denegación se revierte con ella — debilitando "una denegación nunca se pierde" (ADR-D3). En Epic 1 no hay productor real (baja probabilidad: un `AccessDeniedException` rara vez tiene transacción de negocio abierta), pero al cablear 2.3 conviene fijar la asunción: o no hay transacción de negocio al escribir la denegación, o la escritura `security` usa una conexión/transacción que commitea aparte. Extiende el item ya rastreado "re-revisar el contrato de fallo de `security` en 2.3". [`SymfonyAuditLogger.php` writeSecurity / `DbalAuditLogWriter.php`] — deferred, Epic 2/2.3
+- [x] [Review][Defer] `AuditResource::of()` no valida que `id` sea UUID (D-1.2.g: id de agregado ya validado upstream). El primer consumidor (1.5) pasa un UUID de Bank válido; un futuro origen de `resourceId` no confiable haría fallar `CAST(:resource_id AS UUID)` (5xx en `security`, tragado en `activity`). Revisar si aparece un origen de resource id no confiable. [`AuditResource.php`] — deferred

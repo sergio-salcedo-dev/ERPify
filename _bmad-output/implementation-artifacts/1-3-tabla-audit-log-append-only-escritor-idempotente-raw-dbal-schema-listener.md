@@ -4,7 +4,7 @@ baseline_commit: b0dadb140c111d3198828828ce102194a208b9e4
 
 # Story 1.3: Tabla `audit_log` append-only + escritor idempotente (raw DBAL + schema listener)
 
-Status: review
+Status: done
 
 <!-- Epic 1 — Registro de auditoría end-to-end (backbone + primer actor auditado).
      Tercera historia del subsistema de auditoría operativa/de actor. Persiste el AuditLogEntry de 1.2.
@@ -357,3 +357,10 @@ _Code review 2026-06-23 (story 1.3, WIP sin commitear; 3 capas adversariales). *
 
 - [x] [Review][Defer] `user_agent` es atacante-controlado y la columna es `VARCHAR(512)`, pero nada lo trunca antes del INSERT — un UA >512 chars revienta la escritura (perdida en `activity`, propagada en `security`). La captura de Epic 2 debe truncar (o la columna pasar a `TEXT`). Misma familia que el defer de la review de 1.2, ahora concreto. [`DbalAuditLogWriter.php:53`, migración] — deferred, captura Epic 2
 - [x] [Review][Defer] El cableado `#[AsAlias(AuditLogWriter::class)]` queda sin test — el alias se poda (sin consumidor de producción hasta 1.4), así que el test funcional instancia `new DbalAuditLogWriter(...)` a mano. 1.4 debe añadir el test end-to-end que resuelve el puerto desde el contenedor. [`AuditLogWriterIdempotencyTest.php:167-194`] — deferred, aterriza con 1.4
+
+### Code review 2026-06-24 — stories 1.3 & 1.4 (revisión adversarial de 3 capas: Blind Hunter + Edge Case Hunter + Acceptance Auditor)
+
+_**Sin violaciones de AC**: AC1–AC11 verificados satisfechos. La pérdida de precisión de `occurred_on` señalada en la review previa **está corregida** (columna `TIMESTAMP(6)`; el round-trip de almacenamiento asierta `format('u')`). `down() DROP TABLE IF EXISTS` es decisión consciente pre-producción (D-1.3.g), no un defecto. `failure_transport: failed` global se hereda; `UUIDV7_PATTERN` está anclado `\A…\z`. Los hallazgos residuales son defers (uno ya rastreado)._
+
+- [x] [Review][Defer] `metadata` vacío se serializa como array JSON `[]` (no objeto `{}`) → la columna `jsonb` guarda un array en las filas sin metadata y un objeto en las demás. Inocuo hoy; revisar en Epic 4 si alguna consulta trata `metadata` como objeto (`->>`, `jsonb_each`). [`DbalAuditLogWriter.php`] — deferred, Epic 4
+- [x] [Review][Defer] Truncado de `ip`/`user_agent` antes del INSERT — **ya rastreado** en `deferred-work.md` (Epic 2: la captura debe truncar o la columna pasar a `TEXT`); no se duplica.
