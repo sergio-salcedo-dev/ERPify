@@ -14,14 +14,15 @@ boundary it builds on is enforced by `make php.lint.event-bus`.
   ahead of it**. A `*CommandHandler` with no `CommandBus` is scenery (*atrezo*): a name promising a
   dispatch the system cannot perform. CQRS is separation of *execution*, not of *names*.
 
-## The four message categories
+## The five message categories
 
 | # | Category | Name shape | Lives in | Dispatched by a bus/transport today? | Example |
 |---|----------|-----------|----------|--------------------------------------|---------|
 | 1 | **Command** (write intent) | `<Verb><Noun>Command` | `*/Application/Command/` | No — data-carrying intent, consumed by a use case via direct call | `CreateBankCommand`, `UpdateBankCommand` |
 | 2 | **Query** (read intent) | `<Verb><Noun>Query` | `*/Application/Query/` | No — same, direct call | `SearchBanksQuery`, `SearchBankAccountsQuery` |
 | 3 | **Domain-event subscriber** | `<Effect>On<Event>` | `*/Infrastructure/Messenger/` | **Yes** — `#[AsMessageHandler]`, transport-routed (N:M) | `RefreshRealtimeOnBankChanged`, `SendEmailOnBankChanged` |
-| 4 | **Scheduled / maintenance handler** | `<Verb><Noun>Handler` | `Shared/Infrastructure/Messenger/Maintenance/` | **Yes** — reacts to a Scheduler tick / command-style message (1:1) | `PruneHandledDomainEventsHandler` |
+| 4 | **Audit / observability subscriber** | `<Effect>On<X>` | `*/Infrastructure/Audit/` | **Yes** — `#[AsMessageHandler]`; message is **not** a `DomainEvent` | _none currently — see note below_ |
+| 5 | **Scheduled / maintenance handler** | `<Verb><Noun>Handler` | `Shared/Infrastructure/Messenger/Maintenance/` | **Yes** — reacts to a Scheduler tick / command-style message (1:1) | `PruneHandledDomainEventsHandler` |
 
 - Category 3's `On<Event>` may name a concrete event or the change umbrella a subscriber covers —
   `OnBankChanged` is honest because one class carries an `#[AsMessageHandler]` method per lifecycle event
@@ -29,11 +30,13 @@ boundary it builds on is enforced by `make php.lint.event-bus`.
   into three classes. The grouping is a naming choice on the *subscriber*, not an event hierarchy: each
   lifecycle event extends `DomainEvent` directly, and the created/updated pair share their payload by
   composing a `BankSnapshot` value object (delete carries none) rather than inheriting a common supertype.
-- Operational auditing is **not** a naming category: a use case records an access through the
-  `Shared/Audit` `AuditLogger` port (`->log(...)`), whose shared message backbone (`RecordAuditEntry` →
-  the `audit` transport → `RecordAuditEntryHandler` → `audit_log`) the caller never names. The former
-  per-module `<Effect>On<X>` audit subscriber was retired when that seam landed.
-- Category 4 keeps `*Handler` because the suffix is *true* there — a transport-routed message with
+- Category 4 currently has **no live instance**: it is retained as an architectural boundary distinct
+  from a domain-event subscriber (it reacts to an operational signal that is **not** a `DomainEvent`).
+  Today a use case records an access through the `Shared/Audit` `AuditLogger` port (`->log(...)`), whose
+  shared backbone (`RecordAuditEntry` → the `audit` transport → `RecordAuditEntryHandler` → `audit_log`)
+  the caller never names; a future per-aggregate `<Effect>On<X>` audit subscriber reacting to a
+  non-`DomainEvent` signal (e.g. `RecordAuditLogOnInvoiceViewed`) would land here.
+- Category 5 keeps `*Handler` because the suffix is *true* there — a transport-routed message with
   exactly one handler (1:1). It is the only `*Handler` that is honest pre-bus.
 
 ## Direct-execution use cases — not a message category
@@ -52,7 +55,7 @@ migrating *together*, so the `wrapInTransaction` boundary moves to the bus middl
 - `*Subscriber` / `*Listener` for a Messenger consumer — collides with Symfony's `EventDispatcher`
   vocabulary; `#[AsMessageHandler]` *is* Messenger's "subscriber." Use `<Effect>On<Event>`.
 - A generic `*Handler` name for a **domain-event** subscriber — it hides the N:M event reaction that
-  `<Effect>On<Event>` makes legible (`*Handler` is reserved for category 4).
+  `<Effect>On<Event>` makes legible (`*Handler` is reserved for category 5).
 - Story / NFR / ticket IDs in any class or message name.
 
 ## New aggregate / use case — template
