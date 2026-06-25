@@ -162,9 +162,9 @@ final class RateLimitListenerFunctionalTest extends WebTestCase
 
     public function testNonApiPathsBypassTheLimiterAndDoNotStampRateLimitHeaders(): void
     {
-        // The listener is path-scoped to RateLimitListener::API_PATH_PREFIX ('/api/'). Even
-        // with the budget pre-exhausted, a non-/api/ request must neither be rejected nor
-        // stamped — the if-not-prefix early return at the top of onRequest() guarantees it.
+        // The listener is path-scoped to the `/api/` surface via ApiRequestMatcher. Even with the
+        // budget pre-exhausted, a non-/api/ request must neither be rejected nor stamped — the
+        // matcher early return at the top of onRequest() guarantees it.
         $kernelBrowser = self::createClient();
         $this->consumeTokens(self::REMOTE_ADDR_NON_API, self::BUDGET);
 

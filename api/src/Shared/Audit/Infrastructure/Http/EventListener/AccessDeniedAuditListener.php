@@ -6,7 +6,7 @@ namespace Erpify\Shared\Audit\Infrastructure\Http\EventListener;
 
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
-use Erpify\Shared\Audit\Infrastructure\Http\ApiRequestMatcher;
+use Erpify\Shared\Http\Infrastructure\ApiRequestMatcher;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\KernelEvents;

@@ -8,7 +8,7 @@ use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditPolicy;
 use Erpify\Shared\Audit\Domain\HttpInteraction;
-use Erpify\Shared\Audit\Infrastructure\Http\ApiRequestMatcher;
+use Erpify\Shared\Http\Infrastructure\ApiRequestMatcher;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;

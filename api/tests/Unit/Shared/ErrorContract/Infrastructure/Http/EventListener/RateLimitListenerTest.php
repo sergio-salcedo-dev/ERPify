@@ -6,12 +6,12 @@ namespace Erpify\Tests\Unit\Shared\ErrorContract\Infrastructure\Http\EventListen
 
 use Erpify\Shared\ErrorContract\Domain\Exception\RateLimitExceeded;
 use Erpify\Shared\ErrorContract\Infrastructure\Http\EventListener\RateLimitListener;
+use Erpify\Shared\Http\Infrastructure\ApiRequestMatcher;
 use LogicException;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
-use ReflectionMethod;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
@@ -201,12 +201,12 @@ final class RateLimitListenerTest extends TestCase
         $this->assertTrue($reflectionClass->isFinal());
         $this->assertTrue($reflectionClass->isReadOnly());
 
-        $constructor = $reflectionClass->getConstructor();
-        $this->assertInstanceOf(ReflectionMethod::class, $constructor);
+        $parameters = $reflectionClass->getConstructor()?->getParameters() ?? [];
+        $this->assertNotEmpty($parameters);
 
-        foreach ($constructor->getParameters() as $reflectionParameter) {
+        foreach ($parameters as $parameter) {
             $this->assertTrue(
-                $reflectionParameter->isPromoted(),
+                $parameter->isPromoted(),
                 'Constructor params must be promoted to satisfy the worker-mode pattern.',
             );
         }
@@ -224,7 +224,7 @@ final class RateLimitListenerTest extends TestCase
             new InMemoryStorage(),
         );
 
-        return new RateLimitListener($rateLimiterFactory);
+        return new RateLimitListener($rateLimiterFactory, new ApiRequestMatcher());
     }
 
     private function makeRequestEvent(string $path, string $clientIp): RequestEvent

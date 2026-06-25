@@ -9,6 +9,7 @@ use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
 use Erpify\Shared\ErrorContract\Domain\Exception\NotFound;
 use Erpify\Shared\ErrorContract\Infrastructure\Http\EventListener\ExceptionResponder;
 use Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsResponder;
+use Erpify\Shared\Http\Infrastructure\ApiRequestMatcher;
 use Erpify\Shared\Http\Infrastructure\CorrelationIdListener;
 use LogicException;
 use Override;
@@ -979,6 +980,7 @@ final class ExceptionResponderTest extends TestCase
             new ProblemDetailsFactory('test', $factoryLogger ?? new NullLogger()),
             new ProblemDetailsResponder(),
             $logger ?? new BufferingLogger(),
+            new ApiRequestMatcher(),
         );
     }
 

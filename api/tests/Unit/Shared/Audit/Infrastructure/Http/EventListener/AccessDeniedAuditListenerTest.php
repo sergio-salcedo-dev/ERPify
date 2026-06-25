@@ -6,9 +6,9 @@ namespace Erpify\Tests\Unit\Shared\Audit\Infrastructure\Http\EventListener;
 
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
-use Erpify\Shared\Audit\Infrastructure\Http\ApiRequestMatcher;
 use Erpify\Shared\Audit\Infrastructure\Http\EventListener\AccessDeniedAuditListener;
 use Erpify\Shared\ErrorContract\Infrastructure\Http\EventListener\ExceptionResponder;
+use Erpify\Shared\Http\Infrastructure\ApiRequestMatcher;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;

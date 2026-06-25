@@ -9,6 +9,7 @@ use Erpify\Shared\ErrorContract\Application\ProblemDetailsFactory;
 use Erpify\Shared\ErrorContract\Application\RedactionDenylist;
 use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
 use Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsResponder;
+use Erpify\Shared\Http\Infrastructure\ApiRequestMatcher;
 use Erpify\Shared\Http\Infrastructure\CorrelationIdListener;
 use Error;
 use LogicException;
@@ -145,12 +146,11 @@ final readonly class ExceptionResponder
      */
     private const string LAST_RESORT_LOG_MESSAGE = 'ExceptionResponder self-failure: emitting last-resort static body.';
 
-    public const string API_PATH_PREFIX = '/api/';
-
     public function __construct(
         private ProblemDetailsFactory $problemDetailsFactory,
         private ProblemDetailsResponder $problemDetailsResponder,
         private LoggerInterface $logger,
+        private ApiRequestMatcher $apiRequestMatcher,
     ) {
     }
 
@@ -162,7 +162,7 @@ final readonly class ExceptionResponder
 
         $request = $event->getRequest();
 
-        if (!\str_starts_with($request->getPathInfo(), self::API_PATH_PREFIX)) {
+        if (!$this->apiRequestMatcher->matches($request)) {
             return;
         }
 
