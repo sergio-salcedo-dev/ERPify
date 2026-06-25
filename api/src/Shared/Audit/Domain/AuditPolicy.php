@@ -13,9 +13,10 @@ namespace Erpify\Shared\Audit\Domain;
  * routes every `/api/*` interaction through here; modules also call {@see AuditLogger->log()} explicitly
  * for strong-semantic actions the hook cannot name (a sensitive-data view that needs the resource id, an
  * export, a denial). Where both could fire for the same route, the explicit call is the richer, canonical
- * record, so the generic path must yield rather than write a second, thinner row — see
- * {@see self::ROUTES_WITH_CANONICAL_AUDIT}. That a route already has a canonical explicit representation
- * is audit-domain knowledge, modelled here on purpose, not an accidental technical exclusion.
+ * record, so the generic path must yield rather than write a second, thinner row. Which routes are in that
+ * situation is owned by each route's module and declared on its routing metadata, surfaced here as
+ * {@see HttpInteraction::$hasCanonicalAudit} — this policy holds no catalogue of concrete module routes,
+ * so a new module that wants canonical audit changes its own route, never this shared class.
  *
  * A generic action is the route name promoted to an upper-snake token under a {@see self::GENERIC_ACTION_PREFIX}
  * prefix (`backoffice_bank_search` → `ROUTE_BACKOFFICE_BANK_SEARCH`). The route name is the module-owned
@@ -26,15 +27,6 @@ namespace Erpify\Shared\Audit\Domain;
  */
 final class AuditPolicy
 {
-    /**
-     * Routes whose canonical audit record is an explicit {@see AuditLogger->log()} call in the application
-     * layer (richer: it carries the resource id the hook cannot extract). The generic path yields here so the
-     * interaction is not audited twice.
-     *
-     * @var list<string>
-     */
-    private const array ROUTES_WITH_CANONICAL_AUDIT = ['backoffice_bank_account_search'];
-
     private const string GENERIC_ACTION_PREFIX = 'ROUTE_';
 
     public function decide(HttpInteraction $interaction): AuditDecision
@@ -49,7 +41,7 @@ final class AuditPolicy
             return AuditDecision::notAuditable();
         }
 
-        if ($this->hasCanonicalExplicitAudit($route)) {
+        if ($interaction->hasCanonicalAudit) {
             return AuditDecision::notAuditable();
         }
 
@@ -58,11 +50,6 @@ final class AuditPolicy
         }
 
         return AuditDecision::notAuditable();
-    }
-
-    private function hasCanonicalExplicitAudit(string $route): bool
-    {
-        return \in_array($route, self::ROUTES_WITH_CANONICAL_AUDIT, true);
     }
 
     /**

@@ -11,12 +11,13 @@ namespace Erpify\Shared\Audit\Domain;
  * action — so a caller that finds a {@see $level} simply emits, and a null one stays silent.
  *
  * `level` and `action` are non-null together (auditable) or null together (not auditable); the static
- * factories are the only constructors, so that pairing is an invariant, not a convention.
+ * factories are the only constructors, so that pairing is an invariant, not a convention. "Auditable" is
+ * therefore that pairing — {@see isAuditable()} derives it from `level` rather than storing a redundant
+ * flag a caller could contradict.
  */
 final readonly class AuditDecision
 {
     private function __construct(
-        public bool $auditable,
         public ?AuditLevel $level,
         public ?string $action,
     ) {
@@ -24,11 +25,16 @@ final readonly class AuditDecision
 
     public static function notAuditable(): self
     {
-        return new self(false, null, null);
+        return new self(null, null);
     }
 
     public static function auditable(AuditLevel $level, string $action): self
     {
-        return new self(true, $level, $action);
+        return new self($level, $action);
+    }
+
+    public function isAuditable(): bool
+    {
+        return $this->level instanceof AuditLevel;
     }
 }

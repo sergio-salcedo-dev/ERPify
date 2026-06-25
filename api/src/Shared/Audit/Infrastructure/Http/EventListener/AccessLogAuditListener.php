@@ -8,6 +8,7 @@ use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditPolicy;
 use Erpify\Shared\Audit\Domain\HttpInteraction;
+use Erpify\Shared\Audit\Infrastructure\Http\ApiRequestMatcher;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -28,12 +29,17 @@ use Symfony\Component\HttpKernel\KernelEvents;
  */
 final readonly class AccessLogAuditListener
 {
-    private const string API_PATH_PREFIX = '/api/';
+    /**
+     * The route's own audit declaration is read off this request attribute, set from the route's
+     * `defaults` (an underscore-prefixed, framework-internal default, never a controller argument).
+     */
+    private const string CANONICAL_AUDIT_ATTRIBUTE = '_audit_canonical';
 
     public function __construct(
         private AuditPolicy $policy,
         private AuditLogger $auditLogger,
         private RequestStack $requestStack,
+        private ApiRequestMatcher $apiRequestMatcher,
     ) {
     }
 
@@ -46,14 +52,15 @@ final readonly class AccessLogAuditListener
 
         $request = $event->getRequest();
 
-        if (
-            !\str_starts_with($request->getPathInfo(), self::API_PATH_PREFIX)
-            || !$event->getResponse()->isSuccessful()
-        ) {
+        if (!$this->apiRequestMatcher->matches($request) || !$event->getResponse()->isSuccessful()) {
             return;
         }
 
-        $decision = $this->policy->decide(new HttpInteraction($this->routeOf($request), $request->getMethod()));
+        $decision = $this->policy->decide(new HttpInteraction(
+            $this->routeOf($request),
+            $request->getMethod(),
+            $request->attributes->getBoolean(self::CANONICAL_AUDIT_ATTRIBUTE),
+        ));
 
         if (null === $decision->action || !$decision->level instanceof AuditLevel) {
             return;

@@ -32,9 +32,9 @@ final class AuditPolicyTest extends TestCase
         string $routeName,
         string $expectedAction,
     ): void {
-        $decision = $this->policy->decide(new HttpInteraction($routeName, 'GET'));
+        $decision = $this->policy->decide(new HttpInteraction($routeName, 'GET', false));
 
-        $this->assertTrue($decision->auditable);
+        $this->assertTrue($decision->isAuditable());
         $this->assertSame(AuditLevel::ACTIVITY, $decision->level);
         $this->assertSame($expectedAction, $decision->action);
     }
@@ -50,11 +50,12 @@ final class AuditPolicyTest extends TestCase
 
     public function testYieldsToCanonicalExplicitInstrumentation(): void
     {
-        // The bank-accounts read is audited explicitly as BANK_ACCOUNTS_VIEWED (richer: carries the
-        // resource id). The generic path must stay silent so the interaction is not recorded twice.
-        $decision = $this->policy->decide(new HttpInteraction('backoffice_bank_account_search', 'GET'));
+        // The route declares its own canonical audit (it is recorded explicitly as BANK_ACCOUNTS_VIEWED,
+        // richer: it carries the resource id). The generic path must stay silent so the interaction is
+        // not recorded twice — the policy reads that declaration, it does not know the route by name.
+        $decision = $this->policy->decide(new HttpInteraction('backoffice_bank_account_search', 'GET', true));
 
-        $this->assertFalse($decision->auditable);
+        $this->assertFalse($decision->isAuditable());
         $this->assertNotInstanceOf(AuditLevel::class, $decision->level);
         $this->assertNull($decision->action);
     }
@@ -62,9 +63,9 @@ final class AuditPolicyTest extends TestCase
     #[DataProvider('provideDoesNotAuditTechnicalOrNonBusinessInteractionsCases')]
     public function testDoesNotAuditTechnicalOrNonBusinessInteractions(string $routeName, string $method): void
     {
-        $decision = $this->policy->decide(new HttpInteraction($routeName, $method));
+        $decision = $this->policy->decide(new HttpInteraction($routeName, $method, false));
 
-        $this->assertFalse($decision->auditable);
+        $this->assertFalse($decision->isAuditable());
     }
 
     /**
@@ -88,9 +89,9 @@ final class AuditPolicyTest extends TestCase
     public function testDoesNotAuditWritesViaTheGenericPath(string $routeName, string $method): void
     {
         // State changes are the DomainEvent axis; the operational-activity hook captures reads only.
-        $decision = $this->policy->decide(new HttpInteraction($routeName, $method));
+        $decision = $this->policy->decide(new HttpInteraction($routeName, $method, false));
 
-        $this->assertFalse($decision->auditable);
+        $this->assertFalse($decision->isAuditable());
     }
 
     /**
@@ -105,9 +106,9 @@ final class AuditPolicyTest extends TestCase
 
     public function testDoesNotAuditUnroutableRequests(): void
     {
-        $decision = $this->policy->decide(new HttpInteraction(null, 'GET'));
+        $decision = $this->policy->decide(new HttpInteraction(null, 'GET', false));
 
-        $this->assertFalse($decision->auditable);
+        $this->assertFalse($decision->isAuditable());
         $this->assertNotInstanceOf(AuditLevel::class, $decision->level);
         $this->assertNull($decision->action);
     }

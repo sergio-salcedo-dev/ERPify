@@ -6,13 +6,12 @@ namespace Erpify\Tests\Unit\Shared\Audit\Infrastructure\Http\EventListener;
 
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Infrastructure\Http\ApiRequestMatcher;
 use Erpify\Shared\Audit\Infrastructure\Http\EventListener\AccessDeniedAuditListener;
 use Erpify\Shared\ErrorContract\Infrastructure\Http\EventListener\ExceptionResponder;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use ReflectionMethod;
 use RuntimeException;
-use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
@@ -61,17 +60,15 @@ final class AccessDeniedAuditListenerTest extends TestCase
 
     public function testRunsBeforeTheProblemDetailsResponder(): void
     {
-        $attributes = (new ReflectionMethod(AccessDeniedAuditListener::class, 'onException'))
-            ->getAttributes(AsEventListener::class)
-        ;
-
-        $this->assertCount(1, $attributes);
-        $this->assertGreaterThan(ExceptionResponder::PRIORITY, $attributes[0]->newInstance()->priority);
+        // The denial must be recorded before the Problem Details responder sets the 403 and stops
+        // propagation (RequestEvent::setResponse halts later listeners), so this listener's priority sits
+        // above the responder's. The end-to-end wiring is exercised by the symfony_bridges Behat feature.
+        $this->assertGreaterThan(ExceptionResponder::PRIORITY, AccessDeniedAuditListener::PRIORITY);
     }
 
     private function listener(AuditLogger $logger): AccessDeniedAuditListener
     {
-        return new AccessDeniedAuditListener($logger);
+        return new AccessDeniedAuditListener($logger, new ApiRequestMatcher());
     }
 
     private function event(Throwable $throwable, string $path = '/api/v1/backoffice/banks'): ExceptionEvent

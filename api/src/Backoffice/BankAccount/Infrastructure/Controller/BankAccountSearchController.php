@@ -20,7 +20,14 @@ use Symfony\Component\Serializer\Exception\ExceptionInterface;
  * Read-only accounts-by-bank surface. Public like the rest of `/backoffice` (the repo has no auth
  * yet); it exposes the full PII IBAN — see PRODUCTION_SECURITY_CHECKLIST.md and the auth follow-up.
  */
-#[Route('/banks/{id}/accounts', name: self::ROUTE_NAME, methods: ['GET'])]
+/**
+ * The `_audit_canonical` route default tells the generic access-log hook that this read is already
+ * recorded richly by an explicit `AuditLogger->log()` call ({@see BankAccountSearcher}, carrying the
+ * resource id), so the generic path must not write a second, thinner audit row. The fact lives here, on
+ * the route that owns it, not in a list inside the shared audit policy. The leading underscore keeps it
+ * a framework-internal attribute, never bound as a controller argument.
+ */
+#[Route('/banks/{id}/accounts', name: self::ROUTE_NAME, defaults: ['_audit_canonical' => true], methods: ['GET'])]
 final readonly class BankAccountSearchController
 {
     public const string ROUTE_NAME = 'backoffice_bank_account_search';

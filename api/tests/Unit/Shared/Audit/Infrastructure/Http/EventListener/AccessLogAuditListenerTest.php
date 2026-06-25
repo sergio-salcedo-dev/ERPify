@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Shared\Audit\Infrastructure\Http\EventListener;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditPolicy;
+use Erpify\Shared\Audit\Infrastructure\Http\ApiRequestMatcher;
 use Erpify\Shared\Audit\Infrastructure\Http\EventListener\AccessLogAuditListener;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -77,13 +78,21 @@ final class AccessLogAuditListenerTest extends TestCase
             'GET',
             'backoffice_bank_account_search',
         );
+        // The route declares its own canonical audit; Symfony's router would surface that as this
+        // internal request attribute (here set directly, as the unit test has no real router).
+        $request->attributes->set('_audit_canonical', true);
 
         $this->listener($logger)->onTerminate($this->terminateEvent($request, 200));
     }
 
     private function listener(AuditLogger $logger, ?RequestStack $requestStack = null): AccessLogAuditListener
     {
-        return new AccessLogAuditListener(new AuditPolicy(), $logger, $requestStack ?? new RequestStack());
+        return new AccessLogAuditListener(
+            new AuditPolicy(),
+            $logger,
+            $requestStack ?? new RequestStack(),
+            new ApiRequestMatcher(),
+        );
     }
 
     private function loggerExpectingNoEmission(): AuditLogger

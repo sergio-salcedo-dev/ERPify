@@ -6,6 +6,7 @@ namespace Erpify\Shared\Audit\Infrastructure\Http\EventListener;
 
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Infrastructure\Http\ApiRequestMatcher;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
@@ -30,12 +31,12 @@ final readonly class AccessDeniedAuditListener
 {
     public const int PRIORITY = 32;
 
-    private const string API_PATH_PREFIX = '/api/';
-
     private const string ACTION = 'ACCESS_DENIED';
 
-    public function __construct(private AuditLogger $auditLogger)
-    {
+    public function __construct(
+        private AuditLogger $auditLogger,
+        private ApiRequestMatcher $apiRequestMatcher,
+    ) {
     }
 
     #[AsEventListener(event: KernelEvents::EXCEPTION, priority: self::PRIORITY)]
@@ -45,7 +46,7 @@ final readonly class AccessDeniedAuditListener
             return;
         }
 
-        if (!\str_starts_with($event->getRequest()->getPathInfo(), self::API_PATH_PREFIX)) {
+        if (!$this->apiRequestMatcher->matches($event->getRequest())) {
             return;
         }
 
