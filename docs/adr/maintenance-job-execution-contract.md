@@ -111,4 +111,10 @@ sin esa deuda.
   la feature (#370); congela el *abstraction boundary* demasiado pronto.
 - **Scheduler central (god-scheduler) ahora** — *coordination debt* sobre el subsistema Event ya mergeado y
   un registry de runtime implícito; el eje de dispatch (I5) queda explícitamente abierto.
+- **Tercera exención de I1 (mutación idempotente + volumen acotado → exenta)** — descartada **por ahora**, no
+  prohibida. Con un único caso conocido (`handled_domain_event`) la categoría no ha probado estabilidad
+  estructural; mantener la divergencia **visible** preserva la presión de convergencia hacia el estándar de
+  plataforma y evita ablandar la condición de exención de *single-executor por defecto* a *demuestra que
+  puedes saltártelo*. Reabrible si aparecen varios casos con la misma forma (mutación + idempotencia fuerte +
+  cota estricta + beneficio nulo del lock) — entonces sería un patrón, no una excepción aislada.
 - **Status quo (sin contrato)** — divergencia por implementación: justo el riesgo que este ADR cierra.
