@@ -28,19 +28,20 @@ final class AccessLogAuditListenerTest extends TestCase
         $request = $this->request('/api/v1/backoffice/banks', 'GET', 'backoffice_bank_search');
         $requestStack = new RequestStack();
 
-        $sealedWithin = null;
         $logger = $this->createMock(AuditLogger::class);
         $logger->expects($this->once())
             ->method('log')
             ->with('ROUTE_BACKOFFICE_BANK_SEARCH', AuditLevel::ACTIVITY)
-            ->willReturnCallback(static function () use (&$sealedWithin, $requestStack): void {
-                $sealedWithin = $requestStack->getCurrentRequest();
+            ->willReturnCallback(function () use ($request, $requestStack): void {
+                $this->assertSame(
+                    $request,
+                    $requestStack->getCurrentRequest(),
+                    'the request is re-established so the seal runs in request scope',
+                );
             })
         ;
 
         $this->listener($logger, $requestStack)->onTerminate($this->terminateEvent($request, 200));
-
-        $this->assertSame($request, $sealedWithin, 'the request is re-established so the seal runs in request scope');
 
         $restoredStack = $requestStack->getCurrentRequest();
         $this->assertNotInstanceOf(Request::class, $restoredStack, 'request stack restored after emit');

@@ -33,23 +33,22 @@ final class AuditPolicy
     {
         $route = $interaction->routeName;
 
-        if (null === $route) {
+        if (null === $route || !$this->isGenericActivityRead($interaction, $route)) {
             return AuditDecision::notAuditable();
         }
 
-        if ($this->lacksBusinessSemantics($route)) {
-            return AuditDecision::notAuditable();
-        }
+        return AuditDecision::auditable(AuditLevel::ACTIVITY, $this->genericActionFor($route));
+    }
 
-        if ($interaction->hasCanonicalAudit) {
-            return AuditDecision::notAuditable();
-        }
-
-        if ('GET' === $interaction->method) {
-            return AuditDecision::auditable(AuditLevel::ACTIVITY, $this->genericActionFor($route));
-        }
-
-        return AuditDecision::notAuditable();
+    /**
+     * The only interaction this policy audits: a navigational GET to a business-meaningful route that no
+     * module is already auditing canonically. Writes, infrastructure noise and canonical routes fall through.
+     */
+    private function isGenericActivityRead(HttpInteraction $interaction, string $route): bool
+    {
+        return 'GET' === $interaction->method
+            && !$this->lacksBusinessSemantics($route)
+            && !$interaction->hasCanonicalAudit;
     }
 
     /**
