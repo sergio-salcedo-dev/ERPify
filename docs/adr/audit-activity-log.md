@@ -147,14 +147,27 @@ cada una con semántica definida y disparador propio; cualquier otra escritura e
   patrón `HandledDomainEventPruner` (ver [`domain-event-handler-idempotency.md`](./domain-event-handler-idempotency.md))
   y es el **primer caso conforme** al [`maintenance-job-execution-contract.md`](./maintenance-job-execution-contract.md).
 - **Política de cumplimiento GDPR (el erasure) — `UPDATE`, nunca `DELETE`.** El "olvídame"
-  **pseudonimiza** `actor_id` **y redige `ip`/`user_agent`** (hash o truncado **irreversible**) en las
-  mismas filas — no borra filas; la traza de seguridad (`action`, `level`, `occurred_on`, recurso)
-  sobrevive. `ip`/`user_agent` se **almacenan completos** y solo se redactan en la supresión
-  (minimización en el **disparador GDPR**, no en origen), preservando el valor forense hasta entonces.
+  **anonimiza de forma irreversible la identidad del actor conservando la traza de seguridad**. Un único
+  `UPDATE` reescribe `actor_id` en todas las filas del sujeto con **un UUID aleatorio nuevo acuñado en el
+  borrado** —sin valor original, sin tabla de mapeo, sin derivación determinista— y redige
+  `ip`/`user_agent` al centinela `[REDACTED]`. No borra filas; la traza (`action`, `level`, `occurred_on`,
+  recurso, correlación) sobrevive y queda **correlacionada intra-sujeto** porque las N filas comparten el
+  nuevo id. Al no quedar nada que invierta el reemplazo, el vínculo con la persona se rompe de verdad
+  (anonimización efectiva, Recital 26), no una pseudonimización con clave reversible (Art. 4(5)).
+  `ip`/`user_agent` se **almacenan completos** y solo se redactan en la supresión (minimización en el
+  **disparador GDPR**, no en origen), preservando el valor forense hasta entonces. Lo dispara un comando
+  de consola (`audit:gdpr:erase <actor-id>`; operador-driven mientras no haya auth que proteja un
+  endpoint) y se **auto-audita** como entrada `security` `GDPR_ERASURE_EXECUTED` con el pseudónimo
+  resultante —nunca el id original—, de modo que el cumplimiento es demostrable sin re-identificar.
   Coherente con "hard delete por defecto, salvo que el borrado rompa un requisito" de
   [`rules/database.md`](../rules/database.md); se registra en [`rules/security.md`](../rules/security.md)
   y `PRODUCTION_SECURITY_CHECKLIST.md`.
-- **Sin payload sensible** en `metadata` (IDs y discriminantes, no cuerpos de entidad).
+- **`resource_id` no es identidad del sujeto borrado.** El erasure anonimiza al *actor*; `resource_id` no
+  se toca. Si un recurso representa **directamente** a una persona física, su borrado GDPR es
+  responsabilidad de la política del bounded context dueño del recurso, no de esta política de auditoría.
+- **Sin payload sensible** en `metadata` (IDs y discriminantes, no cuerpos de entidad), invariante en la
+  que se apoya el erasure: por eso **no** redige `metadata`. Trigger de revisita: el día que una acción
+  guarde PII ahí, esta política debe crecer un redactor de `metadata`.
 
 **Origen de `ip` (trust boundary).** El valor de `ip` se toma de la entrada *rightmost* de
 `X-Forwarded-For` —la que añade Caddy, no falsificable—, con trusted proxies configurados, heredando
@@ -170,7 +183,11 @@ Descartado: misma retención para todo (incumple separación legal de seguridad 
 Descartado: borrado físico en *erasure* (destruye la auditoría de seguridad, que es justo lo que se
 quiere preservar). Descartado: minimización en origen (truncar `ip` a /24·/48 y normalizar `user_agent`
 al insertar) — degrada permanentemente la fidelidad forense del nivel `security`, que existe justo para
-investigar; la minimización se aplica en la supresión, no en la inserción.
+investigar; la minimización se aplica en la supresión, no en la inserción. Descartado: pseudonimizar
+`actor_id` con un hash con clave (HMAC→UUID) — es reversible con la clave, así que la fila **sigue siendo
+dato personal** (Art. 4(5)), y añade gestión/rotación de un secreto cuya fuga re-vincularía todos los
+borrados; el "olvídame" pide romper el vínculo, no custodiarlo. Descartado: un centinela único global para
+todos los borrados — destruye la correlación intra-sujeto que la traza de seguridad necesita.
 
 ### D5 — Ubicación: backbone en `Shared/`, consulta en `Backoffice/Audit/`
 
@@ -304,7 +321,7 @@ feature que la originó. Secuencia sugerida: (1) `Shared` — `AuditLogger` (sea
 `AuditPolicy` + `RecordAuditEntry`/`RecordAuditEntryHandler` + escritor `AuditLogEntry` (DBAL) +
 transporte `audit` + migración `audit_log`; (2) captura — subscriber `kernel.terminate` + listener
 de `AccessDeniedException` (vía `security` síncrona) + `ActorContext`; (3) retención —
-`AuditLogPruner` (Scheduler) + estrategia de pseudonimización GDPR; (4) `Backoffice/Audit` — read
+`AuditLogPruner` (Scheduler) + anonimización GDPR (`audit:gdpr:erase`); (4) `Backoffice/Audit` — read
 model + UI de investigación. El estado de implementación vive en el issue/PR correspondiente.
 
 **Estructura del adaptador (sellado ≠ enrutado).** El adaptador del seam separa dos

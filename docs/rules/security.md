@@ -59,7 +59,7 @@ Before ANY commit, I MUST perform security checks on all changed files:
 - [ ] User permissions are properly configured
 - [ ] No sensitive data in seed files
 - [ ] Deletes are hard deletes — soft delete only under the documented exceptions in [`database.md`](database.md) (GDPR erasure must stay satisfiable)
-- [ ] `audit_log` is a **PII table** (`actor_id`, `ip`, `user_agent`); its `ip` / `user_agent` / `metadata` are client-controlled (tainted — escape on render, never trust). Retention-by-level and GDPR pseudonymization / redaction are planned but not yet implemented — see [`../../PRODUCTION_SECURITY_CHECKLIST.md`](../../PRODUCTION_SECURITY_CHECKLIST.md)
+- [ ] `audit_log` is a **PII table** (`actor_id`, `ip`, `user_agent`); its `ip` / `user_agent` / `metadata` are client-controlled (tainted — escape on render, never trust). GDPR erasure is implemented as an in-place irreversible anonymisation (`audit:gdpr:erase`: `actor_id` → one fresh random UUID per subject, `ip` / `user_agent` → `[REDACTED]`, never row deletion; self-audited as a `security` `GDPR_ERASURE_EXECUTED` entry holding only the pseudonym). Retention-by-level (scheduled prune) is tracked separately — see [`../../PRODUCTION_SECURITY_CHECKLIST.md`](../../PRODUCTION_SECURITY_CHECKLIST.md)
 
 #### Docker Files
 - [ ] Base images are from trusted sources
