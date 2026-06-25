@@ -34,33 +34,45 @@ existente `audit_log_level_idx (level, occurred_on)`.
 ## Boundaries & Constraints
 
 **Always:**
-- **Política de retención como value object de dominio puro** — `Shared/Audit/Domain/AuditRetentionPolicy.php`:
-  `final readonly`, `__construct(int $activityRetentionDays, int $securityRetentionDays)`. Invariante
-  en el constructor: `securityRetentionDays > activityRetentionDays` y ambos `>= 1`, si no lanza
-  `\InvalidArgumentException` (precondición de **config de confianza**, nunca entrada de cliente, nunca
-  toca RFC 9457 — por eso SPL y **no** una nueva subclase de `DomainException`: ese árbol ya tiene 16
-  hijos directos y `NumberOfChildren` de PHPMD dispara a partir de 15). Método
-  `thresholdFor(AuditLevel $level, DateTimeImmutable $now): DateTimeImmutable` → `$now` menos la ventana
-  del nivel (`match` exhaustivo sobre los 2 casos del enum). PHP puro, cero framework, unit-testeable
-  sin DB ni reloj.
-- **Puerto de poda por nivel** — `Shared/Audit/Application/AuditLogPruner.php` (interfaz):
-  `pruneOlderThan(AuditLevel $level, DateTimeImmutable $threshold): int` (devuelve filas borradas).
-- **Adaptador DBAL** — `Shared/Audit/Infrastructure/Persistence/DbalAuditLogPruner.php`,
-  `#[AsAlias(AuditLogPruner::class)]`, inyecta `Connection`:
-  `DELETE FROM audit_log WHERE level = :level AND occurred_on < :threshold` — **parametrizado**
-  (`:level` = `AuditLevel->value`, `:threshold` con `Types::DATETIMETZ_IMMUTABLE`). No transaccción
-  propia, no traga fallos (igual que `DbalHandledDomainEventPruner`).
+- **Excepción de dominio explícita** — `Shared/Audit/Domain/Exception/InvalidAuditRetentionPolicy.php`
+  extends `DomainException`, marker-less (como `InvalidAuditLogEntry`): precondición de **config de
+  confianza**, fuera del mapeo RFC 9457. (`NumberOfChildren` de PHPMD está **suprimido en la base
+  `DomainException`** por diseño — "one flat root, not a hierarchy to rebalance" — así que un hijo más es
+  coherente con esa decisión, no deuda.)
+- **Política de retención que emite el plan (estrategia como policy object)** —
+  `Shared/Audit/Domain/AuditRetentionPolicy.php` (`final readonly`,
+  `__construct(int $activityRetentionDays, int $securityRetentionDays)`, invariante
+  `security > activity` y ambos `>= 1` → lanza `InvalidAuditRetentionPolicy`) expone
+  `thresholdsAt(DateTimeImmutable $now): list<AuditRetentionThreshold>`, iterando `AuditLevel::cases()`
+  con `match` exhaustivo. El VO `Shared/Audit/Domain/AuditRetentionThreshold.php`
+  (`{AuditLevel $level, DateTimeImmutable $deleteBefore}`) es una línea del plan. Así la **decisión por
+  nivel vive en la policy como dato**, no como control-flow en el handler. PHP puro, unit-testeable sin
+  DB ni reloj.
+- **Puerto que ejecuta el plan** — `Shared/Audit/Application/AuditLogPruner.php` (interfaz):
+  `prune(AuditRetentionThreshold ...$plan): int` (devuelve filas borradas).
+- **Advisory lock reutilizable** — `Shared/Persistence/Infrastructure/PostgresAdvisoryLock.php`,
+  `withTryLock(string $name, callable $work): bool`, **session-level** (`pg_try_advisory_lock` +
+  `pg_advisory_unlock`, no `xact`, para abarcar los varios statements autocommit del borrado por lotes).
+  Primitivo reutilizable (otros pruners convergen aquí en el futuro), no inline en Audit.
+- **Adaptador DBAL — borrado por lotes bajo lock** —
+  `Shared/Audit/Infrastructure/Persistence/DbalAuditLogPruner.php`, `#[AsAlias(AuditLogPruner::class)]`,
+  inyecta `Connection` + `PostgresAdvisoryLock` (+ `batchSize`, default 5000). Bajo un único advisory
+  lock drena cada nivel del plan en lotes `DELETE ... WHERE id IN (SELECT id ... LIMIT :batch)` hasta
+  vaciar — **parametrizado** (`:level`, `:threshold` `Types::DATETIMETZ_IMMUTABLE`, `:batch`
+  `Types::INTEGER`). Acota duración de lock + presión de vacuum (exposición real: backfill/cold-start) y
+  serializa barridos concurrentes (defense-in-depth, no corrección: el DELETE older-than es idempotente y
+  prod corre `scheduler_worker` réplica única). No transacción propia, no traga fallos.
 - **Mensaje de tick** — `Shared/Audit/Infrastructure/Messenger/Maintenance/PruneAuditLogMessage.php`:
   `final readonly`, `__construct(public int $activityRetentionDays = 90, public int $securityRetentionDays = 365)`.
   Las ventanas son **parametrizables** vía estos defaults del constructor (convención del repo, igual que
   `PruneHandledDomainEventsMessage::$retentionDays` y `ReportDeadLetterBacklogMessage`). `security` (365)
   `>` `activity` (90).
-- **Handler** — `Shared/Audit/Infrastructure/Messenger/Maintenance/PruneAuditLogHandler.php`,
+- **Handler delgado (sin loop)** — `Shared/Audit/Infrastructure/Messenger/Maintenance/PruneAuditLogHandler.php`,
   `#[AsMessageHandler]`, inyecta `AuditLogPruner` + `Clock` (`Shared/Clock/Domain`). Construye
-  `new AuditRetentionPolicy($m->activityRetentionDays, $m->securityRetentionDays)` y para **cada**
-  `AuditLevel::cases()` llama `pruneOlderThan($level, $policy->thresholdFor($level, $this->clock->now()))`.
-  (Reloj inyectado, no `new DateTimeImmutable` — coherente con el resto del módulo Audit, que ya depende
-  de `Clock` vía `SealedAuditEntryFactory`; tests deterministas.)
+  `new AuditRetentionPolicy(...)` y hace `pruner->prune(...$policy->thresholdsAt($this->clock->now()))`.
+  La decisión por nivel vive en la policy y la estrategia de borrado en el pruner; ninguna se expresa
+  aquí como control-flow. (Reloj inyectado — Audit ya depende de `Clock` vía `SealedAuditEntryFactory`;
+  tests deterministas.)
 - **Schedule propio de Audit** — `Shared/Audit/Infrastructure/Messenger/Maintenance/AuditLogMaintenanceSchedule.php`,
   `#[AsSchedule('audit_maintenance')]` implements `ScheduleProviderInterface`: una `RecurringMessage::every('1 day', new PruneAuditLogMessage())`.
 - **Transporte consumido** — el schedule `audit_maintenance` autogenera el transporte
@@ -81,14 +93,19 @@ existente `audit_log_level_idx (level, occurred_on)`.
 - **`occurred_on` como eje de la ventana** (no un `created_at` físico) → es el instante de negocio sellado
   por `SealedAuditEntryFactory`; es la única columna temporal de la tabla.
 - **Reloj inyectado vs. `new DateTimeImmutable('-N days')`** → `Clock` inyectado (Audit ya lo usa).
-
-**Never:**
+- **Shared `MaintenanceSchedule` centralizado (1 transporte, tagged messages)** → **diferido** (review).
+  Resolvería el wiring per-feature en `compose`, pero toca el Event subsystem ya mergeado en el mismo PR
+  (coordination debt) e introduce un registry de runtime implícito. El patrón estándar "Maintenance Job"
+  de ERPify es un diseño aparte, no este PR. Audit mantiene su schedule propio por ahora.
+- **Chunking + advisory lock** → adoptados como **hardening estructural** (no hotspot medido — pre-prod);
+  el lock es un primitivo **reutilizable** (`Shared/Persistence`) que otros pruners adoptarán al converger.
 - No abrir ninguna otra ruta `UPDATE`/`DELETE` sobre `audit_log`: la poda es la **única** (FR9). El
   borrado GDPR (3.2) será `UPDATE` de pseudonimización, no `DELETE`.
-- No interpolar `:level`/`:threshold` en el SQL (siempre bindings parametrizados).
-- No introducir un `AuditRetentionEnforcer` de Application separado (el bucle de 2 niveles vive en el
-  handler — regla de tres; el orquestador no compra testabilidad que el test de handler no dé ya).
-- No nueva subclase de `DomainException` (cap de PHPMD `NumberOfChildren`).
+- No interpolar `:level`/`:threshold`/`:batch` en el SQL (siempre bindings parametrizados).
+- No expresar la decisión por nivel como control-flow en el handler/Application: vive en la policy
+  (el plan) y la ejecuta el pruner. Sin `AuditRetentionEnforcer` de Application intermedio.
+- No `pg_advisory_xact_lock` (transaccional): el lock debe abarcar los varios statements autocommit del
+  borrado por lotes → session-level.
 - No tocar `DbalAuditLogWriter`, el `AuditLogSchemaListener`, ni el wire HTTP.
 - No `CREATE INDEX` nuevo: `audit_log_level_idx (level, occurred_on)` ya sirve al `WHERE level = … AND occurred_on < …`.
 
@@ -99,16 +116,19 @@ existente `audit_log_level_idx (level, occurred_on)`.
 | Poda mixta | filas `activity` y `security` con edades varias | borra `activity` con `occurred_on < now-90d` y `security` con `occurred_on < now-365d`; deja el resto | N/A |
 | `security` sobrevive a `activity` | fila `security` de 200 d | **no** se borra (200 < 365), aunque una `activity` de 200 d **sí** | N/A |
 | Idempotencia | correr la poda dos veces seguidas | la 2ª no borra nada nuevo (DELETE older-than es idempotente) | N/A |
-| Política inválida | `new AuditRetentionPolicy(365, 90)` (security ≤ activity) | excepción en construcción → el tick falla ruidosamente | `\InvalidArgumentException` |
+| Política inválida | `new AuditRetentionPolicy(365, 90)` (security ≤ activity) | excepción en construcción → el tick falla ruidosamente | `InvalidAuditRetentionPolicy` |
 | Tabla vacía / nada fuera de ventana | `audit_log` sin filas viejas | 0 borradas | N/A |
+| Borrado por lotes | stale > `batchSize` para un nivel | drena en varios `DELETE … LIMIT :batch` hasta vaciar | N/A |
+| Barrido concurrente | un 2.º prune mientras otro corre | el advisory lock lo salta (no encola, no race) | `withTryLock` → `false` |
 | Conteo exacto (integración) | filas sembradas en Postgres real con edades/niveles concretos | se borran **exactamente** las fuera de ventana | N/A |
 
 ## Verification
 
-- **Unit** `AuditRetentionPolicyTest`: invariante (security>activity, ≥1), `thresholdFor` por nivel con `now` fijo, umbral `security` más antiguo que `activity`.
-- **Unit** `PruneAuditLogHandlerTest`: mock `AuditLogPruner` + reloj fijo → 2 llamadas `pruneOlderThan`, una por nivel, con el umbral correcto.
-- **Unit** `AuditLogMaintenanceScheduleTest`: `getSchedule()->getRecurringMessages()` cuenta 1.
-- **Functional/integración (Postgres real, `KernelTestCase` en transacción con rollback, patrón `HandledDomainEventDeduplicatorFunctionalTest`)** `AuditLogPrunerFunctionalTest`: sembrar filas `activity`/`security` de edades concretas vía `DbalAuditLogWriter`/INSERT, `pruneOlderThan`, assert recuento exacto y supervivencia de la traza dentro de ventana.
+- **Unit** `AuditRetentionPolicyTest`: invariante (security>activity, ≥1) lanza `InvalidAuditRetentionPolicy`; `thresholdsAt` planea un cutoff por nivel con `now` fijo; cutoff `security` más antiguo que `activity`.
+- **Unit** `PruneAuditLogHandlerTest`: doble `RecordingAuditLogPruner` + reloj fijo → **un** `prune()` con el plan (2 thresholds) correcto.
+- **Functional/integración (Postgres real, `KernelTestCase` en transacción con rollback)** `AuditLogPrunerFunctionalTest`: siembra `activity`/`security` de edades concretas; `batchSize` bajo prueba el bucle de lotes; assert recuento exacto + supervivencia de la traza en ventana.
+- **Functional** `PostgresAdvisoryLockFunctionalTest`: dos sesiones (`DriverManager`) → lock tomado bloquea al 2.º; liberado tras el work, el 2.º adquiere.
+- Test de wiring del schedule (`getRecurringMessages` count) **eliminado** (review: testear comportamiento, no wiring).
 - **Gates:** `make php.stan`, `make php.quality` (incl. deptrac, bounded-context, phpmd), `make php.unit`.
 
 </frozen-after-approval>

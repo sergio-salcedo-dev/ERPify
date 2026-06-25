@@ -11,21 +11,23 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditRetentionPolicy;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditLogPruner;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditLogWriter;
+use Erpify\Shared\Persistence\Infrastructure\PostgresAdvisoryLock;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 /**
- * End-to-end lock for the differentiated retention prune against a real Postgres: rows out of their
- * per-level window are deleted, rows inside it survive, and the longer `security` window keeps a
- * `security` row that a same-aged `activity` row loses.
+ * End-to-end lock for the differentiated, chunked retention prune against a real Postgres: rows out of
+ * their per-level window are deleted, rows inside it survive, the longer `security` window keeps a
+ * `security` row that a same-aged `activity` row loses, and a batch size below the stale-row count proves
+ * the chunk loop drains the level across several statements.
  *
- * Each case runs inside a transaction that is always rolled back, so the prune's table-wide DELETE never
- * escapes the test and no rows are left behind — the suite has no DAMA auto-rollback and shares the dev
- * database connection. Rows are addressed by their minted id, so other rows in the shared table do not
- * affect the assertions.
+ * Each case runs inside a transaction that is always rolled back, so the prune's DELETEs never escape the
+ * test and no rows are left behind. Rows are addressed by their minted id, so other rows in the shared
+ * table do not affect the assertions.
  *
  * @internal
  */
@@ -34,32 +36,40 @@ final class AuditLogPrunerFunctionalTest extends KernelTestCase
 {
     private const string ANCHOR = '2026-06-25T00:00:00+00:00';
 
-    public function testItPrunesEachLevelPastItsWindowAndKeepsTheRest(): void
+    private const int SMALL_BATCH = 2;
+
+    public function testItPrunesEachLevelPastItsWindowInChunksAndKeepsTheRest(): void
     {
         $this->inRolledBackTransaction(function (Connection $connection): void {
             $anchor = new DateTimeImmutable(self::ANCHOR);
             $writer = new DbalAuditLogWriter($connection);
 
-            $activityStale = $this->seed($writer, AuditLevel::ACTIVITY, $this->daysBefore($anchor, 200));
-            $activityFresh = $this->seed($writer, AuditLevel::ACTIVITY, $this->daysBefore($anchor, 10));
-            $securitySurvivor = $this->seed($writer, AuditLevel::SECURITY, $this->daysBefore($anchor, 200));
-            $securityStale = $this->seed($writer, AuditLevel::SECURITY, $this->daysBefore($anchor, 400));
+            // Three stale activity rows so a batch of 2 must loop (2 then 1) to drain them.
+            $staleActivity = [
+                $this->seed($writer, AuditLevel::ACTIVITY, $this->daysBefore($anchor, 200)),
+                $this->seed($writer, AuditLevel::ACTIVITY, $this->daysBefore($anchor, 150)),
+                $this->seed($writer, AuditLevel::ACTIVITY, $this->daysBefore($anchor, 120)),
+            ];
+            $freshActivity = $this->seed($writer, AuditLevel::ACTIVITY, $this->daysBefore($anchor, 10));
+            $survivingSecurity = $this->seed($writer, AuditLevel::SECURITY, $this->daysBefore($anchor, 200));
+            $staleSecurity = $this->seed($writer, AuditLevel::SECURITY, $this->daysBefore($anchor, 400));
 
-            $pruner = new DbalAuditLogPruner($connection);
-            $activityRemoved = $pruner->pruneOlderThan(AuditLevel::ACTIVITY, $this->daysBefore($anchor, 90));
-            $securityRemoved = $pruner->pruneOlderThan(AuditLevel::SECURITY, $this->daysBefore($anchor, 365));
+            $pruner = new DbalAuditLogPruner($connection, new PostgresAdvisoryLock($connection), self::SMALL_BATCH);
+            $removed = $pruner->prune(...(new AuditRetentionPolicy(90, 365))->thresholdsAt($anchor));
 
-            $this->assertGreaterThanOrEqual(1, $activityRemoved);
-            $this->assertGreaterThanOrEqual(1, $securityRemoved);
+            $this->assertGreaterThanOrEqual(4, $removed, 'three stale activity + one stale security removed');
 
-            $this->assertSame(0, $this->countRowsForId($connection, $activityStale), 'activity past 90d is pruned');
-            $this->assertSame(1, $this->countRowsForId($connection, $activityFresh), 'activity within 90d survives');
+            foreach ($staleActivity as $id) {
+                $this->assertSame(0, $this->countRowsForId($connection, $id), 'activity past 90d is pruned');
+            }
+
+            $this->assertSame(1, $this->countRowsForId($connection, $freshActivity), 'activity within 90d survives');
             $this->assertSame(
                 1,
-                $this->countRowsForId($connection, $securitySurvivor),
+                $this->countRowsForId($connection, $survivingSecurity),
                 'a 200d security row survives — the longer window is what differentiates it from activity',
             );
-            $this->assertSame(0, $this->countRowsForId($connection, $securityStale), 'security past 365d is pruned');
+            $this->assertSame(0, $this->countRowsForId($connection, $staleSecurity), 'security past 365d is pruned');
         });
     }
 

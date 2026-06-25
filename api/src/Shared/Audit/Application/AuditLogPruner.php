@@ -4,21 +4,18 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Audit\Application;
 
-use DateTimeImmutable;
-use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditRetentionThreshold;
 
 /**
- * Deletes out-of-retention rows from the append-only `audit_log`. This is the **only** sanctioned delete
- * path on the table (FR9); every other access is append or read. Pruning by `(level, threshold)` is
- * idempotent — re-running it over the same window removes nothing new — so a missed or double tick is
- * harmless. The differentiated windows live in {@see \Erpify\Shared\Audit\Domain\AuditRetentionPolicy};
- * this port only takes the resolved threshold for one level.
+ * Executes a retention deletion plan against the append-only `audit_log` — the **only** sanctioned delete
+ * path on the table (FR9). The plan (one {@see AuditRetentionThreshold} per level) is produced by
+ * {@see \Erpify\Shared\Audit\Domain\AuditRetentionPolicy}; this port just runs it. Deletion is idempotent
+ * (every row matched is past its cutoff), so a missed or repeated run removes nothing it should not.
  */
 interface AuditLogPruner
 {
     /**
-     * Deletes rows of the given level whose `occurred_on` is strictly before the threshold; returns the
-     * number of rows removed.
+     * Deletes every `audit_log` row that falls before its level's cutoff; returns the number removed.
      */
-    public function pruneOlderThan(AuditLevel $level, DateTimeImmutable $threshold): int;
+    public function prune(AuditRetentionThreshold ...$plan): int;
 }

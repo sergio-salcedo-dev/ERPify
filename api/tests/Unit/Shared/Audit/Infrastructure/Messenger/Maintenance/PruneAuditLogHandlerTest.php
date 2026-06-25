@@ -21,7 +21,7 @@ use PHPUnit\Framework\TestCase;
 final class PruneAuditLogHandlerTest extends TestCase
 {
     #[Test]
-    public function itPrunesEveryLevelAtItsOwnThresholdFromTheClock(): void
+    public function itPrunesOnceWithTheClockDerivedPlanForEveryLevel(): void
     {
         $pruner = new RecordingAuditLogPruner();
         $clock = new FixedClock(new DateTimeImmutable('2026-06-25 12:00:00'));
@@ -30,12 +30,12 @@ final class PruneAuditLogHandlerTest extends TestCase
             new PruneAuditLogMessage(activityRetentionDays: 90, securityRetentionDays: 365),
         );
 
-        $this->assertCount(2, $pruner->calls, 'one prune per audit level');
+        $this->assertSame(1, $pruner->callCount, 'a single prune drives the whole plan');
 
         $byLevel = [];
 
-        foreach ($pruner->calls as $call) {
-            $byLevel[$call['level']->value] = $call['threshold']->format('Y-m-d H:i:s');
+        foreach ($pruner->plan as $threshold) {
+            $byLevel[$threshold->level->value] = $threshold->deleteBefore->format('Y-m-d H:i:s');
         }
 
         $this->assertSame('2026-03-27 12:00:00', $byLevel[AuditLevel::ACTIVITY->value] ?? null);

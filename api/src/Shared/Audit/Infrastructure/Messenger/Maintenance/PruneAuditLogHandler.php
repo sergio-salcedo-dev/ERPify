@@ -5,15 +5,15 @@ declare(strict_types=1);
 namespace Erpify\Shared\Audit\Infrastructure\Messenger\Maintenance;
 
 use Erpify\Shared\Audit\Application\AuditLogPruner;
-use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditRetentionPolicy;
 use Erpify\Shared\Clock\Domain\Clock;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
 /**
- * Prunes each audit level past its own retention window (see {@see PruneAuditLogMessage}). The window
- * math is the {@see AuditRetentionPolicy}'s; this handler is the messaging adapter that resolves "now"
- * from the {@see Clock} and fans the per-level threshold out to the {@see AuditLogPruner}.
+ * Triggers the differentiated retention prune (see {@see PruneAuditLogMessage}). It is a thin adapter: it
+ * resolves "now" from the {@see Clock}, asks the {@see AuditRetentionPolicy} for the deletion plan, and
+ * hands it to the {@see AuditLogPruner}. The per-level decision lives in the policy and the deletion
+ * strategy lives in the pruner — neither leaks here as control flow.
  */
 #[AsMessageHandler]
 final readonly class PruneAuditLogHandler
@@ -27,10 +27,7 @@ final readonly class PruneAuditLogHandler
     public function __invoke(PruneAuditLogMessage $message): void
     {
         $policy = new AuditRetentionPolicy($message->activityRetentionDays, $message->securityRetentionDays);
-        $now = $this->clock->now();
 
-        foreach (AuditLevel::cases() as $level) {
-            $this->pruner->pruneOlderThan($level, $policy->thresholdFor($level, $now));
-        }
+        $this->pruner->prune(...$policy->thresholdsAt($this->clock->now()));
     }
 }

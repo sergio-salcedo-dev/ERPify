@@ -6,18 +6,18 @@ namespace Erpify\Shared\Audit\Domain;
 
 use DateInterval;
 use DateTimeImmutable;
-use InvalidArgumentException;
+use Erpify\Shared\Audit\Domain\Exception\InvalidAuditRetentionPolicy;
 
 /**
  * The differentiated retention windows for {@see AuditLevel}: how long a row of each level survives in
- * `audit_log` before the pruner is allowed to delete it. The legal separation between the two axes is
- * encoded as an invariant — `security` must outlive `activity` — so a misconfigured schedule fails loudly
- * at construction rather than silently over-pruning the security trail.
+ * `audit_log` before the pruner may delete it. The legal separation between the two axes is encoded as an
+ * invariant — `security` must strictly outlive `activity` — so a misconfigured schedule fails loudly at
+ * construction rather than silently over-pruning the security trail.
  *
- * The windows come from trusted operational config (the scheduled message's defaults), never from client
- * input, so a breach is a programming/config fault: a plain {@see InvalidArgumentException}, kept out of
- * the RFC 9457 mapping on purpose. Pure value object — no clock, no framework; the caller passes the
- * instant so the per-level threshold stays unit-testable against a fixed point.
+ * The policy owns the per-level decision: {@see thresholdsAt()} turns "now" into the full deletion plan
+ * (one {@see AuditRetentionThreshold} per level), so the storage policy is expressed as data here, not as
+ * a level loop in the message handler. Pure value object — the caller passes the instant, keeping the plan
+ * unit-testable against a fixed point.
  */
 final readonly class AuditRetentionPolicy
 {
@@ -26,18 +26,35 @@ final readonly class AuditRetentionPolicy
         private int $securityRetentionDays,
     ) {
         if ($activityRetentionDays < 1 || $securityRetentionDays < 1) {
-            throw new InvalidArgumentException('Audit retention windows must be at least one day.');
+            throw InvalidAuditRetentionPolicy::windowMustBeAtLeastOneDay();
         }
 
         if ($securityRetentionDays <= $activityRetentionDays) {
-            throw new InvalidArgumentException('Audit security retention window must exceed the activity window.');
+            throw InvalidAuditRetentionPolicy::securityMustOutliveActivity(
+                $activityRetentionDays,
+                $securityRetentionDays,
+            );
         }
     }
 
     /**
-     * The instant before which rows of the given level are out of retention and may be pruned.
+     * The full deletion plan at the given instant: for every level, the cutoff before which its rows are
+     * out of retention.
+     *
+     * @return list<AuditRetentionThreshold>
      */
-    public function thresholdFor(AuditLevel $level, DateTimeImmutable $now): DateTimeImmutable
+    public function thresholdsAt(DateTimeImmutable $now): array
+    {
+        $plan = [];
+
+        foreach (AuditLevel::cases() as $level) {
+            $plan[] = new AuditRetentionThreshold($level, $this->deleteBeforeFor($level, $now));
+        }
+
+        return $plan;
+    }
+
+    private function deleteBeforeFor(AuditLevel $level, DateTimeImmutable $now): DateTimeImmutable
     {
         $days = match ($level) {
             AuditLevel::ACTIVITY => $this->activityRetentionDays,
