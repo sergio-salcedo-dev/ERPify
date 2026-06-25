@@ -162,6 +162,14 @@ cada una con semántica definida y disparador propio; cualquier otra escritura e
   Coherente con "hard delete por defecto, salvo que el borrado rompa un requisito" de
   [`rules/database.md`](../rules/database.md); se registra en [`rules/security.md`](../rules/security.md)
   y `PRODUCTION_SECURITY_CHECKLIST.md`.
+  **Atomicidad borrado ↔ auto-auditoría (limitación conocida).** El `UPDATE` de anonimización commitea y
+  *luego* se emite la entrada `security` `GDPR_ERASURE_EXECUTED`; no comparten transacción. Una caída del
+  proceso entre ambos pasos deja el borrado hecho sin su evidencia de auditoría — no corrompe datos ni
+  incumple el "olvídame", pero erosiona la trazabilidad que este eje preserva. Aceptable mientras el único
+  disparador sea un comando de consola síncrono y operador-driven. **Trigger de revisita:** el día que
+  aparezca un segundo disparador (endpoint HTTP, Scheduler, API) o se exija garantía dura, envolver
+  `anonymise` + self-audit en un único caso de uso transaccional (`EraseActorAuditTrailUseCase`) con el CLI
+  como adaptador fino — el mismo tipo de invariante de transacción que D3 fija para la escritura `security`.
 - **`resource_id` no es identidad del sujeto borrado.** El erasure anonimiza al *actor*; `resource_id` no
   se toca. Si un recurso representa **directamente** a una persona física, su borrado GDPR es
   responsabilidad de la política del bounded context dueño del recurso, no de esta política de auditoría.
