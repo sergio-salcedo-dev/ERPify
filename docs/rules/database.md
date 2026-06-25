@@ -42,6 +42,13 @@
   2. The row holds no personal data — or a scheduled purge job enforces a bounded retention window.
   3. The `deleted_at IS NULL` filter is explicit in every repository query — no global/magic ORM filters.
   4. Unique constraints account for it (PostgreSQL partial unique indexes: `… WHERE deleted_at IS NULL`).
+- **`audit_log` is a justified retention exception — append-only + scheduled prune, not soft delete.**
+  The operational audit trail (`Shared/Audit`, raw DBAL) takes no `UPDATE`/`DELETE` on the write path.
+  Its *only* sanctioned delete is a daily Symfony Scheduler prune (`AuditLogPruner`, on the
+  `scheduler_audit_maintenance` transport) with **differentiated per-level retention windows** —
+  `security` kept longer than `activity`, with `AuditRetentionPolicy` enforcing `security > activity`,
+  so the table stays bounded while the legal separation between the two axes holds. The row carries PII
+  (`actor_id`, `ip`, `user_agent`), so that bounded window is also GDPR data minimisation.
 
 ## Identifiers (UUID v7, app-assigned)
 - **All entity ids are UUID v7**, generated in the application layer (`Uuid::generate()` (`Shared/Uuid/Domain`)
