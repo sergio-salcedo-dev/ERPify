@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Shared\Audit\Domain;
 use DateTimeImmutable;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditRetentionPolicy;
+use Erpify\Shared\Audit\Domain\AuditRetentionThreshold;
 use Erpify\Shared\Audit\Domain\Exception\InvalidAuditRetentionPolicy;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
@@ -16,6 +17,7 @@ use PHPUnit\Framework\TestCase;
  * @internal
  */
 #[CoversClass(AuditRetentionPolicy::class)]
+#[CoversClass(AuditRetentionThreshold::class)]
 final class AuditRetentionPolicyTest extends TestCase
 {
     private const string NOW = '2026-06-25 12:00:00';
