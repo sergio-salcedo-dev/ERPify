@@ -314,7 +314,9 @@ canónica de la propia ruta**; los hooks viven en `Audit/Infrastructure/Http`. L
 (`AccessLogAuditListener` sobre `kernel.terminate`) deriva la `action` del nombre de ruta con prefijo
 `ROUTE_` (la identidad la pone cada módulo; nunca un `HTTP_REQUEST` genérico) y se **inhibe** en rutas que
 ya tienen representación auditiva canónica explícita (`backoffice_bank_account_search` →
-`BANK_ACCOUNTS_VIEWED`), evitando filas duplicadas; sólo audita respuestas exitosas. **El hecho «esta ruta
+`BANK_ACCOUNTS_VIEWED`), evitando filas duplicadas; sólo audita respuestas exitosas. La deduplicación
+canónica está protegida mediante tests de comportamiento (una ruta canónica produce exactamente una fila,
+una infra ninguna), no sólo por disciplina humana. **El hecho «esta ruta
 tiene auditoría canónica» pertenece al módulo dueño de la ruta, no al subsistema de auditoría:** la ruta lo
 declara como un *route default* interno (`_audit_canonical`, prefijo `_` = atributo de framework, nunca
 argumento de controlador), el listener lo lee de los atributos de la request y lo pasa a la policy como
@@ -324,7 +326,9 @@ que quiera auditoría canónica cambia su propia ruta, no esta clase compartida.
 vaciarse el `RequestStack`, así que el listener **re-establece la request** para que el sellado resuelva
 actor `anonymous` + correlación + `ip`/`user_agent` reales, no un acto de `system`. La vía `security`
 (`AccessDeniedAuditListener` sobre `kernel.exception`, prioridad > `ExceptionResponder`, puramente aditivo)
-registra `ACCESS_DENIED` síncrono; satisface el invariante de D3 porque en `kernel.exception` cualquier
+registra `ACCESS_DENIED` síncrono sellando la ruta objetivo en `metadata` para el análisis forense por
+recurso (la `action` permanece de cardinalidad 1 —indexable y agregable—; la ruta es la dimensión, no el
+nombre del evento); satisface el invariante de D3 porque en `kernel.exception` cualquier
 transacción de negocio ya hizo rollback en su handler, de modo que la escritura `security` commitea
 independiente — una conexión DBAL dedicada queda como *trigger de revisita* si algún flujo registrara una
 denegación con una transacción de negocio aún abierta. El contrato de `ip` de D4 se cumple con

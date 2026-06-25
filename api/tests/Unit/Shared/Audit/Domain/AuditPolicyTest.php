@@ -46,6 +46,12 @@ final class AuditPolicyTest extends TestCase
     {
         yield 'bank list/search' => ['backoffice_bank_search', 'ROUTE_BACKOFFICE_BANK_SEARCH'];
         yield 'bank detail' => ['backoffice_bank_get', 'ROUTE_BACKOFFICE_BANK_GET'];
+        // A business route that merely mentions "health" in a late segment is not a health probe: the
+        // module slot is `merchant`, so it is audited rather than excluded by the infra heuristic.
+        yield 'business route mentioning health' => [
+            'backoffice_merchant_health_score',
+            'ROUTE_BACKOFFICE_MERCHANT_HEALTH_SCORE',
+        ];
     }
 
     public function testYieldsToCanonicalExplicitInstrumentation(): void

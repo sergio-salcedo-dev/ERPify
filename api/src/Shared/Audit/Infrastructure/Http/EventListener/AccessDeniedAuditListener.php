@@ -8,6 +8,7 @@ use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Http\Infrastructure\ApiRequestMatcher;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
@@ -46,7 +47,9 @@ final readonly class AccessDeniedAuditListener
             return;
         }
 
-        if (!$this->apiRequestMatcher->matches($event->getRequest())) {
+        $request = $event->getRequest();
+
+        if (!$this->apiRequestMatcher->matches($request)) {
             return;
         }
 
@@ -54,7 +57,18 @@ final readonly class AccessDeniedAuditListener
             return;
         }
 
-        $this->auditLogger->log(self::ACTION, AuditLevel::SECURITY);
+        // The denied route is a forensic dimension, not part of the action: `action` stays the
+        // cardinality-1 `ACCESS_DENIED` (so "all denials" remains an indexed equality, and dashboards
+        // and alerts aggregate over it), while the route lives in `metadata` for the per-resource
+        // drill-down an investigation actually runs.
+        $this->auditLogger->log(self::ACTION, AuditLevel::SECURITY, metadata: ['route' => $this->routeOf($request)]);
+    }
+
+    private function routeOf(Request $request): ?string
+    {
+        $route = $request->attributes->get('_route');
+
+        return \is_string($route) ? $route : null;
     }
 
     private function isAccessDenied(Throwable $throwable): bool

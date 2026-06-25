@@ -11,7 +11,7 @@ Feature: Audit permission denials as durable security entries
   Scenario: A denied request records exactly one security audit row sealed with the request context
     Given I add "X-Correlation-Id" header equal to "0190dead-beef-7abc-8def-001122334455"
     When I send a "GET" request to "http://localhost/api/test/_throw-security-access-denied"
-    And I execute the SQL query "SELECT action, level, actor_type, actor_id, resource_type, resource_id, correlation_id FROM audit_log WHERE action = 'ACCESS_DENIED'"
+    And I execute the SQL query "SELECT action, level, actor_type, actor_id, resource_type, resource_id, correlation_id, metadata FROM audit_log WHERE action = 'ACCESS_DENIED'"
     Then the response status code should be 403
     And the SQL result as JSON should be:
     """
@@ -23,7 +23,8 @@ Feature: Audit permission denials as durable security entries
         "actor_id": null,
         "resource_type": null,
         "resource_id": null,
-        "correlation_id": "0190dead-beef-7abc-8def-001122334455"
+        "correlation_id": "0190dead-beef-7abc-8def-001122334455",
+        "metadata": "{\"route\": \"test_throw_security_access_denied\"}"
       }
     ]
     """

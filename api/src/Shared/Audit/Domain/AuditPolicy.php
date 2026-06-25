@@ -59,12 +59,27 @@ final class AuditPolicy
      */
     private function lacksBusinessSemantics(string $route): bool
     {
-        return \str_contains($route, 'health')
-            || \str_contains($route, 'mercure')
-            || \str_contains($route, 'realtime')
-            || \str_contains($route, '_dev_')
-            || \str_starts_with($route, 'shared_')
-            || \str_ends_with($route, '_count');
+        return \in_array(true, [
+            $this->isHealthCheck($route),
+            \str_contains($route, 'mercure'),
+            \str_contains($route, 'realtime'),
+            \str_contains($route, '_dev_'),
+            \str_starts_with($route, 'shared_'),
+            \str_ends_with($route, '_count'),
+        ], true);
+    }
+
+    /**
+     * The health-check endpoints are the routes of the `health` module — `backoffice_health`,
+     * `backoffice_health_database`, `frontoffice_health`. The `health` token is matched by its position
+     * (the module slot, right after the `<context>` prefix), not as a substring: a plain
+     * `str_contains($route, 'health')` would also exclude a business route that merely mentions health in
+     * a later segment — e.g. `backoffice_merchant_health_score` — silently dropping it from the actor's
+     * timeline. This reads the ERPify route-name grammar `<context>_<module>_<action>`.
+     */
+    private function isHealthCheck(string $route): bool
+    {
+        return 'health' === (\explode('_', $route)[1] ?? null);
     }
 
     private function genericActionFor(string $route): string

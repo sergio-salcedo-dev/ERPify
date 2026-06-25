@@ -24,10 +24,12 @@ use Throwable;
 #[CoversClass(AccessDeniedAuditListener::class)]
 final class AccessDeniedAuditListenerTest extends TestCase
 {
-    public function testRecordsASecurityEntryForADeniedApiRequest(): void
+    public function testRecordsASecurityEntryForADeniedApiRequestSealedWithTheRoute(): void
     {
         $logger = $this->createMock(AuditLogger::class);
-        $logger->expects($this->once())->method('log')->with('ACCESS_DENIED', AuditLevel::SECURITY);
+        $logger->expects($this->once())->method('log')
+            ->with('ACCESS_DENIED', AuditLevel::SECURITY, null, ['route' => 'backoffice_bank_update'])
+        ;
 
         $this->listener($logger)->onException($this->event(new AccessDeniedException('Nope.')));
     }
@@ -35,11 +37,25 @@ final class AccessDeniedAuditListenerTest extends TestCase
     public function testWalksTheChainForAWrappedDenial(): void
     {
         $logger = $this->createMock(AuditLogger::class);
-        $logger->expects($this->once())->method('log')->with('ACCESS_DENIED', AuditLevel::SECURITY);
+        $logger->expects($this->once())->method('log')
+            ->with('ACCESS_DENIED', AuditLevel::SECURITY, null, ['route' => 'backoffice_bank_update'])
+        ;
 
         $wrapped = new RuntimeException('boom', 0, new AccessDeniedException('Nope.'));
 
         $this->listener($logger)->onException($this->event($wrapped));
+    }
+
+    public function testRecordsADenialWithoutARouteWhenItPrecedesRouting(): void
+    {
+        // A denial can fire before a route is matched (e.g. a firewall); the metadata key is still
+        // present so the forensic shape is uniform, carrying a null route rather than being absent.
+        $logger = $this->createMock(AuditLogger::class);
+        $logger->expects($this->once())->method('log')
+            ->with('ACCESS_DENIED', AuditLevel::SECURITY, null, ['route' => null])
+        ;
+
+        $this->listener($logger)->onException($this->event(new AccessDeniedException('Nope.'), route: null));
     }
 
     public function testIgnoresExceptionsThatAreNotADenial(): void
@@ -71,11 +87,20 @@ final class AccessDeniedAuditListenerTest extends TestCase
         return new AccessDeniedAuditListener($logger, new ApiRequestMatcher());
     }
 
-    private function event(Throwable $throwable, string $path = '/api/v1/backoffice/banks'): ExceptionEvent
-    {
+    private function event(
+        Throwable $throwable,
+        string $path = '/api/v1/backoffice/banks',
+        ?string $route = 'backoffice_bank_update',
+    ): ExceptionEvent {
+        $request = Request::create($path);
+
+        if (null !== $route) {
+            $request->attributes->set('_route', $route);
+        }
+
         return new ExceptionEvent(
             $this->createStub(HttpKernelInterface::class),
-            Request::create($path),
+            $request,
             HttpKernelInterface::MAIN_REQUEST,
             $throwable,
         );
