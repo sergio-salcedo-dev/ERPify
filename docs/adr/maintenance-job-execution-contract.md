@@ -25,16 +25,22 @@ interfaces reales** hasta que un 3.er caso confirme la estabilidad estructural.
 
 Un job de mantenimiento **conforme** satisface, sin excepción:
 
-- **I1 — Locking: garantía de ejecutor único (estándar, opt-in).** Un job que muta estado corre **a lo sumo
-  una vez en concurrencia**. Cuando lo necesita, usa **el** primitivo estándar — un *advisory lock* de
-  Postgres **session-level**, nombrado por intención — y un intento concurrente se **salta** (skip), no se
-  encola. Nunca un mecanismo de locking ad-hoc por job. Un job de **solo lectura** puede declararse exento.
-- **I2 — Idempotencia: ejecución por chunks idempotentes.** Cada unidad de trabajo es segura de repetir:
-  re-ejecutar el job, o reintentar un chunk tras un fallo parcial, **no produce efecto distinto** al de una
-  ejecución única. Esto es lo que hace tolerable el *at-least-once* del transporte (I6).
-- **I3 — Batching: unidades de trabajo acotadas.** Ninguna mutación no acotada (`DELETE`/`UPDATE` de barrido
-  total). El trabajo se drena en **lotes de tamaño limitado**, para acotar duración de lock y presión de
-  vacuum. La exposición real es el barrido inicial/backfill, no el steady-state.
+- **I1 — Ejecutor único: la garantía, no el mecanismo (estándar, opt-in).** Un job que muta estado corre
+  **a lo sumo una vez en concurrencia**: la plataforma ofrece **un** mecanismo *single-executor* estándar y un
+  intento concurrente se **salta** (skip), no se encola. El invariante es la **garantía de ejecutor único**,
+  no su implementación — hoy se realiza con un *advisory lock* de Postgres **session-level**, nombrado por
+  intención (`PostgresAdvisoryLock`); sustituirlo por otro primitivo (lock distribuido, *leader election*) no
+  reabre este contrato. Nunca un locking ad-hoc por job. Un job de **solo lectura** puede declararse exento.
+- **I2 — Idempotencia: convergencia observable por chunk.** Cada unidad de trabajo es segura de repetir:
+  **re-ejecutar un chunk completo tras un éxito parcial o un redelivery debe converger al mismo estado final
+  observable** que una ejecución única. Es el criterio verificable en review — `DELETE older-than` lo cumple
+  por construcción; un `INSERT`/`UPSERT` sólo si lleva clave natural + `ON CONFLICT`. Esto es lo que hace
+  tolerable el *at-least-once* del transporte (I6).
+- **I3 — Acotación: toda mutación demuestra su cota (batching o volumen documentado).** Ninguna mutación de
+  barrido total sin cota. Cada job declara una **estrategia de acotación explícita**: lo normal es **batching**
+  (lotes de tamaño limitado, para acotar duración de lock y presión de vacuum); la excepción sancionada es un
+  **volumen máximo demostrado y documentado** (p. ej. la dedup de claims, ínfima por diseño). Lo que el
+  contrato prohíbe no es *no batchear*, sino una mutación cuya cota nadie ha demostrado.
 - **I4 — Frontera de policy: la policy emite un `ExecutionPlan`, nada más.** La decisión de **qué** mantener
   vive en una policy **pura** de dominio que produce un plan como **dato** — sin conocer infraestructura, sin
   leer estado de runtime externo. En el momento en que una policy alcanza una `Connection`, un reloj de
@@ -49,6 +55,11 @@ Un job de mantenimiento **conforme** satisface, sin excepción:
   redelivery vía I2; un fallo agota reintentos y aterriza en el transporte `failed`, **observable** (no un
   warning tragado). Sin compensación bespoke. Cada ejecución reporta su `Result` (filas afectadas / *saltada
   por lock*).
+- **I7 — Materializabilidad del plan: estrategia, no dataset.** Construir un `ExecutionPlan` es **acotado** y
+  **no depende del cardinal de los datos mantenidos**: el plan describe *cómo* barrer (umbrales, niveles,
+  tamaño de lote), nunca **materializa el conjunto de filas afectadas**. Un `plan()` que devuelve
+  `findAllExpiredRows()` viola el contrato aunque siga siendo puro (I4) — traslada una bomba de memoria al
+  lado de planificación. Las filas se descubren y se drenan dentro de `ExecutionStep::execute()`, lote a lote (I3).
 
 ## API mental (pseudo-interfaces — **NO** son archivos PHP todavía)
 
@@ -59,26 +70,27 @@ MaintenanceJob
     plan(now): ExecutionPlan          // puro (I4): decide QUÉ; sin infra
 
 ExecutionPlan
-    steps(): iterable<ExecutionStep>  // el plan como DATO (I4); unidades acotadas (I3)
+    steps(): iterable<ExecutionStep>  // el plan como DATO (I4); construcción acotada (I7), unidades acotadas (I3)
 
 ExecutionStep
     execute(Connection): Result       // el borde de infra: idempotente (I2), bajo el lock del job (I1)
 ```
 
-La asimetría es el contrato: **planificar es puro, ejecutar es infra.** `plan()` jamás ve una `Connection`;
-sólo `ExecutionStep::execute()` la toca.
+La asimetría es el contrato: **planificar es puro y acotado (I4, I7), ejecutar es infra.** `plan()` jamás ve
+una `Connection` ni materializa el dataset; sólo `ExecutionStep::execute()` toca filas, lote a lote.
 
 ## Mapeo a los casos reales (evidencia, no abstracción)
 
-| Caso | `plan(now)` | `ExecutionStep` | I1 lock | I2 idemp. | I3 batch |
-|------|-------------|-----------------|---------|-----------|----------|
-| Poda retención `audit_log` | `AuditRetentionPolicy::thresholdsAt(now)` | un `AuditRetentionThreshold` (drena un nivel) | sí (`PostgresAdvisoryLock`) | sí (`DELETE` older-than) | sí (lotes por `id`) |
-| Poda dedup `handled_domain_event` | umbral único `claimedBefore` | 1 step (`pruneClaimedBefore`) | **no (divergencia)** | sí | **no (volumen ínfimo)** |
+| Caso | `plan(now)` | `ExecutionStep` | I1 ejecutor único | I2 idemp. | I3 cota |
+|------|-------------|-----------------|-------------------|-----------|---------|
+| Poda retención `audit_log` | `AuditRetentionPolicy::thresholdsAt(now)` | un `AuditRetentionThreshold` (drena un nivel) | sí (`PostgresAdvisoryLock`) | sí (`DELETE` older-than) | sí — batching (lotes por `id`) |
+| Poda dedup `handled_domain_event` | umbral único `claimedBefore` | 1 step (`pruneClaimedBefore`) | **no — retrofit pendiente** | sí | sí — volumen ínfimo demostrado |
 | Backlog dead-letter | — (solo lectura) | report | exento (I1) | N/A | N/A |
 
-La poda de `audit_log` es el **primer caso conforme de facto**. La de `handled_domain_event` es la
-**divergencia conocida**: converge al contrato (adopta el advisory lock estándar y batching) cuando se la
-retrofitee. El reporte de dead-letter es conforme por vacuidad (no muta).
+La poda de `audit_log` es el **primer caso conforme de facto**. La de `handled_domain_event` diverge **sólo en
+I1** (aún sin el lock estándar): su acotación ya es conforme por la excepción de I3 (volumen ínfimo demostrado,
+sin batching), y converge del todo al adoptar el advisory lock al retrofitearse. El reporte de dead-letter es
+conforme por vacuidad (no muta).
 
 ## Decisión de timing — contrato sin código ahora
 
