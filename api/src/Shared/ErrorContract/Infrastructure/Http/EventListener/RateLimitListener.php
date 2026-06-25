@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Shared\ErrorContract\Infrastructure\Http\EventListener;
 
 use Erpify\Shared\ErrorContract\Domain\Exception\RateLimitExceeded;
+use Erpify\Shared\Http\Infrastructure\ApiRequestMatcher;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\Request;
@@ -106,11 +107,10 @@ final readonly class RateLimitListener
 
     public const string UNKNOWN_CLIENT_KEY = 'unknown';
 
-    public const string API_PATH_PREFIX = '/api/';
-
     public function __construct(
         #[Autowire(service: 'limiter.anonymous_api')]
         private RateLimiterFactoryInterface $anonymousApiLimiter,
+        private ApiRequestMatcher $apiRequestMatcher,
     ) {
     }
 
@@ -123,7 +123,7 @@ final readonly class RateLimitListener
 
         $request = $event->getRequest();
 
-        if (!\str_starts_with($request->getPathInfo(), self::API_PATH_PREFIX)) {
+        if (!$this->apiRequestMatcher->matches($request)) {
             return;
         }
 

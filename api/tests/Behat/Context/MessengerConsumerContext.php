@@ -171,6 +171,31 @@ final class MessengerConsumerContext extends AbstractContext
     }
 
     /**
+     * Asserts how many messages are pending on a transport without consuming them — `get()` is a
+     * non-destructive read of the in-memory queue. This is the behavioural guard for the audit
+     * deduplication invariant: a canonical route must enqueue exactly one audit message (its explicit
+     * entry), and the generic access-log hook must not add a second.
+     */
+    #[Then('the :transportName transport should hold :count message')]
+    #[Then('the :transportName transport should hold :count messages')]
+    public function theTransportShouldHold(string $transportName, int $count): void
+    {
+        $transport = $this->receiver($transportName);
+
+        self::assertInstanceOf(
+            InMemoryTransport::class,
+            $transport,
+            \sprintf('Transport "%s" is not an in-memory test double', $transportName),
+        );
+
+        self::assertCount(
+            $count,
+            $transport->get(),
+            \sprintf('Unexpected number of pending messages on transport "%s"', $transportName),
+        );
+    }
+
+    /**
      * @param list<mixed> $transportNames
      */
     private function runWorker(array $transportNames, int $limit, int $timeLimit, int $verbosity): void

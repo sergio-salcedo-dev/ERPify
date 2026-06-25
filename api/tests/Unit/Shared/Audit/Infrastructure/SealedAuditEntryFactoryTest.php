@@ -51,6 +51,41 @@ final class SealedAuditEntryFactoryTest extends TestCase
         $this->assertSame(self::OCCURRED_ON, $entry->occurredOn->format('Y-m-d\TH:i:s.uP'));
     }
 
+    public function testItSealsTheClientIpAndUserAgentFromTheRequest(): void
+    {
+        $request = new Request(server: ['REMOTE_ADDR' => '203.0.113.7']);
+        $request->headers->set('User-Agent', 'Mozilla/5.0 (probe)');
+
+        $requestStack = new RequestStack();
+        $requestStack->push($request);
+
+        $entry = $this->factory($requestStack)->create('ROUTE_BACKOFFICE_BANK_SEARCH', AuditLevel::ACTIVITY);
+
+        $this->assertSame('203.0.113.7', $entry->ip);
+        $this->assertSame('Mozilla/5.0 (probe)', $entry->userAgent);
+    }
+
+    public function testItLeavesTheClientIpAndUserAgentNullOffRequest(): void
+    {
+        $entry = $this->factory(new RequestStack())->create('SYSTEM_TICK', AuditLevel::ACTIVITY);
+
+        $this->assertNull($entry->ip);
+        $this->assertNull($entry->userAgent);
+    }
+
+    public function testItTrimsAnOverLongUserAgentToTheColumnWidth(): void
+    {
+        $request = new Request();
+        $request->headers->set('User-Agent', \str_repeat('a', 600));
+
+        $requestStack = new RequestStack();
+        $requestStack->push($request);
+
+        $entry = $this->factory($requestStack)->create('ROUTE_BACKOFFICE_BANK_SEARCH', AuditLevel::ACTIVITY);
+
+        $this->assertSame(\str_repeat('a', 512), $entry->userAgent);
+    }
+
     public function testItMintsACanonicalFallbackWhenNoRequestIsInFlight(): void
     {
         $entry = $this->factory(new RequestStack())->create('SYSTEM_TICK', AuditLevel::ACTIVITY);

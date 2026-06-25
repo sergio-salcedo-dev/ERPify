@@ -1,6 +1,6 @@
 # ADR — Auditoría operativa / de actor (`AuditLogger` → `audit_log`), eje separado del stream de dominio
 
-> **Status:** accepted · design frozen, implementation pending · **Date:** 2026-06-14 · **Last reviewed:** 2026-06-23
+> **Status:** accepted · design frozen, implementation pending · **Date:** 2026-06-14 · **Last reviewed:** 2026-06-25
 > · **Scope:** cross-cutting `Shared` subsystem (capture + contract) + `Backoffice/Audit` module
 > (read side). `BankAccountsViewed` is its first consumer; the **subsystem implementation** is
 > its own epic and is not mixed with the code of the feature that surfaced it.
@@ -280,7 +280,14 @@ resto son ejemplos, algunos de módulos futuros, marcados con \*).
 
 (a) Auth real / multirrol → `actor_id` pasa a `NOT NULL` y entra `audit_session` si hay caso. (b)
 Volumen de `activity` que exija particionado temporal o un *sink* externo (deja de ser PostgreSQL).
-(c) Necesidad de exponer la auditoría a un contexto cliente (hoy solo Backoffice la consume).
+(c) Necesidad de exponer la auditoría a un contexto cliente (hoy solo Backoffice la consume). (d)
+**Eje de clasificación estable**: cuando el read model de `Backoffice/Audit` necesite dashboards,
+filtros o agregaciones sobre la actividad, introducir una `category`/`activity_type`
+(navigation|view|export|search…) desacoplada del texto `ROUTE_*`, en vez de depender de patrones de
+cadena sobre `action` (y, de paso, *hedge* del contrato de nombre de ruta estable de arriba). **No se
+añade hoy**: sin consumidor de lectura sería una columna sin lector y congelaría un vocabulario antes de
+conocer las preguntas de investigación que debe responder; al estar pre-producción, añadirla entonces es
+barato (sin *backfill*). La taxonomía debe **emerger de las consultas del read model**, no precederlas.
 
 ## Implementación
 
@@ -300,6 +307,61 @@ contexto de confianza —actor (`ActorContextFactory`), `correlation_id` (Reques
 (`Clock`) e `id`— dentro del ciclo de request. Sellar fuera del seam de enrutado, y no en un
 `buildEntry()` privado del logger, mantiene cada pieza testeable en aislamiento y hace que, cuando
 entre User/RBAC, sólo cambie el proveedor de actor, no el enrutado.
+
+**Captura híbrida — decisiones de Epic 2.** El *mecanismo* de D2 aterriza así: una `AuditPolicy` pura
+(`Audit/Domain`) clasifica la interacción por nombre de ruta, método y la **declaración de auditoría
+canónica de la propia ruta**; los hooks viven en `Audit/Infrastructure/Http`. La vía genérica
+(`AccessLogAuditListener` sobre `kernel.terminate`) deriva la `action` del nombre de ruta con prefijo
+`ROUTE_` (la identidad la pone cada módulo; nunca un `HTTP_REQUEST` genérico) y se **inhibe** en rutas que
+ya tienen representación auditiva canónica explícita (`backoffice_bank_account_search` →
+`BANK_ACCOUNTS_VIEWED`), evitando filas duplicadas; sólo audita respuestas exitosas. La deduplicación
+canónica está protegida mediante tests de comportamiento (una ruta canónica produce exactamente una fila,
+una infra ninguna), no sólo por disciplina humana. **El hecho «esta ruta
+tiene auditoría canónica» pertenece al módulo dueño de la ruta, no al subsistema de auditoría:** la ruta lo
+declara como un *route default* interno (`_audit_canonical`, prefijo `_` = atributo de framework, nunca
+argumento de controlador), el listener lo lee de los atributos de la request y lo pasa a la policy como
+`HttpInteraction::hasCanonicalAudit`. Así `AuditPolicy` **no mantiene ninguna lista de nombres de ruta de
+módulos concretos** —que con decenas de bounded contexts degeneraría en una *god policy*—; un módulo nuevo
+que quiera auditoría canónica cambia su propia ruta, no esta clase compartida. `terminate` corre tras
+vaciarse el `RequestStack`, así que el listener **re-establece la request** para que el sellado resuelva
+actor `anonymous` + correlación + `ip`/`user_agent` reales, no un acto de `system`. La vía `security`
+(`AccessDeniedAuditListener` sobre `kernel.exception`, prioridad > `ExceptionResponder`, puramente aditivo)
+registra `ACCESS_DENIED` síncrono sellando la ruta objetivo en `metadata` para el análisis forense por
+recurso (la `action` permanece de cardinalidad 1 —indexable y agregable—; la ruta es la dimensión, no el
+nombre del evento); satisface el invariante de D3 porque en `kernel.exception` cualquier
+transacción de negocio ya hizo rollback en su handler, de modo que la escritura `security` commitea
+independiente — una conexión DBAL dedicada queda como *trigger de revisita* si algún flujo registrara una
+denegación con una transacción de negocio aún abierta. El contrato de `ip` de D4 se cumple con
+`Request::getClientIp()` (misma decisión de *trusted proxies* que el rate-limiter), sellado en
+`SealedAuditEntryFactory` junto con `user_agent` (recortado al ancho de columna). La frontera `/api/` que
+acota ambos listeners se declara una sola vez (`ApiRequestMatcher`) para que no diverjan; `Shared/ErrorContract`
+mantiene su propia copia para el pipeline de errores y unificarlas es un cambio aparte.
+
+**Contratos y heurísticos de la captura (endurecidos en Epic 2).** Tres supuestos que el código ya asume
+y que aquí se fijan como contrato, para que una refactorización futura no los rompa en silencio:
+
+- **El nombre de ruta es un contrato de auditoría estable.** La vía genérica promueve el nombre de ruta a
+  `action` persistida (`backoffice_bank_search` → `ROUTE_BACKOFFICE_BANK_SEARCH`). Esa `action` es un
+  identificador **forense e histórico** en disco: renombrar la ruta (`..._search` → `..._list`) parte la
+  serie histórica de esa actividad. Por tanto, una vez que una ruta emite `activity` genérica, su nombre es
+  un **contrato estable**; renombrarla es un cambio con impacto en auditoría, no una refactorización
+  puramente técnica, y exige una estrategia de continuidad (alias en la consulta del read model o
+  *backfill*).
+- **El método HTTP es un heurístico temporal, no el modelo definitivo.** `GET ⇒ activity` asume `GET` =
+  lectura segura y todo lo demás = no-actividad. Es correcto para el alcance de Epic 2, pero no sobrevive a
+  `GET` sensibles (export, descarga, nómina, movimientos bancarios) ni a `POST` que son lecturas (search,
+  *report-builder*, *query*). El modelo destino es una clasificación explícita
+  (`SAFE_READ`/`SENSITIVE_READ`/`WRITE`), que se introduce **cuando exista el primer caso real**; hasta
+  entonces el método es el discriminante consciente.
+- **SLA por nivel: `activity` best-effort, `security` durable.** Además del *swallow* en el dispatch (D3),
+  la captura genérica de `activity` depende de que `kernel.terminate` llegue a ejecutarse: un `SIGTERM` /
+  reciclado de pod tras enviar la respuesta puede perder el registro — es una garantía estrictamente menor
+  que la de un encolado dentro del ciclo. `security` es **durable** (write-before-send síncrono enganchado a
+  `kernel.exception`, dentro del ciclo, con propagación de fallo): nunca depende de `terminate`. El sistema
+  es, por contrato, *`activity` = observabilidad de jornada con pérdida parcial tolerada; `security` = traza
+  compliance-grade*. Si en el futuro `activity` necesitara garantía de entrega, el *trigger* es revisar su
+  punto de captura (hoy `kernel.terminate`, elegido por **latencia nula**) frente a la durabilidad — son
+  objetivos en tensión y la elección de Epic 2 prioriza el path de request.
 
 **Secuencia frente a auth (cerrada):** el backbone de auditoría se implementa **antes** de User/RBAC.
 `actor_id` permanece nullable (`actor_type` ∈ {`anonymous`, `system`, `api_key`}) hasta que exista
