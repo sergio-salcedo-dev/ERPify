@@ -144,7 +144,8 @@ cada una con semántica definida y disparador propio; cualquier otra escritura e
   steady-state) bajo un **advisory lock** de Postgres reutilizable (un único barrido a la vez —
   defense-in-depth ante un scheduler escalado por error, no requisito de corrección: el `DELETE` por
   condición temporal es idempotente y prod corre un `scheduler_worker` de réplica única). Reutiliza el
-  patrón `HandledDomainEventPruner` (ver [`domain-event-handler-idempotency.md`](./domain-event-handler-idempotency.md)).
+  patrón `HandledDomainEventPruner` (ver [`domain-event-handler-idempotency.md`](./domain-event-handler-idempotency.md))
+  y es el **primer caso conforme** al [`maintenance-job-execution-contract.md`](./maintenance-job-execution-contract.md).
 - **Política de cumplimiento GDPR (el erasure) — `UPDATE`, nunca `DELETE`.** El "olvídame"
   **pseudonimiza** `actor_id` **y redige `ip`/`user_agent`** (hash o truncado **irreversible**) en las
   mismas filas — no borra filas; la traza de seguridad (`action`, `level`, `occurred_on`, recurso)
