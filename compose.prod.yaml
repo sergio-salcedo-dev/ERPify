@@ -171,9 +171,9 @@ services:
     command: ["php", "bin/console", "messenger:consume", "async", "audit", "--time-limit=3600", "--limit=10000", "--memory-limit=256M"]
 
   # Single-replica scheduler. Symfony Scheduler derives the daily maintenance tick
-  # (PruneHandledDomainEventsMessage) from an in-process clock, so running it on the scaled
+  # (PruneHandledDomainEventsMessage + the audit retention PruneAuditLogMessage) from an in-process clock, so running it on the scaled
   # `messenger_worker` pool would emit one tick per replica — N redundant prunes a day.
-  # Isolating the `scheduler_maintenance` transport on this single instance keeps exactly one
+  # Isolating the `scheduler_maintenance` + `scheduler_audit_maintenance` transports on this single instance keeps exactly one
   # clock running. MUST stay at replicas: 1; scaling it reintroduces the duplicate-tick problem.
   # Lifting that constraint (lock the schedule, then scale freely) needs symfony/lock, which the
   # project deliberately does not install — tracked as a follow-up.
@@ -226,7 +226,7 @@ services:
         limits:
           cpus: ${SCHEDULER_CPU_LIMIT:-0.25}
           memory: ${SCHEDULER_MEM_LIMIT:-256m}
-    command: ["php", "bin/console", "messenger:consume", "scheduler_maintenance", "--time-limit=3600", "--memory-limit=256M"]
+    command: ["php", "bin/console", "messenger:consume", "scheduler_maintenance", "scheduler_audit_maintenance", "--time-limit=3600", "--memory-limit=256M"]
 
 volumes:
   # Uploaded stored-objects (Flysystem local adapter). Survives container

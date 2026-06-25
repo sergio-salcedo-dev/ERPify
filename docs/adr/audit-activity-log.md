@@ -131,21 +131,29 @@ retry/DLQ/throughput y reintroduce el acoplamiento de fallos que D1 evita en el 
 ### D4 — Niveles, retención diferenciada, append-only y GDPR
 
 Dos niveles (`activity`, `security`); el tercer eje (cambios de datos) **ya** lo cubre `DomainEvent`
-y **no se duplica**. `audit_log` es **append-only**: sin `UPDATE`, sin `DELETE` desde la app salvo
-el proceso de retención.
+y **no se duplica**. `audit_log` es **append-only**: la ruta caliente sólo inserta.
 
-`audit_log` **es PII** (`actor_id`, `ip`, `user_agent`) → decisiones obligatorias:
+`audit_log` **es PII** (`actor_id`, `ip`, `user_agent`). Las mutaciones no-append **no** son scripts
+operativos sueltos: el log admite un **conjunto cerrado de dos políticas de mutación de primera clase**,
+cada una con semántica definida y disparador propio; cualquier otra escritura es append.
 
-- **Retención por nivel**: `security` se conserva más; `activity` rota agresivo. Prune por Symfony
-  Scheduler, reutilizando el patrón `HandledDomainEventPruner` (ver
-  [`domain-event-handler-idempotency.md`](./domain-event-handler-idempotency.md)).
-- **Borrado GDPR**: el "olvídame" **pseudonimiza** `actor_id` **y redige `ip`/`user_agent`** (hash o
-  truncado **irreversible**) en las mismas filas — no borra filas; la traza de seguridad (`action`,
-  `level`, `occurred_on`, recurso) sobrevive. `ip`/`user_agent` se **almacenan completos** y solo se
-  redactan en la supresión (minimización en el **disparador GDPR**, no en origen), preservando el valor
-  forense hasta entonces. Coherente con "hard delete por defecto, salvo que el borrado rompa un requisito"
-  de [`rules/database.md`](../rules/database.md); se registra en
-  [`rules/security.md`](../rules/security.md) y `PRODUCTION_SECURITY_CHECKLIST.md`.
+- **Política de retención (la poda) — la *única* `DELETE`.** Retención **por nivel** (`security` >
+  `activity`), expresada como dato por una `AuditRetentionPolicy` de dominio (`thresholdsAt(now)` → un
+  plan de cutoffs por nivel) y ejecutada por un pruner idempotente que **borra en lotes** (acota duración
+  de lock y presión de vacuum; la exposición real es el barrido inicial/backfill, no el ~día de
+  steady-state) bajo un **advisory lock** de Postgres reutilizable (un único barrido a la vez —
+  defense-in-depth ante un scheduler escalado por error, no requisito de corrección: el `DELETE` por
+  condición temporal es idempotente y prod corre un `scheduler_worker` de réplica única). Reutiliza el
+  patrón `HandledDomainEventPruner` (ver [`domain-event-handler-idempotency.md`](./domain-event-handler-idempotency.md))
+  y es el **primer caso conforme** al [`maintenance-job-execution-contract.md`](./maintenance-job-execution-contract.md).
+- **Política de cumplimiento GDPR (el erasure) — `UPDATE`, nunca `DELETE`.** El "olvídame"
+  **pseudonimiza** `actor_id` **y redige `ip`/`user_agent`** (hash o truncado **irreversible**) en las
+  mismas filas — no borra filas; la traza de seguridad (`action`, `level`, `occurred_on`, recurso)
+  sobrevive. `ip`/`user_agent` se **almacenan completos** y solo se redactan en la supresión
+  (minimización en el **disparador GDPR**, no en origen), preservando el valor forense hasta entonces.
+  Coherente con "hard delete por defecto, salvo que el borrado rompa un requisito" de
+  [`rules/database.md`](../rules/database.md); se registra en [`rules/security.md`](../rules/security.md)
+  y `PRODUCTION_SECURITY_CHECKLIST.md`.
 - **Sin payload sensible** en `metadata` (IDs y discriminantes, no cuerpos de entidad).
 
 **Origen de `ip` (trust boundary).** El valor de `ip` se toma de la entrada *rightmost* de
