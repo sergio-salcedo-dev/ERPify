@@ -16,6 +16,7 @@ use PHPUnit\Framework\TestCase;
  * @internal
  */
 #[CoversClass(AuditTimelineResourceMapper::class)]
+#[CoversClass(AuditTimelineResource::class)]
 final class AuditTimelineResourceMapperTest extends TestCase
 {
     public function testToListResourcePinsTheWireShapeAndMicrosecondInstant(): void
