@@ -46,6 +46,14 @@ parameters:
 
 deptrac:
     layers:
+        # ---- Backoffice / Audit -------------------------------------------------
+        - name: Backoffice.Audit.Domain
+          collectors: [{ type: directory, value: src/Backoffice/Audit/Domain/.* }]
+        - name: Backoffice.Audit.Application
+          collectors: [{ type: directory, value: src/Backoffice/Audit/Application/.* }]
+        - name: Backoffice.Audit.Infrastructure
+          collectors: [{ type: directory, value: src/Backoffice/Audit/Infrastructure/.* }]
+
         # ---- Backoffice / Bank --------------------------------------------------
         - name: Backoffice.Bank.Domain
           collectors: [{ type: directory, value: src/Backoffice/Bank/Domain/.* }]
@@ -153,6 +161,7 @@ deptrac:
             - Vendor.Psr
             - Vendor.SymfonyUid
             - Vendor.PassiveMetadata
+        Backoffice.Audit.Domain: *domain
         Backoffice.BankAccount.Domain: *domain
         Backoffice.Health.Domain: *domain
         Frontoffice.Mercure.Domain: *domain
@@ -162,6 +171,13 @@ deptrac:
         # declarative-validation / serializer attribute namespaces (Assert on DTOs).
         Backoffice.Bank.Application:
             - Backoffice.Bank.Domain
+            - Shared.Domain
+            - Shared.Application
+            - Vendor.Psr
+            - Vendor.SymfonyUid
+            - Vendor.PassiveMetadata
+        Backoffice.Audit.Application:
+            - Backoffice.Audit.Domain
             - Shared.Domain
             - Shared.Application
             - Vendor.Psr
@@ -192,6 +208,21 @@ deptrac:
         Backoffice.Bank.Infrastructure: &infra
             - Backoffice.Bank.Domain
             - Backoffice.Bank.Application
+            - Shared.Domain
+            - Shared.Application
+            - Shared.Infrastructure
+            - Vendor.Psr
+            - Vendor.SymfonyUid
+            - Vendor.PassiveMetadata
+            - Vendor.Doctrine
+            - Vendor.Symfony
+            - Vendor.Monolog
+            - Vendor.ApiPlatform
+            - Vendor.Guzzle
+            - Vendor.Flysystem
+        Backoffice.Audit.Infrastructure:
+            - Backoffice.Audit.Domain
+            - Backoffice.Audit.Application
             - Shared.Domain
             - Shared.Application
             - Shared.Infrastructure

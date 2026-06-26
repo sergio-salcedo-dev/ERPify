@@ -58,5 +58,11 @@ final class AuditLogSchemaListener
         $table->addIndex(['correlation_id'], 'audit_log_correlation_idx');
         $table->addIndex(['level', 'occurred_on'], 'audit_log_level_idx');
         $table->addIndex(['resource_type', 'resource_id'], 'audit_log_resource_idx');
+
+        // Read-side (investigation) indexes: a btree scans both directions, so (occurred_on, id)
+        // backs the keyset timeline order (and its `id` tie-break) for ASC and DESC, and
+        // (actor_type, occurred_on) backs filtering a timeline by actor kind without a full scan.
+        $table->addIndex(['occurred_on', 'id'], 'audit_log_timeline_idx');
+        $table->addIndex(['actor_type', 'occurred_on'], 'audit_log_actor_type_idx');
     }
 }
