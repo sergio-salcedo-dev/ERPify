@@ -16,6 +16,7 @@ use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditLogWriter;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use UnexpectedValueException;
 
 /**
  * End-to-end lock for the GDPR erasure against a real Postgres: a subject's rows are all rewritten with a
@@ -134,11 +135,17 @@ final class AuditActorAnonymiserFunctionalTest extends KernelTestCase
 
     /**
      * Postgres hands a boolean back as the wire-protocol `t`/`f` on a raw DBAL fetch (no Doctrine type
-     * conversion), so test against the stored form rather than casting truthiness.
+     * conversion), so map the stored form rather than casting truthiness — and raise on an unexpected
+     * value rather than letting a corrupt cell read as not-erased, the dangerous direction for a GDPR
+     * flag. This mirrors the production read path's fail-loud contract (`requiredBool`).
      */
     private function isErased(mixed $value): bool
     {
-        return \in_array($value, [true, 't', '1', 1], true);
+        return match ($value) {
+            true, 't', '1', 1 => true,
+            false, 'f', '0', 0 => false,
+            default => throw new UnexpectedValueException('audit_log.actor_erased must be a boolean.'),
+        };
     }
 
     /**
