@@ -60,7 +60,7 @@ development_status:
 
   # Epic 3: Retención diferenciada y borrado GDPR
   epic-3: in-progress
-  3-1-auditlogpruner-retencion-por-nivel-symfony-scheduler: review
+  3-1-auditlogpruner-retencion-por-nivel-symfony-scheduler: done
   3-2-borrado-gdpr-pseudonimizacion-de-actor-id: done
   epic-3-retrospective: optional
 
