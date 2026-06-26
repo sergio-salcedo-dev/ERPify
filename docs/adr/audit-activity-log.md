@@ -1,6 +1,6 @@
 # ADR — Auditoría operativa / de actor (`AuditLogger` → `audit_log`), eje separado del stream de dominio
 
-> **Status:** accepted · design frozen, implementation pending · **Date:** 2026-06-14 · **Last reviewed:** 2026-06-25
+> **Status:** accepted · design frozen, implementation pending · **Date:** 2026-06-14 · **Last reviewed:** 2026-06-26
 > · **Scope:** cross-cutting `Shared` subsystem (capture + contract) + `Backoffice/Audit` module
 > (read side). `BankAccountsViewed` is its first consumer; the **subsystem implementation** is
 > its own epic and is not mixed with the code of the feature that surfaced it.
@@ -197,6 +197,77 @@ dato personal** (Art. 4(5)), y añade gestión/rotación de un secreto cuya fuga
 borrados; el "olvídame" pide romper el vínculo, no custodiarlo. Descartado: un centinela único global para
 todos los borrados — destruye la correlación intra-sujeto que la traza de seguridad necesita.
 
+### D4.1 — `actor_erased`: estado de anonimización GDPR materializado y consultable (extiende D4)
+
+D4 fija que el *erasure* anonimiza al actor (un `UPDATE` que reescribe `actor_id` con un UUID nuevo
+aleatorio y redacta `ip`/`user_agent` a `[REDACTED]`), pero **no deja una marca consultable** de que
+la fila quedó anonimizada: tras el borrado `actor_type` sigue siendo `user` (D7) y `actor_id` es un
+UUID válido cualquiera — indistinguible de un actor normal. El único *tell* (`ip`/`user_agent =
+[REDACTED]`) vive en campos que el read model de investigación (D5) expone **solo en el detalle**, no
+en la fila del timeline. La UI de investigación debe mostrar al actor anonimizado **como tal también
+en la fila**, **sin** subir `ip`/`user_agent` (PII de mayor sensibilidad) a la fila esbelta.
+
+**Decisión.** Se materializa un booleano **`actor_erased`** (`NOT NULL`) en `audit_log`, **fijado en
+el mismo `UPDATE`** del erasure (junto al remint de `actor_id` y la redacción de `ip`/`user_agent`), y
+expuesto por el read model de `Backoffice/Audit` (D5) tanto en la fila del timeline como en el
+detalle. Es un **tercer eje** del registro —la *disposición / ciclo de vida* del actor— **ortogonal**
+a `actor_type` (D7, *quién*) y a `level` (D4, *qué clase de auditoría*). Como el resto de columnas de
+`audit_log`, **no lleva default de columna** (la abstracción de esquema no lo expresa y un default
+vivo provocaría drift en `make db.diff`): el writer la inserta en `false` y el erasure la fija en
+`true` — el mismo patrón "el writer aporta todo valor" que ya gobierna `level`/`actor_type`.
+
+**Por qué materializar un hecho derivable.** `actor_erased` es derivable en principio, pero se
+**materializa** (no se deriva en lectura) porque: (a) se conoce y se fija dentro de una mutación que el
+erasure **ya ejecuta** (coste de escritura ~0); (b) la lectura —el timeline— es la **consulta más
+caliente** del subsistema y debe tener **cero derivación**; (c) es un hecho *compliance-critical* con
+**asimetría de falso negativo** (mostrar como identificable a un sujeto borrado es el peor resultado),
+así que conviene un **único punto de escritura testeable**. Es una decisión de *materialización*
+(snapshot de un hecho barato de derivar, por rendimiento de lectura + autoridad en escritura), no de
+normalización.
+
+**Atomicidad.** El flag vive en el **mismo `UPDATE`** que el remint de `actor_id` y la redacción de
+`ip`/`user_agent`, **no** en el paso de auto-auditoría. D4 ya reconoce que ese `UPDATE` y la entrada
+`GDPR_ERASURE_EXECUTED` **no comparten transacción**; poniendo el flag en el `UPDATE` de redacción,
+hereda exactamente su atomicidad (una caída antes del self-audit deja las filas **correctamente
+marcadas**). Derivar el estado (alternativa descartada abajo) convertiría esa misma ventana de caída
+en **falsos negativos**.
+
+**Evidencia independiente + comprobación de integridad.** `GDPR_ERASURE_EXECUTED` se conserva como
+**evidencia forense independiente** (no como fuente de verdad de la UI): registra el pseudónimo
+resultante en `metadata.anonymized_actor_id` —**parte del contrato de ese evento**, no una clave
+incidental—, con `actor_type = system` (el actor del borrado es el proceso operador, **no** el sujeto;
+nunca el id original). Esto habilita un *cross-check* reconciliable: todo `actor_erased = true` ⟺
+existe un `GDPR_ERASURE_EXECUTED` con ese pseudónimo; una divergencia es una violación de integridad
+**detectable** (p. ej. desde un job de mantenimiento), no un acoplamiento (la UI no deriva del evento).
+
+**Invariante (protegido por test).** Tras el erasure debe cumplirse **siempre**:
+`actor_erased = true ∧ actor_id ≠ original ∧ ip = '[REDACTED]' ∧ user_agent = '[REDACTED]'`.
+
+**Naming.** El campo se llama `actor_erased` (no `anonymized`) para no colisionar con
+`actor_type = anonymous` (D7) — un actor **nunca identificado** (ruta pública), categóricamente
+distinto de uno **identificado y luego borrado**. La columna nombra la *causa/ciclo de vida*; la UI
+rotula el *estado legal resultante* («anonimizado (GDPR) · no identificable») y **nunca** muestra el
+UUID nuevo como un id.
+
+**No es PII.** El flag es un booleano: por eso viaja en la fila esbelta del timeline sin necesidad de
+subir `ip`/`user_agent`. Filtrar por `actor_erased = true` **no** reidentifica al interesado (útil para
+auditorías de cumplimiento).
+
+Descartado: **derivar de `ip = '[REDACTED]'`** — invierte la dirección de dependencias (el read model
+pasaría a depender de un centinela interno del erasure) y exigiría subir `ip` a la fila o derivar el
+bool en la consulta. Descartado: **derivar de la existencia de `GDPR_ERASURE_EXECUTED`** — acopla la
+lectura al nombre de la acción y a cómo quedó registrada, introduce **múltiples** falsos negativos
+(rename de acción, migración histórica olvidada, fallo del self-audit) y mete un `JOIN`/`EXISTS` en la
+consulta más caliente. Descartado: **no exponerlo y resolver solo en el detalle** — induce al
+investigador a leer un sujeto borrado como identificable (peor que una columna de más). Descartado:
+**codificar la anonimización en `actor_type`** (un valor `erased`) — destruye la información forense de
+*qué tipo* de actor era (`user` vs `api_key`) y conflagra el eje «quién» (D7) con el eje «ciclo de
+vida», justo la mezcla de ejes que D7 evita.
+
+**Trigger de revisita.** Cuando aparezca un **segundo** evento de cumplimiento
+(`GDPR_EXPORT_COMPLETED`, `GDPR_ERASURE_FAILED`, …), introducir una **estructura tipada** para esos
+eventos en vez de confiar en claves libres de `metadata` (hoy YAGNI: un solo evento de cumplimiento).
+
 ### D5 — Ubicación: backbone en `Shared/`, consulta en `Backoffice/Audit/`
 
 - **`Shared/`** (transversal a todos los contextos): puerto `AuditLogger` (seam), mensaje interno
@@ -277,6 +348,8 @@ resource_id     uuid         NULL
 metadata        jsonb        sin payload sensible
 ip              varchar(45)  NULL
 user_agent      string       NULL
+actor_erased    boolean      NOT NULL — false al insertar (writer); true tras erasure GDPR (D4.1), fijado en
+                             el mismo UPDATE que el remint de actor_id y la redacción de ip/user_agent
 occurred_on     timestamptz
 ```
 

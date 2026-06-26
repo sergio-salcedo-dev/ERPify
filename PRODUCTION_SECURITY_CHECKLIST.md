@@ -139,9 +139,10 @@ you change anything here.
       parameterises every value (no string-interpolated SQL). **GDPR erasure is
       implemented** as an in-place, irreversible anonymisation: `audit:gdpr:erase
       <actor-id>` overwrites the subject's `actor_id` with a single fresh random UUID
-      and redacts `ip` / `user_agent` to `[REDACTED]` in one `UPDATE`, never deleting a
-      row, and self-audits a `security` `GDPR_ERASURE_EXECUTED` entry carrying only the
-      resulting pseudonym (never the original id). Retention by level (`activity` vs
+      and redacts `ip` / `user_agent` to `[REDACTED]` and sets the materialised,
+      queryable, non-PII `actor_erased` flag in one `UPDATE`, never deleting a row, and
+      self-audits a `security` `GDPR_ERASURE_EXECUTED` entry carrying only the resulting
+      pseudonym (never the original id). Retention by level (`activity` vs
       `security`, the scheduled prune — the table's only `DELETE`) is tracked
       separately. A live PII table must never exist without a documented
       retention/erasure policy (epic 3).

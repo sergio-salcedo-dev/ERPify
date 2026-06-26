@@ -34,6 +34,7 @@ final class AuditTimelineResourceMapperTest extends TestCase
                 'correlationId',
                 'resourceType',
                 'resourceId',
+                'actorErased',
             ],
             \array_keys(\get_object_vars($resource)),
         );
@@ -44,6 +45,7 @@ final class AuditTimelineResourceMapperTest extends TestCase
         $this->assertSame('user', $resource->actorType);
         $this->assertSame('11111111-1111-7111-8111-111111111111', $resource->actorId);
         $this->assertSame('Bank', $resource->resourceType);
+        $this->assertFalse($resource->actorErased);
     }
 
     public function testToListResourcePassesNullableFieldsThrough(): void
@@ -58,11 +60,13 @@ final class AuditTimelineResourceMapperTest extends TestCase
             '0190abcd-1234-7abc-8def-001122330000',
             null,
             null,
+            true,
         ));
 
         $this->assertNull($resource->actorId);
         $this->assertNull($resource->resourceType);
         $this->assertNull($resource->resourceId);
+        $this->assertTrue($resource->actorErased, 'an erased subject surfaces as such in the row');
     }
 
     public function testToListPagePreservesNavigationAndMapsItemsInOrder(): void
@@ -99,6 +103,7 @@ final class AuditTimelineResourceMapperTest extends TestCase
             '0190abcd-1234-7abc-8def-001122330000',
             'Bank',
             '22222222-2222-7222-8222-222222222222',
+            false,
         );
     }
 }

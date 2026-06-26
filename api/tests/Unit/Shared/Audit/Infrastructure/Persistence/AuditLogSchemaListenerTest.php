@@ -33,7 +33,7 @@ final class AuditLogSchemaListenerTest extends TestCase
 
         foreach (
             ['id', 'level', 'action', 'actor_type', 'actor_id', 'correlation_id', 'resource_type',
-                'resource_id', 'metadata', 'ip', 'user_agent', 'occurred_on'] as $column
+                'resource_id', 'metadata', 'ip', 'user_agent', 'actor_erased', 'occurred_on'] as $column
         ) {
             $this->assertTrue($table->hasColumn($column), \sprintf('expected column "%s"', $column));
         }
@@ -48,6 +48,7 @@ final class AuditLogSchemaListenerTest extends TestCase
         $this->assertFalse($table->getColumn('actor_id')->getNotnull(), 'actor_id is nullable');
         $this->assertTrue($table->getColumn('correlation_id')->getNotnull(), 'correlation_id is not-null');
         $this->assertTrue($table->getColumn('metadata')->getNotnull(), 'metadata is not-null');
+        $this->assertTrue($table->getColumn('actor_erased')->getNotnull(), 'actor_erased is not-null');
 
         $this->assertSame(16, $table->getColumn('level')->getLength());
         $this->assertSame(16, $table->getColumn('actor_type')->getLength());

@@ -14,7 +14,8 @@ use DateTimeImmutable;
  * as the raw stored strings (not the `AuditLevel`/`ActorType` enums) on purpose — a forensic read
  * must reflect faithfully whatever the table holds, never raise on an unexpected token while
  * investigating. `occurredOn` carries full `TIMESTAMPTZ(6)` precision (the forensic instant and the
- * keyset ordering key); the wire formatting is the resource mapper's job.
+ * keyset ordering key); the wire formatting is the resource mapper's job. `actorErased` is the
+ * materialised GDPR-erasure state — a boolean flag, never derived at read time.
  */
 final readonly class AuditTimelineEntry
 {
@@ -28,6 +29,7 @@ final readonly class AuditTimelineEntry
         public string $correlationId,
         public ?string $resourceType,
         public ?string $resourceId,
+        public bool $actorErased,
     ) {
     }
 }

@@ -13,8 +13,9 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
 /**
  * {@link AuditActorAnonymiser} over the append-only `audit_log` via plain DBAL. The "forget me" erasure is
- * one parameterised UPDATE that overwrites a subject's `actor_id` with a single freshly minted UUIDv7 and
- * redacts `ip`/`user_agent` to a sentinel — never a DELETE, so the security trail survives. The original
+ * one parameterised UPDATE that overwrites a subject's `actor_id` with a single freshly minted UUIDv7,
+ * redacts `ip`/`user_agent` to a sentinel and raises the materialised `actor_erased` flag — never a DELETE,
+ * so the security trail survives. The original
  * id is neither stored nor derivable from the pseudonym, so the link to the person is broken irreversibly
  * (effective anonymisation, not keyed pseudonymisation that a leaked key could reverse). The narrowing
  * `WHERE actor_id = …` makes it idempotent: a re-run with the original id matches nothing.
@@ -64,7 +65,8 @@ final readonly class DbalAuditActorAnonymiser implements AuditActorAnonymiser
 
         $affectedRows = (int) $this->connection->executeStatement(
             'UPDATE audit_log '
-            . 'SET actor_id = CAST(:pseudonym AS UUID), ip = :redacted, user_agent = :redacted '
+            . 'SET actor_id = CAST(:pseudonym AS UUID), ip = :redacted, user_agent = :redacted, '
+            . 'actor_erased = TRUE '
             . 'WHERE actor_id = CAST(:actor_id AS UUID)',
             [
                 'pseudonym' => $pseudonym,

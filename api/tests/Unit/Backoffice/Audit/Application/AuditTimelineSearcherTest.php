@@ -65,6 +65,7 @@ final class AuditTimelineSearcherTest extends TestCase
             '0190abcd-1234-7abc-8def-001122330000',
             null,
             null,
+            false,
         );
     }
 }

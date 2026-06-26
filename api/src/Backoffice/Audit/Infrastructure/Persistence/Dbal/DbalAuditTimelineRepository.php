@@ -58,6 +58,7 @@ final readonly class DbalAuditTimelineRepository implements AuditTimelineReposit
                 'a.correlation_id',
                 'a.resource_type',
                 'a.resource_id',
+                'a.actor_erased',
             )
             ->from(self::TABLE, self::ALIAS)
         ;
@@ -127,7 +128,26 @@ final readonly class DbalAuditTimelineRepository implements AuditTimelineReposit
             $this->requiredString($row, 'correlation_id'),
             $this->optionalString($row, 'resource_type'),
             $this->optionalString($row, 'resource_id'),
+            $this->requiredBool($row, 'actor_erased'),
         );
+    }
+
+    /**
+     * Postgres returns a boolean as the wire-protocol `t`/`f` on a raw DBAL fetch (no Doctrine type
+     * conversion happens here), so map the stored form rather than casting truthiness — and surface an
+     * unexpected value instead of silently reading an erased subject as not-erased (the dangerous direction).
+     *
+     * @param array<string, mixed> $row
+     */
+    private function requiredBool(array $row, string $column): bool
+    {
+        return match ($row[$column] ?? null) {
+            true, 't', '1', 1 => true,
+            false, 'f', '0', 0 => false,
+            default => throw new UnexpectedValueException(
+                \sprintf('audit_log.%s must be a boolean.', $column),
+            ),
+        };
     }
 
     /**

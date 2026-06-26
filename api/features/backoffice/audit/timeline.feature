@@ -6,22 +6,24 @@ Feature: Investigate the audit timeline
   # audit_log is a raw-DBAL append-only table with no Doctrine entity and no fixtures, so each
   # scenario seeds it directly. Four rows, one minute apart, so the default occurred_on DESC order is
   # the deterministic sequence LOGIN, VIEW, SEARCH, DENIED. The wire row is flat and scalar-only:
-  # {id, occurredOn, level, action, actorType, actorId, correlationId, resourceType, resourceId}.
+  # {id, occurredOn, level, action, actorType, actorId, correlationId, resourceType, resourceId,
+  # actorErased}.
   Background:
     Given I execute the SQL query "TRUNCATE audit_log RESTART IDENTITY"
-    And I execute the SQL query "INSERT INTO audit_log (id, level, action, actor_type, actor_id, correlation_id, resource_type, resource_id, metadata, ip, user_agent, occurred_on) VALUES ('0190a001-0000-7000-8000-000000000001','security','LOGIN','user','11111111-1111-7111-8111-111111111111','0190c000-0000-7000-8000-000000000000',NULL,NULL,'{}',NULL,NULL,'2026-03-01 12:00:00+00'), ('0190a001-0000-7000-8000-000000000002','activity','VIEW','user','11111111-1111-7111-8111-111111111111','0190c000-0000-7000-8000-000000000000',NULL,NULL,'{}',NULL,NULL,'2026-03-01 11:59:00+00'), ('0190a001-0000-7000-8000-000000000003','activity','SEARCH','anonymous',NULL,'0190c000-0000-7000-8000-000000000000',NULL,NULL,'{}',NULL,NULL,'2026-03-01 11:58:00+00'), ('0190a001-0000-7000-8000-000000000004','security','DENIED','anonymous',NULL,'0190c000-0000-7000-8000-000000000000',NULL,NULL,'{}',NULL,NULL,'2026-03-01 11:57:00+00')"
+    And I execute the SQL query "INSERT INTO audit_log (id, level, action, actor_type, actor_id, correlation_id, resource_type, resource_id, metadata, ip, user_agent, actor_erased, occurred_on) VALUES ('0190a001-0000-7000-8000-000000000001','security','LOGIN','user','11111111-1111-7111-8111-111111111111','0190c000-0000-7000-8000-000000000000',NULL,NULL,'{}',NULL,NULL,false,'2026-03-01 12:00:00+00'), ('0190a001-0000-7000-8000-000000000002','activity','VIEW','user','11111111-1111-7111-8111-111111111111','0190c000-0000-7000-8000-000000000000',NULL,NULL,'{}',NULL,NULL,false,'2026-03-01 11:59:00+00'), ('0190a001-0000-7000-8000-000000000003','activity','SEARCH','anonymous',NULL,'0190c000-0000-7000-8000-000000000000',NULL,NULL,'{}',NULL,NULL,false,'2026-03-01 11:58:00+00'), ('0190a001-0000-7000-8000-000000000004','security','DENIED','anonymous',NULL,'0190c000-0000-7000-8000-000000000000',NULL,NULL,'{}',NULL,NULL,false,'2026-03-01 11:57:00+00')"
 
   Scenario: The timeline lists newest-first with the constant cursor-only envelope
     When I send a "GET" request to "/backoffice/audit/timeline"
     Then the response status code should be 200
     And the JSON node "data" should have 4 elements
-    And the JSON nodes matching "data[*]" should have 9 children
+    And the JSON nodes matching "data[*]" should have 10 children
     And the JSON nodes matching "data[*].id" should exist
     And the JSON nodes matching "data[*].occurredOn" should exist
     And the JSON nodes matching "data[*].level" should exist
     And the JSON nodes matching "data[*].action" should exist
     And the JSON nodes matching "data[*].actorType" should exist
     And the JSON nodes matching "data[*].correlationId" should exist
+    And the JSON nodes matching "data[*].actorErased" should exist
     And the JSON node "data[0].action" should be equal to "LOGIN"
     And the JSON node "data[3].action" should be equal to "DENIED"
     And the JSON node "pagination" should have 4 elements

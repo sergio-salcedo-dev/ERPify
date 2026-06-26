@@ -94,10 +94,31 @@ final class DbalAuditTimelineRepositoryTest extends KernelTestCase
             $this->assertSame(self::ACTOR_ID, $first->actorId);
             $this->assertSame('Bank', $first->resourceType);
             $this->assertSame(self::RESOURCE_ID, $first->resourceId);
+            $this->assertFalse($first->actorErased, 'a freshly written row is not erased');
             $this->assertSame(
                 '2026-03-01T11:59:00+00:00',
                 $first->occurredOn->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:sP'),
             );
+        });
+    }
+
+    public function testAnErasedActorSurfacesTheErasedFlagThroughTheTimeline(): void
+    {
+        $this->inRolledBackTransaction(function (): void {
+            $this->seedTimeline(2);
+            // Flip the newest row to the post-erasure state the GDPR UPDATE materialises.
+            $this->connection->executeStatement(
+                'UPDATE audit_log SET actor_erased = TRUE WHERE action = :action',
+                ['action' => 'ACTION_01'],
+            );
+
+            $page = $this->repository->search(new SearchCriteria(limit: 2));
+
+            $this->assertSame(['ACTION_01', 'ACTION_02'], $this->actions($page));
+            $this->assertTrue($this->firstEntry($page)->actorErased, 'the erased row reads as erased');
+            $second = $page->items[1] ?? null;
+            $this->assertInstanceOf(AuditTimelineEntry::class, $second);
+            $this->assertFalse($second->actorErased, 'the untouched row stays not-erased');
         });
     }
 
