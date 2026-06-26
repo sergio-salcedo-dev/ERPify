@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Audit\Infrastructure\Cli;
 
+use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Infrastructure\Cli\EraseActorAuditTrailCommand;
+use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FailingAuditLogger;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditActorAnonymiser;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -100,7 +102,22 @@ final class EraseActorAuditTrailCommandTest extends TestCase
         $this->assertNotSame(self::ACTOR_ID, $metadata['anonymized_actor_id'], 'the original id is never logged');
     }
 
-    private function testerFor(RecordingAuditActorAnonymiser $anonymiser, RecordingAuditLogger $logger): CommandTester
+    public function testItReportsFailureWhenTheSelfAuditFailsAfterTheRowsAreAnonymised(): void
+    {
+        $anonymiser = new RecordingAuditActorAnonymiser(2);
+        $tester = $this->testerFor($anonymiser, new FailingAuditLogger());
+
+        $exitCode = $tester->execute(['actor-id' => self::ACTOR_ID, '--force' => true]);
+
+        $this->assertSame(Command::FAILURE, $exitCode, 'a failed self-audit after a real erasure is not a success');
+        $this->assertSame([self::ACTOR_ID], $anonymiser->anonymisedActorIds, 'the rows were still anonymised');
+
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString($anonymiser->pseudonym, $display, 'the operator is shown the new pseudonym');
+        $this->assertStringContainsString('GDPR_ERASURE_EXECUTED', $display);
+    }
+
+    private function testerFor(RecordingAuditActorAnonymiser $anonymiser, AuditLogger $logger): CommandTester
     {
         return new CommandTester(new EraseActorAuditTrailCommand($anonymiser, $logger));
     }

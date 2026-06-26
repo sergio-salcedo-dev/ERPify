@@ -52,6 +52,8 @@ final class AuditActorAnonymiserFunctionalTest extends KernelTestCase
 
             $this->assertSame(2, $anonymiser->countFor($subjectId), 'two rows attributed to the subject');
 
+            $trailBefore = $this->survivingTrail($connection, $subjectRowA);
+
             $result = $anonymiser->anonymise($subjectId);
 
             $this->assertSame(2, $result->affectedRows);
@@ -65,6 +67,14 @@ final class AuditActorAnonymiserFunctionalTest extends KernelTestCase
                 $this->assertSame(self::SENTINEL, $row['ip']);
                 $this->assertSame(self::SENTINEL, $row['user_agent']);
             }
+
+            // The erasure rewrites only actor_id/ip/user_agent — the security trail (action, level,
+            // occurred_on, resource, correlation, metadata) must be byte-for-byte untouched.
+            $this->assertSame(
+                $trailBefore,
+                $this->survivingTrail($connection, $subjectRowA),
+                'the security trail survives the erasure untouched',
+            );
 
             // Other actor untouched, anonymous row still anonymous, and nothing was deleted.
             $other = $this->rowById($connection, $otherRow);
@@ -116,6 +126,23 @@ final class AuditActorAnonymiserFunctionalTest extends KernelTestCase
             'ip' => $row['ip'] ?? null,
             'user_agent' => $row['user_agent'] ?? null,
         ];
+    }
+
+    /**
+     * The columns the erasure must leave untouched, for an exact before/after comparison.
+     *
+     * @return array<string, mixed>
+     */
+    private function survivingTrail(Connection $connection, string $id): array
+    {
+        $row = $connection->fetchAssociative(
+            'SELECT action, level, occurred_on, correlation_id, resource_type, resource_id, metadata '
+            . 'FROM audit_log WHERE id = :id',
+            ['id' => $id],
+        );
+        $this->assertIsArray($row);
+
+        return $row;
     }
 
     private function inRolledBackTransaction(callable $body): void

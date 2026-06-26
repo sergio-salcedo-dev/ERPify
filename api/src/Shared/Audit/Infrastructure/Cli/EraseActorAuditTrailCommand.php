@@ -16,6 +16,7 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
+use Throwable;
 
 /**
  * GDPR "right to erasure" entry point: anonymises one subject's audit trail when an operator handles a
@@ -97,12 +98,36 @@ final class EraseActorAuditTrailCommand extends Command
             return Command::SUCCESS;
         }
 
+        return $this->eraseAndReport($io, $actorId);
+    }
+
+    private function eraseAndReport(SymfonyStyle $io, string $actorId): int
+    {
         $result = $this->anonymiser->anonymise($actorId);
 
-        $this->auditLogger->log(self::ERASURE_ACTION, AuditLevel::SECURITY, null, [
-            'anonymized_actor_id' => $result->pseudonym,
-            'affected_rows' => $result->affectedRows,
-        ]);
+        try {
+            $this->auditLogger->log(self::ERASURE_ACTION, AuditLevel::SECURITY, null, [
+                'anonymized_actor_id' => $result->pseudonym,
+                'affected_rows' => $result->affectedRows,
+            ]);
+        } catch (Throwable $throwable) {
+            // The anonymisation already committed and is irreversible; only the compliance self-audit
+            // failed. The original id now matches nothing, so a naive re-run would falsely report
+            // "nothing to erase" — surface the gap so the operator records this erasure out of band.
+            $io->error([
+                \sprintf(
+                    'Anonymised %d row(s) to actor id %s, but recording the %s audit entry failed: %s',
+                    $result->affectedRows,
+                    $result->pseudonym,
+                    self::ERASURE_ACTION,
+                    $throwable->getMessage(),
+                ),
+                'The erasure is done and irreversible — do not re-run with the original id. '
+                . 'Record this erasure manually for compliance.',
+            ]);
+
+            return Command::FAILURE;
+        }
 
         $io->success(\sprintf(
             'Erased %d row(s). New anonymised actor id: %s',

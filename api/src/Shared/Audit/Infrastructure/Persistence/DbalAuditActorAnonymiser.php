@@ -23,6 +23,10 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  * activity, unlike the retention pruner that sweeps the whole table. `metadata` is deliberately left
  * untouched, on the ADR invariant that it carries no PII (only ids and discriminants) — revisit this
  * (grow a metadata redactor) the day an action stores personal data there.
+ *
+ * Both operations guard the id with {@see Uuid::ensure()} at this edge: the only caller (the CLI) already
+ * validates, so this is defence in depth — a future caller that skips that check fails on a malformed id
+ * with a domain error here rather than a raw driver exception from the `CAST(… AS UUID)`.
  */
 #[AsAlias(AuditActorAnonymiser::class)]
 final readonly class DbalAuditActorAnonymiser implements AuditActorAnonymiser
@@ -41,6 +45,8 @@ final readonly class DbalAuditActorAnonymiser implements AuditActorAnonymiser
     #[Override]
     public function countFor(string $actorId): int
     {
+        Uuid::ensure($actorId);
+
         $count = $this->connection->fetchOne(
             'SELECT COUNT(*) FROM audit_log WHERE actor_id = CAST(:actor_id AS UUID)',
             ['actor_id' => $actorId],
@@ -52,6 +58,8 @@ final readonly class DbalAuditActorAnonymiser implements AuditActorAnonymiser
     #[Override]
     public function anonymise(string $actorId): ActorAnonymisationResult
     {
+        Uuid::ensure($actorId);
+
         $pseudonym = Uuid::generate();
 
         $affectedRows = (int) $this->connection->executeStatement(
