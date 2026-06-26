@@ -31,6 +31,7 @@ final readonly class AuditTimelineResourceMapper
             $entry->correlationId,
             $entry->resourceType,
             $entry->resourceId,
+            $entry->actorErased,
         );
     }
 

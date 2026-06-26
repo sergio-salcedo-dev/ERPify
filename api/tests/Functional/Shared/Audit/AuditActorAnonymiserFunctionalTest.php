@@ -66,6 +66,7 @@ final class AuditActorAnonymiserFunctionalTest extends KernelTestCase
                 $this->assertSame($result->pseudonym, $row['actor_id'], 'rewritten to the shared pseudonym');
                 $this->assertSame(self::SENTINEL, $row['ip']);
                 $this->assertSame(self::SENTINEL, $row['user_agent']);
+                $this->assertTrue($this->isErased($row['actor_erased']), 'the GDPR-erasure flag is materialised');
             }
 
             // The erasure rewrites only actor_id/ip/user_agent — the security trail (action, level,
@@ -80,9 +81,11 @@ final class AuditActorAnonymiserFunctionalTest extends KernelTestCase
             $other = $this->rowById($connection, $otherRow);
             $this->assertSame($otherId, $other['actor_id']);
             $this->assertSame(self::CLIENT_IP, $other['ip']);
+            $this->assertFalse($this->isErased($other['actor_erased']), 'a different actor stays not-erased');
 
             $anonymous = $this->rowById($connection, $anonymousRow);
             $this->assertNull($anonymous['actor_id'], 'anonymous row untouched');
+            $this->assertFalse($this->isErased($anonymous['actor_erased']), 'anonymous row stays not-erased');
 
             // Idempotent: a re-run with the original id matches nothing.
             $this->assertSame(0, $anonymiser->anonymise($subjectId)->affectedRows);
@@ -111,12 +114,12 @@ final class AuditActorAnonymiserFunctionalTest extends KernelTestCase
     }
 
     /**
-     * @return array{actor_id: mixed, ip: mixed, user_agent: mixed}
+     * @return array{actor_id: mixed, ip: mixed, user_agent: mixed, actor_erased: mixed}
      */
     private function rowById(Connection $connection, string $id): array
     {
         $row = $connection->fetchAssociative(
-            'SELECT actor_id, ip, user_agent FROM audit_log WHERE id = :id',
+            'SELECT actor_id, ip, user_agent, actor_erased FROM audit_log WHERE id = :id',
             ['id' => $id],
         );
         $this->assertIsArray($row);
@@ -125,7 +128,17 @@ final class AuditActorAnonymiserFunctionalTest extends KernelTestCase
             'actor_id' => $row['actor_id'] ?? null,
             'ip' => $row['ip'] ?? null,
             'user_agent' => $row['user_agent'] ?? null,
+            'actor_erased' => $row['actor_erased'] ?? null,
         ];
+    }
+
+    /**
+     * Postgres hands a boolean back as the wire-protocol `t`/`f` on a raw DBAL fetch (no Doctrine type
+     * conversion), so test against the stored form rather than casting truthiness.
+     */
+    private function isErased(mixed $value): bool
+    {
+        return \in_array($value, [true, 't', '1', 1], true);
     }
 
     /**

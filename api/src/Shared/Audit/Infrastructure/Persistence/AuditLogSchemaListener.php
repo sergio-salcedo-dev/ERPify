@@ -48,6 +48,7 @@ final class AuditLogSchemaListener
         $table->addColumn('metadata', Types::JSONB);
         $table->addColumn('ip', Types::STRING, ['length' => 45, 'notnull' => false]);
         $table->addColumn('user_agent', Types::STRING, ['length' => 512, 'notnull' => false]);
+        $table->addColumn('actor_erased', Types::BOOLEAN);
         $table->addColumn('occurred_on', Types::DATETIMETZ_IMMUTABLE);
 
         $table->addPrimaryKeyConstraint(
