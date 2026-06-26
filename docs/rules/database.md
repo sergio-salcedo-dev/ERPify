@@ -51,7 +51,9 @@
   longer than `activity`, `AuditRetentionPolicy` enforcing `security > activity`), deleting in `id`-keyed
   batches under a Postgres advisory lock so a sweep neither holds a long lock nor races a second worker.
   The row carries PII (`actor_id`, `ip`, `user_agent`), so the bounded window is also GDPR data
-  minimisation; outright erasure is the second policy — pseudonymising `UPDATE`, never row deletion.
+  minimisation; outright erasure is the second policy — the `audit:gdpr:erase` command's in-place
+  anonymising `UPDATE` (`actor_id` → a fresh random UUID per subject; `ip`/`user_agent` → `[REDACTED]`),
+  never row deletion.
 
 ## Identifiers (UUID v7, app-assigned)
 - **All entity ids are UUID v7**, generated in the application layer (`Uuid::generate()` (`Shared/Uuid/Domain`)

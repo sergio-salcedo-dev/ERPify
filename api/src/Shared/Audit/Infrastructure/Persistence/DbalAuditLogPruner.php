@@ -9,7 +9,9 @@ use Doctrine\DBAL\Types\Types;
 use Erpify\Shared\Audit\Application\AuditLogPruner;
 use Erpify\Shared\Audit\Domain\AuditRetentionThreshold;
 use Erpify\Shared\Persistence\Infrastructure\PostgresAdvisoryLock;
+use InvalidArgumentException;
 use Override;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
 /**
@@ -26,7 +28,9 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  *   accidentally-scaled scheduler) is skipped rather than racing — defence in depth, not a correctness
  *   need (the delete is idempotent and prod runs a single-replica scheduler).
  *
- * Owns no transaction and does not swallow database failures.
+ * Owns no transaction and does not swallow database failures. Each run logs its outcome — rows pruned, or
+ * skipped because another worker already holds the lock — so a perpetually-held lock is visible rather than
+ * silently stopping retention.
  */
 #[AsAlias(AuditLogPruner::class)]
 final readonly class DbalAuditLogPruner implements AuditLogPruner
@@ -38,8 +42,14 @@ final readonly class DbalAuditLogPruner implements AuditLogPruner
     public function __construct(
         private Connection $connection,
         private PostgresAdvisoryLock $advisoryLock,
+        private LoggerInterface $logger,
         private int $batchSize = self::DEFAULT_BATCH_SIZE,
     ) {
+        if ($batchSize < 1) {
+            throw new InvalidArgumentException(
+                \sprintf('Audit prune batch size must be at least 1, got %d.', $batchSize),
+            );
+        }
     }
 
     #[Override]
@@ -47,11 +57,19 @@ final readonly class DbalAuditLogPruner implements AuditLogPruner
     {
         $removed = 0;
 
-        $this->advisoryLock->withTryLock(self::LOCK_NAME, function () use ($plan, &$removed): void {
+        $ran = $this->advisoryLock->withTryLock(self::LOCK_NAME, function () use ($plan, &$removed): void {
             foreach ($plan as $threshold) {
                 $removed += $this->drainLevel($threshold);
             }
         });
+
+        if (!$ran) {
+            $this->logger->info('Audit retention prune skipped: another worker holds the lock.');
+
+            return $removed;
+        }
+
+        $this->logger->info('Pruned {removed} audit_log row(s) past retention.', ['removed' => $removed]);
 
         return $removed;
     }

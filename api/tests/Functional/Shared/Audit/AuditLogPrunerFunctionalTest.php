@@ -7,7 +7,6 @@ namespace Erpify\Tests\Functional\Shared\Audit;
 use DateInterval;
 use DateTimeImmutable;
 use Doctrine\DBAL\Connection;
-use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
@@ -17,6 +16,7 @@ use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditLogWriter;
 use Erpify\Shared\Persistence\Infrastructure\PostgresAdvisoryLock;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use PHPUnit\Framework\Attributes\CoversClass;
+use Psr\Log\NullLogger;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 /**
@@ -54,7 +54,12 @@ final class AuditLogPrunerFunctionalTest extends KernelTestCase
             $survivingSecurity = $this->seed($writer, AuditLevel::SECURITY, $this->daysBefore($anchor, 200));
             $staleSecurity = $this->seed($writer, AuditLevel::SECURITY, $this->daysBefore($anchor, 400));
 
-            $pruner = new DbalAuditLogPruner($connection, new PostgresAdvisoryLock($connection), self::SMALL_BATCH);
+            $pruner = new DbalAuditLogPruner(
+                $connection,
+                new PostgresAdvisoryLock($connection),
+                new NullLogger(),
+                self::SMALL_BATCH,
+            );
             $removed = $pruner->prune(...(new AuditRetentionPolicy(90, 365))->thresholdsAt($anchor));
 
             $this->assertGreaterThanOrEqual(4, $removed, 'three stale activity + one stale security removed');
@@ -70,6 +75,42 @@ final class AuditLogPrunerFunctionalTest extends KernelTestCase
                 'a 200d security row survives — the longer window is what differentiates it from activity',
             );
             $this->assertSame(0, $this->countRowsForId($connection, $staleSecurity), 'security past 365d is pruned');
+
+            // Idempotent: a second prune over the same plan removes nothing new and leaves survivors intact.
+            $pruner->prune(...(new AuditRetentionPolicy(90, 365))->thresholdsAt($anchor));
+
+            $this->assertSame(1, $this->countRowsForId($connection, $freshActivity), 'survivor intact after a re-run');
+            $this->assertSame(
+                1,
+                $this->countRowsForId($connection, $survivingSecurity),
+                'survivor intact after a re-run',
+            );
+            $this->assertSame(
+                0,
+                $this->countRowsForId($connection, $staleSecurity),
+                'a pruned row stays gone on a re-run',
+            );
+        });
+    }
+
+    public function testItRemovesNothingWhenNoRowIsPastItsWindow(): void
+    {
+        $this->inRolledBackTransaction(function (Connection $connection): void {
+            $anchor = new DateTimeImmutable(self::ANCHOR);
+            $writer = new DbalAuditLogWriter($connection);
+
+            $recentActivity = $this->seed($writer, AuditLevel::ACTIVITY, $this->daysBefore($anchor, 10));
+            $recentSecurity = $this->seed($writer, AuditLevel::SECURITY, $this->daysBefore($anchor, 100));
+
+            $pruner = new DbalAuditLogPruner(
+                $connection,
+                new PostgresAdvisoryLock($connection),
+                new NullLogger(),
+            );
+            $pruner->prune(...(new AuditRetentionPolicy(90, 365))->thresholdsAt($anchor));
+
+            $this->assertSame(1, $this->countRowsForId($connection, $recentActivity), 'in-window activity survives');
+            $this->assertSame(1, $this->countRowsForId($connection, $recentSecurity), 'in-window security survives');
         });
     }
 
@@ -96,10 +137,9 @@ final class AuditLogPrunerFunctionalTest extends KernelTestCase
     {
         self::bootKernel();
 
-        $entityManager = self::getContainer()->get(EntityManagerInterface::class);
-        $this->assertInstanceOf(EntityManagerInterface::class, $entityManager);
+        $connection = self::getContainer()->get(Connection::class);
+        $this->assertInstanceOf(Connection::class, $connection);
 
-        $connection = $entityManager->getConnection();
         $connection->beginTransaction();
 
         try {

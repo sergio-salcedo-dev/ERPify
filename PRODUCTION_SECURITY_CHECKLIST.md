@@ -136,10 +136,15 @@ you change anything here.
       column width) sealed onto every entry. Its `ip` / `user_agent` / `metadata` are
       **client-controlled (tainted)** — escape on render in the future admin
       investigation UI, never use in a trust or authorization decision; the writer
-      parameterises every value (no string-interpolated SQL). Planned but **not yet
-      implemented**: retention by level (`activity` vs `security`) plus GDPR
-      pseudonymization / redaction of `ip` / `user_agent` / `actor_id`. A live PII
-      table must never exist without a documented retention/erasure policy (epic 3).
+      parameterises every value (no string-interpolated SQL). **GDPR erasure is
+      implemented** as an in-place, irreversible anonymisation: `audit:gdpr:erase
+      <actor-id>` overwrites the subject's `actor_id` with a single fresh random UUID
+      and redacts `ip` / `user_agent` to `[REDACTED]` in one `UPDATE`, never deleting a
+      row, and self-audits a `security` `GDPR_ERASURE_EXECUTED` entry carrying only the
+      resulting pseudonym (never the original id). Retention by level (`activity` vs
+      `security`, the scheduled prune — the table's only `DELETE`) is tracked
+      separately. A live PII table must never exist without a documented
+      retention/erasure policy (epic 3).
 
 ## 7. Deploy & verify
 
