@@ -98,6 +98,21 @@ export interface DateTimeProvider {
    */
   formatIsoToRelative(iso: string): string;
 
+  /**
+   * Render an ISO 8601 timestamp as the local wall-clock time of day at
+   * millisecond precision, `HH:mm:ss.SSS` (24-hour). For dense, day-grouped
+   * timelines where the calendar day is the group header and each row needs
+   * only the time. Returns the raw input back when it is unparseable.
+   */
+  formatIsoToLocalTimeOfDay(iso: string): string;
+
+  /**
+   * Render an ISO 8601 timestamp as a long, human local date (e.g. `12 de junio
+   * de 2026` in es-ES) — the day-divider header of a grouped timeline. Returns
+   * the raw input back when it is unparseable.
+   */
+  formatIsoToLongDate(iso: string): string;
+
   /** Lower-bound timestamp for a `dd/mm/yyyy` filter input (00:00:00.000). */
   parseDdMmYyyyToStartTimestamp(value: string): number | null;
 

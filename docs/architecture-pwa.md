@@ -62,6 +62,17 @@ Two `context/shared/` modules abstract repeated **logic**, not repeated **struct
 
 The first consumer is the **User module** (`context/backoffice/user/` + `app/backoffice/users/` + the public `app/(auth)/` pages), which binds an `InMemoryUserRepository` into the DI container and is backend-swap-safe: an `Api*Repository` later fills the same ports with no consumer change. Design record: [`docs/superpowers/specs/2026-06-14-iam-user-management-frontend-design.md`](superpowers/specs/2026-06-14-iam-user-management-frontend-design.md).
 
+### Audit investigation (Backoffice)
+
+`context/backoffice/audit/` + `app/backoffice/audit/` is the read-only investigation UI over the 4.1 `audit_log` timeline read model (`GET /api/v1/backoffice/audit/timeline`). It deliberately does **not** reuse the `shared/resource` CRUD toolkit: Backoffice consumes auditoría and never writes it (D5), so the ports are read-only (`AuditTimelineRepository.search` + `AuditTimelineNavigator.follow`) and the list hook is a lean, dedicated `useAuditTimeline` (keyset load + monotonic request guard + empty-tail recovery + derived boundary state, no selection/bulk/delete) — depending on the fat `CrudRepository` here would be an ISP violation with throwing write stubs.
+
+- **DI bindings** (`shared/dependency-injection/infrastructure/Container.ts`): `BackOfficeAuditTimelineRepository` → `ApiAuditTimelineRepository`, `BackOfficeAuditTimelineNavigator` → `ApiAuditTimelineNavigator` (both singletons). The endpoint is registered once in `ApiEndpoints` (`BACKOFFICE.AUDIT.TIMELINE`).
+- **State lives entirely in URL params** (`useAuditUrlState`), never `localStorage` — an `actor_id`/`resource_id`/`ip` is PII, and the URL keeps an investigation shareable for a ticket. The serialized filter has a stable memo identity so the keyset cursor never thrashes; `?entry=<id>` deep-links the drawer.
+- **One grouped table** (`AuditTimelineTable`) renders both the Timeline (per-day `<tbody role="rowgroup">` dividers) and the Jornada modes (per-`correlation_id` sessions), with one roving tabindex over a native table (sidestepping the `jsx-a11y` S6847 focusable-row antipattern), a 2px `{color.security}` lateral accent as a second channel, and a read-only `<RecordSheet>` drawer whose pivots re-filter the same log.
+- **PII-aware presentation**: `ActorChip` reads the materialised `actorErased` GDPR flag as a distinct «anonimizado (GDPR)» chip (the post-erasure UUID is never shown as an id); `RedactedValue` renders the `[REDACTED]` sentinel (≠ a real null «—»); `MetadataBlock` escapes JSON with a size guard. The drawer's detail-only `ip`/`userAgent`/`metadata` sections are **specified-but-dormant** until the 4.2a detail endpoint lands (deferred until auth) — the drawer renders them from an optional `detail` prop, dormant otherwise.
+
+UX contract: `_bmad-output/planning-artifacts/ux-designs/ux-ERPify-2026-06-26/` (`EXPERIENCE.md` / `DESIGN.md`).
+
 ### Where shared code goes (decision rule)
 
 Cross-cutting code has several homes; pick by **purpose**, not just "is it reused". Mirrored in [`pwa/CLAUDE.md`](../pwa/CLAUDE.md).

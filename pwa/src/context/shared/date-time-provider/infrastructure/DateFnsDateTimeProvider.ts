@@ -66,6 +66,26 @@ export class DateFnsDateTimeProvider implements DateTimeProvider {
     },
   );
 
+  private static readonly DISPLAY_TIME_OF_DAY_FORMATTER = new Intl.DateTimeFormat(
+    DateFnsDateTimeProvider.DISPLAY_LOCALE,
+    {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      fractionalSecondDigits: 3,
+      hourCycle: "h23",
+    },
+  );
+
+  private static readonly DISPLAY_LONG_DATE_FORMATTER = new Intl.DateTimeFormat(
+    DateFnsDateTimeProvider.DISPLAY_LOCALE,
+    {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    },
+  );
+
   private static readonly DD_MM_YYYY_PATTERN = /^(\d{2})\/(\d{2})\/(\d{4})$/;
   private static readonly ISO_YYYY_MM_DD_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -198,6 +218,21 @@ export class DateFnsDateTimeProvider implements DateTimeProvider {
   public formatIsoToRelative(iso: string): string {
     const date = this.parseISO(iso);
     return date ? this.formatToRelative(date) : iso;
+  }
+
+  public formatIsoToLocalTimeOfDay(iso: string): string {
+    const date = this.parseISO(iso);
+    if (!date) return iso;
+    const p = DateFnsDateTimeProvider.toParts(
+      DateFnsDateTimeProvider.DISPLAY_TIME_OF_DAY_FORMATTER,
+      date,
+    );
+    return `${p.hour}:${p.minute}:${p.second}.${p.fractionalSecond}`;
+  }
+
+  public formatIsoToLongDate(iso: string): string {
+    const date = this.parseISO(iso);
+    return date ? DateFnsDateTimeProvider.DISPLAY_LONG_DATE_FORMATTER.format(date) : iso;
   }
 
   public parseDdMmYyyyToStartTimestamp(value: string): number | null {

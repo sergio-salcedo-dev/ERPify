@@ -44,6 +44,9 @@ export const API_ENDPOINTS = {
       ACCOUNTS: bankAccountsPath,
       REALTIME_AUTHORIZE: `${BACKOFFICE_PREFIX}/banks/realtime/authorize`,
     },
+    AUDIT: {
+      TIMELINE: `${BACKOFFICE_PREFIX}/audit/timeline`,
+    },
   },
   FRONTOFFICE: {
     HEALTH: `${FRONTOFFICE_PREFIX}/health`,

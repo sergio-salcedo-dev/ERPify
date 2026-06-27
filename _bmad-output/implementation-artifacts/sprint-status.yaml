@@ -67,5 +67,5 @@ development_status:
   # Epic 4: Investigación de auditoría — read model + UI admin
   epic-4: in-progress
   4-1-read-model-de-investigacion-directo-sobre-audit-log-backoffice-audit: done
-  4-2-ui-admin-de-investigacion-pwa: backlog
+  4-2-ui-admin-de-investigacion-pwa: review
   epic-4-retrospective: optional
