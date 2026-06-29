@@ -1,6 +1,6 @@
 # ADR — Regulatory audit trail (ISO 27001): write-side CDC, field-level diff, crypto-shredding
 
-> **Status:** accepted · design only — **implementation is a separate epic and is sequenced after the (not-yet-existing) auth/RBAC subsystem** · **Date:** 2026-06-29 · **Scope:** cross-cutting `Shared/Audit` (capture + contract), extending [`audit-activity-log.md`](./audit-activity-log.md); read side in `Backoffice/Audit`. Builds on the actor/operational axis, does **not** revoke it.
+> **Status:** accepted · design only — **implementation is a separate epic, sliced by dependency: the capture backbone ships pre-auth; only the RBAC access gate and production-readiness wait on the (not-yet-existing) auth/RBAC subsystem (see D9)** · **Date:** 2026-06-29 · **Scope:** cross-cutting `Shared/Audit` (capture + contract), extending [`audit-activity-log.md`](./audit-activity-log.md); read side in `Backoffice/Audit`. Builds on the actor/operational axis, does **not** revoke it.
 >
 > Temporal context: the application is **not in production**, so the new columns/tables, the keystore and the retention floor are born without backward-compatibility constraints.
 
@@ -63,6 +63,16 @@ Reading the regulatory trail is itself privileged: access must be **RBAC-restric
 
 Discarded: ship the read UI behind network-only restriction — unauthenticated trail access is itself an ISO finding and leaves no record of who read the audit.
 
+### D9 — Sequencing: the capture backbone ships pre-auth; only the RBAC gate and attribution wait on auth
+
+Implementation is **not** one block gated on auth — three independent dependencies decide order:
+
+- **Pre-auth, zero rework** — write capture (D1/D2), reconciliation (D3), the read mechanism + resource extractor (D4) and the retention floor (D7) are auth-independent. The sibling ADR already froze "audit backbone before User/RBAC": `actor_id` stays nullable and only `ActorContextFactory` swaps when auth lands — schema, bus, storage, retention and read model do not. The capture backbone it extends is already live (#377). Until auth, actor is `anonymous`/`system`.
+- **Gated on a natural-person entity, not auth** — crypto-shredding + keystore + PII classification (D6) have nothing to encrypt while every audited entity is a catalog (`Bank`/`BankAccount` are not PII). Building the keystore now is speculative (YAGNI); it lands with the first person aggregate (`Customer`/`Employee`).
+- **Gated on auth/RBAC** — restricted, self-audited access (D8) and production-readiness. The trail is mechanically complete pre-auth but **ISO-complete only once attribution is real** (`actor_id` NOT NULL); pre-auth every action is `anonymous`/`system`, forensically thin.
+
+Discarded: sequencing the whole epic after auth — over-couples, stalls field-level change capture (a live #377 consumer) behind an unrelated subsystem, and forfeits the zero-rework property the actor seam already guarantees.
+
 ## Load-bearing implementation challenges
 
 - **Ambient actor context per request** inside the Doctrine listener: `onFlush` holds the changeset but not the HTTP actor — seal `ActorContext` + `correlation_id` (the `SealedAuditEntryFactory` / `ActorContextFactory` seam) and read them inside the flush.
@@ -77,4 +87,4 @@ Discarded: ship the read UI behind network-only restriction — unauthenticated 
 
 ## Implementation
 
-Epic-sized and **sequenced after auth/RBAC** (multi-context: Doctrine `onFlush` listener + actor-context seal + keystore + per-entity PII classification + pruner floor + read-side RBAC + resource extractor). Tracked as its own epic by the PM, **not** in this ADR's PR. Related: issue #376 (async-resurrection gap in actor erasure) and issue #373 (extract keyset) belong to the same subsystem and are revisited when this epic lands.
+Epic-sized and **sliced by the D9 dependency tiers**, not deferred wholesale: **(1)** pre-auth capture slice — Doctrine `onFlush` listener + actor-context seal + field-level diff + semantic action + read resource extractor + retention floor (no prerequisites); **(2)** crypto-shredding + keystore + per-entity PII classification — lands with the first natural-person aggregate; **(3)** RBAC access gate + production-readiness — lands with auth. Tracked as its own epic by the PM, **not** in this ADR's PR. Related: issue #376 (async-resurrection gap in actor erasure) and issue #373 (extract keyset) belong to the same subsystem and are revisited when this epic lands.
