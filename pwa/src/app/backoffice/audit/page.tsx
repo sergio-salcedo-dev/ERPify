@@ -1,3 +1,16 @@
+import { Suspense } from "react";
+import { AuditInvestigationScreen } from "./_components/AuditInvestigationScreen";
+import { AuditTimelineSkeleton } from "@/context/backoffice/audit/infrastructure/ui/AuditTimelineSkeleton";
+
+/**
+ * `/backoffice/audit` — the audit investigation admin UI over the 4.1 timeline read model. The screen
+ * reads its whole state from URL params (`useSearchParams`), so it must sit under a Suspense boundary;
+ * the fallback mirrors the timeline's loading skeleton to keep the first paint layout-stable.
+ */
 export default function AuditPage() {
-  return <h1 className="text-foreground text-2xl font-semibold tracking-tight">Audit Logs</h1>;
+  return (
+    <Suspense fallback={<AuditTimelineSkeleton />}>
+      <AuditInvestigationScreen />
+    </Suspense>
+  );
 }

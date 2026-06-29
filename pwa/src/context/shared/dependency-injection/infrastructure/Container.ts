@@ -20,6 +20,8 @@ import { FindBank } from "../../../backoffice/bank/application/FindBank";
 import { CreateBank } from "../../../backoffice/bank/application/CreateBank";
 import { UpdateBank } from "../../../backoffice/bank/application/UpdateBank";
 import { DeleteBank } from "../../../backoffice/bank/application/DeleteBank";
+import { ApiAuditTimelineRepository } from "../../../backoffice/audit/infrastructure/ApiAuditTimelineRepository";
+import { ApiAuditTimelineNavigator } from "../../../backoffice/audit/infrastructure/ApiAuditTimelineNavigator";
 import { ApiBankAccountRepository } from "../../../backoffice/bankaccount/infrastructure/ApiBankAccountRepository";
 import { ApiBankAccountSearchNavigator } from "../../../backoffice/bankaccount/infrastructure/ApiBankAccountSearchNavigator";
 import { SearchBankAccounts } from "../../../backoffice/bankaccount/application/SearchBankAccounts";
@@ -119,6 +121,19 @@ container
   .inSingletonScope();
 
 container.bind<SearchBankAccounts>("BackOfficeSearchBankAccounts").to(SearchBankAccounts);
+
+// Audit investigation read context (epic 4): read-only ports over the 4.1 timeline read model —
+// no write use case is bound, so a consumer can inject only the read capability (Backoffice
+// consumes auditoría, never writes it, D5).
+container
+  .bind<ApiAuditTimelineRepository>("BackOfficeAuditTimelineRepository")
+  .to(ApiAuditTimelineRepository)
+  .inSingletonScope();
+
+container
+  .bind<ApiAuditTimelineNavigator>("BackOfficeAuditTimelineNavigator")
+  .to(ApiAuditTimelineNavigator)
+  .inSingletonScope();
 
 // User module (mocked). The navigator shares the SAME repository instance so it
 // reads the same in-memory store — a singleton class binding would create two.
