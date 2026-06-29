@@ -45,7 +45,7 @@ export function isAuditView(value: string): value is AuditView {
   return value === AuditView.Timeline || value === AuditView.Journey;
 }
 
-/** The segmented level control's options. Empty value = "Todo" (no level filter). */
+/** The segmented level control's options. The empty-value segment applies no level filter. */
 export const AUDIT_LEVEL_SEGMENTS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "", label: "Todo" },
   { value: AuditLevel.Activity, label: "Activity" },

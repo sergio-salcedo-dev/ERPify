@@ -27,7 +27,7 @@ describe("AuditEntryDrawer", () => {
   it("keeps the PII detail sections dormant when no detail is supplied (4.2a deferred)", () => {
     render(<AuditEntryDrawer entry={ENTRY} open onClose={vi.fn()} />);
     // IP, user agent and metadata each show the dormant note.
-    expect(screen.getAllByTestId("audit-entry-drawer__dormant").length).toBe(3);
+    expect(screen.getAllByTestId("audit-entry-drawer__dormant")).toHaveLength(3);
     expect(screen.queryByText("[REDACTED]")).toBeNull();
   });
 

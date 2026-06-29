@@ -57,7 +57,7 @@ export function AuditViewToggle({
           Jornada
         </button>
       </div>
-      {!journeyEnabled ? (
+      {!journeyEnabled && (
         <span
           id={hintId}
           className="text-text-subtle text-xs"
@@ -65,7 +65,7 @@ export function AuditViewToggle({
         >
           Fija un actor para reconstruir su jornada.
         </span>
-      ) : null}
+      )}
     </div>
   );
 }

@@ -21,7 +21,7 @@ export function groupEntriesByDay(
   for (const entry of entries) {
     const label = labelOf(entry.occurredOn);
     const current = groups.at(-1);
-    if (current && current.label === label) {
+    if (current?.label === label) {
       (current.entries as AuditEntry[]).push(entry);
     } else {
       groups.push({ label, entries: [entry] });

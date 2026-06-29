@@ -48,8 +48,8 @@ interface AuditTimelineTableProps extends AuditPivotHandlers {
 /**
  * The dense investigation timeline, driven by precomputed groups so the SAME table renders the
  * Timeline (per-day dividers) and the Jornada (per-correlation sessions) modes. A real `<table>`:
- * each group is a `<tbody role="rowgroup">` labelled by a `<th scope="rowgroup">` header, so a screen
- * reader announces the day / session as group context. One roving tabindex spans the page (no
+ * each group is a `<tbody>` (implicit `rowgroup`) labelled by a `<th scope="rowgroup">` header, so a
+ * screen reader announces the day / session as group context. One roving tabindex spans the page (no
  * `div role=button` per row — a native table sidesteps the `jsx-a11y` S6847 antipattern): `↑`/`↓`
  * move focus, `Enter` opens the drawer, a click anywhere off an in-row control opens it too.
  * `security` rows carry a 2px lateral accent — a second channel beside the badge, never `{color.danger}`.
@@ -173,7 +173,7 @@ export function AuditTimelineTable({
         {renderGroups.map((group, groupIndex) => {
           const headerId = `${groupIdBase}-group-${groupIndex}`;
           return (
-            <tbody key={group.key} role="rowgroup" aria-labelledby={headerId}>
+            <tbody key={group.key} aria-labelledby={headerId}>
               <tr className="bg-bg-subtle/60 border-border border-b">
                 <th
                   id={headerId}

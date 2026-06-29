@@ -195,27 +195,7 @@ function AuditEntryDrawerBody({
 
       <Section title="Sobre qué">
         <Field label="Recurso">
-          {entry.resourceType || entry.resourceId ? (
-            <span className="inline-flex items-center gap-1">
-              {entry.resourceType ? <span>{entry.resourceType}</span> : null}
-              {entry.resourceId ? (
-                <>
-                  {entry.resourceType ? <span className="text-text-subtle">·</span> : null}
-                  <code className="font-mono text-xs">{entry.resourceId}</code>
-                  <CopyButton
-                    value={entry.resourceId}
-                    iconOnly
-                    size="sm"
-                    variant="ghost"
-                    label="Copiar id de recurso"
-                    title="Copiar id de recurso"
-                  />
-                </>
-              ) : null}
-            </span>
-          ) : (
-            <span className="text-text-subtle">—</span>
-          )}
+          <ResourceValue entry={entry} />
         </Field>
       </Section>
 
@@ -229,6 +209,32 @@ function AuditEntryDrawerBody({
         {detail ? <MetadataBlock value={detail.metadata} /> : <DormantDetail />}
       </Section>
     </div>
+  );
+}
+
+/** `resourceType · resourceId` (id copyable, never a deep-link), or «—» when the entry references neither. */
+function ResourceValue({ entry }: Readonly<{ entry: AuditEntry }>) {
+  if (!entry.resourceType && !entry.resourceId) {
+    return <span className="text-text-subtle">—</span>;
+  }
+  return (
+    <span className="inline-flex items-center gap-1">
+      {entry.resourceType ? <span>{entry.resourceType}</span> : null}
+      {entry.resourceId ? (
+        <>
+          {entry.resourceType ? <span className="text-text-subtle">·</span> : null}
+          <code className="font-mono text-xs">{entry.resourceId}</code>
+          <CopyButton
+            value={entry.resourceId}
+            iconOnly
+            size="sm"
+            variant="ghost"
+            label="Copiar id de recurso"
+            title="Copiar id de recurso"
+          />
+        </>
+      ) : null}
+    </span>
   );
 }
 

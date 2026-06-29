@@ -79,7 +79,7 @@ export function useAuditUrlState(): AuditUrlState {
 
   const entry = useMemo<string | null>(() => {
     const value = new URLSearchParams(paramsKey).get(ENTRY_PARAM)?.trim();
-    return value ? value : null;
+    return value || null;
   }, [paramsKey]);
 
   const commit = useCallback(
