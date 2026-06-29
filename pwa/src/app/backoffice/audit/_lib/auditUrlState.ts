@@ -3,7 +3,13 @@
 import { useCallback, useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { SortDirection } from "@/context/shared/search/domain/SortDirection";
-import { AuditView, EMPTY_AUDIT_FILTER, isAuditView, type AuditFilter } from "./auditFilter";
+import {
+  AuditView,
+  EMPTY_AUDIT_FILTER,
+  isAuditLevelValue,
+  isAuditView,
+  type AuditFilter,
+} from "./auditFilter";
 
 const VIEW_PARAM = "view";
 const DIR_PARAM = "dir";
@@ -53,8 +59,9 @@ export function useAuditUrlState(): AuditUrlState {
   const filter = useMemo<AuditFilter>(() => {
     const params = new URLSearchParams(paramsKey);
     const read = (key: keyof AuditFilter): string => params.get(key)?.trim() ?? "";
+    const level = read("level");
     return {
-      level: read("level"),
+      level: isAuditLevelValue(level) ? level : "",
       from: read("from"),
       to: read("to"),
       actorType: read("actorType"),

@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   AUDIT_PAGE_SIZE_OPTIONS,
+  isAuditPageSize,
   type AuditPageSize,
 } from "@/app/backoffice/audit/_lib/auditPaginate";
 
@@ -41,7 +42,10 @@ export function AuditPagination({
         <select
           className="audit-pagination__page-size-select border-border bg-background text-foreground focus-visible:ring-ring h-7 rounded-md border px-2 text-xs focus-visible:ring-2 focus-visible:outline-none"
           value={pageSize}
-          onChange={(event) => onPageSizeChange(Number(event.target.value) as AuditPageSize)}
+          onChange={(event) => {
+            const next = Number(event.target.value);
+            if (isAuditPageSize(next)) onPageSizeChange(next);
+          }}
           aria-label="Entradas por página"
           title="Entradas por página"
           data-testid="audit-pagination__page-size"

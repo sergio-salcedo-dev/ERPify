@@ -60,9 +60,20 @@ export function AuditInvestigationScreen() {
   );
   const [pageSize, setPageSize] = useState<AuditPageSize>(AUDIT_PAGE_SIZE_DEFAULT);
 
+  // Jornada is reachable only with a fixed actor; a stale `view=journey` URL with no actor falls back
+  // to Timeline so the toggle and the rendered grouping never disagree.
+  const journeyEnabled = hasFixedActor(url.filter);
+  const journeyMode = journeyEnabled && url.view === AuditView.Journey;
+  const effectiveView = journeyMode ? AuditView.Journey : AuditView.Timeline;
+
+  // The "Hora" sort axis does not apply to Jornada: a session is intrinsically ordered and the
+  // sessions themselves always read newest-first. So Jornada fetches DESC regardless of the URL `dir`
+  // and the column header drops its toggle (see `sortable` below).
+  const sortDirection = journeyMode ? SortDirection.DESC : url.direction;
+
   const criteria = useMemo(
-    () => toAuditCriteria(url.filter, url.direction, pageSize),
-    [url.filter, url.direction, pageSize],
+    () => toAuditCriteria(url.filter, sortDirection, pageSize),
+    [url.filter, sortDirection, pageSize],
   );
   const hasActiveFilter = hasActiveAuditFilter(url.filter);
 
@@ -76,11 +87,6 @@ export function AuditInvestigationScreen() {
 
   const activeEntry = url.entry ? (entries.find((entry) => entry.id === url.entry) ?? null) : null;
 
-  // Jornada is reachable only with a fixed actor; a stale `view=journey` URL with no actor falls back
-  // to Timeline so the toggle and the rendered grouping never disagree.
-  const journeyEnabled = hasFixedActor(url.filter);
-  const effectiveView =
-    journeyEnabled && url.view === AuditView.Journey ? AuditView.Journey : AuditView.Timeline;
   const groups = useMemo(() => buildGroups(entries, effectiveView), [entries, effectiveView]);
 
   const followActor = (entry: AuditEntry): void =>
@@ -147,7 +153,8 @@ export function AuditInvestigationScreen() {
               <AuditTimelineTable
                 groups={groups}
                 density={density}
-                direction={url.direction}
+                direction={sortDirection}
+                sortable={!journeyMode}
                 onToggleSort={toggleSort}
                 onRowActivate={(entry) => url.openEntry(entry.id)}
                 activeEntryId={url.entry}
@@ -173,16 +180,9 @@ export function AuditInvestigationScreen() {
         entry={activeEntry}
         open={activeEntry !== null}
         onClose={url.closeEntry}
-        onFollowActor={(entry) =>
-          url.patchFilter({ actorType: entry.actorType, actorId: entry.actorId ?? "" })
-        }
-        onFollowCorrelation={(entry) => url.patchFilter({ correlationId: entry.correlationId })}
-        onFollowResource={(entry) =>
-          url.patchFilter({
-            resourceType: entry.resourceType ?? "",
-            resourceId: entry.resourceId ?? "",
-          })
-        }
+        onFollowActor={followActor}
+        onFollowCorrelation={followCorrelation}
+        onFollowResource={followResource}
       />
     </div>
   );

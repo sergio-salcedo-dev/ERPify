@@ -1,4 +1,5 @@
 import { AuditLevel } from "@/context/backoffice/audit/domain/AuditEntry";
+import { isUuid } from "@/context/shared/uuid/infrastructure/isUuid";
 
 /**
  * The audit timeline's UI filter state. Every field lives in URL params (never localStorage): an
@@ -52,6 +53,11 @@ export const AUDIT_LEVEL_SEGMENTS: ReadonlyArray<{ value: string; label: string 
   { value: AuditLevel.Security, label: "Security" },
 ];
 
+/** True when `value` is a level the segmented control can represent ("" = no level filter). */
+export function isAuditLevelValue(value: string): boolean {
+  return AUDIT_LEVEL_SEGMENTS.some((segment) => segment.value === value);
+}
+
 /**
  * Count of populated panel-hosted filters (actor + recurso + acción). Level and the date range live
  * in the always-visible bar, so the "Filtros (n)" badge only counts what a collapsed panel hides.
@@ -77,7 +83,12 @@ export function hasActiveAuditFilter(filter: AuditFilter): boolean {
   );
 }
 
-/** A fixed actor (type + id) is the precondition for the Jornada render mode (UX-DR3). */
+/**
+ * A fixed actor — type + a resolvable UUID id — is the precondition for the Jornada render mode
+ * (UX-DR3). The id must pass the same `isUuid` gate `toAuditFilters` applies to the wire, so the mode
+ * turns on only when the query genuinely pins one actor; a half-typed id would otherwise reconstruct
+ * a "session" spanning every actor of that type.
+ */
 export function hasFixedActor(filter: AuditFilter): boolean {
-  return Boolean(filter.actorType.trim()) && Boolean(filter.actorId.trim());
+  return Boolean(filter.actorType.trim()) && isUuid(filter.actorId.trim());
 }

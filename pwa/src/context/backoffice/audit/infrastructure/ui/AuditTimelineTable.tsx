@@ -39,6 +39,8 @@ interface AuditTimelineTableProps extends AuditPivotHandlers {
   groups: ReadonlyArray<AuditTimelineGroup>;
   density: ListDensity;
   direction: SortDirection;
+  /** When false (Jornada), the "Hora" header is a static label — the sort axis does not apply. */
+  sortable?: boolean;
   onToggleSort: () => void;
   onRowActivate: (entry: AuditEntry) => void;
   activeEntryId?: string | null;
@@ -58,6 +60,7 @@ export function AuditTimelineTable({
   groups,
   density,
   direction,
+  sortable = true,
   onToggleSort,
   onRowActivate,
   activeEntryId,
@@ -81,6 +84,11 @@ export function AuditTimelineTable({
     }));
     return { renderGroups: rg, rowCount: flat };
   }, [groups]);
+
+  // The roving-focus index must always land on a real row: when the page shrinks (a shorter last
+  // page, a narrower filter, a Timeline↔Jornada regroup) a stale `focusedRow >= rowCount` would leave
+  // every row at `tabIndex=-1`, making the table unreachable by keyboard. Fall back to the first row.
+  const activeRow = focusedRow < rowCount ? focusedRow : 0;
 
   const registerRowRef = useCallback((index: number, el: HTMLTableRowElement | null) => {
     rowRefs.current[index] = el;
@@ -135,20 +143,28 @@ export function AuditTimelineTable({
         </colgroup>
         <thead className="bg-background sticky top-0 z-10">
           <tr className={cn("border-border text-muted-foreground border-b", ROW_HEIGHTS[density])}>
-            <th scope="col" aria-sort={ariaSort} className="px-3 text-left text-xs font-medium">
-              <button
-                type="button"
-                onClick={onToggleSort}
-                className="hover:text-foreground inline-flex items-center gap-1 transition-colors"
-                title="Ordenar por hora"
-              >
-                Hora
-                {direction === SortDirection.ASC ? (
-                  <ArrowUp className="size-3" aria-hidden="true" />
-                ) : (
-                  <ArrowDown className="size-3" aria-hidden="true" />
-                )}
-              </button>
+            <th
+              scope="col"
+              aria-sort={sortable ? ariaSort : undefined}
+              className="px-3 text-left text-xs font-medium"
+            >
+              {sortable ? (
+                <button
+                  type="button"
+                  onClick={onToggleSort}
+                  className="hover:text-foreground inline-flex items-center gap-1 transition-colors"
+                  title="Ordenar por hora"
+                >
+                  Hora
+                  {direction === SortDirection.ASC ? (
+                    <ArrowUp className="size-3" aria-hidden="true" />
+                  ) : (
+                    <ArrowDown className="size-3" aria-hidden="true" />
+                  )}
+                </button>
+              ) : (
+                <span>Hora</span>
+              )}
             </th>
             <th scope="col" className="px-3 text-left text-xs font-medium">
               Nivel
@@ -191,7 +207,7 @@ export function AuditTimelineTable({
                   <tr
                     key={entry.id}
                     ref={(el) => registerRowRef(index, el)}
-                    tabIndex={focusedRow === index ? 0 : -1}
+                    tabIndex={activeRow === index ? 0 : -1}
                     aria-current={isActive ? true : undefined}
                     onKeyDown={(event) => handleRowKeyDown(event, entry, index)}
                     onClick={(event) => handleRowClick(event, entry)}

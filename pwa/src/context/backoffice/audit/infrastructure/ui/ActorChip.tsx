@@ -55,7 +55,7 @@ export function ActorChip({
       >
         <EyeOff className="text-text-subtle size-3.5 flex-none" aria-hidden="true" />
         <span>anonimizado (GDPR)</span>
-        <span className="text-text-subtle">· no identificable</span>
+        <span>· no identificable</span>
       </span>
     );
   }
