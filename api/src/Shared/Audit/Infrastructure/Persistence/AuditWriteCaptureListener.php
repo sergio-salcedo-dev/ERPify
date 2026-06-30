@@ -107,6 +107,20 @@ final readonly class AuditWriteCaptureListener
             return $unitOfWork->getEntityChangeSet($entity);
         }
 
+        return $this->finalStateSnapshot($entityManager, $entity);
+    }
+
+    /**
+     * The complete final state of an aggregate about to be removed, as a `[value, null]` snapshot. Mapped
+     * scalar fields carry their value; a to-one association carries the referenced id alone, never the
+     * related object, so the trail records what the aggregate pointed at without pulling another module's
+     * graph into it. To-many sides are out of field-level scalar scope, like {@see AuditChangeDiff} skips a
+     * collection change.
+     *
+     * @return array<string, array{mixed, null}>
+     */
+    private function finalStateSnapshot(EntityManagerInterface $entityManager, object $entity): array
+    {
         $metadata = $entityManager->getClassMetadata($entity::class);
         $snapshot = [];
 
@@ -114,6 +128,34 @@ final readonly class AuditWriteCaptureListener
             $snapshot[$field] = [$metadata->getFieldValue($entity, $field), null];
         }
 
+        foreach ($metadata->getAssociationNames() as $association) {
+            if (!$metadata->isSingleValuedAssociation($association)) {
+                continue;
+            }
+
+            $snapshot[$association] = [
+                $this->referencedId($entityManager, $metadata->getFieldValue($entity, $association)),
+                null,
+            ];
+        }
+
         return $snapshot;
+    }
+
+    private function referencedId(EntityManagerInterface $entityManager, mixed $related): ?string
+    {
+        if (!\is_object($related)) {
+            return null;
+        }
+
+        $identifiers = $entityManager->getClassMetadata($related::class)->getIdentifierValues($related);
+
+        if (1 !== \count($identifiers)) {
+            return null;
+        }
+
+        $id = \reset($identifiers);
+
+        return \is_scalar($id) ? (string) $id : null;
     }
 }

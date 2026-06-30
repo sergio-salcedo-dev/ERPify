@@ -93,6 +93,32 @@ final class AuditWriteCaptureListenerFunctionalTest extends KernelTestCase
         });
     }
 
+    public function testTheDeleteSnapshotCapturesAToOneAssociationAsItsReferencedId(): void
+    {
+        $this->inRolledBackTransaction(function (EntityManagerInterface $em, Connection $connection): void {
+            $mediaId = Uuid::generate();
+            $media = Media::create($mediaId, \str_repeat('a', 64), 'image/webp', 3, 'abc');
+            $em->persist($media);
+
+            $id = Uuid::generate();
+            $token = \strtoupper(\substr(\str_replace('-', '', $id), 0, 8));
+            $bank = Bank::create($id, 'Logoed Bank ' . $id, 'LOGO' . $token, $media);
+            $em->persist($bank);
+            $em->flush();
+
+            $em->remove($bank);
+            $em->flush();
+
+            $row = $this->changeRow($connection, $id, 'BANK_DELETED');
+            $this->assertSame(
+                $mediaId,
+                $this->changedValue($row, 'media', 'old'),
+                'a to-one association is snapshotted as the referenced id, not the related object',
+            );
+            $this->assertNull($this->changedValue($row, 'media', 'new'), 'with nothing after — the aggregate is gone');
+        });
+    }
+
     public function testTheChangeRowSealsTheAmbientSystemActorCorrelationAndInstant(): void
     {
         $this->inRolledBackTransaction(function (EntityManagerInterface $em, Connection $connection): void {
