@@ -30,6 +30,10 @@ function bankAccountsPath(bankId: string): string {
   return `${BACKOFFICE_PREFIX}/banks/${encodeURIComponent(bankId)}/accounts`;
 }
 
+function bankAccountPath(id: string): string {
+  return `${BACKOFFICE_PREFIX}/bank-accounts/${encodeURIComponent(id)}`;
+}
+
 export const API_ENDPOINTS = {
   BACKOFFICE: {
     HEALTH: `${BACKOFFICE_PREFIX}/health`,
@@ -43,6 +47,14 @@ export const API_ENDPOINTS = {
       DELETE: bankPath,
       ACCOUNTS: bankAccountsPath,
       REALTIME_AUTHORIZE: `${BACKOFFICE_PREFIX}/banks/realtime/authorize`,
+    },
+    BANK_ACCOUNTS: {
+      CREATE: `${BACKOFFICE_PREFIX}/bank-accounts`,
+      DETAILS: bankAccountPath,
+      UPDATE: bankAccountPath,
+      DELETE: bankAccountPath,
+      CHANGE_STATUS: (id: string): string => `${bankAccountPath(id)}/status`,
+      REALTIME_AUTHORIZE: `${BACKOFFICE_PREFIX}/bank-accounts/realtime/authorize`,
     },
     AUDIT: {
       TIMELINE: `${BACKOFFICE_PREFIX}/audit/timeline`,

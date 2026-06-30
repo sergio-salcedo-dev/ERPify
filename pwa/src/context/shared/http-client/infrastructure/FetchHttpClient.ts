@@ -95,6 +95,10 @@ export class FetchHttpClient implements HttpClient {
     return this.sendWithBody<TBody, T>("PUT", url, body, validate);
   }
 
+  async patch<TBody, T>(url: string, body: TBody, validate?: ResponseGuard<T>): Promise<T> {
+    return this.sendWithBody<TBody, T>("PATCH", url, body, validate);
+  }
+
   async delete(url: string): Promise<void> {
     const res = await this.request(this.resolveUrl(url), {
       method: "DELETE",
@@ -108,7 +112,7 @@ export class FetchHttpClient implements HttpClient {
   }
 
   private async sendWithBody<TBody, T>(
-    method: "POST" | "PUT",
+    method: "POST" | "PUT" | "PATCH",
     url: string,
     body: TBody,
     validate?: ResponseGuard<T>,

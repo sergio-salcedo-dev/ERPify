@@ -27,7 +27,14 @@ const PAGE: BankAccountSearchPage = {
 
 describe("SearchBankAccounts", () => {
   it("delegates to the repository with the bank id and criteria", async () => {
-    const repository: BankAccountRepository = { search: vi.fn().mockResolvedValue(PAGE) };
+    const repository: BankAccountRepository = {
+      search: vi.fn().mockResolvedValue(PAGE),
+      find: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      changeStatus: vi.fn(),
+      delete: vi.fn(),
+    };
     const criteria: BankAccountSearchCriteria = { filters: [], sort: null, limit: 25 };
 
     const result = await new SearchBankAccounts(repository).run("bank-1", criteria);

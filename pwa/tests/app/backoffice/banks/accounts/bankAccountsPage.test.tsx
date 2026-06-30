@@ -25,6 +25,15 @@ vi.mock("@/context/shared/dependency-injection/infrastructure/Container", () => 
   },
 }));
 
+// Neutralise the Mercure subscription (its live fetch/EventSource churn flakes
+// under jsdom); these specs cover the load/paginate paths, not realtime.
+vi.mock("@/context/backoffice/bankaccount/infrastructure/bankAccountRealtime", async () => {
+  const actual = await vi.importActual<
+    typeof import("@/context/backoffice/bankaccount/infrastructure/bankAccountRealtime")
+  >("@/context/backoffice/bankaccount/infrastructure/bankAccountRealtime");
+  return { ...actual, useBankAccountRealtime: vi.fn() };
+});
+
 const ACCOUNT = BankAccount.fromPrimitives({
   id: "0190ffff-aaaa-7bbb-8ccc-0d1e2f3a4b5c",
   holderName: "Acme Corp",

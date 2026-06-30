@@ -25,6 +25,11 @@ import { ApiAuditTimelineNavigator } from "../../../backoffice/audit/infrastruct
 import { ApiBankAccountRepository } from "../../../backoffice/bankaccount/infrastructure/ApiBankAccountRepository";
 import { ApiBankAccountSearchNavigator } from "../../../backoffice/bankaccount/infrastructure/ApiBankAccountSearchNavigator";
 import { SearchBankAccounts } from "../../../backoffice/bankaccount/application/SearchBankAccounts";
+import { FindBankAccount } from "../../../backoffice/bankaccount/application/FindBankAccount";
+import { CreateBankAccount } from "../../../backoffice/bankaccount/application/CreateBankAccount";
+import { UpdateBankAccount } from "../../../backoffice/bankaccount/application/UpdateBankAccount";
+import { ChangeBankAccountStatus } from "../../../backoffice/bankaccount/application/ChangeBankAccountStatus";
+import { DeleteBankAccount } from "../../../backoffice/bankaccount/application/DeleteBankAccount";
 import { InMemoryUserRepository } from "../../../backoffice/user/infrastructure/InMemoryUserRepository";
 import { InMemoryResourceNavigator } from "../../../shared/resource/infrastructure/InMemoryResourceNavigator";
 import type { DebugTokenObserver } from "@/context/shared/debug-token/domain/DebugTokenObserver";
@@ -108,8 +113,9 @@ container.bind<CreateBank>("BackOfficeCreateBank").to(CreateBank);
 container.bind<UpdateBank>("BackOfficeUpdateBank").to(UpdateBank);
 container.bind<DeleteBank>("BackOfficeDeleteBank").to(DeleteBank);
 
-// BankAccount read context (CE-4): read-only ports — no write use case is bound,
-// so a consumer of this surface can inject only the read capability.
+// BankAccount context: one repository serves both the per-bank search/navigation
+// reads and the standalone `/bank-accounts` CRUD writes (mirrors Bank's single
+// repository identifier).
 container
   .bind<ApiBankAccountRepository>("BackOfficeBankAccountRepository")
   .to(ApiBankAccountRepository)
@@ -121,6 +127,13 @@ container
   .inSingletonScope();
 
 container.bind<SearchBankAccounts>("BackOfficeSearchBankAccounts").to(SearchBankAccounts);
+container.bind<FindBankAccount>("BackOfficeFindBankAccount").to(FindBankAccount);
+container.bind<CreateBankAccount>("BackOfficeCreateBankAccount").to(CreateBankAccount);
+container.bind<UpdateBankAccount>("BackOfficeUpdateBankAccount").to(UpdateBankAccount);
+container
+  .bind<ChangeBankAccountStatus>("BackOfficeChangeBankAccountStatus")
+  .to(ChangeBankAccountStatus);
+container.bind<DeleteBankAccount>("BackOfficeDeleteBankAccount").to(DeleteBankAccount);
 
 // Audit investigation read context (epic 4): read-only ports over the 4.1 timeline read model —
 // no write use case is bound, so a consumer can inject only the read capability (Backoffice
