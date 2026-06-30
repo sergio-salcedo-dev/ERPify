@@ -48,7 +48,7 @@ Feature: Audit generic backoffice navigation via the kernel.terminate access-log
     When I send a "GET" request to "/backoffice/banks/11111111-1111-7000-8000-000000000001"
     And the "audit" transport should hold 1 message
     And I consume 1 message from the "audit" transport
-    And I execute the SQL query "SELECT action, level, resource_type, resource_id FROM audit_log WHERE action = 'ROUTE_BACKOFFICE_BANK_GET'"
+    And I execute the SQL query "SELECT action, level, resource_type, resource_id, correlation_id FROM audit_log WHERE action = 'ROUTE_BACKOFFICE_BANK_GET' AND correlation_id = '0190dcba-4321-7abc-8def-554433221100'"
     Then the response status code should be 200
     And the SQL result as JSON should be:
     """
@@ -57,7 +57,8 @@ Feature: Audit generic backoffice navigation via the kernel.terminate access-log
         "action": "ROUTE_BACKOFFICE_BANK_GET",
         "level": "activity",
         "resource_type": "Bank",
-        "resource_id": "11111111-1111-7000-8000-000000000001"
+        "resource_id": "11111111-1111-7000-8000-000000000001",
+        "correlation_id": "0190dcba-4321-7abc-8def-554433221100"
       }
     ]
     """
