@@ -52,14 +52,10 @@ final readonly class AuditWriteCaptureListener
 
         $unitOfWork = $entityManager->getUnitOfWork();
 
-        $entries = [
-            ...$this->capture($unitOfWork, AuditWriteOperation::CREATED),
-            ...$this->capture($unitOfWork, AuditWriteOperation::UPDATED),
-            ...$this->capture($unitOfWork, AuditWriteOperation::DELETED),
-        ];
-
-        foreach ($entries as $entry) {
-            $this->writer->write($entry);
+        foreach (AuditWriteOperation::cases() as $operation) {
+            foreach ($this->capture($unitOfWork, $operation) as $entry) {
+                $this->writer->write($entry);
+            }
         }
     }
 
@@ -81,12 +77,10 @@ final readonly class AuditWriteCaptureListener
                 continue;
             }
 
-            $resource = $entity->auditResource();
-
             $entries[] = $this->entryFactory->create(
-                \strtoupper($resource->type) . '_' . $operation->value,
+                $entity->auditAction($operation),
                 AuditLevel::CHANGE,
-                $resource,
+                $entity->auditResource(),
                 $this->changeDiff->of($unitOfWork->getEntityChangeSet($entity)),
             );
         }
