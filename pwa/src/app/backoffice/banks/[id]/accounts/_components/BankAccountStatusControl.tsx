@@ -43,6 +43,16 @@ export function BankAccountStatusControl({
   const [saving, setSaving] = useState(false);
   const isDirty = selected !== account.status;
 
+  // Re-seed the pending selection whenever the account prop arrives with a different status from
+  // another source (a refetch, a realtime update): the dropdown and `isDirty` track the
+  // authoritative status instead of silently desyncing. Adjusting state during render is the
+  // React-sanctioned reset, not an effect.
+  const [syncedStatus, setSyncedStatus] = useState<BankAccountStatus>(account.status);
+  if (account.status !== syncedStatus) {
+    setSyncedStatus(account.status);
+    setSelected(account.status);
+  }
+
   const onSubmit = async (): Promise<void> => {
     setSaving(true);
     try {
