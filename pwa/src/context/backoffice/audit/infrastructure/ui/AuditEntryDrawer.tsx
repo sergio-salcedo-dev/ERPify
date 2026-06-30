@@ -5,33 +5,24 @@ import { Footprints, GitBranch, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CopyButton, CorrelationIdChip, RecordSheet } from "@/components/erpify";
 import { dateTimeProvider } from "@/context/shared/date-time-provider/infrastructure";
-import type { AuditEntry } from "@/context/backoffice/audit/domain/AuditEntry";
+import { AuditLevel, type AuditEntry } from "@/context/backoffice/audit/domain/AuditEntry";
+import type { AuditEventDetail } from "@/context/backoffice/audit/domain/AuditChange";
 import { humanizeAuditAction } from "@/context/backoffice/audit/application/humanizeAuditAction";
 import { AuditLevelBadge } from "./AuditLevelBadge";
 import { ActorChip } from "./ActorChip";
-import { RedactedValue } from "./RedactedValue";
+import { AuditChangeDiff } from "./AuditChangeDiff";
 import { MetadataBlock } from "./MetadataBlock";
-
-/** The `ip`/`user_agent` redaction sentinel the backend writes after a GDPR erasure. */
-const REDACTED_SENTINEL = "[REDACTED]";
-
-/**
- * The detail-only fields, from the 4.2a read model. Optional: until that endpoint lands (deferred
- * until auth), the drawer renders these sections as **specified-but-dormant** — the structure is
- * present, the values arrive with the detail view. `ip`/`userAgent` are `[REDACTED]` after erasure,
- * a real value (forensic evidence), or null («—»); `metadata` carries no sensitive payload (D4).
- */
-export interface AuditEntryDetail {
-  ip: string | null;
-  userAgent: string | null;
-  metadata: unknown;
-}
 
 interface AuditEntryDrawerProps {
   entry: AuditEntry | null;
   open: boolean;
   onClose: () => void;
-  detail?: AuditEntryDetail;
+  /**
+   * The fetched event detail (`/audit/events/{id}`): carries the decoded `metadata` (with the diff
+   * for a `change` row). Optional — until it loads, the diff/metadata sections render dormant.
+   * `ip`/`userAgent` are NOT part of the E1 diff-only payload, so those rows stay dormant by design.
+   */
+  detail?: AuditEventDetail;
   onFollowActor?: (entry: AuditEntry) => void;
   onFollowCorrelation?: (entry: AuditEntry) => void;
   onFollowResource?: (entry: AuditEntry) => void;
@@ -187,9 +178,11 @@ function AuditEntryDrawerBody({
             actorErased={entry.actorErased}
           />
         </Field>
-        <Field label="IP">{detail ? <TaintedValue value={detail.ip} /> : <DormantDetail />}</Field>
+        <Field label="IP">
+          <DormantDetail />
+        </Field>
         <Field label="User agent">
-          {detail ? <TaintedValue value={detail.userAgent} /> : <DormantDetail />}
+          <DormantDetail />
         </Field>
       </Section>
 
@@ -205,11 +198,33 @@ function AuditEntryDrawerBody({
         </Field>
       </Section>
 
+      {entry.level === AuditLevel.Change ? (
+        <Section title="Cambios">
+          {detail ? (
+            <AuditChangeDiff
+              changes={detail.metadata.changes ?? {}}
+              testId="audit-entry-drawer__diff"
+            />
+          ) : (
+            <DormantDetail />
+          )}
+        </Section>
+      ) : null}
+
       <Section title="Metadata">
-        {detail ? <MetadataBlock value={detail.metadata} /> : <DormantDetail />}
+        {detail ? <MetadataBlock value={nonDiffMetadata(detail.metadata)} /> : <DormantDetail />}
       </Section>
     </div>
   );
+}
+
+/** The metadata minus the `changes` diff — the Cambios section already renders the diff in full. */
+function nonDiffMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
+  const rest: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(metadata)) {
+    if (key !== "changes") rest[key] = value;
+  }
+  return rest;
 }
 
 /** `resourceType · resourceId` (id copyable, never a deep-link), or «—» when the entry references neither. */
@@ -238,26 +253,10 @@ function ResourceValue({ entry }: Readonly<{ entry: AuditEntry }>) {
   );
 }
 
-/** Tainted `ip`/`user_agent`: the redaction sentinel, a real value (escaped, copyable), or a real null. */
-function TaintedValue({ value }: Readonly<{ value: string | null }>) {
-  if (value === REDACTED_SENTINEL) return <RedactedValue />;
-  if (value === null || value === "") return <span className="text-text-subtle">—</span>;
-  return (
-    <span className="inline-flex items-center gap-1">
-      <code className="font-mono text-xs break-all">{value}</code>
-      <CopyButton
-        value={value}
-        iconOnly
-        size="sm"
-        variant="ghost"
-        label="Copiar valor"
-        title="Copiar valor"
-      />
-    </span>
-  );
-}
-
-/** Placeholder for a detail-only field while the 4.2a detail endpoint is deferred (until auth). */
+/**
+ * Placeholder for the still-dormant `ip`/`user_agent` fields: the E1 detail payload is diff-only, so
+ * those (PII) values arrive with a later auth-gated read model, not here.
+ */
 function DormantDetail() {
   return (
     <span className="text-text-subtle text-xs italic" data-testid="audit-entry-drawer__dormant">

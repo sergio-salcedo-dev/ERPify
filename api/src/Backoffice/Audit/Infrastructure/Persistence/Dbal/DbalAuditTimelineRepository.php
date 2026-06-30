@@ -6,7 +6,9 @@ namespace Erpify\Backoffice\Audit\Infrastructure\Persistence\Dbal;
 
 use DateTimeImmutable;
 use Doctrine\DBAL\Connection;
+use Erpify\Backoffice\Audit\Domain\AuditEventDetail;
 use Erpify\Backoffice\Audit\Domain\AuditTimelineEntry;
+use Erpify\Backoffice\Audit\Domain\Repository\AuditEventDetailRepository;
 use Erpify\Backoffice\Audit\Domain\Repository\AuditTimelineRepository;
 use Erpify\Shared\Search\Domain\FilterOperator;
 use Erpify\Shared\Search\Domain\Page;
@@ -19,17 +21,20 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use UnexpectedValueException;
 
 /**
- * {@see AuditTimelineRepository} over the append-only `audit_log` table by plain DBAL — no Doctrine
- * entity (the write side is `Shared/Audit`, and the table stays entity-free by design). Its sole
- * search responsibility is to hand the {@see AuditTimelineKeysetPaginator} a base query builder plus
- * the filter/sort allow-lists; ordering, the keyset predicate, the limit and cursor encoding are the
- * paginator's monopoly. The returned {@see Page} carries OPAQUE cursors — link materialization is
- * the responder's job.
+ * The read-side over the append-only `audit_log` table by plain DBAL — no Doctrine entity (the write
+ * side is `Shared/Audit`, and the table stays entity-free by design). It serves two split ports: the
+ * keyset-paginated {@see AuditTimelineRepository} listing and the by-id {@see AuditEventDetailRepository}
+ * detail. The listing hands the {@see AuditTimelineKeysetPaginator} a base query builder plus the
+ * filter/sort allow-lists — ordering, the keyset predicate, the limit and cursor encoding are the
+ * paginator's monopoly, and its returned {@see Page} carries OPAQUE cursors. The detail is a separate,
+ * unpaginated single-row read that additionally hydrates the JSONB `metadata` diff; it shares the
+ * column guards but never the keyset query, so the cursor fingerprint stays untouched.
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[AsAlias(AuditTimelineRepository::class)]
-final readonly class DbalAuditTimelineRepository implements AuditTimelineRepository
+#[AsAlias(AuditEventDetailRepository::class)]
+final readonly class DbalAuditTimelineRepository implements AuditTimelineRepository, AuditEventDetailRepository
 {
     private const string TABLE = 'audit_log';
 
@@ -74,6 +79,28 @@ final readonly class DbalAuditTimelineRepository implements AuditTimelineReposit
         );
 
         return $page;
+    }
+
+    /**
+     * Single-row read by primary key, outside the keyset machinery: it selects the slim columns plus
+     * the JSONB `metadata` diff and never touches the listing's ordered query, so the cursor
+     * fingerprint is unaffected. The id is bound, not interpolated, and cast to UUID in SQL.
+     */
+    #[Override]
+    public function findById(string $id): ?AuditEventDetail
+    {
+        $row = $this->connection->fetchAssociative(
+            'SELECT id, occurred_on, level, action, actor_type, actor_id, correlation_id, '
+            . 'resource_type, resource_id, actor_erased, metadata '
+            . 'FROM ' . self::TABLE . ' WHERE id = CAST(:id AS UUID)',
+            ['id' => $id],
+        );
+
+        if (false === $row) {
+            return null;
+        }
+
+        return $this->hydrateDetail($row);
     }
 
     /**
@@ -130,6 +157,55 @@ final readonly class DbalAuditTimelineRepository implements AuditTimelineReposit
             $this->optionalString($row, 'resource_id'),
             $this->requiredBool($row, 'actor_erased'),
         );
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function hydrateDetail(array $row): AuditEventDetail
+    {
+        return new AuditEventDetail(
+            $this->requiredString($row, 'id'),
+            new DateTimeImmutable($this->requiredString($row, 'occurred_on')),
+            $this->requiredString($row, 'level'),
+            $this->requiredString($row, 'action'),
+            $this->requiredString($row, 'actor_type'),
+            $this->optionalString($row, 'actor_id'),
+            $this->requiredString($row, 'correlation_id'),
+            $this->optionalString($row, 'resource_type'),
+            $this->optionalString($row, 'resource_id'),
+            $this->requiredBool($row, 'actor_erased'),
+            $this->decodedMetadata($row, 'metadata'),
+        );
+    }
+
+    /**
+     * The `metadata` JSONB comes back from a raw DBAL fetch as its JSON text (no Doctrine type
+     * conversion here), so decode it to the structured diff. An absent or empty object yields `[]` —
+     * a non-`change` row simply carries no diff.
+     *
+     * @param array<string, mixed> $row
+     *
+     * @return array<string, mixed>
+     */
+    private function decodedMetadata(array $row, string $column): array
+    {
+        $value = $row[$column] ?? null;
+
+        if (!\is_string($value) || '' === $value) {
+            return [];
+        }
+
+        $decoded = \json_decode($value, true);
+
+        if (!\is_array($decoded)) {
+            throw new UnexpectedValueException(
+                \sprintf('audit_log.%s must decode to a JSON object.', $column),
+            );
+        }
+
+        /** @var array<string, mixed> $decoded */
+        return $decoded;
     }
 
     /**

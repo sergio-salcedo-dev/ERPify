@@ -14,6 +14,7 @@ import { SortDirection } from "@/context/shared/search/domain/SortDirection";
 import { dateTimeProvider } from "@/context/shared/date-time-provider/infrastructure";
 import type { AuditEntry } from "@/context/backoffice/audit/domain/AuditEntry";
 import { useAuditTimeline } from "@/context/backoffice/audit/application/useAuditTimeline";
+import { useAuditEventDetail } from "@/context/backoffice/audit/application/useAuditEventDetail";
 import { AuditFilterBar } from "@/context/backoffice/audit/infrastructure/ui/AuditFilterBar";
 import {
   AuditTimelineTable,
@@ -48,8 +49,8 @@ function buildGroups(entries: ReadonlyArray<AuditEntry>, view: AuditView): Audit
 /**
  * The single audit investigation screen: filter bar + timeline + drawer, driven entirely by URL
  * state (shareable, no PII in storage). Read-only — there is no mutation surface (D5). The drawer
- * opens for the row deep-linked by `?entry`; an off-page deep link cannot resolve until the 4.2a
- * detail endpoint lands (deferred until auth), so it silently no-ops rather than guessing.
+ * opens for the row deep-linked by `?entry` and lifts that row's diff on demand; a deep link to a row
+ * outside the loaded page silently no-ops (the slim row is resolved from the page, not refetched).
  */
 export function AuditInvestigationScreen() {
   const url = useAuditUrlState();
@@ -91,6 +92,10 @@ export function AuditInvestigationScreen() {
     url.setDirection(url.direction === SortDirection.DESC ? SortDirection.ASC : SortDirection.DESC);
 
   const activeEntry = url.entry ? (entries.find((entry) => entry.id === url.entry) ?? null) : null;
+
+  // Lift the open row's diff on demand — a sibling read to the slim timeline, so the keyset list never
+  // carries a JSONB blob per row.
+  const { detail } = useAuditEventDetail(activeEntry?.id ?? null);
 
   const groups = useMemo(() => buildGroups(entries, effectiveView), [entries, effectiveView]);
 
@@ -185,6 +190,7 @@ export function AuditInvestigationScreen() {
         entry={activeEntry}
         open={activeEntry !== null}
         onClose={url.closeEntry}
+        detail={detail ?? undefined}
         onFollowActor={followActor}
         onFollowCorrelation={followCorrelation}
         onFollowResource={followResource}

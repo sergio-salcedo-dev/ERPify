@@ -1,6 +1,10 @@
+---
+baseline_commit: a892875c6c9cc21342fdc1e38faa0431d6f981b4
+---
+
 # Story 1.7: Render del diff en el read model + UI #377 (solo `Bank`)
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -184,8 +188,33 @@ Alineado con DDD/hexagonal: read-side en `Backoffice/Audit/{Domain,Application,I
 
 ### Agent Model Used
 
+claude-opus-4-8[1m] (orquestación) + 2 subagentes paralelos (API ⊥ PWA).
+
 ### Debug Log References
+
+- `make php.stan` → 0 errores (698 ficheros). `make php.quality` → deptrac 0 violaciones, PHPMD 0 (tras split del test, ver abajo), cs-fixer/rector aplicados.
+- `make php.unit` (full) → 1381 tests OK (3 skipped). `make pwa.quality` → typecheck + ESLint + Prettier verdes. `make pwa.test.unit` (full) → 851 tests OK (`bankListDelete.test.tsx` flakeó una vez por su `useBankRealtime` sin mockear — flake conocido; verde en re-run fresco).
 
 ### Completion Notes List
 
+**Implementado y verificado (verde):**
+- **API** — recurso canónico `GET /api/v1/backoffice/audit/events/{id}` (diff-only): `AuditEventDetail` (Domain) + puerto hermano `AuditEventDetailRepository` + `findById` en `DbalAuditTimelineRepository` (no toca el SELECT/orden del listado keyset) + `AuditEventDetailFinder` + `AuditEventDetailResource` + `AuditEventDetailResourceMapper` + `AuditEventDetailController` (`Uuid::ensure` → 400 antes del lookup) + marker `AuditEventNotFound` (reutiliza `NotFound` → 404; error-contract lint verde, sin nuevo marker → sin cambio en `api-error-contract.md`). Tests: mapper unit, funcional (200 diff + 400 invalid-uuid + 404), `DbalAuditEventDetailRepositoryTest` (findById, hidratación + metadata vacío + ausente).
+- **PWA** — render del diff escapado + pulido `change`: `AuditChange.ts` (tipos), `AuditEventDetailRepository` (puerto) + `ApiAuditEventDetailRepository` (guard de frontera) + `useAuditEventDetail` (hook) + `humanizeAuditField` + `AuditChangeDiff.tsx` (3 estados con canal no-color, snapshot CREATE/DELETE, colapso, tipo de campo, **texto React escapado — sin `dangerouslySetInnerHTML`**); drawer con sección "Cambios", badge "Cambio", acento lateral, segmento de filtro, labels ES `BANK_*`, `ApiEndpoints.EVENT_DETAIL`, DI binding. Tests: `AuditChangeDiff.test.tsx` (incl. XSS), `humanizeAuditField`, `ApiAuditEventDetailRepository`, drawer extendido.
+- **Docs** — `security.md` + `PRODUCTION_SECURITY_CHECKLIST.md` (mapeo ISO base A.8.15/A.8.17 + render escapado del diff + ruta de detalle pública), `architecture-api.md` (superficie de lectura de detalle).
+- **Boy-scout (Shared, nombrado):** `ResourceNormalizer` — su docblock + `ResourceDtoContractTest` se relajaron para admitir una propiedad `array` JSON-safe (el diff decodificado del `AuditEventDetailResource`); sin cambio de comportamiento.
+- **Refactor de test (nombrado):** los 3 tests `findById` se extrajeron de `DbalAuditTimelineRepositoryTest` (que superaba el umbral PHPMD de 400 líneas) a una clase hermana enfocada `DbalAuditEventDetailRepositoryTest` (read by-id ≠ keyset search).
+
+**Diferido (NO bloquea ACs — cobertura ya probada por los tests de arriba):**
+- `useAuditEventDetail.test.tsx` (test unit del hook) — el hook se ejercita indirectamente; test directo pendiente.
+- Behat `api/features/backoffice/audit/event_detail.feature` — el `AuditEventDetailFunctionalTest` (WebTestCase, Postgres real) ya cubre las mismas ACs (200 diff / 400 / 404) a nivel HTTP.
+- e2e `pwa/tests/e2e/audit-diff.spec.ts` — pendiente (live-stack, gotchas de flakiness).
+
+Las ACs quedan satisfechas: **AC1** (funcional 200 + diff), **AC2** (`AuditChangeDiff.test` XSS + estados), **AC3** (badge/segmento/labels + tests extendidos), **AC4** (docs ISO).
+
 ### File List
+
+**API NEW:** `Backoffice/Audit/Domain/AuditEventDetail.php`, `Domain/Repository/AuditEventDetailRepository.php`, `Domain/Exception/AuditEventNotFound.php`, `Application/AuditEventDetailFinder.php`, `Application/Resource/AuditEventDetailResource.php`, `Infrastructure/Http/AuditEventDetailResourceMapper.php`, `Infrastructure/Controller/AuditEventDetailController.php`; tests `Unit/.../AuditEventDetailResourceMapperTest.php`, `Functional/.../Controller/AuditEventDetailFunctionalTest.php`, `Functional/.../Dbal/DbalAuditEventDetailRepositoryTest.php`.
+**API UPDATE:** `Infrastructure/Persistence/Dbal/DbalAuditTimelineRepository.php`, `Shared/Serialization/Infrastructure/ResourceNormalizer.php`, `tests/.../Dbal/DbalAuditTimelineRepositoryTest.php`, `tests/Unit/Shared/Serialization/ResourceDtoContractTest.php`.
+**PWA NEW:** `context/backoffice/audit/domain/AuditChange.ts`, `domain/AuditEventDetailRepository.ts`, `infrastructure/ApiAuditEventDetailRepository.ts`, `application/useAuditEventDetail.ts`, `application/humanizeAuditField.ts`, `infrastructure/ui/AuditChangeDiff.tsx`; tests `AuditChangeDiff.test.tsx`, `humanizeAuditField.test.ts`, `ApiAuditEventDetailRepository.test.ts`.
+**PWA UPDATE:** `domain/AuditEntry.ts`, `application/humanizeAuditAction.ts`, `infrastructure/ui/{AuditEntryDrawer,AuditLevelBadge,AuditTimelineTable}.tsx`, `app/backoffice/audit/_components/AuditInvestigationScreen.tsx`, `app/backoffice/audit/_lib/auditFilter.ts`, `context/shared/http-client/infrastructure/ApiEndpoints.ts`, `context/shared/dependency-injection/infrastructure/Container.ts`, `tests/.../ui/AuditEntryDrawer.test.tsx`.
+**Docs:** `docs/rules/security.md`, `PRODUCTION_SECURITY_CHECKLIST.md`, `docs/architecture-api.md`.

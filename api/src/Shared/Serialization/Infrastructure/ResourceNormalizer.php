@@ -12,10 +12,11 @@ use UnexpectedValueException;
 /**
  * Normalizes a resource into a serializable array with NO serializer groups and NO format context:
  * the per-view Resource DTO is already the projection, so whatever public shape it exposes is emitted
- * verbatim. Two consequences are load-bearing — only flat, scalar-only `Application/Resource/` DTOs may
- * flow through here: a non-scalar (e.g. a raw `DateTimeImmutable`) would emit a nested/non-ATOM shape
- * with no group or context to anchor it, and ungrouped normalization serializes every public property
- * and getter. That contract is enforced structurally by
+ * verbatim. Two consequences are load-bearing — only flat `Application/Resource/` DTOs whose properties
+ * are scalar/null or an already-decoded JSON `array` may flow through here: a raw object (e.g. a
+ * `DateTimeImmutable`) would emit a nested/non-ATOM shape with no group or context to anchor it, and
+ * ungrouped normalization serializes every public property and getter. That contract is enforced
+ * structurally by
  * {@see \Erpify\Tests\Unit\Shared\Serialization\ResourceDtoContractTest}; timestamps are pre-formatted
  * to ATOM strings by the mappers, never handed here as objects.
  */

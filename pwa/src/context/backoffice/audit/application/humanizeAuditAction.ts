@@ -9,6 +9,9 @@
  * catalogue is never frozen over the open `ROUTE_*` space; the fallback covers the tail.
  */
 const CURATED_LABELS: Readonly<Record<string, string>> = {
+  BANK_CREATED: "Banco creado",
+  BANK_UPDATED: "Banco actualizado",
+  BANK_DELETED: "Banco eliminado",
   BANK_ACCOUNTS_VIEWED: "Cuentas bancarias consultadas",
   ACCESS_DENIED: "Acceso denegado",
   GDPR_ERASURE_EXECUTED: "Borrado GDPR ejecutado",
