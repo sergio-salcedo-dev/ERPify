@@ -89,11 +89,35 @@ Because GDPR protects *data*, not aggregates, classification is per **field**. T
 
 Discarded: entity-level classification (a single `BankAccount` mixes PII and non-PII columns — too coarse). Discarded: a central PII map in `Shared/Audit` — classification authority belongs to the aggregate's owning module, mirroring how `AuditedEntity` already owns its action vocabulary.
 
+### D13 — Cryptographic identity is decoupled from domain identity (`EncryptionScopeId`)
+
+Crypto-shredding needs an identity to key the DEK by and to target on erasure, but that need must not force a domain aggregate into existence. A value object `EncryptionScopeId` (`"<TYPE>:<uuid>"`) names the scope a DEK protects and over which shredding operates — `BANK_ACCOUNT:<uuid>` today. It deliberately does not presuppose what that scope represents: it may later reference another domain identity if required by the domain model, without renaming the cryptographic concept. The DEK is keyed by the `EncryptionScopeId`; the encrypted diff references it.
+
+Discarded: a `SubjectId` name — "subject" is GDPR-loaded (*data subject*) and this is the cryptographic scope, not the person. Discarded: introducing a `Person`/`Party` aggregate now solely to anchor the DEK — it lets an infrastructure concern model the domain (the wrong direction) and is YAGNI while no business use case needs a party. The domain decides the identity; the crypto adapts.
+
+### D14 — Envelope crypto-shredding, sized for master-data cardinality
+
+Classified diff fields are encrypted under the scope's DEK with libsodium AEAD (`crypto_aead_xchacha20poly1305_ietf`); **DEKs are generated with a CSPRNG**. Envelope: each DEK is wrapped by a KEK and stored in a Postgres keystore table with its `encryption_scope_id` and the `kek_version` it was wrapped under; the **KEK is custodied outside the app** (env-provided), never beside the DEKs. KEK rotation = rewrap every DEK under the new KEK as a bounded one-off batch — feasible at expected master-data cardinality. **Destroying a DEK is irreversible** — an accepted operational property, not a fault.
+
+Discarded: the KEK in Postgres beside the DEKs (defeats the envelope); one global key (destroying it shreds every scope — per-scope keying is what makes single-scope erasure possible); a per-scope HSM or key-derivation hierarchy (over-engineered here). Revisit trigger: a PII-bearing aggregate at transactional cardinality → revisit (derivation, lazy rewrap, KMS/HSM).
+
+### D15 — Subject erasure is distinct from actor erasure
+
+`erase-actor` (the existing `audit:gdpr:erase <actor-id>`, anonymising *who acted*) and `erase-subject` (anonymising *whose data appears in the diff*) are different legal operations and are never merged. `erase-subject` does exactly two things: (1) delete or anonymise the live record, and (2) destroy the scope's DEK — the diff's PII ciphertext becomes permanently unreadable while the row, its order and its integrity remain (append-only preserved).
+
+Discarded: extending `erase-actor` to also shred scope DEKs — it conflates two distinct GDPR triggers (the operator who acted vs. the data subject) and couples their lifecycles.
+
+### D17 — Cryptographic metadata stays out of the domain model
+
+The envelope's bookkeeping — `encryption_scope_id`, `kek_version`, ciphertext, wrapped keys — belongs to the infrastructure layer (currently implemented in the keystore table and the raw-DBAL, entity-free `audit_log` persistence), never on a domain entity or value object. An aggregate carries its data and its `#[PersonalData]` classification; it never knows it is encrypted, under which key, or that a keystore exists.
+
+Discarded: a `dek_id`/key-version field on the entity — it leaks an infrastructure concern into `Domain/`, breaking the hexagonal boundary deptrac enforces.
+
 ## Load-bearing implementation challenges
 
 - **Ambient actor context per request** inside the Doctrine listener: `onFlush` holds the changeset but not the HTTP actor — seal `ActorContext` + `correlation_id` (the `SealedAuditEntryFactory` / `ActorContextFactory` seam) and read them inside the flush.
 - **Entity snapshot on DELETE**: capture the final state *before* the row is removed, so the diff's "before" is not already gone.
-- **Keystore + key management**: DEK lifecycle (mint per subject, KEK-wrap, destroy on erasure) and KEK custody outside the app.
+- **Keystore + key management**: DEK lifecycle (mint per encryption scope, KEK-wrap, destroy on erasure) and KEK custody outside the app (D13/D14).
 - **PII field classification**: each owning module declares its personal-data fields with a passive `#[PersonalData]` attribute (D12), deciding encrypted-vs-clear storage per column.
 
 ## Decided inputs (previously open)
