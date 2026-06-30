@@ -48,3 +48,9 @@ src/Backoffice/Bank/Application/BankAccountCountEnricher.php => Erpify\Backoffic
 # exception it raises are exempted together as one published contract.
 src/Backoffice/BankAccount/Application/BankAccountSearcher.php => Erpify\Backoffice\Bank\Domain\Repository\BankExistenceChecker
 src/Backoffice/BankAccount/Application/BankAccountSearcher.php => Erpify\Backoffice\Bank\Domain\Exception\BankNotFoundException
+
+# BankAccount → Bank existence guard (write side). BankAccountCreator (BankAccount/Application)
+# guards the parent bank's existence before inserting an account via the same published
+# BankExistenceChecker port the searcher uses (UUID-shape → 400, existence → 404 before the INSERT
+# touches the FK). Same reusable cross-context existence seam, write direction.
+src/Backoffice/BankAccount/Application/BankAccountCreator.php => Erpify\Backoffice\Bank\Domain\Repository\BankExistenceChecker

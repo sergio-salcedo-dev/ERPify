@@ -1,6 +1,29 @@
 import type { Filter, PageEnvelope } from "@/context/shared/search/domain";
 import type { SortDirection } from "@/context/shared/search/domain/SortDirection";
-import type { BankAccount } from "./BankAccount";
+import type { BankAccount, BankAccountCurrency, BankAccountStatus } from "./BankAccount";
+
+/**
+ * Editable core of a bank account, shared by create and update — mirroring the
+ * API's `CreateBankAccountCommand` (adds `bankId`; status defaults to ACTIVE
+ * server-side) and `UpdateBankAccountCommand` (descriptive fields only — the
+ * lifecycle `status` is not editable here). `bic` / `alias` are nullable
+ * optionals; `null` clears them.
+ */
+export interface BankAccountInput {
+  holderName: string;
+  iban: string;
+  bic: string | null;
+  alias: string | null;
+  currency: BankAccountCurrency;
+}
+
+/** Create payload: the editable core plus the owning bank id (status defaults to ACTIVE server-side). */
+export interface CreateBankAccountInput extends BankAccountInput {
+  bankId: string;
+}
+
+/** Update payload: the descriptive core only — status transitions through {@link BankAccountRepository.changeStatus}. */
+export type UpdateBankAccountInput = BankAccountInput;
 
 /**
  * Server-side sort for a bank's accounts list. `field` is the public sort field;
@@ -33,11 +56,19 @@ export interface BankAccountSearchCriteria {
 export type BankAccountSearchPage = { accounts: BankAccount[] } & PageEnvelope;
 
 /**
- * Read-only domain port for a bank's associated accounts (CE-4: this surface
- * never writes). `search` starts a search for a given bank id; navigation is the
- * application-layer `BankAccountSearchNavigator`. No create/update/delete is
- * declared — the read context has zero write capability.
+ * Domain port for a bank's associated accounts. `search` starts a per-bank
+ * search (navigation is the application-layer `BankAccountSearchNavigator`);
+ * `find`/`create`/`update`/`delete` drive the standalone CRUD against the
+ * `/bank-accounts` endpoints (the create carries `bankId` in the body, the rest
+ * key off the account id). The 409 `bank-account-not-closed` precondition on
+ * delete is the API's authoritative guard; the UI mirrors it optimistically off
+ * the row's `status`.
  */
 export interface BankAccountRepository {
   search(bankId: string, criteria: BankAccountSearchCriteria): Promise<BankAccountSearchPage>;
+  find(id: string): Promise<BankAccount>;
+  create(input: CreateBankAccountInput): Promise<BankAccount>;
+  update(id: string, input: UpdateBankAccountInput): Promise<BankAccount>;
+  changeStatus(id: string, status: BankAccountStatus): Promise<BankAccount>;
+  delete(id: string): Promise<void>;
 }

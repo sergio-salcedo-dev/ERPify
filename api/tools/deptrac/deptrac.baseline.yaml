@@ -13,6 +13,17 @@
 # (Erpify\Backoffice\* / Erpify\Frontoffice\*) back out of this file.
 deptrac:
   skip_violations:
+    Erpify\Backoffice\BankAccount\Application\BankAccountCreator:
+      - Doctrine\ORM\EntityManagerInterface
+      - Symfony\Component\Validator\Exception\ValidationFailedException
+    Erpify\Backoffice\BankAccount\Application\BankAccountDeleter:
+      - Doctrine\ORM\EntityManagerInterface
+    Erpify\Backoffice\BankAccount\Application\BankAccountStatusChanger:
+      - Doctrine\ORM\EntityManagerInterface
+      - Symfony\Component\Validator\Exception\ValidationFailedException
+    Erpify\Backoffice\BankAccount\Application\BankAccountUpdater:
+      - Doctrine\ORM\EntityManagerInterface
+      - Symfony\Component\Validator\Exception\ValidationFailedException
     Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount:
       - Erpify\Shared\Validation\Infrastructure\EnumType
     Erpify\Backoffice\Bank\Application\BankCreator:

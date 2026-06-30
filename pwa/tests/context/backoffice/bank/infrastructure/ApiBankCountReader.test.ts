@@ -8,6 +8,7 @@ function httpClientReturning(response: unknown): HttpClient {
     get: vi.fn().mockResolvedValue(response),
     post: vi.fn(),
     put: vi.fn(),
+    patch: vi.fn(),
     delete: vi.fn(),
   };
 }

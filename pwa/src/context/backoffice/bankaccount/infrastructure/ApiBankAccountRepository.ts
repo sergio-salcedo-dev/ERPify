@@ -13,11 +13,17 @@ import type {
   BankAccountRepository,
   BankAccountSearchCriteria,
   BankAccountSearchPage,
+  CreateBankAccountInput,
+  UpdateBankAccountInput,
 } from "../domain/BankAccountRepository";
 
 interface BankAccountSearchResponse {
   data: BankAccountPrimitives[];
   pagination: PageEnvelope;
+}
+
+interface BankAccountSingleResponse {
+  data: BankAccountPrimitives;
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
@@ -77,6 +83,25 @@ export function isBankAccountSearchResponse(value: unknown): value is BankAccoun
 }
 
 /**
+ * Trust boundary for the detail/write resource (`GET|POST|PUT /bank-accounts`).
+ * Unlike the list item it carries `bankId` and the ISO-8601 timestamps, so the
+ * single-resource view is fully populated; the nested list projection omits them.
+ */
+function isBankAccountDetailPrimitives(value: unknown): value is BankAccountPrimitives {
+  return (
+    isObjectRecord(value) &&
+    typeof value.bankId === "string" &&
+    typeof value.createdAt === "string" &&
+    typeof value.updatedAt === "string" &&
+    isBankAccountPrimitives(value)
+  );
+}
+
+export function isBankAccountSingleResponse(value: unknown): value is BankAccountSingleResponse {
+  return isObjectRecord(value) && isBankAccountDetailPrimitives(value.data);
+}
+
+/**
  * Maps a validated search response to the domain page: items plus the envelope
  * carried through verbatim (the `links` are server-composed and never rebuilt).
  * Shared so the query and navigation adapters map identically.
@@ -121,5 +146,61 @@ export class ApiBankAccountRepository implements BankAccountRepository {
     );
 
     return toBankAccountSearchPage(response);
+  }
+
+  async find(id: string): Promise<BankAccount> {
+    const response = await this.httpClient.get(
+      API_ENDPOINTS.BACKOFFICE.BANK_ACCOUNTS.DETAILS(id),
+      isBankAccountSingleResponse,
+    );
+    return BankAccount.fromPrimitives(response.data);
+  }
+
+  async create(input: CreateBankAccountInput): Promise<BankAccount> {
+    // POST carries `bankId` in the body; status is omitted (the server defaults
+    // it to ACTIVE — the create command never accepts a status).
+    const response = await this.httpClient.post(
+      API_ENDPOINTS.BACKOFFICE.BANK_ACCOUNTS.CREATE,
+      {
+        bankId: input.bankId,
+        holderName: input.holderName,
+        iban: input.iban,
+        bic: input.bic,
+        alias: input.alias,
+        currency: input.currency,
+      },
+      isBankAccountSingleResponse,
+    );
+    return BankAccount.fromPrimitives(response.data);
+  }
+
+  async update(id: string, input: UpdateBankAccountInput): Promise<BankAccount> {
+    // PUT keys off the account id; `bankId` is immutable and the lifecycle `status` is never sent —
+    // it transitions through PATCH /status.
+    const response = await this.httpClient.put(
+      API_ENDPOINTS.BACKOFFICE.BANK_ACCOUNTS.UPDATE(id),
+      {
+        holderName: input.holderName,
+        iban: input.iban,
+        bic: input.bic,
+        alias: input.alias,
+        currency: input.currency,
+      },
+      isBankAccountSingleResponse,
+    );
+    return BankAccount.fromPrimitives(response.data);
+  }
+
+  async changeStatus(id: string, status: BankAccountStatus): Promise<BankAccount> {
+    const response = await this.httpClient.patch(
+      API_ENDPOINTS.BACKOFFICE.BANK_ACCOUNTS.CHANGE_STATUS(id),
+      { status },
+      isBankAccountSingleResponse,
+    );
+    return BankAccount.fromPrimitives(response.data);
+  }
+
+  async delete(id: string): Promise<void> {
+    await this.httpClient.delete(API_ENDPOINTS.BACKOFFICE.BANK_ACCOUNTS.DELETE(id));
   }
 }

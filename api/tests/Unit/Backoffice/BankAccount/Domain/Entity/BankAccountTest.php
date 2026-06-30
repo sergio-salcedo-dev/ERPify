@@ -6,6 +6,7 @@ namespace Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity;
 
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountStatus;
+use Erpify\Backoffice\BankAccount\Domain\Event\BankAccountCreatedDomainEvent;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity\Mother\BankAccountMother;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -22,6 +23,17 @@ final class BankAccountTest extends TestCase
         $account = BankAccountMother::create();
 
         $this->assertSame(BankAccountMother::DEFAULT_BANK_ID, $account->getBankId());
+    }
+
+    public function testCreateRecordsCreatedEventWhoseAggregateIdEqualsTheEntityId(): void
+    {
+        $account = BankAccountMother::create();
+
+        $events = $account->pullDomainEvents();
+        $this->assertCount(1, $events);
+        $this->assertInstanceOf(BankAccountCreatedDomainEvent::class, $events[0]);
+        $this->assertSame(BankAccountMother::DEFAULT_ID, $events[0]->aggregateId());
+        $this->assertSame(BankAccountMother::DEFAULT_BANK_ID, $events[0]->bankId());
     }
 
     public function testCreateCanonicalizesIbanToUppercaseWithoutWhitespace(): void
