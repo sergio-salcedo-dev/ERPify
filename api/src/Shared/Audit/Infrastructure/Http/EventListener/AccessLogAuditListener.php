@@ -7,7 +7,9 @@ namespace Erpify\Shared\Audit\Infrastructure\Http\EventListener;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditPolicy;
+use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Audit\Domain\HttpInteraction;
+use Erpify\Shared\Audit\Infrastructure\Http\RequestAuditResourceExtractor;
 use Erpify\Shared\Http\Infrastructure\ApiRequestMatcher;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\Request;
@@ -40,6 +42,7 @@ final readonly class AccessLogAuditListener
         private AuditLogger $auditLogger,
         private RequestStack $requestStack,
         private ApiRequestMatcher $apiRequestMatcher,
+        private RequestAuditResourceExtractor $resourceExtractor,
     ) {
     }
 
@@ -66,7 +69,7 @@ final readonly class AccessLogAuditListener
             return;
         }
 
-        $this->emitWithin($request, $decision->action, $decision->level);
+        $this->emitWithin($request, $decision->action, $decision->level, $this->resourceExtractor->extract($request));
     }
 
     /**
@@ -75,12 +78,12 @@ final readonly class AccessLogAuditListener
      * Re-establishing the request for the emission lets {@see AuditLogger} seal the same anonymous
      * actor, request correlation id and client ip/user-agent it would have sealed mid-request.
      */
-    private function emitWithin(Request $request, string $action, AuditLevel $level): void
+    private function emitWithin(Request $request, string $action, AuditLevel $level, ?AuditResource $resource): void
     {
         $this->requestStack->push($request);
 
         try {
-            $this->auditLogger->log($action, $level);
+            $this->auditLogger->log($action, $level, $resource);
         } finally {
             $this->requestStack->pop();
         }
