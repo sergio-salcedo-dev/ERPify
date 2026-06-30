@@ -19,6 +19,8 @@ export { DensityToggle, LIST_DENSITY_STORAGE_KEY, isListDensity } from "./Densit
 export type { ListDensity } from "./DensityToggle";
 export { EmptyState } from "./EmptyState";
 export { FormField, useFormField } from "./FormField";
+export { KeysetPagination } from "./KeysetPagination";
+export type { KeysetPaginationLabels } from "./KeysetPagination";
 export { Logo } from "./Logo";
 export type { LogoProps, LogoSize, LogoVariant } from "./Logo";
 export { MonogramAvatar } from "./MonogramAvatar";
