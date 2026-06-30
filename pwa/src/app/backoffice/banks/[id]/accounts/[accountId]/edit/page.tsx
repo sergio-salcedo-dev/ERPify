@@ -8,6 +8,7 @@ import { container } from "@/context/shared/dependency-injection/infrastructure/
 import { FindBankAccount } from "@/context/backoffice/bankaccount/application/FindBankAccount";
 import type { BankAccount } from "@/context/backoffice/bankaccount/domain/BankAccount";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
+import { BankAccountProblemType } from "@/context/backoffice/bankaccount/domain/BankAccountProblemType";
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { CorrelationIdChip, EmptyState, ProblemDisplay } from "@/components/erpify";
 import { buttonVariants } from "@/components/ui/button-variants";
@@ -31,6 +32,22 @@ function genericProblem(detail: string): ProblemDetails {
     title: "Unexpected error",
     status: 0,
     detail,
+    instance: uuidV7(),
+    "correlation-id": uuidV7(),
+  };
+}
+
+/**
+ * Client-side not-found problem for an account reached under the wrong bank's URL: the account API is
+ * not bank-scoped, so it loads, but a foreign account is rejected as not-found without a server
+ * round-trip. The not-found empty state requires a problem to render its correlation chip.
+ */
+function notFoundProblem(): ProblemDetails {
+  return {
+    type: BankAccountProblemType.NOT_FOUND,
+    title: "Account not found",
+    status: HttpStatus.NOT_FOUND,
+    detail: "We could not find an account with that id under this bank.",
     instance: uuidV7(),
     "correlation-id": uuidV7(),
   };
@@ -73,6 +90,7 @@ export default function EditBankAccountPage() {
         // loads. Reject the mismatch as not-found: every back-link, redirect, and the list realtime
         // scope key off the URL's bankId, so editing a foreign account would strand the user.
         if (result.bankId !== undefined && result.bankId !== bankId) {
+          setProblem(notFoundProblem());
           setState(ViewStatus.NOT_FOUND);
           return;
         }
