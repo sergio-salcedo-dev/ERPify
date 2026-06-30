@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { BankAccount } from "@/context/backoffice/bankaccount/domain/BankAccount";
-import { ApiBankAccountRepository } from "@/context/backoffice/bankaccount/infrastructure/ApiBankAccountRepository";
+import {
+  ApiBankAccountRepository,
+  isBankAccountSingleResponse,
+} from "@/context/backoffice/bankaccount/infrastructure/ApiBankAccountRepository";
 import type { HttpClient } from "@/context/shared/http-client/domain/HttpClient";
 import { SortDirection } from "@/context/shared/search/domain/SortDirection";
 import type { BankAccountSearchCriteria } from "@/context/backoffice/bankaccount/domain/BankAccountRepository";
@@ -33,6 +36,7 @@ function httpClientReturning(response: unknown): HttpClient {
     get: vi.fn().mockResolvedValue(response),
     post: vi.fn(),
     put: vi.fn(),
+    patch: vi.fn(),
     delete: vi.fn(),
   };
 }
@@ -152,5 +156,136 @@ describe("ApiBankAccountRepository response guards", () => {
     // A non-string iban is rejected.
     expect(guard({ data: [{ ...primitives, iban: 42 }], pagination })).toBe(false);
     expect(guard(undefined)).toBe(false);
+  });
+});
+
+const ACCOUNT_ID = "0190ffff-aaaa-7bbb-8ccc-0d1e2f3a4b5c";
+
+// Detail/write resource: unlike the list item it carries bankId + timestamps.
+const detailPrimitives = {
+  id: ACCOUNT_ID,
+  bankId: BANK_ID,
+  holderName: "Acme Corp",
+  iban: "ES9121000418450200051332",
+  bic: "CAIXESBBXXX",
+  alias: "Payroll",
+  currency: "EUR",
+  status: "ACTIVE",
+  createdAt: "2026-01-01T00:00:00+00:00",
+  updatedAt: "2026-01-02T00:00:00+00:00",
+};
+
+function writeHttpClient(): HttpClient {
+  return {
+    get: vi.fn().mockResolvedValue({ data: detailPrimitives }),
+    post: vi.fn().mockResolvedValue({ data: detailPrimitives }),
+    put: vi.fn().mockResolvedValue({ data: detailPrimitives }),
+    patch: vi.fn().mockResolvedValue({ data: detailPrimitives }),
+    delete: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+describe("ApiBankAccountRepository CRUD", () => {
+  it("find() GETs the standalone detail endpoint and maps bankId + timestamps", async () => {
+    const httpClient = writeHttpClient();
+    const account = await new ApiBankAccountRepository(httpClient).find(ACCOUNT_ID);
+
+    expect(vi.mocked(httpClient.get).mock.calls[0][0]).toBe(
+      `/api/v1/backoffice/bank-accounts/${ACCOUNT_ID}`,
+    );
+    expect(account).toBeInstanceOf(BankAccount);
+    expect(account.bankId).toBe(BANK_ID);
+    expect(account.iban).toBe("ES9121000418450200051332");
+    expect(account.createdAt).toBe("2026-01-01T00:00:00+00:00");
+    expect(account.updatedAt).toBe("2026-01-02T00:00:00+00:00");
+  });
+
+  it("create() POSTs /bank-accounts with bankId in the body and NEVER a status", async () => {
+    const httpClient = writeHttpClient();
+    await new ApiBankAccountRepository(httpClient).create({
+      bankId: BANK_ID,
+      holderName: "Acme Corp",
+      iban: "ES9121000418450200051332",
+      bic: "CAIXESBBXXX",
+      alias: "Payroll",
+      currency: "EUR",
+    });
+
+    const [url, body] = vi.mocked(httpClient.post).mock.calls[0];
+    expect(url).toBe("/api/v1/backoffice/bank-accounts");
+    expect(body).toEqual({
+      bankId: BANK_ID,
+      holderName: "Acme Corp",
+      iban: "ES9121000418450200051332",
+      bic: "CAIXESBBXXX",
+      alias: "Payroll",
+      currency: "EUR",
+    });
+    expect(body).not.toHaveProperty("status");
+  });
+
+  it("update() PUTs the detail endpoint with the descriptive fields and NEVER a bankId or status", async () => {
+    const httpClient = writeHttpClient();
+    await new ApiBankAccountRepository(httpClient).update(ACCOUNT_ID, {
+      holderName: "Acme Corp",
+      iban: "ES9121000418450200051332",
+      bic: null,
+      alias: null,
+      currency: "EUR",
+    });
+
+    const [url, body] = vi.mocked(httpClient.put).mock.calls[0];
+    expect(url).toBe(`/api/v1/backoffice/bank-accounts/${ACCOUNT_ID}`);
+    expect(body).toEqual({
+      holderName: "Acme Corp",
+      iban: "ES9121000418450200051332",
+      bic: null,
+      alias: null,
+      currency: "EUR",
+    });
+    expect(body).not.toHaveProperty("bankId");
+    expect(body).not.toHaveProperty("status");
+  });
+
+  it("changeStatus() PATCHes the dedicated /status endpoint with the new status", async () => {
+    const httpClient = writeHttpClient();
+    const account = await new ApiBankAccountRepository(httpClient).changeStatus(
+      ACCOUNT_ID,
+      "CLOSED",
+    );
+
+    const [url, body] = vi.mocked(httpClient.patch).mock.calls[0];
+    expect(url).toBe(`/api/v1/backoffice/bank-accounts/${ACCOUNT_ID}/status`);
+    expect(body).toEqual({ status: "CLOSED" });
+    expect(account).toBeInstanceOf(BankAccount);
+  });
+
+  it("delete() DELETEs the standalone detail endpoint", async () => {
+    const httpClient = writeHttpClient();
+    await new ApiBankAccountRepository(httpClient).delete(ACCOUNT_ID);
+    expect(vi.mocked(httpClient.delete).mock.calls[0][0]).toBe(
+      `/api/v1/backoffice/bank-accounts/${ACCOUNT_ID}`,
+    );
+  });
+});
+
+describe("isBankAccountSingleResponse", () => {
+  it("accepts the fully-populated detail/write resource", () => {
+    expect(isBankAccountSingleResponse({ data: detailPrimitives })).toBe(true);
+    expect(
+      isBankAccountSingleResponse({ data: { ...detailPrimitives, bic: null, alias: null } }),
+    ).toBe(true);
+  });
+
+  it("rejects a list-shaped item lacking bankId / timestamps", () => {
+    expect(isBankAccountSingleResponse({ data: primitives })).toBe(false);
+    expect(isBankAccountSingleResponse({ data: { ...detailPrimitives, bankId: undefined } })).toBe(
+      false,
+    );
+    expect(
+      isBankAccountSingleResponse({ data: { ...detailPrimitives, createdAt: undefined } }),
+    ).toBe(false);
+    expect(isBankAccountSingleResponse({ data: { ...detailPrimitives, iban: 42 } })).toBe(false);
+    expect(isBankAccountSingleResponse(undefined)).toBe(false);
   });
 });

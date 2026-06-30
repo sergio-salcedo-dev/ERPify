@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Backoffice\BankAccount\Infrastructure\Http;
 
+use DateTimeInterface;
 use Erpify\Backoffice\BankAccount\Application\Resource\BankAccountListResource;
 use Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountStatus;
 use Erpify\Backoffice\BankAccount\Infrastructure\Http\BankAccountResourceMapper;
@@ -26,6 +27,51 @@ final class BankAccountResourceMapperTest extends TestCase
     private const string ACCOUNT_ID = '33333333-3333-7000-8000-000000000001';
 
     private const string OTHER_ACCOUNT_ID = '33333333-3333-7000-8000-000000000002';
+
+    public function testResourcePinsTenKeysIncludingBankIdAndAtomTimestamps(): void
+    {
+        $account = BankAccountMother::create(
+            id: self::ACCOUNT_ID,
+            holderName: 'Globex Corporation',
+            iban: 'DE89370400440532013000',
+            bic: 'DEUTDEFFXXX',
+            alias: 'Globex Treasury',
+            currency: Currency::EUR,
+            status: BankAccountStatus::INACTIVE,
+        );
+
+        $resource = (new BankAccountResourceMapper())->toResource($account);
+
+        $this->assertSame(
+            ['id', 'bankId', 'holderName', 'iban', 'bic', 'alias', 'currency', 'status', 'createdAt', 'updatedAt'],
+            \array_keys(\get_object_vars($resource)),
+        );
+        $this->assertSame(self::ACCOUNT_ID, $resource->id);
+        $this->assertSame(BankAccountMother::DEFAULT_BANK_ID, $resource->bankId);
+        $this->assertSame('Globex Corporation', $resource->holderName);
+        $this->assertSame('DE89370400440532013000', $resource->iban);
+        $this->assertSame('DEUTDEFFXXX', $resource->bic);
+        $this->assertSame('Globex Treasury', $resource->alias);
+        $this->assertSame('EUR', $resource->currency);
+        $this->assertSame('INACTIVE', $resource->status);
+        $this->assertSame(
+            $account->getCreatedAt()->format(DateTimeInterface::ATOM),
+            $resource->createdAt,
+        );
+        $this->assertSame(
+            $account->getUpdatedAt()->format(DateTimeInterface::ATOM),
+            $resource->updatedAt,
+        );
+    }
+
+    public function testResourceEmitsNullForAbsentOptionalFields(): void
+    {
+        $resource = (new BankAccountResourceMapper())->toResource(BankAccountMother::create());
+
+        $this->assertNull($resource->bic);
+        $this->assertNull($resource->alias);
+        $this->assertSame('ACTIVE', $resource->status);
+    }
 
     public function testListResourcePinsSevenKeysWithEnumValuesAndOmitsBankId(): void
     {

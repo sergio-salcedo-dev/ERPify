@@ -26,4 +26,24 @@ final class BankAccountMother
     ): BankAccount {
         return BankAccount::create($id, $bankId, $holderName, $iban, $bic, $alias, $currency, $status);
     }
+
+    /**
+     * A created account with its create event already pulled, so a subsequent update/delete test
+     * observes exactly one new event.
+     */
+    public static function drained(
+        string $id = self::DEFAULT_ID,
+        string $bankId = self::DEFAULT_BANK_ID,
+        string $holderName = 'Globex Corporation',
+        string $iban = 'DE89370400440532013000',
+        ?string $bic = null,
+        ?string $alias = null,
+        Currency $currency = Currency::EUR,
+        BankAccountStatus $status = BankAccountStatus::ACTIVE,
+    ): BankAccount {
+        $account = self::create($id, $bankId, $holderName, $iban, $bic, $alias, $currency, $status);
+        $account->pullDomainEvents();
+
+        return $account;
+    }
 }
