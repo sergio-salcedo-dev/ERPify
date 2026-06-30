@@ -9,15 +9,17 @@ use DateTimeImmutable;
 use Erpify\Shared\Audit\Domain\Exception\InvalidAuditRetentionPolicy;
 
 /**
- * The differentiated retention windows for {@see AuditLevel}: how long a row of each level survives in
- * `audit_log` before the pruner may delete it. The legal separation between the two axes is encoded as an
- * invariant — `security` must strictly outlive `activity` — so a misconfigured schedule fails loudly at
- * construction rather than silently over-pruning the security trail.
+ * The differentiated privacy-ceiling windows for the audit levels that carry one: how long a row of that
+ * level survives in `audit_log` before the pruner may delete it. The legal separation between the activity
+ * and security axes is encoded as an invariant — `security` must strictly outlive `activity` — so a
+ * misconfigured schedule fails loudly at construction rather than silently over-pruning the security trail.
  *
- * The policy owns the per-level decision: {@see thresholdsAt()} turns "now" into the full deletion plan
- * (one {@see AuditRetentionThreshold} per level), so the storage policy is expressed as data here, not as
- * a level loop in the message handler. Pure value object — the caller passes the instant, keeping the plan
- * unit-testable against a fixed point.
+ * `change` rows are regulatory compliance evidence governed by a retention floor, not a privacy ceiling, so
+ * the plan carries no cutoff for them and the pruner never deletes a change row on this axis. The policy
+ * owns the per-level decision: {@see thresholdsAt()} turns "now" into the deletion plan (one
+ * {@see AuditRetentionThreshold} per ceiling-bearing level), so the storage policy is expressed as data
+ * here, not as a level loop in the message handler. Pure value object — the caller passes the instant,
+ * keeping the plan unit-testable against a fixed point.
  */
 final readonly class AuditRetentionPolicy
 {
@@ -48,19 +50,24 @@ final readonly class AuditRetentionPolicy
         $plan = [];
 
         foreach (AuditLevel::cases() as $level) {
-            $plan[] = new AuditRetentionThreshold($level, $this->deleteBeforeFor($level, $now));
+            $days = $this->ceilingDaysFor($level);
+
+            if (null === $days) {
+                continue;
+            }
+
+            $plan[] = new AuditRetentionThreshold($level, $now->sub(new DateInterval('P' . $days . 'D')));
         }
 
         return $plan;
     }
 
-    private function deleteBeforeFor(AuditLevel $level, DateTimeImmutable $now): DateTimeImmutable
+    private function ceilingDaysFor(AuditLevel $level): ?int
     {
-        $days = match ($level) {
+        return match ($level) {
             AuditLevel::ACTIVITY => $this->activityRetentionDays,
             AuditLevel::SECURITY => $this->securityRetentionDays,
+            AuditLevel::CHANGE => null,
         };
-
-        return $now->sub(new DateInterval('P' . $days . 'D'));
     }
 }

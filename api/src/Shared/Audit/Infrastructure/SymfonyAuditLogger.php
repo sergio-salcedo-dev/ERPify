@@ -10,6 +10,7 @@ use Erpify\Shared\Audit\Application\AuditLogWriter;
 use Erpify\Shared\Audit\Application\RecordAuditEntry;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
+use LogicException;
 use Override;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
@@ -26,6 +27,10 @@ use Throwable;
  * swallowed and logged at warning, so a successful operation never becomes a 5xx over an audit miss.
  * The warning carries only `action`/`level`/`exception` — never metadata, actor or resource id, which
  * are tainted and could leak PII.
+ *
+ * `change` is not a caller-initiated level: a change row is captured atomically by the Doctrine `onFlush`
+ * listener inside the writing transaction, so routing one through this logger is a programming error and is
+ * rejected rather than written best-effort.
  *
  * Sealing the trusted context onto the entry is {@see AuditEntryFactory}'s job; this class only decides
  * where the sealed entry goes.
@@ -47,6 +52,10 @@ final readonly class SymfonyAuditLogger implements AuditLogger
         match ($level) {
             AuditLevel::SECURITY => $this->writeSecurity($action, $level, $resource, $metadata),
             AuditLevel::ACTIVITY => $this->dispatchActivity($action, $level, $resource, $metadata),
+            AuditLevel::CHANGE => throw new LogicException(
+                'A change-level entry is captured by the Doctrine onFlush listener, never routed through the '
+                . 'audit logger.',
+            ),
         };
     }
 

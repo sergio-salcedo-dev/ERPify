@@ -23,7 +23,8 @@ Feature: Update a bank
     And the JSON node "data.logoUrl" should not exist
     And the JSON node "data.storedObjectUrl" should not exist
     And the JSON node "data.accountCount" should not exist
-    And 9 requests got executed only for doctrine connection "default"
+    # The budget includes the regulatory change row the audit listener writes on the same transaction.
+    And 10 requests got executed only for doctrine connection "default"
     And the last updated "Bank" entity found by "id=ed17ed00-0000-7000-8000-000000000001" should match:
       | name      | Updated Bank |
       | shortName | UB           |

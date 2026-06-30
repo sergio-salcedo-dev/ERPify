@@ -36,6 +36,23 @@ final class AuditRetentionPolicyTest extends TestCase
     }
 
     #[Test]
+    public function itPlansNoCeilingCutoffForChangeRows(): void
+    {
+        $policy = new AuditRetentionPolicy(activityRetentionDays: 90, securityRetentionDays: 365);
+
+        $plannedLevels = \array_map(
+            static fn (AuditRetentionThreshold $threshold): AuditLevel => $threshold->level,
+            $policy->thresholdsAt(new DateTimeImmutable(self::NOW)),
+        );
+
+        $this->assertNotContains(
+            AuditLevel::CHANGE,
+            $plannedLevels,
+            'change rows are compliance evidence governed by a retention floor, not the privacy ceiling',
+        );
+    }
+
+    #[Test]
     public function itKeepsSecurityRowsLongerThanActivityRows(): void
     {
         $policy = new AuditRetentionPolicy(activityRetentionDays: 90, securityRetentionDays: 365);
