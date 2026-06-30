@@ -331,3 +331,7 @@ deptrac:
         Erpify\Backoffice\BankAccount\Application\BankAccountSearcher:
             - Erpify\Backoffice\Bank\Domain\Repository\BankExistenceChecker
             - Erpify\Backoffice\Bank\Domain\Exception\BankNotFoundException
+        Erpify\Backoffice\BankAccount\Application\BankAccountCreator:
+            - Erpify\Backoffice\Bank\Domain\Repository\BankExistenceChecker
+        Erpify\Backoffice\BankAccount\Infrastructure\Persistence\Doctrine\DoctrineBankAccountCollectionSearchRepository:
+            - Erpify\Backoffice\Bank\Domain\Entity\Bank

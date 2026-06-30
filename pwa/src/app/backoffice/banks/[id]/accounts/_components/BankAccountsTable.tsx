@@ -9,11 +9,13 @@ import {
   type ListDensity,
   type StatusBadgeVariant,
 } from "@/components/erpify";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import type {
   BankAccount,
   BankAccountStatus,
 } from "@/context/backoffice/bankaccount/domain/BankAccount";
 import { IbanCell } from "./IbanCell";
+import { BankAccountRowActions } from "./BankAccountRowActions";
 
 const STATUS_VARIANT: Record<BankAccountStatus, StatusBadgeVariant> = {
   ACTIVE: "success",
@@ -31,15 +33,28 @@ const STATUS_LABEL: Record<BankAccountStatus, string> = {
   CLOSED: "Closed",
 };
 
+/**
+ * Optional row-mutation hooks. When `bankId` + the delete callbacks are
+ * supplied, the table renders an Actions column (edit / delete) per row; when
+ * omitted the table stays read-only (the original list contract).
+ */
+interface BankAccountRowMutations {
+  bankId: string;
+  onAccountDeleted: (id: string) => void;
+  onAccountDeleteFailed: (id: string, problem: ProblemDetails) => void;
+}
+
 interface BankAccountsTableProps {
   accounts: BankAccount[];
   density?: ListDensity;
+  mutations?: BankAccountRowMutations;
 }
 
 interface ColumnContext {
   revealedId: string | null;
   onReveal: (id: string) => void;
   onHide: () => void;
+  mutations?: BankAccountRowMutations;
 }
 
 // Built outside the component so the cell renderers are not re-declared as
@@ -49,18 +64,19 @@ function buildColumns({
   revealedId,
   onReveal,
   onHide,
+  mutations,
 }: ColumnContext): DataTableColumn<BankAccount>[] {
-  return [
+  const columns: DataTableColumn<BankAccount>[] = [
     {
       id: "holder",
       header: "Holder",
-      colClassName: "w-[26%]",
+      colClassName: mutations ? "w-[24%]" : "w-[26%]",
       cell: (account) => <TruncatedText value={account.holderName} openOnRowFocus />,
     },
     {
       id: "iban",
       header: "IBAN",
-      colClassName: "w-[34%]",
+      colClassName: mutations ? "w-[30%]" : "w-[34%]",
       cell: (account) => (
         <IbanCell
           iban={account.iban}
@@ -74,7 +90,7 @@ function buildColumns({
     {
       id: "alias",
       header: "Alias",
-      colClassName: "w-[18%]",
+      colClassName: mutations ? "w-[16%]" : "w-[18%]",
       cell: (account) =>
         account.alias ? (
           <TruncatedText value={account.alias} openOnRowFocus={false} />
@@ -91,7 +107,7 @@ function buildColumns({
     {
       id: "status",
       header: "Status",
-      colClassName: "w-[12%]",
+      colClassName: mutations ? "w-[10%]" : "w-[12%]",
       cell: (account) => (
         <StatusBadge
           variant={STATUS_VARIANT[account.status]}
@@ -100,6 +116,26 @@ function buildColumns({
       ),
     },
   ];
+
+  if (mutations) {
+    columns.push({
+      id: "actions",
+      header: "Actions",
+      colClassName: "w-[10%]",
+      cell: (account) => (
+        <BankAccountRowActions
+          id={account.id}
+          bankId={mutations.bankId}
+          holderName={account.holderName}
+          status={account.status}
+          onAccountDeleted={mutations.onAccountDeleted}
+          onAccountDeleteFailed={mutations.onAccountDeleteFailed}
+        />
+      ),
+    });
+  }
+
+  return columns;
 }
 
 /**
@@ -109,7 +145,11 @@ function buildColumns({
  * row re-masks the rest — and it resets whenever the page (the `accounts` array)
  * changes, so paginating always re-masks (PII).
  */
-export function BankAccountsTable({ accounts, density }: Readonly<BankAccountsTableProps>) {
+export function BankAccountsTable({
+  accounts,
+  density,
+  mutations,
+}: Readonly<BankAccountsTableProps>) {
   const [revealedId, setRevealedId] = useState<string | null>(null);
 
   // A new page (or a reconcile) replaces the array — re-mask any revealed IBAN.
@@ -126,7 +166,12 @@ export function BankAccountsTable({ accounts, density }: Readonly<BankAccountsTa
   // re-render and keep the IBAN visible past the intended window.
   const hideRevealed = useCallback(() => setRevealedId(null), []);
 
-  const columns = buildColumns({ revealedId, onReveal: setRevealedId, onHide: hideRevealed });
+  const columns = buildColumns({
+    revealedId,
+    onReveal: setRevealedId,
+    onHide: hideRevealed,
+    mutations,
+  });
 
   return (
     <DataTable

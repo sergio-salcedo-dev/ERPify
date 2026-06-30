@@ -25,6 +25,10 @@ framework:
             Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent: async
             Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent: async
             Erpify\Backoffice\Bank\Domain\Event\BankDeletedDomainEvent: async
+            Erpify\Backoffice\BankAccount\Domain\Event\BankAccountCreatedDomainEvent: async
+            Erpify\Backoffice\BankAccount\Domain\Event\BankAccountUpdatedDomainEvent: async
+            Erpify\Backoffice\BankAccount\Domain\Event\BankAccountDeletedDomainEvent: async
+            Erpify\Backoffice\BankAccount\Domain\Event\BankAccountStatusChangedDomainEvent: async
             Erpify\Shared\Audit\Application\RecordAuditEntry: audit
 
         buses:

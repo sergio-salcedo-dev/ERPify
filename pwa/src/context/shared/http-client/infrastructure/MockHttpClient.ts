@@ -52,6 +52,10 @@ export class MockHttpClient implements HttpClient {
     return {} as T;
   }
 
+  async patch<TBody, T>(_url: string, _body: TBody, _validate?: ResponseGuard<T>): Promise<T> {
+    return {} as T;
+  }
+
   async delete(_url: string): Promise<void> {
     return;
   }

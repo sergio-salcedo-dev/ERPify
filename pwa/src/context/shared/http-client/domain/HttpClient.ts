@@ -8,5 +8,6 @@ export interface HttpClient {
   get<T>(url: string, validate?: ResponseGuard<T>): Promise<T>;
   post<TBody, T>(url: string, body: TBody, validate?: ResponseGuard<T>): Promise<T>;
   put<TBody, T>(url: string, body: TBody, validate?: ResponseGuard<T>): Promise<T>;
+  patch<TBody, T>(url: string, body: TBody, validate?: ResponseGuard<T>): Promise<T>;
   delete(url: string): Promise<void>;
 }
