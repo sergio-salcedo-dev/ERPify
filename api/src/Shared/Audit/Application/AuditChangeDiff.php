@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Audit\Application;
 
+use BackedEnum;
 use DateTimeInterface;
+use UnitEnum;
 
 /**
  * Turns a Doctrine field changeset (`field => [old, new]`) into the structured `metadata` diff a
@@ -13,10 +15,10 @@ use DateTimeInterface;
  * listener that feeds it.
  *
  * Every value is coerced to a JSON-safe scalar so the diff round-trips through the JSONB column without
- * surprises: scalars and null pass through, a date becomes an ISO-8601 string, and any other object is
- * reduced to its type name so opaque object state never leaks into the trail. A change that is not a simple
- * `[old, new]` pair — Doctrine reports a to-many change as the collection itself — is skipped: field-level
- * scalar capture is the scope here.
+ * surprises: scalars and null pass through, a date becomes an ISO-8601 string, a backed enum its backing
+ * value and a pure enum its case name, and any other object is reduced to its type name so opaque object
+ * state never leaks into the trail. A change that is not a simple `[old, new]` pair — Doctrine reports a
+ * to-many change as the collection itself — is skipped: field-level scalar capture is the scope here.
  */
 final class AuditChangeDiff
 {
@@ -53,6 +55,8 @@ final class AuditChangeDiff
         return match (true) {
             null === $value, \is_scalar($value) => $value,
             $value instanceof DateTimeInterface => $value->format(DateTimeInterface::ATOM),
+            $value instanceof BackedEnum => $value->value,
+            $value instanceof UnitEnum => $value->name,
             default => \get_debug_type($value),
         };
     }

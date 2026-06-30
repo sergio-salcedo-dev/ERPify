@@ -6,6 +6,8 @@ namespace Erpify\Tests\Unit\Shared\Audit\Application;
 
 use DateTimeImmutable;
 use Erpify\Shared\Audit\Application\AuditChangeDiff;
+use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditWriteOperation;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -60,6 +62,20 @@ final class AuditChangeDiffTest extends TestCase
         $diff = (new AuditChangeDiff())->of(['media' => [null, new stdClass()]]);
 
         $this->assertSame(['changes' => ['media' => ['old' => null, 'new' => 'stdClass']]], $diff);
+    }
+
+    public function testItRecordsABackedEnumAsItsBackingValueNotItsClassName(): void
+    {
+        $diff = (new AuditChangeDiff())->of(['level' => [AuditLevel::ACTIVITY, AuditLevel::CHANGE]]);
+
+        $this->assertSame(['changes' => ['level' => ['old' => 'activity', 'new' => 'change']]], $diff);
+    }
+
+    public function testItRecordsAPureEnumAsItsCaseName(): void
+    {
+        $diff = (new AuditChangeDiff())->of(['operation' => [null, AuditWriteOperation::DELETED]]);
+
+        $this->assertSame(['changes' => ['operation' => ['old' => null, 'new' => 'DELETED']]], $diff);
     }
 
     public function testItSkipsAChangeThatIsNotASimpleOldToNewPair(): void
