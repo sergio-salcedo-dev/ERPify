@@ -114,6 +114,31 @@ final class AuditLogPrunerFunctionalTest extends KernelTestCase
         });
     }
 
+    public function testItPrunesChangeRowsOnlyOncePastTheComplianceFloorAndKeepsRecentEvidence(): void
+    {
+        $this->inRolledBackTransaction(function (Connection $connection): void {
+            $anchor = new DateTimeImmutable(self::ANCHOR);
+            $writer = new DbalAuditLogWriter($connection);
+
+            $staleChange = $this->seed($writer, AuditLevel::CHANGE, $this->daysBefore($anchor, 6 * 365));
+            $recentChange = $this->seed($writer, AuditLevel::CHANGE, $this->daysBefore($anchor, 4 * 365));
+
+            $pruner = new DbalAuditLogPruner($connection, new PostgresAdvisoryLock($connection), new NullLogger());
+            $pruner->prune(...(new AuditRetentionPolicy(90, 365))->thresholdsAt($anchor));
+
+            $this->assertSame(
+                0,
+                $this->countRowsForId($connection, $staleChange),
+                'a change row past the five-year floor becomes prune-eligible',
+            );
+            $this->assertSame(
+                1,
+                $this->countRowsForId($connection, $recentChange),
+                'a change row within the floor is kept as compliance evidence, despite no privacy ceiling',
+            );
+        });
+    }
+
     private function seed(DbalAuditLogWriter $writer, AuditLevel $level, DateTimeImmutable $occurredOn): string
     {
         $entry = AuditLogEntry::create(
