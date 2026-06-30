@@ -133,7 +133,14 @@ you change anything here.
       `kernel.terminate` (→ `activity`) and permission denials on `kernel.exception`
       (→ `security`), with `ip` (`Request::getClientIp()`, trusted-proxy aware so a
       spoofed `X-Forwarded-For` cannot forge it) and `user_agent` (trimmed to the
-      column width) sealed onto every entry. Its `ip` / `user_agent` / `metadata` are
+      column width) sealed onto every entry. **Write capture is also wired:** every
+      create/update/delete of an aggregate marked `AuditedEntity` records a `change`
+      row with a field-level before/after diff, written synchronously inside the
+      business transaction so the row is atomic with the write (out-of-band flushes —
+      fixtures, seeds — are not captured). Only catalog aggregates (`Bank`) are audited
+      today, so the diff holds **no personal data**; a PII-bearing diff (a person
+      aggregate) must be crypto-shredded before it may be stored (E2), never written in
+      clear. Its `ip` / `user_agent` / `metadata` are
       **client-controlled (tainted)** — escape on render in the future admin
       investigation UI, never use in a trust or authorization decision; the writer
       parameterises every value (no string-interpolated SQL). **GDPR erasure is

@@ -33,6 +33,7 @@ final class AuditLevelTest extends TestCase
     {
         yield 'activity' => ['activity', AuditLevel::ACTIVITY];
         yield 'security' => ['security', AuditLevel::SECURITY];
+        yield 'change' => ['change', AuditLevel::CHANGE];
     }
 
     public function testEveryLevelIsPinnedByAToken(): void
