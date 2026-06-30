@@ -54,3 +54,11 @@ src/Backoffice/BankAccount/Application/BankAccountSearcher.php => Erpify\Backoff
 # BankExistenceChecker port the searcher uses (UUID-shape → 400, existence → 404 before the INSERT
 # touches the FK). Same reusable cross-context existence seam, write direction.
 src/Backoffice/BankAccount/Application/BankAccountCreator.php => Erpify\Backoffice\Bank\Domain\Repository\BankExistenceChecker
+
+# BankAccount → Bank read-composition JOIN (ADR D3). DoctrineBankAccountCollectionSearchRepository
+# (BankAccount/Infrastructure) composes each account row with its owning bank's identity
+# (name/shortName) via a to-one DQL JOIN into a projection DTO — the read-composition pattern the ADR
+# prescribes for "account + bank.name", not a runtime enricher. It imports the Bank *entity* (the JOIN
+# target), a deeper read coupling than the port-based seams above, sanctioned by
+# docs/adr/bank-bankaccount-modeling.md (D3).
+src/Backoffice/BankAccount/Infrastructure/Persistence/Doctrine/DoctrineBankAccountCollectionSearchRepository.php => Erpify\Backoffice\Bank\Domain\Entity\Bank
