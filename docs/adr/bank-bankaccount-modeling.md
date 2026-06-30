@@ -75,6 +75,26 @@ El ciclo de vida de estas *projection policies* (cuándo un enricher de lectura 
 debe reubicarse en un read-model explícito o materializado) se rige por los cinco invariantes de
 [`../rules/read-side-projections.md`](../rules/read-side-projections.md).
 
+**Unidad de gobierno: el contrato de proyección, no el campo ni su representación.** La lectura
+cross-módulo se gobierna por su **contrato de proyección** — la semántica del dato publicado —, hoy
+materializado como puerto + tipo de proyección (`BankAccountCollectionSearchRepository` →
+`BankAccountCollectionRow`); renombrar interfaz/DTO/namespace no lo altera si el dato y su significado
+se conservan, y el `SELECT NEW` + JOIN del adapter Doctrine es detalle interno, no el contrato. Añadir
+`b.swift`/`b.country` es un argumento al DTO y una columna al `SELECT`; ordenar por banco, una entrada
+al `SortFieldMap` (`'bankName' => 'b.name'`) — **cero** dependencias nuevas. Dos cuentas distintas: el
+*contrato* crece O(vistas); la *dependencia*, O(aristas módulo-consumidor → entidad), hoy **una sola
+línea** en `api/.bounded-context-allowlist` (→ entidad `Bank`, espejada en deptrac); el campo, O(0).
+Otro módulo (Payments, Treasury) que haga JOIN a `Bank` añade su línea; sus campos, no.
+
+Si la lectura ordena/filtra/pagina por atributos del otro módulo el JOIN es **obligatorio**, nunca
+enriquecimiento posterior (invariante 2 de
+[`../rules/read-side-projections.md`](../rules/read-side-projections.md), ya gateado: keyset no ordena
+por un valor que solo conoce tras fijar la página), y exige `SELECT NEW Dto(...)` con las columnas de
+orden como propiedades legibles (`SELECT ba, b.col` rompe el cursor). La evolución a un read-model
+materializado se rige por su *promotion rule*, **sin cambiar el contrato**. **Promoción a un puerto
+publicado** (`BankSummaryReader`) solo si coinciden Regla de Tres **y** un consumidor sin búsqueda SQL
+sobre `Bank`; antes, abstracción prematura.
+
 ### D4 — Las entidades siguen en `Domain/` con metadato pasivo
 
 Se confirma la excepción documentada de
