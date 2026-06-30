@@ -9,6 +9,9 @@ SUPERLINTER_IMAGE                 ?= ghcr.io/super-linter/super-linter:latest
 # Use the 'slim' version for faster downloads and GHCR for reliability
 SUPERLINTER_SLIM_IMAGE            ?= ghcr.io/super-linter/super-linter:slim-latest
 SUPERLINTER_VALIDATE_ALL_CODEBASE ?= true
+# Gitignored paths (the project-root tmp/ scratch dir, build output, …) are skipped via
+# IGNORE_GITIGNORED_FILES below, not this regex: the repo mounts at /tmp/lint, so a bare `tmp`
+# here would match the mount prefix and exclude the whole workspace.
 SUPERLINTER_EXCLUDES              ?= (^|/)(vendor|node_modules|var|public/bundles|\.next)/
 #SUPERLINTER_EXCLUDES := .*vendor/.*|.*node_modules/.*|.*\.next/.*|.*out/.*|\.git/.*|.*dist/.*|.*build/.*|.*_bmad-output/.*|api/config/reference\.php|api/migrations/.*|api/tools/.*
 
@@ -19,6 +22,7 @@ super-lint.full: ## Run SuperLinter over the whole repo (requires GITHUB_TOKEN)
 		-e DEFAULT_BRANCH=main \
 		-e VALIDATE_ALL_CODEBASE=$(SUPERLINTER_VALIDATE_ALL_CODEBASE) \
 		-e FILTER_REGEX_EXCLUDE='$(SUPERLINTER_EXCLUDES)' \
+		-e IGNORE_GITIGNORED_FILES=true \
 		-e GITHUB_TOKEN=$(GITHUB_TOKEN) \
 		-v $(PROJECT_ROOT):/tmp/lint \
 		$(SUPERLINTER_IMAGE)
@@ -30,6 +34,7 @@ super-lint.slim: ## SuperLinter on changed files only (slim image)
 		-e DEFAULT_BRANCH=main \
 		-e VALIDATE_ALL_CODEBASE=false \
 		-e FILTER_REGEX_EXCLUDE='$(SUPERLINTER_EXCLUDES)' \
+		-e IGNORE_GITIGNORED_FILES=true \
 		-e GITHUB_TOKEN=$(GITHUB_TOKEN) \
 		-v $(PROJECT_ROOT):/tmp/lint \
 		$(SUPERLINTER_SLIM_IMAGE)

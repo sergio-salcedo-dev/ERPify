@@ -91,3 +91,4 @@ pnpm-debug.log*
 /.claude/worktrees/
 /.superpowers/brainstorm/
 .claude/.story-automator-active
+/tmp/

@@ -226,6 +226,10 @@ No mass cleanup of existing files. Instead apply the **boy scout rule**: when ed
 - `api/var/` — Symfony runtime cache and logs; never commit.
 - `api/migrations/` once merged — generate new ones via `make db.diff`. Editing a migration on the current feature branch is allowed; editing an applied/merged one is not.
 
+### Temporary / scratch files
+
+Write any ad-hoc temporary file Claude creates (hand-off prompts, intermediate outputs, working notes, throwaway scripts) under the project-root `tmp/` directory — never the system scratchpad, bare `/tmp`, or anywhere else in the tree. `tmp/` is gitignored, so its contents stay out of every commit. This overrides any default scratch-directory behaviour.
+
 ### bmad working artifacts
 
 Files under `_bmad-output/implementation-artifacts/` are **transient working artifacts**, not durable docs.
