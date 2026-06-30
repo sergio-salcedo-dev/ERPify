@@ -31,19 +31,27 @@ describe("AuditEntryDrawer", () => {
     expect(screen.queryByText("[REDACTED]")).toBeNull();
   });
 
-  it("renders the PII sections from a supplied detail (the 4.2a forward path)", () => {
+  it("renders the field-by-field diff for a change entry from a supplied detail", () => {
+    const changeEntry: AuditEntry = {
+      ...ENTRY,
+      level: "change",
+      action: "BANK_UPDATED",
+      resourceType: "Bank",
+    };
     render(
       <AuditEntryDrawer
-        entry={ENTRY}
+        entry={changeEntry}
         open
         onClose={vi.fn()}
-        detail={{ ip: "[REDACTED]", userAgent: "curl/8.4", metadata: { route: "/x" } }}
+        detail={{
+          ...changeEntry,
+          metadata: { changes: { name: { old: "BBVA", new: "BBVA S.A." } } },
+        }}
       />,
     );
-    expect(screen.queryByTestId("audit-entry-drawer__dormant")).toBeNull();
-    expect(screen.getByText("[REDACTED]")).toBeInTheDocument();
-    expect(screen.getByText("curl/8.4")).toBeInTheDocument();
-    expect(screen.getByText(/"route": "\/x"/)).toBeInTheDocument();
+    expect(screen.getByTestId("audit-entry-drawer__diff")).toBeInTheDocument();
+    expect(screen.getByText("BBVA")).toBeInTheDocument();
+    expect(screen.getByText("BBVA S.A.")).toBeInTheDocument();
   });
 
   it("exposes query pivots that fire their callbacks (the keyboard-complete path)", () => {

@@ -58,6 +58,8 @@ export const API_ENDPOINTS = {
     },
     AUDIT: {
       TIMELINE: `${BACKOFFICE_PREFIX}/audit/timeline`,
+      EVENT_DETAIL: (id: string): string =>
+        `${BACKOFFICE_PREFIX}/audit/events/${encodeURIComponent(id)}`,
     },
   },
   FRONTOFFICE: {

@@ -68,17 +68,61 @@ Discarded: ship the read UI behind network-only restriction — unauthenticated 
 Implementation is **not** one block gated on auth — three independent dependencies decide order:
 
 - **Pre-auth, zero rework** — write capture (D1/D2), reconciliation (D3), the read mechanism + resource extractor (D4) and the retention floor (D7) are auth-independent. The sibling ADR already froze "audit backbone before User/RBAC": `actor_id` stays nullable and only `ActorContextFactory` swaps when auth lands — schema, bus, storage, retention and read model do not. The capture backbone it extends is already live (#377). Until auth, actor is `anonymous`/`system`.
-- **Gated on a natural-person entity, not auth** — crypto-shredding + keystore + PII classification (D6) have nothing to encrypt while every audited entity is a catalog (`Bank`/`BankAccount` are not PII). Building the keystore now is speculative (YAGNI); it lands with the first person aggregate (`Customer`/`Employee`).
+- **Gated on a natural-person entity, not auth** — crypto-shredding + keystore + PII classification (D6) were deferred as speculative (YAGNI) while every audited entity looked like a catalog. **Superseded by D10/D11: the data — a `BankAccount` PII field — not a person aggregate, triggers E2, so the keystore lands now.**
 - **Gated on auth/RBAC** — restricted, self-audited access (D8) and production-readiness. The trail is mechanically complete pre-auth but **ISO-complete only once attribution is real** (`actor_id` NOT NULL); pre-auth every action is `anonymous`/`system`, forensically thin.
 
 Discarded: sequencing the whole epic after auth — over-couples, stalls field-level change capture (a live #377 consumer) behind an unrelated subsystem, and forfeits the zero-rework property the actor seam already guarantees.
+
+### D10 — The data, not the aggregate, triggers E2 (amends D9)
+
+D9 sequenced crypto-shredding (E2) "gated on the first natural-person *aggregate* (`Customer`/`Employee`)." Correction: the trigger is the first **audited field whose erasure is legally demandable**, not the first person aggregate. Auditing `BankAccount` writes surfaces `holderName` and `iban` — personal/financial data — into the append-only `audit_log`, so E2 fires now.
+
+Discarded: keep waiting for a person aggregate — it would either block auditing `BankAccount` (losing change evidence) or write unforgettable PII in clear into an append-only store, which the right to erasure cannot tolerate.
+
+### D11 — `BankAccount` is PII-bearing; PII is conditional on the subject (amends D6)
+
+D6 listed `Bank`/`BankAccount` as non-PII catalogs. Refine: `Bank` (the institution — BBVA, Santander) stays non-PII reference data, but `BankAccount` carries the holder's personal/financial data. An IBAN is **conditionally** personal: a natural person's account identifies a person (GDPR Art. 4); a legal entity's (ACME SL) does not. So "the entity is/isn't PII" is the wrong unit — PII is a property of a **field** in the context of its **subject**, which D12 classifies.
+
+### D12 — PII classification is per field, owned by the module, declared by a passive attribute
+
+Because GDPR protects *data*, not aggregates, classification is per **field**. The owning module declares it with a passive `#[PersonalData]` attribute on the entity field — the same passive-metadata exception that already sanctions `#[ORM]`/`#[Assert]` in `Domain/`. The classification is **domain metadata**: audit and any other infrastructure concerned with personal-data handling (GDPR export, masking, logging, indexing, search) *read* it to choose encrypt-vs-clear per column; none of them *decides* what is personal. `BankAccount`: `holderName`, `iban` → `#[PersonalData]`; `bic`, `currency`, `status`, `bankId` → clear. With no party-type distinction available yet (D13/D16), the safe default is to encrypt the classified fields of every account; over-encrypting a legal-entity account is harmless.
+
+Discarded: entity-level classification (a single `BankAccount` mixes PII and non-PII columns — too coarse). Discarded: a central PII map in `Shared/Audit` — classification authority belongs to the aggregate's owning module, mirroring how `AuditedEntity` already owns its action vocabulary.
+
+### D13 — Cryptographic identity is decoupled from domain identity (`EncryptionScopeId`)
+
+Crypto-shredding needs an identity to key the DEK by and to target on erasure, but that need must not force a domain aggregate into existence. A value object `EncryptionScopeId` (`"<TYPE>:<uuid>"`) names the scope a DEK protects and over which shredding operates — `BANK_ACCOUNT:<uuid>` today. It deliberately does not presuppose what that scope represents: it may later reference another domain identity if required by the domain model, without renaming the cryptographic concept. The DEK is keyed by the `EncryptionScopeId`; the encrypted diff references it.
+
+Discarded: a `SubjectId` name — "subject" is GDPR-loaded (*data subject*) and this is the cryptographic scope, not the person. Discarded: introducing a `Person`/`Party` aggregate now solely to anchor the DEK — it lets an infrastructure concern model the domain (the wrong direction) and is YAGNI while no business use case needs a party. The domain decides the identity; the crypto adapts.
+
+### D14 — Envelope crypto-shredding, sized for master-data cardinality
+
+Classified diff fields are encrypted under the scope's DEK with libsodium AEAD (`crypto_aead_xchacha20poly1305_ietf`); **DEKs are generated with a CSPRNG**. Envelope: each DEK is wrapped by a KEK and stored in a Postgres keystore table with its `encryption_scope_id` and the `kek_version` it was wrapped under; the **KEK is custodied outside the app** (env-provided), never beside the DEKs. KEK rotation = rewrap every DEK under the new KEK as a bounded one-off batch — feasible at expected master-data cardinality. **Destroying a DEK is irreversible** — an accepted operational property, not a fault.
+
+Discarded: the KEK in Postgres beside the DEKs (defeats the envelope); one global key (destroying it shreds every scope — per-scope keying is what makes single-scope erasure possible); a per-scope HSM or key-derivation hierarchy (over-engineered here). Revisit trigger: a PII-bearing aggregate at transactional cardinality → revisit (derivation, lazy rewrap, KMS/HSM).
+
+### D15 — Subject erasure is distinct from actor erasure
+
+`erase-actor` (the existing `audit:gdpr:erase <actor-id>`, anonymising *who acted*) and `erase-subject` (anonymising *whose data appears in the diff*) are different legal operations and are never merged. `erase-subject` does exactly two things: (1) delete or anonymise the live record, and (2) destroy the scope's DEK — the diff's PII ciphertext becomes permanently unreadable while the row, its order and its integrity remain (append-only preserved).
+
+Discarded: extending `erase-actor` to also shred scope DEKs — it conflates two distinct GDPR triggers (the operator who acted vs. the data subject) and couples their lifecycles.
+
+### D16 — A future party aggregate becomes the encryption scope (forward note, not built here)
+
+When the domain later introduces a party aggregate, it SHALL be treated as the encryption scope for its PII erasure (the migration target of D13). Everything else about that aggregate — its bounded context, subtypes, attributes, and how `BankAccount` references it — is domain modelling for that aggregate's own ADR, deliberately out of scope here.
+
+### D17 — Cryptographic metadata stays out of the domain model
+
+The envelope's bookkeeping — `encryption_scope_id`, `kek_version`, ciphertext, wrapped keys — belongs to the infrastructure layer (currently implemented in the keystore table and the raw-DBAL, entity-free `audit_log` persistence), never on a domain entity or value object. An aggregate carries its data and its `#[PersonalData]` classification; it never knows it is encrypted, under which key, or that a keystore exists.
+
+Discarded: a `dek_id`/key-version field on the entity — it leaks an infrastructure concern into `Domain/`, breaking the hexagonal boundary deptrac enforces.
 
 ## Load-bearing implementation challenges
 
 - **Ambient actor context per request** inside the Doctrine listener: `onFlush` holds the changeset but not the HTTP actor — seal `ActorContext` + `correlation_id` (the `SealedAuditEntryFactory` / `ActorContextFactory` seam) and read them inside the flush.
 - **Entity snapshot on DELETE**: capture the final state *before* the row is removed, so the diff's "before" is not already gone.
-- **Keystore + key management**: DEK lifecycle (mint per subject, KEK-wrap, destroy on erasure) and KEK custody outside the app.
-- **PII field classification**: a per-entity map of which fields are personal data, deciding D6 encrypted-vs-clear storage per column.
+- **Keystore + key management**: DEK lifecycle (mint per encryption scope, KEK-wrap, destroy on erasure) and KEK custody outside the app (D13/D14).
+- **PII field classification**: each owning module declares its personal-data fields with a passive `#[PersonalData]` attribute (D12), deciding encrypted-vs-clear storage per column.
 
 ## Decided inputs (previously open)
 
@@ -87,4 +131,4 @@ Discarded: sequencing the whole epic after auth — over-couples, stalls field-l
 
 ## Implementation
 
-Epic-sized and **sliced by the D9 dependency tiers**, not deferred wholesale: **(1)** pre-auth capture slice — Doctrine `onFlush` listener + actor-context seal + field-level diff + semantic action + read resource extractor + retention floor (no prerequisites); **(2)** crypto-shredding + keystore + per-entity PII classification — lands with the first natural-person aggregate; **(3)** RBAC access gate + production-readiness — lands with auth. Tracked as its own epic by the PM, **not** in this ADR's PR. Related: issue #376 (async-resurrection gap in actor erasure) and issue #373 (extract keyset) belong to the same subsystem and are revisited when this epic lands.
+Epic-sized and **sliced by the D9 dependency tiers**, not deferred wholesale: **(1)** pre-auth capture slice — Doctrine `onFlush` listener + actor-context seal + field-level diff + semantic action + read resource extractor + retention floor (no prerequisites); **(2)** crypto-shredding + keystore + per-field PII classification — triggered now by the first audited PII field (`BankAccount`), not deferred to a person aggregate; **(3)** RBAC access gate + production-readiness — lands with auth. Tracked as its own epic by the PM, **not** in this ADR's PR. Related: issue #376 (async-resurrection gap in actor erasure) and issue #373 (extract keyset) belong to the same subsystem and are revisited when this epic lands.

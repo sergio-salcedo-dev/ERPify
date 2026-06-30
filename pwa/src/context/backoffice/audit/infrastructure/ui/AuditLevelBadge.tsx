@@ -9,15 +9,17 @@ import { AuditLevel } from "@/context/backoffice/audit/domain/AuditEntry";
  * `security` rides `{color.security}` — a class of auditoría, NOT a severity, so never `{color.danger}`.
  *
  * Built here in the audit context (not promoted to `@/components/erpify`) because it consumes the
- * audit `level` vocabulary; the matching row also draws a 2px lateral accent for `security` (a second
- * channel). `level` is the raw stored string: an unknown token still renders, dot neutral, label
- * verbatim — a forensic read never breaks on an unexpected value.
+ * audit `level` vocabulary; the matching row also draws a 2px lateral accent for `security`/`change`
+ * (a second channel). `change` rides `{color.brand}` — a write event, distinct from `security` and
+ * never `{color.danger}`. `level` is the raw stored string: an unknown token still renders, dot
+ * neutral, label verbatim — a forensic read never breaks on an unexpected value.
  */
 const dotVariants = cva("size-1.5 flex-none rounded-full", {
   variants: {
     tone: {
       activity: "bg-text-subtle",
       security: "bg-security",
+      change: "bg-brand",
     },
   },
   defaultVariants: { tone: "activity" },
@@ -26,7 +28,14 @@ const dotVariants = cva("size-1.5 flex-none rounded-full", {
 const KNOWN_LABEL: Readonly<Record<string, string>> = {
   [AuditLevel.Activity]: "Activity",
   [AuditLevel.Security]: "Security",
+  [AuditLevel.Change]: "Cambio",
 };
+
+function toneFor(level: string): "activity" | "security" | "change" {
+  if (level === AuditLevel.Security) return "security";
+  if (level === AuditLevel.Change) return "change";
+  return "activity";
+}
 
 interface AuditLevelBadgeProps {
   level: string;
@@ -35,7 +44,7 @@ interface AuditLevelBadgeProps {
 }
 
 export function AuditLevelBadge({ level, className, testId }: Readonly<AuditLevelBadgeProps>) {
-  const tone = level === AuditLevel.Security ? "security" : "activity";
+  const tone = toneFor(level);
   const label = KNOWN_LABEL[level] ?? level;
   return (
     <output

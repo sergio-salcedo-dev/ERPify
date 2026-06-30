@@ -141,8 +141,13 @@ you change anything here.
       today, so the diff holds **no personal data**; a PII-bearing diff (a person
       aggregate) must be crypto-shredded before it may be stored (E2), never written in
       clear. Its `ip` / `user_agent` / `metadata` are
-      **client-controlled (tainted)** — escape on render in the future admin
-      investigation UI, never use in a trust or authorization decision; the writer
+      **client-controlled (tainted)** — the `change` diff is surfaced read-only via
+      the canonical `GET /audit/events/{id}` resource (diff-only: `ip`/`user_agent`
+      withheld; consciously public like the rest of `/backoffice` until the auth gate)
+      and rendered as **escaped text** in the investigation UI, never
+      `dangerouslySetInnerHTML`; never use in a trust or authorization decision (ISO
+      27001:2022 base: A.8.15 append-only + restricted access, A.8.17 clock-synced
+      `occurred_on`); the writer
       parameterises every value (no string-interpolated SQL). **GDPR erasure is
       implemented** as an in-place, irreversible anonymisation: `audit:gdpr:erase
       <actor-id>` overwrites the subject's `actor_id` with a single fresh random UUID

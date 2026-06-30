@@ -29,12 +29,15 @@ export interface AuditEntry {
 export const AuditLevel = {
   Activity: "activity",
   Security: "security",
+  Change: "change",
 } as const;
 
 export type AuditLevel = (typeof AuditLevel)[keyof typeof AuditLevel];
 
 export function isAuditLevel(value: string): value is AuditLevel {
-  return value === AuditLevel.Activity || value === AuditLevel.Security;
+  return (
+    value === AuditLevel.Activity || value === AuditLevel.Security || value === AuditLevel.Change
+  );
 }
 
 /**

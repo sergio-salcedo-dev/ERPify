@@ -21,13 +21,14 @@ use ReflectionType;
  * public shape a DTO exposes is emitted verbatim. The two byte-stability nets that `#[Groups]` (an
  * allowlist) and the `#[Serializer\Context]` ATOM pin used to provide are therefore gone, so the
  * contract is enforced structurally here: every class under an `Application/Resource/` directory must
- * be a flat, immutable, scalar-only DTO.
+ * be a flat, immutable DTO whose properties are scalar/null or a decoded-JSON `array` (see
+ * {@see NORMALIZER_SAFE_TYPES} for why the array is the one safe non-scalar).
  *
  * This closes both latent risks at once:
  *   - a raw `DateTimeImmutable` (or any object) reaching the normalizer would emit a non-ATOM /
- *     nested shape with nothing to catch it — scalar-only makes that impossible;
- *   - ungrouped normalization serializes every public property AND getter — scalar-only plus no
- *     public method beyond the constructor means there is no object graph to leak.
+ *     nested shape with nothing to catch it — rejecting non-builtin types makes that impossible;
+ *   - ungrouped normalization serializes every public property AND getter — the type allow-list plus
+ *     no public method beyond the constructor means there is no object graph to leak.
  *
  * The ATOM string VALUE is asserted where it is produced — the per-view mapper tests
  * (e.g. `BankResourceMapperTest`) — because the date field is a pre-formatted `string` by the time
@@ -48,9 +49,15 @@ final class ResourceDtoContractTest extends TestCase
     private const string RESOURCE_DIR_SEGMENT = '/Application/Resource/';
 
     /**
+     * A Resource DTO property is normalizer-safe when it is a flat scalar OR a plain `array`. The
+     * array is admitted for one shape only — an already-decoded JSON payload (e.g. the audit diff read
+     * from a JSONB column): `json_decode` guarantees it holds scalars, arrays and null but never a PHP
+     * object, so it reaches the groupless/contextless normalizer in final serialized form, with none
+     * of the non-ATOM / object-graph risk a raw object (a `DateTimeImmutable`, an entity) would carry.
+     *
      * @var list<string>
      */
-    private const array FLAT_SCALAR_TYPES = ['string', 'int', 'float', 'bool'];
+    private const array NORMALIZER_SAFE_TYPES = ['string', 'int', 'float', 'bool', 'array'];
 
     public function testResourceDtoSweepIsNotVacuous(): void
     {
@@ -75,7 +82,8 @@ final class ResourceDtoContractTest extends TestCase
         $this->assertSame(
             [],
             $diagnostics,
-            "Resource DTOs must be flat, immutable and scalar-only (pre-format non-scalars in the mapper):\n"
+            'Resource DTOs must be flat, immutable and scalar-or-decoded-array only '
+            . "(pre-format non-scalar objects in the mapper):\n"
             . \implode("\n", $diagnostics),
         );
     }
@@ -156,9 +164,10 @@ final class ResourceDtoContractTest extends TestCase
         foreach ($reflection->getProperties(ReflectionProperty::IS_PUBLIC) as $reflectionProperty) {
             $type = $reflectionProperty->getType();
 
-            if (!$this->isFlatScalarType($type)) {
+            if (!$this->isNormalizerSafeType($type)) {
                 $violations[] = \sprintf(
-                    'property $%s is %s; only flat scalar/null (string|int|float|bool) may reach the normalizer',
+                    'property $%s is %s; only flat scalar/null or a decoded-JSON array '
+                    . '(string|int|float|bool|array) may reach the normalizer',
                     $reflectionProperty->getName(),
                     null === $type ? 'untyped' : (string) $type,
                 );
@@ -168,10 +177,10 @@ final class ResourceDtoContractTest extends TestCase
         return $violations;
     }
 
-    private function isFlatScalarType(?ReflectionType $type): bool
+    private function isNormalizerSafeType(?ReflectionType $type): bool
     {
         return $type instanceof ReflectionNamedType
             && $type->isBuiltin()
-            && \in_array($type->getName(), self::FLAT_SCALAR_TYPES, true);
+            && \in_array($type->getName(), self::NORMALIZER_SAFE_TYPES, true);
     }
 }

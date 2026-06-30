@@ -51,6 +51,7 @@ export const AUDIT_LEVEL_SEGMENTS: ReadonlyArray<{ value: string; label: string 
   { value: "", label: "Todo" },
   { value: AuditLevel.Activity, label: "Activity" },
   { value: AuditLevel.Security, label: "Security" },
+  { value: AuditLevel.Change, label: "Cambios" },
 ];
 
 /** True when `value` is a level the segmented control can represent ("" = no level filter). */

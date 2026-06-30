@@ -54,7 +54,8 @@ interface AuditTimelineTableProps extends AuditPivotHandlers {
  * screen reader announces the day / session as group context. One roving tabindex spans the page (no
  * `div role=button` per row — a native table sidesteps the `jsx-a11y` S6847 antipattern): `↑`/`↓`
  * move focus, `Enter` opens the drawer, a click anywhere off an in-row control opens it too.
- * `security` rows carry a 2px lateral accent — a second channel beside the badge, never `{color.danger}`.
+ * `security` and `change` rows carry a 2px lateral accent — a second channel beside the badge, each a
+ * distinct token (`{color.security}` / `{color.brand}`), never `{color.danger}`.
  */
 export function AuditTimelineTable({
   groups,
@@ -201,7 +202,7 @@ export function AuditTimelineTable({
                 </th>
               </tr>
               {group.rows.map(({ entry, index }) => {
-                const isSecurity = entry.level === AuditLevel.Security;
+                const accentClass = levelAccent(entry.level);
                 const isActive = activeEntryId === entry.id;
                 return (
                   <tr
@@ -223,7 +224,7 @@ export function AuditTimelineTable({
                     <td
                       className={cn(
                         "text-foreground px-3 font-mono text-xs tabular-nums",
-                        isSecurity && "border-l-security border-l-2",
+                        accentClass,
                       )}
                     >
                       {dateTimeProvider.formatIsoToLocalTimeOfDay(entry.occurredOn)}
@@ -267,6 +268,13 @@ export function AuditTimelineTable({
       </table>
     </div>
   );
+}
+
+/** The 2px lateral row accent — a second channel beside the badge; only `security`/`change` carry one. */
+function levelAccent(level: string): string {
+  if (level === AuditLevel.Security) return "border-l-security border-l-2";
+  if (level === AuditLevel.Change) return "border-l-brand border-l-2";
+  return "";
 }
 
 /** `resourceType · resourceId` (id copyable, never a deep-link), or «—» when the record has neither. */

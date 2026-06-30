@@ -22,6 +22,7 @@ import { UpdateBank } from "../../../backoffice/bank/application/UpdateBank";
 import { DeleteBank } from "../../../backoffice/bank/application/DeleteBank";
 import { ApiAuditTimelineRepository } from "../../../backoffice/audit/infrastructure/ApiAuditTimelineRepository";
 import { ApiAuditTimelineNavigator } from "../../../backoffice/audit/infrastructure/ApiAuditTimelineNavigator";
+import { ApiAuditEventDetailRepository } from "../../../backoffice/audit/infrastructure/ApiAuditEventDetailRepository";
 import { ApiBankAccountRepository } from "../../../backoffice/bankaccount/infrastructure/ApiBankAccountRepository";
 import { ApiBankAccountSearchNavigator } from "../../../backoffice/bankaccount/infrastructure/ApiBankAccountSearchNavigator";
 import { SearchBankAccounts } from "../../../backoffice/bankaccount/application/SearchBankAccounts";
@@ -146,6 +147,13 @@ container
 container
   .bind<ApiAuditTimelineNavigator>("BackOfficeAuditTimelineNavigator")
   .to(ApiAuditTimelineNavigator)
+  .inSingletonScope();
+
+// The audit event detail (the field-by-field diff) is a sibling read port over `/audit/events/{id}`,
+// lifted on demand when a row opens so the keyset timeline stays slim.
+container
+  .bind<ApiAuditEventDetailRepository>("BackOfficeAuditEventDetailRepository")
+  .to(ApiAuditEventDetailRepository)
   .inSingletonScope();
 
 // User module (mocked). The navigator shares the SAME repository instance so it
