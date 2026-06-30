@@ -60,7 +60,14 @@ export function KeysetPagination<T extends number>({
         <select
           className={`${testId}__page-size-select border-border bg-background text-foreground focus-visible:ring-ring h-7 rounded-md border px-2 text-xs focus-visible:ring-2 focus-visible:outline-none`}
           value={pageSize}
-          onChange={(event) => onPageSizeChange(Number(event.target.value) as T)}
+          onChange={(event) => {
+            // Only propagate a value that is one of the offered options, so a synthetic or
+            // programmatic change event carrying a non-member size can never reach the consumer.
+            const next = Number(event.target.value);
+            if ((pageSizeOptions as readonly number[]).includes(next)) {
+              onPageSizeChange(next as T);
+            }
+          }}
           aria-label={labels.pageSize}
           title={labels.pageSize}
           data-testid={`${testId}__page-size`}

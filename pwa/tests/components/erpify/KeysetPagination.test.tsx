@@ -34,8 +34,9 @@ describe("KeysetPagination (cursor-only, D-A11y)", () => {
     // removed (the sealed D-A11y exception to the hide rule).
     expect(screen.getByRole("button", { name: "Previous page" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Next page" })).toBeEnabled();
-    // No page number exists under cursor-only navigation.
-    expect(screen.queryByText(/^Page \d/)).toBeNull();
+    // Cursor-only navigation: just the prev/next pair, no numbered page controls.
+    expect(screen.getAllByRole("button")).toHaveLength(2);
+    expect(screen.queryByRole("spinbutton")).toBeNull();
   });
 
   it("fires onPrev/onNext only for enabled controls", () => {
@@ -60,6 +61,15 @@ describe("KeysetPagination (cursor-only, D-A11y)", () => {
       target: { value: "50" },
     });
     expect(props.onPageSizeChange).toHaveBeenCalledWith(50);
+  });
+
+  it("ignores a change carrying a size that is not one of the supplied options", () => {
+    const props = renderPagination();
+
+    fireEvent.change(screen.getByTestId("x-pagination__page-size"), {
+      target: { value: "7" },
+    });
+    expect(props.onPageSizeChange).not.toHaveBeenCalled();
   });
 
   it("derives every data-testid and the nav landmark name from its props", () => {

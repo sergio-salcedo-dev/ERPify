@@ -92,6 +92,29 @@ describe("BankAccountStatusControl", () => {
     expect(screen.getByTestId("bank-account-status__save")).toBeDisabled();
   });
 
+  it("lets an authoritative status from another source override an unsaved selection", () => {
+    const onChanged = vi.fn();
+    const { rerender } = render(
+      <BankAccountStatusControl account={account("ACTIVE")} onChanged={onChanged} />,
+    );
+
+    const select = screen.getByTestId<HTMLSelectElement>("bank-account-status__select");
+    const save = screen.getByTestId("bank-account-status__save");
+
+    fireEvent.change(select, { target: { value: "CLOSED" } });
+    expect(select.value).toBe("CLOSED");
+    expect(save).toBeEnabled();
+
+    // A refetch/realtime update replaces the account with a different status: the
+    // re-seed wins over the user's pending pick, so the dropdown tracks the
+    // authoritative value and isDirty clears (no stale value can be saved).
+    rerender(<BankAccountStatusControl account={account("INACTIVE")} onChanged={onChanged} />);
+
+    expect(select.value).toBe("INACTIVE");
+    expect(save).toBeDisabled();
+    expect(onChanged).not.toHaveBeenCalled();
+  });
+
   it("surfaces a server problem in the persistent error surface and does not report success", async () => {
     const onChanged = vi.fn();
     changeRun.mockRejectedValueOnce(
