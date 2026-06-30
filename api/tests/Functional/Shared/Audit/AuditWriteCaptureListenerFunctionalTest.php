@@ -73,12 +73,49 @@ final class AuditWriteCaptureListenerFunctionalTest extends KernelTestCase
             $em->persist($bank);
             $em->flush();
 
+            $finalName = $bank->getName();
+            $finalShortName = $bank->getShortName();
+
             $em->remove($bank);
             $em->flush();
 
             $row = $this->changeRow($connection, $id, 'BANK_DELETED');
             $this->assertSame('Bank', $row['resource_type'] ?? null);
             $this->assertSame($id, $row['resource_id'] ?? null);
+
+            $this->assertSame(
+                $finalName,
+                $this->changedValue($row, 'name', 'old'),
+                'the delete snapshots the final state',
+            );
+            $this->assertNull($this->changedValue($row, 'name', 'new'), 'with nothing after — the row is gone');
+            $this->assertSame($finalShortName, $this->changedValue($row, 'shortName', 'old'));
+        });
+    }
+
+    public function testTheChangeRowSealsTheAmbientSystemActorCorrelationAndInstant(): void
+    {
+        $this->inRolledBackTransaction(function (EntityManagerInterface $em, Connection $connection): void {
+            $id = Uuid::generate();
+            $bank = $this->bankWith($id);
+
+            $em->persist($bank);
+            $em->flush();
+
+            $row = $this->changeRow($connection, $id, 'BANK_CREATED');
+
+            // No HTTP request is in flight under a kernel test, so the ambient actor seals as system.
+            $this->assertSame('system', $row['actor_type'] ?? null);
+            $this->assertArrayHasKey('actor_id', $row);
+            $this->assertNull($row['actor_id'], 'a system act carries no actor id');
+
+            $correlationId = $row['correlation_id'] ?? null;
+            $this->assertIsString($correlationId);
+            $this->assertNotSame('', $correlationId, 'the correlation id is sealed, never null');
+
+            $occurredOn = $row['occurred_on'] ?? null;
+            $this->assertIsString($occurredOn);
+            $this->assertNotSame('', $occurredOn, 'the instant is sealed from the clock');
         });
     }
 

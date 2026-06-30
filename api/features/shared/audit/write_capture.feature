@@ -16,13 +16,14 @@ Feature: Capture every write of an audited aggregate as a regulatory change row
     {"name": "Audited Bank", "shortName": "AUD"}
     """
     Then the response status code should be 201
-    And I execute the SQL query "SELECT action, level, resource_type, metadata->'changes'->'name'->>'new' AS new_name FROM audit_log WHERE level = 'change' AND correlation_id = '0190ffff-0000-7abc-8def-00aabbccddee'"
+    And I execute the SQL query "SELECT action, level, actor_type, resource_type, metadata->'changes'->'name'->>'new' AS new_name FROM audit_log WHERE level = 'change' AND correlation_id = '0190ffff-0000-7abc-8def-00aabbccddee'"
     And the SQL result as JSON should be:
     """
     [
       {
         "action": "BANK_CREATED",
         "level": "change",
+        "actor_type": "anonymous",
         "resource_type": "Bank",
         "new_name": "Audited Bank"
       }
