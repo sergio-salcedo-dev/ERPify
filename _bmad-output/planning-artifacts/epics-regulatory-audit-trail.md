@@ -17,8 +17,8 @@ scope: >-
   Trail de auditoría REGULATORIO ISO 27001 (docs/adr/regulatory-audit-trail.md), que EXTIENDE el eje
   operativo/de actor ya enviado (audit-activity-log.md, épicas 1-4, PRs #369/#370/#374/#375/#377). Añade
   captura de ESCRITURAS (CDC Doctrine onFlush + diff campo a campo + acción semántica) y completa las
-  LECTURAS (extractor de recurso). Troceado por las tres dependencias de D9: E1 sin prerequisitos (pre-auth),
-  E2 condicionada a la primera entidad persona-física, E3 condicionada a auth/RBAC. NO es un único PR.
+  LECTURAS (extractor de recurso). Troceado: E1 sin prerequisitos (pre-auth), E2 disparada por el primer
+  campo PII auditado (`BankAccount`, sin agregado Persona — ADR D10/D13), E3 condicionada a auth/RBAC. NO es un único PR.
 ---
 
 # ERPify — Trail de auditoría regulatorio ISO 27001 — Desglose de épicas
@@ -43,9 +43,10 @@ integridad, acceso restringido y olvido de PII sin romper append-only.
 - **E1 — sin prerequisitos (pre-auth):** captura de escrituras (diff + acción semántica), extractor de
   recurso en lecturas y suelo de retención. Auth-independiente y **sin retrabajo**: la costura de actor
   (`ActorContextFactory`) ya aísla auth; hasta entonces el actor sale `anonymous`/`system`.
-- **E2 — condicionada a la primera entidad persona-física:** crypto-shredding + keystore + clasificación
-  PII. Mientras toda entidad auditada sea un catálogo (`Bank`/`BankAccount` **no** son PII) no hay nada
-  que cifrar → YAGNI; aterriza con el primer agregado `Customer`/`Employee`.
+- **E2 — disparada por el dato, no por un agregado:** crypto-shredding + keystore + clasificación PII por
+  campo. Auditar `BankAccount` introduce el primer campo PII (`holderName`/`iban`) en `audit_log`, así que E2
+  se construye **ahora**; **sin** agregado Persona — la identidad cripto es un `EncryptionScopeId` desacoplado
+  del dominio (ADR D10/D13).
 - **E3 — condicionada a auth/RBAC:** acceso restringido + auto-auditado, atribución real
   (`actor_id` NOT NULL) y puesta en producción. Hoy NO existe firewall/voter.
 
@@ -79,15 +80,15 @@ catálogo de rutas por módulo (D4).
 FR8: **Retención con suelo**: una fila de cumplimiento debe conservarse **al menos** el mínimo legal antes
 de ser podable. Suelo = **5 años**. `DbalAuditLogPruner`/`AuditRetentionPolicy` nunca borran por debajo
 del suelo; el olvido dentro del suelo lo cubre el crypto-shredding (E2), no el borrado (D7).
-FR9: **Crypto-shredding** del diff con PII: cifrado bajo una **DEK por sujeto-persona** (la fila referencia
-su `dek_id`); el olvido **destruye la DEK** → ciphertext ilegible, fila/orden/integridad intactos (D6).
+FR9: **Crypto-shredding** del diff con PII: cifrado bajo una **DEK por `EncryptionScopeId`** (la fila
+referencia el scope); el olvido **destruye la DEK** → ciphertext ilegible, fila/orden/integridad intactos (D6, D13).
 FR10: **Keystore**: esquema envelope con **libsodium** (AEAD) y **DEKs en una tabla keystore de Postgres**
-(DEK envuelta por una KEK custodiada fuera de la app) (D6).
-FR11: **Clasificación PII por campo** (A.5.12): un mapa por entidad de qué campos son datos personales,
-que decide cifrado-vs-claro por columna del diff (D6).
-FR12: **Catálogos no se cifran** (`Bank`/`BankAccount` no son PII); el crypto-shredding **compone** con el
-erasure de actor del eje hermano (D4 remint `actor_id` / D4.1 `actor_erased`) sin reabrirlo — distintos
-loci de PII (D6).
+(DEK con CSPRNG, envuelta por una KEK custodiada fuera de la app, con su `kek_version`) (D6, D14).
+FR11: **Clasificación PII por campo** (A.5.12): atributo `#[PersonalData]` propiedad del módulo dueño (no un
+mapa central), que decide cifrado-vs-claro por columna del diff (D6, D12).
+FR12: **Solo se cifran los campos `#[PersonalData]`** (`Bank` no tiene; `BankAccount` sí — `holderName`/`iban`);
+el crypto-shredding **compone** con el erasure de actor del eje hermano (D4 remint `actor_id` / D4.1
+`actor_erased`) sin reabrirlo — distintos loci de PII (D6, D11).
 FR13: **Acceso al trail RBAC-restringido** (voter sobre las rutas de lectura de `Backoffice/Audit`) (D8).
 FR14: **Auto-auditoría del acceso** (auditar-al-auditor, A.5.18/8.15): leer el trail emite una fila
 `security` (D8).
@@ -140,11 +141,11 @@ Toda alta/edición/borrado de un agregado auditado queda en `audit_log` como **d
 la UI #377 (que hoy no muestra escrituras). Incluye el extractor de recurso en lecturas y el suelo de
 retención. **Gate:** ninguno. **FRs:** FR1–FR8, FR16, FR17(base). **NFRs:** NFR1, NFR2, NFR4, NFR5, NFR7, NFR8.
 
-### Epic 2: Diffs PII-safe — crypto-shredding + keystore (condicionada a la 1ª entidad persona)
-Cuando una entidad auditada representa una **persona física**, su diff con PII se almacena
-crypto-shredded, de modo que el olvido funcione sin romper append-only. **Gate:** debe existir un
-agregado persona (`Customer`/`Employee`); hasta entonces YAGNI. **FRs:** FR9–FR12, FR17(clasificación).
-**NFRs:** NFR3, NFR6.
+### Epic 2: Diffs PII-safe — crypto-shredding + keystore (disparada por el dato, no por un agregado)
+El diff de una entidad con campos PII se almacena crypto-shredded, de modo que el olvido funcione sin romper
+append-only. **Disparada ahora** por la auditoría de `BankAccount` (primer campo PII en `audit_log`); **no
+introduce un agregado Persona** — la identidad cripto es un `EncryptionScopeId` desacoplado del dominio (ADR
+D10/D13). **FRs:** FR9–FR12, FR17(clasificación). **NFRs:** NFR3, NFR6.
 
 ### Epic 3: Acceso restringido + auto-auditado + atribución real (condicionada a auth/RBAC)
 El trail (y la ruta #377) queda con control de acceso, el auditor se audita, la atribución es real
@@ -292,108 +293,137 @@ sea menor (FR8).
 **When** corre la poda,
 **Then** se borran exactamente las que superan techo **y** suelo (integración contra Postgres real).
 
-### Story 1.7: Render del diff en el read model + UI #377
+### Story 1.7: Render del diff en el read model + UI #377 (solo `Bank`)
 
 Como administrador,
-quiero ver create/update/delete con su diff en el timeline,
+quiero ver create/update/delete de `Bank` con su diff en el timeline,
 para investigar cambios, no solo navegación.
+
+> **Scope:** solo `Bank` (institución financiera, no-PII). La captura y el render de `BankAccount` se
+> trasladan a E2: su diff lleva PII (`holderName`/`iban`) → debe auditarse crypto-shredded, no en claro.
 
 **Acceptance Criteria:**
 
 **Given** el read model de `Backoffice/Audit` (timeline 4.1),
-**When** se consulta,
-**Then** incluye filas de escritura con su acción semántica y diff campo a campo (FR16).
+**When** se consulta el detalle de una fila de escritura,
+**Then** se expone vía un **recurso canónico `GET /audit/events/{id}`** (no un "detalle del timeline") que
+devuelve la acción semántica y el diff campo a campo; el listado keyset queda slim (FR16, D-A).
 
 **Given** la UI #377,
-**When** se abre el detalle de una escritura,
-**Then** muestra el diff `antes`/`después` por campo, escapando input no confiable (sin
-`dangerouslySetInnerHTML`); el diff de catálogo se muestra en claro (FR16, `rules/security.md`).
+**When** se abre el detalle de una escritura `change`,
+**Then** muestra el diff `antes`/`después` por campo con **color+texto para añadido/eliminado/modificado**,
+**colapso de diffs muy grandes** e **indicador de tipo de campo**, escapando todo input no confiable (sin
+`dangerouslySetInnerHTML`); el diff de `Bank` se muestra en claro (FR16, `rules/security.md`, D-B).
 
 **Given** la documentación,
-**When** se cierra E1,
+**When** se cierra esta rebanada de E1,
 **Then** `docs/rules/security.md` y `PRODUCTION_SECURITY_CHECKLIST.md` reflejan el mapeo ISO base (A.8.15
-append-only, A.8.17 clock) y `docs/architecture-api.md` describe el nuevo emisor de escritura (FR17).
+append-only, A.8.17 clock) y `docs/architecture-api.md` describe el nuevo emisor de escritura y la
+superficie de lectura de detalle (FR17).
 
 ## Epic 2: Diffs PII-safe — crypto-shredding + keystore
 
-Cuando una entidad auditada representa una persona física, su diff con PII se almacena crypto-shredded.
-Construye sobre E1; independiente de E3. **Gate explícito:** no se implementa hasta que exista un agregado
-persona (`Customer`/`Employee`); mientras solo haya catálogos, es YAGNI.
+El diff de una entidad con campos PII se almacena **crypto-shredded** para que el olvido funcione sin romper
+append-only. Construye sobre E1; independiente de E3. **Disparada por el dato, no por un agregado** (ADR D10):
+auditar `BankAccount` introduce el primer campo PII (`holderName`/`iban`) en `audit_log`, así que E2 se
+construye **ahora**. **No introduce un agregado Persona/Party** — la identidad criptográfica es un value object
+`EncryptionScopeId` (`BANK_ACCOUNT:<uuid>` hoy), desacoplado del dominio (ADR D13).
 
-### Story 2.1: Clasificación PII por campo
+### Story 2.1: Clasificación PII por campo (`#[PersonalData]`)
 
 Como responsable de cumplimiento,
-quiero un mapa por entidad de qué campos son datos personales,
+quiero declarar qué campos son datos personales en la propia entidad,
 para decidir qué columnas del diff se cifran y cuáles van en claro.
 
 **Acceptance Criteria:**
 
-**Given** una entidad auditada que representa una persona,
+**Given** un agregado auditado con campos personales,
 **When** se clasifica,
-**Then** existe una clasificación explícita por campo (PII vs no-PII) que gobierna el cifrado del diff
-(A.5.12, FR11).
+**Then** sus campos PII se marcan con un atributo **pasivo `#[PersonalData]`** propiedad del módulo dueño (no
+un mapa central en `Shared/Audit`); la auditoría — y cualquier otra infra de tratamiento de datos personales —
+solo lo **lee** para decidir cifrado-vs-claro por columna (A.5.12, FR11, ADR D12).
 
-**Given** un catálogo (`Bank`/`BankAccount`),
+**Given** `BankAccount`,
 **When** se clasifica,
-**Then** no tiene campos PII → su diff sigue en claro (FR12, NFR6).
+**Then** `holderName` e `iban` son `#[PersonalData]`; `bic`/`currency`/`status`/`bankId` van en claro. `Bank`
+(institución) no tiene campos PII (FR12, NFR6, ADR D11).
 
-### Story 2.2: Keystore + envelope libsodium (DEK por sujeto)
+### Story 2.2: Keystore + envelope libsodium (DEK por `EncryptionScopeId`)
 
 Como plataforma de ERPify,
-quiero una tabla keystore con DEKs por sujeto envueltas por una KEK,
-para soportar crypto-shredding por persona.
+quiero una tabla keystore con DEKs por scope envueltas por una KEK,
+para soportar crypto-shredding por sujeto sin acoplarlo al dominio.
 
 **Acceptance Criteria:**
 
 **Given** el esquema envelope,
 **When** se implementa,
-**Then** existe una tabla keystore en Postgres con la DEK por sujeto **envuelta por una KEK custodiada
-fuera de la app**, usando libsodium (AEAD) (FR10).
+**Then** existe una tabla keystore en Postgres con una DEK por **`EncryptionScopeId`** (`BANK_ACCOUNT:<uuid>`
+hoy), generada con **CSPRNG**, envuelta por una KEK y guardando su **`kek_version`**, usando libsodium AEAD
+(`crypto_aead_xchacha20poly1305_ietf`) (FR10, ADR D13/D14).
 
 **Given** la KEK,
 **When** se gestiona,
-**Then** su custodia es externa a la app (no se persiste en claro junto a las DEKs); el ciclo de vida de
-la DEK (alta por sujeto, envoltura, destrucción) queda definido (FR10, reto load-bearing).
+**Then** se **custodia fuera de la app** (env, nunca junto a las DEKs); la rotación de KEK = **rewrap por
+lotes acotado**; el ciclo de vida de la DEK (alta por scope, envoltura, **destrucción irreversible**) queda
+definido (FR10, ADR D14, reto load-bearing).
 
-### Story 2.3: Camino de escritura crypto-shredded para entidades persona
+### Story 2.3: Auditar `BankAccount` con el diff PII crypto-shredded
 
 Como responsable de cumplimiento,
-quiero que el diff con PII se almacene cifrado bajo la DEK del sujeto,
-para que el olvido sea posible sin tocar la fila.
+quiero que las escrituras de `BankAccount` se auditen con sus campos PII cifrados,
+para registrar el cambio sin dejar PII en claro en una tabla append-only.
 
 **Acceptance Criteria:**
 
-**Given** un cambio sobre una entidad persona,
+**Given** `BankAccount` (hoy **no** auditado),
+**When** se cablea,
+**Then** implementa `AuditedEntity` (`auditResource()` / `auditAction()` → `BANK_ACCOUNT_CREATED`/`_UPDATED`/
+`_DELETED`), igual que `Bank` — su captura sale de la Story 1.7 y vive aquí porque su diff lleva PII (ADR D10).
+
+**Given** un cambio sobre `BankAccount`,
 **When** el listener `onFlush` construye la entrada,
-**Then** los campos PII del diff se cifran bajo la **DEK del sujeto** y la fila referencia su `dek_id`;
-los campos no-PII quedan en claro (FR9, FR11, NFR6).
+**Then** los campos `#[PersonalData]` del diff se cifran bajo la DEK del **`EncryptionScopeId`**
+(`BANK_ACCOUNT:<id>`) y la fila referencia el scope; los campos no-PII quedan en claro (FR9, FR11, NFR6, ADR
+D13).
 
 **Given** el eje hermano,
 **When** se revisa,
-**Then** el crypto-shredding **compone** con el erasure de actor (D4 remint `actor_id` / D4.1
-`actor_erased`) sin reabrirlo — el actor se olvida por remint, el PII del diff por destrucción de DEK
-(FR12).
+**Then** el crypto-shredding del diff **compone** con el erasure de actor (D4 remint `actor_id` / D4.1
+`actor_erased`) sin reabrirlo — loci de PII distintos: el actor se olvida por remint, el PII del diff por
+destrucción de DEK (FR12).
 
-### Story 2.4: Olvido = destruir la DEK (extiende `audit:gdpr:erase`)
+**Given** la frontera hexagonal,
+**When** se revisa el dominio,
+**Then** ningún metadato cripto (`encryption_scope_id`, `kek_version`, ciphertext) contamina la entidad
+`BankAccount` — vive en el keystore y en `audit_log` (raw-DBAL, entity-free) (ADR D17, deptrac).
+
+### Story 2.4: `erase-subject` — olvido por sujeto (destruir la DEK)
 
 Como responsable de cumplimiento,
-quiero que el "olvídame" destruya la DEK del sujeto,
+quiero un "olvídame" por sujeto que destruya su DEK,
 para volver ilegible su PII conservando la fila y la integridad.
 
 **Acceptance Criteria:**
 
 **Given** una solicitud de olvido para un sujeto,
-**When** se ejecuta (comando operador-driven, como `audit:gdpr:erase`),
-**Then** se destruye la DEK del sujeto; el ciphertext del diff queda **permanentemente ilegible**; la
-fila, su orden y su prueba de integridad permanecen intactos (append-only preservado) (FR9, NFR3).
+**When** se ejecuta `erase-subject` (comando operador-driven, **distinto** de `erase-actor` /
+`audit:gdpr:erase`),
+**Then** (1) borra/anonimiza el dato vivo y (2) destruye la DEK de su `EncryptionScopeId`; el ciphertext del
+diff queda **permanentemente ilegible**; fila, orden e integridad intactos (append-only) (FR9, NFR3, ADR D15).
 
 **Given** la operación,
 **When** se repite,
 **Then** es idempotente (DEK ya destruida → no-op).
 
+**Given** la separación de conceptos,
+**When** se revisa,
+**Then** `erase-subject` (de quién es el dato) y `erase-actor` (quién actuó) nunca se mezclan — disparadores
+GDPR distintos (ADR D15).
+
 **Given** la evidencia,
 **When** se reconcilia,
-**Then** todo sujeto con DEK destruida casa con su evidencia de olvido (cross-check tipo
+**Then** todo scope con DEK destruida casa con su evidencia de olvido (cross-check tipo
 `GDPR_ERASURE_EXECUTED`); una divergencia es violación de integridad detectable.
 
 ## Epic 3: Acceso restringido + auto-auditado + atribución real
@@ -456,8 +486,10 @@ trail regulatorio (FR15, D8).
 - **Durabilidad/nivel de las filas de escritura (NFR1, Story 1.1):** el ADR fija la captura, no el
   contrato de durabilidad de los registros de cambio. Candidato principal: inserción síncrona en la
   transacción del flush (atomicidad cambio↔auditoría). **A confirmar con el usuario en E1.**
-- **Gate de E2:** depende de que exista un agregado persona-física; no adelantar el keystore (YAGNI).
+- **E2 disparada ahora (no gated):** la reclasificación de `BankAccount` como PII (ADR D11) dispara E2 por el
+  dato, no por un agregado. La identidad cripto es `EncryptionScopeId` (`BANK_ACCOUNT:<uuid>`), **sin** agregado
+  Persona; el agregado Party llega cuando el dominio lo pida y heredará el scope (ADR D13/D16).
 - **Gate de E3:** depende del subsistema auth/RBAC, hoy inexistente — primer prerequisito probable de toda
   la fase regulatoria «completa».
-- **UX del diff (Story 1.7):** la UI #377 ya existe (read-only); mostrar diffs campo a campo puede requerir
-  un pase UX (Sally) antes de construir las pantallas finales.
+- **UX del diff (Story 1.7, solo `Bank`):** la UI #377 ya existe (read-only); mostrar diffs campo a campo
+  puede requerir un pase UX (Sally). El render del diff PII de `BankAccount` aterriza con E2.
