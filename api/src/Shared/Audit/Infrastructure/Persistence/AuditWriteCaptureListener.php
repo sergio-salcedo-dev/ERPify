@@ -52,14 +52,10 @@ final readonly class AuditWriteCaptureListener
 
         $unitOfWork = $entityManager->getUnitOfWork();
 
-        $entries = [
-            ...$this->capture($unitOfWork, AuditWriteOperation::CREATED),
-            ...$this->capture($unitOfWork, AuditWriteOperation::UPDATED),
-            ...$this->capture($unitOfWork, AuditWriteOperation::DELETED),
-        ];
-
-        foreach ($entries as $entry) {
-            $this->writer->write($entry);
+        foreach (AuditWriteOperation::cases() as $operation) {
+            foreach ($this->capture($unitOfWork, $operation) as $entry) {
+                $this->writer->write($entry);
+            }
         }
     }
 

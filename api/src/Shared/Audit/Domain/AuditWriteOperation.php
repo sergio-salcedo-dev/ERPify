@@ -10,9 +10,9 @@ namespace Erpify\Shared\Audit\Domain;
  * semantic action vocabulary it maps this to (`BANK_CREATED` / `BANK_UPDATED` / `BANK_DELETED`) is owned by
  * the module via {@see AuditedEntity::auditAction()}, not assembled here.
  */
-enum AuditWriteOperation: string
+enum AuditWriteOperation
 {
-    case CREATED = 'CREATED';
-    case UPDATED = 'UPDATED';
-    case DELETED = 'DELETED';
+    case CREATED;
+    case UPDATED;
+    case DELETED;
 }
