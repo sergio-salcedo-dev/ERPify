@@ -10,6 +10,8 @@ use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankDeletedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankSnapshot;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
+use Erpify\Shared\Audit\Domain\AuditedEntity;
+use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Kernel\Domain\ValueObject\NormalizedText;
@@ -25,7 +27,7 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
 #[ORM\Index(name: 'idx_bank_updated_at_id', columns: ['updated_at', 'id'])]
 #[UniqueEntity(fields: ['nameNormalized'], message: 'This bank name is already in use.', errorPath: 'name')]
 #[UniqueEntity(fields: ['shortName'], message: 'This code is already in use.')]
-final class Bank extends AggregateRoot
+final class Bank extends AggregateRoot implements AuditedEntity
 {
     /**
      * Validation limit for the bank name. It matches the default `VARCHAR(255)`
@@ -134,6 +136,11 @@ final class Bank extends AggregateRoot
     public function getStoredObject(): ?StoredObject
     {
         return $this->storedObject->isEmpty() ? null : $this->storedObject;
+    }
+
+    public function auditResource(): AuditResource
+    {
+        return AuditResource::of('Bank', $this->id());
     }
 
     public function rename(string $name, string $shortName): void

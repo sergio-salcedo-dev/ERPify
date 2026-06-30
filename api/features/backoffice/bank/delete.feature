@@ -10,7 +10,8 @@ Feature: Delete a bank
     And there should have 1 "Bank" entities found by "id=de1e7e00-0000-7000-8000-000000000001"
     When I send a "DELETE" request to "/backoffice/banks/de1e7e00-0000-7000-8000-000000000001"
     Then the response status code should be 204
-    And 8 requests got executed only for doctrine connection "default"
+    # The budget includes the regulatory change row the audit listener writes on the same transaction.
+    And 9 requests got executed only for doctrine connection "default"
     And the "Bank" entity found by "id=de1e7e00-0000-7000-8000-000000000001" does not exist
     And there should be 1 event stored for aggregate "de1e7e00-0000-7000-8000-000000000001" named "erpify.backoffice.bank.deleted"
     And there should have 0 "Bank" entities found by "id=de1e7e00-0000-7000-8000-000000000001"
