@@ -107,6 +107,10 @@ Discarded: the KEK in Postgres beside the DEKs (defeats the envelope); one globa
 
 Discarded: extending `erase-actor` to also shred scope DEKs — it conflates two distinct GDPR triggers (the operator who acted vs. the data subject) and couples their lifecycles.
 
+### D16 — A future party aggregate becomes the encryption scope (forward note, not built here)
+
+When the domain later introduces a party aggregate, it SHALL be treated as the encryption scope for its PII erasure (the migration target of D13). Everything else about that aggregate — its bounded context, subtypes, attributes, and how `BankAccount` references it — is domain modelling for that aggregate's own ADR, deliberately out of scope here.
+
 ### D17 — Cryptographic metadata stays out of the domain model
 
 The envelope's bookkeeping — `encryption_scope_id`, `kek_version`, ciphertext, wrapped keys — belongs to the infrastructure layer (currently implemented in the keystore table and the raw-DBAL, entity-free `audit_log` persistence), never on a domain entity or value object. An aggregate carries its data and its `#[PersonalData]` classification; it never knows it is encrypted, under which key, or that a keystore exists.
