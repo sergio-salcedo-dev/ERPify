@@ -7,7 +7,9 @@ namespace Erpify\Tests\Unit\Shared\Audit\Infrastructure\Http\EventListener;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditPolicy;
+use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Audit\Infrastructure\Http\EventListener\AccessLogAuditListener;
+use Erpify\Shared\Audit\Infrastructure\Http\RequestAuditResourceExtractor;
 use Erpify\Shared\Http\Infrastructure\ApiRequestMatcher;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -31,7 +33,7 @@ final class AccessLogAuditListenerTest extends TestCase
         $logger = $this->createMock(AuditLogger::class);
         $logger->expects($this->once())
             ->method('log')
-            ->with('ROUTE_BACKOFFICE_BANK_SEARCH', AuditLevel::ACTIVITY)
+            ->with('ROUTE_BACKOFFICE_BANK_SEARCH', AuditLevel::ACTIVITY, null)
             ->willReturnCallback(function () use ($request, $requestStack): void {
                 $this->assertSame(
                     $request,
@@ -45,6 +47,22 @@ final class AccessLogAuditListenerTest extends TestCase
 
         $restoredStack = $requestStack->getCurrentRequest();
         $this->assertNotInstanceOf(Request::class, $restoredStack, 'request stack restored after emit');
+    }
+
+    public function testSealsTheResourceTheRouteDeclaresForARecordScopedRead(): void
+    {
+        $resourceId = '0190f5d1-2222-7000-8000-000000000001';
+        $request = $this->request('/api/v1/backoffice/banks/' . $resourceId, 'GET', 'backoffice_bank_get');
+        $request->attributes->set('_audit_resource_type', 'Bank');
+        $request->attributes->set('id', $resourceId);
+
+        $logger = $this->createMock(AuditLogger::class);
+        $logger->expects($this->once())
+            ->method('log')
+            ->with('ROUTE_BACKOFFICE_BANK_GET', AuditLevel::ACTIVITY, AuditResource::of('Bank', $resourceId))
+        ;
+
+        $this->listener($logger)->onTerminate($this->terminateEvent($request, 200));
     }
 
     public function testIgnoresNonApiPaths(): void
@@ -93,6 +111,7 @@ final class AccessLogAuditListenerTest extends TestCase
             $logger,
             $requestStack ?? new RequestStack(),
             new ApiRequestMatcher(),
+            new RequestAuditResourceExtractor(),
         );
     }
 

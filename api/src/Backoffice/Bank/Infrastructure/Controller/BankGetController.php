@@ -10,7 +10,7 @@ use Erpify\Shared\Http\Infrastructure\Responder\ResourceResponder;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
-#[Route('/banks/{id}', name: 'backoffice_bank_get', methods: ['GET'])]
+#[Route('/banks/{id}', name: 'backoffice_bank_get', defaults: ['_audit_resource_type' => 'Bank'], methods: ['GET'])]
 final readonly class BankGetController
 {
     public function __construct(

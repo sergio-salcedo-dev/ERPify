@@ -29,3 +29,27 @@ Feature: Audit the access to a bank's accounts
       }
     ]
     """
+
+  # Reading one account by id has no explicit instrumentation, so it is captured generically as
+  # ROUTE_BACKOFFICE_BANK_ACCOUNT_GET. Its route declares the resource type on its `defaults` and carries
+  # the id as `{id}`, so the extractor seals (BankAccount, id) onto the otherwise resource-less generic
+  # activity row — answering which account was read, not only that some account was.
+  Scenario: Reading a single account by id records which account was accessed
+    Given I add "X-Correlation-Id" header equal to "01914e2a-7b3c-7def-8a2b-000000000001"
+    When I send a "GET" request to "/backoffice/bank-accounts/33333333-3333-7000-8000-000000000001"
+    And the "audit" transport should hold 1 message
+    And I consume 1 message from the "audit" transport
+    And I execute the SQL query "SELECT action, level, resource_type, resource_id, correlation_id FROM audit_log WHERE action = 'ROUTE_BACKOFFICE_BANK_ACCOUNT_GET' AND correlation_id = '01914e2a-7b3c-7def-8a2b-000000000001'"
+    Then the response status code should be 200
+    And the SQL result as JSON should be:
+    """
+    [
+      {
+        "action": "ROUTE_BACKOFFICE_BANK_ACCOUNT_GET",
+        "level": "activity",
+        "resource_type": "BankAccount",
+        "resource_id": "33333333-3333-7000-8000-000000000001",
+        "correlation_id": "01914e2a-7b3c-7def-8a2b-000000000001"
+      }
+    ]
+    """

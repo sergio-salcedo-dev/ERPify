@@ -42,6 +42,10 @@ final class PruneAuditLogMessageTest extends TestCase
 
         $policy = new AuditRetentionPolicy($message->activityRetentionDays, $message->securityRetentionDays);
 
-        $this->assertCount(2, $policy->thresholdsAt(new DateTimeImmutable('2026-06-25 12:00:00')));
+        $this->assertCount(
+            3,
+            $policy->thresholdsAt(new DateTimeImmutable('2026-06-25 12:00:00')),
+            'a cutoff per level: the activity and security privacy ceilings plus the change compliance floor',
+        );
     }
 }

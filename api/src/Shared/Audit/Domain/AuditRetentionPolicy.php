@@ -9,20 +9,27 @@ use DateTimeImmutable;
 use Erpify\Shared\Audit\Domain\Exception\InvalidAuditRetentionPolicy;
 
 /**
- * The differentiated privacy-ceiling windows for the audit levels that carry one: how long a row of that
- * level survives in `audit_log` before the pruner may delete it. The legal separation between the activity
- * and security axes is encoded as an invariant — `security` must strictly outlive `activity` — so a
+ * The differentiated retention windows for the audit levels. `activity` and `security` carry a privacy
+ * *ceiling* — how long a row survives in `audit_log` before the pruner may delete it — and the legal
+ * separation between them is encoded as an invariant: `security` must strictly outlive `activity`, so a
  * misconfigured schedule fails loudly at construction rather than silently over-pruning the security trail.
  *
- * `change` rows are regulatory compliance evidence governed by a retention floor, not a privacy ceiling, so
- * the plan carries no cutoff for them and the pruner never deletes a change row on this axis. The policy
- * owns the per-level decision: {@see thresholdsAt()} turns "now" into the deletion plan (one
- * {@see AuditRetentionThreshold} per ceiling-bearing level), so the storage policy is expressed as data
+ * `change` rows are regulatory compliance evidence governed by a *floor* rather than a ceiling: they become
+ * prune-eligible only once past the legal minimum ({@see self::COMPLIANCE_RETENTION_FLOOR}), and are never
+ * deleted earlier. The policy owns the per-level decision: {@see thresholdsAt()} turns "now" into the
+ * deletion plan (one {@see AuditRetentionThreshold} per level), so the storage policy is expressed as data
  * here, not as a level loop in the message handler. Pure value object — the caller passes the instant,
  * keeping the plan unit-testable against a fixed point.
  */
 final readonly class AuditRetentionPolicy
 {
+    /**
+     * The legal minimum a `change` (compliance) row is retained before becoming prune-eligible. A floor,
+     * not a privacy ceiling: the row is never deleted earlier, and erasure of personal data within the
+     * floor is a crypto-shredding concern, not a deletion one, so append-only integrity is preserved.
+     */
+    private const string COMPLIANCE_RETENTION_FLOOR = 'P5Y';
+
     public function __construct(
         private int $activityRetentionDays,
         private int $securityRetentionDays,
@@ -41,7 +48,7 @@ final readonly class AuditRetentionPolicy
 
     /**
      * The full deletion plan at the given instant: for every level, the cutoff before which its rows are
-     * out of retention.
+     * out of retention — its privacy ceiling for `activity`/`security`, its compliance floor for `change`.
      *
      * @return list<AuditRetentionThreshold>
      */
@@ -50,24 +57,18 @@ final readonly class AuditRetentionPolicy
         $plan = [];
 
         foreach (AuditLevel::cases() as $level) {
-            $days = $this->ceilingDaysFor($level);
-
-            if (null === $days) {
-                continue;
-            }
-
-            $plan[] = new AuditRetentionThreshold($level, $now->sub(new DateInterval('P' . $days . 'D')));
+            $plan[] = new AuditRetentionThreshold($level, $now->sub($this->retentionWindowFor($level)));
         }
 
         return $plan;
     }
 
-    private function ceilingDaysFor(AuditLevel $level): ?int
+    private function retentionWindowFor(AuditLevel $level): DateInterval
     {
         return match ($level) {
-            AuditLevel::ACTIVITY => $this->activityRetentionDays,
-            AuditLevel::SECURITY => $this->securityRetentionDays,
-            AuditLevel::CHANGE => null,
+            AuditLevel::ACTIVITY => new DateInterval('P' . $this->activityRetentionDays . 'D'),
+            AuditLevel::SECURITY => new DateInterval('P' . $this->securityRetentionDays . 'D'),
+            AuditLevel::CHANGE => new DateInterval(self::COMPLIANCE_RETENTION_FLOOR),
         };
     }
 }

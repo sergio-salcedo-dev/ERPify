@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Shared\Audit\Infrastructure\Persistence;
 
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
+use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Event\OnFlushEventArgs;
 use Doctrine\ORM\Events;
 use Doctrine\ORM\UnitOfWork;
@@ -50,10 +51,8 @@ final readonly class AuditWriteCaptureListener
             return;
         }
 
-        $unitOfWork = $entityManager->getUnitOfWork();
-
         foreach (AuditWriteOperation::cases() as $operation) {
-            foreach ($this->capture($unitOfWork, $operation) as $entry) {
+            foreach ($this->capture($entityManager, $operation) as $entry) {
                 $this->writer->write($entry);
             }
         }
@@ -62,8 +61,10 @@ final readonly class AuditWriteCaptureListener
     /**
      * @return list<AuditLogEntry>
      */
-    private function capture(UnitOfWork $unitOfWork, AuditWriteOperation $operation): array
+    private function capture(EntityManagerInterface $entityManager, AuditWriteOperation $operation): array
     {
+        $unitOfWork = $entityManager->getUnitOfWork();
+
         $entities = match ($operation) {
             AuditWriteOperation::CREATED => $unitOfWork->getScheduledEntityInsertions(),
             AuditWriteOperation::UPDATED => $unitOfWork->getScheduledEntityUpdates(),
@@ -81,10 +82,80 @@ final readonly class AuditWriteCaptureListener
                 $entity->auditAction($operation),
                 AuditLevel::CHANGE,
                 $entity->auditResource(),
-                $this->changeDiff->of($unitOfWork->getEntityChangeSet($entity)),
+                $this->changeDiff->of($this->changesOf($entityManager, $unitOfWork, $entity, $operation)),
             );
         }
 
         return $entries;
+    }
+
+    /**
+     * The field-level changeset a `change` row records. An insert or update reuses the changeset Doctrine
+     * has already computed; a delete has none — Doctrine computes no changeset for a removed entity — so its
+     * final state is read off the class metadata as a `[value, null]` snapshot, preserving the diff's
+     * "before" that would otherwise be gone once the row is removed.
+     *
+     * @return array<string, mixed>
+     */
+    private function changesOf(
+        EntityManagerInterface $entityManager,
+        UnitOfWork $unitOfWork,
+        object $entity,
+        AuditWriteOperation $operation,
+    ): array {
+        if (AuditWriteOperation::DELETED !== $operation) {
+            return $unitOfWork->getEntityChangeSet($entity);
+        }
+
+        return $this->finalStateSnapshot($entityManager, $entity);
+    }
+
+    /**
+     * The complete final state of an aggregate about to be removed, as a `[value, null]` snapshot. Mapped
+     * scalar fields carry their value; a to-one association carries the referenced id alone, never the
+     * related object, so the trail records what the aggregate pointed at without pulling another module's
+     * graph into it. To-many sides are out of field-level scalar scope, like {@see AuditChangeDiff} skips a
+     * collection change.
+     *
+     * @return array<string, array{mixed, null}>
+     */
+    private function finalStateSnapshot(EntityManagerInterface $entityManager, object $entity): array
+    {
+        $metadata = $entityManager->getClassMetadata($entity::class);
+        $snapshot = [];
+
+        foreach ($metadata->getFieldNames() as $field) {
+            $snapshot[$field] = [$metadata->getFieldValue($entity, $field), null];
+        }
+
+        foreach ($metadata->getAssociationNames() as $association) {
+            if (!$metadata->isSingleValuedAssociation($association)) {
+                continue;
+            }
+
+            $snapshot[$association] = [
+                $this->referencedId($entityManager, $metadata->getFieldValue($entity, $association)),
+                null,
+            ];
+        }
+
+        return $snapshot;
+    }
+
+    private function referencedId(EntityManagerInterface $entityManager, mixed $related): ?string
+    {
+        if (!\is_object($related)) {
+            return null;
+        }
+
+        $identifiers = $entityManager->getClassMetadata($related::class)->getIdentifierValues($related);
+
+        if (1 !== \count($identifiers)) {
+            return null;
+        }
+
+        $id = \reset($identifiers);
+
+        return \is_scalar($id) ? (string) $id : null;
     }
 }
