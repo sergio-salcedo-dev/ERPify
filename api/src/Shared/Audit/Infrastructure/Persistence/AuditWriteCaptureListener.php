@@ -81,12 +81,10 @@ final readonly class AuditWriteCaptureListener
                 continue;
             }
 
-            $resource = $entity->auditResource();
-
             $entries[] = $this->entryFactory->create(
-                \strtoupper($resource->type) . '_' . $operation->value,
+                $entity->auditAction($operation),
                 AuditLevel::CHANGE,
-                $resource,
+                $entity->auditResource(),
                 $this->changeDiff->of($unitOfWork->getEntityChangeSet($entity)),
             );
         }

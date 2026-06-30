@@ -12,6 +12,7 @@ use Erpify\Backoffice\Bank\Domain\Event\BankSnapshot;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
 use Erpify\Shared\Audit\Domain\AuditedEntity;
 use Erpify\Shared\Audit\Domain\AuditResource;
+use Erpify\Shared\Audit\Domain\AuditWriteOperation;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Kernel\Domain\ValueObject\NormalizedText;
@@ -141,6 +142,15 @@ final class Bank extends AggregateRoot implements AuditedEntity
     public function auditResource(): AuditResource
     {
         return AuditResource::of('Bank', $this->id());
+    }
+
+    public function auditAction(AuditWriteOperation $operation): string
+    {
+        return match ($operation) {
+            AuditWriteOperation::CREATED => 'BANK_CREATED',
+            AuditWriteOperation::UPDATED => 'BANK_UPDATED',
+            AuditWriteOperation::DELETED => 'BANK_DELETED',
+        };
     }
 
     public function rename(string $name, string $shortName): void
