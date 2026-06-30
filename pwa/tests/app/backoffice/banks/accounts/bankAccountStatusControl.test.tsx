@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { BankAccountStatusControl } from "@/app/backoffice/banks/[id]/accounts/_components/BankAccountStatusControl";
 import {
   BankAccount,
@@ -72,6 +72,47 @@ describe("BankAccountStatusControl", () => {
       expect(changeRun).toHaveBeenCalledWith("0190ffff-aaaa-7bbb-8ccc-0d1e2f3a4b5c", "CLOSED"),
     );
     expect(onChanged).toHaveBeenCalledWith(expect.objectContaining({ status: "CLOSED" }));
+  });
+
+  it("re-syncs the dropdown when the account prop arrives with a different status", () => {
+    const onChanged = vi.fn();
+    const { rerender } = render(
+      <BankAccountStatusControl account={account("ACTIVE")} onChanged={onChanged} />,
+    );
+
+    const select = screen.getByTestId<HTMLSelectElement>("bank-account-status__select");
+    expect(select.value).toBe("ACTIVE");
+    expect(
+      within(screen.getByTestId("bank-account-status")).getByTestId("bank-account-status__save"),
+    ).toBeDisabled();
+
+    rerender(<BankAccountStatusControl account={account("INACTIVE")} onChanged={onChanged} />);
+
+    expect(select.value).toBe("INACTIVE");
+    expect(screen.getByTestId("bank-account-status__save")).toBeDisabled();
+  });
+
+  it("lets an authoritative status from another source override an unsaved selection", () => {
+    const onChanged = vi.fn();
+    const { rerender } = render(
+      <BankAccountStatusControl account={account("ACTIVE")} onChanged={onChanged} />,
+    );
+
+    const select = screen.getByTestId<HTMLSelectElement>("bank-account-status__select");
+    const save = screen.getByTestId("bank-account-status__save");
+
+    fireEvent.change(select, { target: { value: "CLOSED" } });
+    expect(select.value).toBe("CLOSED");
+    expect(save).toBeEnabled();
+
+    // A refetch/realtime update replaces the account with a different status: the
+    // re-seed wins over the user's pending pick, so the dropdown tracks the
+    // authoritative value and isDirty clears (no stale value can be saved).
+    rerender(<BankAccountStatusControl account={account("INACTIVE")} onChanged={onChanged} />);
+
+    expect(select.value).toBe("INACTIVE");
+    expect(save).toBeDisabled();
+    expect(onChanged).not.toHaveBeenCalled();
   });
 
   it("surfaces a server problem in the persistent error surface and does not report success", async () => {

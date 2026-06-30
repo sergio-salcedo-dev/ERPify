@@ -58,6 +58,11 @@ export function AuditInvestigationScreen() {
     "compact",
     isListDensity,
   );
+  // Page size and the keyset cursor (held in `useAuditTimeline`) are deliberately transient view
+  // state, not URL params. The shareable unit of an investigation is the filtered query —
+  // level / actor / resource / range / mode — which already lives in the URL; a keyset cursor is an
+  // opaque, prunable server token, so bookmarking "page 7" would rot once the pruner trims the tail.
+  // A reloaded link therefore reopens page 1 of the same query, the predictable forensic behaviour.
   const [pageSize, setPageSize] = useState<AuditPageSize>(AUDIT_PAGE_SIZE_DEFAULT);
 
   // Jornada is reachable only with a fixed actor; a stale `view=journey` URL with no actor falls back
