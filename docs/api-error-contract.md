@@ -76,6 +76,27 @@ Marker resolution honours implements-clause order, intersected with the canonica
 
 **422** is the contract for any *well-formed but semantically invalid* input (RFC 9110 §15.5.21) — request body, query-string DTOs (`validation-failed`), and the `invalid-search-criteria` family alike — distinct from **400 `invalid-input`** for a malformed *request target*. Route ids are guarded by [`Uuid::ensure()`](../api/src/Shared/Uuid/Domain/Uuid.php), which throws [`InvalidUuidException`](../api/src/Shared/Uuid/Domain/InvalidUuidException.php) (`InvalidInput` → 400 `invalid-uuid`) *before* any repository lookup; a well-formed id with no row is 404. So `GET /banks/{id}`: malformed id → **400 `invalid-uuid`**, absent → **404**, body/DTO validation → **422 `validation-failed`**. See ADR [`adr/filters-search-criteria.md`](./adr/filters-search-criteria.md).
 
+### Marker-less domain exceptions (crypto-shredding & integrity guards)
+
+Not every `DomainException` carries a marker. The crypto-shredding capability (`api/src/Shared/Crypto/Domain/Exception/`) throws four deliberately **marker-less** exceptions:
+
+| Exception | `type` | Thrown by | HTTP-reachable with real inputs today |
+|-----------|--------|-----------|---------------------------------------|
+| `DekDestroyed`             | `dek-destroyed`               | `SodiumEnvelopeEncryptor::decrypt` (Epic 3 read path) / `mint` tombstone race                          | No             |
+| `DecryptionFailed`         | `decryption-failed`           | `SodiumEnvelopeEncryptor::decrypt`/`unwrap` & `DbalKeystore::wrappedDekFor` — AEAD open / corrupt bytes | No             |
+| `InvalidEncryptionScopeId` | `invalid-encryption-scope-id` | `EncryptionScopeId::of` on a malformed scope built from trusted internal data                          | No             |
+| `InvalidKek`               | `invalid-kek`                 | `SodiumEnvelopeEncryptor` constructor — `AUDIT_KEK` length check                                       | No (misconfig) |
+
+Declaring no marker, they map through [`ProblemDetailsFactory`](../api/src/Shared/ErrorContract/Application/ProblemDetailsFactory.php) to **500** (`firstMatchingMarker` → `null`). Each carries an explicit `TYPE`, so the wire `type` is its own identifier — **not** the `domain-error` default of the marker-less row above, which applies only when `type()` is empty (`resolveDomainType`). Being marker-less they are **not** `ClientError`: they are **not** suppressed in Sentry, log at `error` (status ≥ 500), and carry `exception_category=domain_error`. That is correct — one firing signals corrupted or tampered stored state, an integrity fault operators must see, never a client mistake.
+
+None is HTTP-reachable with real inputs today. `InvalidKek` guards a misconfigured `AUDIT_KEK` — a *missing* key fails at boot (env resolution), while a *wrong-length* key trips on first use of the lazily-instantiated encryptor (the first audited PII mutation), surfaced as a 500; never a client input. `InvalidEncryptionScopeId` derives from trusted internal audit-resource data — a wiring fault, not client input (the audit boundary enforces UUID resource ids, so no non-UUID scope reaches this call). `DekDestroyed` / `DecryptionFailed` reach HTTP only through the write/seal path ([`PiiDiffSealer::seal`](../api/src/Shared/Audit/Infrastructure/Persistence/PiiDiffSealer.php) → `encrypt`, during the Doctrine flush of any PII-bearing mutation — the DEK unwrap and keystore read run there), and there only on corrupted stored state or a should-never-happen tombstone race — where a 500 is the right answer. The decrypt/read path that would surface these as an *expected* outcome has no HTTP route yet; it belongs to Epic 3 (authorized audit-trail read).
+
+Redaction: `DekDestroyed` / `DecryptionFailed` carry only `{encryptionScopeId}` (a `<ResourceType>:<uuid>` label — internal, non-PII); `InvalidKek` / `InvalidEncryptionScopeId` carry no context (the offending value is never included). Nothing here needs the redaction denylist.
+
+The drift gate (`ErrorContractGateTest`) watches only new markers under `api/src/Shared/ErrorContract/Domain/Exception/`, so it does **not** enforce this section — documenting a marker-less `DomainException` that can reach HTTP is manual discipline (see the Review checklist).
+
+> **Deferred decision for Epic 3 — do not skip.** Before the Epic 3 decrypt/read route ships, `dek-destroyed` and `decryption-failed` need a deliberate status *on that path*: `dek-destroyed` is an expected post-erasure outcome (candidate **410 Gone**), while `decryption-failed` stays a **5xx** integrity fault (keep it Sentry-visible). Assign these by **translating at the read boundary** — the read handler catches the crypto exception and throws a read-specific, marker-carrying exception. Do **not** add a marker to `DekDestroyed` / `DecryptionFailed` themselves: they are shared with the write/seal path where 500 is correct, and a 4xx marker (`extends ClientError`) would silence a real integrity fault there in Sentry.
+
 ## How to add a new error (Amelia walk-through from PRD §Journey 1)
 
 Amelia owns the Bank bounded context. Ticket: `GET /api/backoffice/banks/{id}` with an unknown ID currently throws and the PWA receives a Symfony HTML error page. She wants a proper 404 problem details body. **Twenty minutes, no controller edit, no listener edit, no DI config.**
@@ -243,7 +264,7 @@ Grep by `instance` for the single failure entry; grep by `correlation_id` for th
 
 Expected 4xx outcomes are user / state errors, not actionable faults: a 409 `bank-in-use` (deleting a bank that still has associated accounts), a 422 validation error, a 404. Left unfiltered they reach Sentry as `handled: no`, `level: error` and bury real faults under volume — 50 users mis-clicking "delete" become 50 non-actionable issues. So `before_send` drops them.
 
-The drop keys on the [`ClientError`](../api/src/Shared/ErrorContract/Domain/Exception/ClientError.php) marker, **not** on `exception_category=domain_error`. The distinction is load-bearing. Every 4xx marker in the marker→status table above (`NotFound`, `Conflict`, `Forbidden`, `Unauthenticated`, `InvariantViolation`, `InvalidInput`, `RateLimited`, `InvalidSearchCriteria`) `extends ClientError`, so any exception implementing one is suppressed transitively — there is no per-class denylist to maintain. But a **marker-less `DomainException` maps to `unhandled-exception` (500)** and is therefore *not* a `ClientError`; it keeps flowing to Sentry. Filtering on `domain_error` instead would wrongly hide those 500s.
+The drop keys on the [`ClientError`](../api/src/Shared/ErrorContract/Domain/Exception/ClientError.php) marker, **not** on `exception_category=domain_error`. The distinction is load-bearing. Every 4xx marker in the marker→status table above (`NotFound`, `Conflict`, `Forbidden`, `Unauthenticated`, `InvariantViolation`, `InvalidInput`, `RateLimited`, `InvalidSearchCriteria`) `extends ClientError`, so any exception implementing one is suppressed transitively — there is no per-class denylist to maintain. But a **marker-less `DomainException` maps to 500** (its own `type`, or `domain-error` when `type()` is empty) and is therefore *not* a `ClientError`; it keeps flowing to Sentry. Filtering on `domain_error` instead would wrongly hide those 500s.
 
 - Decision site: [`SentryEventFilter`](../api/src/Shared/Monitoring/Infrastructure/Sentry/SentryEventFilter.php) (`$hint->exception instanceof ClientError` → `return null`), composed with the PII [`SentryEventScrubber`](../api/src/Shared/Monitoring/Infrastructure/Sentry/SentryEventScrubber.php) by [`SentryBeforeSend`](../api/src/Shared/Monitoring/Infrastructure/Sentry/SentryBeforeSend.php) (the `before_send` wired in [`sentry.yaml`](../api/config/packages/sentry.yaml)).
 - Invariant: `MarkerStatusMapContractTest::testMarkerIsClientErrorIffStatusIs4xx` pins `ClientError ⇔ 4xx` against `MARKER_STATUS_MAP`. Add a 5xx marker and the test fails unless that marker deliberately does **not** extend `ClientError` — forcing a conscious "should this reach Sentry?" decision instead of silently leaking a 4xx or hiding a 5xx.
@@ -315,7 +336,7 @@ Behat features under `api/features/shared/error_contract/` pin the wire contract
 
 ## Review checklist
 
-Use this when reviewing a PR that touches `api/src/Shared/ErrorContract/Domain/Exception/` or `api/src/Shared/ErrorContract/Application/`:
+Use this when reviewing a PR that touches `api/src/Shared/ErrorContract/Domain/Exception/` or `api/src/Shared/ErrorContract/Application/`, or that adds a `DomainException` anywhere that can reach HTTP:
 
 - [ ] Did the PR add a new marker interface? **Update the marker → HTTP status table above.**
 - [ ] Did the PR change a value in `MARKER_STATUS_MAP` or `MARKER_DEFAULT_TYPE_MAP`? **Update the table above** (the table is a navigation aid; the values themselves come from the constant).
@@ -323,5 +344,6 @@ Use this when reviewing a PR that touches `api/src/Shared/ErrorContract/Domain/E
 - [ ] Did the PR add a key to `RedactionDenylist::KEYS`? **Update the "Extending the redaction denylist" section** if the procedure changed; the new key itself does not need to be listed here (it lives in the constant).
 - [ ] Did the PR change the env-aware `debug` shape? **Update the "Environment-aware `debug` extension" section.**
 - [ ] Did the PR change the listener priority or CORS interaction? **Update the "Listener layout" section.**
+- [ ] Did the PR add a **marker-less** `DomainException` outside `api/src/Shared/ErrorContract/Domain/Exception/` that can reach HTTP? It maps to **500** with its declared `type` (or the `domain-error` default if it declares none) and is **not** Sentry-suppressed — **document it in the "Marker-less domain exceptions" section above.** The drift gate does not catch this.
 
 > **Adding a marker interface or changing its mapping requires updating this page**.
