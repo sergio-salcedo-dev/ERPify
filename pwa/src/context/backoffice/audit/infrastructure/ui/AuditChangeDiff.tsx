@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Lock, Minus, Plus } from "lucide-react";
+import { ArrowRight, Lock, Minus, Plus, type LucideIcon } from "lucide-react";
 import { cn } from "@/components/cn";
 import { CopyButton, TruncatedText } from "@/components/erpify";
 import {
@@ -42,6 +42,12 @@ const KIND_TEXT_TONE: Readonly<Record<ChangeKind, string>> = {
   [ChangeKind.Added]: "text-success-strong",
   [ChangeKind.Removed]: "text-danger-strong",
   [ChangeKind.Changed]: "text-muted-foreground",
+};
+
+const KIND_ICON: Readonly<Record<ChangeKind, LucideIcon>> = {
+  [ChangeKind.Added]: Plus,
+  [ChangeKind.Removed]: Minus,
+  [ChangeKind.Changed]: ArrowRight,
 };
 
 const VALUE_TYPE_LABEL: Readonly<Record<string, string>> = {
@@ -140,7 +146,7 @@ function DiffField({ row, testId }: Readonly<{ row: FieldRow; testId?: string }>
 }
 
 function KindMarker({ kind }: Readonly<{ kind: ChangeKind }>) {
-  const Icon = kind === ChangeKind.Added ? Plus : kind === ChangeKind.Removed ? Minus : ArrowRight;
+  const Icon = KIND_ICON[kind];
   return (
     <span
       className={cn("inline-flex items-center gap-1 text-2xs font-medium", KIND_TEXT_TONE[kind])}
