@@ -50,6 +50,7 @@ final class AuditLogSchemaListener
         $table->addColumn('user_agent', Types::STRING, ['length' => 512, 'notnull' => false]);
         $table->addColumn('actor_erased', Types::BOOLEAN);
         $table->addColumn('occurred_on', Types::DATETIMETZ_IMMUTABLE);
+        $table->addColumn('encryption_scope_id', Types::STRING, ['length' => 160, 'notnull' => false]);
 
         $table->addPrimaryKeyConstraint(
             PrimaryKeyConstraint::editor()->setUnquotedColumnNames('id')->create(),

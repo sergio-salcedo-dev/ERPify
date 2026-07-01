@@ -35,10 +35,11 @@ final readonly class DbalAuditLogWriter implements AuditLogWriter
         $this->connection->executeStatement(
             'INSERT INTO audit_log '
             . '(id, level, action, actor_type, actor_id, correlation_id, resource_type, resource_id, '
-            . 'metadata, ip, user_agent, actor_erased, occurred_on) '
+            . 'metadata, ip, user_agent, actor_erased, occurred_on, encryption_scope_id) '
             . 'VALUES (CAST(:id AS UUID), :level, :action, :actor_type, CAST(:actor_id AS UUID), '
             . 'CAST(:correlation_id AS UUID), :resource_type, CAST(:resource_id AS UUID), '
-            . 'CAST(:metadata AS JSONB), :ip, :user_agent, FALSE, CAST(:occurred_on AS TIMESTAMPTZ)) '
+            . 'CAST(:metadata AS JSONB), :ip, :user_agent, FALSE, CAST(:occurred_on AS TIMESTAMPTZ), '
+            . ':encryption_scope_id) '
             . 'ON CONFLICT (id) DO NOTHING',
             [
                 'id' => $entry->id,
@@ -53,6 +54,7 @@ final readonly class DbalAuditLogWriter implements AuditLogWriter
                 'ip' => $entry->ip,
                 'user_agent' => $entry->userAgent,
                 'occurred_on' => $entry->occurredOn->format('Y-m-d H:i:s.uP'),
+                'encryption_scope_id' => $entry->encryptionScopeId,
             ],
         );
     }

@@ -14,6 +14,9 @@ use Erpify\Backoffice\BankAccount\Domain\Event\BankAccountSnapshot;
 use Erpify\Backoffice\BankAccount\Domain\Event\BankAccountStatusChangedDomainEvent;
 use Erpify\Backoffice\BankAccount\Domain\Event\BankAccountUpdatedDomainEvent;
 use Erpify\Backoffice\BankAccount\Domain\Exception\BankAccountNotClosedException;
+use Erpify\Shared\Audit\Domain\AuditedEntity;
+use Erpify\Shared\Audit\Domain\AuditResource;
+use Erpify\Shared\Audit\Domain\AuditWriteOperation;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Kernel\Domain\Enum\Currency;
@@ -23,10 +26,17 @@ use Erpify\Shared\Validation\Infrastructure\EnumType;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Validator\Constraints as Assert;
 
+/**
+ * A rich aggregate whose collaborators are inherent to its responsibilities — persistence/validation
+ * metadata, four domain events, a status lifecycle, the audit contract and per-field PII classification —
+ * rather than a design smell, so its object coupling is deliberately allowed above the default threshold.
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
+ */
 #[ORM\Entity]
 #[ORM\Table(name: 'bank_account')]
 #[UniqueEntity(fields: ['iban'], message: 'This IBAN is already in use.')]
-final class BankAccount extends AggregateRoot
+final class BankAccount extends AggregateRoot implements AuditedEntity
 {
     private function __construct(
         string $id,
@@ -210,6 +220,20 @@ final class BankAccount extends AggregateRoot
     public function getStatus(): BankAccountStatus
     {
         return $this->status;
+    }
+
+    public function auditResource(): AuditResource
+    {
+        return AuditResource::of('BankAccount', $this->id());
+    }
+
+    public function auditAction(AuditWriteOperation $operation): string
+    {
+        return match ($operation) {
+            AuditWriteOperation::CREATED => 'BANK_ACCOUNT_CREATED',
+            AuditWriteOperation::UPDATED => 'BANK_ACCOUNT_UPDATED',
+            AuditWriteOperation::DELETED => 'BANK_ACCOUNT_DELETED',
+        };
     }
 
     private static function canonicalizeIban(string $iban): string

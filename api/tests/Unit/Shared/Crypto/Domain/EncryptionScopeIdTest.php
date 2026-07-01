@@ -22,7 +22,7 @@ final class EncryptionScopeIdTest extends TestCase
     {
         $id = Uuid::generate();
 
-        $this->assertSame('BANK_ACCOUNT:' . $id, EncryptionScopeId::forBankAccount($id)->toString());
+        $this->assertSame('BankAccount:' . $id, EncryptionScopeId::forBankAccount($id)->toString());
     }
 
     #[Test]
@@ -30,9 +30,9 @@ final class EncryptionScopeIdTest extends TestCase
     {
         $id = Uuid::generate();
 
-        $scope = EncryptionScopeId::fromString('BANK_ACCOUNT:' . $id);
+        $scope = EncryptionScopeId::fromString('BankAccount:' . $id);
 
-        $this->assertSame('BANK_ACCOUNT', $scope->type);
+        $this->assertSame('BankAccount', $scope->type);
         $this->assertSame($id, $scope->id);
     }
 

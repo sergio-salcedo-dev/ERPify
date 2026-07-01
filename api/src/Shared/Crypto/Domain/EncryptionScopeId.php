@@ -23,9 +23,23 @@ final readonly class EncryptionScopeId
     ) {
     }
 
+    /**
+     * The scope `type` is the audited resource type verbatim (e.g. `BankAccount`), so the sealer that
+     * derives a scope from an aggregate and the erasure that targets it agree on one string without a
+     * per-entity mapping.
+     */
+    public static function of(string $type, string $id): self
+    {
+        if ('' === $type || !Uuid::isValid($id)) {
+            throw InvalidEncryptionScopeId::malformed();
+        }
+
+        return new self($type, $id);
+    }
+
     public static function forBankAccount(string $bankAccountId): self
     {
-        return self::of('BANK_ACCOUNT', $bankAccountId);
+        return self::of('BankAccount', $bankAccountId);
     }
 
     public static function fromString(string $value): self
@@ -42,14 +56,5 @@ final readonly class EncryptionScopeId
     public function toString(): string
     {
         return $this->type . self::SEPARATOR . $this->id;
-    }
-
-    private static function of(string $type, string $id): self
-    {
-        if ('' === $type || !Uuid::isValid($id)) {
-            throw InvalidEncryptionScopeId::malformed();
-        }
-
-        return new self($type, $id);
     }
 }

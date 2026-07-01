@@ -51,6 +51,7 @@ final readonly class SealedAuditEntryFactory implements AuditEntryFactory
         AuditLevel $level,
         ?AuditResource $resource = null,
         array $metadata = [],
+        ?string $encryptionScopeId = null,
     ): AuditLogEntry {
         return AuditLogEntry::create(
             $action,
@@ -62,6 +63,7 @@ final readonly class SealedAuditEntryFactory implements AuditEntryFactory
             $metadata,
             $this->resolveClientIp(),
             $this->resolveUserAgent(),
+            $encryptionScopeId,
         );
     }
 
