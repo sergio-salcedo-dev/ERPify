@@ -16,10 +16,11 @@ use PHPUnit\Framework\TestCase;
 final class AuditLogMaintenanceScheduleTest extends TestCase
 {
     #[Test]
-    public function itSchedulesASingleRecurringAuditLogPrune(): void
+    public function itSchedulesTheDailyRetentionPruneAndErasureReconciliation(): void
     {
         $schedule = (new AuditLogMaintenanceSchedule())->getSchedule();
 
-        $this->assertCount(1, $schedule->getRecurringMessages());
+        // Two daily maintenance ticks: the retention prune and the subject-erasure reconciliation.
+        $this->assertCount(2, $schedule->getRecurringMessages());
     }
 }
