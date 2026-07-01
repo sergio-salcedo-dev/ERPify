@@ -37,14 +37,57 @@ describe("AuditChangeDiff", () => {
     expect(screen.getByText("Modificado")).toBeInTheDocument();
   });
 
-  it("distinguishes a null value «— (vacío)» from an empty string «(cadena vacía)»", () => {
+  it("hides a no-op field (both sides null) while keeping an empty-string value visible", () => {
     renderDiff({
       cleared: { old: null, new: null },
       blank: { old: "", new: "x" },
     });
 
-    expect(screen.getAllByText("— (vacío)").length).toBeGreaterThan(0);
+    expect(screen.queryByTestId("diff__field-cleared")).not.toBeInTheDocument();
+    expect(screen.queryByText("— (vacío)")).not.toBeInTheDocument();
     expect(screen.getByText("(cadena vacía)")).toBeInTheDocument();
+    expect(screen.getByText("x")).toBeInTheDocument();
+  });
+
+  it("hides a no-op field among real changes and renders the rest", () => {
+    renderDiff({
+      name: { old: "BBVA", new: "BBVA S.A." },
+      bic: { old: null, new: null },
+    });
+
+    expect(screen.getByText("BBVA S.A.")).toBeInTheDocument();
+    expect(screen.getByText("Modificado")).toBeInTheDocument();
+    expect(screen.queryByTestId("diff__field-bic")).not.toBeInTheDocument();
+  });
+
+  it("keeps the DELETE snapshot header when a no-op field sits among removed fields", () => {
+    renderDiff({
+      name: { old: "BBVA", new: null },
+      bic: { old: null, new: null },
+    });
+
+    expect(screen.getByText("Estado final antes del borrado")).toBeInTheDocument();
+    expect(screen.queryByTestId("diff__field-bic")).not.toBeInTheDocument();
+  });
+
+  it("keeps the CREATE snapshot header when a no-op field sits among added fields", () => {
+    renderDiff({
+      name: { old: null, new: "BBVA" },
+      bic: { old: null, new: null },
+    });
+
+    expect(screen.getByText("Estado inicial")).toBeInTheDocument();
+    expect(screen.queryByTestId("diff__field-bic")).not.toBeInTheDocument();
+  });
+
+  it("reads an all-empty snapshot as «Registro sin campos con valor», not «Sin cambios registrados»", () => {
+    renderDiff({
+      bic: { old: null, new: null },
+      alias: { old: null, new: null },
+    });
+
+    expect(screen.getByText("Registro sin campos con valor")).toBeInTheDocument();
+    expect(screen.queryByText("Sin cambios registrados")).not.toBeInTheDocument();
   });
 
   it("names a CREATE snapshot (all added) and a DELETE snapshot (all removed)", () => {
