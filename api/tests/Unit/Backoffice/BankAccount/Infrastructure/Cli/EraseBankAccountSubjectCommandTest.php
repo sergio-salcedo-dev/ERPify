@@ -14,6 +14,7 @@ use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 
@@ -76,6 +77,31 @@ final class EraseBankAccountSubjectCommandTest extends TestCase
 
         $this->assertSame(Command::SUCCESS, $tester->getStatusCode());
         $this->assertStringContainsString('Erased subject', $tester->getDisplay());
+    }
+
+    #[Test]
+    public function itReportsNothingToEraseForAnAlreadyErasedSubject(): void
+    {
+        // The inert eraser finds no live record and no key, so a forced run is a no-op re-run.
+        $tester = $this->tester($this->inertEraser());
+
+        $tester->execute(['bank-account-id' => self::ACCOUNT_ID, '--force' => true]);
+
+        $this->assertSame(Command::SUCCESS, $tester->getStatusCode());
+        $this->assertStringContainsString('Nothing to erase', $tester->getDisplay());
+    }
+
+    #[Test]
+    public function itReportsFailureWhenTheErasureThrows(): void
+    {
+        $encryptor = $this->createStub(EnvelopeEncryptor::class);
+        $encryptor->method('destroyScope')->willThrowException(new RuntimeException('crypto backend down'));
+
+        $tester = $this->tester($this->eraser($this->createStub(BankAccountRepository::class), $encryptor));
+        $tester->execute(['bank-account-id' => self::ACCOUNT_ID, '--force' => true]);
+
+        $this->assertSame(Command::FAILURE, $tester->getStatusCode());
+        $this->assertStringContainsString('Erasure failed', $tester->getDisplay());
     }
 
     private function tester(EraseBankAccountSubject $eraser): CommandTester
