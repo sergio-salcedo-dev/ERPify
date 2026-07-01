@@ -41,7 +41,7 @@ Then el comando existe con la misma ergonomía que `EraseActorAuditTrailCommand`
 **AC2 — Borra el dato vivo + destruye la DEK (FR9, NFR3, D15).**
 Given un sujeto con datos (`BankAccount`),
 When se ejecuta,
-Then (1) el dato vivo del sujeto se borra o anonimiza (política del módulo dueño — ver Dev Notes) y (2) se destruye la DEK de su `EncryptionScopeId` (`BANK_ACCOUNT:<id>`); el ciphertext del diff en `audit_log` queda **permanentemente ilegible** (descifrar → error/`null` controlado, jamás plaintext); la fila, su orden y su prueba de integridad permanecen (append-only intacto).
+Then (1) el dato vivo del sujeto se borra o anonimiza (política del módulo dueño — ver Dev Notes) y (2) se destruye la DEK de su `EncryptionScopeId` (`BankAccount:<id>`); el ciphertext del diff en `audit_log` queda **permanentemente ilegible** (descifrar → error/`null` controlado, jamás plaintext); la fila, su orden y su prueba de integridad permanecen (append-only intacto).
 
 **AC3 — Idempotente.**
 Given la operación,
@@ -77,7 +77,7 @@ Then no comparten servicio, comando ni columna: `erase-actor` toca `actor_id`/`a
 ### C. Adapter CLI (AC1)
 
 - [ ] **C1.** `api/src/Backoffice/BankAccount/Infrastructure/Cli/EraseBankAccountSubjectCommand.php`
-  - [ ] `#[AsCommand(name: 'bank-account:gdpr:erase-subject', ...)]` (nombre **distinto** de `audit:gdpr:erase`). Argumento `bank-account-id` (UUID; el comando deriva el scope `BANK_ACCOUNT:<id>`). Opciones `--dry-run` (cuenta/preview sin mutar) y `--force` (salta confirmación). Flujo `SymfonyStyle` espejo de `EraseActorAuditTrailCommand` (líneas 30-140): validar UUID → preview → confirmación → `EraseBankAccountSubject::execute` → reportar. Manejo de error: si el self-audit falla tras destruir la DEK, reportar la irreversibilidad (igual asimetría que el eje hermano).
+  - [ ] `#[AsCommand(name: 'bank-account:gdpr:erase-subject', ...)]` (nombre **distinto** de `audit:gdpr:erase`). Argumento `bank-account-id` (UUID; el comando deriva el scope `BankAccount:<id>`). Opciones `--dry-run` (cuenta/preview sin mutar) y `--force` (salta confirmación). Flujo `SymfonyStyle` espejo de `EraseActorAuditTrailCommand` (líneas 30-140): validar UUID → preview → confirmación → `EraseBankAccountSubject::execute` → reportar. Manejo de error: si el self-audit falla tras destruir la DEK, reportar la irreversibilidad (igual asimetría que el eje hermano).
   - [ ] **Ruta consciente:** comando operador-driven (no endpoint) mientras no haya auth (D8/E3). Declararlo.
 
 ### D. Reconciliación (AC4)

@@ -12,6 +12,7 @@ use Erpify\Shared\Crypto\Domain\Exception\DecryptionFailed;
 use Erpify\Shared\Crypto\Domain\Exception\DekDestroyed;
 use Erpify\Shared\Crypto\Domain\Exception\InvalidKek;
 use Override;
+use SodiumException;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
@@ -59,7 +60,15 @@ final readonly class SodiumEnvelopeEncryptor implements EnvelopeEncryptor
         }
 
         $dek = $this->unwrap($scope, $wrapped);
-        $raw = \sodium_base642bin($ciphertext, SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING);
+
+        try {
+            $raw = \sodium_base642bin($ciphertext, SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING);
+        } catch (SodiumException) {
+            \sodium_memzero($dek);
+
+            throw DecryptionFailed::forScope($scope);
+        }
+
         $nonceLength = SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_NPUBBYTES;
         $plaintext = \sodium_crypto_aead_xchacha20poly1305_ietf_decrypt(
             \substr($raw, $nonceLength),
@@ -95,8 +104,16 @@ final readonly class SodiumEnvelopeEncryptor implements EnvelopeEncryptor
         $this->keystore->store($scope, $wrapped);
 
         // Re-read so every value for this scope is sealed under the authoritative stored key, even if a
-        // concurrent mint won the ON CONFLICT race.
-        return $this->keystore->wrappedDekFor($scope) ?? $wrapped;
+        // concurrent mint won the ON CONFLICT race. A null here means the store was a no-op against a
+        // tombstoned (destroyed) scope: crypto-shredding is irreversible, so refuse rather than seal under
+        // an unpersisted key that no reader could ever unwrap.
+        $stored = $this->keystore->wrappedDekFor($scope);
+
+        if (!$stored instanceof WrappedDek) {
+            throw DekDestroyed::forScope($scope);
+        }
+
+        return $stored;
     }
 
     private function wrap(EncryptionScopeId $scope, string $dek): WrappedDek

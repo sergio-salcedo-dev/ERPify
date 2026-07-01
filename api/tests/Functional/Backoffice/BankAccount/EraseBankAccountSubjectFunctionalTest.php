@@ -9,6 +9,8 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\BankAccount\Application\EraseBankAccountSubject;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
+use Erpify\Shared\Crypto\Application\EnvelopeEncryptor;
+use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -48,13 +50,17 @@ final class EraseBankAccountSubjectFunctionalTest extends KernelTestCase
             $this->assertTrue($result->liveRecordErased);
             $this->assertTrue($result->keyDestroyed);
             $this->assertSame(0, $this->bankAccountRows($connection, $accountId), 'the live record is gone');
-            $this->assertGreaterThanOrEqual(
-                $changeRowsBefore,
+            $this->assertSame(
+                $changeRowsBefore + 1,
                 $this->countChangeRows($connection, $accountId),
-                'append-only: the audit rows survive the erasure',
+                'append-only: the surviving rows grow by the captured BANK_ACCOUNT_DELETED snapshot',
             );
             $this->assertSame(0, $this->liveKeys($connection, $scope), 'the DEK is destroyed');
             $this->assertSame(1, $this->subjectErasedRows($connection, $scope), 'the erasure self-audits once');
+            $this->assertFalse(
+                $this->hasEvidencelessDestroyedKey($connection, $scope),
+                'reconciliation: the destroyed key commits with its GDPR_SUBJECT_ERASED evidence row',
+            );
             $this->assertFalse(
                 $this->createRowActorErased($connection, $accountId),
                 'subject erasure never touches the actor-erasure locus',
@@ -68,12 +74,48 @@ final class EraseBankAccountSubjectFunctionalTest extends KernelTestCase
         });
     }
 
+    public function testAReconciliationCrossCheckDetectsADestroyedKeyMissingItsEvidence(): void
+    {
+        $this->inRolledBackTransaction(function (EntityManagerInterface $em, Connection $connection): void {
+            $bankId = Uuid::generate();
+            $token = \strtoupper(\substr(\str_replace('-', '', $bankId), 0, 8));
+            $em->persist(Bank::create($bankId, 'Bank ' . $bankId, 'BNK' . $token));
+            $em->flush();
+
+            $accountId = Uuid::generate();
+            $em->persist(BankAccount::create($accountId, $bankId, 'Juan Pérez', 'ES9121000418450200051332'));
+            $em->flush();
+
+            $scope = 'BankAccount:' . $accountId;
+            $this->assertSame(1, $this->liveKeys($connection, $scope), 'a DEK was minted for the subject');
+
+            // Destroy the key WITHOUT the self-audit — the exact divergence a compliance reconciliation exists
+            // to catch (the atomic erase use case can never produce it; a manual repair or a future bug could).
+            $this->encryptor()->destroyScope(EncryptionScopeId::forBankAccount($accountId));
+
+            $this->assertSame(0, $this->liveKeys($connection, $scope), 'the DEK is destroyed');
+            $this->assertSame(0, $this->subjectErasedRows($connection, $scope), 'no evidence row was written');
+            $this->assertTrue(
+                $this->hasEvidencelessDestroyedKey($connection, $scope),
+                'reconciliation detects a destroyed key with no GDPR_SUBJECT_ERASED evidence',
+            );
+        });
+    }
+
     private function eraser(): EraseBankAccountSubject
     {
         $eraser = self::getContainer()->get(EraseBankAccountSubject::class);
         $this->assertInstanceOf(EraseBankAccountSubject::class, $eraser);
 
         return $eraser;
+    }
+
+    private function encryptor(): EnvelopeEncryptor
+    {
+        $encryptor = self::getContainer()->get(EnvelopeEncryptor::class);
+        $this->assertInstanceOf(EnvelopeEncryptor::class, $encryptor);
+
+        return $encryptor;
     }
 
     /**
@@ -139,6 +181,19 @@ final class EraseBankAccountSubjectFunctionalTest extends KernelTestCase
         );
 
         return \in_array($value, [true, 't', '1', 1], true);
+    }
+
+    private function hasEvidencelessDestroyedKey(Connection $connection, string $scope): bool
+    {
+        $divergent = $this->countRows(
+            $connection,
+            'SELECT COUNT(*) FROM dek_keystore k WHERE k.encryption_scope_id = :scope AND k.destroyed_at IS NOT NULL '
+            . "AND NOT EXISTS (SELECT 1 FROM audit_log a WHERE a.level = 'security' "
+            . "AND a.action = 'GDPR_SUBJECT_ERASED' AND a.metadata->>'encryption_scope_id' = k.encryption_scope_id)",
+            ['scope' => $scope],
+        );
+
+        return $divergent > 0;
     }
 
     /**

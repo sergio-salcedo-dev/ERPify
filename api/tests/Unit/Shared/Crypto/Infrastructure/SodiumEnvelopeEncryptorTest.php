@@ -69,6 +69,33 @@ final class SodiumEnvelopeEncryptorTest extends TestCase
     }
 
     #[Test]
+    public function itRefusesToEncryptOnceTheScopeIsDestroyed(): void
+    {
+        $encryptor = new SodiumEnvelopeEncryptor(new InMemoryKeystore(), self::KEK);
+        $scope = EncryptionScopeId::forBankAccount(Uuid::generate());
+        $encryptor->encrypt($scope, 'secret');
+        $encryptor->destroyScope($scope);
+
+        // Crypto-shredding is irreversible: encrypting under a tombstoned scope must fail loudly, never
+        // silently seal under a fresh key that was never persisted and could never be unwrapped again.
+        $this->expectException(DekDestroyed::class);
+
+        $encryptor->encrypt($scope, 'resurrected');
+    }
+
+    #[Test]
+    public function itRejectsAMalformedCiphertext(): void
+    {
+        $encryptor = new SodiumEnvelopeEncryptor(new InMemoryKeystore(), self::KEK);
+        $scope = EncryptionScopeId::forBankAccount(Uuid::generate());
+        $encryptor->encrypt($scope, 'secret');
+
+        $this->expectException(DecryptionFailed::class);
+
+        $encryptor->decrypt($scope, '@@ not valid base64 @@');
+    }
+
+    #[Test]
     public function itRejectsACiphertextSealedUnderAnotherScope(): void
     {
         $encryptor = new SodiumEnvelopeEncryptor(new InMemoryKeystore(), self::KEK);

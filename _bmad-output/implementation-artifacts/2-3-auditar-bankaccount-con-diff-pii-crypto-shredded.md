@@ -18,7 +18,7 @@ para **registrar quién cambió qué — sin dejar PII (`holderName`/`iban`) en 
 
 ### Scope — lado de escritura (captura cifrada). El render descifrado es de E3
 
-Esta story: (1) cablea `BankAccount` como `AuditedEntity` (igual que `Bank`), de modo que el `AuditWriteCaptureListener` ya vivo lo capture; (2) **cifra los campos `#[PersonalData]` del diff** bajo la DEK del `EncryptionScopeId` (`BANK_ACCOUNT:<id>`) en el mismo `onFlush`; (3) hace que la fila **referencie el scope** (`encryption_scope_id` en `audit_log`); (4) garantiza que **ningún metadato cripto** contamina la entidad. **NO** descifra ni renderiza PII en claro en la UI pública (la superficie de lectura es pre-auth → mostrar PII descifrada es privilegiado → **E3**). Sí añade las etiquetas `BANK_ACCOUNT_*` y un centinela "cifrado" en la UI para que el timeline siga coherente sin filtrar.
+Esta story: (1) cablea `BankAccount` como `AuditedEntity` (igual que `Bank`), de modo que el `AuditWriteCaptureListener` ya vivo lo capture; (2) **cifra los campos `#[PersonalData]` del diff** bajo la DEK del `EncryptionScopeId` (`BankAccount:<id>`) en el mismo `onFlush`; (3) hace que la fila **referencie el scope** (`encryption_scope_id` en `audit_log`); (4) garantiza que **ningún metadato cripto** contamina la entidad. **NO** descifra ni renderiza PII en claro en la UI pública (la superficie de lectura es pre-auth → mostrar PII descifrada es privilegiado → **E3**). Sí añade las etiquetas `BANK_ACCOUNT_*` y un centinela "cifrado" en la UI para que el timeline siga coherente sin filtrar.
 
 ### Dependencias dentro de E2
 
@@ -29,7 +29,7 @@ Esta story: (1) cablea `BankAccount` como `AuditedEntity` (igual que `Bank`), de
 1. **Captura por el listener genérico ya vivo** (D1/D10). `AuditWriteCaptureListener` (onFlush, síncrono **en la transacción del flush**) captura cualquier `AuditedEntity`. Cablear `BankAccount` con la interfaz es suficiente para que se capture — la diferencia con `Bank` es **solo** el cifrado del diff PII.
 2. **El cifrado vive en el seam del diff, no en la entidad** (D6/D17). Se cifra el diff en `audit_log`, **no** la entidad viva: `BankAccount` sigue guardando `holderName`/`iban` en claro (la cuenta debe funcionar; `iban` es `unique`). El crypto-shredding es exclusivo del registro de auditoría. Descartado (sugerencia a evitar): cifrar la entidad en reposo vía Doctrine `prePersist`/`postLoad` — **no** es lo que el ADR pide y rompería unicidad/validación de `iban`.
 3. **Cifrar, no redactar** (D6). Los campos PII del diff se guardan **cifrados** (valor forense preservado hasta el olvido), no `[REDACTED]`. La redacción perdería el "de qué valor a qué valor" que el regulador pide; el olvido se hace destruyendo la DEK (2.4), no redactando.
-4. **La fila referencia el scope** (D6). `audit_log` gana una columna nullable `encryption_scope_id`: null en filas sin PII (p.ej. `Bank` — regresión-segura, la Story 1.7 sigue mostrando `Bank` en claro), `BANK_ACCOUNT:<id>` en filas de `BankAccount`. Descartado: derivar el scope de `(resource_type, resource_id)` en lectura — el `resource_type` es `BankAccount` y el scope-type `BANK_ACCOUNT`; una columna explícita evita un mapeo frágil y cumple "la fila referencia su dek".
+4. **La fila referencia el scope** (D6). `audit_log` gana una columna nullable `encryption_scope_id`: null en filas sin PII (p.ej. `Bank` — regresión-segura, la Story 1.7 sigue mostrando `Bank` en claro), `BankAccount:<id>` en filas de `BankAccount`. Descartado: derivar el scope de `(resource_type, resource_id)` en lectura — el scope-type reusa el `resource_type` verbatim (`BankAccount`), así sellador y erasure comparten una única fuente; una columna explícita evita un mapeo frágil y cumple "la fila referencia su dek".
 5. **Compone con el erasure de actor sin reabrirlo** (D6/FR12). Loci de PII distintos: el actor se olvida por remint de `actor_id` (D4/D4.1, eje hermano); el PII del diff por destrucción de DEK (2.4). Nunca se mezclan.
 
 ## Acceptance Criteria
@@ -42,12 +42,12 @@ Then implementa `AuditedEntity`: `auditResource()` → `AuditResource::of('BankA
 **AC2 — Campos PII del diff cifrados; no-PII en claro (FR9, FR11, NFR6, D6/D11/D12).**
 Given un cambio sobre `BankAccount`,
 When el listener `onFlush` construye la entrada,
-Then los campos `#[PersonalData]` del diff (`holderName`, `iban`) se cifran bajo la DEK del `EncryptionScopeId` `BANK_ACCOUNT:<id>` (vía el `EnvelopeEncryptor` de 2.2, con la clasificación de 2.1), y `bic`/`currency`/`status`/`bankId` quedan **en claro**; **nunca** aparece `holderName`/`iban` en claro en `audit_log.metadata`.
+Then los campos `#[PersonalData]` del diff (`holderName`, `iban`) se cifran bajo la DEK del `EncryptionScopeId` `BankAccount:<id>` (vía el `EnvelopeEncryptor` de 2.2, con la clasificación de 2.1), y `bic`/`currency`/`status`/`bankId` quedan **en claro**; **nunca** aparece `holderName`/`iban` en claro en `audit_log.metadata`.
 
 **AC3 — La fila referencia el scope (D6).**
 Given una fila de escritura de `BankAccount`,
 When se persiste,
-Then `audit_log.encryption_scope_id = 'BANK_ACCOUNT:<id>'`; las filas sin PII (p.ej. `Bank`) tienen `encryption_scope_id = NULL` y su diff sigue en claro (la Story 1.7 no se rompe).
+Then `audit_log.encryption_scope_id = 'BankAccount:<id>'`; las filas sin PII (p.ej. `Bank`) tienen `encryption_scope_id = NULL` y su diff sigue en claro (la Story 1.7 no se rompe).
 
 **AC4 — Cero metadato cripto en el dominio (D17, deptrac).**
 Given la frontera hexagonal,
@@ -78,7 +78,7 @@ Then los campos PII del diff se muestran con un **centinela "🔒 cifrado / no d
 ### B. Seam de cifrado en el listener (AC2, AC3, AC4)
 
 - [ ] **B1.** Sellador del diff PII: `api/src/Shared/Audit/Infrastructure/Persistence/PiiDiffSealer.php` (o `Application` con adapter — decidir)
-  - [ ] Colaborador inyectable que recibe `(AuditedEntity $entity, array $diff)` y devuelve `SealedDiff{array $metadata, ?EncryptionScopeId $scope}`. Internamente: `PersonalDataClassifier::personalFieldsOf($entity)` (2.1) → si hay campos PII presentes en `$diff['changes']`, deriva `EncryptionScopeId` desde `$entity->auditResource()` (`BANK_ACCOUNT:<id>`) y cifra `old`/`new` de esos campos con `EnvelopeEncryptor::encrypt(scope, value)` (2.2); marca cada valor cifrado de forma distinguible (p.ej. `{ "__enc__": "<ciphertext-base64>" }`) para que la lectura sepa que es cifrado (no plaintext, no descifrable sin privilegio). Campos no-PII intactos.
+  - [ ] Colaborador inyectable que recibe `(AuditedEntity $entity, array $diff)` y devuelve `SealedDiff{array $metadata, ?EncryptionScopeId $scope}`. Internamente: `PersonalDataClassifier::personalFieldsOf($entity)` (2.1) → si hay campos PII presentes en `$diff['changes']`, deriva `EncryptionScopeId` desde `$entity->auditResource()` (`BankAccount:<id>`) y cifra `old`/`new` de esos campos con `EnvelopeEncryptor::encrypt(scope, value)` (2.2); marca cada valor cifrado de forma distinguible (p.ej. `{ "__enc__": "<ciphertext-base64>" }`) para que la lectura sepa que es cifrado (no plaintext, no descifrable sin privilegio). Campos no-PII intactos.
   - [ ] Entidad sin campos PII (p.ej. `Bank`) → `scope = null`, `metadata` sin cambios (paridad con el comportamiento actual de la Story 1.7).
 - [ ] **B2.** Cablear el sellador en `AuditWriteCaptureListener.php` (línea ~85, el seam identificado)
   - [ ] Inyectar `PiiDiffSealer`. Antes de `entryFactory->create(...)`: `$sealed = $piiDiffSealer->seal($entity, $changeDiff->of(...))`. Pasar `$sealed->metadata` como metadata y `$sealed->scope` al factory/entry (ver B3). **No** acoplar el listener a `BankAccount` (sigue genérico, opera sobre `AuditedEntity` + clasificación).
@@ -97,7 +97,7 @@ Then los campos PII del diff se muestran con un **centinela "🔒 cifrado / no d
 
 ### D. Tests
 
-- [ ] **D1.** Unit (`PiiDiffSealerTest`, fakes de clasificador+encryptor): campos PII → marcados cifrados con scope `BANK_ACCOUNT:<id>`; no-PII intactos; entidad sin PII → scope null, metadata intacta.
+- [ ] **D1.** Unit (`PiiDiffSealerTest`, fakes de clasificador+encryptor): campos PII → marcados cifrados con scope `BankAccount:<id>`; no-PII intactos; entidad sin PII → scope null, metadata intacta.
 - [ ] **D2.** Unit (`BankAccount` audit methods): `auditAction` mapea las 3 operaciones; `auditResource` = `('BankAccount', id)`.
 - [ ] **D3.** Funcional (Postgres real, `inRolledBackTransaction`): crear/editar/borrar un `BankAccount` → fila `level=change` con `encryption_scope_id` set, `holderName`/`iban` **cifrados** en `metadata` (assert: el plaintext **no** aparece en la fila), `bic`/`status` en claro; DELETE captura snapshot. **Regresión:** un cambio de `Bank` → `encryption_scope_id` NULL y diff en claro (Story 1.7 intacta).
 - [ ] **D4.** Funcional (AC5): una fila de `BankAccount` sobrevive a `audit:gdpr:erase <actor>` (remint `actor_id`, `actor_erased=true`) **conservando** su `encryption_scope_id` y su diff cifrado — loci independientes.

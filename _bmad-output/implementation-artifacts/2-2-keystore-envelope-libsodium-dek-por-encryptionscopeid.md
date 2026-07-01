@@ -26,7 +26,7 @@ Esta story entrega: (1) el value object `EncryptionScopeId`, (2) la tabla keysto
 
 ### Decisiones tomadas (ADR D13/D14/D17)
 
-1. **Identidad cripto desacoplada del dominio** (D13). Un value object `EncryptionScopeId` (`"<TYPE>:<uuid>"`, hoy `BANK_ACCOUNT:<uuid>`) nombra el scope que una DEK protege. **No** presupone un agregado: un futuro `Party` heredará el scope (D16) sin renombrar el concepto cripto. Descartado: nombre `SubjectId` (cargado de GDPR), e introducir un agregado `Person`/`Party` solo para anclar la DEK (deja que infra modele el dominio — dirección incorrecta; YAGNI).
+1. **Identidad cripto desacoplada del dominio** (D13). Un value object `EncryptionScopeId` (`"<TYPE>:<uuid>"`, hoy `BankAccount:<uuid>`) nombra el scope que una DEK protege. **No** presupone un agregado: un futuro `Party` heredará el scope (D16) sin renombrar el concepto cripto. Descartado: nombre `SubjectId` (cargado de GDPR), e introducir un agregado `Person`/`Party` solo para anclar la DEK (deja que infra modele el dominio — dirección incorrecta; YAGNI).
 2. **Envelope: DEK por scope (CSPRNG), envuelta por una KEK custodiada fuera de la app** (D14). libsodium AEAD `crypto_aead_xchacha20poly1305_ietf`; la KEK vive en env, **nunca** junto a las DEKs. Cada fila keystore guarda `wrapped_dek` + `kek_version`. Descartado: KEK en Postgres junto a las DEKs (anula el envelope); una clave global (destruirla *shreddea* todos los scopes — el keying por-scope es justo lo que hace posible el olvido de un único sujeto); HSM/KMS/jerarquía de derivación (sobre-ingeniería a cardinalidad de datos maestros — *trigger de revisita* si llega un agregado PII a cardinalidad transaccional).
 3. **Destruir una DEK es irreversible** (D14) — propiedad operativa aceptada, no un fallo. La rotación de KEK = **rewrap por lotes acotado** (re-envolver cada DEK bajo la nueva KEK; factible a cardinalidad de datos maestros).
 4. **Metadata cripto fuera del dominio** (D17): `encryption_scope_id`, `kek_version`, `wrapped_dek`, ciphertext viven en el keystore y (en 2.3) en `audit_log` raw-DBAL — **nunca** en una entidad o value object de negocio.
@@ -36,7 +36,7 @@ Esta story entrega: (1) el value object `EncryptionScopeId`, (2) la tabla keysto
 **AC1 — `EncryptionScopeId` value object (D13).**
 Given la necesidad de identificar un scope de cifrado sin un agregado de dominio,
 When se modela,
-Then existe un value object inmutable `EncryptionScopeId` con forma `"<TYPE>:<uuid>"` (factory `forBankAccount(string $id)` → `BANK_ACCOUNT:<uuid>`, y un parser/validador), sin dependencias de framework; un valor mal formado lanza una excepción de dominio.
+Then existe un value object inmutable `EncryptionScopeId` con forma `"<TYPE>:<uuid>"` (factory `forBankAccount(string $id)` → `BankAccount:<uuid>`, y un parser/validador), sin dependencias de framework; un valor mal formado lanza una excepción de dominio.
 
 **AC2 — Tabla keystore (FR10, D14).**
 Given el esquema envelope,

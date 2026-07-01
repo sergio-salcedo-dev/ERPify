@@ -20,13 +20,18 @@ you change anything here.
       a service `env_file:` — compose interpolation cannot read that.
 - [ ] `make prod.env.check` passes (no missing file, no empty/`CHANGE_ME`
       required key). The deploy script runs this before touching Docker.
-- [ ] `APP_SECRET`, `POSTGRES_PASSWORD`, `CADDY_MERCURE_JWT_SECRET`, and `AUDIT_KEK`
-      were freshly generated (`openssl rand …`), not reused from dev.
-- [ ] `AUDIT_KEK` (audit crypto-shredding key-encryption key) is **exactly 32 bytes**
-      (the app fails fast otherwise), custodied **outside the app** (env / secret
-      manager), never beside the DEKs it wraps and never committed. KEK rotation
-      re-wraps every DEK under the new version as a bounded batch; destroying a DEK
-      (subject erasure) is irreversible by design.
+- [ ] `APP_SECRET`, `POSTGRES_PASSWORD`, and `CADDY_MERCURE_JWT_SECRET` were freshly
+      generated (`openssl rand …`), not reused from dev.
+- [ ] `AUDIT_KEK` (audit crypto-shredding key-encryption key) is used as **raw 32-byte**
+      key material — the app fails fast unless the value is exactly 32 bytes long.
+      Generate a printable 32-byte key with `openssl rand -base64 24` (24 random bytes →
+      32 base64 chars, no padding); `-hex 32` (64 chars) or `-base64 32` (44 chars)
+      produce the wrong length and abort boot. Freshly generated, not reused from dev.
+      Custodied **outside the app** (env / secret manager), never beside the DEKs it
+      wraps and never committed. Destroying a DEK (subject erasure) is irreversible by
+      design. KEK rotation is **not yet automated**: rotating `AUDIT_KEK` in place makes
+      every existing DEK unreadable, so a batch re-wrap tool is a prerequisite (not yet
+      shipped) — do not rotate the live KEK until it exists.
 - [ ] `POSTGRES_PASSWORD` is URL-safe — generate with `openssl rand -hex`, not
       `-base64`. It is interpolated raw into `DATABASE_URL`, so `/` `+` `=` from
       base64 corrupt the DSN (`MalformedDsnException`, php boot fails).

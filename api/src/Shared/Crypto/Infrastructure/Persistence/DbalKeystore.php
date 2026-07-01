@@ -8,7 +8,9 @@ use Doctrine\DBAL\Connection;
 use Erpify\Shared\Crypto\Application\Keystore;
 use Erpify\Shared\Crypto\Application\WrappedDek;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
+use Erpify\Shared\Crypto\Domain\Exception\DecryptionFailed;
 use Override;
+use SodiumException;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
 /**
@@ -41,14 +43,20 @@ final readonly class DbalKeystore implements Keystore
         $wrappedDek = $row['wrapped_dek'] ?? null;
         $kekVersion = $row['kek_version'] ?? null;
 
+        // A live row (destroyed_at IS NULL) with no usable key material is corruption, not a shredded
+        // scope: fail loudly instead of masquerading as an absent key, which a caller would read as
+        // "destroyed" (DekDestroyed) and mistake for a legitimate crypto-shred.
         if (!\is_string($wrappedDek) || !\is_numeric($kekVersion)) {
-            return null;
+            throw DecryptionFailed::forScope($scope);
         }
 
-        return new WrappedDek(
-            \sodium_base642bin($wrappedDek, SODIUM_BASE64_VARIANT_ORIGINAL),
-            (int) $kekVersion,
-        );
+        try {
+            $bytes = \sodium_base642bin($wrappedDek, SODIUM_BASE64_VARIANT_ORIGINAL);
+        } catch (SodiumException) {
+            throw DecryptionFailed::forScope($scope);
+        }
+
+        return new WrappedDek($bytes, (int) $kekVersion);
     }
 
     #[Override]

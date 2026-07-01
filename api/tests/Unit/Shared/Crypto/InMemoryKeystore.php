@@ -10,13 +10,18 @@ use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use Override;
 
 /**
- * In-memory {@see Keystore} for unit tests. Mirrors the production contract: first write wins
- * (`ON CONFLICT DO NOTHING`) and destroying a scope makes its key unreadable and is idempotent.
+ * In-memory {@see Keystore} for unit tests. Mirrors the production contract faithfully, tombstone included:
+ * first write wins (`ON CONFLICT DO NOTHING`); destroying a scope keeps a surviving tombstone so its key
+ * reads as unavailable, the destroy is idempotent, and a later `store` for that scope is a no-op — the
+ * scope can never be re-minted, exactly as the surviving `destroyed_at` row enforces in Postgres.
  */
 final class InMemoryKeystore implements Keystore
 {
     /** @var array<string, WrappedDek> */
     private array $live = [];
+
+    /** @var array<string, true> */
+    private array $tombstoned = [];
 
     #[Override]
     public function wrappedDekFor(EncryptionScopeId $scope): ?WrappedDek
@@ -27,7 +32,13 @@ final class InMemoryKeystore implements Keystore
     #[Override]
     public function store(EncryptionScopeId $scope, WrappedDek $dek): void
     {
-        $this->live[$scope->toString()] ??= $dek;
+        $key = $scope->toString();
+
+        if (isset($this->tombstoned[$key])) {
+            return;
+        }
+
+        $this->live[$key] ??= $dek;
     }
 
     #[Override]
@@ -40,6 +51,7 @@ final class InMemoryKeystore implements Keystore
         }
 
         unset($this->live[$key]);
+        $this->tombstoned[$key] = true;
 
         return true;
     }

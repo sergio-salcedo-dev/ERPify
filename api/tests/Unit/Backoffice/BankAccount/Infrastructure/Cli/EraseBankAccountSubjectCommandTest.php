@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Backoffice\BankAccount\Infrastructure\Cli;
 
 use Erpify\Backoffice\BankAccount\Application\EraseBankAccountSubject;
+use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository;
 use Erpify\Backoffice\BankAccount\Infrastructure\Cli\EraseBankAccountSubjectCommand;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Crypto\Application\EnvelopeEncryptor;
+use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -21,10 +23,14 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[CoversClass(EraseBankAccountSubjectCommand::class)]
 final class EraseBankAccountSubjectCommandTest extends TestCase
 {
+    private const string ACCOUNT_ID = '0197f2b4-0000-7000-8000-000000000000';
+
+    private const string BANK_ID = '0197f2b4-1111-7000-8000-000000000001';
+
     #[Test]
     public function itRejectsANonUuidArgument(): void
     {
-        $tester = $this->tester();
+        $tester = $this->tester($this->inertEraser());
 
         $tester->execute(['bank-account-id' => 'not-a-uuid']);
 
@@ -34,23 +40,64 @@ final class EraseBankAccountSubjectCommandTest extends TestCase
     #[Test]
     public function aDryRunMutatesNothing(): void
     {
-        $tester = $this->tester();
+        // An inert eraser would break if the erasure ran, so a green dry-run proves it did not.
+        $tester = $this->tester($this->inertEraser());
 
-        // Stubbed collaborators would break if the erasure ran, so a green dry-run proves it did not.
-        $tester->execute(['bank-account-id' => '0197f2b4-0000-7000-8000-000000000000', '--dry-run' => true]);
+        $tester->execute(['bank-account-id' => self::ACCOUNT_ID, '--dry-run' => true]);
 
         $this->assertSame(Command::SUCCESS, $tester->getStatusCode());
         $this->assertStringContainsString('Dry run', $tester->getDisplay());
     }
 
-    private function tester(): CommandTester
+    #[Test]
+    public function aDeclinedConfirmationAbortsWithoutErasing(): void
     {
-        $eraser = new EraseBankAccountSubject(
+        $tester = $this->tester($this->inertEraser());
+        $tester->setInputs(['no']);
+
+        $tester->execute(['bank-account-id' => self::ACCOUNT_ID]);
+
+        $this->assertSame(Command::SUCCESS, $tester->getStatusCode());
+        $this->assertStringContainsString('Aborted', $tester->getDisplay());
+    }
+
+    #[Test]
+    public function itErasesTheSubjectOnConfirmation(): void
+    {
+        $repository = $this->createStub(BankAccountRepository::class);
+        $repository->method('findById')->willReturn(
+            BankAccount::create(self::ACCOUNT_ID, self::BANK_ID, 'Juan Pérez', 'ES9121000418450200051332'),
+        );
+        $encryptor = $this->createStub(EnvelopeEncryptor::class);
+        $encryptor->method('destroyScope')->willReturn(true);
+
+        $tester = $this->tester($this->eraser($repository, $encryptor));
+        $tester->execute(['bank-account-id' => self::ACCOUNT_ID, '--force' => true]);
+
+        $this->assertSame(Command::SUCCESS, $tester->getStatusCode());
+        $this->assertStringContainsString('Erased subject', $tester->getDisplay());
+    }
+
+    private function tester(EraseBankAccountSubject $eraser): CommandTester
+    {
+        return new CommandTester(new EraseBankAccountSubjectCommand($eraser));
+    }
+
+    private function inertEraser(): EraseBankAccountSubject
+    {
+        return $this->eraser(
             $this->createStub(BankAccountRepository::class),
             $this->createStub(EnvelopeEncryptor::class),
-            $this->createStub(AuditLogger::class),
         );
+    }
 
-        return new CommandTester(new EraseBankAccountSubjectCommand($eraser));
+    private function eraser(BankAccountRepository $repository, EnvelopeEncryptor $encryptor): EraseBankAccountSubject
+    {
+        return new EraseBankAccountSubject(
+            $repository,
+            $encryptor,
+            $this->createStub(AuditLogger::class),
+            new ImmediateTransactionManager(),
+        );
     }
 }

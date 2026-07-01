@@ -9,9 +9,9 @@ use Erpify\Shared\Uuid\Domain\Uuid;
 
 /**
  * Names the scope a data-encryption key protects and over which crypto-shredding operates — a
- * `"<TYPE>:<uuid>"` pair (`BANK_ACCOUNT:<uuid>` today). Cryptographic identity, deliberately decoupled
- * from domain identity: it presupposes no aggregate, so a future party aggregate can adopt the scope
- * without renaming the concept (ADR D13/D16).
+ * `"<TYPE>:<uuid>"` pair (`BankAccount:<uuid>` today, the audited resource type verbatim). Cryptographic
+ * identity, deliberately decoupled from domain identity: it presupposes no aggregate, so a future party
+ * aggregate can adopt the scope without renaming the concept (ADR D13/D16).
  */
 final readonly class EncryptionScopeId
 {

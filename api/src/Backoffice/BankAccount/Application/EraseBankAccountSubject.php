@@ -10,6 +10,7 @@ use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Crypto\Application\EnvelopeEncryptor;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
+use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
 
 /**
@@ -19,11 +20,13 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * in the append-only trail becomes permanently unreadable while the rows, their order and their integrity
  * remain — the trail is never touched, only its key is destroyed.
  *
- * A GDPR erasure is not a business deletion, so it does not go through the CLOSED-only lifecycle delete nor
- * emit a `BANK_ACCOUNT_DELETED` event; the compliance record is the `GDPR_SUBJECT_ERASED` security entry
- * plus the surviving (now-unreadable) change rows. The steps are not wrapped in one transaction — like the
- * sibling actor erasure (D4), each step is idempotent, so a partial failure is fully recovered by re-running:
- * a re-run removes nothing and destroys nothing, and skips the self-audit.
+ * The two effects run in one transaction so they commit or roll back together (ADR D15 atomicity): removing
+ * the live record captures a final `BANK_ACCOUNT_DELETED` change row — its PII sealed under the still-live
+ * key — before the same transaction destroys that key, and the `GDPR_SUBJECT_ERASED` security entry commits
+ * with them, so a destroyed key always has its evidence row. It is not a business deletion (no domain event,
+ * no CLOSED-only lifecycle guard); the compliance record is that security entry plus the surviving,
+ * now-unreadable change rows. Idempotent: a re-run finds nothing live and an already-destroyed key, erases
+ * nothing and skips the self-audit.
  */
 final readonly class EraseBankAccountSubject
 {
@@ -33,6 +36,7 @@ final readonly class EraseBankAccountSubject
         private BankAccountRepository $bankAccountRepository,
         private EnvelopeEncryptor $encryptor,
         private AuditLogger $auditLogger,
+        private TransactionManager $transactionManager,
     ) {
     }
 
@@ -41,23 +45,25 @@ final readonly class EraseBankAccountSubject
         Uuid::ensure($bankAccountId);
         $scope = EncryptionScopeId::forBankAccount($bankAccountId);
 
-        $account = $this->bankAccountRepository->findById($bankAccountId);
-        $liveRecordErased = $account instanceof BankAccount;
+        return $this->transactionManager->transactional(function () use ($bankAccountId, $scope): SubjectErasureResult {
+            $account = $this->bankAccountRepository->findById($bankAccountId);
+            $liveRecordErased = $account instanceof BankAccount;
 
-        if ($liveRecordErased) {
-            $this->bankAccountRepository->remove($account);
-        }
+            if ($liveRecordErased) {
+                $this->bankAccountRepository->remove($account);
+            }
 
-        $keyDestroyed = $this->encryptor->destroyScope($scope);
+            $keyDestroyed = $this->encryptor->destroyScope($scope);
 
-        $result = new SubjectErasureResult($scope->toString(), $liveRecordErased, $keyDestroyed);
+            $result = new SubjectErasureResult($scope->toString(), $liveRecordErased, $keyDestroyed);
 
-        if ($result->erasedAnything()) {
-            $this->auditLogger->log(self::ERASURE_ACTION, AuditLevel::SECURITY, null, [
-                'encryption_scope_id' => $result->encryptionScopeId,
-            ]);
-        }
+            if ($result->erasedAnything()) {
+                $this->auditLogger->log(self::ERASURE_ACTION, AuditLevel::SECURITY, null, [
+                    'encryption_scope_id' => $result->encryptionScopeId,
+                ]);
+            }
 
-        return $result;
+            return $result;
+        });
     }
 }
