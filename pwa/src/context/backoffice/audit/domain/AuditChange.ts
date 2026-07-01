@@ -8,10 +8,29 @@ import type { AuditEntry } from "./AuditEntry";
  */
 export type AuditScalar = string | number | boolean;
 
+/**
+ * A personal-data value the backend crypto-shredded: its plaintext is sealed under a per-subject key and
+ * only the ciphertext travels. The read side never decrypts it (that is a privileged, post-auth concern);
+ * it renders a "sealed" sentinel, so the marker exists purely to distinguish a sealed value from a clear
+ * one — the ciphertext itself is never shown.
+ */
+export interface AuditSealedValue {
+  __enc__: string;
+}
+
+export function isAuditSealedValue(value: unknown): value is AuditSealedValue {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "__enc__" in value &&
+    typeof (value as { __enc__: unknown }).__enc__ === "string"
+  );
+}
+
 /** One field's before/after pair. Either side may be `null` (added: `old` null; removed: `new` null). */
 export interface AuditFieldChange {
-  old: AuditScalar | null;
-  new: AuditScalar | null;
+  old: AuditScalar | AuditSealedValue | null;
+  new: AuditScalar | AuditSealedValue | null;
 }
 
 /** The decoded `metadata.changes` map: `{ "<field>": { old, new } }`, the field key forensic-faithful. */

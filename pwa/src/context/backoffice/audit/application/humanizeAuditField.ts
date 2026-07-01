@@ -10,6 +10,13 @@
 const CURATED_LABELS: Readonly<Record<string, string>> = {
   name: "Nombre",
   shortName: "Código",
+  holderName: "Titular",
+  iban: "IBAN",
+  bic: "BIC",
+  alias: "Alias",
+  currency: "Moneda",
+  status: "Estado",
+  bankId: "Banco",
 };
 
 export function humanizeAuditField(field: string): string {
