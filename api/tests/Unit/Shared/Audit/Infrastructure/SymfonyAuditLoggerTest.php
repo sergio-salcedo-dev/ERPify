@@ -92,7 +92,7 @@ final class SymfonyAuditLoggerTest extends TestCase
         $auditLogger->log(
             'BANK_ACCOUNTS_VIEWED',
             AuditLevel::ACTIVITY,
-            AuditResource::of('Bank', 'secret-id'),
+            AuditResource::of('Bank', self::RESOURCE_ID),
             ['pii' => 'x'],
         );
 

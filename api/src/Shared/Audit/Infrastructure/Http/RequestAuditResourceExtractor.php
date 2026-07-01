@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Shared\Audit\Infrastructure\Http;
 
 use Erpify\Shared\Audit\Domain\AuditResource;
+use Erpify\Shared\Uuid\Domain\Uuid;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
@@ -15,8 +16,11 @@ use Symfony\Component\HttpFoundation\Request;
  * is its `{id}` path parameter. This keeps {@see \Erpify\Shared\Audit\Domain\AuditPolicy} free of any
  * per-module route map, mirroring how the canonical-audit declaration already lives on the route.
  *
- * A read with no declared type — or a collection route with no single `{id}` — has no single resource, so
- * the extraction yields null and the row stays resource-less, exactly as it is today.
+ * A read with no declared type, a collection route with no single `{id}`, or a `{id}` that is not a UUID
+ * has no single audit-keyed resource, so the extraction yields null and the row stays resource-less. The
+ * non-UUID case keeps this terminate-time access log best-effort: {@see AuditResource} rejects a non-UUID id
+ * (the `audit_log.resource_id` column is a `uuid`), which the write-capture path *wants* mid-flush, but a
+ * read that already responded 2xx must never throw on `kernel.terminate`.
  */
 final readonly class RequestAuditResourceExtractor
 {
@@ -29,7 +33,7 @@ final readonly class RequestAuditResourceExtractor
         $type = $request->attributes->get(self::RESOURCE_TYPE_ATTRIBUTE);
         $id = $request->attributes->get(self::RESOURCE_ID_ATTRIBUTE);
 
-        if (!\is_string($type) || '' === $type || !\is_string($id) || '' === $id) {
+        if (!\is_string($type) || '' === $type || !\is_string($id) || !Uuid::isValid($id)) {
             return null;
         }
 

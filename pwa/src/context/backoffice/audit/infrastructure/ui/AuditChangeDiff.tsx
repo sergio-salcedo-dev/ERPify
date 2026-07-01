@@ -8,6 +8,7 @@ import {
   ChangeKind,
   changeKind,
   isAuditSealedValue,
+  isNoOpChange,
   type AuditChanges,
   type AuditFieldChange,
   type AuditFieldValue,
@@ -67,17 +68,23 @@ const VALUE_TYPE_LABEL: Readonly<Record<string, string>> = {
  * Mirror of `MetadataBlock`'s escaping stance.
  */
 export function AuditChangeDiff({ changes, className, testId }: Readonly<AuditChangeDiffProps>) {
-  const rows: FieldRow[] = Object.entries(changes).map(([field, change]) => ({
-    field,
-    change,
-    kind: changeKind(change),
-  }));
+  const rows: FieldRow[] = Object.entries(changes)
+    .filter(([, change]) => !isNoOpChange(change))
+    .map(([field, change]) => ({
+      field,
+      change,
+      kind: changeKind(change),
+    }));
   const [expanded, setExpanded] = useState(false);
 
   if (rows.length === 0) {
+    // Every captured field was empty (null on both sides): still a real snapshot, but its direction
+    // (create vs delete) is not derivable from the diff alone — so it reads as a faithful empty record
+    // rather than mislabelling a real write as "no changes". A genuinely empty map keeps the plain copy.
+    const hasCapturedFields = Object.keys(changes).length > 0;
     return (
       <p className={cn("text-muted-foreground text-xs", className)} data-testid={testId}>
-        Sin cambios registrados
+        {hasCapturedFields ? "Registro sin campos con valor" : "Sin cambios registrados"}
       </p>
     );
   }

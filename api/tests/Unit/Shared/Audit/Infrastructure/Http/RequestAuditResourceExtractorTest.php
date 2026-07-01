@@ -51,6 +51,19 @@ final class RequestAuditResourceExtractorTest extends TestCase
         );
     }
 
+    public function testItYieldsNoResourceWhenTheIdIsNotAUuid(): void
+    {
+        $resource = (new RequestAuditResourceExtractor())->extract(
+            $this->request(['_audit_resource_type' => 'Bank', 'id' => 'not-a-uuid']),
+        );
+
+        $this->assertNotInstanceOf(
+            AuditResource::class,
+            $resource,
+            'a non-uuid path id is no audit-keyed resource; the terminate-time log must degrade, not throw',
+        );
+    }
+
     /**
      * @param array<string, string> $attributes
      */
