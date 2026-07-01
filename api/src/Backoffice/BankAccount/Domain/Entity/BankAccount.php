@@ -17,6 +17,7 @@ use Erpify\Backoffice\BankAccount\Domain\Exception\BankAccountNotClosedException
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Kernel\Domain\Enum\Currency;
+use Erpify\Shared\Privacy\Domain\PersonalData;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Shared\Validation\Infrastructure\EnumType;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
@@ -36,6 +37,7 @@ final class BankAccount extends AggregateRoot
         #[ORM\Column(length: 255)]
         #[Assert\NotBlank]
         #[Assert\Length(max: 255)]
+        #[PersonalData]
         private string $holderName,
         /**
          * Stored canonicalized: upper-case, no whitespace (see {@see canonicalizeIban()}). The unique
@@ -50,6 +52,7 @@ final class BankAccount extends AggregateRoot
         #[Assert\NotBlank]
         #[Assert\Iban]
         #[Assert\Length(max: 34)]
+        #[PersonalData]
         private string $iban,
         #[ORM\Column(length: 11, nullable: true)]
         #[Assert\Bic(ibanPropertyPath: 'iban')]
