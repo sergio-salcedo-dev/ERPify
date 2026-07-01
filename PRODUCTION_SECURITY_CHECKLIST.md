@@ -31,7 +31,10 @@ you change anything here.
       wraps and never committed. Destroying a DEK (subject erasure) is irreversible by
       design. KEK rotation is **not yet automated**: rotating `AUDIT_KEK` in place makes
       every existing DEK unreadable, so a batch re-wrap tool is a prerequisite (not yet
-      shipped) — do not rotate the live KEK until it exists.
+      shipped) — do not rotate the live KEK until it exists. Required in prod: listed in
+      `make prod.env.check` and guarded by `${VAR:?}` on every PHP service in
+      `compose.prod.yaml`, so a missing value aborts the deploy by name like the other
+      prod secrets (otherwise the app boots and fails closed on the first audited write).
 - [ ] `POSTGRES_PASSWORD` is URL-safe — generate with `openssl rand -hex`, not
       `-base64`. It is interpolated raw into `DATABASE_URL`, so `/` `+` `=` from
       base64 corrupt the DSN (`MalformedDsnException`, php boot fails).

@@ -19,6 +19,7 @@ services:
       target: frankenphp_prod
     environment:
       APP_SECRET: ${APP_SECRET:?APP_SECRET is required in prod}
+      AUDIT_KEK: ${AUDIT_KEK:?AUDIT_KEK is required in prod (32-byte audit crypto-shredding key-encryption key)}
       # Require explicit DB identity + password; close the weak fallbacks
       # (erpify_user / erpify_db / erpify_password) that compose.yaml keeps for
       # `make app.dev`. serverVersion/charset stay defaulted — non-secret knobs.
@@ -137,6 +138,7 @@ services:
     environment:
       APP_ENV: prod
       APP_SECRET: ${APP_SECRET:?APP_SECRET is required in prod}
+      AUDIT_KEK: ${AUDIT_KEK:?AUDIT_KEK is required in prod (32-byte audit crypto-shredding key-encryption key)}
       DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required in prod}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in prod}@database:5432/${POSTGRES_DB:?POSTGRES_DB is required in prod}?serverVersion=${POSTGRES_VERSION:-18}&charset=${POSTGRES_CHARSET:-utf8}
       # null mailer by default so an unset DSN can't break the worker boot.
       MAILER_DSN: ${MAILER_DSN:-null://null}
@@ -203,6 +205,7 @@ services:
     environment:
       APP_ENV: prod
       APP_SECRET: ${APP_SECRET:?APP_SECRET is required in prod}
+      AUDIT_KEK: ${AUDIT_KEK:?AUDIT_KEK is required in prod (32-byte audit crypto-shredding key-encryption key)}
       DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required in prod}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in prod}@database:5432/${POSTGRES_DB:?POSTGRES_DB is required in prod}?serverVersion=${POSTGRES_VERSION:-18}&charset=${POSTGRES_CHARSET:-utf8}
       # Set explicitly (no base service to inherit from); the async transport is never
       # consumed here but the receiver registry still resolves the DSN at boot.

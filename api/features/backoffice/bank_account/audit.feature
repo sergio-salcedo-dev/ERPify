@@ -53,3 +53,39 @@ Feature: Audit the access to a bank's accounts
       }
     ]
     """
+
+  # E2: a write of a BankAccount is captured as a crypto-shredded `change` row. Its personal-data fields
+  # (holderName/iban) travel encrypted under a per-subject key, so `jsonb_typeof` sees the sealed
+  # `{"__enc__": …}` marker (an object), never a plaintext string; non-PII (bic) stays in clear and the row
+  # references its encryption scope. The onFlush capture commits synchronously inside the write transaction.
+  Scenario: Creating a bank account records a crypto-shredded BANK_ACCOUNT_CREATED change row
+    Given I add "Content-Type" header equal to "application/json"
+    And I add "Accept" header equal to "application/json"
+    And I add "X-Correlation-Id" header equal to "0190ffff-0000-7abc-8def-00aabbccdd01"
+    When I send a POST request to "/backoffice/bank-accounts" with body:
+    """
+    {
+      "bankId": "11111111-1111-7000-8000-000000000003",
+      "holderName": "Acme Holdings",
+      "iban": "GB82WEST12345698765432",
+      "bic": "westgb22xxx",
+      "alias": "Acme Ops",
+      "currency": "EUR"
+    }
+    """
+    Then the response status code should be 201
+    And I execute the SQL query "SELECT action, level, resource_type, split_part(encryption_scope_id, ':', 1) AS scope_type, jsonb_typeof(metadata->'changes'->'holderName'->'new') AS holder_type, jsonb_typeof(metadata->'changes'->'iban'->'new') AS iban_type, metadata->'changes'->'bic'->>'new' AS new_bic FROM audit_log WHERE level = 'change' AND correlation_id = '0190ffff-0000-7abc-8def-00aabbccdd01'"
+    And the SQL result as JSON should be:
+    """
+    [
+      {
+        "action": "BANK_ACCOUNT_CREATED",
+        "level": "change",
+        "resource_type": "BankAccount",
+        "scope_type": "BankAccount",
+        "holder_type": "object",
+        "iban_type": "object",
+        "new_bic": "WESTGB22XXX"
+      }
+    ]
+    """
