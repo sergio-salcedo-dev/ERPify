@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { AuditChangeDiff } from "@/context/backoffice/audit/infrastructure/ui/AuditChangeDiff";
 import type { AuditChanges } from "@/context/backoffice/audit/domain/AuditChange";
 
@@ -66,6 +66,12 @@ describe("AuditChangeDiff", () => {
     expect(screen.queryByText(/c2VjcmV0/)).not.toBeInTheDocument();
   });
 
+  it("renders an empty-changes map as «Sin cambios registrados»", () => {
+    renderDiff({});
+
+    expect(screen.getByText("Sin cambios registrados")).toBeInTheDocument();
+  });
+
   it("collapses a large diff behind a reveal toggle", () => {
     const changes: AuditChanges = Object.fromEntries(
       Array.from({ length: 9 }, (_unused, index) => [
@@ -77,5 +83,40 @@ describe("AuditChangeDiff", () => {
     renderDiff(changes);
 
     expect(screen.getByTestId("diff__toggle")).toHaveTextContent("Ver 3 campos más");
+  });
+
+  it("reveals every hidden field and flips the toggle to «Ver menos» when expanded", () => {
+    const changes: AuditChanges = Object.fromEntries(
+      Array.from({ length: 9 }, (_unused, index) => [
+        `field${index}`,
+        { old: `before${index}`, new: `after${index}` },
+      ]),
+    );
+
+    renderDiff(changes);
+    expect(screen.queryByText("after8")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("diff__toggle"));
+
+    expect(screen.getByTestId("diff__toggle")).toHaveTextContent("Ver menos");
+    expect(screen.getByText("after8")).toBeInTheDocument();
+  });
+
+  it("wraps a value past the length threshold in a truncation container with a copy affordance", () => {
+    const longValue = "Banco Bilbao Vizcaya Argentaria Sociedad Anónima Unipersonal";
+
+    renderDiff({ legalName: { old: null, new: longValue } });
+
+    expect(screen.getByText(longValue)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /copiar valor/i })).toBeInTheDocument();
+  });
+
+  it("renders without a testId, emitting no data-testid attributes", () => {
+    const { container } = render(
+      <AuditChangeDiff changes={{ name: { old: "BBVA", new: "BBVA S.A." } }} />,
+    );
+
+    expect(screen.getByText("BBVA S.A.")).toBeInTheDocument();
+    expect(container.querySelector("[data-testid]")).toBeNull();
   });
 });
