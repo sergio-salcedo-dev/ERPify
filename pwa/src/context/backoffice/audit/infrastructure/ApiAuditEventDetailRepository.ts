@@ -5,8 +5,8 @@ import {
   type AuditChanges,
   type AuditEventDetail,
   type AuditFieldChange,
+  type AuditFieldValue,
   type AuditScalar,
-  type AuditSealedValue,
   isAuditSealedValue,
 } from "../domain/AuditChange";
 import type { AuditEventDetailRepository } from "../domain/AuditEventDetailRepository";
@@ -28,8 +28,8 @@ function isAuditScalarOrNull(value: unknown): value is AuditScalar | null {
   );
 }
 
-/** A scalar, a real `null`, or a crypto-shredded sealed value — the three shapes a diff side can take. */
-function isAuditFieldValue(value: unknown): value is AuditScalar | AuditSealedValue | null {
+/** Narrows an unknown diff side to a valid {@link AuditFieldValue}. */
+function isAuditFieldValue(value: unknown): value is AuditFieldValue {
   return isAuditScalarOrNull(value) || isAuditSealedValue(value);
 }
 
@@ -90,9 +90,7 @@ function toAuditChanges(changes: AuditChanges): AuditChanges {
 }
 
 /** A sealed value is reduced to its marker alone, so a stray key on the ciphertext object cannot ride in. */
-function normalizeFieldValue(
-  value: AuditScalar | AuditSealedValue | null,
-): AuditScalar | AuditSealedValue | null {
+function normalizeFieldValue(value: AuditFieldValue): AuditFieldValue {
   return isAuditSealedValue(value) ? { __enc__: value.__enc__ } : value;
 }
 

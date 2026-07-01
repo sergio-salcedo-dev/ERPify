@@ -27,10 +27,13 @@ export function isAuditSealedValue(value: unknown): value is AuditSealedValue {
   );
 }
 
+/** A scalar, a real `null`, or a crypto-shredded sealed value — the three shapes a diff side can take. */
+export type AuditFieldValue = AuditScalar | AuditSealedValue | null;
+
 /** One field's before/after pair. Either side may be `null` (added: `old` null; removed: `new` null). */
 export interface AuditFieldChange {
-  old: AuditScalar | AuditSealedValue | null;
-  new: AuditScalar | AuditSealedValue | null;
+  old: AuditFieldValue;
+  new: AuditFieldValue;
 }
 
 /** The decoded `metadata.changes` map: `{ "<field>": { old, new } }`, the field key forensic-faithful. */

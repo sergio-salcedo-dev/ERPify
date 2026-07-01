@@ -10,8 +10,7 @@ import {
   isAuditSealedValue,
   type AuditChanges,
   type AuditFieldChange,
-  type AuditScalar,
-  type AuditSealedValue,
+  type AuditFieldValue,
 } from "@/context/backoffice/audit/domain/AuditChange";
 import { humanizeAuditField } from "@/context/backoffice/audit/application/humanizeAuditField";
 
@@ -170,7 +169,7 @@ function ChangeValue({ change, kind }: Readonly<{ change: AuditFieldChange; kind
  * string reads as «(cadena vacía)» — the two are never collapsed. A long value wraps in
  * `TruncatedText` (full string stays in the DOM) and offers a copy affordance.
  */
-function ScalarValue({ value }: Readonly<{ value: AuditScalar | AuditSealedValue | null }>) {
+function ScalarValue({ value }: Readonly<{ value: AuditFieldValue }>) {
   if (isAuditSealedValue(value)) {
     return (
       <span className="text-muted-foreground inline-flex items-center gap-1 italic">

@@ -69,10 +69,23 @@ final class EraseBankAccountSubjectCommand extends Command
 
         $io->writeln(\sprintf('Bank account: %s', $bankAccountId));
 
+        if (!$this->shouldProceed($io, $input)) {
+            return Command::SUCCESS;
+        }
+
+        return $this->eraseAndReport($io, $bankAccountId);
+    }
+
+    /**
+     * Pre-flight guards that stop before any mutation: a dry run reports the target only, and a real run
+     * needs an explicit confirmation (or --force). Either short-circuit leaves the subject untouched.
+     */
+    private function shouldProceed(SymfonyStyle $io, InputInterface $input): bool
+    {
         if (true === $input->getOption('dry-run')) {
             $io->note('Dry run: nothing was erased.');
 
-            return Command::SUCCESS;
+            return false;
         }
 
         if (
@@ -81,10 +94,10 @@ final class EraseBankAccountSubjectCommand extends Command
         ) {
             $io->warning('Aborted — nothing was erased.');
 
-            return Command::SUCCESS;
+            return false;
         }
 
-        return $this->eraseAndReport($io, $bankAccountId);
+        return true;
     }
 
     private function eraseAndReport(SymfonyStyle $io, string $bankAccountId): int
