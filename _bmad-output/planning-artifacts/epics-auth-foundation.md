@@ -73,9 +73,9 @@ esquema/bus/storage del trail; la costura de actor permanece como está hasta E3
 
 ## Requirements Coverage Map
 
-FR3, FR5: Story 1.1 — agregado `User` + roles + persistencia.
-FR1, FR2, FR4: Story 1.2 — firewall de sesión + adapter/provider/authenticator + CSRF.
-FR6: Story 1.3 — baseline de control de acceso (default-deny + 401 por el pipeline).
+FR3, FR5: Story AF-1.1 — agregado `User` + roles + persistencia.
+FR1, FR2, FR4: Story AF-1.2 — firewall de sesión + adapter/provider/authenticator + CSRF.
+FR6: Story AF-1.3 — baseline de control de acceso (default-deny + 401 por el pipeline).
 NFR1–NFR5: transversales, verificadas en cada story (gates + AC de frontera).
 
 ## Epic List
@@ -93,7 +93,7 @@ regulatorio. **No** toca la costura de actor. **FRs:** FR1–FR6. **NFRs:** NFR1
 Construye el subsistema auth/RBAC que hoy no existe, dejando a ERPify con autenticación por sesión, un
 modelo de identidad de dominio y un baseline de control de acceso — sin tocar el eje de auditoría.
 
-### Story 1.1: Agregado `User` en `Backoffice/Identity` + persistencia
+### Story AF-1.1: Agregado `User` en `Backoffice/Identity` + persistencia
 
 Como plataforma de ERPify,
 quiero un agregado `User` de dominio con identidad, credencial y roles,
@@ -119,9 +119,9 @@ de negocio (NFR1).
 **Given** el `HashedPassword`,
 **When** se construye,
 **Then** representa un hash ya calculado (el dominio **no** conoce bcrypt/argon2id ni el hasher); el hashing
-ocurre en Infrastructure en la Story 1.2 (D2, NFR5).
+ocurre en Infrastructure en la Story AF-1.2 (D2, NFR5).
 
-### Story 1.2: Firewall de sesión + `SecurityUser`/provider/authenticator + CSRF
+### Story AF-1.2: Firewall de sesión + `SecurityUser`/provider/authenticator + CSRF
 
 Como responsable de seguridad,
 quiero autenticación por sesión httpOnly con Symfony Security,
@@ -134,7 +134,7 @@ para que un usuario se autentique same-origin desde la PWA sin exponer tokens en
 **Then** usa `json_login` + sesión (cookie httpOnly); un login con credenciales válidas establece sesión y
 uno inválido devuelve **401 RFC 9457** por el pipeline, sin `JsonResponse` manual (FR1, NFR2).
 
-**Given** el agregado `User` de la Story 1.1,
+**Given** el agregado `User` de la Story AF-1.1,
 **When** Symfony resuelve la identidad,
 **Then** un `Infrastructure/Security/SecurityUser` implementa `UserInterface` y envuelve al `User`; un
 `UserProvider` lo carga por repositorio; el hashing/verificación de password usa `PasswordHasherInterface`
@@ -149,7 +149,7 @@ en Infrastructure (FR4, D2).
 **Then** la historia **cierra explícitamente** el mecanismo (SameSite + same-origin, y token/cabecera para
 no-GET); no se ensancha CORS/CSRF ni la política de Mercure (FR2, NFR3).
 
-### Story 1.3: Baseline de control de acceso — default-deny + 401 por el pipeline
+### Story AF-1.3: Baseline de control de acceso — default-deny + 401 por el pipeline
 
 Como responsable de seguridad,
 quiero que el firewall deniegue por defecto y que las rutas públicas sean una allowlist explícita,
@@ -158,7 +158,7 @@ sino de configuración).
 
 **Acceptance Criteria:**
 
-**Given** el firewall de la Story 1.2,
+**Given** el firewall de la Story AF-1.2,
 **When** se define `access_control`,
 **Then** es **default-deny** con una allowlist explícita de las rutas hoy públicas (p. ej. login, health,
 rutas Frontoffice públicas); añadir una ruta protegida no exige tocar el modelo, solo la config (FR6).
@@ -178,9 +178,9 @@ rutas Frontoffice públicas); añadir una ruta protegida no exige tocar el model
 
 - **Puente 401 en el pipeline:** existe el marker `Unauthenticated` (401), pero hay que confirmar/añadir el
   puente de la `AuthenticationException` de Symfony → 401 (análogo al de `AccessDeniedException` → 403). Si
-  se añade, actualizar `docs/api-error-contract.md` en el mismo PR (NFR26). **A cerrar en Story 1.3.**
+  se añade, actualizar `docs/api-error-contract.md` en el mismo PR (NFR26). **A cerrar en Story AF-1.3.**
 - **CSRF concreto:** SameSite + same-origin cubre el grueso; decidir si las mutaciones necesitan token CSRF
-  explícito o basta con comprobación de cabecera. **A cerrar en Story 1.2.**
+  explícito o basta con comprobación de cabecera. **A cerrar en Story AF-1.2.**
 - **Nombre/ubicación del contexto:** `Backoffice/Identity` por Regla de Tres (único consumidor hoy);
   promocionable a `Identity`/`IAM` top-level con un segundo consumidor real (ADR D2). No antes.
 - **Seed de usuarios / bootstrap:** cómo nace el primer usuario (fixture dev, comando de consola) — decisión
