@@ -4,7 +4,7 @@ baseline_commit: 6224f2a21de4aebc3e9680c4381f46ea3c233c24
 
 # Story 2.4: `erase-subject` — olvido por sujeto (destruir la DEK)
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

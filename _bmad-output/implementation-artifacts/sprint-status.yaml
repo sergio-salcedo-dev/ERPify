@@ -59,11 +59,11 @@ development_status:
   epic-1-retrospective: optional
 
   # Epic 2 (E2): Diffs PII-safe — crypto-shredding + keystore (disparada por el dato, no por un agregado)
-  epic-2: in-progress
-  2-1-clasificacion-pii-por-campo-personaldata: review
-  2-2-keystore-envelope-libsodium-dek-por-encryptionscopeid: review
-  2-3-auditar-bankaccount-con-diff-pii-crypto-shredded: review
-  2-4-erase-subject-olvido-por-sujeto-destruir-la-dek: review
+  epic-2: done
+  2-1-clasificacion-pii-por-campo-personaldata: done
+  2-2-keystore-envelope-libsodium-dek-por-encryptionscopeid: done
+  2-3-auditar-bankaccount-con-diff-pii-crypto-shredded: done
+  2-4-erase-subject-olvido-por-sujeto-destruir-la-dek: done
   epic-2-retrospective: optional
 
   # Epic 3 (E3): Acceso restringido + auto-auditado + atribución real (gated on auth/RBAC — inexistente hoy)
