@@ -80,13 +80,14 @@ describe("AuditChangeDiff", () => {
     expect(screen.queryByTestId("diff__field-bic")).not.toBeInTheDocument();
   });
 
-  it("renders «Sin cambios registrados» when every field is a no-op", () => {
+  it("reads an all-empty snapshot as «Registro sin campos con valor», not «Sin cambios registrados»", () => {
     renderDiff({
       bic: { old: null, new: null },
       alias: { old: null, new: null },
     });
 
-    expect(screen.getByText("Sin cambios registrados")).toBeInTheDocument();
+    expect(screen.getByText("Registro sin campos con valor")).toBeInTheDocument();
+    expect(screen.queryByText("Sin cambios registrados")).not.toBeInTheDocument();
   });
 
   it("names a CREATE snapshot (all added) and a DELETE snapshot (all removed)", () => {
