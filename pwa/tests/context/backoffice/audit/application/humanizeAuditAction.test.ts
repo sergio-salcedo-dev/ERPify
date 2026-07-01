@@ -8,6 +8,12 @@ describe("humanizeAuditAction", () => {
     expect(humanizeAuditAction("GDPR_ERASURE_EXECUTED")).toBe("Borrado GDPR ejecutado");
   });
 
+  it("uses the curated label for a BankAccount write action", () => {
+    expect(humanizeAuditAction("BANK_ACCOUNT_CREATED")).toBe("Cuenta bancaria creada");
+    expect(humanizeAuditAction("BANK_ACCOUNT_UPDATED")).toBe("Cuenta bancaria actualizada");
+    expect(humanizeAuditAction("BANK_ACCOUNT_DELETED")).toBe("Cuenta bancaria eliminada");
+  });
+
   it("strips the ROUTE_ prefix and title-cases the rest for route actions", () => {
     expect(humanizeAuditAction("ROUTE_BACKOFFICE_BANK_SEARCH")).toBe("Backoffice Bank Search");
     expect(humanizeAuditAction("ROUTE_BACKOFFICE_AUDIT_TIMELINE_SEARCH")).toBe(

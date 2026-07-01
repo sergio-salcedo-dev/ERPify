@@ -1,11 +1,13 @@
 import { inject, injectable } from "inversify";
 import { API_ENDPOINTS } from "@/context/shared/http-client/infrastructure/ApiEndpoints";
 import type { HttpClient } from "@/context/shared/http-client/domain/HttpClient";
-import type {
-  AuditChanges,
-  AuditEventDetail,
-  AuditFieldChange,
-  AuditScalar,
+import {
+  type AuditChanges,
+  type AuditEventDetail,
+  type AuditFieldChange,
+  type AuditFieldValue,
+  type AuditScalar,
+  isAuditSealedValue,
 } from "../domain/AuditChange";
 import type { AuditEventDetailRepository } from "../domain/AuditEventDetailRepository";
 
@@ -26,9 +28,14 @@ function isAuditScalarOrNull(value: unknown): value is AuditScalar | null {
   );
 }
 
-/** A `{ old, new }` pair where both sides are a scalar or a real `null` — anything else is drift. */
+/** Narrows an unknown diff side to a valid {@link AuditFieldValue}. */
+function isAuditFieldValue(value: unknown): value is AuditFieldValue {
+  return isAuditScalarOrNull(value) || isAuditSealedValue(value);
+}
+
+/** A `{ old, new }` pair where both sides are a scalar, `null` or a sealed value — anything else is drift. */
 function isAuditFieldChange(value: unknown): value is AuditFieldChange {
-  return isObjectRecord(value) && isAuditScalarOrNull(value.old) && isAuditScalarOrNull(value.new);
+  return isObjectRecord(value) && isAuditFieldValue(value.old) && isAuditFieldValue(value.new);
 }
 
 function isAuditChanges(value: unknown): value is AuditChanges {
@@ -74,9 +81,17 @@ export function isAuditEventDetailResponse(value: unknown): value is AuditEventD
 function toAuditChanges(changes: AuditChanges): AuditChanges {
   const result: AuditChanges = {};
   for (const [field, change] of Object.entries(changes)) {
-    result[field] = { old: change.old, new: change.new };
+    result[field] = {
+      old: normalizeFieldValue(change.old),
+      new: normalizeFieldValue(change.new),
+    };
   }
   return result;
+}
+
+/** A sealed value is reduced to its marker alone, so a stray key on the ciphertext object cannot ride in. */
+function normalizeFieldValue(value: AuditFieldValue): AuditFieldValue {
+  return isAuditSealedValue(value) ? { __enc__: value.__enc__ } : value;
 }
 
 /** Carries `metadata` through verbatim (forensic fidelity) but normalises `changes` when present. */

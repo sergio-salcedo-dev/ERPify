@@ -59,6 +59,13 @@ describe("AuditChangeDiff", () => {
     expect(screen.getByText("Estado final antes del borrado")).toBeInTheDocument();
   });
 
+  it("shows a sealed sentinel for a crypto-shredded value and never the ciphertext", () => {
+    renderDiff({ holderName: { old: null, new: { __enc__: "c2VjcmV0LWNpcGhlcnRleHQ" } } });
+
+    expect(screen.getByText("cifrado (no disponible)")).toBeInTheDocument();
+    expect(screen.queryByText(/c2VjcmV0/)).not.toBeInTheDocument();
+  });
+
   it("collapses a large diff behind a reveal toggle", () => {
     const changes: AuditChanges = Object.fromEntries(
       Array.from({ length: 9 }, (_unused, index) => [

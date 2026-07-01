@@ -40,6 +40,7 @@ final readonly class AuditWriteCaptureListener
         private AuditEntryFactory $entryFactory,
         private AuditLogWriter $writer,
         private AuditChangeDiff $changeDiff,
+        private PiiDiffSealer $piiDiffSealer,
     ) {
     }
 
@@ -78,11 +79,17 @@ final readonly class AuditWriteCaptureListener
                 continue;
             }
 
+            $sealed = $this->piiDiffSealer->seal(
+                $entity,
+                $this->changeDiff->of($this->changesOf($entityManager, $unitOfWork, $entity, $operation)),
+            );
+
             $entries[] = $this->entryFactory->create(
                 $entity->auditAction($operation),
                 AuditLevel::CHANGE,
                 $entity->auditResource(),
-                $this->changeDiff->of($this->changesOf($entityManager, $unitOfWork, $entity, $operation)),
+                $sealed->metadata,
+                $sealed->encryptionScopeId,
             );
         }
 

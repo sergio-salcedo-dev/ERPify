@@ -23,5 +23,6 @@ interface AuditEntryFactory
         AuditLevel $level,
         ?AuditResource $resource = null,
         array $metadata = [],
+        ?string $encryptionScopeId = null,
     ): AuditLogEntry;
 }

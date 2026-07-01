@@ -1,5 +1,9 @@
 # Deferred work
 
+## Deferred from: code review of E2 crypto-shredding — stories 2.1–2.4 (2026-07-01)
+
+- **(Epic 2 / Story 2.4) `erase-subject` concurrente no es idempotente — falla ruidoso en vez de no-op.** Dos ejecuciones concurrentes del mismo `bank-account-id` (comando CLI manual, raro): A borra el registro + destruye la DEK + commitea; B (que cargó la cuenta antes del commit de A, READ COMMITTED) flushea su propio borrado → la captura `onFlush` re-sella el snapshot DELETE → `encrypt` topa con el scope ya tombstoneado → `DekDestroyed` → rollback de B y el CLI reporta "Erasure failed". **Falla seguro** (nada queda legible; A borró del todo), pero un duplicado concurrente da un error confuso en vez del no-op limpio del re-run secuencial. Fix opcional: `SELECT … FOR UPDATE` sobre `findById` dentro de la transacción. Ref: `api/src/Backoffice/BankAccount/Application/EraseBankAccountSubject.php`.
+
 ## Deferred from: code review of stories 1.3 & 1.4 (2026-06-24)
 
 - **(Epic 2 / Story 2.3) Durabilidad de la rama `security` (write-before-send) frente a una transacción del llamador.** El `INSERT` síncrono de `security` va por la `Connection` DBAL compartida sin transacción propia; si el llamador de Epic 2 abre una transacción de negocio que luego hace rollback, la fila de la denegación se revierte con ella, debilitando "una denegación nunca se pierde" (ADR-D3). Baja probabilidad (un `AccessDeniedException` rara vez tiene transacción de negocio abierta), pero al cablear 2.3 fijar la asunción: o no hay transacción de negocio al escribir la denegación, o la escritura `security` usa una conexión/transacción que commitea aparte. Extiende el item "re-revisar el contrato de fallo de `security` en 2.3". Ref: `api/src/Shared/Audit/Infrastructure/SymfonyAuditLogger.php` (writeSecurity), `DbalAuditLogWriter.php`.

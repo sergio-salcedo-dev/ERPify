@@ -45,6 +45,7 @@ final readonly class AuditLogEntry
         public array $metadata,
         public ?string $ip,
         public ?string $userAgent,
+        public ?string $encryptionScopeId,
     ) {
     }
 
@@ -63,6 +64,7 @@ final readonly class AuditLogEntry
         array $metadata = [],
         ?string $ip = null,
         ?string $userAgent = null,
+        ?string $encryptionScopeId = null,
     ): self {
         $action = \trim($action);
 
@@ -87,6 +89,7 @@ final readonly class AuditLogEntry
             $metadata,
             $ip,
             $userAgent,
+            $encryptionScopeId,
         );
     }
 

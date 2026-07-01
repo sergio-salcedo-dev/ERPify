@@ -36,6 +36,7 @@ final readonly class FixedAuditEntryFactory implements AuditEntryFactory
         AuditLevel $level,
         ?AuditResource $resource = null,
         array $metadata = [],
+        ?string $encryptionScopeId = null,
     ): AuditLogEntry {
         return AuditLogEntry::create(
             $action,
@@ -45,6 +46,9 @@ final readonly class FixedAuditEntryFactory implements AuditEntryFactory
             $this->occurredOn,
             $resource,
             $metadata,
+            null,
+            null,
+            $encryptionScopeId,
         );
     }
 }

@@ -1,15 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Minus, Plus } from "lucide-react";
+import { ArrowRight, Lock, Minus, Plus } from "lucide-react";
 import { cn } from "@/components/cn";
 import { CopyButton, TruncatedText } from "@/components/erpify";
 import {
   ChangeKind,
   changeKind,
+  isAuditSealedValue,
   type AuditChanges,
   type AuditFieldChange,
-  type AuditScalar,
+  type AuditFieldValue,
 } from "@/context/backoffice/audit/domain/AuditChange";
 import { humanizeAuditField } from "@/context/backoffice/audit/application/humanizeAuditField";
 
@@ -168,7 +169,15 @@ function ChangeValue({ change, kind }: Readonly<{ change: AuditFieldChange; kind
  * string reads as «(cadena vacía)» — the two are never collapsed. A long value wraps in
  * `TruncatedText` (full string stays in the DOM) and offers a copy affordance.
  */
-function ScalarValue({ value }: Readonly<{ value: AuditScalar | null }>) {
+function ScalarValue({ value }: Readonly<{ value: AuditFieldValue }>) {
+  if (isAuditSealedValue(value)) {
+    return (
+      <span className="text-muted-foreground inline-flex items-center gap-1 italic">
+        <Lock className="size-3" aria-hidden="true" />
+        cifrado (no disponible)
+      </span>
+    );
+  }
   if (value === null) {
     return <span className="text-muted-foreground italic">— (vacío)</span>;
   }
@@ -212,6 +221,7 @@ function snapshotHeaderFor(rows: ReadonlyArray<FieldRow>): string | null {
 function typeHintFor(change: AuditFieldChange): string {
   const present = change.new ?? change.old;
   if (present === null) return "—";
+  if (isAuditSealedValue(present)) return "cifrado";
   return VALUE_TYPE_LABEL[typeof present] ?? typeof present;
 }
 

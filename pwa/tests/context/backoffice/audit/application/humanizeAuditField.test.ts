@@ -7,6 +7,12 @@ describe("humanizeAuditField", () => {
     expect(humanizeAuditField("shortName")).toBe("Código");
   });
 
+  it("uses the curated Spanish label for an audited BankAccount field", () => {
+    expect(humanizeAuditField("holderName")).toBe("Titular");
+    expect(humanizeAuditField("iban")).toBe("IBAN");
+    expect(humanizeAuditField("bic")).toBe("BIC");
+  });
+
   it("title-cases an unmapped camelCase field", () => {
     expect(humanizeAuditField("legalName")).toBe("Legal Name");
     expect(humanizeAuditField("taxId")).toBe("Tax Id");
@@ -18,6 +24,6 @@ describe("humanizeAuditField", () => {
 
   it("is resilient to an empty or single-word key (the raw key still carries the truth)", () => {
     expect(humanizeAuditField("")).toBe("");
-    expect(humanizeAuditField("iban")).toBe("Iban");
+    expect(humanizeAuditField("reference")).toBe("Reference");
   });
 });
