@@ -59,12 +59,22 @@ export const ChangeKind = {
 export type ChangeKind = (typeof ChangeKind)[keyof typeof ChangeKind];
 
 /**
- * Classifies a field change by which side is present: a `null` `old` reads as **added**, a `null`
- * `new` as **removed**, anything else (both present, or the degenerate both-null) as **changed**.
- * This is the non-colour signal the diff renders as text/marker — colour only reinforces it.
+ * Classifies a real field change by which side is present: a `null` `old` reads as **added**, a
+ * `null` `new` as **removed**, both sides present as **changed**. This is the non-colour signal the
+ * diff renders as text/marker — colour only reinforces it. Precondition: the field is a genuine
+ * change; a no-op (both sides `null`) is filtered by {@link isNoOpChange} before it reaches here.
  */
 export function changeKind(change: AuditFieldChange): ChangeKind {
   if (change.old === null && change.new !== null) return ChangeKind.Added;
   if (change.new === null && change.old !== null) return ChangeKind.Removed;
   return ChangeKind.Changed;
+}
+
+/**
+ * A no-op field: `old` and `new` both `null`, carrying no diff information — a nullable field left
+ * empty in a full-record snapshot (a CREATE that never set it, a DELETE of an already-empty field).
+ * The diff drops these before rendering so an empty, unchanged field never shows as a modification.
+ */
+export function isNoOpChange(change: AuditFieldChange): boolean {
+  return change.old === null && change.new === null;
 }
