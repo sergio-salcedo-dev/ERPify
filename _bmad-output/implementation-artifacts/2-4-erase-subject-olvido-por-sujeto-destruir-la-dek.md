@@ -4,7 +4,7 @@ baseline_commit: 6224f2a21de4aebc3e9680c4381f46ea3c233c24
 
 # Story 2.4: `erase-subject` — olvido por sujeto (destruir la DEK)
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -165,8 +165,19 @@ Caso de uso + CLI en `Backoffice/BankAccount` (el módulo dueño del dato vivo),
 
 ### Agent Model Used
 
+claude-opus-4-8[1m] (dev-story).
+
 ### Debug Log References
+
+`make php.stan` 0 · `make php.quality` 0 violations (deptrac incluido) · `make php.psalm.taint` clean · `make php.unit` full **1406** green. Commit `21693509`.
 
 ### Completion Notes List
 
+- `bank-account:gdpr:erase-subject <id>` (`Backoffice/BankAccount/Infrastructure/Cli`) → caso de uso `EraseBankAccountSubject`: borra el `BankAccount` vivo (hard-delete, GDPR prevalece sobre el guard CLOSED) + destruye la DEK del scope (`EnvelopeEncryptor::destroyScope`, ahora `: bool`); self-audit `GDPR_SUBJECT_ERASED` (security) solo si algo se borró; idempotente. Distinto de `erase-actor` (D15). Funcional (Postgres real) prueba: fila de auditoría sobrevive + PII ilegible (DEK destruida) + self-audit una vez + re-run no-op + `actor_erased` intacto.
+- **Decisiones abiertas resueltas + flagged para Sergio:** (1) **hard-delete** del registro vivo (no anonimizar — `iban` es `unique`+validado); (2) **sin `wrapInTransaction`** — evita `EntityManager` en Application (ratchet deptrac; no hay puerto de transacción) y refleja que un olvido GDPR no es un delete de negocio (no emite `BANK_ACCOUNT_DELETED` ni evento de dominio; los eventos de `BankAccount` son PII-free y las lecturas son live-queries); atomicidad reemplazada por idempotencia+re-run, como el `erase-actor` hermano.
+- Cross-check de reconciliación (scope destruido ⟺ `GDPR_SUBJECT_ERASED`) cubierto por el funcional (una fila por olvido); job de reconciliación = YAGNI (follow-up).
+
 ### File List
+
+**NEW:** `api/src/Backoffice/BankAccount/Application/{EraseBankAccountSubject,SubjectErasureResult}.php`; `api/src/Backoffice/BankAccount/Infrastructure/Cli/EraseBankAccountSubjectCommand.php`; tests `Functional/Backoffice/BankAccount/EraseBankAccountSubjectFunctionalTest.php`, `Unit/Backoffice/BankAccount/Infrastructure/Cli/EraseBankAccountSubjectCommandTest.php`.
+**UPDATE:** `api/src/Shared/Crypto/{Application/EnvelopeEncryptor.php, Infrastructure/SodiumEnvelopeEncryptor.php}` (`destroyScope: bool`).

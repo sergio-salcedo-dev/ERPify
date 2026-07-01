@@ -4,7 +4,7 @@ baseline_commit: 6224f2a21de4aebc3e9680c4381f46ea3c233c24
 
 # Story 2.3: Auditar `BankAccount` con el diff PII crypto-shredded
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -177,8 +177,20 @@ Write-side en `Shared/Audit` (sealer + propagación de scope) + `Backoffice/Bank
 
 ### Agent Model Used
 
+claude-opus-4-8[1m] (dev-story).
+
 ### Debug Log References
+
+`make php.stan` 0 · `make php.quality` 0 violations · `make php.psalm.taint` clean · `make php.unit` full **1403→1406** green · `make pwa.quality` + `make pwa.test.unit` (854) green. Commits `4f6a3fde` (API) + `a7ecc7ea` (PWA).
 
 ### Completion Notes List
 
+**API (`4f6a3fde`):** `BankAccount implements AuditedEntity` (`BANK_ACCOUNT_*`); new `PiiDiffSealer` at the `onFlush` seam encrypts `#[PersonalData]` diff columns under the aggregate's `EncryptionScopeId` (via 2.1 classifier + 2.2 encryptor), non-PII en claro; `audit_log` gains nullable `encryption_scope_id` (migración `Version20260701084808`), propagated through `AuditLogEntry`/`AuditEntryFactory`/`SealedAuditEntryFactory`/`DbalAuditLogWriter`/`AuditLogSchemaListener`. Cero cripto en la entidad (D17). Boy-scout nombrado: `@SuppressWarnings("PHPMD.CouplingBetweenObjects")` en `BankAccount` (coupling inherente 13; **flagged para Sergio** — alternativa = split de responsabilidades, fuera de E2).
+**PWA (`a7ecc7ea`):** `AuditChange` acepta el marcador `{__enc__}`; guard de detalle lo valida+normaliza; `AuditChangeDiff` lo renderiza como centinela "cifrado (no disponible)" (nunca ciphertext, nunca descifrado — E3); labels `BANK_ACCOUNT_*` + campos `BankAccount`.
+**Render descifrado del PII = diferido a E3** (privilegiado). Behat de escritura no añadido (el funcional cubre las ACs).
+
 ### File List
+
+**API NEW:** `Shared/Audit/Infrastructure/Persistence/{PiiDiffSealer,SealedDiff}.php`; migración `Version20260701084808.php`; tests `Unit/Shared/Audit/Infrastructure/Persistence/{PiiDiffSealerTest,AuditedSubjectFake,PlainAuditedFake}.php`, `Unit/Backoffice/BankAccount/Domain/Entity/BankAccountAuditTest.php`, `Functional/Shared/Audit/BankAccountAuditCryptoShreddingFunctionalTest.php`.
+**API UPDATE:** `Backoffice/BankAccount/Domain/Entity/BankAccount.php`; `Shared/Crypto/Domain/EncryptionScopeId.php`; `Shared/Audit/{Application/{AuditLogEntry,AuditEntryFactory}.php, Infrastructure/{SealedAuditEntryFactory.php, Persistence/{AuditWriteCaptureListener,DbalAuditLogWriter,AuditLogSchemaListener}.php}}`; test double `FixedAuditEntryFactory.php` + `EncryptionScopeIdTest.php`.
+**PWA:** `context/backoffice/audit/{domain/AuditChange.ts, infrastructure/ApiAuditEventDetailRepository.ts, infrastructure/ui/AuditChangeDiff.tsx, application/{humanizeAuditAction,humanizeAuditField}.ts}` + their tests.

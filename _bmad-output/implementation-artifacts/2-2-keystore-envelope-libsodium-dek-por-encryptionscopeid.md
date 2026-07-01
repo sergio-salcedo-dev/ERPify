@@ -4,7 +4,7 @@ baseline_commit: 6224f2a21de4aebc3e9680c4381f46ea3c233c24
 
 # Story 2.2: Keystore + envelope libsodium (DEK por `EncryptionScopeId`)
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -164,8 +164,19 @@ Capability `Shared/Crypto/{Domain,Application,Infrastructure}` alineada a DDD/he
 
 ### Agent Model Used
 
+claude-opus-4-8[1m] (dev-story).
+
 ### Debug Log References
+
+`make php.stan` 0 errors · `make php.quality` 0 violations · `make php.psalm.taint` "No errors found" (KEK no fluye a sinks) · unit+functional (Postgres real) green. Commits `8854eafd` (+ `4f6a3fde` refina `EncryptionScopeId`, + `21693509` `destroyScope: bool`).
 
 ### Completion Notes List
 
+- Nueva capability `Shared/Crypto`: `EncryptionScopeId` VO + tabla `dek_keystore` (migración `Version20260701083342`, sin FK a dominio) + envelope libsodium `crypto_aead_xchacha20poly1305_ietf` (`SodiumEnvelopeEncryptor`), DEK CSPRNG mint-on-first-encrypt, KEK env `AUDIT_KEK` (32 bytes), scope como AAD, `destroyScope` = crypto-shred irreversible.
+- **Decisiones abiertas resueltas:** tabla = `dek_keystore`; `wrapped_dek` = `TEXT` base64 (adapter serializa); `EncryptionScopeId` usa el tipo de recurso verbatim (`BankAccount:<uuid>`, no `BANK_ACCOUNT`) para que sellador y erasure compartan una única fuente — desviación argumentada del ejemplo del ADR.
+- `.env` gana `AUDIT_KEK` placeholder dev; rotación de KEK = rewrap por lotes (documentado, no implementado — YAGNI).
+
 ### File List
+
+**NEW:** `api/src/Shared/Crypto/**` (`Domain/EncryptionScopeId.php` + 4 excepciones, `Application/{Keystore,EnvelopeEncryptor,WrappedDek}.php`, `Infrastructure/{SodiumEnvelopeEncryptor.php, Persistence/{KeystoreSchemaListener,DbalKeystore}.php}`); `api/migrations/2026/Version20260701083342.php`; tests `Unit/Shared/Crypto/**` + `Functional/Shared/Crypto/**`.
+**UPDATE:** `api/.env` (`AUDIT_KEK`).

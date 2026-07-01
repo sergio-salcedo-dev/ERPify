@@ -4,7 +4,7 @@ baseline_commit: 6224f2a21de4aebc3e9680c4381f46ea3c233c24
 
 # Story 2.1: Clasificación PII por campo (`#[PersonalData]`)
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -149,8 +149,19 @@ Nueva capability `Shared/Privacy/{Domain,Application,Infrastructure}` alineada a
 
 ### Agent Model Used
 
+claude-opus-4-8[1m] (dev-story).
+
 ### Debug Log References
+
+`make php.stan` 0 errors · `make php.quality` 0 violations · `make php.unit --filter PersonalData` green. Commit `1ce19642`.
 
 ### Completion Notes List
 
+- Passive `#[PersonalData]` attribute in new capability `Shared/Privacy/Domain`; reflection reader as puerto `PersonalDataClassifier` + adapter `ReflectionPersonalDataClassifier` (cached, `#[AsAlias]`). Sin migración.
+- `BankAccount`: `holderName`/`iban` marcados PII; `bic`/`currency`/`status`/`bankId` en claro; `Bank` intacto.
+- **Decisión abierta resuelta por defecto:** `alias` dejado en claro (el ADR no lo enumera) — revisable en review.
+
 ### File List
+
+**NEW:** `api/src/Shared/Privacy/{Domain/PersonalData.php, Application/PersonalDataClassifier.php, Infrastructure/ReflectionPersonalDataClassifier.php}`; `api/tests/Unit/Shared/Privacy/Infrastructure/{ReflectionPersonalDataClassifierTest.php, Fixtures/SampleWithPersonalData.php, Fixtures/SampleWithoutPersonalData.php}`; `api/tests/Unit/Backoffice/BankAccount/Domain/Entity/BankAccountPersonalDataTest.php`.
+**UPDATE:** `api/src/Backoffice/BankAccount/Domain/Entity/BankAccount.php`.
