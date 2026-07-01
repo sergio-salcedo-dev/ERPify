@@ -77,9 +77,9 @@ final readonly class SodiumEnvelopeEncryptor implements EnvelopeEncryptor
     }
 
     #[Override]
-    public function destroyScope(EncryptionScopeId $scope): void
+    public function destroyScope(EncryptionScopeId $scope): bool
     {
-        $this->keystore->destroy($scope);
+        return $this->keystore->destroy($scope);
     }
 
     private function dekFor(EncryptionScopeId $scope): string

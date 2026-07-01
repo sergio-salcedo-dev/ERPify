@@ -27,5 +27,9 @@ interface EnvelopeEncryptor
      */
     public function decrypt(EncryptionScopeId $scope, string $ciphertext): string;
 
-    public function destroyScope(EncryptionScopeId $scope): void;
+    /**
+     * @return bool true when a live key was destroyed, false when there was none or it was already gone
+     *              (idempotent)
+     */
+    public function destroyScope(EncryptionScopeId $scope): bool;
 }
