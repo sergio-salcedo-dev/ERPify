@@ -17,6 +17,8 @@ interface AuditEntryFactory
 {
     /**
      * @param array<string, mixed> $metadata
+     * @param ?string              $id       the entry id to adopt when the caller minted it up front (e.g. to
+     *                                       seal a value under it before the row exists); minted here when null
      */
     public function create(
         string $action,
@@ -24,5 +26,12 @@ interface AuditEntryFactory
         ?AuditResource $resource = null,
         array $metadata = [],
         ?string $encryptionScopeId = null,
+        ?string $id = null,
     ): AuditLogEntry;
+
+    /**
+     * Mints an entry id up front, for a caller that must know it before the entry exists — e.g. to seal a
+     * value under the id it will be stored on. Feed the returned id back into {@see create()} as `$id`.
+     */
+    public function mintId(): string;
 }

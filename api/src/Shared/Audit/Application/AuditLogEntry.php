@@ -14,8 +14,9 @@ use Erpify\Shared\Uuid\Domain\Uuid;
 /**
  * Immutable record of one thing an actor did: the data the `audit_log` writer persists and
  * the investigation read model reads back. Construction is closed behind {@see create()},
- * which mints the v7 `id` — the sole idempotency anchor, sealed downstream by the
- * `audit_log` primary key — and enforces the field invariants before the row can exist.
+ * which mints the v7 `id` — or adopts one the caller minted up front, so a value can be sealed
+ * under the id before the row exists — the sole idempotency anchor, sealed downstream by the
+ * `audit_log` primary key, and enforces the field invariants before the row can exist.
  *
  * `ip`, `userAgent` and `metadata` are attacker-controlled: treat them as tainted
  * downstream — never render them as HTML without escaping, never use them in a trust or
@@ -65,6 +66,7 @@ final readonly class AuditLogEntry
         ?string $ip = null,
         ?string $userAgent = null,
         ?string $encryptionScopeId = null,
+        ?string $id = null,
     ): self {
         $action = \trim($action);
 
@@ -79,7 +81,7 @@ final readonly class AuditLogEntry
         }
 
         return new self(
-            Uuid::generate(),
+            $id ?? Uuid::generate(),
             $action,
             $level,
             $actor,

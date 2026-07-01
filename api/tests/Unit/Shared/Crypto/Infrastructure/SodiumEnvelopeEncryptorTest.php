@@ -23,15 +23,17 @@ final class SodiumEnvelopeEncryptorTest extends TestCase
 {
     private const string KEK = '0123456789abcdef0123456789abcdef';
 
+    private const string AAD = 'holderName|old|018f-row';
+
     #[Test]
     public function itRoundTripsAValue(): void
     {
         $encryptor = new SodiumEnvelopeEncryptor(new InMemoryKeystore(), self::KEK);
         $scope = EncryptionScopeId::forBankAccount(Uuid::generate());
 
-        $ciphertext = $encryptor->encrypt($scope, 'ES9121000418450200051332');
+        $ciphertext = $encryptor->encrypt($scope, 'ES9121000418450200051332', self::AAD);
 
-        $this->assertSame('ES9121000418450200051332', $encryptor->decrypt($scope, $ciphertext));
+        $this->assertSame('ES9121000418450200051332', $encryptor->decrypt($scope, $ciphertext, self::AAD));
     }
 
     #[Test]
@@ -40,7 +42,7 @@ final class SodiumEnvelopeEncryptorTest extends TestCase
         $encryptor = new SodiumEnvelopeEncryptor(new InMemoryKeystore(), self::KEK);
         $scope = EncryptionScopeId::forBankAccount(Uuid::generate());
 
-        $this->assertNotSame($encryptor->encrypt($scope, 'x'), $encryptor->encrypt($scope, 'x'));
+        $this->assertNotSame($encryptor->encrypt($scope, 'x', self::AAD), $encryptor->encrypt($scope, 'x', self::AAD));
     }
 
     #[Test]
@@ -49,9 +51,12 @@ final class SodiumEnvelopeEncryptorTest extends TestCase
         $keystore = new InMemoryKeystore();
         $scope = EncryptionScopeId::forBankAccount(Uuid::generate());
 
-        $ciphertext = (new SodiumEnvelopeEncryptor($keystore, self::KEK))->encrypt($scope, 'secret');
+        $ciphertext = (new SodiumEnvelopeEncryptor($keystore, self::KEK))->encrypt($scope, 'secret', self::AAD);
 
-        $this->assertSame('secret', (new SodiumEnvelopeEncryptor($keystore, self::KEK))->decrypt($scope, $ciphertext));
+        $this->assertSame(
+            'secret',
+            (new SodiumEnvelopeEncryptor($keystore, self::KEK))->decrypt($scope, $ciphertext, self::AAD),
+        );
     }
 
     #[Test]
@@ -59,13 +64,13 @@ final class SodiumEnvelopeEncryptorTest extends TestCase
     {
         $encryptor = new SodiumEnvelopeEncryptor(new InMemoryKeystore(), self::KEK);
         $scope = EncryptionScopeId::forBankAccount(Uuid::generate());
-        $ciphertext = $encryptor->encrypt($scope, 'secret');
+        $ciphertext = $encryptor->encrypt($scope, 'secret', self::AAD);
 
         $encryptor->destroyScope($scope);
 
         $this->expectException(DekDestroyed::class);
 
-        $encryptor->decrypt($scope, $ciphertext);
+        $encryptor->decrypt($scope, $ciphertext, self::AAD);
     }
 
     #[Test]
@@ -73,14 +78,14 @@ final class SodiumEnvelopeEncryptorTest extends TestCase
     {
         $encryptor = new SodiumEnvelopeEncryptor(new InMemoryKeystore(), self::KEK);
         $scope = EncryptionScopeId::forBankAccount(Uuid::generate());
-        $encryptor->encrypt($scope, 'secret');
+        $encryptor->encrypt($scope, 'secret', self::AAD);
         $encryptor->destroyScope($scope);
 
         // Crypto-shredding is irreversible: encrypting under a tombstoned scope must fail loudly, never
         // silently seal under a fresh key that was never persisted and could never be unwrapped again.
         $this->expectException(DekDestroyed::class);
 
-        $encryptor->encrypt($scope, 'resurrected');
+        $encryptor->encrypt($scope, 'resurrected', self::AAD);
     }
 
     #[Test]
@@ -88,11 +93,11 @@ final class SodiumEnvelopeEncryptorTest extends TestCase
     {
         $encryptor = new SodiumEnvelopeEncryptor(new InMemoryKeystore(), self::KEK);
         $scope = EncryptionScopeId::forBankAccount(Uuid::generate());
-        $encryptor->encrypt($scope, 'secret');
+        $encryptor->encrypt($scope, 'secret', self::AAD);
 
         $this->expectException(DecryptionFailed::class);
 
-        $encryptor->decrypt($scope, '@@ not valid base64 @@');
+        $encryptor->decrypt($scope, '@@ not valid base64 @@', self::AAD);
     }
 
     #[Test]
@@ -100,14 +105,14 @@ final class SodiumEnvelopeEncryptorTest extends TestCase
     {
         $encryptor = new SodiumEnvelopeEncryptor(new InMemoryKeystore(), self::KEK);
         $scope = EncryptionScopeId::forBankAccount(Uuid::generate());
-        $encryptor->encrypt($scope, 'secret'); // mint the DEK so decrypt reaches the AEAD open
+        $encryptor->encrypt($scope, 'secret', self::AAD); // mint the DEK so decrypt reaches the AEAD open
 
         // Valid base64url that decodes to 14 bytes — fewer than the 24-byte nonce — so the AEAD open throws.
         $tooShort = \sodium_bin2base64('under-24-bytes', SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING);
 
         $this->expectException(DecryptionFailed::class);
 
-        $encryptor->decrypt($scope, $tooShort);
+        $encryptor->decrypt($scope, $tooShort, self::AAD);
     }
 
     #[Test]
@@ -116,12 +121,38 @@ final class SodiumEnvelopeEncryptorTest extends TestCase
         $encryptor = new SodiumEnvelopeEncryptor(new InMemoryKeystore(), self::KEK);
         $scopeA = EncryptionScopeId::forBankAccount(Uuid::generate());
         $scopeB = EncryptionScopeId::forBankAccount(Uuid::generate());
-        $ciphertextA = $encryptor->encrypt($scopeA, 'secret');
-        $encryptor->encrypt($scopeB, 'other');
+        $ciphertextA = $encryptor->encrypt($scopeA, 'secret', self::AAD);
+        $encryptor->encrypt($scopeB, 'other', self::AAD);
 
         $this->expectException(DecryptionFailed::class);
 
-        $encryptor->decrypt($scopeB, $ciphertextA);
+        $encryptor->decrypt($scopeB, $ciphertextA, self::AAD);
+    }
+
+    #[Test]
+    public function itRejectsACiphertextRelocatedToAnotherSlot(): void
+    {
+        $encryptor = new SodiumEnvelopeEncryptor(new InMemoryKeystore(), self::KEK);
+        $scope = EncryptionScopeId::forBankAccount(Uuid::generate());
+        $ciphertext = $encryptor->encrypt($scope, 'ES9121000418450200051332', 'iban|new|018f-row-a');
+
+        // Same scope and key; each variant moves the value to a different slot of the same subject — another
+        // field, the other side of the change, or another row — and none may authenticate, because field,
+        // position and row id are each bound into the AAD (the three intra-scope relocations the binding closes).
+        foreach (['holderName|new|018f-row-a', 'iban|old|018f-row-a', 'iban|new|018f-row-b'] as $relocated) {
+            $rejected = false;
+
+            try {
+                $encryptor->decrypt($scope, $ciphertext, $relocated);
+            } catch (DecryptionFailed) {
+                $rejected = true;
+            }
+
+            $this->assertTrue(
+                $rejected,
+                \sprintf('a ciphertext verified under "%s" must not authenticate', $relocated),
+            );
+        }
     }
 
     #[Test]
