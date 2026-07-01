@@ -6,10 +6,12 @@ namespace Erpify\Shared\Audit\Application;
 
 /**
  * Reconciles crypto-shredding against its evidence: every destroyed data-encryption key must have a
- * matching `GDPR_SUBJECT_ERASED` audit entry. A destroyed key without that evidence is an integrity
- * divergence — the erasure happened but its self-audit was lost (the known non-atomic window between
- * destroying the key and recording the security entry). Surfacing it makes the gap detectable rather than
- * silent (ADR D15 / D4.1 cross-check).
+ * matching `GDPR_SUBJECT_ERASED` audit entry (the scope travels in that entry's `metadata`, which is what
+ * this reads — not the `audit_log.encryption_scope_id` column). The transactional `erase-subject` path
+ * commits the key destruction and the security entry together, so it never diverges on its own; this guards
+ * the paths that can — an out-of-band or manual key destruction, a partial repair, or a future non-atomic
+ * caller. A destroyed key without evidence is an integrity divergence surfaced rather than left silent
+ * (ADR D15 / D4.1 cross-check).
  */
 interface SubjectErasureReconciler
 {

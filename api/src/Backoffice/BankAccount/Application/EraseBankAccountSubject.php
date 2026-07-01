@@ -50,6 +50,9 @@ final readonly class EraseBankAccountSubject
             $liveRecordErased = $account instanceof BankAccount;
 
             if ($liveRecordErased) {
+                // Load-bearing: remove() flushes eagerly, so the final BANK_ACCOUNT_DELETED change row is
+                // captured and sealed under the still-live key here, before destroyScope() below tombstones
+                // it. A future lazy flush would move that capture past the destroy and break erasure.
                 $this->bankAccountRepository->remove($account);
             }
 

@@ -70,12 +70,23 @@ final readonly class SodiumEnvelopeEncryptor implements EnvelopeEncryptor
         }
 
         $nonceLength = SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_NPUBBYTES;
-        $plaintext = \sodium_crypto_aead_xchacha20poly1305_ietf_decrypt(
-            \substr($raw, $nonceLength),
-            $scope->toString(),
-            \substr($raw, 0, $nonceLength),
-            $dek,
-        );
+
+        // A truncated or corrupt stored value can decode to fewer bytes than a nonce; the AEAD open *throws*
+        // on a wrong-length nonce (it only returns false for an authentication failure), so catch it and
+        // surface the same integrity signal instead of an unmapped 500 with the DEK left in memory.
+        try {
+            $plaintext = \sodium_crypto_aead_xchacha20poly1305_ietf_decrypt(
+                \substr($raw, $nonceLength),
+                $scope->toString(),
+                \substr($raw, 0, $nonceLength),
+                $dek,
+            );
+        } catch (SodiumException) {
+            \sodium_memzero($dek);
+
+            throw DecryptionFailed::forScope($scope);
+        }
+
         \sodium_memzero($dek);
 
         if (false === $plaintext) {
@@ -131,12 +142,19 @@ final readonly class SodiumEnvelopeEncryptor implements EnvelopeEncryptor
         }
 
         $nonceLength = SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_NPUBBYTES;
-        $dek = \sodium_crypto_aead_xchacha20poly1305_ietf_decrypt(
-            \substr($wrapped->bytes, $nonceLength),
-            $scope->toString(),
-            \substr($wrapped->bytes, 0, $nonceLength),
-            $this->kek,
-        );
+
+        // As in decrypt(): a corrupt wrapped-DEK can be too short for a nonce, which the AEAD open throws on
+        // — surface it as DecryptionFailed rather than letting a raw SodiumException escape the write path.
+        try {
+            $dek = \sodium_crypto_aead_xchacha20poly1305_ietf_decrypt(
+                \substr($wrapped->bytes, $nonceLength),
+                $scope->toString(),
+                \substr($wrapped->bytes, 0, $nonceLength),
+                $this->kek,
+            );
+        } catch (SodiumException) {
+            throw DecryptionFailed::forScope($scope);
+        }
 
         if (false === $dek) {
             throw DecryptionFailed::forScope($scope);

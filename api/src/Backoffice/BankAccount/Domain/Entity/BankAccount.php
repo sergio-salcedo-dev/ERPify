@@ -69,6 +69,7 @@ final class BankAccount extends AggregateRoot implements AuditedEntity
         private ?string $bic,
         #[ORM\Column(length: 100, nullable: true)]
         #[Assert\Length(max: 100)]
+        #[PersonalData]
         private ?string $alias,
         #[ORM\Column(length: 3, enumType: Currency::class)]
         #[EnumType(Currency::class)]

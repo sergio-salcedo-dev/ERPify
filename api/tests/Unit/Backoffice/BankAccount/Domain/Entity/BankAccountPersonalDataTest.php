@@ -17,10 +17,10 @@ use PHPUnit\Framework\TestCase;
 final class BankAccountPersonalDataTest extends TestCase
 {
     #[Test]
-    public function holderNameAndIbanAreItsOnlyPersonalDataFields(): void
+    public function holderNameIbanAndAliasAreItsPersonalDataFields(): void
     {
         $classifier = new ReflectionPersonalDataClassifier();
 
-        $this->assertSame(['holderName', 'iban'], $classifier->personalFieldsOf(BankAccount::class));
+        $this->assertSame(['alias', 'holderName', 'iban'], $classifier->personalFieldsOf(BankAccount::class));
     }
 }
