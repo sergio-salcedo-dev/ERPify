@@ -35,37 +35,40 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-23
-last_updated: 2026-06-25
+last_updated: 2026-07-01
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
 story_location: "{project-root}/_bmad-output/implementation-artifacts"
 
 development_status:
-  # Epic 1: Registro de auditoría end-to-end (backbone + primer actor auditado)
+  # Tracks the REGULATORY audit trail: docs/adr/regulatory-audit-trail.md +
+  # _bmad-output/planning-artifacts/epics-regulatory-audit-trail.md (E1 pre-auth · E2 gated-by-data · E3 gated-auth).
+  # It supersedes the tracking of the operational/actor axis (audit-activity-log.md), whose epics
+  # shipped (PRs up to #402); that axis's record lives in git history and its PRs, not here.
+
+  # Epic 1 (E1): Captura de escrituras regulatoria — diff campo a campo, pre-auth (#394/#398/#399/#402)
   epic-1: in-progress
-  1-1-actorcontext-con-actortype-tipado: done
-  1-2-auditlevel-mensaje-interno-recordauditentry-modelo-auditlogentry-separados-del-domainevent: done
-  1-3-tabla-audit-log-append-only-escritor-idempotente-raw-dbal-schema-listener: done
-  1-4-puerto-auditlogger-persistencia-por-nivel-activity-async-security-write-before-send-actorcontextfactory: done
-  1-5-migrar-bank-accounts-viewed-al-subsistema-real-primer-actor-auditado: done
+  1-1-listener-doctrine-onflush-captura-changeset: done
+  1-2-accion-semantica-forma-del-diff-en-metadata: done
+  1-3-actor-context-correlacion-sellados-en-onflush: done
+  1-4-snapshot-de-la-entidad-en-delete: done
+  1-5-extractor-de-recurso-en-lecturas: done
+  1-6-suelo-de-retencion-5-anos: done
+  1-7-render-del-diff-en-el-read-model-ui-377: review
   epic-1-retrospective: optional
 
-  # Epic 2: Captura híbrida — cobertura activity + security
-  epic-2: done
-  2-1-auditpolicy-que-es-auditable-y-a-que-nivel-alcance-fase-1: done
-  2-2-subscriber-de-access-log-sobre-kernel-terminate: done
-  2-3-captura-security-sobre-accessdeniedexception: done
+  # Epic 2 (E2): Diffs PII-safe — crypto-shredding + keystore (disparada por el dato, no por un agregado)
+  epic-2: in-progress
+  2-1-clasificacion-pii-por-campo-personaldata: ready-for-dev
+  2-2-keystore-envelope-libsodium-dek-por-encryptionscopeid: ready-for-dev
+  2-3-auditar-bankaccount-con-diff-pii-crypto-shredded: ready-for-dev
+  2-4-erase-subject-olvido-por-sujeto-destruir-la-dek: ready-for-dev
   epic-2-retrospective: optional
 
-  # Epic 3: Retención diferenciada y borrado GDPR
-  epic-3: in-progress
-  3-1-auditlogpruner-retencion-por-nivel-symfony-scheduler: done
-  3-2-borrado-gdpr-pseudonimizacion-de-actor-id: done
+  # Epic 3 (E3): Acceso restringido + auto-auditado + atribución real (gated on auth/RBAC — inexistente hoy)
+  epic-3: backlog
+  3-1-voter-rbac-rutas-lectura-trail-actor-id-not-null: backlog
+  3-2-auto-auditoria-del-acceso-auditar-al-auditor: backlog
+  3-3-levantar-el-gate-de-produccion: backlog
   epic-3-retrospective: optional
-
-  # Epic 4: Investigación de auditoría — read model + UI admin
-  epic-4: in-progress
-  4-1-read-model-de-investigacion-directo-sobre-audit-log-backoffice-audit: done
-  4-2-ui-admin-de-investigacion-pwa: done
-  epic-4-retrospective: optional
