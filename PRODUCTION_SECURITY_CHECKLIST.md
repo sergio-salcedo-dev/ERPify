@@ -20,8 +20,13 @@ you change anything here.
       a service `env_file:` — compose interpolation cannot read that.
 - [ ] `make prod.env.check` passes (no missing file, no empty/`CHANGE_ME`
       required key). The deploy script runs this before touching Docker.
-- [ ] `APP_SECRET`, `POSTGRES_PASSWORD`, and `CADDY_MERCURE_JWT_SECRET` were
-      freshly generated (`openssl rand …`), not reused from dev.
+- [ ] `APP_SECRET`, `POSTGRES_PASSWORD`, `CADDY_MERCURE_JWT_SECRET`, and `AUDIT_KEK`
+      were freshly generated (`openssl rand …`), not reused from dev.
+- [ ] `AUDIT_KEK` (audit crypto-shredding key-encryption key) is **exactly 32 bytes**
+      (the app fails fast otherwise), custodied **outside the app** (env / secret
+      manager), never beside the DEKs it wraps and never committed. KEK rotation
+      re-wraps every DEK under the new version as a bounded batch; destroying a DEK
+      (subject erasure) is irreversible by design.
 - [ ] `POSTGRES_PASSWORD` is URL-safe — generate with `openssl rand -hex`, not
       `-base64`. It is interpolated raw into `DATABASE_URL`, so `/` `+` `=` from
       base64 corrupt the DSN (`MalformedDsnException`, php boot fails).
@@ -137,10 +142,12 @@ you change anything here.
       create/update/delete of an aggregate marked `AuditedEntity` records a `change`
       row with a field-level before/after diff, written synchronously inside the
       business transaction so the row is atomic with the write (out-of-band flushes —
-      fixtures, seeds — are not captured). Only catalog aggregates (`Bank`) are audited
-      today, so the diff holds **no personal data**; a PII-bearing diff (a person
-      aggregate) must be crypto-shredded before it may be stored (E2), never written in
-      clear. Its `ip` / `user_agent` / `metadata` are
+      fixtures, seeds — are not captured). `Bank` (a catalog) is audited in clear; a
+      **PII-bearing diff is crypto-shredded**: `BankAccount`'s `#[PersonalData]` fields
+      (`holderName`/`iban`) are AEAD-encrypted (libsodium) under a per-subject DEK before
+      the row is written (A.5.12 classification), so no personal data is ever stored in
+      clear; the row references its `encryption_scope_id` and the read UI shows a sealed
+      sentinel, never the ciphertext. Its `ip` / `user_agent` / `metadata` are
       **client-controlled (tainted)** — the `change` diff is surfaced read-only via
       the canonical `GET /audit/events/{id}` resource (diff-only: `ip`/`user_agent`
       withheld; consciously public like the rest of `/backoffice` until the auth gate)
@@ -154,10 +161,13 @@ you change anything here.
       and redacts `ip` / `user_agent` to `[REDACTED]` and sets the materialised,
       queryable, non-PII `actor_erased` flag in one `UPDATE`, never deleting a row, and
       self-audits a `security` `GDPR_ERASURE_EXECUTED` entry carrying only the resulting
-      pseudonym (never the original id). Retention by level (`activity` vs
-      `security`, the scheduled prune — the table's only `DELETE`) is tracked
-      separately. A live PII table must never exist without a documented
-      retention/erasure policy (epic 3).
+      pseudonym (never the original id). **Subject erasure is distinct** (never merged —
+      ADR D15): `bank-account:gdpr:erase-subject <id>` removes the live account and
+      destroys its DEK, so the PII in the append-only trail becomes permanently unreadable
+      while the rows survive; it self-audits `GDPR_SUBJECT_ERASED`. Retention by level
+      (`activity` vs `security`, the scheduled prune — the table's only `DELETE`) is
+      tracked separately; the `change` level carries a 5-year floor. A live PII table must
+      never exist without a documented retention/erasure policy.
 
 ## 7. Deploy & verify
 
