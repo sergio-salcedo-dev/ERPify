@@ -37,7 +37,7 @@ final class EncryptionScopeIdTest extends TestCase
     }
 
     #[Test]
-    public function itRejectsAValueThatIsNotATypeUuidPair(): void
+    public function itRejectsAValueThatIsNotATypeIdPair(): void
     {
         $this->expectException(InvalidEncryptionScopeId::class);
 
@@ -45,10 +45,43 @@ final class EncryptionScopeIdTest extends TestCase
     }
 
     #[Test]
-    public function itRejectsANonUuidId(): void
+    public function itAcceptsANonUuidIdWithoutSeparator(): void
+    {
+        $scope = EncryptionScopeId::of('Party', 'slug-42');
+
+        $this->assertSame('Party:slug-42', $scope->toString());
+    }
+
+    #[Test]
+    public function itRoundTripsANonUuidId(): void
+    {
+        $scope = EncryptionScopeId::fromString('Party:slug-42');
+
+        $this->assertSame('Party', $scope->type);
+        $this->assertSame('slug-42', $scope->id);
+    }
+
+    #[Test]
+    public function itRejectsATypeContainingTheSeparator(): void
     {
         $this->expectException(InvalidEncryptionScopeId::class);
 
-        EncryptionScopeId::forBankAccount('not-a-uuid');
+        EncryptionScopeId::of('Ba:d', Uuid::generate());
+    }
+
+    #[Test]
+    public function itRejectsAnIdContainingTheSeparator(): void
+    {
+        $this->expectException(InvalidEncryptionScopeId::class);
+
+        EncryptionScopeId::of('BankAccount', 'a:b');
+    }
+
+    #[Test]
+    public function itRejectsAnEmptyId(): void
+    {
+        $this->expectException(InvalidEncryptionScopeId::class);
+
+        EncryptionScopeId::of('BankAccount', '');
     }
 }

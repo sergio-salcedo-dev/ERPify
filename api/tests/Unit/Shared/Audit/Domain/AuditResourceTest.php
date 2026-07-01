@@ -44,4 +44,11 @@ final class AuditResourceTest extends TestCase
         yield 'empty string' => [''];
         yield 'whitespace only' => ['   '];
     }
+
+    public function testRejectsANonUuidResourceId(): void
+    {
+        $this->expectException(InvalidAuditLogEntry::class);
+
+        AuditResource::of('BankAccount', 'not-a-uuid');
+    }
 }

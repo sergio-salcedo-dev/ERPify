@@ -22,7 +22,10 @@ final class InvalidEncryptionScopeIdTest extends TestCase
 
         $this->assertSame(InvalidEncryptionScopeId::TYPE, $exception->type());
         $this->assertSame('invalid-encryption-scope-id', $exception->type());
-        $this->assertSame('Encryption scope id must be a "<TYPE>:<uuid>" pair.', $exception->title());
+        $this->assertSame(
+            'Encryption scope id parts must be non-empty and free of the ":" separator.',
+            $exception->title(),
+        );
         $this->assertSame([], $exception->context());
     }
 }
