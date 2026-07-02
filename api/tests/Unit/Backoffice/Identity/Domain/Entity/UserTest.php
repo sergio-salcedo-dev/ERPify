@@ -13,6 +13,7 @@ use Erpify\Tests\Unit\Backoffice\Identity\Domain\Entity\Mother\UserMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
+use Symfony\Component\Validator\Validation;
 
 /**
  * @internal
@@ -37,6 +38,22 @@ final class UserTest extends TestCase
         $user = UserMother::create(email: '  Alice@ERPify.TEST  ');
 
         $this->assertSame('alice@erpify.test', $user->email());
+    }
+
+    public function testMalformedEmailIsRejectedByTheStrictFormatConstraint(): void
+    {
+        // Validate only the `email` property: the class-level UniqueEntity needs the Doctrine validator
+        // service (exercised through the container at the write boundary), out of scope for this unit.
+        $validator = Validation::createValidatorBuilder()->enableAttributeMapping()->getValidator();
+        $malformed = User::register(
+            UserMother::DEFAULT_ID,
+            'not-an-email',
+            HashedPassword::fromHash('h'),
+            Role::AUDIT_READER,
+        );
+
+        $this->assertGreaterThan(0, $validator->validateProperty($malformed, 'email')->count());
+        $this->assertCount(0, $validator->validateProperty(UserMother::create(), 'email'));
     }
 
     public function testRolesRoundTripThroughTheEnum(): void

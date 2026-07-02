@@ -6,6 +6,7 @@ namespace Erpify\Backoffice\Identity\Domain\Entity;
 
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use Erpify\Backoffice\Identity\Domain\Email;
 use Erpify\Backoffice\Identity\Domain\Enum\Role;
 use Erpify\Backoffice\Identity\Domain\HashedPassword;
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
@@ -28,7 +29,7 @@ final class User extends AggregateRoot
 {
     #[ORM\Column(unique: true)]
     #[Assert\NotBlank]
-    #[Assert\Email]
+    #[Assert\Email(mode: Assert\Email::VALIDATION_MODE_STRICT)]
     private string $email;
 
     #[ORM\Column(name: 'password_hash')]
@@ -47,7 +48,7 @@ final class User extends AggregateRoot
         parent::__construct();
 
         $this->id = $id;
-        $this->email = $this->canonicalizeEmail($email);
+        $this->email = Email::from($email)->toString();
         $this->passwordHash = $password->toString();
         $this->roles = $this->distinctRoleValues($roles);
     }
@@ -73,11 +74,6 @@ final class User extends AggregateRoot
     public function roles(): array
     {
         return \array_map(Role::from(...), $this->roles);
-    }
-
-    private function canonicalizeEmail(string $email): string
-    {
-        return \mb_strtolower(\trim($email));
     }
 
     /**

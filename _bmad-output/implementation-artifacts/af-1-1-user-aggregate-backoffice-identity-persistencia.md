@@ -257,6 +257,8 @@ Gates (todos verdes, worktree stack): `php.stan` OK (767), `php.quality` EXIT 0 
 - `Domain/Entity/User.php`
 - `Domain/HashedPassword.php`
 - `Domain/Exception/InvalidHashedPassword.php`
+- `Domain/Email.php`
+- `Domain/Exception/InvalidEmail.php`
 - `Domain/Enum/Role.php`
 - `Domain/Repository/UserRepository.php`
 - `Infrastructure/Persistence/Doctrine/DoctrineUserRepository.php`
@@ -268,6 +270,7 @@ Gates (todos verdes, worktree stack): `php.stan` OK (767), `php.quality` EXIT 0 
 - `api/tests/Unit/Backoffice/Identity/Domain/Entity/UserTest.php`
 - `api/tests/Unit/Backoffice/Identity/Domain/Entity/Mother/UserMother.php`
 - `api/tests/Unit/Backoffice/Identity/Domain/HashedPasswordTest.php`
+- `api/tests/Unit/Backoffice/Identity/Domain/EmailTest.php`
 - `api/tests/Unit/Backoffice/Identity/Domain/Enum/RoleTest.php`
 - `api/tests/Functional/Backoffice/Identity/DoctrineUserRepositoryTest.php`
 
@@ -289,3 +292,5 @@ Gates (todos verdes, worktree stack): `php.stan` OK (767), `php.quality` EXIT 0 
 | Fecha | Cambio |
 |-------|--------|
 | 2026-07-02 | AF-1.1 implementado: agregado `User` + `HashedPassword` VO + enum `Role` + puerto/adapter + migración `identity_user` + registro deptrac + tests (16) + docs. Story → review. |
+| 2026-07-02 | Code review (#419): patch `RoleTest` (valor de respaldo del enum fijado con data provider tipado). |
+| 2026-07-02 | Post-review: `Email` VO (canonicalización con dueño único → mata el Shotgun Surgery entidad/repo) + `#[Assert\Email(mode: strict)]` (egulias ya instalado, sin dep nueva ni regex propio) + verificación del constraint. `findByEmail` refactor Sonar S1488 (`findOneBy` tipado). |
