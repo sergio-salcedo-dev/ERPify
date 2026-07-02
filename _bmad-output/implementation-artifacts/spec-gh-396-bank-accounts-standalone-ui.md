@@ -15,7 +15,9 @@ context:
 
 **Problem:** Las cuentas bancarias solo se ven anidadas bajo un banco (`/banks/{id}/accounts`); no hay hub global. El endpoint global `GET /bank-accounts` (ya existente) está sin consumir, y el topic Mercure de detalle por-cuenta está publicado+autorizado pero sin suscriptor (#396: dead end-to-end). Además, a diferencia de Bank, no existe topic de colección global, así que una lista global no puede refrescarse en vivo.
 
-**Approach:** Sección standalone **Bank Accounts** en `/backoffice/bank-accounts`: entrada de menú bajo Treasury, **lista global** cross-bank con realtime, y **detalle** `/backoffice/bank-accounts/{id}` con realtime. El detalle se suscribe a `bankAccountTopics.detail(id)` → cablea #396. La lista requiere una pieza nueva de API (topic de colección global, espejo del de Bank) + su suscripción PWA. Núcleo primero: crear/editar standalone se aplaza; las acciones de fila reusan los flujos anidados (las filas llevan `bankId`).
+**Approach:** Sección standalone **Bank Accounts** en `/backoffice/bank-accounts`: entrada de menú bajo Treasury, **lista global** cross-bank con realtime, y **detalle** `/backoffice/bank-accounts/{id}` con realtime. El detalle se suscribe a `bankAccountTopics.detail(id)` → cablea #396. La lista requiere una pieza nueva de API (topic de colección global, espejo del de Bank) + su suscripción PWA.
+
+**Renegociado (revisión PR #421):** la sección standalone es superficie de gestión **autónoma**, no solo lectura. **Edición** vive en `/backoffice/bank-accounts/{id}/edit` (bank-agnóstica — la cuenta lleva su `bankId`); reusa `BankAccountForm` con un `returnTo` inyectado que mantiene Cancel/Back dentro del hub. El **borrado** está disponible en detalle y filas con el mismo guard `CLOSED` que el flujo anidado. Los filtros buscan el banco por **nombre o shortname** (`contains` sobre el JOIN), no por id. La ruta anidada `/banks/{id}/accounts/{id}/edit` se **mantiene** para el flujo por-banco. Sigue aplazado: **crear** standalone (necesita selector de banco).
 
 ## Boundaries & Constraints
 
@@ -33,9 +35,9 @@ context:
 - Cambiar el nombre/scoping del topic global propuesto (`urn:erpify:backoffice:bankaccounts`).
 
 **Never:**
-- Crear/editar standalone con selector de banco (iteración 2).
+- **Crear** standalone con selector de banco (aún aplazado; una cuenta nace bajo un banco).
 - Meter IBAN/holderName en el payload del broadcast, en logs, storage o telemetría.
-- Extender la entidad `BankAccount` con `bankName`/`bankShortName` (va en la proyección).
+- Extender la entidad `BankAccount` con `bankName`/`bankShortName` (va en la proyección; el filtro `bank` es un `contains` sobre el JOIN, no una columna nueva).
 
 ## I/O & Edge-Case Matrix
 
@@ -43,9 +45,11 @@ context:
 |----------|--------------|---------------------------|----------------|
 | Lista con datos | `GET /bank-accounts` devuelve página con `bankName` | Tabla cross-bank: columna Banco, Titular, IBAN enmascarado, estado; paginación keyset prev/next | — |
 | Lista vacía / filtrada vacía | página `data: []` | EmptyState (variante sin/‑con filtro) | — |
-| Filtro/orden | filtros `holderName`/`iban`/`alias`/`bankId`; orden `holderName`/`createdAt`/`updatedAt` | Se envían como `filters[]`/`sort`/`direction`; se resetea el cursor | Campos fuera de contrato no se ofrecen |
+| Filtro/orden | filtros `holderName`/`iban`/`alias`/`bank` (nombre o shortname); orden `holderName`/`createdAt`/`updatedAt` | Se envían como `filters[]`/`sort`/`direction`; `bank` es `contains` sobre `CONCAT(b.name,' ',b.shortName)`; se resetea el cursor | Campos fuera de contrato no se ofrecen |
+| Column picker en tarjetas | vista = cards | El picker se oculta (afordancia solo de tabla; las tarjetas tienen layout fijo) | — |
 | Lista realtime | evento en el topic global (created/updated/deleted) | `silentReload()` de la página visible | reconnect → recarga silenciosa |
-| Detalle OK | `GET /bank-accounts/{id}` 200 | Ficha con IBAN enmascarado + reveal; Edit → flujo anidado (`banks/{bankId}/accounts/{id}/edit`) | — |
+| Detalle OK | `GET /bank-accounts/{id}` 200 | Ficha con IBAN enmascarado + reveal; Edit → `bank-accounts/{id}/edit` (standalone); Delete con guard `CLOSED` | — |
+| Detalle Delete | click Delete | CLOSED → confirm → `DELETE` → toast + redirige a la lista; no-CLOSED → guard "Edit account" (standalone); fallo → `MutationError` bajo el H1 | 409 `bank-account-not-closed` es el guard autoritativo |
 | Detalle realtime updated/deleted | evento en `bankAccountTopics.detail(id)` | updated → refresca; deleted → redirige a la lista; reconnect → recarga | id no-UUID → no se construye topic |
 | Detalle inexistente | 404 (`bank-account-not-found`) | EmptyState NOT_FOUND + CorrelationIdChip | Otros → ProblemDisplay |
 

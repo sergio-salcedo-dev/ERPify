@@ -4,16 +4,16 @@ import { SortDirection } from "@/context/shared/search/domain/SortDirection";
 /**
  * UI filter state for the global accounts list. The API contract is the
  * authority for what is filterable: `holderName` (the toolbar search), `alias`,
- * and `bankId` (an exact owning-bank match). IBAN is deliberately not
- * filterable — it renders masked but a filter would carry the integral IBAN
- * (PII) in the GET query string and thus into server/proxy access logs. No date
- * range here — the collection view drops audit timestamps (they are keyset
- * paging machinery, sortable but not displayed).
+ * and `bank` (a substring match over the owning bank's name or short code). IBAN
+ * is deliberately not filterable — it renders masked but a filter would carry the
+ * integral IBAN (PII) in the GET query string and thus into server/proxy access
+ * logs. No date range here — the collection view drops audit timestamps (they are
+ * keyset paging machinery, sortable but not displayed).
  */
 export interface BankAccountsFilter {
   holderName: string;
   alias: string;
-  bankId: string;
+  bank: string;
 }
 
 export type BankAccountsSort = DataTableSort | null;
@@ -48,11 +48,11 @@ export function isDefaultSort(sort: BankAccountsSort): boolean {
 export const EMPTY_FILTER: BankAccountsFilter = {
   holderName: "",
   alias: "",
-  bankId: "",
+  bank: "",
 };
 
 /**
- * Number of populated fields among the panel-hosted filters (alias + bankId).
+ * Number of populated fields among the panel-hosted filters (alias + bank).
  * The holder search lives in the always-visible toolbar, so the "Filters (n)"
  * badge only counts what a collapsed panel would otherwise hide. Whitespace-only
  * values count as inactive.
@@ -60,7 +60,7 @@ export const EMPTY_FILTER: BankAccountsFilter = {
 export function countPanelFilters(filter: BankAccountsFilter): number {
   let count = 0;
   if (filter.alias.trim()) count += 1;
-  if (filter.bankId.trim()) count += 1;
+  if (filter.bank.trim()) count += 1;
   return count;
 }
 
@@ -77,7 +77,7 @@ export function hasActiveFilter(filter: BankAccountsFilter): boolean {
   return Boolean(filter.holderName.trim()) || hasActivePanelFilter(filter);
 }
 
-export type FilterChipKey = "holderName" | "alias" | "bankId" | "sort";
+export type FilterChipKey = "holderName" | "alias" | "bank" | "sort";
 
 export interface FilterChipDescriptor {
   key: FilterChipKey;
@@ -104,7 +104,7 @@ export function buildActiveFilterChips(
   if (filter.holderName.trim())
     chips.push({ key: "holderName", label: `Holder: ${filter.holderName.trim()}` });
   if (filter.alias.trim()) chips.push({ key: "alias", label: `Alias: ${filter.alias.trim()}` });
-  if (filter.bankId.trim()) chips.push({ key: "bankId", label: `Bank: ${filter.bankId.trim()}` });
+  if (filter.bank.trim()) chips.push({ key: "bank", label: `Bank: ${filter.bank.trim()}` });
 
   if (!isDefaultSort(sort)) {
     if (sort) {

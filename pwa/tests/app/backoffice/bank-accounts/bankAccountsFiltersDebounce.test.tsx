@@ -65,6 +65,30 @@ describe("BankAccountsFilters — debounce", () => {
     expect(onFilterChange).toHaveBeenCalledWith(expect.objectContaining({ alias: "Payroll" }));
   });
 
+  it("debounces the panel bank filter as a `contains` value (name or short code)", () => {
+    const onFilterChange = vi.fn();
+    render(
+      <BankAccountsFilters
+        filter={EMPTY_FILTER}
+        onFilterChange={onFilterChange}
+        sort={DEFAULT_SORT}
+        onSortChange={vi.fn()}
+        onReset={vi.fn()}
+        defaultOpen
+      />,
+    );
+
+    fireEvent.change(screen.getByTestId("bank-accounts-filters__bank"), {
+      target: { value: "Acme" },
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+
+    expect(onFilterChange).toHaveBeenCalledWith(expect.objectContaining({ bank: "Acme" }));
+  });
+
   it("syncs the inputs down when the parent resets the filter", () => {
     const onFilterChange = vi.fn();
     const seeded = { ...EMPTY_FILTER, holderName: "alice" };

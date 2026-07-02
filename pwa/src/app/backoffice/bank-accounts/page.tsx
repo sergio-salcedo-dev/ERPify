@@ -26,7 +26,7 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/components/cn";
 import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import { useStoredPreference } from "@/context/shared/storage/infrastructure/useStoredPreference";
-import { bankAccountRoutes as nestedBankAccountRoutes } from "../banks/[id]/accounts/_lib/bankAccountRoutes";
+import { bankAccountRoutes } from "./_lib/bankAccountRoutes";
 import { BankAccountsTable } from "./_components/BankAccountsTable";
 import { BankAccountsCards } from "./_components/BankAccountsCards";
 import { BankAccountsStackedList } from "./_components/BankAccountsStackedList";
@@ -177,8 +177,8 @@ export default function BankAccountsListPage() {
 
   // Typed recovery in the persistent error surface: a stale `bank-account-not-found`
   // heals in place via a refresh; a `bank-account-not-closed` deep-links to that
-  // account's edit form (the nested flow, keyed by the row's bankId) so the user
-  // can set it to CLOSED first. Other types carry no action.
+  // account's standalone edit form so the user can set it to CLOSED first. Other
+  // types carry no action.
   const deleteRecoveryAction = ((): ReactNode => {
     if (!deleteError) return undefined;
     switch (deleteError.problem.type) {
@@ -204,7 +204,7 @@ export default function BankAccountsListPage() {
         if (!account) return undefined;
         return (
           <Link
-            href={safeHref(nestedBankAccountRoutes.edit(account.bankId, account.id))}
+            href={safeHref(bankAccountRoutes.edit(account.id))}
             className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
             aria-label="Edit account"
             title="Edit this account to close it"
@@ -279,11 +279,15 @@ export default function BankAccountsListPage() {
                   onDensityChange={setDensity}
                   testId="bank-accounts-list__density-toggle"
                 />
-                <BankAccountsColumnPicker
-                  visible={columns}
-                  onChange={setColumns}
-                  testId="bank-accounts-list__columns"
-                />
+                {/* Column visibility is a table-only affordance — the cards render a
+                    fixed layout, so offering the picker there would be a no-op. */}
+                {view === "table" ? (
+                  <BankAccountsColumnPicker
+                    visible={columns}
+                    onChange={setColumns}
+                    testId="bank-accounts-list__columns"
+                  />
+                ) : null}
               </div>
             ) : undefined
           }

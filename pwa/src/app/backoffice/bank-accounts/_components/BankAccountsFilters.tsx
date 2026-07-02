@@ -44,7 +44,7 @@ interface BankAccountsFiltersProps {
   leading?: ReactNode;
 }
 
-type PanelField = "alias" | "bankId";
+type PanelField = "alias" | "bank";
 
 const NONE_SORT_VALUE = "__none__" as const;
 const FILTER_DEBOUNCE_MS = 300;
@@ -71,49 +71,49 @@ export function BankAccountsFilters({
   // externally (e.g. Reset), via the getDerivedState-during-render idiom.
   const [holderInput, setHolderInput] = useState(filter.holderName);
   const [aliasInput, setAliasInput] = useState(filter.alias);
-  const [bankIdInput, setBankIdInput] = useState(filter.bankId);
+  const [bankInput, setBankInput] = useState(filter.bank);
   const [prevFilter, setPrevFilter] = useState(filter);
 
   if (prevFilter !== filter) {
     setPrevFilter(filter);
     setHolderInput(filter.holderName);
     setAliasInput(filter.alias);
-    setBankIdInput(filter.bankId);
+    setBankInput(filter.bank);
   }
 
   const debouncedHolder = useDebouncedValue(holderInput, FILTER_DEBOUNCE_MS);
   const debouncedAlias = useDebouncedValue(aliasInput, FILTER_DEBOUNCE_MS);
-  const debouncedBankId = useDebouncedValue(bankIdInput, FILTER_DEBOUNCE_MS);
+  const debouncedBank = useDebouncedValue(bankInput, FILTER_DEBOUNCE_MS);
 
   useEffect(() => {
     if (
       debouncedHolder === filter.holderName &&
       debouncedAlias === filter.alias &&
-      debouncedBankId === filter.bankId
+      debouncedBank === filter.bank
     ) {
       return;
     }
     onFilterChange({
       holderName: debouncedHolder,
       alias: debouncedAlias,
-      bankId: debouncedBankId,
+      bank: debouncedBank,
     });
     // Only react to the debounced values; `filter` is read as the latest closure
     // value each render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedHolder, debouncedAlias, debouncedBankId]);
+  }, [debouncedHolder, debouncedAlias, debouncedBank]);
 
   useSlashFocus(searchRef);
 
   const setPanelInput = (field: PanelField, value: string): void => {
     if (field === "alias") setAliasInput(value);
-    else setBankIdInput(value);
+    else setBankInput(value);
   };
 
   const clearLocalInputs = (): void => {
     setHolderInput("");
     setAliasInput("");
-    setBankIdInput("");
+    setBankInput("");
   };
 
   const handleReset = (): void => {
@@ -147,9 +147,9 @@ export function BankAccountsFilters({
         nextFilter = { ...filter, alias: "" };
         setAliasInput("");
         break;
-      case "bankId":
-        nextFilter = { ...filter, bankId: "" };
-        setBankIdInput("");
+      case "bank":
+        nextFilter = { ...filter, bank: "" };
+        setBankInput("");
         break;
       case "sort":
         nextSort = DEFAULT_SORT;
@@ -292,14 +292,14 @@ export function BankAccountsFilters({
                   data-testid="bank-accounts-filters__alias"
                 />
               </FormField>
-              <FormField name="bank-accounts-filters-bank-id" label="Bank ID">
+              <FormField name="bank-accounts-filters-bank" label="Bank">
                 <Input
                   type="text"
-                  value={bankIdInput}
-                  onChange={(event) => setPanelInput("bankId", event.target.value)}
-                  placeholder="Owning bank id"
+                  value={bankInput}
+                  onChange={(event) => setPanelInput("bank", event.target.value)}
+                  placeholder="Name or code, e.g. Acme or ACME"
                   autoComplete="off"
-                  data-testid="bank-accounts-filters__bank-id"
+                  data-testid="bank-accounts-filters__bank"
                 />
               </FormField>
             </div>

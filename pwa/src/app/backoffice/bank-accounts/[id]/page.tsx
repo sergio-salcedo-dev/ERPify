@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ChevronLeft, Clock, Landmark, Pencil, RefreshCw } from "lucide-react";
+import { ChevronLeft, Clock, Landmark, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import { container } from "@/context/shared/dependency-injection/infrastructure/Container";
 import { FindBankAccount } from "@/context/backoffice/bankaccount/application/FindBankAccount";
+import { DeleteBankAccount } from "@/context/backoffice/bankaccount/application/DeleteBankAccount";
 import type { BankAccount } from "@/context/backoffice/bankaccount/domain/BankAccount";
 import {
   bankAccountTopics,
@@ -17,10 +18,13 @@ import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetail
 import {
   CopyButton,
   CorrelationIdChip,
+  DeleteResourceButton,
   EmptyState,
+  MutationError,
   ProblemDisplay,
   StatusBadge,
 } from "@/components/erpify";
+import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/components/cn";
 import { uuidV7 } from "@/context/shared/uuid/infrastructure/uuidV7";
@@ -30,7 +34,6 @@ import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
 import { ViewStatus } from "@/context/shared/view-state/domain/ViewState";
 import { bankRoutes } from "../../banks/_lib/bankRoutes";
-import { bankAccountRoutes as nestedBankAccountRoutes } from "../../banks/[id]/accounts/_lib/bankAccountRoutes";
 import { bankAccountRoutes } from "../_lib/bankAccountRoutes";
 import { BANK_ACCOUNT_STATUS_LABEL, BANK_ACCOUNT_STATUS_VARIANT } from "../_lib/bankAccountStatus";
 import { IbanCell } from "../../banks/[id]/accounts/_components/IbanCell";
@@ -94,13 +97,20 @@ export default function BankAccountDetailPage() {
     currentIdRef.current = id;
   }, [id]);
 
-  const handleDeleted = useCallback((): void => {
+  // Suppress the detail UI and navigate to the list. Shared by the realtime
+  // remote-delete path and the user-initiated delete so the gone id never
+  // refetches into a "not found" flash while the redirect is in flight.
+  const redirectToList = useCallback((): void => {
     setRedirecting(true);
+    router.push(bankAccountRoutes.list);
+  }, [router]);
+
+  const handleDeleted = useCallback((): void => {
     toastNotifier.info("Account deleted", {
       description: "It was removed and is no longer available.",
     });
-    router.push(bankAccountRoutes.list);
-  }, [router]);
+    redirectToList();
+  }, [redirectToList]);
 
   // Loads the account by id. `silent` skips the LOADING flash and keeps the
   // current account on a transient failure (realtime reconcile / update refetch);
@@ -228,6 +238,7 @@ export default function BankAccountDetailPage() {
           revealed={revealed}
           onReveal={() => setRevealed(true)}
           onHide={() => setRevealed(false)}
+          onDeleted={redirectToList}
         />
       ) : null}
     </div>
@@ -239,15 +250,20 @@ function BankAccountDetailReady({
   revealed,
   onReveal,
   onHide,
+  onDeleted,
 }: Readonly<{
   account: BankAccount;
   revealed: boolean;
   onReveal: () => void;
   onHide: () => void;
+  /** Runs after a successful delete — the owner suppresses the UI and redirects. */
+  onDeleted: () => void;
 }>) {
-  // The detail/write resource always carries `bankId`; guard anyway so a partial
-  // payload never builds a broken edit href.
+  // Only the "View bank" meta link needs the owning bank; a partial payload
+  // (no bankId) simply hides that link. Edit/Delete key off the account id.
   const bankId = account.bankId;
+  const [deleteProblem, setDeleteProblem] = useState<ProblemDetails | null>(null);
+  const isClosed = account.status === "CLOSED";
 
   return (
     <>
@@ -270,22 +286,79 @@ function BankAccountDetailReady({
             />
           </div>
         </div>
-        {bankId ? (
-          <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
-            <Link
-              href={safeHref(nestedBankAccountRoutes.edit(bankId, account.id))}
-              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-              data-icon="inline-start"
-              data-testid="bank-accounts-detail__edit-button"
-              aria-label={`Edit account ${account.holderName}`}
-              title={`Edit account ${account.holderName}`}
-            >
-              <Pencil className="size-3.5" aria-hidden="true" />
-              Edit
-            </Link>
-          </div>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+          <Link
+            href={safeHref(bankAccountRoutes.edit(account.id))}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+            data-icon="inline-start"
+            data-testid="bank-accounts-detail__edit-button"
+            aria-label={`Edit account ${account.holderName}`}
+            title={`Edit account ${account.holderName}`}
+          >
+            <Pencil className="size-3.5" aria-hidden="true" />
+            Edit
+          </Link>
+          <DeleteResourceButton
+            id={account.id}
+            resourceLabel={account.holderName}
+            entityNoun="account"
+            testIdPrefix="bank-accounts-detail"
+            trigger={
+              <Button
+                variant="outline"
+                size="sm"
+                data-icon="inline-start"
+                className="text-destructive hover:text-destructive"
+                data-testid="bank-accounts-detail__delete-button"
+                aria-label="Delete account"
+                title={`Delete account ${account.holderName}`}
+              >
+                <Trash2 className="size-3.5" aria-hidden="true" />
+                Delete
+              </Button>
+            }
+            onConfirmDelete={(accountId) =>
+              container.get<DeleteBankAccount>("BackOfficeDeleteBankAccount").run(accountId)
+            }
+            onSuccess={() => {
+              toastNotifier.success("Account deleted", { description: account.holderName });
+              onDeleted();
+            }}
+            onError={setDeleteProblem}
+            guard={{
+              active: !isClosed,
+              title: "Can't delete account",
+              description: (
+                <>
+                  <span className="font-semibold">{account.holderName}</span> can&apos;t be deleted
+                  — only <span className="font-semibold">closed</span> accounts may be removed. Set
+                  its status to Closed first.
+                </>
+              ),
+              action: (
+                <Link
+                  href={safeHref(bankAccountRoutes.edit(account.id))}
+                  className={cn(buttonVariants({ size: "sm" }))}
+                  data-icon="inline-start"
+                  data-testid="bank-accounts-detail__delete-guard-edit"
+                  aria-label="Edit account"
+                  title={`Edit account ${account.holderName}`}
+                >
+                  Edit account
+                </Link>
+              ),
+            }}
+          />
+        </div>
       </header>
+
+      {deleteProblem ? (
+        <MutationError
+          problem={deleteProblem}
+          onDismiss={() => setDeleteProblem(null)}
+          testId="bank-accounts-detail__delete-error"
+        />
+      ) : null}
 
       <dl
         className="bank-accounts-detail__meta border-border bg-card grid grid-cols-1 gap-4 rounded-lg border p-4 sm:grid-cols-2"

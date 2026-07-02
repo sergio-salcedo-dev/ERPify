@@ -118,7 +118,7 @@ export function BankAccountsStackedList({
               </div>
               <BankAccountRowActions
                 id={account.id}
-                bankId={account.bankId}
+                editHref={bankAccountRoutes.edit(account.id)}
                 holderName={account.holderName}
                 status={account.status}
                 onAccountDeleted={onAccountDeleted}

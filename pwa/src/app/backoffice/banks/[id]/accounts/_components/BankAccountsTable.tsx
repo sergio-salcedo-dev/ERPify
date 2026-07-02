@@ -16,6 +16,7 @@ import type {
 } from "@/context/backoffice/bankaccount/domain/BankAccount";
 import { IbanCell } from "./IbanCell";
 import { BankAccountRowActions } from "./BankAccountRowActions";
+import { bankAccountRoutes } from "../_lib/bankAccountRoutes";
 
 const STATUS_VARIANT: Record<BankAccountStatus, StatusBadgeVariant> = {
   ACTIVE: "success",
@@ -125,7 +126,7 @@ function buildColumns({
       cell: (account) => (
         <BankAccountRowActions
           id={account.id}
-          bankId={mutations.bankId}
+          editHref={bankAccountRoutes.edit(mutations.bankId, account.id)}
           holderName={account.holderName}
           status={account.status}
           onAccountDeleted={mutations.onAccountDeleted}
