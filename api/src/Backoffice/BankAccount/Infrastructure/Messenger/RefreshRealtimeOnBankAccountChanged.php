@@ -77,7 +77,11 @@ final readonly class RefreshRealtimeOnBankAccountChanged
     private function publish(string $type, string $accountId, string $bankId): void
     {
         $this->hub->publish(new Update(
-            [MercureBankAccountTopic::forBank($bankId), MercureBankAccountTopic::forAccount($accountId)],
+            [
+                MercureBankAccountTopic::COLLECTION,
+                MercureBankAccountTopic::forBank($bankId),
+                MercureBankAccountTopic::forAccount($accountId),
+            ],
             \json_encode(['type' => $type, 'id' => $accountId, 'bankId' => $bankId], JSON_THROW_ON_ERROR),
             true,
         ));

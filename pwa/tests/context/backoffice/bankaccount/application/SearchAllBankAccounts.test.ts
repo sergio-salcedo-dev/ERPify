@@ -1,23 +1,25 @@
 import { describe, expect, it, vi } from "vitest";
-import { SearchBankAccounts } from "@/context/backoffice/bankaccount/application/SearchBankAccounts";
-import { BankAccount } from "@/context/backoffice/bankaccount/domain/BankAccount";
+import { SearchAllBankAccounts } from "@/context/backoffice/bankaccount/application/SearchAllBankAccounts";
 import type {
   BankAccountRepository,
   BankAccountSearchCriteria,
-  BankAccountSearchPage,
 } from "@/context/backoffice/bankaccount/domain/BankAccountRepository";
+import type { BankAccountCollectionPage } from "@/context/backoffice/bankaccount/domain/BankAccountCollectionRow";
 
-const PAGE: BankAccountSearchPage = {
-  accounts: [
-    BankAccount.fromPrimitives({
+const PAGE: BankAccountCollectionPage = {
+  rows: [
+    {
       id: "0190ffff-aaaa-7bbb-8ccc-0d1e2f3a4b5c",
+      bankId: "11111111-1111-7111-8111-111111111111",
+      bankName: "Acme Savings",
+      bankShortName: "ACME",
       holderName: "Acme Corp",
       iban: "ES9121000418450200051332",
       bic: null,
       alias: null,
       currency: "EUR",
       status: "ACTIVE",
-    }),
+    },
   ],
   hasNext: false,
   hasPrev: false,
@@ -25,11 +27,12 @@ const PAGE: BankAccountSearchPage = {
   links: { next: null, prev: null },
 };
 
-describe("SearchBankAccounts", () => {
-  it("delegates to the repository with the bank id and criteria", async () => {
+describe("SearchAllBankAccounts", () => {
+  it("delegates the criteria to the repository's cross-bank searchAll", async () => {
+    const searchAll = vi.fn().mockResolvedValue(PAGE);
     const repository: BankAccountRepository = {
-      search: vi.fn().mockResolvedValue(PAGE),
-      searchAll: vi.fn(),
+      search: vi.fn(),
+      searchAll,
       find: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
@@ -38,9 +41,9 @@ describe("SearchBankAccounts", () => {
     };
     const criteria: BankAccountSearchCriteria = { filters: [], sort: null, limit: 25 };
 
-    const result = await new SearchBankAccounts(repository).run("bank-1", criteria);
+    const result = await new SearchAllBankAccounts(repository).run(criteria);
 
-    expect(repository.search).toHaveBeenCalledWith("bank-1", criteria);
+    expect(searchAll).toHaveBeenCalledWith(criteria);
     expect(result).toBe(PAGE);
   });
 });

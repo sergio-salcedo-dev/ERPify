@@ -39,11 +39,13 @@ import {
   Bell,
   LogOut,
   User,
+  Wallet,
   Wrench,
   Info,
 } from "lucide-react";
 import { Routes } from "@/context/shared/routing/domain/Routes";
 import { bankRoutes } from "@/app/backoffice/banks/_lib/bankRoutes";
+import { bankAccountRoutes } from "@/app/backoffice/bank-accounts/_lib/bankAccountRoutes";
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
 
 /**
@@ -149,6 +151,7 @@ export const backofficeMenuGroups: NavGroup[] = [
         path: bankRoutes.list,
         subItems: [
           { name: "Banks", path: bankRoutes.list, icon: Building2 },
+          { name: "Bank Accounts", path: bankAccountRoutes.list, icon: Wallet },
           { name: "Transactions", path: `${BASE}/finance/transactions`, icon: RefreshCw },
           { name: "Cash Flow", path: `${BASE}/finance/cash-flow`, icon: DollarSign },
         ],

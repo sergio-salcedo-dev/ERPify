@@ -6,12 +6,15 @@ namespace Erpify\Backoffice\BankAccount\Domain;
 
 /**
  * Stable Mercure topic IRIs for back-office bank-account real-time updates (not tied to hostname).
- * The collection topic is scoped per owning bank — the accounts list lives under `/banks/{id}/accounts`
- * — so list-level changes (created/updated/deleted) are addressed by `bankId`; the per-account topic
- * carries a single account's detail changes.
+ * The global collection topic carries list-level changes (created/updated/deleted) across every bank
+ * for the standalone accounts hub; the per-bank collection topic addresses one bank's nested list by
+ * `bankId`; the per-account topic carries a single account's detail changes.
  */
 final class MercureBankAccountTopic
 {
+    /** Global list-level changes across all banks' accounts: created, updated, deleted. */
+    public const string COLLECTION = 'urn:erpify:backoffice:bankaccounts';
+
     /** URI-template (RFC 6570) covering every per-bank accounts topic — used for subscriber authorization. */
     public const string COLLECTION_TEMPLATE = 'urn:erpify:backoffice:bank:{bankId}:accounts';
 

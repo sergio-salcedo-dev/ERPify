@@ -32,7 +32,7 @@ final class RefreshRealtimeOnBankAccountChangedTest extends TestCase
 
     private ?Update $captured = null;
 
-    public function testPublishesCreatedToBankAndAccountTopicsAsPrivateWithMinimalPayload(): void
+    public function testPublishesCreatedToCollectionBankAndAccountTopicsAsPrivateWithMinimalPayload(): void
     {
         $this->handler()->onBankAccountCreated(BankAccountCreatedDomainEventMother::create(
             self::ACCOUNT_ID,
@@ -41,7 +41,11 @@ final class RefreshRealtimeOnBankAccountChangedTest extends TestCase
 
         $update = $this->capturedUpdate();
         $this->assertSame(
-            [MercureBankAccountTopic::forBank(self::BANK_ID), MercureBankAccountTopic::forAccount(self::ACCOUNT_ID)],
+            [
+                MercureBankAccountTopic::COLLECTION,
+                MercureBankAccountTopic::forBank(self::BANK_ID),
+                MercureBankAccountTopic::forAccount(self::ACCOUNT_ID),
+            ],
             $update->getTopics(),
         );
         $this->assertTrue($update->isPrivate());
@@ -51,7 +55,7 @@ final class RefreshRealtimeOnBankAccountChangedTest extends TestCase
         );
     }
 
-    public function testPublishesUpdatedToBankAndAccountTopics(): void
+    public function testPublishesUpdatedToCollectionBankAndAccountTopics(): void
     {
         $this->handler()->onBankAccountUpdated(BankAccountUpdatedDomainEventMother::create(
             self::ACCOUNT_ID,
@@ -60,7 +64,11 @@ final class RefreshRealtimeOnBankAccountChangedTest extends TestCase
 
         $update = $this->capturedUpdate();
         $this->assertSame(
-            [MercureBankAccountTopic::forBank(self::BANK_ID), MercureBankAccountTopic::forAccount(self::ACCOUNT_ID)],
+            [
+                MercureBankAccountTopic::COLLECTION,
+                MercureBankAccountTopic::forBank(self::BANK_ID),
+                MercureBankAccountTopic::forAccount(self::ACCOUNT_ID),
+            ],
             $update->getTopics(),
         );
         $this->assertSame(
@@ -69,7 +77,7 @@ final class RefreshRealtimeOnBankAccountChangedTest extends TestCase
         );
     }
 
-    public function testPublishesDeletedToBankAndAccountTopics(): void
+    public function testPublishesDeletedToCollectionBankAndAccountTopics(): void
     {
         $this->handler()->onBankAccountDeleted(BankAccountDeletedDomainEventMother::create(
             self::ACCOUNT_ID,
@@ -78,7 +86,11 @@ final class RefreshRealtimeOnBankAccountChangedTest extends TestCase
 
         $update = $this->capturedUpdate();
         $this->assertSame(
-            [MercureBankAccountTopic::forBank(self::BANK_ID), MercureBankAccountTopic::forAccount(self::ACCOUNT_ID)],
+            [
+                MercureBankAccountTopic::COLLECTION,
+                MercureBankAccountTopic::forBank(self::BANK_ID),
+                MercureBankAccountTopic::forAccount(self::ACCOUNT_ID),
+            ],
             $update->getTopics(),
         );
         $this->assertSame(
