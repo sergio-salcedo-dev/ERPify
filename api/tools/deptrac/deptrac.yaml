@@ -78,6 +78,14 @@ deptrac:
         - name: Backoffice.Health.Infrastructure
           collectors: [{ type: directory, value: src/Backoffice/Health/Infrastructure/.* }]
 
+        # ---- Backoffice / Identity ----------------------------------------------
+        - name: Backoffice.Identity.Domain
+          collectors: [{ type: directory, value: src/Backoffice/Identity/Domain/.* }]
+        - name: Backoffice.Identity.Application
+          collectors: [{ type: directory, value: src/Backoffice/Identity/Application/.* }]
+        - name: Backoffice.Identity.Infrastructure
+          collectors: [{ type: directory, value: src/Backoffice/Identity/Infrastructure/.* }]
+
         # ---- Frontoffice / Dev --------------------------------------------------
         - name: Frontoffice.Dev.Infrastructure
           collectors: [{ type: directory, value: src/Frontoffice/Dev/Infrastructure/.* }]
@@ -164,6 +172,7 @@ deptrac:
         Backoffice.Audit.Domain: *domain
         Backoffice.BankAccount.Domain: *domain
         Backoffice.Health.Domain: *domain
+        Backoffice.Identity.Domain: *domain
         Frontoffice.Mercure.Domain: *domain
         Shared.Domain: *domain
 
@@ -192,6 +201,13 @@ deptrac:
             - Vendor.PassiveMetadata
         Backoffice.Health.Application:
             - Backoffice.Health.Domain
+            - Shared.Domain
+            - Shared.Application
+            - Vendor.Psr
+            - Vendor.SymfonyUid
+            - Vendor.PassiveMetadata
+        Backoffice.Identity.Application:
+            - Backoffice.Identity.Domain
             - Shared.Domain
             - Shared.Application
             - Vendor.Psr
@@ -253,6 +269,21 @@ deptrac:
         Backoffice.Health.Infrastructure:
             - Backoffice.Health.Domain
             - Backoffice.Health.Application
+            - Shared.Domain
+            - Shared.Application
+            - Shared.Infrastructure
+            - Vendor.Psr
+            - Vendor.SymfonyUid
+            - Vendor.PassiveMetadata
+            - Vendor.Doctrine
+            - Vendor.Symfony
+            - Vendor.Monolog
+            - Vendor.ApiPlatform
+            - Vendor.Guzzle
+            - Vendor.Flysystem
+        Backoffice.Identity.Infrastructure:
+            - Backoffice.Identity.Domain
+            - Backoffice.Identity.Application
             - Shared.Domain
             - Shared.Application
             - Shared.Infrastructure
