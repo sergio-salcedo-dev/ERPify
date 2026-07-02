@@ -246,11 +246,15 @@ export default function UsersListPage() {
                   onDensityChange={setDensity}
                   testId="users-list__density-toggle"
                 />
-                <UsersColumnPicker
-                  visible={columns}
-                  onChange={setColumns}
-                  testId="users-list__columns"
-                />
+                {/* Column visibility is a table-only affordance — the cards render a
+                    fixed layout, so offering the picker there would be a no-op. */}
+                {view === "table" ? (
+                  <UsersColumnPicker
+                    visible={columns}
+                    onChange={setColumns}
+                    testId="users-list__columns"
+                  />
+                ) : null}
               </div>
             ) : undefined
           }
