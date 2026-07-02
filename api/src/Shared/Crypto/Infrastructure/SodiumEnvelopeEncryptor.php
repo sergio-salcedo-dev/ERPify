@@ -20,14 +20,21 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
  * Envelope encryption with libsodium AEAD (`crypto_aead_xchacha20poly1305_ietf`). Each scope owns a
  * data-encryption key minted with a CSPRNG on first use, wrapped by the key-encryption key (KEK) held in
  * the environment (never beside the DEKs) and stored in the {@see Keystore}. The scope id is bound as
- * additional authenticated data, so a ciphertext cannot be replayed under a different scope. Destroying a
- * scope's DEK renders every value it protected permanently unreadable (crypto-shredding), which is the
- * only way this class "forgets".
+ * additional-authenticated-data together with a caller-supplied context, so a ciphertext can be neither
+ * replayed under a different scope nor relocated to another slot in the caller's model — both fail
+ * authentication. Destroying a scope's DEK renders every value it protected permanently unreadable
+ * (crypto-shredding), which is the only way this class "forgets".
  */
 #[AsAlias(EnvelopeEncryptor::class)]
 final readonly class SodiumEnvelopeEncryptor implements EnvelopeEncryptor
 {
     private const int KEK_VERSION = 1;
+
+    /**
+     * Joins the scope to the caller's context in the AEAD additional-authenticated-data. Any byte works;
+     * this one just has to be the same on encrypt and decrypt, which it is because both go through {@see aad()}.
+     */
+    private const string AAD_SEPARATOR = '|';
 
     public function __construct(
         private Keystore $keystore,
@@ -40,18 +47,23 @@ final readonly class SodiumEnvelopeEncryptor implements EnvelopeEncryptor
     }
 
     #[Override]
-    public function encrypt(EncryptionScopeId $scope, string $plaintext): string
+    public function encrypt(EncryptionScopeId $scope, string $plaintext, string $aad): string
     {
         $dek = $this->dekFor($scope);
         $nonce = \random_bytes(SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_NPUBBYTES);
-        $ciphertext = \sodium_crypto_aead_xchacha20poly1305_ietf_encrypt($plaintext, $scope->toString(), $nonce, $dek);
+        $ciphertext = \sodium_crypto_aead_xchacha20poly1305_ietf_encrypt(
+            $plaintext,
+            $this->aad($scope, $aad),
+            $nonce,
+            $dek,
+        );
         \sodium_memzero($dek);
 
         return \sodium_bin2base64($nonce . $ciphertext, SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING);
     }
 
     #[Override]
-    public function decrypt(EncryptionScopeId $scope, string $ciphertext): string
+    public function decrypt(EncryptionScopeId $scope, string $ciphertext, string $aad): string
     {
         $wrapped = $this->keystore->wrappedDekFor($scope);
 
@@ -77,7 +89,7 @@ final readonly class SodiumEnvelopeEncryptor implements EnvelopeEncryptor
         try {
             $plaintext = \sodium_crypto_aead_xchacha20poly1305_ietf_decrypt(
                 \substr($raw, $nonceLength),
-                $scope->toString(),
+                $this->aad($scope, $aad),
                 \substr($raw, 0, $nonceLength),
                 $dek,
             );
@@ -100,6 +112,16 @@ final readonly class SodiumEnvelopeEncryptor implements EnvelopeEncryptor
     public function destroyScope(EncryptionScopeId $scope): bool
     {
         return $this->keystore->destroy($scope);
+    }
+
+    /**
+     * The AEAD additional-authenticated-data: the scope (a ciphertext cannot be replayed under another
+     * scope) followed by the caller's context (it cannot be relocated to another slot). Built identically
+     * on encrypt and decrypt, so a mismatch on either fails authentication.
+     */
+    private function aad(EncryptionScopeId $scope, string $aad): string
+    {
+        return $scope->toString() . self::AAD_SEPARATOR . $aad;
     }
 
     private function dekFor(EncryptionScopeId $scope): string

@@ -29,15 +29,17 @@ final class SodiumEnvelopeEncryptorKeystoreFunctionalTest extends KernelTestCase
 {
     private const string KEK = '0123456789abcdef0123456789abcdef';
 
+    private const string AAD = 'iban|new|018f-row';
+
     public function testItCryptoShredsAValueAgainstARealKeystore(): void
     {
         $this->inRolledBackTransaction(function (Connection $connection): void {
             $scope = EncryptionScopeId::forBankAccount(Uuid::generate());
-            $ciphertext = $this->encryptorOn($connection)->encrypt($scope, 'ES9121000418450200051332');
+            $ciphertext = $this->encryptorOn($connection)->encrypt($scope, 'ES9121000418450200051332', self::AAD);
 
             $this->assertSame(
                 'ES9121000418450200051332',
-                $this->encryptorOn($connection)->decrypt($scope, $ciphertext),
+                $this->encryptorOn($connection)->decrypt($scope, $ciphertext, self::AAD),
                 'a fresh encryptor reads the persisted DEK',
             );
 
@@ -45,7 +47,7 @@ final class SodiumEnvelopeEncryptorKeystoreFunctionalTest extends KernelTestCase
 
             $this->expectException(DekDestroyed::class);
 
-            $this->encryptorOn($connection)->decrypt($scope, $ciphertext);
+            $this->encryptorOn($connection)->decrypt($scope, $ciphertext, self::AAD);
         });
     }
 

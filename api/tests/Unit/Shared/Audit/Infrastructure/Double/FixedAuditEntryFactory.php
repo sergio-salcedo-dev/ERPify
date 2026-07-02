@@ -10,6 +10,7 @@ use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
+use Erpify\Shared\Uuid\Domain\Uuid;
 use Override;
 
 /**
@@ -37,6 +38,7 @@ final readonly class FixedAuditEntryFactory implements AuditEntryFactory
         ?AuditResource $resource = null,
         array $metadata = [],
         ?string $encryptionScopeId = null,
+        ?string $id = null,
     ): AuditLogEntry {
         return AuditLogEntry::create(
             $action,
@@ -49,6 +51,13 @@ final readonly class FixedAuditEntryFactory implements AuditEntryFactory
             null,
             null,
             $encryptionScopeId,
+            $id,
         );
+    }
+
+    #[Override]
+    public function mintId(): string
+    {
+        return Uuid::generate();
     }
 }

@@ -79,9 +79,15 @@ final readonly class AuditWriteCaptureListener
                 continue;
             }
 
+            // Mint the row id up front so the one id is both bound into each sealed value's AAD and carried
+            // as the persisted primary key: sealing runs before the entry is built, so the id cannot come
+            // from it, and the AAD's id must equal the row it lands on or a reader could never reconstruct it.
+            $auditLogId = $this->entryFactory->mintId();
+
             $sealed = $this->piiDiffSealer->seal(
                 $entity,
                 $this->changeDiff->of($this->changesOf($entityManager, $unitOfWork, $entity, $operation)),
+                $auditLogId,
             );
 
             $entries[] = $this->entryFactory->create(
@@ -90,6 +96,7 @@ final readonly class AuditWriteCaptureListener
                 $entity->auditResource(),
                 $sealed->metadata,
                 $sealed->encryptionScopeId,
+                $auditLogId,
             );
         }
 

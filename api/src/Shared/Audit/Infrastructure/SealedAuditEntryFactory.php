@@ -52,6 +52,7 @@ final readonly class SealedAuditEntryFactory implements AuditEntryFactory
         ?AuditResource $resource = null,
         array $metadata = [],
         ?string $encryptionScopeId = null,
+        ?string $id = null,
     ): AuditLogEntry {
         return AuditLogEntry::create(
             $action,
@@ -64,7 +65,14 @@ final readonly class SealedAuditEntryFactory implements AuditEntryFactory
             $this->resolveClientIp(),
             $this->resolveUserAgent(),
             $encryptionScopeId,
+            $id,
         );
+    }
+
+    #[Override]
+    public function mintId(): string
+    {
+        return Uuid::generate();
     }
 
     private function resolveClientIp(): ?string
