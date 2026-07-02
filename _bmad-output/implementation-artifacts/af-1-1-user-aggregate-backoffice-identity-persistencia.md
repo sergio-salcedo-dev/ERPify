@@ -34,7 +34,8 @@ Esta story entrega, en un **contexto nuevo `Backoffice/Identity`**: (1) el agreg
 5. **⚠️ `roles` = columna `JSON` con los `->value` del enum `Role`.** El agregado mantiene `list<Role>`, mapea a/desde `string[]` en el column mapping. **Confirmar** política: ¿un `User` exige ≥1 rol, o `[]` es válido (usuario sin permisos)? Recomendado: permitir `[]` (un usuario recién creado sin rol es legítimo; el default-deny de AF-1.3 lo cubre).
 6. **`User` NO implementa `AuditedEntity` — guardia de seguridad load-bearing.** El CDC `onFlush` de Epic 1 captura el changeset **sólo** de las entidades que optan por el marker (`Bank implements AuditedEntity`). Si `User` lo implementara, el **hash de contraseña entraría en el diff de auditoría** (fuga de credencial). Por tanto `User` **no** opta in. Si algún día se quiere auditar gestión de usuarios (E3+), `password_hash` debe excluirse/clasificarse `#[PersonalData]` **antes**. Ver *Must-preserve*.
 7. **`HashedPassword` invariante mínima: no vacío.** Un hash nunca es cadena vacía. **No** se valida el formato/algoritmo (el dominio no lo conoce).
-8. **`Role` enum backed string**, espejo de `BankAccountStatus`. Casos mínimos: **`AUDIT_READER`** (único que E3 exige: mapeará a `ROLE_AUDIT_READER`). `ADMIN` opcional si el bootstrap del primer usuario lo necesita — decidir al implementar el seed (ver riesgos).
+8. **`Role` enum backed string**, espejo de `BankAccountStatus`. Casos mínimos: **`AUDIT_READER`** (único que E3 exige: el adapter lo emitirá como `ROLE_AUDIT_READER`). `ADMIN` opcional si el bootstrap del primer usuario lo necesita — decidir al implementar el seed (ver riesgos). **Dirección del prefijo (fuente de verdad = dominio):** los `->value` viven sin `ROLE_`; Symfony es un *consumidor* del vocabulario de dominio, no su fuente — el prefijo se añade sólo en el borde de Infra (adapter), jamás al revés.
+9. **Los roles son política de autorización EXTERNA, no una decisión de negocio.** El `User` los guarda como *dato* (fuente de verdad de qué roles tiene, que el adapter emite a Symfony), pero **ninguna lógica de `Application`/`Domain` ramifica por rol** para decidir comportamiento. Security decide *acceso* (allow/deny) **antes** de entrar; `Application` no conoce roles. Prohibido `if ($user->isAdmin())` / `if (in_array(Role::ADMIN, $user->roles()))` como gate de negocio. Esto evita que Security se filtre a lógica de negocio con el tiempo. (`User` **no** expone helpers `isAdmin()`/`isX()`; sólo `roles(): list<Role>` como dato para el adapter.)
 
 ## Acceptance Criteria
 
@@ -46,7 +47,7 @@ Then lleva **id UUID v7** (vía trait `Identifiable`, asignado por la app), **`e
 **AC2 — Enum de dominio `Role` (FR5, D3).**
 Given el modelo de roles,
 When se define `Domain/Enum/Role.php`,
-Then es un `enum Role: string` (espejo de `BankAccountStatus`) con al menos el caso **`AUDIT_READER`**; sus `->value` son los tokens que AF-1.2 mapeará a `ROLE_*` en el adapter — **esta story no crea el adapter ni el mapeo**.
+Then es un `enum Role: string` (espejo de `BankAccountStatus`) con al menos el caso **`AUDIT_READER`**; los `->value` **NO llevan el prefijo `ROLE_`** (`AUDIT_READER`, nunca `ROLE_AUDIT_READER`). El mapeo es **unidireccional Domain → Infra → Symfony**: el adapter de AF-1.2 antepone `ROLE_` al emitir `getRoles()`; **el dominio nunca conoce el prefijo `ROLE_`** y **nada** mapea un `ROLE_*` de Symfony de vuelta al enum. **Esta story no crea el adapter ni el mapeo.**
 
 **AC3 — VO `HashedPassword` sin conocimiento del hasher (FR3, D2, NFR5).**
 Given la credencial,
@@ -167,18 +168,20 @@ PHPUnit 13, `declare(strict_types=1)`. **Estilo del repo (verificado):** clases 
 - **Eje de auditoría intacto (NFR5, SI-1):** no se toca `ActorContextFactory`, ni esquema/bus/storage del trail. `User` **no** es `AuditedEntity` → su `password_hash` **nunca** aparece en el diff `onFlush` (fuga de credencial evitada). Si en el futuro se audita `User`, excluir/clasificar `password_hash` **antes**.
 - **Superficie sin ensanchar (NFR3):** cero cambios en CORS/CSRF/nelmio/Mercure.
 - **`Domain/` puro:** ningún import de Symfony Security/Doctrine-behavioral/HTTP en `Identity/Domain` (deptrac lo verifica).
+- **Roles = autorización externa (decisión 9):** ninguna ramificación por `Role`/`ROLE_*` en `Application`/`Domain`; el prefijo `ROLE_` sólo existe en el borde de Infra. `User` no lleva helpers `isAdmin()`.
 - **Migración reversible + sin secretos (NFR4):** `down()` limpio; nunca sembrar credenciales en migraciones; hard-delete de `User` mantiene GDPR satisfacible.
 
 ### Project Structure Notes
 
-`Backoffice/Identity` por **Regla de Tres** (único consumidor hoy = acceso backoffice al trail): se promociona a `Identity`/`IAM` top-level sólo con un 2º consumidor real (Frontoffice/cliente/OAuth) — **no antes** (ADR D2). `Application/` no se fuerza en AF-1.1; nace en AF-1.2 con el caso de uso de alta. El enum `Role` vive en `Domain/Enum` (no en `Shared`): es vocabulario de este contexto hasta que otro contexto lo consuma.
+`Backoffice/Identity` por **Regla de Tres** (único consumidor hoy = acceso backoffice al trail): se promociona a `Identity`/`IAM` top-level sólo con un **2º consumidor real** (Frontoffice/cliente/OAuth) **o cuando aparezcan capacidades propias de IAM** (MFA, password reset, login attempts, sessions, API keys, OAuth, SSO, impersonation) — **no antes** (ADR D2). Explícito para el futuro: **el ADR NO obliga a mantener `Identity` bajo `Backoffice` para siempre**; hoy es un BC auxiliar, y esas capacidades lo convertirán en un subdominio transversal cuando lleguen. `Application/` no se fuerza en AF-1.1; nace en AF-1.2 con el caso de uso de alta. El enum `Role` vive en `Domain/Enum` (no en `Shared`): es vocabulario de este contexto hasta que otro contexto lo consuma.
 
 ### Riesgos / decisiones abiertas (cerrar al implementar)
 
 - **⚠️ Persistencia de `HashedPassword`** (escalar vs Embeddable) — recomendado escalar; confirmar (decisión 3).
 - **⚠️ Normalización de `email`** (case-insensitive) — fijarla aquí para no romper el login de AF-1.2 (decisión 4).
 - **⚠️ Cardinalidad de `roles`** (`[]` permitido) — recomendado permitir vacío (decisión 5).
-- **Bootstrap del primer usuario:** cómo nace (fixture dev Alice con hash precomputado, o comando de consola) — **nunca** sembrar credenciales en migraciones (NFR4). El seed real encaja mejor en AF-1.2 (cuando exista el hasher); en AF-1.1 basta construir `HashedPassword::fromHash('<precomputado>')` en tests. Registrar como decisión operativa.
+- **Lifecycle del `User` — CONGELADO (review Sergio, 2026-07-02):** **sin auto-registro público** (identidad backoffice-only); alta de usuarios = admin autenticado vía una story posterior (no AF-1.1/1.2); **bootstrap del 1er usuario = comando de consola `identity:user:create`** (idempotente, hashea en Infra) en **AF-1.2** (cuando exista el hasher), espejo de los CLI de audit. **Nunca** credenciales en migraciones (NFR4); dev/test = fixture Alice con hash precomputado. En AF-1.1 basta `HashedPassword::fromHash('<precomputado>')` en tests. *(Propagación pendiente al ADR "Decided inputs" + épica — no aplicada aún; ver report.)*
+- **CSRF — CONGELADO para AF-1.2 (review Sergio, 2026-07-02):** `SameSite=Lax` + verificación de `Origin` en no-seguros + **token CSRF stateless double-submit** (Symfony `csrf_protection: stateless`). Descartado Synchronizer Token (stateful, form-oriented). Fuera del alcance de AF-1.1; se implementa con el firewall en AF-1.2. *(Propagación pendiente al ADR D1 + épica.)*
 - **Nombre de la tabla** (`identity_user` vs `users`) — `users` puede chocar con reservado/futuro; preferir prefijo de contexto `identity_user` (consistente con `bank`/`bank_account`). Confirmar el naming al revisar el `db.diff`.
 
 ### References
