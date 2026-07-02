@@ -4,7 +4,7 @@ baseline_commit: 351b973fb390e7956b112386d5465310f9134f74
 
 # Story AF-1.1: Agregado `User` en `Backoffice/Identity` + persistencia
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -123,6 +123,22 @@ Then `User.id()` es un UUID RFC 4122 válido tal que **`ActorContext::forUser($u
 ### F. Barrido final
 
 - [x] **F1.** Sin comentarios con ID (story/AC/FR/NFR/D) en el código. `make php.stan` por archivo (**`PHP_SERVICE=messenger_worker`** por el segfault del web worker), luego `make php.quality` (deptrac + bounded-context + phpmd + cs-fixer + rector), `make php.psalm.taint`. Migración verificada up+down. Sin `// NOSONAR`.
+
+### Review Findings
+
+`bmad-code-review` (2026-07-02, 3 capas adversariales: Blind Hunter + Edge Case Hunter + Acceptance Auditor sobre el diff de PR #419). **Producción correcta:** AC1–AC7 cumplidas, las 4 decisiones ⚠️ honradas, guardia de fuga de credencial (`User` no `AuditedEntity`) test-locked, DQL parametrizado, hard-delete, migración reversible. Sin bloqueantes (0 High/Med reales). 1 patch · 3 defer · 4 descartados.
+
+**Patch:**
+
+- [x] [Review][Patch] `RoleTest` era tautológico — `assertContains(Role::AUDIT_READER, Role::cases())` es siempre cierto y no fijaba el valor de respaldo `'AUDIT_READER'` (el string persistido en `roles` JSON + base del grant `ROLE_AUDIT_READER` de AF-1.2). **RESUELTO**: reemplazado por `testRoleBacksItsExpectedCanonicalValue` con un data provider tipado (`iterable<string, array{string, Role}>`) que fija `Role::AUDIT_READER->value === 'AUDIT_READER'` sin disparar `alreadyNarrowedType`. Gates verdes tras el fix. [`api/tests/Unit/Backoffice/Identity/Domain/Enum/RoleTest.php`]
+
+**Defer (a AF-1.2):**
+
+- [x] [Review][Defer] `register()` no rechaza email vacío/inválido/>255 — el `#[Assert\Email]`/`#[Assert\NotBlank]` es metadata pasiva que activa `Validator::ensure()` en el caso de uso de alta (patrón del repo); ese caso llega en AF-1.2. [`api/src/Backoffice/Identity/Domain/Entity/User.php`]
+- [x] [Review][Defer] `roles()` lanza `\ValueError` crudo ante un valor de rol desconocido en la columna JSON — no alcanzable en AF-1.1 (el único writer acepta solo instancias de `Role`); revisar en el read-path de AF-1.2 + evolución incompatible del enum. [`api/src/Backoffice/Identity/Domain/Entity/User.php:75`]
+- [x] [Review][Defer] `Vendor.Symfony` en deptrac es una capa única (no sub-divide `Symfony\Component\Security`), así que el `SecurityUser` de AF-1.2 importará Symfony Security **sin** disparar deptrac — el forcing-function que imaginaba la nota del spec C1 no es alcanzable a la granularidad actual del vendor. [`api/tools/deptrac/deptrac.yaml`]
+
+**Descartados (con razón):** `HashedPassword::fromHash('   ')` (invariante = "no vacío" per spec; whitespace no producible por el hasher) · `findById('no-uuid')` lanza en vez de `null` (espeja `DoctrineBank(Account)Repository`; el borde HTTP guarda con `Uuid::ensure()` antes del repo) · migración `up()` sin `IF NOT EXISTS` (house style de TODAS las migraciones + ejecución transaccional all-or-nothing; `down()` ya usa IF EXISTS) · `roles JSON` vs `JSONB` (no hay consulta por rol; JSONB prematuro, Regla de Tres).
 
 ## Dev Notes
 
