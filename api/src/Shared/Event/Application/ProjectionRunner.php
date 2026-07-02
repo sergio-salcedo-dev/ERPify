@@ -46,6 +46,13 @@ final readonly class ProjectionRunner
         });
     }
 
+    /**
+     * Catch up every registered projector, each in its own checkpoint transaction. The live trigger
+     * calls this per delivered event regardless of subscription — an O(N) fan-out whose dominant cost
+     * is the N checkpoint locks, not the (already `subscribedTo()`-filtered) stream scans. Kept
+     * deliberately for its reconciliation guarantee; the subscription-filtered alternative is deferred
+     * to decision D11 / trigger (k) in docs/adr/event-store-and-projections.md.
+     */
     public function catchUpAll(): void
     {
         foreach ($this->projectors as $projector) {

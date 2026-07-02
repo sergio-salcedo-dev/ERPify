@@ -15,6 +15,12 @@ use Symfony\Component\Messenger\Attribute\AsMessageHandler;
  * the permanent `event_store`, never the delivered message, so a missed or duplicated delivery cannot
  * corrupt a read model (the next run reconciles).
  *
+ * Firing every projector regardless of the delivered event (an O(N) fan-out of one checkpoint
+ * transaction per projector) is a recorded trade-off: it buys the reconciliation above and is
+ * negligible at one projector. Filtering by `subscribedTo()` before opening each catch-up transaction
+ * is deferred until projectors grow or `projection_checkpoint` contention appears — decision D11 and
+ * trigger (k) in docs/adr/event-store-and-projections.md.
+ *
  * The handled type is declared via `handles:` (rather than an unused `__invoke(DomainEvent)` parameter
  * a dead-code fixer would strip); Messenger routes every {@see DomainEvent} subclass to it.
  */
