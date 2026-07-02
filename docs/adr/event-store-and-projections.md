@@ -261,6 +261,36 @@ consumer or trim it. Discarded: **thin/delta by default** — breaks replay self
 guarantee (D7). Discarded: a speculative global `changedFields` on every event — YAGNI; it is added to *the one
 event* whose consumer needs the diff, when that consumer exists (trigger (i)).
 
+### D11 — Catch-up live "tonto": `catchUpAll()` por evento, no filtrado por suscripción
+
+`RunProjectionsOnDomainEvent` dispara `ProjectionRunner::catchUpAll()` tras **cada** evento entregado, y
+`catchUpAll()` recorre **todos** los proyectores registrados abriendo, por proyector, su propia transacción con
+`lockAndRead()` sobre `projection_checkpoint` (`INSERT … ON CONFLICT DO NOTHING` + `SELECT … FOR UPDATE`) —
+aunque el proyector no esté suscrito al evento entregado. El `stream()` interno **ya va filtrado por
+`subscribedTo()`** (barato, casi siempre vacío): el coste del fan-out **no es el barrido**, sino las *N*
+transacciones + *N* locks de checkpoint, serializados en el worker único.
+
+**Se mantiene el diseño tonto.** El firing es deliberadamente ignorante del evento entregado: la corrección
+(orden, exactly-once) vive en el checkpoint del runner (D6), no en el disparo; y al releer el `event_store`
+**permanente** —no el mensaje— una entrega perdida o duplicada se reconcilia en el siguiente run (auto-sanación).
+Filtrar por suscripción cambiaría el firing de "reconcilia todo" a "reconcilia solo lo entregado".
+
+**Medición que lo respalda (argumento de coste, CLAUDE.md acepta el análisis de complejidad como medición).** Con
+*N* proyectores el coste por evento es *N* transacciones + *N* locks de checkpoint. Hoy **N = 1**
+(`BankCountProjector`, único `Projector` registrado): el fan-out es exactamente **1 transacción + 1 lock**, el
+**suelo irreducible** —avanzar el único proyector con garantía exactly-once exige abrir una transacción y bloquear
+su checkpoint—, luego el sobrecoste sobre el trabajo necesario es `(N−1) = 0`. No se corre un benchmark de runtime
+porque a `N = 1` no hay fan-out que medir, y sintetizar *N* proyectores para medirlo sería infra especulativa
+(YAGNI). El coste escala con el **número de proyectores**, no con el trabajo real del evento — por eso el trigger
+es *cuántos proyectores*, no *cuántos eventos*.
+
+**Alternativa descartada hoy (se gradúa en el trigger (k)):** pasar el `eventName` entregado al runner y filtrar
+los proyectores por `subscribedTo()` **antes** de abrir su transacción de catch-up. Evita la transacción + lock en
+los proyectores no afectados (el coste dominante). Coste: pierde la auto-sanación de un proyector recién añadido o
+con backlog (dejaría de ponerse al día con eventos ajenos), así que exigiría **conservar un catch-up completo
+periódico fuera del hot path** y medir contención real sobre `projection_checkpoint` antes de decidir. Con un solo
+proyector esa maquinaria es puro coste sin beneficio.
+
 ## Flujo completo
 
 ```
@@ -305,4 +335,8 @@ integration) → that **one** event gains a delta shape or a `changedFields` ent
 field; until then, state snapshots (D10). (j) Event catalog scale/drift → the hand-maintained
 `docs/architecture/event-catalog.md` is generated from the `RegisterDomainEventsPass` registry (plus a drift
 gate) once the events outgrow a hand-kept list, or a first external integrator consumes the contract; until
-then it stays hand-written, pointing at the pass as its source of truth.
+then it stays hand-written, pointing at the pass as its source of truth. (k) El número de proyectores crece
+(orientativo ≥ 5) **o** se observa contención sobre `projection_checkpoint` en el worker → pasar el `eventName`
+entregado al runner y filtrar los proyectores por `subscribedTo()` antes de abrir la transacción de catch-up,
+preservando la garantía exactly-once del checkpoint y añadiendo un catch-up completo periódico fuera del hot path
+como vía de reconciliación (D11).
