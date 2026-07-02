@@ -74,21 +74,21 @@ final class SymfonyCommandContext extends AbstractContext
     #[Then('the last command should succeed')]
     public function theLastCommandShouldSucceed(): void
     {
-        self::assertNotNull($this->lastExitCode, 'No command has been executed yet');
+        $exitCode = $this->exitCode();
+
         self::assertSame(
             Command::SUCCESS,
-            $this->lastExitCode,
-            \sprintf('Command failed (code %d). Output:%s%s', $this->lastExitCode, PHP_EOL, $this->lastOutput),
+            $exitCode,
+            \sprintf('Command failed (code %d). Output:%s%s', $exitCode, PHP_EOL, $this->lastOutput),
         );
     }
 
     #[Then('the last command should fail')]
     public function theLastCommandShouldFail(): void
     {
-        self::assertNotNull($this->lastExitCode, 'No command has been executed yet');
         self::assertNotSame(
             Command::SUCCESS,
-            $this->lastExitCode,
+            $this->exitCode(),
             \sprintf('Command unexpectedly succeeded. Output:%s%s', PHP_EOL, $this->lastOutput),
         );
     }
@@ -113,6 +113,13 @@ final class SymfonyCommandContext extends AbstractContext
         );
     }
 
+    private function exitCode(): int
+    {
+        self::assertNotNull($this->lastExitCode, 'No command has been executed yet');
+
+        return $this->lastExitCode;
+    }
+
     /**
      * @param array<string, mixed> $parameters
      */
@@ -129,6 +136,9 @@ final class SymfonyCommandContext extends AbstractContext
     {
         $application = new Application($this->kernel);
         $application->setAutoExit(false);
+        // Catch exceptions so a throwing command surfaces as a non-zero exit code plus rendered
+        // output (what "the last command should fail" asserts) instead of aborting the scenario.
+        $application->setCatchExceptions(true);
 
         return $application;
     }
