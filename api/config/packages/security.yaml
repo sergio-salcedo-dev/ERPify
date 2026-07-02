@@ -21,6 +21,11 @@ security:
                 username_path: email
                 password_path: password
                 failure_handler: Erpify\Backoffice\Identity\Infrastructure\Security\ProblemDetailsAuthenticationFailureHandler
+            # Throttle the only auth surface: repeated failures per (client IP + email) are rate-limited so a
+            # leaked credential list cannot be sprayed. Pairs with the timing-equalised UserProvider so neither
+            # the 401 body nor its latency leaks which accounts exist.
+            login_throttling:
+                max_attempts: 5
 
     # No access_control: default-deny + the public-route allowlist (and the 401 on protected routes) land
     # in AF-1.3; #[IsGranted] on the audit read routes lands in Epic 3. A missing entry point is fine while

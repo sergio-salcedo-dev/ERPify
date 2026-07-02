@@ -10,6 +10,9 @@ use Erpify\Tests\Unit\Backoffice\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Backoffice\Identity\Domain\Entity\Mother\UserMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\PasswordHasher\Hasher\PasswordHasherFactory;
+use Symfony\Component\PasswordHasher\Hasher\PasswordHasherFactoryInterface;
+use Symfony\Component\PasswordHasher\PasswordHasherInterface;
 use Symfony\Component\Security\Core\Exception\UnsupportedUserException;
 use Symfony\Component\Security\Core\Exception\UserNotFoundException;
 use Symfony\Component\Security\Core\User\UserInterface;
@@ -22,7 +25,7 @@ final class UserProviderTest extends TestCase
 {
     public function testLoadsAKnownUserAsASecurityUser(): void
     {
-        $provider = new UserProvider(new InMemoryUserRepository(UserMother::create()));
+        $provider = $this->provider(new InMemoryUserRepository(UserMother::create()));
 
         $securityUser = $provider->loadUserByIdentifier(UserMother::DEFAULT_EMAIL);
 
@@ -32,7 +35,7 @@ final class UserProviderTest extends TestCase
 
     public function testLoadsCaseInsensitively(): void
     {
-        $provider = new UserProvider(new InMemoryUserRepository(UserMother::create()));
+        $provider = $this->provider(new InMemoryUserRepository(UserMother::create()));
 
         $securityUser = $provider->loadUserByIdentifier('  ALICE@ERPIFY.TEST  ');
 
@@ -41,7 +44,7 @@ final class UserProviderTest extends TestCase
 
     public function testRejectsAnUnknownEmailAsUserNotFound(): void
     {
-        $provider = new UserProvider(new InMemoryUserRepository());
+        $provider = $this->provider(new InMemoryUserRepository());
 
         $this->expectException(UserNotFoundException::class);
 
@@ -50,17 +53,37 @@ final class UserProviderTest extends TestCase
 
     public function testTreatsABlankIdentifierAsUserNotFoundNeverAServerError(): void
     {
-        $provider = new UserProvider(new InMemoryUserRepository());
+        $provider = $this->provider(new InMemoryUserRepository());
 
         $this->expectException(UserNotFoundException::class);
 
         $provider->loadUserByIdentifier('   ');
     }
 
+    public function testAnUnknownEmailStillRunsAHashVerificationSoTimingDoesNotLeakExistence(): void
+    {
+        $hasher = $this->createMock(PasswordHasherInterface::class);
+        $hasher->expects($this->once())->method('hash')->willReturn('dummy-hash');
+        $hasher->expects($this->once())->method('verify')->with('dummy-hash', $this->anything())->willReturn(false);
+
+        $factory = $this->createMock(PasswordHasherFactoryInterface::class);
+        $factory->expects($this->once())
+            ->method('getPasswordHasher')
+            ->with(SecurityUser::class)
+            ->willReturn($hasher)
+        ;
+
+        $provider = new UserProvider(new InMemoryUserRepository(), $factory);
+
+        $this->expectException(UserNotFoundException::class);
+
+        $provider->loadUserByIdentifier('nobody@erpify.test');
+    }
+
     public function testRefreshReloadsTheUserFromTheRepository(): void
     {
         $user = UserMother::create();
-        $provider = new UserProvider(new InMemoryUserRepository($user));
+        $provider = $this->provider(new InMemoryUserRepository($user));
 
         $refreshed = $provider->refreshUser(new SecurityUser($user));
 
@@ -69,7 +92,7 @@ final class UserProviderTest extends TestCase
 
     public function testRejectsRefreshingAForeignUserType(): void
     {
-        $provider = new UserProvider(new InMemoryUserRepository());
+        $provider = $this->provider(new InMemoryUserRepository());
 
         $this->expectException(UnsupportedUserException::class);
 
@@ -78,9 +101,16 @@ final class UserProviderTest extends TestCase
 
     public function testSupportsOnlyItsOwnSecurityUser(): void
     {
-        $provider = new UserProvider(new InMemoryUserRepository());
+        $provider = $this->provider(new InMemoryUserRepository());
 
         $this->assertTrue($provider->supportsClass(SecurityUser::class));
         $this->assertFalse($provider->supportsClass(UserInterface::class));
+    }
+
+    private function provider(InMemoryUserRepository $repository): UserProvider
+    {
+        return new UserProvider($repository, new PasswordHasherFactory([
+            SecurityUser::class => ['algorithm' => 'plaintext'],
+        ]));
     }
 }

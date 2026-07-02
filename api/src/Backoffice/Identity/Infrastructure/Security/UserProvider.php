@@ -9,6 +9,7 @@ use Erpify\Backoffice\Identity\Domain\Entity\User;
 use Erpify\Backoffice\Identity\Domain\Exception\InvalidEmail;
 use Erpify\Backoffice\Identity\Domain\Repository\UserRepository;
 use Override;
+use Symfony\Component\PasswordHasher\Hasher\PasswordHasherFactoryInterface;
 use Symfony\Component\Security\Core\Exception\UnsupportedUserException;
 use Symfony\Component\Security\Core\Exception\UserNotFoundException;
 use Symfony\Component\Security\Core\User\UserInterface;
@@ -21,10 +22,20 @@ use Symfony\Component\Security\Core\User\UserProviderInterface;
  *
  * @implements UserProviderInterface<SecurityUser>
  */
-final readonly class UserProvider implements UserProviderInterface
+final class UserProvider implements UserProviderInterface
 {
-    public function __construct(private UserRepository $users)
-    {
+    private const string TIMING_PROBE_PASSWORD = 'timing-equalisation-probe';
+
+    /**
+     * Lazily hashed once, then reused, so every not-found response spends exactly one password verification —
+     * the same cost as a known email with a wrong password — instead of re-hashing on each probe.
+     */
+    private ?string $dummyHash = null;
+
+    public function __construct(
+        private readonly UserRepository $users,
+        private readonly PasswordHasherFactoryInterface $passwordHasherFactory,
+    ) {
     }
 
     #[Override]
@@ -33,12 +44,16 @@ final readonly class UserProvider implements UserProviderInterface
         try {
             $email = Email::from($identifier);
         } catch (InvalidEmail) {
+            $this->equaliseTiming();
+
             throw new UserNotFoundException();
         }
 
         $user = $this->users->findByEmail($email);
 
         if (!$user instanceof User) {
+            $this->equaliseTiming();
+
             throw new UserNotFoundException();
         }
 
@@ -59,5 +74,18 @@ final readonly class UserProvider implements UserProviderInterface
     public function supportsClass(string $class): bool
     {
         return SecurityUser::class === $class || \is_subclass_of($class, SecurityUser::class);
+    }
+
+    /**
+     * Runs one password verification of equivalent cost before signalling "not found" so an unknown or malformed
+     * identifier cannot be told apart from a known email with a wrong password by response latency — the
+     * normalised 401 body already makes them indistinguishable, this closes the timing side channel too.
+     */
+    private function equaliseTiming(): void
+    {
+        $hasher = $this->passwordHasherFactory->getPasswordHasher(SecurityUser::class);
+        $dummyHash = $this->dummyHash ??= $hasher->hash(self::TIMING_PROBE_PASSWORD);
+
+        $hasher->verify($dummyHash, self::TIMING_PROBE_PASSWORD);
     }
 }

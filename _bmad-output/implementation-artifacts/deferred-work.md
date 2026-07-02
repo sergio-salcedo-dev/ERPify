@@ -1,5 +1,9 @@
 # Deferred work
 
+## Deferred from: code review of af-1-2-firewall-sesion-securityuser-authenticator-csrf (2026-07-03)
+
+- **(auth-foundation / futuro) `User::passwordHash()` lanza `InvalidHashedPassword` (→500) si `password_hash` está vacío en BD, en la ruta de verificación de credenciales.** `HashedPassword::fromHash('')` rechaza el string vacío; `SecurityUser::getPassword()` re-hidrata el valor crudo de BD sin guard. Al ser un `DomainException` **marker-less**, `ProblemDetailsFactory` lo mapea a **500** (`type: invalid-hashed-password`, title fijo en todos los entornos), en vez de un 401 genérico. Inalcanzable hoy (columna NOT NULL + el VO writer nunca produce `''`); sólo por corrupción o escritura fuera de banda. **Sibling** del ya-registrado `User::roles()` `ValueError`: misma clase — re-hidratación de dato corrupto en la ruta de auth → 500. Fix conjunto: decidir la política (fail-closed / 401 controlado / guard en el borde) al endurecer identidad. Ref: `api/src/Backoffice/Identity/Domain/Entity/User.php`.
+
 ## Deferred from: code review of af-1-1-user-aggregate-backoffice-identity-persistencia (2026-07-02)
 
 - **(auth-foundation / AF-1.2) Llamar `Validator::ensure($user)` en el alta de `User`.** *Parcialmente resuelto post-review:* `email` es ahora un `Email` VO que **rechaza blank en construcción** (`InvalidEmail`), y el escalar lleva **`#[Assert\Email(mode: strict)]`** (egulias, verificado por test). Lo que resta: AF-1.1 no tiene caso de uso de alta, así que el formato sólo se *enforcea* cuando `Validator::ensure()` corra — al construir el bootstrap CLI `identity:user:create` / el alta de admin en AF-1.2, llamarlo antes de `save()`. Ref: `api/src/Backoffice/Identity/Domain/Entity/User.php`.
