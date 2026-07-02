@@ -27,6 +27,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[UniqueEntity(fields: ['email'], message: 'This email is already in use.')]
 final class User extends AggregateRoot
 {
+    /** @var non-empty-string */
     #[ORM\Column(unique: true)]
     #[Assert\NotBlank]
     #[Assert\Email(mode: Assert\Email::VALIDATION_MODE_STRICT)]
@@ -58,6 +59,9 @@ final class User extends AggregateRoot
         return new self($id, $email, $password, ...$roles);
     }
 
+    /**
+     * @return non-empty-string the canonical email; never blank because {@see Email::from()} rejects blanks
+     */
     public function email(): string
     {
         return $this->email;
