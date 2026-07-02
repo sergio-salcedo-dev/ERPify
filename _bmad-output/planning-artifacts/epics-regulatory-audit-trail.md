@@ -48,7 +48,8 @@ integridad, acceso restringido y olvido de PII sin romper append-only.
   se construye **ahora**; **sin** agregado Persona — la identidad cripto es un `EncryptionScopeId` desacoplado
   del dominio (ADR D10/D13).
 - **E3 — condicionada a auth/RBAC:** acceso restringido + auto-auditado, atribución real
-  (`actor_id` NOT NULL) y puesta en producción. Hoy NO existe firewall/voter.
+  (`actor_id` real por request autenticada; la columna sigue nullable, D9 tier-1) y puesta en producción.
+  Hoy NO existe firewall/voter.
 
 E1 y E2 son independientes entre sí; ambas son independientes de E3 salvo que **E3 las vuelve
 forense-significativas** (sin auth toda acción es `anonymous`/`system`: mecánicamente completa,
@@ -92,9 +93,10 @@ el crypto-shredding **compone** con el erasure de actor del eje hermano (D4 remi
 FR13: **Acceso al trail RBAC-restringido** (voter sobre las rutas de lectura de `Backoffice/Audit`) (D8).
 FR14: **Auto-auditoría del acceso** (auditar-al-auditor, A.5.18/8.15): leer el trail emite una fila
 `security` (D8).
-FR15: **Atribución real + puesta en producción**: con auth, `actor_id` pasa a `NOT NULL` y la atribución
-del diff/lectura responde *qué usuario*; se levanta el gate de producción de la superficie de lectura
-(D8/D9).
+FR15: **Atribución real + puesta en producción**: con auth, toda request autenticada produce un `actor_id`
+real (UUID del actor) y la atribución del diff/lectura responde *qué usuario*; los eventos `system`/off-request
+siguen persistiendo `actor_id = NULL` por diseño (la columna permanece nullable, conforme a D9 tier-1); solo
+cambia `ActorContextFactory`; se levanta el gate de producción de la superficie de lectura (D8/D9).
 FR16: **Render del diff en el read model + UI #377**: el timeline pasa a mostrar create/update/delete con
 su diff campo a campo (hoy no muestra escrituras) (D2/D4).
 FR17: **Mapeo de controles ISO 27001:2022 documentado** (A.8.15 logging/protección, A.8.17 clock sync,
@@ -149,7 +151,8 @@ D10/D13). **FRs:** FR9–FR12, FR17(clasificación). **NFRs:** NFR3, NFR6.
 
 ### Epic 3: Acceso restringido + auto-auditado + atribución real (condicionada a auth/RBAC)
 El trail (y la ruta #377) queda con control de acceso, el auditor se audita, la atribución es real
-(`actor_id` NOT NULL) y la superficie es apta para producción. **Gate:** subsistema auth/RBAC (firewall +
+(`actor_id` real por request autenticada; columna nullable, D9 tier-1) y la superficie es apta para
+producción. **Gate:** subsistema auth/RBAC (firewall +
 voter), inexistente hoy → aguas abajo de construir auth. **FRs:** FR13–FR15, FR17(acceso). **NFRs:** NFR8.
 
 ---
@@ -431,7 +434,7 @@ GDPR distintos (ADR D15).
 El trail (y la ruta #377) queda con control de acceso, el auditor se audita y la atribución es real.
 Construye sobre E1; **gate:** subsistema auth/RBAC (firewall + voter), inexistente hoy.
 
-### Story 3.1: Voter RBAC sobre las rutas de lectura del trail + `actor_id` NOT NULL
+### Story 3.1: Voter RBAC sobre las rutas de lectura del trail + atribución real de actor
 
 Como responsable de seguridad,
 quiero que solo roles autorizados lean el trail y que la atribución sea real,
@@ -444,8 +447,9 @@ para satisfacer A.5.18 y que el «quién» deje de ser `anonymous`.
 **Then** un voter las deniega (403 RFC 9457) (FR13).
 
 **Given** auth real en vigor,
-**When** se sella una entrada,
-**Then** `actor_id` pasa a `NOT NULL` y la atribución del diff/lectura responde *qué usuario*; solo cambia
+**When** se sella una entrada de una request autenticada,
+**Then** `actor_id` lleva el UUID real del actor y la atribución del diff/lectura responde *qué usuario*;
+`system`/off-request siguen `NULL` (la columna permanece nullable, D9 tier-1); solo cambia
 `ActorContextFactory` (FR15, NFR2).
 
 ### Story 3.2: Auto-auditoría del acceso (auditar-al-auditor)

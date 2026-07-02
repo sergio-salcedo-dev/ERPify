@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-23
-last_updated: 2026-07-01
+last_updated: 2026-07-02
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -66,9 +66,17 @@ development_status:
   2-4-erase-subject-olvido-por-sujeto-destruir-la-dek: done
   epic-2-retrospective: optional
 
-  # Epic 3 (E3): Acceso restringido + auto-auditado + atribución real (gated on auth/RBAC — inexistente hoy)
+  # Epic auth-foundation (AF): Fundación auth/RBAC — prerequisite de E3, gated on nada (greenfield)
+  # docs/adr/auth-rbac-subsystem.md + _bmad-output/planning-artifacts/epics-auth-foundation.md. DAG: AF → 3.1 → 3.2 → 3.3
+  epic-auth-foundation: in-progress
+  af-1-1-user-aggregate-backoffice-identity-persistencia: ready-for-dev
+  af-1-2-firewall-sesion-securityuser-authenticator-csrf: backlog
+  af-1-3-baseline-control-acceso-default-deny-401: backlog
+  epic-auth-foundation-retrospective: optional
+
+  # Epic 3 (E3): Acceso restringido + auto-auditado + atribución real (gated on auth-foundation)
   epic-3: backlog
-  3-1-voter-rbac-rutas-lectura-trail-actor-id-not-null: backlog
+  3-1-voter-rbac-rutas-lectura-trail-atribucion-real: backlog
   3-2-auto-auditoria-del-acceso-auditar-al-auditor: backlog
   3-3-levantar-el-gate-de-produccion: backlog
   epic-3-retrospective: optional
