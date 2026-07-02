@@ -16,6 +16,9 @@ ERPify/
 │   │   │   │   ├── Application/    # Use cases, DTOs
 │   │   │   │   ├── Domain/         # Entity, Event, Exception, Repository (framework-free)
 │   │   │   │   └── Infrastructure/ # Audit, Controller, Persistence
+│   │   │   ├── Identity/           # Identity context — auth foundation (see docs/adr/auth-rbac-subsystem.md)
+│   │   │   │   ├── Domain/         # Entity (User), Enum (Role), HashedPassword VO, Exception, Repository (framework-free)
+│   │   │   │   └── Infrastructure/ # Persistence (Doctrine User adapter)
 │   │   │   └── Health/
 │   │   │       └── Infrastructure/Controller
 │   │   ├── Frontoffice/

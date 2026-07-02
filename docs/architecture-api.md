@@ -42,8 +42,11 @@ Full constraint table (version gotchas, Doctrine 3 API deltas, polyfill `replace
 ```text
 api/src/
 ├── Backoffice/
-│   ├── Bank/       { Application, Domain, Infrastructure }
-│   └── Health/     { Application, Domain, Infrastructure }
+│   ├── Audit/         { Application, Domain, Infrastructure }   # regulatory audit trail (read + write capture)
+│   ├── Bank/          { Application, Domain, Infrastructure }
+│   ├── BankAccount/   { Application, Domain, Infrastructure }   # references Bank by id only — adr/bank-bankaccount-modeling.md
+│   ├── Health/        { Application, Domain, Infrastructure }
+│   └── Identity/      { Domain, Infrastructure }                # User aggregate: email + HashedPassword + roles — auth foundation, adr/auth-rbac-subsystem.md
 ├── Frontoffice/
 │   ├── Dev/        { Infrastructure/Controller }
 │   ├── Health/     { Infrastructure/Controller }

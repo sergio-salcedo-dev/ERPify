@@ -1,6 +1,10 @@
+---
+baseline_commit: 351b973fb390e7956b112386d5465310f9134f74
+---
+
 # Story AF-1.1: Agregado `User` en `Backoffice/Identity` + persistencia
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -80,45 +84,45 @@ Then `User.id()` es un UUID RFC 4122 válido tal que **`ActorContext::forUser($u
 
 ### A. Contexto `Backoffice/Identity` — modelo de dominio (AC1, AC2, AC3)
 
-- [ ] **A1.** `api/src/Backoffice/Identity/Domain/Entity/User.php`
-  - [ ] `final class User extends AggregateRoot` (`Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot` → traits `Identifiable`+`Timestamped`). Constructor **privado** + factory estático `register(string $id, string $email, HashedPassword $password, Role ...$roles): self` (o `array $roles`), espejo de `Bank::create()`. Asignar `$this->id = $id` tras `parent::__construct()`.
-  - [ ] `email`: normalizar a minúsculas en el factory (decisión ⚠️4); `#[ORM\Column(unique: true)]`, `#[Assert\Email]`, `#[Assert\NotBlank]`. Considerar `#[UniqueEntity(fields: ['email'])]` (como `Bank`) — la unicidad dura la impone el índice de la migración; `UniqueEntity` aporta el 422 limpio cuando exista un flujo de alta (AF-1.2).
-  - [ ] `password_hash`: columna escalar `#[ORM\Column(name: 'password_hash')]` (decisión ⚠️3); API tipada (`passwordHash(): HashedPassword`, almacena `$password->toString()`).
-  - [ ] `roles`: **columna `JSON`** con los `->value` de `Role`; accessor `roles(): list<Role>` que mapea de vuelta a enum (decisión ⚠️5). **No** usar Doctrine `enumType:` aquí — ese modo mapea **un** enum escalar (así hace `BankAccount.status`: `#[ORM\Column(type: TEXT, enumType: BankAccountStatus::class)]`), no una `list<Role>`.
-  - [ ] **No** implementar `AuditedEntity`, **no** importar framework (sólo `Doctrine\ORM\Mapping`/`Assert` como metadata pasiva permitida, `symfony/uid` vía `Shared/Uuid`).
-- [ ] **A2.** `api/src/Backoffice/Identity/Domain/HashedPassword.php` — VO: constructor privado + `fromHash(string $hash): self` (rechaza vacío → excepción de dominio, p. ej. `InvalidHashedPassword` en `Domain/Exception/`), `toString(): string`, igualdad por valor. Sin conocimiento del algoritmo (AC3).
-- [ ] **A3.** `api/src/Backoffice/Identity/Domain/Enum/Role.php` — `enum Role: string` (espejo `BankAccountStatus`), caso mínimo `AUDIT_READER = 'AUDIT_READER'` (+ `ADMIN` si el seed lo requiere).
-- [ ] **A4.** `api/src/Backoffice/Identity/Domain/Repository/UserRepository.php` — puerto: `save(User): void`, `remove(User): void`, `findById(string $id): ?User`, `findByEmail(string $email): ?User` (`findByEmail` es lo que consumirá el `UserProvider` de AF-1.2; se define ya para no reabrir el puerto).
+- [x] **A1.** `api/src/Backoffice/Identity/Domain/Entity/User.php`
+  - [x] `final class User extends AggregateRoot` (`Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot` → traits `Identifiable`+`Timestamped`). Constructor **privado** + factory estático `register(string $id, string $email, HashedPassword $password, Role ...$roles): self` (o `array $roles`), espejo de `Bank::create()`. Asignar `$this->id = $id` tras `parent::__construct()`.
+  - [x] `email`: normalizar a minúsculas en el factory (decisión ⚠️4); `#[ORM\Column(unique: true)]`, `#[Assert\Email]`, `#[Assert\NotBlank]`. Considerar `#[UniqueEntity(fields: ['email'])]` (como `Bank`) — la unicidad dura la impone el índice de la migración; `UniqueEntity` aporta el 422 limpio cuando exista un flujo de alta (AF-1.2).
+  - [x] `password_hash`: columna escalar `#[ORM\Column(name: 'password_hash')]` (decisión ⚠️3); API tipada (`passwordHash(): HashedPassword`, almacena `$password->toString()`).
+  - [x] `roles`: **columna `JSON`** con los `->value` de `Role`; accessor `roles(): list<Role>` que mapea de vuelta a enum (decisión ⚠️5). **No** usar Doctrine `enumType:` aquí — ese modo mapea **un** enum escalar (así hace `BankAccount.status`: `#[ORM\Column(type: TEXT, enumType: BankAccountStatus::class)]`), no una `list<Role>`.
+  - [x] **No** implementar `AuditedEntity`, **no** importar framework (sólo `Doctrine\ORM\Mapping`/`Assert` como metadata pasiva permitida, `symfony/uid` vía `Shared/Uuid`).
+- [x] **A2.** `api/src/Backoffice/Identity/Domain/HashedPassword.php` — VO: constructor privado + `fromHash(string $hash): self` (rechaza vacío → excepción de dominio, p. ej. `InvalidHashedPassword` en `Domain/Exception/`), `toString(): string`, igualdad por valor. Sin conocimiento del algoritmo (AC3).
+- [x] **A3.** `api/src/Backoffice/Identity/Domain/Enum/Role.php` — `enum Role: string` (espejo `BankAccountStatus`), caso mínimo `AUDIT_READER = 'AUDIT_READER'` (+ `ADMIN` si el seed lo requiere).
+- [x] **A4.** `api/src/Backoffice/Identity/Domain/Repository/UserRepository.php` — puerto: `save(User): void`, `remove(User): void`, `findById(string $id): ?User`, `findByEmail(string $email): ?User` (`findByEmail` es lo que consumirá el `UserProvider` de AF-1.2; se define ya para no reabrir el puerto).
 
 ### B. Persistencia — adapter Doctrine + migración (AC4)
 
-- [ ] **B1.** `api/src/Backoffice/Identity/Infrastructure/Persistence/Doctrine/DoctrineUserRepository.php` — `final readonly class ... implements UserRepository`, `#[AsAlias(UserRepository::class)]`, inyecta `EntityManagerInterface`. `save` = `persist`+`flush()` (**sin args**, ORM 3), `remove` = `remove`+`flush()`, `findById` = `->find(User::class, $id)`, `findByEmail` = query builder parametrizado (`WHERE u.email = :email`, con `$email` ya en minúsculas). Espejo de `DoctrineBankRepository` (líneas 45–79). Sin herencia de `ServiceEntityRepository`.
-- [ ] **B2.** Migración: `make db.diff` → genera `api/migrations/2026/VersionYYYYMMDDHHMMSS.php` (`extends AbstractMigration`, `$this->addSql(...)`). Revisar el SQL (tabla p. ej. `identity_user`; el `Types::GUID` del trait renderiza como **PG `UUID` PK sin `GeneratedValue`**, `email` `UNIQUE`, `password_hash VARCHAR`, `roles JSON`, `created_at`/`updated_at` `TIMESTAMP(0) WITHOUT TIME ZONE` — house style verificado en `Version20260616201857`). Verificar `down()` reversible (`DROP TABLE`). **Sin `INSERT` de datos.** Migración transaccional por defecto (no `CONCURRENTLY`). Aplicar con `make db.migrate` y verificar up+down en scratch DB.
-- [ ] **B3.** Verificar **auto-wiring sin editar config**: `src/Backoffice` ya está attribute-mapped por prefijo en `api/config/packages/doctrine.yaml` (`dir: src/Backoffice`, `prefix: Erpify\Backoffice`) → `User` se mapea solo; `Erpify\: resource '../src/'` en `services.yaml` registra el adapter y el `#[AsAlias]` liga el puerto. **No** tocar `doctrine.yaml`/`services.yaml`. Confirmar que `make db.diff` detecta la entidad (si no, es señal de mapeo mal ubicado).
+- [x] **B1.** `api/src/Backoffice/Identity/Infrastructure/Persistence/Doctrine/DoctrineUserRepository.php` — `final readonly class ... implements UserRepository`, `#[AsAlias(UserRepository::class)]`, inyecta `EntityManagerInterface`. `save` = `persist`+`flush()` (**sin args**, ORM 3), `remove` = `remove`+`flush()`, `findById` = `->find(User::class, $id)`, `findByEmail` = query builder parametrizado (`WHERE u.email = :email`, con `$email` ya en minúsculas). Espejo de `DoctrineBankRepository` (líneas 45–79). Sin herencia de `ServiceEntityRepository`.
+- [x] **B2.** Migración: `make db.diff` → genera `api/migrations/2026/VersionYYYYMMDDHHMMSS.php` (`extends AbstractMigration`, `$this->addSql(...)`). Revisar el SQL (tabla p. ej. `identity_user`; el `Types::GUID` del trait renderiza como **PG `UUID` PK sin `GeneratedValue`**, `email` `UNIQUE`, `password_hash VARCHAR`, `roles JSON`, `created_at`/`updated_at` `TIMESTAMP(0) WITHOUT TIME ZONE` — house style verificado en `Version20260616201857`). Verificar `down()` reversible (`DROP TABLE`). **Sin `INSERT` de datos.** Migración transaccional por defecto (no `CONCURRENTLY`). Aplicar con `make db.migrate` y verificar up+down en scratch DB.
+- [x] **B3.** Verificar **auto-wiring sin editar config**: `src/Backoffice` ya está attribute-mapped por prefijo en `api/config/packages/doctrine.yaml` (`dir: src/Backoffice`, `prefix: Erpify\Backoffice`) → `User` se mapea solo; `Erpify\: resource '../src/'` en `services.yaml` registra el adapter y el `#[AsAlias]` liga el puerto. **No** tocar `doctrine.yaml`/`services.yaml`. Confirmar que `make db.diff` detecta la entidad (si no, es señal de mapeo mal ubicado).
 
 ### C. Gate de arquitectura (AC5)
 
-- [ ] **C1.** `api/tools/deptrac/deptrac.yaml`: añadir en `layers` los 3 layers `Backoffice.Identity.{Domain,Application,Infrastructure}` (collectors `directory: src/Backoffice/Identity/<Layer>/.*`) y en `ruleset` los bloques espejo de `Backoffice.Bank.*`. **Sólo `Backoffice.Identity.Domain: *domain` reutiliza el anchor** (`&domain` = `[Shared.Domain, Vendor.Psr, Vendor.SymfonyUid, Vendor.PassiveMetadata]`; idéntico en todos los módulos). **`Application` e `Infrastructure` se escriben explícitos** (copiar el bloque de `Backoffice.BankAccount.*` y renombrar) — **no** reutilizar el anchor `*infra`, porque apunta a los layers de *Bank* (`Backoffice.Bank.Domain/Application`), no a los de Identity. Infrastructure incluye `Vendor.Doctrine`. `make php.deptrac`.
-  - [ ] **Nota AF-1.2:** ese `Infrastructure` ruleset ganará `Vendor.Symfony` cuando llegue el `SecurityUser` adapter — **no** añadirlo aquí (aún no hay import de Security).
-- [ ] **C2.** `make php.lint.bounded-context` — `Identity` sólo importa `Erpify\Shared\…` y a sí mismo; ningún import a `Bank`/`BankAccount`/`Audit` `Domain`/`Infrastructure`.
+- [x] **C1.** `api/tools/deptrac/deptrac.yaml`: añadir en `layers` los 3 layers `Backoffice.Identity.{Domain,Application,Infrastructure}` (collectors `directory: src/Backoffice/Identity/<Layer>/.*`) y en `ruleset` los bloques espejo de `Backoffice.Bank.*`. **Sólo `Backoffice.Identity.Domain: *domain` reutiliza el anchor** (`&domain` = `[Shared.Domain, Vendor.Psr, Vendor.SymfonyUid, Vendor.PassiveMetadata]`; idéntico en todos los módulos). **`Application` e `Infrastructure` se escriben explícitos** (copiar el bloque de `Backoffice.BankAccount.*` y renombrar) — **no** reutilizar el anchor `*infra`, porque apunta a los layers de *Bank* (`Backoffice.Bank.Domain/Application`), no a los de Identity. Infrastructure incluye `Vendor.Doctrine`. `make php.deptrac`.
+  - [x] **Nota AF-1.2:** ese `Infrastructure` ruleset ganará `Vendor.Symfony` cuando llegue el `SecurityUser` adapter — **no** añadirlo aquí (aún no hay import de Security).
+- [x] **C2.** `make php.lint.bounded-context` — `Identity` sólo importa `Erpify\Shared\…` y a sí mismo; ningún import a `Bank`/`BankAccount`/`Audit` `Domain`/`Infrastructure`.
 
 ### D. Tests (AC1–AC7)
 
-- [ ] **D1.** Unit `api/tests/Unit/Backoffice/Identity/Domain/Entity/UserTest.php` (`final`, `/** @internal */`, `extends TestCase`, `#[CoversClass(User::class)]`, métodos **`testXxx` descriptivos** — es el default del repo, no `#[Test]`; AAA): `register` con id/email/hash/roles → accessors correctos; **email normalizado a minúsculas**; `id()` es UUID válido y **`ActorContext::forUser($user->id())` no lanza** (AC7); roles round-trip enum↔value. Añadir un **Object Mother** `Mother/UserMother.php` (`DEFAULT_ID` = literal UUID v7, `create()`), espejo de `BankMother`.
-- [ ] **D2.** Unit `HashedPasswordTest` (rechaza vacío; igualdad por valor vía `equals()`; `toString`) y `RoleTest` (valores esperados; `AUDIT_READER` presente).
-- [ ] **D3.** Functional `api/tests/Functional/Backoffice/Identity/DoctrineUserRepositoryTest.php` (`extends KernelTestCase`, `self::bootKernel()`, transacción siempre rolled-back — espejo de `DoctrineBankAccountCollectionSearchRepositoryTest`): `save`→`findById`→`findByEmail` (case-insensitive) round-trip; unicidad de `email` (segundo save con mismo email → violación); `remove` hard-borra (satisface NFR4/GDPR).
-- [ ] **D4.** Test-guardia AC6: assert que `User` **NO** implementa `AuditedEntity` (patrón "X no es Y" → `assertFalse((new ReflectionClass(User::class))->implementsInterface(AuditedEntity::class))`; ver gotcha de tests de negación). Fija el invariante de no-fuga de credencial.
-- [ ] **D5.** (recomendado, lo consumirá AF-1.2) `api/tests/Unit/Backoffice/Identity/Application/InMemoryUserRepository.php` — fake del puerto `UserRepository` (`#[Override]` por método, registra `saved`/`removed`, `findByEmail` case-insensitive), espejo de `InMemoryBankRepository`. Si no aporta a D1–D4, diferir a AF-1.2 (YAGNI).
+- [x] **D1.** Unit `api/tests/Unit/Backoffice/Identity/Domain/Entity/UserTest.php` (`final`, `/** @internal */`, `extends TestCase`, `#[CoversClass(User::class)]`, métodos **`testXxx` descriptivos** — es el default del repo, no `#[Test]`; AAA): `register` con id/email/hash/roles → accessors correctos; **email normalizado a minúsculas**; `id()` es UUID válido y **`ActorContext::forUser($user->id())` no lanza** (AC7); roles round-trip enum↔value. Añadir un **Object Mother** `Mother/UserMother.php` (`DEFAULT_ID` = literal UUID v7, `create()`), espejo de `BankMother`.
+- [x] **D2.** Unit `HashedPasswordTest` (rechaza vacío; igualdad por valor vía `equals()`; `toString`) y `RoleTest` (valores esperados; `AUDIT_READER` presente).
+- [x] **D3.** Functional `api/tests/Functional/Backoffice/Identity/DoctrineUserRepositoryTest.php` (`extends KernelTestCase`, `self::bootKernel()`, transacción siempre rolled-back — espejo de `DoctrineBankAccountCollectionSearchRepositoryTest`): `save`→`findById`→`findByEmail` (case-insensitive) round-trip; unicidad de `email` (segundo save con mismo email → violación); `remove` hard-borra (satisface NFR4/GDPR).
+- [x] **D4.** Test-guardia AC6: assert que `User` **NO** implementa `AuditedEntity` (patrón "X no es Y" → `assertFalse((new ReflectionClass(User::class))->implementsInterface(AuditedEntity::class))`; ver gotcha de tests de negación). Fija el invariante de no-fuga de credencial.
+- [x] **D5.** (recomendado, lo consumirá AF-1.2) `api/tests/Unit/Backoffice/Identity/Application/InMemoryUserRepository.php` — fake del puerto `UserRepository` (`#[Override]` por método, registra `saved`/`removed`, `findByEmail` case-insensitive), espejo de `InMemoryBankRepository`. Si no aporta a D1–D4, diferir a AF-1.2 (YAGNI). **→ DIFERIDO a AF-1.2**: sin consumidor en AF-1.1 (los unit tests usan la entidad directa; el functional usa el adapter real), así que se aplica la cláusula YAGNI de esta propia tarea.
 
 ### E. Docs (nuevo contexto + seguridad)
 
-- [ ] **E1.** `docs/architecture-api.md`: nuevo contexto `Backoffice/Identity` (agregado `User` + puerto/adapter). Nuevo dir `src/` → actualizar también `docs/claude-code-quickref.md` y `docs/source-tree-analysis.md` (regla "keeping docs up to date").
-- [ ] **E2.** `PRODUCTION_SECURITY_CHECKLIST.md` + `docs/rules/security.md`: se introduce el modelo de identidad — `password_hash` **nunca** se loguea/retorna/audita (AC6); `email` es PII, el hard-delete de `User` mantiene satisfacible el borrado GDPR (NFR4). Cambio security-sensitive → obligatorio.
-- [ ] **E3.** Registrar el follow-up (issue o nota) de **bootstrap del primer usuario** y de la **pantalla de login PWA** (advertencia UX del readiness report) — no bloquean; encadenados tras AF-1.2.
+- [x] **E1.** `docs/architecture-api.md`: nuevo contexto `Backoffice/Identity` (agregado `User` + puerto/adapter). Nuevo dir `src/` → actualizar también `docs/claude-code-quickref.md` y `docs/source-tree-analysis.md` (regla "keeping docs up to date").
+- [x] **E2.** `PRODUCTION_SECURITY_CHECKLIST.md` + `docs/rules/security.md`: se introduce el modelo de identidad — `password_hash` **nunca** se loguea/retorna/audita (AC6); `email` es PII, el hard-delete de `User` mantiene satisfacible el borrado GDPR (NFR4). Cambio security-sensitive → obligatorio.
+- [x] **E3.** Registrar el follow-up (issue o nota) de **bootstrap del primer usuario** y de la **pantalla de login PWA** (advertencia UX del readiness report) — no bloquean; encadenados tras AF-1.2.
 
 ### F. Barrido final
 
-- [ ] **F1.** Sin comentarios con ID (story/AC/FR/NFR/D) en el código. `make php.stan` por archivo (**`PHP_SERVICE=messenger_worker`** por el segfault del web worker), luego `make php.quality` (deptrac + bounded-context + phpmd + cs-fixer + rector), `make php.psalm.taint`. Migración verificada up+down. Sin `// NOSONAR`.
+- [x] **F1.** Sin comentarios con ID (story/AC/FR/NFR/D) en el código. `make php.stan` por archivo (**`PHP_SERVICE=messenger_worker`** por el segfault del web worker), luego `make php.quality` (deptrac + bounded-context + phpmd + cs-fixer + rector), `make php.psalm.taint`. Migración verificada up+down. Sin `// NOSONAR`.
 
 ## Dev Notes
 
@@ -202,8 +206,70 @@ PHPUnit 13, `declare(strict_types=1)`. **Estilo del repo (verificado):** clases 
 
 ### Agent Model Used
 
+claude-opus-4-8[1m] (Claude Code).
+
 ### Debug Log References
+
+- PHPStan: 3 hallazgos resueltos — `distinctRoleValues` acepta `array<Role>` (la variádica ensancha el tipo de clave); `RoleTest` reescrito sobre `Role::cases()` para evitar `alreadyNarrowedType` (un enum string tiene valor literal en compilación).
+- Behat tooling no instalado por `app.dev` → `make php.behat.install` antes de `php.stan` (bootstrap `tools/behat/vendor/autoload.php`).
+- Migración verificada up + down (`migrate prev`/`latest`) y mapping en sync (`db.validate` = "mapping files are correct").
 
 ### Completion Notes List
 
+Entregado el contexto nuevo `Backoffice/Identity` (backend puro, sin superficie HTTP/PWA): agregado `User` libre de framework + persistencia + gate deptrac + tests + docs. Las 4 decisiones ⚠️ se cerraron con los defaults del spec, **endurecidos** tras consulta a IA externa + review de Sergio:
+
+- **A (HashedPassword):** columna escalar `password_hash VARCHAR(255)` (default Doctrine, no adivinar corto), VO en el borde. `#[\SensitiveParameter]` en `fromHash()` (defensa contra fuga en stack traces). Excepción marker-less `InvalidHashedPassword` (hash vacío = integridad interna, no error de cliente).
+- **B (id):** `string` RFC 4122 vía trait `Identifiable`; un VO `UserId` sería incompatible con el trait (tipa `?string`) además de YAGNI.
+- **C (roles):** columna `JSON` (`list<Role>`), `[]` permitido; **invariante de conjunto-distinto en el constructor privado** (único choke point que toda fábrica atraviesa — refinamiento de Sergio), no solo en `register()`. `Role::from()` fail-loud al leer.
+- **D (base):** `extends AggregateRoot`, 0 eventos. **`User` NO implementa `AuditedEntity`** (guardia de fuga de credencial), bloqueado por test de reflexión.
+
+Decisiones cerradas adicionales: tabla `identity_user`; email canónico `mb_strtolower(trim())` alimentando el índice `UNIQUE`; `#[UniqueEntity(email)]` incluido (espeja `Bank`; el guard duro es el índice).
+
+Correcciones al spec durante impl: el ruleset `Backoffice.Identity.Infrastructure` **necesita `Vendor.Symfony` YA** (el `#[AsAlias]` del adapter es un import de Symfony DI) — la nota del spec ("añadir Vendor.Symfony solo en AF-1.2") confundía "import de Security" con "cualquier import de Symfony".
+
+**D5 (`InMemoryUserRepository`) DIFERIDO a AF-1.2** por YAGNI (cláusula de la propia tarea): sin consumidor en AF-1.1.
+
+Boy-scout nombrado: el árbol de contextos de `docs/architecture-api.md` omitía `Audit` y `BankAccount` (contextos ya mergeados) — añadidos junto a `Identity` para que el árbol sea correcto.
+
+**Follow-ups registrados** (no bloquean; ya secuenciados en `epics-auth-foundation.md`, sin issue duplicado): bootstrap del 1er usuario = comando CLI `identity:user:create` en **AF-1.2** (cuando exista el hasher); pantalla de login PWA aguas abajo. La ruta de lectura/gating RBAC del trail sigue bloqueando prod (E3).
+
+Gates (todos verdes, worktree stack): `php.stan` OK (767), `php.quality` EXIT 0 (deptrac 0 violaciones), `php.psalm.taint` EXIT 0, `php.lint.error-contract` EXIT 0, `php.unit` full **1461** (6843 assertions, +16 de Identity), migración up+down + mapping en sync.
+
 ### File List
+
+**API NEW (`api/src/Backoffice/Identity/`):**
+- `Domain/Entity/User.php`
+- `Domain/HashedPassword.php`
+- `Domain/Exception/InvalidHashedPassword.php`
+- `Domain/Enum/Role.php`
+- `Domain/Repository/UserRepository.php`
+- `Infrastructure/Persistence/Doctrine/DoctrineUserRepository.php`
+
+**API NEW (migration):**
+- `api/migrations/2026/Version20260702092603.php`
+
+**API NEW (tests):**
+- `api/tests/Unit/Backoffice/Identity/Domain/Entity/UserTest.php`
+- `api/tests/Unit/Backoffice/Identity/Domain/Entity/Mother/UserMother.php`
+- `api/tests/Unit/Backoffice/Identity/Domain/HashedPasswordTest.php`
+- `api/tests/Unit/Backoffice/Identity/Domain/Enum/RoleTest.php`
+- `api/tests/Functional/Backoffice/Identity/DoctrineUserRepositoryTest.php`
+
+**API UPDATE:**
+- `api/tools/deptrac/deptrac.yaml` (registra `Backoffice.Identity.{Domain,Application,Infrastructure}`)
+
+**DOCS UPDATE:**
+- `docs/architecture-api.md` (contexto `Identity` + fix boy-scout `Audit`/`BankAccount`)
+- `docs/source-tree-analysis.md`
+- `PRODUCTION_SECURITY_CHECKLIST.md`
+- `docs/rules/security.md`
+
+**STORY/SPRINT:**
+- `_bmad-output/implementation-artifacts/af-1-1-user-aggregate-backoffice-identity-persistencia.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+
+## Change Log
+
+| Fecha | Cambio |
+|-------|--------|
+| 2026-07-02 | AF-1.1 implementado: agregado `User` + `HashedPassword` VO + enum `Role` + puerto/adapter + migración `identity_user` + registro deptrac + tests (16) + docs. Story → review. |
