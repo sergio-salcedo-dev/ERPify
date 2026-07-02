@@ -191,6 +191,16 @@ you change anything here.
       (`activity` vs `security`, the scheduled prune — the table's only `DELETE`) is
       tracked separately; the `change` level carries a 5-year floor. A live PII table must
       never exist without a documented retention/erasure policy.
+- [ ] `identity_user` stores a **credential** (`password_hash`) and **PII** (`email`). The
+      `password_hash` is never logged, returned, serialized, or audited: `User` deliberately
+      does **not** implement `AuditedEntity`, so it stays out of the `onFlush` change diff (a
+      credential leak), and the domain VO `HashedPassword` is opaque to the algorithm —
+      hashing lives in Infrastructure. `User` is **hard-deleted** (no soft delete), keeping
+      GDPR erasure of the email satisfiable. This slice adds the aggregate + persistence only:
+      **no login/HTTP surface, no session firewall, no hashing** yet (the firewall +
+      `SecurityUser` adapter + hasher land with auth, ADR
+      [`docs/adr/auth-rbac-subsystem.md`](docs/adr/auth-rbac-subsystem.md)). Until then no
+      route reads `identity_user`.
 
 ## 7. Deploy & verify
 
