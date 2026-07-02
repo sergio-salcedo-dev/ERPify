@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "585a43a24cb5fbc061c0eb1466687671",
+    "content-hash": "b293f659edc0e254f472ee605d3f425c",
     "packages": [
         {
             "name": "behat/gherkin",
