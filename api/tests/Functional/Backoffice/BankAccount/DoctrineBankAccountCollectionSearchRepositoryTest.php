@@ -208,6 +208,30 @@ final class DoctrineBankAccountCollectionSearchRepositoryTest extends KernelTest
         });
     }
 
+    public function testBankFilterMatchesByNameOrShortCodeCaseInsensitively(): void
+    {
+        $this->inRolledBackTransaction(function (): void {
+            $this->seedDataset();
+
+            // A lower-case term matches the mixed-case bank name AND the upper-case short code through
+            // the single CONTAINS over CONCAT(name, ' ', shortName): "beta" hits "Beta Bank"/"BETA".
+            $byBeta = $this->repository->search(new SearchCriteria(
+                limit: 10,
+                filters: Filters::fromList([Filter::contains('bank', 'beta')]),
+                sort: 'createdAt',
+            ));
+            $this->assertSame(['Account Two'], $this->holders($byBeta));
+
+            // A partial term is a valid substring (unlike an exact id): "alph" narrows to Alpha's two.
+            $byAlpha = $this->repository->search(new SearchCriteria(
+                limit: 10,
+                filters: Filters::fromList([Filter::contains('bank', 'alph')]),
+                sort: 'createdAt',
+            ));
+            $this->assertSame(['Account One', 'Account Three'], $this->holders($byAlpha));
+        });
+    }
+
     public function testDescendingCreatedAtSortReversesTheCollection(): void
     {
         $this->inRolledBackTransaction(function (): void {

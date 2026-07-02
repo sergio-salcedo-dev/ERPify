@@ -1,6 +1,7 @@
 import type { Filter, PageEnvelope } from "@/context/shared/search/domain";
 import type { SortDirection } from "@/context/shared/search/domain/SortDirection";
 import type { BankAccount, BankAccountCurrency, BankAccountStatus } from "./BankAccount";
+import type { BankAccountCollectionPage } from "./BankAccountCollectionRow";
 
 /**
  * Editable core of a bank account, shared by create and update — mirroring the
@@ -56,16 +57,24 @@ export interface BankAccountSearchCriteria {
 export type BankAccountSearchPage = { accounts: BankAccount[] } & PageEnvelope;
 
 /**
- * Domain port for a bank's associated accounts. `search` starts a per-bank
- * search (navigation is the application-layer `BankAccountSearchNavigator`);
+ * Domain port for bank accounts. `search` starts a per-bank search and
+ * `searchAll` starts the cross-bank global search (both navigated by the
+ * application-layer navigators, which follow server links verbatim);
  * `find`/`create`/`update`/`delete` drive the standalone CRUD against the
  * `/bank-accounts` endpoints (the create carries `bankId` in the body, the rest
  * key off the account id). The 409 `bank-account-not-closed` precondition on
  * delete is the API's authoritative guard; the UI mirrors it optimistically off
  * the row's `status`.
+ *
+ * `searchAll` returns a dedicated {@link BankAccountCollectionPage} of
+ * {@link import("./BankAccountCollectionRow").BankAccountCollectionRow} (each row
+ * enriched with its owning bank's name via the server JOIN), NOT the account
+ * entity — the per-bank `search` and the global `searchAll` are distinct read
+ * views with distinct row shapes.
  */
 export interface BankAccountRepository {
   search(bankId: string, criteria: BankAccountSearchCriteria): Promise<BankAccountSearchPage>;
+  searchAll(criteria: BankAccountSearchCriteria): Promise<BankAccountCollectionPage>;
   find(id: string): Promise<BankAccount>;
   create(input: CreateBankAccountInput): Promise<BankAccount>;
   update(id: string, input: UpdateBankAccountInput): Promise<BankAccount>;

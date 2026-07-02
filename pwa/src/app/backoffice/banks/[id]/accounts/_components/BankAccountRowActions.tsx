@@ -18,11 +18,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/components/cn";
 import { safeHref } from "@/context/shared/navigation/domain/safeHref";
-import { bankAccountRoutes } from "../_lib/bankAccountRoutes";
 
 interface BankAccountRowActionsProps {
   id: string;
-  bankId: string;
+  /**
+   * Edit-form URL for this account, resolved by the caller — the nested surface
+   * points at the per-bank form, the standalone hub at its own. Keeping route
+   * topology out of this shared cluster lets both surfaces reuse it unchanged.
+   */
+  editHref: string;
   /** Account holder — the human label for accessible names / confirm copy (never the IBAN, which is PII). */
   holderName: string;
   /** Drives the optimistic delete-guard: only a `CLOSED` account may be deleted. */
@@ -43,7 +47,7 @@ interface BankAccountRowActionsProps {
  */
 export function BankAccountRowActions({
   id,
-  bankId,
+  editHref,
   holderName,
   status,
   onAccountDeleted,
@@ -65,7 +69,7 @@ export function BankAccountRowActions({
         testId={`bank-accounts-table__copy-${id}`}
       />
       <Link
-        href={safeHref(bankAccountRoutes.edit(bankId, id))}
+        href={safeHref(editHref)}
         className={cn(buttonVariants({ variant: "ghost", size: "icon-sm" }))}
         aria-label="Edit"
         title={`Edit account ${holderName}`}
@@ -124,7 +128,7 @@ export function BankAccountRowActions({
           ),
           action: (
             <Link
-              href={safeHref(bankAccountRoutes.edit(bankId, id))}
+              href={safeHref(editHref)}
               className={cn(buttonVariants({ size: "sm" }))}
               data-icon="inline-start"
               data-testid="bank-accounts-row__delete-guard-edit"

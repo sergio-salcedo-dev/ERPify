@@ -1,8 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { parseBankAccountRealtimeEvent } from "@/context/backoffice/bankaccount/infrastructure/bankAccountRealtime";
+import {
+  bankAccountTopics,
+  parseBankAccountRealtimeEvent,
+} from "@/context/backoffice/bankaccount/infrastructure/bankAccountRealtime";
 
 const ID = "0190ffff-aaaa-7bbb-8ccc-0d1e2f3a4b5c";
 const BANK_ID = "11111111-1111-7111-8111-111111111111";
+
+describe("bankAccountTopics", () => {
+  it("exposes the global collection topic matching the API MercureBankAccountTopic::COLLECTION", () => {
+    expect(bankAccountTopics.collectionAll).toBe("urn:erpify:backoffice:bankaccounts");
+  });
+
+  it("keeps the per-bank collection and detail topics unchanged", () => {
+    expect(bankAccountTopics.collection(BANK_ID)).toBe(
+      `urn:erpify:backoffice:bank:${BANK_ID}:accounts`,
+    );
+    expect(bankAccountTopics.detail(ID)).toBe(`urn:erpify:backoffice:bankaccount:${ID}`);
+  });
+});
 
 describe("parseBankAccountRealtimeEvent", () => {
   it("parses each lifecycle type into a minimal { kind, id, bankId } event", () => {

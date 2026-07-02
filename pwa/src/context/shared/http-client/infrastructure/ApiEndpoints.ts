@@ -49,6 +49,7 @@ export const API_ENDPOINTS = {
       REALTIME_AUTHORIZE: `${BACKOFFICE_PREFIX}/banks/realtime/authorize`,
     },
     BANK_ACCOUNTS: {
+      LIST: `${BACKOFFICE_PREFIX}/bank-accounts`,
       CREATE: `${BACKOFFICE_PREFIX}/bank-accounts`,
       DETAILS: bankAccountPath,
       UPDATE: bankAccountPath,

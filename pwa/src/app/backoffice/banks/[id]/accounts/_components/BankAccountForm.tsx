@@ -47,6 +47,12 @@ interface BankAccountFormProps {
   bankId: string;
   initial?: BankAccountFormInitial;
   /**
+   * Where Cancel and a successful submit return to. Defaults to the owning
+   * bank's nested accounts list; the standalone edit surface overrides it with
+   * the cross-bank hub so editing there never strands the user under a bank.
+   */
+  returnTo?: string;
+  /**
    * Edit-only recovery hook for a stale 404 (`bank-account-not-found`): the
    * surface's "Refresh" action calls this so the owning page re-runs its load
    * and lands on the not-found empty state. Create mode never wires it.
@@ -72,11 +78,13 @@ export function BankAccountForm({
   mode,
   bankId,
   initial,
+  returnTo,
   onStaleAccount,
 }: Readonly<BankAccountFormProps>) {
   const router = useRouter();
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
   const isCreating = mode === PersistenceAction.CREATING;
+  const returnHref = returnTo ?? bankAccountRoutes.list(bankId);
 
   // Hydration marker: until React attaches the submit handler, a click on the
   // submit button performs a NATIVE GET submission that would leak the form
@@ -154,7 +162,7 @@ export function BankAccountForm({
         });
         setProblem(null);
         toastNotifier.success("Account created", { description: values.holderName });
-        router.push(safeHref(bankAccountRoutes.list(bankId)));
+        router.push(safeHref(returnHref));
         router.refresh();
         return;
       }
@@ -173,7 +181,7 @@ export function BankAccountForm({
       });
       setProblem(null);
       toastNotifier.success("Changes saved", { description: values.holderName });
-      router.push(safeHref(bankAccountRoutes.list(bankId)));
+      router.push(safeHref(returnHref));
       router.refresh();
     } catch (err) {
       if (!(err instanceof HttpError)) throw err;
@@ -181,7 +189,7 @@ export function BankAccountForm({
     }
   });
 
-  const cancelHref = safeHref(bankAccountRoutes.list(bankId));
+  const cancelHref = safeHref(returnHref);
   const idleSubmitLabel = isCreating ? "Create account" : "Save changes";
 
   // Typed recovery: a stale 404 on an edit heals by re-running the page load via

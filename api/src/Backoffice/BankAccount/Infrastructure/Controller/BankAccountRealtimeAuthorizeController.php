@@ -12,9 +12,9 @@ use Symfony\Component\Routing\Attribute\Route;
 
 /**
  * Issues the Mercure subscriber authorization cookie scoped to the back-office bank-account topics
- * (the per-bank accounts collection template + the per-account template). The PWA calls this with
- * credentials before opening the same-origin EventSource so the hub delivers the private account
- * updates. No account data is returned here.
+ * (the global collection topic + the per-bank accounts collection template + the per-account
+ * template). The PWA calls this with credentials before opening the same-origin EventSource so the
+ * hub delivers the private account updates. No account data is returned here.
  *
  * The two-segment `/bank-accounts/{id}` placeholder never captures this three-segment path, so the
  * route needs no priority over the detail route.
@@ -34,6 +34,7 @@ final readonly class BankAccountRealtimeAuthorizeController
     public function __invoke(Request $request): Response
     {
         $cookie = $this->authorization->createCookie($request, [
+            MercureBankAccountTopic::COLLECTION,
             MercureBankAccountTopic::COLLECTION_TEMPLATE,
             MercureBankAccountTopic::DETAIL_TEMPLATE,
         ]);

@@ -96,6 +96,15 @@ final readonly class DoctrineBankAccountCollectionSearchRepository implements Ba
             // operators: eq/in/contains.
             'iban' => new FieldMapping('ba.iban', $this->ibanNormalizer),
             'alias' => new FieldMapping('ba.alias'),
+            // Human bank search: one CONTAINS over the joined bank's name AND its short code, so a
+            // single query box matches either. The applier wraps the CONCAT in LOWER(...) LIKE, so the
+            // match is case-insensitive; the space separator keeps a term from spanning the two columns.
+            // shortName is a non-null column, so no COALESCE is needed. Exact bankId stays available for
+            // machine/deep-link callers.
+            'bank' => new FieldMapping(
+                "CONCAT(b.name, ' ', b.shortName)",
+                operators: [FilterOperator::Contains],
+            ),
             // bankId is exact-only: a LIKE over a UUID column breaks at the SQL level.
             'bankId' => new FieldMapping(
                 'ba.bankId',

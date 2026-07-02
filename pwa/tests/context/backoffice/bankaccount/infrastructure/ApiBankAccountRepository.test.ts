@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { BankAccount } from "@/context/backoffice/bankaccount/domain/BankAccount";
 import {
   ApiBankAccountRepository,
+  isBankAccountCollectionResponse,
   isBankAccountSingleResponse,
 } from "@/context/backoffice/bankaccount/infrastructure/ApiBankAccountRepository";
 import type { HttpClient } from "@/context/shared/http-client/domain/HttpClient";
@@ -287,5 +288,137 @@ describe("isBankAccountSingleResponse", () => {
     ).toBe(false);
     expect(isBankAccountSingleResponse({ data: { ...detailPrimitives, iban: 42 } })).toBe(false);
     expect(isBankAccountSingleResponse(undefined)).toBe(false);
+  });
+});
+
+// One row of the cross-bank collection view: carries the owning bank's identity
+// (bankId/bankName/bankShortName from the server JOIN), no audit timestamps.
+const collectionRow = {
+  id: ACCOUNT_ID,
+  bankId: BANK_ID,
+  bankName: "Acme Savings",
+  bankShortName: "ACME",
+  holderName: "Acme Corp",
+  iban: "ES9121000418450200051332",
+  bic: "CAIXESBBXXX",
+  alias: "Payroll",
+  currency: "EUR",
+  status: "ACTIVE",
+};
+
+const collectionPagination = {
+  hasNext: true,
+  hasPrev: true,
+  count: 42,
+  links: {
+    next: "/api/v1/backoffice/bank-accounts?limit=25&after=cursor-next",
+    prev: "/api/v1/backoffice/bank-accounts?limit=25&before=cursor-prev",
+  },
+};
+
+describe("ApiBankAccountRepository.searchAll", () => {
+  it("targets the global collection endpoint and serializes filters, sort and limit — never a cursor", async () => {
+    const httpClient = httpClientReturning({
+      data: [collectionRow],
+      pagination: collectionPagination,
+    });
+    await new ApiBankAccountRepository(httpClient).searchAll({
+      filters: [{ field: "bankId", operator: "eq", value: BANK_ID }],
+      sort: { field: "holderName", direction: SortDirection.DESC },
+      limit: 50,
+    });
+
+    const calledUrl = vi.mocked(httpClient.get).mock.calls[0][0];
+    expect(calledUrl).toContain("/api/v1/backoffice/bank-accounts");
+    expect(calledUrl).not.toContain("/banks/");
+    const q = queryOf(httpClient);
+    expect(q.get("filters[0][field]")).toBe("bankId");
+    expect(q.get("filters[0][value]")).toBe(BANK_ID);
+    expect(q.get("sort")).toBe("holderName");
+    expect(q.get("direction")).toBe("DESC");
+    expect(q.get("limit")).toBe("50");
+    expect(q.has("cursor")).toBe(false);
+    expect(q.has("after")).toBe(false);
+    expect(q.has("paginationMode")).toBe(false);
+  });
+
+  it("omits sort when absent and clamps limit to the wire ceiling (D-Cap)", async () => {
+    const httpClient = httpClientReturning({
+      data: [collectionRow],
+      pagination: collectionPagination,
+    });
+    await new ApiBankAccountRepository(httpClient).searchAll({
+      filters: [],
+      sort: null,
+      limit: 1000,
+    });
+
+    const q = queryOf(httpClient);
+    expect(q.has("sort")).toBe(false);
+    expect(q.get("limit")).toBe("100");
+  });
+
+  it("maps the envelope to a collection page, preserving bankName/bankShortName", async () => {
+    const httpClient = httpClientReturning({
+      data: [collectionRow],
+      pagination: collectionPagination,
+    });
+    const page = await new ApiBankAccountRepository(httpClient).searchAll(BASE_CRITERIA);
+
+    expect(page.rows).toHaveLength(1);
+    expect(page.rows[0].id).toBe(ACCOUNT_ID);
+    expect(page.rows[0].bankId).toBe(BANK_ID);
+    expect(page.rows[0].bankName).toBe("Acme Savings");
+    expect(page.rows[0].bankShortName).toBe("ACME");
+    expect(page.rows[0].iban).toBe("ES9121000418450200051332");
+    expect(page.hasNext).toBe(true);
+    expect(page.count).toBe(42);
+    expect(page.links).toEqual(collectionPagination.links);
+  });
+});
+
+describe("isBankAccountCollectionResponse", () => {
+  it("accepts the collection envelope and requires the JOINed bank name on every row", () => {
+    expect(
+      isBankAccountCollectionResponse({ data: [collectionRow], pagination: collectionPagination }),
+    ).toBe(true);
+    // Nullable bic/alias and absent links/count stay valid.
+    expect(
+      isBankAccountCollectionResponse({
+        data: [{ ...collectionRow, bic: null, alias: null }],
+        pagination: {
+          hasNext: false,
+          hasPrev: false,
+          count: null,
+          links: { next: null, prev: null },
+        },
+      }),
+    ).toBe(true);
+    // A row missing bankName/bankShortName (the read-composition) is rejected.
+    expect(
+      isBankAccountCollectionResponse({
+        data: [{ ...collectionRow, bankName: undefined }],
+        pagination: collectionPagination,
+      }),
+    ).toBe(false);
+    expect(
+      isBankAccountCollectionResponse({
+        data: [{ ...collectionRow, bankShortName: 42 }],
+        pagination: collectionPagination,
+      }),
+    ).toBe(false);
+    // The per-bank list item (no bank identity) is NOT a collection row.
+    expect(
+      isBankAccountCollectionResponse({ data: [primitives], pagination: collectionPagination }),
+    ).toBe(false);
+    // Legacy page-based envelope is rejected (drift guard).
+    expect(
+      isBankAccountCollectionResponse({
+        data: [collectionRow],
+        pagination: { currentPage: 1, hasMorePages: true, cursor: "c" },
+      }),
+    ).toBe(false);
+    expect(isBankAccountCollectionResponse({ data: [collectionRow] })).toBe(false);
+    expect(isBankAccountCollectionResponse(undefined)).toBe(false);
   });
 });
