@@ -39,9 +39,10 @@ Feature: Update a bank account
     And 0 outbox events were created on the queue "async"
     And 0 notification emails were sent
     And 1 Mercure update was published
-    And The Mercure update should have 2 topics
-    And The Mercure update topic 1 should be equal to "urn:erpify:backoffice:bank:11111111-1111-7000-8000-000000000003:accounts"
-    And The Mercure update topic 2 should be equal to "urn:erpify:backoffice:bankaccount:acc1ed00-0000-7000-8000-000000000001"
+    And The Mercure update should have 3 topics
+    And The Mercure update topic 1 should be equal to "urn:erpify:backoffice:bankaccounts"
+    And The Mercure update topic 2 should be equal to "urn:erpify:backoffice:bank:11111111-1111-7000-8000-000000000003:accounts"
+    And The Mercure update topic 3 should be equal to "urn:erpify:backoffice:bankaccount:acc1ed00-0000-7000-8000-000000000001"
     And The Mercure update property "type" should be equal to "bank_account.updated"
     And The Mercure update property "id" should be equal to "acc1ed00-0000-7000-8000-000000000001"
     And The Mercure update property "bankId" should be equal to "11111111-1111-7000-8000-000000000003"
