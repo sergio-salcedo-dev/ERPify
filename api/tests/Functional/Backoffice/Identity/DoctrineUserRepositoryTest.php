@@ -7,6 +7,7 @@ namespace Erpify\Tests\Functional\Backoffice\Identity;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
+use Erpify\Backoffice\Identity\Domain\Email;
 use Erpify\Backoffice\Identity\Domain\Entity\User;
 use Erpify\Backoffice\Identity\Domain\Enum\Role;
 use Erpify\Backoffice\Identity\Domain\HashedPassword;
@@ -72,7 +73,7 @@ final class DoctrineUserRepositoryTest extends KernelTestCase
             $this->repository->save($this->newUser('dave@erpify.test'));
             $this->entityManager->clear();
 
-            $found = $this->repository->findByEmail('  DAVE@ERPify.TEST  ');
+            $found = $this->repository->findByEmail(Email::from('  DAVE@ERPify.TEST  '));
 
             $this->assertInstanceOf(User::class, $found);
             $this->assertSame('dave@erpify.test', $found->email());

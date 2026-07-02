@@ -43,12 +43,8 @@ final readonly class DoctrineUserRepository implements UserRepository
     }
 
     #[Override]
-    public function findByEmail(string $email): ?User
+    public function findByEmail(Email $email): ?User
     {
-        // Canonicalize the lookup key through the same Email value object the aggregate stores with, so
-        // the match is case-insensitive against the UNIQUE column with one shared definition.
-        $canonicalEmail = Email::from($email)->toString();
-
-        return $this->entityManager->getRepository(User::class)->findOneBy(['email' => $canonicalEmail]);
+        return $this->entityManager->getRepository(User::class)->findOneBy(['email' => $email->toString()]);
     }
 }
