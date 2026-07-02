@@ -46,16 +46,8 @@ final readonly class DoctrineUserRepository implements UserRepository
     {
         // The aggregate stores email canonicalized (trimmed, lower-cased); match that same form so the
         // lookup the session firewall performs is case-insensitive against the UNIQUE column.
-        /** @var User|null $user */
-        $user = $this->entityManager->createQueryBuilder()
-            ->select('u')
-            ->from(User::class, 'u')
-            ->where('u.email = :email')
-            ->setParameter('email', \mb_strtolower(\trim($email)))
-            ->getQuery()
-            ->getOneOrNullResult()
-        ;
+        $canonicalEmail = \mb_strtolower(\trim($email));
 
-        return $user;
+        return $this->entityManager->getRepository(User::class)->findOneBy(['email' => $canonicalEmail]);
     }
 }
