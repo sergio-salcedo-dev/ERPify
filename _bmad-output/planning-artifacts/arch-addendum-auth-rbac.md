@@ -12,6 +12,7 @@ Método contract-first scoped: no repite el ADR ni describe estado actual; fija 
 - **SI-2 · Framework confinado.** Symfony Security vive sólo en `Infrastructure/`; la identidad de dominio (`Backoffice/Identity/Domain`) es libre de framework — lo impone `deptrac` (ADR D2).
 - **SI-3 · Gate de producción.** El trail regulatorio y la ruta #377 **no llegan a producción** hasta que el voter (D4) y la auto-auditoría de acceso (D7) estén en vigor (D8 del hermano).
 - **SI-4 · Errores por el contrato.** Autenticación/autorización fallidas fluyen por el pipeline RFC 9457 (`401 unauthorized` / `403 forbidden`), nunca por `JsonResponse` manual (ADR D4; `php.lint.error-contract`).
+- **SI-5 · Roles = autorización externa.** El enum de dominio `Role` es vocabulario que el adapter de Infra emite a Symfony como `ROLE_*` (unidireccional: dominio → Infra → Symfony, **nunca** al revés — el dominio es la fuente de verdad y no conoce el prefijo `ROLE_`); **ninguna lógica de `Application`/`Domain` ramifica por rol** para decidir comportamiento — Security concede/deniega el acceso *antes* de entrar y la aplicación no conoce roles (ADR D3). Impide que Security se filtre poco a poco a lógica de negocio.
 
 ## Localización de decisiones por PR
 

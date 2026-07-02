@@ -12,7 +12,7 @@ El trail regulatorio ([`regulatory-audit-trail.md`](./regulatory-audit-trail.md)
 
 ### D1 — Symfony Security with a stateful httpOnly-session firewall, not JWT
 
-Se instala `symfony/security-bundle` (hoy sólo está `symfony/security-core` como librería, por el tipo `AccessDeniedException`) y se define un firewall **con sesión** (`json_login` para el login de la PWA, cookie de sesión httpOnly). La PWA Next.js y la API comparten origen (FrankenPHP), así que la sesión es el mecanismo natural y encaja con la regla de `pwa/CLAUDE.md` de *no* guardar tokens en `localStorage`. La sesión introduce superficie **CSRF**: se mitiga con cookies `SameSite=Lax/Strict` + same-origin y, para rutas mutantes, protección CSRF explícita (token o comprobación de cabecera). El **JWT de Mercure** (`CADDY_MERCURE_JWT_SECRET`, cookie httpOnly emitida por el hub) es **ortogonal** y no se toca.
+Se instala `symfony/security-bundle` (hoy sólo está `symfony/security-core` como librería, por el tipo `AccessDeniedException`) y se define un firewall **con sesión** (`json_login` para el login de la PWA, cookie de sesión httpOnly). La PWA Next.js y la API comparten origen (FrankenPHP), así que la sesión es el mecanismo natural y encaja con la regla de `pwa/CLAUDE.md` de *no* guardar tokens en `localStorage`. La sesión introduce superficie **CSRF**, mitigada con **`SameSite=Lax`** + verificación de **`Origin`** en métodos no-seguros + un **token CSRF *stateless* double-submit** (Symfony `csrf_protection: stateless`: la PWA lee la cookie del token y la re-emite en cabecera, sin estado de sesión). *Descartado:* el Synchronizer Token clásico (stateful, orientado a formularios Twig → fricción para un API JSON+SPA). Se concreta con el firewall en la Story AF-1.2. El **JWT de Mercure** (`CADDY_MERCURE_JWT_SECRET`, cookie httpOnly emitida por el hub) es **ortogonal** y no se toca.
 
 Discarded: JWT stateless (lexik) — reintroduce el almacenamiento de token en cliente que el front prohíbe y resuelve problemas ausentes (gateways, SPAs cross-domain, consumidores externos) — YAGNI same-origin. Se **conserva** el `ActorType::API_KEY` ya modelado para una futura vía M2M, sin construirla ahora.
 
@@ -20,11 +20,11 @@ Discarded: JWT stateless (lexik) — reintroduce el almacenamiento de token en c
 
 Nuevo contexto `Backoffice/Identity` dueño del agregado `User` (`Domain/`): id **UUID v7** (satisface `ActorContext::forUser(uuid)` sin cambiar el VO), identificador (email) y un value object `HashedPassword` (string ya hasheado). El `User` de dominio **no** implementa `Symfony\...\UserInterface`; un adapter `Infrastructure/Security/SecurityUser` sí lo implementa y envuelve al `User`, junto con el `UserProvider`, el authenticator y `security.yaml`. El **hashing vive en Infrastructure** (`PasswordHasherInterface` de Symfony, en el authenticator/registro); el dominio nunca conoce bcrypt/argon2id ni el hasher. Es DIP obligado, no opcional: la regla de dependencias la impone `deptrac` (`api/tools/deptrac/deptrac.yaml`) — importar `UserInterface` en `Domain/` rompería el gate.
 
-Discarded: `User implements UserInterface` directamente — más simple, pero mete framework en `Domain/`, falla deptrac y exigiría baseline-arlo (deuda permanente). Discarded: ubicar `User` en un contexto `Identity`/`IAM` top-level **hoy** — Regla de Tres: el único consumidor es el acceso de backoffice al trail; se promociona a subdominio transversal cuando exista un segundo consumidor real (Frontoffice/cliente/OAuth), no antes. Discarded: `User` en `Shared/` — es un agregado de negocio, no kernel.
+Discarded: `User implements UserInterface` directamente — más simple, pero mete framework en `Domain/`, falla deptrac y exigiría baseline-arlo (deuda permanente). Discarded: ubicar `User` en un contexto `Identity`/`IAM` top-level **hoy** — Regla de Tres: el único consumidor es el acceso de backoffice al trail; se promociona a subdominio transversal cuando exista un segundo consumidor real (Frontoffice/cliente/OAuth) **o** emerjan capacidades propias de IAM (MFA, password reset, login attempts, sessions, API keys, OAuth, SSO, impersonation), no antes; este ADR **no** obliga a mantener `Identity` bajo `Backoffice` para siempre. Discarded: `User` en `Shared/` — es un agregado de negocio, no kernel.
 
 ### D3 — Roles are a static domain enum, mapped to `ROLE_*` in the adapter
 
-Un enum de dominio `Role` (p. ej. `AUDIT_READER`, `ADMIN`); el `SecurityUser` adapter emite `->value` como `ROLE_*` en `getRoles()`. E3 sólo pide «roles autorizados leen el trail» — un voter, un rol.
+Un enum de dominio `Role` (p. ej. `AUDIT_READER`, `ADMIN`); el `SecurityUser` adapter emite `->value` como `ROLE_*` en `getRoles()`. E3 sólo pide «roles autorizados leen el trail» — un voter, un rol. **Dirección del prefijo:** los `->value` viven **sin** `ROLE_` (`AUDIT_READER`, no `ROLE_AUDIT_READER`) — el dominio es la **fuente de verdad** del vocabulario de roles y el prefijo se añade **sólo** en el borde de Infra (adapter), **nunca al revés**: nada mapea un `ROLE_*` de Symfony de vuelta al enum. **Roles = autorización externa (SI-5 del addendum):** el `User` guarda los roles como *dato* que el adapter emite a Symfony, pero **ninguna lógica de `Application`/`Domain` ramifica por rol** para decidir comportamiento (Security concede/deniega el acceso *antes* de entrar); sin helpers `isAdmin()` en el dominio.
 
 Discarded: una tabla Role/Permission dinámica (RBAC de grano fino) — resuelve problemas inexistentes (editor de permisos, tenancy, jerarquías); se promociona cuando la visibilidad dependa de ≥3 ejes de decisión (propiedad, organización, clasificación).
 
@@ -60,7 +60,9 @@ Discarded: leer `Security`/token dentro del writer o de un handler de aplicació
 ## Decided inputs (previously open)
 
 - **Mecanismo: sesión httpOnly** (no JWT) — same-origin.
-- **Ubicación de `User`: `Backoffice/Identity`** — promocionable a top-level con un segundo consumidor.
+- **CSRF: `SameSite=Lax` + `Origin` check + token *stateless* double-submit** (D1) — se implementa con el firewall en AF-1.2.
+- **Ubicación de `User`: `Backoffice/Identity`** — promocionable a top-level con un segundo consumidor o capacidades IAM (D2).
+- **Lifecycle del `User`:** sin auto-registro público (identidad backoffice-only); alta por admin autenticado (story posterior); **bootstrap del 1er usuario = comando `identity:user:create`** en AF-1.2 (hashea en Infra); nunca sembrar credenciales en migraciones; dev/test = fixture Alice.
 - **`actor_id`: permanece nullable** — «atribución real» es invariante de costura.
 
 ## Implementation

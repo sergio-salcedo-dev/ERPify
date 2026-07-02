@@ -52,7 +52,9 @@ FR4: **Adapter de seguridad** — `Infrastructure/Security/SecurityUser` impleme
 Symfony y envuelve al `User`; `UserProvider` carga por repositorio; authenticator + **hashing en
 Infrastructure** (`PasswordHasherInterface`) (D2).
 FR5: **Modelo de roles** — enum de dominio `Role`; el adapter emite `->value` como `ROLE_*` en
-`getRoles()` (D3).
+`getRoles()` (D3). Los `->value` viven **sin** prefijo `ROLE_` (dominio = fuente de verdad; el prefijo sólo
+en el borde de Infra, unidireccional) y los roles son **autorización externa** — ninguna lógica de
+`Application`/`Domain` ramifica por rol (SI-5).
 FR6: **Baseline de control de acceso** — `access_control` **default-deny** + allowlist explícita de las
 rutas hoy públicas; una request no autenticada a una ruta protegida → **401 RFC 9457** por el pipeline
 (marker `Unauthenticated`), nunca `JsonResponse` manual (D1, SI-3/SI-4).
@@ -179,11 +181,16 @@ rutas Frontoffice públicas); añadir una ruta protegida no exige tocar el model
 - **Puente 401 en el pipeline:** existe el marker `Unauthenticated` (401), pero hay que confirmar/añadir el
   puente de la `AuthenticationException` de Symfony → 401 (análogo al de `AccessDeniedException` → 403). Si
   se añade, actualizar `docs/api-error-contract.md` en el mismo PR (NFR26). **A cerrar en Story AF-1.3.**
-- **CSRF concreto:** SameSite + same-origin cubre el grueso; decidir si las mutaciones necesitan token CSRF
-  explícito o basta con comprobación de cabecera. **A cerrar en Story AF-1.2.**
+- **CSRF (CONGELADO):** `SameSite=Lax` + verificación de `Origin` en no-seguros + **token CSRF *stateless*
+  double-submit** (Symfony `csrf_protection: stateless`); descartado el Synchronizer Token (stateful,
+  form-oriented). Se **implementa** con el firewall en Story AF-1.2 (ADR D1).
 - **Nombre/ubicación del contexto:** `Backoffice/Identity` por Regla de Tres (único consumidor hoy);
-  promocionable a `Identity`/`IAM` top-level con un segundo consumidor real (ADR D2). No antes.
-- **Seed de usuarios / bootstrap:** cómo nace el primer usuario (fixture dev, comando de consola) — decisión
-  operativa a cerrar al implementar; nunca sembrar credenciales en migraciones (NFR4).
+  promocionable a `Identity`/`IAM` top-level con un segundo consumidor real **o capacidades propias de IAM**
+  (MFA, reset, sessions, API keys, OAuth, SSO, impersonation) (ADR D2) — el ADR no lo ata a `Backoffice` para
+  siempre. No antes.
+- **Lifecycle / bootstrap (CONGELADO):** sin auto-registro público (identidad backoffice-only); alta de
+  usuarios = admin autenticado vía story posterior; **bootstrap del 1er usuario = comando
+  `identity:user:create`** en Story AF-1.2 (hashea en Infra); **nunca** sembrar credenciales en migraciones
+  (NFR4); dev/test = fixture Alice con hash precomputado (ADR «Decided inputs»).
 - **Relación con E3:** al completar esta épica, `sprint-status.yaml` deja `epic-3` listo para arrancar
   (Story 3.1 = `#[IsGranted]` + swap de `ActorContextFactory`). DAG: **auth-foundation → 3.1 → 3.2 → 3.3**.
