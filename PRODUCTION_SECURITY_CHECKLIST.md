@@ -196,11 +196,22 @@ you change anything here.
       does **not** implement `AuditedEntity`, so it stays out of the `onFlush` change diff (a
       credential leak), and the domain VO `HashedPassword` is opaque to the algorithm —
       hashing lives in Infrastructure. `User` is **hard-deleted** (no soft delete), keeping
-      GDPR erasure of the email satisfiable. This slice adds the aggregate + persistence only:
-      **no login/HTTP surface, no session firewall, no hashing** yet (the firewall +
-      `SecurityUser` adapter + hasher land with auth, ADR
-      [`docs/adr/auth-rbac-subsystem.md`](docs/adr/auth-rbac-subsystem.md)). Until then no
-      route reads `identity_user`.
+      GDPR erasure of the email satisfiable. Hashing lives in the Infrastructure `PasswordHasher`
+      adapter (used by the `identity:user:create` CLI); the plaintext is never printed or logged,
+      and credentials are never seeded through migrations (dev/test use a fixture with a bcrypt hash).
+- [ ] **Session firewall (`security.yaml`, `main`):** `json_login` over an **httpOnly** session cookie
+      (`SameSite=Lax`, `Secure=auto`) — no JWT/token in the client. A failed login flows through the RFC 9457
+      pipeline as a **401 `unauthenticated`** (never a manual `JsonResponse`); the message is **normalised to a
+      single "Invalid credentials."** so "unknown email" and "wrong password" are indistinguishable — no user
+      enumeration (`hide_user_not_found` stays on). **Login CSRF** is covered by the same-origin deployment + the
+      **non-broadened CORS** policy + `json_login`'s **`application/json` requirement** (a cross-site form cannot
+      send `application/json` without a CORS preflight the policy denies) + `SameSite=Lax`. `json_login`
+      validates no CSRF token, so **no** stateless-token CSRF is configured — it is wired with the first
+      authenticated **mutating** route that can consume it (wire-on-consumer). CORS / Mercure are **not** broadened. **Not yet gated:** there is **no `access_control`** — default-deny + the 401 on
+      protected routes land in AF-1.3, and `#[IsGranted]` on the audit read routes lands in Epic 3, so those
+      routes stay public until then. Sessions use the **native file handler** (single-container only) — a shared
+      handler (Postgres/Redis) is a follow-up before horizontal scaling. ADR
+      [`docs/adr/auth-rbac-subsystem.md`](docs/adr/auth-rbac-subsystem.md).
 
 ## 7. Deploy & verify
 

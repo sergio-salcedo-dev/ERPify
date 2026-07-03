@@ -14,6 +14,9 @@ use Erpify\Backoffice\Identity\Domain\Exception\InvalidEmail;
  */
 final readonly class Email
 {
+    /**
+     * @param non-empty-string $value
+     */
     private function __construct(private string $value)
     {
     }
@@ -32,6 +35,9 @@ final readonly class Email
         return new self($canonical);
     }
 
+    /**
+     * @return non-empty-string
+     */
     public function toString(): string
     {
         return $this->value;
