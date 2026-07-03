@@ -9,6 +9,7 @@ use Erpify\Backoffice\Identity\Domain\Enum\Role;
 use Erpify\Backoffice\Identity\Domain\HashedPassword;
 use Erpify\Backoffice\Identity\Infrastructure\Security\PasswordHasher;
 use Override;
+use SensitiveParameter;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -131,8 +132,13 @@ final class CreateUserCommand extends Command
     /**
      * @param list<Role> $roles
      */
-    private function createAndReport(SymfonyStyle $io, string $email, string $plainPassword, array $roles): int
-    {
+    private function createAndReport(
+        SymfonyStyle $io,
+        string $email,
+        #[SensitiveParameter]
+        string $plainPassword,
+        array $roles,
+    ): int {
         try {
             $hashedPassword = HashedPassword::fromHash($this->passwordHasher->hash($plainPassword));
             $user = $this->createUser->create($email, $hashedPassword, ...$roles);

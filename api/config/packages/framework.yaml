@@ -7,11 +7,13 @@ framework:
 
     # Session auth makes the cookie posture load-bearing. These match the framework defaults but are pinned
     # explicitly because they are now security-relevant: httpOnly (JS cannot read it), SameSite=Lax + Secure
-    # (not replayed cross-site). Login CSRF is covered by the same-origin deployment (FrankenPHP) + the
-    # non-broadened CORS policy + json_login's application/json requirement (a cross-site form cannot send
-    # application/json without a CORS preflight the policy denies) + SameSite=Lax. json_login validates no
-    # CSRF token, so no stateless-token CSRF is configured here — it is wired with the first authenticated
-    # mutating route that can consume it (wire-on-consumer). See docs/adr/auth-rbac-subsystem.md D1.
+    # (not replayed cross-site). Login CSRF (forced login) is closed by LoginOriginListener, which requires a
+    # same-origin Origin on the login POST: json_login attends the POST on the route's `_format: json` default
+    # (not on Content-Type), so a cross-site text/plain form with a JSON body would otherwise reach it as a
+    # CORS simple request — SameSite=Lax and the non-broadened CORS policy do not stop that (they gate reading
+    # the response, not sending the request). json_login validates no CSRF token, so no stateless-token CSRF is
+    # configured here — the stateless double-submit token is wired with the first authenticated mutating route
+    # that can consume it (wire-on-consumer). See docs/adr/auth-rbac-subsystem.md D1.
     # Note: the session starts only when read/written, so anonymous requests set no cookie.
     session:
         cookie_httponly: true

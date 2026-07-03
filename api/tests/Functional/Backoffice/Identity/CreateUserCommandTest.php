@@ -103,6 +103,27 @@ final class CreateUserCommandTest extends KernelTestCase
         });
     }
 
+    public function testRejectsAnEmptyPasswordWithoutPersisting(): void
+    {
+        $this->inRolledBackTransaction(function (): void {
+            $tester = new CommandTester($this->application->find('identity:user:create'));
+            $tester->setInputs(['']);
+            $tester->execute(['email' => 'mallory@erpify.test', '--role' => []]);
+
+            $this->assertSame(Command::INVALID, $tester->getStatusCode());
+            $this->assertNotInstanceOf(User::class, $this->users->findByEmail(Email::from('mallory@erpify.test')));
+        });
+    }
+
+    public function testReportsFailureOnABlankEmail(): void
+    {
+        $this->inRolledBackTransaction(function (): void {
+            $tester = $this->runCommand(['email' => '   ', 'password' => 'pw', '--role' => []]);
+
+            $this->assertSame(Command::FAILURE, $tester->getStatusCode());
+        });
+    }
+
     /**
      * @param array<string, mixed> $input
      */

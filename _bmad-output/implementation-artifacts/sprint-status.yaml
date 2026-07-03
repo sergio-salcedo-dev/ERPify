@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-23
-last_updated: 2026-07-02
+last_updated: 2026-07-03
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -80,7 +80,7 @@ development_status:
   #     request auth vía SecurityUser::getRoles/refreshUser); sólo alcanzable con datos corruptos.
   #   - política de fuerza de password en identity:user:create (hoy sólo rechaza vacío).
   #   - PasswordUpgraderInterface en UserProvider (rehash transparente al subir coste/algoritmo).
-  af-1-4-endurecimiento-auth-follow-ups: backlog
+  af-1-4-endurecimiento-auth-follow-ups: in-progress
   epic-auth-foundation-retrospective: optional
 
   # Epic 3 (E3): Acceso restringido + auto-auditado + atribución real (gated on auth-foundation)

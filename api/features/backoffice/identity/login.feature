@@ -6,6 +6,7 @@ Feature: Log in through the session firewall
   Background:
     Given I add "Content-Type" header equal to "application/json"
     And I add "Accept" header equal to "application/json"
+    And I add "Origin" header equal to "http://localhost"
 
   Scenario: Valid credentials establish a session
     When I send a POST request to "/backoffice/login" with body:
@@ -56,3 +57,25 @@ Feature: Log in through the session firewall
     Then the response status code should be 401
     And the JSON node "type" should be equal to "unauthenticated"
     And the JSON node "title" should be equal to "Invalid credentials."
+
+  Scenario: A cross-site login attempt is refused before any credential check, never establishing a session
+    Given I add "Origin" header equal to "https://evil.example"
+    When I send a POST request to "/backoffice/login" with body:
+    """
+    {
+      "email": "alice@erpify.test",
+      "password": "alice-password"
+    }
+    """
+    Then the response status code should be 403
+    And the header "Content-Type" should contain "application/problem+json"
+    And the JSON node "type" should be equal to "forbidden"
+
+  Scenario: A malformed JSON body is a 400 Problem Details, not a framework error body
+    When I send a POST request to "/backoffice/login" with body:
+    """
+    this is not json
+    """
+    Then the response status code should be 400
+    And the header "Content-Type" should contain "application/problem+json"
+    And the JSON node "type" should be equal to "invalid-input"
