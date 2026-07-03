@@ -7,7 +7,7 @@
 Folders mirror the bounded contexts under `api/src/`:
 
 - **Backoffice** (`/api/v1/backoffice`) — Health, plus a `Banks` folder (search, get, create, update, delete, realtime authorize).
-- **Frontoffice** (`/api/v1`) — Health, plus `Mercure` (bootstrap, publish-demo) and `Dev` (FrankenPHP hot reload) folders. Dev-only routes return 404 outside the dev environment.
+- **Frontoffice** (`/api/v1`) — Health and `Dev` (FrankenPHP hot reload) folders. Dev-only routes return 404 outside the dev environment.
 - **Shared** (`/api/v1`) — `Media` and `Storage` (content-addressed `GET` by SHA-256 hash).
 
 The collection variable `base_url` defaults to `https://localhost` (dev stack, primary checkout). The dev TLS certificate is local — disable *SSL certificate verification* in Postman settings or trust Caddy's local CA.

@@ -13,6 +13,7 @@ use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditLogWriter;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Functional\AuthenticatesFunctionalRequests;
 use JsonException;
 use Override;
 use PHPUnit\Framework\Attributes\CoversNothing;
@@ -33,6 +34,8 @@ use Symfony\Component\HttpFoundation\Request;
 #[CoversNothing]
 final class AuditEventDetailFunctionalTest extends WebTestCase
 {
+    use AuthenticatesFunctionalRequests;
+
     private const string ENDPOINT = '/api/v1/backoffice/audit/events';
 
     private const string ACTOR_ID = '11111111-1111-7111-8111-111111111111';
@@ -46,6 +49,8 @@ final class AuditEventDetailFunctionalTest extends WebTestCase
     {
         $this->client = self::createClient();
         $this->connection()->executeStatement('TRUNCATE audit_log RESTART IDENTITY');
+
+        $this->authenticateClient($this->client);
     }
 
     /**

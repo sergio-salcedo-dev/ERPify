@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Backoffice\Bank\Infrastructure\Controller;
 
+use Erpify\Tests\Functional\AuthenticatesFunctionalRequests;
 use JsonException;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
@@ -16,6 +17,8 @@ use Symfony\Component\HttpFoundation\Request;
 #[CoversNothing]
 final class BankStoredObjectMultipartFunctionalTest extends WebTestCase
 {
+    use AuthenticatesFunctionalRequests;
+
     private const string MIN_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5'
         . '+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
 
@@ -25,6 +28,7 @@ final class BankStoredObjectMultipartFunctionalTest extends WebTestCase
     public function testPostMultipartBankWithStoredObjectReturnsUrlAndServesImage(): void
     {
         $kernelBrowser = self::createClient();
+        $this->authenticateClient($kernelBrowser);
 
         $tmp = \tempnam(\sys_get_temp_dir(), 'erpify_stored');
         $this->assertNotFalse($tmp);
@@ -85,6 +89,7 @@ final class BankStoredObjectMultipartFunctionalTest extends WebTestCase
     public function testReloadedImagelessBankExposesNullStoredObjectUrl(): void
     {
         $kernelBrowser = self::createClient();
+        $this->authenticateClient($kernelBrowser);
 
         $suffix = \bin2hex(\random_bytes(4));
 

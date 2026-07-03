@@ -129,16 +129,17 @@ you change anything here.
       versions. Anonymous access is required by the §7 smoke test and the PWA
       dashboard health check. Two invariants: any *deep* health check
       (dependency status) must be authenticated or internal-only — never on
-      these routes — and when an API firewall lands, these two paths need an
-      explicit `PUBLIC_ACCESS` exemption. Tracked in
+      these routes — and these two paths carry an explicit `PUBLIC_ACCESS`
+      exemption in `access_control` (the firewall + default-deny landed). Tracked in
       [#222](https://github.com/sergio-salcedo-dev/ERPify/issues/222).
 - [ ] `GET /api/v1/backoffice/banks/{id}/accounts` returns the **full canonical
       IBAN** (PII) and is **consciously public** like the rest of `/backoffice`
       (the API has no auth layer yet). The masking is presentational on the PWA
       only — the backend never masks. Two invariants: the IBAN value is **never
       logged** (the access-audit message carries only `bankId` + timestamp), and
-      when the API firewall lands this route must require authentication (it is
-      **not** a public-by-design endpoint, unlike health). Tracked in
+      this route now requires authentication (default-deny `access_control`); it is
+      **not** a public-by-design endpoint, unlike health — route-level RBAC (Epic 3)
+      is the remaining gate. Tracked in
       [#240](https://github.com/sergio-salcedo-dev/ERPify/issues/240) (auth rollout,
       sibling of the health exemption #222).
 - [ ] The **standalone Bank Accounts UI** (`/backoffice/bank-accounts` list +
@@ -152,9 +153,9 @@ you change anything here.
       a refetch, never the IBAN (see the *Realtime wire contract* section of
       [`docs/architecture/event-catalog.md`](docs/architecture/event-catalog.md)). Same
       two invariants as the nested route: the IBAN value is **never logged**, and these
-      are **not** public-by-design endpoints — **route-level RBAC gating is required
-      before production**, requiring authentication when the API firewall lands (a
-      pre-prod follow-up under the same auth rollout,
+      are **not** public-by-design endpoints — the firewall now requires authentication
+      (default-deny), and **route-level RBAC gating is still required before production**
+      (a pre-prod follow-up under the same auth rollout,
       [#240](https://github.com/sergio-salcedo-dev/ERPify/issues/240) / #222).
 - [ ] `audit_log` (raw-DBAL append-only table) **contains live PII**: `actor_id`,
       `ip`, `user_agent`. Capture is now wired: generic `/api` navigation on
@@ -207,9 +208,12 @@ you change anything here.
       **non-broadened CORS** policy + `json_login`'s **`application/json` requirement** (a cross-site form cannot
       send `application/json` without a CORS preflight the policy denies) + `SameSite=Lax`. `json_login`
       validates no CSRF token, so **no** stateless-token CSRF is configured — it is wired with the first
-      authenticated **mutating** route that can consume it (wire-on-consumer). CORS / Mercure are **not** broadened. **Not yet gated:** there is **no `access_control`** — default-deny + the 401 on
-      protected routes land in AF-1.3, and `#[IsGranted]` on the audit read routes lands in Epic 3, so those
-      routes stay public until then. Sessions use the **native file handler** (single-container only) — a shared
+      authenticated **mutating** route that can consume it (wire-on-consumer). CORS / Mercure are **not** broadened. **Access-control baseline:** `access_control` is **default-deny** — every `/api`
+      route requires an authenticated session except an explicit allowlist (login, health probes, dev hot-reload). An
+      unauthenticated request to a protected route is a **401 `unauthenticated`** through the pipeline:
+      `UnauthenticatedAccessListener` rewrites the firewall's `AccessDeniedException` to an `AuthenticationException` for
+      anonymous callers (so 401, not 403), while an authenticated-but-under-privileged caller still gets 403 — the shape
+      `#[IsGranted]` on the audit read routes (Epic 3) relies on. Media/object routes are protected (not public-by-design). Sessions use the **native file handler** (single-container only) — a shared
       handler (Postgres/Redis) is a follow-up before horizontal scaling. ADR
       [`docs/adr/auth-rbac-subsystem.md`](docs/adr/auth-rbac-subsystem.md).
 

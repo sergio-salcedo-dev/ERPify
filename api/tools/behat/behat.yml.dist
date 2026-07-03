@@ -22,6 +22,9 @@ default:
                 # per-feature restore happens first and the stats reset wipes it —
                 # otherwise the first scenario of a run measures fixture queries.
                 - Erpify\Tests\Behat\Context\FixturesContext
+                # After FixturesContext (needs the fixture user + a restored DB) and before DoctrineContext,
+                # so the login lookup is wiped by the per-scenario stats reset and never counts against a budget.
+                - Erpify\Tests\Behat\Context\SecurityContext
                 - Erpify\Tests\Behat\Context\DoctrineContext
                 - Erpify\Tests\Behat\Context\EntityManagerContext
                 - Erpify\Tests\Behat\Context\HttpRequestContext:

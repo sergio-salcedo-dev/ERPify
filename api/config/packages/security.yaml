@@ -27,9 +27,22 @@ security:
             login_throttling:
                 max_attempts: 5
 
-    # No access_control: default-deny + the public-route allowlist (and the 401 on protected routes) land
-    # in AF-1.3; #[IsGranted] on the audit read routes lands in Epic 3. A missing entry point is fine while
-    # nothing triggers one (single json_login authenticator, no access_control).
+    # Default-deny: every /api route needs an authenticated session unless it is on this allowlist, which is
+    # the complete set of routes with a legitimate unauthenticated caller — the login handshake, the liveness
+    # probes hit by CI/monitoring, and the dev hot-reload poll the PWA layout fires before any session exists.
+    # First match wins, so the catch-all is last; it is scoped to `^/api` (not `^/`) so /_dev, /_wdt,
+    # /.well-known/mercure and the reverse-proxied PWA stay outside the firewall's remit. An unauthenticated
+    # hit raises AccessDeniedException, which UnauthenticatedAccessListener turns into a 401 through the
+    # Problem Details pipeline; adding a protected route needs no config — it falls through to the catch-all.
+    access_control:
+        - { path: '^/api/v1/backoffice/login$', roles: PUBLIC_ACCESS }
+        - { path: '^/api/v1/backoffice/health(/database)?$', roles: PUBLIC_ACCESS }
+        - { path: '^/api/v1/health$', roles: PUBLIC_ACCESS }
+        - { path: '^/api/v1/dev/', roles: PUBLIC_ACCESS }
+        # `/api/test/*` are when@test-only throwaway routes that drive the error pipeline through a real
+        # kernel; this rule is inert in prod, where those routes are not registered.
+        - { path: '^/api/test/', roles: PUBLIC_ACCESS }
+        - { path: '^/api', roles: IS_AUTHENTICATED_FULLY }
 
 when@test:
     security:

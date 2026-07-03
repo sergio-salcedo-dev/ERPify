@@ -82,8 +82,6 @@ final class AuditPolicyTest extends TestCase
         yield 'backoffice health' => ['backoffice_health', 'GET'];
         yield 'backoffice database health' => ['backoffice_health_database', 'GET'];
         yield 'frontoffice health' => ['frontoffice_health', 'GET'];
-        yield 'mercure bootstrap' => ['frontoffice_mercure_bootstrap', 'GET'];
-        yield 'mercure publish demo' => ['frontoffice_mercure_publish_demo', 'POST'];
         yield 'bank realtime authorize' => ['backoffice_bank_realtime_authorize', 'GET'];
         yield 'dev hot reload' => ['frontoffice_dev_frankenphp_hot_reload', 'GET'];
         yield 'media asset' => ['shared_media_get', 'GET'];

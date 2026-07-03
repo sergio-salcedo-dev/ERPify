@@ -6,6 +6,7 @@ namespace Erpify\Tests\Functional\Backoffice\Bank\Infrastructure\Controller;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
+use Erpify\Tests\Functional\AuthenticatesFunctionalRequests;
 use JsonException;
 use Override;
 use PHPUnit\Framework\Attributes\CoversNothing;
@@ -29,6 +30,8 @@ use Symfony\Component\Uid\Uuid;
 #[CoversNothing]
 final class BankSearchCursorFunctionalTest extends WebTestCase
 {
+    use AuthenticatesFunctionalRequests;
+
     private const string ENDPOINT = '/api/v1/backoffice/banks';
 
     private const string FIRST_PAGE_QUERY = '?limit=10&sort=name&direction=ASC';
@@ -55,6 +58,8 @@ final class BankSearchCursorFunctionalTest extends WebTestCase
 
         $entityManager->flush();
         $entityManager->clear();
+
+        $this->authenticateClient($this->client);
     }
 
     /**

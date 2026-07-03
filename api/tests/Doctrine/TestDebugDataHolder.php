@@ -75,7 +75,7 @@ class TestDebugDataHolder extends DebugDataHolder
     {
         $backtraces = \debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
 
-        if (!$force && !$this->shouldLog($backtraces)) {
+        if (!$force && (!$this->shouldLog($backtraces) || $this->isAuthenticationLookup($query))) {
             return;
         }
 
@@ -126,6 +126,19 @@ class TestDebugDataHolder extends DebugDataHolder
         }
 
         return $resolved;
+    }
+
+    /**
+     * The session firewall reloads the authenticated user on every request (UserProvider::refreshUser →
+     * findByEmail). That lookup is fixed per-request authentication plumbing, not the business-query
+     * behaviour the per-connection budgets pin, so it is dropped here — otherwise every authenticated
+     * scenario would carry a spurious +1 against every count. `identity_user` is the Identity aggregate's
+     * table and has no business read path, so matching it by name is exact; revisit if that context ever
+     * gains queryable read endpoints of its own.
+     */
+    private function isAuthenticationLookup(Query $query): bool
+    {
+        return \str_contains($query->getSql(), 'identity_user');
     }
 
     /**
