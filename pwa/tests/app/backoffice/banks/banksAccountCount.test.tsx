@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { BanksTable } from "@/app/backoffice/banks/_components/BanksTable";
+import { BanksCards } from "@/app/backoffice/banks/_components/BanksCards";
 import BankDetailPage from "@/app/backoffice/banks/[id]/page";
 import { BANK_COLUMN_KEYS } from "@/app/backoffice/banks/_lib/bankColumns";
 import { Bank } from "@/context/backoffice/bank/domain/Bank";
@@ -56,6 +57,22 @@ describe("BanksTable — ACCOUNTS column", () => {
     expect(cell.closest("a")).toBeNull();
     expect(cell.closest("button")).toBeNull();
     expect(cell.querySelector("a, button")).toBeNull();
+  });
+});
+
+// --- BanksCards footer account count ---
+
+describe("BanksCards — account count footer", () => {
+  it("surfaces the account count in the meta footer", () => {
+    render(<BanksCards onBankDeleteFailed={() => {}} banks={[WITH_ACCOUNTS]} />);
+    const cell = screen.getByTestId(`banks-cards__accounts-${WITH_ACCOUNTS.id}`);
+    expect(cell).toHaveTextContent("5");
+  });
+
+  it("shows 0 when the bank has no accounts", () => {
+    render(<BanksCards onBankDeleteFailed={() => {}} banks={[WITHOUT_ACCOUNTS]} />);
+    const cell = screen.getByTestId(`banks-cards__accounts-${WITHOUT_ACCOUNTS.id}`);
+    expect(cell).toHaveTextContent("0");
   });
 });
 
