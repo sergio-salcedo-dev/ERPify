@@ -55,3 +55,4 @@ Feature: Log in through the session firewall
     """
     Then the response status code should be 401
     And the JSON node "type" should be equal to "unauthenticated"
+    And the JSON node "title" should be equal to "Invalid credentials."
