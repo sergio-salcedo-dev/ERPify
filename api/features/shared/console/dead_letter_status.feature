@@ -16,6 +16,13 @@ Feature: Dead-letter queue status command
     Then the last command should succeed
     And the command output should be JSON with a "total" field
 
+  Scenario: A positive numeric --limit is accepted
+    When I run the "messenger:failed:status" command with options:
+    """
+    {"--limit": 5}
+    """
+    Then the last command should succeed
+
   Scenario: A non-positive --limit is rejected
     When I run the "messenger:failed:status" command with parameters:
       | --limit | 0 |

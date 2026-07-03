@@ -10,6 +10,7 @@ use Behat\Hook\BeforeScenario;
 use Behat\Step\Then;
 use Behat\Step\When;
 use Erpify\Tests\Behat\Context\Abstraction\AbstractContext;
+use InvalidArgumentException;
 use JsonException;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\Console\Command\Command;
@@ -31,6 +32,8 @@ use Symfony\Component\HttpKernel\KernelInterface;
  */
 final class SymfonyCommandContext extends AbstractContext
 {
+    private const string NO_COMMAND_RAN = 'No command has been executed yet';
+
     private ?int $lastExitCode = null;
 
     private string $lastOutput = '';
@@ -54,17 +57,20 @@ final class SymfonyCommandContext extends AbstractContext
     }
 
     /**
-     * @throws JsonException
+     * @throws JsonException            when the body is not valid JSON
+     * @throws InvalidArgumentException when the body is not a JSON object of "--name": value pairs
      */
     #[When('I run the :commandName command with options:')]
     public function iRunTheCommandWithOptions(string $commandName, PyStringNode $options): void
     {
-        /** @var array<string, mixed> $decoded */
-        $decoded = (array) \json_decode($options->getRaw(), true, 512, JSON_THROW_ON_ERROR);
-
-        $this->execute($commandName, $decoded);
+        $this->execute($commandName, $this->decodeOptions($options));
     }
 
+    /**
+     * One string value per option/argument name. A two-column table cannot express a VALUE_NONE
+     * flag (it would bind the empty string, never true), a multi-value option (duplicate rows
+     * collapse last-wins), or a non-string value — use the JSON `with options:` body for those.
+     */
     #[When('I run the :commandName command with parameters:')]
     public function iRunTheCommandWithParameters(string $commandName, TableNode $parameters): void
     {
@@ -96,6 +102,8 @@ final class SymfonyCommandContext extends AbstractContext
     #[Then('the command output should contain :needle')]
     public function theCommandOutputShouldContain(string $needle): void
     {
+        $this->guardCommandRan();
+
         self::assertStringContainsString(
             $needle,
             $this->lastOutput,
@@ -103,22 +111,14 @@ final class SymfonyCommandContext extends AbstractContext
         );
     }
 
-    #[Then('the command output should not contain :needle')]
-    public function theCommandOutputShouldNotContain(string $needle): void
-    {
-        self::assertStringNotContainsString(
-            $needle,
-            $this->lastOutput,
-            \sprintf('Command output unexpectedly contained "%s". Output:%s%s', $needle, PHP_EOL, $this->lastOutput),
-        );
-    }
-
     /**
-     * @throws JsonException
+     * @throws JsonException when the output is not valid JSON
      */
     #[Then('the command output should be JSON with a :field field')]
     public function theCommandOutputShouldBeJsonWithField(string $field): void
     {
+        $this->guardCommandRan();
+
         /** @var array<string, mixed> $decoded */
         $decoded = (array) \json_decode($this->lastOutput, true, 512, JSON_THROW_ON_ERROR);
 
@@ -129,11 +129,42 @@ final class SymfonyCommandContext extends AbstractContext
         );
     }
 
+    /**
+     * @phpstan-assert int $this->lastExitCode
+     */
+    private function guardCommandRan(): void
+    {
+        self::assertNotNull($this->lastExitCode, self::NO_COMMAND_RAN);
+    }
+
     private function exitCode(): int
     {
-        self::assertNotNull($this->lastExitCode, 'No command has been executed yet');
+        $this->guardCommandRan();
 
         return $this->lastExitCode;
+    }
+
+    /**
+     * @throws JsonException            when the body is not valid JSON
+     * @throws InvalidArgumentException when the body is not a JSON object of named options
+     *
+     * @return array<string, mixed>
+     */
+    private function decodeOptions(PyStringNode $options): array
+    {
+        $decoded = \json_decode($options->getRaw(), true, 512, JSON_THROW_ON_ERROR);
+
+        // A JSON array/scalar decodes to integer keys, which ApplicationTester would bind as surplus
+        // positional arguments (an opaque "too many arguments"); require an object of named options.
+        if (!\is_array($decoded) || (\array_is_list($decoded) && [] !== $decoded)) {
+            throw new InvalidArgumentException(\sprintf(
+                'Command options must be a JSON object of "--name": value pairs, got: %s',
+                $options->getRaw(),
+            ));
+        }
+
+        /** @var array<string, mixed> $decoded */
+        return $decoded;
     }
 
     /**
@@ -141,10 +172,19 @@ final class SymfonyCommandContext extends AbstractContext
      */
     private function execute(string $commandName, array $parameters = []): void
     {
+        // The real console hands every option/argument value to a command as a string, so a numeric
+        // JSON value (5) is stringified to match — a command re-parsing its own input as a string
+        // (e.g. a numeric --limit) then behaves as on the CLI. Booleans stay booleans so a
+        // VALUE_NONE flag still reads true, not "1".
+        $values = \array_map(
+            static fn (mixed $value): mixed => \is_int($value) || \is_float($value) ? (string) $value : $value,
+            $parameters,
+        );
+
         $tester = new ApplicationTester($this->application());
         // Non-interactive: a generic "run any command" harness must never block on a prompt
         // (confirm/ask) waiting for stdin — take defaults / fail fast instead of hanging.
-        $tester->run(['command' => $commandName, ...$parameters], ['interactive' => false]);
+        $tester->run(['command' => $commandName, ...$values], ['interactive' => false]);
 
         $this->lastExitCode = $tester->getStatusCode();
         $this->lastOutput = $tester->getDisplay();
