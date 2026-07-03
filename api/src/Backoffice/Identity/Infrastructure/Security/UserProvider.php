@@ -24,7 +24,7 @@ use Symfony\Component\Security\Core\User\UserProviderInterface;
  */
 final class UserProvider implements UserProviderInterface
 {
-    private const string TIMING_PROBE_PASSWORD = 'timing-equalisation-probe';
+    private const string TIMING_PROBE_INPUT = 'timing-equalisation-probe';
 
     /**
      * Lazily hashed once, then reused, so every not-found response spends exactly one password verification —
@@ -84,8 +84,8 @@ final class UserProvider implements UserProviderInterface
     private function equaliseTiming(): void
     {
         $hasher = $this->passwordHasherFactory->getPasswordHasher(SecurityUser::class);
-        $dummyHash = $this->dummyHash ??= $hasher->hash(self::TIMING_PROBE_PASSWORD);
+        $dummyHash = $this->dummyHash ??= $hasher->hash(self::TIMING_PROBE_INPUT);
 
-        $hasher->verify($dummyHash, self::TIMING_PROBE_PASSWORD);
+        $hasher->verify($dummyHash, self::TIMING_PROBE_INPUT);
     }
 }
