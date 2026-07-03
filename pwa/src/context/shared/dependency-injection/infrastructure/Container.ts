@@ -25,7 +25,10 @@ import { ApiAuditTimelineNavigator } from "../../../backoffice/audit/infrastruct
 import { ApiAuditEventDetailRepository } from "../../../backoffice/audit/infrastructure/ApiAuditEventDetailRepository";
 import { ApiBankAccountRepository } from "../../../backoffice/bankaccount/infrastructure/ApiBankAccountRepository";
 import { ApiBankAccountSearchNavigator } from "../../../backoffice/bankaccount/infrastructure/ApiBankAccountSearchNavigator";
+import { BankAccountCrudRepository } from "../../../backoffice/bankaccount/infrastructure/BankAccountCrudRepository";
+import { BankAccountResourceNavigator } from "../../../backoffice/bankaccount/infrastructure/BankAccountResourceNavigator";
 import { SearchBankAccounts } from "../../../backoffice/bankaccount/application/SearchBankAccounts";
+import { SearchAllBankAccounts } from "../../../backoffice/bankaccount/application/SearchAllBankAccounts";
 import { FindBankAccount } from "../../../backoffice/bankaccount/application/FindBankAccount";
 import { CreateBankAccount } from "../../../backoffice/bankaccount/application/CreateBankAccount";
 import { UpdateBankAccount } from "../../../backoffice/bankaccount/application/UpdateBankAccount";
@@ -127,7 +130,22 @@ container
   .to(ApiBankAccountSearchNavigator)
   .inSingletonScope();
 
+// Generic resource-toolkit adapters over the bank-account ports for the global,
+// cross-bank list: `useResourceList` consumes `{ items }`-shaped pages of the
+// collection projection (rows enriched with the owning bank name) through the
+// `CrudRepository`/`ResourceSearchNavigator` contracts.
+container
+  .bind<BankAccountCrudRepository>("BackOfficeBankAccountCrudRepository")
+  .to(BankAccountCrudRepository)
+  .inSingletonScope();
+
+container
+  .bind<BankAccountResourceNavigator>("BackOfficeBankAccountResourceNavigator")
+  .to(BankAccountResourceNavigator)
+  .inSingletonScope();
+
 container.bind<SearchBankAccounts>("BackOfficeSearchBankAccounts").to(SearchBankAccounts);
+container.bind<SearchAllBankAccounts>("BackOfficeSearchAllBankAccounts").to(SearchAllBankAccounts);
 container.bind<FindBankAccount>("BackOfficeFindBankAccount").to(FindBankAccount);
 container.bind<CreateBankAccount>("BackOfficeCreateBankAccount").to(CreateBankAccount);
 container.bind<UpdateBankAccount>("BackOfficeUpdateBankAccount").to(UpdateBankAccount);

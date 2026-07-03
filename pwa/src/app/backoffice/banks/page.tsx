@@ -309,11 +309,15 @@ export default function BanksListPage() {
                   onDensityChange={setDensity}
                   testId="banks-list__density-toggle"
                 />
-                <BanksColumnPicker
-                  visible={columns}
-                  onChange={setColumns}
-                  testId="banks-list__columns"
-                />
+                {/* Column visibility is a table-only affordance — the cards render a
+                    fixed layout, so offering the picker there would be a no-op. */}
+                {view === "table" ? (
+                  <BanksColumnPicker
+                    visible={columns}
+                    onChange={setColumns}
+                    testId="banks-list__columns"
+                  />
+                ) : null}
               </div>
             ) : undefined
           }

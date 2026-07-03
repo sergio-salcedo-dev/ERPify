@@ -29,6 +29,7 @@ describe("SearchBankAccounts", () => {
   it("delegates to the repository with the bank id and criteria", async () => {
     const repository: BankAccountRepository = {
       search: vi.fn().mockResolvedValue(PAGE),
+      searchAll: vi.fn(),
       find: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),

@@ -141,6 +141,21 @@ you change anything here.
       **not** a public-by-design endpoint, unlike health). Tracked in
       [#240](https://github.com/sergio-salcedo-dev/ERPify/issues/240) (auth rollout,
       sibling of the health exemption #222).
+- [ ] The **standalone Bank Accounts UI** (`/backoffice/bank-accounts` list +
+      `/backoffice/bank-accounts/{id}` detail) surfaces the **full canonical IBAN**
+      (PII) sourced from `GET /api/v1/backoffice/bank-accounts` (global list) and
+      `GET /api/v1/backoffice/bank-accounts/{id}` (detail) — both **consciously public**
+      like the sibling nested route (the API has no auth layer yet). Mitigations already
+      in place: the IBAN is **masked at the presentation edge** (`maskIban` / `IbanCell`),
+      the backend never masks; and the realtime channel keeping the list/detail live is
+      **PII-free** — the Mercure broadcast carries only `{ type, id, bankId }` and drives
+      a refetch, never the IBAN (see the *Realtime wire contract* section of
+      [`docs/architecture/event-catalog.md`](docs/architecture/event-catalog.md)). Same
+      two invariants as the nested route: the IBAN value is **never logged**, and these
+      are **not** public-by-design endpoints — **route-level RBAC gating is required
+      before production**, requiring authentication when the API firewall lands (a
+      pre-prod follow-up under the same auth rollout,
+      [#240](https://github.com/sergio-salcedo-dev/ERPify/issues/240) / #222).
 - [ ] `audit_log` (raw-DBAL append-only table) **contains live PII**: `actor_id`,
       `ip`, `user_agent`. Capture is now wired: generic `/api` navigation on
       `kernel.terminate` (→ `activity`) and permission denials on `kernel.exception`

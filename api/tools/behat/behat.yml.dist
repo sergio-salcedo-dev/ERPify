@@ -37,6 +37,7 @@ default:
                 - Erpify\Tests\Behat\Context\OutboxContext
                 - Erpify\Tests\Behat\Context\EventStoreContext
                 - Erpify\Tests\Behat\Context\MessengerConsumerContext
+                - Erpify\Tests\Behat\Context\SymfonyCommandContext
                 - Erpify\Tests\Behat\Context\NotificationContext
                 - Erpify\Tests\Behat\Context\MercureContext
                 - Erpify\Tests\Behat\Context\LoggerContext

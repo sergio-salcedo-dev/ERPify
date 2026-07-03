@@ -6,11 +6,13 @@ import { useMercureRealtime } from "@/context/shared/real-time/infrastructure/us
 
 /**
  * Mercure topic IRIs for back-office bank accounts. MUST stay in lock-step with
- * the API `Erpify\Backoffice\BankAccount\Domain\MercureBankAccountTopic`. The
- * collection is scoped per owning bank (the list is per-bank); the detail is
+ * the API `Erpify\Backoffice\BankAccount\Domain\MercureBankAccountTopic`.
+ * `collectionAll` is the cross-bank global feed (mirrors the Bank collection
+ * topic); `collection(bankId)` is scoped to one bank's nested list; `detail` is
  * keyed by the account id.
  */
 export const bankAccountTopics = {
+  collectionAll: "urn:erpify:backoffice:bankaccounts",
   collection: (bankId: string): string => `urn:erpify:backoffice:bank:${bankId}:accounts`,
   detail: (accountId: string): string => `urn:erpify:backoffice:bankaccount:${accountId}`,
 } as const;
