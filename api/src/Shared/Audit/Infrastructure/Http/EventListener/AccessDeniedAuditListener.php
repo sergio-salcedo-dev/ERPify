@@ -73,7 +73,20 @@ final readonly class AccessDeniedAuditListener
 
     private function isAccessDenied(Throwable $throwable): bool
     {
+        // Cycle-safe walk (spl_object_id seen-set): a malformed/rewrapped chain with a reused previous
+        // instance MUST NOT loop and stall the FrankenPHP worker — the guard ProblemDetailsFactory and
+        // UnauthenticatedAccessListener also apply.
+        $seen = [];
+
         for ($current = $throwable; $current instanceof Throwable; $current = $current->getPrevious()) {
+            $id = \spl_object_id($current);
+
+            if (isset($seen[$id])) {
+                return false;
+            }
+
+            $seen[$id] = true;
+
             if ($current instanceof AccessDeniedException) {
                 return true;
             }

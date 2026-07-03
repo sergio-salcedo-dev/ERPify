@@ -201,8 +201,9 @@ faithful to ADR D1/D2/D3.
   remember-me token (not configured today) gets 401, not 403.
 - **[cosmetic] import `User`** in `SecurityContext` (drops a rector-left inline FQCN).
 
-**Deferred (1):** `AccessDeniedAuditListener::isAccessDenied` has the same unguarded chain walk (pre-existing) →
-`deferred-work.md`.
+**Boy-scout (folded from a review finding):** hardened `AccessDeniedAuditListener::isAccessDenied` with the same
+`spl_object_id` cycle-guard — the sibling chain-walk the carve-out fix flagged (both access-exception
+chain-walkers are now cycle-safe).
 
 **Rejected:** chain-walk DRY (2 occurrences, Rule-of-Three unmet), AC2 prose (actor swap is E3; the test
 asserts only 200), `^/api/test/` in base vs `when@test` (deliberate — a `when@test` `access_control` block would
