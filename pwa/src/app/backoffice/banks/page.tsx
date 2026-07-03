@@ -12,8 +12,8 @@ import { useBanksCount } from "@/context/backoffice/bank/application/useBanksCou
 import { ViewStatus } from "@/context/shared/view-state/domain/ViewState";
 import {
   AsyncBoundary,
-  DensityToggle,
   LIST_DENSITY_STORAGE_KEY,
+  ListDisplayToggles,
   MutationError,
   RecordSheet,
   SelectionMode,
@@ -302,23 +302,20 @@ export default function BanksListPage() {
           onReset={query.reset}
           leading={
             items.length > 0 ? (
-              <div className="banks-list__display-toggles flex items-center gap-2">
-                <BanksViewToggle view={view} onViewChange={setView} />
-                <DensityToggle
-                  density={density}
-                  onDensityChange={setDensity}
-                  testId="banks-list__density-toggle"
-                />
-                {/* Column visibility is a table-only affordance — the cards render a
-                    fixed layout, so offering the picker there would be a no-op. */}
-                {view === "table" ? (
+              <ListDisplayToggles
+                view={view}
+                viewToggle={<BanksViewToggle view={view} onViewChange={setView} />}
+                density={density}
+                onDensityChange={setDensity}
+                columnPicker={
                   <BanksColumnPicker
                     visible={columns}
                     onChange={setColumns}
                     testId="banks-list__columns"
                   />
-                ) : null}
-              </div>
+                }
+                testIdPrefix="banks-list"
+              />
             ) : undefined
           }
         />
