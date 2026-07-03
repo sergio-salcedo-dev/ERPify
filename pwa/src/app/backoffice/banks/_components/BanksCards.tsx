@@ -143,6 +143,13 @@ export function BanksCards({
               </div>
               <CardContent className="banks-cards__footer border-border mt-auto border-t pt-3">
                 <dl className="banks-cards__meta grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs tabular-nums">
+                  <dt className="text-muted-foreground">Accounts</dt>
+                  <dd
+                    className="banks-cards__accounts text-foreground"
+                    data-testid={`banks-cards__accounts-${bank.id}`}
+                  >
+                    {bank.accountCount}
+                  </dd>
                   <dt className="text-muted-foreground">Updated</dt>
                   <dd
                     className="banks-cards__updated text-foreground"
