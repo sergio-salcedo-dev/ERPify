@@ -105,7 +105,10 @@ E2E_USER_EMAIL ?= e2e@erpify.test
 E2E_USER_PASSWORD ?= e2ePassword123
 
 pwa.test.e2e: pwa.install.if-missing ## Run end-to-end tests with Playwright; CI_SHARD=N CI_TOTAL_SHARDS=M for sharded runs; pass c='…' for extra args
-	@$(MAKE) --no-print-directory sf c='identity:user:create $(E2E_USER_EMAIL) $(E2E_USER_PASSWORD) --role AUDIT_READER' >/dev/null 2>&1 || true
+	@echo "[e2e] seeding user $(E2E_USER_EMAIL) (idempotent)…"
+	@$(MAKE) --no-print-directory sf c='identity:user:create $(E2E_USER_EMAIL) $(E2E_USER_PASSWORD) --role AUDIT_READER' >/dev/null 2>&1 \
+		&& echo "[e2e] user seeded." \
+		|| echo "[e2e] seed returned non-zero — user likely already exists (fine) or the stack is unreachable."
 	@if [ -n "$(CI_SHARD)" ] && [ -n "$(CI_TOTAL_SHARDS)" ]; then \
 		$(call pwa_cmd,npm run test:e2e -- --shard=$(CI_SHARD)/$(CI_TOTAL_SHARDS) $(c)); \
 	else \
