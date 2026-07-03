@@ -46,7 +46,6 @@ If the two differ, you get **401** on publish or subscribe.
 | Compose files in repos | Use `${CADDY_MERCURE_JWT_SECRET}` references, not literal keys, in committed YAML. |
 | Stale keys after incident | **Rotate** the secret and redeploy Symfony + Caddy together; invalidate old sessions if needed. |
 | Over-broad hub access | Harden Caddy `mercure { }` (e.g. drop **`anonymous`** in production). See §5 below. |
-| Demo endpoints | `POST /api/v1/mercure/publish-demo` is **404 in prod** (`APP_ENV=prod`); do not enable dev env on the public internet. |
 
 ---
 
@@ -61,8 +60,7 @@ Use this before cutover or after any secret or infra change.
 - [ ] `CORS_ALLOW_ORIGINS` lists **exact** origins (no `*`) and matches real browser origins using credentialed Mercure bootstrap.
 - [ ] HTTPS on the public site; `MERCURE_PUBLIC_URL` uses **https** on that hostname.
 - [ ] Hub `anonymous` reviewed: disabled or acceptable for your threat model.
-- [ ] `POST .../mercure/publish-demo` returns **404** on production host.
-- [ ] Smoke: `GET /api/v1/mercure/bootstrap` over HTTPS; Mercure SSE works after deploy.
+- [ ] Smoke: a realtime write publishes over the hub (`/.well-known/mercure`) and the PWA receives the SSE after deploy.
 
 ---
 

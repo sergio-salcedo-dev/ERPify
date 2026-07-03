@@ -209,9 +209,12 @@ you change anything here.
       cross-site `text/plain` form with a JSON body would otherwise reach it as a CORS simple request — neither
       `SameSite=Lax` nor the non-broadened CORS policy stops forced login (they gate reading the response, not
       sending the request). `json_login` validates no CSRF token, so **no** stateless-token CSRF is configured — it is wired with the first
-      authenticated **mutating** route that can consume it (wire-on-consumer). CORS / Mercure are **not** broadened. **Not yet gated:** there is **no `access_control`** — default-deny + the 401 on
-      protected routes land in AF-1.3, and `#[IsGranted]` on the audit read routes lands in Epic 3, so those
-      routes stay public until then. Sessions use the **native file handler** (single-container only) — a shared
+      authenticated **mutating** route that can consume it (wire-on-consumer). CORS / Mercure are **not** broadened. **Access-control baseline:** `access_control` is **default-deny** — every `/api`
+      route requires an authenticated session except an explicit allowlist (login, health probes, dev hot-reload). An
+      unauthenticated request to a protected route is a **401 `unauthenticated`** through the pipeline:
+      `UnauthenticatedAccessListener` rewrites the firewall's `AccessDeniedException` to an `AuthenticationException` for
+      anonymous callers (so 401, not 403), while an authenticated-but-under-privileged caller still gets 403 — the shape
+      `#[IsGranted]` on the audit read routes (Epic 3) relies on. Media/object routes are protected (not public-by-design). Sessions use the **native file handler** (single-container only) — a shared
       handler (Postgres/Redis) is a follow-up before horizontal scaling. ADR
       [`docs/adr/auth-rbac-subsystem.md`](docs/adr/auth-rbac-subsystem.md).
 

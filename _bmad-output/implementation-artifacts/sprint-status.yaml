@@ -70,8 +70,8 @@ development_status:
   # docs/adr/auth-rbac-subsystem.md + _bmad-output/planning-artifacts/epics-auth-foundation.md. DAG: AF → 3.1 → 3.2 → 3.3
   epic-auth-foundation: in-progress
   af-1-1-user-aggregate-backoffice-identity-persistencia: done
-  af-1-2-firewall-sesion-securityuser-authenticator-csrf: in-progress
-  af-1-3-baseline-control-acceso-default-deny-401: backlog
+  af-1-2-firewall-sesion-securityuser-authenticator-csrf: done
+  af-1-3-baseline-control-acceso-default-deny-401: in-review
   # Follow-ups de endurecimiento surgidos en AF-1.2 (review adversarial, PR #429) — no bloquean AF-1.2/1.3:
   #   - enumeración por timing: email desconocido salta la verificación de hash (rápido) vs password mala
   #     corre bcrypt (lento); el cuerpo ya es indistinguible (mensaje constante), el timing no → dummy-hash.

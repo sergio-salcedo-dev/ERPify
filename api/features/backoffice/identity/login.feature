@@ -1,3 +1,4 @@
+@anonymous
 Feature: Log in through the session firewall
   As the PWA
   In order to reach backoffice endpoints as an authenticated user

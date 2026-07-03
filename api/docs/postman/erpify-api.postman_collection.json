@@ -184,40 +184,6 @@
           "response": []
         },
         {
-          "name": "Mercure",
-          "description": "Mercure context (Frontoffice/Mercure)",
-          "item": [
-            {
-              "name": "Mercure bootstrap",
-              "request": {
-                "method": "GET",
-                "header": [{ "key": "Accept", "value": "application/json" }],
-                "url": {
-                  "raw": "{{base_url}}/api/v1/mercure/bootstrap",
-                  "host": ["{{base_url}}"],
-                  "path": ["api", "v1", "mercure", "bootstrap"]
-                },
-                "description": "Bootstraps the Mercure subscription for the frontoffice."
-              },
-              "response": []
-            },
-            {
-              "name": "Mercure publish demo (dev only)",
-              "request": {
-                "method": "POST",
-                "header": [{ "key": "Accept", "value": "application/json" }],
-                "url": {
-                  "raw": "{{base_url}}/api/v1/mercure/publish-demo",
-                  "host": ["{{base_url}}"],
-                  "path": ["api", "v1", "mercure", "publish-demo"]
-                },
-                "description": "Publishes a demo update to the Mercure hub. No body. **404 outside the dev environment.**"
-              },
-              "response": []
-            }
-          ]
-        },
-        {
           "name": "Dev",
           "description": "Dev context (Frontoffice/Dev) — dev environment only",
           "item": [

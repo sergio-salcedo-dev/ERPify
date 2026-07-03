@@ -94,12 +94,6 @@ deptrac:
         - name: Frontoffice.Health.Infrastructure
           collectors: [{ type: directory, value: src/Frontoffice/Health/Infrastructure/.* }]
 
-        # ---- Frontoffice / Mercure ----------------------------------------------
-        - name: Frontoffice.Mercure.Domain
-          collectors: [{ type: directory, value: src/Frontoffice/Mercure/Domain/.* }]
-        - name: Frontoffice.Mercure.Infrastructure
-          collectors: [{ type: directory, value: src/Frontoffice/Mercure/Infrastructure/.* }]
-
         # ---- Shared kernel (always importable; nested modules folded in) --------
         - name: Shared.Domain
           collectors: [{ type: directory, value: src/Shared/(.*/)?Domain/.* }]
@@ -173,7 +167,6 @@ deptrac:
         Backoffice.BankAccount.Domain: *domain
         Backoffice.Health.Domain: *domain
         Backoffice.Identity.Domain: *domain
-        Frontoffice.Mercure.Domain: *domain
         Shared.Domain: *domain
 
         # Application may orchestrate its own Domain + the shared kernel, plus the
@@ -311,20 +304,6 @@ deptrac:
             - Vendor.Flysystem
             - Vendor.Twig
         Frontoffice.Health.Infrastructure:
-            - Shared.Domain
-            - Shared.Application
-            - Shared.Infrastructure
-            - Vendor.Psr
-            - Vendor.SymfonyUid
-            - Vendor.PassiveMetadata
-            - Vendor.Doctrine
-            - Vendor.Symfony
-            - Vendor.Monolog
-            - Vendor.ApiPlatform
-            - Vendor.Guzzle
-            - Vendor.Flysystem
-        Frontoffice.Mercure.Infrastructure:
-            - Frontoffice.Mercure.Domain
             - Shared.Domain
             - Shared.Application
             - Shared.Infrastructure

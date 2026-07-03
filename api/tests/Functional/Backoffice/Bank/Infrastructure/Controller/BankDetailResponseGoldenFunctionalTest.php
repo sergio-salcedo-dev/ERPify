@@ -6,6 +6,7 @@ namespace Erpify\Tests\Functional\Backoffice\Bank\Infrastructure\Controller;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
+use Erpify\Tests\Functional\AuthenticatesFunctionalRequests;
 use JsonException;
 use Override;
 use PHPUnit\Framework\Attributes\CoversNothing;
@@ -26,6 +27,8 @@ use Symfony\Component\Uid\Uuid;
 #[CoversNothing]
 final class BankDetailResponseGoldenFunctionalTest extends WebTestCase
 {
+    use AuthenticatesFunctionalRequests;
+
     private const string ENDPOINT = '/api/v1/backoffice/banks';
 
     private const string ATOM_PATTERN = '/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/';
@@ -41,6 +44,8 @@ final class BankDetailResponseGoldenFunctionalTest extends WebTestCase
         $this->entityManager()->getConnection()->executeStatement(
             'TRUNCATE bank_account, bank RESTART IDENTITY CASCADE',
         );
+
+        $this->authenticateClient($this->client);
     }
 
     /**

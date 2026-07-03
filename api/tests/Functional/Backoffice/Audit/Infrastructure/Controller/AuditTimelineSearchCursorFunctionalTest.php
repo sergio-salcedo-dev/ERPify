@@ -12,6 +12,7 @@ use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditLogWriter;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Functional\AuthenticatesFunctionalRequests;
 use JsonException;
 use Override;
 use PHPUnit\Framework\Attributes\CoversNothing;
@@ -36,6 +37,8 @@ use Symfony\Component\HttpFoundation\Request;
 #[CoversNothing]
 final class AuditTimelineSearchCursorFunctionalTest extends WebTestCase
 {
+    use AuthenticatesFunctionalRequests;
+
     private const string ENDPOINT = '/api/v1/backoffice/audit/timeline';
 
     private const int DATASET_SIZE = 30;
@@ -52,6 +55,8 @@ final class AuditTimelineSearchCursorFunctionalTest extends WebTestCase
     {
         $this->client = self::createClient();
         $this->seedTimeline();
+
+        $this->authenticateClient($this->client);
     }
 
     /**

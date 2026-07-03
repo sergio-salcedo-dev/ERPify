@@ -18,9 +18,6 @@ return [
             'max_age' => 3600,
         ],
         'paths' => [
-            '^/api/v1/mercure/' => [
-                'allow_credentials' => true,
-            ],
             '^/api/' => [],
         ],
     ],

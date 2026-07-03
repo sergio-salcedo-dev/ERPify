@@ -53,7 +53,7 @@ final class AuditPolicy
 
     /**
      * Infrastructure and UI-plumbing interactions that never belong to an actor's timeline: health checks,
-     * Mercure, realtime authorize hops, dev hot-reload, asset/object serving (`shared_*`) and bare count
+     * realtime authorize hops, dev hot-reload, asset/object serving (`shared_*`) and bare count
      * helpers. Classified by absence of business meaning, not by HTTP method — a count endpoint stays
      * non-auditable whether it is its own route or later folded into a payload.
      */
@@ -61,7 +61,6 @@ final class AuditPolicy
     {
         return \in_array(true, [
             $this->isHealthCheck($route),
-            \str_contains($route, 'mercure'),
             \str_contains($route, 'realtime'),
             \str_contains($route, '_dev_'),
             \str_starts_with($route, 'shared_'),

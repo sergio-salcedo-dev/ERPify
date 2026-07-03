@@ -46,7 +46,7 @@ api/src/
 │   ├── Bank/          { Application, Domain, Infrastructure }
 │   ├── BankAccount/   { Application, Domain, Infrastructure }   # references Bank by id only — adr/bank-bankaccount-modeling.md
 │   ├── Health/        { Application, Domain, Infrastructure }
-│   └── Identity/      { Application, Domain, Infrastructure }   # User aggregate + session firewall (json_login, SecurityUser/UserProvider, PasswordHasher, CSRF) — auth foundation, adr/auth-rbac-subsystem.md
+│   └── Identity/      { Application, Domain, Infrastructure }   # User aggregate + session firewall (json_login, SecurityUser/UserProvider, PasswordHasher) + access_control default-deny (UnauthenticatedAccessListener → 401) — auth foundation, adr/auth-rbac-subsystem.md
 ├── Frontoffice/
 │   ├── Dev/        { Infrastructure/Controller }
 │   ├── Health/     { Infrastructure/Controller }
@@ -267,7 +267,7 @@ Full reference (mapping table, header rules, observability, code map, test surfa
 - **No-handler & failure observability.** The default bus keeps `allow_no_handlers: false`, so a domain event that was never routed *and* has no handler fails synchronously inside the write transaction — surfacing wiring gaps loudly in dev/test (deliberate fail-fast). A handler that fails in the worker exhausts retries and lands in `failure_transport: failed`, where it is visible and replayable (never a swallowed warning). Why this is config-not-`try/catch`, plus the per-bus `allow_no_handlers` split (event bus N:M / command bus 1:1) when buses split for CQRS: ADR [`adr/event-driven-architecture.md`](./adr/event-driven-architecture.md) (D7).
 - **Dead-letter observability & safe replay.** `messenger:failed:status [--json] [--limit]` gives a project view of the `failed` transport aggregated by message type and age, beyond the framework's raw `messenger:failed:show` (`--json` is the scrapeable metric, read behind the capability-probed `DeadLetterReader` port). `ReportDeadLetterBacklogHandler` rides the hourly `scheduler_maintenance` tick and logs one `error` line when the backlog breaches a count/age threshold — the Monolog→Sentry bridge is intentionally unwired, so that log line *is* the cron alarm. **Safe replay** under claim-based dedup is *clear the claim → then retry*, never retry first (a dangling claim makes `messenger:failed:retry` silently drop the message): run `event:dedup:clear <eventId> <handler>` then `messenger:failed:retry <id>`. ADR: [`adr/dead-letter-observability.md`](./adr/dead-letter-observability.md).
 - Default transport: Doctrine (`MESSENGER_TRANSPORT_DSN=doctrine://default?auto_setup=0`).
-- **Mercure Hub**: publish via `Frontoffice/Mercure/` publishers at `/.well-known/mercure`; JWT required (`CADDY_MERCURE_JWT_SECRET` in prod).
+- **Mercure Hub**: modules publish domain-event updates to per-aggregate topics through the hub at `/.well-known/mercure` (each module's `.../realtime/authorize` route mints the subscriber cookie); JWT required (`CADDY_MERCURE_JWT_SECRET` in prod).
 - Mail is dispatched asynchronously via Messenger.
 
 ## Storage & media
