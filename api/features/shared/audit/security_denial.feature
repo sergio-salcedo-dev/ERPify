@@ -19,8 +19,8 @@ Feature: Audit permission denials as durable security entries
       {
         "action": "ACCESS_DENIED",
         "level": "security",
-        "actor_type": "anonymous",
-        "actor_id": null,
+        "actor_type": "user",
+        "actor_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
         "resource_type": null,
         "resource_id": null,
         "correlation_id": "0190dead-beef-7abc-8def-001122334455",

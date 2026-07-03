@@ -9,6 +9,7 @@ use Erpify\Backoffice\Audit\Infrastructure\Http\AuditEventDetailResourceMapper;
 use Erpify\Shared\Http\Infrastructure\Responder\ResourceResponder;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * `GET /api/v1/backoffice/audit/events/{id}` — the canonical audit event, returning the full row with
@@ -17,12 +18,11 @@ use Symfony\Component\Routing\Attribute\Route;
  * off the hot paginated path. The finder guards `{id}` with `Uuid::ensure` (400 `invalid-uuid`) before
  * any lookup and maps an absent row to 404 through the RFC 9457 pipeline.
  *
- * Conscious public route: the codebase has no security firewall/voter yet (the timeline and bank read
- * routes are public too), so the RBAC gate is a pre-prod follow-up (ADR D8/E3), not this slice. No
- * `_audit_resource_type` default is declared on purpose — auditing the read of the audit log would be
- * recursive noise; self-auditing is the same D8/E3 work.
+ * No `_audit_resource_type` default is declared on purpose: the access-log hook would otherwise record
+ * every read of the audit log as an audit entry, which is recursive noise.
  */
 #[Route('/audit/events/{id}', name: 'backoffice_audit_event_detail', methods: ['GET'])]
+#[IsGranted('ROLE_AUDIT_READER')]
 final readonly class AuditEventDetailController
 {
     public function __construct(

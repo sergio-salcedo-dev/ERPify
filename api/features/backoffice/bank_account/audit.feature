@@ -6,7 +6,7 @@ Feature: Audit the access to a bank's accounts
   # BANK_ACCOUNTS_VIEWED is recorded through the AuditLogger seam as an async `activity` entry on the
   # dedicated `audit` transport, so the row only materialises after that transport is consumed — the
   # request path itself stays free of audit IO. The `metadata` column is PII-free (never the IBAN); the
-  # bank is identified by its id alone, and the actor is `anonymous` until authentication exists.
+  # bank is identified by its id alone, and the actor is the authenticated user that read the accounts.
   Scenario: Listing a bank's accounts records exactly one forensic audit row
     Given I add "X-Correlation-Id" header equal to "01914e2a-7b3c-7def-8a2b-3c4d5e6f7a8b"
     When I send a "GET" request to "/backoffice/banks/11111111-1111-7000-8000-000000000001/accounts?limit=100"
@@ -20,8 +20,8 @@ Feature: Audit the access to a bank's accounts
       {
         "action": "BANK_ACCOUNTS_VIEWED",
         "level": "activity",
-        "actor_type": "anonymous",
-        "actor_id": null,
+        "actor_type": "user",
+        "actor_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
         "resource_type": "Bank",
         "resource_id": "11111111-1111-7000-8000-000000000001",
         "correlation_id": "01914e2a-7b3c-7def-8a2b-3c4d5e6f7a8b",
