@@ -203,10 +203,12 @@ you change anything here.
       (`SameSite=Lax`, `Secure=auto`) — no JWT/token in the client. A failed login flows through the RFC 9457
       pipeline as a **401 `unauthenticated`** (never a manual `JsonResponse`); the message is **normalised to a
       single "Invalid credentials."** so "unknown email" and "wrong password" are indistinguishable — no user
-      enumeration (`hide_user_not_found` stays on). **Login CSRF** is covered by the same-origin deployment + the
-      **non-broadened CORS** policy + `json_login`'s **`application/json` requirement** (a cross-site form cannot
-      send `application/json` without a CORS preflight the policy denies) + `SameSite=Lax`. `json_login`
-      validates no CSRF token, so **no** stateless-token CSRF is configured — it is wired with the first
+      enumeration (`hide_user_not_found` stays on). **Login CSRF (forced login)** is closed by a **same-origin
+      `Origin` guard** on the login POST (`LoginOriginListener`, throws `403 forbidden` through the RFC 9457
+      pipeline): `json_login` fires on the route's `_format: json` default, **not** the `Content-Type`, so a
+      cross-site `text/plain` form with a JSON body would otherwise reach it as a CORS simple request — neither
+      `SameSite=Lax` nor the non-broadened CORS policy stops forced login (they gate reading the response, not
+      sending the request). `json_login` validates no CSRF token, so **no** stateless-token CSRF is configured — it is wired with the first
       authenticated **mutating** route that can consume it (wire-on-consumer). CORS / Mercure are **not** broadened. **Not yet gated:** there is **no `access_control`** — default-deny + the 401 on
       protected routes land in AF-1.3, and `#[IsGranted]` on the audit read routes lands in Epic 3, so those
       routes stay public until then. Sessions use the **native file handler** (single-container only) — a shared
