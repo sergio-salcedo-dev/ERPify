@@ -113,6 +113,22 @@ final class SymfonyCommandContext extends AbstractContext
         );
     }
 
+    /**
+     * @throws JsonException
+     */
+    #[Then('the command output should be JSON with a :field field')]
+    public function theCommandOutputShouldBeJsonWithField(string $field): void
+    {
+        /** @var array<string, mixed> $decoded */
+        $decoded = (array) \json_decode($this->lastOutput, true, 512, JSON_THROW_ON_ERROR);
+
+        self::assertArrayHasKey(
+            $field,
+            $decoded,
+            \sprintf('Command output was not JSON with a "%s" field. Output:%s%s', $field, PHP_EOL, $this->lastOutput),
+        );
+    }
+
     private function exitCode(): int
     {
         self::assertNotNull($this->lastExitCode, 'No command has been executed yet');
@@ -126,7 +142,9 @@ final class SymfonyCommandContext extends AbstractContext
     private function execute(string $commandName, array $parameters = []): void
     {
         $tester = new ApplicationTester($this->application());
-        $tester->run(['command' => $commandName, ...$parameters]);
+        // Non-interactive: a generic "run any command" harness must never block on a prompt
+        // (confirm/ask) waiting for stdin — take defaults / fail fast instead of hanging.
+        $tester->run(['command' => $commandName, ...$parameters], ['interactive' => false]);
 
         $this->lastExitCode = $tester->getStatusCode();
         $this->lastOutput = $tester->getDisplay();

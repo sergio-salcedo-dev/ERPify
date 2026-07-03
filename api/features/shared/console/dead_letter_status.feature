@@ -14,7 +14,7 @@ Feature: Dead-letter queue status command
     {"--json": true}
     """
     Then the last command should succeed
-    And the command output should contain "total"
+    And the command output should be JSON with a "total" field
 
   Scenario: A non-positive --limit is rejected
     When I run the "messenger:failed:status" command with parameters:
