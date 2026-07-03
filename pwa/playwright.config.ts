@@ -2,6 +2,8 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { defineConfig, devices } from "@playwright/test";
 
+import { E2E_STORAGE_STATE } from "./tests/e2e/constants";
+
 const pwaDir = path.resolve(__dirname);
 
 /** Parse a minimal dotenv subset (KEY=value, optional # comments). */
@@ -111,10 +113,17 @@ export default defineConfig({
     extraHTTPHeaders: { "x-erpify-e2e": "1" },
   },
   projects: [
+    // Runs first: mints the authenticated session (the whole /api is default-deny) and persists it as
+    // storageState. `.setup.ts` is outside the default `*.spec.ts` match, so the browser project never
+    // re-runs it as a test.
+    { name: "setup", testMatch: /auth\.setup\.ts/ },
     {
       name: "chromium",
+      dependencies: ["setup"],
       use: {
         ...devices["Desktop Chrome"],
+        // Reuse the setup session so the PWA's in-browser /api fetches carry the cookie under default-deny.
+        storageState: E2E_STORAGE_STATE,
         // Browser fetch() to https://localhost uses the stack’s dev certificate; Playwright’s
         // ignoreHTTPSErrors only applies to navigation, not in-page fetch.
         launchOptions: {

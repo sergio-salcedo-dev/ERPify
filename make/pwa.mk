@@ -98,7 +98,14 @@ pwa.test.unit.watch: pwa.install.if-missing ## Run unit tests (Vitest) watch mod
 
 ## —— E2E Tests (Playwright) ——
 
+# E2E fixture user — seeded into the running stack before the Playwright run so the `setup` project can log in
+# against the default-deny /api (there is no login UI yet). Idempotent: a duplicate email just fails the CLI,
+# swallowed by `|| true`. Keep the values in sync with E2E_USER_* in pwa/tests/e2e/constants.ts.
+E2E_USER_EMAIL ?= e2e@erpify.test
+E2E_USER_PASSWORD ?= e2ePassword123
+
 pwa.test.e2e: pwa.install.if-missing ## Run end-to-end tests with Playwright; CI_SHARD=N CI_TOTAL_SHARDS=M for sharded runs; pass c='…' for extra args
+	@$(MAKE) --no-print-directory sf c='identity:user:create $(E2E_USER_EMAIL) $(E2E_USER_PASSWORD) --role AUDIT_READER' >/dev/null 2>&1 || true
 	@if [ -n "$(CI_SHARD)" ] && [ -n "$(CI_TOTAL_SHARDS)" ]; then \
 		$(call pwa_cmd,npm run test:e2e -- --shard=$(CI_SHARD)/$(CI_TOTAL_SHARDS) $(c)); \
 	else \
