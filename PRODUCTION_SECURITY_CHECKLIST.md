@@ -129,17 +129,16 @@ you change anything here.
       versions. Anonymous access is required by the §7 smoke test and the PWA
       dashboard health check. Two invariants: any *deep* health check
       (dependency status) must be authenticated or internal-only — never on
-      these routes — and these two paths carry an explicit `PUBLIC_ACCESS`
-      exemption in `access_control` (the firewall + default-deny landed). Tracked in
+      these routes — and when an API firewall lands, these two paths need an
+      explicit `PUBLIC_ACCESS` exemption. Tracked in
       [#222](https://github.com/sergio-salcedo-dev/ERPify/issues/222).
 - [ ] `GET /api/v1/backoffice/banks/{id}/accounts` returns the **full canonical
       IBAN** (PII) and is **consciously public** like the rest of `/backoffice`
       (the API has no auth layer yet). The masking is presentational on the PWA
       only — the backend never masks. Two invariants: the IBAN value is **never
       logged** (the access-audit message carries only `bankId` + timestamp), and
-      this route now requires authentication (default-deny `access_control`); it is
-      **not** a public-by-design endpoint, unlike health — route-level RBAC (Epic 3)
-      is the remaining gate. Tracked in
+      when the API firewall lands this route must require authentication (it is
+      **not** a public-by-design endpoint, unlike health). Tracked in
       [#240](https://github.com/sergio-salcedo-dev/ERPify/issues/240) (auth rollout,
       sibling of the health exemption #222).
 - [ ] The **standalone Bank Accounts UI** (`/backoffice/bank-accounts` list +
@@ -153,9 +152,9 @@ you change anything here.
       a refetch, never the IBAN (see the *Realtime wire contract* section of
       [`docs/architecture/event-catalog.md`](docs/architecture/event-catalog.md)). Same
       two invariants as the nested route: the IBAN value is **never logged**, and these
-      are **not** public-by-design endpoints — the firewall now requires authentication
-      (default-deny), and **route-level RBAC gating is still required before production**
-      (a pre-prod follow-up under the same auth rollout,
+      are **not** public-by-design endpoints — **route-level RBAC gating is required
+      before production**, requiring authentication when the API firewall lands (a
+      pre-prod follow-up under the same auth rollout,
       [#240](https://github.com/sergio-salcedo-dev/ERPify/issues/240) / #222).
 - [ ] `audit_log` (raw-DBAL append-only table) **contains live PII**: `actor_id`,
       `ip`, `user_agent`. Capture is now wired: generic `/api` navigation on
@@ -204,10 +203,12 @@ you change anything here.
       (`SameSite=Lax`, `Secure=auto`) — no JWT/token in the client. A failed login flows through the RFC 9457
       pipeline as a **401 `unauthenticated`** (never a manual `JsonResponse`); the message is **normalised to a
       single "Invalid credentials."** so "unknown email" and "wrong password" are indistinguishable — no user
-      enumeration (`hide_user_not_found` stays on). **Login CSRF** is covered by the same-origin deployment + the
-      **non-broadened CORS** policy + `json_login`'s **`application/json` requirement** (a cross-site form cannot
-      send `application/json` without a CORS preflight the policy denies) + `SameSite=Lax`. `json_login`
-      validates no CSRF token, so **no** stateless-token CSRF is configured — it is wired with the first
+      enumeration (`hide_user_not_found` stays on). **Login CSRF (forced login)** is closed by a **same-origin
+      `Origin` guard** on the login POST (`LoginOriginListener`, throws `403 forbidden` through the RFC 9457
+      pipeline): `json_login` fires on the route's `_format: json` default, **not** the `Content-Type`, so a
+      cross-site `text/plain` form with a JSON body would otherwise reach it as a CORS simple request — neither
+      `SameSite=Lax` nor the non-broadened CORS policy stops forced login (they gate reading the response, not
+      sending the request). `json_login` validates no CSRF token, so **no** stateless-token CSRF is configured — it is wired with the first
       authenticated **mutating** route that can consume it (wire-on-consumer). CORS / Mercure are **not** broadened. **Access-control baseline:** `access_control` is **default-deny** — every `/api`
       route requires an authenticated session except an explicit allowlist (login, health probes, dev hot-reload). An
       unauthenticated request to a protected route is a **401 `unauthenticated`** through the pipeline:
