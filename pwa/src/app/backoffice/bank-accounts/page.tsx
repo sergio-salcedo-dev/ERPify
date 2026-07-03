@@ -14,8 +14,8 @@ import { useResourceList } from "@/context/shared/resource/application/useResour
 import { ViewStatus } from "@/context/shared/view-state/domain/ViewState";
 import {
   AsyncBoundary,
-  DensityToggle,
   LIST_DENSITY_STORAGE_KEY,
+  ListDisplayToggles,
   MutationError,
   SelectionMode,
   isListDensity,
@@ -272,23 +272,20 @@ export default function BankAccountsListPage() {
           onReset={query.reset}
           leading={
             items.length > 0 ? (
-              <div className="bank-accounts-list__display-toggles flex items-center gap-2">
-                <BankAccountsViewToggle view={view} onViewChange={setView} />
-                <DensityToggle
-                  density={density}
-                  onDensityChange={setDensity}
-                  testId="bank-accounts-list__density-toggle"
-                />
-                {/* Column visibility is a table-only affordance — the cards render a
-                    fixed layout, so offering the picker there would be a no-op. */}
-                {view === "table" ? (
+              <ListDisplayToggles
+                view={view}
+                viewToggle={<BankAccountsViewToggle view={view} onViewChange={setView} />}
+                density={density}
+                onDensityChange={setDensity}
+                columnPicker={
                   <BankAccountsColumnPicker
                     visible={columns}
                     onChange={setColumns}
                     testId="bank-accounts-list__columns"
                   />
-                ) : null}
-              </div>
+                }
+                testIdPrefix="bank-accounts-list"
+              />
             ) : undefined
           }
         />
