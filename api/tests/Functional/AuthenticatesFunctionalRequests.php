@@ -6,6 +6,7 @@ namespace Erpify\Tests\Functional;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\Identity\Domain\Email;
+use Erpify\Backoffice\Identity\Domain\Enum\Role;
 use Erpify\Backoffice\Identity\Domain\Repository\UserRepository;
 use Erpify\Backoffice\Identity\Infrastructure\Security\SecurityUser;
 use Erpify\Tests\DataFixtures\UserFixtureFactory;
@@ -21,7 +22,8 @@ use Symfony\Component\Uid\Uuid;
  *
  * The lookup-then-create is idempotent because this suite manages its own isolation (manual TRUNCATE, no DAMA
  * rollback), so the `identity_user` row survives between tests — creating it once and reusing it keeps a second
- * `setUp` from colliding on the unique email.
+ * `setUp` from colliding on the unique email. A stored row that lacks `AUDIT_READER` is replaced, so a user
+ * left without the role never turns the gated audit routes into a phantom 403.
  */
 trait AuthenticatesFunctionalRequests
 {
@@ -34,7 +36,18 @@ trait AuthenticatesFunctionalRequests
         $users = $container->get(UserRepository::class);
         self::assertInstanceOf(UserRepository::class, $users);
 
+        $entityManager = $container->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+
         $user = $users->findByEmail(Email::from(self::FUNCTIONAL_USER_EMAIL));
+
+        // The User aggregate has no role mutator by design, so a stored row missing AUDIT_READER — which would
+        // make the role-gated audit routes answer 403 — is dropped and recreated rather than reused.
+        if (null !== $user && !\in_array(Role::AUDIT_READER, $user->roles(), true)) {
+            $entityManager->remove($user);
+            $entityManager->flush();
+            $user = null;
+        }
 
         if (null === $user) {
             $user = UserFixtureFactory::create(
@@ -44,8 +57,6 @@ trait AuthenticatesFunctionalRequests
                 ['AUDIT_READER'],
             );
 
-            $entityManager = $container->get(EntityManagerInterface::class);
-            self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
             $entityManager->persist($user);
             $entityManager->flush();
         }

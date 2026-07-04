@@ -52,6 +52,18 @@ final class SecurityActorContextFactoryTest extends TestCase
         $this->assertNull($actor->actorId);
     }
 
+    public function testAnAuthenticatedTokenOffRequestStillResolvesToSystem(): void
+    {
+        $tokenStorage = new TokenStorage();
+        $securityUser = new SecurityUser(UserMother::create());
+        $tokenStorage->setToken(new UsernamePasswordToken($securityUser, 'main', $securityUser->getRoles()));
+
+        $actor = (new SecurityActorContextFactory($tokenStorage, new RequestStack()))->current();
+
+        $this->assertSame(ActorType::SYSTEM, $actor->type);
+        $this->assertNull($actor->actorId);
+    }
+
     public function testATokenWhoseUserIsNotASecurityUserFallsBackToRequestPresence(): void
     {
         $tokenStorage = new TokenStorage();
@@ -60,6 +72,7 @@ final class SecurityActorContextFactoryTest extends TestCase
         $actor = (new SecurityActorContextFactory($tokenStorage, $this->requestInFlight()))->current();
 
         $this->assertSame(ActorType::ANONYMOUS, $actor->type);
+        $this->assertNull($actor->actorId);
     }
 
     private function requestInFlight(): RequestStack
