@@ -44,4 +44,11 @@ final class SecurityUserTest extends TestCase
 
         $this->assertSame([], $securityUser->getRoles());
     }
+
+    public function testExposesTheWrappedUuidForAuditAttribution(): void
+    {
+        $securityUser = new SecurityUser(UserMother::create(id: UserMother::DEFAULT_ID));
+
+        $this->assertSame(UserMother::DEFAULT_ID, $securityUser->id());
+    }
 }

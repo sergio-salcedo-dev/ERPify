@@ -15,8 +15,9 @@ use Symfony\Component\Uid\Uuid;
 /**
  * Seats an authenticated session on a functional test client so its requests clear the default-deny firewall.
  * WebTestCase tests build their own data and never load the Alice fixture, so this ensures a dedicated user
- * exists and logs it in via `loginUser` — no HTTP round trip and no password verification. No role is granted:
- * the baseline only requires an authenticated identity; role-gated routes arrive in Epic 3.
+ * exists and logs it in via `loginUser` — no HTTP round trip and no password verification. It carries
+ * `AUDIT_READER` so the role-gated audit read routes are reachable; the role is inert for routes that only
+ * require an authenticated identity, so bank tests are unaffected by carrying it.
  *
  * The lookup-then-create is idempotent because this suite manages its own isolation (manual TRUNCATE, no DAMA
  * rollback), so the `identity_user` row survives between tests — creating it once and reusing it keeps a second
@@ -40,6 +41,7 @@ trait AuthenticatesFunctionalRequests
                 Uuid::v7()->toRfc4122(),
                 self::FUNCTIONAL_USER_EMAIL,
                 'functional-password',
+                ['AUDIT_READER'],
             );
 
             $entityManager = $container->get(EntityManagerInterface::class);

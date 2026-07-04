@@ -10,9 +10,9 @@ namespace Erpify\Backoffice\Audit\Application\Resource;
  * decoded JSONB diff (`change` rows: `{changes: {field: {old, new}}}`), already in normalized form so
  * it emits verbatim as a JSON object.
  *
- * `ip`/`userAgent` are intentionally absent — the route is public pre-auth and both are PII, so the
- * payload is diff-only. `metadata` is tainted (it can hold an editable bank name); consumers escape it
- * and never feed it to a trust decision.
+ * `ip`/`userAgent` are intentionally absent — both are PII and the detail payload is diff-only.
+ * `metadata` is tainted (it can hold an editable bank name); consumers escape it and never feed it to a
+ * trust decision.
  */
 final readonly class AuditEventDetailResource
 {

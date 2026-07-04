@@ -13,17 +13,15 @@ use JsonException;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapQueryString;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Serializer\Exception\ExceptionInterface;
 
 /**
  * `GET /api/v1/backoffice/audit/timeline` — the audit investigation read model: a keyset-paginated,
  * filterable timeline over `audit_log`.
- *
- * Conscious public route: the codebase has no security firewall/voter yet (the bank search routes
- * are public too), so introducing authorization here would be a new pattern out of this story's
- * scope — flagged as a follow-up. Backoffice only reads auditoría; it never writes it.
  */
 #[Route('/audit/timeline', name: self::ROUTE_NAME, methods: ['GET'])]
+#[IsGranted('ROLE_AUDIT_READER')]
 final readonly class AuditTimelineSearchController
 {
     public const string ROUTE_NAME = 'backoffice_audit_timeline_search';

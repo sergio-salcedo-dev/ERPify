@@ -84,8 +84,8 @@ development_status:
   epic-auth-foundation-retrospective: optional
 
   # Epic 3 (E3): Acceso restringido + auto-auditado + atribución real (gated on auth-foundation)
-  epic-3: backlog
-  3-1-voter-rbac-rutas-lectura-trail-atribucion-real: backlog
+  epic-3: in-progress
+  3-1-voter-rbac-rutas-lectura-trail-atribucion-real: review
   3-2-auto-auditoria-del-acceso-auditar-al-auditor: backlog
   3-3-levantar-el-gate-de-produccion: backlog
   epic-3-retrospective: optional

@@ -46,4 +46,15 @@ final readonly class SecurityUser implements UserInterface, PasswordAuthenticate
             $this->user->roles(),
         );
     }
+
+    /**
+     * The wrapped identity's UUID, for audit actor attribution. Deliberately `?string`: this is read on
+     * the audit hot path (sealed on every request), so it must degrade rather than throw — a caller with
+     * no id assigned falls back to a non-user actor instead of surfacing a 500. In practice the id is
+     * always present (assigned before persist), so this only ever returns null for an unsaved identity.
+     */
+    public function id(): ?string
+    {
+        return $this->user->getId();
+    }
 }
