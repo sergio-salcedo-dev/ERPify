@@ -205,3 +205,25 @@ claude-opus-4-8[1m] (Claude Code, dev-story workflow).
 | Fecha | Cambio |
 |---|---|
 | 2026-07-03 | Story 3.1 implementada: `#[IsGranted('ROLE_AUDIT_READER')]` en las 2 rutas de lectura del trail + atribución real de actor vía `SecurityActorContextFactory` (Opción A: reubicado a `Backoffice/Identity`, `RequestStackActorContextFactory` retirado). Puerto/esquema intactos (NFR2/AC6). Status → review. |
+
+## Review Findings
+
+Code review adversarial (Blind Hunter · Edge Case Hunter · Acceptance Auditor) — 2026-07-04. Veredicto del Acceptance Auditor: implementación fiel y completa (AC1–AC8 satisfechas, sin scope-creep). Los hallazgos son robustez de tests y una divergencia de invariante no alcanzable hoy.
+
+### Decision-needed (resuelto)
+
+- [x] [Review][Decision] Atribución off-request con token contradice el invariante «off-request → system» (AC6/AC7). **RESUELTO 2026-07-04 → reforzar el código.** Ver patch P5.
+
+### Patch
+
+Todos aplicados y verificados el 2026-07-04 (`php.stan` · `php.unit` 1501 OK · `php.behat` 205 OK · `php.quality` EXIT 0).
+
+- [x] [Review][Patch] P5: Reforzar `current()` para honrar «off-request → system» siempre [api/src/Backoffice/Identity/Infrastructure/Security/SecurityActorContextFactory.php] — **APLICADO**: se comprueba la presencia de request primero (`system()` incondicional fuera de request), y sólo dentro de una request en vuelo se atribuye `forUser`/`anonymous`. Nuevo unit test `testAnAuthenticatedTokenOffRequestStillResolvesToSystem`. Cierra el matiz «full-fledged token» (Blind #4). Docblock reescrito y suavizado (retira el «cannot turn into a 5xx» absoluto — parte opcional del defer F6).
+- [x] [Review][Patch] El trait funcional concede `AUDIT_READER` sólo en la rama de creación → 403 fantasma en BD tibia [api/tests/Functional/AuthenticatesFunctionalRequests.php] — **APLICADO**: una fila almacenada sin `AUDIT_READER` se elimina y recrea con el rol (el agregado `User` no tiene mutador de roles por diseño). Idempotente en BD fresca; robusto en BD persistente.
+- [x] [Review][Patch] `security_denial.feature` cuenta `ACCESS_DENIED` sin filtrar → colisión con la nueva `access_control.feature` [api/features/shared/audit/security_denial.feature:14] — **APLICADO**: el `SELECT` se acotó con `AND correlation_id = '0190dead-beef-7abc-8def-001122334455'`. Verificado corriendo `backoffice/audit` + `shared/audit` juntas (la ordenación que dispara la colisión) → 23 escenarios verdes.
+- [x] [Review][Patch] La rama de fallback por id nulo no tiene cobertura unit [api/tests/Unit/Backoffice/Identity/Infrastructure/Security/SecurityActorContextFactoryTest.php] — **RESUELTO POR ANÁLISIS, sin test**: la rama es inalcanzable en runtime — `User::__construct` asigna siempre `$this->id` desde un `string` no-nulo, así que `SecurityUser::id()` nunca devuelve null para un `SecurityUser` real; el guard `?string` es sólo del tipo (PHPStan max), no un camino ejecutable. `SecurityUser` es `final readonly` → un test exigiría forjar un `User` inválido por reflexión (test frágil sobre código muerto). El guard defensivo se mantiene (lo pide el tipo); no se fuerza un test contrived. La línea de retorno `anonymous()` sí queda cubierta por otras rutas (no hay hueco de `new_coverage`).
+- [x] [Review][Patch] Huecos de aserción en la ruta de detalle (AC3/AC4/AC5 fijados sólo para timeline) [api/features/backoffice/audit/access_control.feature] — **APLICADO**: (a) escenario anónimo-401 para `/audit/events/{id}`; (b) el 403 de detalle ahora asevera la fila `ACCESS_DENIED` con `metadata.route = backoffice_audit_event_detail`; (c) el escenario 200 asevera `data.actorId`. Fold Blind #8: la rama not-`SecurityUser` del unit test asevera también `actorId` null.
+
+### Defer
+
+- [x] [Review][Defer] Un id no-nulo no-UUID haría lanzar a `ActorContext::forUser()` → 5xx en las vías síncronas `security`/`change`; el docblock sobre-afirma «cannot turn into a 5xx» [api/src/Backoffice/Identity/Infrastructure/Security/SecurityActorContextFactory.php:498] — defence-in-depth: no alcanzable en producción (`Identifiable::$id` es UUID v7 o null bajo `#[Assert\Uuid(strict:true)]`); misma clase de dato-corrupto-en-hot-path que rastrea el issue abierto **#435** (fuera de scope declarado). Deferido a **#435**. Opcional: suavizar el docblock para no garantizar lo que el código no cubre.

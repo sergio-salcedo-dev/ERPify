@@ -18,6 +18,12 @@ Feature: Restrict the audit trail read routes to ROLE_AUDIT_READER
     And the header "Content-Type" should contain "application/problem+json"
     And the JSON node "type" should be equal to "unauthenticated"
 
+  @anonymous
+  Scenario: An unauthenticated request to the audit event detail is a 401, not a 403
+    When I send a "GET" request to "/backoffice/audit/events/0190a001-0000-7000-8000-000000000001"
+    Then the response status code should be 401
+    And the JSON node "type" should be equal to "unauthenticated"
+
   Scenario: An authenticated user without the audit-reader role is refused the timeline with 403
     Given I am logged in as a user without the audit-reader role
     When I send a "GET" request to "/backoffice/audit/timeline"
@@ -26,10 +32,22 @@ Feature: Restrict the audit trail read routes to ROLE_AUDIT_READER
     And the JSON node "type" should be equal to "forbidden"
 
   Scenario: An authenticated user without the audit-reader role is refused the event detail with 403
-    Given I am logged in as a user without the audit-reader role
+    Given I add "X-Correlation-Id" header equal to "0190a1de-0002-7abc-8def-001122334455"
+    And I am logged in as a user without the audit-reader role
     When I send a "GET" request to "/backoffice/audit/events/0190a001-0000-7000-8000-000000000001"
+    And I execute the SQL query "SELECT action, level, metadata FROM audit_log WHERE action = 'ACCESS_DENIED' AND correlation_id = '0190a1de-0002-7abc-8def-001122334455'"
     Then the response status code should be 403
     And the JSON node "type" should be equal to "forbidden"
+    And the SQL result as JSON should be:
+    """
+    [
+      {
+        "action": "ACCESS_DENIED",
+        "level": "security",
+        "metadata": "{\"route\": \"backoffice_audit_event_detail\"}"
+      }
+    ]
+    """
 
   Scenario: The refusal is recorded as one synchronous security ACCESS_DENIED row naming the denied route
     Given I add "X-Correlation-Id" header equal to "0190a1de-0001-7abc-8def-001122334455"
@@ -54,3 +72,4 @@ Feature: Restrict the audit trail read routes to ROLE_AUDIT_READER
     Then the response status code should be 200
     And the JSON node "data.action" should be equal to "BANK_UPDATED"
     And the JSON node "data.actorType" should be equal to "user"
+    And the JSON node "data.actorId" should be equal to "11111111-1111-7111-8111-111111111111"

@@ -13,10 +13,11 @@ use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 
 /**
- * Resolves the actor for an audit record from the security token: a request carrying an authenticated
- * {@see SecurityUser} is attributed to that user by UUID, everything else keeps the request-presence
- * classification the audit axis had before authentication existed — an in-flight request with no user
- * maps to anonymous, and off-request execution (CLI, scheduler, message worker) maps to system.
+ * Resolves the actor for an audit record. Off-request execution (CLI, scheduler, message worker) is always
+ * `system`: request presence is checked first, so a security token still sitting in storage never attributes
+ * an off-request write to a user. Within an in-flight request an authenticated {@see SecurityUser} is
+ * attributed by UUID; anything else in a request — no token, or a token whose user is not a
+ * {@see SecurityUser} — maps to anonymous.
  *
  * It lives in `Backoffice/Identity/Infrastructure`, not next to the {@see ActorContextFactory} port in
  * `Shared/Audit`, because reading the actor's UUID means depending on {@see SecurityUser} — a business
@@ -24,9 +25,9 @@ use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInt
  * so the one place the actor's UUID is read sits here; the port, its signature and every downstream
  * consumer stay untouched.
  *
- * The user's id is read defensively ({@see SecurityUser::id()} is `?string`): a null id degrades to the
- * request-presence fallback rather than throwing, so this cannot turn the per-request audit seal into a
- * 5xx. A token whose user is not a {@see SecurityUser} takes the same fallback.
+ * The user's id is read defensively ({@see SecurityUser::id()} is `?string`): an absent id degrades to the
+ * anonymous fallback rather than being passed on. A token whose user is not a {@see SecurityUser} takes the
+ * same fallback.
  */
 #[AsAlias(ActorContextFactory::class)]
 final readonly class SecurityActorContextFactory implements ActorContextFactory
@@ -40,6 +41,10 @@ final readonly class SecurityActorContextFactory implements ActorContextFactory
     #[Override]
     public function current(): ActorContext
     {
+        if (!$this->requestStack->getCurrentRequest() instanceof Request) {
+            return ActorContext::system();
+        }
+
         $user = $this->tokenStorage->getToken()?->getUser();
 
         if ($user instanceof SecurityUser) {
@@ -50,8 +55,6 @@ final readonly class SecurityActorContextFactory implements ActorContextFactory
             }
         }
 
-        return $this->requestStack->getCurrentRequest() instanceof Request
-            ? ActorContext::anonymous()
-            : ActorContext::system();
+        return ActorContext::anonymous();
     }
 }
