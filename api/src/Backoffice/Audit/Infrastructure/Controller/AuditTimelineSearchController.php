@@ -19,8 +19,13 @@ use Symfony\Component\Serializer\Exception\ExceptionInterface;
 /**
  * `GET /api/v1/backoffice/audit/timeline` — the audit investigation read model: a keyset-paginated,
  * filterable timeline over `audit_log`.
+ *
+ * `_audit_canonical` tells the generic access-log hook to yield: every authorized read here is recorded
+ * richly as a `security` `AUDIT_TRAIL_READ` entry by
+ * {@see \Erpify\Backoffice\Audit\Infrastructure\Http\EventListener\AuditTrailReadAuditListener}, so the
+ * generic path must not write a second, thinner `activity` row.
  */
-#[Route('/audit/timeline', name: self::ROUTE_NAME, methods: ['GET'])]
+#[Route('/audit/timeline', name: self::ROUTE_NAME, defaults: ['_audit_canonical' => true], methods: ['GET'])]
 #[IsGranted('ROLE_AUDIT_READER')]
 final readonly class AuditTimelineSearchController
 {

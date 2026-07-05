@@ -19,12 +19,18 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * any lookup and maps an absent row to 404 through the RFC 9457 pipeline.
  *
  * No `_audit_resource_type` default is declared on purpose: the access-log hook would otherwise record
- * every read of the audit log as an audit entry, which is recursive noise.
+ * every read of the audit log as an audit entry, which is recursive noise. `_audit_canonical` makes that
+ * generic hook yield, and
+ * {@see \Erpify\Backoffice\Audit\Infrastructure\Http\EventListener\AuditTrailReadAuditListener} records
+ * each authorized read as a `security` `AUDIT_TRAIL_READ` entry carrying the read event id in metadata
+ * (never as a linked resource, which would recurse).
  */
-#[Route('/audit/events/{id}', name: 'backoffice_audit_event_detail', methods: ['GET'])]
+#[Route('/audit/events/{id}', name: self::ROUTE_NAME, defaults: ['_audit_canonical' => true], methods: ['GET'])]
 #[IsGranted('ROLE_AUDIT_READER')]
 final readonly class AuditEventDetailController
 {
+    public const string ROUTE_NAME = 'backoffice_audit_event_detail';
+
     public function __construct(
         private AuditEventDetailFinder $auditEventDetailFinder,
         private AuditEventDetailResourceMapper $auditEventDetailResourceMapper,

@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-23
-last_updated: 2026-07-03
+last_updated: 2026-07-05
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -86,6 +86,6 @@ development_status:
   # Epic 3 (E3): Acceso restringido + auto-auditado + atribución real (gated on auth-foundation)
   epic-3: in-progress
   3-1-voter-rbac-rutas-lectura-trail-atribucion-real: review
-  3-2-auto-auditoria-del-acceso-auditar-al-auditor: backlog
+  3-2-auto-auditoria-del-acceso-auditar-al-auditor: review
   3-3-levantar-el-gate-de-produccion: backlog
   epic-3-retrospective: optional
