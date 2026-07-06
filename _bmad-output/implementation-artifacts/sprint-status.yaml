@@ -68,19 +68,15 @@ development_status:
 
   # Epic auth-foundation (AF): Fundación auth/RBAC — prerequisite de E3, gated on nada (greenfield)
   # docs/adr/auth-rbac-subsystem.md + _bmad-output/planning-artifacts/epics-auth-foundation.md. DAG: AF → 3.1 → 3.2 → 3.3
-  epic-auth-foundation: in-progress
+  epic-auth-foundation: done
   af-1-1-user-aggregate-backoffice-identity-persistencia: done
   af-1-2-firewall-sesion-securityuser-authenticator-csrf: done
-  af-1-3-baseline-control-acceso-default-deny-401: in-review
-  # Follow-ups de endurecimiento surgidos en AF-1.2 (review adversarial, PR #429) — no bloquean AF-1.2/1.3:
-  #   - enumeración por timing: email desconocido salta la verificación de hash (rápido) vs password mala
-  #     corre bcrypt (lento); el cuerpo ya es indistinguible (mensaje constante), el timing no → dummy-hash.
-  #   - login_throttling en el firewall `main` (symfony/rate-limiter ya instalado; ojo interacción con Behat).
-  #   - User::roles() lanza \ValueError ante un valor de rol desconocido en la columna JSON (ahora en cada
-  #     request auth vía SecurityUser::getRoles/refreshUser); sólo alcanzable con datos corruptos.
-  #   - política de fuerza de password en identity:user:create (hoy sólo rechaza vacío).
-  #   - PasswordUpgraderInterface en UserProvider (rehash transparente al subir coste/algoritmo).
-  af-1-4-endurecimiento-auth-follow-ups: in-progress
+  af-1-3-baseline-control-acceso-default-deny-401: done
+  # AF-1.4 = endurecimiento auth (PR #433: login-CSRF Origin-check + CLI SensitiveParameter). El residual
+  # de hardening está trazado como issues abiertos: #435 (roles/password_hash corruptos → 500 en hot-path
+  # auth), #436 (Email NFC/Unicode), #438 (deptrac no aísla Symfony Security). Endurecimiento futuro SIN
+  # issue (opcional, no bloquea): timing dummy-hash, login_throttling, password policy, PasswordUpgrader.
+  af-1-4-endurecimiento-auth-follow-ups: done
   epic-auth-foundation-retrospective: optional
 
   # Epic 3 (E3): Acceso restringido + auto-auditado + atribución real (gated on auth-foundation)
