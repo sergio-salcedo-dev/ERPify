@@ -85,3 +85,18 @@ development_status:
   3-2-auto-auditoria-del-acceso-auditar-al-auditor: done
   3-3-levantar-el-gate-de-produccion: done
   epic-3-retrospective: optional
+
+  # Epic rbac-authorization-model (RM): modelo RBAC transversal Permission=(resource,action).
+  # docs/adr/rbac-authorization-model.md (D1–D9) + _bmad-output/planning-artifacts/epics-rbac-authorization-model.md.
+  # Extiende el subsistema auth/RBAC (SI-1…SI-9); no revoca el hermano. #437 co-requisito de RM-2/RM-4.
+  # Orden de merge safe-first (aditivo → comportamiento): RM-1 → RM-2 → RM-5 → RM-3 → RM-4; RM-6 tras RM-1.
+  # Las historias van en ese orden de merge (no en RM-N numérico): «siguiente backlog» de arriba-abajo es
+  # dependency-safe. RM-4 tiene gate DURO en RM-2 — no mergea sin RM-2 en main (par nested/colección divergente).
+  epic-rbac-authorization-model: in-progress
+  rm-1-nucleo-autorizacion-voter-puerto-politica: ready-for-dev
+  rm-2-cierre-fingerprint-keyset-437: backlog
+  rm-5-migracion-audit-audittrail-read: backlog
+  rm-3-gateo-rutas-bank-tightening: backlog
+  rm-4-gateo-bankaccount-coleccion-anidada: backlog
+  rm-6-gate-ocp-congelar-core: backlog
+  epic-rbac-authorization-model-retrospective: optional
