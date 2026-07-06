@@ -1,6 +1,10 @@
+---
+baseline_commit: d921883038b9d687e515a56f15f35ef7962e9d63
+---
+
 # Story RM-1 (PR-1): Núcleo de autorización — VO, puerto, política declarativa, voter y roles-tier (aditivo)
 
-Status: ready-for-dev
+Status: done
 
 Epic: `rbac-authorization-model` · Orden de merge: **1º** (desbloquea RM-2…RM-6) · Slice: backend puro, **aditivo, sin gatear ninguna ruta**.
 
@@ -24,31 +28,45 @@ para que cualquier recurso futuro se gobierne por permiso sin tocar el núcleo �
 
 ## Tasks / Subtasks
 
-- [ ] **T1 · Extender el enum `Role`** (AC: 7)
-  - [ ] En `api/src/Backoffice/Identity/Domain/Enum/Role.php` añadir casos `VIEWER='VIEWER'`, `EDITOR='EDITOR'`, `MANAGER='MANAGER'`, `ADMIN='ADMIN'` (conservar `AUDIT_READER`). Mantener/actualizar el docblock que explica la dirección del prefijo (`->value` **sin** `ROLE_`).
-  - [ ] Ampliar `api/tests/Unit/Backoffice/Identity/Domain/Enum/RoleTest.php` para cubrir los nuevos casos y la ausencia del prefijo `ROLE_`.
-  - [ ] Verificar que **no** hace falta migración (la columna `identity_user.roles` es `JSON list<string>`; nuevos valores válidos = nuevos strings).
-- [ ] **T2 · VO `Permission`** (AC: 1)
-  - [ ] Crear `api/src/Backoffice/Identity/Infrastructure/Security/Permission.php` — `final readonly`, `fromString(string): self` (valida forma `<resource>.<action>`), `resource()`, `action()`, `toString()`, igualdad por valor. Excepción co-localizada (p. ej. `InvalidPermission`) al rechazar forma inválida.
-  - [ ] Test unitario `api/tests/Unit/Backoffice/Identity/Infrastructure/Security/PermissionTest.php` (canónico, split, igualdad, rechazo de malformados: sin punto, partes vacías, múltiples puntos).
-- [ ] **T3 · Puerto `AuthorizationPolicy` (neutral) + `StaticAuthorizationPolicy`** (AC: 2, 3)
-  - [ ] Crear el puerto `api/src/Backoffice/Identity/Infrastructure/Security/AuthorizationPolicy.php` — `permits(Permission $permission, array $roles): bool` (`@param list<string> $roles` tokens desnudos). **Sin** imports de `User`/`Role`/`SecurityUser`.
-  - [ ] Crear `api/src/Backoffice/Identity/Infrastructure/Security/StaticAuthorizationPolicy.php` con `tierVerbs`/`explicitGrants`/`tierOptOut` como `private const` (literales), resolución data-driven. Puede importar `Role` (Domain) para **construir** los mapas (`Role::VIEWER->value`), pero el puerto no.
-  - [ ] Tests unitarios de la tabla de verdad (`StaticAuthorizationPolicyTest`): `ADMIN` concede todo; `VIEWER` concede `read`, deniega `write`/`delete`; roles vacíos = deny; `explicitGrants` concede a los roles listados; `tierOptOut` bloquea el auto-grant por tier.
-- [ ] **T4 · Test de arquitectura "política = sólo datos"** (AC: 4)
-  - [ ] `api/tests/Unit/Backoffice/Identity/Infrastructure/Security/StaticAuthorizationPolicyIsDataOnlyTest.php` — vía `token_get_all`/Reflection asserta que la definición de los mapas no contiene control-flow ejecutable. Ver **Dev Notes → tripwire** para el enfoque recomendado. (**Tarea de mayor incertidumbre** — considerar un spike de 15 min.)
-- [ ] **T5 · `PermissionVoter`** (AC: 5, 6)
-  - [ ] Crear `api/src/Backoffice/Identity/Infrastructure/Security/PermissionVoter.php` extendiendo `Symfony\Component\Security\Core\Authorization\Voter\Voter`: `supports()` sólo para forma `<resource>.<action>`; `voteOnAttribute()` hace strip `ROLE_` de `$token->getRoleNames()`, construye `Permission`, delega en el puerto; **no lee `$subject`**.
-  - [ ] Test unitario `PermissionVoterTest`: `supports()` discrimina forma (abstiene en `ROLE_AUDIT_READER`, `IS_AUTHENTICATED_FULLY`); strip de `ROLE_`; delega en un fake del puerto; ignora `subject`.
-  - [ ] Test de integración `api/tests/Functional/Backoffice/Identity/Infrastructure/Security/PermissionVoterAccessDecisionTest.php` (o Functional equiv.): sobre el `AuthorizationCheckerInterface`/`AccessDecisionManager` real con un token `VIEWER`, `isGranted('bank.write')===false` y `isGranted('bank.read')===true`. (Prueba R6 sin gatear rutas.)
-- [ ] **T6 · Cableado DI** (AC: 6, 8)
-  - [ ] Confirmar que `PermissionVoter` queda **autoconfigurado** como `security.voter` (subclase de `Voter`) y que `StaticAuthorizationPolicy` **autowirea** como única impl de `AuthorizationPolicy`. Añadir a `services.yaml` **sólo si** el autowiring no resuelve.
-  - [ ] **No** tocar `security.yaml` (`access_decision_manager` sigue sin configurar = `affirmative`).
-- [ ] **T7 · Cerrar decisión de rol de bootstrap** (AC: 9)
-  - [ ] `CreateUserCommand` **ya** acepta `--role` validado contra `Role::cases()` → sin cambio de código. Documentar la convención (1er usuario = `ADMIN`) donde corresponda (ver Dev Notes; confirmar redacción con Sergio). **No** introducir un default `ADMIN` implícito en el comando.
-- [ ] **T8 · Regresión + gates** (AC: 8, 9)
-  - [ ] Correr los tests de auth de audit existentes (`features/backoffice/audit/access_control.feature`, `AuditEventDetailFunctionalTest`) → verdes (prueba que el voter abstiene sobre `ROLE_*`).
-  - [ ] `make php.stan` en cada fichero PHP tocado; al final `make php.quality` (incluye `php.deptrac`, `php.lint.bounded-context`, `php.lint.error-contract`). Todo verde.
+- [x] **T1 · Extender el enum `Role`** (AC: 7)
+  - [x] En `api/src/Backoffice/Identity/Domain/Enum/Role.php` añadir casos `VIEWER='VIEWER'`, `EDITOR='EDITOR'`, `MANAGER='MANAGER'`, `ADMIN='ADMIN'` (conservar `AUDIT_READER`). Mantener/actualizar el docblock que explica la dirección del prefijo (`->value` **sin** `ROLE_`).
+  - [x] Ampliar `api/tests/Unit/Backoffice/Identity/Domain/Enum/RoleTest.php` para cubrir los nuevos casos y la ausencia del prefijo `ROLE_`.
+  - [x] Verificar que **no** hace falta migración (la columna `identity_user.roles` es `JSON list<string>`; nuevos valores válidos = nuevos strings).
+- [x] **T2 · VO `Permission`** (AC: 1)
+  - [x] Crear `api/src/Backoffice/Identity/Infrastructure/Security/Permission.php` — `final readonly`, `fromString(string): self` (valida forma `<resource>.<action>`), `resource()`, `action()`, `toString()`, igualdad por valor. Excepción co-localizada (p. ej. `InvalidPermission`) al rechazar forma inválida.
+  - [x] Test unitario `api/tests/Unit/Backoffice/Identity/Infrastructure/Security/PermissionTest.php` (canónico, split, igualdad, rechazo de malformados: sin punto, partes vacías, múltiples puntos).
+- [x] **T3 · Puerto `AuthorizationPolicy` (neutral) + `StaticAuthorizationPolicy`** (AC: 2, 3)
+  - [x] Crear el puerto `api/src/Backoffice/Identity/Infrastructure/Security/AuthorizationPolicy.php` — `permits(Permission $permission, array $roles): bool` (`@param list<string> $roles` tokens desnudos). **Sin** imports de `User`/`Role`/`SecurityUser`.
+  - [x] Crear `api/src/Backoffice/Identity/Infrastructure/Security/StaticAuthorizationPolicy.php` con `tierVerbs`/`explicitGrants`/`tierOptOut` como `private const` (literales), resolución data-driven. Puede importar `Role` (Domain) para **construir** los mapas (`Role::VIEWER->value`), pero el puerto no.
+  - [x] Tests unitarios de la tabla de verdad (`StaticAuthorizationPolicyTest`): `ADMIN` concede todo; `VIEWER` concede `read`, deniega `write`/`delete`; roles vacíos = deny; `explicitGrants` concede a los roles listados; `tierOptOut` bloquea el auto-grant por tier.
+- [x] **T4 · Test de arquitectura "política = sólo datos"** (AC: 4)
+  - [x] `api/tests/Unit/Backoffice/Identity/Infrastructure/Security/StaticAuthorizationPolicyIsDataOnlyTest.php` — vía `token_get_all`/Reflection asserta que la definición de los mapas no contiene control-flow ejecutable. Ver **Dev Notes → tripwire** para el enfoque recomendado. (**Tarea de mayor incertidumbre** — considerar un spike de 15 min.)
+- [x] **T5 · `PermissionVoter`** (AC: 5, 6)
+  - [x] Crear `api/src/Backoffice/Identity/Infrastructure/Security/PermissionVoter.php` extendiendo `Symfony\Component\Security\Core\Authorization\Voter\Voter`: `supports()` sólo para forma `<resource>.<action>`; `voteOnAttribute()` hace strip `ROLE_` de `$token->getRoleNames()`, construye `Permission`, delega en el puerto; **no lee `$subject`**.
+  - [x] Test unitario `PermissionVoterTest`: `supports()` discrimina forma (abstiene en `ROLE_AUDIT_READER`, `IS_AUTHENTICATED_FULLY`); strip de `ROLE_`; delega en un fake del puerto; ignora `subject`.
+  - [x] Test de integración `api/tests/Functional/Backoffice/Identity/Infrastructure/Security/PermissionVoterAccessDecisionTest.php` (o Functional equiv.): sobre el `AuthorizationCheckerInterface`/`AccessDecisionManager` real con un token `VIEWER`, `isGranted('bank.write')===false` y `isGranted('bank.read')===true`. (Prueba R6 sin gatear rutas.)
+- [x] **T6 · Cableado DI** (AC: 6, 8)
+  - [x] Confirmar que `PermissionVoter` queda **autoconfigurado** como `security.voter` (subclase de `Voter`) y que `StaticAuthorizationPolicy` **autowirea** como única impl de `AuthorizationPolicy`. Añadir a `services.yaml` **sólo si** el autowiring no resuelve.
+  - [x] **No** tocar `security.yaml` (`access_decision_manager` sigue sin configurar = `affirmative`).
+- [x] **T7 · Cerrar decisión de rol de bootstrap** (AC: 9)
+  - [x] `CreateUserCommand` **ya** acepta `--role` validado contra `Role::cases()` → sin cambio de código. Documentar la convención (1er usuario = `ADMIN`) donde corresponda (ver Dev Notes; confirmar redacción con Sergio). **No** introducir un default `ADMIN` implícito en el comando.
+- [x] **T8 · Regresión + gates** (AC: 8, 9)
+  - [x] Correr los tests de auth de audit existentes (`features/backoffice/audit/access_control.feature`, `AuditEventDetailFunctionalTest`) → verdes (prueba que el voter abstiene sobre `ROLE_*`).
+  - [x] `make php.stan` en cada fichero PHP tocado; al final `make php.quality` (incluye `php.deptrac`, `php.lint.bounded-context`, `php.lint.error-contract`). Todo verde.
+
+### Review Findings
+
+_Code review (`bmad-code-review`, 2026-07-06): 3 capas (Blind Hunter · Edge Case Hunter · Acceptance Auditor). **Sin BLOCKER/HIGH**; todos los hallazgos fallan cerrado (no explotables hoy). Revisado por el mismo modelo que implementó — cautela por sesgo de autor._
+
+- [x] [Review][Decision] Canonicalización de entrada en `Permission` (espacios/mayúsculas/`*`) → **RESUELTO (patch)**: charset `^[A-Za-z][A-Za-z0-9]*$` por parte (rechaza espacios/`*`/puntuación; permite camelCase); cierra la colisión `*` y el deny-all silencioso. + tests. [`Permission.php`]
+- [x] [Review][Decision] Endurecer el strip de `ROLE_` → **RESUELTO (patch)**: `bareRoleTokens` descarta tokens sin prefijo `ROLE_` (un `ADMIN` desnudo ya no escala). + test. [`PermissionVoter.php`]
+- [x] [Review][Decision] Redacción AC1: `InvalidPermission extends \InvalidArgumentException` → **RATIFICADO** (sin cambio): `DomainException` fabricaría un 500 (viola AC8). [`InvalidPermission.php`]
+- [x] [Review][Decision] Seam del store (constructor con defaults = const) → **RATIFICADO** (sin cambio): forma mínima de testear las ramas vacías sin datos-fake. [`StaticAuthorizationPolicy.php`]
+- [x] [Review][Patch] Ejercitar la rama wildcard-verb del tier → añadido `testAWildcardTierGrantsEveryAction`. [`StaticAuthorizationPolicyTest.php`]
+- [x] [Review][Patch] Test abstain afirma `calls === []` (la policy no se consulta). [`PermissionVoterTest.php`]
+- [x] [Review][Patch] Test funcional afirma `IS_AUTHENTICATED_FULLY` (independencia firewall/permiso). [`PermissionVoterAccessDecisionTest.php`]
+- [x] [Review][Patch] Denylist del tripwire: añadidos `T_NEW` + `T_NULLSAFE_OBJECT_OPERATOR`. [`StaticAuthorizationPolicyIsDataOnlyTest.php`]
+- [x] [Review][Defer] `supports()` es sólo-forma → su seguridad depende de la estrategia `affirmative` + de que no exista un atributo con punto que no sea permiso [`PermissionVoter.php`] — diferido, diseño mandado por el spec (AC5); el endurecimiento a marcador/registry es roadmap RM-2+
 
 ## Dev Notes
 
@@ -148,10 +166,43 @@ Todo el **core** vive en `api/src/Backoffice/Identity/Infrastructure/Security/` 
 
 ### Agent Model Used
 
-_(a rellenar por el dev agent)_
+claude-opus-4-8[1m] (Claude Opus 4.8, 1M context) — dev-story workflow.
 
 ### Debug Log References
 
+- `make php.stan` — green (801 files) on every changed file.
+- `make php.quality` — **EXIT=0** (php.stan, rector, cs-fixer, phpmd, phpcs, gherkin, doctrine, error-contract, bounded-context, event-bus, deptrac, cs.dry-run). Deptrac: 0 violations / 0 uncovered (no new layer or ruleset — `Infrastructure/Security/*` is already covered by `Backoffice.Identity.Infrastructure`, which already permits `Vendor.Symfony`).
+- New tests: `tests/Unit/Backoffice/Identity/Infrastructure/Security` (unit) + `PermissionVoterAccessDecisionTest` (functional) — green.
+- Regression: `AuditEventDetailFunctionalTest` (3 tests, 52 assertions) + Behat `features/backoffice/audit/access_control.feature` (6 scenarios, 37 steps) — green (proves the voter abstains on `ROLE_*`). Full Identity tree (unit + functional): 99 tests, 253 assertions — green.
+- Rector auto-applied on the diff: `StaticAuthorizationPolicy` → `final readonly`, `permits()` `||`-chain → early returns; tests → `$this->assert*`, `self::createClient()`, `provide<Test>Cases` provider naming. All equivalent.
+
 ### Completion Notes List
 
+- **Additive only — zero behaviour change.** No route carries `#[IsGranted('resource.action')]`; the two audit routes keep `#[IsGranted('ROLE_AUDIT_READER')]` and stay green. `access_decision_manager` left unset (= `affirmative`); `ProblemDetailsFactory` untouched; no new error marker; no migration (roles is a JSON `list<string>` column).
+- **`InvalidPermission extends \InvalidArgumentException`, not the RFC 9457 `DomainException`.** A malformed permission literal is a programmer error (permission strings are authored in code, never taken from a request), so it stays off the Problem Details surface — this also guarantees AC8's "no new error marker" (it is categorically not a `DomainException`). The voter only builds a `Permission` after `Permission::isWellFormed()` passes, so it never fires on a request path.
+- **Policy data vs testability (design choice to review).** `StaticAuthorizationPolicy` keeps the three maps as `private const` literals (tripwire-scannable, compiler-enforced data-only) AND exposes them as constructor defaults, so the truth-table tests drive `explicitGrants`/`tierOptOut` (empty in production) without seeding fake production data or dropping `final readonly`. This is the minimal realisation of ADR D8's "static → configurable = swap the store"; production always runs the seed literals.
+- **Tripwire (T4)** reads the policy source with `token_get_all` (no `nikic/php-parser` in the app autoload) and fails on any `(`, `?`, `T_COALESCE` or control-flow keyword inside a policy-map const value; enum-case / class-constant fetches (`Role::VIEWER->value`, `self::WILDCARD`) are pure data and pass. The heavier CI gate (core-set invariance + `subject:` unread) is RM-6, not here.
+- **T7 bootstrap role — decision closed, no code change.** `identity:user:create` already validates `--role` against `Role::cases()`, which now offers `VIEWER, EDITOR, MANAGER, ADMIN, AUDIT_READER`; default stays `[]` (no implicit ADMIN). Convention: bootstrap the first user with `--role=ADMIN`. Per Sergio's decision, **no doc change now** — the operational "create the first user as ADMIN so you are not locked out" guidance lands with RM-3 (which introduces the actual route gating); RM-1 gates nothing, so no principal is locked out yet.
+- **T6 wiring confirmed:** `PermissionVoter` is autoconfigured `security.voter`; `AuthorizationPolicy` autowires (alias → `StaticAuthorizationPolicy`). No `services.yaml` change; `security.yaml` untouched.
+
+### Change Log
+
+- Extended `Role` with the `VIEWER/EDITOR/MANAGER/ADMIN` tiers (retaining `AUDIT_READER`).
+- Added the authorization core under `Backoffice/Identity/Infrastructure/Security`: `Permission` VO + `InvalidPermission`, the neutral `AuthorizationPolicy` port, `StaticAuthorizationPolicy` (declarative tier/explicit/opt-out maps), and the first custom `PermissionVoter` — additive, no route gated.
+- Added unit tests (Permission, policy truth-table, data-only tripwire, voter) + a functional access-decision test proving R6, and an in-tree `RecordingAuthorizationPolicy` fake.
+
 ### File List
+
+- `api/src/Backoffice/Identity/Domain/Enum/Role.php` (modified — +4 tiers)
+- `api/src/Backoffice/Identity/Infrastructure/Security/Permission.php` (new)
+- `api/src/Backoffice/Identity/Infrastructure/Security/InvalidPermission.php` (new)
+- `api/src/Backoffice/Identity/Infrastructure/Security/AuthorizationPolicy.php` (new — port)
+- `api/src/Backoffice/Identity/Infrastructure/Security/StaticAuthorizationPolicy.php` (new)
+- `api/src/Backoffice/Identity/Infrastructure/Security/PermissionVoter.php` (new)
+- `api/tests/Unit/Backoffice/Identity/Domain/Enum/RoleTest.php` (modified)
+- `api/tests/Unit/Backoffice/Identity/Infrastructure/Security/PermissionTest.php` (new)
+- `api/tests/Unit/Backoffice/Identity/Infrastructure/Security/StaticAuthorizationPolicyTest.php` (new)
+- `api/tests/Unit/Backoffice/Identity/Infrastructure/Security/StaticAuthorizationPolicyIsDataOnlyTest.php` (new)
+- `api/tests/Unit/Backoffice/Identity/Infrastructure/Security/PermissionVoterTest.php` (new)
+- `api/tests/Unit/Backoffice/Identity/Infrastructure/Security/Fixtures/RecordingAuthorizationPolicy.php` (new — test fake)
+- `api/tests/Functional/Backoffice/Identity/Infrastructure/Security/PermissionVoterAccessDecisionTest.php` (new)

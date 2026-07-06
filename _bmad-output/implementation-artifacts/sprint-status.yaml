@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-23
-last_updated: 2026-07-06
+last_updated: 2026-07-07
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -93,7 +93,7 @@ development_status:
   # Las historias van en ese orden de merge (no en RM-N numérico): «siguiente backlog» de arriba-abajo es
   # dependency-safe. RM-4 tiene gate DURO en RM-2 — no mergea sin RM-2 en main (par nested/colección divergente).
   epic-rbac-authorization-model: in-progress
-  rm-1-nucleo-autorizacion-voter-puerto-politica: ready-for-dev
+  rm-1-nucleo-autorizacion-voter-puerto-politica: done
   rm-2-cierre-fingerprint-keyset-437: backlog
   rm-5-migracion-audit-audittrail-read: backlog
   rm-3-gateo-rutas-bank-tightening: backlog
