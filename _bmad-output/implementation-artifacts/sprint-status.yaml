@@ -56,7 +56,7 @@ development_status:
   1-5-extractor-de-recurso-en-lecturas: done
   1-6-suelo-de-retencion-5-anos: done
   1-7-render-del-diff-en-el-read-model-ui-377: done
-  epic-1-retrospective: optional
+  epic-1-retrospective: done
 
   # Epic 2 (E2): Diffs PII-safe — crypto-shredding + keystore (disparada por el dato, no por un agregado)
   epic-2: done
