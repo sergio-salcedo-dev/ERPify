@@ -31,6 +31,10 @@ final class RoleTest extends TestCase
      */
     public static function provideRoleBacksItsExpectedCanonicalValueCases(): iterable
     {
+        yield 'VIEWER' => ['VIEWER', Role::VIEWER];
+        yield 'EDITOR' => ['EDITOR', Role::EDITOR];
+        yield 'MANAGER' => ['MANAGER', Role::MANAGER];
+        yield 'ADMIN' => ['ADMIN', Role::ADMIN];
         yield 'AUDIT_READER' => ['AUDIT_READER', Role::AUDIT_READER];
     }
 
