@@ -16,8 +16,8 @@ use DateTimeImmutable;
  * `AuditLevel`/`ActorType` enums) — a forensic read reflects whatever the table holds and must never
  * raise on an unexpected token while investigating. `metadata` is attacker-influenced (an editable
  * bank name reaches it through the diff): treat it as tainted downstream — escape it on render, never
- * use it in a trust decision. `ip`/`user_agent` are deliberately absent — both are PII and the route
- * is public pre-auth, so the projection is diff-only.
+ * use it in a trust decision. `ip`/`user_agent` are deliberately absent — both are PII,
+ * withheld by this diff-only projection.
  */
 final readonly class AuditEventDetail
 {
