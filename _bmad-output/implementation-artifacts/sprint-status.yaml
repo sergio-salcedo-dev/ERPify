@@ -48,14 +48,14 @@ development_status:
   # shipped (PRs up to #402); that axis's record lives in git history and its PRs, not here.
 
   # Epic 1 (E1): Captura de escrituras regulatoria — diff campo a campo, pre-auth (#394/#398/#399/#402)
-  epic-1: in-progress
+  epic-1: done
   1-1-listener-doctrine-onflush-captura-changeset: done
   1-2-accion-semantica-forma-del-diff-en-metadata: done
   1-3-actor-context-correlacion-sellados-en-onflush: done
   1-4-snapshot-de-la-entidad-en-delete: done
   1-5-extractor-de-recurso-en-lecturas: done
   1-6-suelo-de-retencion-5-anos: done
-  1-7-render-del-diff-en-el-read-model-ui-377: review
+  1-7-render-del-diff-en-el-read-model-ui-377: done
   epic-1-retrospective: optional
 
   # Epic 2 (E2): Diffs PII-safe — crypto-shredding + keystore (disparada por el dato, no por un agregado)
