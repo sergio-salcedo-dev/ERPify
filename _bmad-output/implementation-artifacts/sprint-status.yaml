@@ -100,3 +100,22 @@ development_status:
   rm-4-gateo-bankaccount-coleccion-anidada: backlog
   rm-6-gate-ocp-congelar-core: backlog
   epic-rbac-authorization-model-retrospective: optional
+
+  # Epic identity-invitation-lifecycle (II): ciclo de vida de identidad/invitación — onboarding invitation-first,
+  # admisión de tres momentos (credenciales → identidad → admisión → sesión), registro de sesiones fail-closed.
+  # docs/adr/identity-invitation-lifecycle.md (D1–D12) + _bmad-output/planning-artifacts/{arch-addendum-identity-
+  # invitation.md, epics-identity-invitation-lifecycle.md}. Extiende auth/RBAC (SI-1…SI-9) sin revocarlo; ortogonal
+  # al plano RBAC. Multi-tenant-ready, tenancy operativa diferida. Orden de merge safe-first (las historias van en
+  # ese orden, no en II-N numérico): II-0 → II-1·II-2·II-3·II-7 → II-6 → II-4 → II-5 → II-8. II-0 co-mueve Identity
+  # + core RBAC (opción b; RM-1 ya en main vía #456). II-4/II-5 exigen II-7 (registro/revoca-todas).
+  epic-identity-invitation-lifecycle: backlog
+  ii-0-promocion-contexto-iam-organization-comove-rbac: backlog
+  ii-1-organization-membership-bootstrap-cli: backlog
+  ii-2-shared-token-singleusetoken: backlog
+  ii-3-identitystatus-userchecker-admision-tipos-error: backlog
+  ii-7-session-lifecycle-registry-gate-failclosed: backlog
+  ii-6-lockout-lockeduntil: backlog
+  ii-4-invitation-accept-pantallas-acceso: backlog
+  ii-5-reset-password-uniforme: backlog
+  ii-8-endurecimiento-seguridad-transversal: backlog
+  epic-identity-invitation-lifecycle-retrospective: optional
