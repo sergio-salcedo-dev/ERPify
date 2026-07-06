@@ -1,8 +1,8 @@
 # ADR — Auth/RBAC subsystem: session firewall, pure-domain identity, trail access gate
 
-> **Status:** accepted · design only — **implementation is a separate "auth foundation" epic that unblocks Epic 3 of the regulatory audit trail (trail read routes + #377 production gate); no code ships in this ADR's PR** · **Date:** 2026-07-02 · **Scope:** new `Backoffice/Identity` bounded context (User aggregate + provider), a global Symfony Security firewall (`api/config/packages/security.yaml`), and authorization over the `Backoffice/Audit` read routes. Plugs into the actor seam frozen by [`regulatory-audit-trail.md`](./regulatory-audit-trail.md) (D8/D9) **without revoking it**.
+> **Status:** accepted · **implemented** — the auth foundation shipped and Epic 3 landed (trail read routes RBAC-restricted + self-audited, real actor attribution); the #377/trail production gate is lifted · **Date:** 2026-07-02 · **Scope:** new `Backoffice/Identity` bounded context (User aggregate + provider), a global Symfony Security firewall (`api/config/packages/security.yaml`), and authorization over the `Backoffice/Audit` read routes. Plugs into the actor seam frozen by [`regulatory-audit-trail.md`](./regulatory-audit-trail.md) (D8/D9) **without revoking it**.
 >
-> Temporal context: the application is **not in production** and has **no auth infrastructure today** (no `security.yaml`, no `SecurityBundle`, no `User`, no voter, no roles) — the subsystem is greenfield, born without backward-compatibility constraints.
+> Temporal context: the subsystem was designed greenfield — when this ADR was written the application had **no auth infrastructure** (no `security.yaml`, `SecurityBundle`, `User`, voter or roles) and is **not yet in production**, so it was born without backward-compatibility constraints.
 
 ## Context
 

@@ -1,6 +1,6 @@
 # ADR — Regulatory audit trail (ISO 27001): write-side CDC, field-level diff, crypto-shredding
 
-> **Status:** accepted · design only — **implementation is a separate epic, sliced by dependency: the capture backbone ships pre-auth; only the RBAC access gate and production-readiness wait on the (not-yet-existing) auth/RBAC subsystem (see D9)** · **Date:** 2026-06-29 · **Scope:** cross-cutting `Shared/Audit` (capture + contract), extending [`audit-activity-log.md`](./audit-activity-log.md); read side in `Backoffice/Audit`. Builds on the actor/operational axis, does **not** revoke it.
+> **Status:** accepted · **implemented** — the capture backbone shipped pre-auth; the RBAC access gate and production-readiness are delivered by the auth/RBAC subsystem (Epic 3: trail RBAC + authorized-read self-audit + real attribution), so the trail read surface and #377 are production-ready (see D8/D9) · **Date:** 2026-06-29 · **Scope:** cross-cutting `Shared/Audit` (capture + contract), extending [`audit-activity-log.md`](./audit-activity-log.md); read side in `Backoffice/Audit`. Builds on the actor/operational axis, does **not** revoke it.
 >
 > Temporal context: the application is **not in production**, so the new columns/tables, the keystore and the retention floor are born without backward-compatibility constraints.
 

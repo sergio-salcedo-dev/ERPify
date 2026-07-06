@@ -173,12 +173,17 @@ you change anything here.
       sentinel, never the ciphertext. Its `ip` / `user_agent` / `metadata` are
       **client-controlled (tainted)** — the `change` diff is surfaced read-only via
       the canonical `GET /audit/events/{id}` resource (diff-only: `ip`/`user_agent`
-      withheld; consciously public like the rest of `/backoffice` until the auth gate)
-      and rendered as **escaped text** in the investigation UI, never
-      `dangerouslySetInnerHTML`; never use in a trust or authorization decision (ISO
-      27001:2022 base: A.8.15 append-only + restricted access, A.8.17 clock-synced
-      `occurred_on`); the writer
-      parameterises every value (no string-interpolated SQL). **GDPR erasure is
+      withheld) and rendered as **escaped text** in the investigation UI, never
+      `dangerouslySetInnerHTML`; never use in a trust or authorization decision.
+      **Both audit read routes** — `GET /audit/timeline` and
+      `GET /audit/events/{id}` (the #377 investigation surface) — are **RBAC-restricted**
+      via `#[IsGranted('ROLE_AUDIT_READER')]`: an under-privileged caller gets a **403
+      `forbidden`**, an anonymous one a **401 `unauthenticated`**, both through the RFC
+      9457 pipeline. Every **authorized** read **self-audits** a durable `security`
+      `AUDIT_TRAIL_READ` row written before the response is sent — the auditor is audited
+      (ISO 27001:2022 base: A.5.18 restricted access rights, A.8.15 append-only +
+      restricted access + logging of access to logs, A.8.17 clock-synced `occurred_on`);
+      the writer parameterises every value (no string-interpolated SQL). **GDPR erasure is
       implemented** as an in-place, irreversible anonymisation: `audit:gdpr:erase
       <actor-id>` overwrites the subject's `actor_id` with a single fresh random UUID
       and redacts `ip` / `user_agent` to `[REDACTED]` and sets the materialised,
@@ -214,7 +219,7 @@ you change anything here.
       unauthenticated request to a protected route is a **401 `unauthenticated`** through the pipeline:
       `UnauthenticatedAccessListener` rewrites the firewall's `AccessDeniedException` to an `AuthenticationException` for
       anonymous callers (so 401, not 403), while an authenticated-but-under-privileged caller still gets 403 — the shape
-      `#[IsGranted]` on the audit read routes (Epic 3) relies on. Media/object routes are protected (not public-by-design). Sessions use the **native file handler** (single-container only) — a shared
+      the audit read routes' `#[IsGranted('ROLE_AUDIT_READER')]` relies on. Media/object routes are protected (not public-by-design). Sessions use the **native file handler** (single-container only) — a shared
       handler (Postgres/Redis) is a follow-up before horizontal scaling. ADR
       [`docs/adr/auth-rbac-subsystem.md`](docs/adr/auth-rbac-subsystem.md).
 
