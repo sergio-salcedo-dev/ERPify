@@ -26,9 +26,9 @@ A resource is an independently governable business object — an aggregate root 
 
 Actions are relative to their resource. The seed vocabulary is the tier verbs `read` / `write` / `delete` (`write` covers create+update; finer `create`≠`update` is added per-permission only when a caller needs it — YAGNI). Beyond CRUD, first-class domain operations are actions in their own right (`bank.close`, `bankAccount.changeStatus`, `invoice.approve`). CRUD is a starting alphabet, not a ceiling.
 
-### D4 — Resolution is one custom permission voter over a `PermissionPolicy` port; role-checks are retired from business routes
+### D4 — Resolution is one custom permission voter over a `AuthorizationPolicy` port; role-checks are retired from business routes
 
-A single `PermissionVoter` (the first custom voter in the codebase) supports attribute strings shaped `<resource>.<action>` and delegates the decision to a `PermissionPolicy` port. It coexists cleanly with Symfony's built-in voters, which keep serving the authentication tier (`IS_AUTHENTICATED_FULLY`): each voter abstains on the other's attribute shape. Enforcement stays at the HTTP edge via `#[IsGranted('bank.read')]`; 403/401 flow through the existing RFC 9457 pipeline unchanged (no new marker). **SI-5 is preserved and widened**: neither `Application` nor `Domain` ever branches on a role *or* a permission — the voter runs before the controller and the application code never learns either.
+A single `PermissionVoter` (the first custom voter in the codebase) supports attribute strings shaped `<resource>.<action>` and delegates the decision to a `AuthorizationPolicy` port. It coexists cleanly with Symfony's built-in voters, which keep serving the authentication tier (`IS_AUTHENTICATED_FULLY`): each voter abstains on the other's attribute shape. Enforcement stays at the HTTP edge via `#[IsGranted('bank.read')]`; 403/401 flow through the existing RFC 9457 pipeline unchanged (no new marker). **SI-5 is preserved and widened**: neither `Application` nor `Domain` ever branches on a role *or* a permission — the voter runs before the controller and the application code never learns either.
 
 The two audit routes migrate `#[IsGranted('ROLE_AUDIT_READER')]` → `#[IsGranted('auditTrail.read')]` so the whole system speaks one grammar; `AUDIT_READER` survives as a specialized role that grants that permission.
 
@@ -36,7 +36,7 @@ The two audit routes migrate `#[IsGranted('ROLE_AUDIT_READER')]` → `#[IsGrante
 
 ### D5 — Declaration seam: per-module permission constants + one central, declarative, tier-based policy
 
-Each module declares its own permission constants co-located in its edge (`Backoffice/Bank/Infrastructure/.../BankPermission::READ = 'bank.read'`), referenced by that module's `#[IsGranted]`. A single central `StaticPermissionPolicy` holds two declarative maps and one opt-out set:
+Each module declares its own permission constants co-located in its edge (`Backoffice/Bank/Infrastructure/.../BankPermission::READ = 'bank.read'`), referenced by that module's `#[IsGranted]`. A single central `StaticAuthorizationPolicy` implements the `AuthorizationPolicy` port with two declarative maps and one opt-out set. **This tier-verb shape is the policy chosen today — an implementation of the port, not part of the authorization model; a future system could swap it for a different `AuthorizationPolicy` without touching the model:**
 
 - `tierVerbs`: `VIEWER → {read}`, `EDITOR → {read, write}`, `MANAGER → {read, write, delete}`, `ADMIN → {*}` — **resource-agnostic**, so a new CRUD-only resource is auto-covered with **zero policy edits**.
 - `explicitGrants`: `permission → {roles}` for domain operations and sensitive reads only (`bank.close → {MANAGER, ADMIN}`, `auditTrail.read → {AUDIT_READER, ADMIN}`).
@@ -48,7 +48,7 @@ Resolution: split the permission into `(resource, action)`; grant iff `ADMIN`, o
 
 ### D6 — Placement: start in `Backoffice/Identity/Infrastructure/Security` behind neutral interfaces; promote later without redesign
 
-The `Permission` value, the `PermissionPolicy` port, the `StaticPermissionPolicy`, and the `PermissionVoter` start inside `Backoffice/Identity/Infrastructure/Security` (deptrac-legal; mirrors the existing `ActorContextFactory` seam). The contracts are **neutral from day one**: the port speaks *permissions*, *roles-as-bare-tokens*, and *decisions* — **never** `User`, `Role`, or `SecurityUser`. The voter strips the `ROLE_` prefix at the edge (keeping SI-5's one-directional mapping) before consulting the policy. When a second clearly-transversal consumer appears (a protected CLI, API keys, `Frontoffice` reusing the model), promotion to `Shared/Authorization` is **re-packaging and composition, not a model or API redesign**.
+The authorization model's artefacts — the `Permission` value, the `AuthorizationPolicy` port, its `StaticAuthorizationPolicy` implementation, and the `PermissionVoter` — are **packaged today** inside `Backoffice/Identity/Infrastructure/Security` (their current implementation location, not their conceptual home: the `Permission` value and the port belong to the authorization *model*; only the packaging is Infrastructure). This is deptrac-legal and mirrors the existing `ActorContextFactory` seam. The contracts are **neutral from day one**: the port speaks *permissions*, *roles-as-bare-tokens*, and *decisions* — **never** `User`, `Role`, or `SecurityUser`. The voter strips the `ROLE_` prefix at the edge (keeping SI-5's one-directional mapping) before consulting the policy. When a second clearly-transversal consumer appears (a protected CLI, API keys, `Frontoffice` reusing the model), promotion to `Shared/Authorization` is **re-packaging and composition, not a model or API redesign**.
 
 *Discarded:* a top-level `Access`/`Authorization` context or a `Shared/Authorization` module **now** — a god-module every context couples to before a second consumer exists; Rule of Three.
 
@@ -58,7 +58,7 @@ The subject of an authorization is the *bearer of attributable authority* (User/
 
 ### D8 — Static now, shaped to become configurable without a redesign
 
-Roles and the policy maps are code today (a deploy changes them). Because a permission is a value (D1) and resolution goes through the `PermissionPolicy` port (D4/D5), moving the maps to a database store later swaps only the port's adapter (`StaticPermissionPolicy` → `DbPermissionPolicy`) — the model, the voter, the `#[IsGranted]` call sites, and the port contract are untouched. Configurable RBAC is a store swap, not a rewrite.
+Roles and the policy maps are code today (a deploy changes them). Because a permission is a value (D1) and resolution goes through the `AuthorizationPolicy` port (D4/D5), moving the maps to a database store later swaps only the port's adapter (`StaticAuthorizationPolicy` → `DbAuthorizationPolicy`) — the model, the voter, the `#[IsGranted]` call sites, and the port contract are untouched. Configurable RBAC is a store swap, not a rewrite.
 
 ### D9 — The row-level door stays open for free, unbuilt
 
@@ -66,11 +66,13 @@ Symfony's voter already receives the subject of `#[IsGranted('bank.read', subjec
 
 ## Acceptance criterion (OCP) and the two tripwires
 
-**The authorization subsystem shall be open for extension and closed for modification: adding a new resource or action may only require declaring new permissions and updating the authorization policy — never modifying the resolution algorithm, the `Permission` model, or the `PermissionPolicy` port contract.**
+**The authorization subsystem shall be open for extension and closed for modification: adding a new resource or action may only require declaring new permissions and updating the authorization policy — never modifying the resolution algorithm, the `Permission` model, or the `AuthorizationPolicy` port contract.**
+
+Operatively: **the authorization core is intentionally finite — new business capabilities extend the permission vocabulary and the policy, never the authorization algorithm.**
 
 Two objective boundaries keep the model from drifting into ABAC; crossing either is a **new ADR, a different capability**:
 
-1. **The policy stays strictly declarative** — data only (`tier → [verbs]`, `permission → [roles]`, `resource` opt-out sets). The first `if (…) then grant`, closure, or expression turns the map into a policy engine.
+1. **The policy stays policy, not mechanism** — whether coded or persisted it holds only data (`tier → [verbs]`, `permission → [roles]`, `resource` opt-out sets) and **no algorithm**. The first `if (…) then grant`, closure, or expression turns the policy into a policy *engine* — a different capability.
 2. **The `subject:` gate stays unevaluated** — the day the voter reads the subject to decide, the model has entered data-scoping/ABAC.
 
 *Candidate follow-up:* make the criterion an executable gate (a `deptrac`/`php.lint.*`-style architecture test) asserting the core set (voter + `Permission` value + port) does not change when a resource is added, and the policy holds no executable code — turning the tripwires into CI failures rather than review notes.

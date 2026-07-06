@@ -13,16 +13,16 @@ Continúan la numeración del hermano (SI-1…SI-5); estos cuatro son los que in
 
 - **SI-6 · Permiso = valor.** Un permiso es el valor derivado `(resource, action)` (`"bank.read"`) — nunca una entidad `Permission { id }` ni una tabla. Mantenerlo valor hace que estático→configurable sea un swap del store, no del modelo (ADR D1/D8).
 - **SI-7 · Autorización en el borde (extiende SI-5).** La decide el `PermissionVoter` antes de entrar a la aplicación; **ninguna lógica de `Application`/`Domain` ramifica por rol NI por permiso**. El prefijo `ROLE_` y la traducción permiso→decisión viven sólo en Infra; el negocio no conoce ni roles ni permisos (ADR D4/D6).
-- **SI-8 · Política declarativa, no mecanismo.** El mapa de política es **datos** (`tier → [verbos]`, `permiso → [roles]`, set de opt-out por recurso). El primer `if/closure/expression` lo convierte en motor de políticas → **ADR nuevo** (ABAC). Es uno de los dos tripwires que impiden derivar a ABAC (ADR §tripwires).
-- **SI-9 · Recurso nuevo = additive-only (OCP).** Añadir un recurso sólo puede *añadir* (constantes de permiso en su borde + `#[IsGranted]` + —sólo para domain-ops/lecturas sensibles— filas en `explicitGrants`); **nunca modificar** el `PermissionVoter`, el valor `Permission` ni el contrato del puerto `PermissionPolicy`. La puerta row-level (`subject:` del voter) permanece **sin evaluar** (2º tripwire).
+- **SI-8 · Política, no mecanismo.** La política **puede estar codificada o persistida**, pero **no contiene algoritmo**: sólo datos (`tier → [verbos]`, `permiso → [roles]`, set de opt-out por recurso). El primer `if/closure/expression` la convierte en **motor de políticas** → **ADR nuevo** (ABAC). Es uno de los dos tripwires que impiden derivar a ABAC (ADR §tripwires).
+- **SI-9 · Recurso nuevo = additive-only (OCP).** Añadir un recurso sólo puede *añadir* (constantes de permiso en su borde + `#[IsGranted]` + —sólo para domain-ops/lecturas sensibles— filas en `explicitGrants`); **nunca modificar** el `PermissionVoter`, el valor `Permission` ni el contrato del puerto `AuthorizationPolicy`. La puerta row-level (`subject:` del voter) permanece **sin evaluar** (2º tripwire).
 
 ## Localización de decisiones por PR
 
-*Core = `PermissionVoter` + valor `Permission` + puerto `PermissionPolicy` + `StaticPermissionPolicy` (tierVerbs + explicitGrants + tierOptOut).* Todo el core arranca en `Backoffice/Identity/Infrastructure/Security` con **interfaces neutrales** (hablan permisos/roles-como-token/decisiones, jamás `User`/`Role`/`SecurityUser`).
+*Core = `PermissionVoter` + valor `Permission` + puerto `AuthorizationPolicy` + `StaticAuthorizationPolicy` (tierVerbs + explicitGrants + tierOptOut).* Todo el core arranca en `Backoffice/Identity/Infrastructure/Security` con **interfaces neutrales** (hablan permisos/roles-como-token/decisiones, jamás `User`/`Role`/`SecurityUser`).
 
 | PR / Story | Decisiones ADR | Costura / artefactos que toca |
 |------------|----------------|-------------------------------|
-| **PR-1 — authorization core** | D1, D4, D5, D6, D7, D8 | VO `Permission` + puerto `PermissionPolicy` (neutral) + `StaticPermissionPolicy` (mapas declarativos) + `PermissionVoter` (strip `ROLE_` en el borde, `subject:` aceptado y **no** evaluado) + extender enum `Role` con `VIEWER`/`EDITOR`/`MANAGER`/`ADMIN`. **Additive: ninguna ruta gateada aún** (sin cambio de comportamiento) |
+| **PR-1 — authorization core** | D1, D4, D5, D6, D7, D8 | VO `Permission` + puerto `AuthorizationPolicy` (neutral) + `StaticAuthorizationPolicy` (mapas declarativos) + `PermissionVoter` (strip `ROLE_` en el borde, `subject:` aceptado y **no** evaluado) + extender enum `Role` con `VIEWER`/`EDITOR`/`MANAGER`/`ADMIN`. **Additive: ninguna ruta gateada aún** (sin cambio de comportamiento) |
 | **PR-2 — keyset #437 (co-requisito)** | D9 | `Shared/Search`: discriminante base-query/route en `QueryExecutionTrace`/`FingerprintCanonicalizer` → un cursor acuñado en una ruta se rechaza (`422 invalid-cursor`) en otra con distinto `WHERE`/`JOIN`. **Cierra la puerta antes** de que exista el par de rutas con acceso divergente |
 | **PR-3 — banks slice** | D2, D3, D9 | Constantes `BankPermission` (`bank.read/write/delete/close`) co-localizadas en el borde de `Backoffice/Bank` + `#[IsGranted]` en los controladores de Bank (retira su cobertura por el catch-all `IS_AUTHENTICATED_FULLY`) + `explicitGrants['bank.close']` + asignación de rol a la fixture Alice / bootstrap (si no, regresan acceso). **Tightening de comportamiento** |
 | **PR-4 — bank-accounts slice** | D2, D3, D9 | Constantes `BankAccountPermission` (`bankAccount.read/write/delete/changeStatus`) + `#[IsGranted]` en los controladores de BankAccount, incl. la **ruta anidada** `GET /banks/{id}/accounts` + `explicitGrants['bankAccount.changeStatus']`. Depende de PR-2 (par nested-vs-colección) |
@@ -32,7 +32,7 @@ Continúan la numeración del hermano (SI-1…SI-5); estos cuatro son los que in
 ## DAG de dependencias
 
 ```
-PR-1 (core: Permission VO + PermissionPolicy + StaticPermissionPolicy + PermissionVoter + roles-tier)
+PR-1 (core: Permission VO + AuthorizationPolicy + StaticAuthorizationPolicy + PermissionVoter + roles-tier)
   ├─> PR-2 (#437 keyset fingerprint) ──┐   [co-requisito: cierra la puerta row-level heredada]
   ├─> PR-3 (banks slice) ──────────────┤
   │                                     └─> PR-4 (bank-accounts slice: nested + colección)
