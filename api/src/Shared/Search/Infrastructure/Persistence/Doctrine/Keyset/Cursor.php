@@ -14,7 +14,11 @@ namespace Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset;
  * never changes the wire format; changing a wire key would.
  *
  * - `version`: the serialization-contract version (1 initially), wire key `v`.
- *   A change to ANY of the serialization/canonicalization rules bumps it (FR15).
+ *   A change to any serialization/canonicalization rule of a RELEASED format bumps
+ *   it (FR15) — never a silent change to a cursor a client may still be holding.
+ *   Pre-release the format is still v1 being defined, so refining the canonical
+ *   chain before the first deploy (no cursor exists in the field yet) does not bump
+ *   it: the version counts released formats, not dev-time iterations of v1.
  * - `direction`: the navigation direction baked in at emission (`after`/
  *   `before`), wire key `dir`. It is an INTEGRITY BINDING ONLY (K2/AR21): the
  *   codec compares it against the expected direction, but it is NEVER read to

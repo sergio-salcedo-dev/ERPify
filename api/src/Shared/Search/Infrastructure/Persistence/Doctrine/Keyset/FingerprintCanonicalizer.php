@@ -16,8 +16,16 @@ use ValueError;
  * fingerprint. The canonical string is the contract whose stability the cursor
  * depends on; the fingerprint is the integrity binding stored in the cursor.
  *
- * Canonical chain (AR3): `tenant|entity|filters|sort|direction|limit`, built
- * exclusively from the trace's RECEIPTS, never from raw request input. The
+ * Canonical chain (AR3): `tenant|entity|filters|sort|direction|limit|baseQuery`,
+ * built exclusively from the trace's RECEIPTS, never from raw request input. The
+ * trailing `baseQuery` segment is the repository-authored base query's structural
+ * identity (see {@see QueryExecutionTrace::$baseQuery}). It is placed LAST because
+ * it may itself carry a `|` (a DQL string literal could), so as the final segment
+ * its bytes are the unambiguous remainder. Injectivity still holds: the only
+ * EARLIER segment that can also carry a `|` is `filters`, and it is a
+ * self-delimiting JSON array (no `json_encode` output is a proper prefix of
+ * another), while `sort`/`direction`/`limit` are `|`-free — so the decomposition
+ * stays unique regardless of any `|` inside `filters` or `baseQuery`. The
  * `filters` segment is a deterministic JSON array — JSON because a filter value
  * can contain any byte (a name with a `|`, a `,` or a `:`), and ad-hoc
  * delimiters are exactly where canonicalizers leak collisions; JSON escapes
@@ -72,6 +80,7 @@ final readonly class FingerprintCanonicalizer
             $trace->sort->field,
             $trace->sort->direction->value,
             (string) $trace->limit->value,
+            $trace->baseQuery,
         ]);
     }
 

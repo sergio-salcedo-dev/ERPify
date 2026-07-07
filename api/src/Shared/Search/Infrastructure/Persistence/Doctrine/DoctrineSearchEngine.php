@@ -96,6 +96,10 @@ final readonly class DoctrineSearchEngine
     ): Page {
         $alias = $this->rootAlias($queryBuilder);
 
+        // Captured BEFORE the filter applier mutates the builder, so it holds only the repository's
+        // base query (SELECT/FROM/JOIN/base-WHERE), never the request filters (those are AppliedFilters).
+        $baseQuery = $this->baseQueryIdentity($queryBuilder);
+
         // Steps 1–3: the three receipts of everything that shapes ordering and selection.
         [$appliedSort, $orderByColumns] = $this->resolveSort($criteria, $sortFieldMap);
         $appliedFilters = $this->filterApplier->apply($queryBuilder, $criteria->filters, $searchFieldMap);
@@ -103,7 +107,7 @@ final readonly class DoctrineSearchEngine
 
         // Step 4: seal the trace, derive the fingerprint, and guard the Row Uniqueness Contract.
         $entity = $this->rootEntity($queryBuilder);
-        $trace = new QueryExecutionTrace($entity, $appliedFilters, $appliedSort, $appliedLimit);
+        $trace = new QueryExecutionTrace($entity, $appliedFilters, $appliedSort, $appliedLimit, $baseQuery);
         $fingerprint = $this->fingerprintCanonicalizer->fingerprint($trace);
         $this->rowUniquenessGuard->assert($queryBuilder);
 
@@ -184,8 +188,17 @@ final readonly class DoctrineSearchEngine
         $appliedFilters = $this->filterApplier->apply(clone $queryBuilder, $criteria->filters, $searchFieldMap);
         $appliedLimit = $this->resolveLimit($criteria, $policy);
 
+        // Same base-query identity as paginate(): here the builder is pristine (filters ran on a
+        // clone), so it is read directly. The synthetic cursor must validate on the paginate() call
+        // it accompanies, so both trace-construction sites must derive it in lockstep.
         $fingerprint = $this->fingerprintCanonicalizer->fingerprint(
-            new QueryExecutionTrace($this->rootEntity($queryBuilder), $appliedFilters, $appliedSort, $appliedLimit),
+            new QueryExecutionTrace(
+                $this->rootEntity($queryBuilder),
+                $appliedFilters,
+                $appliedSort,
+                $appliedLimit,
+                $this->baseQueryIdentity($queryBuilder),
+            ),
         );
 
         $values = $this->positionExtractor->extract(
@@ -526,5 +539,29 @@ final readonly class DoctrineSearchEngine
         }
 
         return $entities[0];
+    }
+
+    /**
+     * The base query's structural identity — the DQL the repository authored (SELECT/FROM/JOIN/base
+     * WHERE), read while the builder still holds only that base. Sealed into the {@see QueryExecutionTrace}
+     * so two routes over the same aggregate root with divergent base predicates (the account collection
+     * vs a bank's nested accounts) mint distinct fingerprints; a cursor minted on one then fails
+     * fingerprint validation on the other (422 `invalid-cursor`) instead of paginating a foreign scope.
+     * It is the whole base DQL rather than only WHERE/JOIN because it is deterministic per route,
+     * type-clean (a `string`, unlike the mixed DQL parts), and a superset can only be a stricter binding.
+     * Structural, not value-bound: the `:bankId` placeholder — not its value — is what the two nested
+     * requests share, so a cursor binds to the route's scope shape, not to one bank.
+     *
+     * Precondition (unguarded, holds for every current consumer): the base query's DQL must be
+     * BYTE-STABLE across the mint request and every follow-up — a fixed-shape base builder with NAMED
+     * placeholders. A base predicate carrying a Doctrine AUTO-generated parameter name (`?1`,
+     * `expr()->in()`), or a JOIN/WHERE added conditionally on request state, would shift the DQL between
+     * pages and reject a legitimate cursor (spurious 422). The binding is likewise coupled to Doctrine's
+     * DQL string generation: a library upgrade that alters it re-mints every fingerprint at once
+     * (bounded — cursors are ephemeral, a retry re-mints).
+     */
+    private function baseQueryIdentity(QueryBuilder $queryBuilder): string
+    {
+        return $queryBuilder->getDQL();
     }
 }
