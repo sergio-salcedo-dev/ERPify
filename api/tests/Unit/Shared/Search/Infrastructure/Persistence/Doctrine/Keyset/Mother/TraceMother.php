@@ -21,12 +21,14 @@ final class TraceMother
         ?AppliedFilters $filters = null,
         ?AppliedSort $sort = null,
         ?AppliedLimit $limit = null,
+        string $baseQuery = '',
     ): QueryExecutionTrace {
         return new QueryExecutionTrace(
             $entity,
             $filters ?? AppliedFilters::none(),
             $sort ?? new AppliedSort('name', SortDirection::ASC),
             $limit ?? new AppliedLimit(25),
+            $baseQuery,
         );
     }
 }

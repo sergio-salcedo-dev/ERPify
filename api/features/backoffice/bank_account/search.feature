@@ -67,6 +67,19 @@ Feature: List the accounts of a bank
     And the JSON node "pagination.hasNext" should be false
     And the JSON node "pagination.hasPrev" should be true
 
+  # Cross-route scope guard: a cursor minted on this bank's nested route is bound to its base
+  # predicate (WHERE ba.bankId). Replayed on the unscoped collection — same sort and limit, divergent
+  # base query — the recomputed fingerprint no longer matches, so it is rejected as 422 invalid-cursor.
+  Scenario: A cursor minted on a bank's nested route is rejected on the account collection
+    When I send a "GET" request to "/backoffice/banks/11111111-1111-7000-8000-000000000004/accounts?sort=createdAt&limit=2"
+    Then the response status code should be 200
+    And the JSON node "pagination.links.next" should not be null
+    And I follow the "pagination.links.next" link from the previous response rebased onto "/backoffice/bank-accounts"
+    And the response status code should be 422
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the JSON node "type" should be equal to "invalid-cursor"
+    And the JSON node "status" should be equal to the number 422
+
   Scenario Outline: A malformed bank id returns a 400 invalid-uuid Problem Details body
     When I send a "GET" request to "/backoffice/banks/<bankId>/accounts"
     Then the response status code should be 400

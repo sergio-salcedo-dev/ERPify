@@ -39,6 +39,23 @@ final readonly class QueryExecutionTrace
         public AppliedFilters $filters,
         public AppliedSort $sort,
         public AppliedLimit $limit,
+        /**
+         * The repository-authored base query's structural identity (its `SELECT`/
+         * `FROM`/`JOIN`/base `WHERE`), captured before any request filter is applied.
+         *
+         * why: the root entity FQCN alone does not distinguish two routes that share
+         * an aggregate root but scope it differently — the account collection
+         * (`FROM BankAccount ba JOIN Bank b`) and a bank's nested accounts
+         * (`FROM BankAccount ba WHERE ba.bankId = :bankId`) mint the same order
+         * decision. Without this segment their fingerprints collide, so a cursor
+         * minted on one is accepted on the other and paginates across a foreign
+         * scope — a privilege-scope-widening bypass once the two routes gain
+         * divergent access. Binding the base query into the fingerprint makes a
+         * cross-scope cursor fail fingerprint validation (`422 invalid-cursor`).
+         * Structural, not value-bound: `:bankId = A` and `:bankId = B` share the
+         * base identity — the parameter value is the filter's job, not the scope's.
+         */
+        public string $baseQuery,
     ) {
     }
 

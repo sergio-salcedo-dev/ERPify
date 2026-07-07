@@ -385,6 +385,30 @@ class HttpRequestContext extends AbstractContext
     }
 
     /**
+     * Follow a navigation link's query string — its opaque `after`/`before` cursor and every preserved
+     * param — VERBATIM, but rebased onto a DIFFERENT route path. Models a client replaying a cursor
+     * minted on one route against another route over the same aggregate root: the base-query
+     * discriminant must reject it (422 `invalid-cursor`) instead of paginating a foreign scope. The
+     * query string is spliced whole, never decoded/rebuilt, so a rejection provably targets the
+     * cross-route base-query MISMATCH, not accidental cursor corruption. The path is host-relative
+     * (`baseUrl` is applied by {@see iSendARequestTo}), so callers write it like any other request URL.
+     */
+    #[Given('I follow the :node link from the previous response rebased onto :path')]
+    public function iFollowTheLinkFromThePreviousResponseRebasedOntoPath(string $node, string $path): void
+    {
+        $link = $this->followableLinkFromPreviousResponse($node);
+        $separatorPosition = \strpos($link, '?');
+
+        if (false === $separatorPosition) {
+            throw new UnexpectedValueException(
+                \sprintf('Link "%s" carries no query string (cursor) to rebase onto "%s".', $link, $path),
+            );
+        }
+
+        $this->iSendARequestTo('GET', $path . \substr($link, $separatorPosition));
+    }
+
+    /**
      * Resolves JSON node `$node` from the previous response and validates it is a followable
      * (non-empty string) link. Shared by the verbatim and the param-overriding follow steps.
      */

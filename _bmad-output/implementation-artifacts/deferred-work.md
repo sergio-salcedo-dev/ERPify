@@ -1,5 +1,9 @@
 # Deferred work
 
+## Deferred from: code review of rm-2-cierre-fingerprint-keyset-437 (2026-07-07)
+
+- **(Shared/Search — hardening) La identidad base-query del cursor está acoplada al formato de `getDQL()` de Doctrine.** `DoctrineSearchEngine::baseQueryIdentity()` sella `$queryBuilder->getDQL()` en el fingerprint; su determinismo byte-a-byte entre mint y follow-up es precondición **no guardada** (mitigada sólo con nota en el docblock). Dos ejes de riesgo, sin trigger hoy (los 3 consumidores son fixed-shape con placeholders nombrados): (a) un consumidor futuro con parámetro auto-generado (`?1`, `expr()->in()`) o JOIN/WHERE condicional por request → 422 espurio en la página 2; (b) un upgrade de Doctrine que cambie la generación de DQL re-acuña todos los fingerprints a la vez (acotado — cursores efímeros). Endurecimiento posible: derivar una identidad base-query estable e independiente del formato (p. ej. parts normalizados o un token de identidad explícito), o un guardrail que asegure base-query request-invariante. Ref: `api/src/Shared/Search/Infrastructure/Persistence/Doctrine/DoctrineSearchEngine.php` (`baseQueryIdentity`).
+
 ## Deferred from: code review of af-1-1-user-aggregate-backoffice-identity-persistencia (2026-07-02)
 
 - **(auth-foundation / futuro) ¿`User` guarda `Email` como Doctrine embeddable (el VO = estado persistido)?** Hoy `email` es `string` escalar + `Email::from()->toString()` transitorio en el constructor. Alternativa: mapear `Email` como `#[ORM\Embedded]` para que el VO sea el estado (embeddable + migración + API de la entidad). Pregunta mayor que Winston dejó anotada — NO bloquea nada, revisar si el modelo de identidad crece. Ref: `api/src/Backoffice/Identity/Domain/Entity/User.php`.

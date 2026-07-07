@@ -137,6 +137,32 @@ final class TraceEquivalenceStabilityTest extends TestCase
         );
     }
 
+    #[Test]
+    public function aDivergentBaseQueryChangesTheCanonicalBytes(): void
+    {
+        // Same order decision (entity, filters, sort, limit); the base query is the
+        // only difference — the collision this test guards against is exactly the
+        // cross-route scope-widening the base-query segment closes.
+        $reference = TraceMother::create();
+        $scoped = TraceMother::create(baseQuery: 'SELECT ba FROM BankAccount ba WHERE ba.bankId = :bankId');
+
+        $this->assertNotSame(
+            $this->canonicalizer->canonical($reference),
+            $this->canonicalizer->canonical($scoped),
+        );
+    }
+
+    #[Test]
+    public function anIdenticalBaseQueryCanonicalizesIdentically(): void
+    {
+        $baseQuery = 'SELECT ba FROM BankAccount ba WHERE ba.bankId = :bankId';
+
+        $this->assertSame(
+            $this->canonicalizer->canonical(TraceMother::create(baseQuery: $baseQuery)),
+            $this->canonicalizer->canonical(TraceMother::create(baseQuery: $baseQuery)),
+        );
+    }
+
     private function assertCanonicallyEquivalentToReference(AppliedFilters $drifted): void
     {
         $this->assertSame(
