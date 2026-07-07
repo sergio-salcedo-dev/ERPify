@@ -19,7 +19,7 @@ API-scoped guidance. Root [`../CLAUDE.md`](../CLAUDE.md) is authoritative for mo
     -   `Backoffice/` — internal modules (e.g. `Bank/`, `Health/`), each with its own `Domain`/`Application`/`Infrastructure`.
     -   `Frontoffice/` — client-facing modules.
     -   `Iam/` — identity & access. `Identity/` holds the user aggregate, login, and the RBAC core (`Permission`, `AuthorizationPolicy`, `PermissionVoter`); `Invitation/` and `Session/` are reserved skeletons.
-    -   `Organization/` — tenancy context; a reserved skeleton (organization + membership aggregates land here).
+    -   `Organization/` — tenancy context. `Organization` + `Membership(userId, organizationId, roles)` aggregates: the authoritative user↔org link, org-scoped roles, one organization per installation. Bootstrapped by CLI (`organization:provision`, `organization:administrator:create`); no credentials in migrations.
     -   `Shared/` — vertical-slice capability modules over a minimal `Kernel/` (DDD building blocks). Capabilities each carry only the layers they need: `ErrorContract/` (RFC 9457 pipeline), `Uuid/`, `Http/`, `Serialization/`, `Persistence/`, `Clock/`, `Event/`, `Mailer/`, `Media/`, `Monitoring/`, `Search/`, `Storage/`, `Validation/`. No global `Domain`/`Application`/`Infrastructure` buckets — see [`../docs/adr/shared-module-organization.md`](../docs/adr/shared-module-organization.md). Put truly reusable code here; don't scatter it across modules.
 -   `config/` — Symfony config (services, routes, packages, Messenger transports).
 -   `migrations/` — Doctrine migrations (never edit applied migrations; generate new ones via `make db.diff`).

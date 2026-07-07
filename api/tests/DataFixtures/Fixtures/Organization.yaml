@@ -1,0 +1,8 @@
+Erpify\Organization\Organization\Domain\Entity\Organization:
+    the_organization:
+        # dev/test seed only. There is one organization per installation; the memberships in
+        # Membership.yaml bind the seeded users to it so no seeded user is left without a membership.
+        __factory:
+            'Erpify\Organization\Organization\Domain\Entity\Organization::provision':
+                - '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a50'
+                - 'ERPify'

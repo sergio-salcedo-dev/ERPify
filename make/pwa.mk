@@ -99,15 +99,19 @@ pwa.test.unit.watch: pwa.install.if-missing ## Run unit tests (Vitest) watch mod
 ## —— E2E Tests (Playwright) ——
 
 # E2E fixture user — seeded into the running stack before the Playwright run so the `setup` project can log in
-# against the default-deny /api (there is no login UI yet). Idempotent: a duplicate email just fails the CLI,
-# swallowed by `|| true`. Keep the values in sync with E2E_USER_* in pwa/tests/e2e/constants.ts.
+# against the default-deny /api (there is no login UI yet). The org is provisioned first, then the user is
+# created as the installation administrator (identity + ADMIN membership) via the CLI bootstrap path — there is
+# no generic user-create command. Idempotent: a second provision / duplicate email just fails the CLI, swallowed.
+# Keep the values in sync with E2E_USER_* in pwa/tests/e2e/constants.ts.
 E2E_USER_EMAIL ?= e2e@erpify.test
 E2E_USER_PASSWORD ?= e2ePassword123
+E2E_ORG_NAME ?= E2E-Test-Organization
 
 pwa.test.e2e: pwa.install.if-missing ## Run end-to-end tests with Playwright; CI_SHARD=N CI_TOTAL_SHARDS=M for sharded runs; pass c='…' for extra args
-	@echo "[e2e] seeding user $(E2E_USER_EMAIL) (idempotent)…"
-	@$(MAKE) --no-print-directory sf c='identity:user:create $(E2E_USER_EMAIL) $(E2E_USER_PASSWORD) --role AUDIT_READER' >/dev/null 2>&1 \
-		&& echo "[e2e] user seeded." \
+	@echo "[e2e] seeding org + admin $(E2E_USER_EMAIL) (idempotent)…"
+	@$(MAKE) --no-print-directory sf c='organization:provision $(E2E_ORG_NAME)' >/dev/null 2>&1 || true
+	@$(MAKE) --no-print-directory sf c='organization:administrator:create $(E2E_USER_EMAIL) $(E2E_USER_PASSWORD)' >/dev/null 2>&1 \
+		&& echo "[e2e] org + admin seeded." \
 		|| echo "[e2e] seed returned non-zero — user likely already exists (fine) or the stack is unreachable."
 	@if [ -n "$(CI_SHARD)" ] && [ -n "$(CI_TOTAL_SHARDS)" ]; then \
 		$(call pwa_cmd,npm run test:e2e -- --shard=$(CI_SHARD)/$(CI_TOTAL_SHARDS) $(c)); \

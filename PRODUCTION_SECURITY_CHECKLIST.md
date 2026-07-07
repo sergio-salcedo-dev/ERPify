@@ -202,8 +202,9 @@ you change anything here.
       credential leak), and the domain VO `HashedPassword` is opaque to the algorithm —
       hashing lives in Infrastructure. `User` is **hard-deleted** (no soft delete), keeping
       GDPR erasure of the email satisfiable. Hashing lives in the Infrastructure `PasswordHasher`
-      adapter (used by the `identity:user:create` CLI); the plaintext is never printed or logged,
-      and credentials are never seeded through migrations (dev/test use a fixture with a bcrypt hash).
+      adapter (used by the `organization:administrator:create` CLI that bootstraps the first admin);
+      the plaintext is never printed or logged, and credentials are never seeded through migrations
+      (dev/test use a fixture with a bcrypt hash).
 - [ ] **Session firewall (`security.yaml`, `main`):** `json_login` over an **httpOnly** session cookie
       (`SameSite=Lax`, `Secure=auto`) — no JWT/token in the client. A failed login flows through the RFC 9457
       pipeline as a **401 `unauthenticated`** (never a manual `JsonResponse`); the message is **normalised to a

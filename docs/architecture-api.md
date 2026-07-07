@@ -45,12 +45,18 @@ api/src/
 │   ├── Audit/         { Application, Domain, Infrastructure }   # regulatory audit trail (read + write capture)
 │   ├── Bank/          { Application, Domain, Infrastructure }
 │   ├── BankAccount/   { Application, Domain, Infrastructure }   # references Bank by id only — adr/bank-bankaccount-modeling.md
-│   ├── Health/        { Application, Domain, Infrastructure }
-│   └── Identity/      { Application, Domain, Infrastructure }   # User aggregate + session firewall (json_login, SecurityUser/UserProvider, PasswordHasher) + access_control default-deny (UnauthenticatedAccessListener → 401) — auth foundation, adr/auth-rbac-subsystem.md
+│   └── Health/        { Application, Domain, Infrastructure }
 ├── Frontoffice/
 │   ├── Dev/        { Infrastructure/Controller }
 │   ├── Health/     { Infrastructure/Controller }
 │   └── Mercure/    { Domain, Infrastructure/Controller }
+├── Iam/                                                         # identity & access — promoted from Backoffice/Identity (adr/auth-rbac-subsystem.md D2 trigger)
+│   ├── Identity/     { Application, Domain, Infrastructure }   # User aggregate + session firewall (json_login, SecurityUser/UserProvider, PasswordHasher) + default-deny (UnauthenticatedAccessListener → 401) + parked RBAC core (Permission, AuthorizationPolicy, PermissionVoter) — adr/auth-rbac-subsystem.md, adr/rbac-authorization-model.md
+│   ├── Invitation/   { reserved skeleton }                    # invitation lifecycle — identity/invitation epic
+│   └── Session/      { reserved skeleton }                    # session registry — identity/invitation epic
+├── Organization/                                               # tenancy — modelled multi-tenant-ready, operation deferred (adr/identity-invitation-lifecycle.md D2)
+│   ├── Organization/ { Application, Domain, Infrastructure }   # tenant aggregate — one org per installation, CLI bootstrap (organization:provision / :administrator:create)
+│   └── Membership/   { Application, Domain, Infrastructure }   # authoritative user↔org link + org-scoped roles; references User/Organization by id
 └── Shared/                                                       # kernel trio + capability modules — adr/shared-module-organization.md
     ├── Application/    { Problem, UseCase }                      # kernel: RFC 9457 mapping + use-case Result
     ├── Domain/         { Aggregate, Entity, Enum, Exception, Uuid, ValueObject }   # kernel primitives

@@ -1,0 +1,15 @@
+Erpify\Organization\Membership\Domain\Entity\Membership:
+    membership_alice:
+        # Alice references (@user_alice, @the_organization) make Alice persist the user and organization
+        # first, so the membership.organization_id FK resolves. Roles mirror the seeded user's role set.
+        __factory:
+            'Erpify\Tests\DataFixtures\MembershipFixtureFactory::create':
+                - '@user_alice'
+                - '@the_organization'
+                - ['AUDIT_READER']
+    membership_mallory:
+        __factory:
+            'Erpify\Tests\DataFixtures\MembershipFixtureFactory::create':
+                - '@user_mallory'
+                - '@the_organization'
+                - []
