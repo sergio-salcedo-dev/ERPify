@@ -78,13 +78,48 @@ deptrac:
         - name: Backoffice.Health.Infrastructure
           collectors: [{ type: directory, value: src/Backoffice/Health/Infrastructure/.* }]
 
-        # ---- Backoffice / Identity ----------------------------------------------
-        - name: Backoffice.Identity.Domain
-          collectors: [{ type: directory, value: src/Backoffice/Identity/Domain/.* }]
-        - name: Backoffice.Identity.Application
-          collectors: [{ type: directory, value: src/Backoffice/Identity/Application/.* }]
-        - name: Backoffice.Identity.Infrastructure
-          collectors: [{ type: directory, value: src/Backoffice/Identity/Infrastructure/.* }]
+        # ---- Iam / Identity -----------------------------------------------------
+        # Promoted out of Backoffice. Its Infrastructure/Security also holds the RBAC
+        # core (Permission, AuthorizationPolicy, PermissionVoter) — parked here as a
+        # physical consequence of the module move, covered by the Infrastructure layer.
+        - name: Iam.Identity.Domain
+          collectors: [{ type: directory, value: src/Iam/Identity/Domain/.* }]
+        - name: Iam.Identity.Application
+          collectors: [{ type: directory, value: src/Iam/Identity/Application/.* }]
+        - name: Iam.Identity.Infrastructure
+          collectors: [{ type: directory, value: src/Iam/Identity/Infrastructure/.* }]
+
+        # ---- Iam / Invitation (skeleton — reserved namespace, no classes yet) ----
+        - name: Iam.Invitation.Domain
+          collectors: [{ type: directory, value: src/Iam/Invitation/Domain/.* }]
+        - name: Iam.Invitation.Application
+          collectors: [{ type: directory, value: src/Iam/Invitation/Application/.* }]
+        - name: Iam.Invitation.Infrastructure
+          collectors: [{ type: directory, value: src/Iam/Invitation/Infrastructure/.* }]
+
+        # ---- Iam / Session (skeleton — reserved namespace, no classes yet) -------
+        - name: Iam.Session.Domain
+          collectors: [{ type: directory, value: src/Iam/Session/Domain/.* }]
+        - name: Iam.Session.Application
+          collectors: [{ type: directory, value: src/Iam/Session/Application/.* }]
+        - name: Iam.Session.Infrastructure
+          collectors: [{ type: directory, value: src/Iam/Session/Infrastructure/.* }]
+
+        # ---- Organization / Organization (skeleton — no classes yet) ------------
+        - name: Organization.Organization.Domain
+          collectors: [{ type: directory, value: src/Organization/Organization/Domain/.* }]
+        - name: Organization.Organization.Application
+          collectors: [{ type: directory, value: src/Organization/Organization/Application/.* }]
+        - name: Organization.Organization.Infrastructure
+          collectors: [{ type: directory, value: src/Organization/Organization/Infrastructure/.* }]
+
+        # ---- Organization / Membership (skeleton — no classes yet) --------------
+        - name: Organization.Membership.Domain
+          collectors: [{ type: directory, value: src/Organization/Membership/Domain/.* }]
+        - name: Organization.Membership.Application
+          collectors: [{ type: directory, value: src/Organization/Membership/Application/.* }]
+        - name: Organization.Membership.Infrastructure
+          collectors: [{ type: directory, value: src/Organization/Membership/Infrastructure/.* }]
 
         # ---- Frontoffice / Dev --------------------------------------------------
         - name: Frontoffice.Dev.Infrastructure
@@ -166,7 +201,11 @@ deptrac:
         Backoffice.Audit.Domain: *domain
         Backoffice.BankAccount.Domain: *domain
         Backoffice.Health.Domain: *domain
-        Backoffice.Identity.Domain: *domain
+        Iam.Identity.Domain: *domain
+        Iam.Invitation.Domain: *domain
+        Iam.Session.Domain: *domain
+        Organization.Organization.Domain: *domain
+        Organization.Membership.Domain: *domain
         Shared.Domain: *domain
 
         # Application may orchestrate its own Domain + the shared kernel, plus the
@@ -199,8 +238,36 @@ deptrac:
             - Vendor.Psr
             - Vendor.SymfonyUid
             - Vendor.PassiveMetadata
-        Backoffice.Identity.Application:
-            - Backoffice.Identity.Domain
+        Iam.Identity.Application:
+            - Iam.Identity.Domain
+            - Shared.Domain
+            - Shared.Application
+            - Vendor.Psr
+            - Vendor.SymfonyUid
+            - Vendor.PassiveMetadata
+        Iam.Invitation.Application:
+            - Iam.Invitation.Domain
+            - Shared.Domain
+            - Shared.Application
+            - Vendor.Psr
+            - Vendor.SymfonyUid
+            - Vendor.PassiveMetadata
+        Iam.Session.Application:
+            - Iam.Session.Domain
+            - Shared.Domain
+            - Shared.Application
+            - Vendor.Psr
+            - Vendor.SymfonyUid
+            - Vendor.PassiveMetadata
+        Organization.Organization.Application:
+            - Organization.Organization.Domain
+            - Shared.Domain
+            - Shared.Application
+            - Vendor.Psr
+            - Vendor.SymfonyUid
+            - Vendor.PassiveMetadata
+        Organization.Membership.Application:
+            - Organization.Membership.Domain
             - Shared.Domain
             - Shared.Application
             - Vendor.Psr
@@ -274,9 +341,69 @@ deptrac:
             - Vendor.ApiPlatform
             - Vendor.Guzzle
             - Vendor.Flysystem
-        Backoffice.Identity.Infrastructure:
-            - Backoffice.Identity.Domain
-            - Backoffice.Identity.Application
+        Iam.Identity.Infrastructure:
+            - Iam.Identity.Domain
+            - Iam.Identity.Application
+            - Shared.Domain
+            - Shared.Application
+            - Shared.Infrastructure
+            - Vendor.Psr
+            - Vendor.SymfonyUid
+            - Vendor.PassiveMetadata
+            - Vendor.Doctrine
+            - Vendor.Symfony
+            - Vendor.Monolog
+            - Vendor.ApiPlatform
+            - Vendor.Guzzle
+            - Vendor.Flysystem
+        Iam.Invitation.Infrastructure:
+            - Iam.Invitation.Domain
+            - Iam.Invitation.Application
+            - Shared.Domain
+            - Shared.Application
+            - Shared.Infrastructure
+            - Vendor.Psr
+            - Vendor.SymfonyUid
+            - Vendor.PassiveMetadata
+            - Vendor.Doctrine
+            - Vendor.Symfony
+            - Vendor.Monolog
+            - Vendor.ApiPlatform
+            - Vendor.Guzzle
+            - Vendor.Flysystem
+        Iam.Session.Infrastructure:
+            - Iam.Session.Domain
+            - Iam.Session.Application
+            - Shared.Domain
+            - Shared.Application
+            - Shared.Infrastructure
+            - Vendor.Psr
+            - Vendor.SymfonyUid
+            - Vendor.PassiveMetadata
+            - Vendor.Doctrine
+            - Vendor.Symfony
+            - Vendor.Monolog
+            - Vendor.ApiPlatform
+            - Vendor.Guzzle
+            - Vendor.Flysystem
+        Organization.Organization.Infrastructure:
+            - Organization.Organization.Domain
+            - Organization.Organization.Application
+            - Shared.Domain
+            - Shared.Application
+            - Shared.Infrastructure
+            - Vendor.Psr
+            - Vendor.SymfonyUid
+            - Vendor.PassiveMetadata
+            - Vendor.Doctrine
+            - Vendor.Symfony
+            - Vendor.Monolog
+            - Vendor.ApiPlatform
+            - Vendor.Guzzle
+            - Vendor.Flysystem
+        Organization.Membership.Infrastructure:
+            - Organization.Membership.Domain
+            - Organization.Membership.Application
             - Shared.Domain
             - Shared.Application
             - Shared.Infrastructure

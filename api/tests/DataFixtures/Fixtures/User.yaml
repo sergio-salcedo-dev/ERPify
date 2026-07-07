@@ -1,4 +1,4 @@
-Erpify\Backoffice\Identity\Domain\Entity\User:
+Erpify\Iam\Identity\Domain\Entity\User:
     user_alice:
         # dev/test seed only — credentials are NEVER seeded into migrations. The factory hashes this
         # plaintext (bcrypt) so the login flow can authenticate as alice@erpify.test / alice-password.

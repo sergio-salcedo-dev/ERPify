@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Erpify\Tests\Functional;
 
 use Doctrine\ORM\EntityManagerInterface;
-use Erpify\Backoffice\Identity\Domain\Email;
-use Erpify\Backoffice\Identity\Domain\Enum\Role;
-use Erpify\Backoffice\Identity\Domain\Repository\UserRepository;
-use Erpify\Backoffice\Identity\Infrastructure\Security\SecurityUser;
+use Erpify\Iam\Identity\Domain\Email;
+use Erpify\Iam\Identity\Domain\Enum\Role;
+use Erpify\Iam\Identity\Domain\Repository\UserRepository;
+use Erpify\Iam\Identity\Infrastructure\Security\SecurityUser;
 use Erpify\Tests\DataFixtures\UserFixtureFactory;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Component\Uid\Uuid;

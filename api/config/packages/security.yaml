@@ -2,12 +2,12 @@ security:
     # Verification resolves the algorithm from each stored hash, so a CLI-minted hash and the firewall
     # check always agree. The CLI's PasswordHasher adapter selects this same hasher by SecurityUser::class.
     password_hashers:
-        Erpify\Backoffice\Identity\Infrastructure\Security\SecurityUser: 'auto'
+        Erpify\Iam\Identity\Infrastructure\Security\SecurityUser: 'auto'
 
     # Loads the identity by its email identifier; a blank/unknown identifier maps to "user not found".
     providers:
         identity_user_provider:
-            id: Erpify\Backoffice\Identity\Infrastructure\Security\UserProvider
+            id: Erpify\Iam\Identity\Infrastructure\Security\UserProvider
 
     firewalls:
         dev:
@@ -20,7 +20,7 @@ security:
                 check_path: identity_login
                 username_path: email
                 password_path: password
-                failure_handler: Erpify\Backoffice\Identity\Infrastructure\Security\ProblemDetailsAuthenticationFailureHandler
+                failure_handler: Erpify\Iam\Identity\Infrastructure\Security\ProblemDetailsAuthenticationFailureHandler
             # Throttle the only auth surface: repeated failures per (client IP + email) are rate-limited so a
             # leaked credential list cannot be sprayed. Pairs with the timing-equalised UserProvider so neither
             # the 401 body nor its latency leaks which accounts exist.
@@ -47,7 +47,7 @@ security:
 when@test:
     security:
         password_hashers:
-            Erpify\Backoffice\Identity\Infrastructure\Security\SecurityUser:
+            Erpify\Iam\Identity\Infrastructure\Security\SecurityUser:
                 algorithm: auto
                 cost: 4 # Lowest possible value for bcrypt
                 time_cost: 3 # Lowest possible value for argon

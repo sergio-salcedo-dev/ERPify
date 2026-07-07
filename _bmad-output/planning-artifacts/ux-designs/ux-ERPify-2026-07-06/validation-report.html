@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>UX Design Validation: ERPify — Experiencia de acceso / identidad</title>
+<style>
+  :root {
+    --bg: #fafaf9;
+    --surface: #ffffff;
+    --border: #e7e5e4;
+    --text: #1c1917;
+    --muted: #78716c;
+
+    --verdict-strong: #16a34a;
+    --verdict-adequate: #65a30d;
+    --verdict-thin: #d97706;
+    --verdict-broken: #dc2626;
+
+    --sev-low: #64748b;
+    --sev-medium: #ca8a04;
+    --sev-high: #ea580c;
+    --sev-critical: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    font-size: 15px;
+  }
+  .container { max-width: 960px; margin: 0 auto; padding: 32px 24px 64px; }
+
+  header.report-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+  }
+  .title h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  .title .subtitle { color: var(--muted); font-size: 13px; margin-top: 4px; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+
+  .synthesis {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--muted);
+    border-radius: 8px;
+    padding: 18px 22px;
+    margin-bottom: 24px;
+    font-size: 15.5px;
+  }
+  .synthesis p { margin: 0 0 10px; }
+  .synthesis p:last-child { margin-bottom: 0; }
+
+  .dimension-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .dim-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .dim-card .dim-name { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .dim-card .dim-verdict { font-size: 14px; font-weight: 600; }
+
+  section.dimension, section.reviewer-section { margin-bottom: 14px; }
+  section.dimension details, section.reviewer-section details {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  section summary {
+    padding: 14px 20px;
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  section summary::-webkit-details-marker { display: none; }
+  section summary::before {
+    content: "▸";
+    display: inline-block;
+    color: var(--muted);
+    transition: transform 0.15s ease;
+  }
+  section details[open] summary::before { transform: rotate(90deg); }
+  section summary h2 {
+    display: inline;
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    flex: 1;
+  }
+  .verdict-pill {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: white;
+  }
+  .verdict-strong { background: var(--verdict-strong); }
+  .verdict-adequate { background: var(--verdict-adequate); }
+  .verdict-thin { background: var(--verdict-thin); }
+  .verdict-broken { background: var(--verdict-broken); }
+
+  .dim-body { padding: 4px 20px 18px; }
+  .dim-judgment { color: var(--text); font-size: 14.5px; }
+  .dim-judgment p { margin: 0 0 10px; }
+
+  .findings-list { padding: 0 20px 4px; }
+  article.finding {
+    padding: 14px 0;
+    border-top: 1px solid var(--border);
+  }
+  article.finding:first-child { border-top: none; }
+  article.finding header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .badge {
+    font-size: 10.5px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    line-height: 1.4;
+  }
+  .badge-sev-low { background: rgba(100, 116, 139, 0.12); color: var(--sev-low); }
+  .badge-sev-medium { background: rgba(202, 138, 4, 0.14); color: var(--sev-medium); }
+  .badge-sev-high { background: rgba(234, 88, 12, 0.14); color: var(--sev-high); }
+  .badge-sev-critical { background: rgba(220, 38, 38, 0.14); color: var(--sev-critical); }
+  .finding-title { margin: 0; font-size: 15px; font-weight: 500; flex: 1; min-width: 200px; }
+  .finding-location { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; color: var(--muted); }
+  .finding-note, .finding-fix { margin-top: 6px; font-size: 14px; }
+  .finding-fix strong { color: var(--muted); font-weight: 500; }
+
+  .reviewer-source {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  .mechanical {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-top: 24px;
+    font-size: 14px;
+  }
+  .mechanical h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .mechanical ul { margin: 0; padding-left: 20px; }
+  .mechanical li { margin-bottom: 4px; color: var(--text); }
+
+  footer.report-footer {
+    margin-top: 40px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  footer .meta { display: flex; gap: 24px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+  <div class="container">
+
+    <header class="report-header">
+      <div class="title">
+        <h1>ERPify — Experiencia de acceso / identidad — UX Design Validation Report</h1>
+        <div class="subtitle">_bmad-output/planning-artifacts/ux-designs/ux-ERPify-2026-07-06/</div>
+      </div>
+    </header>
+
+    <div class="synthesis">
+      <p>Par de espinas <strong>sólido y extraíble</strong> como contrato aguas abajo: el rubric walker resuelve
+      token-a-token y fichero-a-fichero sin ninguna referencia rota, los seis componentes están doble-especificados
+      (visual + comportamiento) y los journeys están íntegros — <strong>0 críticas, 0 high</strong> en cobertura.</p>
+      <p>Las lentes adversariales desplazan el cuadro: <strong>seguridad</strong> encuentra que el invariante estrella
+      (indistinguibilidad) se redujo a <em>paridad de copy</em> y deja abiertos los canales que un atacante mide de
+      verdad (timing / status / shape) más la higiene del token-en-URL; <strong>accesibilidad</strong> encuentra dos
+      fallos de gestión de foco a nivel de espec (uno es una trampa de teclado WCAG-A).</p>
+      <p>Todo es <strong>cerrable con ediciones quirúrgicas</strong>. El modelo de dominio (4 máquinas + 2 invariantes)
+      aguanta; los invariantes están <em>infra-especificados</em>, no equivocados. Recuento: 0 críticas · <strong>4
+      high</strong> · 18 medium · 22 low.</p>
+    </div>
+
+    <div class="dimension-summary">
+      <div class="dim-card"><div class="dim-name">Flow coverage</div><div class="dim-verdict" style="color: var(--verdict-strong)">strong</div></div>
+      <div class="dim-card"><div class="dim-name">Token completeness</div><div class="dim-verdict" style="color: var(--verdict-strong)">strong</div></div>
+      <div class="dim-card"><div class="dim-name">Component coverage</div><div class="dim-verdict" style="color: var(--verdict-strong)">strong</div></div>
+      <div class="dim-card"><div class="dim-name">State coverage</div><div class="dim-verdict" style="color: var(--verdict-adequate)">adequate</div></div>
+      <div class="dim-card"><div class="dim-name">Visual reference coverage</div><div class="dim-verdict" style="color: var(--verdict-strong)">strong</div></div>
+      <div class="dim-card"><div class="dim-name">Bloat & overspecification</div><div class="dim-verdict" style="color: var(--verdict-adequate)">adequate</div></div>
+      <div class="dim-card"><div class="dim-name">Inheritance discipline</div><div class="dim-verdict" style="color: var(--verdict-strong)">strong</div></div>
+      <div class="dim-card"><div class="dim-name">Shape fit</div><div class="dim-verdict" style="color: var(--verdict-strong)">strong</div></div>
+    </div>
+
+    <section class="dimension">
+      <details>
+        <summary><h2>State coverage</h2><span class="verdict-pill verdict-adequate">adequate</span></summary>
+        <div class="dim-body"><div class="dim-judgment">
+          <p>B3/B4/C1 fuertes; B1/B2 tienen sus estados repartidos entre secciones en vez de enumerados por
+          superficie.</p>
+        </div></div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">B1 Login sin enumeración de estados por-superficie ni journey propio</h3><span class="finding-location">EXPERIENCE.md · IA / State Patterns</span></header>
+            <div class="finding-note">La superficie más usada (y hoy un mock) obliga a ensamblar su máquina de estados desde ≥4 secciones.</div>
+            <div class="finding-fix"><strong>Fix:</strong> tabla de estados de B1 (idle / enviando / credenciales-inválidas / lockout / offline / error técnico).</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">C1 AccessWall sin lugar de render para los muros post-identidad</h3><span class="finding-location">EXPERIENCE.md · IA</span></header>
+            <div class="finding-note">El caso token-inválido es claro; dónde se renderiza SUSPENDED / LockedUntil / DEACTIVATED tras el login, no.</div>
+            <div class="finding-fix"><strong>Fix:</strong> nombrar la ruta o el mecanismo de render post-login.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary><h2>Bloat & overspecification</h2><span class="verdict-pill verdict-adequate">adequate</span></summary>
+        <div class="dim-body"><div class="dim-judgment">
+          <p>La voz narrativa es método, no relleno. Riesgo de DRY: State Patterns casi duplica el decision-log E6, y
+          hay repeticiones que el pase editorial recorta.</p>
+        </div></div>
+      </details>
+    </section>
+
+    <section class="reviewer-section">
+      <details open>
+        <summary><h2>Revisión de seguridad / anti-enumeración</h2><span class="reviewer-source">review-security.md</span></summary>
+        <div class="dim-body"><div class="dim-judgment">
+          <p>Fuerte donde controla la UI (copy neutro uniforme, muros de token opacos, flujo <code>?next=</code>
+          verificado contra el código), pero <strong>reduce un invariante transversal a una regla de microcopy</strong>.
+          El modelo aguanta; los invariantes están infra-especificados. 2 high · 6 medium · 4 low.</p>
+        </div></div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-high">high</span><h3 class="finding-title">Indistinguibilidad definida solo como paridad de copy</h3><span class="finding-location">EXPERIENCE.md · § Invariante de seguridad</span></header>
+            <div class="finding-note">Email inexistente cortocircuita (no hashea) → respuesta rápida; email real + contraseña errónea corre argon2 → respuesta lenta. Enumeración por <strong>timing</strong> intacta, más divergencia de status-code / response-shape (401 vs 200+redirect al muro SUSPENDED).</div>
+            <div class="finding-fix"><strong>Fix:</strong> el invariante debe declarar que la indistinguibilidad incluye timing / status / shape, y entregar al ADR el requisito de camino de tiempo constante + status/forma uniformes.</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-high">high</span><h3 class="finding-title">Token en la URL sin contrato de higiene</h3><span class="finding-location">EXPERIENCE.md · § Interaction Primitives</span></header>
+            <div class="finding-note">El Referrer-Policy global filtra el token completo en subpeticiones same-origin (/api, túnel /monitoring de Sentry), en el historial y en los logs de Caddy → toma de cuenta, amplificado por D-b (reset limpia LockedUntil).</div>
+            <div class="finding-fix"><strong>Fix:</strong> declarar el contrato del token — un solo uso + caducidad corta, nunca logueado ni en ?next=/referrer, consumido en servidor y retirado de la URL tras validarlo.</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">Contrato de sesión sin declarar</h3><span class="finding-location">EXPERIENCE.md · State Patterns / Modelo de sesión</span></header>
+            <div class="finding-note">CSRF + regeneración de sesión en los POST INVITED→ACTIVE y de login; reset revoca TODAS las sesiones (no solo "las demás"); rate-limit en login/forgot/reset/accept; muro SUSPENDED entregado sin sesión parcial.</div>
+            <div class="finding-fix"><strong>Fix:</strong> subsección «lo que el invariante exige del backend → ADR».</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">Deuda de wiring de los mocks contradice los invariantes</h3><span class="finding-location">pwa/src/app/(auth)/</span></header>
+            <div class="finding-note">El mock de <code>/register</code> (alta libre) y el copy del <code>ResetPasswordForm</code> («…o ha expirado») contradicen los propios invariantes de la espina; deben corregirse al cablear, no solo deprecarse en papel.</div>
+            <div class="finding-fix"><strong>Fix:</strong> nota de «deuda de wiring» en § Estado real del terreno.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="reviewer-section">
+      <details open>
+        <summary><h2>Revisión de accesibilidad (WCAG 2.2 AA)</h2><span class="reviewer-source">review-a11y.md</span></summary>
+        <div class="dim-body"><div class="dim-judgment">
+          <p>Suelo a11y fuerte y deliberado — el color nunca es canal único, el estado de carga lleva etiqueta de
+          texto (reduced-motion safe), targets ≥44px, resiliencia sin pérdida de datos. Las dos debilidades reales son
+          de gestión de foco, ambas a nivel de espec. 2 high · 6 medium · 4 low.</p>
+        </div></div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-high">high</span><h3 class="finding-title">«Trampa de foco dentro de la tarjeta» en superficies no-modales</h3><span class="finding-location">EXPERIENCE.md · § Accessibility Floor / Interaction Primitives</span></header>
+            <div class="finding-note">TokenActionScreen / AccessWall son documentos primarios, no diálogos: un focus-trap literal es una trampa de teclado WCAG 2.1.2 (nivel A) que impide alcanzar Logo / ThemeToggle.</div>
+            <div class="finding-fix"><strong>Fix:</strong> eliminar el "trap"; orden de foco natural + Logo/Theme alcanzables. El foco-trap solo aplica a Dialog reales.</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-high">high</span><h3 class="finding-title">Sin gestión de foco en transiciones de éxito / post-login</h3><span class="finding-location">EXPERIENCE.md · § Key Flows / Component Patterns</span></header>
+            <div class="finding-note">En SPA, tras aceptar/reset/login el foco no se reubica → el usuario de lector de pantalla pierde el sitio y se pierde la confirmación SecuritySignal.</div>
+            <div class="finding-fix"><strong>Fix:</strong> mover el foco al encabezado del SecuritySignal (o al landmark de la nueva superficie) y anunciarlo.</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">Enlace de email en dark mode falla AA</h3><span class="finding-location">DESIGN.md · security-email</span></header>
+            <div class="finding-note">{color.accent} inline ≈ #2f5cd9 ≈ 2.5:1 sobre surface-dark.</div>
+            <div class="finding-fix"><strong>Fix:</strong> rama oscura del enlace (~#6c9bff), como se hizo con surface/text.</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">Endurecer el campo único de contraseña</h3><span class="finding-location">EXPERIENCE.md · § TokenActionScreen</span></header>
+            <div class="finding-note">Mantener el campo único (recomendado) pero mitigar mistype→lockout: toggle por defecto revelado en pantallas de token, aria-pressed, y exponer el salvavidas forgot-password (la identidad ya es ACTIVE tras aceptar).</div>
+            <div class="finding-fix"><strong>Fix:</strong> conectar el salvavidas + reglas del toggle.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="reviewer-section">
+      <details>
+        <summary><h2>Revisión editorial (estructura + prosa)</h2><span class="reviewer-source">review-editorial.md</span></summary>
+        <div class="dim-body"><div class="dim-judgment">
+          <p>Par denso y casi terminado. Los defectos son repetición y referencias colgantes, no contenido. 0 high ·
+          4 medium · 5 low.</p>
+        </div></div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">Códigos-ancla E* colgando</h3><span class="finding-location">EXPERIENCE.md (+ 2 fugas E6.1 en DESIGN.md)</span></header>
+            <div class="finding-note">La serie E* no resuelve a ningún destino (ni frontmatter sources, ni brainstorming, ni doc del repo).</div>
+            <div class="finding-fix"><strong>Fix:</strong> eliminar E*; conservar D-a/D-b/D-c (definidos inline).</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">Duplicación de secciones</h3><span class="finding-location">EXPERIENCE.md · Señales de seguridad / Modelo de sesión / OfflineNotice</span></header>
+            <div class="finding-note">§ Señales de seguridad ≈ § SecuritySignal; § Modelo de sesión reafirma la máquina 4; 3 literales distintos para el aviso OfflineNotice.</div>
+            <div class="finding-fix"><strong>Fix:</strong> dejar una canónica + referencia cruzada; unificar el literal.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <div class="mechanical">
+      <h3>Notas mecánicas</h3>
+      <ul>
+        <li>Todas las referencias de token / composite / source resuelven (verificadas contra pwa/DESIGN.md y en disco).</li>
+        <li>Nombres de componentes idénticos en ambas espinas (contrato de 6 respetado).</li>
+        <li>Mocks (mockups/ · wireframes/) aún no renderizados — paso Finalize pendiente; sin referencias huérfanas.</li>
+        <li>Códigos E* sin destino resoluble (ver hallazgo editorial); D-a/D-b/D-c sí son cross-refs intra-doc válidas.</li>
+      </ul>
+    </div>
+
+    <footer class="report-footer">
+      <div class="meta">
+        <span>Rubric: review-rubric.md</span>
+        <span>Reviewers: review-a11y.md · review-security.md · review-editorial.md</span>
+        <span>Generated: 2026-07-06</span>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>
