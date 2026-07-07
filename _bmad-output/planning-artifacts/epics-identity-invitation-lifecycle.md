@@ -223,16 +223,20 @@ framework. Este seam es lo que hace del multi-node un **ADR nuevo** (D8 forward-
 
 - **Registro deptrac de los nuevos módulos:** `Iam/*` + `Organization/*` necesitan su entrada en
   `api/tools/deptrac/deptrac.yaml` como cualquier módulo (mirror del bloque Identity ya existente).
-- **Secuenciación con RBAC (decisión CERRADA — opción (b)):** `Identity` y el core RBAC son **el mismo lenguaje
-  ubicuo**; separarlos genera interfaces provisionales que luego hay que rehacer. **PR-0 mueve el módulo completo** —
-  `Iam/Identity` **+ el core RBAC** (`PermissionVoter` + `AuthorizationPolicy`, hoy en
-  `Backoffice/Identity/Infrastructure/Security`, con **RM-1 ya implementada** allí) — a
-  `Iam/Identity/Infrastructure/Security` como **movimiento estructural puro**: **mover ≠ terminar** — el *comportamiento*
-  RBAC y las máquinas de identidad/invitación/sesión aterrizan en PRs posteriores. **No** se deja RBAC fuera «para
-  meterlo después»: evitaría una doble migración (mover Membership + mover RBAC) de un contexto que es el mismo.
+- **Secuenciación con RBAC (opción (b) — *parking explícito*, no topología definitiva):** PR-0 co-mueve el core RBAC
+  (`PermissionVoter` + `AuthorizationPolicy` + `StaticAuthorizationPolicy`, **mergeado a `main` en #456**, hoy en
+  `Backoffice/Identity/Infrastructure/Security`) a `Iam/Identity/Infrastructure/Security` **como consecuencia física del
+  rename** —esos ficheros viven dentro del árbol que PR-0 mueve, así que se mueven igual— **no** porque el modelo diga
+  que la autorización pertenezca a Identity: es su **plano ortogonal** (ADR: identidad ≠ autorización ≠ tenancy). Se
+  aloja ahí **temporalmente** para mantener PR-0 *move-only* y de mínimo blast radius sobre el TCB de auth; **mover ≠
+  terminar** (el comportamiento RBAC aterriza en PRs posteriores). **Follow-up (propiedad del ADR RBAC):** extraer el
+  plano de autorización a su **hogar definitivo** (`Access/`, `Iam/Authorization/` o una capacidad `Kernel/Authorization`)
+  cuando ese subsistema se retome y pueda decidirse con calma — **no se decide aquí** ni se hipoteca dentro de PR-0. Se
+  acepta el coste de mover esos pocos ficheros **dos veces** frente a inflar la PR estructural más sensible de la
+  promoción. *(El coste de coordinación que antes lo complicaba desapareció: RM-1 ya está en `main`, #456.)*
   *Precisión de contexto (ADR D1): `Membership` **no «se mueve»**; nace nuevo en el contexto hermano `Organization/`
   (PR-1) — D1 descartó a propósito el paraguas `Iam/` que absorbía `Organization`+`Membership`, para no acoplar tenancy
-  a identidad. La co-localización de PR-0 es **Identity + core RBAC**, no Membership.*
+  a identidad. La co-localización **temporal** de PR-0 es **Identity + core RBAC (parking)**, no Membership.*
 - **Actualización del error contract** (`docs/api-error-contract.md`, NFR26): nuevo marker `invalid-token` + tipos
   `account-locked` / `account-suspended` + el tipo **operacional** del gate; y el mapeo pre/post-identidad de FR9.
 - **CSRF double-submit stateless:** PR-4 es el **primer consumidor** que cablea el token CSRF que el hermano auth-rbac
@@ -402,9 +406,10 @@ magic-link / MFA / SSO, org self-signup (diferido al ADR de tenancy). **FRs:** F
 
 - **II-0 (PR-0) — promoción de contexto (estructural, sin comportamiento):** mover `Backoffice/Identity` → `Iam/Identity`
   (`User`, `SecurityUser`, provider, authenticator, `SecurityActorContextFactory`) + crear `Iam/Invitation` / `Iam/Session`
-  + `Organization/`; **co-mover el core RBAC** (`PermissionVoter` + `AuthorizationPolicy`) a
-  `Iam/Identity/Infrastructure/Security` (**opción b, mover ≠ terminar**); actualizar `security.yaml` + registrar `Iam/*`
-  y `Organization/*` en `deptrac.yaml`. Move/rename **sin cambio de comportamiento**. — FR1; NFR7, NFR8.
+  + `Organization/`; **co-mover el core RBAC** (`PermissionVoter` + `AuthorizationPolicy`, ya en `main` vía #456) a
+  `Iam/Identity/Infrastructure/Security` como **parking temporal** (consecuencia física del rename, no topología
+  definitiva; **follow-up:** extraer el plano de autorización a su hogar propio); actualizar `security.yaml` + registrar
+  `Iam/*` y `Organization/*` en `deptrac.yaml`. Move/rename **sin cambio de comportamiento**. — FR1; NFR7, NFR8.
 - **II-1 (PR-1) — `Organization` + `Membership` + bootstrap CLI:** agregados `Organization/Organization` y
   `Organization/Membership(userId, organizationId, roles)` (enlace autoritativo, roles asignados **antes** de aceptar);
   CLI `ProvisionOrganization` + `CreateInitialAdministrator` (una org/instalación); nunca credenciales en migración;
@@ -470,7 +475,7 @@ la numeración II-N sigue el PR-N del DAG. Ninguna historia depende de una poste
 > test la detecte. Los invariantes de seguridad transversales (SI-12 timing, SI-13 higiene) nacen aquí y se **cierran
 > multicanal** en II-8.
 
-### Story II-0 (PR-0): Promoción de contexto `Iam/` + `Organization/` con co-move del core RBAC (estructural, sin comportamiento)
+### Story II-0 (PR-0): Promoción de contexto `Iam/` + `Organization/` con parking del core RBAC (estructural, sin comportamiento)
 
 Como plataforma de ERPify,
 quiero promover el subsistema de identidad a contextos top-level `Iam/` + `Organization/` moviendo con él el core RBAC,
@@ -481,7 +486,8 @@ a un área de negocio — **sin cambiar todavía ningún comportamiento**.
 
 **Invariantes que consume:** SI-1…SI-9 (firewall de sesión, `User` libre de framework, enum `Role`) — se preservan intactos.
 **Invariantes que establece:** la ubicación canónica del subsistema es `Iam/{Identity,Invitation,Session}` +
-`Organization/{Organization,Membership}`; el core RBAC vive en `Iam/Identity/Infrastructure/Security`; `Iam/*` y
+`Organization/{Organization,Membership}`; el core RBAC queda **parqueado** en `Iam/Identity/Infrastructure/Security`
+(ubicación **temporal**, no canónica — su plano propio se extrae en un follow-up del ADR RBAC); `Iam/*` y
 `Organization/*` son módulos deptrac-registrados; **el comportamiento observable es idéntico al previo** (no-regresión).
 
 **Acceptance Criteria:**
@@ -491,10 +497,11 @@ a un área de negocio — **sin cambiar todavía ningún comportamiento**.
 **Then** `User` / `SecurityUser` / `UserProvider` / authenticator / `SecurityActorContextFactory` viven bajo
 `Iam/Identity`, `security.yaml` referencia las clases nuevas y `Backoffice/Identity` deja de existir (FR1, D1).
 
-**Given** el core RBAC (`PermissionVoter` + `AuthorizationPolicy` + `StaticAuthorizationPolicy`),
-**When** se co-mueve (opción b),
+**Given** el core RBAC (`PermissionVoter` + `AuthorizationPolicy` + `StaticAuthorizationPolicy`, ya en `main` vía #456),
+**When** se co-mueve (**parking temporal** — consecuencia física del rename, no topología definitiva),
 **Then** vive en `Iam/Identity/Infrastructure/Security` con **su comportamiento intacto** — *mover ≠ terminar*: ninguna
-ruta cambia su decisión de autorización respecto de RM-1 (Additional: secuenciación).
+ruta cambia su decisión de autorización respecto de RM-1; queda **registrado el follow-up** de extraer el plano de
+autorización a su hogar propio (Additional: secuenciación con RBAC).
 
 **Given** los módulos nuevos,
 **When** se corren los gates,
@@ -525,7 +532,9 @@ para que exista una organización propietaria de identidades y roles desde el ar
 **Invariantes que establece:** SI-15 — todo agregado de identidad carga `organizationId` (id, nunca relación tipada);
 `Membership(userId, organizationId, roles)` es el **único** enlace autoritativo user↔org (ningún user es «global»); los
 roles son org-scoped y existen **antes** de que el user sea `ACTIVE`; **una** organización por instalación; **ninguna
-credencial en migración**.
+credencial en migración**. **Invariante de titularidad:** la organización mantiene **siempre ≥1 `ADMIN` activo** — regla
+de **dominio**, no un tier `OWNER` nuevo (la titularidad billing/legal/transferencia queda como concepto futuro de
+`Organization`/tenancy, SRP).
 
 **Acceptance Criteria:**
 
@@ -550,6 +559,13 @@ credencial en migración**.
 **Given** dev/test,
 **When** se siembran datos,
 **Then** vía Alice fixtures (nunca en migración).
+
+**Given (invariante ≥1 ADMIN activo)** una organización en cualquier estado válido,
+**When** se consulta,
+**Then** tiene **al menos un `Membership` con rol `ADMIN` cuyo `User` está `ACTIVE`** — es un **invariante de dominio**,
+no un tier RBAC nuevo. El bootstrap lo satisface con el primer admin; su **preservación** bajo `suspend`/`deactivate` se
+verifica en II-3, y bajo `demote`/`remove` (cambio de rol / baja de `Membership`) en el **slice diferido de gestión de
+miembros** — no en esta épica. Protege contra el lockout de titularidad sin introducir `OWNER`/`SUPER_ADMIN` (R5, YAGNI).
 
 ### Story II-2 (PR-2): `Shared/Token` — `SingleUseToken` constant-time (prerrequisito de invitación y reset)
 
@@ -625,6 +641,12 @@ POST); **SI-12 parcial** (`checkPreAuth` trata `INVITED` como **pre-identidad**,
 **Given** la superficie B1,
 **When** un login devuelve identidad no-`ACTIVE`,
 **Then** el cliente proyecta el `AccessWall` correspondiente (suspended/deactivated) con foco al `<h1>` (UX-DR1/7/9); el muro `locked` se cablea en II-6.
+
+**Given (invariante ≥1 ADMIN · caminos en alcance de esta épica)** una transición `ACTIVE→SUSPENDED` o `ACTIVE→DEACTIVATED`,
+**When** se aplica sobre una identidad,
+**Then** se **rechaza** si dejaría a la organización con **0 `ADMIN` activos** — el **último administrador no puede ser
+suspendido ni desactivado** (invariante de II-1). El enforcement de `demote`/`remove` viaja con el **slice diferido de
+gestión de miembros**, no con esta historia.
 
 ### Story II-7 (PR-7): Session Lifecycle + Session Registry + Session Admission Gate fail-closed (habilitador transversal)
 
@@ -867,13 +889,17 @@ Extraídos de los *load-bearing implementation challenges* del ADR + la secuenci
   re-enumera lo que el copy oculta. *Mitigación:* II-8 (benchmark de las 3 respuestas pre-identidad); II-3 ya iguala status+shape.
 - **R3 · Regeneración de sesión en los dos saltos.** accept (II-4) y reset (II-5) acuñan sesión **fuera** de `json_login`
   y deben regenerar el id. *Mitigación:* invariante NFR3 como AC en ambas.
-- **R4 · Promotion churn + coordinación RBAC.** II-0 mueve Identity **+ core RBAC** y toca `security.yaml`/deptrac con
-  **RM-1 en vuelo** (implementada, sin merge). *Mitigación:* II-0 aterriza tras el merge de RM-1 a `main` **o** coordina el
-  move de ambos; AC de no-regresión (`app.test`/`app.quality` idénticas). Opción (b) cerrada.
+- **R4 · Promotion churn (coordinación RBAC ya resuelta).** II-0 mueve Identity **+ core RBAC** y toca
+  `security.yaml`/deptrac. **RM-1 ya está mergeada a `main` (#456)** — el coste de coordinar/rebasar un PR abierto
+  **desapareció**; II-0 solo reubica código ya en `main`. *Mitigación:* AC de no-regresión (`app.test`/`app.quality`
+  idénticas pre/post). Opción (b) adoptada como **parking explícito** (no topología definitiva); **follow-up** de
+  extracción del plano de autorización registrado en Additional (propiedad del ADR RBAC).
 - **R5 · Rol por defecto del bootstrap (CERRADA → `ADMIN`).** El 1er admin recibe el tier **`ADMIN`**: en un sistema
   invitation-first el primer usuario necesita **invitar, administrar miembros y gestionar la organización**, exactamente
   lo que `ADMIN` concede. **No** se introduce `OWNER`/`SUPER_ADMIN`/`ROOT` hasta una necesidad real (propiedad, licencias,
-  transferencia) — sería una evolución explícita del modelo. Anclado en el AC de bootstrap de II-1.
+  transferencia) — sería una evolución explícita del modelo. El riesgo de **lockout del último admin** (degradación mutua)
+  **no** se cubre con un tier nuevo sino con el **invariante de dominio ≥1 `ADMIN` activo** (AC en II-1 + II-3
+  suspend/deactivate; enforcement de demote/remove en el slice de miembros). Anclado en el AC de bootstrap de II-1.
 - **R6 · Proveniencia del run UX (RESUELTA).** El run `ux-ERPify-2026-07-06` produjo decisiones arquitectónicas, así que
   **viaja con el PR** de esta épica (gobernanza: el contexto de las decisiones entra en la revisión, aunque el run viva
   fuera de `docs/`). Se incluye en el árbol del PR #455 al commitear.
