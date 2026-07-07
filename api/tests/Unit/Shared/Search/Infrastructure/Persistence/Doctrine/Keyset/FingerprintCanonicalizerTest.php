@@ -186,12 +186,39 @@ final class FingerprintCanonicalizerTest extends TestCase
         );
     }
 
-    /**
-     * The canonical chain for the default trace (`tenant|Bank|<filters>|name|ASC|25`),
-     * with only the `filters` JSON segment varying — keeps the literal asserts short.
-     */
-    private function chain(string $filters): string
+    #[Test]
+    public function itAppendsTheBaseQueryAsTheTrailingCanonicalSegment(): void
     {
-        return '__erpify_single_tenant__|Bank|' . $filters . '|name|ASC|25';
+        $trace = TraceMother::create(baseQuery: 'SELECT ba FROM BankAccount ba WHERE ba.bankId = :bankId');
+
+        $this->assertSame(
+            $this->chain('[]', 'SELECT ba FROM BankAccount ba WHERE ba.bankId = :bankId'),
+            $this->canonicalizer->canonical($trace),
+        );
+    }
+
+    #[Test]
+    public function itDistinguishesTheBaseQueryOfTwoRoutesOverTheSameEntity(): void
+    {
+        // Same entity, sort, filters and limit — divergent only in the repository's
+        // base query: an unscoped collection vs a bank-scoped nested route.
+        $collection = TraceMother::create(baseQuery: 'SELECT ba FROM BankAccount ba JOIN Bank b WITH ba.bankId = b.id');
+        $nested = TraceMother::create(baseQuery: 'SELECT ba FROM BankAccount ba WHERE ba.bankId = :bankId');
+
+        $this->assertNotSame(
+            $this->canonicalizer->fingerprint($collection),
+            $this->canonicalizer->fingerprint($nested),
+        );
+    }
+
+    /**
+     * The canonical chain for the default trace
+     * (`tenant|Bank|<filters>|name|ASC|25|<baseQuery>`), with the `filters` JSON and
+     * the trailing `baseQuery` segments varying — keeps the literal asserts short.
+     * The default trace carries no base predicate, so `baseQuery` is the empty tail.
+     */
+    private function chain(string $filters, string $baseQuery = ''): string
+    {
+        return '__erpify_single_tenant__|Bank|' . $filters . '|name|ASC|25|' . $baseQuery;
     }
 }
