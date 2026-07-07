@@ -46,7 +46,7 @@ final readonly class StaticAuthorizationPolicy implements AuthorizationPolicy
      * @var array<string, list<string>>
      */
     private const array EXPLICIT_GRANTS = [
-        'auditTrail.read' => [Role::AUDIT_READER->value, Role::ADMIN->value],
+        'auditTrail.read' => [Role::AUDIT_READER->value],
     ];
 
     /**

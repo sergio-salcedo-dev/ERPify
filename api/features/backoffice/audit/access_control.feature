@@ -39,6 +39,12 @@ Feature: Restrict the audit trail read routes to the auditTrail.read permission
     Then the response status code should be 403
     And the JSON node "type" should be equal to "forbidden"
 
+  Scenario: A generic-tier user is refused the event detail with 403 — the trail opts out of tier auto-grant
+    Given I am logged in as a generic-tier user without the audit-reader role
+    When I send a "GET" request to "/backoffice/audit/events/0190a001-0000-7000-8000-000000000001"
+    Then the response status code should be 403
+    And the JSON node "type" should be equal to "forbidden"
+
   Scenario: An authenticated user without the audit-reader role is refused the event detail with 403
     Given I add "X-Correlation-Id" header equal to "0190a1de-0002-7abc-8def-001122334455"
     And I am logged in as a user without the audit-reader role

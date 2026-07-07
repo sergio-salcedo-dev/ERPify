@@ -1,5 +1,5 @@
 ---
-baseline_commit: 70c52f8963ed25d897413eea5bb5a0f0134daccd
+baseline_commit: 4ccb2f922908da37e66909aee4cd314ea1b92e6d
 ---
 
 # Story RM-5 (PR-5): Migración de las rutas de audit a `auditTrail.read`
@@ -19,7 +19,7 @@ Migración semántica pura sobre el core RBAC ya en `main` (RM-1 `#456`): las 2 
 ## Acceptance Criteria
 
 1. **Swap del atributo (FR8, D4).** Los 2 controllers de audit (`AuditTimelineSearchController`, `AuditEventDetailController`) llevan `#[IsGranted('auditTrail.read')]` en lugar de `#[IsGranted('ROLE_AUDIT_READER')]`.
-2. **Política configurada (FR8, D5).** En `StaticAuthorizationPolicy`: `explicitGrants['auditTrail.read'] = [AUDIT_READER, ADMIN]` **y** `auditTrail ∈ tierOptOut`. Ambas entradas quedan como **literales puros** (pasa `StaticAuthorizationPolicyIsDataOnlyTest`).
+2. **Política configurada (FR8, D5).** En `StaticAuthorizationPolicy`: `explicitGrants['auditTrail.read'] = [AUDIT_READER]` **y** `auditTrail ∈ tierOptOut` (ADMIN lee vía la cláusula superusuario incondicional `grantedToAdmin`, no vía grant explícito). Ambas entradas quedan como **literales puros** (pasa `StaticAuthorizationPolicyIsDataOnlyTest`).
 3. **Equivalencia preservada (FR8, R4).** Un `AUDIT_READER` o un `ADMIN` que accede a una ruta de audit → **concede** (200). Alice (fixture, `AUDIT_READER`) sigue leyendo.
 4. **Sin sobre-concesión (FR8, R4).** Un tier genérico `VIEWER`/`EDITOR`/`MANAGER` **sin** `AUDIT_READER` que accede a una ruta de audit → **deniega 403** (`type: forbidden`). El trail no se auto-concede por tier: acceso sensible = explícito (evita la exposición ISO 27001 A.5.18). Esto es lo que garantiza `tierOptOut`.
 5. **Sin regresión (R4).** Comparando el acceso pre/post swap, los principals existentes conservan **exactamente** su acceso previo al trail: anónimo → 401; autenticado sin rol (mallory) → 403; `AUDIT_READER` → 200. Ni una regresión, ni una sobre-concesión.
@@ -90,7 +90,7 @@ El core RBAC ya está en `main` (RM-1 `#456`, commit `edd69e44`). RM-5 **solo co
      * @var array<string, list<string>>
      */
     private const array EXPLICIT_GRANTS = [
-        'auditTrail.read' => [Role::AUDIT_READER->value, Role::ADMIN->value],
+        'auditTrail.read' => [Role::AUDIT_READER->value],
     ];
 
     /**
@@ -187,7 +187,7 @@ claude-opus-4-8[1m] (Opus 4.8, 1M context)
 ### Completion Notes List
 
 - Migración semánticamente equivalente: AUDIT_READER/ADMIN conceden; mallory (sin rol) y trent (MANAGER genérico) → 403; anónimo → 401. Sin regresión y sin sobre-concesión (AC#3/#4/#5).
-- Política: `explicitGrants['auditTrail.read'] = [AUDIT_READER, ADMIN]` + `tierOptOut = ['auditTrail']` como literales puros; tripwire data-only verde (AC#2).
+- Política: `explicitGrants['auditTrail.read'] = [AUDIT_READER]` + `tierOptOut = ['auditTrail']` como literales puros; tripwire data-only verde (AC#2). ADMIN lee el trail vía `grantedToAdmin` (superusuario), no vía grant explícito — el `ADMIN` redundante se retiró en revisión de código.
 - `tierOptOut` es lo que cierra la sobre-concesión: sin él, un VIEWER/MANAGER (tier `read`) leería el trail. Probado en unit (mapas de producción) y Behat (manager→403 end-to-end).
 - Boy-scout: docblocks obsoletos reescritos a estado actual en `StaticAuthorizationPolicy` y `PermissionVoter`; comentario con ID de requisito `R6` retirado del test funcional. `Permission.php` NO tocado (su ejemplo `ROLE_AUDIT_READER` sigue siendo un token-no-permiso correcto). ADR `rbac-authorization-model.md` NO tocado (su §Context es histórico; el status del modelo sigue vigente hasta RM-3/RM-4/RM-6).
 - PHPMD `TooManyPublicMethods`: el test de política queda en 10 métodos, sin disparo.
@@ -219,3 +219,23 @@ Added:
 ## Change Log
 
 - 2026-07-07 — RM-5 implementada: rutas de audit migradas a `#[IsGranted('auditTrail.read')]`; `StaticAuthorizationPolicy` poblada (`explicitGrants` + `tierOptOut`); unit/funcional/Behat + docs de seguridad actualizados. Status → review.
+- 2026-07-07 — Code review 3-capas aprobado (sin BLOCKER/HIGH); 2 patches de cobertura aplicados; `baseline_commit` re-anclado a `4ccb2f92` tras rebase sobre II-0 (#458).
+
+## Review Findings (code review 2026-07-07)
+
+Revisión adversarial de 3 capas (Blind Hunter · Edge Case Hunter · Acceptance Auditor), mismo modelo. **Veredicto: aprobado** — sin BLOCKER/HIGH. Acceptance Auditor: *fully compliant* (todas las AC satisfechas, ambos tripwires OCP se sostienen, docs sincronizadas). 2 patch aplicados (solo tests), 3 descartados como ruido.
+
+### Patches aplicados
+
+- [x] [Review][Patch] Cobertura de integración del camino ADMIN — el refinamiento deja `grantedToAdmin()` como único grant de ADMIN sobre `auditTrail.read`; se añade una aserción end-to-end sobre el voter (`ROLE_ADMIN` → `bareRoleTokens` → `grantedToAdmin`) [`api/tests/Functional/Iam/Identity/Infrastructure/Security/PermissionVoterAccessDecisionTest.php`]
+- [x] [Review][Patch] Invariante de roles aditivos — un principal con un tier genérico junto a AUDIT_READER concede vía la cláusula explícita; fijado con una aserción unitaria [`api/tests/Unit/Iam/Identity/Infrastructure/Security/StaticAuthorizationPolicyTest.php`]
+
+### Descartados (ruido / intencional)
+
+- ADMIN fuera de `explicitGrants` diverge del ejemplo ilustrativo de la ADR D5 — intencional por AC#2, preserva el comportamiento (ADMIN vía cláusula superusuario); la story prohíbe tocar esa ADR.
+- Rutas `Backoffice/Identity/...` en Dev Notes / File List — prosa stale; la implementación apunta correctamente a `Iam/Identity/...` (Identity movido a Iam en II-0, mergeado tras el baseline de esta story).
+- Fixture Behat `user_trent` `['MANAGER']` vs `Role::MANAGER->value` — verificado equivalente; no es defecto.
+
+### Gates tras patches
+
+- `make php.quality` exit 0 (0 violaciones); PHPUnit 1571/7194 (3 skipped); clases parcheadas 13/38 verdes.

@@ -83,4 +83,27 @@ final class PermissionVoterAccessDecisionTest extends WebTestCase
             'A generic MANAGER tier must not be granted auditTrail.read.',
         );
     }
+
+    public function testAuditTrailReadIsGrantedToAnAdminThroughTheSuperuserClause(): void
+    {
+        $client = self::createClient();
+
+        $authorizationChecker = self::getContainer()->get(AuthorizationCheckerInterface::class);
+        $this->assertInstanceOf(AuthorizationCheckerInterface::class, $authorizationChecker);
+
+        // ADMIN reads the trail solely through the unconditional superuser clause — auditTrail.read is not in
+        // its explicit grants and auditTrail opts out of tiering. This pins the full wired chain
+        // (ROLE_ADMIN → bareRoleTokens → grantedToAdmin), which the pure-policy unit test cannot exercise.
+        $admin = UserFixtureFactory::create(
+            Uuid::v7()->toRfc4122(),
+            'admin@erpify.test',
+            'admin-password',
+            [Role::ADMIN->value],
+        );
+        $client->loginUser(new SecurityUser($admin), 'main');
+        $this->assertTrue(
+            $authorizationChecker->isGranted('auditTrail.read'),
+            'An ADMIN must be granted auditTrail.read through the superuser clause.',
+        );
+    }
 }
