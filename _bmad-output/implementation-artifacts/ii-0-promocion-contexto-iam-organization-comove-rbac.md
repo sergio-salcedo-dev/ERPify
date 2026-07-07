@@ -2,7 +2,7 @@
 baseline_commit: edd69e44
 ---
 
-# Story II-0 (PR-0): Promoción de contexto `Iam/` + `Organization/` con co-move del core RBAC (estructural, sin comportamiento)
+# Story II-0 (PR-0): Promoción de contexto `Iam/` + `Organization/` con parking del core RBAC (estructural, sin comportamiento)
 
 Status: ready-for-dev
 
@@ -13,14 +13,14 @@ Epic `identity-invitation-lifecycle` · **primera historia en orden de merge saf
 ## Story
 
 Como plataforma de ERPify,
-quiero promover el subsistema de identidad a contextos top-level `Iam/{Identity,Invitation,Session}` + `Organization/`, moviendo con él el core RBAC (opción b),
+quiero promover el subsistema de identidad a contextos top-level `Iam/{Identity,Invitation,Session}` + `Organization/`, moviendo con él el core RBAC como **parking temporal** (consecuencia física del rename, no topología definitiva),
 para que las capacidades IAM emergentes (invitación, reset, lockout, sesiones) tengan su hogar de dominio sin acoplarse a un área de negocio — **sin cambiar todavía ningún comportamiento observable**.
 
 ## Acceptance Criteria
 
 1. **Identity promovido a `Iam/Identity`.** Los 23 ficheros de `api/src/Backoffice/Identity/` (Domain/Application/Infrastructure, incluido TODO `Infrastructure/Security`) viven bajo `api/src/Iam/Identity/` con namespace `Erpify\Iam\Identity\…`; `api/src/Backoffice/Identity/` **deja de existir**. *(FR1, ADR D1)*
 
-2. **Core RBAC co-movido (opción b, mover ≠ terminar).** `Permission`, `InvalidPermission`, `AuthorizationPolicy`, `StaticAuthorizationPolicy` y `PermissionVoter` viven en `Iam/Identity/Infrastructure/Security` con su **comportamiento intacto**: `PermissionVoterAccessDecisionTest` (VIEWER → `bank.write`=deny, `bank.read`=grant) sigue verde y ninguna ruta cambia su decisión de autorización respecto de RM-1. *(FR1, RM-1, secuenciación opción b)*
+2. **Core RBAC co-movido — *parking temporal* (mover ≠ terminar).** `Permission`, `InvalidPermission`, `AuthorizationPolicy`, `StaticAuthorizationPolicy` y `PermissionVoter` viven en `Iam/Identity/Infrastructure/Security` con su **comportamiento intacto**: `PermissionVoterAccessDecisionTest` (VIEWER → `bank.write`=deny, `bank.read`=grant) sigue verde y ninguna ruta cambia su decisión de autorización respecto de RM-1. **La ubicación es *parking*** —consecuencia física del `git mv` del módulo, no «RBAC pertenece a Identity» (es su plano ortogonal)— y queda registrado el **follow-up del ADR RBAC:** extraer el plano de autorización a su hogar propio (`Access/` / `Kernel/Authorization`) más adelante, sin decidirlo aquí. *(FR1, RM-1, secuenciación (b)-parking + follow-up)*
 
 3. **Esqueletos hermanos + contexto `Organization/` creados, sin lógica.** Existen `Iam/Invitation`, `Iam/Session` y `Organization/` como esqueletos **deptrac-legales sin lógica** (habilitan II-1/II-4/II-7 sin adelantarlos). `Membership` **NO** se crea aquí — nace nuevo en `Organization/` en II-1 (ADR D1: el paraguas `Iam/` que absorbía Organization se descartó). *(ADR D1)*
 
