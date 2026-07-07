@@ -26,7 +26,7 @@ use Symfony\Component\Serializer\Exception\ExceptionInterface;
  * generic path must not write a second, thinner `activity` row.
  */
 #[Route('/audit/timeline', name: self::ROUTE_NAME, defaults: ['_audit_canonical' => true], methods: ['GET'])]
-#[IsGranted('ROLE_AUDIT_READER')]
+#[IsGranted('auditTrail.read')]
 final readonly class AuditTimelineSearchController
 {
     public const string ROUTE_NAME = 'backoffice_audit_timeline_search';

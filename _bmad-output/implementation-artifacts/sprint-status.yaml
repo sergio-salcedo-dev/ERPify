@@ -95,7 +95,7 @@ development_status:
   epic-rbac-authorization-model: in-progress
   rm-1-nucleo-autorizacion-voter-puerto-politica: done
   rm-2-cierre-fingerprint-keyset-437: done
-  rm-5-migracion-audit-audittrail-read: backlog
+  rm-5-migracion-audit-audittrail-read: review
   rm-3-gateo-rutas-bank-tightening: backlog
   rm-4-gateo-bankaccount-coleccion-anidada: backlog
   rm-6-gate-ocp-congelar-core: backlog

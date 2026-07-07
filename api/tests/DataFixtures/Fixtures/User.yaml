@@ -17,3 +17,12 @@ Erpify\Iam\Identity\Domain\Entity\User:
                 - 'mallory@erpify.test'
                 - 'mallory-password'
                 - []
+    user_trent:
+        # A fully-tiered MANAGER who still cannot read the audit trail: proves auditTrail opts out of tier
+        # auto-grant, so a generic business tier (read/write/delete) earns no access to the trail.
+        __factory:
+            'Erpify\Tests\DataFixtures\UserFixtureFactory::create':
+                - '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d'
+                - 'trent@erpify.test'
+                - 'trent-password'
+                - ['MANAGER']

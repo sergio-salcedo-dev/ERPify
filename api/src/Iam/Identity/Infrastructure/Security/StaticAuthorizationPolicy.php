@@ -20,8 +20,9 @@ use Override;
  * The three maps are `const`: the language itself forbids closures/calls in a constant, so "data-only" is
  * compiler-enforced, not merely convention. They double as the constructor defaults — overriding them (a
  * test today, or a configurable store later, when "static" becomes "swap the store") needs no code change,
- * while production always runs the seed literals. `explicitGrants`/`tierOptOut` seed empty;
- * the bank, account and audit slices populate them later, so only `tierVerbs` carries the ladder today.
+ * while production always runs the seed literals. `tierVerbs` carries the resource-agnostic ladder;
+ * `explicitGrants` and `tierOptOut` hold the exceptions for sensitive resources — the audit trail is
+ * readable only via an explicit grant and opts out of tiering, so no generic tier auto-reads it.
  */
 final readonly class StaticAuthorizationPolicy implements AuthorizationPolicy
 {
@@ -44,14 +45,16 @@ final readonly class StaticAuthorizationPolicy implements AuthorizationPolicy
      *
      * @var array<string, list<string>>
      */
-    private const array EXPLICIT_GRANTS = [];
+    private const array EXPLICIT_GRANTS = [
+        'auditTrail.read' => [Role::AUDIT_READER->value, Role::ADMIN->value],
+    ];
 
     /**
      * Resources that opt OUT of tier auto-grant: reachable only by an explicit grant (or by ADMIN).
      *
      * @var list<string>
      */
-    private const array TIER_OPT_OUT = [];
+    private const array TIER_OPT_OUT = ['auditTrail'];
 
     /**
      * @param array<string, list<string>> $tierVerbs

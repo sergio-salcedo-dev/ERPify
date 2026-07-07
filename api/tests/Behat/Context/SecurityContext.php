@@ -22,9 +22,12 @@ use Symfony\Bundle\FrameworkBundle\KernelBrowser;
  * without this each scenario's first request would 401 rather than reach its controller. Scenarios that must
  * observe the unauthenticated edge (the login handshake, the 401 baseline) opt out with the `@anonymous` tag.
  *
- * The default user (Alice) carries `ROLE_AUDIT_READER`. Scenarios that must observe the role gate from the
- * other side — an authenticated caller who lacks the role, so the route answers 403 rather than 401 — switch
- * to the role-less fixture user with "I am logged in as a user without the audit-reader role".
+ * The default user (Alice) carries `ROLE_AUDIT_READER`, which grants the `auditTrail.read` permission the
+ * audit routes require. Scenarios that must observe the gate from the other side — an authenticated caller
+ * who is not granted the permission, so the route answers 403 rather than 401 — switch either to the
+ * role-less fixture user ("I am logged in as a user without the audit-reader role") or to a fully-tiered
+ * MANAGER ("I am logged in as a generic-tier user without the audit-reader role"), still denied because the
+ * trail opts out of tier auto-grant.
  *
  * `loginUser()` seats a session token directly rather than replaying `POST /login`, so it adds no HTTP round
  * trip and no counted query: the firewall's per-request `refreshUser` lookup is raised outside any controller,
@@ -36,6 +39,8 @@ final class SecurityContext extends AbstractContext
     private const string DEFAULT_USER_EMAIL = 'alice@erpify.test';
 
     private const string ROLELESS_USER_EMAIL = 'mallory@erpify.test';
+
+    private const string GENERIC_TIER_USER_EMAIL = 'trent@erpify.test';
 
     private const string FIREWALL = 'main';
 
@@ -65,6 +70,12 @@ final class SecurityContext extends AbstractContext
     public function logInAsAUserWithoutTheAuditReaderRole(): void
     {
         $this->logInAs(self::ROLELESS_USER_EMAIL);
+    }
+
+    #[Given('I am logged in as a generic-tier user without the audit-reader role')]
+    public function logInAsAGenericTierUserWithoutTheAuditReaderRole(): void
+    {
+        $this->logInAs(self::GENERIC_TIER_USER_EMAIL);
     }
 
     private function logInAs(string $email): void

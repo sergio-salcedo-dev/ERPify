@@ -105,4 +105,19 @@ final class StaticAuthorizationPolicyTest extends TestCase
         $this->assertTrue($policy->permits(Permission::fromString('bank.delete'), $supervisor));
         $this->assertTrue($policy->permits(Permission::fromString('ledger.approve'), $supervisor));
     }
+
+    public function testAuditTrailReadIsGrantedOnlyToAuditReaderAndAdmin(): void
+    {
+        $policy = new StaticAuthorizationPolicy();
+        $permission = Permission::fromString('auditTrail.read');
+
+        $this->assertTrue($policy->permits($permission, [Role::AUDIT_READER->value]));
+        $this->assertTrue($policy->permits($permission, [Role::ADMIN->value]));
+
+        // auditTrail opts out of tier auto-grant, so a generic read-tier role earns nothing without an explicit grant.
+        $this->assertFalse($policy->permits($permission, [Role::VIEWER->value]));
+        $this->assertFalse($policy->permits($permission, [Role::EDITOR->value]));
+        $this->assertFalse($policy->permits($permission, [Role::MANAGER->value]));
+        $this->assertFalse($policy->permits($permission, []));
+    }
 }
