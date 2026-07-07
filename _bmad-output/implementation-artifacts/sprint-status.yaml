@@ -109,7 +109,7 @@ development_status:
   # ese orden, no en II-N numérico): II-0 → II-1·II-2·II-3·II-7 → II-6 → II-4 → II-5 → II-8. II-0 co-mueve Identity
   # + core RBAC (opción b; RM-1 ya en main vía #456). II-4/II-5 exigen II-7 (registro/revoca-todas).
   epic-identity-invitation-lifecycle: in-progress
-  ii-0-promocion-contexto-iam-organization-comove-rbac: ready-for-dev
+  ii-0-promocion-contexto-iam-organization-comove-rbac: review
   ii-1-organization-membership-bootstrap-cli: backlog
   ii-2-shared-token-singleusetoken: backlog
   ii-3-identitystatus-userchecker-admision-tipos-error: backlog

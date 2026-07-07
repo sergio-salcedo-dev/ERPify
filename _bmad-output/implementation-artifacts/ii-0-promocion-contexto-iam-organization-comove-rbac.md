@@ -4,7 +4,7 @@ baseline_commit: edd69e44
 
 # Story II-0 (PR-0): Promoción de contexto `Iam/` + `Organization/` con parking del core RBAC (estructural, sin comportamiento)
 
-Status: ready-for-dev
+Status: review
 
 Epic `identity-invitation-lifecycle` · **primera historia en orden de merge safe-first** (`II-0 → II-1·II-2·II-3·II-7 → II-6 → II-4 → II-5 → II-8`). Slice: **movimiento estructural puro** (move/rename), **cero cambio de comportamiento**. Desbloquea todas las demás.
 
@@ -38,41 +38,41 @@ para que las capacidades IAM emergentes (invitación, reset, lockout, sesiones) 
 
 ## Tasks / Subtasks
 
-- [ ] **T1 · Rama base sobre `main` actual** (AC: 1, 9)
-  - [ ] Con autorización de Sergio: crear worktree/rama `feat/<iam>-promote-identity-context` con **BASE=main** (`edd69e44`) — NO sobre `docs/iam-identity-invitation-bvdn`. Confirmar que `api/src/Backoffice/Identity/Infrastructure/Security/PermissionVoter.php` existe en la rama (prueba de que #456 está presente).
-  - [ ] `make app.dev` en el nuevo worktree; capturar el estado verde de baseline: `make app.test` + `make app.quality` (guardar salida para el diff de no-regresión de T9).
+- [x] **T1 · Rama base sobre `main` actual** (AC: 1, 9)
+  - [x] Con autorización de Sergio: crear worktree/rama `feat/<iam>-promote-identity-context` con **BASE=main** (`edd69e44`) — NO sobre `docs/iam-identity-invitation-bvdn`. Confirmar que `api/src/Backoffice/Identity/Infrastructure/Security/PermissionVoter.php` existe en la rama (prueba de que #456 está presente).
+  - [x] `make app.dev` en el nuevo worktree; capturar el estado verde de baseline: `make app.test` + `make app.quality` (guardar salida para el diff de no-regresión de T9).
 
-- [ ] **T2 · Mover `Backoffice/Identity` → `Iam/Identity`** (AC: 1, 2)
-  - [ ] `git mv api/src/Backoffice/Identity api/src/Iam/Identity` (preserva historia; mueve los 23 ficheros incl. `Infrastructure/Security/*` = core RBAC de #456 en bloque).
-  - [ ] Renombrar el namespace en los 23 ficheros: `Erpify\Backoffice\Identity\` → `Erpify\Iam\Identity\` (declaración `namespace` + `use` internos).
-  - [ ] Verificar que NO queda ninguna referencia a `Erpify\Backoffice\Identity` dentro del módulo movido.
+- [x] **T2 · Mover `Backoffice/Identity` → `Iam/Identity`** (AC: 1, 2)
+  - [x] `git mv api/src/Backoffice/Identity api/src/Iam/Identity` (preserva historia; mueve los 23 ficheros incl. `Infrastructure/Security/*` = core RBAC de #456 en bloque).
+  - [x] Renombrar el namespace en los 23 ficheros: `Erpify\Backoffice\Identity\` → `Erpify\Iam\Identity\` (declaración `namespace` + `use` internos).
+  - [x] Verificar que NO queda ninguna referencia a `Erpify\Backoffice\Identity` dentro del módulo movido.
 
-- [ ] **T3 · Esqueletos hermanos + `Organization/`** (AC: 3)
-  - [ ] Crear directorios `api/src/Iam/Invitation/`, `api/src/Iam/Session/`, `api/src/Organization/` como esqueletos (sin clases de lógica; solo la estructura mínima que deptrac/PSR-4 aceptan). **No** crear `Membership` ni `Organization` entidades (van en II-1).
+- [x] **T3 · Esqueletos hermanos + `Organization/`** (AC: 3)
+  - [x] Crear directorios `api/src/Iam/Invitation/`, `api/src/Iam/Session/`, `api/src/Organization/` como esqueletos (sin clases de lógica; solo la estructura mínima que deptrac/PSR-4 aceptan). **No** crear `Membership` ni `Organization` entidades (van en II-1).
 
-- [ ] **T4 · `security.yaml` — 4 FQCN** (AC: 4)
-  - [ ] `api/config/packages/security.yaml`: L5 `password_hashers` (`SecurityUser`), L10 `providers.identity_user_provider.id` (`UserProvider`), L23 `json_login.failure_handler` (`ProblemDetailsAuthenticationFailureHandler`), L50 `when@test.password_hashers` (`SecurityUser`) → `Erpify\Iam\Identity\Infrastructure\Security\…`. **No** tocar `provider: identity_user_provider` (nombre lógico) ni `check_path: identity_login` (nombre de ruta, preservado en T5).
+- [x] **T4 · `security.yaml` — 4 FQCN** (AC: 4)
+  - [x] `api/config/packages/security.yaml`: L5 `password_hashers` (`SecurityUser`), L10 `providers.identity_user_provider.id` (`UserProvider`), L23 `json_login.failure_handler` (`ProblemDetailsAuthenticationFailureHandler`), L50 `when@test.password_hashers` (`SecurityUser`) → `Erpify\Iam\Identity\Infrastructure\Security\…`. **No** tocar `provider: identity_user_provider` (nombre lógico) ni `check_path: identity_login` (nombre de ruta, preservado en T5).
 
-- [ ] **T5 · `routes.yaml` — preservar login** (AC: 5)
-  - [ ] `api/config/routes.yaml`: registrar el descubrimiento de rutas del nuevo árbol `Iam/` de modo que `LoginController` reubicado siga sirviendo **URL `/api/v1/backoffice/login`** con **nombre `identity_login`**. Opciones (elegir la mínima que preserve exactamente URL+nombre): (a) `resource: ../src/Iam/` con `prefix: /api/v1/backoffice`; (b) ruta absoluta explícita en el `#[Route]` del controller. Verificar con `make sf c='debug:router identity_login'` → misma path/methods que en baseline.
+- [x] **T5 · `routes.yaml` — preservar login** (AC: 5)
+  - [x] `api/config/routes.yaml`: registrar el descubrimiento de rutas del nuevo árbol `Iam/` de modo que `LoginController` reubicado siga sirviendo **URL `/api/v1/backoffice/login`** con **nombre `identity_login`**. Opciones (elegir la mínima que preserve exactamente URL+nombre): (a) `resource: ../src/Iam/` con `prefix: /api/v1/backoffice`; (b) ruta absoluta explícita en el `#[Route]` del controller. Verificar con `make sf c='debug:router identity_login'` → misma path/methods que en baseline.
 
-- [ ] **T6 · `doctrine.yaml` — mapping `Iam`, diff vacío** (AC: 6)
-  - [ ] `api/config/packages/doctrine.yaml`: añadir mapping `Iam` (`type: attribute`, `is_bundle: false`, `dir: '%kernel.project_dir%/src/Iam'`, `prefix: 'Erpify\Iam'`, `alias: Iam`) — espejo de los mappings `SharedMedia`/`SharedStorage`. (El mapping `Organization` se añade en II-1, cuando existan sus entidades.)
-  - [ ] `make db.diff` → **diff vacío** (la tabla sigue `identity_user`). Si genera algo, investigar antes de continuar. **No** editar la migración histórica `Version20260702092603.php`.
+- [x] **T6 · `doctrine.yaml` — mapping `Iam`, diff vacío** (AC: 6)
+  - [x] `api/config/packages/doctrine.yaml`: añadir mapping `Iam` (`type: attribute`, `is_bundle: false`, `dir: '%kernel.project_dir%/src/Iam'`, `prefix: 'Erpify\Iam'`, `alias: Iam`) — espejo de los mappings `SharedMedia`/`SharedStorage`. (El mapping `Organization` se añade en II-1, cuando existan sus entidades.)
+  - [x] `make db.diff` → **diff vacío** (la tabla sigue `identity_user`). Si genera algo, investigar antes de continuar. **No** editar la migración histórica `Version20260702092603.php`.
 
-- [ ] **T7 · `deptrac.yaml` — reregistro** (AC: 7)
-  - [ ] `api/tools/deptrac/deptrac.yaml`: reemplazar el bloque `layers` `Backoffice.Identity.{Domain,Application,Infrastructure}` (L81–87) por `Iam.Identity.{…}` (colectores `src/Iam/Identity/<Layer>/.*`); actualizar las 3 reglas (L169 Domain=`*domain`; L202–208 Application; L277–291 Infrastructure) al prefijo `Iam.Identity.*`.
-  - [ ] Añadir capas + reglas para `Iam.Invitation.*`, `Iam.Session.*`, `Organization.Organization.*`, `Organization.Membership.*` (mismo shape: Domain=`*domain`, Application y Infrastructure espejando el ruleset de Identity). `Shared.*` auto-folda, no requiere registro.
-  - [ ] `make php.deptrac` + `make php.lint.bounded-context` verdes. **No** tocar `deptrac.baseline.yaml` (generado, 0 refs a Identity) ni `.bounded-context-allowlist` (0 refs a Identity).
+- [x] **T7 · `deptrac.yaml` — reregistro** (AC: 7)
+  - [x] `api/tools/deptrac/deptrac.yaml`: reemplazar el bloque `layers` `Backoffice.Identity.{Domain,Application,Infrastructure}` (L81–87) por `Iam.Identity.{…}` (colectores `src/Iam/Identity/<Layer>/.*`); actualizar las 3 reglas (L169 Domain=`*domain`; L202–208 Application; L277–291 Infrastructure) al prefijo `Iam.Identity.*`.
+  - [x] Añadir capas + reglas para `Iam.Invitation.*`, `Iam.Session.*`, `Organization.Organization.*`, `Organization.Membership.*` (mismo shape: Domain=`*domain`, Application y Infrastructure espejando el ruleset de Identity). `Shared.*` auto-folda, no requiere registro.
+  - [x] `make php.deptrac` + `make php.lint.bounded-context` verdes. **No** tocar `deptrac.baseline.yaml` (generado, 0 refs a Identity) ni `.bounded-context-allowlist` (0 refs a Identity).
 
-- [ ] **T8 · Tests — mover 21 + reapuntar 4 externos** (AC: 8)
-  - [ ] `git mv api/tests/Unit/Backoffice/Identity api/tests/Unit/Iam/Identity` y `git mv api/tests/Functional/Backoffice/Identity api/tests/Functional/Iam/Identity`; renombrar `namespace Erpify\Tests\…\Backoffice\Identity` → `…\Iam\Identity` + `use` en los 21 ficheros (incl. helpers `InMemoryUserRepository`, `UserMother`, `Fixtures/RecordingAuthorizationPolicy`).
-  - [ ] Reapuntar los 4 externos: `api/tests/Functional/AuthenticatesFunctionalRequests.php` (4 use + `new SecurityUser`), `api/tests/Behat/Context/SecurityContext.php` (4 use), `api/tests/DataFixtures/UserFixtureFactory.php` (3 use), `api/tests/DataFixtures/Fixtures/User.yaml` (L1 clave FQCN del fixture Alice).
+- [x] **T8 · Tests — mover 21 + reapuntar 4 externos** (AC: 8)
+  - [x] `git mv api/tests/Unit/Backoffice/Identity api/tests/Unit/Iam/Identity` y `git mv api/tests/Functional/Backoffice/Identity api/tests/Functional/Iam/Identity`; renombrar `namespace Erpify\Tests\…\Backoffice\Identity` → `…\Iam\Identity` + `use` en los 21 ficheros (incl. helpers `InMemoryUserRepository`, `UserMother`, `Fixtures/RecordingAuthorizationPolicy`).
+  - [x] Reapuntar los 4 externos: `api/tests/Functional/AuthenticatesFunctionalRequests.php` (4 use + `new SecurityUser`), `api/tests/Behat/Context/SecurityContext.php` (4 use), `api/tests/DataFixtures/UserFixtureFactory.php` (3 use), `api/tests/DataFixtures/Fixtures/User.yaml` (L1 clave FQCN del fixture Alice).
 
-- [ ] **T9 · Verificación de no-regresión** (AC: 9)
-  - [ ] `git grep -n 'Erpify\\Backoffice\\Identity'` y `git grep -n 'Backoffice/Identity'` en `api/src api/config api/tests` → **0 coincidencias** (excluyendo `var/cache`).
-  - [ ] `make sf.cc`; `make app.test` + `make app.quality` → **idénticos** al baseline de T1 (mismo set verde). Diff explícito de la lista de tests/gates pre vs post.
-  - [ ] Smoke HTTP: login `/api/v1/backoffice/login` (204 + cookie), ruta gateada anónima → 401, CLI `identity:user:create` funcional.
+- [x] **T9 · Verificación de no-regresión** (AC: 9)
+  - [x] `git grep -n 'Erpify\\Backoffice\\Identity'` y `git grep -n 'Backoffice/Identity'` en `api/src api/config api/tests` → **0 coincidencias** (excluyendo `var/cache`).
+  - [x] `make sf.cc`; `make app.test` + `make app.quality` → **idénticos** al baseline de T1 (mismo set verde). Diff explícito de la lista de tests/gates pre vs post.
+  - [x] Smoke HTTP: login `/api/v1/backoffice/login` (204 + cookie), ruta gateada anónima → 401, CLI `identity:user:create` funcional.
 
 ## Dev Notes
 
@@ -163,10 +163,45 @@ para que las capacidades IAM emergentes (invitación, reset, lockout, sesiones) 
 
 ### Agent Model Used
 
+claude-opus-4-8[1m] (Claude Opus 4.8, 1M context)
+
 ### Debug Log References
+
+- `make php.deptrac` → 0 violations / 0 warnings / 0 errors (`Iam.*` + `Organization.*` layers registered; empty skeleton layers tolerated).
+- `make php.lint.bounded-context` → OK (8 tests).
+- `make php.stan` → 0 errors (801 files). Required `make php.behat.install` first (isolated tooling absent on a fresh worktree).
+- `make php.quality` → EXIT 0 (cs-fixer, rector, phpmd, psalm-taint, error-contract, deptrac, stan) — no fixer mutated any file beyond the intended change.
+- `make php.test` → PHPUnit 1561 tests / 7155 assertions (3 skipped) + Behat 208 scenarios / 2083 steps, all green.
+- `make db.diff` → "No changes detected in your mapping information" (table `identity_user` unchanged → no migration).
+- `make sf c='debug:router identity_login'` → `/api/v1/backoffice/login` (POST, `_format: json`) — identical to baseline.
+- Live HTTP smoke: login `204` + httpOnly session cookie; gated route anonymous `401`; bad credential `401`.
 
 ### Completion Notes List
 
+- Pure structural move (`git mv` + namespace rewrite `Erpify\Backoffice\Identity` → `Erpify\Iam\Identity`), zero behaviour change. The RBAC core (#456) was co-moved in-block via the `git mv` of `Infrastructure/Security` — no separate relocation step.
+- Skeletons `Iam/Invitation`, `Iam/Session`, `Organization/` reserved with `.gitkeep`; deptrac layers + rules for `Iam.*` and `Organization.*` registered. Kept as committed-work scaffolding (epic II-1/II-4/II-7 planned) after an explicit decision to retain the ADR D1 topology unchanged.
+- `routes.yaml`: narrow resource `../src/Iam/Identity/Infrastructure/Http/` (not the broad `../src/Iam/`) — preserves the login URL + route name exactly while keeping the legacy `/api/v1/backoffice` prefix off future Invitation/Session controllers. Argued micro-decision, flagged for review.
+- Docs updated for the two new top-level contexts: `api/CLAUDE.md`, `docs/architecture-api.md`, `docs/claude-code-quickref.md`, `docs/source-tree-analysis.md`.
+- Security review: no new attack surface — pure move, auth/RBAC behaviour identical (verified by the `PermissionVoter`/login tests + live smoke). No `pwa/` files touched.
+
 ### Change Log
 
+- 2026-07-07 — II-0 implemented as a pure structural promotion to top-level `Iam/` + `Organization/`; all no-regression gates green; Status → review.
+
 ### File List
+
+**Moved (`git mv` + namespace rewrite):**
+- `api/src/Backoffice/Identity/**` (23 files) → `api/src/Iam/Identity/**`
+- `api/tests/Unit/Backoffice/Identity/**` + `api/tests/Functional/Backoffice/Identity/**` (21 files) → `api/tests/{Unit,Functional}/Iam/Identity/**`
+
+**New (skeletons):**
+- `api/src/Iam/Invitation/.gitkeep`, `api/src/Iam/Session/.gitkeep`, `api/src/Organization/.gitkeep`
+
+**Modified (config):**
+- `api/config/packages/security.yaml`, `api/config/routes.yaml`, `api/config/packages/doctrine.yaml`, `api/tools/deptrac/deptrac.yaml`
+
+**Modified (external tests re-pointed):**
+- `api/tests/Functional/AuthenticatesFunctionalRequests.php`, `api/tests/Behat/Context/SecurityContext.php`, `api/tests/DataFixtures/UserFixtureFactory.php`, `api/tests/DataFixtures/Fixtures/User.yaml`
+
+**Modified (docs):**
+- `api/CLAUDE.md`, `docs/architecture-api.md`, `docs/claude-code-quickref.md`, `docs/source-tree-analysis.md`
