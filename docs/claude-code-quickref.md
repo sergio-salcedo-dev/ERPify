@@ -127,7 +127,7 @@ scripts/        Utility scripts
 | What                                                                         | Where                                                                    |
 |------------------------------------------------------------------------------|--------------------------------------------------------------------------|
 | Symfony kernel                                                               | `api/src/Kernel.php`                                                     |
-| Bounded contexts (DDD)                                                       | `api/src/{Backoffice,Frontoffice,Shared}/<Module>/`                      |
+| Bounded contexts (DDD)                                                       | `api/src/{Backoffice,Frontoffice,Iam,Organization,Shared}/<Module>/`     |
 | Domain layer (entities, VOs, ports)                                          | `<Module>/Domain/`                                                       |
 | Application layer (use cases, DTOs)                                          | `<Module>/Application/`                                                  |
 | Infrastructure (Doctrine, controllers, Messenger handlers, mailers, clients) | `<Module>/Infrastructure/`                                               |

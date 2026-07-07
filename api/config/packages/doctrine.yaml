@@ -17,6 +17,12 @@ doctrine:
                 dir: '%kernel.project_dir%/src/Backoffice'
                 prefix: 'Erpify\Backoffice'
                 alias: Backoffice
+            Iam:
+                type: attribute
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Iam'
+                prefix: 'Erpify\Iam'
+                alias: Iam
             SharedMedia:
                 type: attribute
                 is_bundle: false

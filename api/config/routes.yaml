@@ -7,6 +7,17 @@ api_v1_back_office:
     defaults:
         _format: json
 
+# Iam is a top-level context, but the login handshake keeps its established
+# /api/v1/backoffice/login URL (security.yaml check_path + access_control + the PWA
+# depend on it). The resource is scoped to Identity's Http dir so this legacy prefix
+# stays confined to the login route and never leaks onto future Iam controllers.
+api_v1_iam_identity_login:
+    resource: ../src/Iam/Identity/Infrastructure/Http/
+    type: attribute
+    prefix: /api/v1/backoffice
+    defaults:
+        _format: json
+
 api_v1_front_office:
     resource: ../src/Frontoffice/
     type: attribute
