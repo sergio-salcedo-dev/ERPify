@@ -4,7 +4,7 @@ baseline_commit: a7d39f06dcc72fef6edf2aa7c3a00c69b40ad02b
 
 # Story RM-3 (PR-3): Gateo de las rutas de `Bank` — primer tightening real
 
-Status: review
+Status: done
 
 Epic: `rbac-authorization-model` · Orden de merge: **4º** (RM-1 → RM-2 → RM-5 → **RM-3** → RM-4) · Slice: `Backoffice/Bank` — **primer tightening real de comportamiento**. Retira el catch-all `IS_AUTHENTICATED_FULLY` como única puerta de las rutas de bank y añade autorización por recurso/acción. Independiente de RM-2/RM-5 (ya en `main`); no bloquea a RM-4 (RM-4 depende de RM-2, no de RM-3).
 

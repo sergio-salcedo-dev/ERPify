@@ -4,7 +4,7 @@ baseline_commit: 1075319b3b17d0f061f43040a39845ef5a893b65
 
 # Story RM-4 (PR-4): Gateo de `BankAccount` — colección + ruta anidada (depende de RM-2)
 
-Status: review
+Status: done
 
 Epic: `rbac-authorization-model` · Orden de merge: **5º y último de comportamiento** (RM-1 → RM-2 → RM-5 → RM-3 → **RM-4**) · Slice: `Backoffice/BankAccount` — **segundo y último tightening real** del epic. Extiende el modelo `Permission = (resource, action)` (ya en `main`) a las **8** rutas de `BankAccount`, incluida la **anidada** `GET /banks/{id}/accounts`, y añade la **primera fila de política de dominio de un slice de negocio** (`explicitGrants['bankAccount.changeStatus']`). **Depende de RM-2 como gate duro** (ya en `main` vía #457): sin el discriminante base-query del cursor keyset, el par colección↔anidada sería un bypass de privilege-scope. RM-3 (#463, ya en `main`) aporta los fixtures tier y el backfill que RM-4 **reutiliza sin añadir ninguno**.
 
