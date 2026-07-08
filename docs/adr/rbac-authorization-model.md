@@ -1,6 +1,6 @@
 # ADR — Cross-cutting RBAC authorization model: permission-as-value, tier policy, edge voter
 
-> **Status:** accepted — design; not yet implemented · **Date:** 2026-07-06 · **Scope:** the cross-cutting authorization model that **every future ERP+CRM entity** inherits to govern *who may perform which action*. Extends the auth/RBAC subsystem ([`auth-rbac-subsystem.md`](./auth-rbac-subsystem.md)) **without revoking it**; `Backoffice/Bank` + `Backoffice/BankAccount` are the first validation slice, and the two `Backoffice/Audit` read routes migrate onto the same grammar.
+> **Status:** accepted — implemented · **Date:** 2026-07-06 · **Scope:** the cross-cutting authorization model that **every future ERP+CRM entity** inherits to govern *who may perform which action*. Extends the auth/RBAC subsystem ([`auth-rbac-subsystem.md`](./auth-rbac-subsystem.md)) **without revoking it**; `Backoffice/Bank` + `Backoffice/BankAccount` are the first validation slice, and the two `Backoffice/Audit` read routes migrate onto the same grammar.
 
 ## Context
 
@@ -77,4 +77,4 @@ Two objective boundaries keep the model from drifting into ABAC; crossing either
 1. **The policy stays policy, not mechanism** — whether coded or persisted it holds only data (`tier → [verbs]`, `permission → [roles]`, `resource` opt-out sets) and **no algorithm**. The first `if (…) then grant`, closure, or expression turns the policy into a policy *engine* — a different capability.
 2. **The `subject:` gate stays unevaluated** — the day the voter reads the subject to decide, the model has entered data-scoping/ABAC.
 
-*Candidate follow-up:* make the criterion an executable gate (a `deptrac`/`php.lint.*`-style architecture test) asserting the core set (voter + `Permission` value + port) does not change when a resource is added, and the policy holds no executable code — turning the tripwires into CI failures rather than review notes.
+*Executable gate:* both tripwires are enforced by architecture tests, not review notes. `StaticAuthorizationPolicyIsDataOnlyTest` tokenises the policy maps and rejects any executable token, keeping the policy data-not-mechanism (tripwire 1). `AuthorizationCoreIsClosedForModificationTest` drives a resource the policy has never listed through the unmodified voter+policy, asserting it is governed by tier verbs with zero policy rows, and freezes the `AuthorizationPolicy` port to its single `permits` method — so adding a resource cannot change the core (the OCP criterion). `PermissionVoterDoesNotEvaluateSubjectTest` reads the voter's source and asserts `subject:` is never read to decide (tripwire 2). A new CRUD-only resource costs zero policy rows; crossing either tripwire fails CI.
