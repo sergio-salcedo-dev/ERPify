@@ -236,9 +236,7 @@ test.describe("BackOffice - Banks long-name containment (real API)", () => {
     await page.getByTestId("banks-filters__name").clear();
 
     // Narrow to the seeded rows so the row locator is deterministic.
-    await page.getByTestId("banks-filters__name").fill(runPrefix);
-    // Wait for the 300ms debounce to flush before asserting on rows.
-    await page.waitForTimeout(400);
+    await filterByName(page, runPrefix);
 
     // Selecting a row shows the bulk bar pinned within the content column.
     const firstRow = page.locator('[data-testid^="banks-table__row-"]').first();
