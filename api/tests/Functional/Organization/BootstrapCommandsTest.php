@@ -105,6 +105,21 @@ final class BootstrapCommandsTest extends KernelTestCase
         $this->assertNotInstanceOf(User::class, $this->users->findByEmail(Email::from('orphan@erpify.test')));
     }
 
+    public function testRejectsABlankOrganizationName(): void
+    {
+        $this->assertSame(Command::INVALID, $this->provision('   ')->getStatusCode());
+    }
+
+    public function testRejectsAnAdministratorWithAnEmptyPassword(): void
+    {
+        $tester = new CommandTester($this->application->find('organization:administrator:create'));
+        $tester->setInputs(['']);
+
+        $tester->execute(['email' => 'no-password@erpify.test']);
+
+        $this->assertSame(Command::INVALID, $tester->getStatusCode());
+    }
+
     private function provision(string $name): CommandTester
     {
         $tester = new CommandTester($this->application->find('organization:provision'));

@@ -16,6 +16,7 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
  * @internal
  */
 #[CoversClass(ProvisionOrganization::class)]
+#[CoversClass(OrganizationAlreadyProvisioned::class)]
 final class ProvisionOrganizationTest extends TestCase
 {
     public function testProvisionsAndPersistsTheOrganization(): void

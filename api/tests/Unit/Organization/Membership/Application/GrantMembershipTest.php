@@ -19,6 +19,8 @@ use PHPUnit\Framework\TestCase;
  * @internal
  */
 #[CoversClass(GrantMembership::class)]
+#[CoversClass(OrganizationNotProvisioned::class)]
+#[CoversClass(UserAlreadyMember::class)]
 final class GrantMembershipTest extends TestCase
 {
     public function testGrantsMembershipInTheProvisionedOrganization(): void
