@@ -21,8 +21,10 @@ use Override;
  * compiler-enforced, not merely convention. They double as the constructor defaults — overriding them (a
  * test today, or a configurable store later, when "static" becomes "swap the store") needs no code change,
  * while production always runs the seed literals. `tierVerbs` carries the resource-agnostic ladder;
- * `explicitGrants` and `tierOptOut` hold the exceptions for sensitive resources — the audit trail is
- * readable only via an explicit grant and opts out of tiering, so no generic tier auto-reads it.
+ * `explicitGrants` and `tierOptOut` hold the exceptions — a domain operation no tier verb covers (a
+ * bank account's status change, granted to MANAGER; ADMIN needs no listing, it holds the wildcard) and
+ * a sensitive resource that opts out of tiering (the audit trail, readable only via an explicit grant
+ * so no generic tier auto-reads it).
  */
 final readonly class StaticAuthorizationPolicy implements AuthorizationPolicy
 {
@@ -47,6 +49,7 @@ final readonly class StaticAuthorizationPolicy implements AuthorizationPolicy
      */
     private const array EXPLICIT_GRANTS = [
         'auditTrail.read' => [Role::AUDIT_READER->value],
+        'bankAccount.changeStatus' => [Role::MANAGER->value],
     ];
 
     /**

@@ -7,18 +7,20 @@ namespace Erpify\Backoffice\BankAccount\Infrastructure\Controller;
 use Erpify\Backoffice\BankAccount\Application\BankAccountCreator;
 use Erpify\Backoffice\BankAccount\Application\Command\CreateBankAccountCommand;
 use Erpify\Backoffice\BankAccount\Infrastructure\Http\BankAccountResourceMapper;
+use Erpify\Backoffice\BankAccount\Infrastructure\Security\BankAccountPermission;
 use Erpify\Shared\Http\Infrastructure\Responder\ResourceResponder;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Messenger\Exception\ExceptionInterface as MessengerExceptionInterface;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Serializer\Exception\ExceptionInterface;
 
 /**
- * Public like the rest of `/backoffice` (the repo has no auth yet); it accepts the PII IBAN — see
- * PRODUCTION_SECURITY_CHECKLIST.md and the auth follow-up.
+ * Accepts the PII IBAN and is gated by `bankAccount.write` — see PRODUCTION_SECURITY_CHECKLIST.md.
  */
 #[Route('/bank-accounts', name: 'backoffice_bank_account_create', methods: ['POST'])]
+#[IsGranted(BankAccountPermission::WRITE)]
 final readonly class BankAccountPostController
 {
     public function __construct(

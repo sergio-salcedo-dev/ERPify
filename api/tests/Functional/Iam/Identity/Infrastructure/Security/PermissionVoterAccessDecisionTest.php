@@ -106,4 +106,40 @@ final class PermissionVoterAccessDecisionTest extends WebTestCase
             'An ADMIN must be granted auditTrail.read through the superuser clause.',
         );
     }
+
+    public function testBankAccountChangeStatusIsGrantedToAManagerButDeniedToAnEditor(): void
+    {
+        $client = self::createClient();
+
+        $authorizationChecker = self::getContainer()->get(AuthorizationCheckerInterface::class);
+        $this->assertInstanceOf(AuthorizationCheckerInterface::class, $authorizationChecker);
+
+        // changeStatus is a domain operation reached only by the explicit grant, so a MANAGER holds it...
+        $manager = UserFixtureFactory::create(
+            Uuid::v7()->toRfc4122(),
+            'status-manager@erpify.test',
+            'status-manager-password',
+            [Role::MANAGER->value],
+        );
+        $client->loginUser(new SecurityUser($manager), 'main');
+        $this->assertTrue(
+            $authorizationChecker->isGranted('bankAccount.changeStatus'),
+            'A MANAGER must be granted bankAccount.changeStatus through the explicit grant.',
+        );
+
+        // ...while an EDITOR, though it clears the write tier, is refused — write does not imply
+        // changeStatus. This pins the wired PermissionVoter → policy → explicitGrants chain end to end,
+        // not just the pure policy the unit test exercises.
+        $editor = UserFixtureFactory::create(
+            Uuid::v7()->toRfc4122(),
+            'status-editor@erpify.test',
+            'status-editor-password',
+            [Role::EDITOR->value],
+        );
+        $client->loginUser(new SecurityUser($editor), 'main');
+        $this->assertFalse(
+            $authorizationChecker->isGranted('bankAccount.changeStatus'),
+            'An EDITOR must not be granted bankAccount.changeStatus despite holding the write tier.',
+        );
+    }
 }

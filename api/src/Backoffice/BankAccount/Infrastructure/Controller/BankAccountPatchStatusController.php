@@ -7,14 +7,17 @@ namespace Erpify\Backoffice\BankAccount\Infrastructure\Controller;
 use Erpify\Backoffice\BankAccount\Application\BankAccountStatusChanger;
 use Erpify\Backoffice\BankAccount\Application\Command\ChangeBankAccountStatusCommand;
 use Erpify\Backoffice\BankAccount\Infrastructure\Http\BankAccountResourceMapper;
+use Erpify\Backoffice\BankAccount\Infrastructure\Security\BankAccountPermission;
 use Erpify\Shared\Http\Infrastructure\Responder\ResourceResponder;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Messenger\Exception\ExceptionInterface as MessengerExceptionInterface;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Serializer\Exception\ExceptionInterface;
 
 #[Route('/bank-accounts/{id}/status', name: 'backoffice_bank_account_change_status', methods: ['PATCH'])]
+#[IsGranted(BankAccountPermission::CHANGE_STATUS)]
 final readonly class BankAccountPatchStatusController
 {
     public function __construct(

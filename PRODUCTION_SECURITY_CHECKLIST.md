@@ -228,7 +228,14 @@ you change anything here.
       closed, only deleted, so there is no `bank.close`). **Deploy backfill (a runbook, not a schema change):**
       assign a tier role to any pre-existing **non-`ADMIN`** principal *before* the gate ships, or it loses bank
       access it held under the catch-all; greenfield today means only the bootstrap `ADMIN` (wildcard) exists, so
-      no data migration is required. Media/object routes are protected (not public-by-design). Sessions use the **native file handler** (single-container only) — a shared
+      no data migration is required. **The `BankAccount` routes are gated the same way:** every `BankAccount`
+      controller — including the nested `GET /banks/{id}/accounts`, which the **same** `bankAccount.read`
+      guards as the flat collection (a resource is governed, not a route) — carries
+      `#[IsGranted('bankAccount.{read,write,delete,changeStatus}')]`. `read`/`write`/`delete` tier as usual;
+      `changeStatus` (`PATCH /bank-accounts/{id}/status`) is a domain operation, **not** a tier verb, so it is
+      reachable only through an explicit grant to `MANAGER` (and `ADMIN` via the wildcard) — an `EDITOR`
+      holding `write` is refused it. The tier backfill above already covers these routes; no extra data
+      migration. Media/object routes are protected (not public-by-design). Sessions use the **native file handler** (single-container only) — a shared
       handler (Postgres/Redis) is a follow-up before horizontal scaling. ADR
       [`docs/adr/auth-rbac-subsystem.md`](docs/adr/auth-rbac-subsystem.md).
 

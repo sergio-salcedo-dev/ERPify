@@ -7,6 +7,7 @@ namespace Erpify\Backoffice\BankAccount\Infrastructure\Controller;
 use Erpify\Backoffice\BankAccount\Application\BankAccountSearcher;
 use Erpify\Backoffice\BankAccount\Application\Query\SearchBankAccountsQuery;
 use Erpify\Backoffice\BankAccount\Infrastructure\Http\BankAccountResourceMapper;
+use Erpify\Backoffice\BankAccount\Infrastructure\Security\BankAccountPermission;
 use Erpify\Shared\Search\Application\Http\SearchQuery;
 use Erpify\Shared\Search\Infrastructure\Http\SearchResponder;
 use JsonException;
@@ -14,13 +15,14 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapQueryString;
 use Symfony\Component\Messenger\Exception\ExceptionInterface as MessengerExceptionInterface;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Serializer\Exception\ExceptionInterface;
 
 /**
- * Read-only accounts-by-bank surface. Public like the rest of `/backoffice` (the repo has no auth
- * yet); it exposes the full PII IBAN — see PRODUCTION_SECURITY_CHECKLIST.md and the auth follow-up.
- */
-/**
+ * Read-only accounts-by-bank surface, gated by `bankAccount.read`; the same permission guards this
+ * nested route and the flat collection (a resource is governed, not a route). It exposes the full PII
+ * IBAN — see PRODUCTION_SECURITY_CHECKLIST.md.
+ *
  * The `_audit_canonical` route default tells the generic access-log hook that this read is already
  * recorded richly by an explicit `AuditLogger->log()` call ({@see BankAccountSearcher}, carrying the
  * resource id), so the generic path must not write a second, thinner audit row. The fact lives here, on
@@ -28,6 +30,7 @@ use Symfony\Component\Serializer\Exception\ExceptionInterface;
  * a framework-internal attribute, never bound as a controller argument.
  */
 #[Route('/banks/{id}/accounts', name: self::ROUTE_NAME, defaults: ['_audit_canonical' => true], methods: ['GET'])]
+#[IsGranted(BankAccountPermission::READ)]
 final readonly class BankAccountSearchController
 {
     public const string ROUTE_NAME = 'backoffice_bank_account_search';

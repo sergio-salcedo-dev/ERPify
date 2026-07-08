@@ -54,17 +54,12 @@ final class StaticAuthorizationPolicyTest extends TestCase
         $this->assertTrue($policy->permits(Permission::fromString('bank.delete'), [Role::MANAGER->value]));
     }
 
-    public function testNoRolesIsDenied(): void
+    public function testASubjectWithoutAGrantingTierOrRuleIsDenied(): void
     {
         $policy = new StaticAuthorizationPolicy();
 
+        // No roles at all, and a role that neither tiers nor appears in an explicit grant, are both denied.
         $this->assertFalse($policy->permits(Permission::fromString('bank.read'), []));
-    }
-
-    public function testAnUntieredRoleIsDeniedWhenNothingGrantsIt(): void
-    {
-        $policy = new StaticAuthorizationPolicy();
-
         $this->assertFalse($policy->permits(Permission::fromString('bank.read'), [Role::AUDIT_READER->value]));
     }
 
@@ -122,11 +117,29 @@ final class StaticAuthorizationPolicyTest extends TestCase
         $this->assertFalse($policy->permits($permission, []));
 
         // The refusal is opt-out-specific, not a blanket VIEWER denial: the same VIEWER still reads a tiered
-        // resource, pinning that only auditTrail's opt-out — not a broken tier — withholds the trail from it.
-        $this->assertTrue($policy->permits(Permission::fromString('bank.read'), [Role::VIEWER->value]));
+        // resource — bankAccount — pinning that only auditTrail's opt-out, not a broken tier, withholds the
+        // trail from it. This paired contrast also guards against a future regression adding bankAccount to
+        // tierOptOut (which would silently strip its read auto-grant).
+        $this->assertTrue($policy->permits(Permission::fromString('bankAccount.read'), [Role::VIEWER->value]));
 
         // Roles are additive: a principal holding a generic tier alongside AUDIT_READER is still granted
         // through the explicit clause — the union of roles decides, not any single one.
         $this->assertTrue($policy->permits($permission, [Role::VIEWER->value, Role::AUDIT_READER->value]));
+    }
+
+    public function testBankAccountChangeStatusIsGrantedOnlyToManagerAndAdmin(): void
+    {
+        $policy = new StaticAuthorizationPolicy();
+        $permission = Permission::fromString('bankAccount.changeStatus');
+
+        // changeStatus is a domain operation, not a tier verb, so only the explicit grant (MANAGER) and
+        // the unconditional admin clause reach it.
+        $this->assertTrue($policy->permits($permission, [Role::MANAGER->value]));
+        $this->assertTrue($policy->permits($permission, [Role::ADMIN->value]));
+
+        // An EDITOR holds the write tier, yet changeStatus is not a tier verb — write does not imply it.
+        $this->assertFalse($policy->permits($permission, [Role::EDITOR->value]));
+        $this->assertFalse($policy->permits($permission, [Role::VIEWER->value]));
+        $this->assertFalse($policy->permits($permission, []));
     }
 }
