@@ -4,7 +4,7 @@ baseline_commit: 4ccb2f922908da37e66909aee4cd314ea1b92e6d
 
 # Story RM-5 (PR-5): Migración de las rutas de audit a `auditTrail.read`
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -220,6 +220,7 @@ Added:
 
 - 2026-07-07 — RM-5 implementada: rutas de audit migradas a `#[IsGranted('auditTrail.read')]`; `StaticAuthorizationPolicy` poblada (`explicitGrants` + `tierOptOut`); unit/funcional/Behat + docs de seguridad actualizados. Status → review.
 - 2026-07-07 — Code review 3-capas aprobado (sin BLOCKER/HIGH); 2 patches de cobertura aplicados; `baseline_commit` re-anclado a `4ccb2f92` tras rebase sobre II-0 (#458).
+- 2026-07-08 — PR #459 sincronizado (force-push `c7589303→9a08638e`); Status → done.
 
 ## Review Findings (code review 2026-07-07)
 

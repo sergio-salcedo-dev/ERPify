@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-23
-last_updated: 2026-07-07
+last_updated: 2026-07-08
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -95,7 +95,7 @@ development_status:
   epic-rbac-authorization-model: in-progress
   rm-1-nucleo-autorizacion-voter-puerto-politica: done
   rm-2-cierre-fingerprint-keyset-437: done
-  rm-5-migracion-audit-audittrail-read: review
+  rm-5-migracion-audit-audittrail-read: done
   rm-3-gateo-rutas-bank-tightening: backlog
   rm-4-gateo-bankaccount-coleccion-anidada: backlog
   rm-6-gate-ocp-congelar-core: backlog
