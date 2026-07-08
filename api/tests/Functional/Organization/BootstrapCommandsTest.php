@@ -34,7 +34,7 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[CoversClass(CreateInitialAdministratorCommand::class)]
 final class BootstrapCommandsTest extends KernelTestCase
 {
-    private const string TRUNCATE_SQL = 'TRUNCATE membership, organization, identity_user RESTART IDENTITY CASCADE';
+    private const string TRUNCATE_SQL = 'TRUNCATE membership, organization, identity_user';
 
     private Connection $connection;
 

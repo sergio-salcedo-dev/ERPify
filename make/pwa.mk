@@ -108,11 +108,11 @@ E2E_USER_PASSWORD ?= e2ePassword123
 E2E_ORG_NAME ?= E2E-Test-Organization
 
 pwa.test.e2e: pwa.install.if-missing ## Run end-to-end tests with Playwright; CI_SHARD=N CI_TOTAL_SHARDS=M for sharded runs; pass c='…' for extra args
-	@echo "[e2e] seeding org + admin $(E2E_USER_EMAIL) (idempotent)…"
+	@echo "[e2e] seeding org + admin $(E2E_USER_EMAIL) (idempotent; non-zero is expected when already seeded)…"
 	@$(MAKE) --no-print-directory sf c='organization:provision $(E2E_ORG_NAME)' >/dev/null 2>&1 || true
 	@$(MAKE) --no-print-directory sf c='organization:administrator:create $(E2E_USER_EMAIL) $(E2E_USER_PASSWORD)' >/dev/null 2>&1 \
 		&& echo "[e2e] org + admin seeded." \
-		|| echo "[e2e] seed returned non-zero — user likely already exists (fine) or the stack is unreachable."
+		|| echo "[e2e] seed non-zero: fine if already seeded; if login then fails, provision/admin-create genuinely failed (check the stack)."
 	@if [ -n "$(CI_SHARD)" ] && [ -n "$(CI_TOTAL_SHARDS)" ]; then \
 		$(call pwa_cmd,npm run test:e2e -- --shard=$(CI_SHARD)/$(CI_TOTAL_SHARDS) $(c)); \
 	else \

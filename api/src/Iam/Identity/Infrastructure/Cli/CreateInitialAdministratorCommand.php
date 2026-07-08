@@ -92,7 +92,14 @@ final class CreateInitialAdministratorCommand extends Command
             return $password;
         }
 
-        $hidden = $io->askHidden('Password');
+        // A closed/EOF stdin at the hidden prompt (Ctrl+D, or a non-interactive run with no input) makes the
+        // question helper throw a console RuntimeException; treat that as "no password" so it flows to the
+        // clean Command::INVALID below instead of surfacing a raw stack trace to the operator.
+        try {
+            $hidden = $io->askHidden('Password');
+        } catch (RuntimeException) {
+            return '';
+        }
 
         return \is_string($hidden) ? $hidden : '';
     }
