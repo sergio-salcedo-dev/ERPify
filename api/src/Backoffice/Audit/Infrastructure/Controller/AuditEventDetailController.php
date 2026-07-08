@@ -26,7 +26,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * (never as a linked resource, which would recurse).
  */
 #[Route('/audit/events/{id}', name: self::ROUTE_NAME, defaults: ['_audit_canonical' => true], methods: ['GET'])]
-#[IsGranted('ROLE_AUDIT_READER')]
+#[IsGranted('auditTrail.read')]
 final readonly class AuditEventDetailController
 {
     public const string ROUTE_NAME = 'backoffice_audit_event_detail';

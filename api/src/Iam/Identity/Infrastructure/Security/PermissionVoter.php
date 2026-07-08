@@ -15,7 +15,7 @@ use Symfony\Component\Security\Core\Authorization\Voter\Voter;
  *
  * It supports ONLY permission-shaped attributes, so it abstains on Symfony's own vocabulary (`ROLE_*`,
  * `IS_AUTHENTICATED_*`, `PUBLIC_ACCESS`): those keep flowing to the native RoleVoter / AuthenticatedVoter,
- * which is why the existing `#[IsGranted('ROLE_AUDIT_READER')]` audit routes are untouched. `ROLE_` is a
+ * so this voter and the built-ins never contend over the same attribute. `ROLE_` is a
  * framework detail that stops at this edge — the token's role names are stripped back to the bare domain
  * tokens the neutral policy speaks. The `$subject` is accepted but never read: authorization here is
  * resource-and-action, not row-level (reading it would make this attribute-based access control — a

@@ -19,19 +19,16 @@ describe("isRecentlyCreated", () => {
     expect(isRecentlyCreated("2026-05-28T12:00:00.000Z", provider)).toBe(true);
   });
 
-  it("is false when createdAt is older than the window", () => {
+  it.each([
+    { case: "createdAt is older than the window", createdAt: "2026-05-01T12:00:00.000Z" },
+    {
+      case: "createdAt is in the future (clock skew is not 'new')",
+      createdAt: "2026-06-05T12:00:00.000Z",
+    },
+    { case: "the timestamp is unparseable", createdAt: "not-a-date" },
+  ])("is false when $case", ({ createdAt }) => {
     const provider = providerWithNow(NOW);
-    expect(isRecentlyCreated("2026-05-01T12:00:00.000Z", provider)).toBe(false);
-  });
-
-  it("is false for a future createdAt (clock skew is not 'new')", () => {
-    const provider = providerWithNow(NOW);
-    expect(isRecentlyCreated("2026-06-05T12:00:00.000Z", provider)).toBe(false);
-  });
-
-  it("is false for an unparseable timestamp", () => {
-    const provider = providerWithNow(NOW);
-    expect(isRecentlyCreated("not-a-date", provider)).toBe(false);
+    expect(isRecentlyCreated(createdAt, provider)).toBe(false);
   });
 
   it("honours a custom window", () => {

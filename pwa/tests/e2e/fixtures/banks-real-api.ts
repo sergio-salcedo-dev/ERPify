@@ -112,24 +112,29 @@ export async function seedBanks(
 }
 
 /**
- * Type into the list's name filter and WAIT for the debounce to flush before
- * returning. `BanksFilters` mirrors the input locally and debounces
- * `onFilterChange` by 300ms, so the applied `filter` — and the page reset it
- * drives in the list page — lands well after the keystroke. A test that
+ * Type into the list's name filter and wait for the debounced, server-driven
+ * search to land before returning. `BanksFilters` mirrors the input locally and
+ * debounces `onFilterChange` by 300ms, so the applied filter — and the page
+ * reset it drives — settles only once the list refetches. A test that
  * filters-to-isolate its seeded rows and then immediately paginates would
  * otherwise have the late filter-change yank it back to page 1 mid-assertion.
  *
- * The name search is always visible in the toolbar (not panel-gated). Because
- * name is excluded from `countPanelFilters`, filling it alone does NOT render
- * the `banks-filters__count` badge, so we can no longer use the badge as the
- * "debounce has flushed" signal. Instead we wait 400ms — slightly longer than
- * the 300ms debounce — so the applied filter has settled before the caller
- * continues. The name input does NOT need the panel to be open first.
+ * We synchronize on the observable effect — the filtered list request that
+ * carries `value` in its `filters[]` query — rather than a fixed timeout: it is
+ * exact (no slow-CI flake, no idle wait) and, because the request fires only
+ * after the debounce, its arrival proves the page reset has already happened.
+ * `value` must be URL-safe: it is matched as a raw substring of the request URL,
+ * so a value the query would percent-encode (spaces, `&`, `%`…) would never match
+ * and would hang to the Playwright timeout — every caller passes a run prefix.
+ * The name search is always visible in the toolbar, so the panel need not be open
+ * first.
  */
 export async function filterByName(page: Page, value: string): Promise<void> {
+  const filtered = page.waitForResponse(
+    (response) => response.url().includes(value) && response.request().method() === "GET",
+  );
   await page.getByTestId("banks-filters__name").fill(value);
-  // Wait for the 300ms debounce to flush + a small buffer.
-  await page.waitForTimeout(400);
+  await filtered;
 }
 
 /**

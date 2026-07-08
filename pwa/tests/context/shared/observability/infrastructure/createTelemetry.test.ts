@@ -29,18 +29,12 @@ function emitErrorWithDsn(dsn: string): void {
 }
 
 describe("createTelemetry sink selection", () => {
-  it("does NOT add the Sentry sink when no DSN is configured", () => {
-    emitErrorWithDsn("");
-    expect(captureMessage).not.toHaveBeenCalled();
-  });
-
-  it("does NOT add the Sentry sink for a whitespace-only DSN", () => {
-    emitErrorWithDsn("   ");
-    expect(captureMessage).not.toHaveBeenCalled();
-  });
-
-  it("does NOT add the Sentry sink for a malformed (non-https) DSN", () => {
-    emitErrorWithDsn("key@o0.ingest.de.sentry.io/1");
+  it.each([
+    { case: "no DSN is configured", dsn: "" },
+    { case: "a whitespace-only DSN", dsn: "   " },
+    { case: "a malformed (non-https) DSN", dsn: "key@o0.ingest.de.sentry.io/1" },
+  ])("does NOT add the Sentry sink for $case", ({ dsn }) => {
+    emitErrorWithDsn(dsn);
     expect(captureMessage).not.toHaveBeenCalled();
   });
 
