@@ -1,13 +1,15 @@
-Feature: Restrict the audit trail read routes to ROLE_AUDIT_READER
+Feature: Restrict the audit trail read routes to the auditTrail.read permission
   As a security officer
   In order to satisfy restricted access to the audit log (ISO 27001 A.5.18)
-  I need the two audit read routes closed to anyone without the audit-reader role, every refusal recorded, and
+  I need the two audit read routes closed to anyone not granted auditTrail.read, every refusal recorded, and
   the distinction between "log in" (401) and "you may not" (403) preserved
 
-  # The timeline and event-detail controllers carry #[IsGranted('ROLE_AUDIT_READER')]. An anonymous caller is
-  # stopped by the default-deny firewall (401) before the role gate; an authenticated caller without the role
-  # reaches the gate and is refused (403). Alice (the default session) holds the role, so the granted path is
-  # covered by timeline.feature; here the role-less user is mallory.
+  # The timeline and event-detail controllers carry #[IsGranted('auditTrail.read')], resolved by the custom
+  # PermissionVoter over the StaticAuthorizationPolicy. An anonymous caller is stopped by the default-deny
+  # firewall (401) before the permission gate; an authenticated caller not granted the permission reaches the
+  # gate and is refused (403). auditTrail opts out of tier auto-grant, so even a fully-tiered MANAGER (trent)
+  # is denied — only AUDIT_READER and ADMIN are granted it. Alice (the default session) holds AUDIT_READER, so
+  # the granted path is covered by timeline.feature; the denied users here are mallory (role-less) and trent.
   Background:
     Given I add "Accept" header equal to "application/json"
 
@@ -29,6 +31,18 @@ Feature: Restrict the audit trail read routes to ROLE_AUDIT_READER
     When I send a "GET" request to "/backoffice/audit/timeline"
     Then the response status code should be 403
     And the header "Content-Type" should contain "application/problem+json"
+    And the JSON node "type" should be equal to "forbidden"
+
+  Scenario: A generic-tier user is refused the timeline with 403 — the trail opts out of tier auto-grant
+    Given I am logged in as a generic-tier user without the audit-reader role
+    When I send a "GET" request to "/backoffice/audit/timeline"
+    Then the response status code should be 403
+    And the JSON node "type" should be equal to "forbidden"
+
+  Scenario: A generic-tier user is refused the event detail with 403 — the trail opts out of tier auto-grant
+    Given I am logged in as a generic-tier user without the audit-reader role
+    When I send a "GET" request to "/backoffice/audit/events/0190a001-0000-7000-8000-000000000001"
+    Then the response status code should be 403
     And the JSON node "type" should be equal to "forbidden"
 
   Scenario: An authenticated user without the audit-reader role is refused the event detail with 403

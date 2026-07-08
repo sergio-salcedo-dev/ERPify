@@ -3,7 +3,7 @@ Feature: Self-audit every authorized read of the audit trail (audit the auditor)
   In order to make access to the audit log itself auditable (ISO 27001 A.5.18/A.8.15)
   I need every authorized read of the two audit routes to leave one synchronous security row naming who read what
 
-  # Alice (the default session) holds ROLE_AUDIT_READER, so these reads are granted. Each granted read emits a
+  # Alice (the default session) is granted auditTrail.read through her AUDIT_READER role, so these reads succeed. Each granted read emits a
   # `security` `AUDIT_TRAIL_READ` row through the same durable write-before-send path as the `ACCESS_DENIED`
   # denial (no transport consume needed). The two routes carry `_audit_canonical`, so the generic access-log
   # hook yields and no second, thinner `activity` row is queued.

@@ -105,4 +105,28 @@ final class StaticAuthorizationPolicyTest extends TestCase
         $this->assertTrue($policy->permits(Permission::fromString('bank.delete'), $supervisor));
         $this->assertTrue($policy->permits(Permission::fromString('ledger.approve'), $supervisor));
     }
+
+    public function testAuditTrailReadIsGrantedOnlyToAuditReaderAndAdmin(): void
+    {
+        $policy = new StaticAuthorizationPolicy();
+        $permission = Permission::fromString('auditTrail.read');
+
+        $this->assertTrue($policy->permits($permission, [Role::AUDIT_READER->value]));
+        // ADMIN reads the trail through the unconditional admin clause, not the explicit grant.
+        $this->assertTrue($policy->permits($permission, [Role::ADMIN->value]));
+
+        // auditTrail opts out of tier auto-grant, so a generic read-tier role earns nothing without an explicit grant.
+        $this->assertFalse($policy->permits($permission, [Role::VIEWER->value]));
+        $this->assertFalse($policy->permits($permission, [Role::EDITOR->value]));
+        $this->assertFalse($policy->permits($permission, [Role::MANAGER->value]));
+        $this->assertFalse($policy->permits($permission, []));
+
+        // The refusal is opt-out-specific, not a blanket VIEWER denial: the same VIEWER still reads a tiered
+        // resource, pinning that only auditTrail's opt-out — not a broken tier — withholds the trail from it.
+        $this->assertTrue($policy->permits(Permission::fromString('bank.read'), [Role::VIEWER->value]));
+
+        // Roles are additive: a principal holding a generic tier alongside AUDIT_READER is still granted
+        // through the explicit clause — the union of roles decides, not any single one.
+        $this->assertTrue($policy->permits($permission, [Role::VIEWER->value, Role::AUDIT_READER->value]));
+    }
 }

@@ -32,6 +32,8 @@ Discarded: una tabla Role/Permission dinámica (RBAC de grano fino) — resuelve
 
 Las dos rutas de lectura del trail —`GET /api/v1/backoffice/audit/timeline` y `GET /api/v1/backoffice/audit/events/{id}`— se protegen con `#[IsGranted('ROLE_AUDIT_READER')]`. El `RoleVoter` interno de Symfony **es** el «voter» que pide FR13; una clase Voter a medida sería `return in_array(...)` — YAGNI mientras no haya autorización por recurso/fila. La denegación lanza `AccessDeniedException`, que el pipeline RFC 9457 **ya** mapea a `403 { "type": "forbidden" }` (marker `Forbidden` + puente en `ProblemDetailsFactory`), y que `AccessDeniedAuditListener` **ya** auto-audita. No se añade marker ni se toca [`../api-error-contract.md`](../api-error-contract.md).
 
+> **Superado por el modelo RBAC transversal ([`rbac-authorization-model.md`](./rbac-authorization-model.md) §D4).** Las dos rutas migran a `#[IsGranted('auditTrail.read')]`, resuelto por el `PermissionVoter` a medida sobre la `StaticAuthorizationPolicy` (el `RoleVoter` nativo abstiene sobre atributos con forma de permiso `recurso.acción`); `AUDIT_READER` sobrevive como el rol que concede ese permiso, y `auditTrail` opta fuera del auto-grant por tier. El pipeline 403 y la auto-auditoría de la denegación descritos aquí siguen vigentes.
+
 Discarded: clase `Voter` propia ahora — duplica el `RoleVoter` sin lógica contextual. Discarded: `JsonResponse` de error manual en el controlador — prohibido por el pipeline (`php.lint.error-contract`).
 
 ### D5 — `actor_id` stays nullable; "real attribution" is a seam invariant, not a schema constraint

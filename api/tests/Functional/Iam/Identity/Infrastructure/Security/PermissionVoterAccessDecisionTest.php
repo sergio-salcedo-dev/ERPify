@@ -40,13 +40,70 @@ final class PermissionVoterAccessDecisionTest extends WebTestCase
         $authorizationChecker = self::getContainer()->get(AuthorizationCheckerInterface::class);
         $this->assertInstanceOf(AuthorizationCheckerInterface::class, $authorizationChecker);
 
-        // R6 is about independence: the VIEWER clears the firewall (IS_AUTHENTICATED_FULLY), yet that is a
-        // separate decision from the permission — so the write is still denied and only the read granted.
+        // Independence: the VIEWER clears the firewall (IS_AUTHENTICATED_FULLY), yet that is a separate
+        // decision from the permission — so the write is still denied and only the read granted.
         $this->assertTrue(
             $authorizationChecker->isGranted('IS_AUTHENTICATED_FULLY'),
             'The VIEWER must clear the firewall, so the permission decision is provably independent of it.',
         );
         $this->assertFalse($authorizationChecker->isGranted('bank.write'), 'A VIEWER must not be granted bank.write.');
         $this->assertTrue($authorizationChecker->isGranted('bank.read'), 'A VIEWER must be granted bank.read.');
+    }
+
+    public function testAuditTrailReadIsGrantedToAnAuditReaderButDeniedToAGenericTier(): void
+    {
+        $client = self::createClient();
+
+        $authorizationChecker = self::getContainer()->get(AuthorizationCheckerInterface::class);
+        $this->assertInstanceOf(AuthorizationCheckerInterface::class, $authorizationChecker);
+
+        $auditReader = UserFixtureFactory::create(
+            Uuid::v7()->toRfc4122(),
+            'audit-reader@erpify.test',
+            'audit-reader-password',
+            [Role::AUDIT_READER->value],
+        );
+        $client->loginUser(new SecurityUser($auditReader), 'main');
+        $this->assertTrue(
+            $authorizationChecker->isGranted('auditTrail.read'),
+            'An AUDIT_READER must be granted auditTrail.read.',
+        );
+
+        // A MANAGER holds the delete tier (which includes read), yet the trail opts out of tier auto-grant,
+        // so a generic business tier is still refused — sensitive access is explicit-only.
+        $manager = UserFixtureFactory::create(
+            Uuid::v7()->toRfc4122(),
+            'manager@erpify.test',
+            'manager-password',
+            [Role::MANAGER->value],
+        );
+        $client->loginUser(new SecurityUser($manager), 'main');
+        $this->assertFalse(
+            $authorizationChecker->isGranted('auditTrail.read'),
+            'A generic MANAGER tier must not be granted auditTrail.read.',
+        );
+    }
+
+    public function testAuditTrailReadIsGrantedToAnAdminThroughTheSuperuserClause(): void
+    {
+        $client = self::createClient();
+
+        $authorizationChecker = self::getContainer()->get(AuthorizationCheckerInterface::class);
+        $this->assertInstanceOf(AuthorizationCheckerInterface::class, $authorizationChecker);
+
+        // ADMIN reads the trail solely through the unconditional superuser clause — auditTrail.read is not in
+        // its explicit grants and auditTrail opts out of tiering. This pins the full wired chain
+        // (ROLE_ADMIN → bareRoleTokens → grantedToAdmin), which the pure-policy unit test cannot exercise.
+        $admin = UserFixtureFactory::create(
+            Uuid::v7()->toRfc4122(),
+            'admin@erpify.test',
+            'admin-password',
+            [Role::ADMIN->value],
+        );
+        $client->loginUser(new SecurityUser($admin), 'main');
+        $this->assertTrue(
+            $authorizationChecker->isGranted('auditTrail.read'),
+            'An ADMIN must be granted auditTrail.read through the superuser clause.',
+        );
     }
 }
