@@ -97,7 +97,7 @@ development_status:
   rm-2-cierre-fingerprint-keyset-437: done
   rm-5-migracion-audit-audittrail-read: done
   rm-3-gateo-rutas-bank-tightening: review
-  rm-4-gateo-bankaccount-coleccion-anidada: backlog
+  rm-4-gateo-bankaccount-coleccion-anidada: review
   rm-6-gate-ocp-congelar-core: backlog
   epic-rbac-authorization-model-retrospective: optional
 
