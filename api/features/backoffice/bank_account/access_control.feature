@@ -34,6 +34,18 @@ Feature: Restrict the bank-account routes to the bank-account permission
     And the JSON node "type" should be equal to "unauthenticated"
 
   @anonymous
+  Scenario: An unauthenticated read of a single account is a 401
+    When I send a "GET" request to "/backoffice/bank-accounts/33333333-3333-7000-8000-000000000001"
+    Then the response status code should be 401
+    And the JSON node "type" should be equal to "unauthenticated"
+
+  @anonymous
+  Scenario: An unauthenticated realtime-authorize request is a 401
+    When I send a "GET" request to "/backoffice/bank-accounts/realtime/authorize"
+    Then the response status code should be 401
+    And the JSON node "type" should be equal to "unauthenticated"
+
+  @anonymous
   Scenario: An unauthenticated create is a 401
     When I send a POST request to "/backoffice/bank-accounts" with body:
     """
@@ -87,6 +99,18 @@ Feature: Restrict the bank-account routes to the bank-account permission
   Scenario: A role-less authenticated user is refused a bank's nested accounts with 403
     Given I am logged in as a user without the audit-reader role
     When I send a "GET" request to "/backoffice/banks/11111111-1111-7000-8000-000000000001/accounts"
+    Then the response status code should be 403
+    And the JSON node "type" should be equal to "forbidden"
+
+  Scenario: A role-less authenticated user is refused a single account with 403
+    Given I am logged in as a user without the audit-reader role
+    When I send a "GET" request to "/backoffice/bank-accounts/33333333-3333-7000-8000-000000000001"
+    Then the response status code should be 403
+    And the JSON node "type" should be equal to "forbidden"
+
+  Scenario: A role-less authenticated user is refused a realtime-authorize request with 403
+    Given I am logged in as a user without the audit-reader role
+    When I send a "GET" request to "/backoffice/bank-accounts/realtime/authorize"
     Then the response status code should be 403
     And the JSON node "type" should be equal to "forbidden"
 

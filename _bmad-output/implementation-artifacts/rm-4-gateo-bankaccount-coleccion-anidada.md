@@ -240,3 +240,11 @@ claude-opus-4-8[1m] (Claude Opus 4.8, 1M context) — dev-story workflow.
 - Tests: matriz unit `changeStatus` + par-guard `tierOptOut`, funcional wired `changeStatus`, `bank_account/access_control.feature` (nuevo). Fusión boy-scout de dos denials duplicados por el cap PHPMD.
 - `PRODUCTION_SECURITY_CHECKLIST.md`: gateo de rutas BankAccount + nota `changeStatus` = MANAGER/ADMIN.
 - Sin migración, sin `security.yaml`, sin `deptrac.yaml`, sin re-edición del ADR (carve-out D5 ya en `main`).
+
+## Review Findings (code review 2026-07-08)
+
+Veredicto: **verde — 8/8 AC cumplidos, 0 bloqueantes.** Código productivo (guards, colocación, fila de política, algoritmo `permits()`) correcto y completo. Los 4 hallazgos son de red de tests y espejo del precedente `bank/access_control.feature` (ya en `main`).
+
+- [x] [Review][Patch] Rutas READ `GET /bank-accounts/{id}` (IBAN/PII) y `GET /bank-accounts/realtime/authorize` gateadas pero sin escenario 401/403 [api/features/backoffice/bank_account/access_control.feature] — **APLICADO**: +4 escenarios (anon→401, role-less→403 por ruta); feature 21→25, behat 25/25 verde. Cierra el hueco «guard caído pasa CI verde» que el precedente Bank aún tiene.
+- [x] [Review][Defer] POST/PUT sin positivo EDITOR (`write→2xx`) [api/features/backoffice/bank_account/access_control.feature] — diferido, pre-existente (mismo patrón que `bank/access_control.feature`; la dirección crítica de seguridad viewer→write→403 ya está cubierta). Registrado en `deferred-work.md`.
+- Dismissed (ruido, espejo de convención ya mergeada): escenario «granted manager» con sesión implícita/casi-tautológico (MANAGER changeStatus→2xx ya vive en `status.feature`); `BankAccountPermission` instanciable sin ctor privado (espejo de `BankPermission` + forma ratificada en ADR D5).
