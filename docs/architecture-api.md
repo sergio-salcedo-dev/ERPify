@@ -2,7 +2,7 @@
 
 ## Executive summary
 
-The `api/` deployable is a Symfony 8 HTTP API on **FrankenPHP** (Caddy embedded), backed by PostgreSQL via Doctrine ORM 3.6 / DBAL 4.4, with async workflows on Symfony Messenger and real-time updates on Mercure. Code follows **DDD + Hexagonal / Clean Architecture** across top-level bounded contexts (`Backoffice/`, `Frontoffice/`, `Shared/`), each layered into `Domain / Application / Infrastructure`.
+The `api/` deployable is a Symfony 8 HTTP API on **FrankenPHP** (Caddy embedded), backed by PostgreSQL via Doctrine ORM 3.6 / DBAL 4.4, with async workflows on Symfony Messenger and real-time updates on Mercure. Code follows **DDD + Hexagonal / Clean Architecture** across top-level bounded contexts (`Backoffice/`, `Frontoffice/`, `Iam/`, `Organization/`, `Shared/`), each layered into `Domain / Application / Infrastructure`.
 
 ## Technology stack
 

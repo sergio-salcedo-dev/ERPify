@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\DataFixtures;
 
-use Erpify\Backoffice\Identity\Domain\Entity\User;
-use Erpify\Backoffice\Identity\Domain\Enum\Role;
-use Erpify\Backoffice\Identity\Domain\HashedPassword;
+use Erpify\Iam\Identity\Domain\Entity\User;
+use Erpify\Iam\Identity\Domain\Enum\Role;
+use Erpify\Iam\Identity\Domain\HashedPassword;
 
 /**
  * Alice fixture factory for {@see User}. Unlike `Bank::create`, `User::register` takes a {@see HashedPassword}
