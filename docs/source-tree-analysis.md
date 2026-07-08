@@ -16,15 +16,19 @@ ERPify/
 │   │   │   │   ├── Application/    # Use cases, DTOs
 │   │   │   │   ├── Domain/         # Entity, Event, Exception, Repository (framework-free)
 │   │   │   │   └── Infrastructure/ # Audit, Controller, Persistence
-│   │   │   ├── Identity/           # Identity context — auth foundation (see docs/adr/auth-rbac-subsystem.md)
-│   │   │   │   ├── Domain/         # Entity (User), Enum (Role), HashedPassword VO, Exception, Repository (framework-free)
-│   │   │   │   └── Infrastructure/ # Persistence (Doctrine User adapter)
 │   │   │   └── Health/
 │   │   │       └── Infrastructure/Controller
 │   │   ├── Frontoffice/
 │   │   │   ├── Dev/Infrastructure/Controller
 │   │   │   ├── Health/Infrastructure/Controller
 │   │   │   └── Mercure/            # Mercure publishing & JWT (Domain + Infrastructure/Controller)
+│   │   ├── Iam/                    # identity & access — promoted from Backoffice/Identity (adr/auth-rbac-subsystem.md D2 trigger)
+│   │   │   ├── Identity/           # User aggregate + session firewall + parked RBAC core (Permission/AuthorizationPolicy/PermissionVoter) — adr/auth-rbac-subsystem.md, adr/rbac-authorization-model.md
+│   │   │   ├── Invitation/         # reserved skeleton — identity/invitation epic
+│   │   │   └── Session/            # reserved skeleton — identity/invitation epic
+│   │   ├── Organization/           # tenancy — multi-tenant-ready, operation deferred (adr/identity-invitation-lifecycle.md D2)
+│   │   │   ├── Organization/       # tenant aggregate — one org per installation, CLI bootstrap (organization:provision / :administrator:create)
+│   │   │   └── Membership/         # authoritative user↔org link + org-scoped roles; references User/Organization by id
 │   │   └── Shared/                 # minimal Kernel + capability modules — see docs/adr/shared-module-organization.md
 │   │       ├── Kernel/             # DDD building blocks — [Domain] Aggregate, Entity (Identifiable/Timestamped), Enum (Currency), ValueObject (NormalizedText); [Application] Result
 │   │       ├── ErrorContract/      # RFC 9457 pipeline — [Domain] Exception taxonomy; [Application] ProblemDetailsFactory/ProblemDetails/RedactionDenylist; [Infrastructure] ProblemDetailsResponder + ExceptionResponder/RateLimitListener

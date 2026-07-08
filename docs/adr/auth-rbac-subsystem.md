@@ -64,7 +64,7 @@ Discarded: leer `Security`/token dentro del writer o de un handler de aplicació
 - **Mecanismo: sesión httpOnly** (no JWT) — same-origin.
 - **CSRF del login: same-origin + CORS no ampliada + `Origin` check same-origin (`LoginOriginListener`) + `SameSite=Lax`** (D1, enmendado al descubrir que `json_login` atiende por el default `_format:json` de la ruta —no por `Content-Type`— y no valida token); el token *stateless double-submit* se cablea con la 1ª ruta autenticada mutante (*wire-on-consumer*).
 - **Ubicación de `User`: `Backoffice/Identity`** — promocionable a top-level con un segundo consumidor o capacidades IAM (D2).
-- **Lifecycle del `User`:** sin auto-registro público (identidad backoffice-only); alta por admin autenticado (story posterior); **bootstrap del 1er usuario = comando `identity:user:create`** en AF-1.2 (hashea en Infra); nunca sembrar credenciales en migraciones; dev/test = fixture Alice.
+- **Lifecycle del `User`:** sin auto-registro público (identidad backoffice-only); alta por admin autenticado (story posterior); **bootstrap del 1er admin = comando `organization:administrator:create`** (identidad + membership ADMIN atómicos; hashea en Infra; sustituye al `identity:user:create` de AF-1.2, retirado en el ciclo identity/invitation); nunca sembrar credenciales en migraciones; dev/test = fixture Alice.
 - **`actor_id`: permanece nullable** — «atribución real» es invariante de costura.
 
 ## Implementation

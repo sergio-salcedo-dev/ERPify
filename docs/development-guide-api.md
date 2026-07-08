@@ -25,6 +25,15 @@ Optional — install Behat into its isolated Composer tree:
 make composer c='behat-tools-install'
 ```
 
+Bootstrap the first administrator — a fresh install without fixtures (e.g. staging/prod) has no login until an organization and its admin exist. `db.load.fixtures` already seeds these for dev, so this is only needed where fixtures are not loaded:
+
+```bash
+make sf c='organization:provision <name>'                        # the installation's single organization
+make sf c='organization:administrator:create <email> [password]' # identity + ADMIN membership (hidden prompt if password omitted)
+```
+
+There is no public sign-up and no generic user-create command; subsequent members arrive by invitation.
+
 ## Run / stop / inspect
 
 | Task                           | Command                          |
