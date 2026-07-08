@@ -29,24 +29,26 @@ describe("LoginForm — return URL", () => {
     login.mockClear();
   });
 
-  it("returns to a safe ?next= target after sign-in", async () => {
-    window.history.replaceState({}, "", "/login?next=%2Fbackoffice%2Fusers");
+  it.each([
+    {
+      case: "returns to a safe ?next= target",
+      url: "/login?next=%2Fbackoffice%2Fusers",
+      target: "/backoffice/users",
+    },
+    {
+      case: "falls back to the back-office root for an off-origin ?next= (open-redirect guard)",
+      url: "/login?next=https%3A%2F%2Fevil.com",
+      target: "/backoffice",
+    },
+    {
+      case: "falls back to the back-office root when no ?next= is present",
+      url: "/login",
+      target: "/backoffice",
+    },
+  ])("$case after sign-in", async ({ url, target }) => {
+    window.history.replaceState({}, "", url);
     render(<LoginForm />);
     signIn();
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/backoffice/users"));
-  });
-
-  it("falls back to the back-office root for an off-origin ?next= (open-redirect guard)", async () => {
-    window.history.replaceState({}, "", "/login?next=https%3A%2F%2Fevil.com");
-    render(<LoginForm />);
-    signIn();
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/backoffice"));
-  });
-
-  it("falls back to the back-office root when no ?next= is present", async () => {
-    window.history.replaceState({}, "", "/login");
-    render(<LoginForm />);
-    signIn();
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/backoffice"));
+    await waitFor(() => expect(push).toHaveBeenCalledWith(target));
   });
 });
