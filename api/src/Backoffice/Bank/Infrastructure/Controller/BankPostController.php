@@ -7,6 +7,7 @@ namespace Erpify\Backoffice\Bank\Infrastructure\Controller;
 use Erpify\Backoffice\Bank\Application\BankCreator;
 use Erpify\Backoffice\Bank\Application\Command\CreateBankCommand;
 use Erpify\Backoffice\Bank\Infrastructure\Http\BankResourceMapper;
+use Erpify\Backoffice\Bank\Infrastructure\Security\BankPermission;
 use Erpify\Shared\Http\Infrastructure\Responder\ResourceResponder;
 use Erpify\Shared\Media\Application\Dto\UploadedImage;
 use Erpify\Shared\Validation\Application\Validator;
@@ -16,9 +17,11 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\HttpKernel\Attribute\MapUploadedFile;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Validator\Constraints\File;
 
 #[Route('/banks', name: 'backoffice_bank_create', methods: ['POST'])]
+#[IsGranted(BankPermission::WRITE)]
 final readonly class BankPostController
 {
     public function __construct(

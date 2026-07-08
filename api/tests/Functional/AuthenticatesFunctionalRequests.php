@@ -17,13 +17,13 @@ use Symfony\Component\Uid\Uuid;
  * Seats an authenticated session on a functional test client so its requests clear the default-deny firewall.
  * WebTestCase tests build their own data and never load the Alice fixture, so this ensures a dedicated user
  * exists and logs it in via `loginUser` — no HTTP round trip and no password verification. It carries
- * `AUDIT_READER` so the role-gated audit read routes are reachable; the role is inert for routes that only
- * require an authenticated identity, so bank tests are unaffected by carrying it.
+ * `AUDIT_READER` (the audit read routes) and `MANAGER` (the business tier granting bank read/write/delete),
+ * so every permission-gated route these tests exercise is reachable.
  *
  * The lookup-then-create is idempotent because this suite manages its own isolation (manual TRUNCATE, no DAMA
  * rollback), so the `identity_user` row survives between tests — creating it once and reusing it keeps a second
- * `setUp` from colliding on the unique email. A stored row that lacks `AUDIT_READER` is replaced, so a user
- * left without the role never turns the gated audit routes into a phantom 403.
+ * `setUp` from colliding on the unique email. A stored row missing either role is replaced, so a user left
+ * under-privileged never turns a gated route into a phantom 403.
  */
 trait AuthenticatesFunctionalRequests
 {
@@ -41,9 +41,13 @@ trait AuthenticatesFunctionalRequests
 
         $user = $users->findByEmail(Email::from(self::FUNCTIONAL_USER_EMAIL));
 
-        // The User aggregate has no role mutator by design, so a stored row missing AUDIT_READER — which would
-        // make the role-gated audit routes answer 403 — is dropped and recreated rather than reused.
-        if (null !== $user && !\in_array(Role::AUDIT_READER, $user->roles(), true)) {
+        // The User aggregate has no role mutator by design, so a stored row missing either required role —
+        // which would make a gated route answer 403 — is dropped and recreated rather than reused.
+        $storedRolesAreSufficient = null !== $user
+            && \in_array(Role::AUDIT_READER, $user->roles(), true)
+            && \in_array(Role::MANAGER, $user->roles(), true);
+
+        if (null !== $user && !$storedRolesAreSufficient) {
             $entityManager->remove($user);
             $entityManager->flush();
             $user = null;
@@ -54,7 +58,7 @@ trait AuthenticatesFunctionalRequests
                 Uuid::v7()->toRfc4122(),
                 self::FUNCTIONAL_USER_EMAIL,
                 'functional-password',
-                ['AUDIT_READER'],
+                [Role::AUDIT_READER->value, Role::MANAGER->value],
             );
 
             $entityManager->persist($user);

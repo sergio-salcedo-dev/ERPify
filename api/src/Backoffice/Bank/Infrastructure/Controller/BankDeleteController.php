@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\Bank\Infrastructure\Controller;
 
 use Erpify\Backoffice\Bank\Application\BankDeleter;
+use Erpify\Backoffice\Bank\Infrastructure\Security\BankPermission;
 use Erpify\Shared\Http\Infrastructure\Responder\ResponderInterface;
 use Erpify\Shared\Kernel\Application\Result;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 #[Route('/banks/{id}', name: 'backoffice_bank_delete', methods: ['DELETE'])]
+#[IsGranted(BankPermission::DELETE)]
 final readonly class BankDeleteController
 {
     public function __construct(

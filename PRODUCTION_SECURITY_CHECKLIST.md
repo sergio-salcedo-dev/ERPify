@@ -219,7 +219,15 @@ you change anything here.
       unauthenticated request to a protected route is a **401 `unauthenticated`** through the pipeline:
       `UnauthenticatedAccessListener` rewrites the firewall's `AccessDeniedException` to an `AuthenticationException` for
       anonymous callers (so 401, not 403), while an authenticated-but-under-privileged caller still gets 403 — the shape
-      the audit read routes' `#[IsGranted('auditTrail.read')]` relies on. Media/object routes are protected (not public-by-design). Sessions use the **native file handler** (single-container only) — a shared
+      the audit read routes' `#[IsGranted('auditTrail.read')]` relies on. **The `Bank` routes are now
+      permission-gated:** every `Bank` controller carries `#[IsGranted('bank.{read,write,delete}')]` (`read`
+      auto-granted from the `VIEWER` tier up, `write` from `EDITOR`, `delete` from `MANAGER`), decided by the
+      same `PermissionVoter` — so a role-less authenticated caller gets **403 `forbidden`** and an anonymous one
+      **401 `unauthenticated`**, retiring the authenticate-only catch-all as their sole gate (a bank is never
+      closed, only deleted, so there is no `bank.close`). **Deploy backfill (a runbook, not a schema change):**
+      assign a tier role to any pre-existing **non-`ADMIN`** principal *before* the gate ships, or it loses bank
+      access it held under the catch-all; greenfield today means only the bootstrap `ADMIN` (wildcard) exists, so
+      no data migration is required. Media/object routes are protected (not public-by-design). Sessions use the **native file handler** (single-container only) — a shared
       handler (Postgres/Redis) is a follow-up before horizontal scaling. ADR
       [`docs/adr/auth-rbac-subsystem.md`](docs/adr/auth-rbac-subsystem.md).
 

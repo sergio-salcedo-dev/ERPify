@@ -2,12 +2,14 @@ Erpify\Iam\Identity\Domain\Entity\User:
     user_alice:
         # dev/test seed only — credentials are NEVER seeded into migrations. The factory hashes this
         # plaintext (bcrypt) so the login flow can authenticate as alice@erpify.test / alice-password.
+        # The default session for every non-@anonymous scenario: MANAGER grants bank read/write/delete so the
+        # gated bank routes stay reachable, AUDIT_READER grants the audit trail (which opts out of tiering).
         __factory:
             'Erpify\Tests\DataFixtures\UserFixtureFactory::create':
                 - '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b'
                 - 'alice@erpify.test'
                 - 'alice-password'
-                - ['AUDIT_READER']
+                - ['AUDIT_READER', 'MANAGER']
     user_mallory:
         # An authenticated but role-less user: proves the role gate answers 403 (authenticated, not
         # authorized) rather than 401, distinct from the anonymous baseline.
