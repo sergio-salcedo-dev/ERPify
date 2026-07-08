@@ -28,3 +28,23 @@ Erpify\Iam\Identity\Domain\Entity\User:
                 - 'trent@erpify.test'
                 - 'trent-password'
                 - ['MANAGER']
+    user_victor:
+        # A VIEWER (read-only tier): granted bank.read, denied bank.write/bank.delete. Pins that the bank read
+        # routes are gated read and the write routes are gated write — a write route weakened to bank.read would
+        # let Victor through, so the write refusals must stay 403.
+        __factory:
+            'Erpify\Tests\DataFixtures\UserFixtureFactory::create':
+                - '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5e'
+                - 'victor@erpify.test'
+                - 'victor-password'
+                - ['VIEWER']
+    user_edith:
+        # An EDITOR (read+write tier): granted bank.read/bank.write, denied bank.delete. Pins that the delete
+        # route is gated delete specifically — a delete route weakened to bank.write would let Edith through, so
+        # the delete refusal must stay 403.
+        __factory:
+            'Erpify\Tests\DataFixtures\UserFixtureFactory::create':
+                - '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5f'
+                - 'edith@erpify.test'
+                - 'edith-password'
+                - ['EDITOR']
