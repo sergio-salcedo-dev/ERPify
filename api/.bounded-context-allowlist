@@ -62,3 +62,21 @@ src/Backoffice/BankAccount/Application/BankAccountCreator.php => Erpify\Backoffi
 # target), a deeper read coupling than the port-based seams above, sanctioned by
 # docs/adr/bank-bankaccount-modeling.md (D3).
 src/Backoffice/BankAccount/Infrastructure/Persistence/Doctrine/DoctrineBankAccountCollectionSearchRepository.php => Erpify\Backoffice\Bank\Domain\Entity\Bank
+
+# Membership → Iam Role vocabulary. Membership carries the org-scoped roles a user holds, typed with the
+# authorization vocabulary enum Role, which lives in Iam/Identity today (co-located there with the parked
+# RBAC core). This is a transitional seam: when the RBAC authorization plane is extracted to its own home,
+# Role moves out of Iam and this exemption is removed. Consumed by the aggregate and the grant use case.
+src/Organization/Membership/Domain/Entity/Membership.php => Erpify\Iam\Identity\Domain\Enum\Role
+src/Organization/Membership/Application/GrantMembership.php => Erpify\Iam\Identity\Domain\Enum\Role
+
+# Membership → Organization single-org resolution. GrantMembership (Membership/Application) reads the
+# installation's organization through the published OrganizationRepository port to resolve the org a new
+# member belongs to — same intra-`Organization/` cross-module seam family as Bank ↔ BankAccount above.
+src/Organization/Membership/Application/GrantMembership.php => Erpify\Organization\Organization\Domain\Repository\OrganizationRepository
+
+# Iam bootstrap → Organization membership service. CreateInitialAdministratorCommand (Iam/Identity
+# Infrastructure) creates the first admin identity and, atomically, its membership via the published
+# GrantMembership use case — the single cross-context seam the bootstrap needs (password hashing and user
+# creation stay local to Iam). The same recurring Iam → Organization direction invitation will reuse.
+src/Iam/Identity/Infrastructure/Cli/CreateInitialAdministratorCommand.php => Erpify\Organization\Membership\Application\GrantMembership

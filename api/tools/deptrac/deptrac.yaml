@@ -472,3 +472,10 @@ deptrac:
             - Erpify\Backoffice\Bank\Domain\Repository\BankExistenceChecker
         Erpify\Backoffice\BankAccount\Infrastructure\Persistence\Doctrine\DoctrineBankAccountCollectionSearchRepository:
             - Erpify\Backoffice\Bank\Domain\Entity\Bank
+        Erpify\Organization\Membership\Domain\Entity\Membership:
+            - Erpify\Iam\Identity\Domain\Enum\Role
+        Erpify\Organization\Membership\Application\GrantMembership:
+            - Erpify\Iam\Identity\Domain\Enum\Role
+            - Erpify\Organization\Organization\Domain\Repository\OrganizationRepository
+        Erpify\Iam\Identity\Infrastructure\Cli\CreateInitialAdministratorCommand:
+            - Erpify\Organization\Membership\Application\GrantMembership

@@ -110,7 +110,7 @@ development_status:
   # + core RBAC (opción b; RM-1 ya en main vía #456). II-4/II-5 exigen II-7 (registro/revoca-todas).
   epic-identity-invitation-lifecycle: in-progress
   ii-0-promocion-contexto-iam-organization-comove-rbac: review
-  ii-1-organization-membership-bootstrap-cli: backlog
+  ii-1-organization-membership-bootstrap-cli: done
   ii-2-shared-token-singleusetoken: backlog
   ii-3-identitystatus-userchecker-admision-tipos-error: backlog
   ii-7-session-lifecycle-registry-gate-failclosed: backlog
