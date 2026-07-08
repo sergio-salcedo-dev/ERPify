@@ -27,7 +27,9 @@ use Symfony\Bundle\FrameworkBundle\KernelBrowser;
  * who is not granted the permission, so the route answers 403 rather than 401 — switch either to the
  * role-less fixture user ("I am logged in as a user without the audit-reader role") or to a fully-tiered
  * MANAGER ("I am logged in as a generic-tier user without the audit-reader role"), still denied because the
- * trail opts out of tier auto-grant.
+ * trail opts out of tier auto-grant. The bank access-control scenarios add two tier-boundary users — a VIEWER
+ * ("I am logged in as a viewer", read only) and an EDITOR ("I am logged in as an editor", read+write, no
+ * delete) — to pin that each bank route demands its exact permission tier, not merely an authenticated session.
  *
  * `loginUser()` seats a session token directly rather than replaying `POST /login`, so it adds no HTTP round
  * trip and no counted query: the firewall's per-request `refreshUser` lookup is raised outside any controller,
@@ -41,6 +43,10 @@ final class SecurityContext extends AbstractContext
     private const string ROLELESS_USER_EMAIL = 'mallory@erpify.test';
 
     private const string GENERIC_TIER_USER_EMAIL = 'trent@erpify.test';
+
+    private const string VIEWER_USER_EMAIL = 'victor@erpify.test';
+
+    private const string EDITOR_USER_EMAIL = 'edith@erpify.test';
 
     private const string FIREWALL = 'main';
 
@@ -76,6 +82,18 @@ final class SecurityContext extends AbstractContext
     public function logInAsAGenericTierUserWithoutTheAuditReaderRole(): void
     {
         $this->logInAs(self::GENERIC_TIER_USER_EMAIL);
+    }
+
+    #[Given('I am logged in as a viewer')]
+    public function logInAsAViewer(): void
+    {
+        $this->logInAs(self::VIEWER_USER_EMAIL);
+    }
+
+    #[Given('I am logged in as an editor')]
+    public function logInAsAnEditor(): void
+    {
+        $this->logInAs(self::EDITOR_USER_EMAIL);
     }
 
     private function logInAs(string $email): void

@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\Bank\Infrastructure\Controller;
 
 use Erpify\Backoffice\Bank\Domain\MercureBankTopic;
+use Erpify\Backoffice\Bank\Infrastructure\Security\BankPermission;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Mercure\Authorization;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * Issues the Mercure subscriber authorization cookie scoped to the back-office
@@ -24,6 +26,7 @@ final readonly class BankRealtimeAuthorizeController
     }
 
     #[Route('/banks/realtime/authorize', name: 'backoffice_bank_realtime_authorize', methods: ['GET'])]
+    #[IsGranted(BankPermission::READ)]
     public function __invoke(Request $request): Response
     {
         $cookie = $this->authorization->createCookie($request, [
