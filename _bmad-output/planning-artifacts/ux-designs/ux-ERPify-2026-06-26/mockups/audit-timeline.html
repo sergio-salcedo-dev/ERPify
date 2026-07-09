@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Auditoría · Timeline — mock</title>
+<!--
+  Mock de referencia (NO código de producción). Tokens reales de pwa/DESIGN.md, modo claro canónico.
+  Geist no está disponible offline → se usa la pila de sistema. Vale como referencia de layout/jerarquía,
+  no de tipografía exacta. La espina (EXPERIENCE.md/DESIGN.md) gana ante cualquier discrepancia.
+-->
+<style>
+  :root{
+    --bg:#f7f8f8; --bg-muted:#f3f4f5; --bg-subtle:#e9eaec; --bg-elevated:#ffffff;
+    --text:#08090a; --text-muted:#62666d; --text-subtle:#8a8f98; --text-faint:#9ea2a8;
+    --border-subtle:#eef0f2; --border:#dcdfe3; --border-strong:#bfc3ca; --line-tint:#f3f4f5;
+    --brand:#2f5cd9; --accent:#2f5cd9; --security:#7589ad; --success-strong:#0f7a5a; --danger:#dc2626;
+    --focus:#2f5cd9;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,system-ui,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.5}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px}
+  h1{font-size:24px;font-weight:600;letter-spacing:-.288px;margin:0}
+  .sub{color:var(--text-muted);margin:2px 0 20px}
+  /* filter bar */
+  .bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--bg-muted);
+       border:1px solid var(--border-subtle);border-radius:8px;padding:10px 12px;margin-bottom:14px}
+  .seg{display:inline-flex;border:1px solid var(--border-strong);border-radius:9999px;overflow:hidden}
+  .seg button{border:0;background:transparent;color:var(--text-muted);padding:5px 12px;font-size:13px;cursor:pointer}
+  .seg button[aria-pressed=true]{background:var(--bg-elevated);color:var(--text);font-weight:500;box-shadow:inset 0 0 0 1px var(--border)}
+  .date{display:inline-flex;align-items:center;gap:6px;color:var(--text-muted);font-size:13px}
+  .date input{height:32px;border:1px solid var(--border);border-radius:6px;background:var(--bg-elevated);
+       padding:0 8px;font-family:var(--mono);font-size:13px;color:var(--text);width:118px}
+  .btn{height:32px;border:1px solid var(--border);background:var(--bg-elevated);border-radius:6px;
+       padding:0 12px;font-size:13px;color:var(--text);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+  .badge{display:inline-grid;place-items:center;min-width:18px;height:18px;border-radius:9999px;
+       background:var(--brand);color:#fff;font-size:11px;font-weight:600;padding:0 5px}
+  .spacer{flex:1}
+  .toggle{display:inline-flex;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+  .toggle button{border:0;background:var(--bg-elevated);color:var(--text-muted);padding:6px 12px;font-size:13px;cursor:pointer}
+  .toggle button[aria-pressed=true]{background:var(--bg-subtle);color:var(--text);font-weight:500}
+  .toggle button[aria-disabled=true]{color:var(--text-faint);cursor:not-allowed}
+  .hint{color:var(--text-subtle);font-size:12px}
+  /* table */
+  table{width:100%;border-collapse:collapse;background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+  thead th{text-align:left;font-size:12px;font-weight:500;color:var(--text-subtle);padding:8px 10px;
+       background:var(--bg-elevated);border-bottom:1px solid var(--border);position:sticky;top:0}
+  .rowgroup-head th{background:var(--bg-muted);color:var(--text-muted);font-size:12px;font-weight:600;
+       padding:6px 10px;border-bottom:1px solid var(--border-subtle);letter-spacing:.02em}
+  tbody.day td{padding:0 10px;height:36px;border-bottom:1px solid var(--line-tint);vertical-align:middle;font-size:13px}
+  tr.entry:hover td{background:var(--bg-muted)}
+  tr.entry{cursor:pointer}
+  tr.sec td:first-child{box-shadow:inset 2px 0 0 0 var(--security)}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .time{color:var(--text);white-space:nowrap}
+  /* level badge */
+  .lvl{display:inline-flex;align-items:center;gap:6px;height:20px;padding:0 8px;border-radius:9999px;
+       background:var(--bg-subtle);color:var(--text-muted);font-size:11px;font-weight:500;white-space:nowrap}
+  .dot{width:6px;height:6px;border-radius:9999px;display:inline-block}
+  .dot.act{background:var(--text-subtle)} .dot.sec{background:var(--security)}
+  /* action cell */
+  .action .lab{color:var(--text)} .action .tok{font-family:var(--mono);font-size:12px;color:var(--text-subtle);display:block}
+  /* actor chip */
+  .actor{display:inline-flex;align-items:center;gap:6px;color:var(--text)}
+  .actor .ico{font-size:13px;filter:grayscale(1);opacity:.85}
+  .actor .id{font-family:var(--mono);font-size:12px;color:var(--text-muted)}
+  .actor.anon{background:var(--bg-subtle);border-radius:9999px;padding:2px 8px;color:var(--text-muted)}
+  .actor.anon .lab{color:var(--text-muted);font-size:12px}
+  .copy{color:var(--text-subtle);font-size:12px;cursor:pointer;border:0;background:transparent}
+  .res{color:var(--text-muted)} .res .id{font-family:var(--mono);color:var(--text-muted)}
+  .corr{display:inline-flex;align-items:center;gap:5px;background:var(--bg-subtle);border:1px solid var(--border-subtle);
+        border-radius:2px;padding:1px 6px;font-family:var(--mono);font-size:12px;font-weight:500;color:var(--text)}
+  .kebab{border:0;background:transparent;color:var(--text-muted);cursor:pointer;font-size:16px;line-height:1;padding:4px 8px;border-radius:6px}
+  .kebab:hover{background:var(--bg-subtle)}
+  /* menu */
+  .menu{position:absolute;right:18px;margin-top:4px;background:var(--bg-elevated);border:1px solid var(--border);
+        border-radius:8px;box-shadow:0 4px 8px -2px rgba(8,9,10,.08);min-width:240px;padding:5px;z-index:5;font-size:13px}
+  .menu div{padding:7px 10px;border-radius:6px;color:var(--text);cursor:pointer}
+  .menu div:hover{background:var(--bg-muted)}
+  .menu hr{border:0;border-top:1px solid var(--border-subtle);margin:5px 0}
+  /* pagination */
+  .pag{display:flex;justify-content:flex-end;gap:8px;padding:12px 2px;color:var(--text-muted)}
+  .pag button{height:32px;border:1px solid var(--border);background:var(--bg-elevated);border-radius:6px;padding:0 12px;cursor:pointer}
+  .pag button[disabled]{color:var(--text-faint);cursor:not-allowed;opacity:.7}
+  .legend{margin-top:18px;color:var(--text-subtle);font-size:12px;line-height:1.7}
+  .legend b{color:var(--text-muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Auditoría</h1>
+  <p class="sub">Investiga la actividad y la seguridad registradas.</p>
+
+  <!-- FILTER BAR -->
+  <div class="bar" role="search" aria-label="Filtros de auditoría">
+    <div class="seg" role="group" aria-label="Nivel">
+      <button aria-pressed="true">Todo</button>
+      <button aria-pressed="false">Activity</button>
+      <button aria-pressed="false">Security</button>
+    </div>
+    <label class="date">desde <input class="mono" value="dd/mm/aaaa" /></label>
+    <label class="date">hasta <input class="mono" value="dd/mm/aaaa" /></label>
+    <button class="btn">Filtros <span class="badge">2</span></button>
+    <span class="spacer"></span>
+    <div class="toggle" role="group" aria-label="Modo de vista">
+      <button aria-pressed="true">Timeline</button>
+      <button aria-pressed="false" aria-disabled="true" aria-describedby="jhint">Jornada</button>
+    </div>
+    <span id="jhint" class="hint">Fija un actor para reconstruir su jornada.</span>
+  </div>
+
+  <!-- TIMELINE TABLE -->
+  <table>
+    <thead>
+      <tr>
+        <th scope="col" style="width:130px">Hora</th>
+        <th scope="col" style="width:108px">Nivel</th>
+        <th scope="col">Acción</th>
+        <th scope="col" style="width:180px">Actor</th>
+        <th scope="col" style="width:170px">Recurso</th>
+        <th scope="col" style="width:120px">Correlación</th>
+        <th scope="col" style="width:44px" aria-label="Acciones"></th>
+      </tr>
+    </thead>
+
+    <tbody class="day" role="rowgroup" aria-labelledby="d-2026-06-12">
+      <tr class="rowgroup-head"><th id="d-2026-06-12" scope="rowgroup" colspan="7">12 de junio de 2026</th></tr>
+
+      <tr class="entry" tabindex="0">
+        <td class="mono time">12:04:31.118</td>
+        <td><span class="lvl"><i class="dot act"></i>Activity</span></td>
+        <td class="action"><span class="lab">Cuentas bancarias consultadas</span><span class="tok">BANK_ACCOUNTS_VIEWED</span></td>
+        <td><span class="actor"><span class="ico">👤</span>user <span class="id">0x9f3a…</span><button class="copy" title="Copiar id de actor">⧉</button></span></td>
+        <td class="res">BankAccount · <span class="id">0x12…</span></td>
+        <td><span class="corr">01926…1 <span class="copy">⧉</span></span></td>
+        <td><button class="kebab" aria-label="Más acciones" title="Más acciones">⋯</button></td>
+      </tr>
+
+      <tr class="entry sec" tabindex="0">
+        <td class="mono time">12:01:10.991</td>
+        <td><span class="lvl"><i class="dot sec"></i>Security</span></td>
+        <td class="action"><span class="lab">Acceso denegado</span><span class="tok">ACCESS_DENIED</span></td>
+        <td><span class="actor"><span class="ico">👁</span>anonymous</span></td>
+        <td class="res">Bank · <span class="id">0x12…</span></td>
+        <td><span class="corr">01926…7 <span class="copy">⧉</span></span></td>
+        <td><button class="kebab" aria-label="Más acciones" title="Más acciones">⋯</button></td>
+      </tr>
+      <!-- menú abierto (estático) para mostrar los pivotes -->
+      <tr><td colspan="7" style="position:relative;height:0;padding:0;border:0">
+        <div class="menu" role="menu" aria-label="Acciones de la entrada">
+          <div role="menuitem">Seguir a este actor</div>
+          <div role="menuitem">Ver esta correlación</div>
+          <div role="menuitem">Ver actividad de este recurso</div>
+          <hr/>
+          <div role="menuitem">Copiar id de entrada</div>
+          <div role="menuitem">Copiar correlación</div>
+        </div>
+      </td></tr>
+
+      <!-- acción HISTÓRICA de un sujeto ya borrado por GDPR: su actor se muestra anonimizado (actorErased=true) -->
+      <tr class="entry" tabindex="0">
+        <td class="mono time">11:58:02.004</td>
+        <td><span class="lvl"><i class="dot act"></i>Activity</span></td>
+        <td class="action"><span class="lab">Facturas exportadas</span><span class="tok">INVOICES_EXPORTED</span></td>
+        <td><span class="actor anon"><span class="ico">🚫</span><span class="lab">anonimizado (GDPR) · no identificable</span></span></td>
+        <td class="res">—</td>
+        <td><span class="corr">01926…b <span class="copy">⧉</span></span></td>
+        <td><button class="kebab" aria-label="Más acciones" title="Más acciones">⋯</button></td>
+      </tr>
+      <!-- la EJECUCIÓN del borrado: entrada security, actor = system (el operador); el pseudónimo va en metadata, no aquí -->
+      <tr class="entry sec" tabindex="0">
+        <td class="mono time">11:30:44.510</td>
+        <td><span class="lvl"><i class="dot sec"></i>Security</span></td>
+        <td class="action"><span class="lab">Borrado GDPR ejecutado</span><span class="tok">GDPR_ERASURE_EXECUTED</span></td>
+        <td><span class="actor"><span class="ico">⚙</span>system</span></td>
+        <td class="res">—</td>
+        <td><span class="corr">01926…e <span class="copy">⧉</span></span></td>
+        <td><button class="kebab" aria-label="Más acciones" title="Más acciones">⋯</button></td>
+      </tr>
+    </tbody>
+
+    <tbody class="day" role="rowgroup" aria-labelledby="d-2026-06-11">
+      <tr class="rowgroup-head"><th id="d-2026-06-11" scope="rowgroup" colspan="7">11 de junio de 2026</th></tr>
+      <tr class="entry" tabindex="0">
+        <td class="mono time">23:59:02.004</td>
+        <td><span class="lvl"><i class="dot act"></i>Activity</span></td>
+        <td class="action"><span class="lab">Clientes buscados</span><span class="tok">CUSTOMERS_SEARCHED</span></td>
+        <td><span class="actor"><span class="ico">🔑</span>api_key <span class="id">0x77b1…</span><button class="copy" title="Copiar id de actor">⧉</button></span></td>
+        <td class="res">—</td>
+        <td><span class="corr">01926…c <span class="copy">⧉</span></span></td>
+        <td><button class="kebab" aria-label="Más acciones" title="Más acciones">⋯</button></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="pag">
+    <button aria-label="Página anterior" title="Página anterior" disabled>‹ Anterior</button>
+    <button aria-label="Página siguiente" title="Página siguiente">Siguiente ›</button>
+  </div>
+
+  <div class="legend">
+    <b>Notas de referencia:</b> ·
+    nivel <b>Security</b> = badge dot-azulado + <b>acento lateral izquierdo</b> (no rojo: es clase de auditoría, no severidad). ·
+    actor por <b>ActorType</b> (icono + id mono copiable); <b>anonimizado</b> = chip distinto (flag <code>actorErased</code> materializado, no derivado), sin id legible, texto a contraste AA. ·
+    ojo: la entrada <code>GDPR_ERASURE_EXECUTED</code> es <b>security</b> con actor <b>system</b> (el operador); el chip anonimizado aparece en las acciones <b>históricas</b> del sujeto borrado. ·
+    acción = <b>etiqueta humanizada</b> + <b>token crudo</b> siempre visible. ·
+    días como <code>&lt;tbody role=rowgroup&gt;</code> + <code>&lt;th scope=rowgroup&gt;</code>. ·
+    el <code>⋯</code> ofrece los 3 pivotes; el drawer es el equivalente de teclado completo.
+  </div>
+</div>
+</body>
+</html>

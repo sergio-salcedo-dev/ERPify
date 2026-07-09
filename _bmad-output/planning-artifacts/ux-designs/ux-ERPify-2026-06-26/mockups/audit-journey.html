@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Auditoría · Modo Jornada — mock</title>
+<!-- Mock de referencia (NO producción). Tokens reales de pwa/DESIGN.md, modo claro. La espina gana ante discrepancias. -->
+<style>
+  :root{
+    --bg:#f7f8f8; --bg-muted:#f3f4f5; --bg-subtle:#e9eaec; --bg-elevated:#ffffff;
+    --text:#08090a; --text-muted:#62666d; --text-subtle:#8a8f98; --text-faint:#9ea2a8;
+    --border-subtle:#eef0f2; --border:#dcdfe3; --line-tint:#f3f4f5; --security:#7589ad; --brand:#2f5cd9;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; --sans:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);font-family:var(--sans);font-size:14px;color:var(--text)}
+  .wrap{max-width:1080px;margin:0 auto;padding:24px}
+  h1{font-size:24px;font-weight:600;margin:0} .sub{color:var(--text-muted);margin:2px 0 16px}
+  .bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--bg-muted);border:1px solid var(--border-subtle);border-radius:8px;padding:10px 12px;margin-bottom:12px}
+  .toggle{display:inline-flex;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+  .toggle button{border:0;background:var(--bg-elevated);color:var(--text-muted);padding:6px 12px;font-size:13px;cursor:pointer}
+  .toggle button[aria-pressed=true]{background:var(--bg-subtle);color:var(--text);font-weight:500}
+  .spacer{flex:1}
+  /* actor pin */
+  .pin{display:inline-flex;align-items:center;gap:8px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:9999px;padding:4px 6px 4px 10px;font-size:13px}
+  .pin .id{font-family:var(--mono);font-size:12px;color:var(--text-muted)}
+  .pin .clear{border:0;background:var(--bg-subtle);border-radius:9999px;width:20px;height:20px;cursor:pointer;color:var(--text-muted)}
+  table{width:100%;border-collapse:collapse;background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+  thead th{text-align:left;font-size:12px;font-weight:500;color:var(--text-subtle);padding:8px 10px;border-bottom:1px solid var(--border)}
+  .session th{background:var(--bg-muted);padding:8px 10px;border-top:1px solid var(--border);border-bottom:1px solid var(--border-subtle);font-weight:600;color:var(--text-muted);font-size:12px}
+  .session .meta{font-weight:400;color:var(--text-subtle);font-family:var(--mono)}
+  tbody.sess td{height:36px;padding:0 10px;border-bottom:1px solid var(--line-tint);font-size:13px;vertical-align:middle}
+  tr.entry:hover td{background:var(--bg-muted)} tr.entry{cursor:pointer}
+  tr.sec td:first-child{box-shadow:inset 2px 0 0 0 var(--security)}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .lvl{display:inline-flex;align-items:center;gap:6px;height:20px;padding:0 8px;border-radius:9999px;background:var(--bg-subtle);color:var(--text-muted);font-size:11px;font-weight:500}
+  .dot{width:6px;height:6px;border-radius:9999px;display:inline-block} .dot.act{background:var(--text-subtle)} .dot.sec{background:var(--security)}
+  .action .lab{color:var(--text)} .action .tok{font-family:var(--mono);font-size:12px;color:var(--text-subtle);display:block}
+  .corr{font-family:var(--mono);font-size:12px;color:var(--text-muted)}
+  .cont{color:var(--text-subtle);font-size:12px;padding:6px 10px;font-style:italic}
+  .legend{margin-top:16px;color:var(--text-subtle);font-size:12px;line-height:1.7}
+  .legend b{color:var(--text-muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Auditoría</h1>
+  <p class="sub">Reconstrucción de jornada — un actor, agrupado por correlación.</p>
+
+  <div class="bar">
+    <span class="pin">👤 user · <span class="id">0x9f3a-7c2e-…</span> <button class="clear" aria-label="Quitar filtro de actor" title="Quitar filtro de actor">✕</button></span>
+    <span class="spacer"></span>
+    <div class="toggle" role="group" aria-label="Modo de vista">
+      <button aria-pressed="false">Timeline</button>
+      <button aria-pressed="true">Jornada</button>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th scope="col" style="width:130px">Hora</th>
+        <th scope="col" style="width:108px">Nivel</th>
+        <th scope="col">Acción</th>
+        <th scope="col" style="width:170px">Recurso</th>
+      </tr>
+    </thead>
+
+    <!-- sesión 1 -->
+    <tbody class="sess" role="rowgroup" aria-labelledby="s1">
+      <tr class="session"><th id="s1" scope="rowgroup" colspan="4">
+        Sesión <span class="meta">01926e7…0001 · 12:01–12:04 · 3 entradas</span>
+      </th></tr>
+      <tr class="entry sec" tabindex="0">
+        <td class="mono">12:01:10.991</td>
+        <td><span class="lvl"><i class="dot sec"></i>Security</span></td>
+        <td class="action"><span class="lab">Acceso denegado</span><span class="tok">ACCESS_DENIED</span></td>
+        <td>Bank · <span class="corr">0x12…</span></td>
+      </tr>
+      <tr class="entry" tabindex="0">
+        <td class="mono">12:03:58.402</td>
+        <td><span class="lvl"><i class="dot act"></i>Activity</span></td>
+        <td class="action"><span class="lab">Listado de bancos</span><span class="tok">ROUTE_BACKOFFICE_BANK_LIST</span></td>
+        <td>—</td>
+      </tr>
+      <tr class="entry" tabindex="0">
+        <td class="mono">12:04:31.118</td>
+        <td><span class="lvl"><i class="dot act"></i>Activity</span></td>
+        <td class="action"><span class="lab">Cuentas bancarias consultadas</span><span class="tok">BANK_ACCOUNTS_VIEWED</span></td>
+        <td>BankAccount · <span class="corr">0x12…</span></td>
+      </tr>
+    </tbody>
+
+    <!-- sesión 2 -->
+    <tbody class="sess" role="rowgroup" aria-labelledby="s2">
+      <tr class="session"><th id="s2" scope="rowgroup" colspan="4">
+        Sesión <span class="meta">01926e7…0007 · 11:58 · 1 entrada</span>
+      </th></tr>
+      <tr class="entry" tabindex="0">
+        <td class="mono">11:58:02.004</td>
+        <td><span class="lvl"><i class="dot act"></i>Activity</span></td>
+        <td class="action"><span class="lab">Clientes buscados</span><span class="tok">CUSTOMERS_SEARCHED</span></td>
+        <td>—</td>
+      </tr>
+      <tr><td colspan="4" class="cont">… continúa en la página siguiente</td></tr>
+    </tbody>
+  </table>
+
+  <div class="legend">
+    <b>Notas de referencia:</b> ·
+    se entra por <b>pivote</b> («Seguir a este actor») → el toggle <b>Jornada</b> se habilita. ·
+    agrupado por <code>correlation_id</code> en <code>&lt;tbody role=rowgroup&gt;</code> + <code>&lt;th scope=rowgroup&gt;</code> (cabecera = correlación · ventana · recuento). ·
+    entradas <b>cronológicas asc</b> dentro de la sesión; sesiones desc. ·
+    <b>clímax forense:</b> denegación → búsqueda → consulta se leen como una secuencia. ·
+    keyset sigue aplicando (un grupo puede «continuar» en la página siguiente).
+  </div>
+</div>
+</body>
+</html>
