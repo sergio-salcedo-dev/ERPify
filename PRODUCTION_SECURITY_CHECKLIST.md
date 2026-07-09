@@ -205,6 +205,14 @@ you change anything here.
       adapter (used by the `organization:administrator:create` CLI that bootstraps the first admin);
       the plaintext is never printed or logged, and credentials are never seeded through migrations
       (dev/test use a fixture with a bcrypt hash).
+- [ ] **Single-use tokens (`Shared/Token/SingleUseToken`):** the one building block invitation and
+      password reset share, so their token security cannot diverge. High-entropy (256-bit CSPRNG),
+      **hashed at rest** (SHA-256 — the raw token is handed to the bearer once and **never** persisted or
+      logged), TTL-bound, and **verified in constant time** (`\hash_equals`, no short-circuit on the
+      secret). A fast hash (not a slow KDF) is correct precisely because the token is already
+      uniformly random. Verification is **opaque**: a used, expired, or non-matching token all fail as
+      the same plain `false` — the cause is never revealed. No HTTP surface yet (consumed by the
+      invitation/reset flows).
 - [ ] **Session firewall (`security.yaml`, `main`):** `json_login` over an **httpOnly** session cookie
       (`SameSite=Lax`, `Secure=auto`) — no JWT/token in the client. A failed login flows through the RFC 9457
       pipeline as a **401 `unauthenticated`** (never a manual `JsonResponse`); the message is **normalised to a

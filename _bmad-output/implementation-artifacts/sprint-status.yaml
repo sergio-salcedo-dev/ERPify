@@ -111,7 +111,7 @@ development_status:
   epic-identity-invitation-lifecycle: in-progress
   ii-0-promocion-contexto-iam-organization-comove-rbac: review
   ii-1-organization-membership-bootstrap-cli: done
-  ii-2-shared-token-singleusetoken: backlog
+  ii-2-shared-token-singleusetoken: done
   ii-3-identitystatus-userchecker-admision-tipos-error: backlog
   ii-7-session-lifecycle-registry-gate-failclosed: backlog
   ii-6-lockout-lockeduntil: backlog
