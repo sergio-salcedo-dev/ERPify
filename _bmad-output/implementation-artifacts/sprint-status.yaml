@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-23
-last_updated: 2026-07-08
+last_updated: 2026-07-09
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -109,7 +109,7 @@ development_status:
   # ese orden, no en II-N numérico): II-0 → II-1·II-2·II-3·II-7 → II-6 → II-4 → II-5 → II-8. II-0 co-mueve Identity
   # + core RBAC (opción b; RM-1 ya en main vía #456). II-4/II-5 exigen II-7 (registro/revoca-todas).
   epic-identity-invitation-lifecycle: in-progress
-  ii-0-promocion-contexto-iam-organization-comove-rbac: review
+  ii-0-promocion-contexto-iam-organization-comove-rbac: done
   ii-1-organization-membership-bootstrap-cli: done
   ii-2-shared-token-singleusetoken: done
   ii-3-identitystatus-userchecker-admision-tipos-error: backlog
