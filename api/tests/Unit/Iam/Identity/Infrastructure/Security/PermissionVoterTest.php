@@ -79,18 +79,47 @@ final class PermissionVoterTest extends TestCase
         $this->assertSame([['VIEWER']], \array_column($policy->calls, 'roles'));
     }
 
-    public function testItDoesNotReadTheSubject(): void
+    public function testTheDecisionIsIndependentOfTheSubject(): void
     {
-        $policy = new RecordingAuthorizationPolicy(true);
+        // ABAC drift would make the vote (or what the voter delegates to the policy) depend on the subject.
+        // Under a denying policy a subject-gated `return GRANTED` branch would diverge from the null case, so
+        // asserting every subject yields the identical outcome proves the decision is a function of
+        // (attribute, roles) alone. This holds for a subject of any shape and needs no knowledge of the
+        // parameter's name, so it stands even if the voter's subject parameter were renamed.
+        $outcomes = \array_map(
+            fn (mixed $subject): array => $this->voteOutcome(['ROLE_VIEWER'], 'bank.read', $subject),
+            [null, new stdClass(), (object) ['id' => 'row-7', 'ownerId' => 'someone-else']],
+        );
+
+        foreach ($outcomes as $outcome) {
+            $this->assertSame($outcomes[0], $outcome);
+        }
+    }
+
+    /**
+     * The vote plus the full shape of every call the voter delegated to the policy (roles handed over and the
+     * permission built), for one authorization under the given subject. Equality of this tuple across
+     * subjects is the subject-independence property.
+     *
+     * @param list<string> $roles
+     *
+     * @return array{vote: int, roles: list<list<string>>, permissions: list<string>}
+     */
+    private function voteOutcome(array $roles, string $attribute, mixed $subject): array
+    {
+        $policy = new RecordingAuthorizationPolicy(false);
         $voter = new PermissionVoter($policy);
-        $token = $this->tokenWithRoles(['ROLE_VIEWER']);
 
-        $withSubject = $voter->vote($token, new stdClass(), ['bank.read']);
-        $withoutSubject = $voter->vote($token, null, ['bank.read']);
+        $vote = $voter->vote($this->tokenWithRoles($roles), $subject, [$attribute]);
 
-        // The decision and the roles handed to the policy are identical with or without a subject.
-        $this->assertSame($withSubject, $withoutSubject);
-        $this->assertSame([['VIEWER'], ['VIEWER']], \array_column($policy->calls, 'roles'));
+        return [
+            'vote' => $vote,
+            'roles' => \array_column($policy->calls, 'roles'),
+            'permissions' => \array_map(
+                static fn (array $call): string => $call['permission']->toString(),
+                $policy->calls,
+            ),
+        ];
     }
 
     /**

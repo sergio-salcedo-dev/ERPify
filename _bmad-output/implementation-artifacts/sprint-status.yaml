@@ -98,7 +98,7 @@ development_status:
   rm-5-migracion-audit-audittrail-read: done
   rm-3-gateo-rutas-bank-tightening: done
   rm-4-gateo-bankaccount-coleccion-anidada: done
-  rm-6-gate-ocp-congelar-core: backlog
+  rm-6-gate-ocp-congelar-core: review
   epic-rbac-authorization-model-retrospective: optional
 
   # Epic identity-invitation-lifecycle (II): ciclo de vida de identidad/invitación — onboarding invitation-first,
