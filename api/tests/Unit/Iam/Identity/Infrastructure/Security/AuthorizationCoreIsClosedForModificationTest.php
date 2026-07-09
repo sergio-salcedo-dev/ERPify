@@ -51,31 +51,35 @@ final class AuthorizationCoreIsClosedForModificationTest extends TestCase
     #[DataProvider('provideANewResourceIsGovernedByTierVerbsAloneCases')]
     public function testANewResourceIsGovernedByTierVerbsAlone(
         string $role,
-        string $permission,
+        string $action,
         int $expectedVote,
     ): void {
         $voter = new PermissionVoter(new StaticAuthorizationPolicy());
+        $permission = self::UNKNOWN_RESOURCE . '.' . $action;
 
         $this->assertSame($expectedVote, $voter->vote($this->tokenWithRoles([$role]), null, [$permission]));
     }
 
     /**
+     * Cases carry only the action; the resource is {@see self::UNKNOWN_RESOURCE}, sourced once so the drive-through
+     * and {@see self::testTheTestResourceStaysUnknownToThePolicy} can never drift onto different sentinels.
+     *
      * @return iterable<string, array{string, string, int}>
      */
     public static function provideANewResourceIsGovernedByTierVerbsAloneCases(): iterable
     {
-        yield 'viewer reads' => ['ROLE_VIEWER', 'invoice.read', self::GRANTED];
-        yield 'viewer does not write' => ['ROLE_VIEWER', 'invoice.write', self::DENIED];
-        yield 'viewer does not delete' => ['ROLE_VIEWER', 'invoice.delete', self::DENIED];
-        yield 'editor writes' => ['ROLE_EDITOR', 'invoice.write', self::GRANTED];
-        yield 'editor does not delete' => ['ROLE_EDITOR', 'invoice.delete', self::DENIED];
-        yield 'manager deletes' => ['ROLE_MANAGER', 'invoice.delete', self::GRANTED];
-        yield 'admin reads' => ['ROLE_ADMIN', 'invoice.read', self::GRANTED];
+        yield 'viewer reads' => ['ROLE_VIEWER', 'read', self::GRANTED];
+        yield 'viewer does not write' => ['ROLE_VIEWER', 'write', self::DENIED];
+        yield 'viewer does not delete' => ['ROLE_VIEWER', 'delete', self::DENIED];
+        yield 'editor writes' => ['ROLE_EDITOR', 'write', self::GRANTED];
+        yield 'editor does not delete' => ['ROLE_EDITOR', 'delete', self::DENIED];
+        yield 'manager deletes' => ['ROLE_MANAGER', 'delete', self::GRANTED];
+        yield 'admin reads' => ['ROLE_ADMIN', 'read', self::GRANTED];
         // The ADMIN wildcard reaches an action no tier verb and no explicit grant covers.
-        yield 'admin performs an unlisted domain op' => ['ROLE_ADMIN', 'invoice.approve', self::GRANTED];
+        yield 'admin performs an unlisted domain op' => ['ROLE_ADMIN', 'approve', self::GRANTED];
         // A domain op is not a tier verb, so without an explicit grant no non-admin tier reaches it: the new
         // resource needs zero policy rows for its CRUD and stays closed beyond them.
-        yield 'manager does not perform an unlisted domain op' => ['ROLE_MANAGER', 'invoice.approve', self::DENIED];
+        yield 'manager does not perform an unlisted domain op' => ['ROLE_MANAGER', 'approve', self::DENIED];
     }
 
     public function testTheAuthorizationPolicyPortContractIsClosed(): void
@@ -115,9 +119,18 @@ final class AuthorizationCoreIsClosedForModificationTest extends TestCase
         ));
     }
 
+    /**
+     * The type's name, prefixed with `?` when nullable, so the port freeze also rejects a nullable widening
+     * of `permits` (e.g. `?bool`, `?array`) — `getName()` alone drops the `?`. A union widening is caught
+     * already: it is a `ReflectionUnionType`, not a named type, so this returns null and the assertion fails.
+     */
     private function typeName(mixed $type): ?string
     {
-        return $type instanceof ReflectionNamedType ? $type->getName() : null;
+        if (!$type instanceof ReflectionNamedType) {
+            return null;
+        }
+
+        return ($type->allowsNull() ? '?' : '') . $type->getName();
     }
 
     /**

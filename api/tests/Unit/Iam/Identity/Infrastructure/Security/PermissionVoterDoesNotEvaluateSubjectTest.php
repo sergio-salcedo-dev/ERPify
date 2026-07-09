@@ -8,19 +8,23 @@ use Erpify\Iam\Identity\Infrastructure\Security\PermissionVoter;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
+use ReflectionMethod;
 
 /**
- * The expensive half of the second OCP tripwire (ADR D9): the voter accepts `#[IsGranted('bank.read',
- * subject: $bank)]` but must never read that subject to decide — the day it does, RBAC has become ABAC.
+ * The static half of ADR D9's second tripwire: the voter accepts `#[IsGranted('bank.read', subject: $bank)]`
+ * but must never read that subject to decide — the day it does, RBAC has become ABAC.
  *
- * A behavioural test already proves this for a couple of subjects
- * ({@see PermissionVoterTest::testItDoesNotReadTheSubject}, exercising `null` and an object). This one is
- * strictly stronger: it reads the voter's own source and asserts `$subject` appears only where it is
- * *declared* as a parameter, never in a body — so it holds for every possible subject and would catch an
- * `if ($subject instanceof …)` slipped into `voteOnAttribute` even if that branch happened to keep the
- * behavioural test green. Same token-source technique as `StaticAuthorizationPolicyIsDataOnlyTest`
- * (`nikic/php-parser` is not on the app autoload). A prose mention of the variable in a docblock is a single
- * comment token, never a `T_VARIABLE`, so it cannot false-trip.
+ * This scan reads the voter's own source and asserts the `$subject` parameter is only ever *declared*, never
+ * read in a body — a fast structural check across the whole method space, aimed at the accidental drift a
+ * reviewer most easily misses: an `if ($subject instanceof …)` written with the parameter's canonical name.
+ * It is deliberately *paired with*, not "stronger than", the behavioural property test
+ * {@see PermissionVoterTest::testTheDecisionIsIndependentOfTheSubject}. The scan matches the literal token
+ * `$subject`, so a `Voter` override that renamed its second parameter would read `$other` unseen; that gap is
+ * closed on two sides — {@see self::testTheSubjectParameterKeepsItsCanonicalName} pins the parameter name so
+ * the token match stays sound, and the behavioural test (vote invariant under a varying subject) catches
+ * renamed or dynamic reads no source scan can see. Same token-source technique as
+ * `StaticAuthorizationPolicyIsDataOnlyTest` (`nikic/php-parser` is not on the app autoload). A prose mention
+ * of the variable in a docblock is a comment token, never a `T_VARIABLE`, so it cannot false-trip.
  *
  * @internal
  */
@@ -31,7 +35,7 @@ final class PermissionVoterDoesNotEvaluateSubjectTest extends TestCase
 
     public function testTheVoterNeverReadsTheSubjectToDecide(): void
     {
-        $reads = $this->subjectOccurrences()['reads'];
+        $reads = $this->subjectReads();
 
         $this->assertSame([], $reads, \sprintf(
             'PermissionVoter must never read %s to decide (ADR D9: the row-level door stays open but '
@@ -41,24 +45,40 @@ final class PermissionVoterDoesNotEvaluateSubjectTest extends TestCase
         ));
     }
 
-    public function testTheVoterStillDeclaresTheSubjectParameter(): void
+    public function testTheSubjectParameterKeepsItsCanonicalName(): void
     {
-        // Guard against silent rot: if the signatures stopped declaring $subject the read check above would
-        // pass vacuously. Pin that the parameter still exists, so a dropped subject fails loudly instead.
-        $this->assertGreaterThan(0, $this->subjectOccurrences()['declarations']);
+        // The read scan matches the literal `$subject`, and a Voter override may legally rename its
+        // second parameter — a body read of the renamed variable would then slip past unseen. Pin the name
+        // on both decision surfaces so the scan stays sound; this is also the anti-vacuous guard, since a
+        // dropped subject parameter fails here loudly rather than letting the read check pass trivially.
+        foreach (['supports', 'voteOnAttribute'] as $method) {
+            $subject = (new ReflectionMethod(PermissionVoter::class, $method))->getParameters()[1] ?? null;
+
+            if (null === $subject) {
+                $this->fail(\sprintf('%s() must declare a subject parameter at position 1.', $method));
+            }
+
+            $this->assertSame('subject', $subject->getName(), \sprintf(
+                '%s() renamed its position-1 subject parameter; the source read scan matches `$subject`, so '
+                . 'a rename would open an ABAC escape hatch. Keep the parameter named `subject`.',
+                $method,
+            ));
+        }
     }
 
     /**
-     * Splits every `$subject` token in the voter's source into parameter *declarations* (inside a function's
-     * parameter parentheses) and *reads* (anywhere else). The scan tracks only whether the current token sits
-     * inside a parameter list: it arms on a `function`/`fn` keyword, opens the depth on that signature's first
-     * `(`, and any `$subject` seen at depth zero is a body read.
+     * Source token indices where the voter *reads* `$subject` — the variable appears outside any function's
+     * parameter list. Flat state machine: it arms on a `function`/`fn` keyword, opens the depth on that
+     * signature's first `(`, closes it on the matching `)`, and records each `$subject` token against the
+     * parameter-list depth it sits at; the depth-zero ones are the body reads. Declarations (depth > 0) are
+     * filtered out here; {@see self::testTheSubjectParameterKeepsItsCanonicalName} — not a declaration count —
+     * is what keeps the read check from passing vacuously.
      *
-     * @return array{declarations: int, reads: list<int>}
+     * @return list<int>
      */
-    private function subjectOccurrences(): array
+    private function subjectReads(): array
     {
-        $occurrences = [];
+        $depthAtSubject = [];
         $parameterDepth = 0;
         $atSignature = false;
 
@@ -71,34 +91,11 @@ final class PermissionVoterDoesNotEvaluateSubjectTest extends TestCase
             } elseif (')' === $token && $parameterDepth > 0) {
                 --$parameterDepth;
             } elseif ($this->isSubjectVariable($token)) {
-                $occurrences[] = ['index' => $index, 'declared' => $parameterDepth > 0];
+                $depthAtSubject[$index] = $parameterDepth;
             }
         }
 
-        return $this->partition($occurrences);
-    }
-
-    /**
-     * @param list<array{index: int, declared: bool}> $occurrences
-     *
-     * @return array{declarations: int, reads: list<int>}
-     */
-    private function partition(array $occurrences): array
-    {
-        $declarations = 0;
-        $reads = [];
-
-        foreach ($occurrences as $occurrence) {
-            if ($occurrence['declared']) {
-                ++$declarations;
-
-                continue;
-            }
-
-            $reads[] = $occurrence['index'];
-        }
-
-        return ['declarations' => $declarations, 'reads' => $reads];
+        return \array_keys(\array_filter($depthAtSubject, static fn (int $depth): bool => 0 === $depth));
     }
 
     /**
