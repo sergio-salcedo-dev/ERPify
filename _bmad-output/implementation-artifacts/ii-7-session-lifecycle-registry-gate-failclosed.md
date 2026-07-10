@@ -224,9 +224,9 @@ intacto; la postura de cookie (`httpOnly` / `SameSite=lax` / `secure:auto`) **no
         al `SessionRepository` (Session). Verificar que **no** se rompe la de-auth nativa existente.
   - [ ] **Erasure/GDPR (Decisión K): DIFERIDO — bloqueado.** No existe hoy evento de borrado/erasure de `User` (ni
         use-case de hard-delete; `UserRepository::remove()` sin callers), así que **no hay disparador al que reaccionar**.
-        Crear un flujo de borrado de usuario está fuera del alcance de II-7. Diferido a un follow-up (junto con #468): al
-        introducirse el evento de erasure de `User`, añadir `SessionRepository::deleteForUser` + reactor de purga. Retención
-        documentada en `PRODUCTION_SECURITY_CHECKLIST.md` (T12).
+        Crear un flujo de borrado de usuario está fuera del alcance de II-7. Diferido a **#470**: al introducirse el
+        evento de erasure de `User`, añadir `SessionRepository::deleteForUser` + reactor de purga. Retención documentada
+        en `PRODUCTION_SECURITY_CHECKLIST.md` (T12).
 - [x] **T9 — `GET /api/me` + de-mock del cliente + reflejo gate-401 + «mis sesiones» (AC9 · Decisiones F, Fork-3)**
   - [x] **Backend `GET /api/me`** (nuevo, mínimo): devuelve identidad + **roles REALES** del `SecurityUser` (id, email,
         roles — **lee lo que ya existe, NO fabricar**). Gateado por el `SessionAdmissionGate` como cualquier `^/api` (sin
@@ -556,7 +556,7 @@ Claude Opus 4.8 (1M context) — BMAD dev-story workflow.
 1. **TTL de sesión = 7 días absolutos** (`StartSession::TTL_SPEC='P7D'`, constante nombrada). No hay idle-timeout
    (`lastSeenAt` es telemetría, no input del gate), así que este cap es el único límite. La historia decía «TTL» sin número.
 2. **K (purga on-erasure) DIFERIDA — bloqueada:** no existe evento de erasure/borrado de `User` (ni use-case; `remove()`
-   sin callers). Diferida a follow-up con #468; retención documentada. Sin código muerto (quité `deleteForUser` del puerto).
+   sin callers). Diferida a **#470**; retención documentada. Sin código muerto (quité `deleteForUser` del puerto).
 3. **`lastSeenAt` mapeado pasivo (NOT NULL, init=`createdAt`)** en vez de no-mapeado (Decisión E, letra): PHPStan max
    rechaza una columna mapeada nunca-leída/escrita, y la nota de E prueba que mapear es seguro (UPDATE parcial por columna).
    Honra el *espíritu* de E (sin churn de heartbeat; no hay heartbeat en II-7). Getter para la futura proyección.

@@ -257,8 +257,9 @@ you change anything here.
       consent. **Retention policy:** the native GC prunes the file store, **not** this table — a prune command
       (`REVOKED` older than 30 days; `ACTIVE` whose `expiresAt` is older than 90 days; immediate deletion on subject
       erasure) is follow-up [#468](https://github.com/sergio-salcedo-dev/ERPify/issues/468). Because there is no
-      physical FK on `user_id`, a user hard-delete does not cascade — the purge-on-erasure reactor is deferred with
-      #468 (no user-erasure event exists yet). **Deploy note (one-time):** native sessions minted **before** this
+      physical FK on `user_id`, a user hard-delete does not cascade — the purge-on-erasure reactor is deferred to
+      [#470](https://github.com/sergio-salcedo-dev/ERPify/issues/470) (no user-erasure event exists yet). **Deploy
+      note (one-time):** native sessions minted **before** this
       ships carry no `iamSessionId`, so the gate 401s them — a single forced global logout at the II-7 deploy
       (acceptable, named).
 
