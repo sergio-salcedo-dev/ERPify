@@ -6,7 +6,7 @@ namespace Erpify\Tests\Unit\Iam\Identity\Domain\Exception;
 
 use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
 use Erpify\Iam\Identity\Domain\Exception\InvalidIdentityTransition;
-use Erpify\Shared\ErrorContract\Domain\Exception\ClientError;
+use Erpify\Shared\ErrorContract\Domain\Exception\Conflict;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -28,12 +28,12 @@ final class InvalidIdentityTransitionTest extends TestCase
     }
 
     #[Test]
-    public function itIsMarkerLessSoThePipelineMapsItToAServerFault(): void
+    public function itIsAConflictSoThePipelineMapsItToA409(): void
     {
-        // No ClientError marker: an illegal transition is an internal precondition fault, not a 4xx client
-        // error, so the RFC 9457 pipeline maps it to a generic 500 and keeps it Sentry-visible.
-        $this->assertFalse(
-            (new ReflectionClass(InvalidIdentityTransition::class))->implementsInterface(ClientError::class),
+        // A Conflict marker (like LastActiveAdministratorProtected): an illegal transition is a well-formed,
+        // authorized request colliding with the aggregate's state, which the RFC 9457 pipeline maps to 409.
+        $this->assertTrue(
+            (new ReflectionClass(InvalidIdentityTransition::class))->implementsInterface(Conflict::class),
         );
     }
 }
