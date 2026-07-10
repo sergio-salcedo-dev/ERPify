@@ -156,9 +156,9 @@ describe("AuthProvider", () => {
     const { result } = renderAuth();
     await waitFor(() => expect(result.current.status).toBe(AuthStatus.AUTHENTICATED));
 
-    act(() => result.current.override({ user: { status: UserStatus.BLOCKED } }));
+    act(() => result.current.override({ user: { status: UserStatus.SUSPENDED } }));
 
-    expect(result.current.session?.user.status).toBe(UserStatus.BLOCKED);
+    expect(result.current.session?.user.status).toBe(UserStatus.SUSPENDED);
     expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
   });
 

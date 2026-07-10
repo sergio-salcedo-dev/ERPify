@@ -13,3 +13,22 @@ Erpify\Organization\Membership\Domain\Entity\Membership:
                 - '@user_mallory'
                 - '@the_organization'
                 - []
+    membership_ingrid:
+        # Provisioned at invitation time — an INVITED identity already belongs to the org before it activates.
+        __factory:
+            'Erpify\Tests\DataFixtures\MembershipFixtureFactory::create':
+                - '@user_ingrid'
+                - '@the_organization'
+                - ['VIEWER']
+    membership_sam:
+        __factory:
+            'Erpify\Tests\DataFixtures\MembershipFixtureFactory::create':
+                - '@user_sam'
+                - '@the_organization'
+                - ['MANAGER']
+    membership_dan:
+        __factory:
+            'Erpify\Tests\DataFixtures\MembershipFixtureFactory::create':
+                - '@user_dan'
+                - '@the_organization'
+                - ['MANAGER']

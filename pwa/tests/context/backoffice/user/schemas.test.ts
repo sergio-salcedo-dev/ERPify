@@ -27,13 +27,13 @@ describe("auth schemas", () => {
     const bad = UserCreateSchema.safeParse({
       email: "a@b.com",
       roles: [],
-      status: UserStatus.PENDING,
+      status: UserStatus.INVITED,
     });
     expect(bad.success).toBe(false);
     const ok = UserCreateSchema.safeParse({
       email: "a@b.com",
       roles: [Role.ADMIN],
-      status: UserStatus.PENDING,
+      status: UserStatus.INVITED,
     });
     expect(ok.success).toBe(true);
   });

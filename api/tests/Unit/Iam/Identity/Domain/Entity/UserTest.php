@@ -29,7 +29,9 @@ final class UserTest extends TestCase
 
         $this->assertSame(UserMother::DEFAULT_ID, $user->getId());
         $this->assertSame('bob@erpify.test', $user->email());
-        $this->assertTrue($user->passwordHash()->equals($password));
+        $passwordHash = $user->passwordHash();
+        $this->assertInstanceOf(HashedPassword::class, $passwordHash);
+        $this->assertTrue($passwordHash->equals($password));
         $this->assertSame([Role::AUDIT_READER], $user->roles());
     }
 

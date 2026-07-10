@@ -21,6 +21,8 @@ final class UserMother
     public const string DEFAULT_HASH = 'hashed-password-placeholder';
 
     /**
+     * An already-credentialed, `ACTIVE` identity.
+     *
      * @param list<Role>|null $roles null defaults to a single AUDIT_READER; pass `[]` for a role-less user
      */
     public static function create(
@@ -35,5 +37,19 @@ final class UserMother
             $password ?? HashedPassword::fromHash(self::DEFAULT_HASH),
             ...($roles ?? [Role::AUDIT_READER]),
         );
+    }
+
+    /**
+     * An `INVITED` identity with no credential set yet — the pre-activation state used to exercise the
+     * nullable password and the pre-identity admission arm.
+     *
+     * @param list<Role>|null $roles null defaults to a single AUDIT_READER; pass `[]` for a role-less user
+     */
+    public static function invited(
+        string $id = self::DEFAULT_ID,
+        string $email = self::DEFAULT_EMAIL,
+        ?array $roles = null,
+    ): User {
+        return User::invite($id, $email, ...($roles ?? [Role::AUDIT_READER]));
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security;
 
+use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
 use Erpify\Iam\Identity\Domain\Enum\Role;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Infrastructure\Security\SecurityUser;
@@ -31,6 +32,15 @@ final class SecurityUserTest extends TestCase
         $this->assertSame('the-stored-hash', $securityUser->getPassword());
     }
 
+    public function testHasNoPasswordWhenTheIdentityHasNotSetOne(): void
+    {
+        // An INVITED identity has no credential yet; the credentials check treats a null password as
+        // "cannot authenticate" (the pre-auth arm stops it earlier still).
+        $securityUser = new SecurityUser(UserMother::invited());
+
+        $this->assertNull($securityUser->getPassword());
+    }
+
     public function testMapsDomainRolesToPrefixedSymfonyRoles(): void
     {
         $securityUser = new SecurityUser(UserMother::create(roles: [Role::AUDIT_READER]));
@@ -50,5 +60,12 @@ final class SecurityUserTest extends TestCase
         $securityUser = new SecurityUser(UserMother::create(id: UserMother::DEFAULT_ID));
 
         $this->assertSame(UserMother::DEFAULT_ID, $securityUser->id());
+    }
+
+    public function testExposesTheIdentityLifecycleStatusForAdmission(): void
+    {
+        $securityUser = new SecurityUser(UserMother::invited());
+
+        $this->assertSame(IdentityStatus::INVITED, $securityUser->status());
     }
 }

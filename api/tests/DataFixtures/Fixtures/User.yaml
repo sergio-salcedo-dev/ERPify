@@ -48,3 +48,33 @@ Erpify\Iam\Identity\Domain\Entity\User:
                 - 'edith@erpify.test'
                 - 'edith-password'
                 - ['EDITOR']
+    user_ingrid:
+        # INVITED: identity + membership provisioned by invitation, credential not set yet (no password). A
+        # login attempt is indistinguishable from an unknown email — pre-identity, so it collapses to a 401.
+        __factory:
+            'Erpify\Tests\DataFixtures\UserFixtureFactory::create':
+                - '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a60'
+                - 'ingrid@erpify.test'
+                - 'ingrid-password'
+                - ['VIEWER']
+                - 'INVITED'
+    user_sam:
+        # SUSPENDED with a correct credential: authenticates (identity proven), then hits the post-identity
+        # wall — 403 account-suspended, and no session cookie is set.
+        __factory:
+            'Erpify\Tests\DataFixtures\UserFixtureFactory::create':
+                - '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a61'
+                - 'sam@erpify.test'
+                - 'sam-password'
+                - ['MANAGER']
+                - 'SUSPENDED'
+    user_dan:
+        # DEACTIVATED with a correct credential: authenticates, then hits the generic 403 forbidden wall (no
+        # actionable next step), again without any session.
+        __factory:
+            'Erpify\Tests\DataFixtures\UserFixtureFactory::create':
+                - '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a62'
+                - 'dan@erpify.test'
+                - 'dan-password'
+                - ['MANAGER']
+                - 'DEACTIVATED'

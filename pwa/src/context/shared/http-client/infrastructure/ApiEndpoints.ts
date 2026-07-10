@@ -38,6 +38,8 @@ export const API_ENDPOINTS = {
   BACKOFFICE: {
     HEALTH: `${BACKOFFICE_PREFIX}/health`,
     HEALTH_DATABASE: `${BACKOFFICE_PREFIX}/health/database`,
+    // Session sign-in — Symfony route name `identity_login` (204 on success).
+    LOGIN: `${BACKOFFICE_PREFIX}/login`,
     BANKS: {
       LIST: `${BACKOFFICE_PREFIX}/banks`,
       COUNT: `${BACKOFFICE_PREFIX}/banks/count`,

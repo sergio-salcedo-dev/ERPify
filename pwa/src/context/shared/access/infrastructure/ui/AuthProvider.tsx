@@ -36,8 +36,8 @@ const SEED_SESSION: Session = {
  * Identity must be resolved before authorization is evaluated. Until the stored
  * session has been read, the provider is `hydrating` and guards render nothing —
  * no protected UI is shown on the strength of a default. Once resolved, an ACTIVE
- * session is `authenticated`; anything else (no session, BLOCKED, PENDING) is
- * `unauthenticated`.
+ * session is `authenticated`; anything else (no session, INVITED, SUSPENDED,
+ * DEACTIVATED) is `unauthenticated`.
  */
 export const AuthStatus = {
   HYDRATING: "hydrating",

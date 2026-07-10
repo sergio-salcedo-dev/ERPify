@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useZodForm } from "@/context/shared/validation/infrastructure";
@@ -7,9 +8,13 @@ import {
   LoginSchema,
   type LoginFormValues,
 } from "@/context/backoffice/user/application/schemas/auth/LoginSchema";
+import { container } from "@/context/shared/dependency-injection/infrastructure/Container";
+import type { LoginRepository } from "@/context/backoffice/user/domain/LoginRepository";
+import { LoginOutcomeKind, type LoginOutcome } from "@/context/backoffice/user/domain/LoginOutcome";
 import { FormField } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AccessWall, AccessWallVariant } from "@/context/shared/error/infrastructure/ui";
 import { useSession } from "@/context/shared/access/application/useSession";
 import { UserStatus } from "@/context/shared/access/domain/UserStatus";
 import { Role } from "@/context/shared/access/domain/Role";
@@ -23,32 +28,79 @@ import { safeInternalPath } from "@/context/shared/navigation/domain/safeInterna
 export function LoginForm() {
   const router = useRouter();
   const { login } = useSession();
+  const [wall, setWall] = useState<AccessWallVariant | null>(null);
+  const [credentialsError, setCredentialsError] = useState(false);
+  const [requestFailed, setRequestFailed] = useState(false);
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useZodForm<LoginFormValues>(LoginSchema, { defaultValues: { email: "", password: "" } });
 
-  const onSubmit = handleSubmit((values) => {
-    // Mocked: no validation, seed an ADMIN identity from the typed email. The
-    // password is never stored.
-    login({
-      id: uuidV7(),
-      email: values.email,
-      status: UserStatus.ACTIVE,
-      roles: [Role.ADMIN],
-      permissions: [PERMISSION_WILDCARD],
-    });
-    toastNotifier.success("Signed in");
-    // Return to the deep link RequireAuth stashed in `?next=`, falling back to
-    // the back-office root. safeInternalPath rejects any off-origin target.
-    const next = new URLSearchParams(globalThis.location.search).get("next");
-    router.push(safeHref(safeInternalPath(next, Routes.BACKOFFICE)));
+  const onSubmit = handleSubmit(async (values) => {
+    setCredentialsError(false);
+    setRequestFailed(false);
+    const repo = container.get<LoginRepository>("BackOfficeLoginRepository");
+    let outcome: LoginOutcome;
+    try {
+      outcome = await repo.login({ email: values.email, password: values.password });
+    } catch {
+      // A network/transport failure is not a login outcome; surface a neutral,
+      // retryable error instead of leaving the form silently unresponsive.
+      setRequestFailed(true);
+      return;
+    }
+
+    if (outcome.kind === LoginOutcomeKind.AUTHENTICATED) {
+      // Identity and roles stay mocked (ADMIN + wildcard) until a who-am-i
+      // endpoint exists; deferred with the wider session de-mock. The 204 has
+      // already set the httpOnly session cookie server-side.
+      login({
+        id: uuidV7(),
+        email: values.email,
+        status: UserStatus.ACTIVE,
+        roles: [Role.ADMIN],
+        permissions: [PERMISSION_WILDCARD],
+      });
+      toastNotifier.success("Signed in");
+      // Return to the deep link RequireAuth stashed in `?next=`, falling back to
+      // the back-office root. safeInternalPath rejects any off-origin target.
+      const next = new URLSearchParams(globalThis.location.search).get("next");
+      router.push(safeHref(safeInternalPath(next, Routes.BACKOFFICE)));
+      return;
+    }
+    if (outcome.kind === LoginOutcomeKind.SUSPENDED) {
+      setWall(AccessWallVariant.SUSPENDED);
+      return;
+    }
+    if (outcome.kind === LoginOutcomeKind.DEACTIVATED) {
+      setWall(AccessWallVariant.DEACTIVATED);
+      return;
+    }
+    setCredentialsError(true);
   });
+
+  if (wall) {
+    return <AccessWall variant={wall} />;
+  }
 
   return (
     <form onSubmit={onSubmit} className="space-y-4" noValidate data-testid="login-form">
       <h1 className="text-foreground text-xl font-semibold">Sign in</h1>
+      {credentialsError ? (
+        <p role="alert" className="text-danger-strong text-sm" data-testid="login-form__error">
+          Invalid email or password.
+        </p>
+      ) : null}
+      {requestFailed ? (
+        <p
+          role="alert"
+          className="text-danger-strong text-sm"
+          data-testid="login-form__request-error"
+        >
+          Something went wrong. Please try again.
+        </p>
+      ) : null}
       <FormField name="email" label="Email" required error={errors.email?.message}>
         <Input
           type="email"

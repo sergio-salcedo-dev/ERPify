@@ -35,6 +35,8 @@ import { UpdateBankAccount } from "../../../backoffice/bankaccount/application/U
 import { ChangeBankAccountStatus } from "../../../backoffice/bankaccount/application/ChangeBankAccountStatus";
 import { DeleteBankAccount } from "../../../backoffice/bankaccount/application/DeleteBankAccount";
 import { InMemoryUserRepository } from "../../../backoffice/user/infrastructure/InMemoryUserRepository";
+import { ApiLoginRepository } from "../../../backoffice/user/infrastructure/ApiLoginRepository";
+import type { LoginRepository } from "../../../backoffice/user/domain/LoginRepository";
 import { InMemoryResourceNavigator } from "../../../shared/resource/infrastructure/InMemoryResourceNavigator";
 import type { DebugTokenObserver } from "@/context/shared/debug-token/domain/DebugTokenObserver";
 import { EventTargetDebugTokenObserver } from "@/context/shared/debug-token/infrastructure/EventTargetDebugTokenObserver";
@@ -181,5 +183,12 @@ container.bind("BackOfficeUserRepository").toConstantValue(userRepository);
 container
   .bind("BackOfficeUserSearchNavigator")
   .toConstantValue(new InMemoryResourceNavigator(userRepository));
+
+// Session sign-in: a real HTTP adapter over the injected HttpClient,
+// which the container binds to MockHttpClient under test.
+container
+  .bind<LoginRepository>("BackOfficeLoginRepository")
+  .to(ApiLoginRepository)
+  .inSingletonScope();
 
 export { container };

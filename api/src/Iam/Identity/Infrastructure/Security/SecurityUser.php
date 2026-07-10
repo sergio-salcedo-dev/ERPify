@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Iam\Identity\Infrastructure\Security;
 
 use Erpify\Iam\Identity\Domain\Entity\User;
+use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
 use Erpify\Iam\Identity\Domain\Enum\Role;
 use Override;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
@@ -29,10 +30,16 @@ final readonly class SecurityUser implements UserInterface, PasswordAuthenticate
         return $this->user->email();
     }
 
+    /**
+     * `?string` because an `INVITED` identity has no credential yet: the base
+     * {@see PasswordAuthenticatedUserInterface::getPassword()} contract is already nullable, and the
+     * firewall's credentials check treats a null password as "cannot authenticate" — an `INVITED` login is
+     * additionally stopped earlier by the user checker's pre-auth arm, before any password verification.
+     */
     #[Override]
-    public function getPassword(): string
+    public function getPassword(): ?string
     {
-        return $this->user->passwordHash()->toString();
+        return $this->user->passwordHash()?->toString();
     }
 
     /**
@@ -45,6 +52,15 @@ final readonly class SecurityUser implements UserInterface, PasswordAuthenticate
             static fn (Role $role): string => 'ROLE_' . $role->value,
             $this->user->roles(),
         );
+    }
+
+    /**
+     * The lifecycle state the admission {@see UserChecker} reads to decide whether this identity may be
+     * admitted to a session (only `ACTIVE` is).
+     */
+    public function status(): IdentityStatus
+    {
+        return $this->user->status();
     }
 
     /**

@@ -30,7 +30,7 @@ describe("authorize", () => {
   it("denies when status is not ACTIVE, even with the wildcard", () => {
     expect(
       authorize(
-        session({ user: { ...session().user, status: UserStatus.BLOCKED } }),
+        session({ user: { ...session().user, status: UserStatus.SUSPENDED } }),
         Permission.USERS_READ,
       ),
     ).toBe(false);
