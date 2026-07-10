@@ -38,10 +38,10 @@ cualquier fraseo previo del cuerpo) y **correcciones factuales** aplicadas inlin
 
 **Riesgos — disposición ratificada:**
 
-- **O1 · GC del registro → follow-up trazado + retención documentada.** `iam_session` NO lo poda el GC nativo (limpia el
-  store de ficheros). **Issue de follow-up** con un comando de poda (`REVOKED` > 30d; `ACTIVE` con `expiresAt < now - 90d`;
-  borrado inmediato tras erasure) + retención en `PRODUCTION_SECURITY_CHECKLIST.md`. No bloquea II-7, pero la **política se
-  documenta ahora** (no shippear IP sin política de retención).
+- **O1 · GC del registro → follow-up #468 + retención documentada.** `iam_session` NO lo poda el GC nativo (limpia el
+  store de ficheros). **Issue [#468](https://github.com/sergio-salcedo-dev/ERPify/issues/468)** para el comando de poda
+  (`REVOKED` > 30d; `ACTIVE` con `expiresAt < now - 90d`; borrado inmediato tras erasure). No bloquea II-7, pero la
+  **política se documenta ahora** con II-7 (no shippear IP sin política de retención) — ver T12.
 - **O2 · Fallo en el acuñado = fail-closed estricto.** Si `StartSession` lanza, el listener hace **`$session->invalidate()`
   + 503** — «si no existe `Session`, no existe sesión». Symfony no revierte la cookie nativa solo → invalidar explícito.
 - **O3 · Sentry flood.** El 503 del store-caído llega a Sentry por diseño; **dedup/fingerprint antes de prod**. Test unit:
@@ -250,9 +250,11 @@ intacto; la postura de cookie (`httpOnly` / `SameSite=lax` / `secure:auto`) **no
 - [ ] **T12 — Docs + follow-ups de las decisiones de revisión (G2/G3/O1)**
   - [ ] **ADR D8 (G2): YA enmendado** en esta rama (`docs/adr/identity-invitation-lifecycle.md`: `status: Active|Revoked` +
         `expiresAt`; `Expired`-persistido a *Discarded*) — verificar que sigue coherente al cerrar la story.
-  - [ ] **Retención `iam_session` (O1/G3):** documentar la política en `PRODUCTION_SECURITY_CHECKLIST.md` (IP = PII
-        operacional, interés legítimo; `REVOKED` > 30d, `ACTIVE` con `expiresAt < now - 90d`, borrado inmediato tras
-        erasure) y **abrir issue de follow-up** para el comando de poda (fuera de alcance de II-7, pero trazado).
+  - [ ] **Retención `iam_session` (O1/G3) — AL IMPLEMENTAR II-7:** como II-7 ya shippea el almacenamiento de `ip` (PII
+        operacional), **documentar en `PRODUCTION_SECURITY_CHECKLIST.md`** la política de retención + base de licitud
+        (interés legítimo; `REVOKED` > 30d, `ACTIVE` con `expiresAt < now - 90d`, borrado inmediato tras erasure) y
+        **enlazar #468 en la PR** (`Relates to #468`). El **comando de poda** en sí va en
+        [#468](https://github.com/sergio-salcedo-dev/ERPify/issues/468) (follow-up fuera de alcance de II-7).
   - [ ] **Error contract (T7/O3):** al añadir el marker `ServiceUnavailable`, actualizar `docs/api-error-contract.md`
         (NFR26) → `make php.lint.error-contract` verde.
 
