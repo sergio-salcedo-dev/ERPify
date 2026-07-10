@@ -479,3 +479,7 @@ deptrac:
             - Erpify\Organization\Organization\Domain\Repository\OrganizationRepository
         Erpify\Iam\Identity\Infrastructure\Cli\CreateInitialAdministratorCommand:
             - Erpify\Organization\Membership\Application\GrantMembership
+        Erpify\Iam\Identity\Infrastructure\Security\SessionMintingSuccessListener:
+            - Erpify\Iam\Session\Application\StartSession
+            - Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable
+            - Erpify\Organization\Membership\Application\FindUserOrganizationId

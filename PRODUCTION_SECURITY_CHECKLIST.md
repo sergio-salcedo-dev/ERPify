@@ -246,6 +246,21 @@ you change anything here.
       migration. Media/object routes are protected (not public-by-design). Sessions use the **native file handler** (single-container only) — a shared
       handler (Postgres/Redis) is a follow-up before horizontal scaling. ADR
       [`docs/adr/auth-rbac-subsystem.md`](docs/adr/auth-rbac-subsystem.md).
+- [ ] **Server-side session registry & admission gate (`iam_session`):** login mints a `Session` aggregate and the
+      **Session Admission Gate** re-reads it on every authenticated `/api` request, so "authenticated" means "has a
+      **live, revocable** session", not merely "holds a cookie". The gate is **fail-closed**: a revoked or
+      time-expired session → **401 `session-expired`** (re-login), an unreachable store → **503 `service-unavailable`**
+      (never a fail-open pass-through). `iam_session` stores **operational PII** — `ip` (plaintext, short-lived) and
+      `device` (**normalised server-side** from the `User-Agent` to a bounded label, **never** the raw client string,
+      closing stored-injection + free-text PII). The table is **not** an `AuditedEntity`, so the IP never enters the
+      five-year audit trail; lawful basis is **legitimate interest** (account security / session management), not
+      consent. **Retention policy:** the native GC prunes the file store, **not** this table — a prune command
+      (`REVOKED` older than 30 days; `ACTIVE` whose `expiresAt` is older than 90 days; immediate deletion on subject
+      erasure) is follow-up [#468](https://github.com/sergio-salcedo-dev/ERPify/issues/468). Because there is no
+      physical FK on `user_id`, a user hard-delete does not cascade — the purge-on-erasure reactor is deferred with
+      #468 (no user-erasure event exists yet). **Deploy note (one-time):** native sessions minted **before** this
+      ships carry no `iamSessionId`, so the gate 401s them — a single forced global logout at the II-7 deploy
+      (acceptable, named).
 
 ## 7. Deploy & verify
 

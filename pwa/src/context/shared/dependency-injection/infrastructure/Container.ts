@@ -37,6 +37,10 @@ import { DeleteBankAccount } from "../../../backoffice/bankaccount/application/D
 import { InMemoryUserRepository } from "../../../backoffice/user/infrastructure/InMemoryUserRepository";
 import { ApiLoginRepository } from "../../../backoffice/user/infrastructure/ApiLoginRepository";
 import type { LoginRepository } from "../../../backoffice/user/domain/LoginRepository";
+import { ApiIdentityRepository } from "@/context/shared/access/infrastructure/ApiIdentityRepository";
+import type { IdentityRepository } from "@/context/shared/access/domain/IdentityRepository";
+import { ApiSessionsRepository } from "@/context/shared/access/infrastructure/ApiSessionsRepository";
+import type { SessionsRepository } from "@/context/shared/access/domain/SessionsRepository";
 import { InMemoryResourceNavigator } from "../../../shared/resource/infrastructure/InMemoryResourceNavigator";
 import type { DebugTokenObserver } from "@/context/shared/debug-token/domain/DebugTokenObserver";
 import { EventTargetDebugTokenObserver } from "@/context/shared/debug-token/infrastructure/EventTargetDebugTokenObserver";
@@ -189,6 +193,17 @@ container
 container
   .bind<LoginRepository>("BackOfficeLoginRepository")
   .to(ApiLoginRepository)
+  .inSingletonScope();
+
+// Identity / session subsystem: the AuthProvider hydrates from `/me`, and the
+// "My sessions" surface reads/revokes the user's own session registry.
+container
+  .bind<IdentityRepository>("IdentityRepository")
+  .to(ApiIdentityRepository)
+  .inSingletonScope();
+container
+  .bind<SessionsRepository>("SessionsRepository")
+  .to(ApiSessionsRepository)
   .inSingletonScope();
 
 export { container };

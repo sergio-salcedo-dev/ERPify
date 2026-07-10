@@ -419,17 +419,17 @@ final class ExceptionResponderTest extends TestCase
         $exceptionResponder = $this->makeListener($bufferingLogger);
         $exceptionEvent = $this->makeEvent(
             '/api/v1/anything',
-            new HttpException(503, 'maintenance window'),
+            new HttpException(502, 'upstream failed'),
         );
 
         $exceptionResponder($exceptionEvent);
 
         $logRecord = $this->singleLogRecord($bufferingLogger);
         $this->assertSame(LogLevel::ERROR, $logRecord['level']);
-        $this->assertSame(503, $logRecord['context']['status']);
+        $this->assertSame(502, $logRecord['context']['status']);
         $this->assertSame('http-error', $logRecord['context']['type']);
         $this->assertSame(HttpException::class, $logRecord['context']['exception_class']);
-        $this->assertSame('maintenance window', $logRecord['context']['exception_message']);
+        $this->assertSame('upstream failed', $logRecord['context']['exception_message']);
     }
 
     public function testLogRecordIsEmittedWithLevelCriticalForUnhandledRuntimeException(): void

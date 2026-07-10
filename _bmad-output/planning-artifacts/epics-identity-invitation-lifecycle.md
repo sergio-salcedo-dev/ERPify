@@ -205,7 +205,7 @@ no offline-first».
 
 NFR10 (Observabilidad / auditoría de eventos de seguridad): los eventos de seguridad relevantes —
 `InvitationCreated/Sent`, `InvitationResent`, `InvitationRevoked`, `InvitationExpired`, `InvitationAccepted`,
-`PasswordResetRequested`, `PasswordResetCompleted`, `SessionCreated`, `SessionRevoked`, `AllSessionsRevoked`,
+`PasswordResetRequested`, `PasswordResetCompleted`, `SessionStarted`, `SessionRevoked`, `AllSessionsRevoked`,
 `UserSuspended`, `UserDeactivated`, `AccountLocked`— deben ser **observables y auditables** (**no meros logs**):
 emitidos como **eventos de dominio** por el `EventBus` transaccional (Doctrine transport = outbox) y consumibles por el
 **audit trail** regulatorio y por reactores (el `SecurityEmail` async ya es uno). Encaja con el diseño basado en
@@ -663,7 +663,7 @@ revoke-all, revoke-current, reset, suspend y deactivate.*
 - **SI-11:** toda request autenticada atraviesa el gate; si no puede decidir (store caído), **no continúa** (fail-closed, TCB).
 - Ninguna `Session` con estado ≠ `Active` alcanza un controlador (la revocación **lógica** basta porque el gate es la frontera).
 - El dominio **nunca** aprende el session id del framework (**NFR11** — `iamSessionId` en el bag es el único acoplamiento a Infra).
-- Los eventos de sesión (`SessionCreated`/`SessionRevoked`/`AllSessionsRevoked`) son observables (NFR10).
+- Los eventos de sesión (`SessionStarted`/`SessionRevoked`/`AllSessionsRevoked`) son observables (NFR10).
 
 **Acceptance Criteria:**
 

@@ -71,6 +71,13 @@ export const API_ENDPOINTS = {
       FRANKENPHP_HOT_RELOAD: `${FRONTOFFICE_PREFIX}/dev/frankenphp-hot-reload`,
     },
   },
+  // Identity / session subsystem — mounted at the v1 root (not under a portal
+  // prefix): the signed-in user reads their own identity and session registry.
+  IDENTITY: {
+    ME: `${API_PREFIX_V1}/me`,
+    SESSIONS: `${API_PREFIX_V1}/sessions`,
+    SESSIONS_REVOKE_OTHERS: `${API_PREFIX_V1}/sessions/revoke-others`,
+  },
 } as const;
 
 export type ApiEndpoints = typeof API_ENDPOINTS;

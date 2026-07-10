@@ -4,12 +4,17 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional;
 
+use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Iam\Identity\Domain\Email;
 use Erpify\Iam\Identity\Domain\Enum\Role;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Iam\Identity\Infrastructure\Security\SecurityUser;
+use Erpify\Iam\Session\Domain\Entity\Session;
+use Erpify\Iam\Session\Domain\Repository\SessionRepository;
+use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Tests\DataFixtures\UserFixtureFactory;
+use RuntimeException;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Component\Uid\Uuid;
 
@@ -28,6 +33,14 @@ use Symfony\Component\Uid\Uuid;
 trait AuthenticatesFunctionalRequests
 {
     private const string FUNCTIONAL_USER_EMAIL = 'functional@erpify.test';
+
+    private const string FUNCTIONAL_SESSION_BAG_KEY = 'iamSessionId';
+
+    /**
+     * A stand-in organization id for the minted session's admission context — the session references it by id
+     * with no physical FK, so it needs no seeded organization row.
+     */
+    private const string FUNCTIONAL_ORGANIZATION_ID = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a50';
 
     private function authenticateClient(KernelBrowser $client): void
     {
@@ -66,5 +79,38 @@ trait AuthenticatesFunctionalRequests
         }
 
         $client->loginUser(new SecurityUser($user), 'main');
+        $this->seatRegistrySession($client, $user->getId() ?? throw new RuntimeException('Functional user has no id.'));
+    }
+
+    /**
+     * The Session Admission Gate requires a live registry session for every authenticated request; mint one for
+     * the functional user and stash its correlation in the session the login seated the token in — the same
+     * coupling real login's minting writes.
+     */
+    private function seatRegistrySession(KernelBrowser $client, string $userId): void
+    {
+        $container = static::getContainer();
+        $sessions = $container->get(SessionRepository::class);
+        self::assertInstanceOf(SessionRepository::class, $sessions);
+
+        $sessionId = SessionId::generate();
+        $session = Session::start(
+            $sessionId->toString(),
+            $userId,
+            self::FUNCTIONAL_ORGANIZATION_ID,
+            'Functional test client',
+            '127.0.0.1',
+            new DateTimeImmutable('+1 day'),
+        );
+        $session->pullDomainEvents();
+
+        $sessions->save($session);
+
+        $httpSession = $client->getSession();
+
+        if ($httpSession instanceof \Symfony\Component\HttpFoundation\Session\SessionInterface) {
+            $httpSession->set(self::FUNCTIONAL_SESSION_BAG_KEY, $sessionId->toString());
+            $httpSession->save();
+        }
     }
 }

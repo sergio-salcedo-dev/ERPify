@@ -1,17 +1,19 @@
 import type { Identity } from "./Identity";
-import type { Role } from "./Role";
 import type { HeldPermission } from "./Permission";
 import type { AccessContext } from "./AccessContext";
 import type { BusinessContext } from "./BusinessContext";
 
 /**
- * The frontend session model. Mocked this iteration; an `AuthProvider` seeds it
- * and the dev switcher mutates it. A real API session later fills the same shape
- * with no consumer change.
+ * The frontend session model. The `AuthProvider` fills it from the gated
+ * `/me` endpoint (the httpOnly session cookie is the source of truth); the
+ * dev switcher may mutate a live one.
+ *
+ * `roles` mirrors {@link Identity.roles}: the backend role names verbatim as a
+ * `string[]` (see {@link Identity}).
  */
 export interface Session {
   user: Identity;
-  roles: Role[];
+  roles: string[];
   permissions: HeldPermission[];
   context: AccessContext;
   business?: BusinessContext;

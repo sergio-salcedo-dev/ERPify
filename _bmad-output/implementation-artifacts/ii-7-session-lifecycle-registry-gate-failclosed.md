@@ -1,6 +1,10 @@
+---
+baseline_commit: 48576d66e59627019978be1221d766d383ef360d
+---
+
 # Story II-7: Session Lifecycle + Session Registry + Session Admission Gate fail-closed
 
-Status: ready-for-dev
+Status: review
 
 <!-- Validación opcional. Ejecuta `bmad-create-story` validate para un chequeo de calidad antes de dev-story. -->
 
@@ -141,12 +145,12 @@ intacto; la postura de cookie (`httpOnly` / `SameSite=lax` / `secure:auto`) **no
 
 ## Tasks / Subtasks
 
-- [ ] **T1 — `SessionStatus` enum (AC1)**
-  - [ ] `api/src/Iam/Session/Domain/Enum/SessionStatus.php` — backed enum `string` **`ACTIVE/REVOKED`** (G2: `EXPIRED`
+- [x] **T1 — `SessionStatus` enum (AC1)**
+  - [x] `api/src/Iam/Session/Domain/Enum/SessionStatus.php` — backed enum `string` **`ACTIVE/REVOKED`** (G2: `EXPIRED`
         fuera del modelo — la caducidad es un predicado temporal `expiresAt <= now`, no un estado persistido), vocabulario
         puro (sin ranking). Espeja el **patrón** de `IdentityStatus.php` (enum puro), no su lista de valores.
-- [ ] **T2 — Agregado `Session` + eventos (AC1, AC8)**
-  - [ ] `api/src/Iam/Session/Domain/Entity/Session.php` — `final class Session extends AggregateRoot`, ctor privado que
+- [x] **T2 — Agregado `Session` + eventos (AC1, AC8)**
+  - [x] `api/src/Iam/Session/Domain/Entity/Session.php` — `final class Session extends AggregateRoot`, ctor privado que
         canaliza invariantes + factoría estática `start(userId, organizationId, device, ip, expiresAt)` (nace `ACTIVE`,
         fija `expiresAt` **absoluto NOT NULL**, `record(new SessionStarted(...))`); **única transición** `revoke()`
         (`ACTIVE→REVOKED`, `record(SessionRevoked)`) con `guardTransitionTo()` que rechaza ilegales
@@ -154,21 +158,21 @@ intacto; la postura de cookie (`httpOnly` / `SameSite=lax` / `secure:auto`) **no
         `isExpired(now)` / la query del gate, no una transición persistida; **no** hay evento `SessionExpired`. **`lastSeenAt`
         NO es estado del agregado** (Decisión E): el agregado **no** lo mapea ni tiene `touch()` (telemetría, se escribe por
         UPDATE DBAL dirigido y se lee en la proyección). Espeja `User.php` (ctor-funnel + guardas).
-  - [ ] Eventos `Domain/Event/{SessionStarted,SessionRevoked,AllSessionsRevoked}.php` — `extends DomainEvent`,
+  - [x] Eventos `Domain/Event/{SessionStarted,SessionRevoked,AllSessionsRevoked}.php` — `extends DomainEvent`,
         `aggregateType()='Iam.Session'`, `toPrimitives()` **sin PII** (ids + `occurredAt`; no `ip`/`device` en el payload
         salvo necesidad de consumidor). Espeja `Iam/Identity/Domain/Event/UserSuspended.php`.
-- [ ] **T3 — Puerto `SessionRepository` + adapter Doctrine (AC1)**
-  - [ ] `api/src/Iam/Session/Domain/Repository/SessionRepository.php` — `save`, `findActiveById(SessionId): ?Session`
+- [x] **T3 — Puerto `SessionRepository` + adapter Doctrine (AC1)**
+  - [x] `api/src/Iam/Session/Domain/Repository/SessionRepository.php` — `save`, `findActiveById(SessionId): ?Session`
         (**G2:** «active» = `status=ACTIVE` **AND** `expires_at > now` — el predicado temporal va en la query, no una
         transición), `findByUserId(userId): list<Session>` (para «mis sesiones»; filtra igual el predicado), y las
         revocaciones (una / todas-menos-actual / todas — ver T8). Interfaz en Domain.
-  - [ ] `api/src/Iam/Session/Infrastructure/Persistence/Doctrine/DoctrineSessionRepository.php` — **por composición**
+  - [x] `api/src/Iam/Session/Infrastructure/Persistence/Doctrine/DoctrineSessionRepository.php` — **por composición**
         (`#[AsAlias(SessionRepository::class)]`, `EntityManagerInterface`, **no** `ServiceEntityRepository`). Espeja
         `DoctrineUserRepository`/`DoctrineMembershipRepository`. **O3:** convierte la `ConnectionException` DBAL en el
         marker de dominio `SessionStoreUnavailable` (`ServiceUnavailable`→503); si escapa cruda mapea a 500 (fallo abierto
         en semántica) — test unit que lo prueba.
-- [ ] **T4 — Migración: tabla del registro (AC1)**
-  - [ ] `make db.diff` → `api/migrations/2026/` creando `iam_session` (`id` GUID PK, `user_id` GUID, `organization_id`
+- [x] **T4 — Migración: tabla del registro (AC1)**
+  - [x] `make db.diff` → `api/migrations/2026/` creando `iam_session` (`id` GUID PK, `user_id` GUID, `organization_id`
         GUID, `status` `ACTIVE|REVOKED`, `created_at`, **`updated_at`** (lo fuerza `AggregateRoot`/`Timestamped`, ver
         `⟦rev⟧` Decisión G), `last_seen_at`, **`expires_at` NOT NULL** (G2), `revoked_at` nullable, `device`, `ip`).
         `user_id` **sin FK física** cross-sub-módulo (patrón `membership.user_id`; ver «Decisión G»). **`CREATE TABLE IF NOT
@@ -177,14 +181,14 @@ intacto; la postura de cookie (`httpOnly` / `SameSite=lax` / `secure:auto`) **no
         `device` son PII operacional** (NO «cero PII»): plaintext, **`Session` NO es `AuditedEntity`** ni lleva
         `#[PersonalData]` → la IP no entra en el audit-log de 5 años; `device` se **normaliza server-side** del `User-Agent`
         (nunca string libre del cliente). El mapping `Iam` de `doctrine.yaml` ya cubre `Iam\Session` (nada que registrar).
-- [ ] **T5 — Acuñar la `Session` en el login (AC2 parcial, AC8) — «Decisión B» + G1 + O2**
-  - [ ] **Read use-case en Organization (G1):** `api/src/Organization/Membership/Application/FindUserOrganizationId.php` —
+- [x] **T5 — Acuñar la `Session` en el login (AC2 parcial, AC8) — «Decisión B» + G1 + O2**
+  - [x] **Read use-case en Organization (G1):** `api/src/Organization/Membership/Application/FindUserOrganizationId.php` —
         fino, publicado, `(userId): string` (usa `MembershipRepository::findByUserId`; `null` → excepción de dominio).
         Añadir el seam `Identity→Organization` per-file a `.bounded-context-allowlist` + `deptrac.yaml skip_violations`.
-  - [ ] Caso de uso `api/src/Iam/Session/Application/StartSession.php` (`(userId, organizationId, device, ip, expiresAt)`:
+  - [x] Caso de uso `api/src/Iam/Session/Application/StartSession.php` (`(userId, organizationId, device, ip, expiresAt)`:
         mint `SessionId` v7 + `Session::start(...)` + `transactionManager->transactional(save + eventBus->publish(pull...))`).
         Espeja `ChangeUserStatus`/`CreateUser`. `expiresAt` = `SystemClock::now()` + TTL (dominio, UTC, nunca cliente).
-  - [ ] Listener sobre `Symfony\...\Security\Http\Event\LoginSuccessEvent` (**recomendado**, dispara **post-admisión**):
+  - [x] Listener sobre `Symfony\...\Security\Http\Event\LoginSuccessEvent` (**recomendado**, dispara **post-admisión**):
         toma `userId` **primitivo** del token, resuelve `organizationId` vía `FindUserOrganizationId` (G1), invoca
         `StartSession`, escribe la correlación en el bag (`$session->set('iamSessionId', $id)`), y **`LoginController` sigue
         devolviendo el 204 intacto**. **O2 — fail-closed estricto:** si `StartSession` (o la resolución de org) lanza,
@@ -192,8 +196,8 @@ intacto; la postura de cookie (`httpOnly` / `SameSite=lax` / `secure:auto`) **no
         sesión». El `userId` primitivo evita importar `SecurityUser` en `Session` (ver «Project Structure»). Verificar que
         `iamSessionId` **sobrevive** a la regeneración de id (`migrate` preserva atributos; listener a prioridad negativa,
         tras `SessionStrategyListener@0`) — anti-fijación.
-- [ ] **T6 — Session Admission Gate fail-closed (AC2, AC3, AC4) — «Decisión A»**
-  - [ ] `api/src/Iam/Session/Infrastructure/Security/SessionAdmissionGate.php` — listener `kernel.request` con
+- [x] **T6 — Session Admission Gate fail-closed (AC2, AC3, AC4) — «Decisión A»**
+  - [x] `api/src/Iam/Session/Infrastructure/Security/SessionAdmissionGate.php` — listener `kernel.request` con
         **`const PRIORITY` < 8** (post-`ContextListener` del firewall, pre-controlador), acotado a `^/api` con token
         autenticado. Lee `iamSessionId` del bag → `SessionRepository::findActiveById` (que ya aplica `status=ACTIVE AND
         expires_at > now`) → si null **lanza fail-closed**: `REVOKED`/expirada-por-tiempo/ausente → el marker de dominio
@@ -202,29 +206,32 @@ intacto; la postura de cookie (`httpOnly` / `SameSite=lax` / `secure:auto`) **no
         `UnauthenticatedAccessListener`); store-no-disponible → el **marker operacional 503** (T7). La excepción **no**
         lleva `AccessDeniedException` en su `previous` (el walk cycle-safe lo re-descubriría). Patrón de listener:
         `LoginOriginListener` (prio 9) + `UnauthenticatedAccessListener` (`const PRIORITY=40`, kernel.exception).
-- [ ] **T7 — Marker operacional 503-family (AC3) — «Decisión C»**
-  - [ ] `api/src/Shared/ErrorContract/Domain/Exception/<Name>.php` — marker interface que mapea a **503** y **NO extiende
+- [x] **T7 — Marker operacional 503-family (AC3) — «Decisión C»**
+  - [x] `api/src/Shared/ErrorContract/Domain/Exception/<Name>.php` — marker interface que mapea a **503** y **NO extiende
         `ClientError`** (el `MarkerStatusMapContractTest::testMarkerIsClientErrorIffStatusIs4xx` fuerza la decisión
         consciente: un 5xx llega a Sentry). Añadir el mapeo en `ProblemDetailsFactory::MARKER_STATUS_MAP` +
         `MARKER_DEFAULT_TYPE_MAP`. Actualizar [`docs/api-error-contract.md`](../../docs/api-error-contract.md) (NFR26,
         `type` neutro tipo `service-unavailable`) → `make php.lint.error-contract` verde.
-- [ ] **T8 — Revocación (AC6) + coherencia del camino nativo (AC7)**
-  - [ ] Casos de uso `Iam/Session/Application/{RevokeSession, RevokeOtherSessions, RevokeAllSessions}.php` (o uno
+- [x] **T8 — Revocación (AC6) + coherencia del camino nativo (AC7)**
+  - [x] Casos de uso `Iam/Session/Application/{RevokeSession, RevokeOtherSessions, RevokeAllSessions}.php` (o uno
         parametrizado por alcance) — una / todas-menos-actual (excluye el `iamSessionId` en curso) / todas. Cada uno
         `transactional(save/updateMany + publish)`; `RevokeAllSessions` emite `AllSessionsRevoked` (lo consumirá el reset
         de II-5). **Sin superficie HTTP de gestión de sesiones de terceros** (backoffice = slice diferido) — se ejercitan
         a nivel aplicación (tests) + la ruta «cerrar sesión / mis sesiones» del propio usuario (T9).
-  - [ ] **Camino nativo (AC7) — reactor, NO en `UserProvider` (Decisión J):** reactor sobre el `TokenDeauthenticatedEvent`
+  - [x] **Camino nativo (AC7) — reactor, NO en `UserProvider` (Decisión J):** reactor sobre el `TokenDeauthenticatedEvent`
         del firewall en `Iam/Session/Infrastructure` que marca la sesión afectada del registro en paso con la de-auth
         nativa (cambio de credencial), leyendo `userId`/`iamSessionId` primitivos — sin acoplar `UserProvider` (Identity)
         al `SessionRepository` (Session). Verificar que **no** se rompe la de-auth nativa existente.
-  - [ ] **Erasure/GDPR (Decisión K):** reactor sobre el borrado/erasure de `User` que **purga** sus filas `iam_session`
-        (sin FK física no cascadea → filas huérfanas con `userId`; familia del gap #376). Test que lo prueba.
-- [ ] **T9 — `GET /api/me` + de-mock del cliente + reflejo gate-401 + «mis sesiones» (AC9 · Decisiones F, Fork-3)**
-  - [ ] **Backend `GET /api/me`** (nuevo, mínimo): devuelve identidad + **roles REALES** del `SecurityUser` (id, email,
+  - [ ] **Erasure/GDPR (Decisión K): DIFERIDO — bloqueado.** No existe hoy evento de borrado/erasure de `User` (ni
+        use-case de hard-delete; `UserRepository::remove()` sin callers), así que **no hay disparador al que reaccionar**.
+        Crear un flujo de borrado de usuario está fuera del alcance de II-7. Diferido a un follow-up (junto con #468): al
+        introducirse el evento de erasure de `User`, añadir `SessionRepository::deleteForUser` + reactor de purga. Retención
+        documentada en `PRODUCTION_SECURITY_CHECKLIST.md` (T12).
+- [x] **T9 — `GET /api/me` + de-mock del cliente + reflejo gate-401 + «mis sesiones» (AC9 · Decisiones F, Fork-3)**
+  - [x] **Backend `GET /api/me`** (nuevo, mínimo): devuelve identidad + **roles REALES** del `SecurityUser` (id, email,
         roles — **lee lo que ya existe, NO fabricar**). Gateado por el `SessionAdmissionGate` como cualquier `^/api` (sin
         sesión viva → 401). Controlador + Resource DTO por vista; sin filtrar campos de auditoría.
-  - [ ] **Matar `SEED_SESSION`** (`AuthProvider.tsx` L22-33; el fallback se usa en L118/121/141) y la fabricación de roles
+  - [x] **Matar `SEED_SESSION`** (`AuthProvider.tsx` L22-33; el fallback se usa en L118/121/141) y la fabricación de roles
         tras el 204 (`LoginForm.tsx` L54-64) — **`⟦rev⟧` son TRES puntos, no dos**: falta **`DevSessionSwitcher.tsx`**, que
         lee `session.roles[0]`/permissions y asume una sesión sembrada; la firma `login(user: Identity, …)` del
         `AuthContextValue` es mock-shaped y cambia con la hidratación real. **Innegociable**: con el gate real, un ADMIN
@@ -232,30 +239,30 @@ intacto; la postura de cookie (`httpOnly` / `SameSite=lax` / `secure:auto`) **no
         el estado auth desde la **existencia real** de sesión vía `/api/me` (cold-load); `/api/me` KO → `unauthenticated →
         B1` (no spinner infinito). Mantener la forma de `Session.ts` (consumidores sin cambio); **no** guardar
         identidad/roles en `localStorage` como fuente de verdad.
-  - [ ] **Reflejo 401 centralizado** en el `FetchHttpClient` con **single-flight** (el 1er 401 del gate limpia la sesión
+  - [x] **Reflejo 401 centralizado** en el `FetchHttpClient` con **single-flight** (el 1er 401 del gate limpia la sesión
         de cliente + redirige a **B1 `/login?next=…&reason=session-expired`** vía `safeInternalPath`; los demás no-op →
         sin tormenta de 401). B1 muestra «tu sesión ha expirado» como `<p role="status" aria-live>`, **no** un 2º `<h1>`.
         `SignInRequiredScreen` queda como *fallback* de 401 en frío/SSR, **no** el camino diario (reconcilia AC9 vs T9).
-  - [ ] **«Mis sesiones» mínima** en **`context/shared/access`** (autoservicio de seguridad del usuario, **no** backoffice):
+  - [x] **«Mis sesiones» mínima** en **`context/shared/access`** (autoservicio de seguridad del usuario, **no** backoffice):
         lista de sesiones `ACTIVE` + «This device» **textual** (no solo color) + «cerrar las demás» (la fila actual **sin**
         «Close» genérico; separar «cerrar las demás» de «cerrar esta»). Reusa primitivas `@/components/erpify`, **sin**
         crear ni promover ninguna (Regla de Tres). Copy en inglés (registro de las pantallas enviadas), traducible; tras
         éxito, señal calmada (no toast). `make pwa.quality` + `make pwa.test` verdes.
-- [ ] **T10 — Tests (todos los AC)** — ver «Testing».
-- [ ] **T11 — Gates + verificación fresca** — `make php.behat.install` (worktree fresco; si el recipe borró el
+- [x] **T10 — Tests (todos los AC)** — ver «Testing».
+- [x] **T11 — Gates + verificación fresca** — `make php.behat.install` (worktree fresco; si el recipe borró el
       condicional FriendsOfBehat de `bundles.php`, restaurarlo, #429) → `make php.stan` (por fichero; si exit 139 →
       `PHP_SERVICE=messenger_worker`) → `make php.test` → `make php.quality` EXIT 0 → `make php.lint.error-contract` →
       `make php.psalm.taint` → `make pwa.quality` → `make pwa.test`. Verificar **fresco** sobre el path del worktree,
       confiar en el exit code recién impreso.
-- [ ] **T12 — Docs + follow-ups de las decisiones de revisión (G2/G3/O1)**
-  - [ ] **ADR D8 (G2): YA enmendado** en esta rama (`docs/adr/identity-invitation-lifecycle.md`: `status: Active|Revoked` +
+- [x] **T12 — Docs + follow-ups de las decisiones de revisión (G2/G3/O1)**
+  - [x] **ADR D8 (G2): YA enmendado** en esta rama (`docs/adr/identity-invitation-lifecycle.md`: `status: Active|Revoked` +
         `expiresAt`; `Expired`-persistido a *Discarded*) — verificar que sigue coherente al cerrar la story.
-  - [ ] **Retención `iam_session` (O1/G3) — AL IMPLEMENTAR II-7:** como II-7 ya shippea el almacenamiento de `ip` (PII
+  - [x] **Retención `iam_session` (O1/G3) — AL IMPLEMENTAR II-7:** como II-7 ya shippea el almacenamiento de `ip` (PII
         operacional), **documentar en `PRODUCTION_SECURITY_CHECKLIST.md`** la política de retención + base de licitud
         (interés legítimo; `REVOKED` > 30d, `ACTIVE` con `expiresAt < now - 90d`, borrado inmediato tras erasure) y
         **enlazar #468 en la PR** (`Relates to #468`). El **comando de poda** en sí va en
         [#468](https://github.com/sergio-salcedo-dev/ERPify/issues/468) (follow-up fuera de alcance de II-7).
-  - [ ] **Error contract (T7/O3):** al añadir el marker `ServiceUnavailable`, actualizar `docs/api-error-contract.md`
+  - [x] **Error contract (T7/O3):** al añadir el marker `ServiceUnavailable`, actualizar `docs/api-error-contract.md`
         (NFR26) → `make php.lint.error-contract` verde.
 
 ## Dev Notes
@@ -514,10 +521,82 @@ Estas resoluciones **superan** cualquier fraseo previo de las tareas/cruxes (p.e
 
 ### Agent Model Used
 
-<!-- rellena el dev-agent -->
+Claude Opus 4.8 (1M context) — BMAD dev-story workflow.
 
 ### Debug Log References
 
+- Gate + minting integran con la suite Behat sin regresión: la query del gate sobre `iam_session` se excluye del
+  presupuesto de queries (`TestDebugDataHolder::isSessionAdmissionLookup`, por backtrace del gate, no por tabla — la
+  lectura de negocio de «mis sesiones» sigue contando). `SecurityContext` (Behat) y `AuthenticatesFunctionalRequests`
+  (WebTestCase) siembran la correlación `iamSessionId` tras `loginUser`, o toda scenario/test autenticado 401ea.
+- Gotchas resueltos: PDepend no parsea `new X()->m()` (asignar a var); rector fuerza `assertSame` sobre objetos
+  DateTime → comparar `format('c')`; PHPMD CouplingBetweenObjects ≤12 en tests (gate test con stubs, happy-path a Behat).
+
 ### Completion Notes List
 
+- **Modelo (T1-T3):** `Iam/Session` agregado libre de framework (`ACTIVE→REVOKED`, terminal, guardado), `SessionId` VO
+  (NFR11 seam), `SessionStatus` (sin `EXPIRED`; caducidad = predicado `expiresAt <= now` en la query), 3 eventos por
+  outbox (R1, sin reactor R2), puerto + adapter Doctrine que convierte `ConnectionException`→`SessionStoreUnavailable`.
+- **Gate + minting (T5-T6):** `SessionAdmissionGate` (prio 7, `^/api`+fullFledged) con dos salidas distinguibles —
+  `SessionNoLongerActive` (`Unauthenticated`→401 `session-expired`) y `SessionStoreUnavailable` (`ServiceUnavailable`→503,
+  fail-closed). `SessionMintingSuccessListener` (`LoginSuccessEvent` prio -128, post-migrate) resuelve `organizationId`
+  vía `FindUserOrganizationId` (seam `Identity→Organization`) e invoca `StartSession` (seam `Identity→Session`); O2
+  fail-closed (`invalidate()`+503). 204 del login intacto.
+- **Error contract (T7):** marker `ServiceUnavailable` (503, único 5xx, no `ClientError`) + `session-expired`;
+  `ProblemDetailsFactory` + `MarkerStatusMapContractTest`/`ProblemDetailsFactoryTest` actualizados; doc NFR26.
+- **Revocación + AC7 (T8):** `RevokeSession` (idempotente), `RevokeOtherSessions`, `RevokeAllSessions` (bulk DQL UPDATE);
+  reactor `RevokeSessionOnTokenDeauthenticated` sobre el de-auth nativo del firewall.
+- **HTTP + PWA (T9):** `GET /api/v1/me`, `GET /api/v1/sessions`, `POST /api/v1/sessions/revoke-others`; PWA mata
+  `SEED_SESSION`, hidrata de `/me`, interceptor 401 single-flight → `/login?next=…&reason=session-expired`, «mis sesiones».
+- **Migración/docs (T4/T12):** `iam_session` sin FK física (erasure-first), idempotente/reversible; `api-error-contract.md`,
+  `PRODUCTION_SECURITY_CHECKLIST.md` (retención + interés legítimo + #468 + logout global one-time del deploy), ADR D8
+  verificado, `epics-…` reconciliado `SessionCreated`→`SessionStarted`.
+
+**Decisiones de dev a revisar por Sergio (defaults tomados, todos triviales de cambiar):**
+1. **TTL de sesión = 7 días absolutos** (`StartSession::TTL_SPEC='P7D'`, constante nombrada). No hay idle-timeout
+   (`lastSeenAt` es telemetría, no input del gate), así que este cap es el único límite. La historia decía «TTL» sin número.
+2. **K (purga on-erasure) DIFERIDA — bloqueada:** no existe evento de erasure/borrado de `User` (ni use-case; `remove()`
+   sin callers). Diferida a follow-up con #468; retención documentada. Sin código muerto (quité `deleteForUser` del puerto).
+3. **`lastSeenAt` mapeado pasivo (NOT NULL, init=`createdAt`)** en vez de no-mapeado (Decisión E, letra): PHPStan max
+   rechaza una columna mapeada nunca-leída/escrita, y la nota de E prueba que mapear es seguro (UPDATE parcial por columna).
+   Honra el *espíritu* de E (sin churn de heartbeat; no hay heartbeat en II-7). Getter para la futura proyección.
+4. **`RevokeAllSessions` provista + testeada** (consumidor II-5) aunque sin caller HTTP en II-7: implementable y mandada por T8.
+5. **Happy-path del gate** (admite sesión viva) cubierto por Behat (feature de sesión), no por unit (presupuesto PHPMD).
+
 ### File List
+
+**API — nuevo (`Iam/Session`):** `Domain/{SessionId, Enum/SessionStatus, Entity/Session, Repository/SessionRepository,
+Event/{SessionStarted,SessionRevoked,AllSessionsRevoked}, Exception/{InvalidSessionTransition,SessionNoLongerActive,
+SessionStoreUnavailable}}`, `Application/{CurrentSessionReference, StartSession, RevokeSession, RevokeOtherSessions,
+RevokeAllSessions, Resource/SessionResource}`, `Infrastructure/{Persistence/Doctrine/DoctrineSessionRepository,
+Security/{SymfonySessionCorrelationStore, SessionAdmissionGate, RevokeSessionOnTokenDeauthenticated},
+Controller/{MySessionsController, RevokeOtherSessionsController}, Http/SessionResourceMapper}`.
+
+**API — nuevo (otros):** `Iam/Identity/{Application/Resource/MeResource, Infrastructure/Http/MeResourceMapper,
+Infrastructure/Controller/MeController, Infrastructure/Security/{SessionMintingSuccessListener, UserAgentDeviceLabel}}`,
+`Organization/Membership/{Application/FindUserOrganizationId, Domain/Exception/MembershipNotFound}`,
+`Shared/ErrorContract/Domain/Exception/ServiceUnavailable`, `migrations/2026/Version20260710192657`.
+
+**API — modificado:** `config/routes.yaml`, `.bounded-context-allowlist`, `tools/deptrac/deptrac.yaml`,
+`Shared/ErrorContract/Application/ProblemDetailsFactory`, `config/reference.php` (regenerado).
+
+**Tests (nuevo/modificado):** unit de todo `Iam/Session` + `UserAgentDeviceLabelTest` + `MeResourceMapperTest` +
+`FindUserOrganizationIdTest` + `MembershipNotFoundTest`; `Functional/Iam/Session/DoctrineSessionRepositoryTest`;
+`features/backoffice/identity/session.feature`; `DataFixtures/{SessionFixtureFactory, Fixtures/Session.yaml}`;
+modificados `Behat/Context/SecurityContext`, `Functional/AuthenticatesFunctionalRequests`, `Doctrine/TestDebugDataHolder`,
+`MarkerStatusMapContractTest`, `ProblemDetailsFactoryTest`, `ExceptionResponderTest`.
+
+**PWA:** `context/shared/access/{domain/{Identity,Session,IdentityRepository,SessionSummary,SessionsRepository},
+application/{useSession,useMySessions}, infrastructure/{ApiIdentityRepository,ApiSessionsRepository,
+ui/{AuthProvider,DevSessionSwitcher,MySessions,index}}}`, `http-client/infrastructure/{ApiEndpoints,FetchHttpClient}`,
+`dependency-injection/infrastructure/Container`, `app/(auth)/_components/LoginForm` + tests.
+
+**Docs:** `docs/api-error-contract.md`, `PRODUCTION_SECURITY_CHECKLIST.md`,
+`_bmad-output/planning-artifacts/epics-identity-invitation-lifecycle.md`.
+
+## Change Log
+
+| Fecha      | Cambio                                                                                                  |
+|------------|---------------------------------------------------------------------------------------------------------|
+| 2026-07-10 | II-7 implementada: agregado `Session` + registro + Session Admission Gate fail-closed + PWA de-mock. Gates verdes. |
+| 2026-07-10 | K (purga on-erasure) diferida — sin evento de erasure de `User`. `RevokeAllSessions` provista para II-5. |

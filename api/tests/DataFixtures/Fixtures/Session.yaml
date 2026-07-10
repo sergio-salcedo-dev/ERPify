@@ -1,0 +1,34 @@
+Erpify\Iam\Session\Domain\Entity\Session:
+    # One live registry session per authenticatable Behat user, so every non-@anonymous scenario passes the
+    # Session Admission Gate. SecurityContext seats the matching id into the request session at login; seeding
+    # them as fixtures (not minting in the context) means a mid-scenario "reload fixtures" restores them.
+    session_alice:
+        __factory:
+            'Erpify\Tests\DataFixtures\SessionFixtureFactory::createActive':
+                - '0190d1e2-f3a4-7b5c-8d6e-1f2a3b4c5d01'
+                - '@user_alice'
+                - '@the_organization'
+    session_mallory:
+        __factory:
+            'Erpify\Tests\DataFixtures\SessionFixtureFactory::createActive':
+                - '0190d1e2-f3a4-7b5c-8d6e-1f2a3b4c5d02'
+                - '@user_mallory'
+                - '@the_organization'
+    session_trent:
+        __factory:
+            'Erpify\Tests\DataFixtures\SessionFixtureFactory::createActive':
+                - '0190d1e2-f3a4-7b5c-8d6e-1f2a3b4c5d03'
+                - '@user_trent'
+                - '@the_organization'
+    session_victor:
+        __factory:
+            'Erpify\Tests\DataFixtures\SessionFixtureFactory::createActive':
+                - '0190d1e2-f3a4-7b5c-8d6e-1f2a3b4c5d04'
+                - '@user_victor'
+                - '@the_organization'
+    session_edith:
+        __factory:
+            'Erpify\Tests\DataFixtures\SessionFixtureFactory::createActive':
+                - '0190d1e2-f3a4-7b5c-8d6e-1f2a3b4c5d05'
+                - '@user_edith'
+                - '@the_organization'

@@ -52,6 +52,21 @@ final class SecurityContext extends AbstractContext
 
     private const string ANONYMOUS_TAG = 'anonymous';
 
+    private const string SESSION_BAG_KEY = 'iamSessionId';
+
+    /**
+     * The deterministic registry-session id seeded per user in Session.yaml. Seating the matching id into the
+     * request session at login is what carries each authenticated scenario through the admission gate; keeping
+     * the rows in fixtures (not minting here) means a mid-scenario "reload fixtures" restores them.
+     */
+    private const array SESSION_ID_BY_EMAIL = [
+        self::DEFAULT_USER_EMAIL => '0190d1e2-f3a4-7b5c-8d6e-1f2a3b4c5d01',
+        self::ROLELESS_USER_EMAIL => '0190d1e2-f3a4-7b5c-8d6e-1f2a3b4c5d02',
+        self::GENERIC_TIER_USER_EMAIL => '0190d1e2-f3a4-7b5c-8d6e-1f2a3b4c5d03',
+        self::VIEWER_USER_EMAIL => '0190d1e2-f3a4-7b5c-8d6e-1f2a3b4c5d04',
+        self::EDITOR_USER_EMAIL => '0190d1e2-f3a4-7b5c-8d6e-1f2a3b4c5d05',
+    ];
+
     private ?InitializedSymfonyExtensionEnvironment $environment = null;
 
     public function __construct(private readonly UserRepository $users)
@@ -107,7 +122,19 @@ final class SecurityContext extends AbstractContext
             ));
         }
 
-        $this->client()->loginUser(new SecurityUser($user), self::FIREWALL);
+        $sessionId = self::SESSION_ID_BY_EMAIL[$email]
+            ?? throw new RuntimeException(\sprintf('No fixture registry session is seeded for "%s".', $email));
+
+        $client = $this->client();
+        $client->loginUser(new SecurityUser($user), self::FIREWALL);
+
+        // Production parity: an authenticated request must carry a live registry session or the admission gate
+        // 401s it. Stash the (fixture-seeded) session id in the very session the login seated the token in, so
+        // the next request the gate reads finds it — the same correlation real login's minting writes.
+        $httpSession = $client->getSession();
+        self::assertNotNull($httpSession);
+        $httpSession->set(self::SESSION_BAG_KEY, $sessionId);
+        $httpSession->save();
     }
 
     private function client(): KernelBrowser

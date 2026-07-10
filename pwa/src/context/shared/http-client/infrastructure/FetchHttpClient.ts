@@ -9,12 +9,45 @@ import {
   type HttpClient,
   type ResponseGuard,
 } from "../domain/HttpClient";
+import { HttpStatus } from "../domain/HttpStatus";
 import type { DebugTokenObserver } from "@/context/shared/debug-token/domain/DebugTokenObserver";
 import { NoopDebugTokenObserver } from "@/context/shared/debug-token/infrastructure/NoopDebugTokenObserver";
 import { uuidV7 } from "@/context/shared/uuid/infrastructure/uuidV7";
+import { Routes } from "@/context/shared/routing/domain/Routes";
+import { safeInternalPath } from "@/context/shared/navigation/domain/safeInternalPath";
+import { API_ENDPOINTS } from "./ApiEndpoints";
 
 function trimBase(url: string): string {
   return url.replace(/\/$/, "");
+}
+
+// Single-flight guard for the session-expired bounce: a burst of concurrent
+// 401s (e.g. a dashboard firing several gated requests at once) must navigate to
+// /login exactly once, not race N redirects. Never reset — the page is leaving.
+let sessionExpiredRedirectStarted = false;
+
+// Endpoints whose 401 is a handshake outcome, not a mid-session expiry:
+//  - `/me` is the cold-load probe the AuthProvider owns; a redirect here would
+//    loop the unauthenticated landing (AuthProvider sets `unauthenticated` and
+//    RequireAuth does the routing).
+//  - `/backoffice/login` reports bad credentials on the login page itself.
+// Every other gated 401 means "was authenticated, now isn't".
+function isAuthHandshakeEndpoint(input: string): boolean {
+  const path = input.split("?")[0];
+  return path.endsWith(API_ENDPOINTS.IDENTITY.ME) || path.endsWith(API_ENDPOINTS.BACKOFFICE.LOGIN);
+}
+
+// Browser-only: bounce an expired session to /login once, preserving the blocked
+// target in `?next=` (open-redirect-guarded) and flagging the reason. No-op during
+// SSR (no document/location) and for the auth-handshake endpoints above.
+function redirectToLoginOnSessionExpiry(input: string): void {
+  if (typeof window === "undefined") return;
+  if (sessionExpiredRedirectStarted) return;
+  if (isAuthHandshakeEndpoint(input)) return;
+  sessionExpiredRedirectStarted = true;
+  const current = `${globalThis.location.pathname}${globalThis.location.search}`;
+  const next = encodeURIComponent(safeInternalPath(current, Routes.BACKOFFICE));
+  globalThis.location.assign(`${Routes.LOGIN}?next=${next}&reason=session-expired`);
 }
 
 function browserApiBase(): string {
@@ -64,12 +97,16 @@ export class FetchHttpClient implements HttpClient {
 
   // Single fetch chokepoint: every request reads the Symfony profiler token off
   // the response (success and error paths share this) and publishes it for the
-  // dev-only toolbar. No-op in prod (header absent + inert observer).
+  // dev-only toolbar. No-op in prod (header absent + inert observer). It is also
+  // where a session-expiry 401 bounces the browser to /login exactly once.
   private async request(input: string, init: RequestInit): Promise<Response> {
     const res = await fetch(input, init);
     const token = res.headers.get("X-Debug-Token");
     if (token) {
       this.debugTokens.publish({ token, profilerUrl: res.headers.get("X-Debug-Token-Link") });
+    }
+    if (res.status === HttpStatus.UNAUTHORIZED) {
+      redirectToLoginOnSessionExpiry(input);
     }
     return res;
   }

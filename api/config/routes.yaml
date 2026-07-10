@@ -18,6 +18,23 @@ api_v1_iam_identity_login:
     defaults:
         _format: json
 
+# Iam identity read surface (who-am-i). Lives in Identity's Controller dir, disjoint from
+# the legacy backoffice-prefixed login resource above, so /me mounts at /api/v1/me.
+api_v1_iam_identity:
+    resource: ../src/Iam/Identity/Infrastructure/Controller/
+    type: attribute
+    prefix: /api/v1
+    defaults:
+        _format: json
+
+# Iam session self-service surface (list my sessions, revoke the others).
+api_v1_iam_session:
+    resource: ../src/Iam/Session/Infrastructure/Controller/
+    type: attribute
+    prefix: /api/v1
+    defaults:
+        _format: json
+
 api_v1_front_office:
     resource: ../src/Frontoffice/
     type: attribute
