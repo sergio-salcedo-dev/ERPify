@@ -63,7 +63,9 @@ final class DoctrineUserRepositoryTest extends KernelTestCase
             $this->assertInstanceOf(User::class, $found);
             $this->assertSame('carol@erpify.test', $found->email());
             $this->assertSame([Role::AUDIT_READER], $found->roles());
-            $this->assertTrue($found->passwordHash()->equals(HashedPassword::fromHash('hashed-carol@erpify.test')));
+            $passwordHash = $found->passwordHash();
+            $this->assertInstanceOf(HashedPassword::class, $passwordHash);
+            $this->assertTrue($passwordHash->equals(HashedPassword::fromHash('hashed-carol@erpify.test')));
         });
     }
 

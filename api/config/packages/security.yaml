@@ -16,6 +16,10 @@ security:
         main:
             lazy: true
             provider: identity_user_provider
+            # Admission gate between proving credentials and minting a session: rejects INVITED pre-auth (→
+            # uniform 401) and SUSPENDED/DEACTIVATED post-auth (→ 403 wall), so authentication never mints a
+            # session for a non-ACTIVE identity.
+            user_checker: Erpify\Iam\Identity\Infrastructure\Security\UserChecker
             json_login:
                 check_path: identity_login
                 username_path: email

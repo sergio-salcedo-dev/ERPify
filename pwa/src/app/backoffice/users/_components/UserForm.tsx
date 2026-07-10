@@ -73,7 +73,7 @@ export function UserForm({ mode, initial, onStaleUser }: Readonly<UserFormProps>
     defaultValues: {
       email: initial?.email ?? "",
       roles: initial?.roles ?? [],
-      status: initial?.status ?? UserStatus.PENDING,
+      status: initial?.status ?? UserStatus.INVITED,
       permissions: initial?.permissions ?? [],
     },
   });

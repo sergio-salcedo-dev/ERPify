@@ -15,7 +15,8 @@ export const ROLE_LABEL: Record<Role, string> = {
 };
 
 export const STATUS_LABEL: Record<UserStatus, string> = {
+  [UserStatus.INVITED]: "Invited",
   [UserStatus.ACTIVE]: "Active",
-  [UserStatus.PENDING]: "Pending",
-  [UserStatus.BLOCKED]: "Blocked",
+  [UserStatus.SUSPENDED]: "Suspended",
+  [UserStatus.DEACTIVATED]: "Deactivated",
 };

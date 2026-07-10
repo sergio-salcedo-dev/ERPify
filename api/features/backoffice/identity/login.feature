@@ -80,3 +80,42 @@ Feature: Log in through the session firewall
     Then the response status code should be 400
     And the header "Content-Type" should contain "application/problem+json"
     And the JSON node "type" should be equal to "invalid-input"
+
+  Scenario: A suspended identity with correct credentials is walled by a specific 403, minting no session
+    When I send a POST request to "/backoffice/login" with body:
+    """
+    {
+      "email": "sam@erpify.test",
+      "password": "sam-password"
+    }
+    """
+    Then the response status code should be 403
+    And the header "Content-Type" should contain "application/problem+json"
+    And the JSON node "type" should be equal to "account-suspended"
+    And the header "Set-Cookie" should not exist
+
+  Scenario: A deactivated identity with correct credentials is walled by a generic 403, minting no session
+    When I send a POST request to "/backoffice/login" with body:
+    """
+    {
+      "email": "dan@erpify.test",
+      "password": "dan-password"
+    }
+    """
+    Then the response status code should be 403
+    And the header "Content-Type" should contain "application/problem+json"
+    And the JSON node "type" should be equal to "forbidden"
+    And the header "Set-Cookie" should not exist
+
+  Scenario: An invited identity that has not set a password is indistinguishable from an unknown email
+    When I send a POST request to "/backoffice/login" with body:
+    """
+    {
+      "email": "ingrid@erpify.test",
+      "password": "any-password"
+    }
+    """
+    Then the response status code should be 401
+    And the JSON node "type" should be equal to "unauthenticated"
+    And the JSON node "title" should be equal to "Invalid credentials."
+    And the header "Set-Cookie" should not exist

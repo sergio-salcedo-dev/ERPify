@@ -3,7 +3,12 @@ import { UserStatus } from "@/context/shared/access/domain/UserStatus";
 import { Role } from "@/context/shared/access/domain/Role";
 import { Permission } from "@/context/shared/access/domain/Permission";
 
-const STATUSES = [UserStatus.ACTIVE, UserStatus.PENDING, UserStatus.BLOCKED];
+const STATUSES = [
+  UserStatus.INVITED,
+  UserStatus.ACTIVE,
+  UserStatus.SUSPENDED,
+  UserStatus.DEACTIVATED,
+];
 const ROLES = [Role.ADMIN, Role.EMPLOYEE, Role.CUSTOMER, Role.SUPPLIER, Role.SUPER_ADMIN];
 
 /** Fixed-id deterministic seed (uuid v7-shaped strings) so tests/snapshots are stable. */

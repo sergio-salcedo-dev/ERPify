@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security;
 
+use Erpify\Iam\Identity\Domain\Exception\AccountDeactivated;
+use Erpify\Iam\Identity\Domain\Exception\AccountSuspended;
+use Erpify\Iam\Identity\Infrastructure\Security\DeactivatedAccountException;
 use Erpify\Iam\Identity\Infrastructure\Security\ProblemDetailsAuthenticationFailureHandler;
+use Erpify\Iam\Identity\Infrastructure\Security\SuspendedAccountException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
@@ -35,5 +39,24 @@ final class ProblemDetailsAuthenticationFailureHandlerTest extends TestCase
         $this->assertInstanceOf(AuthenticationException::class, $caught);
         $this->assertSame('Invalid credentials.', $caught->getMessage());
         $this->assertSame($cause, $caught->getPrevious());
+    }
+
+    public function testGraduatesASuspendedAccountFailureToTheSpecificForbiddenWall(): void
+    {
+        // A post-identity SUSPENDED failure leaves the uniform 401 for a specific 403 account-suspended.
+        $this->expectException(AccountSuspended::class);
+
+        (new ProblemDetailsAuthenticationFailureHandler())
+            ->onAuthenticationFailure(new Request(), new SuspendedAccountException())
+        ;
+    }
+
+    public function testGraduatesADeactivatedAccountFailureToTheGenericForbiddenWall(): void
+    {
+        $this->expectException(AccountDeactivated::class);
+
+        (new ProblemDetailsAuthenticationFailureHandler())
+            ->onAuthenticationFailure(new Request(), new DeactivatedAccountException())
+        ;
     }
 }
