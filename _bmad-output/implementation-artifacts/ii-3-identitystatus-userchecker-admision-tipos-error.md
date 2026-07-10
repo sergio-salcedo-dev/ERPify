@@ -506,3 +506,26 @@ Verificación fresca sobre el path del worktree (exit codes recién impresos):
 | Fecha       | Cambio                                                                                                   |
 |-------------|----------------------------------------------------------------------------------------------------------|
 | 2026-07-10  | II-3 implementada: `IdentityStatus` + máquina de estados en `User`, `UserChecker` (admisión tres momentos), error graduado 403, invariante ≥1 ADMIN (puerto + fake, adapter a #462), PWA login desmockeado + `AccessWall` + reconciliación `UserStatus`. Todos los gates (API + PWA) verdes; login E2E vivo verde. Status → review. |
+
+### Review Findings
+
+_Code review adversarial (Blind Hunter · Edge Case Hunter · Acceptance Auditor), 2026-07-10. Veredicto: implementación fiel — 7/7 AC satisfechos, decisiones A/C/D/E/F honradas, fuera-de-alcance respetado. **Sin hallazgos alto/crítico.** 1 decisión, 3 patches, 5 diferidos, 4 descartados por diseño._
+
+#### Decision needed
+
+- [x] [Review][Decision→Patch] Transición de estado ilegal mapea a HTTP 500 — **RESUELTO (opción 1, 2026-07-10):** dar a `InvalidIdentityTransition` un marker `Conflict` (409), alineado con `LastActiveAdministratorProtected`. Movido a Patch abajo.
+
+#### Patch
+
+- [x] [Review][Patch] Transición ilegal → 409, no 500: `InvalidIdentityTransition implements Conflict` [`api/src/Iam/Identity/Domain/Exception/InvalidIdentityTransition.php`] — marker-less hoy → `ProblemDetailsFactory` `default` terminal → 500 `unhandled-exception`; añadir `implements Conflict` (mapea 409, patrón `LastActiveAdministratorProtected`) para que el contrato sea correcto cuando #462 cablee el caller. **Actualizar también** `tests/Unit/.../InvalidIdentityTransitionTest` (hoy asierta que NO lleva marker `ClientError`). No toca `api-error-contract.md` (marker `Conflict` ya existe/documentado — no es marker nuevo).
+- [x] [Review][Patch] Fallo de red/transporte en el login no da feedback al usuario [`pwa/src/app/(auth)/_components/LoginForm.tsx:42`] — `onSubmit` no envuelve `repo.login()` en try/catch; `ApiLoginRepository.login` re-lanza todo fallo no-`HttpError` (red/DNS/transporte), que se propaga fuera del handler de RHF: `isSubmitting` se resetea y el usuario no ve nada (ni error, ni toast, ni muro). Es el path de auth REAL (login desmockeado). Fix: capturar el fallo no-`HttpError` y mostrar un error neutro reintenable.
+- [x] [Review][Patch] Docblock de `AccountDeactivated` sobre-afirma indistinguibilidad [`api/src/Iam/Identity/Domain/Exception/AccountDeactivated.php:15`] — dice «indistinguishable on the wire from any other generic denial», pero solo el `type` colapsa a `forbidden`; el `title` («Your account is not active.») difiere del genérico («Access denied.»), así que SÍ es distinguible por título. Reformular a «indistinguible en `type`».
+- [x] [Review][Patch] Comentario change-relative «(de-mocked)» en `Container.ts` [`pwa/src/context/shared/dependency-injection/infrastructure/Container.ts:187`] — CLAUDE.md prohíbe comentarios que describan el cambio en `pwa/src`; quitar «(de-mocked)» del binding `BackOfficeLoginRepository`.
+
+#### Deferred
+
+- [x] [Review][Defer] Guarda ≥1-ADMIN corre FUERA de la transacción de escritura [`api/src/Iam/Identity/Application/ChangeUserStatus.php:65`] — diferido a #462: `keepsAnActiveAdminWithout()` se lee antes de `transactional()` (:74); el `SELECT … FOR UPDATE` planeado para #462 sería inútil fuera del write-txn → #462 debe mover la guarda dentro de `transactional()`. TOCTOU latente (caller-less hoy).
+- [x] [Review][Defer] Estado 0-admins rechaza suspender a un no-admin ajeno con 409 engañoso [`api/src/Iam/Identity/Application/ChangeUserStatus.php:65`] — diferido a #462: la guarda devuelve `false` cuando NO hay admin activo alguno, sea quien sea el target; el adapter real (INNER JOIN) debe acotarla a «el target es el admin cuya baja deja <1». Solo alcanzable en un estado que el invariante prohíbe.
+- [x] [Review][Defer] Login real concede ADMIN+wildcard client-side a toda identidad [`pwa/src/app/(auth)/_components/LoginForm.tsx:48`] — diferido a who-am-i: post-204 identidad/roles siguen mockeados con TODO (Decisión F-a); solo display (la API enforcea RBAC). Recomendación: mock por defecto least-privilege (VIEWER) para fallar-cerrado en gates de cliente.
+- [x] [Review][Defer] Cliente mapea cualquier `403 forbidden` al muro DEACTIVATED [`pwa/src/context/backoffice/user/infrastructure/ApiLoginRepository.ts:48`] — diferido/by-design (D12): un `forbidden` genérico (cross-origin de `LoginOriginListener`, Behat `login.feature:62-73`) impersonaría el muro «desactivado». Inalcanzable same-origin. Al entrar who-am-i / nuevas fuentes de 403, rutear sobre señal positiva de desactivación.
+- [x] [Review][Defer] AC4 sin test único que compare las tres respuestas pre-identidad [`api/features/backoffice/identity/login.feature:110`] — se asertan idénticas en 3 escenarios separados (status+type+title) pero sin comparación cara a cara ni aserción de forma/tamaño. Garantía estructural (mismo code path). Test de endurecimiento opcional.
