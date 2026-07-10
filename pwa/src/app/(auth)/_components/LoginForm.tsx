@@ -10,7 +10,7 @@ import {
 } from "@/context/backoffice/user/application/schemas/auth/LoginSchema";
 import { container } from "@/context/shared/dependency-injection/infrastructure/Container";
 import type { LoginRepository } from "@/context/backoffice/user/domain/LoginRepository";
-import { LoginOutcomeKind } from "@/context/backoffice/user/domain/LoginOutcome";
+import { LoginOutcomeKind, type LoginOutcome } from "@/context/backoffice/user/domain/LoginOutcome";
 import { FormField } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +30,7 @@ export function LoginForm() {
   const { login } = useSession();
   const [wall, setWall] = useState<AccessWallVariant | null>(null);
   const [credentialsError, setCredentialsError] = useState(false);
+  const [requestFailed, setRequestFailed] = useState(false);
   const {
     register,
     handleSubmit,
@@ -38,8 +39,17 @@ export function LoginForm() {
 
   const onSubmit = handleSubmit(async (values) => {
     setCredentialsError(false);
+    setRequestFailed(false);
     const repo = container.get<LoginRepository>("BackOfficeLoginRepository");
-    const outcome = await repo.login({ email: values.email, password: values.password });
+    let outcome: LoginOutcome;
+    try {
+      outcome = await repo.login({ email: values.email, password: values.password });
+    } catch {
+      // A network/transport failure is not a login outcome; surface a neutral,
+      // retryable error instead of leaving the form silently unresponsive.
+      setRequestFailed(true);
+      return;
+    }
 
     if (outcome.kind === LoginOutcomeKind.AUTHENTICATED) {
       // Identity and roles stay mocked (ADMIN + wildcard) until a who-am-i
@@ -80,6 +90,15 @@ export function LoginForm() {
       {credentialsError ? (
         <p role="alert" className="text-danger-strong text-sm" data-testid="login-form__error">
           Invalid email or password.
+        </p>
+      ) : null}
+      {requestFailed ? (
+        <p
+          role="alert"
+          className="text-danger-strong text-sm"
+          data-testid="login-form__request-error"
+        >
+          Something went wrong. Please try again.
         </p>
       ) : null}
       <FormField name="email" label="Email" required error={errors.email?.message}>

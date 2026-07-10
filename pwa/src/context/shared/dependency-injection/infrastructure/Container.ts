@@ -184,7 +184,7 @@ container
   .bind("BackOfficeUserSearchNavigator")
   .toConstantValue(new InMemoryResourceNavigator(userRepository));
 
-// Session sign-in: a real HTTP adapter (de-mocked) over the injected HttpClient,
+// Session sign-in: a real HTTP adapter over the injected HttpClient,
 // which the container binds to MockHttpClient under test.
 container
   .bind<LoginRepository>("BackOfficeLoginRepository")

@@ -101,4 +101,19 @@ describe("LoginForm — access outcomes", () => {
     expect(screen.queryByTestId("login-form")).not.toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
   });
+
+  it("surfaces a neutral, retryable error when the login request fails (network/transport)", async () => {
+    repoLogin.mockRejectedValueOnce(new Error("network down"));
+    render(<LoginForm />);
+    signIn();
+
+    const error = await screen.findByTestId("login-form__request-error");
+    expect(error).toHaveTextContent("Something went wrong. Please try again.");
+    expect(error).toHaveAttribute("role", "alert");
+    expect(push).not.toHaveBeenCalled();
+    expect(login).not.toHaveBeenCalled();
+    // The form stays mounted (no wall), and this is not the credentials error.
+    expect(screen.getByTestId("login-form")).toBeInTheDocument();
+    expect(screen.queryByTestId("login-form__error")).not.toBeInTheDocument();
+  });
 });
