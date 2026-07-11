@@ -41,7 +41,9 @@ Feature: Server-side session registry and admission gate
     And the response status code should be 401
 
   Scenario: A revoked session is inert on its next request
-    Given I send a "GET" request to "/me"
+    # Earlier scenarios in this feature revoke the shared registry session; reload so this one starts ACTIVE.
+    Given I reload the fixtures
+    And I send a "GET" request to "/me"
     And the response status code should be 200
     When I execute the SQL query "UPDATE iam_session SET status = 'REVOKED' WHERE id = '0190d1e2-f3a4-7b5c-8d6e-1f2a3b4c5d01'"
     And I send a "GET" request to "/me"
@@ -50,6 +52,8 @@ Feature: Server-side session registry and admission gate
     And the JSON node "type" should be equal to "session-expired"
 
   Scenario: A time-expired session is inert on its next request
+    # Reload first so the session is genuinely ACTIVE before we age it out, isolating the time-expiry path.
+    Given I reload the fixtures
     When I execute the SQL query "UPDATE iam_session SET expires_at = NOW() - INTERVAL '1 hour' WHERE id = '0190d1e2-f3a4-7b5c-8d6e-1f2a3b4c5d01'"
     And I send a "GET" request to "/me"
     Then the response status code should be 401
