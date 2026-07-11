@@ -28,9 +28,13 @@ php.unit: ## PHPUnit; pass c='…' for extra args (e.g. c='--filter SomeTest')
 # coverage") that the no-coverage `php.unit` gate never sees. This is a
 # report-generation target, not the gate — `php.unit` keeps failOnWarning strict.
 # Warnings still print, only the exit code is relaxed.
+#
+# memory_limit=1G: Xdebug coverage instrumentation holds per-line maps for the
+# whole run and exhausts the image's default 128M near the end of the suite.
+# Raised only here (report-only); the `php.unit` gate keeps the default limit.
 COVERAGE_CLOVER := var/coverage/clover.xml
 php.unit.coverage: ## PHPUnit with clover coverage → api/var/coverage/clover.xml (Xdebug coverage mode; report only — php.unit is the gate)
-	@$(PHP_TEST_COVERAGE) bin/phpunit --coverage-clover $(COVERAGE_CLOVER) --do-not-fail-on-phpunit-warning $(c)
+	@$(PHP_TEST_COVERAGE) php -d memory_limit=1G bin/phpunit --coverage-clover $(COVERAGE_CLOVER) --do-not-fail-on-phpunit-warning $(c)
 	@sed -i 's#name="[^"]*/api/src/#name="api/src/#g' $(API_ROOT)/$(COVERAGE_CLOVER)
 
 ## —— Behat ——
