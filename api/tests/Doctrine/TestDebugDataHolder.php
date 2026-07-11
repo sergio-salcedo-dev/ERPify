@@ -75,14 +75,7 @@ class TestDebugDataHolder extends DebugDataHolder
     {
         $backtraces = \debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
 
-        if (
-            !$force
-            && (
-            !$this->shouldLog($backtraces)
-            || $this->isAuthenticationLookup($query)
-            || $this->isSessionAdmissionLookup($backtraces)
-            )
-        ) {
+        if (!$force && $this->shouldSkip($query, $backtraces)) {
             return;
         }
 
@@ -97,6 +90,25 @@ class TestDebugDataHolder extends DebugDataHolder
 
         // array_slice(2) drops this method + DebugMiddleware's invoker frame from the trace.
         self::$backtraces[$connectionName][] = \array_slice($backtraces, 2);
+    }
+
+    /**
+     * Whether this query is fixed per-request authentication plumbing the per-connection budgets ignore — the
+     * firewall's user reload, the gate's session read — rather than a business query the assertions pin.
+     *
+     * @param array<int, array<string, mixed>> $backtraces
+     */
+    private function shouldSkip(Query $query, array $backtraces): bool
+    {
+        if (!$this->shouldLog($backtraces)) {
+            return true;
+        }
+
+        if ($this->isAuthenticationLookup($query)) {
+            return true;
+        }
+
+        return $this->isSessionAdmissionLookup($backtraces);
     }
 
     /**
