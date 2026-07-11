@@ -626,3 +626,40 @@ Patches **aplicados en la rama y verificados**: PHPStan · `php.quality` full (r
 ### Descartado (ruido / cubierto en otro sitio)
 
 - Decisión K (reactor de purga on-erasure): explícitamente diferida a **#470** y divulgada en el PR y en el spec (T8 la marca `[ ] DIFERIDO — bloqueado`, sin evento de erasure de `User` al que reaccionar). No es un hueco oculto.
+
+### Revisión fresca — bmad-code-review 2026-07-11 (verificación de parches + hallazgos nuevos)
+
+Segunda pasada adversarial (Blind Hunter · Edge Case Hunter · Acceptance Auditor) sobre el estado **ya parcheado** de la rama, a petición de Sergio (revisión fresca tratando los 5 parches del 2026-07-10 como código nuevo a auditar). **Los 5 parches (1a–4a + de-mock `SEED_SESSION`) verificados como aterrizados y correctos**; el `catch (DbalException)` de `findActiveById` cubre bien la taxonomía (base DBAL, no solo `ConnectionException`); `SEED_SESSION` desaparecido de `pwa/src`. Triaje: **2 decision-needed · 2 patch · 3 defer nuevos (+6 ya registrados el 2026-07-10) · 3 descartados**.
+
+**Decision-needed:**
+
+- [x] [Review][Patch] **`MySessions` (AC9) no montada en ninguna ruta/menú** — El componente + `useMySessions` + `ApiSessionsRepository` existen y están unit-testeados, pero nada en `app/` los monta (solo el barrel `access/infrastructure/ui/index.ts` los exporta). AC9 pide que el usuario pueda listar sus sesiones activas; hoy la capacidad es inalcanzable en la PWA viva. **RESUELTO (Sergio 2026-07-11): cablearla ahora** en una ruta/menú backoffice (p.ej. `/backoffice/account/sessions` + entrada en el account menu). [pwa/src/context/shared/access/infrastructure/ui/MySessions.tsx]
+- [x] [Review][Patch] **Tests estructurales AC5 y AC2 mandados por el spec, ausentes** — AC5 (ninguna clase de `Session/{Domain,Application}` referencia la sesión Symfony) y AC2 (anti-bypass: un test/checklist falla si una ruta autenticada saltara el gate), más la variante Behat store-down→503 de AC3(d). Los invariantes se sostienen transitivamente (deptrac confina `Symfony\*` a Infrastructure; gate = listener global único; unit `SessionAdmissionGateTest`/`DoctrineSessionRepositoryStoreUnavailableTest`), pero los artefactos dedicados que el spec MANDÓ no existen. **RESUELTO (Sergio 2026-07-11): añadir los tres ahora** (AC5 estructural + AC2 anti-bypass + Behat store-down→503). [api/tests/Unit/Iam/Session/]
+
+**Patch:**
+
+- [x] [Review][Patch] **Logout no durable bajo caída del store — sesión resumible tras recuperación** [api/src/Iam/Session/Infrastructure/Controller/RevokeCurrentSessionController.php:35] — `revoke()` pasa por `findActiveById()` (lanza `SessionStoreUnavailable`→503 ante cualquier DBAL) y por `save()` (DBAL crudo→500); cualquiera de los dos salta el `$request->getSession()->invalidate()` de la línea 38 → la cookie httpOnly sobrevive Y la fila queda `ACTIVE` → tras recuperarse el store, el gate la readmite (sesión reanudable en máquina compartida). Contradice el propio docblock del controlador («always 204 — a logout must not fail; ... the very cookie ... is inert») y el nuevo parche 1a que lo introdujo. Fix: revoke best-effort (try/catch con `telemetry`/log) + `invalidate()` SIEMPRE + 204 siempre. La PWA (`AuthProvider.logout`/`BackOfficeLayoutClient`) ya es robusta; el hueco es solo el controlador backend.
+- [x] [Review][Patch] **ADR D8 sigue listando `lastSeenAt`, que el modelo ya no tiene** [docs/adr/identity-invitation-lifecycle.md:57] — El parche 3a eliminó `lastSeenAt` del agregado y de la migración, pero la lista de campos de D8 aún lo nombra. T12 exigía verificar la coherencia de D8 al cerrar la story. Fix: quitar `lastSeenAt` de la enumeración de campos del `Session` en D8.
+
+**Defer nuevos (no vistos el 2026-07-10):**
+
+- [x] [Review][Defer] **La revocación bulk emite su evento aunque afecte 0 filas** [api/src/Iam/Session/Application/RevokeOtherSessions.php:38 · api/src/Iam/Session/Application/RevokeAllSessions.php] — deferred, latente sin consumidor (R2 / Decisión H)
+- [x] [Review][Defer] **El gate 401 no invalida la cookie nativa → 1 SELECT DB por request de un cliente revocado** [api/src/Iam/Session/Infrastructure/Security/SessionAdmissionGate.php:73] — deferred, low, optimización (no corrección)
+- [x] [Review][Defer] **`FindUserOrganizationId` usa `findOneBy` no determinista bajo multi-membership** [api/src/Organization/Membership/Infrastructure/Persistence/Doctrine/DoctrineMembershipRepository.php:39] — deferred, latente (invariante one-membership hoy)
+
+**Re-confirmados pero YA registrados el 2026-07-10 (no re-listados aquí):** colapso `/me` 503→unauthenticated + flap post-login (Decisión F/AC9); `MembershipNotFound`→503 (O2/O3); dos relojes del agregado; matcher `/api/` vs `^/api`; filas `ACTIVE` huérfanas; ausencia de tests AC5/AC2 (elevados aquí a decision-needed por ser mandados por el spec). Ya tracked fuera de banda: purga on-erasure `iam_session` (Decisión K → #468/#470); logout global one-time del deploy (Decisión M, nombrado en la PR).
+
+**Descartados (ruido / inalcanzable / mitigado):**
+
+- `SessionResourceMapper` traga id null (`?? ''`): un agregado persistido siempre tiene id — rama defensiva muerta, cosmético (inconsistente con el fail-loud de `MeResourceMapper`; boy-scout opcional).
+- user id null en minting → 204 sin sesión: inalcanzable (un `SecurityUser` cargado siempre tiene id) + fail-closed seguro.
+- CSRF en `revoke-current`/`revoke-others`: verificado mitigado por `SameSite=Lax` (POST cross-site llega anónimo → 401); no es vuln viva (informativo: la protección depende solo de SameSite — revisar si algún día se pasa a `SameSite=None`).
+
+**Patches aplicados (Sergio: «aplicar todos», 2026-07-11) — verificados en fresco en el worktree:**
+
+- **P1 · Logout durable** — `RevokeCurrentSessionController` revoca best-effort (`try/catch` + `LoggerInterface`), invalida SIEMPRE la sesión nativa y responde 204 aunque el revoke lance. Test unit `RevokeCurrentSessionControllerTest` (store lanza → 204 + `invalidate()`).
+- **P2 · ADR D8** — `lastSeenAt` eliminado de la lista de campos del agregado `Session` en `docs/adr/identity-invitation-lifecycle.md` (coherente con el modelo shippeado).
+- **P3 · `MySessions` cableada** — ruta `app/backoffice/profile/sessions/page.tsx` (bajo el `RequireAuth` del layout) + entrada «Active sessions» en el account menu (`backofficeMenu.ts`); test de página `page.test.tsx`. La capacidad AC9 es ahora alcanzable.
+- **P4 · Tests spec-mandados** — AC5 seam estructural `SessionSubstitutabilitySeamTest` (ninguna clase de `Session/{Domain,Application}` referencia `Symfony\Component\HttpFoundation` ni el literal quoted `'iamSessionId'`); AC2 anti-bypass `SessionAdmissionGateRegistrationTest` (registro global único en `kernel.request` a prioridad 7); AC3(d) store-down end-to-end `SessionStoreUnavailableAdmissionTest` (gate → 503 `service-unavailable` sobre HTTP real, con `UnavailableSessionRepository`).
+
+Verificación: `make php.stan` (929 ficheros, 0 errores) · `make php.quality` EXIT 0 (deptrac 0 violaciones) · `make pwa.quality` EXIT 0 · 5 tests API nuevos + 354 tests PWA (access+backoffice) verdes. **Cambios sin commitear** en el worktree; commit/push para actualizar el PR queda a decisión de Sergio.
