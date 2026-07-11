@@ -24,7 +24,10 @@ import { Button } from "@/components/ui/button";
 export function DevSessionSwitcher() {
   const { session, override } = useSession();
   if (!session) return null;
-  const role = session.roles[0];
+  // Session roles are backend names (a superset of the Role enum), so the first
+  // one may not be an enum member — default to "" so the radio has no selection
+  // rather than a bogus one.
+  const role = session.roles[0] ?? "";
   const wildcard = session.permissions.includes(PERMISSION_WILDCARD);
 
   const setRole = (next: Role): void => override({ roles: [next], user: { roles: [next] } });

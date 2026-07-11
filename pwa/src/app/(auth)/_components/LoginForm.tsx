@@ -16,12 +16,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AccessWall, AccessWallVariant } from "@/context/shared/error/infrastructure/ui";
 import { useSession } from "@/context/shared/access/application/useSession";
-import { UserStatus } from "@/context/shared/access/domain/UserStatus";
-import { Role } from "@/context/shared/access/domain/Role";
-import { PERMISSION_WILDCARD } from "@/context/shared/access/domain/Permission";
 import { Routes } from "@/context/shared/routing/domain/Routes";
 import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
-import { uuidV7 } from "@/context/shared/uuid/infrastructure/uuidV7";
 import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import { safeInternalPath } from "@/context/shared/navigation/domain/safeInternalPath";
 
@@ -52,16 +48,9 @@ export function LoginForm() {
     }
 
     if (outcome.kind === LoginOutcomeKind.AUTHENTICATED) {
-      // Identity and roles stay mocked (ADMIN + wildcard) until a who-am-i
-      // endpoint exists; deferred with the wider session de-mock. The 204 has
-      // already set the httpOnly session cookie server-side.
-      login({
-        id: uuidV7(),
-        email: values.email,
-        status: UserStatus.ACTIVE,
-        roles: [Role.ADMIN],
-        permissions: [PERMISSION_WILDCARD],
-      });
+      // The 204 has set the httpOnly session cookie; hydrate the real identity
+      // from `/me` (no fabricated ADMIN) before leaving the login page.
+      await login();
       toastNotifier.success("Signed in");
       // Return to the deep link RequireAuth stashed in `?next=`, falling back to
       // the back-office root. safeInternalPath rejects any off-origin target.

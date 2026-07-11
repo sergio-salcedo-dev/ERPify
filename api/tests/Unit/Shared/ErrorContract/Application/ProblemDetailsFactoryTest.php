@@ -16,6 +16,7 @@ use Erpify\Shared\ErrorContract\Domain\Exception\InvalidSearchCriteria;
 use Erpify\Shared\ErrorContract\Domain\Exception\InvariantViolation;
 use Erpify\Shared\ErrorContract\Domain\Exception\NotFound;
 use Erpify\Shared\ErrorContract\Domain\Exception\RateLimited;
+use Erpify\Shared\ErrorContract\Domain\Exception\ServiceUnavailable;
 use Erpify\Shared\ErrorContract\Domain\Exception\Unauthenticated;
 use Erpify\Shared\Search\Domain\Exception\UnknownSearchField;
 use Erpify\Shared\Search\Domain\Exception\UnsupportedSearchOperator;
@@ -571,7 +572,7 @@ final class ProblemDetailsFactoryTest extends TestCase
         $this->assertSame([], $problemDetails->extensions);
     }
 
-    public function testMarkerStatusMapHasExactlyTheCanonicalEightEntries(): void
+    public function testMarkerStatusMapHasExactlyTheCanonicalNineEntries(): void
     {
         $reflectionClass = new ReflectionClass(ProblemDetailsFactory::class);
         $constant = $reflectionClass->getReflectionConstant('MARKER_STATUS_MAP');
@@ -590,16 +591,17 @@ final class ProblemDetailsFactoryTest extends TestCase
             InvalidInput::class => 400,
             RateLimited::class => 429,
             InvalidSearchCriteria::class => 422,
+            ServiceUnavailable::class => 503,
         ];
 
         $this->assertSame(
             $expected,
             $value,
-            'MARKER_STATUS_MAP must contain exactly the eight canonical marker→status entries in canonical order.',
+            'MARKER_STATUS_MAP must contain exactly the nine canonical marker→status entries in canonical order.',
         );
     }
 
-    public function testMarkerDefaultTypeMapHasExactlyTheCanonicalEightEntries(): void
+    public function testMarkerDefaultTypeMapHasExactlyTheCanonicalNineEntries(): void
     {
         $reflectionClass = new ReflectionClass(ProblemDetailsFactory::class);
         $constant = $reflectionClass->getReflectionConstant('MARKER_DEFAULT_TYPE_MAP');
@@ -618,12 +620,13 @@ final class ProblemDetailsFactoryTest extends TestCase
             InvalidInput::class => 'invalid-input',
             RateLimited::class => 'rate-limited',
             InvalidSearchCriteria::class => 'invalid-search-criteria',
+            ServiceUnavailable::class => 'service-unavailable',
         ];
 
         $this->assertSame(
             $expected,
             $value,
-            'MARKER_DEFAULT_TYPE_MAP must contain exactly the eight canonical '
+            'MARKER_DEFAULT_TYPE_MAP must contain exactly the nine canonical '
             . 'marker→default-type entries in canonical order.',
         );
     }
@@ -899,7 +902,7 @@ final class ProblemDetailsFactoryTest extends TestCase
         $this->assertSame('Bank not found', $problemDetails->title);
     }
 
-    public function testHttpStatusTypeMapHasExactlyTheCanonicalSevenEntries(): void
+    public function testHttpStatusTypeMapHasExactlyTheCanonicalEightEntries(): void
     {
         $reflectionClass = new ReflectionClass(ProblemDetailsFactory::class);
         $constant = $reflectionClass->getReflectionConstant('HTTP_STATUS_TYPE_MAP');
@@ -917,12 +920,13 @@ final class ProblemDetailsFactoryTest extends TestCase
             409 => 'conflict',
             422 => 'invariant-violation',
             429 => 'rate-limited',
+            503 => 'service-unavailable',
         ];
 
         $this->assertSame(
             $expected,
             $value,
-            'HTTP_STATUS_TYPE_MAP must contain exactly the seven canonical status→type entries in canonical order.',
+            'HTTP_STATUS_TYPE_MAP must contain exactly the eight canonical status→type entries in canonical order.',
         );
     }
 

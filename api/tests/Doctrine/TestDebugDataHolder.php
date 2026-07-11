@@ -75,7 +75,7 @@ class TestDebugDataHolder extends DebugDataHolder
     {
         $backtraces = \debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
 
-        if (!$force && (!$this->shouldLog($backtraces) || $this->isAuthenticationLookup($query))) {
+        if (!$force && $this->shouldSkip($query, $backtraces)) {
             return;
         }
 
@@ -90,6 +90,25 @@ class TestDebugDataHolder extends DebugDataHolder
 
         // array_slice(2) drops this method + DebugMiddleware's invoker frame from the trace.
         self::$backtraces[$connectionName][] = \array_slice($backtraces, 2);
+    }
+
+    /**
+     * Whether this query is fixed per-request authentication plumbing the per-connection budgets ignore — the
+     * firewall's user reload, the gate's session read — rather than a business query the assertions pin.
+     *
+     * @param array<int, array<string, mixed>> $backtraces
+     */
+    private function shouldSkip(Query $query, array $backtraces): bool
+    {
+        if (!$this->shouldLog($backtraces)) {
+            return true;
+        }
+
+        if ($this->isAuthenticationLookup($query)) {
+            return true;
+        }
+
+        return $this->isSessionAdmissionLookup($backtraces);
     }
 
     /**
@@ -139,6 +158,29 @@ class TestDebugDataHolder extends DebugDataHolder
     private function isAuthenticationLookup(Query $query): bool
     {
         return \str_contains($query->getSql(), 'identity_user');
+    }
+
+    /**
+     * The Session Admission Gate re-reads the session registry on every authenticated request to decide
+     * whether it may continue. Like the firewall's `refreshUser` lookup above, that is fixed per-request
+     * authentication plumbing, not the business-query behaviour the per-connection budgets pin, so it is
+     * dropped — otherwise every authenticated scenario would carry a spurious +1. Matched by call site (the
+     * gate class in the backtrace), not by table name, so the "my sessions" read path — a real controller
+     * query on the same `iam_session` table — still counts.
+     *
+     * @param array<int, array<string, mixed>> $backtraces
+     */
+    private function isSessionAdmissionLookup(array $backtraces): bool
+    {
+        foreach ($backtraces as $backtrace) {
+            $class = $backtrace['class'] ?? null;
+
+            if (\is_string($class) && \str_contains($class, 'SessionAdmissionGate')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

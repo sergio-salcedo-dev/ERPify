@@ -453,4 +453,117 @@ describe("FetchHttpClient", () => {
       expect(() => new FetchHttpClient()).not.toThrow();
     });
   });
+
+  describe("401 session-expired redirect (browser)", () => {
+    const PROBLEM_401 = {
+      type: "session-expired",
+      title: "Session expired.",
+      status: HttpStatus.UNAUTHORIZED,
+      instance: "01H-instance",
+      "correlation-id": "01H-correlation",
+    };
+    const ORIGINAL_INTERNAL = process.env.SYMFONY_INTERNAL_URL;
+
+    let assign: MockInstance;
+
+    // The single-flight redirect guard is module-level, so each test gets a fresh
+    // module (guard reset) via a dynamic re-import after resetModules.
+    async function freshClient(): Promise<InstanceType<typeof FetchHttpClient>> {
+      const mod = await import("@/context/shared/http-client/infrastructure/FetchHttpClient");
+      return new mod.FetchHttpClient();
+    }
+
+    function respond401(): void {
+      fetchSpy.mockResolvedValue(
+        makeResponse(HttpStatus.UNAUTHORIZED, PROBLEM_401, {
+          contentType: "application/problem+json",
+        }),
+      );
+    }
+
+    beforeEach(() => {
+      vi.resetModules();
+      assign = vi.fn();
+      vi.stubGlobal("location", { pathname: "/backoffice/banks", search: "?page=2", assign });
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      if (ORIGINAL_INTERNAL === undefined) delete process.env.SYMFONY_INTERNAL_URL;
+      else process.env.SYMFONY_INTERNAL_URL = ORIGINAL_INTERNAL;
+    });
+
+    it("redirects to /login once on a 401, preserving the blocked target in ?next=", async () => {
+      respond401();
+      const client = await freshClient();
+
+      // `toMatchObject` (not `toBeInstanceOf`): after resetModules the fresh
+      // module throws its own HttpError class, distinct from the static import.
+      await expect(client.get("/api/v1/backoffice/banks")).rejects.toMatchObject({
+        problem: { status: HttpStatus.UNAUTHORIZED },
+      });
+
+      expect(assign).toHaveBeenCalledTimes(1);
+      expect(assign).toHaveBeenCalledWith(
+        `/login?next=${encodeURIComponent("/backoffice/banks?page=2")}&reason=session-expired`,
+      );
+    });
+
+    it("redirects only once for concurrent 401s (single-flight)", async () => {
+      respond401();
+      const client = await freshClient();
+
+      await Promise.allSettled([
+        client.get("/api/v1/backoffice/banks"),
+        client.get("/api/v1/backoffice/bank-accounts"),
+        client.get("/api/v1/backoffice/audit/timeline"),
+      ]);
+
+      expect(assign).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not redirect on a 200", async () => {
+      fetchSpy.mockResolvedValue(makeResponse(HttpStatus.OK, { data: [] }));
+      const client = await freshClient();
+
+      await client.get("/api/v1/backoffice/banks");
+
+      expect(assign).not.toHaveBeenCalled();
+    });
+
+    it("does not redirect for the /me cold-load probe (AuthProvider owns that 401)", async () => {
+      respond401();
+      const client = await freshClient();
+
+      await expect(client.get("/api/v1/me")).rejects.toMatchObject({
+        problem: { status: HttpStatus.UNAUTHORIZED },
+      });
+
+      expect(assign).not.toHaveBeenCalled();
+    });
+
+    it("does not redirect for the login endpoint's own 401 (bad credentials)", async () => {
+      respond401();
+      const client = await freshClient();
+
+      await expect(
+        client.post("/api/v1/backoffice/login", { email: "a@b.com", password: "x" }),
+      ).rejects.toMatchObject({ problem: { status: HttpStatus.UNAUTHORIZED } });
+
+      expect(assign).not.toHaveBeenCalled();
+    });
+
+    it("does not redirect during SSR (no window)", async () => {
+      vi.stubGlobal("window", undefined);
+      process.env.SYMFONY_INTERNAL_URL = "http://php:80";
+      respond401();
+      const client = await freshClient();
+
+      await expect(client.get("/api/v1/backoffice/banks")).rejects.toMatchObject({
+        problem: { status: HttpStatus.UNAUTHORIZED },
+      });
+
+      expect(assign).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -14,6 +14,7 @@ use Erpify\Shared\ErrorContract\Domain\Exception\InvalidSearchCriteria;
 use Erpify\Shared\ErrorContract\Domain\Exception\InvariantViolation;
 use Erpify\Shared\ErrorContract\Domain\Exception\NotFound;
 use Erpify\Shared\ErrorContract\Domain\Exception\RateLimited;
+use Erpify\Shared\ErrorContract\Domain\Exception\ServiceUnavailable;
 use Erpify\Shared\ErrorContract\Domain\Exception\Unauthenticated;
 use Erpify\Tests\Support\ApiSourceFiles;
 use LogicException;
@@ -30,10 +31,10 @@ use Throwable;
  * The data provider reflects directly over {@see ProblemDetailsFactory::MARKER_STATUS_MAP}
  * and `MARKER_DEFAULT_TYPE_MAP` so the test cannot drift from the production constants:
  * adding or removing a marker without matching code-side updates makes this contract
- * fail. The eight canonical markers are the marker-interface set:
+ * fail. The nine canonical markers are the marker-interface set:
  * {@see NotFound}, {@see Conflict}, {@see Forbidden}, {@see Unauthenticated},
  * {@see InvariantViolation}, {@see InvalidInput}, {@see RateLimited},
- * {@see InvalidSearchCriteria}.
+ * {@see InvalidSearchCriteria}, {@see ServiceUnavailable} (the single 5xx marker).
  *
  * Co-located alongside {@see ProblemDetailsFactoryTest} under
  * `api/tests/Unit/Shared/ErrorContract/Application/`.
@@ -61,6 +62,7 @@ final class MarkerStatusMapContractTest extends TestCase
         InvalidInput::class,
         RateLimited::class,
         InvalidSearchCriteria::class,
+        ServiceUnavailable::class,
     ];
 
     private const string CID = '0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c';
@@ -144,19 +146,19 @@ final class MarkerStatusMapContractTest extends TestCase
     }
 
     /**
-     * Pins that the factory's mapping constant array contains exactly those eight marker classes.
+     * Pins that the factory's mapping constant array contains exactly those nine marker classes.
      * Set-equality (not order-sensitive) so a marker addition that drifts the constant from
      * the canonical list fails fast — without forcing a particular declaration order
      * (`testMarkerOrderingFollowsImplementsClause` already pins the ordering separately).
      */
-    public function testMarkerStatusMapContainsExactlyTheCanonicalEight(): void
+    public function testMarkerStatusMapContainsExactlyTheCanonicalNine(): void
     {
         $statusMap = self::reflectConstant('MARKER_STATUS_MAP');
 
         $this->assertCount(
-            8,
+            9,
             $statusMap,
-            'MARKER_STATUS_MAP must contain exactly the eight canonical markers.',
+            'MARKER_STATUS_MAP must contain exactly the nine canonical markers.',
         );
 
         $actualKeys = \array_keys($statusMap);
@@ -173,7 +175,7 @@ final class MarkerStatusMapContractTest extends TestCase
     }
 
     /**
-     * Sister pin to {@see testMarkerStatusMapContainsExactlyTheCanonicalSeven}: the default-type
+     * Sister pin to {@see testMarkerStatusMapContainsExactlyTheCanonicalNine}: the default-type
      * map MUST mirror the status map's key set so every marker has a default `type` literal
      * for PWA `type`-only routing.
      */
@@ -359,6 +361,8 @@ final class MarkerStatusMapContractTest extends TestCase
             },
             // phpcs:ignore Generic.Files.LineLength.TooLong
             InvalidSearchCriteria::class => new class ('', 'x') extends DomainException implements InvalidSearchCriteria {
+            },
+            ServiceUnavailable::class => new class ('', 'x') extends DomainException implements ServiceUnavailable {
             },
             default => throw new LogicException(\sprintf(
                 'No anonymous-class branch for marker %s — add it when extending the marker set.',

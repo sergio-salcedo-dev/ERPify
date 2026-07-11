@@ -50,14 +50,17 @@ export default function BackOfficeLayoutClient({
 
   const handleNavigation = (path: string) => {
     if (path === Routes.HOME) {
-      // The account menu's logout entry targets HOME (the public landing). Clear
-      // the session, then leave with a full-document navigation rather than
-      // router.push: an SPA push keeps this guarded subtree mounted, so RequireAuth
-      // observes the just-cleared session mid-transition and redirects to /login
-      // before the push to HOME commits. A hard navigation discards all in-memory
-      // client state and lands on the public landing unconditionally.
-      logout();
-      globalThis.location.assign(Routes.HOME);
+      // The account menu's logout entry targets HOME (the public landing). logout()
+      // revokes the server session (dropping its cookie) then clears client state;
+      // wait for it to settle so the cookie is gone before leaving, then use a
+      // full-document navigation rather than router.push: an SPA push keeps this
+      // guarded subtree mounted, so RequireAuth observes the just-cleared session
+      // mid-transition and redirects to /login before the push to HOME commits. A
+      // hard navigation discards all in-memory client state and lands on the public
+      // landing unconditionally — and it fires even if the server revoke failed.
+      void logout().finally(() => {
+        globalThis.location.assign(Routes.HOME);
+      });
       return;
     }
     router.push(path);

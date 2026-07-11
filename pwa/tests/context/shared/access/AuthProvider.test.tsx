@@ -1,6 +1,24 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { useContext } from "react";
 import { renderHook, act, waitFor } from "@testing-library/react";
+
+// Hydration is driven by the `/me` probe resolved through the DI container. Mock
+// at that boundary so the provider never touches the network and each test
+// controls what `/me` returns.
+const me = vi.fn();
+const revokeCurrent = vi.fn();
+vi.mock("@/context/shared/dependency-injection/infrastructure/Container", () => ({
+  container: {
+    get: () => ({
+      me: (...args: unknown[]) => me(...args),
+      revokeCurrent: (...args: unknown[]) => revokeCurrent(...args),
+    }),
+  },
+}));
+vi.mock("@/context/shared/observability/infrastructure", () => ({
+  telemetry: { warn: vi.fn(), error: vi.fn() },
+}));
+
 import {
   AuthProvider,
   AuthContext,
@@ -8,17 +26,9 @@ import {
   type AuthContextValue,
 } from "@/context/shared/access/infrastructure/ui/AuthProvider";
 import type { Identity } from "@/context/shared/access/domain/Identity";
-import type { Session } from "@/context/shared/access/domain/Session";
-import { Role } from "@/context/shared/access/domain/Role";
-import { Permission, PERMISSION_WILDCARD } from "@/context/shared/access/domain/Permission";
 import { UserStatus } from "@/context/shared/access/domain/UserStatus";
 import { AccessContext } from "@/context/shared/access/domain/AccessContext";
 
-const STORAGE_KEY = "erpify:session";
-const SEED_EMAIL = "admin@erpify.dev";
-
-// Consume the raw context so the test can drive login/logout/override without
-// depending on the useSession hook module under test in isolation.
 function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("missing provider");
@@ -29,130 +39,120 @@ function renderAuth() {
   return renderHook<AuthContextValue, void>(() => useAuth(), { wrapper: AuthProvider });
 }
 
-const EMPLOYEE: Identity = {
-  id: "00000000-0000-7000-8000-0000000000aa",
-  email: "stored@erpify.dev",
+const ADMIN: Identity = {
+  id: "0190ffff-aaaa-7bbb-8ccc-0d1e2f3a4b5c",
+  email: "admin@erpify.dev",
   status: UserStatus.ACTIVE,
-  roles: [Role.EMPLOYEE],
-  permissions: [Permission.USERS_READ],
+  roles: ["ADMIN"],
+  permissions: [],
 };
 
-function storedSession(): Session {
-  return {
-    user: EMPLOYEE,
-    roles: EMPLOYEE.roles,
-    permissions: EMPLOYEE.permissions,
-    context: AccessContext.EMPLOYEE_PORTAL,
-  };
-}
+beforeEach(() => {
+  me.mockReset();
+  revokeCurrent.mockReset();
+  revokeCurrent.mockResolvedValue(undefined);
+});
 
 describe("AuthProvider", () => {
-  beforeEach(() => {
-    globalThis.localStorage.clear();
+  it("stays hydrating until the /me probe resolves, then authenticates", async () => {
+    let settle!: (identity: Identity | null) => void;
+    me.mockReturnValue(
+      new Promise<Identity | null>((resolve) => {
+        settle = resolve;
+      }),
+    );
+
+    const { result } = renderAuth();
+
+    expect(result.current.status).toBe(AuthStatus.HYDRATING);
+    expect(result.current.session).toBeNull();
+
+    await act(async () => {
+      settle(ADMIN);
+    });
+
+    await waitFor(() => expect(result.current.status).toBe(AuthStatus.AUTHENTICATED));
   });
 
-  it("hydrates to the seeded admin when storage is empty", async () => {
+  it("builds the session from the /me identity (backend roles verbatim, no permissions)", async () => {
+    me.mockResolvedValue(ADMIN);
+
     const { result } = renderAuth();
 
     await waitFor(() => expect(result.current.status).toBe(AuthStatus.AUTHENTICATED));
-    expect(result.current.session?.user.email).toBe(SEED_EMAIL);
-    expect(result.current.session?.permissions).toContain(PERMISSION_WILDCARD);
+    expect(result.current.session?.user.email).toBe("admin@erpify.dev");
+    expect(result.current.session?.user.status).toBe(UserStatus.ACTIVE);
+    expect(result.current.session?.roles).toEqual(["ADMIN"]);
+    expect(result.current.session?.permissions).toEqual([]);
     expect(result.current.session?.context).toBe(AccessContext.BACKOFFICE);
   });
 
-  it("restores a valid stored session over the seed", async () => {
-    globalThis.localStorage.setItem(STORAGE_KEY, JSON.stringify(storedSession()));
+  it("is unauthenticated when /me reports no live session (401 → null)", async () => {
+    me.mockResolvedValue(null);
 
     const { result } = renderAuth();
 
-    await waitFor(() => expect(result.current.session).not.toBeNull());
-    expect(result.current.session?.user.email).toBe("stored@erpify.dev");
-    expect(result.current.session?.context).toBe(AccessContext.EMPLOYEE_PORTAL);
+    await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED));
+    expect(result.current.session).toBeNull();
+  });
+
+  it("is unauthenticated when the /me probe fails (no spinner-forever, no seed)", async () => {
+    me.mockRejectedValue(new Error("network down"));
+
+    const { result } = renderAuth();
+
+    await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED));
+    expect(result.current.session).toBeNull();
+  });
+
+  it("login() re-hydrates from /me (never accepts a fabricated identity)", async () => {
+    me.mockResolvedValueOnce(null).mockResolvedValueOnce(ADMIN);
+
+    const { result } = renderAuth();
+    await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED));
+
+    await act(async () => {
+      await result.current.login();
+    });
+
     expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
+    expect(result.current.session?.user.email).toBe("admin@erpify.dev");
+    expect(me).toHaveBeenCalledTimes(2);
   });
 
-  it.each([
-    ["unparseable JSON", "{not valid json"],
-    ["JSON null", "null"],
-    ["a bare string", '"just a string"'],
-    ["an object with no user", "{}"],
-    ["a non-object user", '{"user":42}'],
-    [
-      "a user with a non-string id",
-      JSON.stringify({
-        user: { id: 1, email: "x", status: UserStatus.ACTIVE, roles: [], permissions: [] },
-        roles: [],
-        permissions: [],
-        context: AccessContext.BACKOFFICE,
-      }),
-    ],
-    [
-      "an unknown user status",
-      JSON.stringify({
-        user: { id: "x", email: "x", status: "GHOST", roles: [], permissions: [] },
-        roles: [],
-        permissions: [],
-        context: AccessContext.BACKOFFICE,
-      }),
-    ],
-    [
-      "missing top-level arrays/context",
-      JSON.stringify({
-        user: { id: "x", email: "x", status: UserStatus.ACTIVE, roles: [], permissions: [] },
-      }),
-    ],
-  ])("falls back to the seed when the stored payload is %s", async (_label, raw) => {
-    globalThis.localStorage.setItem(STORAGE_KEY, raw);
+  it("logout() revokes the server session then clears the local one", async () => {
+    me.mockResolvedValue(ADMIN);
 
-    const { result } = renderAuth();
-
-    await waitFor(() => expect(result.current.session).not.toBeNull());
-    expect(result.current.session?.user.email).toBe(SEED_EMAIL);
-  });
-
-  it("login replaces the session and persists it", async () => {
     const { result } = renderAuth();
     await waitFor(() => expect(result.current.status).toBe(AuthStatus.AUTHENTICATED));
 
-    act(() => result.current.login(EMPLOYEE, AccessContext.EMPLOYEE_PORTAL));
+    await act(async () => {
+      await result.current.logout();
+    });
 
-    expect(result.current.session?.user.email).toBe("stored@erpify.dev");
-    expect(result.current.session?.context).toBe(AccessContext.EMPLOYEE_PORTAL);
-    const persisted = JSON.parse(globalThis.localStorage.getItem(STORAGE_KEY) ?? "null");
-    expect(persisted.user.email).toBe("stored@erpify.dev");
+    expect(revokeCurrent).toHaveBeenCalledTimes(1);
+    expect(result.current.session).toBeNull();
+    expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
   });
 
-  it("login defaults to the backoffice context", async () => {
+  it("logout() still clears the local session when the server revoke fails", async () => {
+    me.mockResolvedValue(ADMIN);
+    revokeCurrent.mockRejectedValueOnce(new Error("network down"));
+
     const { result } = renderAuth();
     await waitFor(() => expect(result.current.status).toBe(AuthStatus.AUTHENTICATED));
 
-    act(() => result.current.login(EMPLOYEE));
-
-    expect(result.current.session?.context).toBe(AccessContext.BACKOFFICE);
-  });
-
-  it("logout clears the session and removes the stored payload", async () => {
-    const { result } = renderAuth();
-    await waitFor(() => expect(result.current.status).toBe(AuthStatus.AUTHENTICATED));
-
-    act(() => result.current.logout());
+    await act(async () => {
+      await result.current.logout();
+    });
 
     expect(result.current.session).toBeNull();
     expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
-    expect(globalThis.localStorage.getItem(STORAGE_KEY)).toBeNull();
   });
 
-  it("override merges a permissions patch onto the live session", async () => {
-    const { result } = renderAuth();
-    await waitFor(() => expect(result.current.status).toBe(AuthStatus.AUTHENTICATED));
+  it("override() can downgrade the user to a non-active status (unauthenticated)", async () => {
+    me.mockResolvedValue(ADMIN);
 
-    act(() => result.current.override({ permissions: [Permission.INVOICES_READ] }));
-
-    expect(result.current.session?.permissions).toEqual([Permission.INVOICES_READ]);
-    expect(result.current.session?.user.email).toBe(SEED_EMAIL);
-  });
-
-  it("override can downgrade the user to a non-active status (unauthenticated)", async () => {
     const { result } = renderAuth();
     await waitFor(() => expect(result.current.status).toBe(AuthStatus.AUTHENTICATED));
 
@@ -162,14 +162,15 @@ describe("AuthProvider", () => {
     expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
   });
 
-  it("override inherits roles and permissions from the base when the patch omits them", async () => {
+  it("override() inherits roles and context from the base when the patch omits them", async () => {
+    me.mockResolvedValue(ADMIN);
+
     const { result } = renderAuth();
     await waitFor(() => expect(result.current.status).toBe(AuthStatus.AUTHENTICATED));
 
     act(() => result.current.override({ context: AccessContext.SUPPLIER_PORTAL }));
 
     expect(result.current.session?.context).toBe(AccessContext.SUPPLIER_PORTAL);
-    expect(result.current.session?.roles).toEqual([Role.ADMIN]);
-    expect(result.current.session?.permissions).toContain(PERMISSION_WILDCARD);
+    expect(result.current.session?.roles).toEqual(["ADMIN"]);
   });
 });

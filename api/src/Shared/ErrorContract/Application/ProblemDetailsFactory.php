@@ -12,6 +12,7 @@ use Erpify\Shared\ErrorContract\Domain\Exception\InvalidSearchCriteria;
 use Erpify\Shared\ErrorContract\Domain\Exception\InvariantViolation;
 use Erpify\Shared\ErrorContract\Domain\Exception\NotFound;
 use Erpify\Shared\ErrorContract\Domain\Exception\RateLimited;
+use Erpify\Shared\ErrorContract\Domain\Exception\ServiceUnavailable;
 use Erpify\Shared\ErrorContract\Domain\Exception\Unauthenticated;
 use JsonSerializable;
 use Psr\Log\LoggerInterface;
@@ -118,6 +119,7 @@ final readonly class ProblemDetailsFactory
         InvalidInput::class => Response::HTTP_BAD_REQUEST,
         RateLimited::class => Response::HTTP_TOO_MANY_REQUESTS,
         InvalidSearchCriteria::class => Response::HTTP_UNPROCESSABLE_ENTITY,
+        ServiceUnavailable::class => Response::HTTP_SERVICE_UNAVAILABLE,
     ];
 
     private const array MARKER_DEFAULT_TYPE_MAP = [
@@ -129,6 +131,7 @@ final readonly class ProblemDetailsFactory
         InvalidInput::class => 'invalid-input',
         RateLimited::class => 'rate-limited',
         InvalidSearchCriteria::class => 'invalid-search-criteria',
+        ServiceUnavailable::class => 'service-unavailable',
     ];
 
     /**
@@ -146,6 +149,7 @@ final readonly class ProblemDetailsFactory
         Response::HTTP_CONFLICT => 'conflict',
         Response::HTTP_UNPROCESSABLE_ENTITY => 'invariant-violation',
         Response::HTTP_TOO_MANY_REQUESTS => 'rate-limited',
+        Response::HTTP_SERVICE_UNAVAILABLE => 'service-unavailable',
     ];
 
     private const array RESERVED_KEYS = [
