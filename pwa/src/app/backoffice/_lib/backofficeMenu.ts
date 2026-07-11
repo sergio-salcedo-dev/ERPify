@@ -41,6 +41,7 @@ import {
   User,
   Wallet,
   Wrench,
+  MonitorSmartphone,
   Info,
 } from "lucide-react";
 import { Routes } from "@/context/shared/routing/domain/Routes";
@@ -252,6 +253,7 @@ export const accountMenuItem: NavItem = {
   path: `${BASE}/profile`,
   subItems: [
     { name: "Notifications", path: `${BASE}/profile/notifications`, icon: Bell },
+    { name: "Active sessions", path: `${BASE}/profile/sessions`, icon: MonitorSmartphone },
     { name: "Settings", path: `${BASE}/profile/settings`, icon: SettingsIcon },
     { name: "Logout", path: "/", icon: LogOut },
   ],
