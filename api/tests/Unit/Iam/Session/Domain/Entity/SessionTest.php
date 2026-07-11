@@ -38,7 +38,6 @@ final class SessionTest extends TestCase
         $this->assertSame(SessionMother::DEFAULT_IP, $session->ip());
         $this->assertSame($expiresAt, $session->expiresAt());
         $this->assertNotInstanceOf(DateTimeImmutable::class, $session->revokedAt());
-        $this->assertSame($session->getCreatedAt(), $session->lastSeenAt());
 
         $events = $session->pullDomainEvents();
         $this->assertCount(1, $events);

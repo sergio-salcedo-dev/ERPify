@@ -77,6 +77,7 @@ export const API_ENDPOINTS = {
     ME: `${API_PREFIX_V1}/me`,
     SESSIONS: `${API_PREFIX_V1}/sessions`,
     SESSIONS_REVOKE_OTHERS: `${API_PREFIX_V1}/sessions/revoke-others`,
+    SESSIONS_REVOKE_CURRENT: `${API_PREFIX_V1}/sessions/revoke-current`,
   },
 } as const;
 

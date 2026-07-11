@@ -6,8 +6,17 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 // at that boundary so the provider never touches the network and each test
 // controls what `/me` returns.
 const me = vi.fn();
+const revokeCurrent = vi.fn();
 vi.mock("@/context/shared/dependency-injection/infrastructure/Container", () => ({
-  container: { get: () => ({ me: (...args: unknown[]) => me(...args) }) },
+  container: {
+    get: () => ({
+      me: (...args: unknown[]) => me(...args),
+      revokeCurrent: (...args: unknown[]) => revokeCurrent(...args),
+    }),
+  },
+}));
+vi.mock("@/context/shared/observability/infrastructure", () => ({
+  telemetry: { warn: vi.fn(), error: vi.fn() },
 }));
 
 import {
@@ -40,6 +49,8 @@ const ADMIN: Identity = {
 
 beforeEach(() => {
   me.mockReset();
+  revokeCurrent.mockReset();
+  revokeCurrent.mockResolvedValue(undefined);
 });
 
 describe("AuthProvider", () => {
@@ -109,13 +120,31 @@ describe("AuthProvider", () => {
     expect(me).toHaveBeenCalledTimes(2);
   });
 
-  it("logout() clears the session", async () => {
+  it("logout() revokes the server session then clears the local one", async () => {
     me.mockResolvedValue(ADMIN);
 
     const { result } = renderAuth();
     await waitFor(() => expect(result.current.status).toBe(AuthStatus.AUTHENTICATED));
 
-    act(() => result.current.logout());
+    await act(async () => {
+      await result.current.logout();
+    });
+
+    expect(revokeCurrent).toHaveBeenCalledTimes(1);
+    expect(result.current.session).toBeNull();
+    expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
+  });
+
+  it("logout() still clears the local session when the server revoke fails", async () => {
+    me.mockResolvedValue(ADMIN);
+    revokeCurrent.mockRejectedValueOnce(new Error("network down"));
+
+    const { result } = renderAuth();
+    await waitFor(() => expect(result.current.status).toBe(AuthStatus.AUTHENTICATED));
+
+    await act(async () => {
+      await result.current.logout();
+    });
 
     expect(result.current.session).toBeNull();
     expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);

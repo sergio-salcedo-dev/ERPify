@@ -4,11 +4,15 @@ import { createContext, useCallback, useEffect, useMemo, useState, type ReactNod
 import type { Session } from "../../domain/Session";
 import type { Identity } from "../../domain/Identity";
 import type { IdentityRepository } from "../../domain/IdentityRepository";
+import type { SessionsRepository } from "../../domain/SessionsRepository";
 import { UserStatus } from "../../domain/UserStatus";
 import { AccessContext } from "../../domain/AccessContext";
 import { container } from "@/context/shared/dependency-injection/infrastructure/Container";
+import { telemetry } from "@/context/shared/observability/infrastructure";
+import { apiScope } from "@/context/shared/observability/domain/TelemetryScope";
 
 const IDENTITY_REPOSITORY_KEY = "IdentityRepository";
+const SESSIONS_REPOSITORY_KEY = "SessionsRepository";
 
 /**
  * Identity must be resolved before authorization is evaluated. Until the cold
@@ -33,8 +37,13 @@ export interface AuthContextValue {
    * identity — the server is the single source of truth.
    */
   login: () => Promise<void>;
-  /** Clear the in-memory session (logout). */
-  logout: () => void;
+  /**
+   * Sign out: revoke the current server-side session (so the server drops its
+   * cookie) and clear the in-memory session. The server call is best-effort —
+   * the local session is always cleared, so a failed revoke never leaves the
+   * user stuck signed in.
+   */
+  logout: () => Promise<void>;
   /** Dev-only partial override (role/status/permissions), used by the switcher. */
   override: (patch: Omit<Partial<Session>, "user"> & { user?: Partial<Identity> }) => void;
 }
@@ -58,6 +67,10 @@ function sessionFromIdentity(identity: Identity): Session {
 export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const identityRepository = useMemo(
     () => container.get<IdentityRepository>(IDENTITY_REPOSITORY_KEY),
+    [],
+  );
+  const sessionsRepository = useMemo(
+    () => container.get<SessionsRepository>(SESSIONS_REPOSITORY_KEY),
     [],
   );
 
@@ -96,10 +109,21 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     setHydrated(true);
   }, [resolveSession]);
 
-  const logout = useCallback((): void => {
-    setSession(null);
-    setHydrated(true);
-  }, []);
+  const logout = useCallback(async (): Promise<void> => {
+    try {
+      await sessionsRepository.revokeCurrent();
+    } catch (error) {
+      // Best-effort: the gate 401s the stale session on its next use regardless,
+      // so a failed server-side revoke must never trap the user signed in.
+      telemetry.warn("Failed to revoke the session on sign-out", {
+        scope: apiScope("sessions-revoke-current"),
+        cause: error,
+      });
+    } finally {
+      setSession(null);
+      setHydrated(true);
+    }
+  }, [sessionsRepository]);
 
   const override = useCallback(
     (patch: Omit<Partial<Session>, "user"> & { user?: Partial<Identity> }): void => {

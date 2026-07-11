@@ -29,6 +29,7 @@ const isSessionsEnvelope: ResponseGuard<SessionsEnvelope> = (body): body is Sess
  * HTTP adapter over the signed-in user's own session registry:
  *  - `GET /sessions` → `{ data: [...] }` envelope of active sessions.
  *  - `POST /sessions/revoke-others` → 204 (revokes every session but the current).
+ *  - `POST /sessions/revoke-current` → 204 (revokes this session; the server drops the cookie).
  */
 @injectable()
 export class ApiSessionsRepository implements SessionsRepository {
@@ -42,6 +43,13 @@ export class ApiSessionsRepository implements SessionsRepository {
   async revokeOthers(): Promise<void> {
     await this.httpClient.post<undefined, void>(
       API_ENDPOINTS.IDENTITY.SESSIONS_REVOKE_OTHERS,
+      undefined,
+    );
+  }
+
+  async revokeCurrent(): Promise<void> {
+    await this.httpClient.post<undefined, void>(
+      API_ENDPOINTS.IDENTITY.SESSIONS_REVOKE_CURRENT,
       undefined,
     );
   }

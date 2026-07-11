@@ -10,9 +10,9 @@ use Doctrine\Migrations\AbstractMigration;
 /**
  * Creates the `iam_session` server-side session registry. `user_id` / `organization_id` are by-id references
  * with no physical foreign key (isolation by id, and erasure-first: a FK would block or couple the GDPR
- * hard-delete of a user). `expires_at` and `last_seen_at` are NOT NULL; `revoked_at` / `ip` are nullable.
- * `ip` / `device` are short-lived operational data (the table is not audited). Indexed on `(user_id, status)`
- * for the "my sessions" read.
+ * hard-delete of a user). `expires_at` is NOT NULL; `revoked_at` / `ip` are nullable. `ip` / `device` are
+ * short-lived operational data (the table is not audited). Indexed on `(user_id, status)` for the "my
+ * sessions" read.
  */
 final class Version20260710192657 extends AbstractMigration
 {
@@ -31,7 +31,6 @@ final class Version20260710192657 extends AbstractMigration
                 status VARCHAR(255) NOT NULL,
                 expires_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL,
                 revoked_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL,
-                last_seen_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL,
                 device VARCHAR(255) NOT NULL,
                 ip VARCHAR(45) DEFAULT NULL,
                 created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL,

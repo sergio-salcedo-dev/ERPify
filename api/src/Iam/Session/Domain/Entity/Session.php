@@ -27,9 +27,7 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * without a `RESTRICT` block or a `CASCADE` that couples the delete across modules.
  *
  * Deliberately NOT an `AuditedEntity`: `ip`/`device` are short-lived operational PII that must never enter the
- * five-year audit trail. `lastSeenAt` is passive telemetry — the aggregate never mutates it (no `touch()`), so
- * a `revoke()`, which Doctrine emits as a partial per-column UPDATE, cannot clobber a heartbeat write; a
- * directed DBAL UPDATE owns that column out of band.
+ * five-year audit trail — the session's observability comes from its domain events, not the audit table.
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'iam_session')]
@@ -44,9 +42,6 @@ final class Session extends AggregateRoot
 
     #[ORM\Column(name: 'revoked_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
     private ?DateTimeImmutable $revokedAt = null;
-
-    #[ORM\Column(name: 'last_seen_at', type: Types::DATETIME_IMMUTABLE)]
-    private DateTimeImmutable $lastSeenAt;
 
     private function __construct(
         string $id,
@@ -69,7 +64,6 @@ final class Session extends AggregateRoot
         $this->id = $id;
         $this->userId = $userId;
         $this->organizationId = $organizationId;
-        $this->lastSeenAt = $this->createdAt;
     }
 
     /**
@@ -157,16 +151,6 @@ final class Session extends AggregateRoot
     public function revokedAt(): ?DateTimeImmutable
     {
         return $this->revokedAt;
-    }
-
-    /**
-     * Last observation of the session, initialised to its creation instant. Passive telemetry: the aggregate
-     * never advances it — a directed DBAL update owns the heartbeat out of band, kept off the changeset so it
-     * never rides an aggregate flush.
-     */
-    public function lastSeenAt(): DateTimeImmutable
-    {
-        return $this->lastSeenAt;
     }
 
     /**

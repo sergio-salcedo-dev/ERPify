@@ -9,4 +9,6 @@ export interface SessionsRepository {
   list(): Promise<SessionSummary[]>;
   /** Revoke every session except the current one. */
   revokeOthers(): Promise<void>;
+  /** Revoke the current session (sign out this device); the server also drops the cookie. */
+  revokeCurrent(): Promise<void>;
 }

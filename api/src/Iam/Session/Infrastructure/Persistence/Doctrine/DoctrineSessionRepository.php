@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Session\Infrastructure\Persistence\Doctrine;
 
-use Doctrine\DBAL\Exception\ConnectionException;
+use Doctrine\DBAL\Exception as DbalException;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Iam\Session\Domain\Enum\SessionStatus;
@@ -22,9 +22,12 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  * Two adapter-specific concerns live here:
  *   - the temporal-validity predicate (`status = ACTIVE AND expires_at > now`) is pushed into SQL, so an
  *     expired session is never returned and caducity needs no persisted state or sweeper;
- *   - a DBAL {@see ConnectionException} on the gate's read is converted to the domain
- *     {@see SessionStoreUnavailable} (→ 503), so a store outage lets the gate fail closed instead of leaking a
- *     raw 500. The bulk revocations are directed DQL UPDATEs (no aggregate hydration, no per-row event).
+ *   - any DBAL failure on the gate's read (a lost connection, a statement timeout, an exhausted pool — all
+ *     {@see DbalException}) is converted to the domain {@see SessionStoreUnavailable} (→ 503), so a store outage
+ *     lets the gate fail closed instead of leaking a raw 500. The read is a fixed PK+status+expiry SELECT with
+ *     no user-supplied DQL, so a DBAL exception here is always infrastructural — a 503 (which still reaches
+ *     Sentry) is the honest outcome, never masking an application bug. The bulk revocations are directed DQL
+ *     UPDATEs (no aggregate hydration, no per-row event).
  */
 #[AsAlias(SessionRepository::class)]
 final readonly class DoctrineSessionRepository implements SessionRepository
@@ -58,8 +61,8 @@ final readonly class DoctrineSessionRepository implements SessionRepository
                 ->getQuery()
                 ->getOneOrNullResult()
             ;
-        } catch (ConnectionException $connectionException) {
-            throw SessionStoreUnavailable::storeUnreachable($connectionException);
+        } catch (DbalException $dbalException) {
+            throw SessionStoreUnavailable::storeUnreachable($dbalException);
         }
 
         return $result instanceof Session ? $result : null;

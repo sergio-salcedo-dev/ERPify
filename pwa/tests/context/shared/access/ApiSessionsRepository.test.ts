@@ -37,4 +37,12 @@ describe("ApiSessionsRepository", () => {
 
     expect(post).toHaveBeenCalledWith(API_ENDPOINTS.IDENTITY.SESSIONS_REVOKE_OTHERS, undefined);
   });
+
+  it("revokeCurrent() POSTs to the revoke-current endpoint with no payload", async () => {
+    const post = vi.fn().mockResolvedValue(undefined);
+
+    await new ApiSessionsRepository(httpClient({ post })).revokeCurrent();
+
+    expect(post).toHaveBeenCalledWith(API_ENDPOINTS.IDENTITY.SESSIONS_REVOKE_CURRENT, undefined);
+  });
 });

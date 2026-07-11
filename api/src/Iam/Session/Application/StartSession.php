@@ -22,8 +22,8 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
  * failed persist never leaves an `iamSessionId` pointing at a session that does not exist. The minting caller
  * treats any throw as fail-closed (invalidate the native session + 503).
  *
- * The TTL is an absolute cap: there is no idle-timeout enforcement (`lastSeenAt` is telemetry, not a gate
- * input), so this ceiling is the sole bound on a session's lifetime.
+ * The TTL is an absolute cap: there is no idle-timeout enforcement, so this ceiling is the sole bound on a
+ * session's lifetime.
  */
 final readonly class StartSession
 {

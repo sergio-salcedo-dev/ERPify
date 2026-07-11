@@ -250,7 +250,11 @@ you change anything here.
       **Session Admission Gate** re-reads it on every authenticated `/api` request, so "authenticated" means "has a
       **live, revocable** session", not merely "holds a cookie". The gate is **fail-closed**: a revoked or
       time-expired session → **401 `session-expired`** (re-login), an unreachable store → **503 `service-unavailable`**
-      (never a fail-open pass-through). `iam_session` stores **operational PII** — `ip` (plaintext, short-lived) and
+      (never a fail-open pass-through). **Sign-out revokes server-side:** `POST /sessions/revoke-current` (this
+      device) revokes the current registry row **and** invalidates the native session so the cookie is dropped, and
+      `POST /sessions/revoke-others` revokes every other row — so "log out" leaves no resumable session behind on a
+      shared machine (the client never relies on merely clearing its own state). `iam_session` stores
+      **operational PII** — `ip` (plaintext, short-lived) and
       `device` (**normalised server-side** from the `User-Agent` to a bounded label, **never** the raw client string,
       closing stored-injection + free-text PII). The table is **not** an `AuditedEntity`, so the IP never enters the
       five-year audit trail; lawful basis is **legitimate interest** (account security / session management), not

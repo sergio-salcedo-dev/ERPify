@@ -6,7 +6,7 @@ namespace Erpify\Tests\Unit\Iam\Session\Application;
 
 use DateTimeImmutable;
 use Erpify\Iam\Session\Application\RevokeOtherSessions;
-use Erpify\Iam\Session\Domain\Event\AllSessionsRevoked;
+use Erpify\Iam\Session\Domain\Event\OtherSessionsRevoked;
 use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Tests\Unit\Iam\Session\Domain\Entity\Mother\SessionMother;
@@ -37,7 +37,9 @@ final class RevokeOtherSessionsTest extends TestCase
         $this->assertInstanceOf(SessionId::class, $sessions->lastRevokeOthersexcept);
         $this->assertTrue($current->equals($sessions->lastRevokeOthersexcept));
         $this->assertCount(1, $eventBus->publishedEvents);
-        $this->assertInstanceOf(AllSessionsRevoked::class, $eventBus->publishedEvents[0]);
+        $revokedFact = $eventBus->publishedEvents[0];
+        $this->assertInstanceOf(OtherSessionsRevoked::class, $revokedFact);
+        $this->assertSame(SessionMother::DEFAULT_ID, $revokedFact->keptSessionId());
     }
 
     public function testRejectsAMalformedUserIdBeforeTouchingTheStore(): void
