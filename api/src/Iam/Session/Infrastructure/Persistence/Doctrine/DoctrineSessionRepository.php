@@ -32,8 +32,6 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 #[AsAlias(SessionRepository::class)]
 final readonly class DoctrineSessionRepository implements SessionRepository
 {
-    private const string ACTIVE_STATUS_PREDICATE = 's.status = :active';
-
     public function __construct(
         private EntityManagerInterface $entityManager,
         private Clock $clock,
@@ -55,7 +53,7 @@ final readonly class DoctrineSessionRepository implements SessionRepository
                 ->select('s')
                 ->from(Session::class, 's')
                 ->where('s.id = :id')
-                ->andWhere(self::ACTIVE_STATUS_PREDICATE)
+                ->andWhere('s.status = :active')
                 ->andWhere('s.expiresAt > :now')
                 ->setParameter('id', $id->toString())
                 ->setParameter('active', SessionStatus::ACTIVE->value)
@@ -78,7 +76,7 @@ final readonly class DoctrineSessionRepository implements SessionRepository
             ->select('s')
             ->from(Session::class, 's')
             ->where('s.userId = :userId')
-            ->andWhere(self::ACTIVE_STATUS_PREDICATE)
+            ->andWhere('s.status = :active')
             ->andWhere('s.expiresAt > :now')
             ->orderBy('s.createdAt', 'DESC')
             ->setParameter('userId', $userId)
@@ -115,7 +113,7 @@ final readonly class DoctrineSessionRepository implements SessionRepository
             ->set('s.revokedAt', ':now')
             ->set('s.updatedAt', ':now')
             ->where('s.userId = :userId')
-            ->andWhere(self::ACTIVE_STATUS_PREDICATE)
+            ->andWhere('s.status = :active')
             ->setParameter('revoked', SessionStatus::REVOKED->value)
             ->setParameter('active', SessionStatus::ACTIVE->value)
             ->setParameter('now', $now)
