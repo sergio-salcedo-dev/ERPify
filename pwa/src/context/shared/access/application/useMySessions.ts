@@ -82,7 +82,7 @@ export function useMySessions(): MySessionsState {
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void load();
+    load();
   }, [load]);
 
   const revokeOthers = useCallback(async () => {
@@ -102,7 +102,7 @@ export function useMySessions(): MySessionsState {
 
   const dismissRevokeProblem = useCallback(() => setRevokeProblem(null), []);
   const reload = useCallback(() => {
-    void load();
+    load();
   }, [load]);
 
   const hasOtherSessions = sessions.some((session) => !session.current);

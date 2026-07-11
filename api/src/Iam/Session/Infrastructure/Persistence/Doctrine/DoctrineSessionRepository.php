@@ -71,8 +71,8 @@ final readonly class DoctrineSessionRepository implements SessionRepository
     #[Override]
     public function findByUserId(string $userId): array
     {
-        /** @var list<Session> $sessions */
-        $sessions = $this->entityManager->createQueryBuilder()
+        /** @phpstan-var list<Session> */
+        return $this->entityManager->createQueryBuilder()
             ->select('s')
             ->from(Session::class, 's')
             ->where('s.userId = :userId')
@@ -85,8 +85,6 @@ final readonly class DoctrineSessionRepository implements SessionRepository
             ->getQuery()
             ->getResult()
         ;
-
-        return $sessions;
     }
 
     #[Override]

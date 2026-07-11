@@ -93,7 +93,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
 
   useEffect(() => {
     let active = true;
-    void resolveSession().then((resolved) => {
+    resolveSession().then((resolved) => {
       if (!active) return;
       setSession(resolved);
       setHydrated(true);
