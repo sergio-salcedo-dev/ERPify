@@ -111,4 +111,24 @@ final class ProblemDetailsAuthenticationFailureHandlerTest extends TestCase
 
         $this->assertSame([], $repository->saved);
     }
+
+    public function testAbsorbsAStoreFaultWhileRecordingSoTheUniform401IsNotLeakedAsA500(): void
+    {
+        // A store fault while persisting the failed attempt must be swallowed: the response stays the uniform
+        // 401 for a resolved email exactly as for an unknown one — never a leaked DBALException (→ 500) that
+        // would both regress the neutral failure path and distinguish a real account on the wire.
+        $caught = null;
+
+        try {
+            $this->handlerFailingToPersist()->onAuthenticationFailure(
+                $this->loginRequest(UserMother::DEFAULT_EMAIL),
+                new BadCredentialsException('wrong'),
+            );
+        } catch (Throwable $throwable) {
+            $caught = $throwable;
+        }
+
+        $this->assertInstanceOf(AuthenticationException::class, $caught);
+        $this->assertSame('Invalid credentials.', $caught->getMessage());
+    }
 }

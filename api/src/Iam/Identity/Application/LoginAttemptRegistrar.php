@@ -36,7 +36,9 @@ final readonly class LoginAttemptRegistrar
      * Records a failed password attempt for the identity resolved BY EMAIL. An unknown or malformed email is a
      * no-op — no row, no write, no event — so a failure against a non-existent account leaves nothing that
      * could tell it apart from a real one (pre-identity indistinguishability); the ephemeral per-IP throttle
-     * covers the anonymous flood.
+     * covers the anonymous flood. An attempt the aggregate ignores (a non-`ACTIVE` or already-locked resolved
+     * identity) likewise opens NO transaction — the write is skipped when nothing changed, so a sustained
+     * attack on a locked account costs no per-attempt round-trip. Mirrors {@see clear()}.
      */
     public function recordFailure(string $email): void
     {
@@ -52,7 +54,9 @@ final readonly class LoginAttemptRegistrar
             return;
         }
 
-        $user->recordFailedAttempt($this->clock->now());
+        if (!$user->recordFailedAttempt($this->clock->now())) {
+            return;
+        }
 
         $this->commit($user);
     }

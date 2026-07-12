@@ -136,6 +136,16 @@ final class UserLockoutTest extends TestCase
     }
 
     #[Test]
+    public function recordingReportsWhetherItMutatedSoTheCallerCanSkipAnEmptyWrite(): void
+    {
+        $now = new DateTimeImmutable(self::NOW);
+
+        $this->assertTrue(UserMother::create()->recordFailedAttempt($now));
+        $this->assertFalse($this->lockedAt($now)->recordFailedAttempt($now));
+        $this->assertFalse(UserMother::invited()->recordFailedAttempt($now));
+    }
+
+    #[Test]
     public function aLapsedLockRestartsTheCountRatherThanReLockingOnTheNextMiss(): void
     {
         $lockedAt = new DateTimeImmutable(self::NOW);

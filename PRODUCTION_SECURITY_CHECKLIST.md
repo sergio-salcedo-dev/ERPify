@@ -255,6 +255,11 @@ you change anything here.
       returns the uniform 401 (an anonymous caller never sees `locked`). Catches a distributed credential-stuffing
       run that sprays one account from many IPs and so evades the per-IP throttle. The lock is orthogonal to
       `IdentityStatus` (a locked identity stays `ACTIVE`); the lock trip emits a PII-free `UserLocked` domain event.
+      A store fault while **recording** a failed attempt is absorbed best-effort, so the failure path stays the
+      uniform 401 — never a leaked **500** nor a resolved-vs-unknown status-code oracle (the increment is lost,
+      tolerable during a DB incident); a store fault while **clearing** on a successful login re-maps to a
+      retryable **503 `service-unavailable`**. An attempt the aggregate ignores (a locked or non-`ACTIVE`
+      resolved identity) opens no transaction, so a sustained attack on a locked account costs no per-attempt write.
 - [ ] **Server-side session registry & admission gate (`iam_session`):** login mints a `Session` aggregate and the
       **Session Admission Gate** re-reads it on every authenticated `/api` request, so "authenticated" means "has a
       **live, revocable** session", not merely "holds a cookie". The gate is **fail-closed**: a revoked or

@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security;
 
 use DateTimeImmutable;
+use Doctrine\DBAL\Exception as DbalException;
 use Erpify\Iam\Identity\Application\LoginAttemptRegistrar;
+use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Iam\Identity\Infrastructure\Security\ProblemDetailsAuthenticationFailureHandler;
 use Erpify\Tests\Unit\Iam\Identity\Application\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InlineTransactionManager;
-use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Identity\Application\RecordingEventBus;
+use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
@@ -19,7 +21,7 @@ use Symfony\Component\HttpFoundation\Request;
  */
 trait BuildsFailureHandler
 {
-    private function handler(InMemoryUserRepository $repository): ProblemDetailsAuthenticationFailureHandler
+    private function handler(UserRepository $repository): ProblemDetailsAuthenticationFailureHandler
     {
         $registrar = new LoginAttemptRegistrar(
             $repository,
@@ -29,6 +31,20 @@ trait BuildsFailureHandler
         );
 
         return new ProblemDetailsAuthenticationFailureHandler($registrar);
+    }
+
+    /**
+     * A handler whose persistence of the failed attempt throws a store fault (a {@see DbalException}), so a test
+     * can assert the record path absorbs it — never leaking it as a 500 or a resolved-vs-unknown enumeration
+     * oracle — while the graded response still stands.
+     */
+    private function handlerFailingToPersist(): ProblemDetailsAuthenticationFailureHandler
+    {
+        $repository = $this->createStub(UserRepository::class);
+        $repository->method('findByEmail')->willReturn(UserMother::create());
+        $repository->method('save')->willThrowException($this->createStub(DbalException::class));
+
+        return $this->handler($repository);
     }
 
     private function loginRequest(string $email): Request

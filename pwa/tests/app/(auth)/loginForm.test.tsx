@@ -113,6 +113,20 @@ describe("LoginForm — access outcomes", () => {
     expect(login).not.toHaveBeenCalled();
   });
 
+  it("surfaces the neutral retryable error when the server fails to finalise the session (503)", async () => {
+    outcome = { kind: LoginOutcomeKind.REQUEST_FAILED };
+    render(<LoginForm />);
+    signIn();
+
+    const error = await screen.findByTestId("login-form__request-error");
+    expect(error).toHaveTextContent("Something went wrong. Please try again.");
+    expect(push).not.toHaveBeenCalled();
+    expect(login).not.toHaveBeenCalled();
+    // The form stays; this is not the credentials error and no wall replaces it.
+    expect(screen.getByTestId("login-form")).toBeInTheDocument();
+    expect(screen.queryByTestId("login-form__error")).not.toBeInTheDocument();
+  });
+
   it("surfaces a neutral, retryable error when the login request fails (network/transport)", async () => {
     repoLogin.mockRejectedValueOnce(new Error("network down"));
     render(<LoginForm />);

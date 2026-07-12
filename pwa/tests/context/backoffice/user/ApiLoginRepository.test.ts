@@ -77,6 +77,21 @@ describe("ApiLoginRepository.login", () => {
     expect(outcome.kind).toBe(LoginOutcomeKind.DEACTIVATED);
   });
 
+  it("maps a 503 service-unavailable to request-failed (retryable, not a credentials error)", async () => {
+    const post = vi
+      .fn()
+      .mockRejectedValue(
+        new HttpError(problem(HttpStatus.SERVICE_UNAVAILABLE, "service-unavailable")),
+      );
+
+    const outcome = await new ApiLoginRepository(httpClientPosting(post)).login({
+      email: "a@b.com",
+      password: "x",
+    });
+
+    expect(outcome.kind).toBe(LoginOutcomeKind.REQUEST_FAILED);
+  });
+
   it.each([
     ["401 unauthenticated", HttpStatus.UNAUTHORIZED, "unauthenticated"],
     ["a 403 with an unrecognised type", HttpStatus.FORBIDDEN, "some-other-type"],

@@ -177,16 +177,19 @@ final class User extends AggregateRoot
      * counter unboundedly nor re-emits {@see UserLocked} on every hit within the window. On crossing
      * {@see MAX_FAILED_ATTEMPTS} it seals the lockout for {@see LOCK_DURATION} and records the fact once. `$now`
      * comes from the application's injected clock so the expiry and the event timestamp share one time source
-     * (never a static wall clock that diverges in tests).
+     * (never a static wall clock that diverges in tests). Reports whether it mutated the aggregate, so the
+     * caller can skip the persistence round-trip on a no-op attempt (a non-`ACTIVE` identity, or one already
+     * locked within its window) — mirroring {@see clearLockout()} and keeping the failure path free of an empty
+     * write under a sustained attack on a locked account.
      */
-    public function recordFailedAttempt(DateTimeImmutable $now): void
+    public function recordFailedAttempt(DateTimeImmutable $now): bool
     {
         if (IdentityStatus::ACTIVE !== $this->status) {
-            return;
+            return false;
         }
 
         if ($this->isLockedAt($now)) {
-            return;
+            return false;
         }
 
         if ($this->lockedUntil instanceof DateTimeImmutable) {
@@ -204,6 +207,8 @@ final class User extends AggregateRoot
 
             $this->record(new UserLocked($this->id(), $this->lockedUntil));
         }
+
+        return true;
     }
 
     /**

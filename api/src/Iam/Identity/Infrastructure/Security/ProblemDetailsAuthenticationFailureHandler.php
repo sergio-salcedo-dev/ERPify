@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Infrastructure\Security;
 
+use Doctrine\DBAL\Exception as DbalException;
 use Erpify\Iam\Identity\Application\LoginAttemptRegistrar;
 use Erpify\Iam\Identity\Domain\Exception\AccountDeactivated;
 use Erpify\Iam\Identity\Domain\Exception\AccountLocked;
@@ -69,7 +70,7 @@ final readonly class ProblemDetailsAuthenticationFailureHandler implements Authe
     public function onAuthenticationFailure(Request $request, AuthenticationException $exception): Response
     {
         if (!$exception instanceof TooManyLoginAttemptsAuthenticationException) {
-            $this->loginAttempts->recordFailure($this->submittedIdentifier($request));
+            $this->recordFailureBestEffort($request);
         }
 
         if ($exception instanceof SuspendedAccountException) {
@@ -85,6 +86,24 @@ final readonly class ProblemDetailsAuthenticationFailureHandler implements Authe
         }
 
         throw new CustomUserMessageAuthenticationException(self::GENERIC_FAILURE_MESSAGE, previous: $exception);
+    }
+
+    /**
+     * Records the failed attempt against the submitted identity, best-effort. A store fault here must NOT turn
+     * the uniform 401 into a leaked 500, nor let a resolved email (a write is attempted) diverge from an unknown
+     * one (no write) on the wire — so a {@see DbalException} is absorbed and the response stays whatever the
+     * admission outcome graded it. The lost increment is tolerable during a database incident (the per-IP
+     * throttle still caps the flood); this differs from the success path's retryable-503 remap because the
+     * failure path has nothing downstream that needs the shared unit of work, so it can swallow and stay neutral.
+     */
+    private function recordFailureBestEffort(Request $request): void
+    {
+        try {
+            $this->loginAttempts->recordFailure($this->submittedIdentifier($request));
+        } catch (DbalException) {
+            // Best-effort: a store fault recording the attempt must not surface to the client as a 500 or an
+            // enumeration oracle; the neutral graded response wins over persisting this one increment.
+        }
     }
 
     /**

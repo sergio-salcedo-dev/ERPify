@@ -120,6 +120,26 @@ final class LoginAttemptRegistrarTest extends TestCase
         $this->assertSame([], $eventBus->publishedEvents);
     }
 
+    public function testRecordingAgainstAnAlreadyLockedIdentityOpensNoTransaction(): void
+    {
+        $repository = new InMemoryUserRepository($this->lockedUser());
+        $eventBus = new RecordingEventBus();
+        $transactionManager = $this->createMock(TransactionManager::class);
+        $transactionManager->expects($this->never())->method('transactional');
+
+        $registrar = new LoginAttemptRegistrar(
+            $repository,
+            $eventBus,
+            $transactionManager,
+            new FixedClock(new DateTimeImmutable(self::NOW)),
+        );
+
+        $registrar->recordFailure(UserMother::DEFAULT_EMAIL);
+
+        $this->assertSame([], $repository->saved);
+        $this->assertSame([], $eventBus->publishedEvents);
+    }
+
     private function registrar(InMemoryUserRepository $repository, RecordingEventBus $eventBus): LoginAttemptRegistrar
     {
         return new LoginAttemptRegistrar(
