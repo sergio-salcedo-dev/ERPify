@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security;
 
+use DateInterval;
+use DateTimeImmutable;
+use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
 use Erpify\Iam\Identity\Domain\Enum\Role;
 use Erpify\Iam\Identity\Domain\HashedPassword;
@@ -67,5 +70,20 @@ final class SecurityUserTest extends TestCase
         $securityUser = new SecurityUser(UserMother::invited());
 
         $this->assertSame(IdentityStatus::INVITED, $securityUser->status());
+    }
+
+    public function testReportsWhetherTheWrappedIdentityIsLockedAtAnInstant(): void
+    {
+        $lockedAt = new DateTimeImmutable('2026-07-11T12:00:00+00:00');
+        $user = UserMother::create();
+
+        for ($attempt = 0; $attempt < User::MAX_FAILED_ATTEMPTS; ++$attempt) {
+            $user->recordFailedAttempt($lockedAt);
+        }
+
+        $securityUser = new SecurityUser($user);
+
+        $this->assertTrue($securityUser->isLockedAt($lockedAt));
+        $this->assertFalse($securityUser->isLockedAt($lockedAt->add(new DateInterval('PT16M'))));
     }
 }

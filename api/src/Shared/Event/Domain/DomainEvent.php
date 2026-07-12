@@ -15,6 +15,12 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * instead of acquiring a fresh one. The canonical key of the store and the mapper is the
  * `(eventName, eventVersion)` pair, never the FQCN (refactor-fragile). See
  * docs/adr/event-store-and-projections.md.
+ *
+ * Every domain event in the app extends this single reproducible base by design — one flat root the mapper
+ * scans, not a hierarchy to rebalance — so the child-count metric does not apply here; it grows with the
+ * domain.
+ *
+ * @SuppressWarnings("PHPMD.NumberOfChildren")
  */
 abstract class DomainEvent
 {

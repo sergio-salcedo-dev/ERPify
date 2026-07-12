@@ -66,6 +66,16 @@ export function LoginForm() {
       setWall(AccessWallVariant.DEACTIVATED);
       return;
     }
+    if (outcome.kind === LoginOutcomeKind.LOCKED) {
+      setWall(AccessWallVariant.LOCKED);
+      return;
+    }
+    if (outcome.kind === LoginOutcomeKind.REQUEST_FAILED) {
+      // The credentials were accepted but the server hit a transient fault finalising the
+      // session (e.g. a 503); surface the neutral retryable error, not "invalid credentials".
+      setRequestFailed(true);
+      return;
+    }
     setCredentialsError(true);
   });
 
