@@ -5,15 +5,19 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security;
 
 use Erpify\Iam\Identity\Domain\Exception\AccountDeactivated;
+use Erpify\Iam\Identity\Domain\Exception\AccountLocked;
 use Erpify\Iam\Identity\Domain\Exception\AccountSuspended;
 use Erpify\Iam\Identity\Infrastructure\Security\DeactivatedAccountException;
+use Erpify\Iam\Identity\Infrastructure\Security\LockedAccountException;
 use Erpify\Iam\Identity\Infrastructure\Security\ProblemDetailsAuthenticationFailureHandler;
 use Erpify\Iam\Identity\Infrastructure\Security\SuspendedAccountException;
+use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
+use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Security\Core\Exception\AuthenticationException;
 use Symfony\Component\Security\Core\Exception\BadCredentialsException;
+use Symfony\Component\Security\Core\Exception\TooManyLoginAttemptsAuthenticationException;
 use Throwable;
 
 /**
@@ -22,6 +26,8 @@ use Throwable;
 #[CoversClass(ProblemDetailsAuthenticationFailureHandler::class)]
 final class ProblemDetailsAuthenticationFailureHandlerTest extends TestCase
 {
+    use BuildsFailureHandler;
+
     public function testNormalisesTheFailureToOneMessageAndKeepsTheRealCauseAsPrevious(): void
     {
         // Symfony's own message ("The presented password is invalid.") would reveal the email exists; the
@@ -31,7 +37,7 @@ final class ProblemDetailsAuthenticationFailureHandlerTest extends TestCase
         $caught = null;
 
         try {
-            (new ProblemDetailsAuthenticationFailureHandler())->onAuthenticationFailure(new Request(), $cause);
+            $this->handler(new InMemoryUserRepository())->onAuthenticationFailure($this->loginRequest(''), $cause);
         } catch (Throwable $throwable) {
             $caught = $throwable;
         }
@@ -46,8 +52,8 @@ final class ProblemDetailsAuthenticationFailureHandlerTest extends TestCase
         // A post-identity SUSPENDED failure leaves the uniform 401 for a specific 403 account-suspended.
         $this->expectException(AccountSuspended::class);
 
-        (new ProblemDetailsAuthenticationFailureHandler())
-            ->onAuthenticationFailure(new Request(), new SuspendedAccountException())
+        $this->handler(new InMemoryUserRepository())
+            ->onAuthenticationFailure($this->loginRequest(''), new SuspendedAccountException())
         ;
     }
 
@@ -55,8 +61,54 @@ final class ProblemDetailsAuthenticationFailureHandlerTest extends TestCase
     {
         $this->expectException(AccountDeactivated::class);
 
-        (new ProblemDetailsAuthenticationFailureHandler())
-            ->onAuthenticationFailure(new Request(), new DeactivatedAccountException())
+        $this->handler(new InMemoryUserRepository())
+            ->onAuthenticationFailure($this->loginRequest(''), new DeactivatedAccountException())
         ;
+    }
+
+    public function testGraduatesALockedAccountFailureToTheSpecificForbiddenWall(): void
+    {
+        // A post-identity locked failure leaves the uniform 401 for a specific 403 account-locked.
+        $this->expectException(AccountLocked::class);
+
+        $this->handler(new InMemoryUserRepository())
+            ->onAuthenticationFailure($this->loginRequest(''), new LockedAccountException())
+        ;
+    }
+
+    public function testRecordsTheFailedAttemptAgainstTheSubmittedIdentityBeforeReporting(): void
+    {
+        $user = UserMother::create();
+        $repository = new InMemoryUserRepository($user);
+
+        try {
+            $this->handler($repository)->onAuthenticationFailure(
+                $this->loginRequest(UserMother::DEFAULT_EMAIL),
+                new BadCredentialsException('wrong'),
+            );
+        } catch (AuthenticationException) {
+            // the uniform 401 is asserted elsewhere; here we only care that the attempt was recorded
+        }
+
+        $this->assertSame([$user], $repository->saved);
+    }
+
+    public function testDoesNotRecordAThrottledAttemptAgainstThePersistentCounter(): void
+    {
+        // A throttled failure never reached a credential check, so counting it would let a single IP drive the
+        // per-identity lock the per-IP throttle exists to stop short of. The record must be skipped.
+        $user = UserMother::create();
+        $repository = new InMemoryUserRepository($user);
+
+        try {
+            $this->handler($repository)->onAuthenticationFailure(
+                $this->loginRequest(UserMother::DEFAULT_EMAIL),
+                new TooManyLoginAttemptsAuthenticationException(),
+            );
+        } catch (AuthenticationException) {
+            // the uniform 401 is asserted elsewhere; here we only care that nothing was recorded
+        }
+
+        $this->assertSame([], $repository->saved);
     }
 }

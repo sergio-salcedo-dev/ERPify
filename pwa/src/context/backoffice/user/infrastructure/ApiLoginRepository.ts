@@ -13,6 +13,7 @@ import { LoginOutcomeKind, LoginProblemType, type LoginOutcome } from "../domain
  *
  *  - 204 → authenticated (httpOnly cookie set server-side).
  *  - 403 + type `account-suspended` → suspended.
+ *  - 403 + type `account-locked` → locked.
  *  - 403 + type `forbidden` → deactivated.
  *  - 401 / any other HTTP error → invalid-credentials (kept indistinguishable
  *    for neutrality — wrong password, unknown email and invited all collapse).
@@ -44,6 +45,9 @@ export class ApiLoginRepository implements LoginRepository {
     if (problem.status === HttpStatus.FORBIDDEN) {
       if (problem.type === LoginProblemType.ACCOUNT_SUSPENDED) {
         return { kind: LoginOutcomeKind.SUSPENDED };
+      }
+      if (problem.type === LoginProblemType.ACCOUNT_LOCKED) {
+        return { kind: LoginOutcomeKind.LOCKED };
       }
       if (problem.type === LoginProblemType.FORBIDDEN) {
         return { kind: LoginOutcomeKind.DEACTIVATED };

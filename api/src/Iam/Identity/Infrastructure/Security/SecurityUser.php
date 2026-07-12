@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Infrastructure\Security;
 
+use DateTimeImmutable;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
 use Erpify\Iam\Identity\Domain\Enum\Role;
@@ -61,6 +62,16 @@ final readonly class SecurityUser implements UserInterface, PasswordAuthenticate
     public function status(): IdentityStatus
     {
         return $this->user->status();
+    }
+
+    /**
+     * Whether the wrapped identity's lockout is still in force at `$now` — the second signal the admission
+     * {@see UserChecker} reads (alongside {@see status()}), orthogonal to the lifecycle state, so it can wall a
+     * locked-but-`ACTIVE` identity without the domain ever implementing a Symfony contract.
+     */
+    public function isLockedAt(DateTimeImmutable $now): bool
+    {
+        return $this->user->isLockedAt($now);
     }
 
     /**

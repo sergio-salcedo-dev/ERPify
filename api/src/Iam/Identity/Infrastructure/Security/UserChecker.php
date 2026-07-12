@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Iam\Identity\Infrastructure\Security;
 
 use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
+use Erpify\Shared\Clock\Domain\Clock;
 use Override;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 use Symfony\Component\Security\Core\User\UserCheckerInterface;
@@ -22,8 +23,12 @@ use Symfony\Component\Security\Core\User\UserInterface;
  *   identity is rejected here, which aborts authentication so the firewall mints no session — the "no session
  *   artifacts" guarantee is structural, not something cleaned up afterwards.
  */
-final class UserChecker implements UserCheckerInterface
+final readonly class UserChecker implements UserCheckerInterface
 {
+    public function __construct(private Clock $clock)
+    {
+    }
+
     #[Override]
     public function checkPreAuth(UserInterface $user): void
     {
@@ -56,6 +61,12 @@ final class UserChecker implements UserCheckerInterface
             throw new DeactivatedAccountException();
         }
 
-        // A future time-boxed lockout state adds its post-auth arm here (a LockedException until an expiry).
+        // The lock arm runs LAST: a lifecycle wall (SUSPENDED/DEACTIVATED) precedes the transient lockout, so a
+        // suspended identity that also tripped the counter sees the suspended wall, never `locked`
+        // (`SUSPENDED + locked` is not representable). The lock is orthogonal to status: an `ACTIVE` identity
+        // reaches here and is walled only while its lockout is still in force.
+        if ($user->isLockedAt($this->clock->now())) {
+            throw new LockedAccountException();
+        }
     }
 }

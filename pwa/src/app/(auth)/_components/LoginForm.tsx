@@ -66,6 +66,10 @@ export function LoginForm() {
       setWall(AccessWallVariant.DEACTIVATED);
       return;
     }
+    if (outcome.kind === LoginOutcomeKind.LOCKED) {
+      setWall(AccessWallVariant.LOCKED);
+      return;
+    }
     setCredentialsError(true);
   });
 

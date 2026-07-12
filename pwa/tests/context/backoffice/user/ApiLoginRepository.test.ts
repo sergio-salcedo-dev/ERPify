@@ -51,6 +51,19 @@ describe("ApiLoginRepository.login", () => {
     expect(outcome.kind).toBe(LoginOutcomeKind.SUSPENDED);
   });
 
+  it("maps 403 account-locked to locked", async () => {
+    const post = vi
+      .fn()
+      .mockRejectedValue(new HttpError(problem(HttpStatus.FORBIDDEN, "account-locked")));
+
+    const outcome = await new ApiLoginRepository(httpClientPosting(post)).login({
+      email: "a@b.com",
+      password: "x",
+    });
+
+    expect(outcome.kind).toBe(LoginOutcomeKind.LOCKED);
+  });
+
   it("maps 403 forbidden to deactivated", async () => {
     const post = vi
       .fn()

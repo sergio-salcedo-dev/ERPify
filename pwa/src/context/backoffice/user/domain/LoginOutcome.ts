@@ -5,6 +5,7 @@
  */
 export const LoginProblemType = {
   ACCOUNT_SUSPENDED: "account-suspended",
+  ACCOUNT_LOCKED: "account-locked",
   FORBIDDEN: "forbidden",
 } as const;
 export type LoginProblemType = (typeof LoginProblemType)[keyof typeof LoginProblemType];
@@ -18,6 +19,7 @@ export const LoginOutcomeKind = {
   INVALID_CREDENTIALS: "invalid-credentials",
   SUSPENDED: "suspended",
   DEACTIVATED: "deactivated",
+  LOCKED: "locked",
 } as const;
 export type LoginOutcomeKind = (typeof LoginOutcomeKind)[keyof typeof LoginOutcomeKind];
 
@@ -31,4 +33,5 @@ export type LoginOutcome =
   | { kind: typeof LoginOutcomeKind.AUTHENTICATED }
   | { kind: typeof LoginOutcomeKind.INVALID_CREDENTIALS }
   | { kind: typeof LoginOutcomeKind.SUSPENDED }
-  | { kind: typeof LoginOutcomeKind.DEACTIVATED };
+  | { kind: typeof LoginOutcomeKind.DEACTIVATED }
+  | { kind: typeof LoginOutcomeKind.LOCKED };

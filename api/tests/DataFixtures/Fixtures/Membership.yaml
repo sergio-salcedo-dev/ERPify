@@ -32,3 +32,10 @@ Erpify\Organization\Membership\Domain\Entity\Membership:
                 - '@user_dan'
                 - '@the_organization'
                 - ['MANAGER']
+    membership_lena:
+        # Lena logs in successfully after a lapsed lock, so session minting must resolve her organization.
+        __factory:
+            'Erpify\Tests\DataFixtures\MembershipFixtureFactory::create':
+                - '@user_lena'
+                - '@the_organization'
+                - ['VIEWER']

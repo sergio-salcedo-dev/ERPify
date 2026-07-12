@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-23
-last_updated: 2026-07-10
+last_updated: 2026-07-11
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -114,7 +114,7 @@ development_status:
   ii-2-shared-token-singleusetoken: done
   ii-3-identitystatus-userchecker-admision-tipos-error: done
   ii-7-session-lifecycle-registry-gate-failclosed: review
-  ii-6-lockout-lockeduntil: backlog
+  ii-6-lockout-lockeduntil: review
   ii-4-invitation-accept-pantallas-acceso: backlog
   ii-5-reset-password-uniforme: backlog
   ii-8-endurecimiento-seguridad-transversal: backlog

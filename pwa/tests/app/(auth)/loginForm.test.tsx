@@ -102,6 +102,17 @@ describe("LoginForm — access outcomes", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
+  it("renders the locked access wall in place of the form", async () => {
+    outcome = { kind: LoginOutcomeKind.LOCKED };
+    render(<LoginForm />);
+    signIn();
+
+    await waitFor(() => expect(screen.getByTestId("access-wall--locked")).toBeInTheDocument());
+    expect(screen.queryByTestId("login-form")).not.toBeInTheDocument();
+    expect(push).not.toHaveBeenCalled();
+    expect(login).not.toHaveBeenCalled();
+  });
+
   it("surfaces a neutral, retryable error when the login request fails (network/transport)", async () => {
     repoLogin.mockRejectedValueOnce(new Error("network down"));
     render(<LoginForm />);

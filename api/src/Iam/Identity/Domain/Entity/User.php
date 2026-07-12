@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Domain\Entity;
 
+use DateInterval;
+use DateTimeImmutable;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Erpify\Iam\Identity\Domain\Email;
 use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
 use Erpify\Iam\Identity\Domain\Enum\Role;
 use Erpify\Iam\Identity\Domain\Event\UserDeactivated;
+use Erpify\Iam\Identity\Domain\Event\UserLocked;
 use Erpify\Iam\Identity\Domain\Event\UserSuspended;
 use Erpify\Iam\Identity\Domain\Exception\InvalidIdentityTransition;
 use Erpify\Iam\Identity\Domain\HashedPassword;
@@ -31,12 +34,28 @@ use Symfony\Component\Validator\Constraints as Assert;
  * listener records a field-level diff only for entities that opt into that marker, so staying out keeps
  * the `password_hash` from ever entering the audit trail (a credential leak). If user management is ever
  * audited, `password_hash` must be excluded/classified first.
+ *
+ * The public surface is the aggregate's whole contract — its factories, its lifecycle transitions, the
+ * lockout behaviour and the read accessors the security adapter needs — so the "too many public methods"
+ * count reflects a rich aggregate root, not a class doing several jobs.
+ *
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods")
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'identity_user')]
 #[UniqueEntity(fields: ['email'], message: 'This email is already in use.')]
 final class User extends AggregateRoot
 {
+    /**
+     * Consecutive failed attempts that trip the lockout, and how long it then holds (`PT15M`). A second,
+     * per-identity line behind the ephemeral per-IP `login_throttling` (max 5): the persistent counter catches
+     * a distributed credential-stuffing run that sprays a single account from many IPs and so evades the
+     * per-IP throttle — hence the higher threshold, which never fires on honest typos.
+     */
+    public const int MAX_FAILED_ATTEMPTS = 10;
+
+    public const string LOCK_DURATION = 'PT15M';
+
     /** @var non-empty-string */
     #[ORM\Column(unique: true)]
     #[Assert\NotBlank]
@@ -49,6 +68,22 @@ final class User extends AggregateRoot
     /** @var list<string> */
     #[ORM\Column(type: Types::JSON)]
     private array $roles;
+
+    /**
+     * Consecutive failed password attempts against this resolved identity. Reset to zero on any successful
+     * login or an explicit lockout clear — the aggregate keeps only the current count, never the history of
+     * attempts (the durable record is the {@see UserLocked} domain event, not this snapshot).
+     */
+    #[ORM\Column(name: 'failed_attempts', type: Types::INTEGER)]
+    private int $failedAttempts = 0;
+
+    /**
+     * The instant the temporary lockout expires, or `null` when the identity is not locked. A timestamp gate
+     * orthogonal to {@see IdentityStatus}: a locked identity stays `ACTIVE`; the admission check reads this
+     * separately from the lifecycle wall, so `ACTIVE + locked` is representable while the status is untouched.
+     */
+    #[ORM\Column(name: 'locked_until', type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    private ?DateTimeImmutable $lockedUntil = null;
 
     /**
      * Every construction path funnels through here, so the aggregate's invariants — canonical
@@ -131,6 +166,71 @@ final class User extends AggregateRoot
         $this->updatedAt = SystemClock::now();
 
         $this->record(new UserDeactivated($this->id(), null, $this->updatedAt));
+    }
+
+    /**
+     * Registers a failed password attempt. Only an `ACTIVE` identity accrues a lockout: the machine is about
+     * password attempts, and a non-`ACTIVE` identity either has no password to attempt (`INVITED`) or is already
+     * walled by its lifecycle status (`SUSPENDED`/`DEACTIVATED`) — counting it would seal a lock and emit a
+     * spurious {@see UserLocked} on an identity that can never present the "temporarily locked" wall. A no-op
+     * while already locked — the attempt is refused before the password is even checked, so it neither grows the
+     * counter unboundedly nor re-emits {@see UserLocked} on every hit within the window. On crossing
+     * {@see MAX_FAILED_ATTEMPTS} it seals the lockout for {@see LOCK_DURATION} and records the fact once. `$now`
+     * comes from the application's injected clock so the expiry and the event timestamp share one time source
+     * (never a static wall clock that diverges in tests).
+     */
+    public function recordFailedAttempt(DateTimeImmutable $now): void
+    {
+        if (IdentityStatus::ACTIVE !== $this->status) {
+            return;
+        }
+
+        if ($this->isLockedAt($now)) {
+            return;
+        }
+
+        if ($this->lockedUntil instanceof DateTimeImmutable) {
+            // A previous lock has lapsed (we are past its expiry). That window is closed, so a fresh run
+            // of attempts starts from zero — otherwise the stale count would re-lock on the first
+            // post-expiry miss and grow without bound across cycles.
+            $this->failedAttempts = 0;
+            $this->lockedUntil = null;
+        }
+
+        ++$this->failedAttempts;
+
+        if ($this->failedAttempts >= self::MAX_FAILED_ATTEMPTS) {
+            $this->lockedUntil = $now->add(new DateInterval(self::LOCK_DURATION));
+
+            $this->record(new UserLocked($this->id(), $this->lockedUntil));
+        }
+    }
+
+    /**
+     * Clears any lockout: zeroes the counter and drops the expiry. Returns whether anything actually changed,
+     * so a caller can skip the persistence round-trip on the common successful login where there is nothing to
+     * clear. Idempotent — safe to call when already clean.
+     */
+    public function clearLockout(): bool
+    {
+        if (0 === $this->failedAttempts && !$this->lockedUntil instanceof DateTimeImmutable) {
+            return false;
+        }
+
+        $this->failedAttempts = 0;
+        $this->lockedUntil = null;
+
+        return true;
+    }
+
+    /**
+     * Whether the identity is locked at `$now`: a lockout is set and its expiry is still in the future. A
+     * lapsed `lockedUntil` (in the past) reads as unlocked without any scheduler — the physical reset happens
+     * lazily on the next successful login.
+     */
+    public function isLockedAt(DateTimeImmutable $now): bool
+    {
+        return $this->lockedUntil instanceof DateTimeImmutable && $this->lockedUntil > $now;
     }
 
     /**

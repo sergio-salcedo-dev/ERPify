@@ -78,3 +78,30 @@ Erpify\Iam\Identity\Domain\Entity\User:
                 - 'dan-password'
                 - ['MANAGER']
                 - 'DEACTIVATED'
+    user_nora:
+        # ACTIVE, one failed attempt below the lockout threshold (seeded per scenario). The next wrong password
+        # trips the lock, emitting a UserLocked event while the anonymous response stays the uniform 401.
+        __factory:
+            'Erpify\Tests\DataFixtures\UserFixtureFactory::create':
+                - '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a63'
+                - 'nora@erpify.test'
+                - 'nora-password'
+                - []
+    user_leo:
+        # ACTIVE, seeded locked per scenario. A correct password within the window is walled 403 account-locked;
+        # a wrong password stays the uniform 401.
+        __factory:
+            'Erpify\Tests\DataFixtures\UserFixtureFactory::create':
+                - '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a64'
+                - 'leo@erpify.test'
+                - 'leo-password'
+                - []
+    user_lena:
+        # ACTIVE with a lapsed lock (seeded per scenario): a successful login admits (204) and clears the counter.
+        # Needs a membership so session minting resolves her organization.
+        __factory:
+            'Erpify\Tests\DataFixtures\UserFixtureFactory::create':
+                - '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a65'
+                - 'lena@erpify.test'
+                - 'lena-password'
+                - ['VIEWER']
