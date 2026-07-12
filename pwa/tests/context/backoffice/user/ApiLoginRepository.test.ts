@@ -51,6 +51,19 @@ describe("ApiLoginRepository.login", () => {
     expect(outcome.kind).toBe(LoginOutcomeKind.SUSPENDED);
   });
 
+  it("maps 403 account-locked to locked", async () => {
+    const post = vi
+      .fn()
+      .mockRejectedValue(new HttpError(problem(HttpStatus.FORBIDDEN, "account-locked")));
+
+    const outcome = await new ApiLoginRepository(httpClientPosting(post)).login({
+      email: "a@b.com",
+      password: "x",
+    });
+
+    expect(outcome.kind).toBe(LoginOutcomeKind.LOCKED);
+  });
+
   it("maps 403 forbidden to deactivated", async () => {
     const post = vi
       .fn()
@@ -62,6 +75,21 @@ describe("ApiLoginRepository.login", () => {
     });
 
     expect(outcome.kind).toBe(LoginOutcomeKind.DEACTIVATED);
+  });
+
+  it("maps a 503 service-unavailable to request-failed (retryable, not a credentials error)", async () => {
+    const post = vi
+      .fn()
+      .mockRejectedValue(
+        new HttpError(problem(HttpStatus.SERVICE_UNAVAILABLE, "service-unavailable")),
+      );
+
+    const outcome = await new ApiLoginRepository(httpClientPosting(post)).login({
+      email: "a@b.com",
+      password: "x",
+    });
+
+    expect(outcome.kind).toBe(LoginOutcomeKind.REQUEST_FAILED);
   });
 
   it.each([

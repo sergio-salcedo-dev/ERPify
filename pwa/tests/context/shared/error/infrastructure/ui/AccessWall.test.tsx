@@ -14,6 +14,11 @@ describe("AccessWall", () => {
       status: "Deactivated",
       testId: "access-wall--deactivated",
     },
+    {
+      variant: AccessWallVariant.LOCKED,
+      status: "Locked",
+      testId: "access-wall--locked",
+    },
   ])("renders the $variant wall as accessible card content", ({ variant, status, testId }) => {
     render(<AccessWall variant={variant} />);
 
@@ -30,6 +35,19 @@ describe("AccessWall", () => {
     expect(signIn).toHaveAttribute("href", "/login");
 
     expect(screen.getByTestId(testId)).toBeInTheDocument();
+  });
+
+  it("renders both recovery actions on the locked wall (neutral, two-action stack)", () => {
+    render(<AccessWall variant={AccessWallVariant.LOCKED} />);
+
+    // Primary CTA routes to self-service recovery; secondary returns to sign-in.
+    const recover = screen.getByRole("link", { name: "Recover access" });
+    expect(recover).toHaveAttribute("href", "/forgot-password");
+    expect(recover).toHaveAttribute("data-testid", "access-wall__recover--locked");
+
+    const signIn = screen.getByRole("link", { name: "Sign in" });
+    expect(signIn).toHaveAttribute("href", "/login");
+    expect(signIn).toHaveAttribute("data-testid", "access-wall__sign-in--locked");
   });
 
   it("uses distinct copy per variant", () => {

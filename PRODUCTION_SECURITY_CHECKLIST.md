@@ -246,6 +246,20 @@ you change anything here.
       migration. Media/object routes are protected (not public-by-design). Sessions use the **native file handler** (single-container only) — a shared
       handler (Postgres/Redis) is a follow-up before horizontal scaling. ADR
       [`docs/adr/auth-rbac-subsystem.md`](docs/adr/auth-rbac-subsystem.md).
+- [ ] **Persisted per-identity lockout (`identity_user.failed_attempts` / `locked_until`):** a second line
+      behind the ephemeral per-IP+email `login_throttling` (built-in, `max_attempts: 5`). After **10** consecutive
+      failed attempts against a **resolved** identity it is locked for **15 minutes** (`checkPostAuth` refuses even
+      a proven login → **403 `account-locked`**, minting no session); a successful login or a lapsed window clears
+      it. The counter increments only for an email that resolves to a row, so an **unknown email writes and emits
+      nothing** — the pre-identity 401 stays indistinguishable, and a wrong password on a locked account still
+      returns the uniform 401 (an anonymous caller never sees `locked`). Catches a distributed credential-stuffing
+      run that sprays one account from many IPs and so evades the per-IP throttle. The lock is orthogonal to
+      `IdentityStatus` (a locked identity stays `ACTIVE`); the lock trip emits a PII-free `UserLocked` domain event.
+      A store fault while **recording** a failed attempt is absorbed best-effort, so the failure path stays the
+      uniform 401 — never a leaked **500** nor a resolved-vs-unknown status-code oracle (the increment is lost,
+      tolerable during a DB incident); a store fault while **clearing** on a successful login re-maps to a
+      retryable **503 `service-unavailable`**. An attempt the aggregate ignores (a locked or non-`ACTIVE`
+      resolved identity) opens no transaction, so a sustained attack on a locked account costs no per-attempt write.
 - [ ] **Server-side session registry & admission gate (`iam_session`):** login mints a `Session` aggregate and the
       **Session Admission Gate** re-reads it on every authenticated `/api` request, so "authenticated" means "has a
       **live, revocable** session", not merely "holds a cookie". The gate is **fail-closed**: a revoked or
