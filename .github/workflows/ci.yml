@@ -48,7 +48,7 @@ jobs:
       - uses: ./.github/actions/docker-setup
 
       - name: Build images
-        uses: docker/bake-action@6614cfa25eff9a0b2b2697efb0b6159e7680d584 # v7.2.0
+        uses: docker/bake-action@d3418bd7d0e9324001bca92fa8ba175ea7e6dc9b # v7.3.0
         with:
           source: "."
           pull: true
@@ -84,7 +84,7 @@ jobs:
       - uses: ./.github/actions/docker-setup
 
       - name: Build images
-        uses: docker/bake-action@6614cfa25eff9a0b2b2697efb0b6159e7680d584 # v7.2.0
+        uses: docker/bake-action@d3418bd7d0e9324001bca92fa8ba175ea7e6dc9b # v7.3.0
         with:
           source: "."
           pull: true
@@ -166,7 +166,7 @@ jobs:
       - uses: ./.github/actions/docker-setup
 
       - name: Build images
-        uses: docker/bake-action@6614cfa25eff9a0b2b2697efb0b6159e7680d584 # v7.2.0
+        uses: docker/bake-action@d3418bd7d0e9324001bca92fa8ba175ea7e6dc9b # v7.3.0
         with:
           source: "."
           pull: true
@@ -221,7 +221,7 @@ jobs:
       - uses: ./.github/actions/docker-setup
 
       - name: Build images
-        uses: docker/bake-action@6614cfa25eff9a0b2b2697efb0b6159e7680d584 # v7.2.0
+        uses: docker/bake-action@d3418bd7d0e9324001bca92fa8ba175ea7e6dc9b # v7.3.0
         with:
           source: "."
           pull: true
@@ -251,7 +251,7 @@ jobs:
       - name: Upload taint SARIF
         if: always()
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+        uses: github/codeql-action/upload-sarif@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a # v4.36.3
         with:
           sarif_file: api/tools/psalm/psalm-taint.sarif
           category: psalm-taint
@@ -319,7 +319,7 @@ jobs:
       - uses: ./.github/actions/full-setup/
 
       - name: Build images
-        uses: docker/bake-action@6614cfa25eff9a0b2b2697efb0b6159e7680d584 # v7.2.0
+        uses: docker/bake-action@d3418bd7d0e9324001bca92fa8ba175ea7e6dc9b # v7.3.0
         with:
           source: "."
           pull: true
@@ -463,7 +463,7 @@ jobs:
       - uses: ./.github/actions/full-setup/
 
       - name: Build images
-        uses: docker/bake-action@6614cfa25eff9a0b2b2697efb0b6159e7680d584 # v7.2.0
+        uses: docker/bake-action@d3418bd7d0e9324001bca92fa8ba175ea7e6dc9b # v7.3.0
         with:
           source: "."
           pull: true
