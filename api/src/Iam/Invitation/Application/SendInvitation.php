@@ -8,6 +8,7 @@ use DateInterval;
 use Erpify\Iam\Identity\Application\InviteUser;
 use Erpify\Iam\Identity\Domain\Enum\Role;
 use Erpify\Iam\Invitation\Domain\Entity\Invitation;
+use Erpify\Iam\Invitation\Domain\Exception\InvitedIdentityUnavailable;
 use Erpify\Iam\Invitation\Domain\Repository\InvitationRepository;
 use Erpify\Organization\Membership\Application\GrantMembership;
 use Erpify\Shared\Clock\Domain\Clock;
@@ -15,7 +16,6 @@ use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\Uuid;
-use RuntimeException;
 
 /**
  * Orchestrates a new invitation across three contexts, in ONE transaction: it provisions the `INVITED` identity
@@ -62,7 +62,7 @@ final readonly class SendInvitation
         $recipientEmail = $this->transactionManager->transactional(
             function () use ($invitationId, $email, $generated, $roles): string {
                 $user = $this->inviteUser->invite($email, ...$roles);
-                $userId = $user->getId() ?? throw new RuntimeException('The invited identity has no id.');
+                $userId = $user->getId() ?? throw InvitedIdentityUnavailable::withoutId();
                 $membership = $this->grantMembership->grant($userId, ...$roles);
 
                 $invitation = Invitation::create(

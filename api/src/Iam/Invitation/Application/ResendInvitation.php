@@ -7,13 +7,13 @@ namespace Erpify\Iam\Invitation\Application;
 use DateInterval;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Iam\Invitation\Domain\Exception\InvitationNotFound;
+use Erpify\Iam\Invitation\Domain\Exception\InvitedIdentityUnavailable;
 use Erpify\Iam\Invitation\Domain\Repository\InvitationRepository;
 use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\Uuid;
-use RuntimeException;
 
 /**
  * Re-sends a still-live invitation with a fresh token: the previous token is invalidated (its digest is
@@ -57,7 +57,7 @@ final readonly class ResendInvitation
                 $this->eventBus->publish(...$invitation->pullDomainEvents());
 
                 $user = $this->users->findById($invitation->invitedUserId())
-                    ?? throw new RuntimeException('The invited identity no longer exists.');
+                    ?? throw InvitedIdentityUnavailable::missing();
 
                 return $user->email();
             },
