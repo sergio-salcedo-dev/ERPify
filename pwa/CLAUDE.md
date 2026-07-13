@@ -76,6 +76,14 @@ Full-stack targets (`make app.dev`, `make docker.up`, `make docker.down`, …) l
 - **No linter-narration comments.** Never add a comment whose only purpose is to justify a construct against a lint/Sonar rule ID (e.g. `// block body avoids S6544/S3735`). Make the linters pass and let the code stand; for a non-obvious pattern state the _intent_ ("fire-and-forget", "stable callback") without naming rules. The only allowed rule-referencing comment is the load-bearing `// eslint-disable-next-line <rule>` directive.
 - **Question the status quo** (root [`../CLAUDE.md`](../CLAUDE.md) → "Question the status quo — argued improvement"): on every PWA change, distrust the existing design _of the code you touch_ and look for the real improvement toward clean architecture / SOLID / DDD — a component reaching infrastructure directly instead of an injected `domain/` port (DIP), logic that belongs in `application/` leaking into a `page.tsx`, a client/server boundary that pulls hooks into the RSC payload, a re-implemented primitive that already lives in `@/components/erpify` or a `@/context/shared/<capability>` module. Propose with principle + objective (maintainability / performance / speed) + cost; let the user decide scope — never a unilateral refactor or a speculative abstraction (Rule of Three / YAGNI gate it).
 
+### Vercel `react-best-practices` skill — house overrides
+
+The project-scoped `vercel-react-best-practices` skill (`.claude/skills/`) is a **performance reference** — 70 Vercel Engineering rules (waterfalls, RSC data-fetching, re-render, bundle). Apply it with judgement (_"performance is measured, not asserted"_, root [`../CLAUDE.md`](../CLAUDE.md)) and treat it as **subordinate to this file** on conflict. Three of its rules are overridden here:
+
+- **`bundle-barrel-imports`** ("avoid barrel files") — the `@/components/erpify` and `@/context/shared/<capability>` barrels are an architectural public-API boundary enforced in CI (`no-restricted-imports`), not a tree-shaking accident. Keep them; if bundle tracing ever bites, reach for `optimizePackageImports` in `next.config.ts`, don't dissolve the boundary.
+- **`client-swr-dedup`** ("use SWR") — data access goes through the injected `http-client` port (`FetchHttpClient`) + `useMercureRealtime`, never a bare library (DIP). Any request dedup lives behind that port, not via SWR bolted on top.
+- **`rendering-conditional-render`** ("ternary, not `&&`") — stylistic, not load-bearing; follow the touched file's own convention.
+
 ## Security review (mandatory on every change)
 
 Every PR — even small fixes — runs the checklist in the root [`../CLAUDE.md`](../CLAUDE.md) ("Security review on every change"); its **Frontend (`pwa/`)** list is authoritative. The XSS rules below are part of that checklist, not optional.
