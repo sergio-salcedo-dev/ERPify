@@ -31,12 +31,12 @@ Fuente de verdad del diseño (**no re-abrir, ya ratificado por Sergio**):
 [`_bmad-output/planning-artifacts/epics-identity-invitation-lifecycle.md`](../planning-artifacts/epics-identity-invitation-lifecycle.md) **Story II-4, líneas 745-799** (FR5/FR9) ·
 run UX **`ux-ERPify-2026-07-06`** (`EXPERIENCE.md` = espina de comportamiento, `DESIGN.md` = delta visual de los 6 componentes).
 
-**La frase que gobierna II-4:** el POST accept vive **fuera del firewall** y hace, en **una transacción**,
-`credenciales-de-token válido → User INVITED→ACTIVE (fija password) → Invitation ACCEPTED → regenera el id de sesión →
-acuña la 1ª Session` — y **solo entonces**. Toda muerte de token (usado/revocado/caducado/aceptado/inexistente) colapsa a
+**La frase que gobierna II-4:** el POST accept (ruta pública `PUBLIC_ACCESS` **dentro** del firewall `main`, no un firewall
+aparte) valida el token y hace `User INVITED→ACTIVE (fija password) → Invitation ACCEPTED` **en una transacción de dominio**,
+y **luego** `regenera el id de sesión → acuña la 1ª Session` (vía `Security::login`) — y **solo entonces**. Toda muerte de token (usado/revocado/caducado/aceptado/inexistente) colapsa a
 **un único** muro opaco (`invalid-token` + «Este enlace ya no es válido»). El token **nunca** se renderiza.
 
-**⚠️ II-4 es grande** (backend `Iam/Invitation` completo + accept fuera del firewall + **primer wiring de CSRF stateless** +
+**⚠️ II-4 es grande** (backend `Iam/Invitation` completo + accept público (dentro de `main`) + **CSRF stateless nativo** +
 6 componentes/pantallas PWA + email de invitación + retiro de `/register`). Ver «Nota de tamaño / ejecución» antes de empezar:
 tres decisiones de arquitectura de riesgo **medio** piden confirmación al inicio (Decisiones A/B/C).
 
@@ -63,7 +63,7 @@ detecte.
    muro `invalid-link` «Este enlace ya no es válido» — **byte-idéntica** (status + type + shape) en los cinco. Un test
    **compara los cinco** y exige respuesta idéntica; nunca se distingue el motivo; el email invitado **nunca** se muestra.
 
-4. **(NFR3 · CSRF + Origin + regeneración — anti-fixation)** El POST accept, al estar **fuera del firewall**, exige
+4. **(NFR3 · CSRF + Origin + regeneración — anti-fixation)** El POST accept, al ser una ruta **pública/pre-identidad**, exige
    **`Origin` same-origin** (patrón `LoginOriginListener`) **y** un **token CSRF válido** (double-submit stateless — II-4 es
    el **primer consumidor** que lo cablea). Sin ambos → rechazo **sin mutar estado** (403). Al pasar `INVITED→ACTIVE` se
    **regenera el id de sesión** (`migrate(true)`) antes de acuñar la `Session`. Un test verifica: (a) accept sin `Origin` →
@@ -112,7 +112,7 @@ logs o respuestas**.
 > el contrato es el body/`type` del endpoint accept. Un subagente API + un subagente PWA en paralelo es legítimo **una vez
 > fijado ese contrato** (path, 204-vs-body, los `type` de `invalid-token`). No paralelizar antes.
 
-### Backend — `Iam/Invitation` + accept fuera del firewall
+### Backend — `Iam/Invitation` + accept público (dentro del firewall `main`)
 
 - [ ] **T1 — Agregado `Invitation` + eventos + repo (AC1, AC8)**
   - [ ] `api/src/Iam/Invitation/Domain/Entity/Invitation.php` — `final class Invitation extends AggregateRoot`,
@@ -158,8 +158,11 @@ logs o respuestas**.
     - [ ] Cualquier fallo de validación (token no elegible en los 5 casos, status≠SENT, User no INVITED) → lanzar la excepción
           **`invalid-token`** (T5) **antes** de mutar nada. **Opacidad total (AC3):** los 5 caminos lanzan la **misma**
           excepción con el **mismo** mensaje — no ramificar el motivo.
-  - [ ] **Establecimiento de sesión + anti-fixation (NFR3) = Decisión A** — tras el commit de los flips, establecer la sesión
-        autenticada y acuñar la 1.ª `Session` (regenerando el id). Ver «El crux: establecer sesión fuera del firewall» + Decisión A.
+  - [ ] **Establecimiento de sesión + anti-fixation (NFR3) = A1 (ratificada)** — tras el **commit** de los flips,
+        `Security::login($securityUser, 'main')` dispara `LoginSuccessEvent` → `SessionMintingSuccessListener` acuña la 1.ª
+        `Session` + el `migrate(true)` nativo regenera el id. `Security::login` va **fuera** del `wrapInTransaction`, **tras**
+        el commit de dominio (los flips + el guard `status==SENT` + retire-then-act van **dentro** y **antes**). Ver «El crux:
+        establecer la sesión tras el accept».
 
 - [ ] **T4 — Controlador accept + ruta pública + Origin (AC2, AC4)**
   - [ ] `api/src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php` — `AbstractController` fino, POST, DTO de
@@ -169,7 +172,8 @@ logs o respuestas**.
   - [ ] Ruta: bloque `resource` nuevo en `api/config/routes.yaml` apuntando a `../src/Iam/Invitation/Infrastructure/Http/`
         con `defaults: { _format: json }` y prefijo adecuado (p.ej. `/api/v1/backoffice`, mirror del login que confina su URL).
   - [ ] **`security.yaml`:** añadir una entrada `access_control` `PUBLIC_ACCESS` para la ruta accept **antes** del catch-all
-        `^/api → IS_AUTHENTICATED_FULLY` (el accept es pre-identidad, fuera del firewall).
+        `^/api → IS_AUTHENTICATED_FULLY`. El accept es pre-identidad pero **dentro** del firewall `main` (ruta pública, **no**
+        un firewall `security:false` — `Security::login` de A1 necesita el firewall resuelto).
   - [ ] Origin check: listener espejo de `LoginOriginListener` **keyed en el nombre de ruta del accept** (o generalizar el
         existente a un conjunto de rutas). `Origin !== getSchemeAndHttpHost()` → `AccessDeniedHttpException` (403 `forbidden`).
 
@@ -177,20 +181,24 @@ logs o respuestas**.
   - [ ] `api/src/Iam/Invitation/Domain/Exception/InvalidToken.php` (o `InvalidInvitationToken`) —
         `final class … extends DomainException implements <marker existente>` con `type()` override → `'invalid-token'`.
         **Sin marker interface nuevo** (vive en `Iam/Invitation`, no en `Shared/ErrorContract` → el `ErrorContractGateTest`
-        git-aware no dispara; pero **igual** actualiza el doc). Marker + status concretos = **Decisión B** (recomendado 400
-        `InvalidInput`, precedente `InvalidUuidException`).
+        git-aware no dispara; pero **igual** actualiza el doc). **Decisión B ratificada: 400 `InvalidInput`** (`implements
+        InvalidInput`, precedente `InvalidUuidException`; status **uniforme** en los 5 casos = opacidad).
   - [ ] Actualizar [`docs/api-error-contract.md`](../../docs/api-error-contract.md): documentar `invalid-token` (el `type` ya
         está **reservado** en el doc por II-3 como «out of scope here» — ahora se realiza), su status, y que es
         **pre-identidad opaco** (los 5 casos colapsan). `make php.lint.error-contract` verde.
 
-- [ ] **T6 — CSRF stateless double-submit (AC4) — 1.er consumidor = Decisión C**
-  - [ ] **Nada existe hoy** (`framework.yaml` sin `csrf_protection`; el comentario de `LoginOriginListener` lo anticipa como
-        `wire-on-consumer`). Cablear el mecanismo (recomendado: `framework.csrf_protection` nativo stateless con
-        `stateless_token_ids` + `check_header` + `cookie_name`, esquema ya documentado en `reference.php`) y aplicarlo al POST
-        accept. **El login POST entra en el alcance del CSRF** (epic Additional) — confirmar si se cablea aquí o se deja
-        preparado. Ver «El crux: CSRF» + Decisión C.
-  - [ ] Coordinar con el cliente: el double-submit necesita que el PWA lea/reenvíe el token (cookie→header). Verificar en un
-        **navegador real** (el flujo de la cookie CSRF + header no se ve en unit; mirror del hallazgo Base-UI tooltip).
+- [ ] **T6 — CSRF stateless (AC4) — Decisión C = Opción 1 (nativo Symfony 8), ratificada**
+  - [ ] Registrar el token id del accept en `framework.csrf_protection.stateless_token_ids` (nativo; **nunca** hand-rolled).
+        El **check Origin-primary + token stateless = parte load-bearing** (unit/Behat-verificable; honra el «Origin **AND**
+        CSRF» de D5). El stateless CSRF de Symfony 8 **no requiere sesión** y es Origin/Referer-primary → encaja en el accept
+        pre-identidad; `reference.php` documenta el esquema. **Dev-verify:** ¿el recipe Flex dejó un `config/packages/csrf.yaml`
+        parcial (stateless on-by-default) o está ausente?
+  - [ ] `check_header:true` (cookie+header double-submit, JS-generado al submit — **no** sembrado por un GET) = **defense-in-
+        depth OPCIONAL**, la **única** parte solo-navegador → **Playwright**, **no bloqueante** (habilitar o diferir sin
+        incumplir D5). El CSRF aquí es **defense-in-depth, NO el control primario** (primarios = Origin + `SingleUseToken`
+        opaco) — no debilitar el Origin check. Consolidar `LoginOriginListener` con el check nativo = **follow-up**, no II-4.
+        El **login POST** entra en alcance CSRF (epic Additional) — confirmar si se cablea aquí o se deja preparado (no romper
+        `login→204`).
 
 - [ ] **T7 — `SecurityEmail` invitación (AC9) — plantilla, no componente React**
   - [ ] Plantilla del email de invitación (Twig/PHP mailer, `symfony/mailer` — **ya async vía Messenger** por defecto en este
@@ -321,41 +329,53 @@ port/adapter accept, `SecuritySignal`, `ConnectivityButton`, `OfflineNotice`, ho
 `Routes.ts` (+`ACCEPT_INVITATION`, −`REGISTER`) · `FetchHttpClient.ts` (handshake endpoint) · `LoginForm.tsx` (quitar link
 register). **PWA — borrar:** `register/page.tsx`, `RegisterForm.tsx`, `RegisterSchema.ts`.
 
-### El crux: establecer la sesión FUERA del firewall (NFR3 · Decisión A)
+### El crux: establecer la sesión tras el accept (NFR3 · Decisión A = A1, ratificada)
 
-El accept es un controlador **custom fuera del firewall** → **no** se dispara `LoginSuccessEvent`, así que **ni** el
-`SessionMintingSuccessListener` (que acuña la `Session`) **ni** el `migrate(true)` anti-fixation del firewall corren solos.
-**No existe hoy** ningún helper de login programático (`grep` no halló `Security::login`/`authenticateUser`/`->migrate(`).
-Dos caminos — **decisión de arquitectura, confirmar al inicio (Decisión A):**
+**Corrección de encuadre:** el accept **NO está fuera del firewall** — es una ruta `PUBLIC_ACCESS` **dentro** del firewall
+`main` (catch-all sin `pattern`), igual que `/login`. Por eso `Security::login` resuelve el firewall y dispara
+`LoginSuccessEvent`. (Lo que el ADR D5 llama «fuera del firewall» = fuera del flujo `json_login`, no fuera del mapa de firewalls.)
 
-- **(A1) Login programático** — `Security::login($securityUser)` (o `UserAuthenticatorInterface::authenticateUser`) tras los
-  flips. Dispara `LoginSuccessEvent` → **reutiliza** `SessionMintingSuccessListener` (acuña la `Session` + resuelve org +
-  device) **y** el `migrate` anti-fixation del firewall. **Mínima duplicación.** Riesgo: login programático dentro de un
-  controlador público; verificar que el evento dispara una sola vez y que el `iamSessionId` sobrevive a la regeneración
-  (el listener corre a −128, después del migrate a 0 — mismo orden que en login).
-- **(A2) Manual** — `$request->getSession()->migrate(true)` + fijar el token en `TokenStorage` + llamar `StartSession->start(...)`
-  directo (resolviendo org con `FindUserOrganizationId`, device con `UserAgentDeviceLabel`). Explícito, sin evento, pero
-  **duplica** la orquestación del `SessionMintingSuccessListener`.
+**A1 (ratificada):** tras el commit de los flips de dominio, `Security::login($securityUser, 'main')` (fijar el firewall
+explícito evita el `LogicException` si mañana hay >1 authenticator) dispara `LoginSuccessEvent` → **reutiliza**
+`SessionMintingSuccessListener` (acuña la `Session` + resuelve org/device, fail-closed) **y** el `migrate(true)` anti-fixation
+nativo (prio 0; el minting a −128 corre después y el `iamSessionId` sobrevive). DRY sobre el TCB de sesión; A2 (manual
+`migrate`+`StartSession` directo) descartado por duplicar el invariante NFR3 y la orquestación.
 
-**Recomendación: A1** (reutiliza el listener de minting y el anti-fixation del firewall; DRY sobre el TCB de sesión), con la
-verificación empírica de que el evento y el migrate se comportan igual que en el login. Si A1 resulta frágil en la práctica
-(doble minting, orden del migrate), caer a A2. **La regeneración del id es AC (NFR3), no opcional** — un test compara el id
-pre/post.
+**Ordering (el mayor riesgo de implementación, ahora fijado):** el **retire-then-act** (`invitation->accept()` = consumo del
+single-use) + los flips de `User`/`Invitation` van **dentro** del `wrapInTransaction` y **antes** del login, con guard
+`status==SENT` + captura de unique-constraint (contra doble-accept concurrente → doble sesión); `Security::login` se llama
+**tras** el commit de dominio (fuera del `wrapInTransaction`). Son **2 transacciones** (TX1 dominio; TX2 mint de `Session`, en
+el `transactional` propio de `StartSession`) — **correcto** por fronteras de agregado (forzar 1 sola TX acoplaría la
+persistencia de `Session` a la de `Invitation`), no un defecto. La no-atomicidad residual (TX1 commit + mint 503) deja
+«usuario `ACTIVE` sin sesión» = estado **benigno recuperable** (entra por login normal con el password recién fijado);
+documentarlo, no ingeniar contra ello.
 
-### El crux: CSRF stateless double-submit (1.er consumidor · Decisión C)
+**Verificar (empírico, no diseño):** que `Security::login` dispara `LoginSuccessEvent` **una sola vez** y el orden
+migrate(0)→mint(−128) se respeta como en `json_login`. **La regeneración del id es AC (NFR3), no opcional** — test Behat
+compara la cookie de sesión pre/post + asserta **1** fila `Session` + **1** `SessionStarted` (el conteo exacto caza el
+doble-minting silencioso).
 
-**Nada existe.** `framework.yaml` no tiene `csrf_protection`; el docblock de `LoginOriginListener` dice que el token CSRF
-`wire-on-consumer` **reutilizará** su mismo-origen — **II-4 es ese consumidor**. `reference.php` ya documenta el esquema
-nativo (`csrf_protection{ stateless_token_ids, check_header, cookie_name: "csrf-token" }`).
+### El crux: CSRF stateless (Decisión C = Opción 1, ratificada · honra el ADR D5, sin desviación)
 
-- **(C1) Nativo Symfony 8 stateless** — habilitar `framework.csrf_protection` con `stateless_token_ids` + `check_header:true` +
-  `cookie_name`; aplicar al POST accept. Menos criptografía hand-rolled; es lo que el ADR anticipó. **Verificar** que funciona
-  para una ruta **fuera del firewall** (el stateless CSRF de Symfony no requiere sesión — encaja).
-- **(C2) Hand-rolled** — listener que compara una cookie a un header (double-submit), espejo de `LoginOriginListener`.
+Verificado en la doc de Symfony 8 (Context7): el stateless CSRF **no requiere sesión** y su check **same-origin (Origin/Referer)
+es el mecanismo PRIMARIO**; el double-submit cookie+header (`check_header`) es **opcional/off-by-default**, con el token
+**generado en JS al submit** — **no** sembrado por un GET previo. Por eso funciona en un landing en frío desde el email y el
+temor al bootstrap se disuelve. El downgrade-guard («una vez probado, se exige») solo aplica **si ya hay sesión** → no muerde
+al accept pre-identidad. `framework.yaml` no tiene `csrf_protection` hoy; `reference.php` documenta el esquema
+(`stateless_token_ids`, `check_header`, `cookie_name: "csrf-token"`).
 
-**Recomendación: C1** (nativo). El **login POST entra en el alcance del CSRF** (epic Additional) — confirmar si II-4 lo
-cablea ya o lo deja preparado (no romper el login `ACTIVE→204` existente es invariante de no-regresión). **Verificar en
-navegador real** el ciclo cookie→header (unit no lo ve).
+- **Parte load-bearing (unit/Behat-verificable):** registrar el token id del accept en `framework.csrf_protection.stateless_token_ids`
+  → check Origin-primary + token stateless. Satisface el «Origin **AND** CSRF token» de D5.
+- **Defense-in-depth OPCIONAL (solo-navegador → Playwright, no bloqueante):** `check_header:true` (cookie+header double-submit,
+  JS-generado al submit). Puede habilitarse o diferirse sin incumplir D5.
+- **Nunca hand-rolled** (C2 descartado): el double-submit completo = generación+almacén+compare constant-time, justo lo que no
+  se escribe a mano.
+
+**Framing honesto (ratificado):** el CSRF aquí es **defense-in-depth, NO el control primario** — los primarios son el check
+Origin + el `SingleUseToken` opaco (que un atacante CSRF no posee; y la sesión se acuña para la **propia** invitada, así que el
+forced-login clásico no aplica). **Documentarlo** para que nadie debilite el Origin check «porque ya hay CSRF». El check
+same-origin nativo **subsume** a `LoginOriginListener` → su **consolidación es follow-up**, no II-4 (no romper el login
+`ACTIVE→204`). El **login POST** entra en alcance CSRF (epic Additional) — confirmar si se cablea aquí o se deja preparado.
 
 ### El crux: opacidad total del token (SI-13 · el invariante que II-4 establece)
 
@@ -417,28 +437,44 @@ de persistencia ni el modelado del agregado.
   final los IDs de story/NFR y comentarios change-relative en `api/src`/`pwa/src` (permitidos aquí en el spec, prohibidos en
   código) · verificar **fresco** sobre el path del worktree, confiar en el exit code recién impreso.
 
-### Decisiones a confirmar al inicio del dev (riesgo medio — recomendaciones flagged)
+### Decisiones ratificadas (A–E) — cerradas por Sergio (2026-07-13; lentes Winston + Amelia + desempate ChatGPT)
 
-- **Decisión A — establecimiento de sesión + anti-fixation (NFR3).** Recomendado **A1** (login programático
-  `Security::login` → reutiliza `SessionMintingSuccessListener` + migrate del firewall); alternativa **A2** (manual `migrate(true)`
-  + `StartSession` directo). Ver «El crux: establecer la sesión fuera del firewall». *La regeneración del id es AC, no opcional.*
-- **Decisión B — marker + status de `invalid-token`.** Recomendado **400 `InvalidInput`** (`DomainException implements
-  InvalidInput`, `type()='invalid-token'`, precedente `InvalidUuidException`; un token muerto es un target de request
-  inválido, sin filtrar «existencia»). Alternativas: 404 `NotFound` o 401 `Unauthenticated` (D12 agrupa `invalid-token` en
-  pre-identidad junto a `unauthorized`). **Requisito duro:** el status elegido es **uniforme** en los 5 casos (opacidad).
-  **Sin** marker interface nuevo (vive en `Iam/Invitation`, drift gate no dispara; doc igual se actualiza).
-- **Decisión C — mecanismo CSRF double-submit.** Recomendado **C1** (nativo Symfony 8 stateless, `framework.csrf_protection`);
-  alternativa **C2** (listener hand-rolled). Confirmar si el **login POST** se cablea al CSRF ahora o se deja preparado
-  (no romper `login→204`). Ver «El crux: CSRF».
-- **Decisión D — superficie de invite/resend/revoke (AC7), dado que la UI de miembros está fuera de alcance (J5).**
-  Recomendado: **comando CLI** de invite (mirror `ProvisionOrganization`/`CreateInitialAdministrator` de II-1) + los casos de
-  uso de aplicación (resend/revoke) exercitables por CLI/Behat; los **endpoints HTTP de gestión** se difieren al slice de
-  gestión de miembros. Alternativa: endpoint HTTP mínimo gated ya. **Confirmar** — condiciona cuánto backend de disparo entra
-  en II-4 vs cuánto se difiere.
-- **Decisión E — placement de los componentes PWA nuevos** (`SecuritySignal`, `ConnectivityButton`, `OfflineNotice`, hook
-  conectividad). `components/erpify` (primitivo reutilizable) vs `context/shared/<capability>/infrastructure/ui` (pantalla de
-  una capacidad). **No** adelantar la frontera `components/{ui,erpify}` no autorizada (ver memoria
-  `project-pwa-component-boundary-model`); confirmar caso a caso en dev.
+Las cinco quedan **cerradas — no re-abrir en dev**. Lo que sigue pendiente es **verificación empírica**, no diseño.
+
+- **Decisión A = A1 (login programático `Security::login`).** Tras el commit de los flips de dominio,
+  `Security::login($securityUser, 'main')` dispara `LoginSuccessEvent` → **reutiliza** `SessionMintingSuccessListener` (acuña
+  la `Session` + resuelve org/device, fail-closed) **y** el `migrate(true)` anti-fixation nativo (prio 0; minting a −128
+  sobrevive). A2 (manual) descartado por duplicar el invariante NFR3. **Corrección de encuadre:** el accept es
+  `PUBLIC_ACCESS` **dentro** del firewall `main`, no fuera — por eso `Security::login` resuelve firewall. **Ordering fijado:**
+  retire-then-act (`invitation->accept()`) + flips **dentro** del `wrapInTransaction` y **antes** del login, con guard
+  `status==SENT`/unique; login **tras** el commit. 2 TX (dominio + mint de `Session`) = correcto por fronteras de agregado;
+  «`ACTIVE` sin sesión» ante mint-503 = benigno recuperable. Ver «El crux: establecer la sesión tras el accept».
+- **Decisión B = 400 `InvalidInput`.** `final class InvalidToken extends DomainException implements InvalidInput` con
+  `type()='invalid-token'` (precedente `InvalidUuidException`; token muerto = target de request inválido, sin filtrar
+  «existencia»). **Sin** marker interface nuevo (vive en `Iam/Invitation`, drift gate no dispara; el doc igual se actualiza).
+  El ADR D12 lista `invalid-token` como marker **distinto** de `unauthorized`(401) y **no le fija status** → 400 es libre y
+  cumple el único requisito duro: **status uniforme** en los 5 casos. 401/404 descartados (401 conflaciona con fallo de
+  credenciales; 404 filtra existencia).
+- **Decisión C = Opción 1 — CSRF nativo stateless de Symfony 8 (honra D5, sin desviación).** Verificado (Context7): stateless
+  CSRF **no requiere sesión**, su check **same-origin es el mecanismo PRIMARIO**, y el double-submit cookie+header
+  (`check_header`) es **opcional/off-by-default**, token **JS-generado al submit** (no sembrado por un GET) → el temor al
+  cold-landing se disuelve. **Load-bearing = Origin-primary + token stateless** (unit/Behat); `check_header` = **defense-in-
+  depth opcional** (única parte solo-navegador → Playwright, **no bloqueante**). El CSRF aquí es **defense-in-depth, NO el
+  control primario** (primarios = Origin + `SingleUseToken`) — documentarlo, no debilitar el Origin check. Consolidar
+  `LoginOriginListener` con el nativo = **follow-up**, no II-4. **Nunca** hand-rolled (C2 descartado). Ver «El crux: CSRF».
+- **Decisión D = D1 (CLI, mirror II-1).** invite/resend/revoke = **casos de uso en `Application`** (comando = adapter fino →
+  cuando J5 traiga los endpoints HTTP, envuelven el **mismo** use-case, OCP; cero rework). Comando `iam:invitation:create`
+  (o `organization:member:invite`) espejo de `CreateInitialAdministratorCommand`: `mint` + persiste `Invitation` + **imprime
+  el token plano una vez** (como el email), nunca lo loggea. Endpoints HTTP de gestión **diferidos** al slice de miembros
+  (J5). El único endpoint HTTP de II-4 es el accept público. **Behat conduce el CLI y parsea el token plano** para POST-earlo
+  a accept (sembrar por SQL no computa el hash → falsos rojos).
+- **Decisión E = per-caso (taxonomía por dependencia).** Hook de conectividad + `OfflineNotice` + `ConnectivityButton` →
+  **nueva capability `context/shared/connectivity/`** (`infrastructure/ui/` para los componentes; consumen el hook → **no**
+  pueden ser `components/erpify`, que tiene prohibido importar `context/`). **`SecuritySignal`** → según semántica:
+  presentacional puro → `components/erpify`; session/security-aware → `context/shared/{access,error}/infrastructure/ui`
+  (espejo de `AccessWall`) — **pin con UX/Sally** qué es exactamente (única pieza cuya capa la decide su import real, no la
+  regla). Reveal de password → `components/ui` (afordancia de input pura). **No** adelantar la frontera `components/{ui,erpify}`
+  no autorizada (ver memoria `project-pwa-component-boundary-model`).
 
 ### Fuera de alcance (frontera explícita — no lo hagas en II-4)
 
@@ -496,5 +532,6 @@ claude-opus-4-8[1m] (Opus 4.8, 1M context).
 | Fecha       | Cambio |
 |-------------|--------|
 | 2026-07-13  | Story II-4 creada (ready-for-dev): análisis exhaustivo de 4 artefactos (UX / código API / código PWA / historias previas + ADR). |
+| 2026-07-13  | Decisiones A–E **ratificadas** (Sergio; lentes Winston+Amelia + desempate ChatGPT + verificación Context7 de Symfony 8 stateless CSRF): A=A1 (`Security::login`, ordering fijado, accept dentro de `main`), B=400 `InvalidInput`, C=Opción 1 (CSRF nativo stateless, Origin-primary load-bearing + `check_header` defense-in-depth opcional, honra D5), D=D1 (CLI), E=per-caso. |
 
 ### Review Findings
