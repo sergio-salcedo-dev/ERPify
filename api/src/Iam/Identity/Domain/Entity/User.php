@@ -11,6 +11,7 @@ use Doctrine\ORM\Mapping as ORM;
 use Erpify\Iam\Identity\Domain\Email;
 use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
 use Erpify\Iam\Identity\Domain\Enum\Role;
+use Erpify\Iam\Identity\Domain\Event\PasswordResetCompleted;
 use Erpify\Iam\Identity\Domain\Event\UserDeactivated;
 use Erpify\Iam\Identity\Domain\Event\UserLocked;
 use Erpify\Iam\Identity\Domain\Event\UserSuspended;
@@ -139,6 +140,28 @@ final class User extends AggregateRoot
     }
 
     /**
+     * Replaces the credential of an already-active identity — the password-reset mutator. Distinct from
+     * {@see activate()} (guarded `INVITED → ACTIVE`, which sets the FIRST credential): a reset overwrites the
+     * credential of an identity that is already `ACTIVE` and leaves the status untouched. Guards `ACTIVE`
+     * defensively — the reset use case walls a non-`ACTIVE` identity before reaching here, so an invocation on
+     * any other state is an orchestration bug, not a reachable user path. Records {@see PasswordResetCompleted}
+     * at its source, like the lifecycle transitions.
+     *
+     * @throws InvalidIdentityTransition when the identity is not `ACTIVE`
+     */
+    public function resetPassword(HashedPassword $password): void
+    {
+        if (IdentityStatus::ACTIVE !== $this->status) {
+            throw InvalidIdentityTransition::from($this->status, IdentityStatus::ACTIVE);
+        }
+
+        $this->passwordHash = $password->toString();
+        $this->updatedAt = SystemClock::now();
+
+        $this->record(new PasswordResetCompleted($this->id()));
+    }
+
+    /**
      * Raises the reversible post-active wall: `ACTIVE → SUSPENDED`.
      *
      * @throws InvalidIdentityTransition when the identity is not `ACTIVE`
@@ -258,6 +281,16 @@ final class User extends AggregateRoot
     public function status(): IdentityStatus
     {
         return $this->status;
+    }
+
+    /**
+     * Whether the identity is admitted to act — the single `ACTIVE` predicate the post-identity flows read
+     * before granting anything. Orthogonal to the lockout gate ({@see isLockedAt()}): an `ACTIVE` identity can
+     * still be temporarily locked.
+     */
+    public function isActive(): bool
+    {
+        return IdentityStatus::ACTIVE === $this->status;
     }
 
     /**

@@ -109,3 +109,10 @@ src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php => Erpify\
 src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php => Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher
 src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php => Erpify\Iam\Identity\Infrastructure\Security\UserProvider
 src/Iam/Invitation/Infrastructure/Cli/CreateInvitationCommand.php => Erpify\Iam\Identity\Domain\Enum\Role
+# Password reset → revoke every session. RevokeSessionsBestEffort (Iam/Identity Application) consumes the
+# published RevokeAllSessions use case (Iam/Session) to invalidate all of the user's sessions after a credential
+# change — the "reset closes every session" guarantee — and swallows a store outage (defence-in-depth: the
+# credential change already de-authenticates natively). CompletePasswordReset delegates to it, so this is the
+# single seam. Same published-Application-service family as the session-minting orchestrator above, the reverse
+# (teardown) direction the AllSessionsRevoked event's own docblock names as its consumer.
+src/Iam/Identity/Application/RevokeSessionsBestEffort.php => Erpify\Iam\Session\Application\RevokeAllSessions

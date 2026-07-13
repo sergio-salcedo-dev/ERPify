@@ -211,8 +211,8 @@ you change anything here.
       logged), TTL-bound, and **verified in constant time** (`\hash_equals`, no short-circuit on the
       secret). A fast hash (not a slow KDF) is correct precisely because the token is already
       uniformly random. Verification is **opaque**: a used, expired, or non-matching token all fail as
-      the same plain `false` — the cause is never revealed. **Its first HTTP consumer is the invitation accept**
-      (below).
+      the same plain `false` — the cause is never revealed. **Its HTTP consumers are the invitation accept and
+      the password reset** (below).
 - [ ] **Invitation accept (`POST /api/v1/backoffice/invitations/accept`):** the first public write of the
       invitation flow — a `PUBLIC_ACCESS` route **inside** the `main` firewall (so `Security::login` reuses the
       native anti-fixation `migrate(true)` + session minting; a half-accepted invitation never yields a session
@@ -227,6 +227,21 @@ you change anything here.
       Password hashing is Infrastructure (the DTO enforces the 8..128 policy at the boundary). Hardening
       (constant-time, `Referrer-Policy: no-referrer`, URL strip, token redaction in logs, rate-limit accept,
       non-`no-reply` sender) is **deferred to II-8**.
+- [ ] **Password reset (`POST /api/v1/backoffice/forgot-password` · `/reset-password`):** the credential-recovery
+      surface, mirroring the invitation flow. Forgot answers a **uniform 202** for every email/identity state
+      (only an `ACTIVE` identity mints a token, and that work is never observable to the anonymous requester) — no
+      account enumeration (SI-12). The reset link is a selector-verifier `<id>.<secret>`: only the SHA-256 digest
+      is stored (`identity_password_reset_token.token_hash`), the raw token is **never rendered, logged, or
+      persisted**. Every dead-token case (used, expired, unknown, malformed) collapses to one **byte-identical
+      `400 invalid-token`** (SI-13, cross-surface opacity with the invitation link — a distinct exception class
+      per context, one wire type). A successful reset **consumes the token atomically** (a conditional delete
+      whose affected-row count is the single-use guard, so a concurrent replay collapses to `invalid-token`), sets
+      the credential, clears the lockout, and **revokes every session** (best-effort teardown; a store outage is
+      swallowed because the credential change de-authenticates natively). A non-`ACTIVE` identity hits the
+      post-identity wall (403). Same-origin is guarded by `PasswordResetOriginListener` (mirror of the login
+      guard). Session mint (auto-login + `migrate(true)` regeneration, reusing the invitation wiring) and the
+      stateless CSRF token id are wired in the D1/D2 follow-on of this same PR. Hardening (constant-time timing,
+      per-target rate-limit, token TTL sweep, GDPR erase hook) is **deferred to II-8**.
 - [ ] **Session firewall (`security.yaml`, `main`):** `json_login` over an **httpOnly** session cookie
       (`SameSite=Lax`, `Secure=auto`) — no JWT/token in the client. A failed login flows through the RFC 9457
       pipeline as a **401 `unauthenticated`** (never a manual `JsonResponse`); the message is **normalised to a
@@ -239,7 +254,9 @@ you change anything here.
       sending the request). `json_login` validates no CSRF token; the **stateless double-submit CSRF token is now
       wired** (its first consumer is the invitation accept POST above), configured session-free via
       `framework.csrf_protection.stateless_token_ids`. CORS / Mercure are **not** broadened. **Access-control baseline:** `access_control` is **default-deny** — every `/api`
-      route requires an authenticated session except an explicit allowlist (login, health probes, dev hot-reload). An
+      route requires an authenticated session except an explicit allowlist (login, the two public recovery routes
+      `forgot-password` / `reset-password` — same-origin-guarded by `PasswordResetOriginListener`, a mirror of
+      `LoginOriginListener` keyed on the reset route names — health probes, dev hot-reload). An
       unauthenticated request to a protected route is a **401 `unauthenticated`** through the pipeline:
       `UnauthenticatedAccessListener` rewrites the firewall's `AccessDeniedException` to an `AuthenticationException` for
       anonymous callers (so 401, not 403), while an authenticated-but-under-privileged caller still gets 403 — the shape

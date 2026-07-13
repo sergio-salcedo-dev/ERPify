@@ -499,3 +499,5 @@ deptrac:
             - Erpify\Iam\Identity\Infrastructure\Security\UserProvider
         Erpify\Iam\Invitation\Infrastructure\Cli\CreateInvitationCommand:
             - Erpify\Iam\Identity\Domain\Enum\Role
+        Erpify\Iam\Identity\Application\RevokeSessionsBestEffort:
+            - Erpify\Iam\Session\Application\RevokeAllSessions
