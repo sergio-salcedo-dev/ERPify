@@ -115,7 +115,7 @@ development_status:
   ii-3-identitystatus-userchecker-admision-tipos-error: done
   ii-7-session-lifecycle-registry-gate-failclosed: done
   ii-6-lockout-lockeduntil: done
-  ii-4-invitation-accept-pantallas-acceso: backlog
+  ii-4-invitation-accept-pantallas-acceso: ready-for-dev
   ii-5-reset-password-uniforme: backlog
   ii-8-endurecimiento-seguridad-transversal: backlog
   epic-identity-invitation-lifecycle-retrospective: optional
