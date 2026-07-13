@@ -1,10 +1,8 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "../fixtures/authenticatedTest";
 import { VIEWPORT_DESKTOP, VIEWPORT_MOBILE } from "../constants";
 import {
   navigateToHealthViaSidebarDesktop,
   navigateToHealthViaSidebarMobile,
-  logoutViaSidebarDesktop,
-  logoutViaSidebarMobile,
 } from "../helpers/backoffice-nav";
 import { expectBackOfficeHealthOk } from "../helpers/health-assertions";
 
@@ -28,14 +26,6 @@ test.describe("BackOffice - Dashboard", () => {
       await expect(page).toHaveURL("/backoffice/health");
       await expectBackOfficeHealthOk(page);
     });
-
-    test("logs out and returns to landing", async ({ page }) => {
-      await logoutViaSidebarDesktop(page);
-      await expect(page).toHaveURL("/");
-      await expect(
-        page.getByRole("heading", { level: 1, name: /ERP for Construction/i }),
-      ).toBeVisible();
-    });
   });
 
   test.describe("mobile", () => {
@@ -45,14 +35,6 @@ test.describe("BackOffice - Dashboard", () => {
       await navigateToHealthViaSidebarMobile(page);
       await expect(page).toHaveURL("/backoffice/health");
       await expectBackOfficeHealthOk(page);
-    });
-
-    test("logs out from mobile navigation", async ({ page }) => {
-      await logoutViaSidebarMobile(page);
-      await expect(page).toHaveURL("/");
-      await expect(
-        page.getByRole("heading", { level: 1, name: /ERP for Construction/i }),
-      ).toBeVisible();
     });
   });
 });

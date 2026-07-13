@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "../fixtures/authenticatedTest";
 import { VIEWPORT_DESKTOP, VIEWPORT_MOBILE } from "../constants";
 import {
   SAMPLE_BANK_A,

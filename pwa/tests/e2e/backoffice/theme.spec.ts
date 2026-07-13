@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "../fixtures/authenticatedTest";
 import { VIEWPORT_DESKTOP, VIEWPORT_MOBILE } from "../constants";
 
 test.describe("BackOffice - Theme toggle", () => {

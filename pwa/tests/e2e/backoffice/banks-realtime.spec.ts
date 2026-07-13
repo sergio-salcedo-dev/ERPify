@@ -1,4 +1,4 @@
-import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
+import { test, expect, type APIRequestContext, type Page } from "../fixtures/authenticatedTest";
 import { VIEWPORT_DESKTOP } from "../constants";
 import {
   createApiContext,
@@ -72,8 +72,8 @@ test.describe("BackOffice - Banks real-time sync via Mercure (real API)", () => 
   let api: APIRequestContext;
   let seeded: ApiBank[] = [];
 
-  test.beforeAll(async () => {
-    api = await createApiContext();
+  test.beforeAll(async ({ workerStorageState }) => {
+    api = await createApiContext(workerStorageState);
     // Seed a small set so the list renders in the READY state (the filters
     // panel only mounts when READY) and provides stable rows for the
     // update/delete observers below.

@@ -1,8 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { request, type APIRequestContext, type Page } from "@playwright/test";
 
-import { E2E_STORAGE_STATE } from "../constants";
-
 /**
  * Real-API helpers for the Banks E2E suite that exercises the live Symfony
  * backend instead of `page.route` interception.
@@ -37,14 +35,14 @@ export function apiBaseURL(): string {
  * Build a Playwright `APIRequestContext` rooted at the API origin. The
  * caller is responsible for `dispose()`-ing it (typically in `afterAll`).
  */
-export async function createApiContext(): Promise<APIRequestContext> {
+export async function createApiContext(storageState: string): Promise<APIRequestContext> {
   return request.newContext({
     baseURL: apiBaseURL(),
     ignoreHTTPSErrors: true,
     extraHTTPHeaders: { Accept: "application/json" },
-    // Reuse the session the `setup` project minted — the whole /api is default-deny, so seed/cleanup
-    // requests need the cookie too. The setup project is a dependency, so the state file always exists here.
-    storageState: E2E_STORAGE_STATE,
+    // Carry the caller's per-worker session cookie — the whole /api is default-deny, so seed/cleanup
+    // requests need it too. The path comes from the `workerStorageState` fixture the caller injects.
+    storageState,
   });
 }
 
