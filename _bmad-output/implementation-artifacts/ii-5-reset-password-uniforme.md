@@ -3,7 +3,7 @@ baseline_commit: 79b5669a
 ---
 # Story II-5: Reset de contraseña uniforme — slice backend (revoca todas las sesiones, limpia el lock)
 
-Status: ready-for-dev
+Status: done
 
 <!-- Validación opcional. Ejecuta `bmad-create-story` validate para un chequeo de calidad antes de dev-story. -->
 
@@ -167,46 +167,46 @@ sobre II-4) — su test se enuncia aquí pero **no se implementa en este PR**.
 
 ### Backend — `Iam/Identity` reset (DENTRO del slice)
 
-- [ ] **T1 — Agregado `PasswordResetToken` + repo + migración (AC1, AC6) = Decisión A**
-  - [ ] `api/src/Iam/Identity/Domain/Entity/PasswordResetToken.php` — `final class PasswordResetToken extends AggregateRoot`,
+- [x] **T1 — Agregado `PasswordResetToken` + repo + migración (AC1, AC6) = Decisión A**
+  - [x] `api/src/Iam/Identity/Domain/Entity/PasswordResetToken.php` — `final class PasswordResetToken extends AggregateRoot`,
         `#[ORM\Table(name: 'identity_password_reset_token')]`. Props por id (UUIDv7): `userId` (string, `Uuid::ensure()` en el
         borde), `tokenHash` (string), `expiresAt` (timestamptz). **State-oriented**, **sin PII, sin token crudo** (embebe el
         hash; rehidrata `SingleUseToken::fromHash($tokenHash, $expiresAt)` para `verify`). Factory `static issue(string $id,
         string $userId, SingleUseToken $token): self`. **Consumo = retire (borrado físico) en la misma TX que el reset**
         (ver Decisión A: sin enum de estado — `verify()` cubre la caducidad; el «superseder al re-pedir» = borrar el previo).
-  - [ ] **Localización del token = selector-verifier (usa el VO tal cual, SIN editar `Shared/Token`).** El VO `SingleUseToken`
+  - [x] **Localización del token = selector-verifier (usa el VO tal cual, SIN editar `Shared/Token`).** El VO `SingleUseToken`
         oculta su `digest` (privado) y solo expone `verify($plain,$now)` sobre un token **ya cargado** — no hay lookup-por-hash
         público, y **no se toca `Shared/Token`** (respeta «`User.php` es el único roce»). Por eso el enlace lleva
         **`?token=<resetTokenId>.<secret>`**: el `id` (PK, no secreto) **selecciona** la fila, el `secret` (plaintext 256-bit)
         se **verifica** constant-time contra `tokenHash`. Un `id` inexistente/caducado/ya-consumido → `findById` null / `verify`
         false → **el mismo** `invalid-token` (opacidad intacta: conocer un `id` no compra nada sin el secreto). Ver Decisión A.
-  - [ ] Puerto `api/src/Iam/Identity/Domain/Repository/PasswordResetTokenRepository.php` (`save`, `remove`,
+  - [x] Puerto `api/src/Iam/Identity/Domain/Repository/PasswordResetTokenRepository.php` (`save`, `remove`,
         **`findById(string $id): ?PasswordResetToken`**, `deleteAllForUser(string $userId): void` para el supersede) +
         adapter Doctrine `.../Infrastructure/Persistence/Doctrine/DoctrinePasswordResetTokenRepository.php` (`#[AsAlias]`,
         composición sobre EM, mirror `DoctrineUserRepository`/`DoctrineSessionRepository`).
-  - [ ] `make db.diff` → migración `api/migrations/2026/` (tabla `identity_password_reset_token`, PK `id`, índice sobre
+  - [x] `make db.diff` → migración `api/migrations/2026/` (tabla `identity_password_reset_token`, PK `id`, índice sobre
         `user_id` para `deleteAllForUser`). `down()` reversible. **Cero PII/credenciales/token crudo** en el schema.
         Editable en esta rama, inmutable tras merge. **No** `NOT NULL` crudo sobre filas existentes (tabla nueva, sin filas → ok).
 
-- [ ] **T2 — `User::resetPassword()` + evento (AC7) — el roce con II-4, mínimo y localizado**
-  - [ ] `api/src/Iam/Identity/Domain/Entity/User.php` — añadir **una** función pública:
+- [x] **T2 — `User::resetPassword()` + evento (AC7) — el roce con II-4, mínimo y localizado**
+  - [x] `api/src/Iam/Identity/Domain/Entity/User.php` — añadir **una** función pública:
         `resetPassword(HashedPassword $password): void`. Guarda que `status === IdentityStatus::ACTIVE` (si no, excepción de
         dominio — es un bug de orquestación, el muro D-c lo intercepta **antes** en el caso de uso); fija
         `passwordHash = $password->toString()`, `updatedAt = SystemClock::now()`, y **graba** un evento
         `PasswordWasReset($this->id, ...)`. **No** reutilizar `activate()` (guardado a `INVITED→ACTIVE`). Mantén el diff a
         esta única función + el import del evento (rebase-friendly con II-4).
-  - [ ] Evento `api/src/Iam/Identity/Domain/Event/PasswordWasReset.php` — subclase de `DomainEvent`,
+  - [x] Evento `api/src/Iam/Identity/Domain/Event/PasswordWasReset.php` — subclase de `DomainEvent`,
         `eventName='erpify.iam.identity.password_was_reset'`, `aggregateType='Iam.Identity'`, **payload PII-free** (solo
         `userId`). **Regla-de-Tres POR MÓDULO:** son 2 eventos nuevos (`PasswordResetRequested` + `PasswordWasReset`/
         `PasswordResetCompleted`) → **sin trait de snapshot** (mirror memoria `bankaccount-event-envelope-trait-vs-bank`;
         NO unificar con Session/Invitation). *(Nombre del evento: ver nota de nomenclatura en Dev Notes — `PasswordWasReset`
         de dominio vs `PasswordResetCompleted` de aplicación; elegir uno, no duplicar.)*
-  - [ ] **¿`resetPassword` limpia el lock por dentro (D-b) o lo orquesta el caso de uso?** Recomendado: el **caso de uso**
+  - [x] **¿`resetPassword` limpia el lock por dentro (D-b) o lo orquesta el caso de uso?** Recomendado: el **caso de uso**
         llama `user.resetPassword(...)` **y** `user.clearLockout()` explícitos (métodos single-purpose, composables). Ver
         Decisión B.
 
-- [ ] **T3 — Caso de uso `RequestPasswordReset` (forgot) (AC2, AC8)**
-  - [ ] `api/src/Iam/Identity/Application/RequestPasswordReset.php` — `request(string $email): void`. Flujo **uniforme**:
+- [x] **T3 — Caso de uso `RequestPasswordReset` (forgot) (AC2, AC8)**
+  - [x] `api/src/Iam/Identity/Application/RequestPasswordReset.php` — `request(string $email): void`. Flujo **uniforme**:
         1. resolver el `User` por email (`UserRepository::findByEmail(new Email($email))` — usar la VO `Email` de dominio;
            un email malformado ya lo caza el `#[Assert\Email]` del DTO → 422, ortogonal a la enumeración);
         2. **si NO existe o NO es `ACTIVE`** → **return** silencioso (sin token, sin evento, sin email) — la respuesta HTTP
@@ -217,12 +217,12 @@ sobre II-4) — su test se enuncia aquí pero **no se implementa en este PR**.
            `SecurityEmail` (reset) con `->plaintext()` en el enlace (`?token=`). Marca el seam con un `// TODO`-de-story
            (barrer del diff final) — en el slice, deja el punto de envío **preparado** (interfaz `SecurityMailer`/no-op) sin
            construir la plantilla.
-  - [ ] TTL de reset = política de II-5 (p.ej. **1h**, más corto que la invitación 72h — un reset es más sensible) —
+  - [x] TTL de reset = política de II-5 (p.ej. **1h**, más corto que la invitación 72h — un reset es más sensible) —
         **constante nombrada**, no magic number.
-  - [ ] El plaintext **no se persiste ni se loggea** (`GeneratedToken` lo guarda `#[SensitiveParameter]`; solo el hash a DB).
+  - [x] El plaintext **no se persiste ni se loggea** (`GeneratedToken` lo guarda `#[SensitiveParameter]`; solo el hash a DB).
 
-- [ ] **T4 — Caso de uso `CompletePasswordReset` (reset) (AC3, AC4, AC5, AC6) — el corazón del slice**
-  - [ ] `api/src/Iam/Identity/Application/CompletePasswordReset.php` — `complete(string $token, string $newPassword): void`
+- [x] **T4 — Caso de uso `CompletePasswordReset` (reset) (AC3, AC4, AC5, AC6) — el corazón del slice**
+  - [x] `api/src/Iam/Identity/Application/CompletePasswordReset.php` — `complete(string $token, string $newPassword): void`
         (donde `$token = "<resetTokenId>.<secret>"`, ver T1):
         1. **split** `$token` en `id` + `secret` (formato inválido → `InvalidResetToken`); `findById($id)` → si null →
            `InvalidResetToken`; `$record->verify($secret, $now)` (constant-time sobre el VO cargado) → false →
@@ -245,53 +245,53 @@ sobre II-4) — su test se enuncia aquí pero **no se implementa en este PR**.
            explícito es **eager/defensa-en-profundidad**, no la única barrera (ver `RevokeSessionOnTokenDeauthenticated`);
         6. **[SEAM diferido D1 + D3]** `Security::login` (mint + regeneración NFR3) y el email «tu contraseña ha cambiado» —
            **no en este slice**. El controlador responde **204 sin cookie** (ver T6). Marcar el seam.
-  - [ ] **Ordering (riesgo de implementación):** el retire-then-act (borrar el `PasswordResetToken`) + `resetPassword` +
+  - [x] **Ordering (riesgo de implementación):** el retire-then-act (borrar el `PasswordResetToken`) + `resetPassword` +
         `clearLockout` van **dentro** del `transactional` y **antes** de revocar sesiones / login. Si valida el token y falla
         antes de borrarlo, quedaría replayable dentro del TTL → por eso pasos 4 van todos en **una** TX. **Idempotencia
         (NFR9):** un reintento tras caída de red → o el token ya se consumió (borrado → `invalid-token` → muro con «Iniciar
         sesión», D-a) o sigue vivo (→ reintento válido); **nunca** doble efecto (no doble revoke-mint).
 
-- [ ] **T5 — `invalid-token` en el contrato de error (AC6) = Decisión C**
-  - [ ] `api/src/Iam/Identity/Domain/Exception/InvalidResetToken.php` — `final class InvalidResetToken extends DomainException
+- [x] **T5 — `invalid-token` en el contrato de error (AC6) = Decisión C**
+  - [x] `api/src/Iam/Identity/Domain/Exception/InvalidResetToken.php` — `final class InvalidResetToken extends DomainException
         implements InvalidInput` con `type()` override → `'invalid-token'` (precedente `InvalidUuidException`;
         **`InvalidInput` YA existe en `main`** → self-contained, NO depende de II-4). **Sin marker interface nuevo** (vive en
         `Iam/Identity`, no en `Shared/ErrorContract` → `ErrorContractGateTest` git-aware no dispara). **Status = 400**
         (uniforme en los 3 casos = opacidad; **alinea con la Decisión B ratificada de II-4** — 400 `InvalidInput`).
-  - [ ] Actualizar [`docs/api-error-contract.md`](../../docs/api-error-contract.md): documentar que `invalid-token` (hoy
+  - [x] Actualizar [`docs/api-error-contract.md`](../../docs/api-error-contract.md): documentar que `invalid-token` (hoy
         reservado «out of scope here» en la línea ~95) lo **realiza también el reset** (pre-identidad opaco, 3 casos
         colapsan). `make php.lint.error-contract` verde. **En el rebase sobre II-4:** reconciliar — ambas superficies
         (invitación + reset) producen el **mismo** `type='invalid-token'` con **su propia** clase excepción por aislamiento
         de contexto (2 clases, 1 wire type; refuerza la opacidad cross-superficie, no la rompe).
 
-- [ ] **T6 — Controladores + rutas públicas + Origin (AC2, AC5, AC6, AC9-seam)**
-  - [ ] `api/src/Iam/Identity/Infrastructure/Http/RequestPasswordResetController.php` — `AbstractController` fino, POST, DTO
+- [x] **T6 — Controladores + rutas públicas + Origin (AC2, AC5, AC6, AC9-seam)**
+  - [x] `api/src/Iam/Identity/Infrastructure/Http/RequestPasswordResetController.php` — `AbstractController` fino, POST, DTO
         con `#[MapRequestPayload]` + `#[Assert\Email]` sobre `email`. Delega en `RequestPasswordReset`. **Respuesta uniforme
         202** (Accepted — «si esa dirección corresponde a una cuenta, te enviaremos un enlace») **sin body variable**
         (ver Decisión D). **Nunca** ramifica por existencia.
-  - [ ] `api/src/Iam/Identity/Infrastructure/Http/CompletePasswordResetController.php` — POST, DTO con `#[MapRequestPayload]`
+  - [x] `api/src/Iam/Identity/Infrastructure/Http/CompletePasswordResetController.php` — POST, DTO con `#[MapRequestPayload]`
         + `#[Assert]` (`token` non-empty `#[Assert\Length(max: 128)]` = `SingleUseToken::MAX_PLAINTEXT_LENGTH`; `password`
         con la **misma policy** que el accept/register — reusar el constraint existente). Delega en `CompletePasswordReset`.
         Éxito → **204 sin cookie** (el mint de sesión es seam D1); `invalid-token` → 400; muro D-c → 403.
-  - [ ] Ruta: bloque `resource` nuevo en `api/config/routes.yaml` apuntando a `../src/Iam/Identity/Infrastructure/Http/`
+  - [x] Ruta: bloque `resource` nuevo en `api/config/routes.yaml` apuntando a `../src/Iam/Identity/Infrastructure/Http/`
         con `defaults: { _format: json }` y prefijo mirror del login (p.ej. `/backoffice`, → `/backoffice/forgot-password`
         + `/backoffice/reset-password`; confirmar los paths en Decisión D). **Ojo:** si `Iam/Identity/Infrastructure/Http/`
         ya tiene un bloque `resource` (login), **añadir las acciones al existente**, no duplicar el bloque.
-  - [ ] **`security.yaml`:** añadir `access_control` `PUBLIC_ACCESS` para las 2 rutas de reset **antes** del catch-all
+  - [x] **`security.yaml`:** añadir `access_control` `PUBLIC_ACCESS` para las 2 rutas de reset **antes** del catch-all
         `^/api → IS_AUTHENTICATED_FULLY` (mirror del `/backoffice/login`). Rutas **públicas/pre-identidad** pero **dentro**
         del firewall `main` (para que el seam D1 `Security::login` resuelva el firewall al aterrizar).
-  - [ ] **Origin check (control primario):** listener espejo de `LoginOriginListener` **keyed en los nombres de ruta de
+  - [x] **Origin check (control primario):** listener espejo de `LoginOriginListener` **keyed en los nombres de ruta de
         reset** (o generalizar el existente a un conjunto de rutas). `Origin !== getSchemeAndHttpHost()` → 403 `forbidden`
         **sin mutar estado**. **[SEAM diferido D2]** el CSRF stateless (`framework.csrf_protection`) reutiliza el de II-4 —
         **no** introducir `framework.csrf_protection` aquí (lo trae II-4); marcar el punto de registro del token id.
 
-- [ ] **T7 — Deptrac seams + Behat (AC3, AC8)**
-  - [ ] **Seam cross-contexto `Iam/Identity → Iam/Session`:** el `CompletePasswordReset` importa
+- [x] **T7 — Deptrac seams + Behat (AC3, AC8)**
+  - [x] **Seam cross-contexto `Iam/Identity → Iam/Session`:** el `CompletePasswordReset` importa
         `Erpify\Iam\Session\Application\RevokeAllSessions` → violación **Nivel-1** salvo allowlist. Añadir entrada
         **per-file** en `api/.bounded-context-allowlist` **y** deptrac `skip_violations` (`CompletePasswordReset.php =>
         RevokeAllSessions`; **nunca** forma global `* =>` — `DeptracSeamSyncGateTest` la prohíbe; contexto = módulo de 2
         niveles). *(Ya existe un seam `Iam/Identity → Iam/Session` para `SessionMintingSuccessListener → StartSession`; este
         es un fichero + target **nuevos**, entrada aparte.)* `Shared/Token` **no** necesita seam (shared kernel).
-  - [ ] Behat: nueva feature `api/features/backoffice/identity/password_reset.feature` (mirror `login.feature` +
+  - [x] Behat: nueva feature `api/features/backoffice/identity/password_reset.feature` (mirror `login.feature` +
         `session.feature`). Escenarios `@anonymous` (forgot/reset son públicos, sin `authenticateDefaultUser`):
         forgot existente-`ACTIVE` **vs** inexistente → **respuesta idéntica** (comparación cara a cara, AC2); reset válido →
         204 + password cambiada + **0 sesiones activas** del user + `LockedUntil` limpio; **3 tokens muertos idénticos**
@@ -303,9 +303,9 @@ sobre II-4) — su test se enuncia aquí pero **no se implementa en este PR**.
         escritura envuelta** (BEGIN/COMMIT); el reset hace varias.
         Worktree fresco → `make php.behat.install` **antes** de los gates.
 
-- [ ] **T8 — Tests unit + functional (todos los AC del slice)** — ver «Testing».
+- [x] **T8 — Tests unit + functional (todos los AC del slice)** — ver «Testing».
 
-- [ ] **T9 — Gates + verificación fresca** — `make php.behat.install` (worktree fresco) → `make php.stan` (por fichero;
+- [x] **T9 — Gates + verificación fresca** — `make php.behat.install` (worktree fresco) → `make php.stan` (por fichero;
       exit 139 → `PHP_SERVICE=messenger_worker`) → `make php.test` → `make php.quality` EXIT 0 (único sweep PHPMD/cs-fixer;
       puede OOM 137) → `make php.lint.error-contract` → `make php.lint.bounded-context` → `make php.deptrac` →
       `make php.psalm.taint`. **PWA no aplica en este slice** (frontend diferido). Verificar sobre el **path del worktree**
@@ -558,14 +558,62 @@ claude-opus-4-8[1m] (Opus 4.8, 1M context).
 
 ### Debug Log References
 
+- Gates verdes sobre el worktree `iam-ii5-reset-password-pfs0`: `php.stan` OK · `php.unit` **1811** (3 skip) EXIT 0 · `php.behat` **274** esc./**2529** pasos (feature nueva `password_reset.feature` = 8 esc.) · `php.quality` **EXIT 0** (deptrac 0 viol/81 skip, PHPMD 0, PHPCS 0, gherkin 0, cs-fixer/rector idempotentes) · `php.lint.error-contract` 0 · `php.lint.bounded-context` 0 · `php.psalm.taint` No errors.
+- OOM intermitente de `BankStoredObjectMultipartFunctionalTest` (FrankenPHP web-worker 128M) = flake ajeno; re-run limpio.
+- `reference.php` revertido a `origin/main` (drift de translator/`_instanceof` ajeno).
+
 ### Completion Notes List
 
+- **Decisiones A–E ratificadas por Sergio (AskUserQuestion) e implementadas tal cual:** A = agregado propio **`PasswordResetToken`** state-oriented, consumo por borrado (retire-then-act), localización **selector-verifier `<id>.<secret>`** (`findById`+`verify`, sin tocar `Shared/Token`); B = evento único **`PasswordResetCompleted`** grabado por el agregado `User`; C = **400 `InvalidResetToken implements InvalidInput`** (`type()='invalid-token'`); D = `POST /api/v1/backoffice/forgot-password` **202** + `POST /api/v1/backoffice/reset-password` **204** (mirror del prefijo del login, sin bloque `routes.yaml` nuevo — el `resource` estrecho de Http ya los escanea); E = límite del slice (backend Origin-only; PWA/email/session-mint/CSRF DIFERIDOS a post-II-4).
+- **Slice completo (AC1–AC10):** `RequestPasswordReset` (forgot uniforme SI-12: solo `ACTIVE` acuña token + `PasswordResetRequested` + supersede; resto return silencioso); `CompletePasswordReset` (retire-then-act atómico en 1 TX: `resetPassword`+`clearLockout`+`remove(token)`+publish; `RevokeAllSessions` tras el commit; muro D-c sin consumir el token). `User::resetPassword()` = único roce con II-4 (una función + su evento). Migración `Version20260713140053` (`identity_password_reset_token`, sin FK, índice `user_id`, sin PII).
+- **Desviaciones argumentadas del literal de la story (folded, más limpias):** (1) **hashing en el controlador** (Infra), el caso de uso recibe `HashedPassword` ya opaco — mirror de `CreateUser`; mantiene Application libre del `PasswordHasher` de Infra (DIP) y da coste de hash uniforme valid/dead-token. (2) **`findById` malformado → null en el adapter Doctrine** (`Uuid::isValid` guard): un selector no-UUID es «fila ausente» (concern del repositorio), evita un 500 por cast uuid y baja el acople del caso de uso; documentado en el puerto. (3) **`User::isActive()`** nuevo predicado de dominio (usado por ambos casos de uso; más expresivo que `IdentityStatus::ACTIVE === status()`). Las tres bajan el acople PHPMD de los casos de uso a ≤12 sin `@SuppressWarnings`.
+- **Seam cross-contexto** `Iam/Identity → Iam/Session\Application\RevokeAllSessions`: entrada **per-file** en `.bounded-context-allowlist` + deptrac `skip_violations` (nunca forma global). `Shared/Token` no necesita seam.
+- **Eventos wire-on-consumer:** `PasswordResetRequested`/`PasswordResetCompleted` (hyphen-style `all-revoked`, aggregateType `Iam.Identity`, payload PII-free) van al `event_store` vía `EventBus`, sin routing a transporte (sin reactor). Auto-descubiertos por el mapper (sin registro manual).
+- **Cobertura:** tests unit por-evento (`fromPrimitives`), `PasswordResetOriginListener` unit (mirror `LoginOriginListener`), adapter functional (incl. selector malformado). Controladores finos sin unit test (precedente `LoginController`).
+- **DIFERIDO (contratos AC D1–D3, tras rebasar sobre II-4):** session-mint + regeneración NFR3 (204-sin-cookie hoy), CSRF stateless (Origin es el control primario), PWA + `SecurityEmail`. Seams marcados en `RequestPasswordReset` (envío de email) y `CompletePasswordResetController` (mint). **VIGILAR EN REBASE:** `User.php` (II-4 llama `activate()`, II-5 añade `resetPassword()`+`isActive()`).
+- **Política de password del reset DTO** = `min:8/max:255` inline (no había policy compartida en `main`); reconciliar con la del accept de II-4 al rebasar.
+
 ### File List
+
+**API — nuevos (`Iam/Identity/`):** `Domain/Entity/PasswordResetToken.php` · `Domain/Event/{PasswordResetRequested,PasswordResetCompleted}.php` · `Domain/Exception/InvalidResetToken.php` · `Domain/Repository/PasswordResetTokenRepository.php` · `Application/{RequestPasswordReset,CompletePasswordReset}.php` · `Infrastructure/Http/{RequestPasswordResetController,CompletePasswordResetController,ForgotPasswordRequest,ResetPasswordRequest,PasswordResetOriginListener}.php` · `Infrastructure/Persistence/Doctrine/DoctrinePasswordResetTokenRepository.php`.
+
+**API — nuevos (otros):** `api/migrations/2026/Version20260713140053.php` · `api/features/backoffice/identity/password_reset.feature`.
+
+**API — modificados:** `src/Iam/Identity/Domain/Entity/User.php` (+`resetPassword()` +`isActive()`) · `config/packages/security.yaml` (2 rutas `PUBLIC_ACCESS`) · `config/routes.yaml` (comentario del resource) · `tools/deptrac/deptrac.yaml` + `.bounded-context-allowlist` (seam `Identity→Session`) · `docs/api-error-contract.md` (`invalid-token` realizado por el reset).
+
+**Tests — nuevos:** `tests/Unit/Iam/Identity/Application/{RequestPasswordResetTest,CompletePasswordResetTest,InMemoryPasswordResetTokenRepository}.php` · `tests/Unit/Iam/Identity/Domain/Entity/{PasswordResetTokenTest,UserResetPasswordTest}.php` · `tests/Unit/Iam/Identity/Domain/Event/{PasswordResetRequestedTest,PasswordResetCompletedTest}.php` · `tests/Unit/Iam/Identity/Domain/Exception/InvalidResetTokenTest.php` · `tests/Unit/Iam/Identity/Infrastructure/Http/PasswordResetOriginListenerTest.php` · `tests/Functional/Iam/Identity/DoctrinePasswordResetTokenRepositoryTest.php`.
 
 ### Change Log
 
 | Fecha       | Cambio |
 |-------------|--------|
 | 2026-07-13  | Story II-5 creada (ready-for-dev): slice **backend paralelo** acotado (DENTRO vs DIFERIDO) para no pisar a II-4. Análisis exhaustivo de 4 artefactos (épico/addendum/ADR · story hermana II-4 · código API `main` vía 3 subagentes: `Shared/Token`, `Iam/Identity` status+lockout+password, `Iam/Session` revoke-all + EventBus + Behat). |
+| 2026-07-13  | Slice backend implementado (Status → review). Decisiones A–E ratificadas. `PasswordResetToken` + repo/adapter/migración · `User::resetPassword()`/`isActive()` + 2 eventos · `RequestPasswordReset`/`CompletePasswordReset` · `InvalidResetToken` · 2 controladores + DTOs + `PasswordResetOriginListener` · seam deptrac `Identity→Session` · `api-error-contract.md`. Feature Behat `password_reset.feature` (8 esc.) + unit/functional. Desviaciones argumentadas: hash en controlador (DIP), `findById` malformado→null en el adapter, `User::isActive()`. Todos los gates PHP verdes; PWA/email/session-mint/CSRF diferidos a post-II-4. |
 
 ### Review Findings
+
+_Code review 2026-07-13 (Blind Hunter · Edge Case Hunter · Acceptance Auditor, Opus 4.8). 2 decision-needed, 2 patch, 4 defer, 5 dismissed as by-design/noise._
+
+**Resolución (2026-07-13, todos los gates verdes: php.stan · php.unit 1813 · php.quality EXIT 0 · error-contract · bounded-context · deptrac seam-sync · Behat 8/8 · psalm.taint):**
+- **D1 APLICADO** (guard mínimo verificable): `PasswordResetTokenRepository::consume(token): bool` (DELETE condicional; el conteo de filas afectadas ES el guard single-use). `CompletePasswordReset` aborta con `InvalidResetToken` si `consume` borra 0 filas → dos `complete` concurrentes ya no doblan el efecto (cierra SI-13/AC6). Verificado en el functional (2.º consume → false) y en Behat (reuso del token → 400).
+- **D2 APLICADO** (tragar+loggear, 204): extraído `RevokeSessionsBestEffort` (Iam/Identity Application) que envuelve `RevokeAllSessions`, traga cualquier `\Throwable` de la revocación post-commit y loggea `warning`. `CompletePasswordReset` delega en él → un store-outage ya no falla un reset commiteado. **Desviación argumentada:** se extrajo un colaborador en vez de un try/catch inline porque el caso de uso ya estaba en el techo de acoplamiento PHPMD (CBO 12) y el logger+catch lo rompían a 14; el colaborador lo devuelve a 12 sin suprimir, mantiene la política en Application, y DRYa hacia el futuro flujo J6 (cambiar password desde «Mi cuenta»). El seam deptrac/allowlist `Identity→Session` se movió a `RevokeSessionsBestEffort`.
+- **P (patches) APLICADOS:** checklist de seguridad corregido; `PasswordResetToken::issue()` con `Uuid::ensure($id)` simétrico.
+- **Diferidos a II-8/follow-up:** forgot-supersede + TOCTOU (concurrencia; ver defer abajo), timing/enumeración, rate-limit per-target, higiene TTL/GDPR del token, endurecer asserts AC6.
+
+**Decision-needed:**
+
+- [ ] [Review][Decision] Concurrencia & carreras mid-flight en el flujo de reset — el `resolve()` (findById+verify) y el guard de estado corren FUERA de la transacción, y el consumo del token es un `remove()`+`flush()` sin guard de filas afectadas (sin `#[ORM\Version]`, sin `SELECT ... FOR UPDATE`, sin unique en `user_id`). Bajo READ COMMITTED: (a) dos `complete` concurrentes del MISMO token válido tienen éxito ambos → single-use roto, `PasswordResetCompleted`+`AllSessionsRevoked` duplicados [`api/src/Iam/Identity/Application/CompletePasswordReset.php:60`, adapter `.../DoctrinePasswordResetTokenRepository.php:34`]; (b) dos `forgot` concurrentes dejan 2 tokens vivos (supersede no atómico) [`api/src/Iam/Identity/Application/RequestPasswordReset.php:71`]; (c) TOCTOU: un admin que suspende ENTRE el load y el commit deja completar el reset sobre una identidad ya no-`ACTIVE` [`CompletePasswordReset.php:63`]. Impacto acotado (el portador ya es legítimo; una cuenta walled no puede usar la credencial nueva; eventos de auditoría duplicados), pero rompe el invariante SI-13 (single-use atómico) que el propio docblock afirma. **Severidad: media.** Opciones: (1) endurecer ahora — lock de fila (`FOR UPDATE`) del token+user dentro de la TX y/o assert de 1 fila borrada + unique en `user_id`; (2) aceptar el impacto acotado y diferir a II-8; (3) solo el guard mínimo del delete del token (assert affected-rows) sin tocar la carrera de forgot. **→ RESUELTO (Sergio, 2026-07-13): tras descubrir que FOR UPDATE sería el PRIMER pessimistic-lock del repo (~13 ficheros) y NO verificable por el harness (fakes single-threaded; ni PHPUnit ni Behat ejercitan concurrencia real), se optó por el guard mínimo verificable — `PasswordResetTokenRepository::consume(token): bool` = DELETE condicional cuyo conteo de filas afectadas ES el guard single-use (dos `complete` concurrentes serializan en el row-lock del DELETE; el loser borra 0 filas → `InvalidResetToken`, aborta antes de mutar). Cierra el double-complete (SI-13/AC6). APLICADO. Forgot-race + TOCTOU → DIFERIDOS a II-8 (ver defer abajo).**
+- [ ] [Review][Decision] Un fallo de `revokeAllSessions` post-commit hace fallar un reset ya exitoso y consume el token — `revokeAllSessions->revoke()` está fuera de la TX y sin `try/catch` [`api/src/Iam/Identity/Application/CompletePasswordReset.php:76`]; abre su propia transacción [`api/src/Iam/Session/Application/RevokeAllSessions.php:33`]. Si el store de sesiones cae, lanza → el controlador devuelve 5xx AUNQUE la password ya cambió y el token ya se borró, contradiciendo el propio docblock ("eager defence-in-depth, never the only barrier — a store outage cannot leave a stale session live": el cambio de credencial ya de-autentica vía `refreshUser` nativo). El usuario recupera entrando por login normal, pero ve un 5xx falso sobre una mutación exitosa. **Severidad: media.** Opciones: (1) tragar+loggear el fallo del revoke y devolver 204 igual (honra el contrato documentado) — recomendado; (2) dejarlo tal cual (fail-loud); (3) diferir a II-8. **→ RESUELTO (Sergio, 2026-07-13): Opción 1 — try/catch alrededor del revoke post-commit, loggear el fallo, devolver 204. Reclasificado a patch.**
+
+**Patch:**
+
+- [x] [Review][Patch] APLICADO — `PRODUCTION_SECURITY_CHECKLIST.md` sin actualizar y ahora factualmente falso [PRODUCTION_SECURITY_CHECKLIST.md:214] — el fichero no se tocó (git status vacío); la línea 214 sigue diciendo "No HTTP surface yet (consumed by the invitation/reset flows)", que II-5 vuelve falso al añadir `/api/v1/backoffice/{forgot,reset}-password`; el "Access-control baseline" (l.226) no lista las 2 rutas `PUBLIC_ACCESS` nuevas ni el `PasswordResetOriginListener`. El spec lo lista en "Ficheros a tocar" y CLAUDE.md lo exige para cambios security-sensitive. **Severidad: media.**
+- [x] [Review][Patch] APLICADO — `PasswordResetToken::issue()` valida `userId` pero no su propio `id` [api/src/Iam/Identity/Domain/Entity/PasswordResetToken.php:53] — el constructor hace `Uuid::ensure($userId)` pero asigna `$this->id = $id` sin `Uuid::ensure($id)`. Hoy seguro (único caller pasa `Uuid::generate()`), pero es una factory pública con invariante asimétrico; un `id` malformado solo fallaría tarde en el cast uuid de la DB. Simetría barata, fail-fast. **Severidad: baja.**
+
+**Defer (diferidos):**
+
+- [x] [Review][Defer] Side-channel de timing en forgot → II-8 [api/src/Iam/Identity/Application/RequestPasswordReset.php:56] — el 202 es uniforme en status+forma, pero el camino `ACTIVE` (mint+2 writes+outbox, y el KDF completo en el controlador del reset para un token muerto) es medibledemente más lento que el read silencioso → oráculo de enumeración por latencia. Accepted-risk documentado; el spec asigna el suelo constant-time y el rate-limit a **II-8**. Diferido, owned by II-8.
+- [x] [Review][Defer] Higiene de ciclo de vida del token de reset [api/migrations/2026/Version20260713140053.php] — sin barrido TTL (filas expiradas-no-usadas crecen sin cota) y sin hook de erase-subject (sin FK cascade → filas huérfanas tras hard-delete GDPR del user; solo `deleteAllForUser` limpia, y solo si el user vuelve a pedir). Follow-up: sweep programado de `expires_at < now` + borrar tokens de reset en la erasure del sujeto. Diferido.
+- [x] [Review][Defer] Rate-limiting de recuperación (per-target) → II-8 [api/config/packages/security.yaml:43] — solo el limitador global 120/min-por-IP `anonymous_api`; sin throttle per-email. Una vez cableado el email: email-bombing + supersesión del token legítimo de la víctima vía `deleteAllForUser`. El spec asigna rate-limit a **II-8**. Diferido, owned by II-8.
+- [x] [Review][Defer] Endurecer tests: byte-identidad AC6 + efecto del supersede [api/features/backoffice/identity/password_reset.feature:76] — el escenario "4 tokens muertos = un invalid-token" solo asserta `status 400 + node type=invalid-token`, no compara los bodies cara a cara (el spec exige "byte-idéntica"); el unit de supersede prueba que se LLAMA `deleteAllForUser`, no que borra un token pre-existente ni el orden delete-before-save. El código es correcto hoy; los asserts no cierran el invariante. Diferido.
+- [x] [Review][Defer] Concurrencia: forgot-supersede no atómico + TOCTOU del muro no-`ACTIVE` [api/src/Iam/Identity/Application/RequestPasswordReset.php:71, CompletePasswordReset.php:61] — de la Decisión 1; el double-complete se cerró con el guard `consume`, estas 2 (ambas benignas: 2 tokens del propio user / password sobre cuenta ya walled) se difieren al hardening de concurrencia de II-8 (evita el primer pessimistic-lock del repo con un mecanismo no verificable por el harness). Diferido, owned by II-8.
