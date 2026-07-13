@@ -124,12 +124,9 @@ export function LoginForm() {
       >
         Sign in
       </Button>
-      <div className="flex justify-between text-sm">
+      <div className="text-sm">
         <Link href={Routes.FORGOT_PASSWORD} className="text-brand">
           Forgot password?
-        </Link>
-        <Link href={Routes.REGISTER} className="text-brand">
-          Create account
         </Link>
       </div>
     </form>

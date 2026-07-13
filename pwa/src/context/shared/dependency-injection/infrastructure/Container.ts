@@ -37,6 +37,8 @@ import { DeleteBankAccount } from "../../../backoffice/bankaccount/application/D
 import { InMemoryUserRepository } from "../../../backoffice/user/infrastructure/InMemoryUserRepository";
 import { ApiLoginRepository } from "../../../backoffice/user/infrastructure/ApiLoginRepository";
 import type { LoginRepository } from "../../../backoffice/user/domain/LoginRepository";
+import { ApiAcceptInvitationRepository } from "../../../backoffice/user/infrastructure/ApiAcceptInvitationRepository";
+import type { AcceptInvitationRepository } from "../../../backoffice/user/domain/AcceptInvitationRepository";
 import { ApiIdentityRepository } from "@/context/shared/access/infrastructure/ApiIdentityRepository";
 import type { IdentityRepository } from "@/context/shared/access/domain/IdentityRepository";
 import { ApiSessionsRepository } from "@/context/shared/access/infrastructure/ApiSessionsRepository";
@@ -193,6 +195,13 @@ container
 container
   .bind<LoginRepository>("BackOfficeLoginRepository")
   .to(ApiLoginRepository)
+  .inSingletonScope();
+
+// Invitation accept: a real HTTP adapter over the injected HttpClient (bound to
+// MockHttpClient under test), mirroring the login adapter.
+container
+  .bind<AcceptInvitationRepository>("BackOfficeAcceptInvitationRepository")
+  .to(ApiAcceptInvitationRepository)
   .inSingletonScope();
 
 // Identity / session subsystem: the AuthProvider hydrates from `/me`, and the

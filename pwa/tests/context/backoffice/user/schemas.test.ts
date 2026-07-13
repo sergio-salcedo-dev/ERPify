@@ -1,14 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { RegisterSchema } from "@/context/backoffice/user/application/schemas/auth/RegisterSchema";
+import { AcceptInvitationSchema } from "@/context/backoffice/user/application/schemas/auth/AcceptInvitationSchema";
 import { ResetPasswordSchema } from "@/context/backoffice/user/application/schemas/auth/ResetPasswordSchema";
 import { UserCreateSchema } from "@/context/backoffice/user/application/schemas/UserCreateSchema";
 import { Role } from "@/context/shared/access/domain/Role";
 import { UserStatus } from "@/context/shared/access/domain/UserStatus";
 
 describe("auth schemas", () => {
-  it("RegisterSchema rejects mismatched passwords on confirmPassword", () => {
-    const r = RegisterSchema.safeParse({
-      email: "a@b.com",
+  it("ResetPasswordSchema rejects mismatched passwords on confirmPassword", () => {
+    const r = ResetPasswordSchema.safeParse({
       password: "password1",
       confirmPassword: "password2",
     });
@@ -37,22 +36,14 @@ describe("auth schemas", () => {
     });
     expect(ok.success).toBe(true);
   });
-  it("RegisterSchema bounds password and email length", () => {
+  it("AcceptInvitationSchema accepts a password within bounds (single field, no confirm)", () => {
+    expect(AcceptInvitationSchema.safeParse({ password: "password1" }).success).toBe(true);
+  });
+  it("AcceptInvitationSchema rejects a too-short password", () => {
+    expect(AcceptInvitationSchema.safeParse({ password: "short" }).success).toBe(false);
+  });
+  it("AcceptInvitationSchema rejects a too-long password", () => {
     const longPassword = "a".repeat(129);
-    expect(
-      RegisterSchema.safeParse({
-        email: "a@b.com",
-        password: longPassword,
-        confirmPassword: longPassword,
-      }).success,
-    ).toBe(false);
-    const longEmail = `${"a".repeat(256)}@b.com`;
-    expect(
-      RegisterSchema.safeParse({
-        email: longEmail,
-        password: "password1",
-        confirmPassword: "password1",
-      }).success,
-    ).toBe(false);
+    expect(AcceptInvitationSchema.safeParse({ password: longPassword }).success).toBe(false);
   });
 });

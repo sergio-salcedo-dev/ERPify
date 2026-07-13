@@ -483,3 +483,19 @@ deptrac:
             - Erpify\Iam\Session\Application\StartSession
             - Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable
             - Erpify\Organization\Membership\Application\FindUserOrganizationId
+        Erpify\Iam\Invitation\Application\AcceptInvitation:
+            - Erpify\Iam\Identity\Domain\Repository\UserRepository
+            - Erpify\Iam\Identity\Domain\HashedPassword
+            - Erpify\Iam\Identity\Domain\Enum\IdentityStatus
+        Erpify\Iam\Invitation\Application\SendInvitation:
+            - Erpify\Iam\Identity\Application\InviteUser
+            - Erpify\Iam\Identity\Domain\Enum\Role
+            - Erpify\Organization\Membership\Application\GrantMembership
+        Erpify\Iam\Invitation\Application\ResendInvitation:
+            - Erpify\Iam\Identity\Domain\Repository\UserRepository
+        Erpify\Iam\Invitation\Infrastructure\Http\AcceptInvitationController:
+            - Erpify\Iam\Identity\Domain\HashedPassword
+            - Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher
+            - Erpify\Iam\Identity\Infrastructure\Security\UserProvider
+        Erpify\Iam\Invitation\Infrastructure\Cli\CreateInvitationCommand:
+            - Erpify\Iam\Identity\Domain\Enum\Role

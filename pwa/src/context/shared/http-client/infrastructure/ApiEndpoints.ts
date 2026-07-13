@@ -40,6 +40,11 @@ export const API_ENDPOINTS = {
     HEALTH_DATABASE: `${BACKOFFICE_PREFIX}/health/database`,
     // Session sign-in — Symfony route name `identity_login` (204 on success).
     LOGIN: `${BACKOFFICE_PREFIX}/login`,
+    INVITATIONS: {
+      // Accept an invitation: set the credential, activate the account (204 on
+      // success, httpOnly session cookie). Dead token → 400 `invalid-token`.
+      ACCEPT: `${BACKOFFICE_PREFIX}/invitations/accept`,
+    },
     BANKS: {
       LIST: `${BACKOFFICE_PREFIX}/banks`,
       COUNT: `${BACKOFFICE_PREFIX}/banks/count`,

@@ -40,6 +40,9 @@ security:
     # Problem Details pipeline; adding a protected route needs no config — it falls through to the catch-all.
     access_control:
         - { path: '^/api/v1/backoffice/login$', roles: PUBLIC_ACCESS }
+        # Invitation accept is a pre-identity write, but stays a PUBLIC_ACCESS route INSIDE the main firewall
+        # (not a security:false firewall) so Security::login can resolve the firewall and mint the first session.
+        - { path: '^/api/v1/backoffice/invitations/accept$', roles: PUBLIC_ACCESS }
         - { path: '^/api/v1/backoffice/health(/database)?$', roles: PUBLIC_ACCESS }
         - { path: '^/api/v1/health$', roles: PUBLIC_ACCESS }
         - { path: '^/api/v1/dev/', roles: PUBLIC_ACCESS }

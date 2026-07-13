@@ -1,0 +1,12 @@
+Erpify\Iam\Invitation\Domain\Entity\Invitation:
+    invitation_iris:
+        # A SENT invitation for iris with a KNOWN token digest, so the accept feature can present
+        # '<id>.behat-known-invitation-secret'. The digest is sha256('behat-known-invitation-secret'); the raw
+        # secret lives only in the feature file. Never in a migration — this is a dev/test seed.
+        __factory:
+            'Erpify\Tests\DataFixtures\InvitationFixtureFactory::create':
+                - '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a90'
+                - '@user_iris'
+                - '@the_organization'
+                - '70f0759d523f100bb31c67201828646721d77adfb44ce75ab59d9c6c5bf99b29'
+                - '2099-01-01 00:00:00'

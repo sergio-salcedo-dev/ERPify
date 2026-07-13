@@ -52,8 +52,8 @@ api/src/
 │   └── Mercure/    { Domain, Infrastructure/Controller }
 ├── Iam/                                                         # identity & access — promoted from Backoffice/Identity (adr/auth-rbac-subsystem.md D2 trigger)
 │   ├── Identity/     { Application, Domain, Infrastructure }   # User aggregate + session firewall (json_login, SecurityUser/UserProvider, PasswordHasher) + default-deny (UnauthenticatedAccessListener → 401) + parked RBAC core (Permission, AuthorizationPolicy, PermissionVoter) — adr/auth-rbac-subsystem.md, adr/rbac-authorization-model.md
-│   ├── Invitation/   { reserved skeleton }                    # invitation lifecycle — identity/invitation epic
-│   └── Session/      { reserved skeleton }                    # session registry — identity/invitation epic
+│   ├── Invitation/   { Application, Domain, Infrastructure }   # invitation lifecycle — Invitation aggregate (state-oriented, SingleUseToken digest) + public accept (retire-then-act + Security::login mints the first session) + invite/revoke/resend CLI — adr/identity-invitation-lifecycle.md
+│   └── Session/      { Application, Domain, Infrastructure }   # server-side session registry (iam_session) + fail-closed admission gate — adr/identity-invitation-lifecycle.md D8
 ├── Organization/                                               # tenancy — modelled multi-tenant-ready, operation deferred (adr/identity-invitation-lifecycle.md D2)
 │   ├── Organization/ { Application, Domain, Infrastructure }   # tenant aggregate — one org per installation, CLI bootstrap (organization:provision / :administrator:create)
 │   └── Membership/   { Application, Domain, Infrastructure }   # authoritative user↔org link + org-scoped roles; references User/Organization by id

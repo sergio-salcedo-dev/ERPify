@@ -211,8 +211,22 @@ you change anything here.
       logged), TTL-bound, and **verified in constant time** (`\hash_equals`, no short-circuit on the
       secret). A fast hash (not a slow KDF) is correct precisely because the token is already
       uniformly random. Verification is **opaque**: a used, expired, or non-matching token all fail as
-      the same plain `false` — the cause is never revealed. No HTTP surface yet (consumed by the
-      invitation/reset flows).
+      the same plain `false` — the cause is never revealed. **Its first HTTP consumer is the invitation accept**
+      (below).
+- [ ] **Invitation accept (`POST /api/v1/backoffice/invitations/accept`):** the first public write of the
+      invitation flow — a `PUBLIC_ACCESS` route **inside** the `main` firewall (so `Security::login` reuses the
+      native anti-fixation `migrate(true)` + session minting; a half-accepted invitation never yields a session
+      because minting runs only **after** the retire-then-act transaction commits). The opaque
+      `<invitationId>.<secret>` token is **never rendered, logged, or persisted raw** — only its SHA-256 digest is
+      stored (`iam_invitation.token_hash`). Every dead-token case (used, revoked, expired, already-accepted,
+      non-existent) collapses to one **byte-identical `400 invalid-token`** (SI-13 opacity); the invited email is
+      never surfaced. **CSRF is defence-in-depth, not the primary control:** the primary same-origin gate is
+      `AcceptInvitationOriginListener` (403, mirror of the login guard) plus the opaque single-use token; the
+      **stateless double-submit token** (`framework.csrf_protection.stateless_token_ids: [invitation_accept]` +
+      `#[IsCsrfTokenValid]`, session-free, same-origin) is the second layer, with `check_header` off/deferred.
+      Password hashing is Infrastructure (the DTO enforces the 8..128 policy at the boundary). Hardening
+      (constant-time, `Referrer-Policy: no-referrer`, URL strip, token redaction in logs, rate-limit accept,
+      non-`no-reply` sender) is **deferred to II-8**.
 - [ ] **Session firewall (`security.yaml`, `main`):** `json_login` over an **httpOnly** session cookie
       (`SameSite=Lax`, `Secure=auto`) — no JWT/token in the client. A failed login flows through the RFC 9457
       pipeline as a **401 `unauthenticated`** (never a manual `JsonResponse`); the message is **normalised to a
@@ -222,8 +236,9 @@ you change anything here.
       pipeline): `json_login` fires on the route's `_format: json` default, **not** the `Content-Type`, so a
       cross-site `text/plain` form with a JSON body would otherwise reach it as a CORS simple request — neither
       `SameSite=Lax` nor the non-broadened CORS policy stops forced login (they gate reading the response, not
-      sending the request). `json_login` validates no CSRF token, so **no** stateless-token CSRF is configured — it is wired with the first
-      authenticated **mutating** route that can consume it (wire-on-consumer). CORS / Mercure are **not** broadened. **Access-control baseline:** `access_control` is **default-deny** — every `/api`
+      sending the request). `json_login` validates no CSRF token; the **stateless double-submit CSRF token is now
+      wired** (its first consumer is the invitation accept POST above), configured session-free via
+      `framework.csrf_protection.stateless_token_ids`. CORS / Mercure are **not** broadened. **Access-control baseline:** `access_control` is **default-deny** — every `/api`
       route requires an authenticated session except an explicit allowlist (login, health probes, dev hot-reload). An
       unauthenticated request to a protected route is a **401 `unauthenticated`** through the pipeline:
       `UnauthenticatedAccessListener` rewrites the firewall's `AccessDeniedException` to an `AuthenticationException` for
