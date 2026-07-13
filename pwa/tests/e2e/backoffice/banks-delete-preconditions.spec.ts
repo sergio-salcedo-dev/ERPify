@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "../fixtures/authenticatedTest";
 import { VIEWPORT_DESKTOP } from "../constants";
 import { SAMPLE_BANK_A, SAMPLE_BANK_B, mockBanksApi } from "../fixtures/banks-api";
 

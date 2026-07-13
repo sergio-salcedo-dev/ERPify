@@ -1,4 +1,4 @@
-import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
+import { test, expect, type APIRequestContext, type Page } from "../fixtures/authenticatedTest";
 import { VIEWPORT_DESKTOP, VIEWPORT_MOBILE } from "../constants";
 import {
   createApiContext,
@@ -48,8 +48,8 @@ test.describe("BackOffice - Banks long-name containment (real API)", () => {
     await filterByName(page, runPrefix);
   }
 
-  test.beforeAll(async () => {
-    api = await createApiContext();
+  test.beforeAll(async ({ workerStorageState }) => {
+    api = await createApiContext(workerStorageState);
     longBank = await createBank(
       api,
       nameOfLength(runPrefix, MAX_NAME_LENGTH),
@@ -276,8 +276,8 @@ test.describe("BackOffice - Banks stacked mobile rows (real API)", () => {
   let api: APIRequestContext;
   let longBank: ApiBank;
 
-  test.beforeAll(async () => {
-    api = await createApiContext();
+  test.beforeAll(async ({ workerStorageState }) => {
+    api = await createApiContext(workerStorageState);
     longBank = await createBank(
       api,
       nameOfLength(runPrefix, MAX_NAME_LENGTH),

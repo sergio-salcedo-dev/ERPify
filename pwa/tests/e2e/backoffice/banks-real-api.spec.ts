@@ -1,4 +1,4 @@
-import { test, expect, type APIRequestContext } from "@playwright/test";
+import { test, expect, type APIRequestContext } from "../fixtures/authenticatedTest";
 import { VIEWPORT_DESKTOP } from "../constants";
 import {
   createApiContext,
@@ -43,8 +43,8 @@ test.describe("BackOffice - Banks CRUD (real API)", () => {
   let api: APIRequestContext;
   let seeded: ApiBank[] = [];
 
-  test.beforeAll(async () => {
-    api = await createApiContext();
+  test.beforeAll(async ({ workerStorageState }) => {
+    api = await createApiContext(workerStorageState);
     seeded = await seedBanks(api, runPrefix, SEED_COUNT);
     trackedIds.push(...seeded.map((bank) => bank.id));
   });

@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "../fixtures/authenticatedTest";
 import { VIEWPORT_DESKTOP } from "../constants";
 
 test.describe("BackOffice - App Shell", () => {

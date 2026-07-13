@@ -1,4 +1,4 @@
-import { test, expect, type APIRequestContext } from "@playwright/test";
+import { test, expect, type APIRequestContext } from "../fixtures/authenticatedTest";
 import {
   createApiContext,
   deleteBanksSafely,
@@ -44,8 +44,8 @@ test.describe("BackOffice - Bank name length validation (real API)", () => {
   const trackedIds: string[] = [];
   let api: APIRequestContext;
 
-  test.beforeAll(async () => {
-    api = await createApiContext();
+  test.beforeAll(async ({ workerStorageState }) => {
+    api = await createApiContext(workerStorageState);
   });
 
   test.afterAll(async () => {

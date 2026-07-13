@@ -13,15 +13,24 @@ interface MeResponse {
   roles: string[];
 }
 
-const isMeResponse: ResponseGuard<MeResponse> = (body): body is MeResponse => {
-  if (typeof body !== "object" || body === null) return false;
-  const candidate = body as Partial<MeResponse>;
+interface MeEnvelope {
+  data: MeResponse;
+}
+
+function isMeResource(value: unknown): value is MeResponse {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Partial<MeResponse>;
   return (
     typeof candidate.id === "string" &&
     typeof candidate.email === "string" &&
     Array.isArray(candidate.roles) &&
     candidate.roles.every((role) => typeof role === "string")
   );
+}
+
+const isMeEnvelope: ResponseGuard<MeEnvelope> = (body): body is MeEnvelope => {
+  if (typeof body !== "object" || body === null) return false;
+  return isMeResource((body as Partial<MeEnvelope>).data);
 };
 
 /**
@@ -42,12 +51,12 @@ export class ApiIdentityRepository implements IdentityRepository {
 
   async me(): Promise<Identity | null> {
     try {
-      const response = await this.httpClient.get(API_ENDPOINTS.IDENTITY.ME, isMeResponse);
+      const { data } = await this.httpClient.get(API_ENDPOINTS.IDENTITY.ME, isMeEnvelope);
       return {
-        id: response.id,
-        email: response.email,
+        id: data.id,
+        email: data.email,
         status: UserStatus.ACTIVE,
-        roles: [...response.roles],
+        roles: [...data.roles],
         permissions: [],
       };
     } catch (error) {
