@@ -35,8 +35,9 @@ use SensitiveParameter;
  *      session) through {@see RevokeSessionsBestEffort}: the credential change already de-authenticates the old
  *      sessions natively, so a revoke failure is swallowed there rather than stranding a reset that committed.
  *
- * Minting a fresh session (auto-login + id regeneration) is deferred; the controller answers 204 with no
- * cookie, and the user signs in normally with the credential just set — a benign, recoverable state.
+ * It returns the identity's email so the HTTP adapter can establish the session (programmatic login on the
+ * just-set credential, reusing the native id regeneration): a successful reset signs the user in, and every
+ * prior session was already revoked above — reset everywhere, then sign in here.
  */
 final readonly class CompletePasswordReset
 {
@@ -54,8 +55,11 @@ final readonly class CompletePasswordReset
      * @throws InvalidResetToken  when the token is malformed, unknown, expired or already consumed (uniform)
      * @throws AccountSuspended   when the identity is suspended between request and complete (403)
      * @throws AccountDeactivated when the identity is deactivated between request and complete (403)
+     *
+     * @return string the identity's canonical email, so the HTTP adapter can establish the post-reset session
+     *                (programmatic login) without handling the identity aggregate across the boundary
      */
-    public function complete(#[SensitiveParameter] string $token, HashedPassword $newPassword): void
+    public function complete(#[SensitiveParameter] string $token, HashedPassword $newPassword): string
     {
         $resetToken = $this->resolve($token);
         $user = $this->users->findById($resetToken->userId()) ?? throw new InvalidResetToken();
@@ -77,6 +81,8 @@ final readonly class CompletePasswordReset
         });
 
         $this->revokeSessions->revoke($resetToken->userId());
+
+        return $user->email();
     }
 
     /**

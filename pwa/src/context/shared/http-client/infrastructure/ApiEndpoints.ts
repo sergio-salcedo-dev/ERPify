@@ -40,6 +40,13 @@ export const API_ENDPOINTS = {
     HEALTH_DATABASE: `${BACKOFFICE_PREFIX}/health/database`,
     // Session sign-in — Symfony route name `identity_login` (204 on success).
     LOGIN: `${BACKOFFICE_PREFIX}/login`,
+    // Request a password-reset link — uniform 202 for every case (existing,
+    // unknown, any account state), so the response never reveals whether the
+    // address matches an account. Same-origin only; no CSRF token.
+    FORGOT_PASSWORD: `${BACKOFFICE_PREFIX}/forgot-password`,
+    // Reset the password with the emailed token (204 on success, httpOnly session
+    // cookie). Dead token → 400 `invalid-token`; suspended/forbidden → 403.
+    RESET_PASSWORD: `${BACKOFFICE_PREFIX}/reset-password`,
     INVITATIONS: {
       // Accept an invitation: set the credential, activate the account (204 on
       // success, httpOnly session cookie). Dead token → 400 `invalid-token`.

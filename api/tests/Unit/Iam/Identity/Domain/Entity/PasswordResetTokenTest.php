@@ -71,4 +71,19 @@ final class PasswordResetTokenTest extends TestCase
 
         $this->assertSame(self::USER_ID, $token->userId());
     }
+
+    public function testIssuingRecordsThePasswordResetRequestedEventAtItsSource(): void
+    {
+        $token = PasswordResetToken::issue(
+            self::TOKEN_ID,
+            self::USER_ID,
+            SingleUseToken::mint(new DateTimeImmutable('2026-07-13T13:00:00+00:00'))->token,
+        );
+
+        $events = $token->pullDomainEvents();
+
+        $this->assertCount(1, $events);
+        $this->assertSame('erpify.iam.identity.password-reset-requested', $events[0]::eventName());
+        $this->assertSame(self::USER_ID, $events[0]->aggregateId());
+    }
 }
