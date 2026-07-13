@@ -17,10 +17,18 @@ import { apiBaseURL } from "./banks-real-api";
  * (sign-out) run on their own throwaway session (see `logout.spec.ts`) so they
  * never revoke a worker session a sibling test still needs.
  *
- * Only successful logins happen here, and Symfony's login throttling consumes a
- * token on failed attempts only, so one mint per worker never nears the limit.
- * Specs that must be unauthenticated (login, sign-out, landing, error pages)
- * import from `@playwright/test` directly and get a fresh context.
+ * Every mint logs in as the same seeded user from one host, so they all draw on a
+ * single `login_throttling` bucket (`max_attempts: 5`, keyed by client IP + email).
+ * Symfony consumes a token on every attempt and resets on a successful login, so the
+ * mints stay within budget at the worker counts in use — CI pins two workers and each
+ * shard runs its own isolated stack. A very high local worker count could contend for
+ * that shared bucket; scale it there via a distinct user or a relaxed E2E throttle.
+ *
+ * Specs that only touch public surfaces (login, sign-out, error pages, `/status`, the
+ * frontoffice theme toggle) import from `@playwright/test` directly for a fresh,
+ * unauthenticated context. Specs that reach a gated `/backoffice` surface import this
+ * fixture — including `landing.spec` (its CTA lands on `/backoffice`) and `rate-limit`
+ * (it opens the `/backoffice` dev-tools error gallery).
  */
 type AuthWorkerFixtures = {
   workerStorageState: string;
