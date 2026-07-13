@@ -58,6 +58,16 @@ Erpify\Iam\Identity\Domain\Entity\User:
                 - 'ingrid-password'
                 - ['VIEWER']
                 - 'INVITED'
+    user_iris:
+        # INVITED with a live invitation (see Invitation.yaml): the invitation-accept flow activates her from
+        # the seeded token. Distinct from ingrid so the login "invited → 401" scenario stays untouched.
+        __factory:
+            'Erpify\Tests\DataFixtures\UserFixtureFactory::create':
+                - '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a70'
+                - 'iris@erpify.test'
+                - 'iris-placeholder-password'
+                - ['VIEWER']
+                - 'INVITED'
     user_sam:
         # SUSPENDED with a correct credential: authenticates (identity proven), then hits the post-identity
         # wall — 403 account-suspended, and no session cookie is set.

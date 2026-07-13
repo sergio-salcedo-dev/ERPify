@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { CircleSlash, LockKeyhole, PauseCircle, type LucideIcon } from "lucide-react";
+import { CircleSlash, Link2Off, LockKeyhole, PauseCircle, type LucideIcon } from "lucide-react";
 import { Routes } from "@/context/shared/routing/domain/Routes";
 import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import { buttonVariants } from "@/components/ui/button-variants";
@@ -12,6 +12,7 @@ export const AccessWallVariant = {
   SUSPENDED: "suspended",
   DEACTIVATED: "deactivated",
   LOCKED: "locked",
+  INVALID_LINK: "invalid-link",
 } as const;
 export type AccessWallVariant = (typeof AccessWallVariant)[keyof typeof AccessWallVariant];
 
@@ -52,6 +53,26 @@ const RECOVER_ACTION: AccessWallAction = {
   title: "Recover access to your account",
 };
 
+// The invitation-accept surface is Spanish (design spine), so its wall carries
+// its own Spanish action stack rather than reusing the English SIGN_IN_ACTION.
+const SIGN_IN_ES_ACTION: AccessWallAction = {
+  testId: "sign-in",
+  href: Routes.LOGIN,
+  label: "Iniciar sesión",
+  title: "Volver a la página de inicio de sesión",
+};
+
+// No self-service "request invitation" route exists in this single-tenant,
+// invitation-first system — a new invitation is minted by an administrator. The
+// action points to the public landing (the entry point where a locked-out user
+// finds how to get access); the wall body directs them to their administrator.
+const REQUEST_INVITATION_ACTION: AccessWallAction = {
+  testId: "request-invitation",
+  href: Routes.HOME,
+  label: "Solicitar nueva invitación",
+  title: "Solicitar una nueva invitación",
+};
+
 // Neutral, non-enumerating copy: a wall is not an error, so the tone stays muted
 // and the description never lists policy reasons.
 const COPY: Record<AccessWallVariant, AccessWallCopy> = {
@@ -78,6 +99,13 @@ const COPY: Record<AccessWallVariant, AccessWallCopy> = {
     description:
       "Access to this account is temporarily locked. Recover your access or try signing in again in a few minutes.",
     actions: [RECOVER_ACTION, SIGN_IN_ACTION],
+  },
+  [AccessWallVariant.INVALID_LINK]: {
+    icon: Link2Off,
+    status: "Enlace no válido",
+    title: "Este enlace ya no es válido",
+    description: "Solicita una nueva invitación a tu administrador para continuar.",
+    actions: [SIGN_IN_ES_ACTION, REQUEST_INVITATION_ACTION],
   },
 };
 

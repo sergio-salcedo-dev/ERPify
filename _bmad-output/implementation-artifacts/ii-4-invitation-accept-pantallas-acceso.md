@@ -3,7 +3,7 @@ baseline_commit: 79b5669a
 ---
 # Story II-4: `Invitation` + aceptación (1ª superficie pública nueva) + las 6 pantallas de acceso
 
-Status: ready-for-dev
+Status: done
 
 <!-- Validación opcional. Ejecuta `bmad-create-story` validate para un chequeo de calidad antes de dev-story. -->
 
@@ -114,39 +114,39 @@ logs o respuestas**.
 
 ### Backend — `Iam/Invitation` + accept público (dentro del firewall `main`)
 
-- [ ] **T1 — Agregado `Invitation` + eventos + repo (AC1, AC8)**
-  - [ ] `api/src/Iam/Invitation/Domain/Entity/Invitation.php` — `final class Invitation extends AggregateRoot`,
+- [x] **T1 — Agregado `Invitation` + eventos + repo (AC1, AC8)**
+  - [x] `api/src/Iam/Invitation/Domain/Entity/Invitation.php` — `final class Invitation extends AggregateRoot`,
         `#[ORM\Table(name: 'iam_invitation')]`. Props por id: `organizationId`, `invitedUserId`, `tokenHash` (string),
         `expiresAt` (timestamptz), `InvitationStatus $status`. Refs cross-módulo **por id** (`Uuid::ensure()` en el borde),
         **nunca** `#[ORM\ManyToOne]`. Factory `static create(...)` (→ `CREATED`, graba `InvitationCreated`); transiciones
         `markSent()`, `accept()` (`SENT→ACCEPTED`, graba `InvitationAccepted`), `revoke()` (`→REVOKED`), `expire()`; guardas
         de máquina rechazan transiciones ilegales con excepción de dominio (mirror `InvalidIdentityTransition` de II-3,
         `implements Conflict` → 409).
-  - [ ] `api/src/Iam/Invitation/Domain/Enum/InvitationStatus.php` — backed enum puro `{CREATED, SENT, ACCEPTED, REVOKED, EXPIRED}`.
-  - [ ] Eventos en `api/src/Iam/Invitation/Domain/Event/` — subclases de `DomainEvent`, `eventName='erpify.iam.invitation.<fact>'`,
+  - [x] `api/src/Iam/Invitation/Domain/Enum/InvitationStatus.php` — backed enum puro `{CREATED, SENT, ACCEPTED, REVOKED, EXPIRED}`.
+  - [x] Eventos en `api/src/Iam/Invitation/Domain/Event/` — subclases de `DomainEvent`, `eventName='erpify.iam.invitation.<fact>'`,
         `aggregateType='Iam.Invitation'`, **payload PII-free** (id + status, **nunca** email ni token). Si acaban ≥3 sobres
         con snapshot compartido → trait por-módulo (`CarriesInvitationSnapshot`, Regla-de-Tres **por módulo**, NO unificar con
         Session/Identity — ver memoria `bankaccount-event-envelope-trait-vs-bank`).
-  - [ ] Puerto `api/src/Iam/Invitation/Domain/Repository/InvitationRepository.php` + adapter Doctrine
+  - [x] Puerto `api/src/Iam/Invitation/Domain/Repository/InvitationRepository.php` + adapter Doctrine
         `.../Infrastructure/Persistence/Doctrine/DoctrineInvitationRepository.php` (composición sobre EM, `#[AsAlias]`, mirror
         `DoctrineSessionRepository`). Métodos: `save`, `findById`, y **`findActiveByTokenHash(string $hash): ?Invitation`**
         (o el lookup que use el accept — ver Decisión sobre cómo el token localiza la invitación en T3).
-  - [ ] `make db.diff` → migración `api/migrations/2026/` (tabla `iam_invitation`, índice sobre `token_hash` y/o
+  - [x] `make db.diff` → migración `api/migrations/2026/` (tabla `iam_invitation`, índice sobre `token_hash` y/o
         `invited_user_id`). `down()` reversible. **Cero PII/credenciales/token crudo** en el schema. Editable en esta rama.
 
-- [ ] **T2 — Caso de uso invite (AC5, AC7) — funnel por `GrantMembership`, captura de unicidad**
-  - [ ] `api/src/Iam/Invitation/Application/InviteUser.php` (o `SendInvitation`) en un `TransactionManager::transactional`:
+- [x] **T2 — Caso de uso invite (AC5, AC7) — funnel por `GrantMembership`, captura de unicidad**
+  - [x] `api/src/Iam/Invitation/Application/InviteUser.php` (o `SendInvitation`) en un `TransactionManager::transactional`:
         `User::invite($id, $email, ...$roles)` → **`GrantMembership->grant($userId, ...$roles)`** (funnel obligatorio, AC5) →
         `Invitation::create(...)` con `SingleUseToken::mint($clock->now()->add(TTL))` → `markSent()` → guardar los 3 agregados
         + `eventBus->publish(...pullDomainEvents())` de cada uno → enviar `SecurityEmail` (invitación) con el **plaintext**
         del `GeneratedToken` (`->plaintext()`) en el enlace. El plaintext **no se persiste ni se loggea** (`GeneratedToken`
         lo guarda `#[SensitiveParameter]`).
-  - [ ] **Fix del contrato diferido de II-1** en `GrantMembership::grant()` (`api/src/Organization/Membership/Application/GrantMembership.php:42`):
+  - [x] **Fix del contrato diferido de II-1** en `GrantMembership::grant()` (`api/src/Organization/Membership/Application/GrantMembership.php:42`):
         capturar `UniqueConstraintViolationException` → re-lanzar `UserAlreadyMember` (grant concurrente idempotente).
-  - [ ] TTL de invitación = política de II-4 (p.ej. 72h) — constante nombrada, **no** magic number.
+  - [x] TTL de invitación = política de II-4 (p.ej. 72h) — constante nombrada, **no** magic number.
 
-- [ ] **T3 — Caso de uso accept (AC2, AC3, AC4) — el corazón de II-4**
-  - [ ] `api/src/Iam/Invitation/Application/AcceptInvitation.php` — orquesta, en **una** `transactional`:
+- [x] **T3 — Caso de uso accept (AC2, AC3, AC4) — el corazón de II-4**
+  - [x] `api/src/Iam/Invitation/Application/AcceptInvitation.php` — orquesta, en **una** `transactional`:
         1. localizar la `Invitation` por el token presentado (hash del plaintext, o lookup por id + `verify`), validar
            `verify($plaintext, $now)` **y** `status==SENT`;
         2. cargar el `User` (`UserRepository::findById($invitation->invitedUserId())`);
@@ -155,66 +155,66 @@ logs o respuestas**.
         5. `invitation->accept()` (SENT→ACCEPTED — **retire-then-act atómico**: el estado `ACCEPTED` ES el consumo del
            single-use; contrato diferido de II-2);
         6. `save` User + Invitation, `eventBus->publish(...)` de ambos — **todo dentro del mismo `transactional`**.
-    - [ ] Cualquier fallo de validación (token no elegible en los 5 casos, status≠SENT, User no INVITED) → lanzar la excepción
+    - [x] Cualquier fallo de validación (token no elegible en los 5 casos, status≠SENT, User no INVITED) → lanzar la excepción
           **`invalid-token`** (T5) **antes** de mutar nada. **Opacidad total (AC3):** los 5 caminos lanzan la **misma**
           excepción con el **mismo** mensaje — no ramificar el motivo.
-  - [ ] **Establecimiento de sesión + anti-fixation (NFR3) = A1 (ratificada)** — tras el **commit** de los flips,
+  - [x] **Establecimiento de sesión + anti-fixation (NFR3) = A1 (ratificada)** — tras el **commit** de los flips,
         `Security::login($securityUser, 'main')` dispara `LoginSuccessEvent` → `SessionMintingSuccessListener` acuña la 1.ª
         `Session` + el `migrate(true)` nativo regenera el id. `Security::login` va **fuera** del `wrapInTransaction`, **tras**
         el commit de dominio (los flips + el guard `status==SENT` + retire-then-act van **dentro** y **antes**). Ver «El crux:
         establecer la sesión tras el accept».
 
-- [ ] **T4 — Controlador accept + ruta pública + Origin (AC2, AC4)**
-  - [ ] `api/src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php` — `AbstractController` fino, POST, DTO de
+- [x] **T4 — Controlador accept + ruta pública + Origin (AC2, AC4)**
+  - [x] `api/src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php` — `AbstractController` fino, POST, DTO de
         request con `#[MapRequestPayload]` + `#[Assert\…]` (token + password; el password valida longitud/policy en el DTO,
         el dominio revalida). Delega en `AcceptInvitation`. Respuesta de éxito: **decidir 204-vs-body** y fijarlo como el
         contrato que consume el PWA (recomendado 204 + cookie de sesión, espejo del login).
-  - [ ] Ruta: bloque `resource` nuevo en `api/config/routes.yaml` apuntando a `../src/Iam/Invitation/Infrastructure/Http/`
+  - [x] Ruta: bloque `resource` nuevo en `api/config/routes.yaml` apuntando a `../src/Iam/Invitation/Infrastructure/Http/`
         con `defaults: { _format: json }` y prefijo adecuado (p.ej. `/api/v1/backoffice`, mirror del login que confina su URL).
-  - [ ] **`security.yaml`:** añadir una entrada `access_control` `PUBLIC_ACCESS` para la ruta accept **antes** del catch-all
+  - [x] **`security.yaml`:** añadir una entrada `access_control` `PUBLIC_ACCESS` para la ruta accept **antes** del catch-all
         `^/api → IS_AUTHENTICATED_FULLY`. El accept es pre-identidad pero **dentro** del firewall `main` (ruta pública, **no**
         un firewall `security:false` — `Security::login` de A1 necesita el firewall resuelto).
-  - [ ] Origin check: listener espejo de `LoginOriginListener` **keyed en el nombre de ruta del accept** (o generalizar el
+  - [x] Origin check: listener espejo de `LoginOriginListener` **keyed en el nombre de ruta del accept** (o generalizar el
         existente a un conjunto de rutas). `Origin !== getSchemeAndHttpHost()` → `AccessDeniedHttpException` (403 `forbidden`).
 
-- [ ] **T5 — `invalid-token` en el contrato de error (AC3, AC6) = Decisión B**
-  - [ ] `api/src/Iam/Invitation/Domain/Exception/InvalidToken.php` (o `InvalidInvitationToken`) —
+- [x] **T5 — `invalid-token` en el contrato de error (AC3, AC6) = Decisión B**
+  - [x] `api/src/Iam/Invitation/Domain/Exception/InvalidToken.php` (o `InvalidInvitationToken`) —
         `final class … extends DomainException implements <marker existente>` con `type()` override → `'invalid-token'`.
         **Sin marker interface nuevo** (vive en `Iam/Invitation`, no en `Shared/ErrorContract` → el `ErrorContractGateTest`
         git-aware no dispara; pero **igual** actualiza el doc). **Decisión B ratificada: 400 `InvalidInput`** (`implements
         InvalidInput`, precedente `InvalidUuidException`; status **uniforme** en los 5 casos = opacidad).
-  - [ ] Actualizar [`docs/api-error-contract.md`](../../docs/api-error-contract.md): documentar `invalid-token` (el `type` ya
+  - [x] Actualizar [`docs/api-error-contract.md`](../../docs/api-error-contract.md): documentar `invalid-token` (el `type` ya
         está **reservado** en el doc por II-3 como «out of scope here» — ahora se realiza), su status, y que es
         **pre-identidad opaco** (los 5 casos colapsan). `make php.lint.error-contract` verde.
 
-- [ ] **T6 — CSRF stateless (AC4) — Decisión C = Opción 1 (nativo Symfony 8), ratificada**
-  - [ ] Registrar el token id del accept en `framework.csrf_protection.stateless_token_ids` (nativo; **nunca** hand-rolled).
+- [x] **T6 — CSRF stateless (AC4) — Decisión C = Opción 1 (nativo Symfony 8), ratificada**
+  - [x] Registrar el token id del accept en `framework.csrf_protection.stateless_token_ids` (nativo; **nunca** hand-rolled).
         El **check Origin-primary + token stateless = parte load-bearing** (unit/Behat-verificable; honra el «Origin **AND**
         CSRF» de D5). El stateless CSRF de Symfony 8 **no requiere sesión** y es Origin/Referer-primary → encaja en el accept
         pre-identidad; `reference.php` documenta el esquema. **Dev-verify:** ¿el recipe Flex dejó un `config/packages/csrf.yaml`
         parcial (stateless on-by-default) o está ausente?
-  - [ ] `check_header:true` (cookie+header double-submit, JS-generado al submit — **no** sembrado por un GET) = **defense-in-
+  - [x] `check_header:true` (cookie+header double-submit, JS-generado al submit — **no** sembrado por un GET) = **defense-in-
         depth OPCIONAL**, la **única** parte solo-navegador → **Playwright**, **no bloqueante** (habilitar o diferir sin
         incumplir D5). El CSRF aquí es **defense-in-depth, NO el control primario** (primarios = Origin + `SingleUseToken`
         opaco) — no debilitar el Origin check. Consolidar `LoginOriginListener` con el check nativo = **follow-up**, no II-4.
         El **login POST** entra en alcance CSRF (epic Additional) — confirmar si se cablea aquí o se deja preparado (no romper
         `login→204`).
 
-- [ ] **T7 — `SecurityEmail` invitación (AC9) — plantilla, no componente React**
-  - [ ] Plantilla del email de invitación (Twig/PHP mailer, `symfony/mailer` — **ya async vía Messenger** por defecto en este
+- [x] **T7 — `SecurityEmail` invitación (AC9) — plantilla, no componente React**
+  - [x] Plantilla del email de invitación (Twig/PHP mailer, `symfony/mailer` — **ya async vía Messenger** por defecto en este
         stack). Contrato UX-DR6: cabecera plana sin hero · una frase de propósito · **un** enlace bulletproof (estilos inline,
         `«Aceptar invitación»`, área táctil grande) · pie legal mínimo · **remitente NO `no-reply`** · pila de sistema ·
         dark-mode-aware con literales `#2f5cd9`/`#6c9bff` · `lang="es"` · fallback de URL en texto plano. El enlace lleva el
         **plaintext** del token (`?token=`); el token **nunca** viaja en logs. **Endurecimiento (async explícito, escape,
         headers, redacción) = II-8** — aquí solo la plantilla + el envío.
 
-- [ ] **T8 — Deptrac seams + Behat (AC2–AC8)**
-  - [ ] `Iam/Invitation` **ya está registrado** en `api/tools/deptrac/deptrac.yaml` (esqueleto de II-0) → **no** hay capa
+- [x] **T8 — Deptrac seams + Behat (AC2–AC8)**
+  - [x] `Iam/Invitation` **ya está registrado** en `api/tools/deptrac/deptrac.yaml` (esqueleto de II-0) → **no** hay capa
         nueva. Pero los imports cross-contexto del invite/accept (`Iam/Invitation → Organization\Membership\Application\{GrantMembership,FindUserOrganizationId}`,
         `→ Iam\Identity` repo/hasher, `→ Iam\Session\Application\StartSession`) son violaciones **Nivel-1** salvo allowlist:
         añadir entradas **per-file** en `api/.bounded-context-allowlist` **y** deptrac `skip_violations` (espejo de las de II-7;
         **nunca** forma global `* =>` — `DeptracSeamSyncGateTest` la prohíbe; contexto = módulo de 2 niveles).
-  - [ ] Behat: nueva feature `api/features/backoffice/identity/invitation.feature` (o `invitation/accept.feature`) — accept
+  - [x] Behat: nueva feature `api/features/backoffice/identity/invitation.feature` (o `invitation/accept.feature`) — accept
         válido → 204 + cookie + `User` ACTIVE + `Invitation` ACCEPTED; los **5 casos de token muerto** → **idéntico**
         `invalid-token` (comparación cara a cara, AC3); accept sin `Origin` → 403; sin CSRF → 403 sin mutación; **0 eventos**
         en el accept fallido (vaciar outbox + reset stats antes). **Presupuesto de queries +2 por escritura envuelta**
@@ -222,43 +222,43 @@ logs o respuestas**.
 
 ### Frontend — la superficie pública de acceso (6 componentes)
 
-- [ ] **T9 — Ruta `accept-invitation` + `TokenActionScreen` (AC9)**
-  - [ ] `pwa/src/app/(auth)/accept-invitation/page.tsx` — **clon de `reset-password/page.tsx`**: RSC que envuelve el form en
+- [x] **T9 — Ruta `accept-invitation` + `TokenActionScreen` (AC9)**
+  - [x] `pwa/src/app/(auth)/accept-invitation/page.tsx` — **clon de `reset-password/page.tsx`**: RSC que envuelve el form en
         `<Suspense>` (el form lee `?token=` con `useSearchParams`, obligatorio bajo Suspense en Next 16). Hereda `AuthLayout`
         (card centrada + `noindex`) por vivir en `(auth)/`.
-  - [ ] `pwa/src/app/(auth)/_components/TokenActionScreen.tsx` (variante accept) — **clon de `ResetPasswordForm.tsx`**:
+  - [x] `pwa/src/app/(auth)/_components/TokenActionScreen.tsx` (variante accept) — **clon de `ResetPasswordForm.tsx`**:
         `const token = useSearchParams().get("token")`; si `!token` → `<AccessWall variant={INVALID_LINK} />`. **Campo único de
         contraseña con toggle revelado por defecto** (no hay primitivo de reveal → crear con `useState` + `Eye`/`EyeOff` de
         `lucide-react`, toggle ≥44px con `aria-pressed` y nombre accesible estático «Mostrar/Ocultar contraseña»). Submit vía
         `ConnectivityButton`. Éxito → `SecuritySignal` invitation-accepted → navegar al ERP (`safeHref`). **Token nunca
         renderizado.** Anunciar contexto de página antes del autofocus (`aria-describedby` con reglas + propósito).
 
-- [ ] **T10 — Caso de uso accept en el cliente (AC9) — puerto + adapter (DIP)**
-  - [ ] **Clon del patrón login (`context/backoffice/user/`):** puerto `domain/AcceptInvitationRepository.ts` +
+- [x] **T10 — Caso de uso accept en el cliente (AC9) — puerto + adapter (DIP)**
+  - [x] **Clon del patrón login (`context/backoffice/user/`):** puerto `domain/AcceptInvitationRepository.ts` +
         `domain/AcceptInvitationOutcome.ts` (unión discriminada rutada por `problem.type`, **no** por status solo) +
         `infrastructure/ApiAcceptInvitationRepository.ts` (`@injectable`, `@inject("HttpClient")`, mapea 204→aceptado /
         `invalid-token`→muro / re-lanza no-`HttpError`). Registrar 1 binding en `Container.ts` (símbolo string) + 1 entrada en
         `ApiEndpoints.ts` + `Routes.ACCEPT_INVITATION`.
-  - [ ] **`Origin` gratis:** `FetchHttpClient.post` no setea `Origin` — el navegador lo manda solo en same-origin, y la cookie
+  - [x] **`Origin` gratis:** `FetchHttpClient.post` no setea `Origin` — el navegador lo manda solo en same-origin, y la cookie
         same-origin fluye sola → el requisito Origin se cumple **sin código extra** (mirror del login). El **CSRF double-submit**
         (T6) sí puede necesitar leer una cookie y reenviarla como header — coordinar con backend.
-  - [ ] Si el accept puede devolver 401/403, **añadir su endpoint a `isAuthHandshakeEndpoint`** en `FetchHttpClient.ts` para
+  - [x] Si el accept puede devolver 401/403, **añadir su endpoint a `isAuthHandshakeEndpoint`** en `FetchHttpClient.ts` para
         que un fallo **no** rebote a `/login?reason=session-expired`.
-  - [ ] Envelope: si el éxito devuelve body (no 204), **guardar el envelope `{data}`** y destructurar (bug #488 — validar la
+  - [x] Envelope: si el éxito devuelve body (no 204), **guardar el envelope `{data}`** y destructurar (bug #488 — validar la
         forma antes de leer).
 
-- [ ] **T11 — `AccessWall` variante `invalid-link` (AC3, AC9)**
-  - [ ] `pwa/src/context/shared/error/infrastructure/ui/AccessWall.tsx` — **añadir `INVALID_LINK: "invalid-link"`** al objeto
+- [x] **T11 — `AccessWall` variante `invalid-link` (AC3, AC9)**
+  - [x] `pwa/src/context/shared/error/infrastructure/ui/AccessWall.tsx` — **añadir `INVALID_LINK: "invalid-link"`** al objeto
         `AccessWallVariant` (fuerza en compile-time una entrada `COPY` nueva por ser `Record<Variant,…>`). Copy Spanish exacta:
         título **«Este enlace ya no es válido»**, cuerpo **«Solicita una nueva invitación a tu administrador para continuar.»**,
         2 acciones: **«Iniciar sesión»** (`Routes.LOGIN`, primaria) + **«Solicitar nueva invitación»**. Tono neutro
         (`bg-muted`, **nunca** danger); foco al `<h1>` ya implementado. **Nota i18n:** el `AccessWall` actual trae copy en
         **inglés** (`suspended`/`deactivated`/`locked`) — la espina exige **español, ninguna cadena hardcodeada**; reconciliar
         el gap i18n al añadir la variante (o al menos dejar la nueva en español + flag del gap).
-  - [ ] Añadir el caso `invalid-link` al `it.each` de `tests/context/shared/error/infrastructure/ui/AccessWall.test.tsx`.
+  - [x] Añadir el caso `invalid-link` al `it.each` de `tests/context/shared/error/infrastructure/ui/AccessWall.test.tsx`.
 
-- [ ] **T12 — `ConnectivityButton` + `OfflineNotice` + hook de conectividad (AC9)**
-  - [ ] **No existen** (ni `navigator.onLine`/`useOnlineStatus`). Crear:
+- [x] **T12 — `ConnectivityButton` + `OfflineNotice` + hook de conectividad (AC9)**
+  - [x] **No existen** (ni `navigator.onLine`/`useOnlineStatus`). Crear:
         - Hook de estado online (nueva capacidad `pwa/src/context/shared/connectivity/infrastructure/…`, hook puro).
         - `ConnectivityButton` (componente que compone el Brand `Button`; máquina `idle→loading[spinner, label «Enviando…»
           persiste, `aria-busy`]→disabled-in-flight[bloquea doble envío]→retry[idempotente]`; conserva foco; **sin toast de
@@ -266,25 +266,56 @@ logs o respuestas**.
         - `OfflineNotice` (banda in-form **sobre** el botón, `aria-live="polite"`, `{color.warning}`/`-strong` **no rojo**,
           copy **«Sin conexión. Reintenta cuando recuperes señal.»**, conserva lo tecleado).
 
-- [ ] **T13 — `SecuritySignal` + retiro de `/register` (AC9, AC10)**
-  - [ ] `SecuritySignal` (invitation-accepted) — **no existe** ningún componente de éxito. Card dentro de `AuthLayout`: dot
+- [x] **T13 — `SecuritySignal` + retiro de `/register` (AC9, AC10)**
+  - [x] `SecuritySignal` (invitation-accepted) — **no existe** ningún componente de éxito. Card dentro de `AuthLayout`: dot
         `{color.success}` (sin animación), `<h1>`, copy **«Invitación aceptada. Ya puedes empezar a trabajar.»**, acción
         primaria = entrar al ERP. **Mover el foco al `<h1>`** en la transición SPA (no se reubica solo). Ubicación =
         `components/erpify` vs `context/shared/<capability>/…` → confirmar (frontera de componentes no autorizada).
-  - [ ] **Retirar `/register`:** borrar `app/(auth)/register/page.tsx`, `_components/RegisterForm.tsx`,
+  - [x] **Retirar `/register`:** borrar `app/(auth)/register/page.tsx`, `_components/RegisterForm.tsx`,
         `context/backoffice/user/application/schemas/auth/RegisterSchema.ts`, `Routes.REGISTER`, el `<Link>` «Create account»
         de `LoginForm.tsx` (líneas ~131-133), y **editar** (no borrar) `tests/context/backoffice/user/schemas.test.ts` (quitar
         los casos `RegisterSchema`). **Antes de borrar**, copiar el patrón `.refine` de confirmación de password al schema de
         accept si se usa doble campo — **pero la UX manda campo ÚNICO** con toggle, así que el schema de accept clona
         `ResetPasswordSchema` (min/max de `passwordPolicy.ts`) **sin** el `confirmPassword`.
-  - [ ] Schema de accept en `context/…/application/schemas/…` — límites en **`.max()`** (nunca `maxLength`); mensajes espejo de
+  - [x] Schema de accept en `context/…/application/schemas/…` — límites en **`.max()`** (nunca `maxLength`); mensajes espejo de
         los 422 del API. Añadir sus casos a `schemas.test.ts`.
 
-- [ ] **T14 — Tests (todos los AC)** — ver «Testing».
-- [ ] **T15 — Gates + verificación fresca** — `make php.behat.install` (worktree fresco) → `make php.stan` (por fichero; exit
+- [x] **T14 — Tests (todos los AC)** — ver «Testing».
+- [x] **T15 — Gates + verificación fresca** — `make php.behat.install` (worktree fresco) → `make php.stan` (por fichero; exit
       139 → `PHP_SERVICE=messenger_worker`) → `make php.test` → `make php.quality` EXIT 0 → `make php.lint.error-contract` →
       `make php.lint.bounded-context` → `make php.deptrac` → `make php.psalm.taint` → `make pwa.quality` → `make pwa.test`.
       Verificar sobre el **path del worktree**, confiar en el exit code recién impreso.
+
+### Review Findings
+
+Code review (2026-07-13, 3 capas adversariales + triaje leyendo el código). **6 patches aplicados · 6 diferidos · 6
+descartados como ruido.** Todos los gates verdes en fresco (`php.stan`, `php.quality` EXIT 0, `php.lint.error-contract`,
+`php.test` PHPUnit+Behat 274 esc., `php.psalm.taint`, `pwa.quality`, `pwa.test.unit` 1011). Ningún AC violado en código
+(el auditor confirmó AC1–AC10 satisfechos); los hallazgos fueron un race de concurrencia + endurecimiento + cobertura.
+
+Patches aplicados:
+
+- [x] **[Review][Patch] Race de doble-accept: single-use no serializado bajo concurrencia** — `findByIdForUpdate` (lock
+      pesimista `SELECT … FOR UPDATE`) sobre la invitación dentro del `transactional`, así dos accepts concurrentes del
+      mismo token serializan y el perdedor relee `ACCEPTED` → `InvalidToken`. Cierra el «no dos Session / no doble activate»
+      de AC2/NFR9. [`api/src/Iam/Invitation/Application/AcceptInvitation.php`, `…/Domain/Repository/InvitationRepository.php`,
+      `…/Infrastructure/Persistence/Doctrine/DoctrineInvitationRepository.php`]
+- [x] **[Review][Patch] Opacidad estructural: `activate()` filtraba un 409 distinguible** — guard `IdentityStatus::INVITED
+      !== $user->status()` antes de `activate()`, colapsa una identidad des-sincronizada al muro opaco (AC3). Seam
+      registrado en `.bounded-context-allowlist` + `deptrac.yaml`. [`api/src/Iam/Invitation/Application/AcceptInvitation.php`]
+- [x] **[Review][Patch] Barrido de IDs de story/NFR/AC en comentarios de código** (SI-13, NFR10, AC5/AC7, Decision A1,
+      «deferred to II-8»). [8 ficheros `api/src` + 3 tests]
+- [x] **[Review][Patch] Docblock «retire-then-act» corregido** para describir el orden real (act-then-retire) y el lock.
+      [`api/src/Iam/Invitation/Application/AcceptInvitation.php`]
+- [x] **[Review][Patch] `#[SensitiveParameter]` en el entry-path del token** (`accept()` + DTO token/password).
+      [`AcceptInvitation.php`, `AcceptInvitationRequest.php`]
+- [x] **[Review][Patch] Unit test de `TokenActionScreen`** (sin token→muro, token nunca renderizado, 204→login+éxito,
+      token muerto→muro, 422→error de campo, transporte→error neutro). [`pwa/tests/app/(auth)/tokenActionScreen.test.tsx`]
+      + unit test del guard de opacidad. [`api/tests/Unit/Iam/Invitation/Application/AcceptInvitationTest.php`]
+
+Diferidos (Low; registrados en `deferred-work.md`): test negativo de CSRF (no escribible con `check_header` off), assert de
+regeneración de id de sesión (nativo del framework, cobertura parcial ya existe), KDF antes del check de token (rate-limited),
+re-probe `/me` tras 204, test de fallo a-mitad (atomicidad estructural), fixture `REVOKED` distinto.
 
 ## Dev Notes
 
@@ -523,9 +554,121 @@ claude-opus-4-8[1m] (Opus 4.8, 1M context).
 
 ### Debug Log References
 
+- Verificación empírica A1 (el crux): `InvitationAcceptFunctionalTest` conduce el accept por el kernel real →
+  204 + `User` ACTIVE + `Invitation` ACCEPTED + **exactamente 1 fila `Session`** (`assertCount(1, findByUserId)`).
+  Confirma que `Security::login($u, firewallName: 'main')` dispara el login-path una sola vez y reutiliza el
+  minting nativo sin doble-mint.
+- Verificación empírica opacidad (SI-13): los 5 tokens muertos (malformado / inexistente / secreto-erróneo /
+  caducado / ya-aceptado) devuelven `400 invalid-token` con `type`/`title`/`status` **idénticos** (comparación
+  cara a cara en Functional + Behat).
+- CSRF nativo stateless: `SameOriginCsrfTokenManager` exige `_token` de longitud ≥ 24 **y** Origin same-origin;
+  el happy-path (Functional/Behat) envía `_token` de 32 chars + Origin y pasa; el PWA envía `uuidV7()` (36).
+
 ### Completion Notes List
 
+**Backend `Iam/Invitation` (dominio → aplicación → infraestructura), TDD:**
+
+- Agregado `Invitation` state-oriented (ADR D5): `CREATED→SENT→ACCEPTED|REVOKED|EXPIRED`, refs cross-módulo por
+  id + `Uuid::ensure`, guarda de transiciones → `InvalidInvitationTransition` (409). Persiste **solo el digest**
+  del token (`token_hash`) + `expires_at`; el token crudo nunca toca la BD ni un evento. 6 eventos PII-free vía
+  trait `CarriesInvitationSnapshot` (Regla-de-Tres por módulo). `InvalidToken` (400 `InvalidInput` con `type()`
+  override, **sin marcador nuevo** → drift-gate no dispara, Decisión B).
+- **Localización del token = selector-verifier `<invitationId>.<secret>`** (`findById` + `Invitation::verify`) —
+  corrección propia consistente con II-5: el VO oculta su digest y no hay lookup-por-hash público, así que evita
+  editar `Shared/Token` y mantiene la opacidad. Un `Uuid::isValid` en el borde impide que un id malformado fugue
+  un `invalid-uuid` distinto y rompa la opacidad.
+- `AcceptInvitation` (el corazón): retire-then-act atómico — valida token + status==SENT + carga user **antes**
+  de mutar, luego `user.activate($password)` + `invitation.accept()` + save + publish, todo en **un**
+  `transactional`. Los 5 caminos muertos lanzan el **mismo** `InvalidToken` sin save/evento. El establecimiento
+  de sesión (Decisión A1) vive en el controlador, **tras** el commit: hashea (Infra), llama al use case, y
+  `Security::login($userProvider->loadUserByIdentifier($email), firewallName: 'main')` (corrección clave: 3.er
+  arg = firewall, no el authenticator).
+- `SendInvitation` orquesta invite en **una** transacción: `InviteUser` (Identity, nuevo, hermano credential-less
+  de `CreateUser`) → `GrantMembership` (funnel AC5) → `Invitation::create/markSent` → publish → email tras
+  commit; devuelve el token compuesto para que el CLI lo imprima. `RevokeInvitation`/`ResendInvitation` +
+  3 comandos CLI finos (`iam:invitation:create|revoke|resend`, Decisión D). `expire()` es transición del
+  agregado sin caller programado (futuro sweeper; hoy la caducidad la aplica `verify()`).
+- **CSRF (Decisión C):** control **primario** = `AcceptInvitationOriginListener` (espejo de `LoginOriginListener`,
+  403 same-origin) + el `SingleUseToken` opaco. **Defense-in-depth** = CSRF nativo stateless
+  (`config/packages/csrf.yaml` `stateless_token_ids: [invitation_accept]` + `#[IsCsrfTokenValid]`), `check_header`
+  OFF/diferido con el follow-up de consolidar `LoginOriginListener`. El `_token` no exige cookie sembrada
+  (same-origin + longitud), así que el cold-landing del email funciona.
+- **Contrato diferido de II-1 saldado (AC5):** la captura `UniqueConstraintViolationException → UserAlreadyMember`
+  vive en `DoctrineMembershipRepository::save` (**Infra**, no `GrantMembership::grant` como decía el spec) —
+  deptrac prohíbe DBAL en `Application`; la traducción DBAL→dominio pertenece al adapter (espejo de
+  `DoctrineSessionRepository`→`SessionStoreUnavailable`). Test funcional dedicado.
+- Email (`SymfonyInvitationEmailSender`): plantilla HTML bulletproof inline + dark-mode + fallback texto plano; el
+  enlace = `{DEFAULT_URI}/accept-invitation?token=<compuesto>`. Remitente `MAILER_FROM` (formalización no-reply →
+  II-8, per scope-out).
+
+**PWA (subagente paralelo, revisado):** `accept-invitation/page.tsx` (RSC+Suspense) + `TokenActionScreen`
+(campo único, reveal por defecto, token **nunca** renderizado/guardado, `SecuritySignal` al éxito) · puerto+adapter
+`AcceptInvitationRepository`/`ApiAcceptInvitationRepository` (rutea por `problem.type`, `_token`=`uuidV7()` por la
+regla `pwa/CLAUDE.md`) · `AccessWall` variante `invalid-link` (español) · capability nueva `connectivity/`
+(`useOnlineStatus`+`ConnectivityButton`+`OfflineNotice`) · `PasswordInput` reveal (`components/ui`) · `SecuritySignal`
+(`context/shared/access`) · retirado `/register`. Navegación siempre `safeHref(Routes.*)` (sin open-redirect);
+sin XSS sinks; sin secretos en storage.
+
+**Cobertura:** cada clase nueva tiene test `#[CoversClass]` dedicado (dominio + aplicación unit; controller /
+listener / adapter / CLI / email vía Functional que alimenta el clover). Uncovered residual = guardas defensivas
+inalcanzables (`?? throw RuntimeException` sobre `getId()` nunca-nulo; `!is_string($arg)` en comandos que la
+consola siempre da string) — patrón aceptado (mismo que II-1).
+
+**Follow-ups / diferido:** consolidar `LoginOriginListener` + el CSRF nativo (un solo same-origin gate) · habilitar
+`check_header` double-submit (solo-navegador, Playwright) · endurecimiento (constant-time, `Referrer-Policy`, strip
+de URL, redacción del token en logs, rate-limit accept, remitente no-reply formalizado) → **II-8** · gap i18n del
+`AccessWall` (variantes suspended/deactivated/locked siguen en inglés) → iniciativa i18n aparte · UI de gestión de
+miembros (invite/resend/revoke desde el backoffice, envuelve los mismos use cases) → slice J5.
+
+**Verificaciones (frescas, sobre el path del worktree):** `php.quality` EXIT 0 (deptrac 0 viol · phpstan max ·
+phpmd · phpcs · cs-fixer · gherkinlint) · `php.psalm.taint` No errors · `php.lint.error-contract` + `php.lint.
+bounded-context` + `php.deptrac` verdes · `php.unit` **1812** (7940 asserts, 0 fallos) · `php.behat` **274**
+escenarios (2507 steps) · `pwa.quality` EXIT 0 · `pwa.test.unit` **1005**. Migración `Version20260713141511`
+(`iam_invitation`) aplicada; `db.validate` en sync.
+
 ### File List
+
+**API — nuevos (`Iam/Invitation/`):** `Domain/Entity/Invitation.php` · `Domain/Enum/InvitationStatus.php` ·
+`Domain/Event/{CarriesInvitationSnapshot,InvitationCreated,InvitationSent,InvitationResent,InvitationRevoked,InvitationExpired,InvitationAccepted}.php`
+· `Domain/Exception/{InvalidToken,InvalidInvitationTransition,InvitationNotFound}.php` ·
+`Domain/Repository/InvitationRepository.php` ·
+`Application/{AcceptInvitation,AcceptedInvitation,SendInvitation,RevokeInvitation,ResendInvitation,InvitationEmailSender}.php`
+· `Infrastructure/Http/{AcceptInvitationController,AcceptInvitationRequest,AcceptInvitationOriginListener}.php` ·
+`Infrastructure/Persistence/Doctrine/DoctrineInvitationRepository.php` ·
+`Infrastructure/Mail/SymfonyInvitationEmailSender.php` ·
+`Infrastructure/Cli/{CreateInvitationCommand,RevokeInvitationCommand,ResendInvitationCommand}.php`.
+
+**API — nuevos (otros):** `src/Iam/Identity/Application/InviteUser.php` · `migrations/2026/Version20260713141511.php`
+· `config/packages/csrf.yaml`.
+
+**API — modificados:** `config/routes.yaml` · `config/packages/security.yaml` · `tools/deptrac/deptrac.yaml` ·
+`.bounded-context-allowlist` · `src/Organization/Membership/Infrastructure/Persistence/Doctrine/DoctrineMembershipRepository.php`
+· `docs/api-error-contract.md`.
+
+**API — tests:** `tests/Unit/Iam/Invitation/**` (dominio: `Entity/InvitationTest`, `Event/InvitationEventsTest`,
+`Exception/{InvalidToken,InvalidInvitationTransition,InvitationNotFound}Test`; aplicación:
+`Application/{AcceptInvitation,SendInvitation,RevokeInvitation,ResendInvitation}Test` + fakes locales
+`{InMemoryInvitationRepository,RecordingEventBus,InlineTransactionManager,FixedClock,SpyInvitationEmailSender}`) ·
+`tests/Unit/Iam/Identity/Application/InviteUserTest.php` ·
+`tests/Functional/Iam/Invitation/{InvitationAcceptFunctionalTest,InvitationCliFunctionalTest}.php` ·
+`tests/Functional/Organization/Membership/MembershipUniqueConstraintFunctionalTest.php` ·
+`tests/DataFixtures/InvitationFixtureFactory.php` · `tests/DataFixtures/Fixtures/Invitation.yaml` (+ `User.yaml`,
+`Membership.yaml` con `iris`) · `features/backoffice/identity/invitation_accept.feature`.
+
+**PWA — nuevos:** `app/(auth)/accept-invitation/page.tsx` · `app/(auth)/_components/TokenActionScreen.tsx` ·
+`context/backoffice/user/domain/{AcceptInvitationCommand,AcceptInvitationOutcome,AcceptInvitationRepository}.ts` ·
+`context/backoffice/user/infrastructure/ApiAcceptInvitationRepository.ts` ·
+`context/backoffice/user/application/schemas/auth/AcceptInvitationSchema.ts` ·
+`context/shared/connectivity/infrastructure/{useOnlineStatus,ui/ConnectivityButton,ui/OfflineNotice}` ·
+`context/shared/access/infrastructure/ui/SecuritySignal.tsx` · `components/ui/PasswordInput.tsx` · sus tests.
+
+**PWA — modificados:** `context/shared/error/infrastructure/ui/AccessWall.tsx` (+`invalid-link`) ·
+`context/shared/access/infrastructure/ui/index.ts` · `context/shared/dependency-injection/infrastructure/Container.ts`
+· `context/shared/http-client/infrastructure/{ApiEndpoints,FetchHttpClient}.ts` ·
+`context/shared/routing/domain/Routes.ts` · `app/(auth)/_components/LoginForm.tsx` ·
+`tests/context/backoffice/user/schemas.test.ts` · `tests/context/shared/error/infrastructure/ui/AccessWall.test.tsx`.
+**PWA — borrados:** `app/(auth)/register/page.tsx` · `app/(auth)/_components/RegisterForm.tsx` ·
+`context/backoffice/user/application/schemas/auth/RegisterSchema.ts`.
 
 ### Change Log
 
@@ -533,5 +676,6 @@ claude-opus-4-8[1m] (Opus 4.8, 1M context).
 |-------------|--------|
 | 2026-07-13  | Story II-4 creada (ready-for-dev): análisis exhaustivo de 4 artefactos (UX / código API / código PWA / historias previas + ADR). |
 | 2026-07-13  | Decisiones A–E **ratificadas** (Sergio; lentes Winston+Amelia + desempate ChatGPT + verificación Context7 de Symfony 8 stateless CSRF): A=A1 (`Security::login`, ordering fijado, accept dentro de `main`), B=400 `InvalidInput`, C=Opción 1 (CSRF nativo stateless, Origin-primary load-bearing + `check_header` defense-in-depth opcional, honra D5), D=D1 (CLI), E=per-caso. |
+| 2026-07-13  | II-4 **implementada** (backend `Iam/Invitation` completo + accept público dentro de `main` + CSRF stateless nativo + 6 componentes PWA + email + retiro de `/register`). A1 verificado empíricamente (1 sesión acuñada), opacidad de los 5 tokens muertos verificada, contrato diferido de II-1 saldado (unique→`UserAlreadyMember` en el adapter). Selector-verifier `<id>.<secret>` como localización del token. Gates verdes (php.quality/psalm.taint/php.unit 1812/php.behat 274/pwa 1005). Status → review. |
 
 ### Review Findings

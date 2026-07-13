@@ -8,34 +8,46 @@ describe("AccessWall", () => {
       variant: AccessWallVariant.SUSPENDED,
       status: "Suspended",
       testId: "access-wall--suspended",
+      signInName: "Sign in",
     },
     {
       variant: AccessWallVariant.DEACTIVATED,
       status: "Deactivated",
       testId: "access-wall--deactivated",
+      signInName: "Sign in",
     },
     {
       variant: AccessWallVariant.LOCKED,
       status: "Locked",
       testId: "access-wall--locked",
+      signInName: "Sign in",
     },
-  ])("renders the $variant wall as accessible card content", ({ variant, status, testId }) => {
-    render(<AccessWall variant={variant} />);
+    {
+      variant: AccessWallVariant.INVALID_LINK,
+      status: "Enlace no válido",
+      testId: "access-wall--invalid-link",
+      signInName: "Iniciar sesión",
+    },
+  ])(
+    "renders the $variant wall as accessible card content",
+    ({ variant, status, testId, signInName }) => {
+      render(<AccessWall variant={variant} />);
 
-    // Exactly one h1, which receives focus on mount.
-    const headings = screen.getAllByRole("heading", { level: 1 });
-    expect(headings).toHaveLength(1);
-    expect(headings[0]).toHaveFocus();
+      // Exactly one h1, which receives focus on mount.
+      const headings = screen.getAllByRole("heading", { level: 1 });
+      expect(headings).toHaveLength(1);
+      expect(headings[0]).toHaveFocus();
 
-    // The visible status text is the non-color channel paired with the icon.
-    expect(screen.getByText(status)).toBeInTheDocument();
+      // The visible status text is the non-color channel paired with the icon.
+      expect(screen.getByText(status)).toBeInTheDocument();
 
-    // A "Sign in" recovery link back to /login (safeHref) with a static aria-label.
-    const signIn = screen.getByRole("link", { name: "Sign in" });
-    expect(signIn).toHaveAttribute("href", "/login");
+      // A sign-in recovery link back to /login (safeHref) with a static aria-label.
+      const signIn = screen.getByRole("link", { name: signInName });
+      expect(signIn).toHaveAttribute("href", "/login");
 
-    expect(screen.getByTestId(testId)).toBeInTheDocument();
-  });
+      expect(screen.getByTestId(testId)).toBeInTheDocument();
+    },
+  );
 
   it("renders both recovery actions on the locked wall (neutral, two-action stack)", () => {
     render(<AccessWall variant={AccessWallVariant.LOCKED} />);
@@ -48,6 +60,26 @@ describe("AccessWall", () => {
     const signIn = screen.getByRole("link", { name: "Sign in" });
     expect(signIn).toHaveAttribute("href", "/login");
     expect(signIn).toHaveAttribute("data-testid", "access-wall__sign-in--locked");
+  });
+
+  it("renders the invalid-link wall in Spanish with a two-action stack", () => {
+    render(<AccessWall variant={AccessWallVariant.INVALID_LINK} />);
+
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      "Este enlace ya no es válido",
+    );
+    expect(
+      screen.getByText("Solicita una nueva invitación a tu administrador para continuar."),
+    ).toBeInTheDocument();
+
+    // Primary CTA returns to sign-in; secondary asks for a new invitation.
+    const signIn = screen.getByRole("link", { name: "Iniciar sesión" });
+    expect(signIn).toHaveAttribute("href", "/login");
+    expect(signIn).toHaveAttribute("data-testid", "access-wall__sign-in--invalid-link");
+
+    const request = screen.getByRole("link", { name: "Solicitar nueva invitación" });
+    expect(request).toHaveAttribute("href", "/");
+    expect(request).toHaveAttribute("data-testid", "access-wall__request-invitation--invalid-link");
   });
 
   it("uses distinct copy per variant", () => {

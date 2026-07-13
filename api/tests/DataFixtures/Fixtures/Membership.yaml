@@ -20,6 +20,13 @@ Erpify\Organization\Membership\Domain\Entity\Membership:
                 - '@user_ingrid'
                 - '@the_organization'
                 - ['VIEWER']
+    membership_iris:
+        # Provisioned at invitation time — iris belongs to the org before she accepts and activates.
+        __factory:
+            'Erpify\Tests\DataFixtures\MembershipFixtureFactory::create':
+                - '@user_iris'
+                - '@the_organization'
+                - ['VIEWER']
     membership_sam:
         __factory:
             'Erpify\Tests\DataFixtures\MembershipFixtureFactory::create':

@@ -26,15 +26,22 @@ function trimBase(url: string): string {
 // /login exactly once, not race N redirects. Never reset — the page is leaving.
 let sessionExpiredRedirectStarted = false;
 
-// Endpoints whose 401 is a handshake outcome, not a mid-session expiry:
+// Endpoints whose 401/403 is a handshake outcome, not a mid-session expiry:
 //  - `/me` is the cold-load probe the AuthProvider owns; a redirect here would
 //    loop the unauthenticated landing (AuthProvider sets `unauthenticated` and
 //    RequireAuth does the routing).
 //  - `/backoffice/login` reports bad credentials on the login page itself.
+//  - `/backoffice/invitations/accept` runs for an as-yet-unauthenticated user;
+//    an origin/CSRF rejection is a handshake failure the accept screen owns, so
+//    it must not be bounced to `/login?reason=session-expired`.
 // Every other gated 401 means "was authenticated, now isn't".
 function isAuthHandshakeEndpoint(input: string): boolean {
   const path = input.split("?")[0];
-  return path.endsWith(API_ENDPOINTS.IDENTITY.ME) || path.endsWith(API_ENDPOINTS.BACKOFFICE.LOGIN);
+  return (
+    path.endsWith(API_ENDPOINTS.IDENTITY.ME) ||
+    path.endsWith(API_ENDPOINTS.BACKOFFICE.LOGIN) ||
+    path.endsWith(API_ENDPOINTS.BACKOFFICE.INVITATIONS.ACCEPT)
+  );
 }
 
 // Browser-only: bounce an expired session to /login once, preserving the blocked

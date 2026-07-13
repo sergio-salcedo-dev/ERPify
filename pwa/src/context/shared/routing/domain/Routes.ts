@@ -15,12 +15,12 @@ export const Routes = {
   HOME: "/",
   /** Public login page. */
   LOGIN: "/login",
-  /** Public registration page. */
-  REGISTER: "/register",
   /** Public forgot-password page. */
   FORGOT_PASSWORD: "/forgot-password",
   /** Public reset-password page. */
   RESET_PASSWORD: "/reset-password",
+  /** Public accept-invitation page — sets the credential that activates an invited account. */
+  ACCEPT_INVITATION: "/accept-invitation",
   /** Authenticated BackOffice root — every `/backoffice/*` path lives under this prefix. */
   BACKOFFICE: "/backoffice",
   /** Public service status page (Atlassian-style). Unauthenticated, like {@link HOME}. */

@@ -89,3 +89,23 @@ src/Iam/Identity/Infrastructure/Cli/CreateInitialAdministratorCommand.php => Erp
 src/Iam/Identity/Infrastructure/Security/SessionMintingSuccessListener.php => Erpify\Iam\Session\Application\StartSession
 src/Iam/Identity/Infrastructure/Security/SessionMintingSuccessListener.php => Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable
 src/Iam/Identity/Infrastructure/Security/SessionMintingSuccessListener.php => Erpify\Organization\Membership\Application\FindUserOrganizationId
+
+# Invitation flow → Identity + Organization seams (II-4). The onboarding orchestration is inherently
+# cross-context: SendInvitation provisions an INVITED identity via the published InviteUser use case, funnels
+# it through GrantMembership (so a user never exists without a membership), and mints the Invitation; on accept,
+# AcceptInvitation loads and activates the identity through its UserRepository port + HashedPassword value
+# object, reading its IdentityStatus to keep a SENT/non-INVITED desync opaque; the HTTP adapter hashes via the
+# Identity PasswordHasher and re-authenticates through its UserProvider.
+# Same recurring Iam → Identity/Organization direction that II-1/II-7 established — every entry is a published
+# Application service, a domain port, or a shared value object, never a reach into internals.
+src/Iam/Invitation/Application/AcceptInvitation.php => Erpify\Iam\Identity\Domain\Repository\UserRepository
+src/Iam/Invitation/Application/AcceptInvitation.php => Erpify\Iam\Identity\Domain\HashedPassword
+src/Iam/Invitation/Application/AcceptInvitation.php => Erpify\Iam\Identity\Domain\Enum\IdentityStatus
+src/Iam/Invitation/Application/SendInvitation.php => Erpify\Iam\Identity\Application\InviteUser
+src/Iam/Invitation/Application/SendInvitation.php => Erpify\Iam\Identity\Domain\Enum\Role
+src/Iam/Invitation/Application/SendInvitation.php => Erpify\Organization\Membership\Application\GrantMembership
+src/Iam/Invitation/Application/ResendInvitation.php => Erpify\Iam\Identity\Domain\Repository\UserRepository
+src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php => Erpify\Iam\Identity\Domain\HashedPassword
+src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php => Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher
+src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php => Erpify\Iam\Identity\Infrastructure\Security\UserProvider
+src/Iam/Invitation/Infrastructure/Cli/CreateInvitationCommand.php => Erpify\Iam\Identity\Domain\Enum\Role

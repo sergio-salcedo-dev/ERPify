@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Erpify\Organization\Membership\Infrastructure\Persistence\Doctrine;
 
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Organization\Membership\Domain\Entity\Membership;
+use Erpify\Organization\Membership\Domain\Exception\UserAlreadyMember;
 use Erpify\Organization\Membership\Domain\Repository\MembershipRepository;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
@@ -21,11 +23,23 @@ final readonly class DoctrineMembershipRepository implements MembershipRepositor
     {
     }
 
+    /**
+     * Translates the `user_id` UNIQUE breach into the domain {@see UserAlreadyMember} — the backstop for the
+     * grant-duplicate race the application-level pre-check cannot close (two concurrent grants both pass the
+     * "already a member?" read, then collide on INSERT). Mirroring how the session adapter maps a DBAL failure
+     * to its domain exception, this keeps DBAL confined to Infrastructure while the caller sees one meaning.
+     *
+     * @throws UserAlreadyMember when the user already has a membership (unique-constraint violation)
+     */
     #[Override]
     public function save(Membership $membership): void
     {
-        $this->entityManager->persist($membership);
-        $this->entityManager->flush();
+        try {
+            $this->entityManager->persist($membership);
+            $this->entityManager->flush();
+        } catch (UniqueConstraintViolationException) {
+            throw new UserAlreadyMember($membership->userId());
+        }
     }
 
     #[Override]
