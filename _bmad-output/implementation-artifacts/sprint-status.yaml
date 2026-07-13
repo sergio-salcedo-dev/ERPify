@@ -116,6 +116,6 @@ development_status:
   ii-7-session-lifecycle-registry-gate-failclosed: done
   ii-6-lockout-lockeduntil: done
   ii-4-invitation-accept-pantallas-acceso: done
-  ii-5-reset-password-uniforme: backlog
+  ii-5-reset-password-uniforme: done
   ii-8-endurecimiento-seguridad-transversal: backlog
   epic-identity-invitation-lifecycle-retrospective: optional
