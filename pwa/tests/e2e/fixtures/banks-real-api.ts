@@ -1,6 +1,8 @@
 import { randomBytes } from "node:crypto";
 import { request, type APIRequestContext, type Page } from "@playwright/test";
 
+import { apiBaseURL } from "./api";
+
 /**
  * Real-API helpers for the Banks E2E suite that exercises the live Symfony
  * backend instead of `page.route` interception.
@@ -21,15 +23,6 @@ export interface ApiBank {
 }
 
 const BANKS_PATH = "/api/v1/backoffice/banks";
-
-/** Resolve the API origin from the same env Playwright resolves the PWA at. */
-export function apiBaseURL(): string {
-  return (
-    process.env.PLAYWRIGHT_API_BASE_URL?.trim() ||
-    process.env.PLAYWRIGHT_BASE_URL?.trim() ||
-    "https://localhost"
-  );
-}
 
 /**
  * Build a Playwright `APIRequestContext` rooted at the API origin. The

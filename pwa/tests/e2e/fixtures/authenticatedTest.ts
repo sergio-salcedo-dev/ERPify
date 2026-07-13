@@ -1,7 +1,7 @@
 import { test as base, request } from "@playwright/test";
 
 import { E2E_USER_EMAIL, E2E_USER_PASSWORD } from "../constants";
-import { apiBaseURL } from "./banks-real-api";
+import { apiBaseURL } from "./api";
 
 /**
  * Per-worker authenticated session for the backoffice E2E suite. Each Playwright
@@ -34,13 +34,30 @@ type AuthWorkerFixtures = {
   workerStorageState: string;
 };
 
+// Teardown helper: revoke a worker's session so its registry row doesn't outlive the run.
+// Best-effort — `revoke-current` always answers 204, and a teardown must never fail the suite.
+async function revokeWorkerSession(storageState: string): Promise<void> {
+  try {
+    const context = await request.newContext({
+      baseURL: apiBaseURL(),
+      ignoreHTTPSErrors: true,
+      storageState,
+    });
+    await context.post("/api/v1/sessions/revoke-current", { headers: { Origin: apiBaseURL() } });
+    await context.dispose();
+  } catch (error) {
+    // A failed revoke only leaks a registry row that self-cleans via TTL.
+    console.warn("[authenticatedTest] worker session revoke failed:", error);
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export const test = base.extend<{}, AuthWorkerFixtures>({
   storageState: ({ workerStorageState }, provide) => provide(workerStorageState),
 
   workerStorageState: [
-    async ({}, provide) => {
-      const index = test.info().parallelIndex;
+    async ({}, provide, workerInfo) => {
+      const index = workerInfo.parallelIndex;
       const storageStatePath = `tests/e2e/.auth/worker-${index}.json`;
 
       const context = await request.newContext({ baseURL: apiBaseURL(), ignoreHTTPSErrors: true });
@@ -60,6 +77,9 @@ export const test = base.extend<{}, AuthWorkerFixtures>({
       await context.dispose();
 
       await provide(storageStatePath);
+
+      // Worker teardown: revoke this worker's session so its row doesn't outlive the run.
+      await revokeWorkerSession(storageStatePath);
     },
     { scope: "worker" },
   ],
