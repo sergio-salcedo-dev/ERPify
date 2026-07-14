@@ -7,10 +7,10 @@ namespace Erpify\Tests\Unit\Shared\Mailer\Infrastructure;
 use Erpify\Shared\Mailer\Infrastructure\BulletproofEmailChrome;
 use Erpify\Shared\Mailer\Infrastructure\SecurityLinkEmailContent;
 use Erpify\Shared\Mailer\Infrastructure\SecurityLinkMailer;
+use Erpify\Shared\Mailer\Infrastructure\SecurityMailerMisconfigured;
 use Erpify\Shared\Mailer\Infrastructure\SecuritySenderAddress;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use RuntimeException;
 use Symfony\Component\Mime\Address;
 use Symfony\Component\Mime\Email;
 
@@ -19,6 +19,7 @@ use Symfony\Component\Mime\Email;
  */
 #[CoversClass(SecurityLinkMailer::class)]
 #[CoversClass(SecurityLinkEmailContent::class)]
+#[CoversClass(SecurityMailerMisconfigured::class)]
 final class SecurityLinkMailerTest extends TestCase
 {
     private const string FROM = 'noreply@erpify.local';
@@ -73,7 +74,7 @@ final class SecurityLinkMailerTest extends TestCase
         $mailer = new CapturingMailer();
         $sut = $this->mailer($mailer, baseUrl: 'http://app.erpify.example', environment: 'prod');
 
-        $this->expectException(RuntimeException::class);
+        $this->expectException(SecurityMailerMisconfigured::class);
 
         try {
             $sut->send($this->content(), self::RECIPIENT, self::TOKEN);

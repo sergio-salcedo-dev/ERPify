@@ -4,16 +4,17 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Mailer\Infrastructure;
 
+use Erpify\Shared\Mailer\Infrastructure\SecurityMailerMisconfigured;
 use Erpify\Shared\Mailer\Infrastructure\SecuritySenderAddress;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use RuntimeException;
 
 /**
  * @internal
  */
 #[CoversClass(SecuritySenderAddress::class)]
+#[CoversClass(SecurityMailerMisconfigured::class)]
 final class SecuritySenderAddressTest extends TestCase
 {
     public function testReturnsAReplyableAddressOutsideLocalEnvironments(): void
@@ -29,7 +30,7 @@ final class SecuritySenderAddressTest extends TestCase
     {
         $sender = new SecuritySenderAddress($address, 'prod');
 
-        $this->expectException(RuntimeException::class);
+        $this->expectException(SecurityMailerMisconfigured::class);
 
         $sender->toString();
     }

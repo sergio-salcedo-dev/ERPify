@@ -92,14 +92,12 @@ final readonly class RequestPasswordReset
             return true;
         });
 
-        if (!$issued) {
-            return;
-        }
-
         // After commit: the reset link's plaintext token (`<id>.<secret>`) is delivered exactly once and never
         // touches the transaction, an event or a log. The send is best-effort — a mailer fault is swallowed so
         // it can't turn the ACTIVE path's uniform 202 into a 500 — so only an ACTIVE identity reaches here and
         // the uniform response never reveals to an anonymous requester whether an email was actually sent.
-        $this->emailSender->send($user->email(), $tokenId . '.' . $generated->plaintext());
+        if ($issued) {
+            $this->emailSender->send($user->email(), $tokenId . '.' . $generated->plaintext());
+        }
     }
 }

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Mailer\Infrastructure;
 
-use RuntimeException;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
@@ -43,10 +42,7 @@ final readonly class SecuritySenderAddress
             '' === \trim($this->address) || \str_contains(\strtolower($this->address), 'noreply')
             || \str_contains(\strtolower($this->address), 'no-reply')
         ) {
-            throw new RuntimeException(
-                'MAILER_SECURITY_FROM must be a monitored, replyable mailbox (never empty or no-reply): '
-                . 'security emails tell the recipient to contact this address.',
-            );
+            throw SecurityMailerMisconfigured::unmonitoredSender();
         }
 
         return $this->address;

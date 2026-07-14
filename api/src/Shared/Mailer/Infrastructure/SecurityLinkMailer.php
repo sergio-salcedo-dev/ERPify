@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Mailer\Infrastructure;
 
-use RuntimeException;
 use SensitiveParameter;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Mailer\MailerInterface;
@@ -53,9 +52,7 @@ final readonly class SecurityLinkMailer
             !\in_array($this->environment, self::LOCAL_ENVIRONMENTS, true)
             && !\str_starts_with($this->appBaseUrl, 'https://')
         ) {
-            throw new RuntimeException(
-                'Security links require an https:// base URL outside dev/test; check DEFAULT_URI.',
-            );
+            throw SecurityMailerMisconfigured::nonHttpsBaseUrl();
         }
 
         $link = \rtrim($this->appBaseUrl, '/') . $content->path . '?token=' . \rawurlencode($token);
