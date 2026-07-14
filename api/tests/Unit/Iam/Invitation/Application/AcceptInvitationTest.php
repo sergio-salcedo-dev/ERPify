@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Invitation\Application;
 
+use Closure;
 use DateTimeImmutable;
 use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
 use Erpify\Iam\Identity\Domain\HashedPassword;
@@ -43,6 +44,8 @@ final class AcceptInvitationTest extends TestCase
 
     private const string NOW = '2026-07-13T10:00:00+00:00';
 
+    private int $kdfRuns = 0;
+
     #[Test]
     public function itActivatesTheIdentityRetiresTheInvitationAndPublishesOnce(): void
     {
@@ -54,6 +57,7 @@ final class AcceptInvitationTest extends TestCase
 
         $accepted = $this->useCase($invitations, $users, $eventBus)->accept($token, $this->password());
 
+        $this->assertSame(1, $this->kdfRuns);
         $this->assertSame(self::USER_ID, $accepted->userId);
         $this->assertSame(UserMother::DEFAULT_EMAIL, $accepted->email);
         $this->assertSame(IdentityStatus::ACTIVE, $user->status());
@@ -200,6 +204,9 @@ final class AcceptInvitationTest extends TestCase
             $this->assertSame('invalid-token', $invalidToken->type());
         }
 
+        // A rejected accept must never have paid the deferred KDF: a garbage token costing an argon2id run
+        // would hand an anonymous caller a CPU-amplification vector.
+        $this->assertSame(0, $this->kdfRuns);
         $this->assertSame([], $invitations->saved);
         $this->assertSame([], $users->saved);
         $this->assertSame([], $eventBus->publishedEvents);
@@ -249,8 +256,15 @@ final class AcceptInvitationTest extends TestCase
         return new DateTimeImmutable('2026-07-10T10:00:00+00:00');
     }
 
-    private function password(): HashedPassword
+    /**
+     * @return Closure(): HashedPassword
+     */
+    private function password(): Closure
     {
-        return HashedPassword::fromHash('a-precomputed-hash');
+        return function (): HashedPassword {
+            ++$this->kdfRuns;
+
+            return HashedPassword::fromHash('a-precomputed-hash');
+        };
     }
 }

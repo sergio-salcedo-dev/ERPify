@@ -13,6 +13,7 @@ export const AccessWallVariant = {
   DEACTIVATED: "deactivated",
   LOCKED: "locked",
   INVALID_LINK: "invalid-link",
+  INVALID_RESET_LINK: "invalid-reset-link",
 } as const;
 export type AccessWallVariant = (typeof AccessWallVariant)[keyof typeof AccessWallVariant];
 
@@ -73,6 +74,13 @@ const REQUEST_INVITATION_ACTION: AccessWallAction = {
   title: "Solicitar una nueva invitación",
 };
 
+const REQUEST_RESET_LINK_ACTION: AccessWallAction = {
+  testId: "request-reset-link",
+  href: Routes.FORGOT_PASSWORD,
+  label: "Solicitar enlace nuevo",
+  title: "Solicitar un nuevo enlace de restablecimiento",
+};
+
 // Neutral, non-enumerating copy: a wall is not an error, so the tone stays muted
 // and the description never lists policy reasons.
 const COPY: Record<AccessWallVariant, AccessWallCopy> = {
@@ -106,6 +114,16 @@ const COPY: Record<AccessWallVariant, AccessWallCopy> = {
     title: "Este enlace ya no es válido",
     description: "Solicita una nueva invitación a tu administrador para continuar.",
     actions: [SIGN_IN_ES_ACTION, REQUEST_INVITATION_ACTION],
+  },
+  // Same icon/status/title as INVALID_LINK on purpose: the opacity contract protects WHY the link
+  // died (used/expired/unknown are one wall), not WHICH flow it belongs to — the URL already names
+  // the flow. Only the exit differs: a reset link is self-service, an invitation is not.
+  [AccessWallVariant.INVALID_RESET_LINK]: {
+    icon: Link2Off,
+    status: "Enlace no válido",
+    title: "Este enlace ya no es válido",
+    description: "Puedes solicitar un enlace nuevo desde «¿Has olvidado tu contraseña?».",
+    actions: [SIGN_IN_ES_ACTION, REQUEST_RESET_LINK_ACTION],
   },
 };
 

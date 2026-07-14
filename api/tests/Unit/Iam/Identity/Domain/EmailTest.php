@@ -27,6 +27,12 @@ final class EmailTest extends TestCase
         Email::from('   ');
     }
 
+    public function testTryFromYieldsNullForABlankValueAndTheCanonicalEmailOtherwise(): void
+    {
+        $this->assertNotInstanceOf(Email::class, Email::tryFrom('   '));
+        $this->assertSame('alice@erpify.test', Email::tryFrom('  Alice@ERPify.TEST  ')?->toString());
+    }
+
     public function testEqualityIsByCanonicalValue(): void
     {
         $email = Email::from('bob@erpify.test');

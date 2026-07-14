@@ -129,3 +129,19 @@ Feature: Accept an invitation
     """
     Then the response status code should be 204
     And there should be 1 event stored named "erpify.iam.invitation.accepted"
+
+  Scenario: A saturated selector folds a LIVE invitation link into the same opaque invalid-token wall
+    Given the token-action budget is exhausted for selector "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a90"
+    When I send a POST request to "/backoffice/invitations/accept" with body:
+    """
+    {
+      "token": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a90.behat-known-invitation-secret",
+      "password": "a-brand-new-password",
+      "_token": "behat-stateless-csrf-nonce-000000"
+    }
+    """
+    Then the response status code should be 400
+    And the JSON node "type" should be equal to "invalid-token"
+    And the header "Set-Cookie" should not exist
+    And I execute the SQL query "SELECT id FROM identity_user WHERE email = 'iris@erpify.test' AND status = 'INVITED'"
+    And there should have 1 records in SQL result

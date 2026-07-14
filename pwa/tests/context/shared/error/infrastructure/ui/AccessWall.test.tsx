@@ -28,6 +28,12 @@ describe("AccessWall", () => {
       testId: "access-wall--invalid-link",
       signInName: "Iniciar sesión",
     },
+    {
+      variant: AccessWallVariant.INVALID_RESET_LINK,
+      status: "Enlace no válido",
+      testId: "access-wall--invalid-reset-link",
+      signInName: "Iniciar sesión",
+    },
   ])(
     "renders the $variant wall as accessible card content",
     ({ variant, status, testId, signInName }) => {
@@ -80,6 +86,33 @@ describe("AccessWall", () => {
     const request = screen.getByRole("link", { name: "Solicitar nueva invitación" });
     expect(request).toHaveAttribute("href", "/");
     expect(request).toHaveAttribute("data-testid", "access-wall__request-invitation--invalid-link");
+  });
+
+  it("renders the invalid-reset-link wall with the same opaque title but a self-service exit", () => {
+    const { unmount } = render(<AccessWall variant={AccessWallVariant.INVALID_LINK} />);
+    const invitationTitle = screen.getByRole("heading", { level: 1 }).textContent;
+    unmount();
+
+    render(<AccessWall variant={AccessWallVariant.INVALID_RESET_LINK} />);
+
+    // The opacity contract protects WHY the link died, not WHICH flow it belongs
+    // to (the URL already names the flow) — so the title stays byte-identical
+    // and only the exit path differs.
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(invitationTitle ?? "");
+    expect(
+      screen.getByText("Puedes solicitar un enlace nuevo desde «¿Has olvidado tu contraseña?»."),
+    ).toBeInTheDocument();
+
+    const signIn = screen.getByRole("link", { name: "Iniciar sesión" });
+    expect(signIn).toHaveAttribute("href", "/login");
+    expect(signIn).toHaveAttribute("data-testid", "access-wall__sign-in--invalid-reset-link");
+
+    const request = screen.getByRole("link", { name: "Solicitar enlace nuevo" });
+    expect(request).toHaveAttribute("href", "/forgot-password");
+    expect(request).toHaveAttribute(
+      "data-testid",
+      "access-wall__request-reset-link--invalid-reset-link",
+    );
   });
 
   it("uses distinct copy per variant", () => {

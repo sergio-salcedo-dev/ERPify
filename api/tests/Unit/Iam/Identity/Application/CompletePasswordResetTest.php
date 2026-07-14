@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Application;
 
+use Closure;
 use DateTimeImmutable;
 use Erpify\Iam\Identity\Application\CompletePasswordReset;
 use Erpify\Iam\Identity\Application\RevokeSessionsBestEffort;
@@ -48,11 +49,17 @@ final class CompletePasswordResetTest extends TestCase
         $sessions = new InMemorySessionRepository();
         $eventBus = new RecordingEventBus();
         $newHash = HashedPassword::fromHash('new-argon2id-hash');
+        $kdfRuns = 0;
 
         $this->useCase(new InMemoryUserRepository($user), $tokens, $sessions, $eventBus)
-            ->complete(self::TOKEN_ID . '.' . $secret, $newHash)
+            ->complete(self::TOKEN_ID . '.' . $secret, static function () use ($newHash, &$kdfRuns): HashedPassword {
+                ++$kdfRuns;
+
+                return $newHash;
+            })
         ;
 
+        $this->assertSame(1, $kdfRuns);
         $this->assertTrue($user->passwordHash()?->equals($newHash));
         $this->assertFalse($user->isLockedAt($this->now()));
         $this->assertSame([$token], $tokens->consumed);
@@ -107,6 +114,67 @@ final class CompletePasswordResetTest extends TestCase
         $this->assertRejectedWithoutMutating(AccountDeactivated::class, self::TOKEN_ID . '.' . $secret, $user, $token);
     }
 
+    public function testTheCompletionRunsUnderTheUserRowLock(): void
+    {
+        $user = UserMother::create();
+        [$token, $secret] = $this->mintToken(UserMother::DEFAULT_ID);
+        $users = new InMemoryUserRepository($user);
+
+        $tokens = new InMemoryPasswordResetTokenRepository($token);
+
+        $this->useCase($users, $tokens, new InMemorySessionRepository(), new RecordingEventBus())
+            ->complete(self::TOKEN_ID . '.' . $secret, $this->precomputedHash())
+        ;
+
+        $this->assertSame([UserMother::DEFAULT_ID], $users->forUpdateCalls);
+    }
+
+    public function testASuspensionCommittedAtTheLockMomentWallsTheResetWithoutConsuming(): void
+    {
+        // The sequential shape of the TOCTOU guard: the status is re-sampled from the locked row, so an
+        // admin write landing between the unlocked load and the transaction walls the reset. The real
+        // concurrent race is covered by the lock's serialisation, not exercisable in this harness.
+        $user = UserMother::create();
+        [$token, $secret] = $this->mintToken(UserMother::DEFAULT_ID);
+        $users = new InMemoryUserRepository($user);
+        $users->onFindByIdForUpdate = static function () use ($user): void {
+            $user->suspend();
+            $user->pullDomainEvents();
+        };
+        $tokens = new InMemoryPasswordResetTokenRepository($token);
+        $eventBus = new RecordingEventBus();
+
+        try {
+            $this->useCase($users, $tokens, new InMemorySessionRepository(), $eventBus)
+                ->complete(self::TOKEN_ID . '.' . $secret, $this->precomputedHash())
+            ;
+            $this->fail('Expected ' . AccountSuspended::class);
+        } catch (Throwable $throwable) {
+            $this->assertInstanceOf(AccountSuspended::class, $throwable);
+        }
+
+        // The wall does NOT consume: the token stays live for a later attempt if the account is reactivated.
+        $this->assertSame([], $tokens->consumed);
+        $this->assertSame([], $users->saved);
+        $this->assertSame([], $eventBus->publishedEvents);
+    }
+
+    public function testAUserGoneUnderTheLockIsRejectedAsTheUniformInvalidToken(): void
+    {
+        $user = UserMother::create();
+        [$token, $secret] = $this->mintToken(UserMother::DEFAULT_ID);
+        $users = new InMemoryUserRepository($user);
+        $users->goneUnderLock = true;
+
+        $tokens = new InMemoryPasswordResetTokenRepository($token);
+
+        $this->expectException(InvalidResetToken::class);
+
+        $this->useCase($users, $tokens, new InMemorySessionRepository(), new RecordingEventBus())
+            ->complete(self::TOKEN_ID . '.' . $secret, $this->precomputedHash())
+        ;
+    }
+
     /**
      * @param class-string<Throwable> $expected
      */
@@ -122,16 +190,24 @@ final class CompletePasswordResetTest extends TestCase
             : new InMemoryPasswordResetTokenRepository();
         $sessions = new InMemorySessionRepository();
         $eventBus = new RecordingEventBus();
+        $kdfRuns = 0;
 
         try {
             $this->useCase($users, $tokens, $sessions, $eventBus)
-                ->complete($token, HashedPassword::fromHash('new-argon2id-hash'))
+                ->complete($token, static function () use (&$kdfRuns): HashedPassword {
+                    ++$kdfRuns;
+
+                    return HashedPassword::fromHash('new-argon2id-hash');
+                })
             ;
             $this->fail('Expected ' . $expected);
         } catch (Throwable $throwable) {
             $this->assertInstanceOf($expected, $throwable);
         }
 
+        // A rejected completion must never have paid the deferred KDF: a dead link or a walled identity
+        // costing an argon2id run would hand an anonymous caller a CPU-amplification vector.
+        $this->assertSame(0, $kdfRuns);
         $this->assertSame([], $tokens->consumed);
         $this->assertSame([], $users->saved);
         $this->assertSame([], $sessions->revokeAllCalls);
@@ -181,5 +257,13 @@ final class CompletePasswordResetTest extends TestCase
     private function now(): DateTimeImmutable
     {
         return new DateTimeImmutable(self::NOW);
+    }
+
+    /**
+     * @return Closure(): HashedPassword
+     */
+    private function precomputedHash(): Closure
+    {
+        return static fn (): HashedPassword => HashedPassword::fromHash('new-argon2id-hash');
     }
 }

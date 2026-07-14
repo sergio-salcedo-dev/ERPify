@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Application;
 
-use DateTimeImmutable;
 use Erpify\Iam\Identity\Application\RequestPasswordReset;
 use Erpify\Iam\Identity\Application\SendPasswordResetEmailBestEffort;
 use Erpify\Iam\Identity\Domain\Entity\User;
@@ -92,19 +91,85 @@ final class RequestPasswordResetTest extends TestCase
         yield 'deactivated' => [$deactivated];
     }
 
+    public function testTheSupersedeRunsUnderTheUserRowLock(): void
+    {
+        // Single-threaded proof of the mutex's SHAPE: the write path re-acquires the user row under a
+        // pessimistic lock inside its transaction, which is what serialises two concurrent forgots into
+        // "only the latest token lives". The real interleaving is covered by design, not by this test.
+        $users = new InMemoryUserRepository(UserMother::create());
+        $tokens = new InMemoryPasswordResetTokenRepository();
+
+        $this->useCase($users, $tokens, new RecordingEventBus(), new RecordingPasswordResetEmailSender())
+            ->request(UserMother::DEFAULT_EMAIL)
+        ;
+
+        $this->assertSame([UserMother::DEFAULT_ID], $users->forUpdateCalls);
+        $this->assertCount(1, $tokens->saved);
+    }
+
+    public function testAUserGoneUnderTheLockIssuesAndEmailsNothing(): void
+    {
+        $users = new InMemoryUserRepository(UserMother::create());
+        $users->goneUnderLock = true;
+
+        $tokens = new InMemoryPasswordResetTokenRepository();
+        $eventBus = new RecordingEventBus();
+        $emails = new RecordingPasswordResetEmailSender();
+
+        $this->useCase($users, $tokens, $eventBus, $emails)->request(UserMother::DEFAULT_EMAIL);
+
+        $this->assertNoWork($tokens, $eventBus, $emails);
+    }
+
+    #[DataProvider('provideEveryOutcomePaysTheSameTimingFloorSoLatencyDoesNotLeakExistenceCases')]
+    public function testEveryOutcomePaysTheSameTimingFloorSoLatencyDoesNotLeakExistence(
+        ?User $user,
+        string $requestedEmail,
+    ): void {
+        $floor = new CountingPreIdentityTimingFloor();
+        $users = $user instanceof User ? new InMemoryUserRepository($user) : new InMemoryUserRepository();
+
+        $this->useCase(
+            $users,
+            new InMemoryPasswordResetTokenRepository(),
+            new RecordingEventBus(),
+            new RecordingPasswordResetEmailSender(),
+            $floor,
+        )->request($requestedEmail);
+
+        $this->assertSame(1, $floor->invocations);
+    }
+
+    /**
+     * @return iterable<string, array{?User, string}>
+     */
+    public static function provideEveryOutcomePaysTheSameTimingFloorSoLatencyDoesNotLeakExistenceCases(): iterable
+    {
+        $suspended = UserMother::create();
+        $suspended->suspend();
+
+        yield 'active (the write path)' => [UserMother::create(), UserMother::DEFAULT_EMAIL];
+        yield 'unknown email' => [null, 'nobody@erpify.test'];
+        yield 'malformed email' => [null, '   '];
+        yield 'invited' => [UserMother::invited(), UserMother::DEFAULT_EMAIL];
+        yield 'suspended' => [$suspended, UserMother::DEFAULT_EMAIL];
+    }
+
     private function useCase(
         InMemoryUserRepository $users,
         InMemoryPasswordResetTokenRepository $tokens,
         RecordingEventBus $eventBus,
         RecordingPasswordResetEmailSender $emails,
+        ?CountingPreIdentityTimingFloor $floor = null,
     ): RequestPasswordReset {
         return new RequestPasswordReset(
             $users,
             $tokens,
             $eventBus,
             new InlineTransactionManager(),
-            new FixedClock(new DateTimeImmutable('2026-07-13T12:00:00+00:00')),
+            FixedClock::at('2026-07-13T12:00:00+00:00'),
             new SendPasswordResetEmailBestEffort($emails, new NullLogger()),
+            $floor ?? new CountingPreIdentityTimingFloor(),
         );
     }
 

@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Mailer\Infrastructure;
 
+use Erpify\Shared\Mailer\Infrastructure\BulletproofEmailChrome;
 use Erpify\Shared\Mailer\Infrastructure\SecurityLinkEmailContent;
 use Erpify\Shared\Mailer\Infrastructure\SecurityLinkMailer;
+use Erpify\Shared\Mailer\Infrastructure\SecurityMailerMisconfigured;
+use Erpify\Shared\Mailer\Infrastructure\SecuritySenderAddress;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Mime\Address;
@@ -16,6 +19,7 @@ use Symfony\Component\Mime\Email;
  */
 #[CoversClass(SecurityLinkMailer::class)]
 #[CoversClass(SecurityLinkEmailContent::class)]
+#[CoversClass(SecurityMailerMisconfigured::class)]
 final class SecurityLinkMailerTest extends TestCase
 {
     private const string FROM = 'noreply@erpify.local';
@@ -63,19 +67,64 @@ final class SecurityLinkMailerTest extends TestCase
         $this->assertStringContainsString('class="erpify-btn" href="' . self::EXPECTED_LINK . '"', $html);
     }
 
+    public function testANonHttpsBaseUrlFailsLoudlyOutsideLocalEnvironments(): void
+    {
+        // Defence in depth: a misconfigured production base URL must never emit a credential-bearing link
+        // over plaintext http — the send aborts before any mail is built.
+        $mailer = new CapturingMailer();
+        $sut = $this->mailer($mailer, baseUrl: 'http://app.erpify.example', environment: 'prod');
+
+        $this->expectException(SecurityMailerMisconfigured::class);
+
+        try {
+            $sut->send($this->content(), self::RECIPIENT, self::TOKEN);
+        } finally {
+            $this->assertNotInstanceOf(Email::class, $mailer->lastEmail);
+        }
+    }
+
+    public function testAnHttpsBaseUrlSendsOutsideLocalEnvironments(): void
+    {
+        $mailer = new CapturingMailer();
+        $this->mailer($mailer, from: 'seguridad@erpify.example', environment: 'prod')
+            ->send($this->content(), self::RECIPIENT, self::TOKEN)
+        ;
+
+        $this->assertInstanceOf(Email::class, $mailer->lastEmail);
+    }
+
+    public function testTheLocalHttpBaseUrlStillSendsInDev(): void
+    {
+        $mailer = new CapturingMailer();
+        $this->mailer($mailer, baseUrl: 'http://localhost')->send($this->content(), self::RECIPIENT, self::TOKEN);
+
+        $this->assertInstanceOf(Email::class, $mailer->lastEmail);
+    }
+
     private function send(): Email
     {
         $mailer = new CapturingMailer();
-        (new SecurityLinkMailer($mailer, self::FROM, self::BASE_URL))->send(
-            $this->content(),
-            self::RECIPIENT,
-            self::TOKEN,
-        );
+        $this->mailer($mailer)->send($this->content(), self::RECIPIENT, self::TOKEN);
 
         $email = $mailer->lastEmail;
         $this->assertInstanceOf(Email::class, $email);
 
         return $email;
+    }
+
+    private function mailer(
+        CapturingMailer $mailer,
+        string $from = self::FROM,
+        string $baseUrl = self::BASE_URL,
+        string $environment = 'dev',
+    ): SecurityLinkMailer {
+        return new SecurityLinkMailer(
+            $mailer,
+            new SecuritySenderAddress($from, $environment),
+            $baseUrl,
+            new BulletproofEmailChrome(),
+            $environment,
+        );
     }
 
     /**

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security;
 
-use DateInterval;
 use DateTimeImmutable;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Infrastructure\Security\DeactivatedAccountException;
@@ -13,6 +12,7 @@ use Erpify\Iam\Identity\Infrastructure\Security\LockedAccountException;
 use Erpify\Iam\Identity\Infrastructure\Security\SecurityUser;
 use Erpify\Iam\Identity\Infrastructure\Security\SuspendedAccountException;
 use Erpify\Iam\Identity\Infrastructure\Security\UserChecker;
+use Erpify\Tests\Unit\Iam\Identity\Application\CountingPreIdentityTimingFloor;
 use Erpify\Tests\Unit\Iam\Identity\Application\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -32,6 +32,26 @@ final class UserCheckerTest extends TestCase
         $this->expectException(InvitedAccountException::class);
 
         $this->checker()->checkPreAuth(new SecurityUser(UserMother::invited()));
+    }
+
+    public function testPreAuthPaysTheTimingFloorOnlyWhenRejectingAnInvitedIdentity(): void
+    {
+        // An INVITED identity has no credential, so no password verification would otherwise run — without
+        // the floor this rejection answers faster than a wrong-password failure and leaks the state. An
+        // admitted identity pays nothing here: its real credential check follows.
+        $floor = new CountingPreIdentityTimingFloor();
+        $checker = new UserChecker(new FixedClock(new DateTimeImmutable(self::NOW)), $floor);
+
+        $checker->checkPreAuth(new SecurityUser(UserMother::create()));
+        $this->assertSame(0, $floor->invocations);
+
+        $this->expectException(InvitedAccountException::class);
+
+        try {
+            $checker->checkPreAuth(new SecurityUser(UserMother::invited()));
+        } finally {
+            $this->assertSame(1, $floor->invocations);
+        }
     }
 
     public function testPreAuthAdmitsAnActiveIdentity(): void
@@ -69,7 +89,7 @@ final class UserCheckerTest extends TestCase
         $this->expectNotToPerformAssertions();
 
         $lockedAt = new DateTimeImmutable(self::NOW);
-        $afterExpiry = $lockedAt->add(new DateInterval('PT16M'));
+        $afterExpiry = $lockedAt->modify('+16 minutes');
 
         $this->checker($afterExpiry)->checkPostAuth(new SecurityUser($this->lockedActiveUser($lockedAt)));
     }
@@ -107,7 +127,10 @@ final class UserCheckerTest extends TestCase
 
     private function checker(?DateTimeImmutable $now = null): UserChecker
     {
-        return new UserChecker(new FixedClock($now ?? new DateTimeImmutable(self::NOW)));
+        return new UserChecker(
+            new FixedClock($now ?? new DateTimeImmutable(self::NOW)),
+            new CountingPreIdentityTimingFloor(),
+        );
     }
 
     private function suspended(): User

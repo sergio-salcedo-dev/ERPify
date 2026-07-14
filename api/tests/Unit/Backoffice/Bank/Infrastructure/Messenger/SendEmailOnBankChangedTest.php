@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Backoffice\Bank\Infrastructure\Messenger;
 use Erpify\Backoffice\Bank\Infrastructure\Messenger\SendEmailOnBankChanged;
 use Erpify\Tests\Unit\Backoffice\Bank\Domain\Event\Mother\BankCreatedDomainEventMother;
 use Erpify\Tests\Unit\Backoffice\Bank\Domain\Event\Mother\BankUpdatedDomainEventMother;
+use Erpify\Tests\Unit\Shared\Event\Application\RecordingDomainEventHandlerDeduplicator;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;

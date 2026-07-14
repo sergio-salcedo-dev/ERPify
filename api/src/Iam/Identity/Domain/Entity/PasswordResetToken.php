@@ -86,4 +86,13 @@ final class PasswordResetToken extends AggregateRoot
     {
         return $this->userId;
     }
+
+    /**
+     * Whether this row is already dead to the verifier at `$now` — the retention sweep's criterion: an
+     * expired token can never verify again, so keeping the row buys nothing.
+     */
+    public function isExpiredAt(DateTimeImmutable $now): bool
+    {
+        return $this->expiresAt < $now;
+    }
 }

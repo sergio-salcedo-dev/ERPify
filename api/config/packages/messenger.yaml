@@ -29,6 +29,10 @@ framework:
             Erpify\Backoffice\BankAccount\Domain\Event\BankAccountUpdatedDomainEvent: async
             Erpify\Backoffice\BankAccount\Domain\Event\BankAccountDeletedDomainEvent: async
             Erpify\Backoffice\BankAccount\Domain\Event\BankAccountStatusChangedDomainEvent: async
+            # Safe to queue because its payload is the aggregate id alone — the token-bearing security emails
+            # (invitation, reset) stay synchronous best-effort instead: routing Symfony's SendEmailMessage
+            # would serialise the whole Email, plaintext token included, into this transport and `failed`.
+            Erpify\Iam\Identity\Domain\Event\PasswordResetCompleted: async
             Erpify\Shared\Audit\Application\RecordAuditEntry: audit
 
         buses:

@@ -9,6 +9,7 @@ use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Iam\Identity\Domain\Email;
 use Erpify\Iam\Identity\Domain\Entity\User;
+use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
 use Erpify\Iam\Identity\Domain\Enum\Role;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DoctrineUserRepository;
@@ -91,6 +92,60 @@ final class DoctrineUserRepositoryTest extends KernelTestCase
 
             // Canonicalises to the same stored email, so the UNIQUE index catches it.
             $this->repository->save($this->newUser('ERIN@erpify.test'));
+        });
+    }
+
+    public function testFindByIdForUpdateTakesARowLevelWriteLock(): void
+    {
+        $this->inRolledBackTransaction(function (): void {
+            $user = $this->newUser('grace@erpify.test');
+            $id = $user->getId();
+            $this->assertNotNull($id);
+            $this->repository->save($user);
+
+            $this->repository->findByIdForUpdate($id);
+
+            // SELECT … FOR UPDATE acquires RowShareLock on the table (a plain SELECT only takes
+            // AccessShareLock), so its presence for this backend proves the locking form of the query.
+            $rowShareLocks = $this->connection->fetchOne(
+                'SELECT count(*) FROM pg_locks l JOIN pg_class c ON c.oid = l.relation'
+                . " WHERE c.relname = 'identity_user' AND l.mode = 'RowShareLock' AND l.pid = pg_backend_pid()",
+            );
+
+            $this->assertSame(1, (int) (\is_scalar($rowShareLocks) ? $rowShareLocks : 0));
+        });
+    }
+
+    public function testFindByIdForUpdateRefreshesAStaleManagedAggregate(): void
+    {
+        $this->inRolledBackTransaction(function (): void {
+            $user = $this->newUser('heidi@erpify.test');
+            $id = $user->getId();
+            $this->assertNotNull($id);
+            $this->repository->save($user);
+
+            // A rival write lands behind the ORM's back after the aggregate is already managed — the exact
+            // TOCTOU window: without the refresh, the locked re-fetch would serve the stale ACTIVE snapshot
+            // from the identity map and the status re-check would miss the suspension.
+            $this->connection->executeStatement(
+                "UPDATE identity_user SET status = 'SUSPENDED' WHERE id = :id",
+                ['id' => $id],
+            );
+
+            $reloaded = $this->repository->findByIdForUpdate($id);
+
+            $this->assertInstanceOf(User::class, $reloaded);
+            $this->assertSame(IdentityStatus::SUSPENDED, $reloaded->status());
+        });
+    }
+
+    public function testFindByIdForUpdateReturnsNullForAnUnknownId(): void
+    {
+        $this->inRolledBackTransaction(function (): void {
+            $this->assertNotInstanceOf(
+                User::class,
+                $this->repository->findByIdForUpdate('0190e1f2-a3b4-7c5d-8e6f-1a2b3c4d5eff'),
+            );
         });
     }
 

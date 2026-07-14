@@ -140,6 +140,15 @@ final class User extends AggregateRoot
     }
 
     /**
+     * Whether the reversible post-active wall is up — the arm the reset flow's graduated wall reads to name
+     * the specific reason (a valid token proves email control, so specificity is safe there).
+     */
+    public function isSuspended(): bool
+    {
+        return IdentityStatus::SUSPENDED === $this->status;
+    }
+
+    /**
      * Replaces the credential of an already-active identity — the password-reset mutator. Distinct from
      * {@see activate()} (guarded `INVITED → ACTIVE`, which sets the FIRST credential): a reset overwrites the
      * credential of an identity that is already `ACTIVE` and leaves the status untouched. Guards `ACTIVE`

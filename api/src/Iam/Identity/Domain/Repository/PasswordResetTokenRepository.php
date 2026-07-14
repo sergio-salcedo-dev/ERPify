@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Domain\Repository;
 
+use DateTimeImmutable;
 use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
 
 /**
@@ -35,7 +36,18 @@ interface PasswordResetTokenRepository
 
     /**
      * Drops every pending reset token of the user — called before issuing a new one so only the latest request
-     * is live (a re-request supersedes its predecessor).
+     * is live (a re-request supersedes its predecessor), and by the subject erasure so no `user_id` linkage
+     * outlives the identity.
+     *
+     * @return int the number of rows removed
      */
-    public function deleteAllForUser(string $userId): void;
+    public function deleteAllForUser(string $userId): int;
+
+    /**
+     * Retention sweep: drops every token whose `expires_at` has passed. An expired row is already dead to the
+     * verifier, so keeping it buys nothing and the table would otherwise grow without bound.
+     *
+     * @return int the number of rows removed
+     */
+    public function deleteExpired(DateTimeImmutable $now): int;
 }

@@ -11,21 +11,32 @@ use Symfony\Component\Mime\Email;
 
 /**
  * Renders and sends a "single bulletproof link" security email — a plain-text fallback plus a dark-mode-aware
- * HTML body with one CTA button and a copy-paste link fallback. The scaffold lives here once; each caller (the
- * invitation and password-reset adapters) supplies only its copy and route via {@see SecurityLinkEmailContent}.
+ * HTML body with one CTA button and a copy-paste link fallback. Each caller (the invitation and password-reset
+ * adapters) supplies only its copy and route via {@see SecurityLinkEmailContent}; the shared envelope lives in
+ * {@see BulletproofEmailChrome} and the sender policy in {@see SecuritySenderAddress}.
  *
  * The link is assembled from the app base URL and the token and HTML-escaped in the body — the raw token rides
- * only in that emailed URL, never in a log or event. The send is synchronous today because Symfony's
- * `SendEmailMessage` is not routed to a transport in this stack.
+ * only in that emailed URL, never in a log or event. The send is synchronous on purpose: routing Symfony's
+ * `SendEmailMessage` to a queued transport would serialise the whole Email — plaintext token included — into
+ * the transport table and the `failed` queue, so a token-bearing email must never ride a transport. Callers
+ * wrap the send best-effort, which is what keeps their uniform response from turning a mailer fault into a 500.
  */
 final readonly class SecurityLinkMailer
 {
+    /**
+     * @see SecuritySenderAddress::LOCAL_ENVIRONMENTS — same rationale: dev/test run on `http://localhost`
+     * by design, so the HTTPS guard targets a misconfigured deploy, not the developer loop.
+     */
+    private const array LOCAL_ENVIRONMENTS = ['dev', 'test'];
+
     public function __construct(
         private MailerInterface $mailer,
-        #[Autowire('%env(MAILER_FROM)%')]
-        private string $mailFrom,
+        private SecuritySenderAddress $securityFrom,
         #[Autowire('%env(DEFAULT_URI)%')]
         private string $appBaseUrl,
+        private BulletproofEmailChrome $chrome,
+        #[Autowire('%kernel.environment%')]
+        private string $environment,
     ) {
     }
 
@@ -35,10 +46,19 @@ final readonly class SecurityLinkMailer
         #[SensitiveParameter]
         string $token,
     ): void {
+        // Defence in depth over the single link-assembly point: a deploy whose base URL is not HTTPS must
+        // fail loudly here rather than email a credential-bearing link an on-path attacker could read.
+        if (
+            !\in_array($this->environment, self::LOCAL_ENVIRONMENTS, true)
+            && !\str_starts_with($this->appBaseUrl, 'https://')
+        ) {
+            throw SecurityMailerMisconfigured::nonHttpsBaseUrl();
+        }
+
         $link = \rtrim($this->appBaseUrl, '/') . $content->path . '?token=' . \rawurlencode($token);
 
         $email = (new Email())
-            ->from($this->mailFrom)
+            ->from($this->securityFrom->toString())
             ->to($recipientEmail)
             ->subject($content->subject)
             ->text($this->textBody($content, $link))
@@ -55,46 +75,29 @@ final readonly class SecurityLinkMailer
 
     private function htmlBody(SecurityLinkEmailContent $content, string $link): string
     {
-        $safeLink = \htmlspecialchars($link, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $safeLink = $this->chrome->escape($link);
 
-        return <<<HTML
-            <!doctype html>
-            <html lang="es">
-            <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-            <style>
-              @media (prefers-color-scheme: dark) {
-                body { background:#0b0f19 !important; color:#e5e7eb !important; }
-                .erpify-btn { background:#6c9bff !important; }
-              }
-            </style>
-            </head>
-            <body style="margin:0;padding:24px;background:#f4f5f7;color:#111827;font-family:Arial,sans-serif;">
-              <div style="max-width:520px;margin:0 auto;">
-                <p style="font-size:16px;line-height:1.5;margin:0 0 16px;">
-                  {$content->htmlLead}
-                </p>
-                <p style="font-size:16px;line-height:1.5;margin:0 0 24px;">
-                  {$content->htmlDetail}
-                </p>
-                <p style="margin:0 0 24px;">
-                  <a class="erpify-btn" href="{$safeLink}"
-                     style="display:inline-block;padding:14px 28px;background:#2f5cd9;color:#ffffff;
-                            text-decoration:none;border-radius:8px;font-size:16px;font-weight:bold;">
-                    {$content->ctaLabel}
-                  </a>
-                </p>
-                <p style="font-size:13px;line-height:1.5;color:#6b7280;margin:0 0 8px;">
-                  Si el botón no funciona, copia y pega esta dirección en tu navegador:
-                </p>
-                <p style="font-size:13px;line-height:1.5;word-break:break-all;margin:0 0 24px;">{$safeLink}</p>
-                <p style="font-size:12px;line-height:1.5;color:#9ca3af;margin:0;">
-                  {$content->htmlFootnote}
-                </p>
-              </div>
-            </body>
-            </html>
-            HTML;
+        return $this->chrome->render(<<<HTML
+            <p style="font-size:16px;line-height:1.5;margin:0 0 16px;">
+              {$content->htmlLead}
+            </p>
+            <p style="font-size:16px;line-height:1.5;margin:0 0 24px;">
+              {$content->htmlDetail}
+            </p>
+            <p style="margin:0 0 24px;">
+              <a class="erpify-btn" href="{$safeLink}"
+                 style="display:inline-block;padding:14px 28px;background:#2f5cd9;color:#ffffff;
+                        text-decoration:none;border-radius:8px;font-size:16px;font-weight:bold;">
+                {$content->ctaLabel}
+              </a>
+            </p>
+            <p style="font-size:13px;line-height:1.5;color:#6b7280;margin:0 0 8px;">
+              Si el botón no funciona, copia y pega esta dirección en tu navegador:
+            </p>
+            <p style="font-size:13px;line-height:1.5;word-break:break-all;margin:0 0 24px;">{$safeLink}</p>
+            <p style="font-size:12px;line-height:1.5;color:#9ca3af;margin:0;">
+              {$content->htmlFootnote}
+            </p>
+            HTML);
     }
 }

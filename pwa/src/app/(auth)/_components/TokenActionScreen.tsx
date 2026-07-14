@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useZodForm } from "@/context/shared/validation/infrastructure";
 import {
@@ -27,13 +27,22 @@ const PASSWORD_FIELD = "password";
 
 /**
  * Sets the credential that activates an invited account. The opaque token is
- * read from `?token=` and passed straight to the use case — never parsed,
- * stored, or rendered. A missing or dead token collapses to the neutral
- * invalid-link wall (indistinguishable from every other dead-token reason); a
- * successful accept hands off to the {@link SecuritySignal} success surface.
+ * read once from `?token=` and passed straight to the use case — never parsed,
+ * persisted, or rendered; the query string is then stripped from the address
+ * bar so the token survives only in memory. A missing or dead token collapses
+ * to the neutral invalid-link wall (indistinguishable from every other
+ * dead-token reason); a successful accept hands off to the
+ * {@link SecuritySignal} success surface.
  */
 export function TokenActionScreen() {
-  const token = useSearchParams().get("token");
+  const searchParams = useSearchParams();
+  // Captured in state so the token outlives the URL strip below.
+  const [token] = useState(() => searchParams.get("token"));
+  // Drop the query string from the address bar and history entry so the token
+  // cannot linger in browser history or leak through a Referer header.
+  useEffect(() => {
+    window.history.replaceState(null, "", window.location.pathname);
+  }, []);
   const { login } = useSession();
   const online = useOnlineStatus();
   const purposeId = useId();

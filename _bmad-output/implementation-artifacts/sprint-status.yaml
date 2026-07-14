@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-23
-last_updated: 2026-07-13
+last_updated: 2026-07-14
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -117,5 +117,5 @@ development_status:
   ii-6-lockout-lockeduntil: done
   ii-4-invitation-accept-pantallas-acceso: done
   ii-5-reset-password-uniforme: done
-  ii-8-endurecimiento-seguridad-transversal: backlog
+  ii-8-endurecimiento-seguridad-transversal: review
   epic-identity-invitation-lifecycle-retrospective: optional

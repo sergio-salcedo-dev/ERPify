@@ -92,7 +92,7 @@ final class DoctrinePasswordResetTokenRepositoryTest extends KernelTestCase
         });
     }
 
-    public function testDeleteAllForUserRemovesOnlyThatUsersTokens(): void
+    public function testDeleteAllForUserRemovesOnlyThatUsersTokensAndReportsTheCount(): void
     {
         $this->inRolledBackTransaction(function (): void {
             $firstA = Uuid::generate();
@@ -105,13 +105,36 @@ final class DoctrinePasswordResetTokenRepositoryTest extends KernelTestCase
             $this->repository->save(PasswordResetToken::issue($secondA, self::USER_A, $secondToken));
             $this->repository->save(PasswordResetToken::issue($onlyB, self::USER_B, $thirdToken));
 
-            $this->repository->deleteAllForUser(self::USER_A);
+            $this->assertSame(2, $this->repository->deleteAllForUser(self::USER_A));
 
             $this->entityManager->clear();
 
             $this->assertNotInstanceOf(PasswordResetToken::class, $this->repository->findById($firstA));
             $this->assertNotInstanceOf(PasswordResetToken::class, $this->repository->findById($secondA));
             $this->assertInstanceOf(PasswordResetToken::class, $this->repository->findById($onlyB));
+        });
+    }
+
+    public function testDeleteExpiredRemovesOnlyLapsedTokensAndReportsTheCount(): void
+    {
+        $this->inRolledBackTransaction(function (): void {
+            $now = new DateTimeImmutable(self::LATER);
+            $expired = Uuid::generate();
+            $live = Uuid::generate();
+            $expiredToken = SingleUseToken::mint($now->modify('-1 minute'))->token;
+            $liveToken = SingleUseToken::mint($now->modify('+1 hour'))->token;
+            $this->repository->save(PasswordResetToken::issue($expired, self::USER_A, $expiredToken));
+            $this->repository->save(PasswordResetToken::issue($live, self::USER_B, $liveToken));
+
+            $this->assertSame(1, $this->repository->deleteExpired($now));
+
+            $this->entityManager->clear();
+
+            $this->assertNotInstanceOf(PasswordResetToken::class, $this->repository->findById($expired));
+            $this->assertInstanceOf(PasswordResetToken::class, $this->repository->findById($live));
+
+            // Idempotent: a second sweep at the same instant finds nothing left to remove.
+            $this->assertSame(0, $this->repository->deleteExpired($now));
         });
     }
 

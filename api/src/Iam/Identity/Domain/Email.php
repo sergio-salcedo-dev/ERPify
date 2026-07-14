@@ -36,6 +36,19 @@ final readonly class Email
     }
 
     /**
+     * The lenient twin of {@see from()} for flows whose contract is silence, not an error: a blank value
+     * yields null instead of an exception, so the caller folds it into its uniform outcome with no try/catch.
+     */
+    public static function tryFrom(string $raw): ?self
+    {
+        try {
+            return self::from($raw);
+        } catch (InvalidEmail) {
+            return null;
+        }
+    }
+
+    /**
      * @return non-empty-string
      */
     public function toString(): string

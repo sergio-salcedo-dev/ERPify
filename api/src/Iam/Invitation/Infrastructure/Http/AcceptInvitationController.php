@@ -8,6 +8,8 @@ use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher;
 use Erpify\Iam\Identity\Infrastructure\Security\UserProvider;
 use Erpify\Iam\Invitation\Application\AcceptInvitation;
+use Erpify\Iam\Invitation\Domain\Exception\InvalidToken;
+use Erpify\Iam\Invitation\Infrastructure\Security\InvitationAcceptThrottle;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
@@ -24,7 +26,9 @@ use Symfony\Component\Security\Http\Attribute\IsCsrfTokenValid;
  * Ordering is load-bearing: the domain flips (identity activation + invitation retire) commit INSIDE
  * {@see AcceptInvitation}'s transaction FIRST; only then does the login run, on the committed ACTIVE identity,
  * so a session is never minted for a half-accepted invitation. Password hashing is an Infrastructure concern
- * done here, so the use case stays a pure Application orchestrator over a {@see HashedPassword}.
+ * done here — but wrapped in a deferred supplier the use case only invokes once the token has resolved live,
+ * so a dead link never costs a KDF run (an unauthenticated argon2id per garbage POST would be a
+ * CPU-amplification vector).
  *
  * CSRF is defence in depth, not the primary control: same-origin is enforced by
  * {@see AcceptInvitationOriginListener} (403), and the token itself is single-use and opaque. The native
@@ -45,14 +49,22 @@ final readonly class AcceptInvitationController
         private PasswordHasher $passwordHasher,
         private UserProvider $userProvider,
         private Security $security,
+        private InvitationAcceptThrottle $throttle,
     ) {
     }
 
     public function __invoke(#[MapRequestPayload] AcceptInvitationRequest $request): Response
     {
-        $hashedPassword = HashedPassword::fromHash($this->passwordHasher->hash($request->password));
+        // Per-selector brute-force budget, consumed before any work: exhaustion folds into the SAME opaque
+        // invalid-token wall as a dead link — a per-selector 429 would confirm the selector exists.
+        if (!$this->throttle->allowAccept(\explode('.', $request->token, 2)[0])) {
+            throw new InvalidToken();
+        }
 
-        $accepted = $this->acceptInvitation->accept($request->token, $hashedPassword);
+        $accepted = $this->acceptInvitation->accept(
+            $request->token,
+            fn (): HashedPassword => HashedPassword::fromHash($this->passwordHasher->hash($request->password)),
+        );
 
         // Post-commit: authenticate the now-ACTIVE identity through the real firewall so LoginSuccessEvent
         // fires once — reusing the native id regeneration and the session-minting listener.

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine;
 
+use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
 use Erpify\Iam\Identity\Domain\Repository\PasswordResetTokenRepository;
@@ -62,14 +63,30 @@ final readonly class DoctrinePasswordResetTokenRepository implements PasswordRes
     }
 
     #[Override]
-    public function deleteAllForUser(string $userId): void
+    public function deleteAllForUser(string $userId): int
     {
-        $this->entityManager->createQueryBuilder()
+        $affected = $this->entityManager->createQueryBuilder()
             ->delete(PasswordResetToken::class, 't')
             ->where('t.userId = :userId')
             ->setParameter('userId', $userId)
             ->getQuery()
             ->execute()
         ;
+
+        return \is_int($affected) ? $affected : 0;
+    }
+
+    #[Override]
+    public function deleteExpired(DateTimeImmutable $now): int
+    {
+        $affected = $this->entityManager->createQueryBuilder()
+            ->delete(PasswordResetToken::class, 't')
+            ->where('t.expiresAt < :now')
+            ->setParameter('now', $now)
+            ->getQuery()
+            ->execute()
+        ;
+
+        return \is_int($affected) ? $affected : 0;
     }
 }

@@ -34,6 +34,9 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * each a published seam or core building block. Splitting it would fracture the single transaction that is its
  * whole point, so the coupling is accepted rather than diffused through indirection.
  *
+ * The post-commit email is best-effort: the invitation is already durable, so a mailer fault must not abort
+ * the caller mid-hand-over — the CLI still echoes the token and the operator resends if the mail never landed.
+ *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 final readonly class SendInvitation
@@ -44,7 +47,7 @@ final readonly class SendInvitation
         private InviteUser $inviteUser,
         private GrantMembership $grantMembership,
         private InvitationRepository $invitations,
-        private InvitationEmailSender $emailSender,
+        private SendInvitationEmailBestEffort $emailSender,
         private EventBus $eventBus,
         private TransactionManager $transactionManager,
         private Clock $clock,

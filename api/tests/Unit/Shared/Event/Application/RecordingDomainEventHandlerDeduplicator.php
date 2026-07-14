@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Tests\Unit\Backoffice\Bank\Infrastructure\Messenger;
+namespace Erpify\Tests\Unit\Shared\Event\Application;
 
 use Erpify\Shared\Event\Application\DomainEventHandlerDeduplicator;
 use Override;
