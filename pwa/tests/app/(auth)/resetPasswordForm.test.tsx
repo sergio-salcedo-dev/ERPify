@@ -54,7 +54,7 @@ describe("ResetPasswordForm — token gate", () => {
     window.history.replaceState(null, "", "/reset-password");
     render(<ResetPasswordForm />);
 
-    expect(screen.getByTestId("access-wall--invalid-link")).toBeInTheDocument();
+    expect(screen.getByTestId("access-wall--invalid-reset-link")).toBeInTheDocument();
     expect(screen.queryByTestId("reset-password-form")).not.toBeInTheDocument();
   });
 
@@ -113,14 +113,19 @@ describe("ResetPasswordForm — reset outcomes", () => {
     submitWithPassword("a-strong-password");
 
     await waitFor(() =>
-      expect(screen.getByTestId("access-wall--invalid-link")).toBeInTheDocument(),
+      expect(screen.getByTestId("access-wall--invalid-reset-link")).toBeInTheDocument(),
     );
     // The wall collapses every dead-token reason (invalid, expired, consumed)
-    // into one opaque message and always offers the sign-in exit.
+    // into one opaque message and always offers the sign-in exit; the reset
+    // flavour additionally points at the self-service forgot-password path.
     expect(
       screen.getByRole("heading", { name: "Este enlace ya no es válido" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Iniciar sesión" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Solicitar enlace nuevo" })).toHaveAttribute(
+      "href",
+      "/forgot-password",
+    );
     expect(screen.queryByTestId("reset-password-form")).not.toBeInTheDocument();
     expect(login).not.toHaveBeenCalled();
   });

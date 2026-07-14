@@ -105,7 +105,7 @@ interpolation.
 | `MESSENGER_TRANSPORT_DSN`    | `php`, `messenger_worker` | Usually `doctrine://default?auto_setup=0`; queue name `async` is in `api/config/packages/messenger.yaml`. |
 | `MAILER_DSN`                 | `php`, `messenger_worker` | Real SMTP/API DSN in production (not `null://null`). Set in env for both services.                        |
 | `MAILER_FROM`                | Symfony Mailer            | Operational sender (may be no-reply). Must be authorised by your mail provider.                           |
-| `MAILER_SECURITY_FROM`       | Security emails           | Sender of invitation/reset/password-changed mails (e.g. `seguridad@…`). Must be a monitored, replyable mailbox — outside dev/test an empty or no-reply value fails loudly at send time. |
+| `MAILER_SECURITY_FROM`       | Security emails           | Sender of invitation/reset/password-changed mails. Must be a monitored, replyable mailbox — outside dev/test an empty or no-reply value fails loudly at send time. Provisional prod value: `sergio.salcedo.dev@gmail.com` (the monitored operator mailbox, same as `DEFAULT_NOTIFICATION_EMAIL`) until a dedicated `seguridad@…` mailbox exists. |
 | `DEFAULT_NOTIFICATION_EMAIL` | Notification handler      | Recipient for bank create/update emails.                                                                  |
 
 Overview: [docs-info/production-deployment.md](../../../docs-info/production-deployment.md) and [architecture-api.md](../../../docs/architecture-api.md#async--messaging).

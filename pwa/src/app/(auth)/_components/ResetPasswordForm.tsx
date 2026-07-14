@@ -55,7 +55,7 @@ export function ResetPasswordForm() {
   // In-flight latch: ConnectivityButton disables only the button, so pressing
   // Enter in the password field while a submit runs would re-fire the form and
   // reset the same token twice — the loser's 400 invalid-token would then tap
-  // the INVALID_LINK wall over the success surface. Read/written only in the
+  // the invalid-link wall over the success surface. Read/written only in the
   // form's own submit handler.
   const submitting = useRef(false);
   const {
@@ -91,7 +91,7 @@ export function ResetPasswordForm() {
       return;
     }
     if (outcome.kind === ResetPasswordOutcomeKind.INVALID_LINK) {
-      setWall(AccessWallVariant.INVALID_LINK);
+      setWall(AccessWallVariant.INVALID_RESET_LINK);
       return;
     }
     if (outcome.kind === ResetPasswordOutcomeKind.SUSPENDED) {
@@ -134,7 +134,7 @@ export function ResetPasswordForm() {
   };
 
   if (!token) {
-    return <AccessWall variant={AccessWallVariant.INVALID_LINK} />;
+    return <AccessWall variant={AccessWallVariant.INVALID_RESET_LINK} />;
   }
 
   if (wall) {
