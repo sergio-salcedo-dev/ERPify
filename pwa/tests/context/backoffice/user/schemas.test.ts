@@ -6,21 +6,15 @@ import { Role } from "@/context/shared/access/domain/Role";
 import { UserStatus } from "@/context/shared/access/domain/UserStatus";
 
 describe("auth schemas", () => {
-  it("ResetPasswordSchema rejects mismatched passwords on confirmPassword", () => {
-    const r = ResetPasswordSchema.safeParse({
-      password: "password1",
-      confirmPassword: "password2",
-    });
-    expect(r.success).toBe(false);
-    if (!r.success) {
-      expect(r.error.issues.some((i) => i.path.includes("confirmPassword"))).toBe(true);
-    }
+  it("ResetPasswordSchema accepts a password within bounds (single field, no confirm)", () => {
+    expect(ResetPasswordSchema.safeParse({ password: "password1" }).success).toBe(true);
   });
-  it("ResetPasswordSchema accepts matching passwords", () => {
-    expect(
-      ResetPasswordSchema.safeParse({ password: "password1", confirmPassword: "password1" })
-        .success,
-    ).toBe(true);
+  it("ResetPasswordSchema rejects a too-short password", () => {
+    expect(ResetPasswordSchema.safeParse({ password: "short" }).success).toBe(false);
+  });
+  it("ResetPasswordSchema rejects a too-long password", () => {
+    const longPassword = "a".repeat(129);
+    expect(ResetPasswordSchema.safeParse({ password: longPassword }).success).toBe(false);
   });
   it("UserCreateSchema requires at least one role", () => {
     const bad = UserCreateSchema.safeParse({

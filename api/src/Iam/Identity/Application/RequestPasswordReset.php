@@ -7,7 +7,6 @@ namespace Erpify\Iam\Identity\Application;
 use Erpify\Iam\Identity\Domain\Email;
 use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
 use Erpify\Iam\Identity\Domain\Entity\User;
-use Erpify\Iam\Identity\Domain\Event\PasswordResetRequested;
 use Erpify\Iam\Identity\Domain\Exception\InvalidEmail;
 use Erpify\Iam\Identity\Domain\Repository\PasswordResetTokenRepository;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
@@ -42,6 +41,7 @@ final readonly class RequestPasswordReset
         private EventBus $eventBus,
         private TransactionManager $transactionManager,
         private Clock $clock,
+        private SendPasswordResetEmailBestEffort $emailSender,
     ) {
     }
 
@@ -65,20 +65,22 @@ final readonly class RequestPasswordReset
             return;
         }
 
+        $tokenId = Uuid::generate();
         $generated = SingleUseToken::mint($this->clock->now()->modify(self::TOKEN_TTL));
-        $token = PasswordResetToken::issue(Uuid::generate(), $userId, $generated->token);
+        $token = PasswordResetToken::issue($tokenId, $userId, $generated->token);
 
         $this->transactionManager->transactional(function () use ($userId, $token): void {
             $this->tokens->deleteAllForUser($userId);
             $this->tokens->save($token);
 
-            $this->eventBus->publish(new PasswordResetRequested($userId, occurredOn: $this->clock->now()));
+            // The "reset requested" event is recorded by the token aggregate at issue() — publish it from there.
+            $this->eventBus->publish(...$token->pullDomainEvents());
         });
 
-        // The reset email carrying the selector-verifier link `?token=<token id>.<secret>` (the secret is
-        // $generated->plaintext(), delivered exactly once and never persisted) is dispatched here. It is
-        // deferred to the shared security-email surface built alongside invitation delivery, which this flow
-        // reuses; until then the minted token is inert (nobody receives the secret), which is a benign,
-        // recoverable state — the endpoint answers the same uniform response regardless.
+        // After commit: the reset link's plaintext token (`<id>.<secret>`) is delivered exactly once and never
+        // touches the transaction, an event or a log. The send is best-effort — a mailer fault is swallowed so
+        // it can't turn the ACTIVE path's uniform 202 into a 500 — so only an ACTIVE identity reaches here and
+        // the uniform response never reveals to an anonymous requester whether an email was actually sent.
+        $this->emailSender->send($user->email(), $tokenId . '.' . $generated->plaintext());
     }
 }

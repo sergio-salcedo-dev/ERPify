@@ -18,13 +18,13 @@ use ReflectionClass;
 final class AccountDeactivatedTest extends TestCase
 {
     #[Test]
-    public function itIsAGenericForbiddenWallWithoutAnActionableType(): void
+    public function itCarriesTheSpecificAccountDeactivatedType(): void
     {
         $exception = new AccountDeactivated();
 
-        // Empty type() falls through to the Forbidden marker default ('forbidden') at the wire — deliberately
-        // generic, since a retired identity has no next step from the login screen.
-        $this->assertSame('', $exception->type());
+        // A specific type() so a client tells this terminal admission wall apart from a generic infrastructural
+        // 'forbidden' (an origin/CSRF rejection) that shares the 403 status.
+        $this->assertSame('account-deactivated', $exception->type());
         $this->assertSame('Your account is not active.', $exception->title());
     }
 

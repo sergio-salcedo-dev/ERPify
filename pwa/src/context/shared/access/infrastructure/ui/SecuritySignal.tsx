@@ -7,20 +7,25 @@ import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/components/cn";
 
-const SIGNAL_TITLE = "Invitación aceptada. Ya puedes empezar a trabajar.";
+const DEFAULT_SIGNAL_TITLE = "Invitación aceptada. Ya puedes empezar a trabajar.";
 const ENTER_LABEL = "Entrar";
 const ENTER_TITLE = "Entrar al panel";
 
 /**
- * Success card shown in place of the accept-invitation form once the invitation
- * is accepted (the session cookie is already set). It renders INSIDE the
- * centered `AuthLayout` card, so it carries no header/logo of its own. The
- * success is signalled by a static (non-animated) success dot AND the title
- * text — never color alone. Focus moves to the single `<h1>` on the SPA
- * transition, and the primary action is a static in-app link into the ERP
- * (`Routes.BACKOFFICE`), never a redirect target read from the URL or a payload.
+ * Success card shown in place of a token-action form once a credential-setting
+ * action succeeds and the session cookie is already set — invitation-accept and
+ * password-reset both land here, differing only in the {@link title} they pass.
+ * It renders INSIDE the centered `AuthLayout` card, so it carries no header/logo
+ * of its own. The success is signalled by a static (non-animated) success dot
+ * AND the title text — never color alone. Focus moves to the single `<h1>` on
+ * the SPA transition, and the primary action is a static in-app link into the
+ * ERP (`Routes.BACKOFFICE`), never a redirect target read from the URL or a
+ * payload.
  */
-export function SecuritySignal({ testId = "security-signal" }: Readonly<{ testId?: string }>) {
+export function SecuritySignal({
+  testId = "security-signal",
+  title = DEFAULT_SIGNAL_TITLE,
+}: Readonly<{ testId?: string; title?: string }>) {
   const headingRef = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     headingRef.current?.focus();
@@ -37,7 +42,7 @@ export function SecuritySignal({ testId = "security-signal" }: Readonly<{ testId
         tabIndex={-1}
         className="security-signal__title text-foreground text-xl font-semibold tracking-tight outline-none"
       >
-        {SIGNAL_TITLE}
+        {title}
       </h1>
 
       <div className="security-signal__actions">

@@ -39,6 +39,10 @@ import { ApiLoginRepository } from "../../../backoffice/user/infrastructure/ApiL
 import type { LoginRepository } from "../../../backoffice/user/domain/LoginRepository";
 import { ApiAcceptInvitationRepository } from "../../../backoffice/user/infrastructure/ApiAcceptInvitationRepository";
 import type { AcceptInvitationRepository } from "../../../backoffice/user/domain/AcceptInvitationRepository";
+import { ApiForgotPasswordRepository } from "../../../backoffice/user/infrastructure/ApiForgotPasswordRepository";
+import type { ForgotPasswordRepository } from "../../../backoffice/user/domain/ForgotPasswordRepository";
+import { ApiResetPasswordRepository } from "../../../backoffice/user/infrastructure/ApiResetPasswordRepository";
+import type { ResetPasswordRepository } from "../../../backoffice/user/domain/ResetPasswordRepository";
 import { ApiIdentityRepository } from "@/context/shared/access/infrastructure/ApiIdentityRepository";
 import type { IdentityRepository } from "@/context/shared/access/domain/IdentityRepository";
 import { ApiSessionsRepository } from "@/context/shared/access/infrastructure/ApiSessionsRepository";
@@ -202,6 +206,18 @@ container
 container
   .bind<AcceptInvitationRepository>("BackOfficeAcceptInvitationRepository")
   .to(ApiAcceptInvitationRepository)
+  .inSingletonScope();
+
+// Password recovery: request a reset link (uniform 202) and set a new credential
+// with the emailed token (204 → signed in). Both are real HTTP adapters over the
+// injected HttpClient, mirroring the accept adapter.
+container
+  .bind<ForgotPasswordRepository>("BackOfficeForgotPasswordRepository")
+  .to(ApiForgotPasswordRepository)
+  .inSingletonScope();
+container
+  .bind<ResetPasswordRepository>("BackOfficeResetPasswordRepository")
+  .to(ApiResetPasswordRepository)
   .inSingletonScope();
 
 // Identity / session subsystem: the AuthProvider hydrates from `/me`, and the

@@ -7,6 +7,7 @@ namespace Erpify\Iam\Identity\Domain\Entity;
 use DateTimeImmutable;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use Erpify\Iam\Identity\Domain\Event\PasswordResetRequested;
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\Uuid;
@@ -59,11 +60,16 @@ final class PasswordResetToken extends AggregateRoot
 
     /**
      * Records a freshly minted reset token: only the digest and expiry of `$token` are kept, never its raw
-     * secret. The caller holds the plaintext just long enough to deliver the link, then drops it.
+     * secret. The caller holds the plaintext just long enough to deliver the link, then drops it. Issuing IS the
+     * "a reset was requested" fact, so the aggregate records {@see PasswordResetRequested} at its source (mirror
+     * of {@see User} recording its own credential events) — PII-free, only the user id.
      */
     public static function issue(string $id, string $userId, SingleUseToken $token): self
     {
-        return new self($id, $userId, $token);
+        $reset = new self($id, $userId, $token);
+        $reset->record(new PasswordResetRequested($userId));
+
+        return $reset;
     }
 
     /**

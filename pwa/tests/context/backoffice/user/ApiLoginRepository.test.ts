@@ -64,10 +64,10 @@ describe("ApiLoginRepository.login", () => {
     expect(outcome.kind).toBe(LoginOutcomeKind.LOCKED);
   });
 
-  it("maps 403 forbidden to deactivated", async () => {
+  it("maps 403 account-deactivated to deactivated", async () => {
     const post = vi
       .fn()
-      .mockRejectedValue(new HttpError(problem(HttpStatus.FORBIDDEN, "forbidden")));
+      .mockRejectedValue(new HttpError(problem(HttpStatus.FORBIDDEN, "account-deactivated")));
 
     const outcome = await new ApiLoginRepository(httpClientPosting(post)).login({
       email: "a@b.com",
@@ -75,6 +75,15 @@ describe("ApiLoginRepository.login", () => {
     });
 
     expect(outcome.kind).toBe(LoginOutcomeKind.DEACTIVATED);
+  });
+
+  it("re-throws a generic 403 forbidden (origin/CSRF rejection) — it is not a login outcome", async () => {
+    const error = new HttpError(problem(HttpStatus.FORBIDDEN, "forbidden"));
+    const post = vi.fn().mockRejectedValue(error);
+
+    await expect(
+      new ApiLoginRepository(httpClientPosting(post)).login({ email: "a@b.com", password: "x" }),
+    ).rejects.toBe(error);
   });
 
   it("maps a 503 service-unavailable to request-failed (retryable, not a credentials error)", async () => {

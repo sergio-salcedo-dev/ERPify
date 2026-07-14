@@ -1,10 +1,12 @@
 # Stateless CSRF (Symfony 8): session-free, same-origin-primary double-submit token. Invitation accept is the
-# first consumer that wires it — a defence-in-depth second layer behind the same-origin Origin check
-# (AcceptInvitationOriginListener) and the opaque single-use token, which remain the primary controls. The
-# `check_header` browser-only double-submit is deliberately left off (off-by-default) and deferred with the
-# LoginOriginListener consolidation follow-up; the token id is validated by #[IsCsrfTokenValid] on the accept
-# controller. See docs/adr/identity-invitation-lifecycle.md D5.
+# first consumer that wires it; the password reset (credential write) is the second — both a defence-in-depth
+# second layer behind their same-origin Origin check (AcceptInvitationOriginListener / PasswordResetOriginListener)
+# and their opaque single-use token, which remain the primary controls. The `check_header` browser-only
+# double-submit is deliberately left off (off-by-default) and deferred with the LoginOriginListener consolidation
+# follow-up; each token id is validated by #[IsCsrfTokenValid] on its controller. See
+# docs/adr/identity-invitation-lifecycle.md D5.
 framework:
     csrf_protection:
         stateless_token_ids:
             - invitation_accept
+            - password_reset
