@@ -108,7 +108,7 @@ development_status:
   # al plano RBAC. Multi-tenant-ready, tenancy operativa diferida. Orden de merge safe-first (las historias van en
   # ese orden, no en II-N numérico): II-0 → II-1·II-2·II-3·II-7 → II-6 → II-4 → II-5 → II-8. II-0 co-mueve Identity
   # + core RBAC (opción b; RM-1 ya en main vía #456). II-4/II-5 exigen II-7 (registro/revoca-todas).
-  epic-identity-invitation-lifecycle: in-progress
+  epic-identity-invitation-lifecycle: done
   ii-0-promocion-contexto-iam-organization-comove-rbac: done
   ii-1-organization-membership-bootstrap-cli: done
   ii-2-shared-token-singleusetoken: done
@@ -117,5 +117,5 @@ development_status:
   ii-6-lockout-lockeduntil: done
   ii-4-invitation-accept-pantallas-acceso: done
   ii-5-reset-password-uniforme: done
-  ii-8-endurecimiento-seguridad-transversal: review
+  ii-8-endurecimiento-seguridad-transversal: done
   epic-identity-invitation-lifecycle-retrospective: optional
