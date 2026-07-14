@@ -71,10 +71,10 @@ describe("ApiResetPasswordRepository.reset", () => {
     expect(outcome.kind).toBe(ResetPasswordOutcomeKind.SUSPENDED);
   });
 
-  it("maps a 403 forbidden to deactivated", async () => {
+  it("maps a 403 account-deactivated to deactivated", async () => {
     const post = vi
       .fn()
-      .mockRejectedValue(new HttpError(problem(HttpStatus.FORBIDDEN, "forbidden")));
+      .mockRejectedValue(new HttpError(problem(HttpStatus.FORBIDDEN, "account-deactivated")));
 
     const outcome = await new ApiResetPasswordRepository(httpClientPosting(post)).reset(COMMAND);
 
@@ -100,8 +100,9 @@ describe("ApiResetPasswordRepository.reset", () => {
   });
 
   it.each([
-    ["a 401 origin/CSRF rejection", HttpStatus.UNAUTHORIZED, "unauthenticated"],
-    ["a 403 that is neither suspended nor forbidden", HttpStatus.FORBIDDEN, "account-locked"],
+    ["a generic 403 forbidden (origin/CSRF rejection)", HttpStatus.FORBIDDEN, "forbidden"],
+    ["a 403 that is neither suspended nor deactivated", HttpStatus.FORBIDDEN, "account-locked"],
+    ["a 401", HttpStatus.UNAUTHORIZED, "unauthenticated"],
     ["a 500", HttpStatus.INTERNAL_SERVER_ERROR, "server-error"],
   ])("re-throws %s — it is not a reset outcome", async (_label, status, type) => {
     const error = new HttpError(problem(status, type));

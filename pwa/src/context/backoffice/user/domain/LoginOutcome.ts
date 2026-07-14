@@ -1,11 +1,14 @@
 /**
- * The `ProblemDetails.type` discriminators the login adapter routes on. Two 403
- * responses share the status but mean different things — the type, never the
- * status alone, decides which access wall the user sees.
+ * The `ProblemDetails.type` discriminators the login adapter routes on. Several
+ * 403 responses share the status but mean different things — the type, never the
+ * status alone, decides the outcome: `account-suspended`, `account-locked` and
+ * `account-deactivated` each map to their access wall, while a generic `forbidden`
+ * 403 (an origin or CSRF rejection) is not a login outcome and is rethrown.
  */
 export const LoginProblemType = {
   ACCOUNT_SUSPENDED: "account-suspended",
   ACCOUNT_LOCKED: "account-locked",
+  ACCOUNT_DEACTIVATED: "account-deactivated",
   FORBIDDEN: "forbidden",
 } as const;
 export type LoginProblemType = (typeof LoginProblemType)[keyof typeof LoginProblemType];

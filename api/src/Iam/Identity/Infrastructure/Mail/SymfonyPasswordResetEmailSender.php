@@ -13,13 +13,14 @@ use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
 
 /**
- * {@see PasswordResetEmailSender} over `symfony/mailer` (async via Messenger in this stack). Builds the reset
- * email with a single bulletproof link pointing at the PWA's public `reset-password` route; the raw token rides
- * only in the emailed URL, never in a log or event. The HTML uses inline styles and a dark-mode media query so
- * it renders in a bare mail client — mirroring the invitation email so the two security emails stay consistent.
+ * {@see PasswordResetEmailSender} over `symfony/mailer`. The send is synchronous today because `SendEmailMessage`
+ * is not routed to a transport in this stack. Builds the reset email with a single bulletproof link pointing at
+ * the PWA's public `reset-password` route; the raw token rides only in the emailed URL, never in a log or event.
+ * The HTML uses inline styles and a dark-mode media query so it renders in a bare mail client — mirroring the
+ * invitation email so the two security emails stay consistent.
  *
- * The `no-reply` sender formalisation and transport-header hardening are a later hardening concern (II-8); here
- * it uses the app's configured `MAILER_FROM` and public `DEFAULT_URI`.
+ * The `no-reply` sender formalisation and transport-header hardening are a later hardening concern; here it uses
+ * the app's configured `MAILER_FROM` and public `DEFAULT_URI`.
  */
 #[AsAlias(PasswordResetEmailSender::class)]
 final readonly class SymfonyPasswordResetEmailSender implements PasswordResetEmailSender

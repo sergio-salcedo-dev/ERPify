@@ -100,13 +100,38 @@ describe("ResetPasswordForm — reset outcomes", () => {
     expect(login).not.toHaveBeenCalled();
   });
 
-  it("shows the deactivated wall on a 403 forbidden account", async () => {
+  it("shows the deactivated wall on a deactivated account", async () => {
     outcome = { kind: ResetPasswordOutcomeKind.DEACTIVATED };
     render(<ResetPasswordForm />);
     submitWithPassword("a-strong-password");
 
     await waitFor(() => expect(screen.getByTestId("access-wall--deactivated")).toBeInTheDocument());
     expect(login).not.toHaveBeenCalled();
+  });
+
+  it("swallows a second concurrent submit while the reset is in flight", async () => {
+    let resolveReset: (result: ResetPasswordOutcome) => void = () => {};
+    repoReset.mockImplementationOnce(
+      () =>
+        new Promise<ResetPasswordOutcome>((resolve) => {
+          resolveReset = resolve;
+        }),
+    );
+    render(<ResetPasswordForm />);
+
+    submitWithPassword("a-strong-password");
+    await waitFor(() => expect(repoReset).toHaveBeenCalledTimes(1));
+
+    // Enter submits the form even though ConnectivityButton is disabled in
+    // flight; the in-flight latch must swallow the re-fire so the same token is
+    // never reset twice (the loser's 400 would tap the wall over the success).
+    fireEvent.submit(screen.getByTestId("reset-password-form"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(repoReset).toHaveBeenCalledTimes(1);
+
+    resolveReset({ kind: ResetPasswordOutcomeKind.RESET });
+    await waitFor(() => expect(screen.getByTestId("reset-password__success")).toBeInTheDocument());
+    expect(repoReset).toHaveBeenCalledTimes(1);
   });
 
   it("maps a server password violation onto the password field", async () => {

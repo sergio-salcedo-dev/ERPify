@@ -65,14 +65,14 @@ Feature: Reset a forgotten password uniformly
     And I execute the SQL query "SELECT id FROM identity_password_reset_token WHERE id = '0190e1f2-a3b4-7c5d-8e6f-1a2b3c4d5e03'"
     And there should have 1 records in SQL result
 
-  Scenario: A valid token for a deactivated identity is walled generically
+  Scenario: A valid token for a deactivated identity is walled by a specific 403
     Given I execute the SQL query "INSERT INTO identity_password_reset_token (id, user_id, token_hash, expires_at, created_at, updated_at) VALUES ('0190e1f2-a3b4-7c5d-8e6f-1a2b3c4d5e04', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a62', '3d13deaeba930a5a7b3e4be6a0ec97cf75b569cef039df85f2d29d972610a022', NOW() + INTERVAL '1 hour', NOW(), NOW())"
     When I send a POST request to "/backoffice/reset-password" with body:
     """
     { "token": "0190e1f2-a3b4-7c5d-8e6f-1a2b3c4d5e04.behat-deactivated-reset-secret", "password": "brand-new-strong-password", "_token": "behat-stateless-csrf-nonce-000000" }
     """
     Then the response status code should be 403
-    And the JSON node "type" should be equal to "forbidden"
+    And the JSON node "type" should be equal to "account-deactivated"
 
   Scenario: An expired, an unknown, a malformed and a non-uuid token are one indistinguishable invalid-token
     Given I execute the SQL query "INSERT INTO identity_password_reset_token (id, user_id, token_hash, expires_at, created_at, updated_at) VALUES ('0190e1f2-a3b4-7c5d-8e6f-1a2b3c4d5e02', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b', '6087b5a9916bc298714197654465b32cc8c5ba37701db4efee880fcd9972e502', NOW() - INTERVAL '1 hour', NOW(), NOW())"

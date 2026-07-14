@@ -94,7 +94,7 @@ Feature: Log in through the session firewall
     And the JSON node "type" should be equal to "account-suspended"
     And the header "Set-Cookie" should not exist
 
-  Scenario: A deactivated identity with correct credentials is walled by a generic 403, minting no session
+  Scenario: A deactivated identity with correct credentials is walled by a specific 403, minting no session
     When I send a POST request to "/backoffice/login" with body:
     """
     {
@@ -104,7 +104,7 @@ Feature: Log in through the session firewall
     """
     Then the response status code should be 403
     And the header "Content-Type" should contain "application/problem+json"
-    And the JSON node "type" should be equal to "forbidden"
+    And the JSON node "type" should be equal to "account-deactivated"
     And the header "Set-Cookie" should not exist
 
   Scenario: An invited identity that has not set a password is indistinguishable from an unknown email

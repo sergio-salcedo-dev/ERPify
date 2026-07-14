@@ -6,11 +6,13 @@ namespace Erpify\Tests\Unit\Iam\Identity\Application;
 
 use DateTimeImmutable;
 use Erpify\Iam\Identity\Application\RequestPasswordReset;
+use Erpify\Iam\Identity\Application\SendPasswordResetEmailBestEffort;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 
 /**
  * @internal
@@ -102,7 +104,7 @@ final class RequestPasswordResetTest extends TestCase
             $eventBus,
             new InlineTransactionManager(),
             new FixedClock(new DateTimeImmutable('2026-07-13T12:00:00+00:00')),
-            $emails,
+            new SendPasswordResetEmailBestEffort($emails, new NullLogger()),
         );
     }
 

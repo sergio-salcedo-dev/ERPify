@@ -3,13 +3,15 @@ import type { ProblemViolation } from "@/context/shared/error/domain/ProblemDeta
 /**
  * The `ProblemDetails.type` discriminators the reset-password adapter routes on.
  * A dead token (used, expired, unknown) collapses to the single `invalid-token`
- * type; a suspended or forbidden account each carries its own type. The type,
- * never the status alone, decides the outcome — two 403s carry different meaning.
+ * type. `account-suspended` and `account-deactivated` are the two specific 403
+ * types that each map to an access wall; a generic `forbidden` 403 (an origin or
+ * CSRF rejection) is not a reset outcome and is rethrown. The type, never the
+ * status alone, decides the outcome — two 403s carry different meaning.
  */
 export const ResetPasswordProblemType = {
   INVALID_TOKEN: "invalid-token",
   ACCOUNT_SUSPENDED: "account-suspended",
-  FORBIDDEN: "forbidden",
+  ACCOUNT_DEACTIVATED: "account-deactivated",
   VALIDATION_FAILED: "validation-failed",
 } as const;
 export type ResetPasswordProblemType =

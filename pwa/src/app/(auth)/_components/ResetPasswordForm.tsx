@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { type FormEvent, useId, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useZodForm } from "@/context/shared/validation/infrastructure";
 import {
@@ -43,6 +43,12 @@ export function ResetPasswordForm() {
   const [reset, setReset] = useState(false);
   const [wall, setWall] = useState<AccessWallVariant | null>(null);
   const [requestFailed, setRequestFailed] = useState(false);
+  // In-flight latch: ConnectivityButton disables only the button, so pressing
+  // Enter in the password field while a submit runs would re-fire the form and
+  // reset the same token twice — the loser's 400 invalid-token would then tap
+  // the INVALID_LINK wall over the success surface. Read/written only in the
+  // form's own submit handler.
+  const submitting = useRef(false);
   const {
     register,
     handleSubmit,
@@ -52,7 +58,7 @@ export function ResetPasswordForm() {
     defaultValues: { password: "" },
   });
 
-  const onSubmit = handleSubmit(async (values) => {
+  const submitReset = handleSubmit(async (values) => {
     // Render already guards `!token`; this keeps the closure total for TS.
     if (!token) return;
     setRequestFailed(false);
@@ -103,6 +109,20 @@ export function ResetPasswordForm() {
     }
     if (!mappedAny) setRequestFailed(true);
   });
+
+  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
+    if (submitting.current) {
+      event.preventDefault();
+      return;
+    }
+    submitting.current = true;
+    // handleSubmit's promise settles after a validation reject too, so releasing
+    // the latch here (rather than inside the async body) also frees a submit that
+    // never reached the port because client validation failed.
+    return submitReset(event).finally(() => {
+      submitting.current = false;
+    });
+  };
 
   if (!token) {
     return <AccessWall variant={AccessWallVariant.INVALID_LINK} />;
