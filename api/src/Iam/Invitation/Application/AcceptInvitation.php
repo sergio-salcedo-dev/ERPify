@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Invitation\Application;
 
+use Closure;
 use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
@@ -42,16 +43,22 @@ final readonly class AcceptInvitation
     }
 
     /**
+     * @param Closure(): HashedPassword $hashPassword defers the KDF of the submitted password; invoked only
+     *                                                after every dead-token check has passed, so a garbage
+     *                                                token never costs a KDF run. The hash therefore runs
+     *                                                while the invitation row lock is held — a few extra ms
+     *                                                serialising only concurrent accepts of the SAME token,
+     *                                                which is the very race the lock exists to serialise.
+     *
      * @throws InvalidToken when the token is not eligible in any of the five cases
      */
     public function accept(
         #[SensitiveParameter]
         string $presentedToken,
-        #[SensitiveParameter]
-        HashedPassword $password,
+        Closure $hashPassword,
     ): AcceptedInvitation {
         return $this->transactionManager->transactional(
-            function () use ($presentedToken, $password): AcceptedInvitation {
+            function () use ($presentedToken, $hashPassword): AcceptedInvitation {
                 [$invitationId, $secret] = $this->splitToken($presentedToken);
 
                 $invitation = $this->invitations->findByIdForUpdate($invitationId) ?? throw new InvalidToken();
@@ -72,7 +79,7 @@ final readonly class AcceptInvitation
                     throw new InvalidToken();
                 }
 
-                $user->activate($password);
+                $user->activate($hashPassword());
 
                 $invitation->accept();
 

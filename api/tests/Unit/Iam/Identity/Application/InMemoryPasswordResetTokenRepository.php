@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Application;
 
+use DateTimeImmutable;
 use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
 use Erpify\Iam\Identity\Domain\Repository\PasswordResetTokenRepository;
 use Override;
@@ -64,15 +65,34 @@ final class InMemoryPasswordResetTokenRepository implements PasswordResetTokenRe
     }
 
     #[Override]
-    public function deleteAllForUser(string $userId): void
+    public function deleteAllForUser(string $userId): int
     {
         $this->deleteAllForUserCalls[] = $userId;
+        $deleted = 0;
 
         foreach ($this->byId as $key => $token) {
             if ($token->userId() === $userId) {
                 unset($this->byId[$key]);
+                ++$deleted;
             }
         }
+
+        return $deleted;
+    }
+
+    #[Override]
+    public function deleteExpired(DateTimeImmutable $now): int
+    {
+        $deleted = 0;
+
+        foreach ($this->byId as $key => $token) {
+            if ($token->isExpiredAt($now)) {
+                unset($this->byId[$key]);
+                ++$deleted;
+            }
+        }
+
+        return $deleted;
     }
 
     private function index(PasswordResetToken $token): void

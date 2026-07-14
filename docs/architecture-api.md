@@ -274,7 +274,14 @@ Full reference (mapping table, header rules, observability, code map, test surfa
 - **Dead-letter observability & safe replay.** `messenger:failed:status [--json] [--limit]` gives a project view of the `failed` transport aggregated by message type and age, beyond the framework's raw `messenger:failed:show` (`--json` is the scrapeable metric, read behind the capability-probed `DeadLetterReader` port). `ReportDeadLetterBacklogHandler` rides the hourly `scheduler_maintenance` tick and logs one `error` line when the backlog breaches a count/age threshold — the Monolog→Sentry bridge is intentionally unwired, so that log line *is* the cron alarm. **Safe replay** under claim-based dedup is *clear the claim → then retry*, never retry first (a dangling claim makes `messenger:failed:retry` silently drop the message): run `event:dedup:clear <eventId> <handler>` then `messenger:failed:retry <id>`. ADR: [`adr/dead-letter-observability.md`](./adr/dead-letter-observability.md).
 - Default transport: Doctrine (`MESSENGER_TRANSPORT_DSN=doctrine://default?auto_setup=0`).
 - **Mercure Hub**: modules publish domain-event updates to per-aggregate topics through the hub at `/.well-known/mercure` (each module's `.../realtime/authorize` route mints the subscriber cookie); JWT required (`CADDY_MERCURE_JWT_SECRET` in prod).
-- Mail is dispatched asynchronously via Messenger.
+- Mail: notification email rides Messenger asynchronously, with one deliberate exception — **token-bearing
+  security emails (invitation, password reset) are sent synchronously post-commit, best-effort**. Routing
+  Symfony's `SendEmailMessage` to a queued transport would serialise the whole `Email` — the plaintext
+  single-use token included — into the transport table and the `failed` queue, so those two never touch a
+  transport; their best-effort wrappers (`SendInvitationEmailBestEffort`, `SendPasswordResetEmailBestEffort`)
+  swallow mailer faults so the uniform pre-identity responses never turn into a 500. The token-free
+  password-changed notification is async the safe way: its reactor (`SendEmailOnPasswordResetCompleted`)
+  consumes `PasswordResetCompleted` from the `async` transport and resolves the recipient in-module.
 
 ## Storage & media
 

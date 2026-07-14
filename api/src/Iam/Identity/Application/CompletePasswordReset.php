@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Application;
 
+use Closure;
 use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
-use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
+use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Exception\AccountDeactivated;
 use Erpify\Iam\Identity\Domain\Exception\AccountSuspended;
 use Erpify\Iam\Identity\Domain\Exception\InvalidResetToken;
@@ -18,8 +19,13 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
 use SensitiveParameter;
 
 /**
- * Completes a password reset from a selector-verifier link `<id>.<secret>` and an already-hashed new
- * credential (hashing stays in Infrastructure, exactly as {@see CreateUser} receives its credential).
+ * Completes a password reset from a selector-verifier link `<id>.<secret>` and a deferred supplier of the new
+ * hashed credential. Hashing stays in Infrastructure (the HTTP adapter builds the closure, exactly as
+ * {@see CreateUser} receives an already-opaque credential) but is only INVOKED once the token has resolved
+ * live: a dead link must never cost a KDF run, or the unauthenticated endpoint becomes an argon2id
+ * amplification vector — anyone posting garbage tokens would burn tens of ms of CPU per request. The dead
+ * cases stay mutually uniform (they all do the same cheap resolve work); only liveness changes the cost, and
+ * the response reveals liveness anyway.
  *
  * The heart of the flow, and the ordering is load-bearing:
  *   1. Resolve the token opaquely — a malformed, unknown, expired or already-consumed link all raise the SAME
@@ -52,6 +58,10 @@ final readonly class CompletePasswordReset
     }
 
     /**
+     * @param Closure(): HashedPassword $hashNewPassword defers the KDF of the submitted password; invoked only
+     *                                                   after the token resolves live and the identity passes
+     *                                                   the status wall, so dead links stay KDF-free
+     *
      * @throws InvalidResetToken  when the token is malformed, unknown, expired or already consumed (uniform)
      * @throws AccountSuspended   when the identity is suspended between request and complete (403)
      * @throws AccountDeactivated when the identity is deactivated between request and complete (403)
@@ -59,16 +69,27 @@ final readonly class CompletePasswordReset
      * @return string the identity's canonical email, so the HTTP adapter can establish the post-reset session
      *                (programmatic login) without handling the identity aggregate across the boundary
      */
-    public function complete(#[SensitiveParameter] string $token, HashedPassword $newPassword): string
+    public function complete(#[SensitiveParameter] string $token, Closure $hashNewPassword): string
     {
         $resetToken = $this->resolve($token);
         $user = $this->users->findById($resetToken->userId()) ?? throw new InvalidResetToken();
 
-        if (!$user->isActive()) {
-            throw IdentityStatus::SUSPENDED === $user->status() ? new AccountSuspended() : new AccountDeactivated();
-        }
+        // Cheap first sampling of the wall: the common already-walled case is rejected without paying the
+        // KDF or opening a transaction. The authoritative sampling is repeated under the row lock below.
+        $this->wallUnlessActive($user);
 
-        $this->transactionManager->transactional(function () use ($user, $newPassword, $resetToken): void {
+        // The KDF runs outside the transaction (no row lock held for tens of ms); the rare token consumed
+        // between here and the conditional delete below is caught by the consume() affected-rows guard.
+        $newPassword = $hashNewPassword();
+
+        $email = $this->transactionManager->transactional(function () use ($newPassword, $resetToken): string {
+            // Re-sample the status from the LOCKED row: an admin suspension/deactivation committed between
+            // the load above and this transaction must wall the reset — without the lock the check races the
+            // admin write and a walled identity could still complete. The lock also serialises against the
+            // forgot supersede, and the re-read is the fresh row, never the identity map's snapshot.
+            $user = $this->users->findByIdForUpdate($resetToken->userId()) ?? throw new InvalidResetToken();
+            $this->wallUnlessActive($user);
+
             if (!$this->tokens->consume($resetToken)) {
                 throw new InvalidResetToken();
             }
@@ -78,11 +99,30 @@ final readonly class CompletePasswordReset
 
             $this->users->save($user);
             $this->eventBus->publish(...$user->pullDomainEvents());
+
+            return $user->email();
         });
 
         $this->revokeSessions->revoke($resetToken->userId());
 
-        return $user->email();
+        return $email;
+    }
+
+    /**
+     * The post-identity wall (a valid token proves email control, so the reason is graduated, not opaque):
+     * a non-`ACTIVE` identity may not complete a reset, and the token is deliberately NOT consumed — it
+     * stays live for a later attempt if the account is reactivated within its TTL.
+     *
+     * @throws AccountSuspended
+     * @throws AccountDeactivated
+     */
+    private function wallUnlessActive(User $user): void
+    {
+        if ($user->isActive()) {
+            return;
+        }
+
+        throw $user->isSuspended() ? new AccountSuspended() : new AccountDeactivated();
     }
 
     /**

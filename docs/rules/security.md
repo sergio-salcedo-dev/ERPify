@@ -10,6 +10,27 @@
 - Use HTTPS in production
 - Implement CSRF protection
 
+## Pre-identity surfaces (login, invitation accept, forgot/reset)
+- **Constant-time floor:** every pre-identity rejection pays one unit of password-hashing work through the
+  shared `PreIdentityTimingFloor` port before answering, so response latency never correlates with whether an
+  account exists or what state it is in. New pre-identity branches (future magic-link, MFA, …) must pay the
+  same floor. The proof is always a STRUCTURAL test (the work is invoked on every branch) — wall-clock timing
+  assertions are banned as flaky.
+- **No KDF for dead tokens:** on token-consuming endpoints, hash the submitted password only AFTER the token
+  resolves live (a deferred closure built in the HTTP adapter), or a garbage POST becomes an unauthenticated
+  argon2id amplification vector.
+- **Neutral per-target rate limits:** a per-account/per-selector budget must NEVER change the response shape
+  when exhausted — fold saturation into the surface's uniform outcome (forgot keeps its 202 with the work
+  silenced; token endpoints keep the opaque `invalid-token`). Only IP-global limits may answer 429; a
+  per-target 429 is an oracle over which accounts/selectors exist and are under attack.
+- **Token hygiene:** a single-use token travels ONLY in the emailed link and the request body — never in a
+  log (Caddy redacts the `token` query parameter), never in a Messenger transport (token-bearing emails are
+  synchronous best-effort), never left in browser history/`Referer` (token screens send
+  `Referrer-Policy: no-referrer` and strip `?token=` on mount).
+- **Security sender:** user-facing security emails come from `MAILER_SECURITY_FROM` — a monitored, replyable
+  mailbox validated fail-loud outside dev/test (`SecuritySenderAddress`); the operational `MAILER_FROM` may
+  stay no-reply.
+
 ## Security Checklist Maintenance
 - The `PRODUCTION_SECURITY_CHECKLIST.md` file MUST be kept up-to-date at all times
 - When making changes that affect security-related files, I MUST review and update the checklist accordingly

@@ -58,6 +58,20 @@ at-least-once).
 
 Source: [`api/src/Backoffice/Bank/Domain/Event/`](../../api/src/Backoffice/Bank/Domain/Event/BankCreatedDomainEvent.php).
 
+### Iam.Identity (`aggregateType: Iam.Identity`)
+
+The identity lifecycle events are recorded by the `User`/`PasswordResetToken` aggregates and reach the
+`event_store` outbox, but stay **unrouted** until a consumer exists (wire-on-consumer). The one consumed —
+and therefore `async`-routed — event today:
+
+| `eventName` | ver | Producer (use case) | Payload | Consumers |
+|-------------|:---:|---------------------|---------|-----------|
+| `erpify.iam.identity.password-reset-completed` | 1 | `CompletePasswordReset` (recorded by `User::resetPassword()`) | *empty* `[]` (user id in envelope — PII-free by design) | password-changed email |
+
+Its payload is deliberately the aggregate id alone: the reactor resolves the recipient in-module at
+handling time, so nothing secret or personal ever rides the transport, and a user hard-deleted before the
+async send is simply skipped (never resurrected into a mail).
+
 #### `BankSnapshot` — the shared payload
 
 Created and updated carry the same value object so they stay byte-identical in the store; they share
@@ -223,6 +237,12 @@ delivered message — so a missed or duplicated delivery cannot corrupt a read m
 |----------|------|:---:|:---:|:---:|:---:|--------|
 | `RefreshRealtimeOnBankAccountChanged` | reactor | ● | ● | ● | ● | Mercure publish (live only) |
 | `RunProjectionsOnDomainEvent` | trigger | ● | ● | ● | ● | Fires projector catch-up for any event (no BankAccount projector today) |
+
+### Iam.Identity
+
+| Consumer | Kind | password-reset-completed | Effect |
+|----------|------|:---:|--------|
+| `SendEmailOnPasswordResetCompleted` | reactor | ● | Password-changed notification email (no token, no link); idempotent via `(eventId, handler)` claim |
 
 ## Stored event row
 

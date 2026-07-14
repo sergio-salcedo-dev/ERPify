@@ -43,3 +43,26 @@ framework:
             limit: '%env(int:RATE_LIMIT_ANONYMOUS_API_LIMIT)%'
             interval: '%env(RATE_LIMIT_ANONYMOUS_API_INTERVAL)%'
             lock_factory: null
+
+        # `password_recovery_per_email` — per-target budget on POST /forgot-password, keyed by the requested
+        # email. Exhaustion is deliberately INVISIBLE to the caller: the endpoint still answers the uniform
+        # 202 and only the work (token mint + email) is silenced — a per-account 429 would announce which
+        # accounts are under attack (an existence oracle) and let an attacker keep superseding a victim's
+        # legitimate token. Consumed by PasswordRecoveryThrottle at the controller edge, mirroring where
+        # login_throttling and anonymous_api live.
+        password_recovery_per_email:
+            policy: 'sliding_window'
+            limit: '%env(int:RATE_LIMIT_PASSWORD_RECOVERY_PER_EMAIL_LIMIT)%'
+            interval: '%env(RATE_LIMIT_PASSWORD_RECOVERY_PER_EMAIL_INTERVAL)%'
+            lock_factory: null
+
+        # `token_action_per_selector` — per-target budget on the token-consuming endpoints (reset-password,
+        # invitation accept), keyed by the selector half of the presented `<id>.<secret>` link. It caps
+        # brute-forcing the secret of one selector; exhaustion folds into the SAME opaque invalid-token wall
+        # as a dead link, because a per-selector 429 would confirm to an attacker that the selector exists.
+        # Selectors are UUIDs, so reset and accept share the namespace collision-free.
+        token_action_per_selector:
+            policy: 'sliding_window'
+            limit: '%env(int:RATE_LIMIT_TOKEN_ACTION_LIMIT)%'
+            interval: '%env(RATE_LIMIT_TOKEN_ACTION_INTERVAL)%'
+            lock_factory: null

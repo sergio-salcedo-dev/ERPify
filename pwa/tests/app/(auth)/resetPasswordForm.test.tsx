@@ -6,9 +6,11 @@ import {
 } from "@/context/backoffice/user/domain/ResetPasswordOutcome";
 import type { ProblemViolation } from "@/context/shared/error/domain/ProblemDetails";
 
-const params = { search: "" };
+// The mock reads the live jsdom URL so the on-mount query-string strip is
+// observable: after it runs, useSearchParams no longer serves the token and
+// only the screen's captured copy can drive the submit.
 vi.mock("next/navigation", () => ({
-  useSearchParams: () => new URLSearchParams(params.search),
+  useSearchParams: () => new URLSearchParams(window.location.search),
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
 
@@ -44,12 +46,12 @@ beforeEach(() => {
   login.mockClear();
   repoReset.mockClear();
   outcome = { kind: ResetPasswordOutcomeKind.RESET };
-  params.search = `token=${TOKEN}`;
+  window.history.replaceState(null, "", `/reset-password?token=${TOKEN}`);
 });
 
 describe("ResetPasswordForm — token gate", () => {
   it("shows the neutral invalid-link wall and no form when no token is present", () => {
-    params.search = "";
+    window.history.replaceState(null, "", "/reset-password");
     render(<ResetPasswordForm />);
 
     expect(screen.getByTestId("access-wall--invalid-link")).toBeInTheDocument();
@@ -62,6 +64,32 @@ describe("ResetPasswordForm — token gate", () => {
     expect(screen.getByTestId("reset-password-form")).toBeInTheDocument();
     expect(screen.queryByDisplayValue(TOKEN)).not.toBeInTheDocument();
     expect(document.body.textContent ?? "").not.toContain(TOKEN);
+  });
+
+  it("strips the token from the URL on mount while the submit keeps sending it", async () => {
+    render(<ResetPasswordForm />);
+
+    expect(window.location.search).toBe("");
+    expect(window.location.pathname).toBe("/reset-password");
+    expect(screen.getByTestId("reset-password-form")).toBeInTheDocument();
+
+    submitWithPassword("a-strong-password");
+    await waitFor(() =>
+      expect(repoReset).toHaveBeenCalledWith({ token: TOKEN, password: "a-strong-password" }),
+    );
+  });
+
+  it("keeps the captured token across re-renders after the URL strip", async () => {
+    repoReset.mockRejectedValueOnce(new Error("network down"));
+    render(<ResetPasswordForm />);
+    expect(window.location.search).toBe("");
+
+    submitWithPassword("a-strong-password");
+    expect(await screen.findByTestId("reset-password-form__error")).toBeInTheDocument();
+
+    submitWithPassword("a-strong-password");
+    await waitFor(() => expect(repoReset).toHaveBeenCalledTimes(2));
+    expect(repoReset).toHaveBeenLastCalledWith({ token: TOKEN, password: "a-strong-password" });
   });
 });
 
@@ -79,7 +107,7 @@ describe("ResetPasswordForm — reset outcomes", () => {
     expect(screen.queryByTestId("reset-password-form")).not.toBeInTheDocument();
   });
 
-  it("replaces the form with the invalid-link wall on a dead token", async () => {
+  it("replaces the form with the opaque invalid-link wall on a dead token", async () => {
     outcome = { kind: ResetPasswordOutcomeKind.INVALID_LINK };
     render(<ResetPasswordForm />);
     submitWithPassword("a-strong-password");
@@ -87,6 +115,12 @@ describe("ResetPasswordForm — reset outcomes", () => {
     await waitFor(() =>
       expect(screen.getByTestId("access-wall--invalid-link")).toBeInTheDocument(),
     );
+    // The wall collapses every dead-token reason (invalid, expired, consumed)
+    // into one opaque message and always offers the sign-in exit.
+    expect(
+      screen.getByRole("heading", { name: "Este enlace ya no es válido" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Iniciar sesión" })).toBeInTheDocument();
     expect(screen.queryByTestId("reset-password-form")).not.toBeInTheDocument();
     expect(login).not.toHaveBeenCalled();
   });

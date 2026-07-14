@@ -20,6 +20,15 @@ final readonly class FixedClock implements Clock
     {
     }
 
+    /**
+     * Named constructor from an ISO-8601 string, so a test that needs no date arithmetic can freeze the
+     * clock without referencing {@see DateTimeImmutable} itself.
+     */
+    public static function at(string $instant): self
+    {
+        return new self(new DateTimeImmutable($instant));
+    }
+
     #[Override]
     public function now(): DateTimeImmutable
     {

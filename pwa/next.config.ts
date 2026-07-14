@@ -114,6 +114,28 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      // Token-bearing screens receive `?token=<id>.<secret>` in the URL, so no
+      // Referer may leave them at all — even the origin. These entries must sit
+      // AFTER the catch-all: when several sources match, the last value set for
+      // a header key wins.
+      {
+        source: "/accept-invitation",
+        headers: [
+          {
+            key: "Referrer-Policy",
+            value: "no-referrer",
+          },
+        ],
+      },
+      {
+        source: "/reset-password",
+        headers: [
+          {
+            key: "Referrer-Policy",
+            value: "no-referrer",
+          },
+        ],
+      },
     ];
   },
 

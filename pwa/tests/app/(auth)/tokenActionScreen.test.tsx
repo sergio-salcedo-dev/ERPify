@@ -6,9 +6,11 @@ import {
 } from "@/context/backoffice/user/domain/AcceptInvitationOutcome";
 import type { ProblemViolation } from "@/context/shared/error/domain/ProblemDetails";
 
-const params = { search: "" };
+// The mock reads the live jsdom URL so the on-mount query-string strip is
+// observable: after it runs, useSearchParams no longer serves the token and
+// only the screen's captured copy can drive the submit.
 vi.mock("next/navigation", () => ({
-  useSearchParams: () => new URLSearchParams(params.search),
+  useSearchParams: () => new URLSearchParams(window.location.search),
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
 
@@ -44,12 +46,12 @@ beforeEach(() => {
   login.mockClear();
   repoAccept.mockClear();
   outcome = { kind: AcceptInvitationOutcomeKind.ACCEPTED };
-  params.search = `token=${TOKEN}`;
+  window.history.replaceState(null, "", `/accept-invitation?token=${TOKEN}`);
 });
 
 describe("TokenActionScreen — token gate", () => {
   it("shows the neutral invalid-link wall and no form when no token is present", () => {
-    params.search = "";
+    window.history.replaceState(null, "", "/accept-invitation");
     render(<TokenActionScreen />);
 
     expect(screen.getByTestId("access-wall--invalid-link")).toBeInTheDocument();
@@ -62,6 +64,32 @@ describe("TokenActionScreen — token gate", () => {
     expect(screen.getByTestId("accept-invitation-form")).toBeInTheDocument();
     expect(screen.queryByDisplayValue(TOKEN)).not.toBeInTheDocument();
     expect(document.body.textContent ?? "").not.toContain(TOKEN);
+  });
+
+  it("strips the token from the URL on mount while the submit keeps sending it", async () => {
+    render(<TokenActionScreen />);
+
+    expect(window.location.search).toBe("");
+    expect(window.location.pathname).toBe("/accept-invitation");
+    expect(screen.getByTestId("accept-invitation-form")).toBeInTheDocument();
+
+    submitWithPassword("a-strong-password");
+    await waitFor(() =>
+      expect(repoAccept).toHaveBeenCalledWith({ token: TOKEN, password: "a-strong-password" }),
+    );
+  });
+
+  it("keeps the captured token across re-renders after the URL strip", async () => {
+    repoAccept.mockRejectedValueOnce(new Error("network down"));
+    render(<TokenActionScreen />);
+    expect(window.location.search).toBe("");
+
+    submitWithPassword("a-strong-password");
+    expect(await screen.findByTestId("accept-invitation-form__error")).toBeInTheDocument();
+
+    submitWithPassword("a-strong-password");
+    await waitFor(() => expect(repoAccept).toHaveBeenCalledTimes(2));
+    expect(repoAccept).toHaveBeenLastCalledWith({ token: TOKEN, password: "a-strong-password" });
   });
 });
 

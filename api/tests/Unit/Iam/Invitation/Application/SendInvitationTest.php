@@ -9,6 +9,7 @@ use Erpify\Iam\Identity\Application\InviteUser;
 use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
 use Erpify\Iam\Identity\Domain\Enum\Role;
 use Erpify\Iam\Invitation\Application\SendInvitation;
+use Erpify\Iam\Invitation\Application\SendInvitationEmailBestEffort;
 use Erpify\Iam\Invitation\Domain\Enum\InvitationStatus;
 use Erpify\Organization\Membership\Application\GrantMembership;
 use Erpify\Organization\Organization\Domain\Entity\Organization;
@@ -19,6 +20,7 @@ use Erpify\Tests\Unit\Organization\Organization\Application\InMemoryOrganization
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 use Symfony\Component\Validator\ConstraintViolationList;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
@@ -57,7 +59,7 @@ final class SendInvitationTest extends TestCase
             new InviteUser($users, $this->passingValidator()),
             new GrantMembership($memberships, $organizations),
             $invitations,
-            $emailSender,
+            new SendInvitationEmailBestEffort($emailSender, new NullLogger()),
             $eventBus,
             new InlineTransactionManager(),
             new FixedClock(new DateTimeImmutable(self::NOW)),

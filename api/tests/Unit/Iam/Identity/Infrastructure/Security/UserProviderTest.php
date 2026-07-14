@@ -6,13 +6,11 @@ namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security;
 
 use Erpify\Iam\Identity\Infrastructure\Security\SecurityUser;
 use Erpify\Iam\Identity\Infrastructure\Security\UserProvider;
+use Erpify\Tests\Unit\Iam\Identity\Application\CountingPreIdentityTimingFloor;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\PasswordHasher\Hasher\PasswordHasherFactory;
-use Symfony\Component\PasswordHasher\Hasher\PasswordHasherFactoryInterface;
-use Symfony\Component\PasswordHasher\PasswordHasherInterface;
 use Symfony\Component\Security\Core\Exception\UnsupportedUserException;
 use Symfony\Component\Security\Core\Exception\UserNotFoundException;
 use Symfony\Component\Security\Core\User\UserInterface;
@@ -60,24 +58,42 @@ final class UserProviderTest extends TestCase
         $provider->loadUserByIdentifier('   ');
     }
 
-    public function testAnUnknownEmailStillRunsAHashVerificationSoTimingDoesNotLeakExistence(): void
+    public function testAnUnknownEmailStillPaysTheTimingFloorSoLatencyDoesNotLeakExistence(): void
     {
-        $hasher = $this->createMock(PasswordHasherInterface::class);
-        $hasher->expects($this->once())->method('hash')->willReturn('dummy-hash');
-        $hasher->expects($this->once())->method('verify')->with('dummy-hash', $this->anything())->willReturn(false);
-
-        $factory = $this->createMock(PasswordHasherFactoryInterface::class);
-        $factory->expects($this->once())
-            ->method('getPasswordHasher')
-            ->with(SecurityUser::class)
-            ->willReturn($hasher)
-        ;
-
-        $provider = new UserProvider(new InMemoryUserRepository(), $factory);
+        $floor = new CountingPreIdentityTimingFloor();
+        $provider = new UserProvider(new InMemoryUserRepository(), $floor);
 
         $this->expectException(UserNotFoundException::class);
 
-        $provider->loadUserByIdentifier('nobody@erpify.test');
+        try {
+            $provider->loadUserByIdentifier('nobody@erpify.test');
+        } finally {
+            $this->assertSame(1, $floor->invocations);
+        }
+    }
+
+    public function testAMalformedIdentifierStillPaysTheTimingFloor(): void
+    {
+        $floor = new CountingPreIdentityTimingFloor();
+        $provider = new UserProvider(new InMemoryUserRepository(), $floor);
+
+        $this->expectException(UserNotFoundException::class);
+
+        try {
+            $provider->loadUserByIdentifier('   ');
+        } finally {
+            $this->assertSame(1, $floor->invocations);
+        }
+    }
+
+    public function testAKnownUserPaysNoFloorBecauseItsRealCredentialCheckFollows(): void
+    {
+        $floor = new CountingPreIdentityTimingFloor();
+        $provider = new UserProvider(new InMemoryUserRepository(UserMother::create()), $floor);
+
+        $provider->loadUserByIdentifier(UserMother::DEFAULT_EMAIL);
+
+        $this->assertSame(0, $floor->invocations);
     }
 
     public function testRefreshReloadsTheUserFromTheRepository(): void
@@ -109,8 +125,6 @@ final class UserProviderTest extends TestCase
 
     private function provider(InMemoryUserRepository $repository): UserProvider
     {
-        return new UserProvider($repository, new PasswordHasherFactory([
-            SecurityUser::class => ['algorithm' => 'plaintext'],
-        ]));
+        return new UserProvider($repository, new CountingPreIdentityTimingFloor());
     }
 }

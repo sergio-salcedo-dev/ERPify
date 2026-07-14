@@ -224,9 +224,10 @@ you change anything here.
       `AcceptInvitationOriginListener` (403, mirror of the login guard) plus the opaque single-use token; the
       **stateless double-submit token** (`framework.csrf_protection.stateless_token_ids: [invitation_accept]` +
       `#[IsCsrfTokenValid]`, session-free, same-origin) is the second layer, with `check_header` off/deferred.
-      Password hashing is Infrastructure (the DTO enforces the 8..128 policy at the boundary). Hardening
-      (constant-time, `Referrer-Policy: no-referrer`, URL strip, token redaction in logs, rate-limit accept,
-      non-`no-reply` sender) is **deferred to II-8**.
+      Password hashing is Infrastructure (the DTO enforces the 8..128 policy at the boundary) and is **deferred
+      behind the token check**: a dead accept link never pays an argon2id run (no unauthenticated KDF
+      amplification). The accept is capped **per selector** (`token_action_per_selector` limiter); exhaustion
+      folds into the same opaque `invalid-token`, never a per-selector 429.
 - [ ] **Password reset (`POST /api/v1/backoffice/forgot-password` · `/reset-password`):** the credential-recovery
       surface, mirroring the invitation flow. Forgot answers a **uniform 202** for every email/identity state
       (only an `ACTIVE` identity mints a token, and that work is never observable to the anonymous requester) — no
@@ -239,9 +240,27 @@ you change anything here.
       the credential, clears the lockout, and **revokes every session** (best-effort teardown; a store outage is
       swallowed because the credential change de-authenticates natively). A non-`ACTIVE` identity hits the
       post-identity wall (403). Same-origin is guarded by `PasswordResetOriginListener` (mirror of the login
-      guard). Session mint (auto-login + `migrate(true)` regeneration, reusing the invitation wiring) and the
-      stateless CSRF token id are wired in the D1/D2 follow-on of this same PR. Hardening (constant-time timing,
-      per-target rate-limit, token TTL sweep, GDPR erase hook) is **deferred to II-8**.
+      guard); session mint (auto-login + `migrate(true)` regeneration) and the stateless CSRF token id share the
+      invitation wiring. The user row is re-read **under a pessimistic lock** inside the completing transaction:
+      concurrent forgots serialise their supersede (only the latest token lives) and an admin suspension committed
+      between load and commit still walls the reset (TOCTOU re-check).
+- [ ] **Pre-identity cross-cutting hardening (login · invitation accept · forgot/reset):**
+      every pre-identity rejection pays the same **constant-time floor** (`PreIdentityTimingFloor`, one password
+      verification of the firewall's own hasher) — malformed/unknown login identifiers, the `INVITED` pre-auth
+      rejection and **every** forgot outcome, so latency correlates with nothing (SI-12). A dead reset/accept
+      link never runs the KDF (hashing is deferred until the token proves live). Token hygiene (SI-13):
+      `Referrer-Policy: no-referrer` on `/accept-invitation` + `/reset-password`, the client strips `?token=`
+      from the URL/history on mount, and Caddy's access log **redacts the `token` query parameter** (gate:
+      `CaddyfileAccessLogRedactionGateTest`). Recovery rate limits are **neutral per target**: forgot is capped
+      per email (`password_recovery_per_email`) and a saturated target still gets the uniform 202 with the work
+      silenced (plus the timing floor); token endpoints are capped per selector; only IP-global limits may 429.
+      Security emails come from `MAILER_SECURITY_FROM` (monitored, replyable — a blank/no-reply value **fails
+      loudly** outside dev/test) and refuse to emit a non-HTTPS link outside dev/test; token-bearing emails stay
+      **synchronous best-effort** (never routed through a Messenger transport, which would serialise the raw
+      token); only the token-free password-changed notification rides the async reactor. Retention: expired
+      reset tokens are swept by `identity:password-reset-tokens:prune` (schedule it in prod cron) and
+      `identity:gdpr:erase-subject` hard-deletes an identity plus its reset tokens with a `GDPR_SUBJECT_ERASED`
+      audit entry.
 - [ ] **Session firewall (`security.yaml`, `main`):** `json_login` over an **httpOnly** session cookie
       (`SameSite=Lax`, `Secure=auto`) — no JWT/token in the client. A failed login flows through the RFC 9457
       pipeline as a **401 `unauthenticated`** (never a manual `JsonResponse`); the message is **normalised to a

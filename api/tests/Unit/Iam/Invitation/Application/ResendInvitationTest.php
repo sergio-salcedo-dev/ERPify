@@ -6,6 +6,7 @@ namespace Erpify\Tests\Unit\Iam\Invitation\Application;
 
 use DateTimeImmutable;
 use Erpify\Iam\Invitation\Application\ResendInvitation;
+use Erpify\Iam\Invitation\Application\SendInvitationEmailBestEffort;
 use Erpify\Iam\Invitation\Domain\Entity\Invitation;
 use Erpify\Iam\Invitation\Domain\Enum\InvitationStatus;
 use Erpify\Iam\Invitation\Domain\Event\InvitationResent;
@@ -16,6 +17,7 @@ use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 
 /**
  * Reissuing a live invitation with a fresh token, invalidating the previous one and re-delivering it. The
@@ -79,7 +81,7 @@ final class ResendInvitationTest extends TestCase
         return new ResendInvitation(
             $invitations,
             $users,
-            $emailSender,
+            new SendInvitationEmailBestEffort($emailSender, new NullLogger()),
             $eventBus,
             new InlineTransactionManager(),
             new FixedClock(new DateTimeImmutable(self::NOW)),

@@ -6,8 +6,6 @@ namespace Erpify\Iam\Identity\Application;
 
 use Erpify\Iam\Identity\Domain\Email;
 use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
-use Erpify\Iam\Identity\Domain\Entity\User;
-use Erpify\Iam\Identity\Domain\Exception\InvalidEmail;
 use Erpify\Iam\Identity\Domain\Repository\PasswordResetTokenRepository;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Shared\Clock\Domain\Clock;
@@ -23,9 +21,9 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * to the anonymous requester. So the response cannot be used to enumerate accounts (SI-12).
  *
  * Only an `ACTIVE` identity mints a {@see SingleUseToken}, supersedes any pending token, persists the digest
- * and records {@see PasswordResetRequested}; every other case returns silently having touched nothing. The
- * timing differential between the write path and the silent read path is out of scope here (a constant-time
- * floor is a separate cross-cutting concern) — this use case guarantees an identical status and shape.
+ * and records {@see PasswordResetRequested}; every other case returns silently having touched nothing. Every
+ * outcome pays the shared {@see PreIdentityTimingFloor} up front, so the silent read path cannot be told apart
+ * from the write path by latency either — status, shape and timing all answer uniformly.
  */
 final readonly class RequestPasswordReset
 {
@@ -42,20 +40,26 @@ final readonly class RequestPasswordReset
         private TransactionManager $transactionManager,
         private Clock $clock,
         private SendPasswordResetEmailBestEffort $emailSender,
+        private PreIdentityTimingFloor $timingFloor,
     ) {
     }
 
     public function request(string $email): void
     {
-        try {
-            $canonicalEmail = Email::from($email);
-        } catch (InvalidEmail) {
+        // why: without a floor the silent branches (malformed, unknown, non-ACTIVE) answer in the time of one
+        // indexed read while the ACTIVE branch pays a multi-write transaction — a latency oracle over account
+        // existence. The KDF floor (tens of ms) is paid by every branch and swamps that sub-ms differential.
+        $this->timingFloor->equalise();
+
+        $canonicalEmail = Email::tryFrom($email);
+
+        if (!$canonicalEmail instanceof Email) {
             return;
         }
 
         $user = $this->users->findByEmail($canonicalEmail);
 
-        if (!$user instanceof User || !$user->isActive()) {
+        if (!$user instanceof \Erpify\Iam\Identity\Domain\Entity\User || !$user->isActive()) {
             return;
         }
 
@@ -69,13 +73,28 @@ final readonly class RequestPasswordReset
         $generated = SingleUseToken::mint($this->clock->now()->modify(self::TOKEN_TTL));
         $token = PasswordResetToken::issue($tokenId, $userId, $generated->token);
 
-        $this->transactionManager->transactional(function () use ($userId, $token): void {
+        $issued = $this->transactionManager->transactional(function () use ($userId, $token): bool {
+            // The user row lock is the supersede mutex: two concurrent forgots would otherwise interleave
+            // their delete+insert and leave BOTH tokens live. Serialised on the lock, the loser waits and
+            // its own supersede then retires the winner's token — only the latest request stays valid. The
+            // uniform read above ran unlocked (outside this transaction a lock guards nothing), so the row
+            // is re-acquired here; gone by now means a hard-deleted user — nothing to issue.
+            if (!$this->users->findByIdForUpdate($userId) instanceof \Erpify\Iam\Identity\Domain\Entity\User) {
+                return false;
+            }
+
             $this->tokens->deleteAllForUser($userId);
             $this->tokens->save($token);
 
             // The "reset requested" event is recorded by the token aggregate at issue() — publish it from there.
             $this->eventBus->publish(...$token->pullDomainEvents());
+
+            return true;
         });
+
+        if (!$issued) {
+            return;
+        }
 
         // After commit: the reset link's plaintext token (`<id>.<secret>`) is delivered exactly once and never
         // touches the transaction, an event or a log. The send is best-effort — a mailer fault is swallowed so

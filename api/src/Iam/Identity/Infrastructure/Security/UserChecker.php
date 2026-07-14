@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Infrastructure\Security;
 
+use Erpify\Iam\Identity\Application\PreIdentityTimingFloor;
 use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
 use Erpify\Shared\Clock\Domain\Clock;
 use Override;
@@ -25,8 +26,10 @@ use Symfony\Component\Security\Core\User\UserInterface;
  */
 final readonly class UserChecker implements UserCheckerInterface
 {
-    public function __construct(private Clock $clock)
-    {
+    public function __construct(
+        private Clock $clock,
+        private PreIdentityTimingFloor $timingFloor,
+    ) {
     }
 
     #[Override]
@@ -37,6 +40,11 @@ final readonly class UserChecker implements UserCheckerInterface
         }
 
         if (IdentityStatus::INVITED === $user->status()) {
+            // why: an INVITED identity is rejected before any password verification (it has no credential yet),
+            // so without a floor this branch answers measurably faster than a wrong-password failure — a
+            // pre-identity state oracle. Pay the same hashing work the equalised not-found path pays.
+            $this->timingFloor->equalise();
+
             throw new InvitedAccountException();
         }
     }

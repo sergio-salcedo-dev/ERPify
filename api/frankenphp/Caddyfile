@@ -19,10 +19,12 @@
 {$SERVER_NAME:localhost} {
 	log {
 		{$CADDY_SERVER_LOG_OPTIONS}
-		# Redact the authorization query parameter that can be set by Mercure
+		# Redact secret-bearing query parameters: `authorization` can be set by Mercure, and `token` carries
+		# the single-use invitation/reset secret (`<id>.<secret>`) — neither may land in the access log.
 		format filter {
 			request>uri query {
 				replace authorization REDACTED
+				replace token REDACTED
 			}
 		}
 	}

@@ -23,5 +23,13 @@ interface UserRepository
 
     public function findById(string $id): ?User;
 
+    /**
+     * Loads the aggregate under a pessimistic write lock (`SELECT … FOR UPDATE`), re-read from the locked row —
+     * never a cached snapshot. Callable only inside a transaction; the lock is the mutex that serialises the
+     * password-reset writers on the user row: concurrent forgot requests supersede each other one at a time,
+     * and a completion re-checks the identity's status against what an admin may have just committed.
+     */
+    public function findByIdForUpdate(string $id): ?User;
+
     public function findByEmail(Email $email): ?User;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useId, useRef, useState } from "react";
+import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useZodForm } from "@/context/shared/validation/infrastructure";
 import {
@@ -28,15 +28,24 @@ const PASSWORD_CHANGED_TITLE = "Contraseña actualizada. Hemos cerrado tus otras
 
 /**
  * Sets a new credential from the emailed reset link. The opaque token is read
- * from `?token=` and passed straight to the use case — never parsed, stored, or
- * rendered. A missing or dead token collapses to the neutral invalid-link wall
- * (indistinguishable from every other dead-token reason); a suspended/deactivated
- * account shows the matching wall; a successful reset signs the user in and hands
- * off to the {@link SecuritySignal} success surface (which reports that other
- * sessions were closed).
+ * once from `?token=` and passed straight to the use case — never parsed,
+ * persisted, or rendered; the query string is then stripped from the address
+ * bar so the token survives only in memory. A missing or dead token collapses
+ * to the neutral invalid-link wall (indistinguishable from every other
+ * dead-token reason); a suspended/deactivated account shows the matching wall;
+ * a successful reset signs the user in and hands off to the
+ * {@link SecuritySignal} success surface (which reports that other sessions
+ * were closed).
  */
 export function ResetPasswordForm() {
-  const token = useSearchParams().get("token");
+  const searchParams = useSearchParams();
+  // Captured in state so the token outlives the URL strip below.
+  const [token] = useState(() => searchParams.get("token"));
+  // Drop the query string from the address bar and history entry so the token
+  // cannot linger in browser history or leak through a Referer header.
+  useEffect(() => {
+    window.history.replaceState(null, "", window.location.pathname);
+  }, []);
   const { login } = useSession();
   const online = useOnlineStatus();
   const purposeId = useId();

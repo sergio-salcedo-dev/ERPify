@@ -28,7 +28,7 @@ final readonly class ResendInvitation
     public function __construct(
         private InvitationRepository $invitations,
         private UserRepository $users,
-        private InvitationEmailSender $emailSender,
+        private SendInvitationEmailBestEffort $emailSender,
         private EventBus $eventBus,
         private TransactionManager $transactionManager,
         private Clock $clock,

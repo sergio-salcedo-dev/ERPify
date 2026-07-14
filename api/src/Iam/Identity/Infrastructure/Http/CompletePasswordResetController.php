@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Erpify\Iam\Identity\Infrastructure\Http;
 
 use Erpify\Iam\Identity\Application\CompletePasswordReset;
+use Erpify\Iam\Identity\Domain\Exception\InvalidResetToken;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher;
+use Erpify\Iam\Identity\Infrastructure\Security\PasswordRecoveryThrottle;
 use Erpify\Iam\Identity\Infrastructure\Security\UserProvider;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\Response;
@@ -15,10 +17,10 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsCsrfTokenValid;
 
 /**
- * The reset-password endpoint. Hashes the new credential here — hashing is an Infrastructure concern, so the
- * use case receives an already-opaque {@see HashedPassword} (as {@see \Erpify\Iam\Identity\Application\
- * CreateUser} does); paying the hash before the use case also keeps the credential cost uniform across valid
- * and dead tokens. A dead token → 400 `invalid-token`; a suspended / deactivated identity → 403.
+ * The reset-password endpoint. Hashing is an Infrastructure concern, so it stays here — but wrapped in a
+ * deferred supplier the use case only invokes once the token has resolved live, so a dead link never costs a
+ * KDF run (an unauthenticated argon2id per garbage POST would be a CPU-amplification vector). A dead token →
+ * 400 `invalid-token`; a suspended / deactivated identity → 403.
  *
  * On success it establishes the session: a `PUBLIC_ACCESS` route INSIDE the `main` firewall (like `/login` and
  * the invitation accept), so {@see Security::login()} resolves the firewall and reuses the established login
@@ -46,14 +48,21 @@ final readonly class CompletePasswordResetController
         private PasswordHasher $passwordHasher,
         private UserProvider $userProvider,
         private Security $security,
+        private PasswordRecoveryThrottle $throttle,
     ) {
     }
 
     public function __invoke(#[MapRequestPayload] ResetPasswordRequest $request): Response
     {
+        // Per-selector brute-force budget, consumed before any work: exhaustion folds into the SAME opaque
+        // invalid-token wall as a dead link — a per-selector 429 would confirm the selector exists.
+        if (!$this->throttle->allowCompletion(\explode('.', $request->token, 2)[0])) {
+            throw new InvalidResetToken();
+        }
+
         $email = $this->completePasswordReset->complete(
             $request->token,
-            HashedPassword::fromHash($this->passwordHasher->hash($request->password)),
+            fn (): HashedPassword => HashedPassword::fromHash($this->passwordHasher->hash($request->password)),
         );
 
         // Post-commit: authenticate the identity with the just-set credential so LoginSuccessEvent fires once,
