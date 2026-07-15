@@ -34,19 +34,19 @@ final readonly class SymfonyInvitationEmailSender implements InvitationEmailSend
     {
         return new SecurityLinkEmailContent(
             path: '/accept-invitation',
-            subject: 'Tu invitación a ERPify',
+            subject: 'Your ERPify invitation',
             textLead: [
-                'Te han invitado a ERPify.',
+                'You have been invited to ERPify.',
                 '',
-                'Abre este enlace para definir tu contraseña y entrar:',
+                'Open this link to set your password and sign in:',
             ],
             textTrailer: [
-                'Si no esperabas esta invitación, puedes ignorar este mensaje.',
+                'If you were not expecting this invitation, you can ignore this message.',
             ],
-            htmlLead: 'Te han invitado a <strong>ERPify</strong>.',
-            htmlDetail: 'Define tu contraseña y entra en tu cuenta con un solo paso.',
-            ctaLabel: 'Aceptar invitación',
-            htmlFootnote: 'Si no esperabas esta invitación, puedes ignorar este mensaje.',
+            htmlLead: 'You have been invited to <strong>ERPify</strong>.',
+            htmlDetail: 'Set your password and access your account in a single step.',
+            ctaLabel: 'Accept invitation',
+            htmlFootnote: 'If you were not expecting this invitation, you can ignore this message.',
         );
     }
 }

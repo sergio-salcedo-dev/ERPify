@@ -27,7 +27,7 @@ final class SymfonyPasswordChangedEmailSenderTest extends TestCase
     {
         $email = $this->send();
 
-        $this->assertSame('Tu contraseña de ERPify ha cambiado', $email->getSubject());
+        $this->assertSame('Your ERPify password has changed', $email->getSubject());
         $this->assertSame([self::FROM], $this->addresses($email->getFrom()));
         $this->assertSame([self::RECIPIENT], $this->addresses($email->getTo()));
     }
@@ -40,9 +40,9 @@ final class SymfonyPasswordChangedEmailSenderTest extends TestCase
 
         $this->assertIsString($text);
         $this->assertIsString($html);
-        $this->assertStringContainsString('Tu contraseña de ERPify ha cambiado.', $text);
-        $this->assertStringContainsString('contacta de inmediato con ' . self::FROM, $text);
-        $this->assertStringContainsString('Cerramos todas tus sesiones abiertas por seguridad.', $html);
+        $this->assertStringContainsString('Your ERPify password has changed.', $text);
+        $this->assertStringContainsString('contact ' . self::FROM . ' immediately', $text);
+        $this->assertStringContainsString('We signed out all your open sessions for security.', $html);
         // A notification, not an action email: no CTA, no link, no token — which is why it may ride the
         // async transport while the invitation/reset emails must not. (The shared chrome's <style> block
         // still names .erpify-btn; the invariant is that no anchor/button ELEMENT is rendered.)
@@ -55,7 +55,7 @@ final class SymfonyPasswordChangedEmailSenderTest extends TestCase
         $html = $this->send()->getHtmlBody();
 
         $this->assertIsString($html);
-        $this->assertStringContainsString('<html lang="es">', $html);
+        $this->assertStringContainsString('<html lang="en">', $html);
         $this->assertStringContainsString('@media (prefers-color-scheme: dark)', $html);
         $this->assertStringContainsString(
             "font-family:-apple-system,system-ui,'Segoe UI',Roboto,sans-serif",

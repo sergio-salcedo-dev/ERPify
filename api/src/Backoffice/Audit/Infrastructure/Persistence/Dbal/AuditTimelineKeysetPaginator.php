@@ -39,8 +39,8 @@ use UnexpectedValueException;
  *   - `before` is contained here (invert the scan + re-reverse in memory); the page contract never
  *     sees it. COUNT and the synthetic "go-to-date" cursor are intentionally omitted (not needed).
  *
- * Deuda D (registrada): cuando mantener este orquestador y el ORM empiece a costar, extraer el
- * algoritmo a un núcleo agnóstico de persistencia con un puerto fetch/position.
+ * Debt D (tracked): when maintaining this orchestrator alongside the ORM starts to cost, extract the
+ * algorithm into a persistence-agnostic core behind a fetch/position port.
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
