@@ -14,13 +14,13 @@ describe("ConnectivityButton", () => {
     expect(button).not.toHaveAttribute("aria-busy");
   });
 
-  it("shows «Enviando…», marks aria-busy, and disables while in flight (blocks double submit)", () => {
+  it("shows «Sending…», marks aria-busy, and disables while in flight (blocks double submit)", () => {
     render(
       <ConnectivityButton loading testId="cta">
         Activar cuenta
       </ConnectivityButton>,
     );
-    const button = screen.getByRole("button", { name: "Enviando…" });
+    const button = screen.getByRole("button", { name: "Sending…" });
     expect(button).toBeDisabled();
     expect(button).toHaveAttribute("aria-busy", "true");
   });

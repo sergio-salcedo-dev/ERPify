@@ -54,15 +54,6 @@ const RECOVER_ACTION: AccessWallAction = {
   title: "Recover access to your account",
 };
 
-// The invitation-accept surface is Spanish (design spine), so its wall carries
-// its own Spanish action stack rather than reusing the English SIGN_IN_ACTION.
-const SIGN_IN_ES_ACTION: AccessWallAction = {
-  testId: "sign-in",
-  href: Routes.LOGIN,
-  label: "Iniciar sesión",
-  title: "Volver a la página de inicio de sesión",
-};
-
 // No self-service "request invitation" route exists in this single-tenant,
 // invitation-first system — a new invitation is minted by an administrator. The
 // action points to the public landing (the entry point where a locked-out user
@@ -70,15 +61,15 @@ const SIGN_IN_ES_ACTION: AccessWallAction = {
 const REQUEST_INVITATION_ACTION: AccessWallAction = {
   testId: "request-invitation",
   href: Routes.HOME,
-  label: "Solicitar nueva invitación",
-  title: "Solicitar una nueva invitación",
+  label: "Request a new invitation",
+  title: "Request a new invitation",
 };
 
 const REQUEST_RESET_LINK_ACTION: AccessWallAction = {
   testId: "request-reset-link",
   href: Routes.FORGOT_PASSWORD,
-  label: "Solicitar enlace nuevo",
-  title: "Solicitar un nuevo enlace de restablecimiento",
+  label: "Request a new link",
+  title: "Request a new reset link",
 };
 
 // Neutral, non-enumerating copy: a wall is not an error, so the tone stays muted
@@ -110,20 +101,20 @@ const COPY: Record<AccessWallVariant, AccessWallCopy> = {
   },
   [AccessWallVariant.INVALID_LINK]: {
     icon: Link2Off,
-    status: "Enlace no válido",
-    title: "Este enlace ya no es válido",
-    description: "Solicita una nueva invitación a tu administrador para continuar.",
-    actions: [SIGN_IN_ES_ACTION, REQUEST_INVITATION_ACTION],
+    status: "Invalid link",
+    title: "This link is no longer valid",
+    description: "Ask your administrator for a new invitation to continue.",
+    actions: [SIGN_IN_ACTION, REQUEST_INVITATION_ACTION],
   },
   // Same icon/status/title as INVALID_LINK on purpose: the opacity contract protects WHY the link
   // died (used/expired/unknown are one wall), not WHICH flow it belongs to — the URL already names
   // the flow. Only the exit differs: a reset link is self-service, an invitation is not.
   [AccessWallVariant.INVALID_RESET_LINK]: {
     icon: Link2Off,
-    status: "Enlace no válido",
-    title: "Este enlace ya no es válido",
-    description: "Puedes solicitar un enlace nuevo desde «¿Has olvidado tu contraseña?».",
-    actions: [SIGN_IN_ES_ACTION, REQUEST_RESET_LINK_ACTION],
+    status: "Invalid link",
+    title: "This link is no longer valid",
+    description: "You can request a new link to reset your password.",
+    actions: [SIGN_IN_ACTION, REQUEST_RESET_LINK_ACTION],
   },
 };
 

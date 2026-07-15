@@ -4,7 +4,7 @@ import { WifiOff } from "lucide-react";
 import { cn } from "@/components/cn";
 
 /** Warning copy shown when the browser reports no connection. */
-const OFFLINE_MESSAGE = "Sin conexión. Reintenta cuando recuperes señal.";
+const OFFLINE_MESSAGE = "No connection. Try again when you're back online.";
 
 /**
  * In-form band, mounted above the submit button while the browser is offline.

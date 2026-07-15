@@ -118,9 +118,9 @@ export function TokenActionScreen() {
       aria-describedby={purposeId}
       data-testid="accept-invitation-form"
     >
-      <h1 className="text-foreground text-xl font-semibold">Crea tu contraseña</h1>
+      <h1 className="text-foreground text-xl font-semibold">Create your password</h1>
       <p id={purposeId} className="text-muted-foreground text-sm">
-        Elige una contraseña para activar tu cuenta y empezar a trabajar.
+        Choose a password to activate your account and get started.
       </p>
       {requestFailed ? (
         <p
@@ -128,10 +128,10 @@ export function TokenActionScreen() {
           className="text-danger-strong text-sm"
           data-testid="accept-invitation-form__error"
         >
-          No hemos podido completar la operación. Inténtalo de nuevo.
+          Something went wrong. Please try again.
         </p>
       ) : null}
-      <FormField name={PASSWORD_FIELD} label="Contraseña" required error={errors.password?.message}>
+      <FormField name={PASSWORD_FIELD} label="Password" required error={errors.password?.message}>
         <PasswordInput
           autoComplete="new-password"
           defaultRevealed
@@ -146,7 +146,7 @@ export function TokenActionScreen() {
         disabled={!online}
         testId="accept-invitation-form__submit"
       >
-        Activar cuenta
+        Activate account
       </ConnectivityButton>
     </form>
   );
