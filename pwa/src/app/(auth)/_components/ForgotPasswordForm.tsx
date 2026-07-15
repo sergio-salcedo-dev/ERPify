@@ -19,7 +19,7 @@ import { OfflineNotice } from "@/context/shared/connectivity/infrastructure/ui/O
 
 const FORGOT_REPOSITORY_KEY = "BackOfficeForgotPasswordRepository";
 const EMAIL_FIELD = "email";
-const BACK_TO_SIGN_IN = "Volver a iniciar sesión";
+const BACK_TO_SIGN_IN = "Back to sign in";
 
 /**
  * Requests a password-reset link. The endpoint answers a uniform 202 for every
@@ -66,11 +66,10 @@ export function ForgotPasswordForm() {
           tabIndex={-1}
           className="text-foreground text-xl font-semibold tracking-tight outline-none"
         >
-          Revisa tu correo
+          Check your email
         </h1>
         <p className="text-muted-foreground text-sm leading-relaxed">
-          Si esa dirección corresponde a una cuenta, te hemos enviado un enlace para restablecer tu
-          contraseña.
+          If that address matches an account, we&apos;ve sent you a link to reset your password.
         </p>
         <div className="text-sm">
           <Link
@@ -87,9 +86,9 @@ export function ForgotPasswordForm() {
 
   return (
     <form onSubmit={onSubmit} className="space-y-4" noValidate data-testid="forgot-password-form">
-      <h1 className="text-foreground text-xl font-semibold">Restablece tu contraseña</h1>
+      <h1 className="text-foreground text-xl font-semibold">Reset your password</h1>
       <p className="text-muted-foreground text-sm">
-        Introduce tu correo y te enviaremos un enlace para restablecerla.
+        Enter your email and we&apos;ll send you a link to reset it.
       </p>
       {requestFailed ? (
         <p
@@ -97,15 +96,10 @@ export function ForgotPasswordForm() {
           className="text-danger-strong text-sm"
           data-testid="forgot-password-form__error"
         >
-          No hemos podido completar la operación. Inténtalo de nuevo.
+          Something went wrong. Please try again.
         </p>
       ) : null}
-      <FormField
-        name={EMAIL_FIELD}
-        label="Correo electrónico"
-        required
-        error={errors.email?.message}
-      >
+      <FormField name={EMAIL_FIELD} label="Email" required error={errors.email?.message}>
         <Input
           type="email"
           autoComplete="email"
@@ -119,7 +113,7 @@ export function ForgotPasswordForm() {
         disabled={!online}
         testId="forgot-password-form__submit"
       >
-        Enviar enlace
+        Send link
       </ConnectivityButton>
       <div className="text-sm">
         <Link href={safeHref(Routes.LOGIN)} className="text-brand">

@@ -24,7 +24,7 @@ import { OfflineNotice } from "@/context/shared/connectivity/infrastructure/ui/O
 
 const RESET_REPOSITORY_KEY = "BackOfficeResetPasswordRepository";
 const PASSWORD_FIELD = "password";
-const PASSWORD_CHANGED_TITLE = "Contraseña actualizada. Hemos cerrado tus otras sesiones abiertas.";
+const PASSWORD_CHANGED_TITLE = "Password updated. We've signed out your other open sessions.";
 
 /**
  * Sets a new credential from the emailed reset link. The opaque token is read
@@ -153,9 +153,9 @@ export function ResetPasswordForm() {
       aria-describedby={purposeId}
       data-testid="reset-password-form"
     >
-      <h1 className="text-foreground text-xl font-semibold">Elige una nueva contraseña</h1>
+      <h1 className="text-foreground text-xl font-semibold">Choose a new password</h1>
       <p id={purposeId} className="text-muted-foreground text-sm">
-        Crea una contraseña nueva para recuperar el acceso a tu cuenta.
+        Create a new password to regain access to your account.
       </p>
       {requestFailed ? (
         <p
@@ -163,12 +163,12 @@ export function ResetPasswordForm() {
           className="text-danger-strong text-sm"
           data-testid="reset-password-form__error"
         >
-          No hemos podido completar la operación. Inténtalo de nuevo.
+          Something went wrong. Please try again.
         </p>
       ) : null}
       <FormField
         name={PASSWORD_FIELD}
-        label="Nueva contraseña"
+        label="New password"
         required
         error={errors.password?.message}
       >
@@ -186,7 +186,7 @@ export function ResetPasswordForm() {
         disabled={!online}
         testId="reset-password-form__submit"
       >
-        Actualizar contraseña
+        Update password
       </ConnectivityButton>
     </form>
   );

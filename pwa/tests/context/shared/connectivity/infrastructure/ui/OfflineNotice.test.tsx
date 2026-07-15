@@ -8,7 +8,7 @@ describe("OfflineNotice", () => {
 
     const notice = screen.getByRole("status");
     expect(notice).toHaveAttribute("aria-live", "polite");
-    expect(notice).toHaveTextContent("Sin conexión. Reintenta cuando recuperes señal.");
+    expect(notice).toHaveTextContent("No connection. Try again when you're back online.");
     expect(screen.getByTestId("offline")).toBe(notice);
   });
 });

@@ -15,7 +15,7 @@ vi.mock("@/context/shared/dependency-injection/infrastructure/Container", () => 
 import { ForgotPasswordForm } from "@/app/(auth)/_components/ForgotPasswordForm";
 
 const CONFIRMATION =
-  "Si esa dirección corresponde a una cuenta, te hemos enviado un enlace para restablecer tu contraseña.";
+  "If that address matches an account, we've sent you a link to reset your password.";
 
 function submitWithEmail(email: string): void {
   fireEvent.change(screen.getByTestId("forgot-password-form__email"), {
@@ -75,7 +75,7 @@ describe("ForgotPasswordForm", () => {
     submitWithEmail("not-an-email");
 
     await waitFor(() =>
-      expect(screen.getByText("Introduce un correo electrónico válido.")).toBeInTheDocument(),
+      expect(screen.getByText("Enter a valid email address.")).toBeInTheDocument(),
     );
     expect(repoRequest).not.toHaveBeenCalled();
   });

@@ -10,7 +10,7 @@ import { cn } from "@/components/cn";
  * changes under assistive tech. The pressed state is carried by `aria-pressed`,
  * not by rewording the label.
  */
-const TOGGLE_LABEL = "Mostrar/Ocultar contraseña";
+const TOGGLE_LABEL = "Show/hide password";
 
 interface PasswordInputProps extends Omit<ComponentProps<"input">, "type"> {
   /** Test id for the reveal toggle button (the input keeps the spread `data-testid`). */

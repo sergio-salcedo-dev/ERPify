@@ -8,14 +8,14 @@ describe("SecuritySignal", () => {
 
     const headings = screen.getAllByRole("heading", { level: 1 });
     expect(headings).toHaveLength(1);
-    expect(headings[0]).toHaveTextContent("Invitación aceptada. Ya puedes empezar a trabajar.");
+    expect(headings[0]).toHaveTextContent("Invitation accepted. You're ready to get started.");
     expect(headings[0]).toHaveFocus();
   });
 
   it("offers a single in-app primary action into the ERP", () => {
     render(<SecuritySignal testId="sig" />);
 
-    const enter = screen.getByRole("link", { name: "Entrar" });
+    const enter = screen.getByRole("link", { name: "Enter" });
     expect(enter).toHaveAttribute("href", "/backoffice");
     expect(enter).toHaveAttribute("data-testid", "sig__enter");
   });

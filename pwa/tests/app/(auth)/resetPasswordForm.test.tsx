@@ -102,7 +102,7 @@ describe("ResetPasswordForm — reset outcomes", () => {
     expect(repoReset).toHaveBeenCalledWith({ token: TOKEN, password: "a-strong-password" });
     expect(login).toHaveBeenCalledTimes(1);
     expect(
-      screen.getByText("Contraseña actualizada. Hemos cerrado tus otras sesiones abiertas."),
+      screen.getByText("Password updated. We've signed out your other open sessions."),
     ).toBeInTheDocument();
     expect(screen.queryByTestId("reset-password-form")).not.toBeInTheDocument();
   });
@@ -119,10 +119,10 @@ describe("ResetPasswordForm — reset outcomes", () => {
     // into one opaque message and always offers the sign-in exit; the reset
     // flavour additionally points at the self-service forgot-password path.
     expect(
-      screen.getByRole("heading", { name: "Este enlace ya no es válido" }),
+      screen.getByRole("heading", { name: "This link is no longer valid" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Iniciar sesión" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Solicitar enlace nuevo" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Sign in" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Request a new link" })).toHaveAttribute(
       "href",
       "/forgot-password",
     );
