@@ -11,7 +11,7 @@ use Erpify\Shared\Search\Domain\SearchCriteria;
 /**
  * Read-side port over the append-only `audit_log` table: a keyset-paginated, filterable timeline
  * for investigation. There is deliberately no write counterpart here — Backoffice/Audit consumes
- * auditoría, the writer lives in `Shared/Audit`.
+ * the audit trail; the writer lives in `Shared/Audit`.
  *
  * Returns the keyset {@see Page} with OPAQUE cursors; link materialization is the responder's job.
  */

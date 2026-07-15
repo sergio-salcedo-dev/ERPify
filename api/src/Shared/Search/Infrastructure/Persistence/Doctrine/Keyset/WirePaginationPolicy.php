@@ -8,7 +8,7 @@ namespace Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset;
  * Explicit configuration for the wire (HTTP) pagination policy: page-size
  * default and ceiling, boundary semantics and whether cursors are emitted.
  *
- * Kernel-único + policy-scoped configuration (ADR Process Patterns): the
+ * Kernel-only + policy-scoped configuration (ADR Process Patterns): the
  * {@see KeysetPredicateBuilder} is never shared "without context" — each policy
  * hands it explicit configuration, so a wire/batch divergence that tests would
  * miss cannot creep in through accidental reuse.

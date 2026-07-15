@@ -24,7 +24,7 @@ use InvalidArgumentException;
  * root alias) and generated parameter names are interpolated; every boundary
  * value travels as a bound parameter.
  *
- * Kernel-único: the builder holds no policy state. Each caller passes its
+ * Kernel-only: the builder holds no policy state. Each caller passes its
  * {@see WirePaginationPolicy} explicitly (boundary semantics), so it can never
  * be shared "without context" between the wire and batch policies.
  */
