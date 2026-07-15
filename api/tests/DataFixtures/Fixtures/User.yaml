@@ -115,3 +115,13 @@ Erpify\Iam\Identity\Domain\Entity\User:
                 - 'lena@erpify.test'
                 - 'lena-password'
                 - ['VIEWER']
+    user_admin:
+        # dev/test seed only — a full ADMIN so a fresh `make db.load.fixtures` yields an administrator login
+        # without the CLI bootstrap (admin@erpify.test / admin-password, per the seed convention; credentials
+        # never enter a migration). ADMIN is the top privilege tier, so keep this fixture dev/test-gated.
+        __factory:
+            'Erpify\Tests\DataFixtures\UserFixtureFactory::create':
+                - '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66'
+                - 'admin@erpify.test'
+                - 'admin-password'
+                - ['ADMIN']
