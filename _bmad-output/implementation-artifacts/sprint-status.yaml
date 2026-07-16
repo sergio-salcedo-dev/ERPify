@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-23
-last_updated: 2026-07-14
+last_updated: 2026-07-16
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -119,3 +119,18 @@ development_status:
   ii-5-reset-password-uniforme: done
   ii-8-endurecimiento-seguridad-transversal: done
   epic-identity-invitation-lifecycle-retrospective: optional
+
+  # Epic users-admin (U): Administración de usuarios (back-office/Iam) — conectar la consola PWA /backoffice/users
+  # (hoy mock CrudRepository) al backend real Iam/Identity (invitation-based). arch-addendum-users-admin.md (SI-16…20)
+  # + epics-users-admin.md. PR #500. Orden de merge safe-first (las historias van en ese orden, no en U-N numérico):
+  # U-0 → U-1 → (U-2 · U-3) → U-4 · [U-5a → U-5b]. U-5b (borrado GDPR) tiene gate DURO en U-5a (cerrar #376).
+  # U-4 (edición de roles) es candidato. erase gana UI (SI-19 enmendado). Cada historia = su propia rama (gate de ramas).
+  epic-users-admin: backlog
+  u-0-read-side-lista-detalle-conectados-backend: backlog
+  u-1-me-deriva-permisos-gateo-can: backlog
+  u-2-invitar-alta-invitacion: backlog
+  u-3-cambio-de-estado-suspend-deactivate: backlog
+  u-4-edicion-de-roles-candidato: backlog
+  u-5a-cerrar-376-tombstone-actor-ids: backlog
+  u-5b-borrado-gdpr-consola: backlog
+  epic-users-admin-retrospective: optional
