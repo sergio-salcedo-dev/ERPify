@@ -86,10 +86,21 @@ uso de dominio** `ChangeUserRoles` (no existe hoy: `register`/`invite` fijan rol
 ≥1 ADMIN en la democión del último admin y la **decisión `User.roles` vs `Organization.Membership.roles`**
 (dualidad del seam de tenancy). Se presenta al Paso 2 como historia con diseño propio, no se da por incluida.
 
-FR8: **`users.erase` backend-only** (SI-19) — `users.erase` es permiso **sin entrada** en el enum de la PWA;
-la ejecución es CLI (`identity:gdpr:erase-subject`, **hard-delete** de la fila + reset tokens + audit
-`GDPR_SUBJECT_ERASED`). La consola **no** construye superficie de erase (plano de cumplimiento, otra
-superficie, fuera de esta épica).
+FR8: **Borrado GDPR — superficie de cumplimiento en consola** (SI-19 enmendado · U-5) — `users.erase`
+**gana** entrada en el enum de la PWA: acción «Borrado GDPR (irreversible)» **separada de deactivate**,
+ADMIN-only, `#[IsGranted('users.erase')]`, con **confirmación type-to-confirm** y respetando ≥1 ADMIN
+activo. El flujo **encadena** `EraseIdentitySubject` (hard-delete de la identidad + reset tokens + audit
+`GDPR_SUBJECT_ERASED`) **+** anonimización del rastro de auditoría (`audit:gdpr:erase` →
+`DbalAuditActorAnonymiser`: `actor_id` + `ip`/`user_agent`) — un erase que solo borre la identidad deja el
+`actor_id` **huérfano** y es **incompleto**. La CLI (`identity:gdpr:erase-subject`) se mantiene (additiva).
+*Fricción = confirmación fuerte, no ausencia de UI: exigir un desarrollador para una obligación legal es un
+anti-patrón operativo.*
+
+FR9: **Cerrar #376 — tombstone de `actor_id`s** *(prerrequisito duro de U-5 · `Shared/Audit`)* — un
+*tombstone* de `actor_id`s erasados, consultado por el writer DBAL (`DbalAuditLogWriter`) **y** el handler
+async (`RecordAuditEntryHandler`), para que un evento `activity` en vuelo **no** re-inserte un `actor_id` ya
+anonimizado. Historia previa (cross-cutting en `Shared/Audit`) que **bloquea** U-5, porque exponer el erase a
+admins eleva la frecuencia del disparo.
 
 ### NonFunctional Requirements
 
@@ -109,8 +120,12 @@ NFR3 (Invariante · SI-18): **La administración de identidades NO es CRUD.** La
 de dominio (invite / changeStatus), **nunca** `create/update/delete` genéricos ni un `PUT/PATCH` genérico de
 identidad; el email es **inmutable**.
 
-NFR4 (Invariante · SI-19): **Fricción ∝ irreversibilidad.** `read`/`invite`/`changeStatus` a la vista de
-quien tiene la capacidad; `erase` (irreversible) en otro edificio con llave (CLI, sin UI).
+NFR4 (Invariante · SI-19 enmendado): **Fricción ∝ irreversibilidad = confirmación fuerte, no ausencia de
+UI.** `deactivate` es la acción **cotidiana** de consola (despido — conserva la atribución); `erase` es una
+superficie de cumplimiento **separada** (ADMIN-only, distinta de deactivate, **type-to-confirm**, respeta ≥1
+ADMIN) que des-identifica **identidad + rastro de auditoría** encadenados; `users.erase` **gana** entrada en
+el enum PWA. La CLI se mantiene (additiva). *Exigir un desarrollador (CLI) para una obligación legal es un
+anti-patrón operativo.*
 
 NFR5 (Read-side / rendimiento): **Keyset, no OFFSET.** El read-side pagina con `DoctrineSearchEngine`
 (cursores opacos HMAC, envelope-v2), proyección de columnas explícitas (sin `SELECT *`), **single FROM**
@@ -158,6 +173,12 @@ es aditivo (no cambia comportamiento existente); ninguna historia depende de una
   reutilizar la superficie de `Iam/Invitation`.
 - **U-4 edición de roles — candidato:** nuevo `ChangeUserRoles` + dualidad `User.roles` vs `Membership.roles`;
   puede quedar fuera de esta épica.
+- **Atribución al borrar un usuario (verificado):** las filas de negocio (`Bank`, `BankAccount`) **no** guardan
+  autor (solo `createdAt`/`updatedAt`) — borrar/erase un usuario **no** cascadea ni toca datos de negocio; la
+  atribución vive **solo** en `audit_log` (`actor_id`). `deactivate` la conserva; el erase completo la
+  des-identifica (identidad + actor **encadenados**).
+- **#376 (resurrección async del `actor_id`) = prerrequisito duro de U-5** — tombstone de `actor_id`s en
+  `Shared/Audit` (FR9); historia previa que bloquea el borrado GDPR en consola.
 - **Gate de ramas (CLAUDE.md):** cada historia posterior tendrá su rama, reconfirmada una a una; nunca merge a
   `main` sin permiso.
 
@@ -188,8 +209,9 @@ UX-DR5: **Costura J5 visible** — la acción admin dispara `Evento → Estado �
 (invitar **encola** el email → B4; suspender **invalida** sesiones → muro post-identidad). La UI refleja el
 estado resultante; realtime es **opcional** (la lista de usuarios no lo tiene hoy — reload basta).
 
-UX-DR6: **`users.erase` sin superficie** (SI-19) — ninguna entrada de erase en la consola ni en el enum de
-permisos de la PWA.
+UX-DR6: **Borrado GDPR — superficie separada y guardada** (SI-19 enmendado) — acción «Borrado GDPR
+(irreversible)» **claramente distinta** del deactivate/«quitar» cotidiano, ADMIN-only, con **type-to-confirm**
+y aviso de que **des-identifica el rastro de auditoría**; la UI nunca permite confundir erase con deactivate.
 
 ### FR Coverage Map
 
