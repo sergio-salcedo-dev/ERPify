@@ -75,7 +75,7 @@ class TestDebugDataHolder extends DebugDataHolder
     {
         $backtraces = \debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
 
-        if (!$force && $this->shouldSkip($query, $backtraces)) {
+        if (!$force && $this->shouldSkip($backtraces)) {
             return;
         }
 
@@ -98,13 +98,13 @@ class TestDebugDataHolder extends DebugDataHolder
      *
      * @param array<int, array<string, mixed>> $backtraces
      */
-    private function shouldSkip(Query $query, array $backtraces): bool
+    private function shouldSkip(array $backtraces): bool
     {
         if (!$this->shouldLog($backtraces)) {
             return true;
         }
 
-        if ($this->isAuthenticationLookup($query)) {
+        if ($this->isAuthenticationLookup($backtraces)) {
             return true;
         }
 
@@ -150,14 +150,26 @@ class TestDebugDataHolder extends DebugDataHolder
     /**
      * The session firewall reloads the authenticated user on every request (UserProvider::refreshUser →
      * findByEmail). That lookup is fixed per-request authentication plumbing, not the business-query
-     * behaviour the per-connection budgets pin, so it is dropped here — otherwise every authenticated
-     * scenario would carry a spurious +1 against every count. `identity_user` is the Identity aggregate's
-     * table and has no business read path, so matching it by name is exact; revisit if that context ever
-     * gains queryable read endpoints of its own.
+     * behaviour the per-connection budgets pin, so it is dropped — otherwise every authenticated scenario
+     * would carry a spurious +1 against every count. Matched by CALL SITE (the {@see UserProvider} in the
+     * backtrace), like {@see isSessionAdmissionLookup} — not by the `identity_user` table name: the identity
+     * register now has a real read-side that issues business queries over that same table, so a name match
+     * would wrongly drop them too. `refreshUser` is the only per-request identity lookup; the login flow's
+     * lookups run on `@anonymous` requests that assert no budget.
+     *
+     * @param array<int, array<string, mixed>> $backtraces
      */
-    private function isAuthenticationLookup(Query $query): bool
+    private function isAuthenticationLookup(array $backtraces): bool
     {
-        return \str_contains($query->getSql(), 'identity_user');
+        foreach ($backtraces as $backtrace) {
+            $class = $backtrace['class'] ?? null;
+
+            if (\is_string($class) && \str_contains($class, 'UserProvider')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

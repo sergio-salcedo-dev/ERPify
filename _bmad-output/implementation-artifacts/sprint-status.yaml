@@ -125,8 +125,8 @@ development_status:
   # + epics-users-admin.md. PR #500. Orden de merge safe-first (las historias van en ese orden, no en U-N numérico):
   # U-0 → U-1 → (U-2 · U-3) → U-4 · [U-5a → U-5b]. U-5b (borrado GDPR) tiene gate DURO en U-5a (cerrar #376).
   # U-4 (edición de roles) es candidato. erase gana UI (SI-19 enmendado). Cada historia = su propia rama (gate de ramas).
-  epic-users-admin: backlog
-  u-0-read-side-lista-detalle-conectados-backend: backlog
+  epic-users-admin: in-progress
+  u-0-read-side-lista-detalle-conectados-backend: in-progress
   u-1-me-deriva-permisos-gateo-can: backlog
   u-2-invitar-alta-invitacion: backlog
   u-3-cambio-de-estado-suspend-deactivate: backlog

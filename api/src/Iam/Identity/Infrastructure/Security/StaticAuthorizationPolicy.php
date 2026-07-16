@@ -45,11 +45,23 @@ final readonly class StaticAuthorizationPolicy implements AuthorizationPolicy
     /**
      * Permission string -> the role tokens explicitly granted it, independent of any tier.
      *
+     * The four `users.*` grants localize the identity-console authorization surface as one data line.
+     * Only `users.read` has an endpoint today; `invite` / `changeStatus` / `erase` are listed ahead of the
+     * use cases that reach them, so the console's full action vocabulary is declared in one place rather
+     * than discovered per later story. They are deliberate, documented seam — not dead code to cull. ADMIN
+     * already passes through the unconditional clause, so these rows are functionally redundant for ADMIN;
+     * what actually confines the console to ADMIN is `users` in {@see self::TIER_OPT_OUT} (without it,
+     * `read` — a tier verb — would auto-grant to VIEWER).
+     *
      * @var array<string, list<string>>
      */
     private const array EXPLICIT_GRANTS = [
         'auditTrail.read' => [Role::AUDIT_READER->value],
         'bankAccount.changeStatus' => [Role::MANAGER->value],
+        'users.read' => [Role::ADMIN->value],
+        'users.invite' => [Role::ADMIN->value],
+        'users.changeStatus' => [Role::ADMIN->value],
+        'users.erase' => [Role::ADMIN->value],
     ];
 
     /**
@@ -57,7 +69,7 @@ final readonly class StaticAuthorizationPolicy implements AuthorizationPolicy
      *
      * @var list<string>
      */
-    private const array TIER_OPT_OUT = ['auditTrail'];
+    private const array TIER_OPT_OUT = ['auditTrail', 'users'];
 
     /**
      * @param array<string, list<string>> $tierVerbs

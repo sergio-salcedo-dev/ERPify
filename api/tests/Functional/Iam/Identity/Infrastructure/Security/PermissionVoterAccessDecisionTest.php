@@ -107,6 +107,41 @@ final class PermissionVoterAccessDecisionTest extends WebTestCase
         );
     }
 
+    public function testUsersReadIsGrantedToAnAdminButDeniedToAGenericTier(): void
+    {
+        $client = self::createClient();
+
+        $authorizationChecker = self::getContainer()->get(AuthorizationCheckerInterface::class);
+        $this->assertInstanceOf(AuthorizationCheckerInterface::class, $authorizationChecker);
+
+        // The identity console opts out of tier auto-grant, so a fully-tiered MANAGER is refused users.read —
+        // only ADMIN reaches it. This pins the wired chain (ROLE_ADMIN → bareRoleTokens → grantedToAdmin),
+        // the same admin-only shape as auditTrail but for the users resource.
+        $manager = UserFixtureFactory::create(
+            Uuid::v7()->toRfc4122(),
+            'users-manager@erpify.test',
+            'users-manager-password',
+            [Role::MANAGER->value],
+        );
+        $client->loginUser(new SecurityUser($manager), 'main');
+        $this->assertFalse(
+            $authorizationChecker->isGranted('users.read'),
+            'A generic MANAGER tier must not be granted users.read.',
+        );
+
+        $admin = UserFixtureFactory::create(
+            Uuid::v7()->toRfc4122(),
+            'users-admin@erpify.test',
+            'users-admin-password',
+            [Role::ADMIN->value],
+        );
+        $client->loginUser(new SecurityUser($admin), 'main');
+        $this->assertTrue(
+            $authorizationChecker->isGranted('users.read'),
+            'An ADMIN must be granted users.read through the superuser clause.',
+        );
+    }
+
     public function testBankAccountChangeStatusIsGrantedToAManagerButDeniedToAnEditor(): void
     {
         $client = self::createClient();
