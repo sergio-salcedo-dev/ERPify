@@ -67,7 +67,9 @@ de consumidor** (páginas/hook dependen solo de las claves DI + puertos genéric
 
 FR4: **Derivación de permisos en `/me` + gateo de cliente** (U-1) — `/me` expande `roles → permisos` vía
 `AuthorizationPolicy` (**set derivado, no almacenado**); `<Can>` deja de denegar por `permissions:[]`; los
-botones de acción se hacen visibles al ADMIN. **Prerrequisito de toda superficie de acción.**
+botones de acción se hacen visibles al ADMIN. **Prerrequisito de toda superficie de acción.** Los permisos
+**no forman parte del modelo de dominio** — son un **read-model de autorización derivado**; no existe
+`User.permissions` persistido.
 
 FR5: **Invitar (alta = invitación)** (SI-18 · U-2) — endpoint de alta `#[IsGranted('users.invite')]` →
 `SendInvitation`/`InviteUser` (→ `INVITED`); form de **invitación** (email + roles; **sin** password ni
@@ -82,14 +84,16 @@ PWA `users.delete → users.changeStatus`. **J5:** `UserSuspended` → `Identity
 sesiones) → muro post-identidad «suspendido».
 
 FR7: **Edición de roles** *(candidato — a decidir en el corte · SI-16, SI-18; toca SI-15)* — **nuevo caso de
-uso de dominio** `ChangeUserRoles` (no existe hoy: `register`/`invite` fijan roles solo al alta), con guard
+uso de dominio** `ChangeUserRoles` (no existe hoy: `register`/`invite` fijan roles solo al alta) que **establece el conjunto completo** de roles (semántica
+*set*, no deltas grant/revoke — coherente con el form de checkboxes), con guard
 ≥1 ADMIN en la democión del último admin y la **decisión `User.roles` vs `Organization.Membership.roles`**
 (dualidad del seam de tenancy). Se presenta al Paso 2 como historia con diseño propio, no se da por incluida.
 
 FR8: **Borrado GDPR — superficie de cumplimiento en consola** (SI-19 enmendado · U-5) — `users.erase`
 **gana** entrada en el enum de la PWA: acción «Borrado GDPR (irreversible)» **separada de deactivate**,
 ADMIN-only, `#[IsGranted('users.erase')]`, con **confirmación type-to-confirm** y respetando ≥1 ADMIN
-activo. El flujo **encadena** `EraseIdentitySubject` (hard-delete de la identidad + reset tokens + audit
+activo. El flujo, **orquestado por un único Application Service** (p.ej. `FulfilIdentityErasure`), **encadena**
+`EraseIdentitySubject` (hard-delete de la identidad + reset tokens + audit
 `GDPR_SUBJECT_ERASED`) **+** anonimización del rastro de auditoría (`audit:gdpr:erase` →
 `DbalAuditActorAnonymiser`: `actor_id` + `ip`/`user_agent`) — un erase que solo borre la identidad deja el
 `actor_id` **huérfano** y es **incompleto**. La CLI (`identity:gdpr:erase-subject`) se mantiene (additiva).
@@ -118,7 +122,9 @@ mientras sea **un puñado (~5)** — hacia **~15** migrar a capacidades puras (n
 
 NFR3 (Invariante · SI-18): **La administración de identidades NO es CRUD.** Las mutaciones son casos de uso
 de dominio (invite / changeStatus), **nunca** `create/update/delete` genéricos ni un `PUT/PATCH` genérico de
-identidad; el email es **inmutable**.
+identidad; el email es **inmutable hoy** (ancla de identidad; mutabilidad con verificación = evolución
+posible, no principio del dominio); los **permisos** son read-model derivado, **no** estado persistido (no
+`User.permissions`).
 
 NFR4 (Invariante · SI-19 enmendado): **Fricción ∝ irreversibilidad = confirmación fuerte, no ausencia de
 UI.** `deactivate` es la acción **cotidiana** de consola (despido — conserva la atribución); `erase` es una
@@ -151,8 +157,13 @@ NFR9 (Test): **Cobertura por suite, no por visitas.** Consola de bajo tráfico v
 changeStatus → reflejo` (no smoke); todo sobre primitivos compartidos (`DataTable`/`AsyncBoundary`/
 `MutationError`/`<Can>`/`useResourceList`).
 
-NFR10 (Safe-first / secuenciación): **Orden aditivo primero.** `U-0 → U-1 → (U-2 · U-3) → U-4`; U-0 (lectura)
+NFR10 (Safe-first / secuenciación): **Orden aditivo primero.** `U-0 → U-1 → (U-2 · U-3) → U-4 · [cerrar #376] → U-5`; U-0 (lectura)
 es aditivo (no cambia comportamiento existente); ninguna historia depende de una posterior en su orden de merge.
+
+NFR11 (Invariante · SI-20): **Consistencia del contrato de permisos.** Los strings de permiso son **idénticos
+byte-a-byte** en API (`#[IsGranted]`) y PWA (`Permission`), en camelCase — sin fuente de verdad compartida el
+drift es silencioso (ningún compilador lo atrapa). Separado de la autorización (SI-17) porque evoluciona con
+tooling, no con el modelo.
 
 ### Additional Requirements
 
@@ -179,6 +190,9 @@ es aditivo (no cambia comportamiento existente); ninguna historia depende de una
   des-identifica (identidad + actor **encadenados**).
 - **#376 (resurrección async del `actor_id`) = prerrequisito duro de U-5** — tombstone de `actor_id`s en
   `Shared/Audit` (FR9); historia previa que bloquea el borrado GDPR en consola.
+- **Evolución anotada (no se cambia hoy):** `users.erase` es plano de cumplimiento (SI-19); si el erase
+  prolifera a otros sujetos (`customers`/`employees`/…), considerar un recurso dedicado
+  (`compliance.eraseSubject` / `gdpr.eraseIdentity`) en vez de un `*.erase` por recurso — punto de evolución.
 - **Gate de ramas (CLAUDE.md):** cada historia posterior tendrá su rama, reconfirmada una a una; nunca merge a
   `main` sin permiso.
 
