@@ -30,6 +30,8 @@ use Symfony\Bundle\FrameworkBundle\KernelBrowser;
  * trail opts out of tier auto-grant. The bank access-control scenarios add two tier-boundary users — a VIEWER
  * ("I am logged in as a viewer", read only) and an EDITOR ("I am logged in as an editor", read+write, no
  * delete) — to pin that each bank route demands its exact permission tier, not merely an authenticated session.
+ * The identity-console read routes add an ADMIN ("I am logged in as an administrator"): the users resource
+ * opts out of tiering, so ADMIN is the only tier that reaches it and every lesser tier is refused 403.
  *
  * `loginUser()` seats a session token directly rather than replaying `POST /login`, so it adds no HTTP round
  * trip and no counted query: the firewall's per-request `refreshUser` lookup is raised outside any controller,
@@ -48,6 +50,8 @@ final class SecurityContext extends AbstractContext
 
     private const string EDITOR_USER_EMAIL = 'edith@erpify.test';
 
+    private const string ADMIN_USER_EMAIL = 'admin@erpify.test';
+
     private const string FIREWALL = 'main';
 
     private const string ANONYMOUS_TAG = 'anonymous';
@@ -65,6 +69,7 @@ final class SecurityContext extends AbstractContext
         self::GENERIC_TIER_USER_EMAIL => '0190d1e2-f3a4-7b5c-8d6e-1f2a3b4c5d03',
         self::VIEWER_USER_EMAIL => '0190d1e2-f3a4-7b5c-8d6e-1f2a3b4c5d04',
         self::EDITOR_USER_EMAIL => '0190d1e2-f3a4-7b5c-8d6e-1f2a3b4c5d05',
+        self::ADMIN_USER_EMAIL => '0190d1e2-f3a4-7b5c-8d6e-1f2a3b4c5d06',
     ];
 
     private ?InitializedSymfonyExtensionEnvironment $environment = null;
@@ -109,6 +114,12 @@ final class SecurityContext extends AbstractContext
     public function logInAsAnEditor(): void
     {
         $this->logInAs(self::EDITOR_USER_EMAIL);
+    }
+
+    #[Given('I am logged in as an administrator')]
+    public function logInAsAnAdministrator(): void
+    {
+        $this->logInAs(self::ADMIN_USER_EMAIL);
     }
 
     private function logInAs(string $email): void

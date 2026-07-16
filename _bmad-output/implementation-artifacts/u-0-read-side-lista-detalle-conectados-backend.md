@@ -3,7 +3,7 @@ baseline_commit: 3bb35964
 ---
 # Story 1.1 (U-0): Read-side de identidades — lista + detalle conectados al backend real
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Validación opcional. Ejecuta `bmad-create-story` validate para un chequeo de calidad antes de dev-story. -->
 
@@ -139,45 +139,46 @@ costura B; AC5 = costura C; AC6-7 = transversales.
 
 ### A — Auth-data RBAC · `api/src/Iam/Identity/Infrastructure/Security/StaticAuthorizationPolicy.php` (AC1, AC2)
 
-- [ ] Añadir `'users'` a `TIER_OPT_OUT` (hoy `['auditTrail']`).
-- [ ] Añadir las 4 filas `'users.<action>' => [Role::ADMIN->value]` a `EXPLICIT_GRANTS` — **solo `Role::ADMIN->value` +
+- [x] Añadir `'users'` a `TIER_OPT_OUT` (hoy `['auditTrail']`).
+- [x] Añadir las 4 filas `'users.<action>' => [Role::ADMIN->value]` a `EXPLICIT_GRANTS` — **solo `Role::ADMIN->value` +
       strings literales** (el tripwire prohíbe `match`/`fn`/`new`/`(`/`?`). Un **docblock breve** en el sitio explica que los
       3 sin endpoint son el seam documentado (SI-17), no código muerto → que un reviewer posterior no los cull.
-- [ ] Ampliar `StaticAuthorizationPolicyTest` (espeja el caso `auditTrail`): ADMIN concede las 4; VIEWER/EDITOR/MANAGER/`[]`
+- [x] Ampliar `StaticAuthorizationPolicyTest` (espeja el caso `auditTrail`): ADMIN concede las 4; VIEWER/EDITOR/MANAGER/`[]`
       niegan `users.read`; regresión `bank.read` sigue tiereando a VIEWER. Y `PermissionVoterAccessDecisionTest` (functional):
-      `users.read` ADMIN vs tier.
-- [ ] **NO** tocar el tripwire `StaticAuthorizationPolicyIsDataOnlyTest` (queda verde solo). **NO** nombrar nada `invoice`
+      `users.read` ADMIN vs tier. (Los casos de política de `users` viven en la clase dedicada
+      `StaticAuthorizationPolicyUsersResourceTest` porque la existente estaba en el tope de métodos públicos de PHPMD.)
+- [x] **NO** tocar el tripwire `StaticAuthorizationPolicyIsDataOnlyTest` (queda verde solo). **NO** nombrar nada `invoice`
       (centinela OCP de `AuthorizationCoreIsClosedForModificationTest`).
 
 ### B — API read-side · `api/src/Iam/Identity/` (AC3, AC4, AC6, AC7)
 
-- [ ] **Gateo** — `#[IsGranted('users.read')]` (**literal**) en ambos controladores. **No** crear una clase `UsersPermission`
+- [x] **Gateo** — `#[IsGranted('users.read')]` (**literal**) en ambos controladores. **No** crear una clase `UsersPermission`
       para una sola acción (mismo patrón que `auditTrail.read`, que usa el literal); la clase de constantes aterriza cuando
       U-2/U-3 añaden la 2ª acción. ⚠️ Recurso **`users` PLURAL** — no `user.read` singular (SI-20).
-- [ ] **Proyección** — `Domain/Projection/UserRow.php` (readonly, ctor promocionado: `id`, `email`, `roles` `list<string>`,
+- [x] **Proyección** — `Domain/Projection/UserRow.php` (readonly, ctor promocionado: `id`, `email`, `roles` `list<string>`,
       `status` `IdentityStatus`, `createdAt`, `updatedAt`). `createdAt`/`updatedAt` **públicos** (el `CursorPositionExtractor`
       los lee por property-path). Ver `BankAccountCollectionRow` como patrón exacto (docblock incluido).
-- [ ] **Puerto + adaptador de búsqueda** — `Domain/Repository/UserSearchRepository.php` (`search(SearchCriteria): Page<UserRow>`)
+- [x] **Puerto + adaptador de búsqueda** — `Domain/Repository/UserSearchRepository.php` (`search(SearchCriteria): Page<UserRow>`)
       + su adaptador Doctrine (sibling nuevo, o sobre `DoctrineUserRepository` con `#[AsAlias]`): DQL `SELECT NEW UserRow(...)`
       **single FROM `User`, sin JOIN**, delegando en `DoctrineSearchEngine::paginate(...)`. **Field maps:** filtrable =
       `email`(Contains) + `status`(Eq); **`roles` fuera del map** (no filtrable). Sortable = `email`/`status`/`createdAt`/
       `updatedAt` (el `id` tie-break lo añade el engine). Espeja `DoctrineBankAccountCollectionSearchRepository`.
-- [ ] **Handler + finder** — `Application/UserSearcher.php` + `Application/Query/SearchUsersQuery.php` (espeja `BankSearcher`);
+- [x] **Handler + finder** — `Application/UserSearcher.php` + `Application/Query/SearchUsersQuery.php` (espeja `BankSearcher`);
       `Application/UserFinder.php` para el detalle: `Uuid::ensure($id)` → **reusa** `UserRepository::findById` y la excepción
       `UserNotFound` ya existentes (no crear repos nuevos para el detalle).
-- [ ] **Resource DTOs por-vista + mapper** — `UserListResource` + `UserDetailResource` (`status`/`roles` = `.value`,
+- [x] **Resource DTOs por-vista + mapper** — `UserListResource` + `UserDetailResource` (`status`/`roles` = `.value`,
       timestamps ATOM; **detalle SIN `permissions`**) + `UserResourceMapper` (`toListPage` + `toDetailResource`). **Hoy los
       dos DTOs coinciden; se mantienen separados por estabilidad de contrato, NO fusionar** (un docblock en cada uno lo dice;
       divergen cuando el detalle hospede metadata de acciones en U-3). **La entidad `User` NUNCA se serializa** (AC7).
-- [ ] **Controladores** — `Infrastructure/Controller/UserSearchController.php` (`GET`, `#[MapQueryString] SearchQuery`,
+- [x] **Controladores** — `Infrastructure/Controller/UserSearchController.php` (`GET`, `#[MapQueryString] SearchQuery`,
       `SearchResponder`) + `UserGetController.php` (`GET /{id}`, `ResourceResponder`), ambos gateados. ⚠️ **Verificar** que la
       ruta resuelve a **`/api/v1/backoffice/users`** (`debug:router`) antes de escribir el `Given` del Behat — ver *Verificaciones*.
-- [ ] **Behat + PHPUnit** — Behat `users/search.feature` + `get.feature` + `access_control.feature` (espeja bank + la
+- [x] **Behat + PHPUnit** — Behat `users/search.feature` + `get.feature` + `access_control.feature` (espeja bank + la
       plantilla opt-out de audit). PHPUnit Unit: `UserSearcherTest`, `UserFinderTest`, `UserRowContractTest`,
       `UserResourceMapperTest`. Functional (Postgres real): `UserSearchCursorFunctionalTest`, `UserDetailResponseGoldenFunctionalTest`
       (AC7-b), un **test estructural** de AC7-a, y `DoctrineUserSearchRepositoryTest` (fija la hidratación de `roles` como
       regresión — ver crux).
-- [ ] Gates: `make php.stan` por fichero → `make php.quality` → `make php.deptrac` → `make php.lint.bounded-context`
+- [x] Gates: `make php.stan` por fichero → `make php.quality` → `make php.deptrac` → `make php.lint.bounded-context`
       → `make php.lint.error-contract`.
 
 ### C — Conexión PWA · `pwa/src/` (AC5, AC6)
@@ -210,11 +211,13 @@ costura B; AC5 = costura C; AC6-7 = transversales.
 
 - [ ] `make php.stan` (cada fichero), `make php.quality`, `make php.deptrac`, `make php.lint.bounded-context`,
       `make php.lint.error-contract`, `make pwa.quality`, `make php.behat`, `make pwa.test`.
-- [ ] `make sf c='debug:router'` → confirmar `/api/v1/backoffice/users` (los controladores en `Iam/Identity/Infrastructure/
-      Controller/` reciben el prefijo `/api/v1` del recurso `api_v1_iam_identity`).
-- [ ] Check en vivo: `curl -k` autenticado como ADMIN a `/api/v1/backoffice/users` (200 + envelope) y check visual del
-      navegador en `/backoffice/users` (lista + detalle) — si salta `ERR_CERT_AUTHORITY_INVALID`, pausar y aceptar el cert
-      manual, no downgradear a curl-only.
+- [x] `make sf c='debug:router'` → confirmar `/api/v1/backoffice/users` (los controladores en `Iam/Identity/Infrastructure/
+      Controller/` reciben el prefijo `/api/v1` del recurso `api_v1_iam_identity`). ✓ resuelve a `backoffice_user_search` /
+      `backoffice_user_get`.
+- [x] Check en vivo (backend): `curl -k` autenticado como ADMIN → lista 200 + envelope-v2 (roles JSON→array, status enum,
+      timestamps ATOM, cursor opaco en `links.next`, sin credenciales), detalle 200, id malformado 400 `invalid-uuid`,
+      anónimo 401. El **check visual del navegador** en `/backoffice/users` es PR-B (la consola PWA aún usa el mock hasta la
+      costura C).
 
 ---
 
@@ -380,12 +383,85 @@ la convención de proyecciones en `docs/rules/read-side-projections.md` (follow-
 
 ### Agent Model Used
 
+claude-opus-4-8 (1M context).
+
 ### Debug Log References
+
+- `make sf c='debug:router'` → `backoffice_user_search` = `GET /api/v1/backoffice/users`, `backoffice_user_get` =
+  `GET /api/v1/backoffice/users/{id}`.
+- `make php.behat` (full) → 308 scenarios / 2803 steps green (verificado tras tocar `TestDebugDataHolder`).
+- `make php.unit` (full) → 1951 tests / 8557 assertions green (2 notices pre-existentes en `main`, no de esta historia).
+- `make php.quality`, `make php.lint.bounded-context`, `make php.lint.error-contract` → exit 0.
+- Live: admin login 204 → `GET /api/v1/backoffice/users` 200 (envelope-v2 correcto), detalle 200, `not-a-uuid` 400,
+  anónimo 401.
 
 ### Completion Notes List
 
+**Alcance entregado = PR-A backend (costuras A + B).** La costura C (PWA) es PR-B, sesión aparte — sus tareas quedan sin
+marcar a propósito. La historia permanece `in-progress` hasta que C aterrice.
+
+- **A · RBAC (data-only):** `users` → `TIER_OPT_OUT` + 4 grants `users.{read,invite,changeStatus,erase}` → `[ADMIN]` en
+  `StaticAuthorizationPolicy`. El opt-out es lo que confina la consola a ADMIN (sin él, `read` se auto-concedería a VIEWER);
+  los 3 grants sin endpoint son deuda deliberada documentada en el docblock. El tripwire data-only y el centinela OCP
+  (`invoice`) siguen verdes intactos.
+- **B · read-side:** proyección `UserRow` (`Domain/Projection`) + puerto `UserSearchRepository` + adaptador Doctrine
+  `SELECT NEW UserRow(...)` single-FROM sin JOIN sobre el keyset engine; `UserSearcher`/`SearchUsersQuery`/`UserFinder`
+  (reusa `UserRepository::findById` + `UserNotFound`); Resource DTOs por-vista (list/detail, hoy idénticos, separados por
+  contrato) + `UserResourceMapper`; controladores `GET /backoffice/users` y `/{id}` gateados con el literal
+  `#[IsGranted('users.read')]`. Filtros `email`(contains) + `status`(eq/in); `roles` **fuera** del map (no filtrable).
+- **Shape B verificado en real-DB** (`DoctrineUserSearchRepositoryTest`): la columna JSON `roles` hidrata dentro de
+  `SELECT NEW` como `list<string>`, `status` como enum `IdentityStatus`, timestamps como `DateTimeImmutable`; y el filtro
+  `status` (string atado contra la columna enum) selecciona sólo ese estado. Sin fallback Shape A.
+- **AC7 (la entidad nunca se serializa):** guardia estructural por reflexión
+  (`UserEntityNeverReachesTheSerializerStructuralTest`) + golden HTTP del key-set
+  (`UserDetailResponseGoldenFunctionalTest`) + la proyección excluye por construcción `password_hash`/`failedAttempts`/
+  `lockedUntil`.
+- **Cambio en infra de test compartida (necesario, anticipado por su propio docblock):** `TestDebugDataHolder`
+  descartaba **por nombre de tabla** (`identity_user`) toda query como "auth plumbing"; U-0 es el primer read-side de
+  negocio sobre esa tabla, así que ahora descarta por **call-site** (`UserProvider`), como ya hacía con el
+  `SessionAdmissionGate`. Sin esto, el presupuesto de queries del Behat contaba 0 en la lista. Full Behat (308) revalidado
+  sin regresiones. También `AuthenticatesFunctionalRequests` gana `authenticateAdminClient()` (el registro es ADMIN-only).
+- **Boy-scout / decisión menor a revisar:** los casos de política de `users` se alojaron en la clase nueva
+  `StaticAuthorizationPolicyUsersResourceTest` en vez de la existente `StaticAuthorizationPolicyTest`, que ya estaba en el
+  tope de 10 métodos públicos de PHPMD; se cubre el mismo SUT desde una clase cohesiva dedicada.
+- **Nota de auditoría (no en scope, informativa):** como cualquier GET de negocio, las dos rutas del registro reciben el
+  access-log genérico en `kernel.terminate` (`ROUTE_BACKOFFICE_USER_*`), consistente con Bank; no cuenta contra el
+  presupuesto de queries (post-terminate) y no requiere código.
+
 ### File List
 
+**A — RBAC (`api/`):**
+- `src/Iam/Identity/Infrastructure/Security/StaticAuthorizationPolicy.php` (UPDATE)
+- `tests/Unit/Iam/Identity/Infrastructure/Security/StaticAuthorizationPolicyUsersResourceTest.php` (NEW)
+- `tests/Functional/Iam/Identity/Infrastructure/Security/PermissionVoterAccessDecisionTest.php` (UPDATE)
+
+**B — read-side API (`api/src/Iam/Identity/`, NEW salvo aviso):**
+- `Domain/Projection/UserRow.php` · `Domain/Repository/UserSearchRepository.php`
+- `Infrastructure/Persistence/Doctrine/DoctrineUserSearchRepository.php`
+- `Application/UserSearcher.php` · `Application/Query/SearchUsersQuery.php` · `Application/UserFinder.php`
+- `Application/Resource/UserListResource.php` · `Application/Resource/UserDetailResource.php`
+- `Infrastructure/Http/UserResourceMapper.php`
+- `Infrastructure/Controller/UserSearchController.php` · `Infrastructure/Controller/UserGetController.php`
+
+**B — tests (`api/tests/`, NEW):**
+- `Unit/Iam/Identity/Application/{UserSearcherTest,UserFinderTest,InMemoryUserSearchRepository}.php`
+- `Unit/Iam/Identity/Infrastructure/UserRowContractTest.php`
+- `Unit/Iam/Identity/Infrastructure/Http/UserResourceMapperTest.php`
+- `Unit/Iam/Identity/Infrastructure/UserEntityNeverReachesTheSerializerStructuralTest.php`
+- `Functional/Iam/Identity/Infrastructure/Persistence/Doctrine/DoctrineUserSearchRepositoryTest.php`
+- `Functional/Iam/Identity/Infrastructure/Controller/{UserSearchCursorFunctionalTest,UserDetailResponseGoldenFunctionalTest}.php`
+- `features/backoffice/users/{search,get,access_control}.feature`
+
+**Infra de test compartida (UPDATE):**
+- `tests/Doctrine/TestDebugDataHolder.php` (auth-lookup por call-site)
+- `tests/Functional/AuthenticatesFunctionalRequests.php` (`authenticateAdminClient`)
+- `tests/Behat/Context/SecurityContext.php` (paso "logged in as an administrator")
+- `tests/DataFixtures/Fixtures/Session.yaml` (`session_admin`)
+
 ### Change Log
+
+- 2026-07-16 — PR-A (costuras A+B): RBAC `users` opt-out + 4 grants ADMIN; read-side `GET /backoffice/users` (+`/{id}`)
+  con proyección `UserRow`, keyset y Resource DTOs por-vista, gateados `users.read`. Tests unit/functional/Behat +
+  ajuste de `TestDebugDataHolder` (auth-lookup por call-site). Costura C (PWA) pendiente en PR-B.
 
 ### Review Findings
