@@ -46,3 +46,11 @@ Erpify\Organization\Membership\Domain\Entity\Membership:
                 - '@user_lena'
                 - '@the_organization'
                 - ['VIEWER']
+    membership_admin:
+        # The seeded ADMIN's org-scoped membership; ADMIN in both identity and membership mirrors the CLI
+        # bootstrap (organization:administrator:create writes the role to both).
+        __factory:
+            'Erpify\Tests\DataFixtures\MembershipFixtureFactory::create':
+                - '@user_admin'
+                - '@the_organization'
+                - ['ADMIN']

@@ -92,7 +92,7 @@ final readonly class SecurityLinkMailer
               </a>
             </p>
             <p style="font-size:13px;line-height:1.5;color:#6b7280;margin:0 0 8px;">
-              Si el botón no funciona, copia y pega esta dirección en tu navegador:
+              If the button does not work, copy and paste this address into your browser:
             </p>
             <p style="font-size:13px;line-height:1.5;word-break:break-all;margin:0 0 24px;">{$safeLink}</p>
             <p style="font-size:12px;line-height:1.5;color:#9ca3af;margin:0;">

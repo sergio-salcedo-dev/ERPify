@@ -25,14 +25,35 @@ Optional — install Behat into its isolated Composer tree:
 make composer c='behat-tools-install'
 ```
 
-Bootstrap the first administrator — a fresh install without fixtures (e.g. staging/prod) has no login until an organization and its admin exist. `db.load.fixtures` already seeds these for dev, so this is only needed where fixtures are not loaded:
+### Logging in (dev)
+
+`make db.load.fixtures` seeds the single organization (`ERPify`), users, and their memberships, so **dev has a working login out of the box** — you do *not* run the bootstrap commands below. Sign in with a seeded account; the fullest is Alice (`ACTIVE`, roles `MANAGER` + `AUDIT_READER`, so both the bank routes and the audit trail are reachable):
+
+```
+email:    alice@erpify.test
+password: alice-password
+```
+
+Other seeded users exercise the auth walls (`victor` VIEWER, `edith` EDITOR, `trent` MANAGER, `mallory` role-less, plus `INVITED`/`SUSPENDED`/`DEACTIVATED`/locked cases) — see `api/tests/DataFixtures/Fixtures/User.yaml`. Credentials are seeded for dev/test only and never enter a migration.
+
+Because the fixtures already provision the organization, `make sf c='organization:provision …'` in dev fails with `This installation already has an organization`. That is **by design** — one organization per installation, a rule that lives in application code (not the schema) so it relaxes without a migration when tenancy opens; see [`adr/identity-invitation-lifecycle.md`](./adr/identity-invitation-lifecycle.md) D2 — not an error to work around.
+
+### Bootstrap the first administrator (fresh install — staging/prod, or dev without fixtures)
+
+A fresh install has no login until an organization and its first admin exist. Run once, **in order** (the admin-create fails if no organization is provisioned yet):
 
 ```bash
-make sf c='organization:provision <name>'                        # the installation's single organization
+make sf c='organization:provision <name>'                        # the installation's single organization (rejects a second run)
 make sf c='organization:administrator:create <email> [password]' # identity + ADMIN membership (hidden prompt if password omitted)
 ```
 
-There is no public sign-up and no generic user-create command; subsequent members arrive by invitation.
+Prefer omitting the password so it is read from a hidden prompt — passing it as an argument leaves it visible in the process list.
+
+There is no public sign-up and no generic user-create command; subsequent members arrive by invitation, which provisions their identity + membership and emails an accept link:
+
+```bash
+make sf c='iam:invitation:create <email> [ROLE ...]'             # default role: VIEWER
+```
 
 ## Run / stop / inspect
 

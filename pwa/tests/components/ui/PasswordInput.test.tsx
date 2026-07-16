@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 
-const TOGGLE_NAME = "Mostrar/Ocultar contraseña";
+const TOGGLE_NAME = "Show/hide password";
 
 describe("PasswordInput", () => {
   it("defaults to REVEALED (type=text) with a pressed toggle carrying a static name", () => {

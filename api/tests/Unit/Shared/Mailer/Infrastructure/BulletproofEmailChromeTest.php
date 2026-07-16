@@ -19,7 +19,7 @@ final class BulletproofEmailChromeTest extends TestCase
         $html = (new BulletproofEmailChrome())->render('<p>inner-marker</p>');
 
         $this->assertStringContainsString('<!doctype html>', $html);
-        $this->assertStringContainsString('<html lang="es">', $html);
+        $this->assertStringContainsString('<html lang="en">', $html);
         $this->assertStringContainsString('<p>inner-marker</p>', $html);
     }
 

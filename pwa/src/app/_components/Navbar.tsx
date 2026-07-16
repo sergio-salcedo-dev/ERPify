@@ -51,6 +51,14 @@ export function Navbar({ goToBackoffice }: Readonly<NavbarProps>) {
 
             <ThemeToggle testId="navbar__theme" className="navbar__theme" />
 
+            <Link
+              href={Routes.LOGIN}
+              className="navbar__link navbar__link--login text-foreground hover:text-primary font-medium transition-colors"
+              data-testid="navbar__link-login"
+            >
+              Sign in
+            </Link>
+
             <Button
               onClick={goToBackoffice}
               size="default"
@@ -97,6 +105,13 @@ export function Navbar({ goToBackoffice }: Readonly<NavbarProps>) {
               Dev Tools
             </Link>
           ) : null}
+          <Link
+            href={Routes.LOGIN}
+            className="navbar__link navbar__link--login block text-foreground font-medium"
+            data-testid="navbar__link-login--mobile"
+          >
+            Sign in
+          </Link>
           <Button
             onClick={goToBackoffice}
             size="lg"

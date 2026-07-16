@@ -7,9 +7,9 @@ import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/components/cn";
 
-const DEFAULT_SIGNAL_TITLE = "Invitación aceptada. Ya puedes empezar a trabajar.";
-const ENTER_LABEL = "Entrar";
-const ENTER_TITLE = "Entrar al panel";
+const DEFAULT_SIGNAL_TITLE = "Invitation accepted. You're ready to get started.";
+const ENTER_LABEL = "Enter";
+const ENTER_TITLE = "Enter the dashboard";
 
 /**
  * Success card shown in place of a token-action form once a credential-setting

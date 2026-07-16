@@ -18,6 +18,20 @@ test.describe("FrontOffice - Landing Page", () => {
     await expect(page).toHaveURL("/backoffice");
   });
 
+  test("navigates to login from the Sign in CTA", async ({ page }) => {
+    await page.getByTestId("navbar__link-login").click();
+    await expect(page).toHaveURL("/login");
+    await expect(page.getByTestId("login-form")).toBeVisible();
+  });
+
+  test("navigates to login from the mobile Sign in CTA", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.getByTestId("navbar__mobile-menu-toggle").click();
+    await page.getByTestId("navbar__link-login--mobile").click();
+    await expect(page).toHaveURL("/login");
+    await expect(page.getByTestId("login-form")).toBeVisible();
+  });
+
   test("navigates to the public status page from the navbar", async ({ page }) => {
     await page.getByTestId("navbar__link-status").click();
     await expect(page).toHaveURL("/status");

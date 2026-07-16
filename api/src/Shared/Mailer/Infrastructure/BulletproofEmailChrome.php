@@ -8,7 +8,7 @@ namespace Erpify\Shared\Mailer\Infrastructure;
  * The shared HTML chrome of every security email: doctype, dark-mode-aware styles, the centred wrapper and the
  * system font stack, plus the one escaping helper untrusted values must pass through. It exists in exactly one
  * place because it carries a security control (the escape) and a UX contract (banking-grade, dark-mode,
- * `lang="es"`): duplicating the scaffold per sender is the regression vector that consolidating it killed.
+ * `lang="en"`): duplicating the scaffold per sender is the regression vector that consolidating it killed.
  * Senders render only their inner paragraphs and delegate the envelope here.
  */
 final readonly class BulletproofEmailChrome
@@ -17,7 +17,7 @@ final readonly class BulletproofEmailChrome
     {
         return <<<HTML
             <!doctype html>
-            <html lang="es">
+            <html lang="en">
             <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">

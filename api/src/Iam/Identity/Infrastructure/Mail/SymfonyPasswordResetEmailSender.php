@@ -34,21 +34,22 @@ final readonly class SymfonyPasswordResetEmailSender implements PasswordResetEma
     {
         return new SecurityLinkEmailContent(
             path: '/reset-password',
-            subject: 'Restablece tu contraseña de ERPify',
+            subject: 'Reset your ERPify password',
             textLead: [
-                'Has solicitado restablecer tu contraseña de ERPify.',
+                'You requested to reset your ERPify password.',
                 '',
-                'Abre este enlace para definir una nueva contraseña (caduca en una hora):',
+                'Open this link to set a new password (it expires in one hour):',
             ],
             textTrailer: [
-                'Al restablecerla cerraremos todas tus sesiones abiertas por seguridad.',
-                'Si no solicitaste este cambio, puedes ignorar este mensaje: tu contraseña no cambiará.',
+                'When you reset it, we will sign out all your open sessions for security.',
+                'If you did not request this change, you can ignore this message: your password will not change.',
             ],
-            htmlLead: 'Has solicitado restablecer tu contraseña de <strong>ERPify</strong>.',
-            htmlDetail: 'Define una nueva contraseña. El enlace caduca en una hora y cerraremos todas '
-                . 'tus sesiones abiertas por seguridad.',
-            ctaLabel: 'Restablecer contraseña',
-            htmlFootnote: 'Si no solicitaste este cambio, puedes ignorar este mensaje: tu contraseña no cambiará.',
+            htmlLead: 'You requested to reset your <strong>ERPify</strong> password.',
+            htmlDetail: 'Set a new password. The link expires in one hour and we will sign out all '
+                . 'your open sessions for security.',
+            ctaLabel: 'Reset password',
+            htmlFootnote: 'If you did not request this change, you can ignore this message: '
+                . 'your password will not change.',
         );
     }
 }

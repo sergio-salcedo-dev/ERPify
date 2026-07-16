@@ -9,7 +9,7 @@ use DateTimeImmutable;
 /**
  * One row of the audit investigation timeline — a read-only projection of an `audit_log` record.
  *
- * Backoffice consumes auditoría, never writes it: this is a query result, not the write-side
+ * Backoffice consumes the audit trail, never writes it: this is a query result, not the write-side
  * {@see \Erpify\Shared\Audit\Application\AuditLogEntry} aggregate. `level` and `actorType` are kept
  * as the raw stored strings (not the `AuditLevel`/`ActorType` enums) on purpose — a forensic read
  * must reflect faithfully whatever the table holds, never raise on an unexpected token while

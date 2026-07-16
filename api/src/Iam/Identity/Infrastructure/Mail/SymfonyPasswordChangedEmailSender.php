@@ -25,7 +25,7 @@ use Symfony\Component\Mime\Email;
 #[AsAlias(PasswordChangedEmailSender::class)]
 final readonly class SymfonyPasswordChangedEmailSender implements PasswordChangedEmailSender
 {
-    private const string SUBJECT = 'Tu contraseña de ERPify ha cambiado';
+    private const string SUBJECT = 'Your ERPify password has changed';
 
     public function __construct(
         private MailerInterface $mailer,
@@ -53,10 +53,10 @@ final readonly class SymfonyPasswordChangedEmailSender implements PasswordChange
     private function textBody(string $from): string
     {
         return \implode("\n", [
-            'Tu contraseña de ERPify ha cambiado.',
-            'Cerramos todas tus sesiones abiertas por seguridad.',
+            'Your ERPify password has changed.',
+            'We signed out all your open sessions for security.',
             '',
-            'Si no fuiste tú, contacta de inmediato con ' . $from . '.',
+            'If this was not you, contact ' . $from . ' immediately.',
         ]);
     }
 
@@ -66,13 +66,13 @@ final readonly class SymfonyPasswordChangedEmailSender implements PasswordChange
 
         return $this->chrome->render(<<<HTML
             <p style="font-size:16px;line-height:1.5;margin:0 0 16px;">
-              Tu contraseña de <strong>ERPify</strong> ha cambiado.
+              Your <strong>ERPify</strong> password has changed.
             </p>
             <p style="font-size:16px;line-height:1.5;margin:0 0 24px;">
-              Cerramos todas tus sesiones abiertas por seguridad.
+              We signed out all your open sessions for security.
             </p>
             <p style="font-size:13px;line-height:1.5;color:#6b7280;margin:0;">
-              Si no fuiste tú, contacta de inmediato con {$safeFrom}.
+              If this was not you, contact {$safeFrom} immediately.
             </p>
             HTML);
     }

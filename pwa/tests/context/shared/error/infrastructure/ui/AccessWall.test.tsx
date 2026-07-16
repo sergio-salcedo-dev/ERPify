@@ -24,15 +24,15 @@ describe("AccessWall", () => {
     },
     {
       variant: AccessWallVariant.INVALID_LINK,
-      status: "Enlace no válido",
+      status: "Invalid link",
       testId: "access-wall--invalid-link",
-      signInName: "Iniciar sesión",
+      signInName: "Sign in",
     },
     {
       variant: AccessWallVariant.INVALID_RESET_LINK,
-      status: "Enlace no válido",
+      status: "Invalid link",
       testId: "access-wall--invalid-reset-link",
-      signInName: "Iniciar sesión",
+      signInName: "Sign in",
     },
   ])(
     "renders the $variant wall as accessible card content",
@@ -68,22 +68,22 @@ describe("AccessWall", () => {
     expect(signIn).toHaveAttribute("data-testid", "access-wall__sign-in--locked");
   });
 
-  it("renders the invalid-link wall in Spanish with a two-action stack", () => {
+  it("renders the invalid-link wall with a two-action stack", () => {
     render(<AccessWall variant={AccessWallVariant.INVALID_LINK} />);
 
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      "Este enlace ya no es válido",
+      "This link is no longer valid",
     );
     expect(
-      screen.getByText("Solicita una nueva invitación a tu administrador para continuar."),
+      screen.getByText("Ask your administrator for a new invitation to continue."),
     ).toBeInTheDocument();
 
     // Primary CTA returns to sign-in; secondary asks for a new invitation.
-    const signIn = screen.getByRole("link", { name: "Iniciar sesión" });
+    const signIn = screen.getByRole("link", { name: "Sign in" });
     expect(signIn).toHaveAttribute("href", "/login");
     expect(signIn).toHaveAttribute("data-testid", "access-wall__sign-in--invalid-link");
 
-    const request = screen.getByRole("link", { name: "Solicitar nueva invitación" });
+    const request = screen.getByRole("link", { name: "Request a new invitation" });
     expect(request).toHaveAttribute("href", "/");
     expect(request).toHaveAttribute("data-testid", "access-wall__request-invitation--invalid-link");
   });
@@ -100,14 +100,14 @@ describe("AccessWall", () => {
     // and only the exit path differs.
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(invitationTitle ?? "");
     expect(
-      screen.getByText("Puedes solicitar un enlace nuevo desde «¿Has olvidado tu contraseña?»."),
+      screen.getByText("You can request a new link to reset your password."),
     ).toBeInTheDocument();
 
-    const signIn = screen.getByRole("link", { name: "Iniciar sesión" });
+    const signIn = screen.getByRole("link", { name: "Sign in" });
     expect(signIn).toHaveAttribute("href", "/login");
     expect(signIn).toHaveAttribute("data-testid", "access-wall__sign-in--invalid-reset-link");
 
-    const request = screen.getByRole("link", { name: "Solicitar enlace nuevo" });
+    const request = screen.getByRole("link", { name: "Request a new link" });
     expect(request).toHaveAttribute("href", "/forgot-password");
     expect(request).toHaveAttribute(
       "data-testid",

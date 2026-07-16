@@ -6,7 +6,7 @@ import { Spinner } from "@/components/erpify";
 import { cn } from "@/components/cn";
 
 /** Label shown while a submission is in flight. */
-const LOADING_LABEL = "Enviando…";
+const LOADING_LABEL = "Sending…";
 
 interface ConnectivityButtonProps {
   /** In-flight flag (typically RHF `isSubmitting`): shows the spinner + label. */
@@ -21,7 +21,7 @@ interface ConnectivityButtonProps {
 
 /**
  * Submit button with a connectivity-aware state machine:
- * `idle → loading (spinner + «Enviando…», aria-busy) → disabled-in-flight`.
+ * `idle → loading (spinner + «Sending…», aria-busy) → disabled-in-flight`.
  * It stays mounted across the transition, so keyboard focus is preserved, and it
  * is `disabled` while loading (and while the caller's `disabled` gate holds), so
  * a double submit cannot fire. Retrying is idempotent — the same click path runs
