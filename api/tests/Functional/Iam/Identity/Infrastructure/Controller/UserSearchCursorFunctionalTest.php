@@ -6,11 +6,13 @@ namespace Erpify\Tests\Functional\Iam\Identity\Infrastructure\Controller;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Iam\Identity\Domain\Enum\Role;
+use Erpify\Iam\Identity\Infrastructure\Controller\UserSearchController;
+use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DoctrineUserSearchRepository;
 use Erpify\Tests\DataFixtures\UserFixtureFactory;
 use Erpify\Tests\Functional\AuthenticatesFunctionalRequests;
 use JsonException;
 use Override;
-use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\HttpFoundation\Request;
@@ -28,7 +30,8 @@ use Symfony\Component\Uid\Uuid;
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
-#[CoversNothing]
+#[CoversClass(UserSearchController::class)]
+#[CoversClass(DoctrineUserSearchRepository::class)]
 final class UserSearchCursorFunctionalTest extends WebTestCase
 {
     use AuthenticatesFunctionalRequests;

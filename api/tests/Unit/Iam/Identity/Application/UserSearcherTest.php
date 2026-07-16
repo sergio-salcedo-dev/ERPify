@@ -18,6 +18,7 @@ use PHPUnit\Framework\TestCase;
  * @internal
  */
 #[CoversClass(UserSearcher::class)]
+#[CoversClass(SearchUsersQuery::class)]
 final class UserSearcherTest extends TestCase
 {
     public function testPassesTheCriteriaToTheRepositoryAndReturnsItsPageVerbatim(): void

@@ -6,11 +6,12 @@ namespace Erpify\Tests\Functional\Iam\Identity\Infrastructure\Controller;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Iam\Identity\Domain\Enum\Role;
+use Erpify\Iam\Identity\Infrastructure\Controller\UserGetController;
 use Erpify\Tests\DataFixtures\UserFixtureFactory;
 use Erpify\Tests\Functional\AuthenticatesFunctionalRequests;
 use JsonException;
 use Override;
-use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\HttpFoundation\Request;
@@ -28,7 +29,7 @@ use Symfony\Component\HttpFoundation\Request;
  *
  * @internal
  */
-#[CoversNothing]
+#[CoversClass(UserGetController::class)]
 final class UserDetailResponseGoldenFunctionalTest extends WebTestCase
 {
     use AuthenticatesFunctionalRequests;
