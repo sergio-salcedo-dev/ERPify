@@ -1,5 +1,5 @@
 ---
-stepsCompleted: ['step-01-validate-prerequisites']
+stepsCompleted: ['step-01-validate-prerequisites', 'step-02-design-epics', 'step-03-create-stories']
 inputDocuments:
   - _bmad-output/planning-artifacts/arch-addendum-users-admin.md
   - _bmad-output/planning-artifacts/ux-designs/ux-ERPify-2026-07-06/EXPERIENCE.md
@@ -229,8 +229,299 @@ y aviso de que **des-identifica el rastro de auditoría**; la UI nunca permite c
 
 ### FR Coverage Map
 
-{{requirements_coverage_map}}
+- **FR1 → Epic 1 (U-0)** — read-side de identidades (list + detalle keyset).
+- **FR2 → Epic 1 (U-0)** — datos de autorización (`users` → `TIER_OPT_OUT` + grants `[ADMIN]`).
+- **FR3 → Epic 1 (U-0)** — conexión PWA ↔ backend real + vocabulario de roles alineado.
+- **FR4 → Epic 1 (U-1)** — `/me` deriva permisos + `<Can>` funcional.
+- **FR5 → Epic 1 (U-2)** — invitar (alta = invitación).
+- **FR6 → Epic 1 (U-3)** — cambio de estado (suspend/deactivate, guard ≥1 ADMIN).
+- **FR7 → Epic 1 (U-4)** — edición de roles *(candidato)*.
+- **FR8 → Epic 1 (U-5b)** — borrado GDPR en consola (superficie de cumplimiento).
+- **FR9 → Epic 1 (U-5a)** — cerrar #376 (tombstone de `actor_id`s en `Shared/Audit`, prereq duro de U-5b).
+
+**Cobertura NFR:** NFR1-4 = invariantes SI-16…19 + NFR11 = SI-20, verificados transversalmente en cada
+historia; NFR5 (keyset) nace en U-0; NFR6 (≥1 ADMIN) en U-3/U-5b; NFR7 (gateo + RFC 9457) en cada endpoint;
+NFR8 (deptrac) gate en todas; NFR9 (test) transversal; NFR10 (safe-first) = el orden de merge. **UX-DR1-6**
+en U-0 (lista/detalle) · U-2 (invitación) · U-3 (estado) · U-5b (erase). Sin FR/NFR/UX-DR huérfanos.
 
 ## Epic List
 
-{{epics_list}}
+**Una sola épica.** El diseño está validado (addendum SI-16…20 + decisión de auth cerrada) y el DAG es un
+grafo conexo enraizado en U-0 con **fuerte churn compartido** sobre los mismos ficheros núcleo (la consola
+`pwa/.../backoffice/users`, el `Permission` enum, `StaticAuthorizationPolicy`, el `Container` DI,
+`Iam/Identity`): no hay frontera de riesgo capaz de cambiar la dirección de una historia posterior, así que
+aplica «outcome cierto → menos épicas, más grandes + consolidar lo que toca los mismos ficheros» (precedente:
+`epics-identity-invitation-lifecycle.md`). *Alternativa descartada:* aislar U-5 (borrado GDPR + #376) en su
+propia épica — legítima (cruza a `Shared/Audit`) pero añade una dependencia cross-épica (U-5 necesita la
+consola de U-0) sin comprar feedback temprano (el diseño ya está validado).
+
+### Epic 1: Administración de usuarios (back-office / Iam)
+
+Tras la épica, un **ADMIN** gestiona identidades desde la consola `/backoffice/users` **conectada al backend
+real**: ve el padrón (list + detalle keyset), invita altas (alta = invitación), cambia el estado
+(suspend/deactivate) con la garantía **≥1 ADMIN activo**, y —con salvaguardas de cumplimiento— ejecuta el
+**borrado GDPR**; el gateo RBAC (`users.*`) es ADMIN-only por opt-out y los permisos de cliente vienen de
+`/me`. **Fuera de alcance:** tenancy operativa, filtro por rol server-side, superficie de erase para otros
+sujetos. **FRs:** FR1-FR9. **NFRs:** NFR1-NFR11. **UX-DR:** UX-DR1-UX-DR6.
+
+**Historias (orden de merge safe-first `U-0 → U-1 → (U-2 · U-3) → U-4 · [U-5a → U-5b]`):**
+
+- **U-0 — read-side + auth-data + conexión PWA** — proyección `UserRow` single-context + `GET
+  /backoffice/users` (keyset) + `/{id}`, `#[IsGranted('users.read')]`; `users`→opt-out+grants;
+  `ApiUserRepository` + swap del mock + vocabulario de roles alineado. — FR1, FR2, FR3.
+- **U-1 — `/me` deriva permisos + `<Can>`** — expansión `roles→permisos` (read-model derivado, no
+  persistido); habilita las acciones visibles al ADMIN. — FR4.
+- **U-2 — invitar** — `#[IsGranted('users.invite')]` → `SendInvitation`/`InviteUser` (→ INVITED); form de
+  invitación; rename `users.write→users.invite`. — FR5.
+- **U-3 — cambio de estado** — `PATCH .../status` → `ChangeUserStatus` (`409` si rompe ≥1 ADMIN); acciones en
+  el detalle; rename `users.delete→users.changeStatus`. — FR6.
+- **U-4 — edición de roles** *(candidato)* — `ChangeUserRoles` (establece el conjunto completo) + dualidad
+  `User.roles` vs `Membership.roles`. — FR7.
+- **U-5a — cerrar #376** *(prereq duro · `Shared/Audit`)* — tombstone de `actor_id`s consultado por el writer
+  DBAL + el handler async. — FR9.
+- **U-5b — borrado GDPR en consola** — Application Service `FulfilIdentityErasure` (identity-erase +
+  actor-anonymise, una operación); acción separada, ADMIN-only, type-to-confirm; `users.erase` gana entrada
+  en el enum PWA. — FR8.
+
+Ninguna historia depende de una posterior en su orden de merge.
+
+## Epic 1: Administración de usuarios (back-office / Iam)
+
+Consola `/backoffice/users` conectada al backend real: padrón (list+detalle keyset), invitar, cambio de
+estado con garantía ≥1 ADMIN, edición de roles *(candidato)* y borrado GDPR con salvaguardas. Gateo RBAC
+`users.*` ADMIN-only por opt-out. **Orden de merge:** `U-0 → U-1 → (U-2 · U-3) → U-4 · [U-5a → U-5b]`.
+
+> **Método de las historias (AC basado en invariantes).** Cada historia declara el comportamiento que
+> introduce, los invariantes que consume y los que establece; los AC se redactan como **invariantes
+> verificables** enganchados al addendum (SI-16…SI-20) y a las FR, de modo que una refactorización futura no
+> pueda romper una garantía sin que un test la detecte.
+
+### Story 1.1 (U-0): Read-side de identidades — lista + detalle conectados al backend real
+
+Como **ADMIN**,
+quiero ver el padrón de usuarios (lista paginada + detalle) desde la consola conectada al backend real,
+para administrar identidades sobre datos reales en vez del mock in-memory.
+
+**Comportamiento que introduce:** el read-side de identidades, los datos de autorización de `users` y la
+conexión de la consola PWA al backend.
+**Invariantes que consume:** el plano RBAC (SI-1…9), `Iam/Identity/User` (Épica II).
+**Invariantes que establece:** SI-16 (vocabulario = backend), SI-17 (`users`→opt-out, ADMIN-only), SI-20.
+
+**Acceptance Criteria:**
+
+**Given** `StaticAuthorizationPolicy`,
+**When** se añade `users`,
+**Then** `users` ∈ `TIER_OPT_OUT` y `users.{read,invite,changeStatus,erase}` ∈ `EXPLICIT_GRANTS → [ADMIN]`, y
+el tripwire `StaticAuthorizationPolicyIsDataOnlyTest` sigue **verde** (solo datos) (FR2, SI-17).
+
+**Given** un usuario `VIEWER`/`EDITOR`/`MANAGER` (no ADMIN),
+**When** hace `GET /backoffice/users`,
+**Then** recibe `403` — sin el opt-out, `read` de tier lo concedería; el opt-out lo impide (SI-17).
+
+**Given** un ADMIN,
+**When** hace `GET /backoffice/users`,
+**Then** recibe un `Page` keyset (envelope-v2 `{data[], pagination{hasNext,hasPrev,count,links{next,prev}}}`,
+cursores opacos) de `UserListResource` proyectado por `SELECT NEW UserRow(...) FROM User` **sin JOIN**;
+filtros `email`(Contains)+`status`(Eq); `roles` **no** es filtrable (ausente del `SearchFieldMap`) (FR1, NFR5).
+
+**Given** un ADMIN,
+**When** hace `GET /backoffice/users/{id}`,
+**Then** recibe `UserDetailResource` (email, status, roles, timestamps) **sin** sección `permissions`; `{id}`
+malformado → `400 invalid-uuid`; id ausente → `404` (FR1, NFR7).
+
+**Given** la consola PWA,
+**When** se conecta,
+**Then** `ApiUserRepository`(search+find) + navigator + adapters sustituyen el mock
+(`toConstantValue`→`inSingletonScope`) **sin cambios de consumidor**; el `Role` del PWA se alinea al backend
+(`VIEWER/EDITOR/MANAGER/ADMIN/AUDIT_READER`), se quita el filtro de rol y `create/update/delete` lanzan
+«no soportado» (FR3, SI-16, SI-18).
+
+**Given (SI-20)** los strings de permiso,
+**When** se comparan API y PWA,
+**Then** `users.read` es idéntico byte-a-byte en `#[IsGranted]` y `Permission.USERS_READ`.
+
+### Story 1.2 (U-1): `/me` deriva permisos + gateo de cliente `<Can>`
+
+Como **ADMIN**,
+quiero que la consola conozca mis permisos derivados,
+para ver las acciones que puedo ejecutar en vez de tenerlas ocultas.
+
+**Comportamiento que introduce:** la expansión `roles → permisos` en `/me` y el gateo de cliente funcional.
+**Invariantes que consume:** el plano RBAC, SI-17.
+**Invariantes que establece:** los permisos son un **read-model derivado, no persistido** (SI-18).
+
+**Acceptance Criteria:**
+
+**Given** un ADMIN autenticado,
+**When** hace `GET /me`,
+**Then** la respuesta incluye el **set de permisos derivado** expandiendo `roles` vía `AuthorizationPolicy`
+(no un campo almacenado) (FR4).
+
+**Given (SI-18)** el modelo de `User`,
+**When** se inspecciona,
+**Then** **no** existe `User.permissions` persistido — los permisos solo se derivan.
+
+**Given** un ADMIN en la consola,
+**When** se renderiza,
+**Then** `<Can permission=users.invite>` / `<Can permission=users.changeStatus>` **muestran** sus botones
+(antes ocultos por `permissions:[]`) (FR4).
+
+**Given** un usuario sin un permiso,
+**When** se renderiza,
+**Then** el control gateado **no** aparece (deniega por ausencia).
+
+### Story 1.3 (U-2): Invitar (alta = invitación)
+
+Como **ADMIN**,
+quiero invitar a una persona nueva por email con sus roles,
+para dar de alta identidades sin crear contraseñas ni «cuentas» directamente.
+
+**Comportamiento que introduce:** el alta por invitación desde la consola.
+**Invariantes que consume:** SI-17 (`users.invite` ADMIN-only), SI-18 (alta = invitación), SI-20.
+**Invariantes que establece:** el rename del enum PWA `users.write → users.invite`.
+
+**Acceptance Criteria:**
+
+**Given** un ADMIN,
+**When** hace el `POST` de alta con `{email, roles}` (`#[IsGranted('users.invite')]`),
+**Then** se crea una identidad `INVITED` vía `SendInvitation`/`InviteUser` (sin password ni status en el
+payload) (FR5, SI-18).
+
+**Given (test)** una invitación exitosa,
+**When** se verifica en Behat,
+**Then** el email de invitación queda **encolado** (no basta el `201`) (NFR9).
+
+**Given** el form de la consola,
+**When** se invita,
+**Then** es un form de **invitación** (email + roles) que reemplaza el «create» del mock, gateado por
+`<Can permission=users.invite>` (FR5, UX-DR3).
+
+**Given** el enum PWA,
+**When** se renombra,
+**Then** `users.write → users.invite`, idéntico al string del `#[IsGranted]` backend (SI-20).
+
+### Story 1.4 (U-3): Cambio de estado (suspend / deactivate)
+
+Como **ADMIN**,
+quiero suspender o desactivar a un usuario (p.ej. un empleado despedido),
+para bloquear su acceso conservando su historia, sin dejar la organización sin administrador.
+
+**Comportamiento que introduce:** las acciones de estado desde el detalle.
+**Invariantes que consume:** el ciclo unidireccional + ≥1 ADMIN activo (Épica II), SI-18.
+**Invariantes que establece:** el rename `users.delete → users.changeStatus`.
+
+**Acceptance Criteria:**
+
+**Given** un ADMIN y un usuario `ACTIVE`,
+**When** hace `PATCH /backoffice/users/{id}/status` con `{status: SUSPENDED|DEACTIVATED}`
+(`#[IsGranted('users.changeStatus')]`),
+**Then** `ChangeUserStatus` transiciona el estado (unidireccional desde `ACTIVE`), invalida sesiones y emite
+`UserSuspended`/`UserDeactivated` por el `EventBus` (outbox) (FR6, NFR6).
+
+**Given (≥1 ADMIN)** el último ADMIN activo,
+**When** se intenta suspender/desactivar,
+**Then** responde `409 LastActiveAdministratorProtected` y el estado **no** cambia (NFR6).
+
+**Given (atribución)** un usuario desactivado,
+**When** se consulta el audit trail,
+**Then** su atribución (`actor_id`) permanece **intacta** — deactivate conserva la historia.
+
+**Given** la consola,
+**When** se cambia el estado,
+**Then** las acciones viven en el **detalle** (no un form de edición libre); e2e conduce el ciclo
+`invite → INVITED → changeStatus → reflejo` (NFR9, UX-DR4).
+
+**Given** el enum PWA,
+**When** se renombra,
+**Then** `users.delete → users.changeStatus` (SI-20).
+
+### Story 1.5 (U-4): Edición de roles *(candidato — a confirmar en el corte)*
+
+Como **ADMIN**,
+quiero cambiar el conjunto de roles de un usuario,
+para ajustar sus capacidades sin re-invitarlo.
+
+> **Candidato.** Introduce un caso de uso de dominio nuevo y toca el seam de tenancy (SI-15); puede quedar
+> fuera de esta épica. Sus decisiones abiertas se resuelven al implementarla.
+
+**Comportamiento que introduce:** `ChangeUserRoles` (nuevo caso de uso).
+**Invariantes que consume:** SI-16, SI-15 (dualidad `User.roles`/`Membership.roles`).
+**Invariantes que establece:** la semántica *set* de la edición de roles.
+
+**Acceptance Criteria:**
+
+**Given** el caso de uso `ChangeUserRoles`,
+**When** se ejecuta,
+**Then** **establece el conjunto completo** de roles (semántica *set*, no deltas grant/revoke) y el guard ≥1
+ADMIN evalúa el conjunto **resultante** (no puede dejar la org sin ADMIN activo) (FR7).
+
+**Given** la dualidad de fuentes (SI-15),
+**When** se persisten los roles,
+**Then** se **decide al implementar** si escriben `User.roles` (operativo) y/o `Membership.roles`
+(autoritativo) — decisión abierta, no se fija aquí.
+
+**Given** el permiso de la acción,
+**When** se define,
+**Then** se decide al implementar (probablemente un `users.changeRoles` propio en `EXPLICIT_GRANTS → [ADMIN]`),
+idéntico byte-a-byte API↔PWA (SI-20).
+
+### Story 1.6 (U-5a): Cerrar #376 — tombstone de `actor_id`s en `Shared/Audit`
+
+Como **plataforma**,
+quiero que un `actor_id` anonimizado no pueda ser re-insertado por un evento de auditoría async en vuelo,
+para que el borrado GDPR sea completo y no se «resucite» un sujeto ya erasado.
+
+**Comportamiento que introduce:** el tombstone de `actor_id`s erasados.
+**Invariantes que consume:** el subsistema de auditoría (`audit_log`, writer, handler async).
+**Invariantes que establece:** un `actor_id` tombstoneado nunca reaparece en `audit_log`.
+
+**Acceptance Criteria:**
+
+**Given** un `actor_id` anonimizado,
+**When** se registra en el tombstone,
+**Then** `DbalAuditLogWriter` **y** el `RecordAuditEntryHandler` async lo consultan y **anonimizan/rechazan**
+cualquier inserción posterior con ese `actor_id` (FR9).
+
+**Given** un evento `activity` en vuelo para un actor tombstoneado,
+**When** el handler lo drena tras la anonimización,
+**Then** la fila resultante **no** lleva el `actor_id` original (no hay resurrección) — un test lo prueba.
+
+**Given** el reconciler existente,
+**When** corre tras un erase,
+**Then** no encuentra discrepancias de sujeto.
+
+### Story 1.7 (U-5b): Borrado GDPR desde la consola
+
+Como **ADMIN**,
+quiero ejecutar el borrado GDPR de una identidad desde la consola, con confirmación irreversible,
+para cumplir una solicitud de derecho al olvido sin depender de que un desarrollador ejecute una CLI.
+
+**Comportamiento que introduce:** la superficie de cumplimiento de erase en la consola.
+**Invariantes que consume:** SI-19 (fricción ∝ irreversibilidad), ≥1 ADMIN activo, el tombstone de #376 (U-5a).
+**Invariantes que establece:** el erase des-identifica identidad + rastro **como una unidad**.
+
+**Acceptance Criteria:**
+
+**Given (prereq duro)** #376,
+**When** se planifica el merge,
+**Then** U-5b **no** se mergea antes que U-5a (el tombstone existe).
+
+**Given** un ADMIN,
+**When** ejecuta el borrado GDPR (`#[IsGranted('users.erase')]`) con **confirmación type-to-confirm**,
+**Then** un **único Application Service** (`FulfilIdentityErasure`) encadena `EraseIdentitySubject` (hard-delete
+identidad + reset tokens + audit `GDPR_SUBJECT_ERASED`) **+** anonimización del rastro (`actor_id`/`ip`/`ua`)
+como **una operación** idempotente (FR8, SI-19).
+
+**Given (atribución)** un usuario erasado,
+**When** se consulta el audit trail y los datos de negocio,
+**Then** su `actor_id` está anonimizado y su PII redactada, y **ningún** registro de negocio que creó/actualizó/
+borró se toca (no hay cascada — las filas de negocio no guardan autor).
+
+**Given (≥1 ADMIN)** el último ADMIN activo,
+**When** se intenta erasar,
+**Then** se rechaza (no puede dejar la org sin ADMIN).
+
+**Given** la UI,
+**When** se muestra el borrado GDPR,
+**Then** es una acción «Borrado GDPR (irreversible)» **separada** de deactivate, ADMIN-only, con aviso de
+des-identificación; `users.erase` tiene entrada en el enum PWA; la CLI se mantiene (additiva) (UX-DR6, SI-19).
