@@ -7,7 +7,6 @@ export function toUserFilters(filter: UsersFilter): Filter[] {
   const filters: Filter[] = [];
   const email = filter.email.trim();
   if (email) filters.push({ field: "email", operator: FilterOperator.Contains, value: email });
-  if (filter.role) filters.push({ field: "role", operator: FilterOperator.Eq, value: filter.role });
   if (filter.status)
     filters.push({ field: "status", operator: FilterOperator.Eq, value: filter.status });
   return filters;

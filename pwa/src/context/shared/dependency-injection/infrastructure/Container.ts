@@ -34,7 +34,8 @@ import { CreateBankAccount } from "../../../backoffice/bankaccount/application/C
 import { UpdateBankAccount } from "../../../backoffice/bankaccount/application/UpdateBankAccount";
 import { ChangeBankAccountStatus } from "../../../backoffice/bankaccount/application/ChangeBankAccountStatus";
 import { DeleteBankAccount } from "../../../backoffice/bankaccount/application/DeleteBankAccount";
-import { InMemoryUserRepository } from "../../../backoffice/user/infrastructure/InMemoryUserRepository";
+import { ApiUserRepository } from "../../../backoffice/user/infrastructure/ApiUserRepository";
+import { ApiUserSearchNavigator } from "../../../backoffice/user/infrastructure/ApiUserSearchNavigator";
 import { ApiLoginRepository } from "../../../backoffice/user/infrastructure/ApiLoginRepository";
 import type { LoginRepository } from "../../../backoffice/user/domain/LoginRepository";
 import { ApiAcceptInvitationRepository } from "../../../backoffice/user/infrastructure/ApiAcceptInvitationRepository";
@@ -47,7 +48,6 @@ import { ApiIdentityRepository } from "@/context/shared/access/infrastructure/Ap
 import type { IdentityRepository } from "@/context/shared/access/domain/IdentityRepository";
 import { ApiSessionsRepository } from "@/context/shared/access/infrastructure/ApiSessionsRepository";
 import type { SessionsRepository } from "@/context/shared/access/domain/SessionsRepository";
-import { InMemoryResourceNavigator } from "../../../shared/resource/infrastructure/InMemoryResourceNavigator";
 import type { DebugTokenObserver } from "@/context/shared/debug-token/domain/DebugTokenObserver";
 import { EventTargetDebugTokenObserver } from "@/context/shared/debug-token/infrastructure/EventTargetDebugTokenObserver";
 import { NoopDebugTokenObserver } from "@/context/shared/debug-token/infrastructure/NoopDebugTokenObserver";
@@ -186,13 +186,11 @@ container
   .to(ApiAuditEventDetailRepository)
   .inSingletonScope();
 
-// User module (mocked). The navigator shares the SAME repository instance so it
-// reads the same in-memory store — a singleton class binding would create two.
-const userRepository = new InMemoryUserRepository();
-container.bind("BackOfficeUserRepository").toConstantValue(userRepository);
-container
-  .bind("BackOfficeUserSearchNavigator")
-  .toConstantValue(new InMemoryResourceNavigator(userRepository));
+// User read-side: live adapters over the injected HttpClient. Both are stateless
+// (they hold no store), so each binds as its own singleton — the register list and
+// its cursor navigation read the same backend endpoint.
+container.bind("BackOfficeUserRepository").to(ApiUserRepository).inSingletonScope();
+container.bind("BackOfficeUserSearchNavigator").to(ApiUserSearchNavigator).inSingletonScope();
 
 // Session sign-in: a real HTTP adapter over the injected HttpClient,
 // which the container binds to MockHttpClient under test.

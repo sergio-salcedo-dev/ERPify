@@ -106,7 +106,6 @@ export default function EditUserPage() {
               email: user.email,
               roles: user.roles,
               status: user.status,
-              permissions: user.permissions,
             }}
             onStaleUser={reload}
           />

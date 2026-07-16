@@ -140,26 +140,6 @@ export default function UserDetailPage() {
                 <RolesBadges roles={user.roles} testId="users-detail__field-roles" />
               </dd>
             </div>
-            <div className="users-detail__field sm:col-span-2">
-              <dt className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-                Permissions
-              </dt>
-              <dd
-                className="text-foreground mt-1 flex flex-wrap gap-1.5 text-xs"
-                data-testid="users-detail__field-permissions"
-              >
-                {user.permissions.length > 0
-                  ? user.permissions.map((permission) => (
-                      <span
-                        key={permission}
-                        className="border-border bg-muted rounded border px-1.5 py-0.5 font-mono"
-                      >
-                        {permission}
-                      </span>
-                    ))
-                  : "—"}
-              </dd>
-            </div>
             <Field
               label="Created"
               value={dateTimeProvider.formatIsoToRelative(user.createdAt)}

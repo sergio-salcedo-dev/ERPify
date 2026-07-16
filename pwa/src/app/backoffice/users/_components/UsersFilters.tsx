@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/erpify";
 import { SortDirection } from "@/context/shared/search/domain/SortDirection";
-import { ALL_ROLES, type Role } from "@/context/shared/access/domain/Role";
 import { UserStatus } from "@/context/shared/access/domain/UserStatus";
 import {
   USERS_SORTABLE_COLUMNS,
@@ -17,7 +16,7 @@ import {
   type UsersFilter,
   type UsersSort,
 } from "../_lib/usersFilterSort";
-import { ROLE_LABEL, STATUS_LABEL } from "../_lib/userLabels";
+import { STATUS_LABEL } from "../_lib/userLabels";
 
 interface UsersFiltersProps {
   filter: UsersFilter;
@@ -34,7 +33,7 @@ const NONE_SORT_VALUE = "__none__" as const;
 const FILTER_DEBOUNCE_MS = 300;
 
 function countPanelFilters(filter: UsersFilter): number {
-  return (filter.role === "" ? 0 : 1) + (filter.status === "" ? 0 : 1);
+  return filter.status === "" ? 0 : 1;
 }
 
 export function UsersFilters({
@@ -76,9 +75,6 @@ export function UsersFilters({
     onReset();
   };
 
-  const handleRoleChange = (event: ChangeEvent<HTMLSelectElement>): void => {
-    onFilterChange({ ...filter, role: event.target.value as Role | "" });
-  };
   const handleStatusChange = (event: ChangeEvent<HTMLSelectElement>): void => {
     onFilterChange({ ...filter, status: event.target.value as UserStatus | "" });
   };
@@ -176,24 +172,7 @@ export function UsersFilters({
       >
         <div className="users-filters__panel-inner overflow-hidden">
           <div className="users-filters__panel-fields border-border bg-muted/20 mt-3 rounded-md border p-3 sm:p-4">
-            <div className="users-filters__grid grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <FormField name="users-filters-role" label="Role">
-                <select
-                  className={selectClassName}
-                  value={filter.role}
-                  onChange={handleRoleChange}
-                  aria-label="Filter by role"
-                  title="Filter by role"
-                  data-testid="users-filters__role"
-                >
-                  <option value="">All roles</option>
-                  {ALL_ROLES.map((role) => (
-                    <option key={role} value={role}>
-                      {ROLE_LABEL[role]}
-                    </option>
-                  ))}
-                </select>
-              </FormField>
+            <div className="users-filters__grid grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <FormField name="users-filters-status" label="Status">
                 <select
                   className={selectClassName}

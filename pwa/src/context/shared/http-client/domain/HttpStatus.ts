@@ -34,6 +34,8 @@ export const HttpStatus = {
   TOO_MANY_REQUESTS: 429,
   /** 500 — generic server error. */
   INTERNAL_SERVER_ERROR: 500,
+  /** 501 — the operation is not implemented / not supported. */
+  NOT_IMPLEMENTED: 501,
   /** 502 — upstream gateway error. */
   BAD_GATEWAY: 502,
   /** 503 — service unavailable. */
