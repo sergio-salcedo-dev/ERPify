@@ -48,10 +48,10 @@ final readonly class PermissionCatalog
     ];
 
     /**
-     * @return list<Permission>
+     * @throws InvalidPermission if a catalog entry is not a well-formed `<resource>.<action>`; a typo here is
+     *                           a bug, kept out by the catalog's own well-formedness test
      *
-     * @throws InvalidPermission if a catalog entry is not a well-formed `<resource>.<action>` — a typo here
-     *                           is a bug, kept out by {@see \Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security\PermissionCatalogTest}
+     * @return list<Permission>
      */
     public function all(): array
     {
