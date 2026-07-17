@@ -147,9 +147,13 @@ describe("ApiUserRepository response guards", () => {
     expect(guard({ data: null, pagination })).toBe(false);
     // A row whose roles are not a string array is rejected.
     expect(guard({ data: [{ ...primitives, roles: "ADMIN" }], pagination })).toBe(false);
-    // A leaked credential column is simply ignored (not required) — the row still
-    // validates on its declared fields; the projection never selects it anyway.
+    // A wrong-typed declared field (id must be a string) is rejected.
     expect(guard({ data: [{ ...primitives, id: 42 }], pagination })).toBe(false);
+    // An extra column the projection would never select (e.g. a leaked credential)
+    // is tolerated: the guard checks only the declared fields, and
+    // `User.fromPrimitives` reads only those six — a stray field never reaches the
+    // domain object. The server-side projection is the real defence.
+    expect(guard({ data: [{ ...primitives, password_hash: "leak" }], pagination })).toBe(true);
     expect(guard(undefined)).toBe(false);
   });
 

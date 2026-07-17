@@ -3,7 +3,7 @@ baseline_commit: 3bb35964
 ---
 # Story 1.1 (U-0): Read-side de identidades — lista + detalle conectados al backend real
 
-Status: in-progress
+Status: review
 
 <!-- Validación opcional. Ejecuta `bmad-create-story` validate para un chequeo de calidad antes de dev-story. -->
 
@@ -183,33 +183,33 @@ costura B; AC5 = costura C; AC6-7 = transversales.
 
 ### C — Conexión PWA · `pwa/src/` (AC5, AC6)
 
-- [ ] **Endpoints** — bloque `USERS` en `ApiEndpoints` (helper `userPath(id)` con `encodeURIComponent`, bajo `BACKOFFICE_PREFIX`
+- [x] **Endpoints** — bloque `USERS` en `ApiEndpoints` (helper `userPath(id)` con `encodeURIComponent`, bajo `BACKOFFICE_PREFIX`
       → `/api/v1/backoffice/users`).
-- [ ] **Repo + navigator reales** — `ApiUserRepository implements CrudRepository<User, UserInput>` (**SIN capa de adaptador**
+- [x] **Repo + navigator reales** — `ApiUserRepository implements CrudRepository<User, UserInput>` (**SIN capa de adaptador**
       — el puerto ya es genérico; ver crux) con `search`/`find` vía `HttpClient` + `ResponseGuard` (guards + `toUserSearchPage`
       devolviendo `{items}`, espejando `ApiBankRepository`) y `create/update/delete` → `throw` tipado «no soportado»;
       `ApiUserSearchNavigator implements ResourceSearchNavigator<User>` (`follow` con guard same-origin `safeHref`).
-- [ ] **DI swap** — en `Container.ts`, los 2 binds `.toConstantValue(mock)` → `.to(Api...).inSingletonScope()`; borrar la
+- [x] **DI swap** — en `Container.ts`, los 2 binds `.toConstantValue(mock)` → `.to(Api...).inSingletonScope()`; borrar la
       construcción del mock + imports. Páginas/hooks intactos (0 cambios de consumidor).
-- [ ] **Revocabulario `Role`** — `Role.ts` → `VIEWER/EDITOR/MANAGER/ADMIN/AUDIT_READER`. Ripple: `ROLE_LABEL` (`userLabels.ts`,
+- [x] **Revocabulario `Role`** — `Role.ts` → `VIEWER/EDITOR/MANAGER/ADMIN/AUDIT_READER`. Ripple: `ROLE_LABEL` (`userLabels.ts`,
       `Record<Role,string>` exhaustivo = guardrail de compilación), `UserForm` (checkboxes), `RolesBadges`, `DevSessionSwitcher`.
       Borrar `userSeed.ts` (mock retirado).
-- [ ] **Quitar filtro de rol** — el `<select users-filters__role>` en `UsersFilters` + el campo `role` en `usersFilterSort`/
+- [x] **Quitar filtro de rol** — el `<select users-filters__role>` en `UsersFilters` + el campo `role` en `usersFilterSort`/
       `usersSearchCriteria`. Quedan email + status.
-- [ ] **Detalle sin `permissions`** — quitar `permissions` de `User.ts` (`UserPrimitives`) y de los chips en `[id]/page.tsx`
+- [x] **Detalle sin `permissions`** — quitar `permissions` de `User.ts` (`UserPrimitives`) y de los chips en `[id]/page.tsx`
       (UX-DR2 — el real no lo devuelve). El form/`UserInput.permissions` son **transitorios** (→ invite/changeStatus en
       U-2/U-3, ocultos por `<Can>`): **mínima cirugía para que compile**, no invertir.
-- [ ] **NO tocar** el enum `Permission` (`users.write`/`users.delete` se renombran en U-2/U-3; `users.read` ya coincide),
+- [x] **NO tocar** el enum `Permission` (`users.write`/`users.delete` se renombran en U-2/U-3; `users.read` ya coincide),
       `UserStatus` (ya coincide), ni páginas/hooks.
-- [ ] **Tests** — retirar/reescribir `InMemoryUserRepository.test.ts` (mock muerto); actualizar `schemas.test.ts` a los nuevos
+- [x] **Tests** — retirar/reescribir `InMemoryUserRepository.test.ts` (mock muerto); actualizar `schemas.test.ts` a los nuevos
       `Role`; nuevos `ApiUserRepository.test.ts` + `ApiUserSearchNavigator.test.ts` (espejan Banks: filtros/sort/limit,
       envelope-v2 aceptado / legacy rechazado, guard open-redirect). e2e `users-real-api.spec.ts` **solo lectura** (list+detail,
       login ADMIN con el seed dev/test; **NO** conteos exactos — DB dev compartida).
-- [ ] Gate: `make pwa.quality` + `make pwa.test.unit`.
+- [x] Gate: `make pwa.quality` + `make pwa.test.unit`.
 
 ### Verificaciones (Working principle 4)
 
-- [ ] `make php.stan` (cada fichero), `make php.quality`, `make php.deptrac`, `make php.lint.bounded-context`,
+- [x] `make php.stan` (cada fichero), `make php.quality`, `make php.deptrac`, `make php.lint.bounded-context`,
       `make php.lint.error-contract`, `make pwa.quality`, `make php.behat`, `make pwa.test`.
 - [x] `make sf c='debug:router'` → confirmar `/api/v1/backoffice/users` (los controladores en `Iam/Identity/Infrastructure/
       Controller/` reciben el prefijo `/api/v1` del recurso `api_v1_iam_identity`). ✓ resuelve a `backoffice_user_search` /
@@ -397,8 +397,36 @@ claude-opus-4-8 (1M context).
 
 ### Completion Notes List
 
-**Alcance entregado = PR-A backend (costuras A + B).** La costura C (PWA) es PR-B, sesión aparte — sus tareas quedan sin
-marcar a propósito. La historia permanece `in-progress` hasta que C aterrice.
+**PR-A backend (costuras A + B)** mergeado en `main` (#501, `086624e9`). **PR-B frontend (costura C)** entregado abajo (#502)
+→ la historia pasa a `review`.
+
+**C · Conexión PWA ↔ backend (PR-B, #502).** La consola `/backoffice/users` conmuta el mock in-memory por HTTP real vía DI,
+sin un solo cambio de consumidor (páginas/hooks/toolkit intactos):
+
+- **`ApiUserRepository implements CrudRepository<User, UserInput>`** (sin capa de adaptador — el puerto ya es genérico):
+  `search` serializa `filters + sort(dir uppercased) + limit(clamp 100)` y `find` pega a `/backoffice/users/{id}`, ambos con
+  `ResponseGuard` que acepta el envelope-v2 y rechaza la forma legacy. `create/update/delete` lanzan un `HttpError` tipado
+  **status 501** (`UserProblemType.NOT_SUPPORTED` + nuevo `HttpStatus.NOT_IMPLEMENTED`) — `HttpError`, no `Error` plano, para
+  que `DeleteUserButton` (que re-lanza los no-`HttpError`) lo degrade a `MutationError` en vez de crashear; ruta hoy
+  inalcanzable por `<Can>` (SI-18). **`ApiUserSearchNavigator implements ResourceSearchNavigator<User>`** (follow verbatim con
+  guard same-origin `safeHref`). Bindeados directo en `Container.ts` bajo `"BackOfficeUserRepository"` /
+  `"BackOfficeUserSearchNavigator"`; mock (`InMemoryUserRepository`) + `userSeed` + su test borrados.
+- **`Role` alineado al backend** (`VIEWER/EDITOR/MANAGER/ADMIN/AUDIT_READER`, byte-idéntico a `Iam\Identity\Domain\Enum\Role`);
+  `ROLE_LABEL` reescrito (guardrail `Record<Role,string>` exhaustivo). Ripple automático en `RolesBadges`/`UserForm`/
+  `DevSessionSwitcher` (consumen `ALL_ROLES`/`ROLE_LABEL`). `schemas.test.ts` fija el vocabulario nuevo (acepta los 5, rechaza
+  uno stale).
+- **Filtro de rol quitado** (`roles` no es filtrable — fuera del `SearchFieldMap`): fuera el `<select>` de `UsersFilters` y el
+  campo `role` de `UsersFilter`/`EMPTY_FILTER`/`hasActiveFilter`/`toUserFilters`; quedan email(contains) + status(eq).
+- **Detalle sin `permissions`** (UX-DR2 — el read-model real no lo devuelve): `permissions` fuera de `UserPrimitives`/`User` y
+  de los chips de `[id]/page.tsx`; el campo del form es transitorio (`UserFormInitial.permissions` → opcional, seed `[]`),
+  cirugía mínima para compilar. Enum `Permission`, `UserStatus`, páginas y hooks intactos.
+- **Verificado (fresco, worktree #502):** `tsc --noEmit` limpio · `make pwa.quality` exit 0 · `make pwa.test.unit` 1061/1061 ·
+  e2e **read-only** `users-real-api.spec.ts` verde contra el stack vivo (list + filtro por email + detalle sin `permissions`;
+  el `beforeAll` afirma envelope-v2 y que la fila no trae `password_hash`/`permissions`; sin conteos exactos).
+- **Seguridad (checklist frontend):** open-redirect cubierto por `assertSameOriginRelative` (test dedicado: absoluta/
+  protocol-relative/scheme peligroso rechazadas, sin red); `ResponseGuard` convierte drift/legacy en fallo tipado; ninguna
+  credencial/PII en el wire (el guard tolera pero `User` descarta un campo extra; la proyección server-side es la defensa
+  real); sin `dangerouslySetInnerHTML`, sin deps nuevas, headers/CSP intactos.
 
 - **A · RBAC (data-only):** `users` → `TIER_OPT_OUT` + 4 grants `users.{read,invite,changeStatus,erase}` → `[ADMIN]` en
   `StaticAuthorizationPolicy`. El opt-out es lo que confina la consola a ADMIN (sin él, `read` se auto-concedería a VIEWER);
@@ -458,10 +486,33 @@ marcar a propósito. La historia permanece `in-progress` hasta que C aterrice.
 - `tests/Behat/Context/SecurityContext.php` (paso "logged in as an administrator")
 - `tests/DataFixtures/Fixtures/Session.yaml` (`session_admin`)
 
+**C — PWA (`pwa/`, PR-B / #502):**
+- `src/context/backoffice/user/infrastructure/ApiUserRepository.ts` · `ApiUserSearchNavigator.ts` (NEW)
+- `src/context/backoffice/user/domain/User.ts` (UPDATE — sin `permissions`)
+- `src/context/backoffice/user/domain/UserProblemType.ts` (UPDATE — `NOT_SUPPORTED`)
+- `src/context/shared/http-client/domain/HttpStatus.ts` (UPDATE — `NOT_IMPLEMENTED` 501)
+- `src/context/shared/access/domain/Role.ts` (UPDATE — vocab backend)
+- `src/context/shared/http-client/infrastructure/ApiEndpoints.ts` (UPDATE — bloque `USERS`)
+- `src/context/shared/dependency-injection/infrastructure/Container.ts` (UPDATE — swap 2 binds mock→real)
+- `src/app/backoffice/users/_lib/userLabels.ts` · `_lib/usersFilterSort.ts` · `_lib/usersSearchCriteria.ts` (UPDATE)
+- `src/app/backoffice/users/_components/UsersFilters.tsx` · `_components/UserForm.tsx` (UPDATE)
+- `src/app/backoffice/users/[id]/page.tsx` · `[id]/edit/page.tsx` (UPDATE)
+- `src/context/backoffice/user/infrastructure/InMemoryUserRepository.ts` · `infrastructure/userSeed.ts` (DELETE)
+
+**C — tests (`pwa/tests/`, PR-B / #502):**
+- `context/backoffice/user/infrastructure/ApiUserRepository.test.ts` · `ApiUserSearchNavigator.test.ts` (NEW)
+- `e2e/backoffice/users-real-api.spec.ts` (NEW)
+- `context/backoffice/user/schemas.test.ts` (UPDATE — vocabulario `Role`)
+- `context/backoffice/user/InMemoryUserRepository.test.ts` (DELETE)
+
 ### Change Log
 
 - 2026-07-16 — PR-A (costuras A+B): RBAC `users` opt-out + 4 grants ADMIN; read-side `GET /backoffice/users` (+`/{id}`)
   con proyección `UserRow`, keyset y Resource DTOs por-vista, gateados `users.read`. Tests unit/functional/Behat +
   ajuste de `TestDebugDataHolder` (auth-lookup por call-site). Costura C (PWA) pendiente en PR-B.
+- 2026-07-17 — PR-B (costura C, #502): consola `/backoffice/users` conectada al backend real vía DI (`ApiUserRepository`/
+  `ApiUserSearchNavigator`, swap mock→real sin cambios de consumidor); `Role` alineado al backend; filtro de rol quitado;
+  detalle sin `permissions`; writes → `HttpError` 501 (`user-operation-not-supported`). Tests unit + e2e read-only. Historia
+  → `review`.
 
 ### Review Findings
