@@ -7,11 +7,11 @@ import { UserStatus } from "@/context/shared/access/domain/UserStatus";
  * `Role`/`UserStatus` fails the build until its label is supplied.
  */
 export const ROLE_LABEL: Record<Role, string> = {
-  [Role.SUPER_ADMIN]: "Super Admin",
+  [Role.VIEWER]: "Viewer",
+  [Role.EDITOR]: "Editor",
+  [Role.MANAGER]: "Manager",
   [Role.ADMIN]: "Admin",
-  [Role.EMPLOYEE]: "Employee",
-  [Role.CUSTOMER]: "Customer",
-  [Role.SUPPLIER]: "Supplier",
+  [Role.AUDIT_READER]: "Audit Reader",
 };
 
 export const STATUS_LABEL: Record<UserStatus, string> = {

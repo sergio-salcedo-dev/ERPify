@@ -30,6 +30,21 @@ describe("auth schemas", () => {
     });
     expect(ok.success).toBe(true);
   });
+  it("UserCreateSchema accepts the backend role vocabulary and rejects an unknown role", () => {
+    const all = UserCreateSchema.safeParse({
+      email: "a@b.com",
+      roles: [Role.VIEWER, Role.EDITOR, Role.MANAGER, Role.ADMIN, Role.AUDIT_READER],
+      status: UserStatus.ACTIVE,
+    });
+    expect(all.success).toBe(true);
+    // A role that is not part of the backend enum (a stale vocabulary) is rejected.
+    const stale = UserCreateSchema.safeParse({
+      email: "a@b.com",
+      roles: ["EMPLOYEE"],
+      status: UserStatus.ACTIVE,
+    });
+    expect(stale.success).toBe(false);
+  });
   it("AcceptInvitationSchema accepts a password within bounds (single field, no confirm)", () => {
     expect(AcceptInvitationSchema.safeParse({ password: "password1" }).success).toBe(true);
   });

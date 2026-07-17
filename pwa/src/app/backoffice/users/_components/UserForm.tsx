@@ -35,7 +35,10 @@ interface UserFormInitial {
   email: string;
   roles: Role[];
   status: UserStatus;
-  permissions: UserFormValues["permissions"];
+  // Not sourced from the read model (the detail view carries no permissions);
+  // the update-only permissions editor defaults to empty until its write use
+  // case lands in a later story.
+  permissions?: UserFormValues["permissions"];
 }
 
 interface UserFormProps {
