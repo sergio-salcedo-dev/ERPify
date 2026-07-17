@@ -12,10 +12,6 @@ const USERS_BASE = `${Routes.BACKOFFICE}/users` as const;
 export const userRoutes = {
   /** Users list page. */
   list: USERS_BASE,
-  /** Create-user form. */
-  new: `${USERS_BASE}/new`,
   /** User detail page for a given id. */
   detail: (id: string): string => `${USERS_BASE}/${encodeURIComponent(id)}`,
-  /** Edit-user form for a given id. */
-  edit: (id: string): string => `${USERS_BASE}/${encodeURIComponent(id)}/edit`,
 } as const;

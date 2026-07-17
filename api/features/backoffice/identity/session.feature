@@ -16,6 +16,30 @@ Feature: Server-side session registry and admission gate
     And the JSON node "data.roles[0]" should be equal to "AUDIT_READER"
     And the JSON node "data.roles[1]" should be equal to "MANAGER"
 
+  # Permissions are derived from the roles on every read, never stored: MANAGER earns the bank and
+  # bankAccount tier verbs, AUDIT_READER adds the audit grant, and bankAccount.changeStatus arrives through
+  # an explicit grant rather than a tier verb. Neither role reaches the identity plane, so the set holds no
+  # `users.*` — pinned exhaustively, since the count alone would not catch one capability swapped for another.
+  Scenario: The signed-in user reads the permissions their roles grant
+    When I send a "GET" request to "/me"
+    Then the response status code should be 200
+    And the JSON node "data.permissions" should have 8 elements
+    And the JSON nodes should be equal to:
+      | data.permissions[0] | auditTrail.read          |
+      | data.permissions[1] | bank.read                |
+      | data.permissions[2] | bank.write               |
+      | data.permissions[3] | bank.delete              |
+      | data.permissions[4] | bankAccount.read         |
+      | data.permissions[5] | bankAccount.write        |
+      | data.permissions[6] | bankAccount.delete       |
+      | data.permissions[7] | bankAccount.changeStatus |
+
+  # Deriving the set is a catalog walk over an in-memory policy: it must cost nothing at the database.
+  Scenario: Deriving the permission set adds no query
+    When I send a "GET" request to "/me"
+    Then the response status code should be 200
+    And 0 requests got executed only for doctrine connection "default"
+
   Scenario: My sessions lists the current device, distinguished
     When I send a "GET" request to "/sessions"
     Then the response status code should be 200

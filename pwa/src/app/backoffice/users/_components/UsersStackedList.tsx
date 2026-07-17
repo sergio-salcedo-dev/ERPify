@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import type { User } from "@/context/backoffice/user/domain/User";
-import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { TruncatedText } from "@/components/erpify";
 import { useRowKeyboardNavigation } from "@/context/shared/resource/application/useRowKeyboardNavigation";
 import { cn } from "@/components/cn";
@@ -13,8 +12,6 @@ import { UserRowActions } from "./UserRowActions";
 
 interface UsersStackedListProps {
   users: User[];
-  onUserDeleted?: (id: string) => void;
-  onUserDeleteFailed: (id: string, problem: ProblemDetails) => void;
   selectedIds?: ReadonlySet<string>;
   onToggleSelect?: (id: string) => void;
   /** Enables Shift+↑/↓ range selection (Explorer semantics) when provided. */
@@ -33,8 +30,6 @@ interface UsersStackedListProps {
  */
 export function UsersStackedList({
   users,
-  onUserDeleted,
-  onUserDeleteFailed,
   selectedIds,
   onToggleSelect,
   onSelectionChange,
@@ -109,8 +104,6 @@ export function UsersStackedList({
               id={user.id}
               email={user.email}
               surface="stacked"
-              onUserDeleted={onUserDeleted}
-              onUserDeleteFailed={onUserDeleteFailed}
               className="relative z-10 flex-none"
             />
           </li>

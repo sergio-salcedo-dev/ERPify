@@ -3,7 +3,6 @@
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import type { User } from "@/context/backoffice/user/domain/User";
-import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { DataTable, TruncatedText } from "@/components/erpify";
 import type { DataTableColumn, DataTableSelection, DataTableSort } from "@/components/erpify";
 import { dateTimeProvider } from "@/context/shared/date-time-provider/infrastructure";
@@ -20,8 +19,6 @@ interface UsersTableProps {
   visible: UserColumnKey[];
   sort?: DataTableSort | null;
   onSortChange?: (sort: DataTableSort | null) => void;
-  onUserDeleted?: (id: string) => void;
-  onUserDeleteFailed: (id: string, problem: ProblemDetails) => void;
   selection?: DataTableSelection;
   onUserPeek?: (id: string) => void;
   density?: "compact" | "comfortable";
@@ -52,11 +49,7 @@ const renderCreatedAtCell = (row: User) =>
 const renderUpdatedAtCell = (row: User) =>
   renderRelativeCell(row.updatedAt, `users-table__updated-${row.id}`);
 
-function buildUsersColumns(
-  visible: UserColumnKey[],
-  onUserDeleteFailed: (id: string, problem: ProblemDetails) => void,
-  onUserDeleted?: (id: string) => void,
-): DataTableColumn<User>[] {
+function buildUsersColumns(visible: UserColumnKey[]): DataTableColumn<User>[] {
   const shown = new Set(visible);
   const renderActionsCell = (row: User) => (
     <UserRowActions
@@ -64,8 +57,6 @@ function buildUsersColumns(
       email={row.email}
       surface="table"
       reveal="row"
-      onUserDeleted={onUserDeleted}
-      onUserDeleteFailed={onUserDeleteFailed}
       className="justify-end"
     />
   );
@@ -134,18 +125,13 @@ export function UsersTable({
   visible,
   sort,
   onSortChange,
-  onUserDeleted,
-  onUserDeleteFailed,
   selection,
   onUserPeek,
   density = "compact",
 }: Readonly<UsersTableProps>) {
   const router = useRouter();
 
-  const columns = useMemo(
-    () => buildUsersColumns(visible, onUserDeleteFailed, onUserDeleted),
-    [visible, onUserDeleteFailed, onUserDeleted],
-  );
+  const columns = useMemo(() => buildUsersColumns(visible), [visible]);
 
   return (
     <div

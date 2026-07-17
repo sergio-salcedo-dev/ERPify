@@ -37,12 +37,13 @@ function guardingGet(body: unknown): HttpClient["get"] {
 }
 
 describe("ApiIdentityRepository.me", () => {
-  it("maps a 200 to an ACTIVE identity with backend roles verbatim and no permissions", async () => {
+  it("maps a 200 to an ACTIVE identity with backend roles and permissions verbatim", async () => {
     const get = vi.fn().mockResolvedValue({
       data: {
         id: "0190aaaa-bbbb-7ccc-8ddd-0e1f2a3b4c5d",
         email: "a@b.com",
         roles: ["ADMIN", "AUDIT_READER"],
+        permissions: ["users.read", "users.invite"],
       },
     });
 
@@ -54,8 +55,70 @@ describe("ApiIdentityRepository.me", () => {
       email: "a@b.com",
       status: UserStatus.ACTIVE,
       roles: ["ADMIN", "AUDIT_READER"],
-      permissions: [],
+      permissions: ["users.read", "users.invite"],
     });
+  });
+
+  // The API publishes permissions for resources this console does not gate on (banks, audit). They are
+  // dropped rather than carried, so the session type keeps meaning what it says.
+  it("drops permissions the client does not declare", async () => {
+    const get = vi.fn().mockResolvedValue({
+      data: {
+        id: "0190aaaa-bbbb-7ccc-8ddd-0e1f2a3b4c5d",
+        email: "a@b.com",
+        roles: ["ADMIN"],
+        permissions: ["bank.read", "users.read", "auditTrail.read", "bankAccount.changeStatus"],
+      },
+    });
+
+    const identity = await new ApiIdentityRepository(httpClientGetting(get)).me();
+
+    expect(identity?.permissions).toEqual(["users.read"]);
+  });
+
+  // A wildcard is a client-side convenience the server never emits: `*` is not a permission it can express.
+  it("does not invent a wildcard from a full permission set", async () => {
+    const get = vi.fn().mockResolvedValue({
+      data: {
+        id: "0190aaaa-bbbb-7ccc-8ddd-0e1f2a3b4c5d",
+        email: "a@b.com",
+        roles: ["ADMIN"],
+        permissions: ["users.read", "users.invite", "users.changeStatus", "users.erase"],
+      },
+    });
+
+    const identity = await new ApiIdentityRepository(httpClientGetting(get)).me();
+
+    expect(identity?.permissions).not.toContain("*");
+  });
+
+  it("rejects a body whose permissions are not all strings", async () => {
+    const body = {
+      data: {
+        id: "0190aaaa-bbbb-7ccc-8ddd-0e1f2a3b4c5d",
+        email: "a@b.com",
+        roles: ["ADMIN"],
+        permissions: ["users.read", 42],
+      },
+    };
+
+    await expect(
+      new ApiIdentityRepository(httpClientGetting(guardingGet(body))).me(),
+    ).rejects.toThrow(HttpError);
+  });
+
+  it("rejects a body with no permissions field", async () => {
+    const body = {
+      data: {
+        id: "0190aaaa-bbbb-7ccc-8ddd-0e1f2a3b4c5d",
+        email: "a@b.com",
+        roles: ["ADMIN"],
+      },
+    };
+
+    await expect(
+      new ApiIdentityRepository(httpClientGetting(guardingGet(body))).me(),
+    ).rejects.toThrow(HttpError);
   });
 
   it("returns null on a 401 (no live session)", async () => {
@@ -84,7 +147,12 @@ describe("ApiIdentityRepository.me", () => {
 
   it("passes a well-formed { data } envelope through the guard and maps it", async () => {
     const get = guardingGet({
-      data: { id: "0190aaaa-bbbb-7ccc-8ddd-0e1f2a3b4c5d", email: "a@b.com", roles: ["ADMIN"] },
+      data: {
+        id: "0190aaaa-bbbb-7ccc-8ddd-0e1f2a3b4c5d",
+        email: "a@b.com",
+        roles: ["ADMIN"],
+        permissions: ["users.read"],
+      },
     });
 
     const identity = await new ApiIdentityRepository(httpClientGetting(get)).me();
@@ -98,6 +166,7 @@ describe("ApiIdentityRepository.me", () => {
       id: "0190aaaa-bbbb-7ccc-8ddd-0e1f2a3b4c5d",
       email: "a@b.com",
       roles: ["ADMIN"],
+      permissions: ["users.read"],
     });
 
     await expect(new ApiIdentityRepository(httpClientGetting(get)).me()).rejects.toMatchObject({
@@ -115,7 +184,12 @@ describe("ApiIdentityRepository.me", () => {
 
   it("rejects an envelope whose roles holds a non-string", async () => {
     const get = guardingGet({
-      data: { id: "0190aaaa-bbbb-7ccc-8ddd-0e1f2a3b4c5d", email: "a@b.com", roles: ["ADMIN", 7] },
+      data: {
+        id: "0190aaaa-bbbb-7ccc-8ddd-0e1f2a3b4c5d",
+        email: "a@b.com",
+        roles: ["ADMIN", 7],
+        permissions: ["users.read"],
+      },
     });
 
     await expect(new ApiIdentityRepository(httpClientGetting(get)).me()).rejects.toMatchObject({

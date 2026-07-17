@@ -3,7 +3,7 @@ baseline_commit: 4de018ff
 ---
 # Story 1.2 (U-1): `/me` deriva permisos — gateo de cliente `<Can>` vivo
 
-Status: ready-for-dev
+Status: review
 
 <!-- Validación opcional. Ejecuta `bmad-create-story` validate para un chequeo de calidad antes de dev-story. -->
 
@@ -102,80 +102,80 @@ a U-2») y filas U-2/U-3 sin la cláusula de rename. Menciónalo en la descripci
 
 ### A — Catálogo + derivación · `api/src/Iam/Identity/Infrastructure/Security/` (AC1–AC4, AC10)
 
-- [ ] `PermissionCatalog.php` **nuevo**. `final class`, const array **literal** con los 12 permisos (*El catálogo*).
+- [x] `PermissionCatalog.php` **nuevo**. `final class`, const array **literal** con los 12 permisos (*El catálogo*).
       `all(): list<Permission>`. Docblock: por qué central y no por-módulo (*Crux A*), y que se muda con el plano RBAC.
-- [ ] `PermissionResolver.php` **nuevo**. `final readonly class`; inyecta `PermissionCatalog` + `AuthorizationPolicy`.
+- [x] `PermissionResolver.php` **nuevo**. `final readonly class`; inyecta `PermissionCatalog` + `AuthorizationPolicy`.
       `forRoles(array $bareRoles): list<string>` → itera el catálogo, filtra por `permits()`, devuelve `toString()`.
-- [ ] `MeResource.php` — cuarto parámetro `public array $permissions` con `@param list<string>`.
-- [ ] `MeResourceMapper.php` — inyecta `PermissionResolver`; **reutiliza** la lista bare que ya calcula
+- [x] `MeResource.php` — cuarto parámetro `public array $permissions` con `@param list<string>`.
+- [x] `MeResourceMapper.php` — inyecta `PermissionResolver`; **reutiliza** la lista bare que ya calcula
       `stripRolePrefix()` (`:34-42`, disponible en `:25`). No dupliques el pelado de `ROLE_`.
-- [ ] Tests: `PermissionCatalogTest` (los 12; todos `isWellFormed`), `PermissionResolverTest` (**los 6 casos de la tabla
+- [x] Tests: `PermissionCatalogTest` (los 12; todos `isWellFormed`), `PermissionResolverTest` (**los 6 casos de la tabla
       de AC1**, vía `#[DataProvider]`), y el tripwire de literalidad de AC4.
-- [ ] `MeResourceMapperTest` — `:24` (`new MeResourceMapper()`) **romperá** por la firma: extiéndelo con los permisos.
-- [ ] `session.feature` — asserta `permissions` de `alice` (**los 8 de AC1**) + el step de budget de AC10.
+- [x] `MeResourceMapperTest` — `:24` (`new MeResourceMapper()`) **romperá** por la firma: extiéndelo con los permisos.
+- [x] `session.feature` — asserta `permissions` de `alice` (**los 8 de AC1**) + el step de budget de AC10.
 
 ### B — Tripwire de completitud · `api/tests/Unit/…` (AC5)
 
-- [ ] `PermissionCatalogCoversEveryGatedRouteTest.php` **nuevo**. **No hand-rollees el walk**: usa
+- [x] `PermissionCatalogCoversEveryGatedRouteTest.php` **nuevo**. **No hand-rollees el walk**: usa
       `Erpify\Tests\Support\ApiSourceFiles` (`root()` + `phpFiles()`, ya usado por 9 gates). El patrón
       **walk → FQCN PSR-4 → `class_exists` → `ReflectionClass`** está resuelto en
       `MarkerStatusMapContractTest.php:290-318` — cópialo.
-- [ ] Extrae con **`$attribute->newInstance()->attribute`**, **no** `getArguments()[0]`. Motivo verificado:
+- [x] Extrae con **`$attribute->newInstance()->attribute`**, **no** `getArguments()[0]`. Motivo verificado:
       `IsGranted::$attribute` es `string|Expression|\Closure` (`vendor/symfony/security-http/Attribute/IsGranted.php`), y
       `getArguments()` devuelve `['attribute' => …]` (no `[0]`) si el call site usa **argumento nombrado**, y un
       **objeto** si usa `Expression`. Con `strict_types`, pasar eso a `Permission::isWellFormed(string)` (`:45`) lanza
       **`TypeError`** → el build peta con un error incomprensible. **Guarda con `is_string(...)` antes de filtrar.**
-- [ ] Filtra con `Permission::isWellFormed()` (descarta `ROLE_*`/`IS_AUTHENTICATED_*`/`PUBLIC_ACCESS` — sin separador).
+- [x] Filtra con `Permission::isWellFormed()` (descarta `ROLE_*`/`IS_AUTHENTICATED_*`/`PUBLIC_ACCESS` — sin separador).
       `IsGranted` es `IS_REPEATABLE`: itera **todos** los atributos, no solo el primero.
-- [ ] Verifica contra los **19 call sites / 9 strings** de hoy (*Inventario `#[IsGranted]`*).
+- [x] Verifica contra los **19 call sites / 9 strings** de hoy (*Inventario `#[IsGranted]`*).
 
 ### C — Vocabulario, superficie honesta y gate real · `pwa/src/` (AC6–AC9)
 
-- [ ] `Permission.ts` — `USERS_READ`/`USERS_INVITE`/`USERS_CHANGE_STATUS`/`USERS_ERASE`. Fuera los 6 huérfanos.
-- [ ] `ApiIdentityRepository.ts` — `MeResponse.permissions: string[]`; `isMeResource` lo valida; mapea **filtrando** por
+- [x] `Permission.ts` — `USERS_READ`/`USERS_INVITE`/`USERS_CHANGE_STATUS`/`USERS_ERASE`. Fuera los 6 huérfanos.
+- [x] `ApiIdentityRepository.ts` — `MeResponse.permissions: string[]`; `isMeResource` lo valida; mapea **filtrando** por
       el enum conocido (*Crux B*); **borra** el `permissions: []` (`:60`) y el JSDoc que lo justificaba (`:36-47`).
-- [ ] **Gate real (AC9):** envuelve `users/page.tsx` y `users/[id]/page.tsx` en
+- [x] **Gate real (AC9):** envuelve `users/page.tsx` y `users/[id]/page.tsx` en
       `<Can permission={Permission.USERS_READ} fallback={<EmptyState heading="Access denied" …/>}>`. **Reutiliza** el
       patrón de fallback que hoy vive en `new/page.tsx:40` y `[id]/edit/page.tsx:76` — se borran, pero su patrón es el
       correcto y es el que sobrevive.
-- [ ] **Borra:** `users/new/page.tsx`, `users/[id]/edit/page.tsx`, `_components/UserForm.tsx`,
+- [x] **Borra:** `users/new/page.tsx`, `users/[id]/edit/page.tsx`, `_components/UserForm.tsx`,
       `_components/DeleteUserButton.tsx`, `_components/UsersBulkBar.tsx`, `schemas/UserFormSchema.ts`.
       (`UserCreateSchema`, que `UserFormSchema` importa, **sobrevive**: lo usan `LoginSchema`/`ForgotPasswordSchema`.)
-- [ ] `UserRowActions.tsx` — **sobrevive** con `CopyButton` solo. Fuera el `<Can USERS_WRITE>`+Link Edit (`:82`), el
+- [x] `UserRowActions.tsx` — **sobrevive** con `CopyButton` solo. Fuera el `<Can USERS_WRITE>`+Link Edit (`:82`), el
       `<Can USERS_DELETE>`+dropdown+`DeleteUserButton` (`:95`), el `useState(deleteOpen)` y las props
       `onUserDeleted`/`onUserDeleteFailed`. **Actualiza su docblock** (`:56-61`: describe el gateo que retiras).
-- [ ] Ripple de props: `UsersTable.tsx`, `UsersCards.tsx`, `UsersStackedList.tsx`, `users/page.tsx`.
-- [ ] `users/page.tsx` — fuera botón New user (`:215`), `emptyAction` (`:294`), `<UsersBulkBar>` y el estado huérfano.
+- [x] Ripple de props: `UsersTable.tsx`, `UsersCards.tsx`, `UsersStackedList.tsx`, `users/page.tsx`.
+- [x] `users/page.tsx` — fuera botón New user (`:215`), `emptyAction` (`:294`), `<UsersBulkBar>` y el estado huérfano.
       **Reescribe el copy del empty state** (`:291-292`: `"No users yet"` / `"Create the first user to get started."`
       instruye una acción que ya no existe → AC8).
-- [ ] `users/[id]/page.tsx` — fuera botón Edit (`:95`) y `<DeleteUserButton>` (`:108`), **y el estado huérfano**:
+- [x] `users/[id]/page.tsx` — fuera botón Edit (`:95`) y `<DeleteUserButton>` (`:108`), **y el estado huérfano**:
       `deleteProblem`/`setDeleteProblem` + el `<MutationError testId="users-detail__delete-error">` (`:114-120`).
       **Compila y ESLint no lo caza** (sigue "usado") → código muerto silencioso si no lo borras a mano.
-- [ ] `UserRepository.ts` — quita `permissions?: Permission[]` de `UserInput` (no es concepto de dominio, SI-18).
+- [x] `UserRepository.ts` — quita `permissions?: Permission[]` de `UserInput` (no es concepto de dominio, SI-18).
       **Los stubs `create/update/delete` se quedan**: el puerto sigue siendo `CrudRepository` (fuera de alcance).
-- [ ] `_lib/userRoutes.ts` — retira las rutas sin destino.
-- [ ] **Comentarios que quedan mintiendo** (regla de comentarios + boy-scout):
+- [x] `_lib/userRoutes.ts` — retira las rutas sin destino.
+- [x] **Comentarios que quedan mintiendo** (regla de comentarios + boy-scout):
       `AuthProvider.tsx:54-56` (*«the identity's (currently empty) permissions»*) y
       `ApiUserRepository.ts:104-107` (*«the action buttons are gated behind `<Can>`»* → tras AC8 el argumento es «no hay
       superficie»). **`User.ts:13-18` NO se toca** — habla del read-side, sigue siendo cierto.
-- [ ] Tests: `useCan.test.tsx` (**invierte** el test que codifica «oculta mientras `/me` no concede permisos»);
+- [x] Tests: `useCan.test.tsx` (**invierte** el test que codifica «oculta mientras `/me` no concede permisos»);
       `authorize.test.ts` (usa `USERS_WRITE`/`USERS_DELETE` **y `INVOICES_READ`/`INVOICES_WRITE` en `:45-48`** →
       reescribe con dos permisos del enum nuevo, p. ej. `USERS_READ` vs `USERS_ERASE`);
       `ApiIdentityRepository.test.ts` (la aserción `permissions: []` de `:40-59` **debe** romper → reescríbela; **añade**
       el caso de `permissions` malformado, que hoy no existe).
-- [ ] e2e (AC9): **añade un test al `describe` existente** de `users-real-api.spec.ts` — el spec **ya** importa
+- [x] e2e (AC9): **añade un test al `describe` existente** de `users-real-api.spec.ts` — el spec **ya** importa
       `authenticatedTest` (`:2`) y usa `workerStorageState` (`:29`).
 
 ### Verificaciones (Working principle 4)
 
-- [ ] `make php.stan` por fichero PHP tocado · `make php.quality` al final (deptrac + PHPMD + cs-fixer incluidos).
-- [ ] `make php.lint.bounded-context` — **verde sin tocar el allowlist** (*Crux A*).
-- [ ] `make php.unit` · `make php.behat` — verdes completos.
-- [ ] `make pwa.quality` · `make pwa.test.unit`.
-- [ ] e2e contra el stack del worktree: puerto efímero (`docker compose port php 443`) +
+- [x] `make php.stan` por fichero PHP tocado · `make php.quality` al final (deptrac + PHPMD + cs-fixer incluidos).
+- [x] `make php.lint.bounded-context` — **verde sin tocar el allowlist** (*Crux A*).
+- [x] `make php.unit` · `make php.behat` — verdes completos.
+- [x] `make pwa.quality` · `make pwa.test.unit`.
+- [x] e2e contra el stack del worktree: puerto efímero (`docker compose port php 443`) +
       `PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu24.04-x64`; ADMIN sembrado con
       `organization:administrator:create e2e@erpify.test`.
-- [ ] `curl -k` en vivo: `/me` con ADMIN → 12 permisos; con VIEWER → exactamente `bank.read` + `bankAccount.read`.
+- [x] `curl -k` en vivo: `/me` con ADMIN → 12 permisos; con VIEWER → exactamente `bank.read` + `bankAccount.read`.
 
 ## Dev Notes
 
@@ -428,12 +428,148 @@ lista de ripple está completa.
 
 ### Agent Model Used
 
+Claude Opus 4.8 (1M context) — `claude-opus-4-8[1m]`.
+
 ### Debug Log References
+
+Gates finales, todos con logs frescos contra el stack del worktree (`erpify-iam-me-permissions-can-kuzw`,
+HTTPS efímero `33389`):
+
+| Gate | Resultado |
+|---|---|
+| `make php.quality` (stan+deptrac+PHPMD+cs-fixer+PHPCS) | **EXIT=0** |
+| `make php.lint.bounded-context` | **EXIT=0** — 8 tests, **sin tocar el allowlist** (D1) |
+| `make php.lint.error-contract` | **EXIT=0** |
+| `make php.deptrac` | **EXIT=0** — 0 violations, 0 errors |
+| `make php.unit` | **EXIT=0** — **1966** tests, 8625 asserts (1951 en U-0 → +15) |
+| `make php.behat` | **EXIT=0** — **310** escenarios, 2812 steps (308 en U-0 → +2) |
+| `make pwa.quality` | **EXIT=0** |
+| `make pwa.test.unit` | **EXIT=0** — **1067** tests (1061 en U-0 → +6) |
+| e2e `users-real-api` | **EXIT=0** — 3/3 |
+| `curl -k` en vivo `/me` (ADMIN) | 12 permisos, envelope `{data}` |
 
 ### Completion Notes List
 
+**Los dos gates nuevos se verificaron por sabotaje, no por observar que pasan.** Un tripwire que no puede
+fallar no vale nada, y AC5 es lo único que hace defendible el catálogo central:
+
+- **AC5:** quitado `users.read` del catálogo → el build falla con
+  *«Permission "users.read" gates UserSearchController but is absent from PermissionCatalog»*. Restaurado.
+- **AC9:** forzado `permissions: []` en el cliente → el e2e falla (la consola no renderiza). Restaurado.
+  Un *probe* aparte confirmó que el denegado ve el fallback **«Access denied»**, no una página en blanco.
+
+**Corrección a mi propio test de AC9.** La primera versión asertaba `Access denied → count(0)` **antes** de
+esperar a la lista: pasaba de forma vacua contra una página sin hidratar — justo el estado que deja un gate
+roto. Reordenado: primero `data-state=ready`, después la ausencia del fallback.
+
+**Desviación deliberada (AC4).** La historia proponía extender el DataProvider de
+`StaticAuthorizationPolicyIsDataOnlyTest`. **No se hizo**: ese test está referenciado por nombre en 4 sitios,
+incluido `docs/adr/rbac-authorization-model.md:80`, así que renombrarlo para cubrir dos clases habría hecho
+ripple hasta el ADR; y clonar sus ~120 líneas de máquina de tokens habría disparado la duplicación de Sonar.
+En su lugar se extrajo la mecánica a **`api/tests/Support/ConstantValueTokens.php`**, consumida por el test
+existente (que conserva nombre, `#[CoversClass]` y las referencias del ADR) y por el nuevo
+`PermissionCatalogIsDataOnlyTest`. Es el precedente literal de `ApiSourceFiles` («centralising it here keeps
+the two gates from drifting apart»). Ambos verdes: 4 tests, 200 asserts.
+
+**Decisión de alcance no anticipada por la historia: la selección de filas.** Al retirar `UsersBulkBar`
+(control alcanzable que caía en el stub 501, AC8) la selección quedó **huérfana** — checkboxes que
+seleccionan y no ofrecen ninguna acción. Se retiró su cableado de `page.tsx`. **Las props de selección de
+`UsersTable`/`UsersCards`/`UsersStackedList` se conservan** (son opcionales, y U-3 —cambio de estado— es su
+consumidor natural); lo que desaparece es su uso. Cualquier revisor debería mirar esto.
+
+**Ubicación de AC5** (la historia pedía decidir y justificar): `tests/Unit/Iam/Identity/Infrastructure/Security/`
+y no la familia `tests/Unit/Shared/Architecture/`, pese a que ahí viven los demás gates que barren `api/src`.
+Motivo: el gate no describe una regla de arquitectura global, sino una **propiedad del catálogo** — y se muda
+con el plano RBAC el día que se extraiga.
+
+**Verificaciones que confirmaron la historia, no al revés:**
+
+- `PermissionResolverTest` pasa con la tabla exacta de AC1 (ADMIN 12 · VIEWER 2 · AUDIT_READER **1** ·
+  VIEWER+AUDIT_READER 3 · alice 8 · `[]` 0) → la simulación a mano de `permits()` era correcta, incluida la
+  trampa de que AUDIT_READER **no** está en `TIER_VERBS`.
+- AC10 verificado, no asumido: el escenario Behat con budget **0 queries** pasa — derivar los 12 permisos no
+  toca la base de datos.
+- D1 verificado contra el gate real: `php.lint.bounded-context` verde **sin una sola entrada nueva** en
+  `api/.bounded-context-allowlist`.
+
+**Gotchas encontrados (para las historias siguientes):**
+
+- **`make php.behat` resetea la DB** y se lleva por delante el ADMIN sembrado del e2e → **siembra después de
+  Behat**, no antes (`organization:provision` + `organization:administrator:create e2e@erpify.test
+  e2ePassword123`; la password es `E2E_USER_PASSWORD` de `tests/e2e/constants.ts`, y el comando la toma
+  posicional, no con `--password=`).
+- **`docker compose ps` a pelo miente en un worktree**: usa el proyecto derivado del directorio, no el
+  `COMPOSE_PROJECT_NAME` del Makefile → parece que el stack está caído. Usa `make docker.ps`.
+- **Flake preexistente**, no introducido por U-1: `BankStoredObjectMultipartFunctionalTest` aborta con
+  *«Premature end of PHP process»* de forma intermitente. Verificado stasheando los cambios de U-1: la suite
+  **base** también falla así, y con los cambios aplicados pasa 1966/1966.
+- **Rector × PHPCS**: `AddArrayFunctionClosureParamTypeRector` impone el tipo del parámetro **inlineando el
+  FQCN**, lo que revienta el límite de 120 caracteres. Solución: importar el tipo y usar el nombre corto —
+  así ninguna de las dos herramientas tiene opinión.
+
 ### File List
 
+**API — nuevos**
+
+- `api/src/Iam/Identity/Infrastructure/Security/PermissionCatalog.php`
+- `api/src/Iam/Identity/Infrastructure/Security/PermissionResolver.php`
+- `api/tests/Support/ConstantValueTokens.php`
+- `api/tests/Unit/Iam/Identity/Infrastructure/Security/PermissionCatalogTest.php`
+- `api/tests/Unit/Iam/Identity/Infrastructure/Security/PermissionCatalogIsDataOnlyTest.php`
+- `api/tests/Unit/Iam/Identity/Infrastructure/Security/PermissionCatalogCoversEveryGatedRouteTest.php`
+- `api/tests/Unit/Iam/Identity/Infrastructure/Security/PermissionResolverTest.php`
+
+**API — modificados**
+
+- `api/src/Iam/Identity/Application/Resource/MeResource.php`
+- `api/src/Iam/Identity/Infrastructure/Http/MeResourceMapper.php`
+- `api/tests/Unit/Iam/Identity/Infrastructure/Http/MeResourceMapperTest.php`
+- `api/tests/Unit/Iam/Identity/Infrastructure/Security/StaticAuthorizationPolicyIsDataOnlyTest.php`
+- `api/features/backoffice/identity/session.feature`
+
+**PWA — borrados**
+
+- `pwa/src/app/backoffice/users/new/page.tsx`
+- `pwa/src/app/backoffice/users/[id]/edit/page.tsx`
+- `pwa/src/app/backoffice/users/_components/UserForm.tsx`
+- `pwa/src/app/backoffice/users/_components/DeleteUserButton.tsx`
+- `pwa/src/app/backoffice/users/_components/UsersBulkBar.tsx`
+- `pwa/src/context/backoffice/user/application/schemas/UserFormSchema.ts`
+
+**PWA — modificados**
+
+- `pwa/src/context/shared/access/domain/Permission.ts`
+- `pwa/src/context/shared/access/infrastructure/ApiIdentityRepository.ts`
+- `pwa/src/context/shared/access/infrastructure/ui/AuthProvider.tsx`
+- `pwa/src/app/backoffice/users/page.tsx`
+- `pwa/src/app/backoffice/users/[id]/page.tsx`
+- `pwa/src/app/backoffice/users/_components/UserRowActions.tsx`
+- `pwa/src/app/backoffice/users/_components/UsersTable.tsx`
+- `pwa/src/app/backoffice/users/_components/UsersCards.tsx`
+- `pwa/src/app/backoffice/users/_components/UsersStackedList.tsx`
+- `pwa/src/app/backoffice/users/_lib/userRoutes.ts`
+- `pwa/src/context/backoffice/user/domain/UserRepository.ts`
+- `pwa/src/context/backoffice/user/infrastructure/ApiUserRepository.ts`
+- `pwa/tests/context/shared/access/useCan.test.tsx`
+- `pwa/tests/context/shared/access/domain/authorize.test.ts`
+- `pwa/tests/context/shared/access/ApiIdentityRepository.test.ts`
+- `pwa/tests/e2e/backoffice/users-real-api.spec.ts`
+
+**Artefactos de planificación (enmendados en este PR)**
+
+- `_bmad-output/planning-artifacts/epics-users-admin.md` (FR4/FR5/FR6 + resúmenes + AC de U-2/U-3)
+- `_bmad-output/planning-artifacts/arch-addendum-users-admin.md` (fila U-1/U-2/U-3 + DAG)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+
 ### Change Log
+
+| Fecha | Cambio |
+|---|---|
+| 2026-07-17 | Historia creada `ready-for-dev` (commit `087ecee7`), con FR4/FR5/FR6 + addendum enmendados |
+| 2026-07-17 | A: `PermissionCatalog` + `PermissionResolver`; `/me` emite el set derivado (12 para ADMIN) |
+| 2026-07-17 | B: tripwire de completitud sobre todo `#[IsGranted]`; verificado por sabotaje |
+| 2026-07-17 | C: vocabulario byte-idéntico, superficie CRUD del mock retirada, consola gateada por `users.read` |
+| 2026-07-17 | AC4: mecánica `token_get_all` extraída a `ConstantValueTokens`, compartida por los dos tripwires |
+| 2026-07-17 | Todos los gates verdes con logs frescos; historia → `review` |
 
 ### Review Findings

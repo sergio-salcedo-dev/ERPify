@@ -103,8 +103,8 @@ export function toUserSearchPage(response: UserSearchResponse): ResourceSearchPa
 
 // The identity aggregate is invitation-based: there is no create/update/delete
 // endpoint to call. Its write use cases (invite / change-status / erase) arrive in
-// later stories, so these bind directly to a typed failure. In this console they
-// are also unreachable — the action buttons are gated behind `<Can>`.
+// later stories, so these bind directly to a typed failure. Nothing in the console
+// reaches them — it renders no generic CRUD surface for an identity.
 function notSupported(operation: string): HttpError {
   return new HttpError({
     type: UserProblemType.NOT_SUPPORTED,
