@@ -134,7 +134,7 @@ export default function UsersListPage() {
       permission={Permission.USERS_READ}
       fallback={
         <EmptyState
-          variant="first-run"
+          variant="permission-denied"
           heading="Access denied"
           description="You don't have permission to view users."
         />

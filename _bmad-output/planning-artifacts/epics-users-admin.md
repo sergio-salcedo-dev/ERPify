@@ -93,8 +93,9 @@ uso de dominio** `ChangeUserRoles` (no existe hoy: `register`/`invite` fijan rol
 ≥1 ADMIN en la democión del último admin y la **decisión `User.roles` vs `Organization.Membership.roles`**
 (dualidad del seam de tenancy). Se presenta al Paso 2 como historia con diseño propio, no se da por incluida.
 
-FR8: **Borrado GDPR — superficie de cumplimiento en consola** (SI-19 enmendado · U-5) — `users.erase`
-**gana** entrada en el enum de la PWA: acción «Borrado GDPR (irreversible)» **separada de deactivate**,
+FR8: **Borrado GDPR — superficie de cumplimiento en consola** (SI-19 enmendado · U-5) — U-5 **usa** la entrada
+`users.erase` que el enum de la PWA ya declara (alineada en U-1) para una acción «Borrado GDPR (irreversible)»
+**separada de deactivate**,
 ADMIN-only, `#[IsGranted('users.erase')]`, con **confirmación type-to-confirm** y respetando ≥1 ADMIN
 activo. El flujo, **orquestado por un único Application Service** (p.ej. `FulfilIdentityErasure`), **encadena**
 `EraseIdentitySubject` (hard-delete de la identidad + reset tokens + audit
@@ -285,8 +286,8 @@ sujetos. **FRs:** FR1-FR9. **NFRs:** NFR1-NFR11. **UX-DR:** UX-DR1-UX-DR6.
 - **U-5a — cerrar #376** *(prereq duro · `Shared/Audit`)* — tombstone de `actor_id`s consultado por el writer
   DBAL + el handler async. — FR9.
 - **U-5b — borrado GDPR en consola** — Application Service `FulfilIdentityErasure` (identity-erase +
-  actor-anonymise, una operación); acción separada, ADMIN-only, type-to-confirm; `users.erase` gana entrada
-  en el enum PWA. — FR8.
+  actor-anonymise, una operación); acción separada, ADMIN-only, type-to-confirm; gatea con `users.erase`
+  (entrada del enum PWA ya alineada en U-1). — FR8.
 
 Ninguna historia depende de una posterior en su orden de merge.
 

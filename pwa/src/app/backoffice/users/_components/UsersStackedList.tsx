@@ -24,9 +24,9 @@ interface UsersStackedListProps {
 
 /**
  * Below `md` the table becomes this stack of card-rows. Keyboard contract
- * mirrors the table: each row-card is a single roving tab stop; ↑/↓ move
- * (Shift extends the selection range), Enter opens the detail, `o` peeks the
- * record, Space toggles selection. Checkbox and actions are always visible.
+ * mirrors the table: each row-card is a single roving tab stop; ↑/↓ move,
+ * Enter opens the detail, `o` peeks the record. Selection is wired through
+ * the optional props but no surface passes them yet, so no checkbox renders.
  */
 export function UsersStackedList({
   users,

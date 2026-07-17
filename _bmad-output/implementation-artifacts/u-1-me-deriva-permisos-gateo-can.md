@@ -3,7 +3,7 @@ baseline_commit: 4de018ff
 ---
 # Story 1.2 (U-1): `/me` deriva permisos — gateo de cliente `<Can>` vivo
 
-Status: review
+Status: done
 
 <!-- Validación opcional. Ejecuta `bmad-create-story` validate para un chequeo de calidad antes de dev-story. -->
 
@@ -573,3 +573,21 @@ con el plano RBAC el día que se extraiga.
 | 2026-07-17 | Todos los gates verdes con logs frescos; historia → `review` |
 
 ### Review Findings
+
+Code-review 2026-07-17 (3 capas adversariales — Blind Hunter · Edge Case Hunter · Acceptance Auditor — sobre
+`4de018ff..62eaf4e4`, incluidas las enmiendas de planificación). Todos los AC verificados como cumplidos por
+las 3 capas (la tabla AC1 re-simulada a mano contra `permits()` = exacta; AC5 muerde; SI-20 byte-idéntico uno
+a uno; frontera de alcance respetada). 8 patch, 2 defer, resto descartado con evidencia.
+
+- [x] [Review][Patch] `EmptyState` usa `variant="first-run"` (icono Sparkles) en los fallbacks de «Access denied» — existe `variant="permission-denied"` (icono Lock), hecho para esto [pwa/src/app/backoffice/users/page.tsx:137 · pwa/src/app/backoffice/users/[id]/page.tsx:31]
+- [x] [Review][Patch] Enmienda incompleta: FR8/SI-19/fila U-5 siguen diciendo «`users.erase` **gana** entrada en el enum» — falso tras U-1, que ya la mete. Es la clase exacta de defecto que el PR se propuso corregir; se arreglaron FR5/FR6/U-2/U-3 pero no los gemelos de U-5 [_bmad-output/planning-artifacts/epics-users-admin.md:97,288 · arch-addendum-users-admin.md:17,37]
+- [x] [Review][Patch] Docblock que miente: `UsersStackedList` describe checkbox/selección («Shift extends the selection range… Checkbox and actions are always visible») que ya no se renderiza tras retirar el cableado de selección — boy-scout, fichero tocado [pwa/src/app/backoffice/users/_components/UsersStackedList.tsx:25-30]
+- [x] [Review][Patch] Comentario e2e «the real API returns no `permissions`» contradice al test hermano que este PR añade justo debajo (`/me` SÍ trae permissions) — la aserción sigue válida (AC2), la justificación no [pwa/tests/e2e/backoffice/users-real-api.spec.ts:92-93]
+- [x] [Review][Patch] Docblock de `me()` «never a wildcard the server did not send» induce a error: el cliente filtra `*` **siempre** (no está en `ALL_PERMISSIONS`), venga de donde venga. Reformular a «descarta lo que el enum no declara, wildcard incluido» [pwa/src/context/shared/access/infrastructure/ApiIdentityRepository.ts:60]
+- [x] [Review][Patch] ID de invariante en comentario de código — prohibido en `main` (CLAUDE.md → Code comments). Borrar «(SI-20)»; el argumento se sostiene sin él [api/tests/Unit/Iam/Identity/Infrastructure/Security/PermissionCatalogTest.php:60]
+- [x] [Review][Patch] `\n` literal dentro de comillas simples en el mensaje de fallo del tripwire → imprime `\n` literal, no un salto (degrada el propio gate de AC5) [api/tests/Unit/Iam/Identity/Infrastructure/Security/PermissionCatalogCoversEveryGatedRouteTest.php:66]
+- [x] [Review][Patch] `PermissionCatalog` es `final class` mientras sus vecinos (incl. `PermissionResolver`, mismo diff) son `final readonly class`; y `all()` no declara `@throws InvalidPermission` pese a llamar `Permission::fromString()` en cada `/me` — consistencia + honestidad, sin coste [api/src/Iam/Identity/Infrastructure/Security/PermissionCatalog.php:26,52]
+- [x] [Review][Defer] El fetch de la lista/detalle se dispara aunque `<Can>` deniegue (`useResourceList`/`useResourceItem` corren en el cuerpo antes del gate) → petición desperdiciada + un 403 por visita denegada. Sin agujero (enforcement server-side). Fix limpio requiere que los hooks compartidos acepten un flag `enabled` → `Shared/` está **fuera de alcance** de U-1 [pwa/src/app/backoffice/users/page.tsx:82 · [id]/page.tsx:24] — deferred, toca infra compartida
+- [x] [Review][Defer] El tripwire de AC5 es ciego a `#[IsGranted(new Expression(...))]`, a las reglas `access_control` de `security.yaml`, y a subclases de `IsGranted` (match exacto) — todos **latentes hoy** (0 en el árbol, verificado). Es un límite conocido del barrido, no un bug activo [api/tests/Unit/Iam/Identity/Infrastructure/Security/PermissionCatalogCoversEveryGatedRouteTest.php:112] — deferred, gap latente documentado
+
+**Descartados con evidencia (no ruido, verificados):** el riesgo de comportamiento del wildcard («si `/me` devuelve `*` → todo se cierra») es **imposible bajo D3** (la API nunca emite `*`; `Permission::isWellFormed` lo rechaza) — solo el docblock era real (patch arriba). La retención de props de selección en las 3 listas es **desviación ya declarada** (Completion Notes, para U-3) — solo el docblock que miente es accionable. El order-coupling del escenario Behat es *pinning exhaustivo deliberado* y el contra-ejemplo del revisor es erróneo (un permiso que alice no posee no desplaza sus índices). `contains()` como 2º método público es benigno, correcto y necesario para el tripwire. La forma de `/me` sin doc: verificado que **no existe** doc que la fije hoy (0 hits de `iam_me`/`GET /me` en `api/docs` y `docs`) → sin drift.

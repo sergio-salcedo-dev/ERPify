@@ -23,7 +23,7 @@ namespace Erpify\Iam\Identity\Infrastructure\Security;
  * is what makes that price safe, by turning a forgotten entry into a failed build rather than a client-side
  * gate that silently denies.
  */
-final class PermissionCatalog
+final readonly class PermissionCatalog
 {
     /**
      * `users.invite`, `users.changeStatus` and `users.erase` have no endpoint yet: they are declared ahead of
@@ -49,6 +49,9 @@ final class PermissionCatalog
 
     /**
      * @return list<Permission>
+     *
+     * @throws InvalidPermission if a catalog entry is not a well-formed `<resource>.<action>` — a typo here
+     *                           is a bug, kept out by {@see \Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security\PermissionCatalogTest}
      */
     public function all(): array
     {

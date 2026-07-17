@@ -56,8 +56,8 @@ function knownPermissionsOf(permissions: string[]): HeldPermission[] {
  *
  *  - 200 → the live identity. A 200 is only returned for an admitted session, so
  *    the user is ACTIVE by construction. Roles are the backend names, stored
- *    verbatim; permissions are the set the API derives from them — read, never
- *    fabricated, and never a wildcard the server did not send.
+ *    verbatim; permissions are the set the API derives from them, narrowed to the
+ *    ones this client declares (anything else — the wildcard included — is dropped).
  *  - 401 (`session-expired`) → no live session → null.
  *
  * A non-401 failure (network / malformed body) propagates so the caller can

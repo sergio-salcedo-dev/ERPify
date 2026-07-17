@@ -89,8 +89,8 @@ test.describe("BackOffice - Users read-side (real API)", () => {
     await expect(page.getByTestId("users-detail__field-status")).toBeVisible();
     await expect(page.getByTestId("users-detail__id")).toHaveText(seededUser.id);
 
-    // The detail view deliberately carries no permissions section — the roles ARE
-    // the authorization map, and the real API returns no `permissions`.
+    // The detail resource deliberately carries no permissions section — the roles ARE
+    // the authorization map. (Permissions live on `/me`, not on a user's detail view.)
     await expect(page.getByTestId("users-detail__field-permissions")).toHaveCount(0);
   });
 

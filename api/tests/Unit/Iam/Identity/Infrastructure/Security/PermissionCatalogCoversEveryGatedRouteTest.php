@@ -63,8 +63,8 @@ final class PermissionCatalogCoversEveryGatedRouteTest extends TestCase
 
         $this->assertEmpty(
             $methodGated->getAttributes(IsGranted::class),
-            'Precondition drifted: this controller is now gated at class level, so it no longer exercises\n'
-            . 'the method path.',
+            'Precondition drifted: this controller is now gated at class level, '
+            . 'so it no longer exercises the method path.',
         );
         $this->assertNotEmpty(
             $this->isGrantedAttributesOf($methodGated),

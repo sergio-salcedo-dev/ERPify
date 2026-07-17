@@ -57,7 +57,8 @@ final class PermissionCatalogTest extends TestCase
 
     /**
      * A malformed entry would be rejected by `Permission::fromString()` at construction, so this asserts the
-     * catalog never ships one — the wire contract carries these strings verbatim to the PWA (SI-20).
+     * catalog never ships one — the wire contract carries these strings verbatim to the PWA, which must gate
+     * on the exact same spelling.
      */
     public function testEveryCatalogedPermissionIsWellFormed(): void
     {
