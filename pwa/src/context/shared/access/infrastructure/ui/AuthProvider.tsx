@@ -52,8 +52,8 @@ export const AuthContext = createContext<AuthContextValue | null>(null);
 
 /**
  * Build the session from a resolved identity. A 200 from the gated `/me`
- * endpoint means an admitted, ACTIVE session; `/me` carries no permission set,
- * so the session holds exactly the identity's (currently empty) permissions.
+ * endpoint means an admitted, ACTIVE session; the session holds exactly the
+ * permissions the endpoint derived from the identity's roles — never more.
  */
 function sessionFromIdentity(identity: Identity): Session {
   return {

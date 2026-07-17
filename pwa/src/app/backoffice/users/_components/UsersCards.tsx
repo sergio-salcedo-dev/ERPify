@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import type { User } from "@/context/backoffice/user/domain/User";
-import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/components/cn";
@@ -16,8 +15,6 @@ import { UserRowActions } from "./UserRowActions";
 
 interface UsersCardsProps {
   users: User[];
-  onUserDeleted?: (id: string) => void;
-  onUserDeleteFailed: (id: string, problem: ProblemDetails) => void;
   selectedIds?: ReadonlySet<string>;
   onToggleSelect?: (id: string) => void;
   density?: "compact" | "comfortable";
@@ -54,8 +51,6 @@ function UserCardEmail({ user, detailHref }: Readonly<{ user: User; detailHref: 
 
 export function UsersCards({
   users,
-  onUserDeleted,
-  onUserDeleteFailed,
   selectedIds,
   onToggleSelect,
   density = "compact",
@@ -98,8 +93,6 @@ export function UsersCards({
                   email={user.email}
                   surface="cards"
                   reveal="card"
-                  onUserDeleted={onUserDeleted}
-                  onUserDeleteFailed={onUserDeleteFailed}
                   className="users-cards__actions relative z-10 ml-auto"
                 />
               </div>

@@ -24,7 +24,7 @@ function session(overrides: Partial<Session> = {}): Session {
 
 describe("authorize", () => {
   it("allows when ACTIVE and holds the wildcard", () => {
-    expect(authorize(session(), Permission.USERS_WRITE)).toBe(true);
+    expect(authorize(session(), Permission.USERS_INVITE)).toBe(true);
   });
 
   it("denies when status is not ACTIVE, even with the wildcard", () => {
@@ -39,11 +39,11 @@ describe("authorize", () => {
   it("allows a concrete permission and denies a missing one", () => {
     const s = session({ permissions: [Permission.USERS_READ] });
     expect(authorize(s, Permission.USERS_READ)).toBe(true);
-    expect(authorize(s, Permission.USERS_DELETE)).toBe(false);
+    expect(authorize(s, Permission.USERS_ERASE)).toBe(false);
   });
 
   it("hasPermission honors the wildcard", () => {
-    expect(hasPermission([PERMISSION_WILDCARD], Permission.INVOICES_WRITE)).toBe(true);
-    expect(hasPermission([Permission.INVOICES_READ], Permission.INVOICES_WRITE)).toBe(false);
+    expect(hasPermission([PERMISSION_WILDCARD], Permission.USERS_ERASE)).toBe(true);
+    expect(hasPermission([Permission.USERS_READ], Permission.USERS_ERASE)).toBe(false);
   });
 });

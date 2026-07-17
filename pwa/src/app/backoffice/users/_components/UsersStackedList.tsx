@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import type { User } from "@/context/backoffice/user/domain/User";
-import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { TruncatedText } from "@/components/erpify";
 import { useRowKeyboardNavigation } from "@/context/shared/resource/application/useRowKeyboardNavigation";
 import { cn } from "@/components/cn";
@@ -13,8 +12,6 @@ import { UserRowActions } from "./UserRowActions";
 
 interface UsersStackedListProps {
   users: User[];
-  onUserDeleted?: (id: string) => void;
-  onUserDeleteFailed: (id: string, problem: ProblemDetails) => void;
   selectedIds?: ReadonlySet<string>;
   onToggleSelect?: (id: string) => void;
   /** Enables Shift+↑/↓ range selection (Explorer semantics) when provided. */
@@ -27,14 +24,12 @@ interface UsersStackedListProps {
 
 /**
  * Below `md` the table becomes this stack of card-rows. Keyboard contract
- * mirrors the table: each row-card is a single roving tab stop; ↑/↓ move
- * (Shift extends the selection range), Enter opens the detail, `o` peeks the
- * record, Space toggles selection. Checkbox and actions are always visible.
+ * mirrors the table: each row-card is a single roving tab stop; ↑/↓ move,
+ * Enter opens the detail, `o` peeks the record. Selection is wired through
+ * the optional props but no surface passes them yet, so no checkbox renders.
  */
 export function UsersStackedList({
   users,
-  onUserDeleted,
-  onUserDeleteFailed,
   selectedIds,
   onToggleSelect,
   onSelectionChange,
@@ -109,8 +104,6 @@ export function UsersStackedList({
               id={user.id}
               email={user.email}
               surface="stacked"
-              onUserDeleted={onUserDeleted}
-              onUserDeleteFailed={onUserDeleteFailed}
               className="relative z-10 flex-none"
             />
           </li>

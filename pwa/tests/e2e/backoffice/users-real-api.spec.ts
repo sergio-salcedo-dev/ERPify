@@ -89,8 +89,31 @@ test.describe("BackOffice - Users read-side (real API)", () => {
     await expect(page.getByTestId("users-detail__field-status")).toBeVisible();
     await expect(page.getByTestId("users-detail__id")).toHaveText(seededUser.id);
 
-    // The detail view deliberately carries no permissions section — the roles ARE
-    // the authorization map, and the real API returns no `permissions`.
+    // The detail resource deliberately carries no permissions section — the roles ARE
+    // the authorization map. (Permissions live on `/me`, not on a user's detail view.)
     await expect(page.getByTestId("users-detail__field-permissions")).toHaveCount(0);
+  });
+
+  /**
+   * The console is gated on `users.read`, which no role holds by tier — only an explicit grant reaches it.
+   * Rendering the list therefore proves the whole chain end-to-end: the API derived a real permission set
+   * from the session's roles, the client kept it, and `<Can>` opened on it. Before the set existed the gate
+   * denied unconditionally, so this is the case that would have caught it.
+   */
+  test("crosses the users.read client gate with the permissions the live API derived", async ({
+    page,
+  }) => {
+    const me = await api.get("/api/v1/me");
+    expect(me.ok()).toBe(true);
+
+    const identity = (await me.json()) as { data: { permissions: string[] } };
+    expect(identity.data.permissions).toContain("users.read");
+
+    await page.goto("/backoffice/users");
+
+    // Settle first: asserting the gate's fallback is absent would pass vacuously against a page that has
+    // simply not hydrated yet, which is exactly the state a broken gate leaves behind.
+    await expect(page.getByTestId("users-list")).toHaveAttribute("data-state", "ready");
+    await expect(page.getByText("Access denied")).toHaveCount(0);
   });
 });

@@ -2,23 +2,20 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
-import { Plus } from "lucide-react";
 import type { User } from "@/context/backoffice/user/domain/User";
 import type { UserInput } from "@/context/backoffice/user/domain/UserRepository";
-import { UserProblemType } from "@/context/backoffice/user/domain/UserProblemType";
 import { useQueryState } from "@/context/shared/resource/application/createQueryState";
 import { useResourceList } from "@/context/shared/resource/application/useResourceList";
 import { ViewStatus } from "@/context/shared/view-state/domain/ViewState";
 import {
   AsyncBoundary,
+  EmptyState,
   LIST_DENSITY_STORAGE_KEY,
   ListDisplayToggles,
-  MutationError,
   RecordSheet,
-  SelectionMode,
   isListDensity,
 } from "@/components/erpify";
-import type { DataTableSelection, DataTableSort, ListDensity } from "@/components/erpify";
+import type { DataTableSort, ListDensity } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/components/cn";
@@ -36,7 +33,6 @@ import { UsersViewToggle, type UsersView } from "./_components/UsersViewToggle";
 import { UsersColumnPicker } from "./_components/UsersColumnPicker";
 import { UsersListSkeleton } from "./_components/UsersListSkeleton";
 import { UsersEmptyFiltered } from "./_components/UsersEmptyFiltered";
-import { BULK_DELETE_TESTID, UsersBulkBar } from "./_components/UsersBulkBar";
 import { UserStatusBadge } from "./_components/UserStatusBadge";
 import { RolesBadges } from "./_components/RolesBadges";
 import {
@@ -78,21 +74,10 @@ export default function UsersListPage() {
     items,
     paginationActions,
     problem,
-    selectedIds,
-    setSelectedIds,
-    toggleSelect,
-    clearSelection,
     reload,
-    deleteItem,
-    deleteFailed,
-    deleteError,
-    setDeleteError,
-    handleDeleteErrorRefresh,
     peekId,
     setPeekId,
-    bulkDelete,
     listContainerRef,
-    selectionAnnouncement,
     refreshAnnouncement,
   } = useResourceList<User, UsersFilter, UserInput>({
     repositoryKey: "BackOfficeUserRepository",
@@ -108,7 +93,6 @@ export default function UsersListPage() {
     entitySingular: "user",
     entityPlural: "users",
     rowFocusTestIds: (id) => [`users-table__row-${id}`, `users-stacked__row-${id}`],
-    bulkDeleteTestId: BULK_DELETE_TESTID,
   });
 
   const [view, setView] = useStoredPreference<UsersView>(
@@ -140,289 +124,204 @@ export default function UsersListPage() {
 
   const { filter } = query;
 
-  const tableSelection = useMemo<DataTableSelection>(
-    () => ({
-      mode: SelectionMode.MULTI,
-      selected: selectedIds,
-      onChange: setSelectedIds,
-    }),
-    [selectedIds, setSelectedIds],
-  );
-
   const peekUser = useMemo(() => items.find((user) => user.id === peekId) ?? null, [items, peekId]);
 
   const showFiltersToolbar =
     boundaryState === ViewStatus.READY || hasActiveFilter(filter) || !isDefaultSort(tableSort);
 
-  const deleteRecoveryAction =
-    deleteError?.problem.type === UserProblemType.NOT_FOUND ? (
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => {
-          // Fire-and-forget: the handler resolves all errors internally.
-          handleDeleteErrorRefresh();
-        }}
-        aria-label="Refresh list"
-        title="Refresh the users list"
-        data-testid="users-list__delete-error-refresh"
-      >
-        Refresh list
-      </Button>
-    ) : undefined;
-
   return (
-    <div
-      ref={listContainerRef}
-      tabIndex={-1}
-      className="users-list mx-auto w-full max-w-[90rem] space-y-4 outline-none sm:space-y-6"
-      data-testid="users-list"
-      data-state={boundaryState}
+    <Can
+      permission={Permission.USERS_READ}
+      fallback={
+        <EmptyState
+          variant="permission-denied"
+          heading="Access denied"
+          description="You don't have permission to view users."
+        />
+      }
     >
-      <p
-        className="sr-only"
-        role="status"
-        aria-live="polite"
-        data-testid="users-list__selection-status"
+      <div
+        ref={listContainerRef}
+        tabIndex={-1}
+        className="users-list mx-auto w-full max-w-[90rem] space-y-4 outline-none sm:space-y-6"
+        data-testid="users-list"
+        data-state={boundaryState}
       >
-        {selectionAnnouncement}
-      </p>
-      <p
-        className="sr-only"
-        role="status"
-        aria-live="polite"
-        data-testid="users-list__refresh-status"
-      >
-        {refreshAnnouncement}
-      </p>
+        <p
+          className="sr-only"
+          role="status"
+          aria-live="polite"
+          data-testid="users-list__refresh-status"
+        >
+          {refreshAnnouncement}
+        </p>
 
-      <header
-        className="users-list__header flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
-        data-testid="users-list__header"
-      >
-        <div className="users-list__heading min-w-0">
-          <h1
-            className="text-foreground text-xl font-semibold tracking-tight sm:text-2xl"
-            data-testid="users-list__title"
-          >
-            Users
-          </h1>
-          <p className="text-muted-foreground mt-1 text-sm" data-testid="users-list__subtitle">
-            Manage the users and their access in the back office.
-          </p>
-        </div>
-        <Can permission={Permission.USERS_WRITE}>
-          <Link
-            href={userRoutes.new}
-            className={cn(
-              buttonVariants({ size: "sm" }),
-              "users-list__new-button w-full sm:w-auto",
-            )}
-            data-icon="inline-start"
-            data-testid="users-list__new-button"
-            aria-label="Create a new user"
-            title="Create a new user"
-          >
-            <Plus className="size-3.5" aria-hidden="true" />
-            New user
-          </Link>
-        </Can>
-      </header>
-
-      {showFiltersToolbar ? (
-        <UsersFilters
-          filter={filter}
-          onFilterChange={query.setFilter}
-          sort={tableSort}
-          onSortChange={setTableSort}
-          onReset={query.reset}
-          leading={
-            items.length > 0 ? (
-              <ListDisplayToggles
-                view={view}
-                viewToggle={<UsersViewToggle view={view} onViewChange={setView} />}
-                density={density}
-                onDensityChange={setDensity}
-                columnPicker={
-                  <UsersColumnPicker
-                    visible={columns}
-                    onChange={setColumns}
-                    testId="users-list__columns"
-                  />
-                }
-                testIdPrefix="users-list"
-              />
-            ) : undefined
-          }
-        />
-      ) : null}
-
-      {deleteError ? (
-        <MutationError
-          problem={deleteError.problem}
-          onDismiss={() => setDeleteError(null)}
-          action={deleteRecoveryAction}
-          testId="users-list__delete-error"
-        />
-      ) : null}
-
-      <AsyncBoundary
-        state={boundaryState}
-        data={items}
-        error={problem ?? undefined}
-        loading={<UsersListSkeleton view={view} rows={Math.min(query.pageSize, 8)} />}
-        errorAction={
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              reload();
-            }}
-            title="Retry loading users"
-            aria-label="Retry loading users"
-            data-testid="users-list__retry"
-          >
-            Retry
-          </Button>
-        }
-        emptyVariant="first-run"
-        emptyHeading="No users yet"
-        emptyDescription="Create the first user to get started."
-        emptyAction={
-          <Can permission={Permission.USERS_WRITE}>
-            <Link
-              href={userRoutes.new}
-              className={cn(buttonVariants())}
-              aria-label="Create your first user"
-              title="Create your first user"
+        <header
+          className="users-list__header flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+          data-testid="users-list__header"
+        >
+          <div className="users-list__heading min-w-0">
+            <h1
+              className="text-foreground text-xl font-semibold tracking-tight sm:text-2xl"
+              data-testid="users-list__title"
             >
-              Create your first user
-            </Link>
-          </Can>
-        }
-      >
-        {() =>
-          items.length === 0 ? (
-            <UsersEmptyFiltered onReset={query.reset} />
-          ) : (
-            <>
-              {view === "table" ? (
-                <>
-                  <UsersStackedList
-                    users={items}
-                    onUserDeleted={deleteItem}
-                    onUserDeleteFailed={deleteFailed}
-                    selectedIds={selectedIds}
-                    onToggleSelect={toggleSelect}
-                    onSelectionChange={setSelectedIds}
-                    onUserPeek={setPeekId}
-                    density={density}
-                    className="md:hidden"
-                  />
-                  <div className="hidden md:block">
-                    <UsersTable
-                      users={items}
+              Users
+            </h1>
+            <p className="text-muted-foreground mt-1 text-sm" data-testid="users-list__subtitle">
+              Manage the users and their access in the back office.
+            </p>
+          </div>
+        </header>
+
+        {showFiltersToolbar ? (
+          <UsersFilters
+            filter={filter}
+            onFilterChange={query.setFilter}
+            sort={tableSort}
+            onSortChange={setTableSort}
+            onReset={query.reset}
+            leading={
+              items.length > 0 ? (
+                <ListDisplayToggles
+                  view={view}
+                  viewToggle={<UsersViewToggle view={view} onViewChange={setView} />}
+                  density={density}
+                  onDensityChange={setDensity}
+                  columnPicker={
+                    <UsersColumnPicker
                       visible={columns}
-                      sort={tableSort}
-                      onSortChange={setTableSort}
-                      onUserDeleted={deleteItem}
-                      onUserDeleteFailed={deleteFailed}
-                      selection={tableSelection}
+                      onChange={setColumns}
+                      testId="users-list__columns"
+                    />
+                  }
+                  testIdPrefix="users-list"
+                />
+              ) : undefined
+            }
+          />
+        ) : null}
+
+        <AsyncBoundary
+          state={boundaryState}
+          data={items}
+          error={problem ?? undefined}
+          loading={<UsersListSkeleton view={view} rows={Math.min(query.pageSize, 8)} />}
+          errorAction={
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                reload();
+              }}
+              title="Retry loading users"
+              aria-label="Retry loading users"
+              data-testid="users-list__retry"
+            >
+              Retry
+            </Button>
+          }
+          emptyVariant="first-run"
+          emptyHeading="No users yet"
+          emptyDescription="Users appear here once they are invited."
+        >
+          {() =>
+            items.length === 0 ? (
+              <UsersEmptyFiltered onReset={query.reset} />
+            ) : (
+              <>
+                {view === "table" ? (
+                  <>
+                    <UsersStackedList
+                      users={items}
                       onUserPeek={setPeekId}
                       density={density}
+                      className="md:hidden"
                     />
-                  </div>
-                </>
-              ) : (
-                <UsersCards
-                  users={items}
-                  onUserDeleted={deleteItem}
-                  onUserDeleteFailed={deleteFailed}
-                  selectedIds={selectedIds}
-                  onToggleSelect={toggleSelect}
-                  density={density}
+                    <div className="hidden md:block">
+                      <UsersTable
+                        users={items}
+                        visible={columns}
+                        sort={tableSort}
+                        onSortChange={setTableSort}
+                        onUserPeek={setPeekId}
+                        density={density}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <UsersCards users={items} density={density} />
+                )}
+                <UsersPagination
+                  pageSize={
+                    isUsersPageSize(query.pageSize) ? query.pageSize : USERS_PAGE_SIZE_DEFAULT
+                  }
+                  hasPrev={paginationActions.hasPrev}
+                  hasNext={paginationActions.hasNext}
+                  onPrev={paginationActions.goPrev}
+                  onNext={paginationActions.goNext}
+                  onPageSizeChange={query.setPageSize}
                 />
-              )}
-              <UsersPagination
-                pageSize={
-                  isUsersPageSize(query.pageSize) ? query.pageSize : USERS_PAGE_SIZE_DEFAULT
-                }
-                hasPrev={paginationActions.hasPrev}
-                hasNext={paginationActions.hasNext}
-                onPrev={paginationActions.goPrev}
-                onNext={paginationActions.goNext}
-                onPageSizeChange={query.setPageSize}
-              />
-            </>
-          )
-        }
-      </AsyncBoundary>
-
-      {boundaryState === ViewStatus.READY && selectedIds.size > 0 ? (
-        <UsersBulkBar
-          count={selectedIds.size}
-          names={items.filter((user) => selectedIds.has(user.id)).map((user) => user.email)}
-          onClear={clearSelection}
-          onConfirmDelete={bulkDelete}
-        />
-      ) : null}
-
-      {peekUser ? (
-        <RecordSheet
-          open
-          onOpenChange={(open) => {
-            if (!open) setPeekId(null);
-          }}
-          title={peekUser.email}
-          testId="users-list__peek"
-          footer={
-            <Link
-              href={safeHref(userRoutes.detail(peekUser.id))}
-              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-              aria-label="Open detail"
-              title={`Open ${peekUser.email}`}
-              data-testid="users-peek__detail-link"
-            >
-              Open detail
-            </Link>
+              </>
+            )
           }
-        >
-          <dl className="users-peek space-y-3 text-sm">
-            <div className="users-peek__field">
-              <dt className="text-muted-foreground text-xs font-medium uppercase">Id</dt>
-              <dd className="mt-0.5 font-mono text-xs break-all" data-testid="users-peek__id">
-                {peekUser.id}
-              </dd>
-            </div>
-            <div className="users-peek__field">
-              <dt className="text-muted-foreground text-xs font-medium uppercase">Email</dt>
-              <dd className="mt-0.5" data-testid="users-peek__email">
-                {peekUser.email}
-              </dd>
-            </div>
-            <div className="users-peek__field">
-              <dt className="text-muted-foreground text-xs font-medium uppercase">Roles</dt>
-              <dd className="mt-0.5">
-                <RolesBadges roles={peekUser.roles} testId="users-peek__roles" />
-              </dd>
-            </div>
-            <div className="users-peek__field">
-              <dt className="text-muted-foreground text-xs font-medium uppercase">Status</dt>
-              <dd className="mt-0.5">
-                <UserStatusBadge status={peekUser.status} testId="users-peek__status" />
-              </dd>
-            </div>
-            <div className="users-peek__field">
-              <dt className="text-muted-foreground text-xs font-medium uppercase">Created</dt>
-              <dd className="mt-0.5" data-testid="users-peek__created-at">
-                {dateTimeProvider.formatIsoToLocalDateTime(peekUser.createdAt)}
-              </dd>
-            </div>
-          </dl>
-        </RecordSheet>
-      ) : null}
-    </div>
+        </AsyncBoundary>
+
+        {peekUser ? (
+          <RecordSheet
+            open
+            onOpenChange={(open) => {
+              if (!open) setPeekId(null);
+            }}
+            title={peekUser.email}
+            testId="users-list__peek"
+            footer={
+              <Link
+                href={safeHref(userRoutes.detail(peekUser.id))}
+                className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+                aria-label="Open detail"
+                title={`Open ${peekUser.email}`}
+                data-testid="users-peek__detail-link"
+              >
+                Open detail
+              </Link>
+            }
+          >
+            <dl className="users-peek space-y-3 text-sm">
+              <div className="users-peek__field">
+                <dt className="text-muted-foreground text-xs font-medium uppercase">Id</dt>
+                <dd className="mt-0.5 font-mono text-xs break-all" data-testid="users-peek__id">
+                  {peekUser.id}
+                </dd>
+              </div>
+              <div className="users-peek__field">
+                <dt className="text-muted-foreground text-xs font-medium uppercase">Email</dt>
+                <dd className="mt-0.5" data-testid="users-peek__email">
+                  {peekUser.email}
+                </dd>
+              </div>
+              <div className="users-peek__field">
+                <dt className="text-muted-foreground text-xs font-medium uppercase">Roles</dt>
+                <dd className="mt-0.5">
+                  <RolesBadges roles={peekUser.roles} testId="users-peek__roles" />
+                </dd>
+              </div>
+              <div className="users-peek__field">
+                <dt className="text-muted-foreground text-xs font-medium uppercase">Status</dt>
+                <dd className="mt-0.5">
+                  <UserStatusBadge status={peekUser.status} testId="users-peek__status" />
+                </dd>
+              </div>
+              <div className="users-peek__field">
+                <dt className="text-muted-foreground text-xs font-medium uppercase">Created</dt>
+                <dd className="mt-0.5" data-testid="users-peek__created-at">
+                  {dateTimeProvider.formatIsoToLocalDateTime(peekUser.createdAt)}
+                </dd>
+              </div>
+            </dl>
+          </RecordSheet>
+        ) : null}
+      </div>
+    </Can>
   );
 }
