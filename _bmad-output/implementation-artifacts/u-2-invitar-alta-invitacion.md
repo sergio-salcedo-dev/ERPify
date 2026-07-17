@@ -158,6 +158,9 @@ Las **dos decisiones abiertas del addendum** («a decidir en el corte») quedan 
 - [ ] **Unit:** `InviteUserRequest` (constraints), el mapeo rol-string→enum, el controller (thin, `#[CoversClass]` — nunca
       `#[CoversNothing]`), y el marker de AC7. PWA: `InviteUser`/`ApiInviteUserRepository` (mockea `HttpClient`),
       `InviteUserSchema` (email/roles), y el form (submit feliz + error → `MutationError`).
+- [ ] **Idempotencia de doble envío:** el botón de submit se **deshabilita** mientras `isSubmitting` (patrón `BankForm`);
+      un test (unit del form o e2e) verifica que un doble click **no** dispara dos invitaciones — **una sola** llamada al
+      caso de uso / **una sola** fila `INVITED`.
 - [ ] **e2e (AC11):** extiende `pwa/tests/e2e/backoffice/users-real-api.spec.ts` (o spec nuevo real-API) — usa
       `authenticatedTest` + `workerStorageState` (sesión ADMIN por worker). Navega a `/backoffice/users/invite`, email
       único (p.ej. sufijo por worker), selecciona un rol, envía; assert toast de éxito + fila `INVITED` filtrando por el
@@ -231,6 +234,14 @@ acepta porque el stub perpetúa la mentira que SI-18 nombra, y U-3 lo reutiliza 
 `ADMIN`) es asignable; es aceptable (la acción entera es ADMIN-only). El form exige **≥1 rol** (`InviteUserSchema`,
 `.min(1)`); la CLI por defecto usa `[VIEWER]`, pero en UI el ADMIN elige explícitamente. El DTO valida los strings
 contra el enum (`#[Assert\Choice]`) → rol desconocido = `422` en el pipeline estándar.
+
+**Fuente única de los valores válidos (evitar duplicación accidental).** `Role` es enum de **vocabulario puro** — sin
+métodos, por diseño (su docblock: *«no method here ranks or maps a role»*). El `#[Assert\Choice]` del DTO es el **único**
+sitio en producción que enumera los valores de rol (map local `Role::cases()` → `->value`). **No** añadas un
+`Role::values()` ni extraigas un helper compartido: hoy hay **un solo caller** (no existe ningún `Assert\Choice`+`cases()`
+en `api/src` — U-2 estrena el patrón), así que un helper viola YAGNI/Regla-de-Tres y contradice el diseño del enum. **El
+disparador de extracción es U-3**: si su DTO de `status` (u otro DTO enum-array) aparece, *entonces* se extrae (segundo
+caller = Regla-de-Tres cumplida). Los tests referencian `Role::cases()` directamente, **no** re-listan los 5 strings.
 
 ### Auth en la capa de Application (nota de decisión)
 
@@ -358,3 +369,4 @@ Completion Notes si un revisor lo cuestiona.
 | Fecha | Cambio |
 |---|---|
 | 2026-07-17 | Historia creada `ready-for-dev` — endpoint en contexto Invitation (D1) + puerto identity-shaped PWA (D3) |
+| 2026-07-17 | Review arquitectónico (aprobado sin cambios): +nota de fuente única de valores de rol (YAGNI/helper hasta U-3) + test de doble-submit |
