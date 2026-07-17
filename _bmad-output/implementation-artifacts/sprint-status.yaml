@@ -127,7 +127,7 @@ development_status:
   # U-4 (edición de roles) es candidato. erase gana UI (SI-19 enmendado). Cada historia = su propia rama (gate de ramas).
   epic-users-admin: in-progress
   u-0-read-side-lista-detalle-conectados-backend: done
-  u-1-me-deriva-permisos-gateo-can: backlog
+  u-1-me-deriva-permisos-gateo-can: ready-for-dev
   u-2-invitar-alta-invitacion: backlog
   u-3-cambio-de-estado-suspend-deactivate: backlog
   u-4-edicion-de-roles-candidato: backlog

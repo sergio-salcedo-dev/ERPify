@@ -66,22 +66,26 @@ de consumidor** (páginas/hook dependen solo de las claves DI + puertos genéric
 *no-soportado* hasta su historia (SI-18).
 
 FR4: **Derivación de permisos en `/me` + gateo de cliente** (U-1) — `/me` expande `roles → permisos` vía
-`AuthorizationPolicy` (**set derivado, no almacenado**); `<Can>` deja de denegar por `permissions:[]`; los
-botones de acción se hacen visibles al ADMIN. **Prerrequisito de toda superficie de acción.** Los permisos
-**no forman parte del modelo de dominio** — son un **read-model de autorización derivado**; no existe
-`User.permissions` persistido.
+`AuthorizationPolicy` (**set derivado, no almacenado**), enumerando el vocabulario contra un **catálogo** (el puerto
+responde sí/no a un permiso, no enumera); `<Can>` deja de denegar por `permissions:[]` y **la consola se gatea con
+`users.read`**. U-1 alinea además el **vocabulario completo** de permisos de la PWA al del backend (SI-20), y **retira
+la superficie CRUD del mock** (create/edit/delete respaldados por stubs *no-soportado*), que SI-18 declara inexistente
+para identidades. **Prerrequisito de toda superficie de acción:** las acciones reales y su visibilidad llegan con
+U-2/U-3/U-5, cada una gateada por su permiso. Los permisos **no forman parte del modelo de dominio** — son un
+**read-model de autorización derivado**; no existe `User.permissions` persistido.
 
 FR5: **Invitar (alta = invitación)** (SI-18 · U-2) — endpoint de alta `#[IsGranted('users.invite')]` →
 `SendInvitation`/`InviteUser` (→ `INVITED`); form de **invitación** (email + roles; **sin** password ni
-status) que **reemplaza** el create del mock; **rename** enum PWA `users.write → users.invite`. **J5:**
+status) — no «reemplaza» el create del mock: U-1 ya lo retiró, aquí se **construye la superficie real**, visible para
+quien posea `users.invite` (`<Can permission=users.invite>`; el string ya existe en el enum desde U-1). **J5:**
 `InvitationCreated/Sent` → `Invitation CREATED→SENT` → email de invitación → superficie pública B4 accept.
 
 FR6: **Cambio de estado (suspend / deactivate)** (SI-18 · U-3) — `PATCH /backoffice/users/{id}/status`
 (precedente `BankAccount PATCH .../status`; body `{status}` validado contra las transiciones legales desde
 `ACTIVE`) `#[IsGranted('users.changeStatus')]` → `ChangeUserStatus` (`409 LastActiveAdministratorProtected`
-si rompe ≥1 ADMIN activo); acciones de estado en el **detalle** (no un form de edición libre); **rename** enum
-PWA `users.delete → users.changeStatus`. **J5:** `UserSuspended` → `Identity ACTIVE→SUSPENDED` (invalida
-sesiones) → muro post-identidad «suspendido».
+si rompe ≥1 ADMIN activo); acciones de estado en el **detalle** (no un form de edición libre), visibles para quien posea
+`users.changeStatus` (`<Can permission=users.changeStatus>`; el string ya existe en el enum desde U-1). **J5:**
+`UserSuspended` → `Identity ACTIVE→SUSPENDED` (invalida sesiones) → muro post-identidad «suspendido».
 
 FR7: **Edición de roles** *(candidato — a decidir en el corte · SI-16, SI-18; toca SI-15)* — **nuevo caso de
 uso de dominio** `ChangeUserRoles` (no existe hoy: `register`/`invite` fijan roles solo al alta) que **establece el conjunto completo** de roles (semántica
@@ -270,11 +274,12 @@ sujetos. **FRs:** FR1-FR9. **NFRs:** NFR1-NFR11. **UX-DR:** UX-DR1-UX-DR6.
   /backoffice/users` (keyset) + `/{id}`, `#[IsGranted('users.read')]`; `users`→opt-out+grants;
   `ApiUserRepository` + swap del mock + vocabulario de roles alineado. — FR1, FR2, FR3.
 - **U-1 — `/me` deriva permisos + `<Can>`** — expansión `roles→permisos` (read-model derivado, no
-  persistido); habilita las acciones visibles al ADMIN. — FR4.
+  persistido) vía catálogo + tripwire; consola gateada por `users.read`; vocabulario alineado (SI-20) y
+  superficie CRUD del mock retirada; habilita las acciones de U-2/U-3/U-5. — FR4.
 - **U-2 — invitar** — `#[IsGranted('users.invite')]` → `SendInvitation`/`InviteUser` (→ INVITED); form de
-  invitación; rename `users.write→users.invite`. — FR5.
+  invitación visible con `users.invite`. — FR5.
 - **U-3 — cambio de estado** — `PATCH .../status` → `ChangeUserStatus` (`409` si rompe ≥1 ADMIN); acciones en
-  el detalle; rename `users.delete→users.changeStatus`. — FR6.
+  el detalle, visibles con `users.changeStatus`. — FR6.
 - **U-4 — edición de roles** *(candidato)* — `ChangeUserRoles` (establece el conjunto completo) + dualidad
   `User.roles` vs `Membership.roles`. — FR7.
 - **U-5a — cerrar #376** *(prereq duro · `Shared/Audit`)* — tombstone de `actor_id`s consultado por el writer
@@ -377,8 +382,9 @@ quiero invitar a una persona nueva por email con sus roles,
 para dar de alta identidades sin crear contraseñas ni «cuentas» directamente.
 
 **Comportamiento que introduce:** el alta por invitación desde la consola.
-**Invariantes que consume:** SI-17 (`users.invite` ADMIN-only), SI-18 (alta = invitación), SI-20.
-**Invariantes que establece:** el rename del enum PWA `users.write → users.invite`.
+**Invariantes que consume:** SI-17 (`users.invite` ADMIN-only), SI-18 (alta = invitación), SI-20 (el string
+`users.invite` ya está en el enum desde U-1).
+**Invariantes que establece:** ninguno nuevo — construye la superficie de invitación sobre el vocabulario ya alineado.
 
 **Acceptance Criteria:**
 
@@ -396,9 +402,9 @@ payload) (FR5, SI-18).
 **Then** es un form de **invitación** (email + roles) que reemplaza el «create» del mock, gateado por
 `<Can permission=users.invite>` (FR5, UX-DR3).
 
-**Given** el enum PWA,
-**When** se renombra,
-**Then** `users.write → users.invite`, idéntico al string del `#[IsGranted]` backend (SI-20).
+**Given** un ADMIN en la consola,
+**When** posee `users.invite`,
+**Then** la acción de invitar es visible y gateada por ese permiso, idéntico al string del `#[IsGranted]` backend (SI-20).
 
 ### Story 1.4 (U-3): Cambio de estado (suspend / deactivate)
 
@@ -407,8 +413,9 @@ quiero suspender o desactivar a un usuario (p.ej. un empleado despedido),
 para bloquear su acceso conservando su historia, sin dejar la organización sin administrador.
 
 **Comportamiento que introduce:** las acciones de estado desde el detalle.
-**Invariantes que consume:** el ciclo unidireccional + ≥1 ADMIN activo (Épica II), SI-18.
-**Invariantes que establece:** el rename `users.delete → users.changeStatus`.
+**Invariantes que consume:** el ciclo unidireccional + ≥1 ADMIN activo (Épica II), SI-18, SI-20 (el string
+`users.changeStatus` ya está en el enum desde U-1).
+**Invariantes que establece:** ninguno nuevo — construye las acciones de estado sobre el vocabulario ya alineado.
 
 **Acceptance Criteria:**
 
@@ -431,9 +438,9 @@ para bloquear su acceso conservando su historia, sin dejar la organización sin 
 **Then** las acciones viven en el **detalle** (no un form de edición libre); e2e conduce el ciclo
 `invite → INVITED → changeStatus → reflejo` (NFR9, UX-DR4).
 
-**Given** el enum PWA,
-**When** se renombra,
-**Then** `users.delete → users.changeStatus` (SI-20).
+**Given** un ADMIN en el detalle de un usuario,
+**When** posee `users.changeStatus`,
+**Then** las acciones de estado son visibles y gateadas por ese permiso (SI-20).
 
 ### Story 1.5 (U-4): Edición de roles *(candidato — a confirmar en el corte)*
 
