@@ -3,7 +3,7 @@ baseline_commit: 3bb35964
 ---
 # Story 1.1 (U-0): Read-side de identidades — lista + detalle conectados al backend real
 
-Status: review
+Status: done
 
 <!-- Validación opcional. Ejecuta `bmad-create-story` validate para un chequeo de calidad antes de dev-story. -->
 
