@@ -8,8 +8,8 @@ use DateTimeInterface;
 use Erpify\Iam\Identity\Application\Resource\UserDetailResource;
 use Erpify\Iam\Identity\Application\Resource\UserListResource;
 use Erpify\Iam\Identity\Domain\Entity\User;
-use Erpify\Iam\Identity\Domain\Enum\Role;
 use Erpify\Iam\Identity\Domain\Projection\UserRow;
+use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Search\Domain\Page;
 use LogicException;
 

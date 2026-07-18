@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Iam\Identity\Infrastructure\Security;
 
-use Erpify\Iam\Identity\Domain\Enum\Role;
 use Erpify\Iam\Identity\Infrastructure\Security\PermissionVoter;
 use Erpify\Iam\Identity\Infrastructure\Security\SecurityUser;
+use Erpify\Shared\Access\Domain\Role;
 use Erpify\Tests\DataFixtures\UserFixtureFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;

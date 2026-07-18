@@ -63,13 +63,6 @@ src/Backoffice/BankAccount/Application/BankAccountCreator.php => Erpify\Backoffi
 # docs/adr/bank-bankaccount-modeling.md (D3).
 src/Backoffice/BankAccount/Infrastructure/Persistence/Doctrine/DoctrineBankAccountCollectionSearchRepository.php => Erpify\Backoffice\Bank\Domain\Entity\Bank
 
-# Membership → Iam Role vocabulary. Membership carries the org-scoped roles a user holds, typed with the
-# authorization vocabulary enum Role, which lives in Iam/Identity today (co-located there with the parked
-# RBAC core). This is a transitional seam: when the RBAC authorization plane is extracted to its own home,
-# Role moves out of Iam and this exemption is removed. Consumed by the aggregate and the grant use case.
-src/Organization/Membership/Domain/Entity/Membership.php => Erpify\Iam\Identity\Domain\Enum\Role
-src/Organization/Membership/Application/GrantMembership.php => Erpify\Iam\Identity\Domain\Enum\Role
-
 # Membership → Organization single-org resolution. GrantMembership (Membership/Application) reads the
 # installation's organization through the published OrganizationRepository port to resolve the org a new
 # member belongs to — same intra-`Organization/` cross-module seam family as Bank ↔ BankAccount above.
@@ -102,18 +95,12 @@ src/Iam/Invitation/Application/AcceptInvitation.php => Erpify\Iam\Identity\Domai
 src/Iam/Invitation/Application/AcceptInvitation.php => Erpify\Iam\Identity\Domain\HashedPassword
 src/Iam/Invitation/Application/AcceptInvitation.php => Erpify\Iam\Identity\Domain\Enum\IdentityStatus
 src/Iam/Invitation/Application/SendInvitation.php => Erpify\Iam\Identity\Application\InviteUser
-src/Iam/Invitation/Application/SendInvitation.php => Erpify\Iam\Identity\Domain\Enum\Role
 src/Iam/Invitation/Application/SendInvitation.php => Erpify\Organization\Membership\Application\GrantMembership
 src/Iam/Invitation/Application/ResendInvitation.php => Erpify\Iam\Identity\Domain\Repository\UserRepository
 src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php => Erpify\Iam\Identity\Domain\HashedPassword
 src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php => Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher
 src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php => Erpify\Iam\Identity\Infrastructure\Security\UserProvider
-src/Iam/Invitation/Infrastructure/Cli/CreateInvitationCommand.php => Erpify\Iam\Identity\Domain\Enum\Role
-# The HTTP alta (management console) wraps the same SendInvitation use case, so it names the same Role
-# vocabulary the CLI does: the controller maps the validated wire strings to Role for SendInvitation's
-# signature, and the request DTO validates the roles against the enum at the boundary (unknown role → 422).
-src/Iam/Invitation/Infrastructure/Http/CreateInvitationController.php => Erpify\Iam\Identity\Domain\Enum\Role
-src/Iam/Invitation/Infrastructure/Http/InviteUserRequest.php => Erpify\Iam\Identity\Domain\Enum\Role
+
 # Password reset → revoke every session. RevokeSessionsBestEffort (Iam/Identity Application) consumes the
 # published RevokeAllSessions use case (Iam/Session) to invalidate all of the user's sessions after a credential
 # change — the "reset closes every session" guarantee — and swallows a store outage (defence-in-depth: the

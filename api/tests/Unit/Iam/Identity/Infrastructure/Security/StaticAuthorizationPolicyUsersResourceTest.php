@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security;
 
-use Erpify\Iam\Identity\Domain\Enum\Role;
 use Erpify\Iam\Identity\Infrastructure\Security\Permission;
 use Erpify\Iam\Identity\Infrastructure\Security\StaticAuthorizationPolicy;
+use Erpify\Shared\Access\Domain\Role;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;

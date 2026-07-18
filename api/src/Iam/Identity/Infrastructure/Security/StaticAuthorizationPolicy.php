@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Infrastructure\Security;
 
-use Erpify\Iam\Identity\Domain\Enum\Role;
+use Erpify\Shared\Access\Domain\Role;
 use Override;
 
 /**

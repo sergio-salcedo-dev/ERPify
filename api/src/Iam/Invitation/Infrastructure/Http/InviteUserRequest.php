@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Invitation\Infrastructure\Http;
 
-use Erpify\Iam\Identity\Domain\Enum\Role;
+use Erpify\Shared\Access\Domain\Role;
 use Symfony\Component\Validator\Constraints as Assert;
 
 /**

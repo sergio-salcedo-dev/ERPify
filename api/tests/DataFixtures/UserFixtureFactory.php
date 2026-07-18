@@ -6,8 +6,8 @@ namespace Erpify\Tests\DataFixtures;
 
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
-use Erpify\Iam\Identity\Domain\Enum\Role;
 use Erpify\Iam\Identity\Domain\HashedPassword;
+use Erpify\Shared\Access\Domain\Role;
 
 /**
  * Fixture factory for {@see User}. Unlike `Bank::create`, `User::register` takes a {@see HashedPassword}

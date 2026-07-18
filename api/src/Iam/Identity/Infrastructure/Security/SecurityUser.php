@@ -7,7 +7,7 @@ namespace Erpify\Iam\Identity\Infrastructure\Security;
 use DateTimeImmutable;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
-use Erpify\Iam\Identity\Domain\Enum\Role;
+use Erpify\Shared\Access\Domain\Role;
 use Override;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
 use Symfony\Component\Security\Core\User\UserInterface;

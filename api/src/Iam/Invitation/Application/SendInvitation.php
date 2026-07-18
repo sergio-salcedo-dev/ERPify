@@ -6,11 +6,11 @@ namespace Erpify\Iam\Invitation\Application;
 
 use DateInterval;
 use Erpify\Iam\Identity\Application\InviteUser;
-use Erpify\Iam\Identity\Domain\Enum\Role;
 use Erpify\Iam\Invitation\Domain\Entity\Invitation;
 use Erpify\Iam\Invitation\Domain\Exception\InvitedIdentityUnavailable;
 use Erpify\Iam\Invitation\Domain\Repository\InvitationRepository;
 use Erpify\Organization\Membership\Application\GrantMembership;
+use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;

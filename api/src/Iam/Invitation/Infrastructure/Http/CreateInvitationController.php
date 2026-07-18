@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Invitation\Infrastructure\Http;
 
-use Erpify\Iam\Identity\Domain\Enum\Role;
 use Erpify\Iam\Invitation\Application\SendInvitation;
+use Erpify\Shared\Access\Domain\Role;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Routing\Attribute\Route;

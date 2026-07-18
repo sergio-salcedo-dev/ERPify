@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother;
 
 use Erpify\Iam\Identity\Domain\Entity\User;
-use Erpify\Iam\Identity\Domain\Enum\Role;
 use Erpify\Iam\Identity\Domain\HashedPassword;
+use Erpify\Shared\Access\Domain\Role;
 
 final class UserMother
 {

@@ -6,7 +6,7 @@ namespace Erpify\Tests\Unit\Iam\Identity\Application;
 
 use Erpify\Iam\Identity\Application\InviteUser;
 use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
-use Erpify\Iam\Identity\Domain\Enum\Role;
+use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Validation\Application\Validator;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;

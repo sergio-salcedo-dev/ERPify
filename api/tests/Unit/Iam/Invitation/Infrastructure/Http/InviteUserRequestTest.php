@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Invitation\Infrastructure\Http;
 
-use Erpify\Iam\Identity\Domain\Enum\Role;
 use Erpify\Iam\Invitation\Infrastructure\Http\InviteUserRequest;
+use Erpify\Shared\Access\Domain\Role;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;

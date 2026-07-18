@@ -6,10 +6,10 @@ namespace Erpify\Iam\Identity\Infrastructure\Cli;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Iam\Identity\Application\CreateUser;
-use Erpify\Iam\Identity\Domain\Enum\Role;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher;
 use Erpify\Organization\Membership\Application\GrantMembership;
+use Erpify\Shared\Access\Domain\Role;
 use Override;
 use RuntimeException;
 use SensitiveParameter;
