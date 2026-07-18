@@ -10,13 +10,13 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Erpify\Iam\Identity\Domain\Email;
 use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
-use Erpify\Iam\Identity\Domain\Enum\Role;
 use Erpify\Iam\Identity\Domain\Event\PasswordResetCompleted;
 use Erpify\Iam\Identity\Domain\Event\UserDeactivated;
 use Erpify\Iam\Identity\Domain\Event\UserLocked;
 use Erpify\Iam\Identity\Domain\Event\UserSuspended;
 use Erpify\Iam\Identity\Domain\Exception\InvalidIdentityTransition;
 use Erpify\Iam\Identity\Domain\HashedPassword;
+use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
@@ -61,6 +61,7 @@ final class User extends AggregateRoot
     #[ORM\Column(unique: true)]
     #[Assert\NotBlank]
     #[Assert\Email(mode: Assert\Email::VALIDATION_MODE_STRICT)]
+    #[Assert\Length(max: 255)]
     private string $email;
 
     #[ORM\Column(name: 'password_hash', nullable: true)]

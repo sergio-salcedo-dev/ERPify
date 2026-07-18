@@ -6,13 +6,13 @@ namespace Erpify\Tests\Functional\Organization\Membership;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
-use Erpify\Iam\Identity\Domain\Enum\Role;
 use Erpify\Organization\Membership\Domain\Entity\Membership;
 use Erpify\Organization\Membership\Domain\Exception\UserAlreadyMember;
 use Erpify\Organization\Membership\Domain\Repository\MembershipRepository;
 use Erpify\Organization\Membership\Infrastructure\Persistence\Doctrine\DoctrineMembershipRepository;
 use Erpify\Organization\Organization\Domain\Entity\Organization;
 use Erpify\Organization\Organization\Domain\Repository\OrganizationRepository;
+use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;

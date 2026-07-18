@@ -472,10 +472,7 @@ deptrac:
             - Erpify\Backoffice\Bank\Domain\Repository\BankExistenceChecker
         Erpify\Backoffice\BankAccount\Infrastructure\Persistence\Doctrine\DoctrineBankAccountCollectionSearchRepository:
             - Erpify\Backoffice\Bank\Domain\Entity\Bank
-        Erpify\Organization\Membership\Domain\Entity\Membership:
-            - Erpify\Iam\Identity\Domain\Enum\Role
         Erpify\Organization\Membership\Application\GrantMembership:
-            - Erpify\Iam\Identity\Domain\Enum\Role
             - Erpify\Organization\Organization\Domain\Repository\OrganizationRepository
         Erpify\Iam\Identity\Infrastructure\Cli\CreateInitialAdministratorCommand:
             - Erpify\Organization\Membership\Application\GrantMembership
@@ -489,7 +486,6 @@ deptrac:
             - Erpify\Iam\Identity\Domain\Enum\IdentityStatus
         Erpify\Iam\Invitation\Application\SendInvitation:
             - Erpify\Iam\Identity\Application\InviteUser
-            - Erpify\Iam\Identity\Domain\Enum\Role
             - Erpify\Organization\Membership\Application\GrantMembership
         Erpify\Iam\Invitation\Application\ResendInvitation:
             - Erpify\Iam\Identity\Domain\Repository\UserRepository
@@ -497,7 +493,5 @@ deptrac:
             - Erpify\Iam\Identity\Domain\HashedPassword
             - Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher
             - Erpify\Iam\Identity\Infrastructure\Security\UserProvider
-        Erpify\Iam\Invitation\Infrastructure\Cli\CreateInvitationCommand:
-            - Erpify\Iam\Identity\Domain\Enum\Role
         Erpify\Iam\Identity\Application\RevokeSessionsBestEffort:
             - Erpify\Iam\Session\Application\RevokeAllSessions

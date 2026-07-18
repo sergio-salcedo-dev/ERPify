@@ -44,6 +44,9 @@ import { ApiForgotPasswordRepository } from "../../../backoffice/user/infrastruc
 import type { ForgotPasswordRepository } from "../../../backoffice/user/domain/ForgotPasswordRepository";
 import { ApiResetPasswordRepository } from "../../../backoffice/user/infrastructure/ApiResetPasswordRepository";
 import type { ResetPasswordRepository } from "../../../backoffice/user/domain/ResetPasswordRepository";
+import { ApiInviteUserRepository } from "../../../backoffice/user/infrastructure/ApiInviteUserRepository";
+import type { InviteUserRepository } from "../../../backoffice/user/domain/InviteUserRepository";
+import { InviteUser } from "../../../backoffice/user/application/InviteUser";
 import { ApiIdentityRepository } from "@/context/shared/access/infrastructure/ApiIdentityRepository";
 import type { IdentityRepository } from "@/context/shared/access/domain/IdentityRepository";
 import { ApiSessionsRepository } from "@/context/shared/access/infrastructure/ApiSessionsRepository";
@@ -191,6 +194,15 @@ container
 // its cursor navigation read the same backend endpoint.
 container.bind("BackOfficeUserRepository").to(ApiUserRepository).inSingletonScope();
 container.bind("BackOfficeUserSearchNavigator").to(ApiUserSearchNavigator).inSingletonScope();
+
+// Identity write side: invitation is the alta, through a dedicated identity-shaped port — never the
+// generic CrudRepository.create(), which stays a typed no-op. The stateless adapter is a singleton; the use
+// case is transient like the other write use cases.
+container
+  .bind<InviteUserRepository>("BackOfficeInviteUserRepository")
+  .to(ApiInviteUserRepository)
+  .inSingletonScope();
+container.bind<InviteUser>("BackOfficeInviteUser").to(InviteUser);
 
 // Session sign-in: a real HTTP adapter over the injected HttpClient,
 // which the container binds to MockHttpClient under test.

@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Organization\Membership\Application;
 
-use Erpify\Iam\Identity\Domain\Enum\Role;
 use Erpify\Organization\Membership\Application\GrantMembership;
 use Erpify\Organization\Membership\Domain\Exception\OrganizationNotProvisioned;
 use Erpify\Organization\Membership\Domain\Exception\UserAlreadyMember;
 use Erpify\Organization\Organization\Domain\Entity\Organization;
+use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Unit\Organization\Organization\Application\InMemoryOrganizationRepository;

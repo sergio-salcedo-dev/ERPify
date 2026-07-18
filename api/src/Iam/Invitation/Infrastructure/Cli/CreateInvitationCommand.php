@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Invitation\Infrastructure\Cli;
 
-use Erpify\Iam\Identity\Domain\Enum\Role;
 use Erpify\Iam\Invitation\Application\SendInvitation;
+use Erpify\Shared\Access\Domain\Role;
 use Override;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;

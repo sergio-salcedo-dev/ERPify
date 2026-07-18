@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Tests\Unit\Iam\Identity\Domain\Enum;
+namespace Erpify\Tests\Unit\Shared\Access\Domain;
 
-use Erpify\Iam\Identity\Domain\Enum\Role;
+use Erpify\Shared\Access\Domain\Role;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;

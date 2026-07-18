@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Erpify\Tests\DataFixtures;
 
 use Erpify\Iam\Identity\Domain\Entity\User;
-use Erpify\Iam\Identity\Domain\Enum\Role;
 use Erpify\Organization\Membership\Domain\Entity\Membership;
 use Erpify\Organization\Organization\Domain\Entity\Organization;
+use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use LogicException;
 

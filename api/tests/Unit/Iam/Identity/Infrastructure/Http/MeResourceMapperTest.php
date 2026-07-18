@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Http;
 
-use Erpify\Iam\Identity\Domain\Enum\Role;
 use Erpify\Iam\Identity\Infrastructure\Http\MeResourceMapper;
 use Erpify\Iam\Identity\Infrastructure\Security\Permission;
 use Erpify\Iam\Identity\Infrastructure\Security\PermissionCatalog;
 use Erpify\Iam\Identity\Infrastructure\Security\PermissionResolver;
 use Erpify\Iam\Identity\Infrastructure\Security\SecurityUser;
 use Erpify\Iam\Identity\Infrastructure\Security\StaticAuthorizationPolicy;
+use Erpify\Shared\Access\Domain\Role;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;

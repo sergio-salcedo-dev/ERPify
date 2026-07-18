@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Erpify\Iam\Identity\Application;
 
 use Erpify\Iam\Identity\Domain\Entity\User;
-use Erpify\Iam\Identity\Domain\Enum\Role;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
+use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Shared\Validation\Application\Validator;
 

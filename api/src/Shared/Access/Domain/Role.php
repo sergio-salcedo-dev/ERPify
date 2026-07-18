@@ -2,10 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Iam\Identity\Domain\Enum;
+namespace Erpify\Shared\Access\Domain;
 
 /**
- * Authorization roles a {@see \Erpify\Iam\Identity\Domain\Entity\User} carries as data.
+ * Coarse-grained, org-scoped authorization roles a member carries as data — the shared RBAC vocabulary
+ * consumed across the identity, invitation and organization contexts (byte-identical to the PWA `Role`).
  *
  * The `->value`s are the domain vocabulary and never carry Symfony's `ROLE_` prefix: the mapping is
  * one-directional Domain -> Infrastructure -> Symfony, so a Security adapter prepends `ROLE_` when it

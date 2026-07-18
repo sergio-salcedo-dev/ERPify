@@ -6,7 +6,7 @@ namespace Erpify\Organization\Membership\Domain\Entity;
 
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
-use Erpify\Iam\Identity\Domain\Enum\Role;
+use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Uuid\Domain\Uuid;
 

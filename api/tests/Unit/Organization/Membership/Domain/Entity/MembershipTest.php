@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Organization\Membership\Domain\Entity;
 
-use Erpify\Iam\Identity\Domain\Enum\Role;
 use Erpify\Organization\Membership\Domain\Entity\Membership;
+use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use PHPUnit\Framework\Attributes\CoversClass;

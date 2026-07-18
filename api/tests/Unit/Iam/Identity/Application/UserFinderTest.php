@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Iam\Identity\Application;
 
 use Erpify\Iam\Identity\Application\UserFinder;
-use Erpify\Iam\Identity\Domain\Enum\Role;
 use Erpify\Iam\Identity\Domain\Exception\UserNotFound;
+use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Tests\DataFixtures\UserFixtureFactory;
 use PHPUnit\Framework\Attributes\CoversClass;

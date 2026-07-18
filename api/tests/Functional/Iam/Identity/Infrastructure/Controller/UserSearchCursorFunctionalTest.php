@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Erpify\Tests\Functional\Iam\Identity\Infrastructure\Controller;
 
 use Doctrine\ORM\EntityManagerInterface;
-use Erpify\Iam\Identity\Domain\Enum\Role;
 use Erpify\Iam\Identity\Infrastructure\Controller\UserSearchController;
 use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DoctrineUserSearchRepository;
+use Erpify\Shared\Access\Domain\Role;
 use Erpify\Tests\DataFixtures\UserFixtureFactory;
 use Erpify\Tests\Functional\AuthenticatesFunctionalRequests;
 use JsonException;

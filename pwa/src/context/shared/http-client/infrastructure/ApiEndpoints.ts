@@ -55,6 +55,10 @@ export const API_ENDPOINTS = {
       // Accept an invitation: set the credential, activate the account (204 on
       // success, httpOnly session cookie). Dead token → 400 `invalid-token`.
       ACCEPT: `${BACKOFFICE_PREFIX}/invitations/accept`,
+      // Create an invitation (the alta): ADMIN-only (`users.invite`). 201 with an
+      // empty body on success — the console refreshes the register to show the new
+      // INVITED row; the accept token never leaves the email.
+      CREATE: `${BACKOFFICE_PREFIX}/invitations`,
     },
     BANKS: {
       LIST: `${BACKOFFICE_PREFIX}/banks`,

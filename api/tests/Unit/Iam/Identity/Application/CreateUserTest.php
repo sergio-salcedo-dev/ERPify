@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Iam\Identity\Application;
 
 use Erpify\Iam\Identity\Application\CreateUser;
-use Erpify\Iam\Identity\Domain\Enum\Role;
 use Erpify\Iam\Identity\Domain\HashedPassword;
+use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Validation\Application\Validator;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
