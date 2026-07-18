@@ -3,7 +3,7 @@ baseline_commit: b8b13b61
 ---
 # Story 1.3 (U-2): Invitar (alta = invitación)
 
-Status: review
+Status: done
 
 <!-- Validación opcional. Ejecuta `bmad-create-story` validate para un chequeo de calidad antes de dev-story. -->
 
