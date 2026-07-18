@@ -6,6 +6,7 @@ namespace Erpify\Tests\Unit\Iam\Invitation\Domain\Exception;
 
 use Erpify\Iam\Invitation\Domain\Exception\InvitedIdentityUnavailable;
 use Erpify\Shared\ErrorContract\Domain\Exception\ClientError;
+use Erpify\Shared\ErrorContract\Domain\Exception\ServiceUnavailable;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -38,10 +39,10 @@ final class InvitedIdentityUnavailableTest extends TestCase
     #[Test]
     public function itIsMarkerLessSoTheContractKeepsItAServerError(): void
     {
-        // No ClientError marker: the RFC 9457 pipeline keeps it a 500 (an internal integrity violation), never
-        // a 4xx the caller could correct.
-        $this->assertFalse(
-            (new ReflectionClass(InvitedIdentityUnavailable::class))->implementsInterface(ClientError::class),
-        );
+        // No ClientError (4xx) and no ServiceUnavailable (503) marker: the RFC 9457 pipeline keeps it a 500 (an
+        // internal integrity violation), never a status the caller could correct.
+        $reflection = new ReflectionClass(InvitedIdentityUnavailable::class);
+        $this->assertFalse($reflection->implementsInterface(ClientError::class));
+        $this->assertFalse($reflection->implementsInterface(ServiceUnavailable::class));
     }
 }

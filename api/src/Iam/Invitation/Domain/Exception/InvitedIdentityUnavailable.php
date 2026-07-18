@@ -11,8 +11,8 @@ use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
  * just-provisioned identity reports no id, or a resent invitation points at an identity that no longer exists.
  * Both are internal integrity violations, not input the caller could correct.
  *
- * Marker-less by design: it maps to a 500 (a broken invariant, never a 4xx), and the invite/resend surface is
- * CLI in this slice.
+ * Marker-less by design → HTTP 500: an integrity violation is a server fault, never a client-correctable 4xx.
+ * A 4xx marker would disguise that server fault as a client error the caller could fix by changing its input.
  */
 final class InvitedIdentityUnavailable extends DomainException
 {
