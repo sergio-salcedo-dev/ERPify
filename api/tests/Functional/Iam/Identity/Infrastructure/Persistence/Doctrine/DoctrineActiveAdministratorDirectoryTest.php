@@ -99,6 +99,34 @@ final class DoctrineActiveAdministratorDirectoryTest extends KernelTestCase
         });
     }
 
+    public function testTheGuardLocksTheActiveAdminSetToSerializeConcurrentTransitions(): void
+    {
+        $this->inRolledBackTransaction(function (): void {
+            $this->seed(self::ADMIN_A, 'admin-a@erpify.test', [Role::ADMIN->value]);
+            $this->seed(self::ADMIN_B, 'admin-b@erpify.test', [Role::ADMIN->value]);
+
+            $this->directory->keepsAnActiveAdminWithout(self::ADMIN_A);
+
+            // `SELECT ... FOR UPDATE` takes a RowShareLock on identity_user held until commit; a plain read
+            // would only take AccessShareLock. Its presence proves the guard locks the admin set — the lock
+            // that makes two concurrent last-two-admin transitions serialize (the loser re-reads the committed
+            // state and is rejected) instead of both draining every administrator from a stale snapshot.
+            $rowShareLocks = $this->connection->fetchOne(
+                <<<'SQL'
+                    SELECT count(*)
+                    FROM pg_locks
+                    WHERE relation = 'identity_user'::regclass
+                      AND mode = 'RowShareLock'
+                      AND pid = pg_backend_pid()
+                    SQL,
+            );
+
+            // pg_locks count(*) surfaces as an int or a numeric string depending on the driver.
+            $lockCount = \is_numeric($rowShareLocks) ? (int) $rowShareLocks : 0;
+            $this->assertGreaterThan(0, $lockCount);
+        });
+    }
+
     /**
      * @param list<string> $roleValues
      */

@@ -20,9 +20,10 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  * simply never counted). When tenancy moves the authoritative role source to `Membership`, this adapter is
  * re-pointed exactly as the read model will be — the port never changes.
  *
- * `EXISTS` stops at the first surviving administrator — the question is existence, never a count. `roles` is a
- * Postgres `json` column, so the containment operator runs against an explicit `::jsonb` cast; the query is
- * parameterised end to end.
+ * The read takes a `FOR UPDATE` lock on the active-admin set so concurrent transitions serialize — the
+ * invariant is set-based, so two last-two-admin suspends must not both pass a stale read and drain every
+ * administrator. `roles` is a Postgres `json` column, so the containment operator runs against an explicit
+ * `::jsonb` cast; the query is parameterised end to end.
  */
 #[AsAlias(ActiveAdministratorDirectory::class)]
 final readonly class DoctrineActiveAdministratorDirectory implements ActiveAdministratorDirectory
@@ -34,25 +35,28 @@ final readonly class DoctrineActiveAdministratorDirectory implements ActiveAdmin
     #[Override]
     public function keepsAnActiveAdminWithout(string $userId): bool
     {
-        $keeps = $this->connection->fetchOne(
+        // Lock the whole active-admin set — not only the rows other than $userId — so two concurrent
+        // transitions acquire the same rows in the same scan order (no deadlock) and the second blocks behind
+        // the first, then re-reads the committed state under READ COMMITTED. Excluding $userId in SQL would
+        // make the two lock sets diverge and could deadlock; the exclusion is applied in PHP instead. This must
+        // run inside the caller's transaction for the lock to hold until commit.
+        $activeAdminIds = $this->connection->fetchFirstColumn(
             <<<'SQL'
-                SELECT EXISTS(
-                    SELECT 1
-                    FROM identity_user
-                    WHERE status = :active
-                      AND id <> CAST(:excluded AS uuid)
-                      AND roles::jsonb @> CAST(:adminRole AS jsonb)
-                )::int
+                SELECT id
+                FROM identity_user
+                WHERE status = :active
+                  AND roles::jsonb @> CAST(:adminRole AS jsonb)
+                FOR UPDATE
                 SQL,
             [
                 'active' => IdentityStatus::ACTIVE->value,
-                'excluded' => $userId,
                 'adminRole' => \json_encode([Role::ADMIN->value], JSON_THROW_ON_ERROR),
             ],
         );
 
-        // `EXISTS(...)::int` yields 1 when an active admin other than $userId remains, else 0; pdo_pgsql may
-        // surface it as the int or its numeric string, so accept both without casting the mixed driver value.
-        return 1 === $keeps || '1' === $keeps;
+        return \array_any(
+            $activeAdminIds,
+            static fn ($adminId): bool => \is_string($adminId) && 0 !== \strcasecmp($adminId, $userId),
+        );
     }
 }
