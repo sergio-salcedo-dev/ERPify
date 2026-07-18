@@ -223,6 +223,24 @@ del DAG — **U-3 no depende de U-2**, solo comparten churn (detalle/`<Can>`), y
       `.next-e2e`).
 - [x] Si el adapter del guard necesita índice/containment nuevo → `make db.diff` (migración medida, no asumida).
 
+### Review Findings (code review 2026-07-18)
+
+Revisión adversarial en 3 capas (Blind Hunter · Edge Case Hunter · Acceptance Auditor) sobre el diff completo. Auditoría de aceptación: **13/13 AC cumplidos** (AC8 y AC12 «partial» = divergencias honestas ya documentadas en Completion Notes); D1–D7 todos cumplidos; las 3 divergencias verificadas son ciertas en el código.
+
+**Resuelto (patch aplicado — opción b, Sergio 2026-07-18):**
+
+- [x] [Review][Patch] TOCTOU en el guard del último administrador — **endurecido**. `keepsAnActiveAdminWithout` corría en `findAndGuard()` **antes y fuera** de la transacción, sin lock: con 2 admins activos, dos PATCH concurrentes que suspendan cada uno a uno distinto pasaban ambos el guard (read-committed) → **0 admins activos**, irrecuperable. **Fix:** el guard se movió **dentro** de la transacción de escritura y el adapter toma un `SELECT id … FOR UPDATE` sobre el **conjunto completo** de admins activos (sin excluir el target en SQL → ambas transacciones bloquean las mismas filas en el mismo orden → **sin deadlock**; bajo READ COMMITTED el perdedor re-lee el estado commiteado vía EvalPlanQual → **409 limpio**, no un 500). La exclusión del target se aplica en PHP. + test de integración `testTheGuardLocksTheActiveAdminSetToSerializeConcurrentTransitions` (prueba el `RowShareLock` vía `pg_locks`, determinista, sin carrera temporal). Verde: `php.quality` · unit (5) · integración (5) · functional wire-gate (3) · behat `status.feature` (13/13, canario de queries `22` intacto). [`api/src/Iam/Identity/Application/ChangeUserStatus.php`, `api/src/Iam/Identity/Infrastructure/Persistence/Doctrine/DoctrineActiveAdministratorDirectory.php`]
+
+**Diferidos (checked; reales, no accionables ahora):**
+
+- [x] [Review][Defer] Test funcional borra TODOS los admins sin rollback [`api/tests/Functional/Iam/Identity/Infrastructure/Controller/UserPatchStatusFunctionalTest.php:164-169`] — `deleteAllAdministrators()` commitea un `DELETE … roles @> ADMIN` global en la DB de test (trait base: «manual TRUNCATE, no DAMA rollback»). Impacto real bajo (`functional-admin` se auto-repara; DB de test ≠ DB e2e), pero destruye filas admin no relacionadas dentro del run. Fix ambiguo (el test conduce por HTTP → un tx rolled-back no es visible a la request sin DAMA). Nuevo, no pre-existente; low.
+- [x] [Review][Defer] Guard confunde «no queda admin» con «este es el último admin» [`DoctrineActiveAdministratorDirectory.php:35-57`] — en un estado de 0 admins activos, excluir a un no-admin también deja 0 → suspender a un no-admin devuelve `409 last-active-administrator-protected` (error engañoso). Fail-safe (bloquea, no permite); solo alcanzable en estado 0-admins (que el endpoint mismo previene). Low.
+- [x] [Review][Defer] Cobertura: `status` ausente/null/empty/lowercase → 422 no aserta­do [`api/features/backoffice/users/status.feature:647-664`] — AC4 lista «ausente» como caso 422; el Scenario Outline solo cubre valores presentes-pero-ilegales (`FROZEN`/`ACTIVE`/`INVITED`). Correcto por construcción (`IdentityStatus $status` no-nullable + `#[MapRequestPayload]`), sin test.
+- [x] [Review][Defer] Cobertura: admin `INVITED` no cuenta en el guard · `SUSPENDED→DEACTIVATED` → 409 [`DoctrineActiveAdministratorDirectoryTest.php`, `status.feature`] — ramas del set de estado correctas pero sin aserción explícita (la integración cubre SUSPENDED/DEACTIVATED; la feature cubre re-suspend pero no deactivate-de-suspended).
+- [x] [Review][Defer] `AllSessionsRevoked` se emite aunque el objetivo no tenga sesiones, y el éxito lo fija [`RevokeAllSessions.php`, `status.feature`] — smell semántico del módulo Session (pre-existente): el log registra «all-revoked» para identidades con 0 sesiones y la feature lo asegura duro. Si `RevokeAllSessions` se endurece a emitir-solo-si-revocó, rompe este test de status.
+
+**Descartados (ruido / ya trackeado / divergencia honesta):** PWA `UserStatusControl` re-lanza no-`HttpError` en `void onSubmit()` (idéntico al mirror `BankAccountStatusControl`; **ya diferido como sistémico** en la review de U-2, fix central en `FetchHttpClient`) · AC12 e2e reducido a smoke suspend-only (divulgado en Completion Notes; Behat posee la matriz) · AC8 «CDC onFlush audita» inexacto (código correcto: `User` no es `AuditedEntity` a propósito; el registro durable es el evento de dominio) · AC10 gate «no-dirty» omitido (picker target-only sin estado dirty; razonable) · canario de query `22` acopla a internals de revoke (patrón aceptado de la casa) · churn de `api/config/reference.php` (auto-generado; commitear el diff regenerado está permitido).
+
 ## Dev Notes
 
 ### Crux 1 — el controller traduce `status → método`, el DTO acota el target
