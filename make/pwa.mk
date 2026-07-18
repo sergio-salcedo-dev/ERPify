@@ -107,12 +107,27 @@ E2E_USER_EMAIL ?= e2e@erpify.test
 E2E_USER_PASSWORD ?= e2ePassword123
 E2E_ORG_NAME ?= E2E-Test-Organization
 
+# Suspend/deactivate needs an ACTIVE NON-admin target the admin can transition — the admin itself is the only
+# ADMIN, so suspending it hits the last-active-admin guard (409). There is no create-active-user CLI (only
+# invite→INVITED and admin-create), so this login-less e2e fixture is seeded via raw SQL, exactly as the Behat
+# and functional suites seed identity rows. It NEVER authenticates (only the admin logs in and transitions it),
+# so `password_hash` is deliberately NULL. The identity lifecycle is unidirectional (no reinstate), so the
+# suspend spec would leave it SUSPENDED and un-reseedable — `ON CONFLICT DO UPDATE SET status='ACTIVE'`
+# re-activates it every run, keeping the smoke repeatable. `json_build_array` builds the roles JSON without
+# embedded double quotes, so the SQL carries through the make→console layers with no escaping.
+E2E_SUSPENDABLE_EMAIL ?= e2e-suspendable@erpify.test
+E2E_SUSPENDABLE_ID ?= 0190e2e5-5050-7050-8050-000000000001
+
 pwa.test.e2e: pwa.install.if-missing ## Run end-to-end tests with Playwright; CI_SHARD=N CI_TOTAL_SHARDS=M for sharded runs; pass c='…' for extra args
 	@echo "[e2e] seeding org + admin $(E2E_USER_EMAIL) (idempotent; non-zero is expected when already seeded)…"
 	@$(MAKE) --no-print-directory sf c='organization:provision $(E2E_ORG_NAME)' >/dev/null 2>&1 || true
 	@$(MAKE) --no-print-directory sf c='organization:administrator:create $(E2E_USER_EMAIL) $(E2E_USER_PASSWORD)' >/dev/null 2>&1 \
 		&& echo "[e2e] org + admin seeded." \
 		|| echo "[e2e] seed non-zero: fine if already seeded; if login then fails, provision/admin-create genuinely failed (check the stack)."
+	@echo "[e2e] seeding ACTIVE non-admin $(E2E_SUSPENDABLE_EMAIL) (re-activated each run for the suspend spec)…"
+	@$(MAKE) --no-print-directory sf c="dbal:run-sql \"INSERT INTO identity_user (id, email, password_hash, roles, status, failed_attempts, created_at, updated_at) VALUES ('$(E2E_SUSPENDABLE_ID)', '$(E2E_SUSPENDABLE_EMAIL)', NULL, json_build_array('VIEWER'), 'ACTIVE', 0, NOW(), NOW()) ON CONFLICT (email) DO UPDATE SET status = 'ACTIVE', updated_at = NOW()\"" >/dev/null 2>&1 \
+		&& echo "[e2e] suspendable member seeded (ACTIVE)." \
+		|| echo "[e2e] suspendable seed non-zero: check the stack if the change-status spec then fails."
 	@if [ -n "$(CI_SHARD)" ] && [ -n "$(CI_TOTAL_SHARDS)" ]; then \
 		$(call pwa_cmd,npm run test:e2e -- --shard=$(CI_SHARD)/$(CI_TOTAL_SHARDS) $(c)); \
 	else \

@@ -46,12 +46,12 @@ final readonly class StaticAuthorizationPolicy implements AuthorizationPolicy
      * Permission string -> the role tokens explicitly granted it, independent of any tier.
      *
      * The four `users.*` grants localize the identity-console authorization surface as one data line.
-     * Only `users.read` has an endpoint today; `invite` / `changeStatus` / `erase` are listed ahead of the
-     * use cases that reach them, so the console's full action vocabulary is declared in one place rather
-     * than discovered per later story. They are deliberate, documented seam — not dead code to cull. ADMIN
-     * already passes through the unconditional clause, so these rows are functionally redundant for ADMIN;
-     * what actually confines the console to ADMIN is `users` in {@see self::TIER_OPT_OUT} (without it,
-     * `read` — a tier verb — would auto-grant to VIEWER).
+     * `read`, `invite` and `changeStatus` back endpoints today; `erase` is listed ahead of the GDPR use case
+     * that reaches it, so the console's full action vocabulary is declared in one place rather than discovered
+     * per later story. It is a deliberate, documented seam — not dead code to cull. ADMIN already passes
+     * through the unconditional clause, so these rows are functionally redundant for ADMIN; what actually
+     * confines the console to ADMIN is `users` in {@see self::TIER_OPT_OUT} (without it, `read` — a tier verb —
+     * would auto-grant to VIEWER).
      *
      * @var array<string, list<string>>
      */

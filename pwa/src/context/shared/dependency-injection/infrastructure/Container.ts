@@ -47,6 +47,9 @@ import type { ResetPasswordRepository } from "../../../backoffice/user/domain/Re
 import { ApiInviteUserRepository } from "../../../backoffice/user/infrastructure/ApiInviteUserRepository";
 import type { InviteUserRepository } from "../../../backoffice/user/domain/InviteUserRepository";
 import { InviteUser } from "../../../backoffice/user/application/InviteUser";
+import { ApiChangeUserStatusRepository } from "../../../backoffice/user/infrastructure/ApiChangeUserStatusRepository";
+import type { ChangeUserStatusRepository } from "../../../backoffice/user/domain/ChangeUserStatusRepository";
+import { ChangeUserStatus } from "../../../backoffice/user/application/ChangeUserStatus";
 import { ApiIdentityRepository } from "@/context/shared/access/infrastructure/ApiIdentityRepository";
 import type { IdentityRepository } from "@/context/shared/access/domain/IdentityRepository";
 import { ApiSessionsRepository } from "@/context/shared/access/infrastructure/ApiSessionsRepository";
@@ -203,6 +206,14 @@ container
   .to(ApiInviteUserRepository)
   .inSingletonScope();
 container.bind<InviteUser>("BackOfficeInviteUser").to(InviteUser);
+
+// Identity write side: status change (suspend/deactivate) through its own identity-shaped port, the sibling
+// of invite — never the generic CrudRepository.update(). Stateless adapter singleton; transient use case.
+container
+  .bind<ChangeUserStatusRepository>("BackOfficeChangeUserStatusRepository")
+  .to(ApiChangeUserStatusRepository)
+  .inSingletonScope();
+container.bind<ChangeUserStatus>("BackOfficeChangeUserStatus").to(ChangeUserStatus);
 
 // Session sign-in: a real HTTP adapter over the injected HttpClient,
 // which the container binds to MockHttpClient under test.

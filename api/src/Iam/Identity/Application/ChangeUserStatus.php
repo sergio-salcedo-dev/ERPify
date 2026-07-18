@@ -21,12 +21,19 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * check is a synchronous precondition (a rejection must stop the write, which a post-hoc event could only
  * observe). Persist and publish commit in one transaction (through the framework-free {@see TransactionManager}
  * seam, keeping the ORM out of Application) so the aggregate, its event-store rows and the outbox land atomically.
+ *
+ * A successful transition then revokes the identity's live sessions ({@see RevokeSessionsBestEffort},
+ * post-commit, best-effort). A pure status flip touches neither credential nor roles, so the native
+ * de-authentication paths never fire; suspending is an access control that must cut live access at once, and
+ * the fail-closed session gate only walls the suspended identity once its registry rows are gone. Swallowing a
+ * revoke failure (logged for ops) mirrors {@see CompletePasswordReset}: the change already committed.
  */
 final readonly class ChangeUserStatus
 {
     public function __construct(
         private UserRepository $users,
         private ActiveAdministratorDirectory $administrators,
+        private RevokeSessionsBestEffort $revokeSessions,
         private EventBus $eventBus,
         private TransactionManager $transactionManager,
     ) {
@@ -41,7 +48,7 @@ final readonly class ChangeUserStatus
         $user = $this->findAndGuard($userId);
         $user->suspend();
 
-        return $this->commit($user);
+        return $this->commitAndRevoke($user, $userId);
     }
 
     /**
@@ -53,7 +60,7 @@ final readonly class ChangeUserStatus
         $user = $this->findAndGuard($userId);
         $user->deactivate();
 
-        return $this->commit($user);
+        return $this->commitAndRevoke($user, $userId);
     }
 
     private function findAndGuard(string $userId): User
@@ -69,12 +76,14 @@ final readonly class ChangeUserStatus
         return $user;
     }
 
-    private function commit(User $user): User
+    private function commitAndRevoke(User $user, string $userId): User
     {
         $this->transactionManager->transactional(function () use ($user): void {
             $this->users->save($user);
             $this->eventBus->publish(...$user->pullDomainEvents());
         });
+
+        $this->revokeSessions->revoke($userId);
 
         return $user;
     }

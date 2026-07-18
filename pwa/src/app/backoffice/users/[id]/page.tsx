@@ -17,11 +17,16 @@ import { Permission } from "@/context/shared/access/domain/Permission";
 import { userRoutes } from "../_lib/userRoutes";
 import { UserStatusBadge } from "../_components/UserStatusBadge";
 import { RolesBadges } from "../_components/RolesBadges";
+import { UserStatusControl } from "../_components/UserStatusControl";
 
 export default function UserDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params?.id ?? "";
-  const { item: user, state } = useResourceItem<User, UserInput>("BackOfficeUserRepository", id);
+  const {
+    item: user,
+    state,
+    reload,
+  } = useResourceItem<User, UserInput>("BackOfficeUserRepository", id);
 
   return (
     <Can
@@ -158,6 +163,8 @@ export default function UserDetailPage() {
                 </dd>
               </div>
             </dl>
+
+            <UserStatusControl user={user} onChanged={() => void reload()} />
           </>
         ) : null}
       </div>

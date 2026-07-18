@@ -142,6 +142,42 @@ final class PermissionVoterAccessDecisionTest extends WebTestCase
         );
     }
 
+    public function testUsersChangeStatusIsGrantedToAnAdminButDeniedToAGenericTier(): void
+    {
+        $client = self::createClient();
+
+        $authorizationChecker = self::getContainer()->get(AuthorizationCheckerInterface::class);
+        $this->assertInstanceOf(AuthorizationCheckerInterface::class, $authorizationChecker);
+
+        // changeStatus on the identity console is ADMIN-only: users opts out of tier auto-grant and the
+        // permission carries no lesser explicit grant, so even a fully-tiered MANAGER is refused...
+        $manager = UserFixtureFactory::create(
+            Uuid::v7()->toRfc4122(),
+            'status-users-manager@erpify.test',
+            'status-users-manager-password',
+            [Role::MANAGER->value],
+        );
+        $client->loginUser(new SecurityUser($manager), 'main');
+        $this->assertFalse(
+            $authorizationChecker->isGranted('users.changeStatus'),
+            'A generic MANAGER tier must not be granted users.changeStatus.',
+        );
+
+        // ...while an ADMIN reaches it through the unconditional superuser clause, the same admin-only shape
+        // as users.read but for the write action the console gates the suspend/deactivate control on.
+        $admin = UserFixtureFactory::create(
+            Uuid::v7()->toRfc4122(),
+            'status-users-admin@erpify.test',
+            'status-users-admin-password',
+            [Role::ADMIN->value],
+        );
+        $client->loginUser(new SecurityUser($admin), 'main');
+        $this->assertTrue(
+            $authorizationChecker->isGranted('users.changeStatus'),
+            'An ADMIN must be granted users.changeStatus through the superuser clause.',
+        );
+    }
+
     public function testBankAccountChangeStatusIsGrantedToAManagerButDeniedToAnEditor(): void
     {
         $client = self::createClient();
