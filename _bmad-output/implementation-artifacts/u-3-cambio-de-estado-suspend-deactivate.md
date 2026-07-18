@@ -4,7 +4,7 @@ baseline_commit: 582274b6d82e5597f376908ee7a97ee300ee41d0
 
 # Story 1.4 (U-3): Cambio de estado (suspend / deactivate)
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
