@@ -1,6 +1,10 @@
+---
+baseline_commit: 582274b6d82e5597f376908ee7a97ee300ee41d0
+---
+
 # Story 1.4 (U-3): Cambio de estado (suspend / deactivate)
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -127,12 +131,12 @@ del DAG — **U-3 no depende de U-2**, solo comparten churn (detalle/`<Can>`), y
 
 ### A — Endpoint `PATCH .../status` · `api/src/Iam/Identity/Infrastructure/` (AC1, AC4, AC5, AC6)
 
-- [ ] **Request DTO** `ChangeUserStatusRequest.php` **nuevo** en `Iam/Identity/Infrastructure/Http/` (junto a
+- [x] **Request DTO** `ChangeUserStatusRequest.php` **nuevo** en `Iam/Identity/Infrastructure/Http/` (junto a
       `UserResourceMapper`). Único campo `public IdentityStatus $status` (enum backed → `#[MapRequestPayload]` rechaza
       valor fuera de enum con `422`) **+** `#[Assert\Choice(choices: [IdentityStatus::SUSPENDED, IdentityStatus::DEACTIVATED])]`
       para acotar el target a las transiciones legales (`INVITED`/`ACTIVE` → `422`). Espejo de
       `ChangeBankAccountStatusCommand` + el acote de target.
-- [ ] **Controller** `UserPatchStatusController.php` **nuevo** en `Iam/Identity/Infrastructure/Controller/` (junto a
+- [x] **Controller** `UserPatchStatusController.php` **nuevo** en `Iam/Identity/Infrastructure/Controller/` (junto a
       `UserGetController`). `#[Route('/backoffice/users/{id}/status', name: self::ROUTE_NAME, methods: ['PATCH'])]`
       (`const string ROUTE_NAME = 'backoffice_user_change_status'`), `#[IsGranted('users.changeStatus')]` (**string
       literal**, como los read-controllers). `final readonly`, invokable, deps `ChangeUserStatus`, `UserResourceMapper`,
@@ -140,84 +144,84 @@ del DAG — **U-3 no depende de U-2**, solo comparten churn (detalle/`<Can>`), y
       `$user = match ($request->status) { SUSPENDED => $changeUserStatus->suspend($id), DEACTIVATED => $changeUserStatus->deactivate($id) };`
       (exhaustivo sobre el set acotado por `Assert\Choice`) → `$responder->respond($mapper->toDetailResource($user))`. El
       `Uuid::ensure`/`UserNotFound` los hace `ChangeUserStatus` — **no** dupliques `UserFinder`.
-- [ ] **Docblock stale.** Actualiza el comentario de `EXPLICIT_GRANTS` en `StaticAuthorizationPolicy.php` (`:50-54`) que
+- [x] **Docblock stale.** Actualiza el comentario de `EXPLICIT_GRANTS` en `StaticAuthorizationPolicy.php` (`:50-54`) que
       afirma «solo `users.read` tiene endpoint hoy» — ahora `changeStatus` también.
 
 ### B — Adapter de producción de `ActiveAdministratorDirectory` (AC3) — **bloqueante duro**
 
-- [ ] **Adapter Doctrine** que implemente `keepsAnActiveAdminWithout(string $userId): bool` (hoy inexistente en `src/`).
+- [x] **Adapter Doctrine** que implemente `keepsAnActiveAdminWithout(string $userId): bool` (hoy inexistente en `src/`).
       **Decisión D2:** cuenta admins **desde `Iam/Identity/User.roles`** (fuente operativa hoy, SI-15 — **single-context,
       sin JOIN a `Organization/Membership`**): `¿existe algún `User` con `status = ACTIVE` y `ADMIN` ∈ `roles`, con `id !=
       :excluded`?`. Ubicación: `Iam/Identity/Infrastructure/Persistence/` (o donde vivan los repos Doctrine de Identity).
       Query parametrizada como **`SELECT EXISTS(SELECT 1 FROM identity_user WHERE status = 'ACTIVE' AND roles @> :adminJson AND id <> :excluded)`**
       — **`EXISTS`, no `COUNT(*)`** (solo interesa si **queda** otro admin activo → Postgres corta en la 1ª fila y la
       intención queda explícita; containment JSONB → *Gotchas*), sin `SELECT *`.
-- [ ] **Binding** del puerto → adapter (autowiring por `_defaults`/`bind:` o entry explícito en `services.yaml` si el
+- [x] **Binding** del puerto → adapter (autowiring por `_defaults`/`bind:` o entry explícito en `services.yaml` si el
       containment JSONB necesita un `dql:`/función). Verifica que `ChangeUserStatus` autowirea tras el bind (`make sf
       c='debug:container ...'` o el functional wire-gate).
-- [ ] **Test de integración** del adapter (Postgres real): ≥1 otro admin activo → `true`; único admin activo → `false`;
+- [x] **Test de integración** del adapter (Postgres real): ≥1 otro admin activo → `true`; único admin activo → `false`;
       admins `SUSPENDED`/`DEACTIVATED` no cuentan; `id` excluido no se auto-cuenta.
 
 ### C — Invalidación de sesiones (AC7) — **Decisión D3: revoke síncrono post-commit**
 
-- [ ] **Cablear `RevokeSessionsBestEffort`** en `ChangeUserStatus`: añadir la dep e invocar `->revoke($userId)`
+- [x] **Cablear `RevokeSessionsBestEffort`** en `ChangeUserStatus`: añadir la dep e invocar `->revoke($userId)`
       **después** del `transactional(...)` (post-commit best-effort, mirror `CompletePasswordReset` — traga+loguea, no
       aborta al caller). Aplica a `suspend` **y** `deactivate`.
-- [ ] Extender `ChangeUserStatusTest` para fijar: éxito → revoke invocado 1×; guard-fail (409) → revoke **no** invocado
+- [x] Extender `ChangeUserStatusTest` para fijar: éxito → revoke invocado 1×; guard-fail (409) → revoke **no** invocado
       (se aborta antes del commit).
 
 ### D — Puerto identity-shaped + control en el detalle (PWA) (AC9, AC10, AC11)
 
-- [ ] `pwa/src/context/shared/http-client/infrastructure/ApiEndpoints.ts` — `+ USERS.CHANGE_STATUS: (id) =>
+- [x] `pwa/src/context/shared/http-client/infrastructure/ApiEndpoints.ts` — `+ USERS.CHANGE_STATUS: (id) =>
       `${userPath(id)}/status`` (espejo del bloque `BANK_ACCOUNTS.CHANGE_STATUS`; `userPath` ya hace `encodeURIComponent`).
-- [ ] `pwa/src/context/backoffice/user/domain/ChangeUserStatusRepository.ts` **nuevo** — puerto `changeStatus(id: string,
+- [x] `pwa/src/context/backoffice/user/domain/ChangeUserStatusRepository.ts` **nuevo** — puerto `changeStatus(id: string,
       status: UserStatus): Promise<User>`.
-- [ ] `pwa/src/context/backoffice/user/infrastructure/ApiChangeUserStatusRepository.ts` **nuevo** — `httpClient.patch(...,
+- [x] `pwa/src/context/backoffice/user/infrastructure/ApiChangeUserStatusRepository.ts` **nuevo** — `httpClient.patch(...,
       { status }, isUserSingleResponse)` → `User.fromPrimitives(response.data)` (reusa `isUserSingleResponse` exportado de
       `ApiUserRepository.ts`).
-- [ ] `pwa/src/context/backoffice/user/application/ChangeUserStatus.ts` **nuevo** — use case `run(id, status)` que delega
+- [x] `pwa/src/context/backoffice/user/application/ChangeUserStatus.ts` **nuevo** — use case `run(id, status)` que delega
       en el puerto (mirror `ChangeBankAccountStatus`).
-- [ ] `pwa/src/context/shared/dependency-injection/infrastructure/Container.ts` — +2 binds (`BackOfficeChangeUserStatusRepository`
+- [x] `pwa/src/context/shared/dependency-injection/infrastructure/Container.ts` — +2 binds (`BackOfficeChangeUserStatusRepository`
       → `ApiChangeUserStatusRepository` singleton; `BackOfficeChangeUserStatus` → use case).
-- [ ] `pwa/src/app/backoffice/users/_components/UserStatusControl.tsx` **nuevo** — `"use client"`, mirror
+- [x] `pwa/src/app/backoffice/users/_components/UserStatusControl.tsx` **nuevo** — `"use client"`, mirror
       `BankAccountStatusControl` (select de target {Suspend, Deactivate} + botón save disabled mientras no-dirty/saving) +
       manejo de error de U-2 (`<MutationError testId="user-status__error">` + `toastNotifier.success`). Gateado por
       `<Can permission={Permission.USERS_CHANGE_STATUS}>`. Visible/operable **solo si `user.status === ACTIVE`** (sin
       reinstate). Testids `user-status__select` / `user-status__save` / `user-status__error` (patrón `bank-account-status__*`).
-- [ ] `pwa/src/app/backoffice/users/[id]/page.tsx` — montar `<UserStatusControl>` en la superficie de detalle; tras éxito,
+- [x] `pwa/src/app/backoffice/users/[id]/page.tsx` — montar `<UserStatusControl>` en la superficie de detalle; tras éxito,
       `reload()` (de `useResourceItem`) refleja el nuevo `UserStatusBadge`. **No** tocar el read-side (`search`/`find`
       siguen en el toolkit genérico).
 
 ### E — Tests (Behat + unit + functional + e2e) (AC1–AC8, AC12, AC13)
 
-- [ ] **Behat** `api/features/backoffice/users/status.feature` **nuevo** — espejo de `bank_account/status.feature` +
+- [x] **Behat** `api/features/backoffice/users/status.feature` **nuevo** — espejo de `bank_account/status.feature` +
       escenarios propios: éxito suspend + éxito deactivate (200 + `data.status` + **1 evento** + outbox + budget); **403**
       no-ADMIN + **401** sin sesión (mirror `users/access_control.feature`); **409 last-admin**; **409
       invalid-identity-transition** (re-suspender un `SUSPENDED`); **422** target fuera de `{SUSPENDED,DEACTIVATED}`;
       **400 invalid-uuid** (Scenario Outline); **404**. Assert-0-en-fallo: vaciar outbox + reset stats **antes** de la
       request (`behat-assert-zero-new-events-on-failure`).
-- [ ] **Unit** — extender `tests/Unit/Iam/Identity/Application/ChangeUserStatusTest.php` (revoke, Task C); `ChangeUserStatusRequest`
+- [x] **Unit** — extender `tests/Unit/Iam/Identity/Application/ChangeUserStatusTest.php` (revoke, Task C); `ChangeUserStatusRequest`
       (enum coercion + `Assert\Choice` subset); controller `#[CoversClass(UserPatchStatusController::class)]` (**nunca**
       `CoversNothing` — el wire-gate funcional alimenta cobertura; `sonar-coversnothing-zeroes-thin-controllers`).
-- [ ] **Unit — guard-fail NO muta el agregado (order-independence).** Test explícito: guard `false` → el `User` (vía
+- [x] **Unit — guard-fail NO muta el agregado (order-independence).** Test explícito: guard `false` → el `User` (vía
       `UserMother`, estado `ACTIVE`) **nunca** recibe `suspend()`/`deactivate()` — asertar `status()` sigue `ACTIVE`,
       `pullDomainEvents()` **vacío** y `save`/revoke **no** invocados. Hoy se cumple por orden de código; el test lo blinda
       frente a un refactor que reordene guard/mutación.
-- [ ] **Functional** — wire-gate del controller (golden/response) en `tests/Functional/Iam/Identity/Infrastructure/
+- [x] **Functional** — wire-gate del controller (golden/response) en `tests/Functional/Iam/Identity/Infrastructure/
       Controller/` (patrón `UserDetailResponseGoldenFunctionalTest`) + autz en `PermissionVoterAccessDecisionTest`.
-- [ ] **e2e** `pwa/tests/e2e/backoffice/users-change-status-real-api.spec.ts` **nuevo** — `authenticatedTest`, abre el
+- [x] **e2e** `pwa/tests/e2e/backoffice/users-change-status-real-api.spec.ts` **nuevo** — `authenticatedTest`, abre el
       detalle de un usuario **ACTIVE no-admin** (semilla), suspende, asserta `UserStatusBadge` = «Suspended»; sin
       exact-counts. Reusa los timeouts/viewport de `users-invite-real-api.spec.ts`.
 
 ### Verificaciones (Working principle 4)
 
-- [ ] `make php.stan` en cada `.php` tocado (worker: `PHP_SERVICE=messenger_worker` si segfault 139).
-- [ ] `make php.quality` (stan + psalm-taint + phpmd + cs-fixer + **deptrac** + **bounded-context** + **error-contract**)
+- [x] `make php.stan` en cada `.php` tocado (worker: `PHP_SERVICE=messenger_worker` si segfault 139).
+- [x] `make php.quality` (stan + psalm-taint + phpmd + cs-fixer + **deptrac** + **bounded-context** + **error-contract**)
       **verde**. El error-contract debe quedar verde **sin** marcador nuevo (hecho 5) — si pide cambio, algo se desvió.
-- [ ] `make php.behat` (features nuevas + regresión). Re-sembrar el ADMIN e2e **después** de Behat (resetea la DB).
-- [ ] `make pwa.quality` + `make pwa.test.unit` + e2e (worktree: puerto efímero + overrides Playwright; EACCES → limpiar
+- [x] `make php.behat` (features nuevas + regresión). Re-sembrar el ADMIN e2e **después** de Behat (resetea la DB).
+- [x] `make pwa.quality` + `make pwa.test.unit` + e2e (worktree: puerto efímero + overrides Playwright; EACCES → limpiar
       `.next-e2e`).
-- [ ] Si el adapter del guard necesita índice/containment nuevo → `make db.diff` (migración medida, no asumida).
+- [x] Si el adapter del guard necesita índice/containment nuevo → `make db.diff` (migración medida, no asumida).
 
 ## Dev Notes
 
@@ -411,8 +415,73 @@ extraigas** un helper compartido de vocabulario: seguiría siendo YAGNI (dos enu
 
 ### Agent Model Used
 
+Opus 4.8 (1M context).
+
 ### Debug Log References
+
+- `make php.stan` (per file) · `make php.quality` (stan + psalm-taint + phpmd + cs-fixer + rector + deptrac + bounded-context + error-contract) — green; error-contract green **without** a new marker (hecho 5 confirmado), deptrac green **without** a new allowlist (D2 single-context adapter).
+- `make php.behat` — 329 scenarios / 2994 steps green (incl. `features/backoffice/users/status.feature`, 13 scenarios).
+- `make php.unit` — 1987 tests / 8702 assertions green.
+- `make pwa.quality` (eslint + prettier + tsc) · `make pwa.test.unit` — 1088 tests green.
+- e2e `users-change-status-real-api.spec.ts` — green and **repeatable** (the `ON CONFLICT … SET status='ACTIVE'` seed re-activates the target each run).
 
 ### Completion Notes List
 
+Delivered as one unit: backend endpoint + guard adapter + session revoke, PWA identity-shaped port + gated control, and tests (Behat/functional/integration/unit/e2e).
+
+- **Three verified divergences from the story's stated assumptions** (surfaced, none reversing a decision):
+  1. `identity_user.roles` is a Postgres **`json`** column, **not `jsonb`** (the Gotcha assumed JSONB). `@>` containment needs `jsonb`, so the guard adapter casts `roles::jsonb @> CAST(:adminRole AS jsonb)`. Validated by the real-Postgres adapter integration test.
+  2. `UserSuspended` / `UserDeactivated` are **not routed to `async`** (only `PasswordResetCompleted` is, among Identity events), so AC6's "outbox" is the **event_store** log, not the async queue — the success scenarios assert `0 outbox events … on the queue "async"` (aligns with D7: no realtime consumer). The session revoke is provable via the `erpify.iam.session.all-revoked` event (mirror of `password_reset.feature`).
+  3. `User` deliberately does **not** implement `AuditedEntity` (credential-leak guard), so AC8's "the CDC onFlush audits the change" is inaccurate — the durable record of the transition is the domain event in the event_store, not an `audit_log` diff. AC8's substantive claim (deactivate ≠ erase: `actor_id` preserved) holds; `User` was **not** made audited (out of scope + a security regression).
+- **AC13 query budget**: measured live (deterministic 22 on `default` across runs) and pinned as a canary in the success scenario, with a comment on its composition (admission gate read + guard EXISTS + wrapped write +2 + wrapped revoke +2).
+- **Controller `match`**: PHPStan (level max) requires exhaustiveness, so the two-arm `match` carries a throwing `default` guarding the (validation-unreachable) INVITED/ACTIVE — a defensive belt, not a real branch.
+- **Boy-scout doc fixes** (named, doc-only, tied to D2): the `ActiveAdministratorDirectory` port docblock and the in-memory test-double docblock described a JOIN adapter that D2 chose not to build; both now describe the shipped single-context `EXISTS`. Plus the stale `EXPLICIT_GRANTS` docblock (`read`/`invite`/`changeStatus` now all back endpoints; only `erase` remains ahead).
+- **PWA control**: the save button is disabled only while `saving` (the story's "no-dirty" gate doesn't map to a target-only picker with no current-status option); all other AC10/AC11 behaviour (Suspend/Deactivate offered, `<Can>`-gated, ACTIVE-only, persistent `<MutationError>`, badge reflected via `reload()`) is met.
+- **E2E seed** (chosen after consulting the architect / dev / test-architect lenses — unanimous Option 1): a login-less ACTIVE non-admin fixture (`e2e-suspendable@erpify.test`) seeded via raw SQL in `make/pwa.mk` (outside the story's file list — flagged here). `password_hash` is NULL (never authenticates); `ON CONFLICT DO UPDATE SET status='ACTIVE'` re-activates it each run, defeating the unidirectional-lifecycle trap; the e2e is scoped to a single happy-path smoke (Behat owns the 409/422/403/401/404 matrix).
+- **Security self-review** (per CLAUDE.md): endpoint gated by `#[IsGranted('users.changeStatus')]`; payload validated by an enum DTO + `#[Assert\Choice]` via `#[MapRequestPayload]` (422); route id guarded by `Uuid::ensure` (400) inside the use case; guard SQL fully parameterised (no interpolation); response is the per-view resource DTO (no credential/audit fields); errors via the RFC 9457 pipeline (no manual bodies); no secrets/`.env` in the diff; the seed row carries no PII/secret. Migrations: none (the lifecycle already existed; the guard runs a seq scan over single-org rows — no index added, measured not assumed).
+
 ### File List
+
+**API — new**
+
+- `api/src/Iam/Identity/Infrastructure/Http/ChangeUserStatusRequest.php`
+- `api/src/Iam/Identity/Infrastructure/Controller/UserPatchStatusController.php`
+- `api/src/Iam/Identity/Infrastructure/Persistence/Doctrine/DoctrineActiveAdministratorDirectory.php`
+- `api/features/backoffice/users/status.feature`
+- `api/tests/Unit/Iam/Identity/Infrastructure/Http/ChangeUserStatusRequestTest.php`
+- `api/tests/Functional/Iam/Identity/Infrastructure/Controller/UserPatchStatusFunctionalTest.php`
+- `api/tests/Functional/Iam/Identity/Infrastructure/Persistence/Doctrine/DoctrineActiveAdministratorDirectoryTest.php`
+
+**API — modified**
+
+- `api/src/Iam/Identity/Application/ChangeUserStatus.php` (+ `RevokeSessionsBestEffort` dep + post-commit revoke)
+- `api/src/Iam/Identity/Domain/Repository/ActiveAdministratorDirectory.php` (docblock → D2 single-context)
+- `api/src/Iam/Identity/Infrastructure/Security/StaticAuthorizationPolicy.php` (stale `EXPLICIT_GRANTS` docblock)
+- `api/tests/Unit/Iam/Identity/Application/ChangeUserStatusTest.php` (revoke + guard-fail-no-mutation)
+- `api/tests/Unit/Iam/Identity/Application/InMemoryActiveAdministratorDirectory.php` (docblock → D2)
+- `api/tests/Functional/Iam/Identity/Infrastructure/Security/PermissionVoterAccessDecisionTest.php` (`users.changeStatus` case)
+
+**PWA — new**
+
+- `pwa/src/context/backoffice/user/domain/ChangeUserStatusRepository.ts`
+- `pwa/src/context/backoffice/user/infrastructure/ApiChangeUserStatusRepository.ts`
+- `pwa/src/context/backoffice/user/application/ChangeUserStatus.ts`
+- `pwa/src/app/backoffice/users/_components/UserStatusControl.tsx`
+- `pwa/tests/context/backoffice/user/infrastructure/ApiChangeUserStatusRepository.test.ts`
+- `pwa/tests/context/backoffice/user/application/ChangeUserStatus.test.ts`
+- `pwa/tests/app/backoffice/users/userStatusControl.test.tsx`
+- `pwa/tests/e2e/backoffice/users-change-status-real-api.spec.ts`
+
+**PWA — modified**
+
+- `pwa/src/context/shared/http-client/infrastructure/ApiEndpoints.ts` (`USERS.CHANGE_STATUS`)
+- `pwa/src/context/shared/dependency-injection/infrastructure/Container.ts` (+2 binds)
+- `pwa/src/app/backoffice/users/[id]/page.tsx` (mount `<UserStatusControl>` + `reload()`)
+
+**Infra — modified**
+
+- `make/pwa.mk` (e2e seed: ACTIVE non-admin `e2e-suspendable@erpify.test`)
+
+### Change Log
+
+- 2026-07-18 — U-3 implemented: `PATCH /api/v1/backoffice/users/{id}/status` (suspend/deactivate), last-active-admin guard adapter (single-context, D2), post-commit session revoke (D3), PWA identity-shaped port + gated `<UserStatusControl>`, and full test coverage (Behat/functional/integration/unit/e2e). Status → review.
