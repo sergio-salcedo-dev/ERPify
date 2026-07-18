@@ -149,7 +149,9 @@ del DAG — **U-3 no depende de U-2**, solo comparten churn (detalle/`<Can>`), y
       **Decisión D2:** cuenta admins **desde `Iam/Identity/User.roles`** (fuente operativa hoy, SI-15 — **single-context,
       sin JOIN a `Organization/Membership`**): `¿existe algún `User` con `status = ACTIVE` y `ADMIN` ∈ `roles`, con `id !=
       :excluded`?`. Ubicación: `Iam/Identity/Infrastructure/Persistence/` (o donde vivan los repos Doctrine de Identity).
-      Query parametrizada (containment JSONB sobre `roles` — ver *Gotchas*), columnas explícitas, sin `SELECT *`.
+      Query parametrizada como **`SELECT EXISTS(SELECT 1 FROM identity_user WHERE status = 'ACTIVE' AND roles @> :adminJson AND id <> :excluded)`**
+      — **`EXISTS`, no `COUNT(*)`** (solo interesa si **queda** otro admin activo → Postgres corta en la 1ª fila y la
+      intención queda explícita; containment JSONB → *Gotchas*), sin `SELECT *`.
 - [ ] **Binding** del puerto → adapter (autowiring por `_defaults`/`bind:` o entry explícito en `services.yaml` si el
       containment JSONB necesita un `dql:`/función). Verifica que `ChangeUserStatus` autowirea tras el bind (`make sf
       c='debug:container ...'` o el functional wire-gate).
@@ -197,6 +199,10 @@ del DAG — **U-3 no depende de U-2**, solo comparten churn (detalle/`<Can>`), y
 - [ ] **Unit** — extender `tests/Unit/Iam/Identity/Application/ChangeUserStatusTest.php` (revoke, Task C); `ChangeUserStatusRequest`
       (enum coercion + `Assert\Choice` subset); controller `#[CoversClass(UserPatchStatusController::class)]` (**nunca**
       `CoversNothing` — el wire-gate funcional alimenta cobertura; `sonar-coversnothing-zeroes-thin-controllers`).
+- [ ] **Unit — guard-fail NO muta el agregado (order-independence).** Test explícito: guard `false` → el `User` (vía
+      `UserMother`, estado `ACTIVE`) **nunca** recibe `suspend()`/`deactivate()` — asertar `status()` sigue `ACTIVE`,
+      `pullDomainEvents()` **vacío** y `save`/revoke **no** invocados. Hoy se cumple por orden de código; el test lo blinda
+      frente a un refactor que reordene guard/mutación.
 - [ ] **Functional** — wire-gate del controller (golden/response) en `tests/Functional/Iam/Identity/Infrastructure/
       Controller/` (patrón `UserDetailResponseGoldenFunctionalTest`) + autz en `PermissionVoterAccessDecisionTest`.
 - [ ] **e2e** `pwa/tests/e2e/backoffice/users-change-status-real-api.spec.ts` **nuevo** — `authenticatedTest`, abre el
@@ -325,7 +331,8 @@ extraigas** un helper compartido de vocabulario: seguiría siendo YAGNI (dos enu
   **no** tiene operador de containment (por eso el filtro-por-rol se difirió en U-0). El adapter del guard es DQL/DBAL
   **propio** (no pasa por `SearchFieldMap`): usa el operador nativo de Postgres (`roles @> :adminJson`) vía DBAL
   parametrizado, o `JSON_CONTAINS` si hay `dql:` registrado. **No** reabras el filtro-por-rol del read-side; esto es una
-  query interna del guard.
+  query interna del guard. El índice probable si la query se vuelve caliente es un **GIN sobre `roles`** — **medir con
+  `EXPLAIN ANALYZE` antes de crearlo** (single-org, docenas de filas → seq scan basta hoy; no lo asumas).
 - **`users` es PLURAL** (SI-20) — `users.changeStatus`, nunca `user.changeStatus` ni `users.change_status`.
 - **Presupuesto de query +2 por write envuelto** (BEGIN/COMMIT); el revoke de sesión añade sus propias queries — mídelas
   en vivo (`I dump the number of executed queries`) y fija el número, no lo adivines (`behat-query-budget-transaction-overhead`).
@@ -360,6 +367,9 @@ extraigas** un helper compartido de vocabulario: seguiría siendo YAGNI (dos enu
 - **Tenancy / `Membership.roles` como fuente autoritativa del guard** — SI-15, diferido (D2).
 - **Reactor de auditoría/realtime sobre `UserSuspended`/`UserDeactivated`** — el CDC `onFlush` ya audita; realtime es
   opcional (UX-DR5). No se añade subscriber.
+- **Renombrar `ActiveAdministratorDirectory`** — el nombre describe la implementación más que la intención (responde a
+  `¿al quitar a este usuario queda algún administrador activo?`); es un puerto **existente** de la Épica II — renombrarlo
+  rompería su contrato + el doble de test → **no** se toca aquí. Anotado para una futura ADR.
 
 ### Project Structure Notes
 
