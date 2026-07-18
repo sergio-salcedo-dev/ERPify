@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { container } from "@/context/shared/dependency-injection/infrastructure/Container";
@@ -33,20 +33,25 @@ function isInviteFieldName(value: string): value is InviteFieldName {
 
 /** `"roles[0]"` / `"email"` → the base field the violation belongs to. */
 function baseField(field: string): string {
-  return field.split(/[.[]/)[0] ?? field;
+  return field.split(/[.[]/)[0];
 }
+
+// Stable no-op subscribe: the "has the client hydrated" flag never changes after the hydration commit,
+// so `useSyncExternalStore` needs only its server (`false`) vs client (`true`) snapshots to expose it.
+const emptySubscribe = () => () => {};
 
 export function InviteUserForm() {
   const router = useRouter();
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
 
-  // Hydration marker: until React attaches the submit handler, a click performs a
-  // native GET submission that leaks the values into the URL. The attribute lets
-  // automation wait for the wired form instead of racing it.
-  const formRef = useRef<HTMLFormElement>(null);
-  useEffect(() => {
-    formRef.current?.setAttribute("data-hydrated", "true");
-  }, []);
+  // Until React wires the submit handler, a native submit performs a GET that leaks the invitee email
+  // into the URL, history and logs. Gating the submit button on hydration stops any submit — click or
+  // Enter — from firing that native GET; the mirrored `data-hydrated` also lets automation wait.
+  const hydrated = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false,
+  );
 
   const {
     register,
@@ -98,10 +103,10 @@ export function InviteUserForm() {
 
   return (
     <form
-      ref={formRef}
       onSubmit={onSubmit}
       className="invite-user-form border-border bg-card space-y-4 rounded-lg border p-4"
       data-testid="invite-user-form"
+      data-hydrated={hydrated ? "true" : undefined}
       noValidate
     >
       {problem ? (
@@ -188,7 +193,7 @@ export function InviteUserForm() {
         <Button
           type="submit"
           size="sm"
-          disabled={isSubmitting}
+          disabled={isSubmitting || !hydrated}
           data-icon={isSubmitting ? "inline-start" : undefined}
           aria-label="Send invitation"
           title="Send invitation"

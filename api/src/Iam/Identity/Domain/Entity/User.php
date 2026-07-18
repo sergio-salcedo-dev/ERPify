@@ -61,6 +61,7 @@ final class User extends AggregateRoot
     #[ORM\Column(unique: true)]
     #[Assert\NotBlank]
     #[Assert\Email(mode: Assert\Email::VALIDATION_MODE_STRICT)]
+    #[Assert\Length(max: 255)]
     private string $email;
 
     #[ORM\Column(name: 'password_hash', nullable: true)]

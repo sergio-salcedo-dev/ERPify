@@ -78,7 +78,7 @@ describe("InviteUserForm", () => {
     expect(mocks.push).not.toHaveBeenCalled();
   });
 
-  it("disables the submit while in flight so a double submit fires one invitation", async () => {
+  it("disables the submit button while an invitation is in flight, blocking a second submit", async () => {
     let resolveInvite: () => void = () => {};
     mocks.inviteRun.mockReturnValue(
       new Promise<void>((resolve) => {
@@ -88,15 +88,17 @@ describe("InviteUserForm", () => {
     render(<InviteUserForm />);
 
     fillValidInvitation();
+    const submit = screen.getByTestId("invite-user-form__submit");
     fireEvent.submit(screen.getByTestId("invite-user-form"));
 
+    // The disabled submit is the sole double-submit guard: while the first invitation is in flight the
+    // button is disabled, so neither a second click nor Enter can fire another one.
     expect(await screen.findByTestId("invite-user-form__submit-spinner")).toBeInTheDocument();
-    expect(screen.getByTestId("invite-user-form__submit")).toBeDisabled();
+    expect(submit).toBeDisabled();
     expect(mocks.inviteRun).toHaveBeenCalledTimes(1);
 
     resolveInvite();
-    await waitFor(() => {
-      expect(screen.queryByTestId("invite-user-form__submit-spinner")).not.toBeInTheDocument();
-    });
+    await waitFor(() => expect(submit).toBeEnabled());
+    expect(mocks.inviteRun).toHaveBeenCalledTimes(1);
   });
 });

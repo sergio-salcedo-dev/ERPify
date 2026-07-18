@@ -26,6 +26,7 @@ final readonly class InviteUserRequest
     public function __construct(
         #[Assert\NotBlank(message: 'An email is required.')]
         #[Assert\Email(message: 'Enter a valid email address.', mode: Assert\Email::VALIDATION_MODE_STRICT)]
+        #[Assert\Length(max: 255, maxMessage: 'The email must not exceed 255 characters.')]
         public string $email = '',
         #[Assert\Count(min: 1, minMessage: 'Select at least one role.')]
         #[Assert\Choice(

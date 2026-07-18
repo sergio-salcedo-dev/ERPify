@@ -68,12 +68,14 @@ Feature: Invite a member from the console
     And the JSON node "type" should be equal to "validation-failed"
     And there should be 0 events stored named "erpify.iam.invitation.created"
     And 0 notification emails were sent
+    And I execute the SQL query "SELECT id FROM identity_user WHERE email = '<email>'"
+    And there should have 0 records in SQL result
 
     Examples:
-      | case         | body                                                    |
-      | bad email    | { "email": "not-an-email", "roles": ["EDITOR"] }        |
-      | empty roles  | { "email": "candidate@erpify.test", "roles": [] }       |
-      | unknown role | { "email": "candidate@erpify.test", "roles": ["ROOT"] } |
+      | case         | email                 | body                                                    |
+      | bad email    | not-an-email          | { "email": "not-an-email", "roles": ["EDITOR"] }        |
+      | empty roles  | candidate@erpify.test | { "email": "candidate@erpify.test", "roles": [] }       |
+      | unknown role | candidate@erpify.test | { "email": "candidate@erpify.test", "roles": ["ROOT"] } |
 
   Scenario: Re-inviting an email already in use is refused 422 with no partial write
     Given I am logged in as an administrator
