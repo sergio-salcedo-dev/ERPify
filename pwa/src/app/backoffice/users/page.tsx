@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
+import { UserPlus } from "lucide-react";
 import type { User } from "@/context/backoffice/user/domain/User";
 import type { UserInput } from "@/context/backoffice/user/domain/UserRepository";
 import { useQueryState } from "@/context/shared/resource/application/createQueryState";
@@ -171,6 +172,19 @@ export default function UsersListPage() {
               Manage the users and their access in the back office.
             </p>
           </div>
+
+          <Can permission={Permission.USERS_INVITE}>
+            <Link
+              href={safeHref(userRoutes.invite)}
+              className={cn(buttonVariants({ size: "sm" }), "shrink-0")}
+              aria-label="Invite user"
+              title="Invite a new user"
+              data-testid="users-list__invite-button"
+            >
+              <UserPlus className="size-4" aria-hidden="true" />
+              Invite user
+            </Link>
+          </Can>
         </header>
 
         {showFiltersToolbar ? (

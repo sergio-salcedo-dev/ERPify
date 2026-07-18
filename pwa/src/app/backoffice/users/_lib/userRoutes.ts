@@ -14,4 +14,6 @@ export const userRoutes = {
   list: USERS_BASE,
   /** User detail page for a given id. */
   detail: (id: string): string => `${USERS_BASE}/${encodeURIComponent(id)}`,
+  /** Invite-a-user form page. */
+  invite: `${USERS_BASE}/invite`,
 } as const;

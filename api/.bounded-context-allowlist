@@ -109,6 +109,11 @@ src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php => Erpify\
 src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php => Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher
 src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php => Erpify\Iam\Identity\Infrastructure\Security\UserProvider
 src/Iam/Invitation/Infrastructure/Cli/CreateInvitationCommand.php => Erpify\Iam\Identity\Domain\Enum\Role
+# The HTTP alta (management console) wraps the same SendInvitation use case, so it names the same Role
+# vocabulary the CLI does: the controller maps the validated wire strings to Role for SendInvitation's
+# signature, and the request DTO validates the roles against the enum at the boundary (unknown role → 422).
+src/Iam/Invitation/Infrastructure/Http/CreateInvitationController.php => Erpify\Iam\Identity\Domain\Enum\Role
+src/Iam/Invitation/Infrastructure/Http/InviteUserRequest.php => Erpify\Iam\Identity\Domain\Enum\Role
 # Password reset → revoke every session. RevokeSessionsBestEffort (Iam/Identity Application) consumes the
 # published RevokeAllSessions use case (Iam/Session) to invalidate all of the user's sessions after a credential
 # change — the "reset closes every session" guarantee — and swallows a store outage (defence-in-depth: the
