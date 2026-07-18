@@ -109,7 +109,7 @@ describe("UserStatusControl", () => {
 
     fireEvent.click(await screen.findByTestId("user-status__save"));
 
-    await waitFor(() => expect(screen.getByTestId("user-status__error")).toBeInTheDocument());
+    expect(await screen.findByTestId("user-status__error")).toBeInTheDocument();
     expect(onChanged).not.toHaveBeenCalled();
   });
 
