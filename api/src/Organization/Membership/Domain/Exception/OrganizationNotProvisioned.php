@@ -7,10 +7,13 @@ namespace Erpify\Organization\Membership\Domain\Exception;
 use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
 
 /**
- * Raised when a membership is granted before the installation's organization exists — a member cannot
- * belong to nothing. In the bootstrap sequence the organization is provisioned first.
+ * Raised when a membership is granted before the installation's organization exists — a member cannot belong
+ * to nothing. The organization is provisioned first in the bootstrap sequence.
  *
- * Marker-less by design: it guards a CLI bootstrap step, not an HTTP surface in this slice.
+ * Marker-less by design → HTTP 500: a missing installation organization is a broken server invariant, never a
+ * client-correctable 4xx. It is unreachable on the gated invitation/membership path — a gated ADMIN session
+ * implies the single installation organization already exists — so a 4xx marker would disguise a server fault
+ * as a client error.
  */
 final class OrganizationNotProvisioned extends DomainException
 {

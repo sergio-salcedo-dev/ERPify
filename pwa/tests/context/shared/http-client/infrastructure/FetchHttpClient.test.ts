@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import { FetchHttpClient } from "@/context/shared/http-client/infrastructure/FetchHttpClient";
-import { MALFORMED_RESPONSE_ENVELOPE } from "@/context/shared/http-client/domain/HttpClient";
+import {
+  MALFORMED_RESPONSE_ENVELOPE,
+  NETWORK_ERROR,
+} from "@/context/shared/http-client/domain/HttpClient";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
+import type { Telemetry } from "@/context/shared/observability/domain/Telemetry";
 import { isProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 
@@ -96,6 +100,37 @@ describe("FetchHttpClient", () => {
       ]);
       expect(isProblemDetails(httpError.problem)).toBe(true);
     }
+  });
+
+  it("throws a transport HttpError and reports telemetry when fetch rejects", async () => {
+    const cause = new TypeError("Failed to fetch");
+    fetchSpy.mockRejectedValueOnce(cause);
+    const telemetryErrors: Array<{ message: string; scope?: string; cause?: unknown }> = [];
+    const fakeTelemetry: Telemetry = {
+      warn: () => {},
+      error: (message, context) => {
+        telemetryErrors.push({ message, scope: context?.scope, cause: context?.cause });
+      },
+    };
+
+    const client = new FetchHttpClient(undefined, fakeTelemetry);
+
+    try {
+      await client.post("/api/v1/backoffice/banks", { name: "Acme" });
+      throw new Error("expected HttpError");
+    } catch (err) {
+      expect(err).toBeInstanceOf(HttpError);
+      const httpError = err as HttpError;
+      expect(httpError.problem.type).toBe(NETWORK_ERROR);
+      expect(httpError.problem.status).toBe(0);
+      expect(httpError.problem.instance).toBe(STUB_UUID);
+      expect(httpError.problem["correlation-id"]).toBe(STUB_UUID);
+      expect(isProblemDetails(httpError.problem)).toBe(true);
+    }
+
+    expect(telemetryErrors).toHaveLength(1);
+    expect(telemetryErrors[0].scope).toBe("api:transport");
+    expect(telemetryErrors[0].cause).toBe(cause);
   });
 
   it("synthesizes a generic ProblemDetails when the body is not RFC 9457", async () => {

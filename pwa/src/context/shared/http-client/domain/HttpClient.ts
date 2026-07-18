@@ -4,6 +4,9 @@ export type ResponseGuard<T> = (body: unknown) => body is T;
 /** `ProblemDetails.type` minted when a 2xx body fails its {@link ResponseGuard}. */
 export const MALFORMED_RESPONSE_ENVELOPE = "malformed-response-envelope";
 
+/** `ProblemDetails.type` minted client-side when a request never reaches the server (offline / DNS / CORS). */
+export const NETWORK_ERROR = "network-error";
+
 export interface HttpClient {
   get<T>(url: string, validate?: ResponseGuard<T>): Promise<T>;
   post<TBody, T>(url: string, body: TBody, validate?: ResponseGuard<T>): Promise<T>;
