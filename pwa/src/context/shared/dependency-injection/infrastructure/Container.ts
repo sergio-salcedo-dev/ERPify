@@ -57,6 +57,7 @@ import type { SessionsRepository } from "@/context/shared/access/domain/Sessions
 import type { DebugTokenObserver } from "@/context/shared/debug-token/domain/DebugTokenObserver";
 import { EventTargetDebugTokenObserver } from "@/context/shared/debug-token/infrastructure/EventTargetDebugTokenObserver";
 import { NoopDebugTokenObserver } from "@/context/shared/debug-token/infrastructure/NoopDebugTokenObserver";
+import { telemetry, type Telemetry } from "@/context/shared/observability/infrastructure";
 import { isDevToolsAvailable } from "../../dev-tools/domain/isDevToolsAvailable";
 
 const container = new Container();
@@ -68,6 +69,10 @@ container
   .bind<DebugTokenObserver>("DebugTokenObserver")
   .to(isDevToolsAvailable() ? EventTargetDebugTokenObserver : NoopDebugTokenObserver)
   .inSingletonScope();
+
+// FetchHttpClient reports transport failures (client-side, invisible to server
+// logs) through the Telemetry port; bind the app singleton so autowiring resolves it.
+container.bind<Telemetry>("Telemetry").toConstantValue(telemetry);
 
 const useMockHttp = process.env.NODE_ENV === "test" || process.env.VITEST === "true";
 

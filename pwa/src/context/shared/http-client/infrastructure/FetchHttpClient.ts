@@ -6,12 +6,16 @@ import {
 import { HttpError } from "../domain/HttpError";
 import {
   MALFORMED_RESPONSE_ENVELOPE,
+  NETWORK_ERROR,
   type HttpClient,
   type ResponseGuard,
 } from "../domain/HttpClient";
 import { HttpStatus } from "../domain/HttpStatus";
 import type { DebugTokenObserver } from "@/context/shared/debug-token/domain/DebugTokenObserver";
 import { NoopDebugTokenObserver } from "@/context/shared/debug-token/infrastructure/NoopDebugTokenObserver";
+import type { Telemetry } from "@/context/shared/observability/domain/Telemetry";
+import { NoopTelemetry } from "@/context/shared/observability/infrastructure/NoopTelemetry";
+import { apiScope } from "@/context/shared/observability/domain/TelemetryScope";
 import { uuidV7 } from "@/context/shared/uuid/infrastructure/uuidV7";
 import { Routes } from "@/context/shared/routing/domain/Routes";
 import { safeInternalPath } from "@/context/shared/navigation/domain/safeInternalPath";
@@ -102,6 +106,8 @@ export class FetchHttpClient implements HttpClient {
   constructor(
     @inject("DebugTokenObserver")
     private readonly debugTokens: DebugTokenObserver = new NoopDebugTokenObserver(),
+    @inject("Telemetry")
+    private readonly telemetry: Telemetry = new NoopTelemetry(),
   ) {}
 
   // Single fetch chokepoint: every request reads the Symfony profiler token off
@@ -109,7 +115,16 @@ export class FetchHttpClient implements HttpClient {
   // dev-only toolbar. No-op in prod (header absent + inert observer). It is also
   // where a session-expiry 401 bounces the browser to /login exactly once.
   private async request(input: string, init: RequestInit): Promise<Response> {
-    const res = await fetch(input, init);
+    let res: Response;
+    try {
+      res = await fetch(input, init);
+    } catch (cause) {
+      this.telemetry.error("Transport failure reaching the API", {
+        scope: apiScope("transport"),
+        cause,
+      });
+      throw this.transportError();
+    }
     const token = res.headers.get("X-Debug-Token");
     if (token) {
       this.debugTokens.publish({ token, profilerUrl: res.headers.get("X-Debug-Token-Link") });
@@ -228,6 +243,22 @@ export class FetchHttpClient implements HttpClient {
       detail,
       instance: uuidV7(),
       "correlation-id": this.correlationId(res),
+    });
+  }
+
+  // why: a transport failure (offline / DNS / CORS / server down) rejects fetch
+  // with a raw TypeError, not an HttpError — without this, form catch-guards
+  // re-throw it as an unhandled rejection and the submit dies silently. status 0
+  // is the "no response" sentinel ProblemDisplay renders as "No response"; with
+  // no Response there is no X-Correlation-Id to join, so a client v7 is minted.
+  private transportError(): HttpError {
+    return new HttpError({
+      type: NETWORK_ERROR,
+      title: "Could not reach the server",
+      status: 0,
+      detail: "Check your connection and try again.",
+      instance: uuidV7(),
+      "correlation-id": uuidV7(),
     });
   }
 
