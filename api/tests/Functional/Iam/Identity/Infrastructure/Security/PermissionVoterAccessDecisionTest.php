@@ -178,6 +178,40 @@ final class PermissionVoterAccessDecisionTest extends WebTestCase
         );
     }
 
+    public function testUsersChangeRolesIsGrantedToAnAdminButDeniedToAGenericTier(): void
+    {
+        $client = self::createClient();
+
+        $authorizationChecker = self::getContainer()->get(AuthorizationCheckerInterface::class);
+        $this->assertInstanceOf(AuthorizationCheckerInterface::class, $authorizationChecker);
+
+        // Assigning roles is the console's most privileged write — it can mint an administrator — so it stays
+        // ADMIN-only: users opts out of tier auto-grant and the permission carries no lesser explicit grant.
+        $manager = UserFixtureFactory::create(
+            Uuid::v7()->toRfc4122(),
+            'roles-users-manager@erpify.test',
+            'roles-users-manager-password',
+            [Role::MANAGER->value],
+        );
+        $client->loginUser(new SecurityUser($manager), 'main');
+        $this->assertFalse(
+            $authorizationChecker->isGranted('users.changeRoles'),
+            'A generic MANAGER tier must not be granted users.changeRoles.',
+        );
+
+        $admin = UserFixtureFactory::create(
+            Uuid::v7()->toRfc4122(),
+            'roles-users-admin@erpify.test',
+            'roles-users-admin-password',
+            [Role::ADMIN->value],
+        );
+        $client->loginUser(new SecurityUser($admin), 'main');
+        $this->assertTrue(
+            $authorizationChecker->isGranted('users.changeRoles'),
+            'An ADMIN must be granted users.changeRoles through the superuser clause.',
+        );
+    }
+
     public function testBankAccountChangeStatusIsGrantedToAManagerButDeniedToAnEditor(): void
     {
         $client = self::createClient();

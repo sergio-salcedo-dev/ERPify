@@ -83,7 +83,13 @@ describe("ApiIdentityRepository.me", () => {
         id: "0190aaaa-bbbb-7ccc-8ddd-0e1f2a3b4c5d",
         email: "a@b.com",
         roles: ["ADMIN"],
-        permissions: ["users.read", "users.invite", "users.changeStatus", "users.erase"],
+        permissions: [
+          "users.read",
+          "users.invite",
+          "users.changeStatus",
+          "users.changeRoles",
+          "users.erase",
+        ],
       },
     });
 

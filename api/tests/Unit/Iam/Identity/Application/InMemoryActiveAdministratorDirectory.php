@@ -16,20 +16,29 @@ use Override;
  * hard-deleted or is no longer `ACTIVE`) is present with `false` and deliberately never counts, so it can
  * never keep the last real administrator suspendable.
  *
+ * Records the ids it was asked about, so a test can assert not only the verdict but whether the question was
+ * put at all — the observable difference between a guard a use case always evaluates and one it evaluates only
+ * when the change actually threatens the invariant.
+ *
  * @internal
  */
-final readonly class InMemoryActiveAdministratorDirectory implements ActiveAdministratorDirectory
+final class InMemoryActiveAdministratorDirectory implements ActiveAdministratorDirectory
 {
+    /** @var list<string> */
+    public array $askedWithout = [];
+
     /**
      * @param array<string, bool> $adminUserIsActive admin user id => (its backing User exists AND is ACTIVE)
      */
-    public function __construct(private array $adminUserIsActive)
+    public function __construct(private readonly array $adminUserIsActive)
     {
     }
 
     #[Override]
     public function keepsAnActiveAdminWithout(string $userId): bool
     {
+        $this->askedWithout[] = $userId;
+
         return \array_any(
             $this->adminUserIsActive,
             static fn (bool $isActive, $adminUserId): bool => $isActive && $adminUserId !== $userId,

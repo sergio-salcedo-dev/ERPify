@@ -26,9 +26,9 @@ namespace Erpify\Iam\Identity\Infrastructure\Security;
 final readonly class PermissionCatalog
 {
     /**
-     * `users.invite`, `users.changeStatus` and `users.erase` have no endpoint yet: they are declared ahead of
-     * the use cases that will reach them, matching the seam {@see StaticAuthorizationPolicy} documents. The
-     * completeness gate asserts the catalog is a superset of what is gated, never an equality, so they pass.
+     * `users.erase` has no endpoint yet: it is declared ahead of the use case that will reach it, matching the
+     * seam {@see StaticAuthorizationPolicy} documents. The completeness gate asserts the catalog is a superset
+     * of what is gated, never an equality, so it passes.
      *
      * @var list<string>
      */
@@ -44,6 +44,7 @@ final readonly class PermissionCatalog
         'users.read',
         'users.invite',
         'users.changeStatus',
+        'users.changeRoles',
         'users.erase',
     ];
 

@@ -13,6 +13,7 @@ use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
 use Erpify\Iam\Identity\Domain\Event\PasswordResetCompleted;
 use Erpify\Iam\Identity\Domain\Event\UserDeactivated;
 use Erpify\Iam\Identity\Domain\Event\UserLocked;
+use Erpify\Iam\Identity\Domain\Event\UserRolesChanged;
 use Erpify\Iam\Identity\Domain\Event\UserSuspended;
 use Erpify\Iam\Identity\Domain\Exception\InvalidIdentityTransition;
 use Erpify\Iam\Identity\Domain\HashedPassword;
@@ -38,9 +39,13 @@ use Symfony\Component\Validator\Constraints as Assert;
  *
  * The public surface is the aggregate's whole contract — its factories, its lifecycle transitions, the
  * lockout behaviour and the read accessors the security adapter needs — so the "too many public methods"
- * count reflects a rich aggregate root, not a class doing several jobs.
+ * count reflects a rich aggregate root, not a class doing several jobs. Its object coupling reads the same
+ * way: the collaborators are inherent responsibilities — persistence/validation metadata, the credential and
+ * email value objects, the status lifecycle, the role vocabulary and the five facts it records — so the
+ * coupling is deliberately allowed above the default threshold rather than dissolved into anaemic helpers.
  *
  * @SuppressWarnings("PHPMD.TooManyPublicMethods")
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'identity_user')]
@@ -199,6 +204,24 @@ final class User extends AggregateRoot
         $this->updatedAt = SystemClock::now();
 
         $this->record(new UserDeactivated($this->id(), null, $this->updatedAt));
+    }
+
+    /**
+     * Replaces the identity's whole role set — the set is the unit of change, so this is an assignment, not a
+     * grant/revoke delta. Deduplicates through the same helper every construction path uses, so the
+     * duplicate-free invariant holds however the roles arrive.
+     *
+     * Carries no lifecycle guard, unlike the transitions above: roles are orthogonal to {@see IdentityStatus},
+     * so re-roling a `SUSPENDED` or `INVITED` identity is meaningful (its roles simply stay inert until it can
+     * act again) and there is no state matrix to enforce. The cross-aggregate "keep ≥1 active ADMIN" rule is
+     * deliberately absent too — it must see every other identity, so it lives in the application use case.
+     */
+    public function changeRoles(Role ...$roles): void
+    {
+        $this->roles = $this->distinctRoleValues($roles);
+        $this->updatedAt = SystemClock::now();
+
+        $this->record(new UserRolesChanged($this->id(), $this->roles()));
     }
 
     /**

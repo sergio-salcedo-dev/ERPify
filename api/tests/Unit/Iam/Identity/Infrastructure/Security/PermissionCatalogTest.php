@@ -38,6 +38,7 @@ final class PermissionCatalogTest extends TestCase
         'users.read',
         'users.invite',
         'users.changeStatus',
+        'users.changeRoles',
         'users.erase',
     ];
 
