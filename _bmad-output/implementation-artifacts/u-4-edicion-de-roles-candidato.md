@@ -228,17 +228,25 @@ U-3 y ya»). Las tres primeras condicionan el diseño; se detallan en los *Crux*
 - [ ] **App service** `ChangeUserRoles.php` **nuevo** (`final readonly class`, espejo de `ChangeUserStatus`). Deps:
       `UserRepository`, `ActiveAdministratorDirectory`, `RevokeSessionsBestEffort`, `EventBus`, `TransactionManager`.
       Método `run(string $userId, Role ...$roles): User` (o `array $roles` — sé consistente con el mapeo del controller).
-      Flujo:
+      **Mantén el pipeline BYTE-por-byte idéntico al de `ChangeUserStatus`** (no introduzcas diferencias de orden entre
+      U-3 y U-4 — la consistencia entre casos de uso es lo que hace el módulo mantenible):
+      `Uuid::ensure → transactional{ findById → (no-op? short-circuit) → guard condicional → mutate → save → publish } →
+      commit → revoke`. **Nunca `publish` antes de `save`.**
   - [ ] `Uuid::ensure($userId)` antes de todo.
   - [ ] Abre `transactionManager->transactional(...)`; **dentro**: `findById ?? UserNotFound`.
-  - [ ] **No-op (AC8):** calcula el set resultante deduplicado; si **iguala** el set actual (comparación de conjuntos,
-        ignora orden) → devuelve el `User` **sin** mutar, **sin** publicar, **sin** marcar para revoke. (Determina el
-        flag de revoke/publish antes de salir de la tx.)
-  - [ ] **Guard condicional (AC3, Crux 2):** invoca `keepsAnActiveAdminWithout($userId)` **solo si**
-        `$user->isActive()` **y** el set actual contiene `ADMIN` **y** el nuevo set **no** contiene `ADMIN`; si el guard
-        devuelve `false` → `throw LastActiveAdministratorProtected::forUser($userId)`. En cualquier otro caso, **no**
-        llames al guard.
-  - [ ] `$user->changeRoles(...$roles)` → `save` → `publish(...pullDomainEvents())` en la misma tx.
+  - [ ] **No-op (AC8) — lo decide el APP SERVICE, no el agregado.** Compara el set resultante con el actual con
+        **comparación semántica de conjuntos**: normaliza **ambos** lados (dedup + orden canónico — reusa
+        `distinctRoleValues`, o `sort` sobre los `->value`) y compara los canónicos. **Nunca** `$user->roles() ===
+        $newRoles` (fallaría con `[ADMIN,EDITOR]` vs `[EDITOR,ADMIN]`). Si iguala → devuelve el `User` **sin** llamar a
+        `changeRoles`, **sin** publicar, **sin** marcar para revoke. El agregado permanece simple (solo muta+registra
+        cuando se le llama); la decisión de si hace falta llamarlo es del use case.
+  - [ ] **Guard condicional (AC3, Crux 2):** encapsula la condición de tres cláusulas en un método privado
+        `removesAdminRole(User $user, array $newRoles): bool` (`$user->isActive()` ∧ `ADMIN ∈ roles_actuales` ∧
+        `ADMIN ∉ roles_nuevos`) — legibilidad, no cambia comportamiento. Invoca `keepsAnActiveAdminWithout($userId)`
+        **solo si** `removesAdminRole(...)` es `true`; si el guard devuelve `false` → `throw
+        LastActiveAdministratorProtected::forUser($userId)`. En cualquier otro caso, **no** llames al guard.
+  - [ ] `$user->changeRoles(...$roles)` → `save` → `publish(...pullDomainEvents())` en la misma tx (**save antes de
+        publish**, siempre).
   - [ ] **Post-commit** (fuera de la closure, solo si hubo cambio): `revokeSessions->revoke($userId)` (best-effort,
         defensa-en-profundidad — D3).
 
@@ -356,7 +364,9 @@ prueba vía el evento `erpify.iam.session.all-revoked`, como en `status.feature`
 
 El dominio de roles **no** es unidireccional. Re-enviar el mismo set (ignorando orden/duplicados) es legítimo → `200`,
 pero **no** debe persistir, publicar ni **revocar sesiones** (nukear las sesiones por un guardado redundante sería un
-efecto colateral sorpresa). El use case compara el set resultante con el actual **antes** de mutar y hace short-circuit.
+efecto colateral sorpresa). El use case compara el set resultante con el actual **antes** de mutar y hace short-circuit — con comparación
+**semántica** de conjuntos (normaliza dedup + orden en ambos lados; nunca `===` sobre arrays ordenados). El agregado
+permanece simple: solo muta+registra cuando se le llama; es el use case quien decide si esa llamada es necesaria.
 **No** copies el escenario `409 invalid-identity-transition` de `status.feature` — aquí el mismo-set es `200` no-op.
 
 ### Decisión D2 — fuente de verdad = `User.roles` solo (single-context), NO `Membership.roles` (Sergio, cierre del candidato)
