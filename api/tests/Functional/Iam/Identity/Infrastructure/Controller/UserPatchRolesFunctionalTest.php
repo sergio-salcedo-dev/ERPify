@@ -47,6 +47,12 @@ final class UserPatchRolesFunctionalTest extends WebTestCase
         $this->client = self::createClient();
     }
 
+    protected function tearDown(): void
+    {
+        $this->restoreParkedAdministrators();
+        parent::tearDown();
+    }
+
     /**
      * @throws JsonException
      */
@@ -71,7 +77,7 @@ final class UserPatchRolesFunctionalTest extends WebTestCase
     {
         // Clear every administrator, then seat exactly one: functional-admin is now the SOLE active admin, so
         // the production directory adapter — not a test double — answers 409 when its ADMIN is taken away.
-        $this->deleteAllAdministrators();
+        $this->demoteEveryAdministrator();
         $this->authenticateAdminClient($this->client);
         $loneAdminId = $this->soleActiveAdministratorId();
 
@@ -93,7 +99,7 @@ final class UserPatchRolesFunctionalTest extends WebTestCase
     {
         // Same single-administrator setup as the conflict above; the only difference is that ADMIN is kept, so
         // nobody leaves the active-admin pool and the guard is never consulted.
-        $this->deleteAllAdministrators();
+        $this->demoteEveryAdministrator();
         $this->authenticateAdminClient($this->client);
         $loneAdminId = $this->soleActiveAdministratorId();
 
@@ -208,13 +214,6 @@ final class UserPatchRolesFunctionalTest extends WebTestCase
         );
         $entityManager->flush();
         $entityManager->clear();
-    }
-
-    private function deleteAllAdministrators(): void
-    {
-        $this->entityManager()->getConnection()->executeStatement(
-            'DELETE FROM identity_user WHERE roles::jsonb @> \'["ADMIN"]\'::jsonb',
-        );
     }
 
     private function soleActiveAdministratorId(): string
