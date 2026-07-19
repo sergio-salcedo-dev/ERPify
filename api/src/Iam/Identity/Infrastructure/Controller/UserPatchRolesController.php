@@ -9,8 +9,8 @@ use Erpify\Iam\Identity\Infrastructure\Http\ChangeUserRolesRequest;
 use Erpify\Iam\Identity\Infrastructure\Http\UserResourceMapper;
 use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Http\Infrastructure\Responder\ResourceResponder;
+use Erpify\Shared\Http\Infrastructure\StrictRequestPayload;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Serializer\Exception\ExceptionInterface;
@@ -43,7 +43,7 @@ final readonly class UserPatchRolesController
      */
     public function __invoke(
         string $id,
-        #[MapRequestPayload]
+        #[StrictRequestPayload]
         ChangeUserRolesRequest $request,
     ): Response {
         $user = $this->changeUserRoles->run($id, ...$this->rolesFrom($request));
