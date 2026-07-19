@@ -18,6 +18,7 @@ import { userRoutes } from "../_lib/userRoutes";
 import { UserStatusBadge } from "../_components/UserStatusBadge";
 import { RolesBadges } from "../_components/RolesBadges";
 import { UserStatusControl } from "../_components/UserStatusControl";
+import { UserRolesControl } from "../_components/UserRolesControl";
 
 export default function UserDetailPage() {
   const params = useParams<{ id: string }>();
@@ -163,6 +164,8 @@ export default function UserDetailPage() {
                 </dd>
               </div>
             </dl>
+
+            <UserRolesControl user={user} onChanged={() => void reload()} />
 
             <UserStatusControl user={user} onChanged={() => void reload()} />
           </>

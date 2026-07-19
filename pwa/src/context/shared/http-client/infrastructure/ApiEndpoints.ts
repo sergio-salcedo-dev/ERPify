@@ -83,6 +83,7 @@ export const API_ENDPOINTS = {
       LIST: `${BACKOFFICE_PREFIX}/users`,
       DETAILS: userPath,
       CHANGE_STATUS: (id: string): string => `${userPath(id)}/status`,
+      CHANGE_ROLES: (id: string): string => `${userPath(id)}/roles`,
     },
     AUDIT: {
       TIMELINE: `${BACKOFFICE_PREFIX}/audit/timeline`,

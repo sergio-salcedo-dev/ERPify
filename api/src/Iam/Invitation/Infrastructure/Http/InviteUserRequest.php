@@ -14,9 +14,11 @@ use Symfony\Component\Validator\Constraints as Assert;
  * roles: an `INVITED` identity has no password and no status yet (both are set later, when the invitation is
  * accepted), so neither belongs on this payload.
  *
- * {@see roleValues()} is the single production site that enumerates the role vocabulary as wire strings. {@see Role}
- * is pure vocabulary by design (no method ranks or maps a role), so the `Role::cases() -> ->value` mapping lives
- * here at its one caller rather than as a helper on the enum.
+ * {@see roleValues()} enumerates the role vocabulary as wire strings. {@see Role} is pure vocabulary by design
+ * (no method ranks or maps a role), so the `Role::cases() -> ->value` mapping lives at each payload that needs
+ * it rather than as a helper on the enum. The identity console's own role payload carries an identical helper:
+ * that duplication is what keeps the two contexts isolated, and it stays until a third caller earns a home for
+ * the mapping that neither context owns.
  */
 final readonly class InviteUserRequest
 {

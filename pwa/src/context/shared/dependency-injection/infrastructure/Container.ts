@@ -50,6 +50,9 @@ import { InviteUser } from "../../../backoffice/user/application/InviteUser";
 import { ApiChangeUserStatusRepository } from "../../../backoffice/user/infrastructure/ApiChangeUserStatusRepository";
 import type { ChangeUserStatusRepository } from "../../../backoffice/user/domain/ChangeUserStatusRepository";
 import { ChangeUserStatus } from "../../../backoffice/user/application/ChangeUserStatus";
+import { ApiChangeUserRolesRepository } from "../../../backoffice/user/infrastructure/ApiChangeUserRolesRepository";
+import type { ChangeUserRolesRepository } from "../../../backoffice/user/domain/ChangeUserRolesRepository";
+import { ChangeUserRoles } from "../../../backoffice/user/application/ChangeUserRoles";
 import { ApiIdentityRepository } from "@/context/shared/access/infrastructure/ApiIdentityRepository";
 import type { IdentityRepository } from "@/context/shared/access/domain/IdentityRepository";
 import { ApiSessionsRepository } from "@/context/shared/access/infrastructure/ApiSessionsRepository";
@@ -219,6 +222,14 @@ container
   .to(ApiChangeUserStatusRepository)
   .inSingletonScope();
 container.bind<ChangeUserStatus>("BackOfficeChangeUserStatus").to(ChangeUserStatus);
+
+// Identity write side: role re-grant through its own identity-shaped port — authorization and lifecycle status
+// are independent intents, so they never share a use case. Stateless adapter singleton; transient use case.
+container
+  .bind<ChangeUserRolesRepository>("BackOfficeChangeUserRolesRepository")
+  .to(ApiChangeUserRolesRepository)
+  .inSingletonScope();
+container.bind<ChangeUserRoles>("BackOfficeChangeUserRoles").to(ChangeUserRoles);
 
 // Session sign-in: a real HTTP adapter over the injected HttpClient,
 // which the container binds to MockHttpClient under test.

@@ -4,7 +4,7 @@ baseline_commit: a8a88bf31c0867754feec7d2ba2be0017975d56a
 
 # Story 1.5 (U-4): Edición de roles
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -195,13 +195,13 @@ U-3 y ya»). Las tres primeras condicionan el diseño; se detallan en los *Crux*
 
 ### A — Dominio: mutador de roles + evento · `api/src/Iam/Identity/Domain/` (AC1, AC4, AC6, AC8)
 
-- [ ] **Mutador** `User::changeRoles(Role ...$roles): void` **nuevo** (`Domain/Entity/User.php`). Reemplaza el set
+- [x] **Mutador** `User::changeRoles(Role ...$roles): void` **nuevo** (`Domain/Entity/User.php`). Reemplaza el set
       completo: `$this->roles = $this->distinctRoleValues(...$roles)` (reusa el helper existente → dedup + orden),
       bumpea `updatedAt` (`SystemClock::now()`), y **`record(UserRolesChanged::...)`** con el nuevo set. **No** aplica
       guard de ciclo de vida (roles ⟂ estado, D6) — cualquier estado no-erased es válido. **No** metas el invariante
       ≥1 ADMIN aquí (vive en el use case, hecho 1). *Nota: el no-op de set-sin-cambios (AC8) lo decide el use case,
       no el agregado — ver Task C.*
-- [ ] **Evento** `UserRolesChanged` **nuevo** en `api/src/Iam/Identity/Domain/Event/` (espejo de `UserSuspended`:
+- [x] **Evento** `UserRolesChanged` **nuevo** en `api/src/Iam/Identity/Domain/Event/` (espejo de `UserSuspended`:
       `extends DomainEvent`, `eventName(): 'erpify.iam.identity.roles-changed'`, `aggregateType(): 'Iam.Identity'`,
       `toPrimitives()/fromPrimitives()`). **Payload lleva `roles: list<string>`** (el nuevo set — D9; no vacío como los
       de status). Auto-descubierto por `RegisterDomainEventsPass` + `ReflectionDomainEventMapper` — **sin** editar
@@ -209,12 +209,12 @@ U-3 y ya»). Las tres primeras condicionan el diseño; se detallan en los *Crux*
 
 ### B — Endpoint `PATCH .../roles` + DTO array-of-Role · `api/src/Iam/Identity/Infrastructure/` (AC1, AC4, AC5)
 
-- [ ] **Request DTO** `ChangeUserRolesRequest.php` **nuevo** en `Iam/Identity/Infrastructure/Http/` (junto a
+- [x] **Request DTO** `ChangeUserRolesRequest.php` **nuevo** en `Iam/Identity/Infrastructure/Http/` (junto a
       `UserResourceMapper`). Campo `public array $roles = []` (`list<string>`) con `#[Assert\Count(min: 1, minMessage:
       'Select at least one role.')]` + `#[Assert\Choice(callback: [self::class, 'roleValues'], multiple: true,
       multipleMessage: 'Select a valid role.')]` + `roleValues()` estático (clon de `InviteUserRequest`, **NO** el
       enum-escalar de `ChangeUserStatusRequest`).
-- [ ] **Controller** `UserPatchRolesController.php` **nuevo** en `Iam/Identity/Infrastructure/Controller/` (junto a
+- [x] **Controller** `UserPatchRolesController.php` **nuevo** en `Iam/Identity/Infrastructure/Controller/` (junto a
       `UserPatchStatusController`). `#[Route('/backoffice/users/{id}/roles', name: self::ROUTE_NAME, methods:
       ['PATCH'])]` (`const string ROUTE_NAME = 'backoffice_user_change_roles'`), `#[IsGranted('users.changeRoles')]`
       (**string literal**). `final readonly`, invokable, deps `ChangeUserRoles`, `UserResourceMapper`,
@@ -225,109 +225,109 @@ U-3 y ya»). Las tres primeras condicionan el diseño; se detallan en los *Crux*
 
 ### C — Application service `ChangeUserRoles` + guard condicional + revoke · `api/src/Iam/Identity/Application/` (AC3, AC6, AC7, AC8)
 
-- [ ] **App service** `ChangeUserRoles.php` **nuevo** (`final readonly class`, espejo de `ChangeUserStatus`). Deps:
+- [x] **App service** `ChangeUserRoles.php` **nuevo** (`final readonly class`, espejo de `ChangeUserStatus`). Deps:
       `UserRepository`, `ActiveAdministratorDirectory`, `RevokeSessionsBestEffort`, `EventBus`, `TransactionManager`.
       Método `run(string $userId, Role ...$roles): User` (o `array $roles` — sé consistente con el mapeo del controller).
       **Mantén el pipeline BYTE-por-byte idéntico al de `ChangeUserStatus`** (no introduzcas diferencias de orden entre
       U-3 y U-4 — la consistencia entre casos de uso es lo que hace el módulo mantenible):
       `Uuid::ensure → transactional{ findById → (no-op? short-circuit) → guard condicional → mutate → save → publish } →
       commit → revoke`. **Nunca `publish` antes de `save`.**
-  - [ ] `Uuid::ensure($userId)` antes de todo.
-  - [ ] Abre `transactionManager->transactional(...)`; **dentro**: `findById ?? UserNotFound`.
-  - [ ] **No-op (AC8) — lo decide el APP SERVICE, no el agregado.** Compara el set resultante con el actual con
+  - [x] `Uuid::ensure($userId)` antes de todo.
+  - [x] Abre `transactionManager->transactional(...)`; **dentro**: `findById ?? UserNotFound`.
+  - [x] **No-op (AC8) — lo decide el APP SERVICE, no el agregado.** Compara el set resultante con el actual con
         **comparación semántica de conjuntos**: normaliza **ambos** lados (dedup + orden canónico — reusa
         `distinctRoleValues`, o `sort` sobre los `->value`) y compara los canónicos. **Nunca** `$user->roles() ===
         $newRoles` (fallaría con `[ADMIN,EDITOR]` vs `[EDITOR,ADMIN]`). Si iguala → devuelve el `User` **sin** llamar a
         `changeRoles`, **sin** publicar, **sin** marcar para revoke. El agregado permanece simple (solo muta+registra
         cuando se le llama); la decisión de si hace falta llamarlo es del use case.
-  - [ ] **Guard condicional (AC3, Crux 2):** encapsula la condición de tres cláusulas en un método privado
+  - [x] **Guard condicional (AC3, Crux 2):** encapsula la condición de tres cláusulas en un método privado
         `removesAdminRole(User $user, array $newRoles): bool` (`$user->isActive()` ∧ `ADMIN ∈ roles_actuales` ∧
         `ADMIN ∉ roles_nuevos`) — legibilidad, no cambia comportamiento. Invoca `keepsAnActiveAdminWithout($userId)`
         **solo si** `removesAdminRole(...)` es `true`; si el guard devuelve `false` → `throw
         LastActiveAdministratorProtected::forUser($userId)`. En cualquier otro caso, **no** llames al guard.
-  - [ ] `$user->changeRoles(...$roles)` → `save` → `publish(...pullDomainEvents())` en la misma tx (**save antes de
+  - [x] `$user->changeRoles(...$roles)` → `save` → `publish(...pullDomainEvents())` en la misma tx (**save antes de
         publish**, siempre).
-  - [ ] **Post-commit** (fuera de la closure, solo si hubo cambio): `revokeSessions->revoke($userId)` (best-effort,
+  - [x] **Post-commit** (fuera de la closure, solo si hubo cambio): `revokeSessions->revoke($userId)` (best-effort,
         defensa-en-profundidad — D3).
 
 ### D — Datos RBAC: `users.changeRoles` · `api/src/Iam/Identity/Infrastructure/Security/` (AC2, AC13)
 
-- [ ] **Catálogo** `PermissionCatalog.php` — añadir `'users.changeRoles'` a `PERMISSIONS` (**obligatorio**:
+- [x] **Catálogo** `PermissionCatalog.php` — añadir `'users.changeRoles'` a `PERMISSIONS` (**obligatorio**:
       `PermissionCatalogCoversEveryGatedRouteTest` falla el build si un `#[IsGranted]` no está en el catálogo).
-- [ ] **Policy** `StaticAuthorizationPolicy.php` — añadir `'users.changeRoles' => [Role::ADMIN->value]` a
+- [x] **Policy** `StaticAuthorizationPolicy.php` — añadir `'users.changeRoles' => [Role::ADMIN->value]` a
       `EXPLICIT_GRANTS` (data-only, tripwire verde). **Boy-scout:** actualizar el docblock (`~:51-54`) que dice «cuatro
       grants `users.*`» → cinco (y que `read/invite/changeStatus/changeRoles` respaldan endpoints; `erase` sigue por
       delante).
-- [ ] **Test voter** — añadir el caso `users.changeRoles` (ADMIN concede / tier de negocio deniega) a
+- [x] **Test voter** — añadir el caso `users.changeRoles` (ADMIN concede / tier de negocio deniega) a
       `PermissionVoterAccessDecisionTest` (espejo del caso `users.changeStatus`).
 
 ### E — PWA: puerto identity-shaped + editor de conjunto en el detalle (AC9, AC10, AC11, AC13)
 
-- [ ] `context/shared/http-client/infrastructure/ApiEndpoints.ts` — `+ USERS.CHANGE_ROLES: (id) =>
+- [x] `context/shared/http-client/infrastructure/ApiEndpoints.ts` — `+ USERS.CHANGE_ROLES: (id) =>
       `${userPath(id)}/roles`` (espejo de `USERS.CHANGE_STATUS`).
-- [ ] `context/shared/access/domain/Permission.ts` — `+ USERS_CHANGE_ROLES: "users.changeRoles"` (byte-idéntico, SI-20).
-- [ ] **Actualizar los 2 tests que fijan el vocabulario de permisos** (o el build/asserts fallan):
+- [x] `context/shared/access/domain/Permission.ts` — `+ USERS_CHANGE_ROLES: "users.changeRoles"` (byte-idéntico, SI-20).
+- [x] **Actualizar los 2 tests que fijan el vocabulario de permisos** (o el build/asserts fallan):
       `tests/context/shared/access/ApiIdentityRepository.test.ts` (el mock de `/me` hardcodea la lista de strings) y
       `tests/context/shared/access/domain/authorize.test.ts`.
-- [ ] `context/backoffice/user/domain/ChangeUserRolesRepository.ts` **nuevo** — puerto `changeRoles(id: string, roles:
+- [x] `context/backoffice/user/domain/ChangeUserRolesRepository.ts` **nuevo** — puerto `changeRoles(id: string, roles:
       Role[]): Promise<User>`.
-- [ ] `context/backoffice/user/infrastructure/ApiChangeUserRolesRepository.ts` **nuevo** — `httpClient.patch(
+- [x] `context/backoffice/user/infrastructure/ApiChangeUserRolesRepository.ts` **nuevo** — `httpClient.patch(
       USERS.CHANGE_ROLES(id), { roles }, isUserSingleResponse)` → `User.fromPrimitives(response.data)` (reusa
       `isUserSingleResponse` exportado de `ApiUserRepository.ts`).
-- [ ] `context/backoffice/user/application/ChangeUserRoles.ts` **nuevo** — use case `run(id, roles)` delega en el puerto.
-- [ ] `context/backoffice/user/application/schemas/ChangeUserRolesSchema.ts` **nuevo** — `z.object({ roles:
+- [x] `context/backoffice/user/application/ChangeUserRoles.ts` **nuevo** — use case `run(id, roles)` delega en el puerto.
+- [x] `context/backoffice/user/application/schemas/ChangeUserRolesSchema.ts` **nuevo** — `z.object({ roles:
       z.array(z.enum(Role)).min(1, "Select at least one role.") })` (patrón `InviteUserSchema`).
-- [ ] `context/shared/dependency-injection/infrastructure/Container.ts` — +2 binds
+- [x] `context/shared/dependency-injection/infrastructure/Container.ts` — +2 binds
       (`BackOfficeChangeUserRolesRepository` → `ApiChangeUserRolesRepository` singleton; `BackOfficeChangeUserRoles` →
       use case) + 3 imports (espejo de los de status, `~L50-52`/`~L215-221`).
-- [ ] `app/backoffice/users/_components/UserRolesControl.tsx` **nuevo** — `"use client"`, mirror de `UserStatusControl`
+- [x] `app/backoffice/users/_components/UserRolesControl.tsx` **nuevo** — `"use client"`, mirror de `UserStatusControl`
       **pero con el fieldset de checkboxes del `InviteUserForm`** (`ALL_ROLES.map`, pre-marcado desde `user.roles`,
       `react-hook-form` + `ChangeUserRolesSchema`), botón save, `<MutationError testId="user-roles__error">` +
       `toastNotifier.success`. Gateado por `<Can permission={Permission.USERS_CHANGE_ROLES}>`. **Sin** early-return por
       estado (D6 — cualquier estado no-erased). Testids `user-roles`, `user-roles__role-{ROLE}`, `user-roles__save`,
       `user-roles__error` (patrón de U-2/U-3). Props `{ user: User; onChanged: (user: User) => void }`.
-- [ ] `app/backoffice/users/[id]/page.tsx` — montar `<UserRolesControl user={user} onChanged={() => void reload()} />`
+- [x] `app/backoffice/users/[id]/page.tsx` — montar `<UserRolesControl user={user} onChanged={() => void reload()} />`
       junto a `<UserStatusControl>` (`~L167`); `reload()` refleja los nuevos `RolesBadges`. **No** tocar el read-side.
 
 ### F — Tests (Behat + unit + functional + e2e) (AC1–AC13)
 
-- [ ] **Behat** `api/features/backoffice/users/roles.feature` **nuevo** — espejo de `status.feature`: éxito que
+- [x] **Behat** `api/features/backoffice/users/roles.feature` **nuevo** — espejo de `status.feature`: éxito que
       **cambia** el set (200 + `data.roles` + **1 evento** `roles-changed` + `all-revoked` + budget); **no-op**
       set-sin-cambios (200, **0 eventos**, **0 all-revoked** — AC8); **403** no-ADMIN + **401** sin sesión; **409
       last-admin** en democión del último admin ACTIVE; **200** en `[ADMIN]→[ADMIN,EDITOR]` del único admin (guard NO
       dispara — AC3); **422** roles vacío / valor fuera de vocabulario; **400 invalid-uuid** (Scenario Outline); **404**.
       Assert-0-en-fallo: vaciar outbox + reset stats **antes** de la request.
-- [ ] **Unit** — `ChangeUserRolesTest` (`tests/Unit/Iam/Identity/Application/`, reusa `InMemoryActiveAdministratorDirectory`):
+- [x] **Unit** — `ChangeUserRolesTest` (`tests/Unit/Iam/Identity/Application/`, reusa `InMemoryActiveAdministratorDirectory`):
       cambio con revoke; **guard NO invocado** cuando no hay democión (add/same-set/no-admin) — asertar que el doble del
       directory **no** recibe la llamada; guard invocado y 409 en democión del último admin; **no-op** set-igual (sin
       save/publish/revoke); guard-fail NO muta el agregado (order-independence). `ChangeUserRolesRequestTest`
       (`tests/Unit/.../Http/`, valida el array: vacío→inválido, valor ilegal→inválido, dedup ok). Aggregate test
       `User::changeRoles` (set semantics + dedup + evento). Controller `#[CoversClass(UserPatchRolesController::class)]`
       (**nunca** `CoversNothing`).
-- [ ] **Functional** — wire-gate del controller en `tests/Functional/Iam/Identity/Infrastructure/Controller/`
+- [x] **Functional** — wire-gate del controller en `tests/Functional/Iam/Identity/Infrastructure/Controller/`
       (`UserPatchRolesFunctionalTest`, patrón `UserPatchStatusFunctionalTest`): 200 admin (orden de claves del recurso),
       403 no-admin, y el **409 real** (adapter de producción) en democión del último admin. El adapter del guard se
       reusa → **no** hace falta test de integración nuevo.
-- [ ] **e2e** `pwa/tests/e2e/backoffice/users-change-roles-real-api.spec.ts` **nuevo** — `authenticatedTest`, abre el
+- [x] **e2e** `pwa/tests/e2e/backoffice/users-change-roles-real-api.spec.ts` **nuevo** — `authenticatedTest`, abre el
       detalle de un usuario **no-admin** (semilla), cambia su set de roles, asserta los `RolesBadges` resultantes; sin
       exact-counts. **Semilla:** reusar el fixture no-admin `e2e-suspendable@erpify.test` de `make/pwa.mk` **pero
       añadir el reset de `roles` al `ON CONFLICT DO UPDATE SET`** (hoy solo resetea `status`) para que el spec sea
       repetible, o sembrar un `e2e-role-editable@erpify.test` dedicado. Mantenerlo no-admin (nunca roza el guard AC3).
-- [ ] **PWA unit** — `ApiChangeUserRolesRepository` + `ChangeUserRoles` (use case) + `userRolesControl.test.tsx`
+- [x] **PWA unit** — `ApiChangeUserRolesRepository` + `ChangeUserRoles` (use case) + `userRolesControl.test.tsx`
       (mockea el container por token; render con checkboxes pre-marcados; save/error/hidden-when-not-permitted;
       **renderiza en cualquier estado**, sin el test ACTIVE-only de U-3).
 
 ### Verificaciones (Working principle 4)
 
-- [ ] `make php.stan` en cada `.php` tocado (worker: `PHP_SERVICE=messenger_worker` si segfault 139).
-- [ ] `make php.quality` completo (stan + psalm-taint + phpmd + cs-fixer + rector + **deptrac** + **bounded-context** +
+- [x] `make php.stan` en cada `.php` tocado (worker: `PHP_SERVICE=messenger_worker` si segfault 139).
+- [x] `make php.quality` completo (stan + psalm-taint + phpmd + cs-fixer + rector + **deptrac** + **bounded-context** +
       **error-contract**) **verde**. `error-contract` debe quedar verde **sin marcador nuevo** (`LastActiveAdministratorProtected`
       ya es `Conflict`); `deptrac`/`bounded-context` verdes **sin allowlist nuevo** (D2 single-context, no toca
       `Organization`). Si alguno pide cambio, algo se desvió.
-- [ ] `make php.behat` (features nuevas + regresión). Re-sembrar el ADMIN e2e **después** (Behat resetea la DB).
-- [ ] `make pwa.quality` + `make pwa.test.unit` + e2e (worktree: puerto efímero + overrides Playwright; EACCES →
+- [x] `make php.behat` (features nuevas + regresión). Re-sembrar el ADMIN e2e **después** (Behat resetea la DB).
+- [x] `make pwa.quality` + `make pwa.test.unit` + e2e (worktree: puerto efímero + overrides Playwright; EACCES →
       limpiar `.next-e2e`; contenedor `pwa` debe estar `Up`).
-- [ ] **Barrido final:** eliminar del diff (código `api/src`, `pwa/src`, tests) los comentarios con IDs de story/NFR/AC
+- [x] **Barrido final:** eliminar del diff (código `api/src`, `pwa/src`, tests) los comentarios con IDs de story/NFR/AC
       y los change-relative — la trazabilidad vive aquí, en el PR y en el commit (CLAUDE.md).
 
 ## Dev Notes
@@ -527,6 +527,116 @@ Opus 4.8 (1M context).
 
 ### Debug Log References
 
+- **Presupuesto de queries medido en vivo** (no estimado): camino de cambio **21** (frente a las 22 de `status.feature`
+  — falta exactamente la lectura del guard, que aquí no se invoca porque el objetivo no es administrador); no-op **3**
+  (sin transacción de escritura ni revoke). Fijados en `roles.feature`.
+- **Falso positivo perseguido y descartado:** un `Fatal error: Premature end of PHP process` en los tests multipart de
+  Bank apareció en 3 ejecuciones de `make php.unit`. Aislado: la suite pasa sin `UserPatchRolesFunctionalTest` (2013
+  tests) y ese test pasa en solitario (5/5). Tras limpiar el *result cache* de PHPUnit dejó de reproducirse: **6
+  ejecuciones completas consecutivas en verde (2018 tests)**, una de ellas con la caché borrada. No queda causa raíz
+  demostrada; es el área de flakiness multipart ya conocida del repo, no un defecto introducido — pero conviene
+  vigilarlo en CI.
+- **`git stash pop` parcial:** al verificar si el flake era preexistente, el `pop` restauró solo los ficheros nuevos y
+  dejó las modificaciones de ficheros versionados en el stash, produciendo un árbol inconsistente (el servicio llamaba
+  a un `User::changeRoles` ausente). Restaurado con `git checkout stash@{0} -- <ficheros>` antes de seguir.
+
 ### Completion Notes List
 
+- **Guard condicional verificado por observación, no por inspección.** `InMemoryActiveAdministratorDirectory` ahora
+  registra los ids por los que se le pregunta (dejó de ser `readonly`), así que los tests asertan que el directorio
+  **no recibe la llamada** en add / mismo-set / no-admin / admin no-ACTIVE, y que **sí** la recibe en democión. El
+  test funcional lo repite contra el adapter de producción: mismo montaje de administrador único, `[ADMIN]→[EDITOR]`
+  da 409 y `[ADMIN]→[ADMIN,EDITOR]` da 200.
+- **No-op con comparación semántica de conjuntos** (normaliza dedup + orden en ambos lados). Cubierto en unit
+  (`[MANAGER,AUDIT_READER]` reenviado como `[AUDIT_READER,MANAGER,MANAGER]`) y en Behat (`["MANAGER","MANAGER"]` →
+  200, 0 eventos, 0 revokes).
+- **Supresión PHPMD añadida y declarada** (no colada): añadir el 5º evento de dominio subió el acoplamiento de `User`
+  a 13 y PHPMD lo rechaza. Añadido `@SuppressWarnings("PHPMD.CouplingBetweenObjects")` con argumento en el docblock,
+  siguiendo el precedente exacto de `BankAccount` (agregado rico cuyos colaboradores son responsabilidades
+  inherentes). Es la única supresión nueva del PR.
+- **Boy-scout nombrado:** el docblock de `InviteUserRequest` afirmaba ser «the single production site» que enumera el
+  vocabulario de roles; U-4 añade un segundo. Corregido para decir la verdad y explicar por qué la duplicación es
+  deliberada (aislamiento entre contextos; compartirlo acoplaría Identity↔Invitation o metería un método en un enum
+  que es vocabulario puro). El docblock de `StaticAuthorizationPolicy` decía «cuatro grants `users.*`» → cinco.
+- **Desviación en E:** la tarea pedía actualizar **dos** tests de vocabulario; solo `ApiIdentityRepository.test.ts` lo
+  fija literalmente. `authorize.test.ts` referencia `Permission.*` de forma simbólica y no enumera, así que no
+  requería cambio (verificado, no asumido). Se añadió en su lugar `users.changeRoles` a `PermissionCatalogTest`, que
+  sí fija la lista del lado API.
+- **Dos correcciones al trabajo del subagente PWA tras revisarlo:** (1) el e2e asertaba el estado sembrado
+  (`toEqual(["VIEWER"])`), lo que habría fallado en un reintento de Playwright — ahora deriva el intercambio de los
+  roles actuales; verificado ejecutándolo dos veces **sin re-sembrar**. (2) el texto de ayuda decía que el cambio
+  «takes effect on their next request», falso: revocamos todas las sesiones al confirmar. Reescrito.
+- **Sin migración, sin allowlist, sin marcador de error nuevo.** `deptrac`, `php.lint.bounded-context` y
+  `php.lint.error-contract` pasan sin tocar configuración (D2 single-context: solo se escribe `User.roles`).
+- **Nota de seguridad para el PR:** `users.changeRoles` es la escritura más privilegiada de la consola — puede acuñar
+  un ADMIN. Queda ADMIN-only (catálogo + grant explícito + `users` en `TIER_OPT_OUT`), con test de voter dedicado, y
+  el guard del último administrador activo impide el auto-bloqueo de la organización.
+
+### Verificación (ejecutada, con su resultado)
+
+| Gate | Resultado |
+|---|---|
+| `make php.stan` | **OK, sin errores** |
+| `make php.quality` | **verde** (stan · psalm-taint · phpmd · cs-fixer · rector · deptrac 0 violaciones · bounded-context · error-contract) |
+| `make php.quality.dry-run` (el que corre CI) | **exit 0** |
+| `make php.unit` | **2018 tests verdes** (6 ejecuciones consecutivas) |
+| `make php.behat` | **343 escenarios / 3110 pasos verdes**; `roles.feature` 14/14 |
+| `make pwa.quality` | **exit 0** |
+| `make pwa.test.unit` | **exit 0** — 215 ficheros / 1099 tests |
+| e2e `users-change-roles-real-api` | **1 passed** contra el stack vivo del worktree (puerto efímero 33489), y de nuevo **sin re-sembrar** |
+
 ### File List
+
+**API — nuevos**
+
+- `api/src/Iam/Identity/Domain/Event/UserRolesChanged.php`
+- `api/src/Iam/Identity/Application/ChangeUserRoles.php`
+- `api/src/Iam/Identity/Infrastructure/Http/ChangeUserRolesRequest.php`
+- `api/src/Iam/Identity/Infrastructure/Controller/UserPatchRolesController.php`
+- `api/features/backoffice/users/roles.feature`
+- `api/tests/Unit/Iam/Identity/Domain/Entity/UserChangeRolesTest.php`
+- `api/tests/Unit/Iam/Identity/Domain/Event/UserRolesChangedTest.php`
+- `api/tests/Unit/Iam/Identity/Application/ChangeUserRolesTest.php`
+- `api/tests/Unit/Iam/Identity/Infrastructure/Http/ChangeUserRolesRequestTest.php`
+- `api/tests/Functional/Iam/Identity/Infrastructure/Controller/UserPatchRolesFunctionalTest.php`
+
+**API — modificados**
+
+- `api/src/Iam/Identity/Domain/Entity/User.php` — `changeRoles(Role ...)` + supresión de acoplamiento argumentada
+- `api/src/Iam/Identity/Infrastructure/Security/PermissionCatalog.php` — `users.changeRoles` + docblock al día
+- `api/src/Iam/Identity/Infrastructure/Security/StaticAuthorizationPolicy.php` — grant `[ADMIN]` + docblock (cuatro→cinco)
+- `api/src/Iam/Invitation/Infrastructure/Http/InviteUserRequest.php` — docblock corregido (boy-scout)
+- `api/tests/Unit/Iam/Identity/Application/InMemoryActiveAdministratorDirectory.php` — registra las consultas recibidas
+- `api/tests/Unit/Iam/Identity/Infrastructure/Security/PermissionCatalogTest.php` — vocabulario esperado
+- `api/tests/Functional/Iam/Identity/Infrastructure/Security/PermissionVoterAccessDecisionTest.php` — caso `users.changeRoles`
+
+**PWA — nuevos**
+
+- `pwa/src/context/backoffice/user/domain/ChangeUserRolesRepository.ts`
+- `pwa/src/context/backoffice/user/infrastructure/ApiChangeUserRolesRepository.ts`
+- `pwa/src/context/backoffice/user/application/ChangeUserRoles.ts`
+- `pwa/src/context/backoffice/user/application/schemas/ChangeUserRolesSchema.ts`
+- `pwa/src/app/backoffice/users/_components/UserRolesControl.tsx`
+- `pwa/tests/context/backoffice/user/infrastructure/ApiChangeUserRolesRepository.test.ts`
+- `pwa/tests/context/backoffice/user/application/ChangeUserRoles.test.ts`
+- `pwa/tests/app/backoffice/users/userRolesControl.test.tsx`
+- `pwa/tests/e2e/backoffice/users-change-roles-real-api.spec.ts`
+
+**PWA — modificados**
+
+- `pwa/src/context/shared/http-client/infrastructure/ApiEndpoints.ts` — `USERS.CHANGE_ROLES`
+- `pwa/src/context/shared/access/domain/Permission.ts` — `USERS_CHANGE_ROLES`
+- `pwa/src/context/shared/dependency-injection/infrastructure/Container.ts` — 2 binds + imports
+- `pwa/src/app/backoffice/users/[id]/page.tsx` — monta `<UserRolesControl>`
+- `pwa/tests/context/shared/access/ApiIdentityRepository.test.ts` — vocabulario del mock de `/me`
+
+**Otros**
+
+- `make/pwa.mk` — la semilla e2e resetea también `roles`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — estado de la historia
+
+### Change Log
+
+| Fecha | Cambio |
+|---|---|
+| 2026-07-19 | Implementada U-4: `PATCH /api/v1/backoffice/users/{id}/roles` (semántica *set*, guard ≥1 ADMIN condicional, no-op idempotente, revoke defensa-en-profundidad), permiso `users.changeRoles`, evento `UserRolesChanged`, editor de checkboxes gateado en el detalle. Estado → `review`. |
