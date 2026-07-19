@@ -59,8 +59,7 @@ final class UserLocked extends DomainEvent
         string $eventId,
         string $occurredOn,
     ): static {
-        $lockedUntil = $body['lockedUntil'] ?? null;
-        \assert(\is_string($lockedUntil));
+        $lockedUntil = self::stringMember($body, 'lockedUntil');
 
         return new self(
             $aggregateId,

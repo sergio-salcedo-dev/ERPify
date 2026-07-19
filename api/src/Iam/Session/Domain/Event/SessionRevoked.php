@@ -54,8 +54,7 @@ final class SessionRevoked extends DomainEvent
         string $eventId,
         string $occurredOn,
     ): static {
-        $userId = $body['userId'] ?? null;
-        \assert(\is_string($userId));
+        $userId = self::stringMember($body, 'userId');
 
         return new self($aggregateId, $userId, $eventId, new DateTimeImmutable($occurredOn));
     }

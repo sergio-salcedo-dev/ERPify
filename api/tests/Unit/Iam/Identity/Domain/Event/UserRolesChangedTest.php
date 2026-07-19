@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Iam\Identity\Domain\Event;
 use DateTimeImmutable;
 use Erpify\Iam\Identity\Domain\Event\UserRolesChanged;
 use Erpify\Shared\Access\Domain\Role;
+use Erpify\Shared\Event\Domain\Exception\CorruptEventStoreRow;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -54,5 +55,29 @@ final class UserRolesChangedTest extends TestCase
         $this->assertSame(self::EVENT_ID, $reconstructed->eventId());
         $this->assertSame(['roles' => ['MANAGER', 'ADMIN']], $reconstructed->toPrimitives());
         $this->assertSame(self::OCCURRED_ON, $reconstructed->occurredOn()->format('c'));
+    }
+
+    #[Test]
+    public function aStoredRolesMemberThatIsNotAnArrayIsRefused(): void
+    {
+        $this->expectException(CorruptEventStoreRow::class);
+
+        UserRolesChanged::fromPrimitives(self::USER_ID, ['roles' => 'ADMIN'], self::EVENT_ID, self::OCCURRED_ON);
+    }
+
+    #[Test]
+    public function aStoredRoleThatIsNotAStringIsRefused(): void
+    {
+        $this->expectException(CorruptEventStoreRow::class);
+
+        UserRolesChanged::fromPrimitives(self::USER_ID, ['roles' => [7]], self::EVENT_ID, self::OCCURRED_ON);
+    }
+
+    #[Test]
+    public function anAbsentRolesMemberReadsAsAnEmptySetRatherThanCorruption(): void
+    {
+        $reconstructed = UserRolesChanged::fromPrimitives(self::USER_ID, [], self::EVENT_ID, self::OCCURRED_ON);
+
+        $this->assertSame(['roles' => []], $reconstructed->toPrimitives());
     }
 }
