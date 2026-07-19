@@ -48,6 +48,10 @@ final readonly class CreateInvitationController
     }
 
     /**
+     * Safe because the payload already refused anything outside the {@see Role} vocabulary with a 422, and
+     * refused a body whose `roles` is not a list at all — without that shape check the keys of a JSON object
+     * would survive into the variadic below as named arguments, where `email` collides with the invitee.
+     *
      * @return list<Role>
      */
     private function rolesFrom(InviteUserRequest $request): array

@@ -58,8 +58,7 @@ final class OtherSessionsRevoked extends DomainEvent
         string $eventId,
         string $occurredOn,
     ): static {
-        $keptSessionId = $body['keptSessionId'] ?? null;
-        \assert(\is_string($keptSessionId));
+        $keptSessionId = self::stringMember($body, 'keptSessionId');
 
         return new self($aggregateId, $keptSessionId, $eventId, new DateTimeImmutable($occurredOn));
     }

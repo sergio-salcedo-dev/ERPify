@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Erpify\Iam\Identity\Application\ChangeUserStatus;
 use Erpify\Iam\Identity\Application\RevokeSessionsBestEffort;
 use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
+use Erpify\Iam\Identity\Domain\Exception\InvalidIdentityTransition;
 use Erpify\Iam\Identity\Domain\Exception\LastActiveAdministratorProtected;
 use Erpify\Iam\Identity\Domain\Exception\UserNotFound;
 use Erpify\Iam\Session\Application\RevokeAllSessions;
@@ -112,6 +113,54 @@ final class ChangeUserStatusTest extends TestCase
         $this->expectException(LastActiveAdministratorProtected::class);
 
         $this->makeUseCase($repository, $directory, $eventBus, $sessions)->deactivate(UserMother::DEFAULT_ID);
+    }
+
+    public function testTheTargetIsReadUnderARowLock(): void
+    {
+        $repository = new InMemoryUserRepository(UserMother::create());
+        $directory = new InMemoryActiveAdministratorDirectory([
+            UserMother::DEFAULT_ID => true,
+            self::OTHER_ADMIN_ID => true,
+        ]);
+
+        $this->makeUseCase($repository, $directory, new RecordingEventBus(), new InMemorySessionRepository())
+            ->suspend(UserMother::DEFAULT_ID)
+        ;
+
+        // The directory locks the active-admin set, which never covers a target that is not an active
+        // administrator — so the target carries its own lock on every path.
+        $this->assertSame([UserMother::DEFAULT_ID], $repository->forUpdateCalls);
+    }
+
+    public function testATransitionLandingBeforeTheLockedReadIsRejectedInsteadOfOverwritten(): void
+    {
+        // The caller aimed at an identity it read as ACTIVE; a rival transition suspends it before the locked
+        // re-read resolves. The state machine must judge the committed state, not the caller's snapshot —
+        // otherwise DEACTIVATED lands on top of SUSPENDED and an event records a transition that never
+        // legally occurred, onto a log that cannot be rewritten.
+        $user = UserMother::create();
+        $repository = new InMemoryUserRepository($user);
+        $repository->onFindByIdForUpdate = static function () use ($user): void {
+            $user->suspend();
+            $user->pullDomainEvents();
+        };
+        $directory = new InMemoryActiveAdministratorDirectory([
+            UserMother::DEFAULT_ID => true,
+            self::OTHER_ADMIN_ID => true,
+        ]);
+        $eventBus = new RecordingEventBus();
+        $sessions = new InMemorySessionRepository();
+
+        $this->expectException(InvalidIdentityTransition::class);
+
+        try {
+            $this->makeUseCase($repository, $directory, $eventBus, $sessions)->deactivate(UserMother::DEFAULT_ID);
+        } finally {
+            $this->assertSame(IdentityStatus::SUSPENDED, $user->status());
+            $this->assertSame([], $repository->saved);
+            $this->assertSame([], $eventBus->publishedEvents);
+            $this->assertSame([], $sessions->revokeAllCalls);
+        }
     }
 
     public function testChangingTheStatusOfAMissingIdentityIsANotFound(): void

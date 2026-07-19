@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Shared\Event\Domain;
 
 use DateTimeImmutable;
+use Erpify\Shared\Event\Domain\Exception\CorruptEventStoreRow;
 use Erpify\Shared\Uuid\Domain\Uuid;
 
 /**
@@ -73,6 +74,50 @@ abstract class DomainEvent
         string $eventId,
         string $occurredOn,
     ): static;
+
+    /**
+     * Reads a payload member the current schema version promises is a string.
+     *
+     * The stored payload is written by {@see toPrimitives()}, so a member of the wrong type means the row no
+     * longer matches the schema it was written under — corruption, a hand-edited row, or a version that should
+     * have been upcast before reaching here. Replay must stop, and stop saying why: an `assert()` would state
+     * the invariant without enforcing it, because production runs with `zend.assertions=-1`.
+     *
+     * @param array<string, mixed> $body
+     *
+     * @throws CorruptEventStoreRow when the member is absent or not a string
+     */
+    final protected static function stringMember(array $body, string $member): string
+    {
+        $value = $body[$member] ?? null;
+
+        if (!\is_string($value)) {
+            throw CorruptEventStoreRow::malformedPayloadMember(static::eventName(), $member, 'a string');
+        }
+
+        return $value;
+    }
+
+    /**
+     * Reads a payload member the current schema version promises is a list. An absent member reads as empty:
+     * a collection member that was never written is an empty collection, not corruption.
+     *
+     * @param array<string, mixed> $body
+     *
+     * @throws CorruptEventStoreRow when the member is present but not an array
+     *
+     * @return array<mixed>
+     */
+    final protected static function arrayMember(array $body, string $member): array
+    {
+        $value = $body[$member] ?? [];
+
+        if (!\is_array($value)) {
+            throw CorruptEventStoreRow::malformedPayloadMember(static::eventName(), $member, 'an array');
+        }
+
+        return $value;
+    }
 
     final public function aggregateId(): string
     {

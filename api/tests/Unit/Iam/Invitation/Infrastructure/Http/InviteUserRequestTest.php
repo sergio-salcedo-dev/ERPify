@@ -14,8 +14,11 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 /**
  * Pins the boundary contract of the invitation payload: a well-formed alta passes, while the failure modes the
- * console can produce (blank/malformed email, no role, an unknown role) each raise a violation so
- * `#[MapRequestPayload]` answers 422 before {@see \Erpify\Iam\Invitation\Application\SendInvitation} runs.
+ * console can produce (blank/malformed email, no role, an unknown role, more roles than the vocabulary holds)
+ * each raise a violation so `#[MapRequestPayload]` answers 422 before
+ * {@see \Erpify\Iam\Invitation\Application\SendInvitation} runs. The list-shape check is exercised over HTTP in
+ * `features/backoffice/identity/invitation_create.feature` instead: a string-keyed array cannot be handed to a
+ * `list<string>` parameter here without defeating the very type promise the constraint exists to keep.
  *
  * @internal
  */
@@ -79,5 +82,19 @@ final class InviteUserRequestTest extends TestCase
         $request = new InviteUserRequest('newbie@erpify.test', ['ROOT']);
 
         $this->assertGreaterThan(0, $this->validator->validate($request)->count());
+    }
+
+    #[Test]
+    public function aSetLargerThanTheVocabularyIsRejected(): void
+    {
+        $request = new InviteUserRequest('newbie@erpify.test', \array_fill(0, 6, Role::VIEWER->value));
+
+        $this->assertGreaterThan(0, $this->validator->validate($request)->count());
+    }
+
+    #[Test]
+    public function theCeilingTracksTheRoleVocabulary(): void
+    {
+        $this->assertCount(InviteUserRequest::MAX_ROLES, InviteUserRequest::roleValues());
     }
 }

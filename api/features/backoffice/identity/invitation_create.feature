@@ -71,11 +71,17 @@ Feature: Invite a member from the console
     And I execute the SQL query "SELECT id FROM identity_user WHERE email = '<email>'"
     And there should have 0 records in SQL result
 
+    # The two object bodies carry a legal role under a key. Every member-level constraint accepts them, so only
+    # the list check stands between a JSON object and a variadic spread that would read its keys as named
+    # arguments — the "email" key collides with the invitee parameter and would answer 500 instead of 422.
     Examples:
-      | case         | email                 | body                                                    |
-      | bad email    | not-an-email          | { "email": "not-an-email", "roles": ["EDITOR"] }        |
-      | empty roles  | candidate@erpify.test | { "email": "candidate@erpify.test", "roles": [] }       |
-      | unknown role | candidate@erpify.test | { "email": "candidate@erpify.test", "roles": ["ROOT"] } |
+      | case          | email                 | body                                                                                                |
+      | bad email     | not-an-email          | { "email": "not-an-email", "roles": ["EDITOR"] }                                                    |
+      | empty roles   | candidate@erpify.test | { "email": "candidate@erpify.test", "roles": [] }                                                   |
+      | unknown role  | candidate@erpify.test | { "email": "candidate@erpify.test", "roles": ["ROOT"] }                                              |
+      | roles object  | candidate@erpify.test | { "email": "candidate@erpify.test", "roles": {"a": "EDITOR"} }                                      |
+      | email key     | candidate@erpify.test | { "email": "candidate@erpify.test", "roles": {"email": "EDITOR"} }                                  |
+      | over the cap  | candidate@erpify.test | { "email": "candidate@erpify.test", "roles": ["VIEWER","EDITOR","MANAGER","ADMIN","AUDIT_READER","VIEWER"] } |
 
   Scenario: Re-inviting an email already in use is refused 422 with no partial write
     Given I am logged in as an administrator

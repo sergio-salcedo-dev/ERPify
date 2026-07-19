@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Functional;
 
 use DateTimeImmutable;
+use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Iam\Identity\Domain\Email;
 use Erpify\Iam\Identity\Domain\Entity\User;
@@ -46,9 +47,70 @@ trait AuthenticatesFunctionalRequests
      */
     private const string FUNCTIONAL_ORGANIZATION_ID = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a50';
 
+    /**
+     * Role sets of the administrators {@see demoteEveryAdministrator} parked, keyed by id.
+     *
+     * @var array<string, string>
+     */
+    private array $parkedAdministratorRoles = [];
+
     private function authenticateClient(KernelBrowser $client): void
     {
         $this->authenticateAs($client, self::FUNCTIONAL_USER_EMAIL, [Role::AUDIT_READER->value, Role::MANAGER->value]);
+    }
+
+    /**
+     * Empties the active-administrator pool so the caller can seat a known sole administrator and exercise the
+     * "keep ≥1 active ADMIN" guard. Roles are parked and put back by {@see restoreParkedAdministrators}, which
+     * every caller MUST invoke in `tearDown`: this suite shares one database with no DAMA rollback, several
+     * other classes seed their own ADMIN rows, and an unrestored wipe would make the suite order-dependent.
+     *
+     * Demoting rather than deleting is what keeps this reversible — the rows, their ids and anything
+     * referencing them survive, so only the one column this needs to change is touched.
+     */
+    private function demoteEveryAdministrator(): void
+    {
+        $connection = $this->functionalConnection();
+
+        $administrators = $connection->fetchAllAssociative(
+            'SELECT id, roles FROM identity_user WHERE roles::jsonb @> \'["ADMIN"]\'::jsonb',
+        );
+
+        foreach ($administrators as $administrator) {
+            self::assertArrayHasKey('id', $administrator);
+            self::assertArrayHasKey('roles', $administrator);
+            $id = $administrator['id'];
+            $roles = $administrator['roles'];
+            self::assertIsString($id);
+            self::assertIsString($roles);
+            $this->parkedAdministratorRoles[$id] = $roles;
+        }
+
+        $connection->executeStatement(
+            'UPDATE identity_user SET roles = \'["VIEWER"]\' WHERE roles::jsonb @> \'["ADMIN"]\'::jsonb',
+        );
+    }
+
+    private function restoreParkedAdministrators(): void
+    {
+        $connection = $this->functionalConnection();
+
+        foreach ($this->parkedAdministratorRoles as $id => $roles) {
+            $connection->executeStatement(
+                'UPDATE identity_user SET roles = CAST(:roles AS json) WHERE id = CAST(:id AS uuid)',
+                ['roles' => $roles, 'id' => $id],
+            );
+        }
+
+        $this->parkedAdministratorRoles = [];
+    }
+
+    private function functionalConnection(): Connection
+    {
+        $entityManager = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+
+        return $entityManager->getConnection();
     }
 
     /**

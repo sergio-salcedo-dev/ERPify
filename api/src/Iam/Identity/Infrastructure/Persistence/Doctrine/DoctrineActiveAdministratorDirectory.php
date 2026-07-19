@@ -36,9 +36,11 @@ final readonly class DoctrineActiveAdministratorDirectory implements ActiveAdmin
     public function keepsAnActiveAdminWithout(string $userId): bool
     {
         // Lock the whole active-admin set — not only the rows other than $userId — so two concurrent
-        // transitions acquire the same rows in the same scan order (no deadlock) and the second blocks behind
-        // the first, then re-reads the committed state under READ COMMITTED. Excluding $userId in SQL would
-        // make the two lock sets diverge and could deadlock; the exclusion is applied in PHP instead. This must
+        // transitions acquire the same rows in the same order and the second blocks behind the first, then
+        // re-reads the committed state under READ COMMITTED. Excluding $userId in SQL would make the two lock
+        // sets diverge and could deadlock; the exclusion is applied in PHP instead. The explicit ORDER BY is
+        // what makes that shared order real: Postgres does not promise a stable scan order across plans, so
+        // without it two concurrent callers could take the same rows in opposite orders and deadlock. This must
         // run inside the caller's transaction for the lock to hold until commit.
         $activeAdminIds = $this->connection->fetchFirstColumn(
             <<<'SQL'
@@ -46,6 +48,7 @@ final readonly class DoctrineActiveAdministratorDirectory implements ActiveAdmin
                 FROM identity_user
                 WHERE status = :active
                   AND roles::jsonb @> CAST(:adminRole AS jsonb)
+                ORDER BY id
                 FOR UPDATE
                 SQL,
             [
