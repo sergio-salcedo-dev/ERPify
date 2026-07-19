@@ -105,19 +105,17 @@ describe("UserRolesControl", () => {
     expect(toastNotifier.success).toHaveBeenCalled();
   });
 
-  it("re-checks the saved set once the re-grant resolves", async () => {
-    changeRun.mockResolvedValueOnce(user([Role.MANAGER]));
-    renderControl(user([Role.VIEWER]));
+  it("carries a role it cannot render through the save instead of dropping it", async () => {
+    // An API ahead of this build grants a role with no checkbox here. Submitting the whole set must not
+    // strip it.
+    const unknown = "LEGACY_AUDITOR" as Role;
+    changeRun.mockResolvedValueOnce(user([Role.VIEWER]));
+    renderControl(user([Role.VIEWER, unknown]));
 
-    fireEvent.click(await screen.findByTestId(`user-roles__role-${Role.MANAGER}`));
-    fireEvent.click(screen.getByTestId(`user-roles__role-${Role.VIEWER}`));
-    fireEvent.submit(screen.getByTestId("user-roles"));
+    expect(screen.queryByTestId(`user-roles__role-${unknown}`)).not.toBeInTheDocument();
+    fireEvent.submit(await screen.findByTestId("user-roles"));
 
-    await waitFor(() => expect(changeRun).toHaveBeenCalled());
-    await waitFor(() =>
-      expect(screen.getByTestId(`user-roles__role-${Role.MANAGER}`)).toBeChecked(),
-    );
-    expect(screen.getByTestId(`user-roles__role-${Role.VIEWER}`)).not.toBeChecked();
+    await waitFor(() => expect(changeRun).toHaveBeenCalledWith(TARGET_ID, [Role.VIEWER, unknown]));
   });
 
   it("surfaces a server problem in the persistent error surface and does not report success", async () => {
