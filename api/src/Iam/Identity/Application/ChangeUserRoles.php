@@ -27,6 +27,13 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  *    `[ADMIN] -> [ADMIN, EDITOR]` on the only administrator — who is not leaving the pool at all. When the guard
  *    does apply it reads through {@see ActiveAdministratorDirectory}, whose row lock is taken inside this
  *    transaction, so two concurrent demotions serialize instead of both passing a stale snapshot.
+ *    Because that call is conditional, its lock cannot be the one that protects the write: the aggregate is
+ *    read through {@see UserRepository::findByIdForUpdate()} so the target row is locked and re-hydrated on
+ *    every path. Both decisions below — whether the set already matches, and whether this demotes an active
+ *    administrator — then read committed state rather than a snapshot a rival transaction may already have
+ *    invalidated. Without it a change that looks harmless against a stale read (the target was not an
+ *    administrator when it was loaded) would overwrite an ADMIN granted meanwhile, and consult nothing,
+ *    because {@see User::changeRoles()} assigns the whole set rather than a delta.
  * 2. Re-sending the set an identity already holds is a legitimate no-op, not a conflict: the role set is not
  *    unidirectional the way the identity lifecycle is. It short-circuits before mutating, so a redundant save
  *    neither writes, nor emits an event, nor — the reason this matters — tears down live sessions.
@@ -58,7 +65,7 @@ final readonly class ChangeUserRoles
 
         [$user, $replaced] = $this->transactionManager->transactional(
             function () use ($userId, $roles): array {
-                $user = $this->users->findById($userId) ?? throw UserNotFound::withId($userId);
+                $user = $this->users->findByIdForUpdate($userId) ?? throw UserNotFound::withId($userId);
 
                 if ($this->alreadyHolds($user, $roles)) {
                     return [$user, false];

@@ -64,6 +64,9 @@ final class UserPatchRolesFunctionalTest extends WebTestCase
         $this->assertSame(['EDITOR', 'AUDIT_READER'], $this->node($data, 'roles'));
     }
 
+    /**
+     * @throws JsonException
+     */
     public function testDemotingTheLastActiveAdministratorIsARealConflictWithoutMutating(): void
     {
         // Clear every administrator, then seat exactly one: functional-admin is now the SOLE active admin, so
@@ -76,6 +79,9 @@ final class UserPatchRolesFunctionalTest extends WebTestCase
 
         self::assertResponseStatusCodeSame(409);
         self::assertResponseHeaderSame('Content-Type', 'application/problem+json');
+        // Pin the marker, not just the status: any other conflict would also answer 409, and the wired
+        // directory adapter is precisely what this test exists to prove.
+        $this->assertSame('last-active-administrator-protected', $this->problemType());
         // The guard runs before the aggregate mutates: the lone admin keeps its ADMIN.
         $this->assertContains('ADMIN', $this->rolesOf($loneAdminId));
     }
@@ -128,6 +134,25 @@ final class UserPatchRolesFunctionalTest extends WebTestCase
         $this->assertArrayHasKey($key, $data);
 
         return $data[$key];
+    }
+
+    /**
+     * @throws JsonException
+     */
+    private function problemType(): string
+    {
+        $decoded = \json_decode(
+            (string) $this->client->getResponse()->getContent(),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        $this->assertIsArray($decoded);
+        /** @phpstan-var array<string, mixed> $decoded */
+        $type = $this->node($decoded, 'type');
+        $this->assertIsString($type);
+
+        return $type;
     }
 
     /**

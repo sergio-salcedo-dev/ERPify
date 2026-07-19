@@ -120,6 +120,36 @@ final class ChangeUserRolesTest extends TestCase
         $this->assertSame([], $sessions->revokeAllCalls);
     }
 
+    public function testTheTargetIsReadUnderARowLockEvenWhereTheGuardDoesNotApply(): void
+    {
+        $user = UserMother::create(roles: [Role::VIEWER]);
+        $repository = new InMemoryUserRepository($user);
+        $directory = new InMemoryActiveAdministratorDirectory([]);
+
+        $this->makeUseCase($repository, $directory)->run(UserMother::DEFAULT_ID, Role::EDITOR);
+
+        // The directory is not consulted on this path, so its lock cannot be what protects the write.
+        $this->assertSame([UserMother::DEFAULT_ID], $repository->forUpdateCalls);
+        $this->assertSame([], $directory->askedWithout);
+    }
+
+    public function testAGrantLandingBeforeTheLockedReadReclassifiesTheChangeAsADemotion(): void
+    {
+        // The caller aimed at a set it read as [VIEWER]; ADMIN is granted before the locked re-read resolves,
+        // so the change the use case is really about to make is a demotion — and must be judged as one.
+        $user = UserMother::create(roles: [Role::VIEWER]);
+        $repository = new InMemoryUserRepository($user);
+        $repository->onFindByIdForUpdate = static function () use ($user): void {
+            $user->changeRoles(Role::ADMIN);
+            $user->pullDomainEvents();
+        };
+        $directory = new InMemoryActiveAdministratorDirectory([UserMother::DEFAULT_ID => true]);
+
+        $this->expectException(LastActiveAdministratorProtected::class);
+
+        $this->makeUseCase($repository, $directory)->run(UserMother::DEFAULT_ID, Role::EDITOR);
+    }
+
     public function testDemotingAnAdministratorWhileOthersRemainIsAllowed(): void
     {
         $user = UserMother::create(roles: [Role::ADMIN]);

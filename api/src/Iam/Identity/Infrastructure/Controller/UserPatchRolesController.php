@@ -54,7 +54,9 @@ final readonly class UserPatchRolesController
     }
 
     /**
-     * Safe because the payload's `#[Assert\Choice]` already refused anything outside the vocabulary with a 422.
+     * Safe because the payload already refused anything outside the {@see Role} vocabulary with a 422, and
+     * refused a body whose `roles` is not a list at all — without that shape check the keys of a JSON object
+     * would survive into the variadic below as named arguments.
      *
      * @return list<Role>
      */

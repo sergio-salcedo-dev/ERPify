@@ -73,7 +73,8 @@ Feature: Assign an identity's roles
     And the JSON node "data.roles[0]" should be equal to "MANAGER"
     And there should be 0 events stored named "erpify.iam.identity.roles-changed"
     And there should be 0 events stored named "erpify.iam.session.all-revoked"
-    # Its own budget, far below the change path: the short-circuit opens no write transaction and no revoke.
+    # Its own budget, far below the change path: the transaction opens and closes around a single read, with
+    # nothing written and no revoke behind it.
     And 3 requests got executed for doctrine connection "default"
 
   @anonymous
@@ -136,14 +137,20 @@ Feature: Assign an identity's roles
     And the JSON node "type" should be equal to "validation-failed"
     And there should be 0 events stored named "erpify.iam.identity.roles-changed"
 
+    # The two object bodies carry a legal role under a key. Every member-level constraint accepts them, so only
+    # the list check stands between a JSON object and a variadic spread that would read its keys as named
+    # arguments — the "userId" key collides with the route id and would answer 500 instead of 422.
     Examples:
-      | roles              |
-      | []                 |
-      | ["ROOT"]           |
-      | ["EDITOR", "ROOT"] |
+      | roles                 |
+      | []                    |
+      | ["ROOT"]              |
+      | ["EDITOR", "ROOT"]    |
+      | {"a": "EDITOR"}       |
+      | {"userId": "EDITOR"}  |
 
   Scenario Outline: A malformed id returns a 400 invalid-uuid Problem Details body
     Given I am logged in as an administrator
+    And the stored events are cleared
     When I send a PATCH request to "/backoffice/users/<id>/roles" with body:
     """
     {
@@ -153,6 +160,8 @@ Feature: Assign an identity's roles
     Then the response status code should be 400
     And the JSON node "type" should be equal to "invalid-uuid"
     And the JSON node "status" should be equal to the number 400
+    And there should be 0 events stored named "erpify.iam.identity.roles-changed"
+    And there should be 0 events stored named "erpify.iam.session.all-revoked"
 
     Examples:
       | id         |
@@ -161,6 +170,7 @@ Feature: Assign an identity's roles
 
   Scenario: Changing the roles of a well-formed but unknown id is a 404 user-not-found
     Given I am logged in as an administrator
+    And the stored events are cleared
     When I send a PATCH request to "/backoffice/users/2e6d865c-17b0-476a-85f2-037bf6d3b3dc/roles" with body:
     """
     {
@@ -169,6 +179,8 @@ Feature: Assign an identity's roles
     """
     Then the response status code should be 404
     And the JSON node "type" should be equal to "user-not-found"
+    And there should be 0 events stored named "erpify.iam.identity.roles-changed"
+    And there should be 0 events stored named "erpify.iam.session.all-revoked"
 
   # The administrator seeded here is the only ACTIVE one, so an unconditionally-evaluated guard would refuse
   # this with a 409. Keeping ADMIN takes nobody out of the active-admin pool, so the guard is never consulted

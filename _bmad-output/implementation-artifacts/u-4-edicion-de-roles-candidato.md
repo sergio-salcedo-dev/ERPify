@@ -4,7 +4,7 @@ baseline_commit: a8a88bf31c0867754feec7d2ba2be0017975d56a
 
 # Story 1.5 (U-4): Edición de roles
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -330,6 +330,87 @@ U-3 y ya»). Las tres primeras condicionan el diseño; se detallan en los *Crux*
 - [x] **Barrido final:** eliminar del diff (código `api/src`, `pwa/src`, tests) los comentarios con IDs de story/NFR/AC
       y los change-relative — la trazabilidad vive aquí, en el PR y en el commit (CLAUDE.md).
 
+### Review Findings
+
+Revisión adversarial de tres capas (Blind Hunter · Edge Case Hunter · Acceptance Auditor) sobre `37c979d8`
+(baseline `a8a88bf3`). Los 13 AC quedaron VERIFICADOS y D1–D10 respetados; los gates se re-ejecutaron en fresco
+(`php.quality.dry-run`, `php.unit` 2018, `pwa.quality`, `pwa.test.unit` 1099 — todos exit 0 reales).
+
+Las dos decisiones se cerraron consultando a arquitectura, implementación y una IA externa: los tres
+convergieron en leer el agregado bajo lock. Resueltas y aplicadas todas las de `[Patch]`. Gates tras los
+parches: `php.quality` 0 · `php.unit` **2022** · `php.behat` **345 escenarios / 3135 pasos** · `pwa.quality` 0 ·
+`pwa.test.unit` 1099. **El presupuesto de queries se midió, no se supuso: 21 y 3 no se movieron** (el DQL
+bloqueante sustituye al `find()`, no lo añade).
+
+- [x] [Review][Decision] **La lectura del agregado no toma lock cuando el guard se salta — un grant de ADMIN
+      concurrente puede perderse y drenar la organización** — `ChangeUserRoles::run` lee con `findById` (sin lock)
+      y `changeRoles` es una asignación *absoluta* del conjunto. Cuando `demotesAnActiveAdministrator` es `false`
+      no se llama al directorio, y esa llamada es **el único punto donde se toma el `SELECT … FOR UPDATE`**.
+      Interleave: T1 lee B=`[VIEWER]` → no es democión → sin lock; T2 hace B=`[ADMIN]` y commitea; T3 demueve al
+      admin A (su guard bloquea `{A,B}`, ve a B, pasa) y commitea; T1 escribe B=`[EDITOR]`. Resultado: **cero
+      administradores activos**, recuperable solo por CLI/DB. El repositorio **ya expone `findByIdForUpdate`**
+      (`PESSIMISTIC_WRITE` + refresh) usado por `CompletePasswordReset`, `RequestPasswordReset` y
+      `AcceptInvitation`. Opciones: (a) leer el objetivo con `findByIdForUpdate` — cierra el lost-update sin tocar
+      la condicionalidad del guard, sin coste de query extra, tests de «directorio no consultado» intactos;
+      (b) tomar siempre el lock del set de admins y *actuar* solo si hay democión — rompe los unit tests de AC3;
+      (c) aceptar el riesgo. Nota: `ChangeUserStatus` comparte la lectura sin lock, pero su guard incondicional
+      **sí** bloquea la fila del objetivo cuando éste es admin, así que la ventana es nueva de U-4.
+- [x] [Review][Decision] **Editar los roles propios expulsa al admin de todos los dispositivos con un toast de
+      éxito** — reproducido en vivo: un ADMIN que amplía su propio set `[ADMIN]→[ADMIN,EDITOR]` recibe `200`, y la
+      siguiente petición con la misma cookie es `401` → rebote a `/login?reason=session-expired` sin explicación
+      causal. No es el 409 del guard. Es **inherente** al cambio de roles (la des-autenticación nativa de Symfony
+      lo haría igual, aunque `RevokeSessionsBestEffort` no existiera), así que no se arregla quitando el revoke.
+      Opciones: confirmación previa en auto-edición, excluir la sesión actual del revoke, o aceptar y corregir el
+      copy (`UserRolesControl.tsx:60` dice «signs **them** out», falso en auto-edición).
+- [x] [Review][Patch] Un objeto JSON en `roles` produce **500 en vez de 422** (colisión de argumento con nombre) —
+      `{"roles":{"userId":"EDITOR"}}` → `500 unhandled-exception "Named parameter $userId overwrites previous
+      argument"`, reproducido por HTTP. `#[MapRequestPayload]` denormaliza el objeto en un array **con claves
+      string** (`list<string>` es solo docblock), `Assert\Choice(multiple:true)` itera valores y pasa, `array_map`
+      preserva las claves y `...$roles` las convierte en argumentos con nombre. Viola AC4 y el contrato RFC 9457.
+      Fix: `\array_values(...)` en `rolesFrom()` y/o `#[Assert\Type('list')]` en el DTO
+      [api/src/Iam/Identity/Infrastructure/Controller/UserPatchRolesController.php:49]
+- [x] [Review][Patch] El test funcional del 409 no asserta el `type` — no distingue
+      `last-active-administrator-protected` de cualquier otro 409, justo la garantía que su docblock invoca. El
+      escenario Behat equivalente sí lo hace
+      [api/tests/Functional/Iam/Identity/Infrastructure/Controller/UserPatchRolesFunctionalTest.php:74]
+- [x] [Review][Patch] `#[Assert\Count(min: 1)]` sin `max` — un array de 5000 roles responde `200` tras
+      denormalizar y validar elemento a elemento [api/src/Iam/Identity/Infrastructure/Http/ChangeUserRolesRequest.php:32]
+- [x] [Review][Patch] El comentario del presupuesto del no-op afirma que «the short-circuit opens no write
+      transaction», pero `transactional(...)` se invoca **incondicionalmente** y emite `BEGIN`/`COMMIT` antes de
+      que la closure pueda cortocircuitar. El número (3) es correcto; la frase no describe el código actual
+      [api/features/backoffice/users/roles.feature:104]
+- [x] [Review][Patch] Los escenarios `400 invalid-uuid` y `404` no limpian eventos ni assertan 0 eventos, a
+      diferencia del 409 y el 422 — AC6 pide «ningún fallo emite evento» para las cuatro clases
+      [api/features/backoffice/users/roles.feature]
+- [x] [Review][Patch] La nota de compleción afirma «es la única supresión nueva del PR»; el diff añade **tres**
+      `@SuppressWarnings("PHPMD.CouplingBetweenObjects")` (una en `User`, dos en clases de test). Las dos de test
+      siguen la convención del repo (42 ficheros en `main`, incluido `UserPatchStatusFunctionalTest`) — solo el
+      recuento es falso
+- [x] [Review][Defer] `deleteAllAdministrators()` hace un `DELETE` sin acotar sobre `identity_user` en la BD
+      funcional compartida (suite con aislamiento manual, sin rollback DAMA), borrando ADMINs sembrados por otras
+      clases y haciendo la suite dependiente del orden — deferido, **ya registrado** en la review de U-3 para
+      `UserPatchStatusFunctionalTest::deleteAllAdministrators()` con fix declarado ambiguo; U-4 replica el patrón
+      [api/tests/Functional/Iam/Identity/Infrastructure/Controller/UserPatchRolesFunctionalTest.php:188]
+- [x] [Review][Defer] El mismo fallo de array con claves preexiste en `CreateInvitationController::rolesFrom()`
+      (`invite(string $email, …)` → clave `email`), enviado en U-2 — deferido, preexistente
+- [x] [Review][Defer] La PWA descarta silenciosamente roles fuera de su propio enum al guardar (semántica *set* +
+      `ALL_ROLES.map`): si el vocabulario de la API diverge, un rol no renderizado se pierde sin avisar. Hoy hay
+      test de identidad byte-a-byte, así que es latente — deferido, no alcanzable hoy
+- [x] [Review][Defer] `UserRolesChanged::fromPrimitives` usa `Role::from` (lanza `ValueError`) y `\assert()`
+      (no-op con `zend.assertions=-1`): primer evento de identidad con payload de enum sobre un `event_store`
+      append-only, sin upcaster — un renombrado futuro de rol rompería el replay — deferido, preexistente al
+      diseño del event store
+- [x] [Review][Defer] El guard de último admin no filtra por `locked_until`: demoter al penúltimo admin mientras
+      el otro está en lockout deja cero admins *usables* hasta 15 min. Adapter reusado sin tocar — deferido,
+      preexistente
+- [x] [Review][Defer] Un `reload()` fallido tras un cambio correcto pinta el vacío «User not found. It may have
+      been deleted.» y desmonta el control — cableado preexistente de `useResourceItem` — deferido, preexistente
+- [x] [Review][Defer] Campos extra en el payload se aceptan y descartan en silencio (sin
+      `ALLOW_EXTRA_ATTRIBUTES=false` en todo el proyecto) — deferido, configuración global preexistente
+- [x] [Review][Defer] El `reset()` de `UserRolesControl` es código muerto en producción: `onChanged` dispara
+      `reload()` → `ViewStatus.LOADING` → el control se desmonta y remonta con `defaultValues` frescos. Su unit
+      test cubre una ruta que la app nunca ejecuta — deferido, cosmético
+
 ## Dev Notes
 
 ### Crux 1 — el controller mapea `{roles: string[]}` → `Role[]`, el DTO valida el array, el agregado dedupe
@@ -553,7 +634,10 @@ Opus 4.8 (1M context).
 - **Supresión PHPMD añadida y declarada** (no colada): añadir el 5º evento de dominio subió el acoplamiento de `User`
   a 13 y PHPMD lo rechaza. Añadido `@SuppressWarnings("PHPMD.CouplingBetweenObjects")` con argumento en el docblock,
   siguiendo el precedente exacto de `BankAccount` (agregado rico cuyos colaboradores son responsabilidades
-  inherentes). Es la única supresión nueva del PR.
+  inherentes). Es la única supresión nueva sobre código de producción; las otras dos del PR están sobre clases
+  de test (`UserPatchRolesFunctionalTest`, `ChangeUserRolesTest`), donde PHPMD cuenta igual el acoplamiento y el
+  repo ya acumula 42 ficheros de test con la misma supresión — incluido el precedente directo
+  `UserPatchStatusFunctionalTest`.
 - **Boy-scout nombrado:** el docblock de `InviteUserRequest` afirmaba ser «the single production site» que enumera el
   vocabulario de roles; U-4 añade un segundo. Corregido para decir la verdad y explicar por qué la duplicación es
   deliberada (aislamiento entre contextos; compartirlo acoplaría Identity↔Invitation o metería un método en un enum

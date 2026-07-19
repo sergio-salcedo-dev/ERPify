@@ -91,8 +91,9 @@ export function UserRolesControl({ user, onChanged }: Readonly<UserRolesControlP
         <div className="space-y-1">
           <h2 className="text-foreground text-base font-semibold">Roles</h2>
           <p className="text-muted-foreground text-sm">
-            Grant what this member may do. Saving replaces their whole role set and signs them out
-            of every device, so they sign back in with the new roles.
+            Grant what this member may do. Saving replaces their whole role set and signs the member
+            out of every device, so they sign back in with the new roles — including you, if you are
+            editing your own roles.
           </p>
         </div>
 

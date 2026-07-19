@@ -73,4 +73,18 @@ final class ChangeUserRolesRequestTest extends TestCase
 
         $this->assertCount(0, $this->validator->validate($request));
     }
+
+    #[Test]
+    public function aSetLargerThanTheVocabularyIsRejected(): void
+    {
+        $request = new ChangeUserRolesRequest(\array_fill(0, 6, Role::VIEWER->value));
+
+        $this->assertGreaterThan(0, $this->validator->validate($request)->count());
+    }
+
+    #[Test]
+    public function theCeilingTracksTheRoleVocabulary(): void
+    {
+        $this->assertCount(ChangeUserRolesRequest::MAX_ROLES, ChangeUserRolesRequest::roleValues());
+    }
 }
