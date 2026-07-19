@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Iam\Identity\Domain\Event;
 use DateTimeImmutable;
 use DateTimeInterface;
 use Erpify\Iam\Identity\Domain\Event\UserLocked;
+use Erpify\Shared\Event\Domain\Exception\CorruptEventStoreRow;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -57,6 +58,15 @@ final class UserLockedTest extends TestCase
             $reconstructed->lockedUntil()->format(DateTimeInterface::ATOM),
         );
         $this->assertSame($event->occurredOn()->format('c'), $reconstructed->occurredOn()->format('c'));
+    }
+
+    #[Test]
+    public function aStoredLockedUntilThatIsNotAStringIsRefused(): void
+    {
+        // The same shared guard the whole event backbone reads its payload members through.
+        $this->expectException(CorruptEventStoreRow::class);
+
+        UserLocked::fromPrimitives(self::USER_ID, ['lockedUntil' => 12345], self::EVENT_ID, self::OCCURRED_ON);
     }
 
     private function event(): UserLocked

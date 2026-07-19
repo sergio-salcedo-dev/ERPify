@@ -7,6 +7,7 @@ namespace Erpify\Iam\Identity\Domain\Event;
 use DateTimeImmutable;
 use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Event\Domain\DomainEvent;
+use Erpify\Shared\Event\Domain\Exception\CorruptEventStoreRow;
 use Override;
 
 /**
@@ -62,10 +63,12 @@ final class UserRolesChanged extends DomainEvent
         string $eventId,
         string $occurredOn,
     ): static {
-        $roles = $body['roles'] ?? [];
-        \assert(\is_array($roles));
-
-        return new self($aggregateId, self::rolesFrom($roles), $eventId, new DateTimeImmutable($occurredOn));
+        return new self(
+            $aggregateId,
+            self::rolesFrom(self::arrayMember($body, 'roles')),
+            $eventId,
+            new DateTimeImmutable($occurredOn),
+        );
     }
 
     /**
@@ -77,8 +80,14 @@ final class UserRolesChanged extends DomainEvent
     {
         return \array_values(\array_map(
             static function (mixed $value): Role {
-                \assert(\is_string($value));
+                if (!\is_string($value)) {
+                    throw CorruptEventStoreRow::malformedPayloadMember(self::eventName(), 'roles', 'a list of strings');
+                }
 
+                // A stored value outside the vocabulary means the role set was renamed without an upcaster
+                // registered for this event's version. Failing loudly is the point: decoding it leniently
+                // would replay a smaller role set than was actually granted, inventing a history the log
+                // never recorded.
                 return Role::from($value);
             },
             $values,

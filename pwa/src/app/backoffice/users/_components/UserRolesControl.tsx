@@ -26,7 +26,7 @@ function baseField(field: string): string {
 
 interface UserRolesControlProps {
   user: User;
-  /** Hands the re-granted identity back so the detail reflects the new role set in place. */
+  /** Hands the re-granted identity back; the detail decides how it refreshes from there. */
   onChanged: (user: User) => void;
 }
 
@@ -40,14 +40,19 @@ interface UserRolesControlProps {
 export function UserRolesControl({ user, onChanged }: Readonly<UserRolesControlProps>) {
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
 
+  // Roles this build's vocabulary does not know get no checkbox, and the form's schema would reject them
+  // anyway, so they stay out of the form entirely and are re-attached on submit. A PWA deployed behind the
+  // API must never strip a grant it merely cannot draw.
+  const renderableRoles = user.roles.filter((role) => ALL_ROLES.includes(role));
+  const unrenderableRoles = user.roles.filter((role) => !ALL_ROLES.includes(role));
+
   const {
     register,
     handleSubmit,
-    reset,
     setError,
     formState: { errors, isSubmitting },
   } = useZodForm<ChangeUserRolesFormValues>(ChangeUserRolesSchema, {
-    defaultValues: { roles: [...user.roles] },
+    defaultValues: { roles: renderableRoles },
   });
 
   const handleHttpError = (err: HttpError) => {
@@ -67,11 +72,8 @@ export function UserRolesControl({ user, onChanged }: Readonly<UserRolesControlP
   const onSubmit = handleSubmit(async (values) => {
     try {
       const useCase = container.get<ChangeUserRoles>("BackOfficeChangeUserRoles");
-      const updated = await useCase.run(user.id, values.roles);
+      const updated = await useCase.run(user.id, [...values.roles, ...unrenderableRoles]);
       setProblem(null);
-      // Re-seed the checkboxes from what the server actually stored, so the form is the identity's
-      // current set even if the backend normalised it.
-      reset({ roles: [...updated.roles] });
       toastNotifier.success("Roles updated", { description: updated.roles.join(", ") });
       onChanged(updated);
     } catch (err) {

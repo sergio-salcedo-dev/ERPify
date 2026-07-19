@@ -7,7 +7,8 @@ import { ChevronLeft, Clock, RefreshCw } from "lucide-react";
 import type { User } from "@/context/backoffice/user/domain/User";
 import type { UserInput } from "@/context/backoffice/user/domain/UserRepository";
 import { useResourceItem } from "@/context/shared/resource/application/useResourceItem";
-import { CopyButton, EmptyState } from "@/components/erpify";
+import { CopyButton, EmptyState, ProblemDisplay } from "@/components/erpify";
+import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/components/cn";
 import { dateTimeProvider } from "@/context/shared/date-time-provider/infrastructure";
@@ -26,8 +27,28 @@ export default function UserDetailPage() {
   const {
     item: user,
     state,
+    problem,
     reload,
   } = useResourceItem<User, UserInput>("BackOfficeUserRepository", id);
+
+  // Only a 404 means the identity is gone. Any other failure — a transport blip after a successful
+  // mutation, a 500, a revoked permission — must not be reported as a deletion the operator did not cause.
+  const isMissing = state === ViewStatus.ERROR && problem?.status === HttpStatus.NOT_FOUND;
+  const hasFailed = state === ViewStatus.ERROR && !isMissing;
+
+  const retryAction = (
+    <button
+      type="button"
+      onClick={() => void reload()}
+      className={cn(buttonVariants())}
+      title="Retry loading this user"
+      aria-label="Retry"
+      data-testid="users-detail__retry"
+    >
+      <RefreshCw className="size-4" aria-hidden="true" />
+      Retry
+    </button>
+  );
 
   return (
     <Can
@@ -67,7 +88,7 @@ export default function UserDetailPage() {
           </p>
         ) : null}
 
-        {state === ViewStatus.ERROR ? (
+        {isMissing ? (
           <div data-testid="users-detail__not-found">
             <EmptyState
               variant="first-run"
@@ -83,6 +104,21 @@ export default function UserDetailPage() {
                 </Link>
               }
             />
+          </div>
+        ) : null}
+
+        {hasFailed ? (
+          <div data-testid="users-detail__error">
+            {problem ? (
+              <ProblemDisplay problem={problem} action={retryAction} />
+            ) : (
+              <EmptyState
+                variant="first-run"
+                heading="We couldn't load this user"
+                description="The request did not complete. The user has not been changed."
+                action={retryAction}
+              />
+            )}
           </div>
         ) : null}
 

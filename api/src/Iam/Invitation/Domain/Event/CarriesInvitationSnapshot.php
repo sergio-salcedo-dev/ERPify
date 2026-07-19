@@ -54,8 +54,7 @@ trait CarriesInvitationSnapshot
         string $eventId,
         string $occurredOn,
     ): static {
-        $invitedUserId = $body['invitedUserId'] ?? null;
-        \assert(\is_string($invitedUserId));
+        $invitedUserId = self::stringMember($body, 'invitedUserId');
 
         return new self($aggregateId, $invitedUserId, $eventId, new DateTimeImmutable($occurredOn));
     }

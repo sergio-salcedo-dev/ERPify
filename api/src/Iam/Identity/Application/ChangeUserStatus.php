@@ -24,6 +24,15 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * commit in that same transaction (through the framework-free {@see TransactionManager} seam, keeping the ORM
  * out of Application) so the aggregate, its event-store rows and the outbox land atomically.
  *
+ * That set lock protects the invariant, not the target: it covers the rows that are active administrators, so
+ * it neither re-hydrates the aggregate already loaded in the identity map nor touches the target's row at all
+ * when the target is not an active administrator. The aggregate is therefore read through
+ * {@see UserRepository::findByIdForUpdate()}, which locks and refreshes it, so the state machine
+ * ({@see User::suspend()} / {@see User::deactivate()}, both requiring `ACTIVE`) decides against committed state
+ * rather than a snapshot a rival transaction has already superseded. Without it two concurrent transitions both
+ * read `ACTIVE`, both pass their guard, and the loser writes its terminal state over the winner's — recording a
+ * transition the state machine forbids, and appending its event to a log that cannot be rewritten.
+ *
  * A successful transition then revokes the identity's live sessions ({@see RevokeSessionsBestEffort},
  * post-commit, best-effort). A pure status flip touches neither credential nor roles, so the native
  * de-authentication paths never fire; suspending is an access control that must cut live access at once, and
@@ -71,7 +80,7 @@ final readonly class ChangeUserStatus
         Uuid::ensure($userId);
 
         $user = $this->transactionManager->transactional(function () use ($userId, $applyTransition): User {
-            $user = $this->users->findById($userId) ?? throw UserNotFound::withId($userId);
+            $user = $this->users->findByIdForUpdate($userId) ?? throw UserNotFound::withId($userId);
 
             if (!$this->administrators->keepsAnActiveAdminWithout($userId)) {
                 throw LastActiveAdministratorProtected::forUser($userId);

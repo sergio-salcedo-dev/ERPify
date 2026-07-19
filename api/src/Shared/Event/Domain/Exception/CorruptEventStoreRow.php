@@ -21,4 +21,18 @@ final class CorruptEventStoreRow extends DomainException
             context: ['column' => $column],
         );
     }
+
+    public static function malformedPayloadMember(string $eventName, string $member, string $expected): self
+    {
+        return new self(
+            type: 'corrupt-event-store-row',
+            title: \sprintf(
+                'The stored "%s" payload member "%s" is not %s.',
+                $eventName,
+                $member,
+                $expected,
+            ),
+            context: ['event_name' => $eventName, 'member' => $member, 'expected' => $expected],
+        );
+    }
 }
