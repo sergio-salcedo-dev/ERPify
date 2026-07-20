@@ -228,7 +228,6 @@ function FlowJourney({ flow }: Readonly<{ flow: Flow }>) {
               key={step.title}
               id={`${flow.id}-step-${index + 1}`}
               className="flow__step flex scroll-mt-24 gap-4"
-              data-testid={`docs-flow__step-${flow.id}-${index + 1}`}
             >
               <div className="flow__step-rail flex flex-col items-center">
                 <span

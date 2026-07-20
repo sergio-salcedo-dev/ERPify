@@ -139,12 +139,15 @@ UI primitives live under `src/components/erpify/` (barrel `@/components/erpify`)
 
 ## Test ID rules
 
-QA scripts target controls by `data-testid`. The contract: **every static `data-testid` literal must be unique across the source tree** so two elements with the same id never land on the same page (Playwright strict-mode locators fail with "more than one element matched").
+A `data-testid` is a **first-class, published QA interface** — app-wide-unique and **independent of DOM/CSS structure**, stable across styling/layout refactors. It addresses _what an element is for QA_, never _where it sits in the markup_ (so two elements with the same id never land on the same page — Playwright strict-mode locators fail with "more than one element matched"). Contract + rationale: [`../docs/adr/test-id-naming-contract.md`](../docs/adr/test-id-naming-contract.md).
 
-- Use BEM-flavoured prefixes matching the entity/surface (e.g. `banks-list__title`, `banks-detail__copy-id`, `banks-pagination__next`).
-- For lists/tables, encode row identity with the **backend entity id** (a UUID) from the API — e.g. ``data-testid={`banks-table__row-${row.id}`}`` for the row and `banks-table__edit-${row.id}` / `banks-table__delete-${row.id}` for per-row actions. The id is unique by construction. Do NOT emit a parallel `data-row-id` — `data-testid` is the canonical row identity. `<DataTable>` enforces this with its `rowTestId` prop.
-- For reusable components, **never hardcode a testid** — accept a `testId` prop (see `<DataTable testId rowTestId>`, `<CopyButton testId>`, `<DateField testId>`). Hardcoding traps every consumer into the same id and triggers strict-mode failures.
-- The guard `tests/data-testid-uniqueness.test.ts` walks `src/` at CI time and fails if a literal `data-testid="..."` appears in more than one file or twice in the same file. Don't weaken or skip it.
+- **Grammar is `<surface>__<element>[--<state>]`, but `__`/`--` are lexical separators with NO BEM semantics** (e.g. `banks-list__title`, `banks-pagination__next`). `<surface>` names a semantic feature (not a CSS block); `--<state>` is a QA variant (not a BEM modifier). The characters overlap the CSS BEM convention by history only — never copy a `className` into a `data-testid`.
+- For lists/tables, encode row identity with the **backend entity id** (a UUID v7) from the API — e.g. ``data-testid={`banks-table__row-${row.id}`}`` for the row and `banks-table__edit-${row.id}` / `banks-table__delete-${row.id}` for per-row actions. Unique by construction. **Never key a testid by array index/position** (`index`/`i`/`idx`/`n`) — unstable under reorder, filter, or pagination. Do NOT emit a parallel `data-row-id` — `data-testid` is the canonical row identity. `<DataTable>` enforces this with its `rowTestId` prop.
+- For reusable primitives, **never hardcode a testid** — accept a `testId` / `testIdPrefix` prop (see `<DataTable testId rowTestId>`, `<CopyButton testId>`, `<DateField testId>`); the consumer owns `<surface>`, the primitive owns `<element>`. Hardcoding traps every consumer into the same id and triggers strict-mode failures.
+- **Never derive a testid from the presentation layer** — a `cn()`/`clsx()`/`cva()`/`twMerge()` call or a `className` value must not become a `data-testid`. It is a QA address, not a style hook.
+- Enforcement (`make pwa.quality` + CI), never weakened:
+  - The guard `tests/data-testid-uniqueness.test.ts` walks `src/` and fails if a **static** `data-testid="..."` literal appears in more than one file or twice in one file.
+  - Two contract bans (three `no-restricted-syntax` selectors) in `eslint.config.mjs` fail the build — on `data-testid` **and** on the `testId` / `testIdPrefix` prop channel (where consumers author the value, D3) — for a presentation-derived id (class-helper / `className`) or a dynamic template keyed by a positional index (`index`/`i`/`idx`/`n`).
 
 ## Accessibility rules for action buttons
 

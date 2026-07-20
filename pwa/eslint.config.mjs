@@ -58,6 +58,24 @@ const eslintConfig = [
           message:
             "maxLength silently truncates typed/pasted input. Enforce the limit in the entity's Zod schema (.max()) so the user sees the 'must not exceed' error instead.",
         },
+        {
+          selector:
+            "JSXAttribute[name.name=/^data-testid$|^testId(Prefix)?$|TestId(Prefix)?$/] CallExpression[callee.name=/^(cn|clsx|cx|cva|classNames|twMerge|twJoin)$/]",
+          message:
+            "A test id (data-testid or a testId/testIdPrefix prop) is a QA contract, independent of styling — never derive it from a class-name helper (cn/clsx/cva/twMerge). Give the element its own stable test id. See docs/adr/test-id-naming-contract.md.",
+        },
+        {
+          selector:
+            "JSXAttribute[name.name=/^data-testid$|^testId(Prefix)?$|TestId(Prefix)?$/] Identifier[name='className']",
+          message:
+            "A test id (data-testid or a testId/testIdPrefix prop) must not be the element's className — it is a QA identifier, not a style hook. Use a dedicated, stable value. See docs/adr/test-id-naming-contract.md.",
+        },
+        {
+          selector:
+            "JSXAttribute[name.name=/^data-testid$|^testId(Prefix)?$|TestId(Prefix)?$/] TemplateLiteral Identifier[name=/^(index|idx|i|n)$/]",
+          message:
+            "A dynamic test id (data-testid or a testId/testIdPrefix prop) must not be keyed by a positional index (index/i/idx/n) — it breaks under reorder, filter, or pagination. Suffix with the entity's stable id (UUID) instead. See docs/adr/test-id-naming-contract.md.",
+        },
       ],
       "react/react-in-jsx-scope": "off", // Next.js doesn't need it
       "react/prop-types": "off", // Using TS
