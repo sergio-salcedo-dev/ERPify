@@ -131,6 +131,6 @@ development_status:
   u-2-invitar-alta-invitacion: done
   u-3-cambio-de-estado-suspend-deactivate: done
   u-4-edicion-de-roles-candidato: done
-  u-5a-cerrar-376-tombstone-actor-ids: backlog
+  u-5a-cerrar-376-tombstone-actor-ids: review
   u-5b-borrado-gdpr-consola: backlog
   epic-users-admin-retrospective: optional

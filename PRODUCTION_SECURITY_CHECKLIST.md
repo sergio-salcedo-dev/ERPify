@@ -192,7 +192,13 @@ you change anything here.
       pseudonym (never the original id). **Subject erasure is distinct** (never merged —
       ADR D15): `bank-account:gdpr:erase-subject <id>` removes the live account and
       destroys its DEK, so the PII in the append-only trail becomes permanently unreadable
-      while the rows survive; it self-audits `GDPR_SUBJECT_ERASED`. Retention by level
+      while the rows survive; it self-audits `GDPR_SUBJECT_ERASED`. **The erasure is not
+      defeated by an in-flight write:** `activity` entries are written synchronously (ADR
+      D3.1), so audit PII never sits queued in `messenger_messages` (nor in the shared
+      `failed` transport) where a later consume could re-insert an already-anonymised
+      `actor_id` after the erasure `UPDATE` (issue #376). The only residual is the
+      request-duration window a request already in flight shares with `security`/`change`.
+      Retention by level
       (`activity` vs `security`, the scheduled prune — the table's only `DELETE`) is
       tracked separately; the `change` level carries a 5-year floor. A live PII table must
       never exist without a documented retention/erasure policy.

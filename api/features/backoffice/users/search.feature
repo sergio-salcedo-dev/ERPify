@@ -37,7 +37,7 @@ Feature: Search the identity register
     And the JSON node "pagination.links.next" should be null
     And the JSON node "pagination.links.prev" should be null
     And a request contains "FROM identity_user" across all doctrine connections
-    And 1 request got executed only for doctrine connection "default"
+    And 2 request got executed only for doctrine connection "default"
 
   # The projection never selects the credential columns: the row shape is exactly the six wire fields, so
   # password_hash / failed_attempts / locked_until can never appear.

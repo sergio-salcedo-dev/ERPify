@@ -43,7 +43,7 @@ Feature: Search the cross-bank account collection
     And the JSON node "pagination.count" should be null
     And the JSON node "pagination.links.next" should be null
     And the JSON node "pagination.links.prev" should be null
-    And 1 request got executed only for doctrine connection "default"
+    And 2 request got executed only for doctrine connection "default"
 
   # holderName has no normalizer, so CONTAINS matches via LOWER(...) LIKE LOWER(...) — case-insensitive.
   # "citi" (lower-case) narrows to Citigroup's three accounts, each carrying the same owning-bank identity.
@@ -55,7 +55,7 @@ Feature: Search the cross-bank account collection
     And the JSON node "data[0].bankName" should be equal to "Citigroup"
     And the JSON node "data[2].holderName" should be equal to "Citi Treasury"
     And the JSON node "data[2].bankName" should be equal to "Citigroup"
-    And 1 request got executed only for doctrine connection "default"
+    And 2 request got executed only for doctrine connection "default"
 
   # bankId is exact-only (eq/in, UUID-valued): it scopes the collection to a single bank's accounts
   # without a route constraint — the bank is a tunable filter here, not the route.
@@ -68,7 +68,7 @@ Feature: Search the cross-bank account collection
     And the JSON node "data[0].holderName" should be equal to "Citi Operations"
     And the JSON node "data[2].bankName" should be equal to "Citigroup"
     And the JSON node "data[2].holderName" should be equal to "Citi Treasury"
-    And 1 request got executed only for doctrine connection "default"
+    And 2 request got executed only for doctrine connection "default"
 
   # Keyset continuity over the SELECT NEW projection: a ?sort=createdAt walk of limit=2 pages must
   # retrace the account-id sequence with no dropped/repeated row, one query per page (3 pages -> 3
@@ -95,7 +95,7 @@ Feature: Search the cross-bank account collection
     And the JSON node "data[0].id" should be equal to "33333333-3333-7000-8000-000000000005"
     And the JSON node "pagination.hasNext" should be false
     And the JSON node "pagination.hasPrev" should be true
-    And 3 requests got executed only for doctrine connection "default"
+    And 6 requests got executed only for doctrine connection "default"
 
   # Cross-route scope guard: the collection cursor's fingerprint is bound to the collection's base
   # query (no base WHERE, JOIN Bank). Replayed on a bank's nested route — same sort and limit, but a
@@ -119,7 +119,7 @@ Feature: Search the cross-bank account collection
     And the JSON node "pagination.hasPrev" should be false
     And the JSON node "pagination.links.next" should be null
     And the JSON node "pagination.links.prev" should be null
-    And 1 request got executed only for doctrine connection "default"
+    And 2 request got executed only for doctrine connection "default"
 
   # Semantic 422 from the applier: a sort field outside the allow-list (holderName/createdAt/updatedAt)
   # is rejected before any SQL runs — the field is never interpolated into DQL.
@@ -177,7 +177,7 @@ Feature: Search the cross-bank account collection
     And the JSON node "data[0].holderName" should be equal to "Globex Corporation"
     And the JSON node "data[0].iban" should be equal to "DE89370400440532013000"
     And the JSON node "data[0].bankName" should be equal to "JPMorgan Chase"
-    And 1 request got executed only for doctrine connection "default"
+    And 2 request got executed only for doctrine connection "default"
 
   # Pagination mode is validated at DTO mapping time (shape), inherited from the shared SearchQuery — an
   # unknown token is a 422 validation-failed before any SQL runs.

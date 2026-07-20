@@ -15,14 +15,14 @@ Feature: Get banks
     And the JSON node "data.logoUrl" should be null
     And the JSON node "data.storedObjectUrl" should be null
     And the JSON node "data.accountCount" should be equal to the number 1
-    And 2 requests got executed only for doctrine connection "default"
+    And 3 requests got executed only for doctrine connection "default"
 
   Scenario: Get a bank with no associated accounts reports a zero account count
     When I send a "GET" request to "/backoffice/banks/11111111-1111-7000-8000-000000000003"
     Then the response status code should be 200
     And the JSON node "data.name" should be equal to "Wells Fargo"
     And the JSON node "data.accountCount" should be equal to the number 0
-    And 2 requests got executed only for doctrine connection "default"
+    And 3 requests got executed only for doctrine connection "default"
 
   Scenario Outline: Get a bank with a malformed id returns a 400 invalid-uuid Problem Details body
     When I send a "GET" request to "/backoffice/banks/<bankId>"

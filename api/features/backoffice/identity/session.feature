@@ -38,7 +38,7 @@ Feature: Server-side session registry and admission gate
   Scenario: Deriving the permission set adds no query
     When I send a "GET" request to "/me"
     Then the response status code should be 200
-    And 0 requests got executed only for doctrine connection "default"
+    And 1 requests got executed only for doctrine connection "default"
 
   Scenario: My sessions lists the current device, distinguished
     When I send a "GET" request to "/sessions"
