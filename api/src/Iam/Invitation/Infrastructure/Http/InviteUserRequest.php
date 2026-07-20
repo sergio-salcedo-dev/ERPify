@@ -8,7 +8,7 @@ use Erpify\Shared\Access\Domain\Role;
 use Symfony\Component\Validator\Constraints as Assert;
 
 /**
- * Request payload for {@see CreateInvitationController}, mapped from the JSON body via `#[MapRequestPayload]`
+ * Request payload for {@see CreateInvitationController}, mapped from the JSON body via `#[StrictRequestPayload]`
  * (any constraint failure is answered 422 `validation-failed` before the use case runs, so a malformed alta
  * never reaches the domain). It carries only what an invitation needs — the invitee email and the org-scoped
  * roles: an `INVITED` identity has no password and no status yet (both are set later, when the invitation is

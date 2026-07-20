@@ -148,8 +148,13 @@ export class FetchHttpClient implements HttpClient {
     return this.parseBody<T>(res, url, validate);
   }
 
-  async post<TBody, T>(url: string, body: TBody, validate?: ResponseGuard<T>): Promise<T> {
-    return this.sendWithBody<TBody, T>("POST", url, body, validate);
+  async post<TBody, T>(
+    url: string,
+    body: TBody,
+    validate?: ResponseGuard<T>,
+    headers?: Record<string, string>,
+  ): Promise<T> {
+    return this.sendWithBody<TBody, T>("POST", url, body, validate, headers);
   }
 
   async put<TBody, T>(url: string, body: TBody, validate?: ResponseGuard<T>): Promise<T> {
@@ -177,12 +182,14 @@ export class FetchHttpClient implements HttpClient {
     url: string,
     body: TBody,
     validate?: ResponseGuard<T>,
+    headers?: Record<string, string>,
   ): Promise<T> {
     const res = await this.request(this.resolveUrl(url), {
       method,
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
+        ...headers,
       },
       cache: "no-store",
       body: JSON.stringify(body),

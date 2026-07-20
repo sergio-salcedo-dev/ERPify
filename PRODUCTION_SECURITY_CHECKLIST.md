@@ -224,6 +224,11 @@ you change anything here.
       `AcceptInvitationOriginListener` (403, mirror of the login guard) plus the opaque single-use token; the
       **stateless double-submit token** (`framework.csrf_protection.stateless_token_ids: [invitation_accept]` +
       `#[IsCsrfTokenValid]`, session-free, same-origin) is the second layer, with `check_header` off/deferred.
+      That token is read from the **`X-CSRF-Token` header**, not the request body
+      (`tokenSource: SOURCE_HEADER`): the body is the application contract, which `#[StrictRequestPayload]`
+      enforces by rejecting undeclared members, and a custom header cannot be forged by a cross-origin form
+      post without clearing a CORS preflight. `check_header` is a separate axis (it governs the *cookie* half
+      of the double-submit) and stays off.
       Password hashing is Infrastructure (the DTO enforces the 8..128 policy at the boundary) and is **deferred
       behind the token check**: a dead accept link never pays an argon2id run (no unauthenticated KDF
       amplification). The accept is capped **per selector** (`token_action_per_selector` limiter); exhaustion

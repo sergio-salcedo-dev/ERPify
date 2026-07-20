@@ -6,8 +6,8 @@ namespace Erpify\Iam\Invitation\Infrastructure\Http;
 
 use Erpify\Iam\Invitation\Application\SendInvitation;
 use Erpify\Shared\Access\Domain\Role;
+use Erpify\Shared\Http\Infrastructure\StrictRequestPayload;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
@@ -40,7 +40,7 @@ final readonly class CreateInvitationController
     {
     }
 
-    public function __invoke(#[MapRequestPayload] InviteUserRequest $request): Response
+    public function __invoke(#[StrictRequestPayload] InviteUserRequest $request): Response
     {
         $this->sendInvitation->invite($request->email, ...$this->rolesFrom($request));
 

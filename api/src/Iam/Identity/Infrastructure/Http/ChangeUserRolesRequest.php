@@ -9,7 +9,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 
 /**
  * Input payload for {@see \Erpify\Iam\Identity\Infrastructure\Controller\UserPatchRolesController}, mapped from
- * the JSON body via `#[MapRequestPayload]` so a malformed set is answered 422 `validation-failed` before the
+ * the JSON body via `#[StrictRequestPayload]` so a malformed set is answered 422 `validation-failed` before the
  * use case runs.
  *
  * It bounds the set at the wire edge — a JSON array rather than an object, non-empty, no longer than the

@@ -10,9 +10,9 @@ use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher;
 use Erpify\Iam\Identity\Infrastructure\Security\PasswordRecoveryThrottle;
 use Erpify\Iam\Identity\Infrastructure\Security\UserProvider;
+use Erpify\Shared\Http\Infrastructure\StrictRequestPayload;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsCsrfTokenValid;
 
@@ -31,10 +31,11 @@ use Symfony\Component\Security\Http\Attribute\IsCsrfTokenValid;
  * CSRF is defence in depth, not the primary control: same-origin is enforced by {@see PasswordResetOriginListener}
  * (403), and the reset token itself is single-use and opaque. The native stateless double-submit token
  * (`#[IsCsrfTokenValid]`, session-free, same-origin) is the second layer, sharing the invitation-accept flow's
- * `check_header`-off config.
+ * `check_header`-off config and its header-carried token — the body stays the application contract that
+ * {@see StrictRequestPayload} enforces, and a custom header is the harder half to forge cross-origin.
  */
 #[Route('/reset-password', name: self::ROUTE_NAME, methods: ['POST'])]
-#[IsCsrfTokenValid(self::CSRF_TOKEN_ID)]
+#[IsCsrfTokenValid(self::CSRF_TOKEN_ID, tokenKey: 'X-CSRF-Token', tokenSource: IsCsrfTokenValid::SOURCE_HEADER)]
 final readonly class CompletePasswordResetController
 {
     public const string ROUTE_NAME = 'identity_reset_password';
@@ -52,7 +53,7 @@ final readonly class CompletePasswordResetController
     ) {
     }
 
-    public function __invoke(#[MapRequestPayload] ResetPasswordRequest $request): Response
+    public function __invoke(#[StrictRequestPayload] ResetPasswordRequest $request): Response
     {
         // Per-selector brute-force budget, consumed before any work: exhaustion folds into the SAME opaque
         // invalid-token wall as a dead link — a per-selector 429 would confirm the selector exists.

@@ -7,8 +7,8 @@ namespace Erpify\Iam\Identity\Infrastructure\Http;
 use Erpify\Iam\Identity\Application\PreIdentityTimingFloor;
 use Erpify\Iam\Identity\Application\RequestPasswordReset;
 use Erpify\Iam\Identity\Infrastructure\Security\PasswordRecoveryThrottle;
+use Erpify\Shared\Http\Infrastructure\StrictRequestPayload;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Routing\Attribute\Route;
 
 /**
@@ -33,7 +33,7 @@ final readonly class RequestPasswordResetController
     ) {
     }
 
-    public function __invoke(#[MapRequestPayload] ForgotPasswordRequest $request): Response
+    public function __invoke(#[StrictRequestPayload] ForgotPasswordRequest $request): Response
     {
         if (!$this->throttle->allowRequest($request->email)) {
             $this->timingFloor->equalise();

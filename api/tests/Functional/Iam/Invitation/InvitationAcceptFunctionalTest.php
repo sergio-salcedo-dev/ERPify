@@ -151,11 +151,11 @@ final class InvitationAcceptFunctionalTest extends WebTestCase
             server: [
                 'CONTENT_TYPE' => 'application/json',
                 'HTTP_ORIGIN' => $origin,
+                'HTTP_X_CSRF_TOKEN' => self::CSRF_TOKEN,
             ],
             content: (string) \json_encode([
                 'token' => $token,
                 'password' => self::PASSWORD,
-                '_token' => self::CSRF_TOKEN,
             ]),
         );
     }
