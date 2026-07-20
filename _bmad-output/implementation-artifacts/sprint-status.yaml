@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-23
-last_updated: 2026-07-19
+last_updated: 2026-07-20
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -92,13 +92,13 @@ development_status:
   # Orden de merge safe-first (aditivo → comportamiento): RM-1 → RM-2 → RM-5 → RM-3 → RM-4; RM-6 tras RM-1.
   # Las historias van en ese orden de merge (no en RM-N numérico): «siguiente backlog» de arriba-abajo es
   # dependency-safe. RM-4 tiene gate DURO en RM-2 — no mergea sin RM-2 en main (par nested/colección divergente).
-  epic-rbac-authorization-model: in-progress
+  epic-rbac-authorization-model: done
   rm-1-nucleo-autorizacion-voter-puerto-politica: done
   rm-2-cierre-fingerprint-keyset-437: done
   rm-5-migracion-audit-audittrail-read: done
   rm-3-gateo-rutas-bank-tightening: done
   rm-4-gateo-bankaccount-coleccion-anidada: done
-  rm-6-gate-ocp-congelar-core: review
+  rm-6-gate-ocp-congelar-core: done
   epic-rbac-authorization-model-retrospective: optional
 
   # Epic identity-invitation-lifecycle (II): ciclo de vida de identidad/invitación — onboarding invitation-first,

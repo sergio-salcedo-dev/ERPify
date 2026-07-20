@@ -4,7 +4,7 @@ baseline_commit: ee094655a27a9bae918baf73c8f82caf7f5869c0
 
 # Story RM-6 (PR-6): Gate OCP ejecutable — congelar el core de autorización (mitad cara, opcional)
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
