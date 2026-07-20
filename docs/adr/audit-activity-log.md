@@ -172,6 +172,16 @@ enmienda la devuelve a su duración natural.
 best-effort (fallo tragado + `warning` sin contexto tainted), `security` sigue propagando el fallo. La rama `change`
 (síncrona en la transacción de flush) es intacta.
 
+**Riesgo aceptado (best-effort, explícito).** Con la cola, un hipo transitorio de BD dejaba la entrada `activity` en el
+transporte `failed` para reintentar; ahora ese mismo hipo **la pierde** (se traga + `warning`). Es la contrapartida
+consciente de retirar la cola, y cae dentro del best-effort que D3 ya declara. **No se añade reintento síncrono:** para
+este write —`INSERT` autocommit de una fila con `id` v7 acuñado por el cliente, esquema con solo PK (sin FK ni otro
+UNIQUE)— las clases reintentables (deadlock/serialization) no contienden, y la que sí ocurre (conexión perdida) no se
+recupera sobre la misma `Connection` (DBAL 4 no reconecta) sin arrastrar gestión de ciclo de vida de conexión al camino
+best-effort. La pérdida se cubre por **observabilidad** (alarma sobre el pico de ese `warning`), no por durabilidad:
+best-effort significa pérdida **visible**, no pérdida evitada. El vector dominante de pérdida sigue siendo que
+`kernel.terminate` no dispare (SIGTERM/reciclado del worker), que ningún reintento de BD toca.
+
 **Trigger de revisita.** Si `MESSENGER_TRANSPORT_DSN` migra a un **broker real** (AMQP/Redis/SQS), el `dispatch` pasa a
 ser más barato que un write a BD y la absorción de picos deja de ser gratis — reconsiderar entonces una cola de
 `activity` (y, con ella, la pregunta del tombstone). Hoy, con transporte Doctrine, la cola era coste neto.
