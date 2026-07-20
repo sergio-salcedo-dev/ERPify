@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 
 vi.mock("@/context/shared/connectivity/infrastructure/useOnlineStatus", () => ({
   useOnlineStatus: () => true,
@@ -41,9 +41,7 @@ describe("ForgotPasswordForm", () => {
     render(<ForgotPasswordForm />);
     submitWithEmail("known@example.com");
 
-    await waitFor(() =>
-      expect(screen.getByTestId("forgot-password__confirmation")).toBeInTheDocument(),
-    );
+    expect(await screen.findByTestId("forgot-password__confirmation")).toBeInTheDocument();
     expect(repoRequest).toHaveBeenCalledWith({ email: "known@example.com" });
     expect(screen.getByText(CONFIRMATION)).toBeInTheDocument();
     expect(screen.queryByTestId("forgot-password-form")).not.toBeInTheDocument();
@@ -53,9 +51,7 @@ describe("ForgotPasswordForm", () => {
     render(<ForgotPasswordForm />);
     submitWithEmail("nobody@example.com");
 
-    await waitFor(() =>
-      expect(screen.getByTestId("forgot-password__confirmation")).toBeInTheDocument(),
-    );
+    expect(await screen.findByTestId("forgot-password__confirmation")).toBeInTheDocument();
     // The copy carries no signal about whether the address matches an account.
     expect(screen.getByText(CONFIRMATION)).toBeInTheDocument();
   });
@@ -74,9 +70,7 @@ describe("ForgotPasswordForm", () => {
     render(<ForgotPasswordForm />);
     submitWithEmail("not-an-email");
 
-    await waitFor(() =>
-      expect(screen.getByText("Enter a valid email address.")).toBeInTheDocument(),
-    );
+    expect(await screen.findByText("Enter a valid email address.")).toBeInTheDocument();
     expect(repoRequest).not.toHaveBeenCalled();
   });
 });

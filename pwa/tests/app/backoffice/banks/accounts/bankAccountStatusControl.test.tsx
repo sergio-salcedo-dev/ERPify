@@ -127,9 +127,7 @@ describe("BankAccountStatusControl", () => {
     });
     fireEvent.click(screen.getByTestId("bank-account-status__save"));
 
-    await waitFor(() =>
-      expect(screen.getByTestId("bank-account-status__error")).toBeInTheDocument(),
-    );
+    expect(await screen.findByTestId("bank-account-status__error")).toBeInTheDocument();
     expect(onChanged).not.toHaveBeenCalled();
   });
 });

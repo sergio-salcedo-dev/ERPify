@@ -98,7 +98,7 @@ describe("ResetPasswordForm — reset outcomes", () => {
     render(<ResetPasswordForm />);
     submitWithPassword("a-strong-password");
 
-    await waitFor(() => expect(screen.getByTestId("reset-password__success")).toBeInTheDocument());
+    expect(await screen.findByTestId("reset-password__success")).toBeInTheDocument();
     expect(repoReset).toHaveBeenCalledWith({ token: TOKEN, password: "a-strong-password" });
     expect(login).toHaveBeenCalledTimes(1);
     expect(
@@ -112,9 +112,7 @@ describe("ResetPasswordForm — reset outcomes", () => {
     render(<ResetPasswordForm />);
     submitWithPassword("a-strong-password");
 
-    await waitFor(() =>
-      expect(screen.getByTestId("access-wall--invalid-reset-link")).toBeInTheDocument(),
-    );
+    expect(await screen.findByTestId("access-wall--invalid-reset-link")).toBeInTheDocument();
     // The wall collapses every dead-token reason (invalid, expired, consumed)
     // into one opaque message and always offers the sign-in exit; the reset
     // flavour additionally points at the self-service forgot-password path.
@@ -135,7 +133,7 @@ describe("ResetPasswordForm — reset outcomes", () => {
     render(<ResetPasswordForm />);
     submitWithPassword("a-strong-password");
 
-    await waitFor(() => expect(screen.getByTestId("access-wall--suspended")).toBeInTheDocument());
+    expect(await screen.findByTestId("access-wall--suspended")).toBeInTheDocument();
     expect(login).not.toHaveBeenCalled();
   });
 
@@ -144,7 +142,7 @@ describe("ResetPasswordForm — reset outcomes", () => {
     render(<ResetPasswordForm />);
     submitWithPassword("a-strong-password");
 
-    await waitFor(() => expect(screen.getByTestId("access-wall--deactivated")).toBeInTheDocument());
+    expect(await screen.findByTestId("access-wall--deactivated")).toBeInTheDocument();
     expect(login).not.toHaveBeenCalled();
   });
 
@@ -169,7 +167,7 @@ describe("ResetPasswordForm — reset outcomes", () => {
     expect(repoReset).toHaveBeenCalledTimes(1);
 
     resolveReset({ kind: ResetPasswordOutcomeKind.RESET });
-    await waitFor(() => expect(screen.getByTestId("reset-password__success")).toBeInTheDocument());
+    expect(await screen.findByTestId("reset-password__success")).toBeInTheDocument();
     expect(repoReset).toHaveBeenCalledTimes(1);
   });
 
