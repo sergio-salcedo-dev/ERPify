@@ -61,6 +61,7 @@ export function SidebarItem({
   return (
     <div className="sidebar-item-wrapper">
       <button
+        type="button"
         onClick={handleItemClick}
         title={name}
         data-testid={testId}
@@ -98,6 +99,7 @@ export function SidebarItem({
             const SubIcon = subItem.icon;
             return (
               <button
+                type="button"
                 key={subItem.name}
                 onClick={() => onClick(subItem.path)}
                 title={subItem.name}

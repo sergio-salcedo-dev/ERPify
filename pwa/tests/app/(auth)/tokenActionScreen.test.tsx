@@ -98,9 +98,7 @@ describe("TokenActionScreen — accept outcomes", () => {
     render(<TokenActionScreen />);
     submitWithPassword("a-strong-password");
 
-    await waitFor(() =>
-      expect(screen.getByTestId("accept-invitation__success")).toBeInTheDocument(),
-    );
+    expect(await screen.findByTestId("accept-invitation__success")).toBeInTheDocument();
     expect(repoAccept).toHaveBeenCalledWith({ token: TOKEN, password: "a-strong-password" });
     expect(login).toHaveBeenCalledTimes(1);
     expect(screen.queryByTestId("accept-invitation-form")).not.toBeInTheDocument();
@@ -111,9 +109,7 @@ describe("TokenActionScreen — accept outcomes", () => {
     render(<TokenActionScreen />);
     submitWithPassword("a-strong-password");
 
-    await waitFor(() =>
-      expect(screen.getByTestId("access-wall--invalid-link")).toBeInTheDocument(),
-    );
+    expect(await screen.findByTestId("access-wall--invalid-link")).toBeInTheDocument();
     expect(screen.queryByTestId("accept-invitation-form")).not.toBeInTheDocument();
     expect(login).not.toHaveBeenCalled();
   });
