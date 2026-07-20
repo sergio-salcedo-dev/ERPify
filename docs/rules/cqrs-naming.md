@@ -33,9 +33,9 @@ boundary it builds on is enforced by `make php.lint.event-bus`.
 - Category 4 currently has **no live instance**: it is retained as an architectural boundary distinct
   from a domain-event subscriber (it reacts to an operational signal that is **not** a `DomainEvent`).
   Today a use case records an access through the `Shared/Audit` `AuditLogger` port (`->log(...)`), whose
-  shared backbone (`RecordAuditEntry` → the `audit` transport → `RecordAuditEntryHandler` → `audit_log`)
-  the caller never names; a future per-aggregate `<Effect>On<X>` audit subscriber reacting to a
-  non-`DomainEvent` signal (e.g. `RecordAuditLogOnInvoiceViewed`) would land here.
+  shared backbone (a synchronous `AuditLogWriter` write into `audit_log`, no queue — ADR D3.1) the caller
+  never names; a future per-aggregate `<Effect>On<X>` audit subscriber reacting to a non-`DomainEvent`
+  signal (e.g. `RecordAuditLogOnInvoiceViewed`) would land here.
 - Category 5 keeps `*Handler` because the suffix is *true* there — a transport-routed message with
   exactly one handler (1:1). It is the only `*Handler` that is honest pre-bus.
 
@@ -67,7 +67,7 @@ migrating *together*, so the `wrapInTransaction` boundary moves to the bus middl
 - a side effect of a domain event → `Infrastructure/Messenger/<Effect>On<Event>` — `#[AsMessageHandler]`,
   idempotent, or claims via `DomainEventHandlerDeduplicator` for a non-idempotent external effect
 - an audit / observability trail → record it through the `Shared/Audit` `AuditLogger` port (no
-  per-aggregate class to name; the `RecordAuditEntry` → `audit` transport → `audit_log` backbone is shared)
+  per-aggregate class to name; the synchronous `AuditLogWriter` → `audit_log` backbone is shared)
 
 Persistence strategy (state-oriented default vs event-sourced) is a separate per-aggregate decision,
 presented to the user before modeling: [`../adr/bank-bankaccount-modeling.md`](../adr/bank-bankaccount-modeling.md).

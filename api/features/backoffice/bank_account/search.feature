@@ -23,7 +23,7 @@ Feature: List the accounts of a bank
     And the JSON node "pagination.count" should be null
     And the JSON node "pagination.links.next" should be null
     And the JSON node "pagination.links.prev" should be null
-    And 2 requests got executed only for doctrine connection "default"
+    And 3 requests got executed only for doctrine connection "default"
 
   Scenario: The status is serialized as its identity wire value and absent optional fields are null
     When I send a "GET" request to "/backoffice/banks/11111111-1111-7000-8000-000000000002/accounts?limit=100"
@@ -35,7 +35,7 @@ Feature: List the accounts of a bank
     And the JSON node "data[0].status" should be equal to "ACTIVE"
     And the JSON node "data[0].bic" should be null
     And the JSON node "data[0].alias" should be null
-    And 2 requests got executed only for doctrine connection "default"
+    And 3 requests got executed only for doctrine connection "default"
 
   Scenario: A bank with no associated accounts returns an empty page
     When I send a "GET" request to "/backoffice/banks/11111111-1111-7000-8000-000000000003/accounts"
@@ -43,13 +43,13 @@ Feature: List the accounts of a bank
     And the JSON node "data" should have 0 elements
     And the JSON node "pagination.hasNext" should be false
     And the JSON node "pagination.hasPrev" should be false
-    And 2 requests got executed only for doctrine connection "default"
+    And 3 requests got executed only for doctrine connection "default"
 
   Scenario: The limit caps the page size
     When I send a "GET" request to "/backoffice/banks/11111111-1111-7000-8000-000000000001/accounts?limit=1"
     Then the response status code should be 200
     And the JSON node "data" should have 1 elements
-    And 2 requests got executed only for doctrine connection "default"
+    And 3 requests got executed only for doctrine connection "default"
 
   # Citigroup holds three accounts: a full keyset round-trip across pages, exercising the nested-route
   # next-link generation (the `{id}` route param threaded into the cursor link) and the engine's

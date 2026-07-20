@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Shared\Audit\Infrastructure;
 
 use DateTimeImmutable;
-use Erpify\Shared\Audit\Application\RecordAuditEntry;
+use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
@@ -13,7 +13,6 @@ use Erpify\Shared\Audit\Infrastructure\SymfonyAuditLogger;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FixedAuditEntryFactory;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\InMemoryAuditLogWriter;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingLogger;
-use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingMessageBus;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -33,22 +32,17 @@ final class SymfonyAuditLoggerTest extends TestCase
     // without coupling the test to the UUID factory.
     private const string RESOURCE_ID = '0190abcd-1234-7abc-8def-001122334455';
 
-    public function testActivityRoutesTheSealedEntryToTheBusWithoutWriting(): void
+    public function testActivityWritesTheSealedEntrySynchronously(): void
     {
-        $bus = new RecordingMessageBus();
         $writer = new InMemoryAuditLogWriter();
-        $auditLogger = $this->makeLogger($bus, $writer, new RecordingLogger());
+        $auditLogger = $this->makeLogger($writer, new RecordingLogger());
 
         $resourceId = self::RESOURCE_ID;
         $auditLogger->log('BANK_ACCOUNTS_VIEWED', AuditLevel::ACTIVITY, AuditResource::of('Bank', $resourceId));
 
-        $this->assertSame([], $writer->written, 'activity must not write synchronously');
-        $this->assertCount(1, $bus->dispatchedMessages);
+        $this->assertCount(1, $writer->written, 'activity writes the sealed entry in the request cycle');
 
-        $message = $bus->dispatchedMessages[0];
-        $this->assertInstanceOf(RecordAuditEntry::class, $message);
-
-        $entry = $message->entry;
+        $entry = $this->onlyEntry($writer);
         $this->assertSame('BANK_ACCOUNTS_VIEWED', $entry->action, 'the action is forwarded to the factory');
         $this->assertSame(AuditLevel::ACTIVITY, $entry->level);
         $this->assertInstanceOf(AuditResource::class, $entry->resource);
@@ -56,25 +50,20 @@ final class SymfonyAuditLoggerTest extends TestCase
         $this->assertSame($resourceId, $entry->resource->id);
     }
 
-    public function testSecurityWritesTheSealedEntrySynchronouslyWithoutDispatching(): void
+    public function testSecurityWritesTheSealedEntrySynchronously(): void
     {
-        $bus = new RecordingMessageBus();
         $writer = new InMemoryAuditLogWriter();
-        $auditLogger = $this->makeLogger($bus, $writer, new RecordingLogger());
+        $auditLogger = $this->makeLogger($writer, new RecordingLogger());
 
         $auditLogger->log('ACCESS_DENIED', AuditLevel::SECURITY, AuditResource::of('Bank', self::RESOURCE_ID));
 
         $this->assertCount(1, $writer->written, 'security writes the sealed entry before send');
-        $this->assertSame([], $bus->dispatchedMessages, 'security does not enqueue');
+        $this->assertSame(AuditLevel::SECURITY, $this->onlyEntry($writer)->level);
     }
 
     public function testItRejectsTheChangeLevelWhichTheOnFlushListenerCapturesNotTheLogger(): void
     {
-        $auditLogger = $this->makeLogger(
-            new RecordingMessageBus(),
-            new InMemoryAuditLogWriter(),
-            new RecordingLogger(),
-        );
+        $auditLogger = $this->makeLogger(new InMemoryAuditLogWriter(), new RecordingLogger());
 
         $this->expectException(LogicException::class);
 
@@ -83,11 +72,10 @@ final class SymfonyAuditLoggerTest extends TestCase
 
     public function testAnActivityFailureIsSwallowedAndLoggedWithoutLeakingContext(): void
     {
-        $failure = new RuntimeException('audit transport unavailable');
-        $bus = new RecordingMessageBus($failure);
-        $writer = new InMemoryAuditLogWriter();
+        $failure = new RuntimeException('audit_log unavailable');
+        $writer = new InMemoryAuditLogWriter($failure);
         $recordingLogger = new RecordingLogger();
-        $auditLogger = $this->makeLogger($bus, $writer, $recordingLogger);
+        $auditLogger = $this->makeLogger($writer, $recordingLogger);
 
         $auditLogger->log(
             'BANK_ACCOUNTS_VIEWED',
@@ -108,10 +96,9 @@ final class SymfonyAuditLoggerTest extends TestCase
 
     public function testASecurityFailurePropagatesAndIsNotSwallowed(): void
     {
-        $bus = new RecordingMessageBus();
         $writer = new InMemoryAuditLogWriter(new RuntimeException('audit_log unavailable'));
         $recordingLogger = new RecordingLogger();
-        $auditLogger = $this->makeLogger($bus, $writer, $recordingLogger);
+        $auditLogger = $this->makeLogger($writer, $recordingLogger);
 
         try {
             $auditLogger->log('ACCESS_DENIED', AuditLevel::SECURITY, AuditResource::of('Bank', self::RESOURCE_ID));
@@ -127,13 +114,19 @@ final class SymfonyAuditLoggerTest extends TestCase
         );
     }
 
+    private function onlyEntry(InMemoryAuditLogWriter $writer): AuditLogEntry
+    {
+        $entry = \array_first($writer->written) ?? null;
+        $this->assertInstanceOf(AuditLogEntry::class, $entry);
+
+        return $entry;
+    }
+
     private function makeLogger(
-        RecordingMessageBus $bus,
         InMemoryAuditLogWriter $writer,
         RecordingLogger $logger,
     ): SymfonyAuditLogger {
         return new SymfonyAuditLogger(
-            $bus,
             $writer,
             new FixedAuditEntryFactory(
                 ActorContext::system(),

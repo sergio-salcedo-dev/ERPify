@@ -164,13 +164,12 @@ services:
     networks:
       - frontend
       - backend
-    # Consumes `async` and `audit`. The Doctrine transport's FOR UPDATE SKIP LOCKED hands each queued
+    # Consumes `async` (domain events). The Doctrine transport's FOR UPDATE SKIP LOCKED hands each queued
     # message to exactly one consumer, so this pool is safe to scale horizontally
     # (`docker compose up --scale messenger_worker=N`). The daily maintenance schedule is split
-    # out to the single `scheduler_worker` below so it ticks once, not once per replica. Audit is
-    # folded into this pool for now; a dedicated audit worker (mirroring scheduler_worker) is a
-    # future throughput call, not a Phase 1 need.
-    command: ["php", "bin/console", "messenger:consume", "async", "audit", "--time-limit=3600", "--limit=10000", "--memory-limit=256M"]
+    # out to the single `scheduler_worker` below so it ticks once, not once per replica. Audit `activity`
+    # rows are written synchronously on kernel.terminate, so no audit queue is consumed here.
+    command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600", "--limit=10000", "--memory-limit=256M"]
 
   # Single-replica scheduler. Symfony Scheduler derives the daily maintenance tick
   # (PruneHandledDomainEventsMessage + the audit retention PruneAuditLogMessage) from an in-process clock, so running it on the scaled
