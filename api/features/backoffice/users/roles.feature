@@ -148,6 +148,42 @@ Feature: Assign an identity's roles
       | {"a": "EDITOR"}       |
       | {"userId": "EDITOR"}  |
 
+  Scenario: A body carrying a member the payload does not declare is refused, naming it
+    # "status" is a legal instruction on a sibling endpoint, so silently discarding it would tell the caller a
+    # status change succeeded when only the roles were replaced.
+    Given I am logged in as an administrator
+    And the stored events are cleared
+    When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5e/roles" with body:
+    """
+    {
+      "roles": ["EDITOR"],
+      "status": "SUSPENDED"
+    }
+    """
+    Then the response status code should be 422
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the JSON node "type" should be equal to "validation-failed"
+    And the JSON node "violations" should have 1 elements
+    And the JSON node "violations[0].field" should be equal to "status"
+    And there should be 0 events stored named "erpify.iam.identity.roles-changed"
+    And there should be 0 events stored named "erpify.iam.session.all-revoked"
+
+  Scenario: Every surplus member is named, not just the first
+    Given I am logged in as an administrator
+    And the stored events are cleared
+    When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5e/roles" with body:
+    """
+    {
+      "roles": ["EDITOR"],
+      "status": "SUSPENDED",
+      "id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a99"
+    }
+    """
+    Then the response status code should be 422
+    And the JSON node "type" should be equal to "validation-failed"
+    And the JSON node "violations" should have 2 elements
+    And there should be 0 events stored named "erpify.iam.identity.roles-changed"
+
   Scenario Outline: A malformed id returns a 400 invalid-uuid Problem Details body
     Given I am logged in as an administrator
     And the stored events are cleared

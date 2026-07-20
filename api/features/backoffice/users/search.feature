@@ -12,6 +12,14 @@ Feature: Search the identity register
   Background:
     Given I am logged in as an administrator
 
+  Scenario: An unknown query parameter is tolerated, unlike an unknown body member
+    # Request bodies are strict (see roles.feature) because an unknown member reads as an instruction the
+    # server silently dropped. Query parameters are ambient — analytics tags, cache-busters, a pasted campaign
+    # URL — so rejecting them would fail a read nobody got wrong.
+    When I send a "GET" request to "/backoffice/users?limit=100&utm_source=newsletter"
+    Then the response status code should be 200
+    And the JSON node "pagination" should have 4 elements
+
   Scenario: The register returns the read projection with the cursor-only envelope
     When I send a "GET" request to "/backoffice/users?limit=100"
     Then the response status code should be 200
