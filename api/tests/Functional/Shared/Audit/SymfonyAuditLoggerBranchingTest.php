@@ -8,8 +8,6 @@ use DateTimeImmutable;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Shared\Audit\Application\AuditLogger;
-use Erpify\Shared\Audit\Application\RecordAuditEntry;
-use Erpify\Shared\Audit\Domain\ActorType;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Audit\Infrastructure\SymfonyAuditLogger;
@@ -22,15 +20,13 @@ use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
-use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 
 /**
- * End-to-end lock on the per-level branching wired through the real container: `activity` routes to the
- * dedicated `audit` transport and writes no `audit_log` row in the request cycle, while `security` writes
- * synchronously (write-before-send) and enqueues nothing. The asymmetric failure boundary (activity
- * swallows, security propagates) is pinned by the unit {@see SymfonyAuditLogger} test, which can inject
- * throwing doubles cleanly; here the real serializer round-trip (serialize=true) proves the sealed
- * context survives transport.
+ * End-to-end lock on the per-level write wired through the real container: both `activity` and `security`
+ * write their `audit_log` row synchronously in the request cycle, sealing the request context (anonymous
+ * pre-auth actor, canonical correlation id, sub-second instant) as it enters the writer. The asymmetric
+ * failure boundary (activity swallows, security propagates) is pinned by the unit {@see SymfonyAuditLogger}
+ * test, which can inject throwing doubles cleanly.
  *
  * Work runs inside a rolled-back transaction (the suite has no DAMA and shares the dev connection).
  *
@@ -41,22 +37,19 @@ use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 #[CoversClass(SymfonyAuditLogger::class)]
 final class SymfonyAuditLoggerBranchingTest extends KernelTestCase
 {
-    public function testActivityRoutesToTheAuditTransportAndWritesNoRowSynchronously(): void
+    public function testActivityWritesSynchronouslyWithTheSealedRequestContext(): void
     {
         self::bootKernel();
         $auditLogger = self::getContainer()->get(AuditLogger::class);
         $this->assertInstanceOf(AuditLogger::class, $auditLogger);
-
-        $transport = self::getContainer()->get('messenger.transport.audit');
-        $this->assertInstanceOf(InMemoryTransport::class, $transport);
 
         // Drive the real web path: a request in flight makes the sealed actor anonymous (pre-auth)
         // and its canonical correlation id is the one adopted onto the entry.
         $correlationId = Uuid::generate();
         $requestStack = $this->pushRequestWithCorrelationId($correlationId);
 
-        // Freeze the shared time source so the sealed instant is known to the microsecond; the
-        // serializer round-trip (serialize=true) must return it byte-for-byte, not truncated.
+        // Freeze the shared time source so the sealed instant is known to the microsecond; the row read
+        // back from Postgres must return it byte-for-byte, not truncated.
         $sealedInstant = new DateTimeImmutable('2026-03-02T10:11:12.654321+00:00');
         SymfonyClockFacade::set(new MockClock($sealedInstant));
 
@@ -67,17 +60,8 @@ final class SymfonyAuditLoggerBranchingTest extends KernelTestCase
             $resourceId = Uuid::generate();
             $auditLogger->log('BANK_ACCOUNTS_VIEWED', AuditLevel::ACTIVITY, AuditResource::of('Bank', $resourceId));
 
-            $messages = [...$transport->get()];
-            $this->assertCount(1, $messages, 'activity routes to the dedicated audit transport');
-            $this->assertSame(
-                0,
-                $this->countAuditRowsByResourceId($connection, $resourceId),
-                'activity writes no audit_log row in the request cycle',
-            );
-
-            $message = \reset($messages)->getMessage();
-            $this->assertInstanceOf(RecordAuditEntry::class, $message);
-            $this->assertActivityEntrySealedInRequestPath($message, $resourceId, $correlationId, $sealedInstant);
+            $row = $this->fetchAuditRowByResourceId($connection, $resourceId);
+            $this->assertActivityRowSealedInRequestPath($row, $correlationId, $sealedInstant);
         } finally {
             if ($connection->isTransactionActive()) {
                 $connection->rollBack();
@@ -85,6 +69,32 @@ final class SymfonyAuditLoggerBranchingTest extends KernelTestCase
 
             $requestStack->pop();
             SymfonyClockFacade::set(new NativeClock());
+        }
+    }
+
+    public function testSecurityWritesSynchronously(): void
+    {
+        self::bootKernel();
+        $auditLogger = self::getContainer()->get(AuditLogger::class);
+        $this->assertInstanceOf(AuditLogger::class, $auditLogger);
+
+        $connection = $this->connection();
+        $connection->beginTransaction();
+
+        try {
+            $resourceId = Uuid::generate();
+            $auditLogger->log('ACCESS_DENIED', AuditLevel::SECURITY, AuditResource::of('Bank', $resourceId));
+
+            $row = $this->fetchAuditRowByResourceId($connection, $resourceId);
+            $this->assertSame(
+                AuditLevel::SECURITY->value,
+                $row['level'] ?? null,
+                'security writes the audit_log row before the response is sent',
+            );
+        } finally {
+            if ($connection->isTransactionActive()) {
+                $connection->rollBack();
+            }
         }
     }
 
@@ -100,58 +110,32 @@ final class SymfonyAuditLoggerBranchingTest extends KernelTestCase
         return $requestStack;
     }
 
-    private function assertActivityEntrySealedInRequestPath(
-        RecordAuditEntry $message,
-        string $resourceId,
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function assertActivityRowSealedInRequestPath(
+        array $row,
         string $correlationId,
         DateTimeImmutable $sealedInstant,
     ): void {
-        $entry = $message->entry;
-        $this->assertSame('BANK_ACCOUNTS_VIEWED', $entry->action);
-        $this->assertSame(AuditLevel::ACTIVITY, $entry->level);
-        $this->assertInstanceOf(AuditResource::class, $entry->resource);
-        $this->assertSame('Bank', $entry->resource->type);
-        $this->assertSame($resourceId, $entry->resource->id);
+        $this->assertSame('BANK_ACCOUNTS_VIEWED', $row['action'] ?? null);
+        $this->assertSame(AuditLevel::ACTIVITY->value, $row['level'] ?? null);
+        $this->assertSame('Bank', $row['resource_type'] ?? null);
         $this->assertSame(
-            ActorType::ANONYMOUS,
-            $entry->actor->type,
+            'anonymous',
+            $row['actor_type'] ?? null,
             'on the request path the sealed actor is anonymous (pre-auth)',
         );
-        $this->assertSame($correlationId, $entry->correlationId, 'the request correlation id is adopted');
+        $this->assertNull($row['actor_id'] ?? null, 'an anonymous actor carries no id');
+        $this->assertSame($correlationId, $row['correlation_id'] ?? null, 'the request correlation id is adopted');
+
+        $occurredOn = $row['occurred_on'] ?? null;
+        $this->assertIsString($occurredOn);
         $this->assertSame(
             $sealedInstant->format('Y-m-d\TH:i:s.uP'),
-            $entry->occurredOn->format('Y-m-d\TH:i:s.uP'),
-            'the sealed sub-second instant survives the serializer round-trip',
+            (new DateTimeImmutable($occurredOn))->format('Y-m-d\TH:i:s.uP'),
+            'the sealed sub-second instant survives the round-trip to Postgres',
         );
-    }
-
-    public function testSecurityWritesSynchronouslyAndEnqueuesNothing(): void
-    {
-        self::bootKernel();
-        $auditLogger = self::getContainer()->get(AuditLogger::class);
-        $this->assertInstanceOf(AuditLogger::class, $auditLogger);
-
-        $transport = self::getContainer()->get('messenger.transport.audit');
-        $this->assertInstanceOf(InMemoryTransport::class, $transport);
-
-        $connection = $this->connection();
-        $connection->beginTransaction();
-
-        try {
-            $resourceId = Uuid::generate();
-            $auditLogger->log('ACCESS_DENIED', AuditLevel::SECURITY, AuditResource::of('Bank', $resourceId));
-
-            $this->assertSame(
-                1,
-                $this->countAuditRowsByResourceId($connection, $resourceId),
-                'security writes the audit_log row before the response is sent',
-            );
-            $this->assertCount(0, [...$transport->get()], 'security does not enqueue');
-        } finally {
-            if ($connection->isTransactionActive()) {
-                $connection->rollBack();
-            }
-        }
     }
 
     private function connection(): Connection
@@ -162,14 +146,18 @@ final class SymfonyAuditLoggerBranchingTest extends KernelTestCase
         return $entityManager->getConnection();
     }
 
-    private function countAuditRowsByResourceId(Connection $connection, string $resourceId): int
+    /**
+     * @return array<string, mixed>
+     */
+    private function fetchAuditRowByResourceId(Connection $connection, string $resourceId): array
     {
-        $rowCount = $connection->fetchOne(
-            'SELECT COUNT(*) FROM audit_log WHERE resource_id = :resourceId',
+        $row = $connection->fetchAssociative(
+            'SELECT action, level, actor_type, actor_id, correlation_id, resource_type, occurred_on
+             FROM audit_log WHERE resource_id = :resourceId',
             ['resourceId' => $resourceId],
         );
-        $this->assertIsNumeric($rowCount);
+        $this->assertIsArray($row, 'exactly one row is written synchronously for the resource');
 
-        return (int) $rowCount;
+        return $row;
     }
 }

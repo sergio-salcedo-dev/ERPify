@@ -1,6 +1,6 @@
 # ADR — Auditoría operativa / de actor (`AuditLogger` → `audit_log`), eje separado del stream de dominio
 
-> **Status:** accepted · design frozen, implementation pending · **Date:** 2026-06-14 · **Last reviewed:** 2026-06-26
+> **Status:** accepted · **Date:** 2026-06-14 · **Last reviewed:** 2026-07-20 (D3 amended by D3.1 — `activity` writes synchronously)
 > · **Scope:** cross-cutting `Shared` subsystem (capture + contract) + `Backoffice/Audit` module
 > (read side). `BankAccountsViewed` is its first consumer; the **subsystem implementation** is
 > its own epic and is not mixed with the code of the feature that surfaced it.
@@ -81,6 +81,11 @@ IO desperdiciado y decisión tardía.
 
 ### D3 — Persistencia por nivel: `activity` async, `security` write-before-send; transporte `audit` dedicado
 
+> **Enmendada por [D3.1](#d31--enmienda-activity-pasa-a-escritura-síncrona-retira-la-cola-cierra-376).** El mecanismo de
+> entrega de `activity` pasó a **escritura síncrona**; el transporte `audit`, `RecordAuditEntry` y su handler dejaron de
+> existir. El **contrato de durabilidad por nivel** (`activity` best-effort · `security` propaga el fallo) que fija esta
+> decisión **se conserva íntegro** — es ortogonal al mecanismo. El texto siguiente queda como registro histórico.
+
 `AuditLogger->log(...)` **ramifica por `level`**, porque los dos niveles tienen contratos de
 durabilidad distintos:
 
@@ -127,6 +132,63 @@ Descartado: best-effort **uniforme** para ambos niveles — abre un *gap* silenc
 `INSERT` síncrono **para todo** → latencia p95 y contención de DB en el alto volumen de `activity`.
 Descartado: compartir el transporte `async` con los `DomainEvent` → mezcla semánticas de
 retry/DLQ/throughput y reintroduce el acoplamiento de fallos que D1 evita en el tipo.
+
+### D3.1 — Enmienda: `activity` pasa a escritura síncrona (retira la cola, cierra #376)
+
+**Enmienda a D3 (issue #376).** `activity` deja de encolarse: se escribe **síncronamente** vía `AuditLogWriter`, igual
+que `security` y `change`. Se eliminan `RecordAuditEntry`, `RecordAuditEntryHandler` y el transporte `audit`. **D4 y
+D4.1 no cambian.**
+
+**Qué disparó la revisita.** #376: una entrada `activity` **encolada antes** de un borrado GDPR y **consumida después**
+re-insertaba el `actor_id`/`ip`/`user_agent` originales con `actor_erased = FALSE` — resucitando la PII que el `UPDATE`
+de anonimización (D4) acababa de borrar. `ON CONFLICT (id) DO NOTHING` no protege: la fila tardía tiene id propio. El
+trigger de revisita que U-5b dispara (exponer el erase a admins en consola) eleva la frecuencia del disparo.
+
+**Por qué se retira la cola en vez de compensarla.** Se descartó un *tombstone* de `actor_id`s: un mapa
+`(actor_id → pseudónimo)` es **exactamente la tabla de mapeo que D4 prohíbe por escrito**, y una huella del `actor_id`
+no es de un solo sentido porque el espacio de ids es **enumerable** (con la tabla `users` se recupera el mapa) — sería
+un oráculo de re-identificación, estrictamente más débil que el HMAC→UUID que D4 ya descartó. Drenar antes de borrar es
+**incorrecto**: no se puede drenar lo que el transporte `failed` reinyecta semanas después.
+
+**La justificación de D3 no se sostiene.** D3 justificaba la cola con «libera el request path de IO de auditoría» y
+«latencia p95». Pero el transporte es `doctrine://default` —la cola `audit` es una tabla Postgres en la **misma base y
+conexión** que `audit_log`—, y la captura de `activity` corre en `kernel.terminate`, **después** de enviar la respuesta.
+Medido (microbenchmark de una conexión + pgbench bajo carga concurrente, tablas scratch de DDL idéntico): el `INSERT`
+directo no añade latencia visible al cliente (post-terminate), y bajo carga los dos caminos son **indistinguibles** en
+throughput/latencia (el coste de commit/fsync domina y es idéntico). La vía async hacía **~3,2x el trabajo total de BD**
+por entrada. Así que la cola no compraba lo que D3 le atribuía.
+
+**Bonus estructural.** La cola era una **segunda copia durable de PII** (`messenger_messages`, y su sumidero permanente
+en el transporte `failed`) que ninguna política de este ADR —retención, borrado, redacción— gobernaba. Retirarla la
+elimina.
+
+**Ventana residual (aceptada).** Una petición que **empieza antes** del `UPDATE` de anonimización y cuya escritura en
+`terminate` **commitea después** aún registra el `actor_id` original. Es la **misma carrera de duración-de-request** que
+`security` (write-before-send) y `change` (`onFlush`) ya tienen, y que este ADR tolera desde el día uno — no una laguna
+nueva. La cola convertía esa ventana de milisegundos en una **ilimitada** (reintentos, `failed`, replay diferido); la
+enmienda la devuelve a su duración natural.
+
+**Contrato preservado.** El SLA por nivel de D3 es ortogonal al mecanismo y **no cambia**: `activity` sigue siendo
+best-effort (fallo tragado + `warning` sin contexto tainted), `security` sigue propagando el fallo. La rama `change`
+(síncrona en la transacción de flush) es intacta.
+
+**Riesgo aceptado (best-effort, explícito).** Con la cola, un hipo transitorio de BD dejaba la entrada `activity` en el
+transporte `failed` para reintentar; ahora ese mismo hipo **la pierde** (se traga + `warning`). Es la contrapartida
+consciente de retirar la cola, y cae dentro del best-effort que D3 ya declara. **No se añade reintento síncrono:** para
+este write —`INSERT` autocommit de una fila con `id` v7 acuñado por el cliente, esquema con solo PK (sin FK ni otro
+UNIQUE)— las clases reintentables (deadlock/serialization) no contienden, y la que sí ocurre (conexión perdida) no se
+recupera sobre la misma `Connection` (DBAL 4 no reconecta) sin arrastrar gestión de ciclo de vida de conexión al camino
+best-effort. La pérdida se cubre por **observabilidad** (alarma sobre el pico de ese `warning`), no por durabilidad:
+best-effort significa pérdida **visible**, no pérdida evitada. El vector dominante de pérdida sigue siendo que
+`kernel.terminate` no dispare (SIGTERM/reciclado del worker), que ningún reintento de BD toca.
+
+**Trigger de revisita.** Si `MESSENGER_TRANSPORT_DSN` migra a un **broker real** (AMQP/Redis/SQS), el `dispatch` pasa a
+ser más barato que un write a BD y la absorción de picos deja de ser gratis — reconsiderar entonces una cola de
+`activity` (y, con ella, la pregunta del tombstone). Hoy, con transporte Doctrine, la cola era coste neto.
+
+Descartado: *tombstone* consultado en la escritura (reintroduce la tabla de mapeo que D4 rompe). Descartado: barrido
+periódico que re-anonimiza (convierte un invariante en convergencia eventual gobernada por la frecuencia de un cron).
+Descartado: documentar la ventana async como riesgo residual (no sustituye a cerrarla).
 
 ### D4 — Niveles, retención diferenciada, append-only y GDPR
 

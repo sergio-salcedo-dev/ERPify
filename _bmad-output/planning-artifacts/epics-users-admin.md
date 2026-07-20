@@ -105,11 +105,18 @@ activo. El flujo, **orquestado por un único Application Service** (p.ej. `Fulfi
 *Fricción = confirmación fuerte, no ausencia de UI: exigir un desarrollador para una obligación legal es un
 anti-patrón operativo.*
 
-FR9: **Cerrar #376 — tombstone de `actor_id`s** *(prerrequisito duro de U-5 · `Shared/Audit`)* — un
-*tombstone* de `actor_id`s erasados, consultado por el writer DBAL (`DbalAuditLogWriter`) **y** el handler
-async (`RecordAuditEntryHandler`), para que un evento `activity` en vuelo **no** re-inserte un `actor_id` ya
-anonimizado. Historia previa (cross-cutting en `Shared/Audit`) que **bloquea** U-5, porque exponer el erase a
-admins eleva la frecuencia del disparo.
+FR9: **Cerrar #376 — eliminar la ventana de resurrección async** *(prerrequisito duro de U-5 · `Shared/Audit`)* —
+una entrada `activity` en vuelo **no** puede re-insertar un `actor_id` ya anonimizado. **La solución no es un
+tombstone: es eliminar la cola de `activity`** — se escribe síncronamente vía `AuditLogWriter`, igual que
+`security` y `change`, conservando verbatim el SLA best-effort (fallo tragado y logueado). Sin cola no hay
+consumidor tardío, y desaparece además la segunda copia durable de PII (`messenger_messages`) que ninguna
+política de D4 gobernaba. Historia previa (cross-cutting en `Shared/Audit`) que **bloquea** U-5, porque exponer
+el erase a admins eleva la frecuencia del disparo.
+
+*El tombstone `(actor_id → pseudónimo)` se descartó: es la tabla de mapeo que D4 prohíbe por escrito, y una
+huella del `actor_id` no es de un solo sentido (el espacio de ids es enumerable), así que sería un oráculo de
+re-identificación sin llave. Enmienda **D3** (mecanismo de entrega); **D4/D4.1 quedan intactos**. Decisión
+cerrada con medición en vivo — detalle en la historia.*
 
 ### NonFunctional Requirements
 
@@ -193,8 +200,8 @@ tooling, no con el modelo.
   autor (solo `createdAt`/`updatedAt`) — borrar/erase un usuario **no** cascadea ni toca datos de negocio; la
   atribución vive **solo** en `audit_log` (`actor_id`). `deactivate` la conserva; el erase completo la
   des-identifica (identidad + actor **encadenados**).
-- **#376 (resurrección async del `actor_id`) = prerrequisito duro de U-5** — tombstone de `actor_id`s en
-  `Shared/Audit` (FR9); historia previa que bloquea el borrado GDPR en consola.
+- **#376 (resurrección async del `actor_id`) = prerrequisito duro de U-5** — se cierra **retirando la cola de
+  `activity`** en `Shared/Audit` (FR9), no con un tombstone; historia previa que bloquea el borrado GDPR en consola.
 - **Evolución anotada (no se cambia hoy):** `users.erase` es plano de cumplimiento (SI-19); si el erase
   prolifera a otros sujetos (`customers`/`employees`/…), considerar un recurso dedicado
   (`compliance.eraseSubject` / `gdpr.eraseIdentity`) en vez de un `*.erase` por recurso — punto de evolución.
@@ -242,7 +249,7 @@ y aviso de que **des-identifica el rastro de auditoría**; la UI nunca permite c
 - **FR6 → Epic 1 (U-3)** — cambio de estado (suspend/deactivate, guard ≥1 ADMIN).
 - **FR7 → Epic 1 (U-4)** — edición de roles *(candidato)*.
 - **FR8 → Epic 1 (U-5b)** — borrado GDPR en consola (superficie de cumplimiento).
-- **FR9 → Epic 1 (U-5a)** — cerrar #376 (tombstone de `actor_id`s en `Shared/Audit`, prereq duro de U-5b).
+- **FR9 → Epic 1 (U-5a)** — cerrar #376 (retirar la cola de `activity` en `Shared/Audit`, prereq duro de U-5b).
 
 **Cobertura NFR:** NFR1-4 = invariantes SI-16…19 + NFR11 = SI-20, verificados transversalmente en cada
 historia; NFR5 (keyset) nace en U-0; NFR6 (≥1 ADMIN) en U-3/U-5b; NFR7 (gateo + RFC 9457) en cada endpoint;
@@ -283,8 +290,8 @@ sujetos. **FRs:** FR1-FR9. **NFRs:** NFR1-NFR11. **UX-DR:** UX-DR1-UX-DR6.
   el detalle, visibles con `users.changeStatus`. — FR6.
 - **U-4 — edición de roles** *(candidato)* — `ChangeUserRoles` (establece el conjunto completo) + dualidad
   `User.roles` vs `Membership.roles`. — FR7.
-- **U-5a — cerrar #376** *(prereq duro · `Shared/Audit`)* — tombstone de `actor_id`s consultado por el writer
-  DBAL + el handler async. — FR9.
+- **U-5a — cerrar #376** *(prereq duro · `Shared/Audit`)* — `activity` pasa a escritura síncrona; se borran el
+  mensaje, su handler y el transporte `audit`. — FR9.
 - **U-5b — borrado GDPR en consola** — Application Service `FulfilIdentityErasure` (identity-erase +
   actor-anonymise, una operación); acción separada, ADMIN-only, type-to-confirm; gatea con `users.erase`
   (entrada del enum PWA ya alineada en U-1). — FR8.
@@ -473,30 +480,44 @@ ADMIN evalúa el conjunto **resultante** (no puede dejar la org sin ADMIN activo
 **Then** se decide al implementar (probablemente un `users.changeRoles` propio en `EXPLICIT_GRANTS → [ADMIN]`),
 idéntico byte-a-byte API↔PWA (SI-20).
 
-### Story 1.6 (U-5a): Cerrar #376 — tombstone de `actor_id`s en `Shared/Audit`
+### Story 1.6 (U-5a): Cerrar #376 — eliminar la ventana de resurrección async del `actor_id`
 
 Como **plataforma**,
-quiero que un `actor_id` anonimizado no pueda ser re-insertado por un evento de auditoría async en vuelo,
+quiero que un `actor_id` anonimizado no pueda ser re-insertado por una escritura de auditoría en vuelo,
 para que el borrado GDPR sea completo y no se «resucite» un sujeto ya erasado.
 
-**Comportamiento que introduce:** el tombstone de `actor_id`s erasados.
-**Invariantes que consume:** el subsistema de auditoría (`audit_log`, writer, handler async).
-**Invariantes que establece:** un `actor_id` tombstoneado nunca reaparece en `audit_log`.
+**Comportamiento que introduce:** ninguno — **retira** el camino async de `activity`.
+**Invariantes que consume:** el SLA por nivel de D3 (`activity` best-effort, `security` durable).
+**Invariantes que establece:** ninguna entrada de auditoría viaja por Messenger, así que no existe consumidor
+tardío capaz de re-materializar PII anonimizada.
 
 **Acceptance Criteria:**
 
-**Given** un `actor_id` anonimizado,
-**When** se registra en el tombstone,
-**Then** `DbalAuditLogWriter` **y** el `RecordAuditEntryHandler` async lo consultan y **anonimizan/rechazan**
-cualquier inserción posterior con ese `actor_id` (FR9).
+**Given** una interacción `/api/*` auditable,
+**When** corre la captura en `kernel.terminate`,
+**Then** la entrada `activity` se escribe **directamente** vía `AuditLogWriter`, sin despachar mensaje alguno
+(FR9).
 
-**Given** un evento `activity` en vuelo para un actor tombstoneado,
-**When** el handler lo drena tras la anonimización,
-**Then** la fila resultante **no** lleva el `actor_id` original (no hay resurrección) — un test lo prueba.
+**Given** un fallo al escribir una entrada `activity`,
+**Then** se **traga y se loguea** como `warning` sin filtrar contexto, y un fallo en `security` **sigue
+propagándose** — la asimetría de durabilidad por nivel de D3 no cambia.
+
+**Given** el subsistema tras el cambio,
+**Then** `RecordAuditEntry`, su handler, el transporte `audit` y su routing **ya no existen**, y ninguna entrada
+de auditoría puede aterrizar en el transporte `failed`.
+
+**Given** mensajes `RecordAuditEntry` encolados o en `failed` al desplegar,
+**Then** se **descartan** —amparado en el best-effort que D3 declara para `activity`— acotando el borrado **por
+tipo de mensaje**, nunca por cola (`failed` es compartido con los eventos de dominio).
+
+**Given** una petición que empieza antes del `UPDATE` de anonimización y termina después,
+**Then** puede escribir el `actor_id` original: la ventana pasa de ilimitada a **duración-de-request**, que es
+**la misma carrera que `security` y `change` ya tienen** y que D4 tolera. Se documenta; no se declara cero.
 
 **Given** el reconciler existente,
 **When** corre tras un erase,
-**Then** no encuentra discrepancias de sujeto.
+**Then** no encuentra discrepancias de sujeto — **guarda de regresión**: reconcilia DEKs destruidas
+(crypto-shredding), un eje distinto del erase de actor (D15), y este cambio no debe perturbarlo.
 
 ### Story 1.7 (U-5b): Borrado GDPR desde la consola
 
@@ -505,14 +526,14 @@ quiero ejecutar el borrado GDPR de una identidad desde la consola, con confirmac
 para cumplir una solicitud de derecho al olvido sin depender de que un desarrollador ejecute una CLI.
 
 **Comportamiento que introduce:** la superficie de cumplimiento de erase en la consola.
-**Invariantes que consume:** SI-19 (fricción ∝ irreversibilidad), ≥1 ADMIN activo, el tombstone de #376 (U-5a).
+**Invariantes que consume:** SI-19 (fricción ∝ irreversibilidad), ≥1 ADMIN activo, el cierre de #376 (U-5a).
 **Invariantes que establece:** el erase des-identifica identidad + rastro **como una unidad**.
 
 **Acceptance Criteria:**
 
 **Given (prereq duro)** #376,
 **When** se planifica el merge,
-**Then** U-5b **no** se mergea antes que U-5a (el tombstone existe).
+**Then** U-5b **no** se mergea antes que U-5a (la cola de `activity` ya no existe).
 
 **Given** un ADMIN,
 **When** ejecuta el borrado GDPR (`#[IsGranted('users.erase')]`) con **confirmación type-to-confirm**,
