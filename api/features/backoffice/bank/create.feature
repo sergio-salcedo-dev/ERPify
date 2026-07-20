@@ -219,3 +219,20 @@ Feature: Create a bank
       | accents fold      | Crédit Lyonë    | crly      | CRLY            | credit lyone    |
       | eñe and cedilla   | Niño Çedi Bank  | ninoc     | NINOC           | nino cedi bank  |
       | short name uppers | mixed Case bank | sgx       | SGX             | mixed case bank |
+
+  Scenario: A body carrying members the payload does not declare is refused, naming every one
+    Given the stored events are cleared
+    When I send a POST request to "/backoffice/banks" with body:
+    """
+    {
+      "name": "Test Bank",
+      "shortName": "TB",
+      "id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a99",
+      "accountCount": 7
+    }
+    """
+    Then the response status code should be 422
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the JSON node "type" should be equal to "validation-failed"
+    And the JSON node "violations" should have 2 elements
+    And there should be 0 events stored named "erpify.backoffice.bank.created"

@@ -72,6 +72,45 @@ final class BankLogoMultipartFunctionalTest extends WebTestCase
         $this->assertNotNull($kernelBrowser->getResponse()->headers->get('ETag'));
     }
 
+    /**
+     * The file part rides `$request->files` and never reaches the extra-attribute check, so the
+     * upload survives strict mapping. A surplus *scalar* does land in `$request->request`, which is
+     * what the payload is mapped from — so `form` is closed on exactly the same terms as `json`,
+     * and an HTML form posting its submit button would be refused rather than silently trimmed.
+     */
+    public function testMultipartRejectsASurplusFormFieldWhileTheFilePartIsIgnored(): void
+    {
+        $kernelBrowser = self::createClient();
+        $this->authenticateClient($kernelBrowser);
+
+        $tmp = \tempnam(\sys_get_temp_dir(), 'erpify_logo');
+        $this->assertNotFalse($tmp);
+        \file_put_contents($tmp, \base64_decode(self::MIN_PNG, true));
+        $uploadedFile = new UploadedFile($tmp, 'logo.png', self::PNG_MIME, null, true);
+
+        $suffix = \bin2hex(\random_bytes(4));
+
+        $kernelBrowser->request(
+            Request::METHOD_POST,
+            '/api/v1/backoffice/banks',
+            [
+                'name' => 'Surplus Field Bank ' . $suffix,
+                'shortName' => 'SFB' . $suffix,
+                'submit' => 'Save',
+            ],
+            ['image' => $uploadedFile],
+        );
+
+        self::assertResponseStatusCodeSame(422);
+        $body = \json_decode((string) $kernelBrowser->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertIsArray($body);
+        $this->assertArrayHasKey('type', $body);
+        $this->assertSame('validation-failed', $body['type']);
+        $this->assertArrayHasKey('violations', $body);
+        $this->assertIsArray($body['violations']);
+        $this->assertCount(1, $body['violations']);
+    }
+
     public function testMediaGetReturns304WhenEtagMatches(): void
     {
         $kernelBrowser = self::createClient();

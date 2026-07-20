@@ -10,9 +10,9 @@ use Erpify\Iam\Identity\Infrastructure\Security\UserProvider;
 use Erpify\Iam\Invitation\Application\AcceptInvitation;
 use Erpify\Iam\Invitation\Domain\Exception\InvalidToken;
 use Erpify\Iam\Invitation\Infrastructure\Security\InvitationAcceptThrottle;
+use Erpify\Shared\Http\Infrastructure\StrictRequestPayload;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsCsrfTokenValid;
 
@@ -32,10 +32,21 @@ use Symfony\Component\Security\Http\Attribute\IsCsrfTokenValid;
  *
  * CSRF is defence in depth, not the primary control: same-origin is enforced by
  * {@see AcceptInvitationOriginListener} (403), and the token itself is single-use and opaque. The native
- * stateless double-submit token (`#[IsCsrfTokenValid]`, session-free, same-origin) is the second layer.
+ * stateless CSRF token (`#[IsCsrfTokenValid]`, session-free) is the second layer. What it proves is narrow:
+ * the manager length-checks the value, then reads same-origin off `Sec-Fetch-Site` when the browser sent that
+ * header and falls back to comparing `Origin`/`Referer` only when it did not; the alternative path is a
+ * double-submit cookie, which this client never sets. So the token must be PRESENT, but its value is never
+ * verified against anything.
+ *
+ * The header carries it because the body is the application contract — {@see StrictRequestPayload} refuses
+ * any member the payload does not declare, and a transport credential is not something
+ * {@see AcceptInvitationRequest} should have to model. It also fails fast: a missing `X-CSRF-Token` is
+ * refused before origin is consulted. What it does NOT add is a barrier independent of origin — a
+ * cross-origin caller is already refused by the origin check above, and anyone able to forge `Origin` can
+ * set a custom header just as easily. The token alone never admits a request.
  */
 #[Route('/invitations/accept', name: self::ROUTE_NAME, methods: ['POST'])]
-#[IsCsrfTokenValid(self::CSRF_TOKEN_ID)]
+#[IsCsrfTokenValid(self::CSRF_TOKEN_ID, tokenKey: 'X-CSRF-Token', tokenSource: IsCsrfTokenValid::SOURCE_HEADER)]
 final readonly class AcceptInvitationController
 {
     public const string ROUTE_NAME = 'iam_invitation_accept';
@@ -53,7 +64,7 @@ final readonly class AcceptInvitationController
     ) {
     }
 
-    public function __invoke(#[MapRequestPayload] AcceptInvitationRequest $request): Response
+    public function __invoke(#[StrictRequestPayload] AcceptInvitationRequest $request): Response
     {
         // Per-selector brute-force budget, consumed before any work: exhaustion folds into the SAME opaque
         // invalid-token wall as a dead link — a per-selector 429 would confirm the selector exists.

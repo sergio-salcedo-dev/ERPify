@@ -9,9 +9,9 @@ use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
 use Erpify\Iam\Identity\Infrastructure\Http\ChangeUserStatusRequest;
 use Erpify\Iam\Identity\Infrastructure\Http\UserResourceMapper;
 use Erpify\Shared\Http\Infrastructure\Responder\ResourceResponder;
+use Erpify\Shared\Http\Infrastructure\StrictRequestPayload;
 use LogicException;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Serializer\Exception\ExceptionInterface;
@@ -42,7 +42,7 @@ final readonly class UserPatchStatusController
      */
     public function __invoke(
         string $id,
-        #[MapRequestPayload]
+        #[StrictRequestPayload]
         ChangeUserStatusRequest $request,
     ): Response {
         $user = match ($request->status) {

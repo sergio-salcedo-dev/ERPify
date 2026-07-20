@@ -222,8 +222,28 @@ you change anything here.
       non-existent) collapses to one **byte-identical `400 invalid-token`** (SI-13 opacity); the invited email is
       never surfaced. **CSRF is defence-in-depth, not the primary control:** the primary same-origin gate is
       `AcceptInvitationOriginListener` (403, mirror of the login guard) plus the opaque single-use token; the
-      **stateless double-submit token** (`framework.csrf_protection.stateless_token_ids: [invitation_accept]` +
-      `#[IsCsrfTokenValid]`, session-free, same-origin) is the second layer, with `check_header` off/deferred.
+      **stateless CSRF token** (`framework.csrf_protection.stateless_token_ids: [invitation_accept]` +
+      `#[IsCsrfTokenValid]`, session-free) is the second layer, with `check_header` off/deferred. Be precise
+      about what that token proves: `SameOriginCsrfTokenManager::isTokenValid()` length-checks the value
+      (>= 24) and then asks `isValidOrigin()`, which **returns on `Sec-Fetch-Site` alone when the browser sent
+      it** and falls back to comparing `Origin`/`Referer` only when it did not; the alternative path is a
+      double-submit cookie. The client mints a fresh nonce per request and sets no cookie, so the
+      double-submit half never engages — validity rests on the same-origin check. It is a token in the
+      sense that its **presence** is required, not one whose value is verified.
+      The token is read from the **`X-CSRF-Token` header**, not the request body
+      (`tokenSource: SOURCE_HEADER`), for two reasons: the body is the application contract, which
+      `#[StrictRequestPayload]` enforces by rejecting undeclared members; and a missing header makes
+      `getTokenValue()` return `null` → `InvalidCsrfTokenException`, **before** any origin reasoning.
+      That is fail-fast ordering, **not** a barrier independent of `Origin`/`Referer`: the header requirement
+      only rejects a same-origin request that omits it, a cross-origin one is already refused by the origin
+      listener, and a caller able to forge `Origin` can set a custom header just as easily. The CSRF token
+      never admits a request on its own, so it is never grounds to relax the origin guard.
+      CORS must echo the header (`nelmio_cors.allow_headers`) or a cross-origin preflight blocks the call
+      before it is sent; the browser default is same-origin, which needs no preflight.
+      **Naming foot-gun:** `tokenKey: 'X-CSRF-Token'` (where `#[IsCsrfTokenValid]` reads the submitted token)
+      is a different axis from `check_header`, which governs the *cookie* half and reads a header named after
+      `cookie_name` (Symfony default `csrf-token`). Turning `check_header` on would have Symfony look for
+      `csrf-token`, **not** our `X-CSRF-Token` — two similar-looking headers with unrelated jobs.
       Password hashing is Infrastructure (the DTO enforces the 8..128 policy at the boundary) and is **deferred
       behind the token check**: a dead accept link never pays an argon2id run (no unauthenticated KDF
       amplification). The accept is capped **per selector** (`token_action_per_selector` limiter); exhaustion

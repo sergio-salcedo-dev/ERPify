@@ -9,8 +9,8 @@ use Erpify\Backoffice\BankAccount\Application\Command\CreateBankAccountCommand;
 use Erpify\Backoffice\BankAccount\Infrastructure\Http\BankAccountResourceMapper;
 use Erpify\Backoffice\BankAccount\Infrastructure\Security\BankAccountPermission;
 use Erpify\Shared\Http\Infrastructure\Responder\ResourceResponder;
+use Erpify\Shared\Http\Infrastructure\StrictRequestPayload;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Messenger\Exception\ExceptionInterface as MessengerExceptionInterface;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
@@ -35,7 +35,7 @@ final readonly class BankAccountPostController
      * @throws MessengerExceptionInterface
      */
     public function __invoke(
-        #[MapRequestPayload]
+        #[StrictRequestPayload]
         CreateBankAccountCommand $command,
     ): Response {
         $account = $this->bankAccountCreator->create($command);

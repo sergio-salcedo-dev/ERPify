@@ -9,7 +9,7 @@ use Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountStatus;
 /**
  * Input command for {@see \Erpify\Backoffice\BankAccount\Application\BankAccountStatusChanger}.
  *
- * `status` is a required, typed transition target: `#[MapRequestPayload]` rejects a missing or
+ * `status` is a required, typed transition target: `#[StrictRequestPayload]` rejects a missing or
  * out-of-enum value as a 422 at the HTTP boundary. Status lives in its own command (and endpoint),
  * never in the descriptive update payload — a lifecycle transition is a distinct intent.
  */

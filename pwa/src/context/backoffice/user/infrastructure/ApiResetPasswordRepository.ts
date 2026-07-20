@@ -16,8 +16,6 @@ import {
 interface ResetPasswordRequest {
   token: string;
   password: string;
-  /** Stateless CSRF nonce — see {@link ApiResetPasswordRepository}. */
-  _token: string;
 }
 
 /**
@@ -35,10 +33,13 @@ interface ResetPasswordRequest {
  *    `account-deactivated` type, so a stripped-`Origin` request never mis-renders
  *    the terminal "account not active" wall.
  *
- * The `_token` is a client-generated, single-use CSRF nonce (defense-in-depth):
- * the backend only length-checks it (>= 24), so a v7 UUID (36 chars) satisfies
- * the contract while keeping every client-side id on the one canonical generator
- * (never `crypto.randomUUID`; see `pwa/CLAUDE.md`).
+ * The `X-CSRF-Token` header carries a client-generated, single-use CSRF nonce
+ * (defense-in-depth): the backend only length-checks it (>= 24), so a v7 UUID
+ * (36 chars) satisfies the contract while keeping every client-side id on the one
+ * canonical generator (never `crypto.randomUUID`; see `pwa/CLAUDE.md`). It travels
+ * as a header, not a body field, because the endpoint rejects any body member its
+ * request payload does not declare — and a custom header cannot be forged by a
+ * cross-origin form post without clearing a CORS preflight.
  */
 @injectable()
 export class ApiResetPasswordRepository implements ResetPasswordRepository {
@@ -48,12 +49,13 @@ export class ApiResetPasswordRepository implements ResetPasswordRepository {
     const request: ResetPasswordRequest = {
       token: command.token,
       password: command.password,
-      _token: uuidV7(),
     };
     try {
       await this.httpClient.post<ResetPasswordRequest, void>(
         API_ENDPOINTS.BACKOFFICE.RESET_PASSWORD,
         request,
+        undefined,
+        { "X-CSRF-Token": uuidV7() },
       );
       return { kind: ResetPasswordOutcomeKind.RESET };
     } catch (error) {

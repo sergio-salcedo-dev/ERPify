@@ -8,7 +8,7 @@ use SensitiveParameter;
 use Symfony\Component\Validator\Constraints as Assert;
 
 /**
- * Request payload for {@see AcceptInvitationController}, mapped from the JSON body via `#[MapRequestPayload]`
+ * Request payload for {@see AcceptInvitationController}, mapped from the JSON body via `#[StrictRequestPayload]`
  * (a failure to satisfy these constraints is answered 422 `validation-failed` before the use case runs). The
  * `#[Assert]` attributes are passive validation metadata. The opaque `<invitationId>.<secret>` token is only
  * shape-capped here — its eligibility is the domain's call, uniformly opaque across the five dead-token cases.

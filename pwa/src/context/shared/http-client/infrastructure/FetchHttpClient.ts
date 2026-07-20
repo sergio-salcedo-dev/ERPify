@@ -148,8 +148,13 @@ export class FetchHttpClient implements HttpClient {
     return this.parseBody<T>(res, url, validate);
   }
 
-  async post<TBody, T>(url: string, body: TBody, validate?: ResponseGuard<T>): Promise<T> {
-    return this.sendWithBody<TBody, T>("POST", url, body, validate);
+  async post<TBody, T>(
+    url: string,
+    body: TBody,
+    validate?: ResponseGuard<T>,
+    headers?: Record<string, string>,
+  ): Promise<T> {
+    return this.sendWithBody<TBody, T>("POST", url, body, validate, headers);
   }
 
   async put<TBody, T>(url: string, body: TBody, validate?: ResponseGuard<T>): Promise<T> {
@@ -177,10 +182,15 @@ export class FetchHttpClient implements HttpClient {
     url: string,
     body: TBody,
     validate?: ResponseGuard<T>,
+    headers?: Record<string, string>,
   ): Promise<T> {
     const res = await this.request(this.resolveUrl(url), {
       method,
       headers: {
+        // Caller headers first: the body is always JSON.stringify'd, so Accept and Content-Type
+        // describe what this client actually sends and a caller must not be able to contradict
+        // them — a "text/plain" override would ship a JSON body the API then refuses as 415.
+        ...headers,
         Accept: "application/json",
         "Content-Type": "application/json",
       },

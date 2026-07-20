@@ -15,8 +15,6 @@ import {
 interface AcceptInvitationRequest {
   token: string;
   password: string;
-  /** Stateless CSRF nonce — see {@link ApiAcceptInvitationRepository}. */
-  _token: string;
 }
 
 /**
@@ -29,10 +27,13 @@ interface AcceptInvitationRequest {
  *  - anything else (403/401 origin/CSRF rejection, transport fault) → rethrow;
  *    it is not an accept outcome.
  *
- * The `_token` is a client-generated, single-use CSRF nonce (defense-in-depth):
- * the backend only length-checks it (>= 24), so a v7 UUID (36 chars) satisfies
- * the contract while keeping every client-side id on the one canonical generator
- * (never `crypto.randomUUID`; see `pwa/CLAUDE.md`).
+ * The `X-CSRF-Token` header carries a client-generated, single-use CSRF nonce
+ * (defense-in-depth): the backend only length-checks it (>= 24), so a v7 UUID
+ * (36 chars) satisfies the contract while keeping every client-side id on the one
+ * canonical generator (never `crypto.randomUUID`; see `pwa/CLAUDE.md`). It travels
+ * as a header, not a body field, because the endpoint rejects any body member its
+ * request payload does not declare — and a custom header cannot be forged by a
+ * cross-origin form post without clearing a CORS preflight.
  */
 @injectable()
 export class ApiAcceptInvitationRepository implements AcceptInvitationRepository {
@@ -42,12 +43,13 @@ export class ApiAcceptInvitationRepository implements AcceptInvitationRepository
     const request: AcceptInvitationRequest = {
       token: command.token,
       password: command.password,
-      _token: uuidV7(),
     };
     try {
       await this.httpClient.post<AcceptInvitationRequest, void>(
         API_ENDPOINTS.BACKOFFICE.INVITATIONS.ACCEPT,
         request,
+        undefined,
+        { "X-CSRF-Token": uuidV7() },
       );
       return { kind: AcceptInvitationOutcomeKind.ACCEPTED };
     } catch (error) {

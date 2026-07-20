@@ -9,7 +9,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 /**
  * Input command for {@see \Erpify\Backoffice\Bank\Application\BankUpdater}.
  *
- * HTTP maps it from the request body via #[MapRequestPayload]; a console
+ * HTTP maps it from the request body via #[StrictRequestPayload]; a console
  * command (or CQRS command bus) builds it directly with `new`. The #[Assert]
  * attributes are passive validation metadata, enforced at the HTTP boundary
  * and re-checkable via Validator::ensure() for non-HTTP callers; Bank entity

@@ -10,7 +10,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 /**
  * Input command for {@see \Erpify\Backoffice\BankAccount\Application\BankAccountUpdater}.
  *
- * HTTP maps it from the request body via #[MapRequestPayload]; a console command (or CQRS command bus)
+ * HTTP maps it from the request body via #[StrictRequestPayload]; a console command (or CQRS command bus)
  * builds it directly with `new`. Every descriptive field is editable, including the IBAN (revalidated
  * for the BIC↔IBAN pair and uniqueness, which UniqueEntity scopes to ignore the account's own row).
  * The lifecycle `status` is NOT here — it transitions through its own command/endpoint

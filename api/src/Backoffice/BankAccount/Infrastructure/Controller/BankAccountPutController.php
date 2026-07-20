@@ -9,8 +9,8 @@ use Erpify\Backoffice\BankAccount\Application\Command\UpdateBankAccountCommand;
 use Erpify\Backoffice\BankAccount\Infrastructure\Http\BankAccountResourceMapper;
 use Erpify\Backoffice\BankAccount\Infrastructure\Security\BankAccountPermission;
 use Erpify\Shared\Http\Infrastructure\Responder\ResourceResponder;
+use Erpify\Shared\Http\Infrastructure\StrictRequestPayload;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Messenger\Exception\ExceptionInterface as MessengerExceptionInterface;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
@@ -33,7 +33,7 @@ final readonly class BankAccountPutController
      */
     public function __invoke(
         string $id,
-        #[MapRequestPayload]
+        #[StrictRequestPayload]
         UpdateBankAccountCommand $command,
     ): Response {
         $account = $this->bankAccountUpdater->update($id, $command);
