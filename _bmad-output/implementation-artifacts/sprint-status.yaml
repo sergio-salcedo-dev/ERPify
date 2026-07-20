@@ -64,7 +64,7 @@ development_status:
   2-2-keystore-envelope-libsodium-dek-por-encryptionscopeid: done
   2-3-auditar-bankaccount-con-diff-pii-crypto-shredded: done
   2-4-erase-subject-olvido-por-sujeto-destruir-la-dek: done
-  epic-2-retrospective: optional
+  epic-2-retrospective: done
 
   # Epic auth-foundation (AF): Fundación auth/RBAC — prerequisite de E3, gated on nada (greenfield)
   # docs/adr/auth-rbac-subsystem.md + _bmad-output/planning-artifacts/epics-auth-foundation.md. DAG: AF → 3.1 → 3.2 → 3.3
@@ -77,14 +77,14 @@ development_status:
   # auth), #436 (Email NFC/Unicode), #438 (deptrac no aísla Symfony Security). Endurecimiento futuro SIN
   # issue (opcional, no bloquea): timing dummy-hash, login_throttling, password policy, PasswordUpgrader.
   af-1-4-endurecimiento-auth-follow-ups: done
-  epic-auth-foundation-retrospective: optional
+  epic-auth-foundation-retrospective: done
 
   # Epic 3 (E3): Acceso restringido + auto-auditado + atribución real (gated on auth-foundation)
   epic-3: done
   3-1-voter-rbac-rutas-lectura-trail-atribucion-real: done
   3-2-auto-auditoria-del-acceso-auditar-al-auditor: done
   3-3-levantar-el-gate-de-produccion: done
-  epic-3-retrospective: optional
+  epic-3-retrospective: done
 
   # Epic rbac-authorization-model (RM): modelo RBAC transversal Permission=(resource,action).
   # docs/adr/rbac-authorization-model.md (D1–D9) + _bmad-output/planning-artifacts/epics-rbac-authorization-model.md.
@@ -99,7 +99,7 @@ development_status:
   rm-3-gateo-rutas-bank-tightening: done
   rm-4-gateo-bankaccount-coleccion-anidada: done
   rm-6-gate-ocp-congelar-core: done
-  epic-rbac-authorization-model-retrospective: optional
+  epic-rbac-authorization-model-retrospective: done
 
   # Epic identity-invitation-lifecycle (II): ciclo de vida de identidad/invitación — onboarding invitation-first,
   # admisión de tres momentos (credenciales → identidad → admisión → sesión), registro de sesiones fail-closed.
@@ -118,7 +118,7 @@ development_status:
   ii-4-invitation-accept-pantallas-acceso: done
   ii-5-reset-password-uniforme: done
   ii-8-endurecimiento-seguridad-transversal: done
-  epic-identity-invitation-lifecycle-retrospective: optional
+  epic-identity-invitation-lifecycle-retrospective: done
 
   # Epic users-admin (U): Administración de usuarios (back-office/Iam) — conectar la consola PWA /backoffice/users
   # (hoy mock CrudRepository) al backend real Iam/Identity (invitation-based). arch-addendum-users-admin.md (SI-16…20)
