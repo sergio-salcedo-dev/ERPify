@@ -30,9 +30,12 @@ use Symfony\Component\Security\Http\Attribute\IsCsrfTokenValid;
  *
  * CSRF is defence in depth, not the primary control: same-origin is enforced by {@see PasswordResetOriginListener}
  * (403), and the reset token itself is single-use and opaque. The native stateless double-submit token
- * (`#[IsCsrfTokenValid]`, session-free, same-origin) is the second layer, sharing the invitation-accept flow's
- * `check_header`-off config and its header-carried token — the body stays the application contract that
- * {@see StrictRequestPayload} enforces, and a custom header is the harder half to forge cross-origin.
+ * (`#[IsCsrfTokenValid]`, session-free) is the second layer, sharing the invitation-accept flow's
+ * `check_header`-off config and its header-carried token. What it proves is narrow: the manager
+ * length-checks the value and then accepts on a matching `Origin`/`Referer` or a double-submit cookie, and
+ * this client sets no cookie — so the token must be PRESENT, but its value is not verified. The header is
+ * what makes presence cost something: the body stays the application contract {@see StrictRequestPayload}
+ * enforces, and a missing `X-CSRF-Token` is refused before origin is consulted.
  */
 #[Route('/reset-password', name: self::ROUTE_NAME, methods: ['POST'])]
 #[IsCsrfTokenValid(self::CSRF_TOKEN_ID, tokenKey: 'X-CSRF-Token', tokenSource: IsCsrfTokenValid::SOURCE_HEADER)]

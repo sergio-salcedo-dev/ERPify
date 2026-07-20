@@ -21,9 +21,19 @@
 - **Transport credentials travel in headers, not the body.** A body member is application data; anything the
   framework consumes (CSRF tokens) is read from a header — `#[IsCsrfTokenValid(..., tokenKey: 'X-CSRF-Token',
   tokenSource: IsCsrfTokenValid::SOURCE_HEADER)]`. This keeps the request DTO modelling only the application
-  contract, and a custom header is the harder half of a double-submit to forge cross-origin (a form post
-  cannot set one without clearing a CORS preflight). Note `framework.csrf_protection.check_header` is a
-  *different* axis — it governs the cookie half, not where the submitted token is read from.
+  contract, and it makes the token's *presence* a real barrier: a missing header throws
+  `InvalidCsrfTokenException` before any origin reasoning, and a cross-origin form — which can post any body
+  it likes — cannot set a custom header without clearing a CORS preflight.
+- **Do not overstate what a stateless CSRF token proves.** `SameOriginCsrfTokenManager::isTokenValid()`
+  length-checks the value (>= 24), then accepts on **either** a matching `Origin`/`Referer` **or** a
+  double-submit cookie, failing only when both are absent. A client that mints a fresh nonce per request and
+  sets no cookie never engages the double-submit half, so validity rests on the same-origin check — the token
+  is required to be *present*, not verified to be *right*. Call it a stateless CSRF token, not a double-submit
+  token, unless the cookie half is actually wired.
+- **Two similarly-named headers, unrelated jobs.** `tokenKey` is where `#[IsCsrfTokenValid]` reads the
+  submitted token (ours: `X-CSRF-Token`). `framework.csrf_protection.check_header` is a *different* axis: it
+  governs the cookie half and reads a header named after `cookie_name` (Symfony default `csrf-token`).
+  Enabling `check_header` would make Symfony look for `csrf-token`, not `X-CSRF-Token`.
 
 ## Pre-identity surfaces (login, invitation accept, forgot/reset)
 - **Constant-time floor:** every pre-identity rejection pays one unit of password-hashing work through the

@@ -32,13 +32,15 @@ use Symfony\Component\Security\Http\Attribute\IsCsrfTokenValid;
  *
  * CSRF is defence in depth, not the primary control: same-origin is enforced by
  * {@see AcceptInvitationOriginListener} (403), and the token itself is single-use and opaque. The native
- * stateless double-submit token (`#[IsCsrfTokenValid]`, session-free, same-origin) is the second layer.
+ * stateless CSRF token (`#[IsCsrfTokenValid]`, session-free) is the second layer. What it proves is narrow:
+ * the manager length-checks the value and then accepts on a matching `Origin`/`Referer` or a double-submit
+ * cookie, and this client sets no cookie — so the token must be PRESENT, but its value is not verified.
  *
- * That token is read from a header rather than the body for two reasons. The body is the application
+ * Presence is the point, and the header is what makes it cost something. The body is the application
  * contract — {@see StrictRequestPayload} refuses any member the payload does not declare, and a transport
- * credential is not something {@see AcceptInvitationRequest} should have to model. It is also the stronger
- * half of the double-submit: a cross-origin form POST can forge a body, but cannot set a custom header
- * without clearing a CORS preflight.
+ * credential is not something {@see AcceptInvitationRequest} should have to model. Reading from a header
+ * also turns presence into a real barrier: a cross-origin form POST can forge any body, but cannot set a
+ * custom header without clearing a CORS preflight, and a missing one is refused before origin is consulted.
  */
 #[Route('/invitations/accept', name: self::ROUTE_NAME, methods: ['POST'])]
 #[IsCsrfTokenValid(self::CSRF_TOKEN_ID, tokenKey: 'X-CSRF-Token', tokenSource: IsCsrfTokenValid::SOURCE_HEADER)]
