@@ -8,13 +8,6 @@ framework:
                 options:
                     queue_name: async
                     auto_setup: false
-            # Dedicated audit queue, separate from `async`: an audit backlog must not couple to domain
-            # event delivery (head-of-line blocking, a shared `failed` queue, independent scaling).
-            audit:
-                dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
-                options:
-                    queue_name: audit
-                    auto_setup: false
             failed:
                 dsn: 'doctrine://default?queue_name=failed'
                 options:
@@ -33,7 +26,6 @@ framework:
             # (invitation, reset) stay synchronous best-effort instead: routing Symfony's SendEmailMessage
             # would serialise the whole Email, plaintext token included, into this transport and `failed`.
             Erpify\Iam\Identity\Domain\Event\PasswordResetCompleted: async
-            Erpify\Shared\Audit\Application\RecordAuditEntry: audit
 
         buses:
             messenger.bus.default:
@@ -48,6 +40,5 @@ when@test:
         messenger:
             transports:
                 async: 'in-memory://?serialize=true'
-                audit: 'in-memory://?serialize=true'
                 failed: 'in-memory://?serialize=true'
                 sync: 'sync://'

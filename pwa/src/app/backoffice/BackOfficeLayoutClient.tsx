@@ -200,6 +200,7 @@ export default function BackOfficeLayoutClient({
                         {group.items.map((item) => (
                           <div key={item.name} className="bo-layout__sidebar-mobile-item-wrapper">
                             <button
+                              type="button"
                               onClick={() => handleNavigation(item.path)}
                               title={item.name}
                               data-testid={item.testId ? `${item.testId}--mobile` : undefined}
@@ -216,6 +217,7 @@ export default function BackOfficeLayoutClient({
                               <div className="ml-8 mt-1 space-y-1">
                                 {item.subItems.map((subItem) => (
                                   <button
+                                    type="button"
                                     key={subItem.name}
                                     onClick={navigateTo(subItem.path)}
                                     title={subItem.name}
@@ -245,6 +247,7 @@ export default function BackOfficeLayoutClient({
                       </p>
                       <div className="bo-layout__sidebar-mobile-item-wrapper">
                         <button
+                          type="button"
                           onClick={() => handleNavigation(accountMenuItem.path)}
                           title={accountMenuItem.name}
                           className={`bo-layout__sidebar-mobile-link w-full flex items-center gap-3 p-3 rounded-md font-semibold transition-all ${
@@ -259,6 +262,7 @@ export default function BackOfficeLayoutClient({
                         <div className="ml-8 mt-1 space-y-1">
                           {accountMenuItem.subItems?.map((subItem) => (
                             <button
+                              type="button"
                               key={subItem.name}
                               onClick={() => handleNavigation(subItem.path)}
                               title={subItem.name}

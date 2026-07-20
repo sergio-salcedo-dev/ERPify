@@ -27,7 +27,7 @@ Feature: Get a single identity
     And the JSON node "data.failedAttempts" should not exist
     And the JSON node "data.lockedUntil" should not exist
     And the JSON node "data.permissions" should not exist
-    And 1 request got executed only for doctrine connection "default"
+    And 2 request got executed only for doctrine connection "default"
 
   Scenario Outline: Get an identity with a malformed id returns a 400 invalid-uuid Problem Details body
     When I send a "GET" request to "/backoffice/users/<userId>"

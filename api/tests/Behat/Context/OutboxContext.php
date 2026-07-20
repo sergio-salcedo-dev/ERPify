@@ -56,14 +56,12 @@ final class OutboxContext extends AbstractContext
 
     /**
      * Queues drained before each scenario so in-memory pending messages don't leak across scenarios.
-     * Superset of {@see INSPECTABLE_QUEUES} plus the dedicated `audit` transport: a successful read
-     * records an access by enqueuing a `RecordAuditEntry` that no outbox assertion consumes, so it
-     * must be drained too — but `audit` stays OUT of INSPECTABLE_QUEUES so it never inflates the
-     * domain-event outbox count or becomes an inspectable outbox queue.
+     * Distinct constant from {@see INSPECTABLE_QUEUES} so a transport can be drained without becoming an
+     * inspectable outbox queue that inflates the domain-event count.
      *
      * @var list<string>
      */
-    private const array RESETTABLE_QUEUES = ['async', 'failed', 'audit'];
+    private const array RESETTABLE_QUEUES = ['async', 'failed'];
 
     private ?object $selectedEvent = null;
 

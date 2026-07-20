@@ -86,7 +86,7 @@ describe("LoginForm — access outcomes", () => {
     render(<LoginForm />);
     signIn();
 
-    await waitFor(() => expect(screen.getByTestId("access-wall--suspended")).toBeInTheDocument());
+    expect(await screen.findByTestId("access-wall--suspended")).toBeInTheDocument();
     expect(screen.queryByTestId("login-form")).not.toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
     expect(login).not.toHaveBeenCalled();
@@ -97,7 +97,7 @@ describe("LoginForm — access outcomes", () => {
     render(<LoginForm />);
     signIn();
 
-    await waitFor(() => expect(screen.getByTestId("access-wall--deactivated")).toBeInTheDocument());
+    expect(await screen.findByTestId("access-wall--deactivated")).toBeInTheDocument();
     expect(screen.queryByTestId("login-form")).not.toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
   });
@@ -107,7 +107,7 @@ describe("LoginForm — access outcomes", () => {
     render(<LoginForm />);
     signIn();
 
-    await waitFor(() => expect(screen.getByTestId("access-wall--locked")).toBeInTheDocument());
+    expect(await screen.findByTestId("access-wall--locked")).toBeInTheDocument();
     expect(screen.queryByTestId("login-form")).not.toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
     expect(login).not.toHaveBeenCalled();

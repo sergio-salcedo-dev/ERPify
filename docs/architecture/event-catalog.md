@@ -184,18 +184,16 @@ Topics ([`MercureBankAccountTopic`](../../api/src/Backoffice/BankAccount/Domain/
 
 ## Non-domain signals
 
-Messages that look event-shaped but are **not** `DomainEvent`s — they record no business fact, stay out
-of the domain language, and never enter the `event_store`.
-
-| Message | Dispatched by | Transport | Consumer | Payload |
-|---------|---------------|-----------|----------|---------|
-| `RecordAuditEntry` (a `BANK_ACCOUNTS_VIEWED` activity entry) | `BankAccountSearcher` via `AuditLogger->log(...)` (best-effort isolated inside `AuditLogger`, so an audit miss never 5xxs the read) | **`audit`** (async, dedicated queue) | `RecordAuditEntryHandler` → durable row in `audit_log` | `AuditLogEntry`: `action`, `level=activity`, `actor_type`, `correlation_id`, `resource_type=Bank`/`resource_id`, `metadata` **PII-free** (never the IBAN) |
+The operational / actor audit axis records no business fact, stays out of the domain language, and never
+enters the `event_store` — so it is not a `DomainEvent`. It is also **not a Messenger message**: an
+`AuditLogger->log(...)` call writes its `audit_log` row **synchronously** via `AuditLogWriter`, with no
+queue (ADR D3.1). A `BANK_ACCOUNTS_VIEWED` `activity` entry from `BankAccountSearcher`, for example, is
+best-effort (a write miss is swallowed inside `AuditLogger` and never 5xxs the read) and carries a PII-free
+payload (`action`, `level`, `actor_type`, `correlation_id`, `resource_type`/`resource_id` — never the IBAN).
 
 Source: [`BankAccountSearcher.php`](../../api/src/Backoffice/BankAccount/Application/BankAccountSearcher.php)
-(producer) and the [`AuditLogger`](../../api/src/Shared/Audit/Application/AuditLogger.php) seam. The
-operational / actor audit axis — `AuditLogger` → `RecordAuditEntry` → the `audit` transport →
-`RecordAuditEntryHandler` → `audit_log` — is documented in
-[`audit-activity-log.md`](../adr/audit-activity-log.md).
+(producer) and the [`AuditLogger`](../../api/src/Shared/Audit/Application/AuditLogger.php) seam. The full
+audit axis is documented in [`audit-activity-log.md`](../adr/audit-activity-log.md).
 
 ## Read models & projections
 

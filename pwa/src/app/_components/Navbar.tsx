@@ -73,6 +73,7 @@ export function Navbar({ goToBackoffice }: Readonly<NavbarProps>) {
           <div className="navbar__mobile-toggle md:hidden flex items-center gap-1">
             <ThemeToggle testId="navbar__theme--mobile" className="navbar__theme--mobile" />
             <button
+              type="button"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               className="p-2 text-muted-foreground"
               aria-label={isMenuOpen ? "Close navigation menu" : "Open navigation menu"}

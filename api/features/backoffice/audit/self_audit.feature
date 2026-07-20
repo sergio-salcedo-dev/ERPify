@@ -4,9 +4,9 @@ Feature: Self-audit every authorized read of the audit trail (audit the auditor)
   I need every authorized read of the two audit routes to leave one synchronous security row naming who read what
 
   # Alice (the default session) is granted auditTrail.read through her AUDIT_READER role, so these reads succeed. Each granted read emits a
-  # `security` `AUDIT_TRAIL_READ` row through the same durable write-before-send path as the `ACCESS_DENIED`
-  # denial (no transport consume needed). The two routes carry `_audit_canonical`, so the generic access-log
-  # hook yields and no second, thinner `activity` row is queued.
+  # `security` `AUDIT_TRAIL_READ` row through the durable write-before-send path, the same as the `ACCESS_DENIED`
+  # denial. The two routes carry `_audit_canonical`, so the generic access-log hook yields and no second, thinner
+  # `activity` row is written — proven by the exact-match SQL below returning only the one security row.
   Background:
     Given I add "Accept" header equal to "application/json"
 
@@ -15,7 +15,6 @@ Feature: Self-audit every authorized read of the audit trail (audit the auditor)
     When I send a "GET" request to "/backoffice/audit/timeline"
     And I execute the SQL query "SELECT action, level, actor_type, actor_id, metadata FROM audit_log WHERE correlation_id = '0190a1de-0004-7abc-8def-001122334455'"
     Then the response status code should be 200
-    And the "audit" transport should hold 0 messages
     And the SQL result as JSON should be:
     """
     [
@@ -35,7 +34,6 @@ Feature: Self-audit every authorized read of the audit trail (audit the auditor)
     When I send a "GET" request to "/backoffice/audit/events/0190a002-0000-7000-8000-0000000000bb"
     And I execute the SQL query "SELECT action, level, actor_type, actor_id, metadata FROM audit_log WHERE correlation_id = '0190a1de-0003-7abc-8def-001122334455'"
     Then the response status code should be 200
-    And the "audit" transport should hold 0 messages
     And the SQL result as JSON should be:
     """
     [

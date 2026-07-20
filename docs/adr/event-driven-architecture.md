@@ -103,10 +103,10 @@ puede reaparecer en un PR sin una excepción revisada.
 
 El eje **audit** estrenó esa frontera temporal y la cerró: `BankAccountSearcher` ya **no** importa
 `MessageBusInterface` — registra el acceso por el puerto `AuditLogger`
-([`audit-activity-log.md`](./audit-activity-log.md)), que encola un `RecordAuditEntry` (**no** un
-`DomainEvent`, best-effort) por su transporte `audit` dedicado, fuera del `EventBus` transaccional.
-Construida esa épica, su entrada se retiró del `api/.event-dispatch-allowlist`, que queda sin entradas
-de path.
+([`audit-activity-log.md`](./audit-activity-log.md)), que escribe una entrada de auditoría **síncrona**
+(best-effort, **no** un `DomainEvent`), fuera del `EventBus` transaccional (ADR D3.1 — la vía async se
+retiró). Construida esa épica, su entrada se retiró del `api/.event-dispatch-allowlist`, que queda sin
+entradas de path.
 
 Descartado: gate que prohíbe `MessageBusInterface` sin excepción (rompe el eje audit). Descartado
 introducir ya un `AuditLogger` para evitar la allowlist (abre una épica congelada → scope creep).
