@@ -16,20 +16,27 @@
   `#[MapRequestPayload]`. It bakes `ALLOW_EXTRA_ATTRIBUTES => false`, so a body carrying members the payload
   does not declare is answered `422 validation-failed` naming each surplus member, rather than executing the
   recognised part and reporting `200` for the whole request. Enforced by `StrictRequestPayloadGateTest`.
+  The policy reaches exactly as far as the attribute does: a body consumed by a firewall authenticator
+  instead of an argument resolver (`json_login` on `POST /login`) never passes through it, and the gate
+  cannot see it. Those surfaces stay permissive — treat that as a known edge, not as coverage.
 - **`#[MapQueryString]` stays permissive on purpose.** An unknown query parameter is ambient (analytics,
   cache-busting, a pasted campaign URL), not an instruction; failing a read over one would be self-inflicted.
 - **Transport credentials travel in headers, not the body.** A body member is application data; anything the
   framework consumes (CSRF tokens) is read from a header — `#[IsCsrfTokenValid(..., tokenKey: 'X-CSRF-Token',
   tokenSource: IsCsrfTokenValid::SOURCE_HEADER)]`. This keeps the request DTO modelling only the application
-  contract, and it makes the token's *presence* a real barrier: a missing header throws
-  `InvalidCsrfTokenException` before any origin reasoning, and a cross-origin form — which can post any body
-  it likes — cannot set a custom header without clearing a CORS preflight.
+  contract, and it fails fast: a missing header throws `InvalidCsrfTokenException` before any origin
+  reasoning. It is **not** an origin-independent barrier — see the next bullet.
 - **Do not overstate what a stateless CSRF token proves.** `SameOriginCsrfTokenManager::isTokenValid()`
-  length-checks the value (>= 24), then accepts on **either** a matching `Origin`/`Referer` **or** a
-  double-submit cookie, failing only when both are absent. A client that mints a fresh nonce per request and
-  sets no cookie never engages the double-submit half, so validity rests on the same-origin check — the token
-  is required to be *present*, not verified to be *right*. Call it a stateless CSRF token, not a double-submit
-  token, unless the cookie half is actually wired.
+  length-checks the value (>= 24), then asks `isValidOrigin()`, which **returns on `Sec-Fetch-Site` alone
+  when the browser sent it** (`'same-origin' === $header`) and only falls back to comparing `Origin`/`Referer`
+  when it did not. The alternative path is a double-submit cookie. A client that mints a fresh nonce per
+  request and sets no cookie never engages the double-submit half, so validity rests entirely on the
+  same-origin check — the token is required to be *present*, not verified to be *right*. Call it a stateless
+  CSRF token, not a double-submit token, unless the cookie half is actually wired.
+- **The header transport does not make the token an independent control.** Requiring `X-CSRF-Token` only
+  rejects a *same-origin* request that omits it; a cross-origin one is already refused by the origin check,
+  and any caller that can forge `Origin` can set a custom header just as easily. Never remove or relax an
+  origin guard on the grounds that the CSRF token covers it — the token alone admits nothing.
 - **Two similarly-named headers, unrelated jobs.** `tokenKey` is where `#[IsCsrfTokenValid]` reads the
   submitted token (ours: `X-CSRF-Token`). `framework.csrf_protection.check_header` is a *different* axis: it
   governs the cookie half and reads a header named after `cookie_name` (Symfony default `csrf-token`).

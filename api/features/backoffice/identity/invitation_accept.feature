@@ -136,3 +136,18 @@ Feature: Accept an invitation
     And the header "Set-Cookie" should not exist
     And I execute the SQL query "SELECT id FROM identity_user WHERE email = 'iris@erpify.test' AND status = 'INVITED'"
     And there should have 1 records in SQL result
+
+  Scenario: An accept with no CSRF token header is refused before the token is even read
+    Given I remove "X-CSRF-Token" header
+    When I send a POST request to "/backoffice/invitations/accept" with body:
+    """
+    {
+      "token": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a90.behat-known-invitation-secret",
+      "password": "a-brand-new-password"
+    }
+    """
+    Then the response status code should be 401
+    And the JSON node "type" should be equal to "unauthenticated"
+    And the header "Set-Cookie" should not exist
+    And I execute the SQL query "SELECT id FROM identity_user WHERE email = 'iris@erpify.test' AND status = 'INVITED'"
+    And there should have 1 records in SQL result

@@ -33,14 +33,17 @@ use Symfony\Component\Security\Http\Attribute\IsCsrfTokenValid;
  * CSRF is defence in depth, not the primary control: same-origin is enforced by
  * {@see AcceptInvitationOriginListener} (403), and the token itself is single-use and opaque. The native
  * stateless CSRF token (`#[IsCsrfTokenValid]`, session-free) is the second layer. What it proves is narrow:
- * the manager length-checks the value and then accepts on a matching `Origin`/`Referer` or a double-submit
- * cookie, and this client sets no cookie — so the token must be PRESENT, but its value is not verified.
+ * the manager length-checks the value, then reads same-origin off `Sec-Fetch-Site` when the browser sent that
+ * header and falls back to comparing `Origin`/`Referer` only when it did not; the alternative path is a
+ * double-submit cookie, which this client never sets. So the token must be PRESENT, but its value is never
+ * verified against anything.
  *
- * Presence is the point, and the header is what makes it cost something. The body is the application
- * contract — {@see StrictRequestPayload} refuses any member the payload does not declare, and a transport
- * credential is not something {@see AcceptInvitationRequest} should have to model. Reading from a header
- * also turns presence into a real barrier: a cross-origin form POST can forge any body, but cannot set a
- * custom header without clearing a CORS preflight, and a missing one is refused before origin is consulted.
+ * The header carries it because the body is the application contract — {@see StrictRequestPayload} refuses
+ * any member the payload does not declare, and a transport credential is not something
+ * {@see AcceptInvitationRequest} should have to model. It also fails fast: a missing `X-CSRF-Token` is
+ * refused before origin is consulted. What it does NOT add is a barrier independent of origin — a
+ * cross-origin caller is already refused by the origin check above, and anyone able to forge `Origin` can
+ * set a custom header just as easily. The token alone never admits a request.
  */
 #[Route('/invitations/accept', name: self::ROUTE_NAME, methods: ['POST'])]
 #[IsCsrfTokenValid(self::CSRF_TOKEN_ID, tokenKey: 'X-CSRF-Token', tokenSource: IsCsrfTokenValid::SOURCE_HEADER)]

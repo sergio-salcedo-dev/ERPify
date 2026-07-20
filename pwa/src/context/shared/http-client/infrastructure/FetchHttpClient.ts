@@ -187,9 +187,12 @@ export class FetchHttpClient implements HttpClient {
     const res = await this.request(this.resolveUrl(url), {
       method,
       headers: {
+        // Caller headers first: the body is always JSON.stringify'd, so Accept and Content-Type
+        // describe what this client actually sends and a caller must not be able to contradict
+        // them — a "text/plain" override would ship a JSON body the API then refuses as 415.
+        ...headers,
         Accept: "application/json",
         "Content-Type": "application/json",
-        ...headers,
       },
       cache: "no-store",
       body: JSON.stringify(body),

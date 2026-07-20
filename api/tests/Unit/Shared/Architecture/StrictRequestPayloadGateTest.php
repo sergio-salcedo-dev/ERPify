@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Shared\Architecture;
 use Erpify\Shared\Http\Infrastructure\StrictRequestPayload;
 use Erpify\Tests\Support\ApiSourceFiles;
 use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use SplFileInfo;
@@ -30,9 +31,13 @@ use SplFileInfo;
  * policy. An allowlist file here would invite exactly the "just add yours" entry the gate exists to
  * prevent.
  *
- * Scope: the coupling is flagged where it is expressed — the `use` import, plus the inline
- * `#[\Symfony\...\MapRequestPayload]` FQCN that would sidestep an import-only scan. Resolution via
- * reflection or a container alias is not checked; the attribute seam is the shape that occurs.
+ * Scope: the file is tokenised with PHP's own lexer and every identifier whose trailing segment is
+ * `MapRequestPayload` counts, whichever spelling carries it — a plain import, an aliased one, a
+ * group `use`, a leading-backslash FQCN, an inline attribute, or an attribute broken across lines.
+ * A regex over raw lines cannot see those as one thing, and each spelling it misses is a silent way
+ * back to permissive mapping. Tokenising also drops comments and string literals for free, so a
+ * docblock naming the attribute is not mistaken for a coupling. Resolution via reflection or a
+ * container alias is not checked; the attribute seam is the shape that occurs.
  *
  * @internal
  */
@@ -49,6 +54,21 @@ final class StrictRequestPayloadGateTest extends TestCase
         . 'so a body carrying undeclared members is answered 422 instead of silently discarded.';
 
     private const string FORBIDDEN_FQCN = \Symfony\Component\HttpKernel\Attribute\MapRequestPayload::class;
+
+    private const string FORBIDDEN_SHORT_NAME = 'MapRequestPayload';
+
+    /**
+     * Token ids a class name can arrive as: bare (imported or same-namespace), qualified,
+     * fully qualified, and `namespace\`-relative.
+     *
+     * @var list<int>
+     */
+    private const array IDENTIFIER_TOKENS = [
+        T_STRING,
+        T_NAME_QUALIFIED,
+        T_NAME_FULLY_QUALIFIED,
+        T_NAME_RELATIVE,
+    ];
 
     public function testNoBareMapRequestPayloadInApiSource(): void
     {
@@ -111,49 +131,68 @@ final class StrictRequestPayloadGateTest extends TestCase
         );
     }
 
-    public function testFixtureExposesMatcher(): void
+    /**
+     * @param list<int> $expectedLines
+     */
+    #[DataProvider('provideFixtureExposesMatcherCases')]
+    public function testFixtureExposesMatcher(string $source, array $expectedLines, string $rationale): void
     {
-        $dirtyImport = <<<'PHP'
-            <?php
-            namespace Erpify\Backoffice\Bank\Infrastructure\Controller;
-            use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
-            final class Sample {}
-            PHP;
+        $this->assertSame($expectedLines, $this->matchForbiddenUsage($source), $rationale);
+    }
 
-        $this->assertSame(
+    /**
+     * Every spelling that carries the attribute into a file. Each one is a way back to permissive
+     * mapping, so each is pinned rather than trusted to the shape a reviewer happens to picture.
+     *
+     * @return iterable<string, array{string, list<int>, string}>
+     */
+    public static function provideFixtureExposesMatcherCases(): iterable
+    {
+        yield 'plain import' => [
+            "<?php\nuse Symfony\\Component\\HttpKernel\\Attribute\\MapRequestPayload;\n",
+            [2],
+            'A bare MapRequestPayload import went unflagged — the matcher has regressed.',
+        ];
+
+        yield 'aliased import' => [
+            "<?php\nuse Symfony\\Component\\HttpKernel\\Attribute\\MapRequestPayload as Payload;\n",
+            [2],
+            'An alias renames the attribute without loosening it — the coupling is still there.',
+        ];
+
+        yield 'group import' => [
+            "<?php\nuse Symfony\\Component\\HttpKernel\\Attribute\\{MapRequestPayload, MapUploadedFile};\n",
+            [2],
+            'Folding the attribute into a group use hid it — controllers already import both names.',
+        ];
+
+        yield 'leading-backslash import' => [
+            "<?php\nuse \\Symfony\\Component\\HttpKernel\\Attribute\\MapRequestPayload;\n",
+            [2],
+            'A leading backslash is legal PHP and resolves to the same class.',
+        ];
+
+        yield 'inline fully-qualified attribute' => [
+            "<?php\nclass S {\n function f("
+                . "#[\\Symfony\\Component\\HttpKernel\\Attribute\\MapRequestPayload] D \$d) {}\n}\n",
             [3],
-            $this->matchForbiddenUsage($dirtyImport),
-            'Gate matcher failed to flag a bare MapRequestPayload import — the parser has regressed.',
-        );
+            'An inline FQCN needs no import at all — the import-only bypass.',
+        ];
 
-        $dirtyInline = <<<'PHP'
-            <?php
-            namespace Erpify\Backoffice\Bank\Infrastructure\Controller;
-            final class Sample {
-                public function __invoke(#[\Symfony\Component\HttpKernel\Attribute\MapRequestPayload] Dto $dto): void {}
-            }
-            PHP;
+        yield 'attribute split across lines' => [
+            "<?php\nclass S {\n function f(\n  #[\n   "
+                . "\\Symfony\\Component\\HttpKernel\\Attribute\\MapRequestPayload\n  ]\n  D \$d) {}\n}\n",
+            [5],
+            'A line-by-line scan loses an attribute wrapped across lines.',
+        ];
 
-        $this->assertSame(
-            [4],
-            $this->matchForbiddenUsage($dirtyInline),
-            'Gate matcher failed to flag an inline FQCN MapRequestPayload attribute — the import-only bypass is open.',
-        );
-
-        $clean = <<<'PHP'
-            <?php
-            namespace Erpify\Backoffice\Bank\Infrastructure\Controller;
-            use Erpify\Shared\Http\Infrastructure\StrictRequestPayload;
-            use Symfony\Component\HttpKernel\Attribute\MapQueryString;
-            /** Mapped from the body, see StrictRequestPayload rather than MapRequestPayload. */
-            final class Sample {}
-            PHP;
-
-        $this->assertSame(
+        yield 'mention outside code' => [
+            "<?php\nuse Erpify\\Shared\\Http\\Infrastructure\\StrictRequestPayload;\n"
+                . "/** Mapped from the body, see StrictRequestPayload not MapRequestPayload. */\n"
+                . "\$s = 'MapRequestPayload';\n",
             [],
-            $this->matchForbiddenUsage($clean),
-            'Gate matcher flagged StrictRequestPayload, MapQueryString or a docblock mention — false positive.',
-        );
+            'A docblock or string mention is not a coupling — false positive.',
+        ];
     }
 
     /**
@@ -183,24 +222,34 @@ final class StrictRequestPayloadGateTest extends TestCase
     }
 
     /**
-     * Line numbers carrying the bare attribute, as an import or as an inline FQCN. A docblock
-     * mention is not a coupling — only `use ...;` and `#[\...]` are matched.
+     * Line numbers naming the bare attribute in code. Identifier tokens only, so a mention inside a
+     * comment, docblock or string literal is not a coupling.
      *
      * @return list<int>
      */
     private function matchForbiddenUsage(string $contents): array
     {
-        $fqcn = \preg_quote(self::FORBIDDEN_FQCN, '/');
-        $pattern = \sprintf('/^\s*use\s+%s\s*;|#\[\s*\\\%s\b/', $fqcn, $fqcn);
         $lines = [];
 
-        foreach (\preg_split('/\R/', $contents) ?: [] as $index => $line) {
-            if (1 === \preg_match($pattern, $line)) {
-                $lines[] = $index + 1;
+        foreach (\token_get_all($contents) as $token) {
+            if (!\is_array($token)) {
+                continue;
+            }
+
+            if (!\in_array($token[0], self::IDENTIFIER_TOKENS, true)) {
+                continue;
+            }
+
+            // A qualified name arrives as one token, so the trailing segment is what identifies the
+            // class — `Strict…` and `…PayloadFactory` are different classes, not near-misses.
+            $segments = \explode('\\', $token[1]);
+
+            if (self::FORBIDDEN_SHORT_NAME === \end($segments)) {
+                $lines[] = $token[2];
             }
         }
 
-        return $lines;
+        return \array_values(\array_unique($lines));
     }
 
     private function isPolicyDefinition(SplFileInfo $file): bool
