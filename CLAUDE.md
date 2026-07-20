@@ -237,6 +237,7 @@ Files under `_bmad-output/implementation-artifacts/` are **transient working art
 - **Done spec → delete it.** A `spec-*.md` is a quick-dev design contract whose intent is spent once the work ships. When its frontmatter `status:` is `done`, remove it from the tree — git history + shipped tests + PR carry the record. Keep in-progress specs (`Status: ready-for-dev`, etc.). Grep the filename before deleting so no Markdown link breaks. `/prune-done-specs` sweeps them (`--dry-run` to preview).
 - **`deferred-work.md` is pending-only.** A live registry, not a changelog: on resolving an item, **delete its bullet** rather than annotating it "done" inline. If the resolving PR also added it, restore the file to `origin/main` so the net diff is empty. (The pending registry was migrated to GitHub issues #194–#207.)
 - Keep the live registries (`deferred-work.md`, `sprint-status.yaml`); never delete those for being "done".
+- **`sprint-status.yaml` markers drift by default.** Merging a PR moves nothing, so a story stays at `review` and its epic at `in-progress` long after shipping. `make bmad.status.audit` reports it (offline; also runs from a `SessionStart` hook, silent when clean). When you merge a story's PR, move its key to `done` in the same breath.
 
 ### Markdown link style
 

@@ -96,6 +96,17 @@ make super-lint.slim                # SuperLinter on changed files only (slim im
 
 **Always start the stack with `make app.dev` or `make docker.up`.** Bare `docker compose up -d` skips composer install on cold checkouts and the `pwa.install.if-missing` guard, leaving the PWA container without dependencies.
 
+### BMad artifacts
+
+```bash
+make bmad.status.audit              # Report sprint-status.yaml markers left behind by merged work.
+make bmad.status.audit c='--strict' # Same, but exit 1 on drift (for a gate).
+```
+
+Nothing in the merge path moves a marker in `sprint-status.yaml`: a PR squash-merges on GitHub and the file keeps saying `review` / `in-progress`. The audit is offline (no network, no `gh`) and reports two things — an epic still open whose stories are all `done`, and a story below `done` whose tag (`RM-6`, `U-4`, `II-5`, `AF-1.1`…) already appears in a commit subject on the base branch. Story keys with no letter prefix carry no commit tag, so they are listed as unchecked rather than passed silently.
+
+A `SessionStart` hook in `.claude/settings.json` runs it with `--quiet-when-clean`, so drift surfaces when a session opens and a clean tree stays silent. It never blocks: exit code is 0 unless `--strict`.
+
 ---
 
 ## Services

@@ -23,6 +23,18 @@
           }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "scripts/bmad-status-audit.sh --quiet-when-clean || true",
+            "timeout": 15,
+            "statusMessage": "Checking BMad sprint-status drift"
+          }
+        ]
+      }
     ]
   },
   "enabledPlugins": {
