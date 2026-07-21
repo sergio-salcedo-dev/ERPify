@@ -195,7 +195,7 @@ export function ProblemDisplay({
   const violations = problem.violations ?? [];
   const tone = TONE_CLASSES[toneForStatus(problem.status)];
   const statusIcon = iconForStatus(problem.status, violations.length > 0);
-  const isUrgent = problem.status >= HttpStatus.INTERNAL_SERVER_ERROR;
+  const isUrgent = problem.status === 0 || problem.status >= HttpStatus.INTERNAL_SERVER_ERROR;
   const debugCandidate = (problem as { debug?: unknown }).debug;
   const debug = !isProductionEnv() && isProblemDebug(debugCandidate) ? debugCandidate : undefined;
   // The status pill renders a non-zero numeric code; status === 0 is our

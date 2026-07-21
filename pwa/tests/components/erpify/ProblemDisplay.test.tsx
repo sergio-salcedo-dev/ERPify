@@ -75,6 +75,13 @@ describe("ProblemDisplay", () => {
     expect(container.querySelector('[role="alert"]')).toHaveAttribute("aria-live", "assertive");
   });
 
+  it("uses aria-live='assertive' for the synthetic 0 sentinel (transport error)", () => {
+    const { container } = render(
+      <ProblemDisplay problem={{ ...baseProblem, status: 0, title: "Network unreachable" }} />,
+    );
+    expect(container.querySelector('[role="alert"]')).toHaveAttribute("aria-live", "assertive");
+  });
+
   it("uses aria-live='polite' for 4xx errors", () => {
     const { container } = render(<ProblemDisplay problem={baseProblem} />);
     expect(container.querySelector('[role="alert"]')).toHaveAttribute("aria-live", "polite");

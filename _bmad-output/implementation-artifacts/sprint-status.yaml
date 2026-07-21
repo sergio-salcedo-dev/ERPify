@@ -125,7 +125,7 @@ development_status:
   # + epics-users-admin.md. PR #500. Orden de merge safe-first (las historias van en ese orden, no en U-N numérico):
   # U-0 → U-1 → (U-2 · U-3) → U-4 · [U-5a → U-5b]. U-5b (borrado GDPR) tiene gate DURO en U-5a (cerrar #376).
   # U-4 (edición de roles) es candidato. erase gana UI (SI-19 enmendado). Cada historia = su propia rama (gate de ramas).
-  epic-users-admin: in-progress
+  epic-users-admin: done
   u-0-read-side-lista-detalle-conectados-backend: done
   u-1-me-deriva-permisos-gateo-can: done
   u-2-invitar-alta-invitacion: done
@@ -133,4 +133,50 @@ development_status:
   u-4-edicion-de-roles-candidato: done
   u-5a-cerrar-376-tombstone-actor-ids: done
   u-5b-borrado-gdpr-consola: done
-  epic-users-admin-retrospective: optional
+  epic-users-admin-retrospective: done
+
+# Action items — retrospectiva users-admin (2026-07-21). Principio: resolver, no acumular.
+# Detalle y triaje en epic-users-admin-retro-2026-07-21.md.
+# NOTA: 3 defers de origen resultaron deuda FANTASMA (ya en main, verificado): FetchHttpClient try/catch (#520),
+# 500 array-claves en invitación (#509), InvitedIdentityUnavailable markerless-500 (#507). Solo reconciliar.
+action_items:
+  - epic: "users-admin"
+    action: "a11y: ProblemDisplay.tsx:198 anuncia status:0 (transporte/no-response) como aria-live=polite pese al ramp destructivo; plegar status===0 en el test de urgencia (aflorado por #520). Mecánico"
+    owner: "PWA"
+    status: open
+  - epic: "users-admin"
+    action: "5 páginas de detalle (banks/[id], bank-accounts/[id], sus edit, banks/[id]/accounts/[accountId]/edit) colapsan cualquier error a 'puede que se haya borrado'; comparar problem?.status con 404 (fix idéntico al ya hecho en el detalle de usuario). Mecánico"
+    owner: "PWA"
+    status: open
+  - epic: "users-admin"
+    action: "Aserciones de test que faltan en status.feature: status ausente/null/vacío/lowercase→422; admin INVITED no rescata al último ADMIN; SUSPENDED→DEACTIVATED→409. Blindaje, correctos por construcción hoy"
+    owner: "API"
+    status: open
+  - epic: "users-admin"
+    action: "403 de realtime/authorize al primer no-ADMIN (RM-3/RM-4, sigue abierto: 5ffa0c13 endureció selección no la degradación); U-2 acercó el trigger. Decidir 204-sin-cookie vs degradación PWA del EventSource"
+    owner: "API+PWA"
+    status: open
+  - epic: "users-admin"
+    action: "Política de rol del invitador (#505): cualquier ADMIN acuña ADMINs sin límite; decisión propia sobre el modelo de propagación de privilegio"
+    owner: "API/Iam"
+    status: open
+  - epic: "users-admin"
+    action: "Lockout por email = DoS contra admins (review U-4): revisar antes de prod (throttling adaptativo / MFA / recuperación). Descartado filtrar locked_until en el directorio de admins — no re-proponer"
+    owner: "API/Iam"
+    status: open
+  - epic: "users-admin"
+    action: "Gobernanza del transporte failed (gap GDPR vivo, heredado de U-5a→U-5b): política de retención/purga de PII en messenger_messages/failed"
+    owner: "API/Shared"
+    status: open
+  - epic: "users-admin"
+    action: "Pasada adversarial retro-ajustada a U-5b (borrado GDPR, autocertificada) + fijar la regla: ninguna story de seguridad/GDPR/audit done sin review adversarial registrada"
+    owner: "process"
+    status: open
+  - epic: "users-admin"
+    action: "Fetch-antes-del-gate en la consola (hooks corren antes de <Can> → 403 desperdiciado): flag enabled en los hooks de Shared/resource (cross-cutting)"
+    owner: "PWA"
+    status: open
+  - epic: "users-admin"
+    action: "Decisiones de arquitectura diferidas (corte de próxima épica): autoridad tenancy User.roles vs Membership.roles (SI-15) + extracción del core RBAC del parking de Iam/Identity (desde II-0)"
+    owner: "architecture"
+    status: open
