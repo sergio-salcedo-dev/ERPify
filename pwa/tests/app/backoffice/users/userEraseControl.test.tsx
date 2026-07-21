@@ -134,4 +134,35 @@ describe("UserEraseControl", () => {
     expect(await screen.findByTestId("user-erase__error")).toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
   });
+
+  it("dismisses the persistent error surface", async () => {
+    eraseRun.mockRejectedValueOnce(new HttpError(problem()));
+    renderControl();
+
+    fireEvent.click(await screen.findByTestId("user-erase__trigger"));
+    fireEvent.change(await screen.findByTestId("user-erase__confirm-input"), {
+      target: { value: TARGET_EMAIL },
+    });
+    fireEvent.click(screen.getByTestId("user-erase__confirm"));
+
+    fireEvent.click(await screen.findByTestId("user-erase__error__dismiss"));
+
+    await waitFor(() => expect(screen.queryByTestId("user-erase__error")).not.toBeInTheDocument());
+  });
+
+  it("resets the typed confirmation when the dialog is cancelled", async () => {
+    renderControl();
+
+    fireEvent.click(await screen.findByTestId("user-erase__trigger"));
+    fireEvent.change(await screen.findByTestId("user-erase__confirm-input"), {
+      target: { value: TARGET_EMAIL },
+    });
+    expect(screen.getByTestId("user-erase__confirm")).toBeEnabled();
+
+    fireEvent.click(screen.getByTestId("user-erase__cancel"));
+
+    // Re-opening shows an empty, disabled confirm — the typed phrase was cleared on close.
+    fireEvent.click(await screen.findByTestId("user-erase__trigger"));
+    expect(await screen.findByTestId("user-erase__confirm")).toBeDisabled();
+  });
 });

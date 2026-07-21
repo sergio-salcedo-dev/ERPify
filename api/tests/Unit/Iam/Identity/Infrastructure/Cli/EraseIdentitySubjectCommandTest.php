@@ -95,6 +95,19 @@ final class EraseIdentitySubjectCommandTest extends TestCase
         $this->assertFalse($users->removeCalled);
     }
 
+    public function testDecliningTheConfirmationErasesNothing(): void
+    {
+        $users = new InMemoryUserRepository(UserMother::create());
+        $tester = $this->tester($users);
+        $tester->setInputs(['no']);
+
+        $exitCode = $tester->execute(['user-id' => UserMother::DEFAULT_ID]);
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $this->assertStringContainsString('Aborted', $tester->getDisplay());
+        $this->assertFalse($users->removeCalled);
+    }
+
     private function tester(
         InMemoryUserRepository $users,
         ?InMemoryActiveAdministratorDirectory $directory = null,

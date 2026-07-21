@@ -32,6 +32,8 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 #[AsAlias(SessionRepository::class)]
 final readonly class DoctrineSessionRepository implements SessionRepository
 {
+    private const string USER_ID_FILTER = 's.userId = :userId';
+
     public function __construct(
         private EntityManagerInterface $entityManager,
         private Clock $clock,
@@ -75,7 +77,7 @@ final readonly class DoctrineSessionRepository implements SessionRepository
         return $this->entityManager->createQueryBuilder()
             ->select('s')
             ->from(Session::class, 's')
-            ->where('s.userId = :userId')
+            ->where(self::USER_ID_FILTER)
             ->andWhere('s.status = :active')
             ->andWhere('s.expiresAt > :now')
             ->orderBy('s.createdAt', 'DESC')
@@ -104,7 +106,7 @@ final readonly class DoctrineSessionRepository implements SessionRepository
     {
         $affected = $this->entityManager->createQueryBuilder()
             ->delete(Session::class, 's')
-            ->where('s.userId = :userId')
+            ->where(self::USER_ID_FILTER)
             ->setParameter('userId', $userId)
             ->getQuery()
             ->execute()
@@ -126,7 +128,7 @@ final readonly class DoctrineSessionRepository implements SessionRepository
             ->set('s.status', ':revoked')
             ->set('s.revokedAt', ':now')
             ->set('s.updatedAt', ':now')
-            ->where('s.userId = :userId')
+            ->where(self::USER_ID_FILTER)
             ->andWhere('s.status = :active')
             ->setParameter('revoked', SessionStatus::REVOKED->value)
             ->setParameter('active', SessionStatus::ACTIVE->value)

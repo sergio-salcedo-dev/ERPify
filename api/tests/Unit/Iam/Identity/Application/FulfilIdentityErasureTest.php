@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Iam\Identity\Application;
 use DateTimeImmutable;
 use Erpify\Iam\Identity\Application\EraseIdentitySubject;
 use Erpify\Iam\Identity\Application\FulfilIdentityErasure;
+use Erpify\Iam\Identity\Application\FulfilIdentityErasureResult;
 use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
 use Erpify\Iam\Identity\Domain\Exception\LastActiveAdministratorProtected;
 use Erpify\Iam\Identity\Domain\Exception\SelfErasureForbidden;
@@ -39,6 +40,9 @@ use RuntimeException;
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[CoversClass(FulfilIdentityErasure::class)]
+#[CoversClass(FulfilIdentityErasureResult::class)]
+#[CoversClass(SelfErasureForbidden::class)]
+#[CoversClass(LastActiveAdministratorProtected::class)]
 final class FulfilIdentityErasureTest extends TestCase
 {
     private const string ACTING_ADMIN_ID = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a90';
