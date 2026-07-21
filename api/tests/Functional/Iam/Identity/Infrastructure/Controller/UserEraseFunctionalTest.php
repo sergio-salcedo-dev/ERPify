@@ -11,8 +11,10 @@ use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Iam\Session\Domain\Repository\SessionRepository;
 use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Shared\Access\Domain\Role;
+use Erpify\Shared\Audit\Application\AuditActorAnonymiser;
 use Erpify\Tests\DataFixtures\UserFixtureFactory;
 use Erpify\Tests\Functional\AuthenticatesFunctionalRequests;
+use Erpify\Tests\Functional\Iam\Identity\Fixtures\FailingAuditActorAnonymiser;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
@@ -77,6 +79,36 @@ final class UserEraseFunctionalTest extends WebTestCase
         $adminId = $this->idOfEmail(self::FUNCTIONAL_ADMIN_EMAIL);
         $this->assertSame(1, $this->countActionByActor('GDPR_SUBJECT_ERASED', $adminId));
         $this->assertSame(1, $this->countActionByActor('GDPR_ERASURE_EXECUTED', $adminId));
+    }
+
+    public function testAFailedTrailAnonymisationRollsBackTheEntireErasure(): void
+    {
+        $this->resetSubject();
+        $this->persistSubject();
+        $this->seedSubjectAuditRow();
+        $this->seedSubjectSession();
+
+        // Fail the anonymisation link — outside the request's auth path — after the identity delete but before the
+        // session purge. disableReboot keeps the override in the container the erase request resolves from.
+        self::getContainer()->set(AuditActorAnonymiser::class, new FailingAuditActorAnonymiser());
+        $this->client->disableReboot();
+        $this->authenticateAdminClient($this->client);
+
+        // Compliance rows are counted as a delta — sibling tests on the shared dev DB leave admin-signed rows.
+        $adminId = $this->idOfEmail(self::FUNCTIONAL_ADMIN_EMAIL);
+        $subjectErasedBefore = $this->countActionByActor('GDPR_SUBJECT_ERASED', $adminId);
+        $erasureExecutedBefore = $this->countActionByActor('GDPR_ERASURE_EXECUTED', $adminId);
+
+        $this->erase(self::TARGET_ID, expectedStatusCode: 500);
+
+        // The whole unit rolled back: the identity, its still-attributed (un-erased) audit row and its session all
+        // survive, and neither compliance row was written for this erase.
+        $this->assertSame(1, $this->countIdentity(self::TARGET_ID));
+        $this->assertSame(1, $this->countActiveSessionRows(self::TARGET_ID));
+        $this->assertSame(1, $this->countAuditRowsAttributedTo(self::TARGET_ID));
+        $this->assertFalse($this->seededAuditRowIsErased());
+        $this->assertSame($subjectErasedBefore, $this->countActionByActor('GDPR_SUBJECT_ERASED', $adminId));
+        $this->assertSame($erasureExecutedBefore, $this->countActionByActor('GDPR_ERASURE_EXECUTED', $adminId));
     }
 
     public function testANonAdminIsForbidden(): void

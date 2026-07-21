@@ -76,9 +76,11 @@ final readonly class FulfilIdentityErasure
                 );
 
                 if ($result->erasedAnything()) {
+                    // Counts only. Recording the subject id beside its anonymisation pseudonym would be a
+                    // reversible crosswalk — this row shares the request's correlation id with GDPR_SUBJECT_ERASED
+                    // (which carries the subject id), so a pseudonym here re-links the anonymised trail to the
+                    // person, defeating the anonymisation. Which subject was erased lives in GDPR_SUBJECT_ERASED.
                     $this->auditLogger->log(self::ERASURE_ACTION, AuditLevel::SECURITY, null, [
-                        'subject_user_id' => $subjectId,
-                        'anonymized_actor_id' => $anonymisation->pseudonym,
                         'affected_rows' => $anonymisation->affectedRows,
                         'reset_tokens_deleted' => $identity->resetTokensDeleted,
                         'sessions_deleted' => $sessionsDeleted,
@@ -94,7 +96,9 @@ final readonly class FulfilIdentityErasure
     {
         $actorId = $this->actorContext->current()->actorId;
 
-        if (null !== $actorId && $actorId === $subjectId) {
+        // RFC 4122 hex is case-insensitive: the route id and the sealed actor id can spell one UUID in different
+        // case, so compare case-insensitively (as the ≥1-admin directory does) — a `===` here would be bypassable.
+        if (null !== $actorId && 0 === \strcasecmp($actorId, $subjectId)) {
             throw SelfErasureForbidden::forActor($subjectId);
         }
     }

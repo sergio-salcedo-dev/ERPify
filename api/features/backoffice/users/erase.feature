@@ -34,9 +34,11 @@ Feature: Erase an identity (GDPR right to erasure)
     And there should have 1 records in SQL result
     And I execute the SQL query "SELECT id FROM audit_log WHERE correlation_id = '0190f200-0000-7000-8000-00000000ee51' AND action = 'GDPR_ERASURE_EXECUTED' AND actor_id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66'"
     And there should have 1 records in SQL result
-    # Budget canary: the admission gate read, the ≥1-admin guard EXISTS (FOR UPDATE), the reset-token delete, the
-    # identity delete, the GDPR_SUBJECT_ERASED insert, the trail-anonymisation UPDATE, the session delete and the
-    # GDPR_ERASURE_EXECUTED insert, wrapped (+2 BEGIN/COMMIT). A shift means an added round trip — re-measure.
+    # Budget canary (14 on "default"). In one transaction (+2 BEGIN/COMMIT): the ≥1-admin guard SELECT … FOR
+    # UPDATE, the reset-token delete, the identity find and delete, the GDPR_SUBJECT_ERASED insert, the trail-
+    # anonymisation UPDATE, the session delete and the GDPR_ERASURE_EXECUTED insert (= 10). The remaining reads
+    # resolve the acting admin and its permissions before the controller. A shift means an added round trip —
+    # re-measure, don't just bump the number.
     And 14 requests got executed for doctrine connection "default"
 
   @anonymous
@@ -61,6 +63,13 @@ Feature: Erase an identity (GDPR right to erasure)
     When I send a "DELETE" request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66"
     Then the response status code should be 409
     And the header "Content-Type" should be equal to "application/problem+json"
+    And the JSON node "type" should be equal to "self-erasure-forbidden"
+    And there should have 1 "Erpify\Iam\Identity\Domain\Entity\User" entities found by "id=0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66"
+
+  Scenario: Self-erasure is refused even when the admin spells their own id in a different case
+    Given I am logged in as an administrator
+    When I send a "DELETE" request to "/backoffice/users/0190A1B2-C3D4-7E5F-8A9B-0C1D2E3F4A66"
+    Then the response status code should be 409
     And the JSON node "type" should be equal to "self-erasure-forbidden"
     And there should have 1 "Erpify\Iam\Identity\Domain\Entity\User" entities found by "id=0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66"
 

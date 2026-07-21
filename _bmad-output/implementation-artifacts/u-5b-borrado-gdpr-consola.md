@@ -4,7 +4,7 @@ baseline_commit: 3ec79a0372d725a7e46b8a7e77f88ee01a750d1d
 
 # Story 1.7 (U-5b): Borrado GDPR desde la consola
 
-Status: review
+Status: done
 
 <!-- Validación opcional: correr `validate-create-story` antes de `dev-story` para un check de calidad. -->
 
@@ -76,6 +76,10 @@ del rastro (`AuditActorAnonymiser::anonymise` sobre `actor_id`/`ip`/`user_agent`
 **When** se intenta erasar,
 **Then** se rechaza con **409 `last-active-administrator-protected`**; el guard corre **dentro** de la transacción
 del erase (lock `FOR UPDATE`, antes del delete) para ser race-safe. No puede dejar la org sin ADMIN.
+> **Sobre HTTP este 409 es inalcanzable directamente** (consecuencia de D7, ver Completion Notes): la única forma de
+> apuntar al último ADMIN es que sea uno mismo, y el auto-borrado se rechaza antes con 409 `self-erasure-forbidden`.
+> El guard ≥1-ADMIN queda como defensa off-request (CLI, actor `system`), **cubierto a nivel unit + CLI**; HTTP/Behat
+> ejercitan el rechazo de auto-borrado (incluido el id propio en distinto case, que también debe rechazarse).
 
 **AC5 — Atribución: negocio intacto, rastro des-identificado.**
 **Given** un usuario erasado,
@@ -170,8 +174,9 @@ residuo en silencio. *(Decisión D4 — endurecida sobre el consenso interno; ve
       `ip`/`device` no nulos) y asertar `SELECT COUNT(*) FROM iam_session WHERE user_id = subject == 0` tras el 204.
 - [x] B6. **Behat `api/features/backoffice/users/erase.feature`** (matriz de `status.feature`): 204 éxito, 401
       `unauthenticated`, 403 `forbidden` (viewer + audit-reader), 400 `invalid-uuid`, 404 `user-not-found`, 409
-      `last-active-administrator-protected`; assert del row `GDPR_SUBJECT_ERASED` y de la anonimización (con el mismo seed
-      de B5). **Sin esta feature `make php.behat` pasa en vacío y AC9 no ejercita el erase.** Presupuesto de queries:
+      `self-erasure-forbidden` (incluido el id propio en distinto case; el 409 `last-active-administrator-protected`
+      es inalcanzable por HTTP → cubierto en unit + CLI, ver AC4); assert del row `GDPR_SUBJECT_ERASED` y de la
+      anonimización (con el mismo seed de B5). **Sin esta feature `make php.behat` pasa en vacío y AC9 no ejercita el erase.** Presupuesto de queries:
       `assertEquals` exacto (mídelo, no lo asumas).
 
 ### C — API: CLI y self-audit (AC2, AC5) · Decisiones D3, D5

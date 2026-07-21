@@ -80,9 +80,8 @@ final class FulfilIdentityErasureTest extends TestCase
         $this->assertSame('GDPR_SUBJECT_ERASED', $audit->records[0]['action']);
         $this->assertSame('GDPR_ERASURE_EXECUTED', $audit->records[1]['action']);
         $this->assertSame(AuditLevel::SECURITY, $audit->records[1]['level']);
+        // Counts only — never the subject id beside its pseudonym, which would re-link the anonymised trail.
         $this->assertSame([
-            'subject_user_id' => UserMother::DEFAULT_ID,
-            'anonymized_actor_id' => $anonymiser->pseudonym,
             'affected_rows' => 3,
             'reset_tokens_deleted' => 1,
             'sessions_deleted' => 1,
@@ -139,6 +138,41 @@ final class FulfilIdentityErasureTest extends TestCase
             $this->fail('Expected SelfErasureForbidden.');
         } catch (SelfErasureForbidden) {
             // refused before the transaction opens — the admin guard is never even consulted
+        }
+
+        $this->assertFalse($users->removeCalled);
+        $this->assertSame([], $directory->askedWithout);
+        $this->assertSame([], $anonymiser->anonymisedActorIds);
+        $this->assertSame([], $sessions->deleteAllCalls);
+    }
+
+    public function testAnActorCannotEraseTheirOwnIdentityUnderADifferentUuidCasing(): void
+    {
+        // DEFAULT_ID carries hex letters, so upper-casing it yields the same UUID in a different case.
+        $upperCasedOwnId = \strtoupper(UserMother::DEFAULT_ID);
+
+        $users = new InMemoryUserRepository(UserMother::create());
+        $anonymiser = new RecordingAuditActorAnonymiser(matchCount: 3);
+        $sessions = new InMemorySessionRepository();
+        $directory = new InMemoryActiveAdministratorDirectory([UserMother::DEFAULT_ID => true]);
+
+        // The sealed actor id is canonical lower case; the same UUID spelled upper case still passes Uuid::ensure
+        // (RFC 4122 validation is case-insensitive). The self-erasure refusal must hold regardless of casing.
+        $useCase = $this->useCase(
+            $users,
+            new InMemoryPasswordResetTokenRepository(),
+            new RecordingAuditLogger(),
+            $anonymiser,
+            $sessions,
+            $directory,
+            ActorContext::forUser(UserMother::DEFAULT_ID),
+        );
+
+        try {
+            $useCase->execute($upperCasedOwnId);
+            $this->fail('Expected SelfErasureForbidden.');
+        } catch (SelfErasureForbidden) {
+            // refused before the transaction opens — a case-flipped id is still the actor's own identity
         }
 
         $this->assertFalse($users->removeCalled);

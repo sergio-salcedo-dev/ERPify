@@ -36,6 +36,10 @@ final readonly class UserEraseController
 
     public function __invoke(string $id): Response
     {
+        // A well-formed id with no live identity is a 404 for the console (which only ever erases a listed row).
+        // The service still runs idempotently first, so a residual trail from a legacy identity-only delete gets
+        // anonymised (and self-audited) before this 404 — a completed cleanup, not a no-op. Do not gate the erase
+        // on this branch: that would leave such orphaned rows un-anonymised over HTTP.
         if (!$this->fulfilIdentityErasure->execute($id)->identityErased) {
             throw UserNotFound::withId($id);
         }
