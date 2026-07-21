@@ -27,11 +27,12 @@ function FlowMap({ flow }: Readonly<{ flow: Flow }>) {
           const Icon = step.icon;
           const isLast = index === flow.steps.length - 1;
           return (
-            <li key={step.title} className="flow__map-node flex items-start gap-1.5">
+            <li key={step.id} className="flow__map-node flex items-start gap-1.5">
               <a
                 href={`#${flow.id}-step-${index + 1}`}
                 className="hover:bg-muted/60 focus-visible:ring-ring flex w-21 flex-col items-center gap-1 rounded-lg p-1.5 text-center focus-visible:ring-2 focus-visible:outline-none"
                 title={`Ir al paso ${index + 1}: ${step.title}`}
+                data-testid={`docs-flow__map-link-${flow.id}-${step.id}`}
               >
                 <span
                   className={cn(
@@ -225,10 +226,10 @@ function FlowJourney({ flow }: Readonly<{ flow: Flow }>) {
           const isLast = index === flow.steps.length - 1;
           return (
             <li
-              key={step.title}
+              key={step.id}
               id={`${flow.id}-step-${index + 1}`}
               className="flow__step flex scroll-mt-24 gap-4"
-              data-testid={`docs-flow__step-${flow.id}-${index + 1}`}
+              data-testid={`docs-flow__step-${flow.id}-${step.id}`}
             >
               <div className="flow__step-rail flex flex-col items-center">
                 <span
