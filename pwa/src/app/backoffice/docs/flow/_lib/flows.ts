@@ -23,6 +23,12 @@ import {
 export type FlowTone = "brand" | "success" | "warning" | "accent";
 
 export interface FlowStep {
+  /**
+   * Stable QA identity — the suffix of the step's `data-testid` (journey step
+   * and map jump-link). A semantic slug tied to what the step *is*, so it stays
+   * fixed under reorder/insertion — never an array index (test-id ADR, D2).
+   */
+  id: string;
   icon: LucideIcon;
   tone: FlowTone;
   /** Short, concrete title — names the real piece doing the work. */
@@ -122,6 +128,7 @@ const requestLifecycle: Flow = {
   },
   steps: [
     {
+      id: "browser-action",
       icon: MousePointerClick,
       tone: "brand",
       title: "Acción en el navegador",
@@ -130,6 +137,7 @@ const requestLifecycle: Flow = {
       tech: "Un evento de UI en la PWA (Next.js / React).",
     },
     {
+      id: "http-request",
       icon: LayoutDashboard,
       tone: "brand",
       title: "Petición HTTP",
@@ -138,6 +146,7 @@ const requestLifecycle: Flow = {
       tech: "La PWA llama a la API con fetch; los datos van como JSON.",
     },
     {
+      id: "server-routing",
       icon: DoorOpen,
       tone: "accent",
       title: "Enrutado en el servidor",
@@ -146,6 +155,7 @@ const requestLifecycle: Flow = {
       tech: "FrankenPHP (con Caddy embebido) actúa de reverse proxy.",
     },
     {
+      id: "api-rules",
       icon: BrainCircuit,
       tone: "success",
       title: "La API aplica las reglas",
@@ -154,6 +164,7 @@ const requestLifecycle: Flow = {
       tech: "Un controlador Symfony delega en un caso de uso (capa de aplicación).",
     },
     {
+      id: "database",
       icon: Database,
       tone: "success",
       title: "Base de datos",
@@ -162,6 +173,7 @@ const requestLifecycle: Flow = {
       tech: "PostgreSQL a través de Doctrine, dentro de una transacción.",
     },
     {
+      id: "domain-event",
       icon: Zap,
       tone: "warning",
       title: "Evento de dominio",
@@ -170,6 +182,7 @@ const requestLifecycle: Flow = {
       tech: "El evento de dominio se registra y persiste (auditoría / outbox).",
     },
     {
+      id: "queue-worker",
       icon: Cog,
       tone: "warning",
       title: "Cola y worker",
@@ -178,6 +191,7 @@ const requestLifecycle: Flow = {
       tech: "Symfony Messenger entrega el evento a un worker asíncrono.",
     },
     {
+      id: "realtime",
       icon: RadioTower,
       tone: "brand",
       title: "Tiempo real",
@@ -186,6 +200,7 @@ const requestLifecycle: Flow = {
       tech: "Mercure (server-sent events); la PWA actualiza la vista al recibirlo.",
     },
     {
+      id: "response",
       icon: CheckCircle2,
       tone: "success",
       title: "Respuesta",
