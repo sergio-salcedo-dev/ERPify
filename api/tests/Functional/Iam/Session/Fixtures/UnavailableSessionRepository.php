@@ -51,4 +51,10 @@ final readonly class UnavailableSessionRepository implements SessionRepository
     {
         throw SessionStoreUnavailable::storeUnreachable();
     }
+
+    #[Override]
+    public function deleteAllForUser(string $userId): int
+    {
+        throw SessionStoreUnavailable::storeUnreachable();
+    }
 }

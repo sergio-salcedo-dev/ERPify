@@ -20,6 +20,7 @@ import { UserStatusBadge } from "../_components/UserStatusBadge";
 import { RolesBadges } from "../_components/RolesBadges";
 import { UserStatusControl } from "../_components/UserStatusControl";
 import { UserRolesControl } from "../_components/UserRolesControl";
+import { UserEraseControl } from "../_components/UserEraseControl";
 
 export default function UserDetailPage() {
   const params = useParams<{ id: string }>();
@@ -204,6 +205,8 @@ export default function UserDetailPage() {
             <UserRolesControl user={user} onChanged={() => void reload()} />
 
             <UserStatusControl user={user} onChanged={() => void reload()} />
+
+            <UserEraseControl user={user} />
           </>
         ) : null}
       </div>

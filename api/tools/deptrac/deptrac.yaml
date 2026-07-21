@@ -495,3 +495,5 @@ deptrac:
             - Erpify\Iam\Identity\Infrastructure\Security\UserProvider
         Erpify\Iam\Identity\Application\RevokeSessionsBestEffort:
             - Erpify\Iam\Session\Application\RevokeAllSessions
+        Erpify\Iam\Identity\Application\FulfilIdentityErasure:
+            - Erpify\Iam\Session\Application\PurgeUserSessions

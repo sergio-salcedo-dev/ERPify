@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-23
-last_updated: 2026-07-20
+last_updated: 2026-07-21
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -132,5 +132,5 @@ development_status:
   u-3-cambio-de-estado-suspend-deactivate: done
   u-4-edicion-de-roles-candidato: done
   u-5a-cerrar-376-tombstone-actor-ids: done
-  u-5b-borrado-gdpr-consola: backlog
+  u-5b-borrado-gdpr-consola: review
   epic-users-admin-retrospective: optional

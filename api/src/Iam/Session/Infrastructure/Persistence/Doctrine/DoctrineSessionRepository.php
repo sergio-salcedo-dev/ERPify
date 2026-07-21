@@ -99,6 +99,20 @@ final readonly class DoctrineSessionRepository implements SessionRepository
         $this->bulkRevokeActive($userId, null);
     }
 
+    #[Override]
+    public function deleteAllForUser(string $userId): int
+    {
+        $affected = $this->entityManager->createQueryBuilder()
+            ->delete(Session::class, 's')
+            ->where('s.userId = :userId')
+            ->setParameter('userId', $userId)
+            ->getQuery()
+            ->execute()
+        ;
+
+        return \is_int($affected) ? $affected : 0;
+    }
+
     /**
      * Directed UPDATE flipping every currently-active session of the user to `REVOKED` (optionally excluding
      * the one in hand). Runs as SQL without hydrating the aggregates — the bulk path never needs their events.
