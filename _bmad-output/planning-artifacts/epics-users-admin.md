@@ -13,6 +13,8 @@ inputDocuments:
 
 # ERPify — Administración de usuarios (back-office / Iam) — Desglose de épica
 
+> **Estado: implementado — épica `users-admin` cerrada (2026-07-21).** Documento histórico: el estado vivo son los PRs #500–#529, el código y la retro `epic-users-admin-retro-2026-07-21.md`. No re-abrir el diseño desde aquí.
+
 ## Overview
 
 Desglosa la épica **«Administración de usuarios (Iam)» (U-0…U-4)** definida en el DAG de
