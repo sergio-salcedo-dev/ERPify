@@ -108,3 +108,10 @@ src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php => Erpify\
 # single seam. Same published-Application-service family as the session-minting orchestrator above, the reverse
 # (teardown) direction the AllSessionsRevoked event's own docblock names as its consumer.
 src/Iam/Identity/Application/RevokeSessionsBestEffort.php => Erpify\Iam\Session\Application\RevokeAllSessions
+
+# GDPR erasure → hard-delete every session. FulfilIdentityErasure (Iam/Identity Application) consumes the
+# published PurgeUserSessions use case (Iam/Session) to hard-delete the erased subject's sessions inside the same
+# transaction, leaving no residual session PII. Distinct from the reset teardown above: that soft-revokes (keeps
+# the row); erasure must drop the rows. Same published-Application-service family as the session-minting and
+# reset seams — a use case, never a reach into Session internals.
+src/Iam/Identity/Application/FulfilIdentityErasure.php => Erpify\Iam\Session\Application\PurgeUserSessions

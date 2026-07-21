@@ -53,6 +53,9 @@ import { ChangeUserStatus } from "../../../backoffice/user/application/ChangeUse
 import { ApiChangeUserRolesRepository } from "../../../backoffice/user/infrastructure/ApiChangeUserRolesRepository";
 import type { ChangeUserRolesRepository } from "../../../backoffice/user/domain/ChangeUserRolesRepository";
 import { ChangeUserRoles } from "../../../backoffice/user/application/ChangeUserRoles";
+import { ApiEraseIdentityRepository } from "../../../backoffice/user/infrastructure/ApiEraseIdentityRepository";
+import type { EraseIdentityRepository } from "../../../backoffice/user/domain/EraseIdentityRepository";
+import { FulfilIdentityErasure } from "../../../backoffice/user/application/FulfilIdentityErasure";
 import { ApiIdentityRepository } from "@/context/shared/access/infrastructure/ApiIdentityRepository";
 import type { IdentityRepository } from "@/context/shared/access/domain/IdentityRepository";
 import { ApiSessionsRepository } from "@/context/shared/access/infrastructure/ApiSessionsRepository";
@@ -230,6 +233,14 @@ container
   .to(ApiChangeUserRolesRepository)
   .inSingletonScope();
 container.bind<ChangeUserRoles>("BackOfficeChangeUserRoles").to(ChangeUserRoles);
+
+// Identity write side: GDPR erasure through its own destructive identity-shaped port — never the generic
+// CrudRepository.delete(). Stateless adapter singleton; transient use case.
+container
+  .bind<EraseIdentityRepository>("BackOfficeEraseIdentityRepository")
+  .to(ApiEraseIdentityRepository)
+  .inSingletonScope();
+container.bind<FulfilIdentityErasure>("BackOfficeFulfilIdentityErasure").to(FulfilIdentityErasure);
 
 // Session sign-in: a real HTTP adapter over the injected HttpClient,
 // which the container binds to MockHttpClient under test.

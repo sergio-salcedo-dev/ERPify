@@ -26,9 +26,10 @@ namespace Erpify\Iam\Identity\Infrastructure\Security;
 final readonly class PermissionCatalog
 {
     /**
-     * `users.erase` has no endpoint yet: it is declared ahead of the use case that will reach it, matching the
-     * seam {@see StaticAuthorizationPolicy} documents. The completeness gate asserts the catalog is a superset
-     * of what is gated, never an equality, so it passes.
+     * Every published permission, each backing a gated route. The completeness gate
+     * ({@see \Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security\PermissionCatalogCoversEveryGatedRouteTest})
+     * asserts the catalog is a *superset* of what `#[IsGranted]` gates, never an equality — so a permission may
+     * be declared here ahead of the endpoint that reaches it without breaking the gate.
      *
      * @var list<string>
      */

@@ -284,9 +284,16 @@ you change anything here.
       loudly** outside dev/test) and refuse to emit a non-HTTPS link outside dev/test; token-bearing emails stay
       **synchronous best-effort** (never routed through a Messenger transport, which would serialise the raw
       token); only the token-free password-changed notification rides the async reactor. Retention: expired
-      reset tokens are swept by `identity:password-reset-tokens:prune` (schedule it in prod cron) and
-      `identity:gdpr:erase-subject` hard-deletes an identity plus its reset tokens with a `GDPR_SUBJECT_ERASED`
-      audit entry.
+      reset tokens are swept by `identity:password-reset-tokens:prune` (schedule it in prod cron). **GDPR
+      identity erasure** runs through `FulfilIdentityErasure` (chained + atomic): it hard-deletes the identity
+      plus its reset tokens (`GDPR_SUBJECT_ERASED`), anonymises every audit row the subject authored, hard-deletes
+      its `iam_session` rows (no residual `ip`/`device` PII) and self-audits `GDPR_ERASURE_EXECUTED` — all in one
+      transaction, rolled back as a unit on any failure. It is reachable both by the `identity:gdpr:erase-subject`
+      CLI and, new here, by the **ADMIN-only `DELETE /api/v1/backoffice/users/{id}`** (gated `#[IsGranted('users.erase')]`,
+      route-id `Uuid::ensure`'d, all errors through the RFC 9457 pipeline — never a manual body; a 204 carries no
+      body to leak). The console surfaces it as a **type-to-confirm** destructive action (the admin retypes the
+      subject's email); the redirect is `safeHref`-wrapped and no PII/JWT is written to client storage. The write
+      keeps ≥1 active administrator (409) and refuses self-erasure (409 `self-erasure-forbidden`).
 - [ ] **Session firewall (`security.yaml`, `main`):** `json_login` over an **httpOnly** session cookie
       (`SameSite=Lax`, `Secure=auto`) — no JWT/token in the client. A failed login flows through the RFC 9457
       pipeline as a **401 `unauthenticated`** (never a manual `JsonResponse`); the message is **normalised to a

@@ -84,6 +84,8 @@ export const API_ENDPOINTS = {
       DETAILS: userPath,
       CHANGE_STATUS: (id: string): string => `${userPath(id)}/status`,
       CHANGE_ROLES: (id: string): string => `${userPath(id)}/roles`,
+      // GDPR erasure — a DELETE on the detail URL (204, no body). Same target as DETAILS, different verb.
+      ERASE: userPath,
     },
     AUDIT: {
       TIMELINE: `${BACKOFFICE_PREFIX}/audit/timeline`,

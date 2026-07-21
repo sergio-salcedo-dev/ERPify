@@ -49,4 +49,12 @@ interface SessionRepository
      * Bulk-revokes every currently-active session of the user (the reset-everywhere capability).
      */
     public function revokeAllForUser(string $userId): void;
+
+    /**
+     * Hard-deletes every session row of the user — active or not — and returns how many were removed. Unlike
+     * the revocations (which flip a status but keep the row, with its `ip`/`device`), this drops the rows
+     * outright: the GDPR-erasure path needs the subject's residual session PII gone, not merely marked
+     * revoked. Idempotent — a second pass with a subject that has no rows deletes nothing and returns 0.
+     */
+    public function deleteAllForUser(string $userId): int;
 }

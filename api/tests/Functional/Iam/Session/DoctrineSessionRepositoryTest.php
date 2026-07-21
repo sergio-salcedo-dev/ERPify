@@ -136,6 +136,37 @@ final class DoctrineSessionRepositoryTest extends KernelTestCase
         });
     }
 
+    public function testDeleteAllForUserHardDeletesEverySessionOfTheUserAndReturnsTheCount(): void
+    {
+        $this->inRolledBackTransaction(function (): void {
+            $userId = Uuid::generate();
+            $otherId = Uuid::generate();
+            // Two rows for the subject (one active, one time-expired — both are rows, expiry is a read predicate)
+            // plus one for a different user that must survive.
+            $this->repository->save($this->activeSession(Uuid::generate(), $userId, '+1 hour'));
+            $this->repository->save($this->activeSession(Uuid::generate(), $userId, '-1 hour'));
+            $this->repository->save($this->activeSession(Uuid::generate(), $otherId, '+1 hour'));
+
+            $this->entityManager->clear();
+
+            $deleted = $this->repository->deleteAllForUser($userId);
+
+            $this->assertSame(2, $deleted);
+            $this->assertSame(0, $this->rowCountForUser($userId));
+            $this->assertSame(1, $this->rowCountForUser($otherId));
+        });
+    }
+
+    private function rowCountForUser(string $userId): int
+    {
+        $count = $this->connection->fetchOne(
+            'SELECT COUNT(*) FROM iam_session WHERE user_id = CAST(:id AS uuid)',
+            ['id' => $userId],
+        );
+
+        return \is_numeric($count) ? (int) $count : 0;
+    }
+
     private function activeSession(string $id, string $userId, string $expiryOffset): Session
     {
         $now = new DateTimeImmutable(self::NOW);
