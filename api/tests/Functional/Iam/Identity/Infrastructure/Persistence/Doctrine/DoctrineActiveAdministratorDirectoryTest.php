@@ -16,8 +16,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 /**
  * Proves the guard adapter against REAL Postgres — the `json`→`jsonb` role containment the in-memory double
  * can only approximate. An active administrator is a row whose status is `ACTIVE` and whose `roles` contain
- * `ADMIN`; the query excludes the passed id, so the last active admin never rescues itself, and a SUSPENDED /
- * DEACTIVATED admin or an active non-admin never counts.
+ * `ADMIN`; the query excludes the passed id, so the last active admin never rescues itself, and a SUSPENDED,
+ * DEACTIVATED or INVITED admin or an active non-admin never counts.
  *
  * Each test runs inside a rolled-back transaction over a truncated `identity_user`, so the shared dev DB is
  * left untouched.
@@ -34,6 +34,8 @@ final class DoctrineActiveAdministratorDirectoryTest extends KernelTestCase
     private const string SUSPENDED_ADMIN = '0190f100-0000-7000-8000-0000000000a3';
 
     private const string DEACTIVATED_ADMIN = '0190f100-0000-7000-8000-0000000000a4';
+
+    private const string INVITED_ADMIN = '0190f100-0000-7000-8000-0000000000a6';
 
     private const string ACTIVE_VIEWER = '0190f100-0000-7000-8000-0000000000a5';
 
@@ -78,12 +80,15 @@ final class DoctrineActiveAdministratorDirectoryTest extends KernelTestCase
         });
     }
 
-    public function testASuspendedOrDeactivatedAdministratorDoesNotCount(): void
+    public function testANonActiveAdministratorDoesNotCount(): void
     {
         $this->inRolledBackTransaction(function (): void {
             $this->seed(self::ADMIN_A, 'admin-a@erpify.test', [Role::ADMIN->value]);
             $this->seed(self::SUSPENDED_ADMIN, 'suspended-admin@erpify.test', [Role::ADMIN->value], 'SUSPENDED');
             $this->seed(self::DEACTIVATED_ADMIN, 'deactivated-admin@erpify.test', [Role::ADMIN->value], 'DEACTIVATED');
+            // An INVITED admin holds the role but has never activated, so it must not rescue the last ACTIVE
+            // admin any more than a SUSPENDED or DEACTIVATED one does — the guard filters on `status = ACTIVE`.
+            $this->seed(self::INVITED_ADMIN, 'invited-admin@erpify.test', [Role::ADMIN->value], 'INVITED');
 
             $this->assertFalse($this->directory->keepsAnActiveAdminWithout(self::ADMIN_A));
         });

@@ -110,6 +110,24 @@ Feature: Change an identity's status (suspend / deactivate)
     And there should be 0 events stored named "erpify.iam.identity.suspended"
     And there should be 0 events stored named "erpify.iam.session.all-revoked"
 
+  # Deactivating a SUSPENDED identity hits the same `guardTransitionTo(requiredFrom: ACTIVE)` branch as
+  # re-suspend: only an ACTIVE identity may be deactivated, so a post-active wall is never crossed a second
+  # time. The last-active-admin guard passes first (sam is a MANAGER, and an ACTIVE ADMIN remains), so the
+  # 409 is the transition wall, not the admin-protection one.
+  Scenario: Deactivating an already-suspended identity is a 409 invalid-identity-transition (not idempotent)
+    Given I am logged in as an administrator
+    And the stored events are cleared
+    When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a61/status" with body:
+    """
+    {
+      "status": "DEACTIVATED"
+    }
+    """
+    Then the response status code should be 409
+    And the JSON node "type" should be equal to "invalid-identity-transition"
+    And there should be 0 events stored named "erpify.iam.identity.deactivated"
+    And there should be 0 events stored named "erpify.iam.session.all-revoked"
+
   Scenario Outline: A target outside the two legal transitions is a 422, before the domain is touched
     Given I am logged in as an administrator
     And the stored events are cleared
@@ -128,6 +146,28 @@ Feature: Change an identity's status (suspend / deactivate)
       | FROZEN  |
       | ACTIVE  |
       | INVITED |
+
+  # A payload that never resolves to a valid IdentityStatus target — key missing, null, empty, or wrong-case —
+  # is refused at the HTTP mapping boundary as the same 422 validation-failed, before any domain method runs, so
+  # no transition event is recorded. Distinct from the outline above, whose values ARE valid enum cases yet fall
+  # outside the two offered transitions; here the value is not even a well-typed IdentityStatus.
+  Scenario Outline: A malformed status payload is a 422 validation-failed, before the domain is touched
+    Given I am logged in as an administrator
+    And the stored events are cleared
+    When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5e/status" with body:
+    """
+    <body>
+    """
+    Then the response status code should be 422
+    And the JSON node "type" should be equal to "validation-failed"
+    And there should be 0 events stored named "erpify.iam.identity.suspended"
+
+    Examples:
+      | body                    |
+      | {}                      |
+      | {"status": null}        |
+      | {"status": ""}          |
+      | {"status": "suspended"} |
 
   Scenario Outline: A malformed id returns a 400 invalid-uuid Problem Details body
     Given I am logged in as an administrator
