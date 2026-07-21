@@ -76,6 +76,12 @@ const eslintConfig = [
           message:
             "A dynamic test id (data-testid or a testId/testIdPrefix prop) must not be keyed by a positional index (index/i/idx/n) — it breaks under reorder, filter, or pagination. Suffix with the entity's stable id (UUID) instead. See docs/adr/test-id-naming-contract.md.",
         },
+        {
+          selector:
+            "JSXAttribute[name.name=/^data-testid$|^testId(Prefix)?$|TestId(Prefix)?$/] > JSXExpressionContainer > BinaryExpression Identifier[name=/^(index|idx|i|n)$/]",
+          message:
+            "A dynamic test id (data-testid or a testId/testIdPrefix prop) must not be keyed by a positional index (index/i/idx/n) — it breaks under reorder, filter, or pagination. Suffix with the entity's stable id (UUID) instead. See docs/adr/test-id-naming-contract.md.",
+        },
       ],
       "react/react-in-jsx-scope": "off", // Next.js doesn't need it
       "react/prop-types": "off", // Using TS

@@ -44,9 +44,15 @@ Both internal reviews and an external second opinion converge on **keeping the c
   3. **Lint — no presentation-derived testid:** a `data-testid` value must never be mechanically derived from a presentation-layer expression (`className`, `cn()`, `clsx()`, CSS-module bindings, Tailwind/style helpers). Broader than "no className" so it survives future styling approaches. This is *defense-in-depth* — it stops **derivation**, not a hand-typed copy of the same text (that path is covered by D3 + the guard).
   4. **Lint — dynamic templates carry a uniqueness token (heuristic):** a dynamic `data-testid` template must interpolate at least one **non-constant** expression and must **not** interpolate a positional index (`index`/`i`/`idx`/`n`). *Honest scope:* a heuristic backstop, **not** a uniqueness proof — real keyed ids interpolate `${area}` / `${chip.key}` / `${segment.value}`, not only `${*.id}`, so the rule cannot require an `id`-named token and cannot guarantee runtime uniqueness for non-UUID keys; that still rests on the author choosing a unique key + review.
 
+## Decision — coverage (which elements carry a testid)
+
+- **D7 — Presence: every interactive/CTA control and every element that is a QA assertion target carries a stable testid — proactively, and review-enforced.** D1–D6 govern *how* a testid is shaped; D7 governs *whether one exists*. An absent testid is not evidence one isn't needed: QA targets outlive the presence of a current test, so coverage is decided by the element's role (a CTA, a state surface, a list row), not by whether a test consumes it today. The malformation bans (D6.3–D6.4) reject a *bad* testid but cannot require a *present* one — there is no reliable syntactic signal for "this element is a QA target" — so presence rests on the same load-bearing review the heuristics already lean on.
+  - *Discarded:* gating presence on a current test consumer — couples a durable QA address to a transient test and deletes the affordance the next test would need; the "internal / no-target-yet" exemption is exactly how missing and index-keyed ids creep back.
+
 ## Consequences
 
 - The uniqueness invariant becomes an *intended contract* with a written rationale, not an accident guarded by one test.
+- **Coverage (D7) is review-enforced, not lint-enforced** — a deliberate asymmetry: a *malformed* testid is syntactically detectable, a *missing* one is not.
 - Two new lint rules (D6.3, D6.4) join `make pwa.quality`; the guard test is never weakened. **No id churn.**
 - **Accepted residual:** `--<state>` (e.g. `access-wall--suspended`) reads exactly like a BEM modifier even though D5 disclaims BEM semantics — a coherence wrinkle we accept as the price of not renaming. Harmless: one variant mounts at a time and the value stays app-wide-unique.
 - **Accepted residual:** the dynamic-token lint (D6.4) is heuristic and cannot prove runtime uniqueness for non-UUID keys — D3 and review stay load-bearing.
