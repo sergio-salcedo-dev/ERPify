@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-23
-last_updated: 2026-07-21
+last_updated: 2026-07-22
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -141,12 +141,19 @@ development_status:
 # try/catch (#520), 500 array-claves en invitación (#509), InvitedIdentityUnavailable markerless-500 (#507), y
 # las "5 páginas de detalle" (la nota de review de U-4 era falsa — ya distinguen 404 vía ViewStatus.NOT_FOUND).
 # Resueltos tras la retro y removidos: a11y status:0 (#531), aserciones de status.feature (#532).
+# NOTA (2026-07-22, verificado contra main, no contra esta foto): removidos otros 3.
+#   · realtime/authorize — DECIDIDO y shipped en #535: se descartó el 204-sin-cookie (borraría la señal de
+#     seguridad que audita AccessDeniedAuditListener y que Behat pinnea) y se implementó la degradación PWA:
+#     401/403 son terminales y cierran la suscripción. Residual → deferred-work.md (feed no se re-arma).
+#   · fetch-antes-del-gate — RESUELTO por otra vía en #539: el flag `enabled` en los hooks compartidos se
+#     descartó (Regla de Tres incumplida, 2 consumidores) y el gate <Can> subió por encima del hook mediante
+#     cáscaras page.tsx + _components/. Residual → deferred-work.md (gatear el menú lateral).
+#   · transporte failed — REPLANTEADO como #546: medido en main NO hay fuga viva (SendEmailMessage sin enrutar,
+#     BankAccountSnapshot excluye PII). El gap real es que nada EJECUTA esa invariante. La pasada adversarial a
+#     U-5b abrió además #545 (membership huérfana) y cerró #495 (sesiones, ya resuelto por #529); la regla de
+#     proceso quedó fijada en CLAUDE.md → "Security review on every change" → Process.
 # Quedan solo los items de DECISIÓN PROPIA:
 action_items:
-  - epic: "users-admin"
-    action: "403 de realtime/authorize al primer no-ADMIN (RM-3/RM-4, sigue abierto: 5ffa0c13 endureció selección no la degradación); U-2 acercó el trigger. Decidir 204-sin-cookie vs degradación PWA del EventSource"
-    owner: "API+PWA"
-    status: open
   - epic: "users-admin"
     action: "Política de rol del invitador (#505): cualquier ADMIN acuña ADMINs sin límite; decisión propia sobre el modelo de propagación de privilegio"
     owner: "API/Iam"
@@ -156,18 +163,6 @@ action_items:
     owner: "API/Iam"
     status: open
   - epic: "users-admin"
-    action: "Gobernanza del transporte failed (gap GDPR vivo, heredado de U-5a→U-5b): política de retención/purga de PII en messenger_messages/failed"
-    owner: "API/Shared"
-    status: open
-  - epic: "users-admin"
-    action: "Pasada adversarial retro-ajustada a U-5b (borrado GDPR, autocertificada) + fijar la regla: ninguna story de seguridad/GDPR/audit done sin review adversarial registrada"
-    owner: "process"
-    status: open
-  - epic: "users-admin"
-    action: "Fetch-antes-del-gate en la consola (hooks corren antes de <Can> → 403 desperdiciado): flag enabled en los hooks de Shared/resource (cross-cutting)"
-    owner: "PWA"
-    status: open
-  - epic: "users-admin"
-    action: "Decisiones de arquitectura diferidas (corte de próxima épica): autoridad tenancy User.roles vs Membership.roles (SI-15) + extracción del core RBAC del parking de Iam/Identity (desde II-0)"
+    action: "Decisiones de arquitectura diferidas (corte de próxima épica): autoridad tenancy User.roles vs Membership.roles (SI-15, ahora con síntoma medido en #545 — el guard ≥1-admin lee identity_user y el erase deja roles en membership) + extracción del core RBAC del parking de Iam/Identity (desde II-0)"
     owner: "architecture"
     status: open
