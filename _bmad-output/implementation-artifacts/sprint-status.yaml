@@ -137,21 +137,12 @@ development_status:
 
 # Action items — retrospectiva users-admin (2026-07-21). Principio: resolver, no acumular.
 # Detalle y triaje en epic-users-admin-retro-2026-07-21.md.
-# NOTA: 3 defers de origen resultaron deuda FANTASMA (ya en main, verificado): FetchHttpClient try/catch (#520),
-# 500 array-claves en invitación (#509), InvitedIdentityUnavailable markerless-500 (#507). Solo reconciliar.
+# NOTA: 5 items resultaron deuda FANTASMA / ya-resuelta (verificado en main) y se removieron: FetchHttpClient
+# try/catch (#520), 500 array-claves en invitación (#509), InvitedIdentityUnavailable markerless-500 (#507), y
+# las "5 páginas de detalle" (la nota de review de U-4 era falsa — ya distinguen 404 vía ViewStatus.NOT_FOUND).
+# Resueltos tras la retro y removidos: a11y status:0 (#531), aserciones de status.feature (#532).
+# Quedan solo los items de DECISIÓN PROPIA:
 action_items:
-  - epic: "users-admin"
-    action: "a11y: ProblemDisplay.tsx:198 anuncia status:0 (transporte/no-response) como aria-live=polite pese al ramp destructivo; plegar status===0 en el test de urgencia (aflorado por #520). Mecánico"
-    owner: "PWA"
-    status: open
-  - epic: "users-admin"
-    action: "5 páginas de detalle (banks/[id], bank-accounts/[id], sus edit, banks/[id]/accounts/[accountId]/edit) colapsan cualquier error a 'puede que se haya borrado'; comparar problem?.status con 404 (fix idéntico al ya hecho en el detalle de usuario). Mecánico"
-    owner: "PWA"
-    status: open
-  - epic: "users-admin"
-    action: "Aserciones de test que faltan en status.feature: status ausente/null/vacío/lowercase→422; admin INVITED no rescata al último ADMIN; SUSPENDED→DEACTIVATED→409. Blindaje, correctos por construcción hoy"
-    owner: "API"
-    status: open
   - epic: "users-admin"
     action: "403 de realtime/authorize al primer no-ADMIN (RM-3/RM-4, sigue abierto: 5ffa0c13 endureció selección no la degradación); U-2 acercó el trigger. Decidir 204-sin-cookie vs degradación PWA del EventSource"
     owner: "API+PWA"
