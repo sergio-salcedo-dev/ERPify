@@ -16,11 +16,13 @@
 # install (api/tools/phpunit holds only bootstrap.php + phpunit.dist.xml).
 #
 # PHPUNIT_MEMORY_LIMIT (make/config.mk, default 512M): the whole suite runs in
-# one process and peaks at 127–143 MB — PHPUnit's own `Memory:` line over a full
+# one process and peaks at 127–145 MB — PHPUnit's own `Memory:` line over a full
 # run, which is only observable under an already-raised limit because the run
-# dies first otherwise. The peak falls in the functional phase and lands on the
-# image's 128M default, so whichever test makes the next allocation is the one
-# that dies, a different one each run. Filtered runs stay far below it (a
+# dies first otherwise. That figure drifts up as the suite and its dependencies
+# grow — a doctrine-bundle minor moved it several MB — so read it as a floor for
+# the ceiling, not a fixed number. The peak falls in the functional phase and
+# lands on the image's 128M default, so whichever test makes the next allocation
+# is the one that dies, a different one each run. Filtered runs stay below it (a
 # `--filter` gate peaks ~55 MB), which is why php.bench and the php.lint.* gates
 # need no flag. Raised on this invocation only: the image default keeps bounding
 # real HTTP requests. 512M is margin over the measured peak, not a measured need.
