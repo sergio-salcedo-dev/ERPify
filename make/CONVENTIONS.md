@@ -236,7 +236,7 @@ Both Vitest (unit) and Playwright (E2E) run on the host, via `$(pwa_cmd)`. There
 
 ### Prerequisite
 
-Dev machines must have Node installed (version pinned in `pwa/.nvmrc` / `pwa/package.json#engines`). Document this as an onboarding prereq in `docs/development-guide-pwa.md`. This is the trade the policy makes in exchange for the speed and IDE wins above.
+Dev machines must have Node installed (version pinned in `.nvmrc` / `pwa/package.json#engines`). Document this as an onboarding prereq in `docs/development-guide-pwa.md`. This is the trade the policy makes in exchange for the speed and IDE wins above.
 
 ### When to revisit
 

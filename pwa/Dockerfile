@@ -16,6 +16,13 @@ WORKDIR /app/pwa
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# The base image ships its own npm (11.x); pin explicitly so this image, CI and
+# dev machines resolve dependencies with one npm — the version declared in
+# package.json#engines.npm. corepack is not an option: Node no longer bundles
+# it, so it is absent here. Kept above the COPY so the layer caches across
+# dependency changes.
+RUN npm install --global npm@12.0.1
+
 COPY package.json package-lock.json ./
 
 RUN npm ci

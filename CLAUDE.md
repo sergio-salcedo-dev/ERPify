@@ -160,7 +160,8 @@ Every PR — even a "small" one — MUST be self-reviewed for the common attack 
 - **Domain events / Messenger** — handlers idempotent; transports authenticated; payloads scrubbed of secrets.
 
 **Process**
-- Run `make php.quality` and `make pwa.quality` locally before pushing — PHPStan / ESLint catch many of the above implicitly. `make semgrep.scan` mechanises the three `api/` bans a taint analyser can express (Request → DQL/SQL, Request → shell, Request → redirect); everything else on this list is checked by review, and the checklist remains the control.
+- **No security, GDPR, or audit-surface work reaches `done` without a recorded adversarial pass.** Self-certification does not count: a hostile read by someone other than the author (a fresh context, a different model, or a human) is the gate, and *where it was recorded* — PR description, review thread, or the story artifact — must be stated when the work is declared done. The rule exists because this class of defect is invisible to the checklist above: the failure modes that shipped here (drain the org to zero admins under concurrency; PII surviving its own erasure) each needed someone actively trying to break the change, and the two most sensitive stories of an epic are exactly the ones that tend to skip it. A pass that finds nothing still counts — record it and say so.
+- Run `make php.quality` and `make pwa.quality` locally before pushing — PHPStan / ESLint catch many of the above implicitly. There is no taint / security-dataflow analyser: this checklist is the control.
 - For security-sensitive changes (auth, input parsing, file uploads, SQL, headers, CSP), update `PRODUCTION_SECURITY_CHECKLIST.md` and [`docs/rules/security.md`](docs/rules/security.md) if a new pattern is introduced.
 - When a finding is genuinely out of scope, file a follow-up issue rather than ship-and-forget.
 
