@@ -162,7 +162,14 @@ action_items:
     action: "Lockout por email = DoS contra admins (review U-4): revisar antes de prod (throttling adaptativo / MFA / recuperación). Descartado filtrar locked_until en el directorio de admins — no re-proponer"
     owner: "API/Iam"
     status: open
-  - epic: "users-admin"
-    action: "Decisiones de arquitectura diferidas (corte de próxima épica): autoridad tenancy User.roles vs Membership.roles (SI-15, ahora con síntoma medido en #545 — el guard ≥1-admin lee identity_user y el erase deja roles en membership) + extracción del core RBAC del parking de Iam/Identity (desde II-0)"
-    owner: "architecture"
-    status: open
+  # DECIDIDAS 2026-07-22 (round trip con IA externa, contrastado contra el repo) y removidas de aquí:
+  #   · SI-15 autoridad de roles → A1, User.roles única fuente; se elimina Membership.roles → #549.
+  #     Descartadas A2 (obligaría a cruzar frontera en auth y en el guard ≥1-admin) y A3 (consistencia
+  #     eventual en la ruta de autorización). Condición de reapertura escrita en el issue.
+  #   · Core RBAC → NO se mueve. La premisa "shared kernel de facto" es falsa: cero imports de tipo fuera
+  #     de Iam/, el acoplamiento es por literal de cadena en #[IsGranted], y Role ya vive en Shared/Access.
+  #   · Orden: #545 (seam de erasure, arregla el defecto) ANTES que #549 (limpieza de modelo). Quitar
+  #     Membership.roles NO cierra #545 — el residuo GDPR es el user_id, no los roles.
+  #   · Se descartó abrir un ADR sobre si Membership sigue siendo agregado: su organization_id se lee en
+  #     hot path de login y el seam de #545 le devuelve comportamiento, así que la forma final emerge de
+  #     esos dos cambios en vez de deliberarse antes.
