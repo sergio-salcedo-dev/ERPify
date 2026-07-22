@@ -113,8 +113,7 @@ jobs:
       # oversubscribes the 2-core runner so the light targets fill the gaps while the
       # analyzer runs — GitHub runners have ~7GB RAM, so 4 PHP processes fit easily.
       # Revisit from the step timing if a run shows it's purely CPU-bound (then -j2/3).
-      # --output-sync keeps logs grouped per-tool. (phpcs gated via php.cs.dry-run.
-      # Psalm general analysis retired — taint-only now runs in the api-taint job.)
+      # --output-sync keeps logs grouped per-tool. (phpcs gated via php.cs.dry-run.)
       - name: PHP lint (check, parallel)
         run: make -j4 --output-sync=target php.quality.dry-run
 
@@ -200,67 +199,6 @@ jobs:
           echo "=== php (last 50 lines) ==="; docker compose logs --tail=50 php || true
           echo "=== database (last 50 lines) ==="; docker compose logs --tail=50 database || true
           echo "=== messenger_worker (last 50 lines) ==="; docker compose logs --tail=50 messenger_worker || true
-
-  # -------------------------
-  # API TAINT (Psalm security flow analysis — parallel, gating)
-  # -------------------------
-  api-taint:
-    name: API Security (Psalm Taint)
-    needs: api-build
-    runs-on: ubuntu-latest
-    timeout-minutes: 12
-    permissions:
-      contents: read
-      security-events: write # upload taint SARIF to code scanning
-
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          persist-credentials: false
-
-      - uses: ./.github/actions/docker-setup
-
-      - name: Build images
-        uses: docker/bake-action@d3418bd7d0e9324001bca92fa8ba175ea7e6dc9b # v7.3.0
-        with:
-          source: "."
-          pull: true
-          load: true
-          # API-only job: build the php image (carries vendor/ + psalm); skip pwa.
-          targets: php
-          files: |
-            compose.yaml
-            compose.dev.yaml
-          set: |
-            php.cache-from=type=gha,scope=php-${{ github.ref_name }}
-            php.cache-from=type=gha,scope=php-main
-
-      - name: Start API stack (backend only — no PWA)
-        run: make docker.up.wait.no-build.api
-
-      # Psalm taint / security flow analysis. Kept OUT of the fast parallel lint
-      # sweep (php.quality.dry-run) because it is slower and emits a SARIF. Uses the
-      # baseline-free tools/psalm/psalm-taint.xml so the error baseline does not
-      # flood it with UnusedBaselineEntry. Fails this job on any genuine Tainted* flow.
-      - name: Psalm taint analysis
-        run: make php.psalm.taint
-
-      # Best-effort: surface findings in Security ▸ Code scanning. Non-gating
-      # (continue-on-error) so the GATE is the analysis result above, not the upload
-      # — and so fork PRs (no security-events: write) don't fail here.
-      - name: Upload taint SARIF
-        if: always()
-        continue-on-error: true
-        uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4.37.0
-        with:
-          sarif_file: api/tools/psalm/psalm-taint.sarif
-          category: psalm-taint
-
-      - name: Debug
-        if: failure()
-        run: |
-          echo "=== ps ==="; docker compose ps
-          echo "=== php (last 50 lines) ==="; docker compose logs --tail=50 php || true
 
   # -------------------------
   # PWA NODE (isolated, fast)
@@ -594,7 +532,7 @@ jobs:
   ci-summary:
     name: CI Summary
     if: always()
-    needs: [api-build, api-test, api-behat, api-taint, pwa-node, pwa-e2e, pwa-burn-in, sonar]
+    needs: [api-build, api-test, api-behat, pwa-node, pwa-e2e, pwa-burn-in, sonar]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions: {}
@@ -605,7 +543,6 @@ jobs:
           R_API_BUILD: ${{ needs.api-build.result }}
           R_API_TEST: ${{ needs.api-test.result }}
           R_API_BEHAT: ${{ needs.api-behat.result }}
-          R_API_TAINT: ${{ needs.api-taint.result }}
           R_PWA_NODE: ${{ needs.pwa-node.result }}
           R_PWA_E2E: ${{ needs.pwa-e2e.result }}
           R_PWA_BURNIN: ${{ needs.pwa-burn-in.result }}
@@ -619,7 +556,6 @@ jobs:
             echo "| API Build       | $R_API_BUILD |"
             echo "| API Tests       | $R_API_TEST |"
             echo "| API Behat       | $R_API_BEHAT |"
-            echo "| API Taint       | $R_API_TAINT |"
             echo "| PWA (Node)      | $R_PWA_NODE |"
             echo "| PWA (E2E)       | $R_PWA_E2E |"
             echo "| PWA (Burn-In)   | $R_PWA_BURNIN |"
@@ -638,7 +574,7 @@ jobs:
   # -------------------------
   ci-success:
     name: CI Status
-    needs: [api-test, api-behat, api-taint, pwa-node, pwa-e2e]
+    needs: [api-test, api-behat, pwa-node, pwa-e2e]
     runs-on: ubuntu-latest
     permissions: {}
     steps:

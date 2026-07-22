@@ -30,7 +30,7 @@ Follow these rules for persisting project context:
 
 ### API (PHP/Symfony)
 - **Static Analysis:** `make php.stan` is mandatory for all changed files.
-- **Code Quality:** `make php.quality` for full cleanup (PHPStan, Rector, PHP-CS-Fixer, PHPMD, PHPCS). Psalm runs taint-only (`make php.psalm.taint`, `api-taint` CI job), not in `php.quality`.
+- **Code Quality:** `make php.quality` for full cleanup (PHPStan, Rector, PHP-CS-Fixer, PHPMD, PHPCS). PHPStan `level: max` is the sole static-analysis gate.
 - **Database:** Migrations via `make db.diff`. Only edit migrations on the current branch. Applied migrations are immutable.
 
 ### PWA (TS/Next.js)

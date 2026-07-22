@@ -83,7 +83,7 @@ Each module in `make/` owns one domain. The active modules:
 | `git.mk`         | Git container config + submodules (`git.*`)                    |
 | `php.mk`         | PHP container utilities — shell, exec, ownership (`php.*`)     |
 | `php-test.mk`    | PHPUnit, Behat, benchmarks                                     |
-| `php-quality.mk` | PHPStan, Rector, PHP-CS-Fixer, PHPMD, PHPCS, Psalm taint, lint gates |
+| `php-quality.mk` | PHPStan, Rector, PHP-CS-Fixer, PHPMD, PHPCS, lint gates        |
 | `pwa.mk`         | Next.js install/dev/build/test/lint/format/clean               |
 | `ci.mk`          | CI aggregates only (composes other modules)                    |
 | `super-lint.mk`  | GitHub SuperLinter (Docker)                                    |

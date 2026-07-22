@@ -164,10 +164,9 @@ make php.cs-fixer.dry-run
 make php.md
 make php.cs                    # apply
 make php.cs.dry-run
-make php.psalm.taint           # Psalm security dataflow → SARIF (api-taint CI job)
 ```
 
-Tool configs live at `api/.php-cs-fixer.php`, `api/tools/phpstan/phpstan.neon`, `api/tools/psalm/psalm-taint.xml`, `api/rector.php`. PHPStan (`level: max`) is the sole type-checking gate; Psalm's general analysis was retired — it now runs taint-only.
+Tool configs live at `api/.php-cs-fixer.php`, `api/tools/phpstan/phpstan.neon`, `api/rector.php`. PHPStan (`level: max`) is the sole static-analysis gate; Psalm was removed entirely.
 
 ## Directory discipline
 

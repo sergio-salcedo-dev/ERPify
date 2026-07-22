@@ -63,7 +63,6 @@ ERPify/
 │   ├── composer.json
 │   ├── phpunit.xml.dist
 │   ├── tools/phpstan/phpstan.neon  # PHPStan (level: max) — sole type-checking gate
-│   ├── tools/psalm/psalm-taint.xml # Psalm taint-only (security dataflow → SARIF)
 │   ├── rector.php
 │   ├── .php-cs-fixer.php
 │   └── Dockerfile                  # FrankenPHP-based image (digest-pinned base)
