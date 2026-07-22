@@ -44,22 +44,6 @@ php.cs: ## PHPCBF (apply fixes) ; pass c= for extra args
 php.cs.dry-run: ## PHPCS (check only); pass c= for extra args
 	@$(PHP_TEST) vendor/bin/phpcs --standard=tools/phpcs/phpcs.xml src tests $(c)
 
-## —— Psalm (taint / security flow analysis only) ——
-#
-# Psalm's general static analysis was retired (chore/remove-psalm-general):
-# PHPStan at `level: max` (tools/phpstan/phpstan.neon) is the sole type-checking
-# authority. Two overlapping analysers disagreed on the same code and the frozen
-# ~492-issue psalm-baseline.xml + `--alter` auto-fix were pure friction. What
-# PHPStan has no native equivalent for — taint / security dataflow — is kept here.
-
-PSALM_TAINT_CONFIG = tools/psalm/psalm-taint.xml
-PSALM_BIN = vendor/bin/psalm
-
-# Baseline-free config (PSALM_TAINT_CONFIG) so taint mode does not flag every
-# regular baseline entry as UnusedBaselineEntry — see tools/psalm/psalm-taint.xml.
-php.psalm.taint: ## Psalm taint analysis (SARIF)
-	$(PHP_TEST) $(PSALM_BIN) --config=$(PSALM_TAINT_CONFIG) --taint-analysis --report=psalm-taint.sarif
-
 ## —— Gherkinlint ——————————————————————————————————————————————————————————
 
 GHERKINLINT := cd tools/gherkinlint && php -d error_reporting='E_ALL & ~E_DEPRECATED' ../../vendor/bin/gherkinlint
@@ -165,16 +149,14 @@ php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint
 # (all lines ≤120), so plain `phpcs` now FAILS on any new >120 (warning) / >160
 # (error) line instead of being masked by phpcbf's `exit ≤2` tolerance.
 #
-# Psalm's general analysis is no longer part of this sweep (chore/remove-psalm-general):
-# PHPStan `level: max` is the sole type-checking gate. Psalm now runs taint-only,
-# in its own CI job (`api-taint` → `make php.psalm.taint`), not here.
+# PHPStan `level: max` is the sole type-checking gate — there is no second
+# analyser to reconcile it with.
 php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.deptrac ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
 
 .PHONY: php.stan php.stan.baseline \
         php.rector php.rector.dry-run \
         php.cs-fixer php.cs-fixer.dry-run \
         php.md php.cs php.cs.dry-run \
-        php.psalm.taint \
         php.gherkin php.gherkin.rules \
         php.lint.doctrine php.lint.yaml \
         php.lint.error-contract php.lint.bounded-context php.lint.event-bus \

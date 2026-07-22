@@ -75,8 +75,8 @@ final readonly class SearchQuery
      *   - filter indexes must be a contiguous list from 0 (D1);
      *   - `after`/`before` are mutually exclusive (AR1/K2) — a request carrying both has no single
      *     navigation intent.
-     * Both live in this one `#[Assert\Callback]` so the method (and its Psalm baseline entry, an
-     * attribute-callback false positive the analyzer cannot resolve) stays stable.
+     * Both live in this one `#[Assert\Callback]` so a request carrying either defect is rejected
+     * at mapping time, in one place.
      */
     #[Assert\Callback]
     public function validateFilterIndexes(ExecutionContextInterface $context): void

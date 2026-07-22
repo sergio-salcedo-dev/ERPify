@@ -31,7 +31,6 @@ api/.phpunit.cache/
 api/.php-cs-fixer.cache
 api/tools/ecs/.php-cs-fixer.cache
 api/.phpstan.cache/
-api/.psalm.cache/
 api/.rector.cache/
 
 # Stray PHP-CS-Fixer cache (some IDE plugins drop it at the cwd)

@@ -25,7 +25,7 @@ Specific guidance for the Symfony HTTP API. Reference the root [GEMINI.md](../GE
 
 Run from the repository root:
 - `make php.stan`: Mandatory static analysis. Fix all reports before declaring "done".
-- `make php.quality`: Full cleanup (PHPStan, Rector, PHP-CS-Fixer, PHPMD, PHPCS). CI will fail if this isn't clean. Psalm runs taint-only (`make php.psalm.taint`, `api-taint` CI job), not here.
+- `make php.quality`: Full cleanup (PHPStan, Rector, PHP-CS-Fixer, PHPMD, PHPCS). CI will fail if this isn't clean. PHPStan `level: max` is the sole static-analysis gate.
 - `make db.diff`: Generate migrations from entity changes.
 - `make php.test`: Runs `php.unit` (PHPUnit) and `php.behat` (Behat).
 

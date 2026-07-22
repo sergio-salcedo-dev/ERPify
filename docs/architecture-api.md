@@ -25,7 +25,7 @@ The `api/` deployable is a Symfony 8 HTTP API on **FrankenPHP** (Caddy embedded)
 | Security        | symfony/security-core                                  | 8.0.x                                         |
 | Unit tests      | PHPUnit                                                | 13                                            |
 | E2E tests       | Behat (isolated tree)                                  | `api/tools/behat/`                            |
-| Static analysis | PHPStan (sole type gate) / Rector / Psalm (taint-only) | 2 / 2 / 6.x                                   |
+| Static analysis | PHPStan (sole gate) / Rector                           | 2 / 2                                         |
 | Style / quality | PHP-CS-Fixer / PHPCS / PHPMD                           | 3.x / 4 / —                                   |
 | Fixtures        | Hautelook Alice                                        | 2.x                                           |
 
@@ -305,7 +305,6 @@ Full reference (mapping table, header rules, observability, code map, test surfa
 | E2E / BDD         | **Behat 3** (isolated Composer tree)           | `api/tools/behat/`, features in `api/features/`, run via `make php.behat`   |
 | Fixtures          | Hautelook Alice                                | `make db.load.fixtures`                                                     |
 | Static analysis   | PHPStan (`level: max`, sole type gate), Rector | `make php.stan`, `php.rector[.dry-run]`                                     |
-| Security dataflow | Psalm taint analysis (SARIF)                   | `make php.psalm.taint` (`api-taint` CI job; general Psalm analysis retired) |
 | Style / quality   | PHP-CS-Fixer, PHPCS, PHPMD                     | `make php.quality` (aggregate)                                              |
 | Composer hygiene  | composer-unused, composer-require-checker      | `make composer.check.all`                                                   |
 

@@ -28,11 +28,6 @@ phpstan.neon
 /phpcs.xml
 ###< squizlabs/php_codesniffer ###
 
-###> vimeo/psalm ###
-# Generated taint-analysis report (make php.psalm.taint)
-/tools/psalm/*.sarif
-###< vimeo/psalm ###
-
 ###> object storage (runtime uploads — not source code) ###
 /storage/*
 !/storage/.gitkeep
