@@ -99,15 +99,10 @@ final class FixturesContext implements Context
     {
         $this->entityManager->clear();
 
+        $this->ensureDatabaseExists();
+
         $application = new Application($this->kernel);
         $application->setAutoExit(false);
-
-        $this->runConsole($application, [
-            'command' => 'doctrine:database:create',
-            '--if-not-exists' => true,
-            '--no-interaction' => true,
-            '--quiet' => true,
-        ], $scope);
 
         $this->runConsole($application, [
             'command' => 'doctrine:migrations:migrate',
@@ -149,6 +144,38 @@ final class FixturesContext implements Context
                 $scope->getScenario()->getLine(),
                 $exitCode,
             ));
+        }
+    }
+
+    /**
+     * Creates the test database when it is absent.
+     *
+     * `doctrine:database:create` is unusable here: it detects PostgreSQL with
+     * `getDriver() instanceof AbstractPostgreSQLDriver`, which is false whenever a driver
+     * middleware wraps the driver. Symfony wraps it by default, and this suite cannot opt
+     * out — the query-count assertions read the debug middleware's data holder. With the
+     * check skipped the command omits `dbname`, libpq falls back to the role name, and it
+     * fails against a database named after the role.
+     */
+    private function ensureDatabaseExists(): void
+    {
+        $connection = $this->entityManager->getConnection();
+        $params = $connection->getParams();
+        $dbName = $this->requireDbName($params);
+
+        $connection->close();
+
+        $maintenance = $this->openMaintenanceConnection($params);
+
+        try {
+            if (false !== $maintenance->fetchOne('SELECT 1 FROM pg_database WHERE datname = ?', [$dbName])) {
+                return;
+            }
+
+            // Identifiers can't be parameter-bound; the name comes from the test DSN, never user input.
+            $maintenance->executeStatement(\sprintf('CREATE DATABASE "%s"', $dbName));
+        } finally {
+            $maintenance->close();
         }
     }
 
