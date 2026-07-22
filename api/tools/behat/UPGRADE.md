@@ -17,9 +17,15 @@ any FQCN present in both.
 Do not start this migration until **all** of the following resolve cleanly
 against `symfony/*:8.0.*`:
 
-- `behat/behat` (likely `>= 3.32` or a `4.x` release)
-- `friends-of-behat/symfony-extension` (likely a `>= 2.7` release supporting
-  both Sf8 DI and the chosen Behat major)
+- `behat/behat` — `3.32.0` still requires
+  `symfony/dependency-injection: ^5.4 || ^6.4 || ^7.0`, so a `4.x` release is
+  the realistic unblock.
+- `friends-of-behat/symfony-extension` — `2.7.0` still requires
+  `symfony/dependency-injection` and `symfony/http-kernel` on `^6.4 || ^7.0`.
+
+The tree's `symfony/*` constraints are therefore pinned to `8.0.*`, not
+`^8.0`: the app kernel it boots is on the 8.0 line, and letting the tools
+vendor drift to 8.1 breaks the kernel boot under Behat.
 
 Smoke test from `api/`:
 

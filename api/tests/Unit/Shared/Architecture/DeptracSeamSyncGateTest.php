@@ -89,7 +89,7 @@ final class DeptracSeamSyncGateTest extends TestCase
 
             $parts = \explode('=>', $trimmed, 2);
             $left = \trim($parts[0]);
-            $right = \trim($parts[1] ?? '');
+            $right = \trim($parts[1]);
 
             if ('*' === $left) {
                 continue;
