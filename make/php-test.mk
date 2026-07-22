@@ -14,8 +14,18 @@
 
 # PHPUnit runs from the app vendor (bin/phpunit) — no separate tools tree to
 # install (api/tools/phpunit holds only bootstrap.php + phpunit.dist.xml).
+#
+# PHPUNIT_MEMORY_LIMIT (make/config.mk, default 512M): the whole suite runs in
+# one process and peaks at 127–143 MB — PHPUnit's own `Memory:` line over a full
+# run, which is only observable under an already-raised limit because the run
+# dies first otherwise. The peak falls in the functional phase and lands on the
+# image's 128M default, so whichever test makes the next allocation is the one
+# that dies, a different one each run. Filtered runs stay far below it (a
+# `--filter` gate peaks ~55 MB), which is why php.bench and the php.lint.* gates
+# need no flag. Raised on this invocation only: the image default keeps bounding
+# real HTTP requests. 512M is margin over the measured peak, not a measured need.
 php.unit: ## PHPUnit; pass c='…' for extra args (e.g. c='--filter SomeTest')
-	@$(PHP_TEST) bin/phpunit $(c)
+	@$(PHP_TEST) php -d memory_limit=$(PHPUNIT_MEMORY_LIMIT) bin/phpunit $(c)
 
 # Clover report for SonarCloud (sonar.php.coverage.reportPaths). Runs with
 # XDEBUG_MODE=coverage (the image ships Xdebug off). PHPUnit writes absolute
@@ -30,8 +40,8 @@ php.unit: ## PHPUnit; pass c='…' for extra args (e.g. c='--filter SomeTest')
 # Warnings still print, only the exit code is relaxed.
 #
 # memory_limit=1G: Xdebug coverage instrumentation holds per-line maps for the
-# whole run and exhausts the image's default 128M near the end of the suite.
-# Raised only here (report-only); the `php.unit` gate keeps the default limit.
+# whole run, on top of the suite's own footprint, and exhausts the image's
+# default 128M near the end of the suite.
 COVERAGE_CLOVER := var/coverage/clover.xml
 php.unit.coverage: ## PHPUnit with clover coverage → api/var/coverage/clover.xml (Xdebug coverage mode; report only — php.unit is the gate)
 	@$(PHP_TEST_COVERAGE) php -d memory_limit=1G bin/phpunit --coverage-clover $(COVERAGE_CLOVER) --do-not-fail-on-phpunit-warning $(c)
