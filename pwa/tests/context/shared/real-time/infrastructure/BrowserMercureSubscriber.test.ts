@@ -5,6 +5,12 @@ import {
   mercureSubscriber,
 } from "@/context/shared/real-time/infrastructure/BrowserMercureSubscriber";
 import { useMercureRealtime } from "@/context/shared/real-time/infrastructure/useMercureRealtime";
+import { container } from "@/context/shared/dependency-injection/infrastructure/Container";
+import { FetchHttpClient } from "@/context/shared/http-client/infrastructure/FetchHttpClient";
+
+vi.mock("@/context/shared/dependency-injection/infrastructure/Container", () => ({
+  container: { get: vi.fn() },
+}));
 
 /** Opened EventSource stand-ins for the current test (reset in `beforeEach`). */
 const sources: FakeEventSource[] = [];
@@ -143,21 +149,30 @@ describe("BrowserMercureSubscriber", () => {
       }
     });
 
-    it("resolves the identical origin for the EventSource and the authorize fetch", async () => {
+    it("resolves the identical origin for the EventSource and the authorize request", async () => {
       // A padded value reproduces the bug: without .trim(), the trailing space
       // survives into `new URL(base + path)` right after the host (the parser
       // only strips leading/trailing input whitespace), so the URL throws
-      // ("Invalid URL") and the EventSource diverges from the trimmed fetch
-      // path. Both builders must trim and land on the same origin.
+      // ("Invalid URL") and the EventSource diverges from the authorize path.
+      // The stream and the cookie that authorizes it are minted by two separate
+      // builders, so both must trim and land on the same origin — a divergence
+      // hands the hub a cookie scoped to an origin the subscriber never uses.
       process.env.NEXT_PUBLIC_API_BASE_URL = " https://x ";
 
       // EventSource side.
       new BrowserMercureSubscriber().subscribe(["urn:erpify:test"], () => {});
       const eventSourceOrigin = new URL(lastSource()!.url).origin;
 
-      // Authorize fetch side (built by `useMercureRealtime`).
-      const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 204 });
+      // Authorize side, driven through the hook itself so the pairing stays honest: asserting
+      // against a stand-alone client would keep passing if the hook ever stopped using it.
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 204,
+        headers: new Headers(),
+        text: () => Promise.resolve(""),
+      });
       vi.stubGlobal("fetch", fetchMock);
+      vi.mocked(container.get).mockReturnValue(new FetchHttpClient());
       vi.spyOn(mercureSubscriber, "subscribe").mockReturnValue({ close: () => {} });
 
       renderHook(() =>
@@ -171,11 +186,10 @@ describe("BrowserMercureSubscriber", () => {
       );
 
       await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-      const [fetchInput] = fetchMock.mock.calls[0] as [URL];
-      const fetchOrigin = fetchInput.origin;
+      const [requestUrl] = fetchMock.mock.calls[0] as [string];
 
       expect(eventSourceOrigin).toBe("https://x");
-      expect(fetchOrigin).toBe(eventSourceOrigin);
+      expect(new URL(requestUrl).origin).toBe(eventSourceOrigin);
     });
   });
 });
