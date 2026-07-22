@@ -91,9 +91,9 @@ final class PermissionVoterAccessDecisionTest extends WebTestCase
         $authorizationChecker = self::getContainer()->get(AuthorizationCheckerInterface::class);
         $this->assertInstanceOf(AuthorizationCheckerInterface::class, $authorizationChecker);
 
-        // ADMIN reads the trail solely through the unconditional superuser clause — auditTrail.read is not in
-        // its explicit grants and auditTrail opts out of tiering. This pins the full wired chain
-        // (ROLE_ADMIN → bareRoleTokens → grantedToAdmin), which the pure-policy unit test cannot exercise.
+        // auditTrail opts out of tiering, so ADMIN's wildcard tier does not reach it and the explicit grant is
+        // what does. This pins the full wired chain (ROLE_ADMIN → bareRoleTokens → policy), which the
+        // pure-policy unit test cannot exercise.
         $admin = UserFixtureFactory::create(
             Uuid::v7()->toRfc4122(),
             'admin@erpify.test',
@@ -115,8 +115,8 @@ final class PermissionVoterAccessDecisionTest extends WebTestCase
         $this->assertInstanceOf(AuthorizationCheckerInterface::class, $authorizationChecker);
 
         // The identity console opts out of tier auto-grant, so a fully-tiered MANAGER is refused users.read —
-        // only ADMIN reaches it. This pins the wired chain (ROLE_ADMIN → bareRoleTokens → grantedToAdmin),
-        // the same admin-only shape as auditTrail but for the users resource.
+        // only ADMIN reaches it, through its explicit grant. This pins the wired chain (ROLE_ADMIN →
+        // bareRoleTokens → policy), the same admin-only shape as auditTrail but for the users resource.
         $manager = UserFixtureFactory::create(
             Uuid::v7()->toRfc4122(),
             'users-manager@erpify.test',
@@ -163,8 +163,8 @@ final class PermissionVoterAccessDecisionTest extends WebTestCase
             'A generic MANAGER tier must not be granted users.changeStatus.',
         );
 
-        // ...while an ADMIN reaches it through the unconditional superuser clause, the same admin-only shape
-        // as users.read but for the write action the console gates the suspend/deactivate control on.
+        // ...while an ADMIN reaches it through its explicit grant, the same admin-only shape as users.read but
+        // for the write action the console gates the suspend/deactivate control on.
         $admin = UserFixtureFactory::create(
             Uuid::v7()->toRfc4122(),
             'status-users-admin@erpify.test',

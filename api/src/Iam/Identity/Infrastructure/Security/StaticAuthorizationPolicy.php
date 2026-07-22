@@ -12,10 +12,16 @@ use Override;
  * opening a resource to a role is a data edit, never a new branch in a resolver. A tripwire test asserts
  * the maps stay literal — see `StaticAuthorizationPolicyIsDataOnlyTest`.
  *
- * A permission is granted iff ANY holds:
- *   1. the subject is ADMIN — unconditional; ADMIN is never blocked by an opt-out;
- *   2. tier grant — the resource has NOT opted out of tiering AND the action is in some tier the subject holds;
- *   3. explicit grant — some role the subject holds is listed for that exact permission.
+ * A permission is granted iff EITHER holds:
+ *   1. tier grant — the resource has NOT opted out of tiering AND the action is in some tier the subject holds;
+ *   2. explicit grant — some role the subject holds is listed for that exact permission.
+ *
+ * ADMIN is not a superuser clause, it is a tier: `ADMIN => ['*']` in {@see self::TIER_VERBS} reaches every
+ * action of every resource that tiers at all, so a brand-new resource still costs zero policy rows. What it
+ * deliberately does NOT do is bypass {@see self::TIER_OPT_OUT}. That is the whole point: opting a resource out
+ * of tiering is how a governance, compliance or separation-of-duties surface becomes fail-CLOSED for everyone,
+ * ADMIN included, and is then reopened one declared row at a time. Without it, every capability invented in the
+ * future would be granted to ADMIN silently, by a default nobody chose.
  *
  * The three maps are `const`: the language itself forbids closures/calls in a constant, so "data-only" is
  * compiler-enforced, not merely convention. They double as the constructor defaults — overriding them (a
@@ -46,16 +52,21 @@ final readonly class StaticAuthorizationPolicy implements AuthorizationPolicy
      * Permission string -> the role tokens explicitly granted it, independent of any tier.
      *
      * The five `users.*` grants localize the identity-console authorization surface as one data line — `read`,
-     * `invite`, `changeStatus`, `changeRoles` and `erase` each back a console endpoint, all ADMIN-only. ADMIN
-     * already passes through the unconditional clause, so these rows are redundant for ADMIN; they are kept as
+     * `invite`, `changeStatus`, `changeRoles` and `erase` each back a console endpoint, all ADMIN-only. They are
      * the single-place, declared record of each console action's intended grantee (load-bearing the day a
-     * non-ADMIN role earns one). What actually confines the console to ADMIN is `users` in
-     * {@see self::TIER_OPT_OUT} (without it, `read` — a tier verb — would auto-grant to VIEWER).
+     * non-ADMIN role earns one), and — because `users` opts out of tiering — they are also what actually grants
+     * ADMIN those actions. The opt-out is what confines the console to this list at all (without it, `read` —
+     * a tier verb — would auto-grant to VIEWER).
+     *
+     * `auditTrail.read` lists ADMIN beside AUDIT_READER because `auditTrail` also opts out of tiering, so the
+     * row is what grants it. Whether an administrator should be able to read the trail that audits them is a
+     * separation-of-duties question with arguments on both sides; it is settled here as a declared row rather
+     * than left to fall out of how the policy happens to resolve.
      *
      * @var array<string, list<string>>
      */
     private const array EXPLICIT_GRANTS = [
-        'auditTrail.read' => [Role::AUDIT_READER->value],
+        'auditTrail.read' => [Role::AUDIT_READER->value, Role::ADMIN->value],
         'bankAccount.changeStatus' => [Role::MANAGER->value],
         'users.read' => [Role::ADMIN->value],
         'users.invite' => [Role::ADMIN->value],
@@ -89,23 +100,11 @@ final readonly class StaticAuthorizationPolicy implements AuthorizationPolicy
     #[Override]
     public function permits(Permission $permission, array $roles): bool
     {
-        if ($this->grantedToAdmin($roles)) {
-            return true;
-        }
-
         if ($this->grantedByTier($permission, $roles)) {
             return true;
         }
 
         return $this->grantedExplicitly($permission, $roles);
-    }
-
-    /**
-     * @param list<string> $roles
-     */
-    private function grantedToAdmin(array $roles): bool
-    {
-        return \in_array(Role::ADMIN->value, $roles, true);
     }
 
     /**
