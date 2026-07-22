@@ -201,6 +201,44 @@ jobs:
           echo "=== messenger_worker (last 50 lines) ==="; docker compose logs --tail=50 messenger_worker || true
 
   # -------------------------
+  # API SECURITY (ERPify Semgrep taint rules — parallel, non-gating for now)
+  # -------------------------
+  api-semgrep:
+    name: API Security (Semgrep)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write # upload SARIF to code scanning
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      # No stack and no application image: the ruleset is local YAML and the
+      # scanner is a pinned container, so this job needs neither the registry nor
+      # a Semgrep account. It stays out of the php.quality.dry-run sweep because
+      # it runs in its own container rather than the php one.
+      - name: Rule fixtures
+        run: make semgrep.test
+
+      # Non-gating while the rules bed in — findings are visible in code scanning
+      # and in this job's log, but a false positive must not block a merge. Flip
+      # to gating (drop continue-on-error) once a few PRs have run clean.
+      - name: Scan api/src
+        continue-on-error: true
+        run: make semgrep.sarif
+
+      - name: Upload SARIF
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4.37.0
+        with:
+          sarif_file: .semgrep/erpify-rules.sarif
+          category: erpify-semgrep
+
+  # -------------------------
   # PWA NODE (isolated, fast)
   # -------------------------
   pwa-node:
@@ -532,7 +570,7 @@ jobs:
   ci-summary:
     name: CI Summary
     if: always()
-    needs: [api-build, api-test, api-behat, pwa-node, pwa-e2e, pwa-burn-in, sonar]
+    needs: [api-build, api-test, api-behat, api-semgrep, pwa-node, pwa-e2e, pwa-burn-in, sonar]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions: {}
@@ -543,6 +581,7 @@ jobs:
           R_API_BUILD: ${{ needs.api-build.result }}
           R_API_TEST: ${{ needs.api-test.result }}
           R_API_BEHAT: ${{ needs.api-behat.result }}
+          R_API_SEMGREP: ${{ needs.api-semgrep.result }}
           R_PWA_NODE: ${{ needs.pwa-node.result }}
           R_PWA_E2E: ${{ needs.pwa-e2e.result }}
           R_PWA_BURNIN: ${{ needs.pwa-burn-in.result }}
@@ -556,6 +595,7 @@ jobs:
             echo "| API Build       | $R_API_BUILD |"
             echo "| API Tests       | $R_API_TEST |"
             echo "| API Behat       | $R_API_BEHAT |"
+            echo "| API Semgrep     | $R_API_SEMGREP |"
             echo "| PWA (Node)      | $R_PWA_NODE |"
             echo "| PWA (E2E)       | $R_PWA_E2E |"
             echo "| PWA (Burn-In)   | $R_PWA_BURNIN |"

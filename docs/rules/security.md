@@ -93,6 +93,7 @@ Before ANY commit, I MUST perform security checks on all changed files:
 - [ ] Xdebug is disabled in production configurations
 
 #### PHP Files
+- [ ] `make semgrep.scan` is clean — mechanises three of the checks below for input reaching a query, a shell or a redirect from the Symfony `Request`. It is a floor, not a substitute: it covers those three flows only, so every remaining item is still checked by hand
 - [ ] All user inputs are validated and sanitized
 - [ ] SQL queries use prepared statements (no string concatenation)
 - [ ] No eval() or dangerous functions without proper sanitization

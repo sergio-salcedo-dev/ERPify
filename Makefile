@@ -29,6 +29,7 @@ IN_CONTAINER ?= true
 #include make/super-lint.mk
 #include make/help.mk
 #include make/codeql.mk
+#include make/semgrep.mk
 include make/*.mk
 
 .DEFAULT_GOAL := help
