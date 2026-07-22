@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 const search = vi.hoisted(() => vi.fn());
 const follow = vi.hoisted(() => vi.fn());
@@ -105,6 +105,9 @@ function onePage() {
 describe("UsersListPage authorization gate", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // View and density are persisted preferences: without this, the cards-view test leaks its choice
+    // into every later render and the table rows stop existing.
+    localStorage.clear();
     search.mockResolvedValue(onePage());
   });
 
@@ -115,6 +118,70 @@ describe("UsersListPage authorization gate", () => {
 
     expect(await screen.findByTestId(ROW)).toBeInTheDocument();
     expect(search).toHaveBeenCalledTimes(1);
+  });
+
+  it("announces an empty register instead of a table", async () => {
+    me.mockResolvedValue(ADMIN);
+    search.mockResolvedValue({ ...onePage(), items: [], count: 0 });
+
+    renderList();
+
+    expect(await screen.findByText("No users yet")).toBeInTheDocument();
+    expect(screen.queryByTestId(ROW)).not.toBeInTheDocument();
+  });
+
+  it("re-reads the register when the operator retries a failed load", async () => {
+    me.mockResolvedValue(ADMIN);
+    search.mockRejectedValueOnce(new Error("network down")).mockResolvedValueOnce(onePage());
+
+    renderList();
+
+    fireEvent.click(await screen.findByTestId("users-list__retry"));
+
+    expect(await screen.findByTestId(ROW)).toBeInTheDocument();
+    expect(search).toHaveBeenCalledTimes(2);
+  });
+
+  it("re-reads the register sorted when a column header is activated", async () => {
+    me.mockResolvedValue(ADMIN);
+
+    renderList();
+    await screen.findByTestId(ROW);
+
+    fireEvent.click(screen.getByRole("button", { name: /^Email/ }));
+
+    await waitFor(() => {
+      expect(search).toHaveBeenCalledTimes(2);
+    });
+    expect(search.mock.calls[1][0]).toMatchObject({ sort: { field: "email" } });
+  });
+
+  it("peeks a row and closes the sheet again", async () => {
+    me.mockResolvedValue(ADMIN);
+
+    renderList();
+    await screen.findByTestId(ROW);
+
+    fireEvent.keyDown(screen.getByTestId(`users-stacked__row-${LISTED_USER.id}`), { key: "o" });
+
+    expect(await screen.findByTestId("users-peek__email")).toHaveTextContent(LISTED_USER.email);
+
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("users-peek__email")).not.toBeInTheDocument();
+    });
+  });
+
+  it("switches to the cards view", async () => {
+    me.mockResolvedValue(ADMIN);
+
+    renderList();
+    await screen.findByTestId(ROW);
+
+    fireEvent.click(screen.getByTestId("users-list__view-toggle-cards"));
+
+    expect(await screen.findByTestId("users-cards")).toBeInTheDocument();
   });
 
   it("issues no request when the authenticated session lacks the permission", async () => {
