@@ -5,13 +5,16 @@ const find = vi.hoisted(() => vi.fn());
 const me = vi.hoisted(() => vi.fn());
 
 // The page reads its item through `useResourceItem`, which resolves the repository from the container; the
-// `Can` gate hydrates the session from `/me` through the same container. Dispatch by token so the gate sees a
-// real permission set while the read path hits the mocked repository.
+// `Can` gate hydrates the session from `/me` through the same container. Dispatch by token, and throw on an
+// unknown one: the read call site swallows exceptions, so a silently mis-stubbed token would degrade the view
+// to an error state and let a "no request was issued" assertion pass for the wrong reason.
 vi.mock("@/context/shared/dependency-injection/infrastructure/Container", () => ({
   container: {
     get: (token: string) => {
       if (token === "BackOfficeUserRepository") return { find };
-      return { me: (...args: unknown[]) => me(...args) };
+      if (token === "IdentityRepository") return { me: (...args: unknown[]) => me(...args) };
+      if (token === "SessionsRepository") return { revokeCurrent: vi.fn() };
+      throw new Error(`Unexpected container token: ${token}`);
     },
   },
 }));
@@ -22,6 +25,7 @@ vi.mock("next/navigation", () => ({
 
 import UserDetailPage from "@/app/backoffice/users/[id]/page";
 import { AuthProvider } from "@/context/shared/access/infrastructure/ui/AuthProvider";
+import { useSession } from "@/context/shared/access/application/useSession";
 import { Permission } from "@/context/shared/access/domain/Permission";
 import { Role } from "@/context/shared/access/domain/Role";
 import { UserStatus } from "@/context/shared/access/domain/UserStatus";
@@ -35,6 +39,14 @@ const ADMIN: Identity = {
   status: UserStatus.ACTIVE,
   roles: [Role.ADMIN],
   permissions: [Permission.USERS_READ],
+};
+
+const VIEWER: Identity = {
+  id: "0190ffff-aaaa-7bbb-8ccc-0d1e2f3a4b5d",
+  email: "viewer@erpify.test",
+  status: UserStatus.ACTIVE,
+  roles: [Role.VIEWER],
+  permissions: [],
 };
 
 function problem(status: number, type: string): ProblemDetails {
@@ -92,5 +104,36 @@ describe("UserDetailPage error states", () => {
     expect(await screen.findByTestId("users-detail__error")).toBeInTheDocument();
     expect(screen.getByTestId("users-detail__retry")).toBeInTheDocument();
     expect(screen.queryByTestId("users-detail__not-found")).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Reports the hydrated identity. A denied render alone cannot tell "authenticated without the permission"
+ * apart from "session never resolved" — both produce the same fallback — so the probe pins which one the
+ * assertion is actually observing.
+ */
+function SessionProbe() {
+  const { session } = useSession();
+  return <span data-testid="probe">{session?.user.email ?? "none"}</span>;
+}
+
+describe("UserDetailPage authorization gate", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("issues no request when the authenticated session lacks the permission", async () => {
+    me.mockResolvedValue(VIEWER);
+
+    render(
+      <AuthProvider>
+        <SessionProbe />
+        <UserDetailPage />
+      </AuthProvider>,
+    );
+
+    expect(await screen.findByTestId("probe")).toHaveTextContent(VIEWER.email);
+    expect(await screen.findByText("Access denied")).toBeInTheDocument();
+    expect(find).not.toHaveBeenCalled();
   });
 });
