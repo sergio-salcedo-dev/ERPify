@@ -164,9 +164,15 @@ make php.cs-fixer.dry-run
 make php.md
 make php.cs                    # apply
 make php.cs.dry-run
+
+make semgrep.test              # rule fixtures — run after editing a rule
+make semgrep.scan              # Request-sourced taint flows in api/src
+make semgrep.sarif             # same scan, SARIF for code scanning
 ```
 
 Tool configs live at `api/.php-cs-fixer.php`, `api/tools/phpstan/phpstan.neon`, `api/rector.php`. PHPStan (`level: max`) is the sole static-analysis gate; Psalm was removed entirely.
+
+The `semgrep.*` targets run a pinned scanner container against [`tools/semgrep/rules/erpify-rules.yaml`](../tools/semgrep/rules/erpify-rules.yaml) — three taint rules covering `Request` → DQL/SQL, `Request` → shell, and `Request` → redirect. They are deliberately narrow: vendor PHP rulesets (community and Pro alike) model only superglobals as taint sources, and `api/src` uses none, so they find nothing here. Edit a rule and `make semgrep.test` must stay green — the fixtures in `tools/semgrep/tests/` assert both what each rule catches and what it must not. The scanner's PHP parser does not fully parse every file (one `api/src` file is ~68% skipped), so a clean scan is a narrow signal, not proof.
 
 ## Directory discipline
 

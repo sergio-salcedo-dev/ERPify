@@ -81,6 +81,9 @@ pnpm-debug.log*
 # CodeQL local CLI bundle, database, and SARIF
 .codeql/
 
+# Semgrep scan output (rules themselves are tracked under tools/semgrep/)
+.semgrep/
+
 # BMad generated artifacts
 /_bmad/
 /.agents/skills/bmad-*/
