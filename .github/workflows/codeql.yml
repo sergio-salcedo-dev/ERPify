@@ -21,11 +21,14 @@ defaults:
     shell: bash
 
 jobs:
-  # CodeQL semantic analysis. PHP has no CodeQL analyzer, so the Symfony api/
-  # is covered by local SAST (`make codeql.run` / `make security.sast`); see
-  # make/codeql.mk for the local CLI workflow. Here we scan the PWA's
-  # JavaScript/TypeScript and the GitHub Actions workflows themselves. Findings
-  # land in the repo's Security ▸ Code scanning tab (needs code scanning enabled).
+  # CodeQL semantic analysis over the PWA's JavaScript/TypeScript and the GitHub
+  # Actions workflows themselves. Findings land in the repo's Security ▸ Code
+  # scanning tab (needs code scanning enabled).
+  #
+  # The Symfony api/ is NOT analysed here and has no static dataflow gate at all:
+  # CodeQL ships no PHP analyzer, and make/codeql.mk targets the PWA source root.
+  # The control for api/ is the security checklist in the root CLAUDE.md, applied
+  # in review. Replacement analysers are being evaluated in issue #542.
   analyze:
     name: CodeQL (${{ matrix.language }})
     runs-on: ubuntu-latest
