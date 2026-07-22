@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect, useEffectEvent } from "react";
+import { container } from "@/context/shared/dependency-injection/infrastructure/Container";
+import type { HttpClient } from "@/context/shared/http-client/domain/HttpClient";
+import { HttpError } from "@/context/shared/http-client/domain/HttpError";
+import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import type { TelemetryScope } from "@/context/shared/observability/domain/TelemetryScope";
 import { telemetry } from "@/context/shared/observability/infrastructure";
 import { mercureSubscriber } from "@/context/shared/real-time/infrastructure/BrowserMercureSubscriber";
@@ -26,28 +30,47 @@ export interface UseMercureRealtimeOptions<E> {
   scope: TelemetryScope;
 }
 
+/**
+ * Mints the subscriber cookie. Goes through the injected `HttpClient` so a refusal arrives
+ * as a typed `HttpError` whose `problem.status` the classification below can read, and so a
+ * session-expiry 401 takes the same bounce to the login screen as every other call. Rejects
+ * so the caller skips opening a doomed stream (the hub never delivers private topics without
+ * a valid cookie).
+ *
+ * The client sends cookies under fetch's `same-origin` default rather than forcing `include`:
+ * the hub, the API and the document share an origin by construction (`BrowserMercureSubscriber`
+ * builds the stream URL off the same base), and every other authenticated call in the PWA
+ * already relies on that. A genuinely cross-origin API would break the whole session, not just
+ * this handshake.
+ */
 async function authorize(authorizePath: string): Promise<void> {
-  // Resolve an absolute URL against the current origin so `fetch` behaves like
-  // the EventSource subscription (a bare relative path is unparseable outside a
-  // browser, e.g. under test/SSR).
-  const base = (process.env.NEXT_PUBLIC_API_BASE_URL?.trim() ?? "").replace(/\/$/, "");
-  const origin = globalThis.window?.location.origin ?? "http://localhost";
-  const url = new URL(`${base}${authorizePath}`, origin);
-  const response = await fetch(url, { credentials: "include", cache: "no-store" });
-  if (!response.ok) {
-    // Reject so the caller skips opening a doomed stream (the hub never delivers
-    // private topics without a valid subscriber cookie).
-    throw new Error(`Mercure authorize failed: ${response.status}`);
+  await container.get<HttpClient>("HttpClient").get<void>(authorizePath);
+}
+
+/**
+ * A 401/403 is a stable authorization decision — an expired session or a revoked
+ * permission — that no retry can change, so the stream must be abandoned rather than
+ * re-authorized on every reconnect. Everything else (5xx, transport blip) is transient
+ * and worth the debounced retry the subscriber already performs.
+ */
+function isTerminalDenial(error: unknown): boolean {
+  if (!(error instanceof HttpError)) {
+    return false;
   }
+
+  return (
+    error.problem.status === HttpStatus.UNAUTHORIZED ||
+    error.problem.status === HttpStatus.FORBIDDEN
+  );
 }
 
 /**
  * Subscribes to Mercure topics, authorizes (mints the subscriber cookie) before
  * opening the stream, and dispatches typed events to `onEvent`. Re-mints the
  * cookie on stream error so the EventSource's automatic reconnect stays
- * authorized. Reusable across every entity's realtime feed; failures are routed
- * through `telemetry` (never user-facing). No-op on the server and when `topics`
- * is empty.
+ * authorized, and abandons the stream when that re-mint is refused for good.
+ * Reusable across every entity's realtime feed; failures are routed through
+ * `telemetry` (never user-facing). No-op on the server and when `topics` is empty.
  */
 export function useMercureRealtime<E>({
   topics,
@@ -89,11 +112,24 @@ export function useMercureRealtime<E>({
     }
   });
 
-  const refreshAuthorization = useEffectEvent((): void => {
-    // Best-effort re-mint on reconnect; swallow + report, never throw.
-    void authorize(authorizePath).catch((error) =>
-      telemetry.warn("subscriber-cookie refresh failed", { scope, cause: error }),
-    );
+  // Best-effort re-mint on reconnect; swallow + report, never throw. Answers whether the
+  // refusal is terminal, so the caller can drop a stream that will never be authorized again.
+  // The two outcomes carry distinct messages: telemetry coalesces on (level, scope, message),
+  // so sharing one would let a preceding transient failure swallow the report of a feed that
+  // just went dead for good — the single diagnostic that matters here.
+  const refreshAuthorization = useEffectEvent(async (): Promise<boolean> => {
+    try {
+      await authorize(authorizePath);
+      return false;
+    } catch (error) {
+      const terminal = isTerminalDenial(error);
+      const message = terminal
+        ? "realtime authorization revoked"
+        : "subscriber-cookie refresh failed";
+      telemetry.warn(message, { scope, cause: error });
+
+      return terminal;
+    }
   });
 
   const handleReconnect = useEffectEvent((): void => {
@@ -110,13 +146,48 @@ export function useMercureRealtime<E>({
 
     let subscription: { close(): void } | undefined;
     let cancelled = false;
+    let refreshing = false;
+
+    // The transport reconnects on its own, so a refusal that stands would be re-authorized on
+    // every retry, forever — a silent request loop against an endpoint that will keep saying no,
+    // and an audited access denial each time. Closing the stream is the only way to stop that
+    // reconnect: while the EventSource lives, its errors keep arriving. Dropping the handle
+    // afterwards makes the close exactly-once.
+    //
+    // The guards, in order: a stream error can still arrive after cleanup (the handle is closed
+    // but the callback is already queued), and authorizing then would both cost a doomed request
+    // and let a 401 navigate a page the user has already left. `refreshing` keeps a re-mint that
+    // outlives the transport's own error debounce from stacking a second one — and it is released
+    // in `finally`, since a latched guard would freeze the feed in exactly the silent limbo this
+    // whole path exists to end. `subscription` being unset means the stream is not open yet.
+    const handleStreamError = (): void => {
+      if (cancelled || refreshing || subscription === undefined) {
+        return;
+      }
+
+      refreshing = true;
+      void (async (): Promise<void> => {
+        try {
+          if ((await refreshAuthorization()) && !cancelled) {
+            subscription?.close();
+            subscription = undefined;
+          }
+        } catch {
+          // Reporting the refusal is itself fallible (the telemetry singleton fans out to real
+          // sinks). A throwing sink must not escape as an unhandled rejection, and it leaves the
+          // refusal unclassified — so keep the stream and let the next error retry.
+        } finally {
+          refreshing = false;
+        }
+      })();
+    };
 
     void (async (): Promise<void> => {
       try {
         await authorize(authorizePath);
         if (!cancelled) {
           subscription = mercureSubscriber.subscribe(topicList, (data) => dispatch(data), {
-            onError: () => refreshAuthorization(),
+            onError: handleStreamError,
             onReconnect: () => handleReconnect(),
           });
         }
