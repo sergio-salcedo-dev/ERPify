@@ -136,7 +136,7 @@ final class ReadSideProjectionGateTest extends TestCase
                 continue;
             }
 
-            $targets[] = \trim(\explode('=>', $trimmed, 2)[1] ?? '');
+            $targets[] = \trim(\explode('=>', $trimmed, 2)[1]);
         }
 
         return $targets;
