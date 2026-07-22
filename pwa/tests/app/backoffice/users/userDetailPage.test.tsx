@@ -1,30 +1,37 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 
 const find = vi.hoisted(() => vi.fn());
 const me = vi.hoisted(() => vi.fn());
 
 // The page reads its item through `useResourceItem`, which resolves the repository from the container; the
-// `Can` gate hydrates the session from `/me` through the same container. Dispatch by token so the gate sees a
-// real permission set while the read path hits the mocked repository.
+// `Can` gate hydrates the session from `/me` through the same container. Dispatch by token, and throw on an
+// unknown one: the read call site swallows exceptions, so a silently mis-stubbed token would degrade the view
+// to an error state and let a "no request was issued" assertion pass for the wrong reason.
 vi.mock("@/context/shared/dependency-injection/infrastructure/Container", () => ({
   container: {
     get: (token: string) => {
       if (token === "BackOfficeUserRepository") return { find };
-      return { me: (...args: unknown[]) => me(...args) };
+      if (token === "IdentityRepository") return { me: (...args: unknown[]) => me(...args) };
+      if (token === "SessionsRepository") return { revokeCurrent: vi.fn() };
+      throw new Error(`Unexpected container token: ${token}`);
     },
   },
 }));
 
+// `UserEraseControl` reaches for the router once the detail reaches its ready state.
 vi.mock("next/navigation", () => ({
   useParams: () => ({ id: "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c" }),
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), back: vi.fn() }),
 }));
 
 import UserDetailPage from "@/app/backoffice/users/[id]/page";
 import { AuthProvider } from "@/context/shared/access/infrastructure/ui/AuthProvider";
+import { useSession } from "@/context/shared/access/application/useSession";
 import { Permission } from "@/context/shared/access/domain/Permission";
 import { Role } from "@/context/shared/access/domain/Role";
 import { UserStatus } from "@/context/shared/access/domain/UserStatus";
+import { User } from "@/context/backoffice/user/domain/User";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import type { Identity } from "@/context/shared/access/domain/Identity";
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
@@ -35,6 +42,23 @@ const ADMIN: Identity = {
   status: UserStatus.ACTIVE,
   roles: [Role.ADMIN],
   permissions: [Permission.USERS_READ],
+};
+
+const SUBJECT = new User(
+  "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c",
+  "member@erpify.test",
+  UserStatus.ACTIVE,
+  [Role.VIEWER],
+  "2026-07-01T10:00:00+00:00",
+  "2026-07-02T11:00:00+00:00",
+);
+
+const VIEWER: Identity = {
+  id: "0190ffff-aaaa-7bbb-8ccc-0d1e2f3a4b5d",
+  email: "viewer@erpify.test",
+  status: UserStatus.ACTIVE,
+  roles: [Role.VIEWER],
+  permissions: [],
 };
 
 function problem(status: number, type: string): ProblemDetails {
@@ -92,5 +116,75 @@ describe("UserDetailPage error states", () => {
     expect(await screen.findByTestId("users-detail__error")).toBeInTheDocument();
     expect(screen.getByTestId("users-detail__retry")).toBeInTheDocument();
     expect(screen.queryByTestId("users-detail__not-found")).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Reports the hydrated identity. A denied render alone cannot tell "authenticated without the permission"
+ * apart from "session never resolved" — both produce the same fallback — so the probe pins which one the
+ * assertion is actually observing.
+ */
+function SessionProbe() {
+  const { session } = useSession();
+  return <span data-testid="probe">{session?.user.email ?? "none"}</span>;
+}
+
+describe("UserDetailPage ready state", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    me.mockResolvedValue(ADMIN);
+  });
+
+  it("renders the identity once the read resolves", async () => {
+    find.mockResolvedValue(SUBJECT);
+
+    render(
+      <AuthProvider>
+        <UserDetailPage />
+      </AuthProvider>,
+    );
+
+    expect(await screen.findByTestId("users-detail__email")).toHaveTextContent(SUBJECT.email);
+    expect(screen.getByTestId("users-detail__field-email")).toHaveTextContent(SUBJECT.email);
+    expect(screen.getByTestId("users-detail__id")).toHaveTextContent(SUBJECT.id);
+    expect(screen.getByTestId("users-detail__field-roles")).toBeInTheDocument();
+    expect(screen.getByTestId("users-detail__field-created")).toBeInTheDocument();
+    expect(screen.queryByTestId("users-detail__error")).not.toBeInTheDocument();
+  });
+
+  it("re-reads the identity when the operator retries a failure", async () => {
+    find.mockRejectedValueOnce(new Error("network down")).mockResolvedValueOnce(SUBJECT);
+
+    render(
+      <AuthProvider>
+        <UserDetailPage />
+      </AuthProvider>,
+    );
+
+    fireEvent.click(await screen.findByTestId("users-detail__retry"));
+
+    expect(await screen.findByTestId("users-detail__email")).toHaveTextContent(SUBJECT.email);
+    expect(find).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("UserDetailPage authorization gate", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("issues no request when the authenticated session lacks the permission", async () => {
+    me.mockResolvedValue(VIEWER);
+
+    render(
+      <AuthProvider>
+        <SessionProbe />
+        <UserDetailPage />
+      </AuthProvider>,
+    );
+
+    expect(await screen.findByTestId("probe")).toHaveTextContent(VIEWER.email);
+    expect(await screen.findByText("Access denied")).toBeInTheDocument();
+    expect(find).not.toHaveBeenCalled();
   });
 });
