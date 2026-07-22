@@ -27,7 +27,7 @@
         "ext-zend-opcache": "*",
         "behat/gherkin": "^4.17.0",
         "doctrine/dbal": "^4.4.4",
-        "doctrine/doctrine-bundle": "^3.2.4",
+        "doctrine/doctrine-bundle": "^3.3.0",
         "doctrine/doctrine-migrations-bundle": "^4.0.0",
         "doctrine/orm": "^3.6.7",
         "doctrine/persistence": "^4.2.0",
@@ -126,7 +126,6 @@
         "behat-tools-install":"Install Behat and Mink into api/tools/behat (separate Composer tree; avoids Symfony 8 vs Behat 3 conflicts)"
     },
     "conflict":{
-        "doctrine/doctrine-bundle":"3.2.5",
         "symfony/symfony":"*"
     },
     "extra":{
