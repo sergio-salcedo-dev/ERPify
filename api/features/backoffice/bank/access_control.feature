@@ -53,11 +53,29 @@ Feature: Restrict the bank routes to the bank permission
     Then the response status code should be 401
     And the JSON node "type" should be equal to "unauthenticated"
 
+  @anonymous
+  Scenario: An unauthenticated realtime-authorize request is a 401
+    When I send a "GET" request to "/backoffice/banks/realtime/authorize"
+    Then the response status code should be 401
+    And the JSON node "type" should be equal to "unauthenticated"
+
   Scenario: A role-less authenticated user is refused the bank collection with 403
     Given I am logged in as a user without the audit-reader role
     When I send a "GET" request to "/backoffice/banks"
     Then the response status code should be 403
     And the header "Content-Type" should contain "application/problem+json"
+    And the JSON node "type" should be equal to "forbidden"
+
+  # The subscriber cookie is minted behind bank.read — the same permission that gates the data the stream
+  # refreshes — so a caller refused here is equally refused the collection. Refusing with 403 rather than a
+  # cookie-less 204 keeps the denial auditable. The absent Set-Cookie is the load-bearing half: a refusal
+  # that still minted a cookie would hand the hub a subscription the permission gate meant to deny.
+  Scenario: A role-less authenticated user is refused a realtime-authorize request with 403
+    Given I am logged in as a user without the audit-reader role
+    When I send a "GET" request to "/backoffice/banks/realtime/authorize"
+    Then the response status code should be 403
+    And the header "Content-Type" should contain "application/problem+json"
+    And the header "Set-Cookie" should not exist
     And the JSON node "type" should be equal to "forbidden"
 
   Scenario: A role-less authenticated user is refused a create with 403 — the permission gate, not validation
