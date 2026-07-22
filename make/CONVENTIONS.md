@@ -88,6 +88,7 @@ Each module in `make/` owns one domain. The active modules:
 | `ci.mk`          | CI aggregates only (composes other modules)                    |
 | `super-lint.mk`  | GitHub SuperLinter (Docker)                                    |
 | `codeql.mk`      | CodeQL database build + analysis (`codeql.*`)                  |
+| `semgrep.mk`     | ERPify Semgrep taint rules — fixtures + scan (`semgrep.*`)      |
 | `help.mk`        | `help` + `help-targets`                                        |
 
 ### Splitting a module

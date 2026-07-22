@@ -160,7 +160,7 @@ Every PR — even a "small" one — MUST be self-reviewed for the common attack 
 - **Domain events / Messenger** — handlers idempotent; transports authenticated; payloads scrubbed of secrets.
 
 **Process**
-- Run `make php.quality` and `make pwa.quality` locally before pushing — PHPStan / ESLint catch many of the above implicitly. There is no taint / security-dataflow analyser: this checklist is the control.
+- Run `make php.quality` and `make pwa.quality` locally before pushing — PHPStan / ESLint catch many of the above implicitly. `make semgrep.scan` mechanises the three `api/` bans a taint analyser can express (Request → DQL/SQL, Request → shell, Request → redirect); everything else on this list is checked by review, and the checklist remains the control.
 - For security-sensitive changes (auth, input parsing, file uploads, SQL, headers, CSP), update `PRODUCTION_SECURITY_CHECKLIST.md` and [`docs/rules/security.md`](docs/rules/security.md) if a new pattern is introduced.
 - When a finding is genuinely out of scope, file a follow-up issue rather than ship-and-forget.
 

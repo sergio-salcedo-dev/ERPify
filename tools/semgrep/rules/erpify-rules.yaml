@@ -1,0 +1,86 @@
+# Taint rules encoding the api/ bans from the root CLAUDE.md security checklist.
+#
+# These exist because no vendor ruleset models Symfony's Request as a taint
+# source: api/src uses zero superglobals, so every community and Pro PHP taint
+# rule sees an unreachable source and reports nothing. The sources below are the
+# HttpFoundation accessors that actually carry user input in this codebase.
+#
+# Rule tests live in tests/erpify-rules.php — `make semgrep.test` runs them.
+
+rules:
+  - id: erpify-symfony-request-to-dql
+    mode: taint
+    languages: [php]
+    severity: ERROR
+    message: >-
+      User input from the Symfony Request reaches a manually-constructed DQL/SQL
+      string. Parameterise the query (:placeholder or query-builder bindings)
+      instead of interpolating the value.
+    metadata:
+      category: security
+      cwe: "CWE-89: Improper Neutralization of Special Elements used in an SQL Command"
+      technology: [symfony, doctrine]
+      confidence: HIGH
+    pattern-sources:
+      - pattern-either:
+          - pattern: $REQ->query->get(...)
+          - pattern: $REQ->query->all(...)
+          - pattern: $REQ->request->get(...)
+          - pattern: $REQ->request->all(...)
+          - pattern: $REQ->headers->get(...)
+          - pattern: $REQ->cookies->get(...)
+          - pattern: $REQ->attributes->get(...)
+          - pattern: $REQ->getContent(...)
+    pattern-sinks:
+      - pattern-either:
+          - pattern: $X->createQuery(...)
+          - pattern: $X->executeQuery(...)
+          - pattern: $X->executeStatement(...)
+
+  - id: erpify-symfony-request-to-shell
+    mode: taint
+    languages: [php]
+    severity: ERROR
+    message: >-
+      User input from the Symfony Request reaches a shell commandline. Use the
+      array form of Process, never Process::fromShellCommandline with a string.
+    metadata:
+      category: security
+      cwe: "CWE-78: Improper Neutralization of Special Elements used in an OS Command"
+      technology: [symfony]
+      confidence: HIGH
+    pattern-sources:
+      - pattern-either:
+          - pattern: $REQ->query->get(...)
+          - pattern: $REQ->request->get(...)
+          - pattern: $REQ->headers->get(...)
+          - pattern: $REQ->attributes->get(...)
+          - pattern: $REQ->getContent(...)
+    pattern-sinks:
+      - pattern-either:
+          - pattern: Process::fromShellCommandline(...)
+          - pattern: $P->setCommandLine(...)
+
+  - id: erpify-symfony-request-to-redirect
+    mode: taint
+    languages: [php]
+    severity: WARNING
+    message: >-
+      A redirect target derives from the Symfony Request. Validate it is a
+      relative in-app path before redirecting, or an attacker controls where the
+      user lands (open redirect).
+    metadata:
+      category: security
+      cwe: "CWE-601: URL Redirection to Untrusted Site (Open Redirect)"
+      technology: [symfony]
+      confidence: MEDIUM
+    pattern-sources:
+      - pattern-either:
+          - pattern: $REQ->query->get(...)
+          - pattern: $REQ->request->get(...)
+          - pattern: $REQ->headers->get(...)
+    pattern-sinks:
+      - pattern-either:
+          - pattern: new RedirectResponse(...)
+          - pattern: $X->redirect(...)
+          - pattern: $H->set('Location', ...)

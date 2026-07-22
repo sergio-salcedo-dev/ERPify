@@ -25,10 +25,10 @@ jobs:
   # Actions workflows themselves. Findings land in the repo's Security ▸ Code
   # scanning tab (needs code scanning enabled).
   #
-  # The Symfony api/ is NOT analysed here and has no static dataflow gate at all:
-  # CodeQL ships no PHP analyzer, and make/codeql.mk targets the PWA source root.
-  # The control for api/ is the security checklist in the root CLAUDE.md, applied
-  # in review. Replacement analysers are being evaluated in issue #542.
+  # The Symfony api/ is NOT analysed here: CodeQL ships no PHP analyzer, and
+  # make/codeql.mk targets the PWA source root. Its dataflow coverage is the
+  # repo-owned Semgrep ruleset in the api-semgrep job of ci.yml, backed by the
+  # security checklist in the root CLAUDE.md applied in review.
   analyze:
     name: CodeQL (${{ matrix.language }})
     runs-on: ubuntu-latest
