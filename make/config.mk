@@ -94,6 +94,12 @@ DOCKER_COMPOSE := cd $(PROJECT_ROOT) && docker compose -p $(COMPOSE_PROJECT_NAME
 DOCKER_COMPOSE_EXEC := $(DOCKER_COMPOSE) exec
 
 # —— PHP exec helpers ——————————————————————————————————————————————————————
+# Ceiling for the full PHPUnit suite (consumed by php.unit in make/php-test.mk).
+# Overridable so a one-off heavy run needs no tracked-file edit:
+# `make php.unit PHPUNIT_MEMORY_LIMIT=1G`. `c=` cannot do this — it lands after
+# the script name, so PHPUnit consumes the flag instead of PHP.
+PHPUNIT_MEMORY_LIMIT ?= 512M
+
 # IN_CONTAINER=true  → exec into the running php container (default)
 # IN_CONTAINER=false → run on host in $(API_ROOT) (needs PHP + composer on PATH)
 ifeq ($(IN_CONTAINER),false)
