@@ -6,6 +6,7 @@ namespace Erpify\Tests\Functional\Backoffice\Bank\Infrastructure\Controller;
 
 use Erpify\Tests\Functional\AuthenticatesFunctionalRequests;
 use PHPUnit\Framework\Attributes\CoversNothing;
+use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\Request;
@@ -73,12 +74,12 @@ final class BankLogoMultipartFunctionalTest extends WebTestCase
     }
 
     /**
-     * The file part rides `$request->files` and never reaches the extra-attribute check, so the
-     * upload survives strict mapping. A surplus *scalar* does land in `$request->request`, which is
-     * what the payload is mapped from — so `form` is closed on exactly the same terms as `json`,
-     * and an HTML form posting its submit button would be refused rather than silently trimmed.
+     * Both the file part and the scalars are mapped from the same payload, so the upload survives strict
+     * mapping only because `CreateBankRequest` declares `image`. A surplus *scalar* is declared nowhere, so
+     * `form` is closed on exactly the same terms as `json`, and an HTML form posting its submit button is
+     * refused rather than silently trimmed. Exactly one violation: the accepted part must not add a second.
      */
-    public function testMultipartRejectsASurplusFormFieldWhileTheFilePartIsIgnored(): void
+    public function testMultipartRejectsASurplusFormFieldWhileTheDeclaredFilePartIsAccepted(): void
     {
         $kernelBrowser = self::createClient();
         $this->authenticateClient($kernelBrowser);
@@ -149,5 +150,90 @@ final class BankLogoMultipartFunctionalTest extends WebTestCase
 
         $kernelBrowser->request(Request::METHOD_GET, $path, server: ['HTTP_IF_NONE_MATCH' => $etag]);
         self::assertResponseStatusCodeSame(304);
+    }
+
+    /**
+     * A file part the payload does not declare is surplus on the same terms as a surplus scalar. Naming the
+     * offending part back to the caller is what separates "we ignored your upload" from an answer they can act
+     * on — the part name is their own input, so echoing it discloses nothing.
+     */
+    public function testMultipartRejectsAFilePartThePayloadDoesNotDeclare(): void
+    {
+        $kernelBrowser = self::createClient();
+        $this->authenticateClient($kernelBrowser);
+
+        $suffix = \bin2hex(\random_bytes(4));
+
+        $kernelBrowser->request(
+            Request::METHOD_POST,
+            '/api/v1/backoffice/banks',
+            [
+                'name' => 'Undeclared Part Bank ' . $suffix,
+                'shortName' => 'UPB' . $suffix,
+            ],
+            ['logo' => $this->pngUpload()],
+        );
+
+        self::assertResponseStatusCodeSame(422);
+        $violations = $this->violationsFrom($kernelBrowser);
+        $this->assertCount(1, $violations);
+        $this->assertSame('logo', $violations[0]['field']);
+    }
+
+    /**
+     * The payload resolver lets a file part overwrite a scalar of the same name, so the part name is an input
+     * the caller controls all the way into the mapped member. Pinned here because it is the shape an attacker
+     * would reach for: a part named after a declared member, or after the surplus scalar it wants excused.
+     * Neither is excused — the scalar is still reported, and no bank is created.
+     */
+    public function testMultipartDoesNotLetAFilePartNameLaunderASurplusScalar(): void
+    {
+        $kernelBrowser = self::createClient();
+        $this->authenticateClient($kernelBrowser);
+
+        $suffix = \bin2hex(\random_bytes(4));
+
+        $kernelBrowser->request(
+            Request::METHOD_POST,
+            '/api/v1/backoffice/banks',
+            [
+                'name' => 'Laundering Bank ' . $suffix,
+                'shortName' => 'LDB' . $suffix,
+                'submit' => 'Save',
+            ],
+            ['submit' => $this->pngUpload()],
+        );
+
+        self::assertResponseStatusCodeSame(422);
+        $violations = $this->violationsFrom($kernelBrowser);
+        $this->assertCount(1, $violations);
+        $this->assertSame('submit', $violations[0]['field']);
+    }
+
+    private function pngUpload(): UploadedFile
+    {
+        $tmp = \tempnam(\sys_get_temp_dir(), 'erpify_logo');
+        $this->assertNotFalse($tmp);
+        \file_put_contents($tmp, \base64_decode(self::MIN_PNG, true));
+
+        return new UploadedFile($tmp, 'logo.png', self::PNG_MIME, null, true);
+    }
+
+    /**
+     * @return list<array{field: string, message: string, code: string}>
+     */
+    private function violationsFrom(KernelBrowser $kernelBrowser): array
+    {
+        $body = \json_decode((string) $kernelBrowser->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertIsArray($body);
+        $this->assertArrayHasKey('type', $body);
+        $this->assertSame('validation-failed', $body['type']);
+        $this->assertArrayHasKey('violations', $body);
+        $this->assertIsArray($body['violations']);
+
+        /** @phpstan-var list<array{field: string, message: string, code: string}> $violations */
+        $violations = \array_values($body['violations']);
+
+        return $violations;
     }
 }

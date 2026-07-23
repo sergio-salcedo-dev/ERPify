@@ -7,6 +7,7 @@ namespace Erpify\Backoffice\Bank\Infrastructure\Controller;
 use Erpify\Backoffice\Bank\Application\BankCreator;
 use Erpify\Backoffice\Bank\Application\Command\CreateBankCommand;
 use Erpify\Backoffice\Bank\Infrastructure\Http\BankResourceMapper;
+use Erpify\Backoffice\Bank\Infrastructure\Http\CreateBankRequest;
 use Erpify\Backoffice\Bank\Infrastructure\Security\BankPermission;
 use Erpify\Shared\Http\Infrastructure\Responder\ResourceResponder;
 use Erpify\Shared\Http\Infrastructure\StrictRequestPayload;
@@ -15,7 +16,6 @@ use Erpify\Shared\Validation\Application\Validator;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpKernel\Attribute\MapUploadedFile;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Validator\Constraints\File;
@@ -36,19 +36,15 @@ final readonly class BankPostController
 
     public function __invoke(
         #[StrictRequestPayload(acceptFormat: ['json', 'form'])]
-        CreateBankCommand $bankCommand,
-        #[MapUploadedFile(name: 'image')]
-        ?UploadedFile $image = null,
-        #[MapUploadedFile(name: 'storedObject')]
-        ?UploadedFile $storedObject = null,
+        CreateBankRequest $bankRequest,
     ): Response {
-        $this->assertValidUpload($image);
-        $this->assertValidUpload($storedObject);
+        $this->assertValidUpload($bankRequest->image);
+        $this->assertValidUpload($bankRequest->storedObject);
 
         $bank = $this->bankCreator->create(
-            $bankCommand,
-            $this->toUploadedImage($image),
-            $this->toUploadedImage($storedObject),
+            new CreateBankCommand($bankRequest->name, $bankRequest->shortName),
+            $this->toUploadedImage($bankRequest->image),
+            $this->toUploadedImage($bankRequest->storedObject),
         );
 
         return $this->resourceResponder->respond(
