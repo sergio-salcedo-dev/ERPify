@@ -235,6 +235,14 @@ cada una con semántica definida y disparador propio; cualquier otra escritura e
 - **`resource_id` no es identidad del sujeto borrado.** El erasure anonimiza al *actor*; `resource_id` no
   se toca. Si un recurso representa **directamente** a una persona física, su borrado GDPR es
   responsabilidad de la política del bounded context dueño del recurso, no de esta política de auditoría.
+  **Consecuencia, de obligada lectura antes de auditar un recurso-persona:** una fila cuyo actor pueda ser
+  *la misma persona* que su recurso queda, tras el borrado, con el seudónimo fresco en `actor_id` y el id
+  real en `resource_id` — un **crosswalk reversible** que re-atribuye todas las demás filas anonimizadas de
+  esa persona, porque `resourceId` es filtro indexado del API de lectura y `ADMIN` tiene `auditTrail.read`.
+  `GDPR_SUBJECT_ERASED` se libra solo porque el auto-borrado está prohibido, así que su actor nunca es el
+  sujeto. **Hasta que se decida quién anonimiza estas columnas (issue #555), ninguna fila nueva debe llevar
+  un `resource_type` que denote una persona física.** Se descubrió al intentar auditar `ChangeUserRoles`,
+  donde el auto-cambio de roles hace `actor_id == resource_id`.
 - **Sin payload sensible** en `metadata` (IDs y discriminantes, no cuerpos de entidad), invariante en la
   que se apoya el erasure: por eso **no** redige `metadata`. Trigger de revisita: el día que una acción
   guarde PII ahí, esta política debe crecer un redactor de `metadata`.
