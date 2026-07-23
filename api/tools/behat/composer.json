@@ -7,12 +7,12 @@
         "php": "^8.5",
         "behat/behat": "^3.32.0",
         "friends-of-behat/symfony-extension": "^2.7.0",
-        "symfony/browser-kit": "8.0.*",
-        "symfony/http-client": "8.0.*",
-        "symfony/css-selector": "8.0.*",
-        "symfony/dom-crawler": "8.0.*",
-        "symfony/dotenv": "8.0.*",
-        "symfony/mime": "8.0.*"
+        "symfony/browser-kit": "8.1.*",
+        "symfony/http-client": "8.1.*",
+        "symfony/css-selector": "8.1.*",
+        "symfony/dom-crawler": "8.1.*",
+        "symfony/dotenv": "8.1.*",
+        "symfony/mime": "8.1.*"
     },
     "config": {
         "sort-packages": true

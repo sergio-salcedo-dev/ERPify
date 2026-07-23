@@ -5,10 +5,15 @@ declare(strict_types=1);
 /*
  * Behat runner that reconciles two vendor trees.
  *
- * api/vendor provides the Symfony 8 kernel; api/tools/behat/vendor provides
- * Behat 3.31 (which still constrains Symfony DI/Config/HttpKernel to ^7.x).
- * We register the app autoload *first* so the Symfony 8 classes win for any
- * shared FQCN — the tools-vendor tree then supplies Behat's own packages.
+ * api/vendor provides the app's Symfony kernel; api/tools/behat/vendor provides Behat. behat/behat
+ * caps symfony/console, config, dependency-injection, event-dispatcher, translation, yaml,
+ * filesystem and process at ^7.0, so those stay on 7.4 — inside this tree only, which is the whole
+ * point of isolating it.
+ *
+ * Composer resolves a shared FQCN from the autoloader registered *last*, so the tools tree wins
+ * every collision regardless of the order below. That makes its symfony/* pins load-bearing: any
+ * package Behat does not cap must track the app's minor line, or the suite exercises the app
+ * against a different Symfony than the one it ships with.
  */
 
 $behatRoot = __DIR__;
