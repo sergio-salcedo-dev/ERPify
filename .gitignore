@@ -93,4 +93,7 @@ pnpm-debug.log*
 /.claude/worktrees/
 /.superpowers/brainstorm/
 .claude/.story-automator-active
+
 /tmp/
+
+/next-steps-audit-trail-crosswalk.md
