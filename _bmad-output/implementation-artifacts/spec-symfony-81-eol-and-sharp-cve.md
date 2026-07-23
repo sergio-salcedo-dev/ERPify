@@ -2,7 +2,7 @@
 title: 'Symfony 8.1 antes del EOL de 8.0 y sharp fuera del rango vulnerable'
 type: 'chore'
 created: '2026-07-22'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: '6243f123fb115f8f3ce7178dc25b1cbf3b2eb6c7'
 review_loop_iteration: 0
 context:
@@ -215,3 +215,50 @@ están enteramente comentadas, así que hoy la única red del endpoint multipart
 `DenormalizerInterface::COLLECT_EXTRA_ATTRIBUTES_ERRORS`, que produce nativamente el mismo 422 y
 haría redundante `UnknownPayloadMemberListener` (-93 líneas), a cambio de cambiar el texto de la
 violación y tocar `docs/api-error-contract.md`.
+
+### 2026-07-23 -- el review adversarial encontró un fallo CRÍTICO en la propia Option F
+
+Blind Hunter y Edge Case Hunter, en contextos separados y sin hablarse, convergieron en el mismo
+hallazgo. Confirmado por reproducción propia.
+
+**Declarar `?UploadedFile` en el DTO lo convirtió en miembro denormalizable, y `UploadedFile` es
+construible desde el cuerpo de la petición.** `path` y `originalName` son parámetros de su constructor,
+y `test: true` hace que `isValid()` responda true sin consultar `is_uploaded_file()` -- que es el único
+corto-circuito de `FileValidator`. Como el endpoint acepta `json`, no hacía falta ni multipart:
+
+```
+F1 CONFIRMADO: se construyó un UploadedFile desde JSON
+  pathname : /etc/hostname   isValid(): true   contenido: bdbcb0344c9b
+```
+
+Cualquier principal con `bank.write` podía leer **cualquier fichero del contenedor** que oliera a
+JPEG/PNG/WebP y cupiera en `%erpify.media.max_upload_bytes%`, quedando persistido y servido en
+`logoUrl`. Y una ruta inexistente lanzaba `FileNotFoundException`, sin marcador de error-contract, luego
+**500** -- un oráculo de existencia del sistema de ficheros a petición por intento.
+
+La tesis original de la Option F ("endurece el control") era **cierta para multipart y falsa para JSON**.
+El invariante que se perdió al quitar `#[MapUploadedFile]` no era el de nombres, sino el de transporte:
+*un upload entra por `$request->files` o no entra*.
+
+**Arreglo:** `api/src/Shared/Http/Infrastructure/TransportOnlyUploadedFileDenormalizer.php`. Reclama
+`UploadedFile` **sólo cuando el dato no lo es ya** y lo rechaza con `NotNormalizableValueException`, que
+el resolver ya traduce a 422. Un upload real llega como el objeto mismo y pasa intacto; un cuerpo que
+*describe* uno se rechaza antes de tocar el disco, lo que cierra también el oráculo de existencia.
+
+Detalle que costó dos iteraciones y merece quedar escrito: `getSupportedTypes()` debe devolver
+`[UploadedFile::class => false]`. Con `true` el serializer cachea la decisión **por tipo** y deja de
+consultar `supportsDenormalization()`, de modo que el upload legítimo también se rechazaba.
+
+```
+A) upload real desde $request->files : PASA intacto (misma instancia)
+B) JSON sintetizado: RECHAZADO
+C) ruta inexistente: RECHAZADO antes de tocar el disco -> sin oracle de existencia
+D) string en miembro de fichero: RECHAZADO
+```
+
+**El test se probó contra sí mismo.** Ataca `/app/api/docs/ide-config/composer.png`, un PNG real dentro
+del límite de tamaño, para que el 422 no pueda venir del chequeo MIME. Con el arreglo desactivado el
+test falla devolviendo **201 Created** -- la exfiltración completándose. Con el arreglo, 422.
+
+Va en `Shared/Http/` a propósito, no en el controlador: la misma razón por la que `StrictRequestPayload`
+mete la política en el tipo -- que ningún endpoint futuro pueda adoptarla a medias.

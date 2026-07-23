@@ -24,6 +24,12 @@ final class BankLogoMultipartFunctionalTest extends WebTestCase
 
     private const string PNG_MIME = 'image/png';
 
+    /**
+     * A real PNG shipped in the image, used as the target a body-described upload would exfiltrate. It has
+     * to pass the MIME and size checks for the attack test to prove anything.
+     */
+    private const string SERVER_SIDE_PNG = '/app/api/docs/ide-config/composer.png';
+
     public function testPostMultipartBankWithLogoReturnsLogoUrlAndServesImage(): void
     {
         $kernelBrowser = self::createClient();
@@ -208,6 +214,74 @@ final class BankLogoMultipartFunctionalTest extends WebTestCase
         $violations = $this->violationsFrom($kernelBrowser);
         $this->assertCount(1, $violations);
         $this->assertSame('submit', $violations[0]['field']);
+    }
+
+    /**
+     * A payload member typed `UploadedFile` is reachable from the parsed body as well as from the file bag,
+     * and `UploadedFile` is constructible from body data: `path` and `originalName` are constructor
+     * parameters and `test` switches off the `is_uploaded_file()` check. Left open, a caller could name any
+     * server path and have it read, stored and served back under `logoUrl`. The upload must come from the
+     * transport or not at all.
+     *
+     * The named path is a genuine PNG well inside the size ceiling, so `#[Assert\File]` would pass it: the
+     * 422 asserted here can only come from the upload being refused, never from the MIME or size check.
+     */
+    public function testJsonCannotDescribeAnUploadToReadAServerFile(): void
+    {
+        $kernelBrowser = self::createClient();
+        $this->authenticateClient($kernelBrowser);
+
+        $suffix = \bin2hex(\random_bytes(4));
+
+        $kernelBrowser->request(
+            Request::METHOD_POST,
+            '/api/v1/backoffice/banks',
+            server: ['CONTENT_TYPE' => 'application/json'],
+            content: \json_encode([
+                'name' => 'Path Traversal Bank ' . $suffix,
+                'shortName' => 'PTB' . $suffix,
+                'image' => [
+                    'path' => self::SERVER_SIDE_PNG,
+                    'originalName' => 'stolen.png',
+                    'mimeType' => self::PNG_MIME,
+                    'test' => true,
+                ],
+            ], JSON_THROW_ON_ERROR),
+        );
+
+        self::assertResponseStatusCodeSame(422);
+        $violations = $this->violationsFrom($kernelBrowser);
+        $this->assertCount(1, $violations);
+        $this->assertSame('image', $violations[0]['field']);
+    }
+
+    /**
+     * The same member naming a path that does not exist must not reach `File::__construct`, whose
+     * `FileNotFoundException` carries no error-contract marker and would surface as a 500. A caller able to
+     * tell 500 from 422 apart can enumerate the container's filesystem one request at a time.
+     */
+    public function testJsonDescribingAMissingPathIsRefusedWithoutLeakingExistence(): void
+    {
+        $kernelBrowser = self::createClient();
+        $this->authenticateClient($kernelBrowser);
+
+        $suffix = \bin2hex(\random_bytes(4));
+
+        $kernelBrowser->request(
+            Request::METHOD_POST,
+            '/api/v1/backoffice/banks',
+            server: ['CONTENT_TYPE' => 'application/json'],
+            content: \json_encode([
+                'name' => 'Missing Path Bank ' . $suffix,
+                'shortName' => 'MPB' . $suffix,
+                'image' => ['path' => '/nope/does-not-exist', 'originalName' => 'x.png'],
+            ], JSON_THROW_ON_ERROR),
+        );
+
+        self::assertResponseStatusCodeSame(422);
+        $violations = $this->violationsFrom($kernelBrowser);
+        $this->assertCount(1, $violations);
+        $this->assertSame('image', $violations[0]['field']);
     }
 
     private function pngUpload(): UploadedFile
