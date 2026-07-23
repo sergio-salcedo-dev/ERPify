@@ -27,6 +27,9 @@ final class InMemoryActiveAdministratorDirectory implements ActiveAdministratorD
     /** @var list<string> */
     public array $askedWithout = [];
 
+    /** @var list<string> */
+    public array $askedWhetherAdministrator = [];
+
     /**
      * @param array<string, bool> $adminUserIsActive admin user id => (its backing User exists AND is ACTIVE)
      */
@@ -43,5 +46,18 @@ final class InMemoryActiveAdministratorDirectory implements ActiveAdministratorD
             $this->adminUserIsActive,
             static fn (bool $isActive, $adminUserId): bool => $isActive && $adminUserId !== $userId,
         );
+    }
+
+    /**
+     * Membership of the map IS carrying the role: an entry valued `false` is an administrator whose backing
+     * user is absent or no longer `ACTIVE`, and that identity still holds `ADMIN`. Which is exactly why the
+     * production adapter's second query drops the status predicate the first one applies.
+     */
+    #[Override]
+    public function holdsAdministratorRole(string $userId): bool
+    {
+        $this->askedWhetherAdministrator[] = $userId;
+
+        return \array_key_exists($userId, $this->adminUserIsActive);
     }
 }

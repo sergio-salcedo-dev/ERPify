@@ -6,8 +6,9 @@ Feature: Erase an identity (GDPR right to erasure)
   # ADMIN-only (users.erase). One DELETE chains, in a single transaction: the identity hard-delete (the module's
   # PII — email and credential hash), the anonymisation of every audit row the subject authored, the hard-delete
   # of the subject's sessions, and the combined compliance self-audit — all attributed to the acting admin, never
-  # the subject. Success is a 204. An admin may not erase themselves (409 self-erasure-forbidden); the ≥1-active-
-  # admin guard binds off-request (the CLI), unreachable over HTTP once self-erasure is refused.
+  # the subject. Success is a 204. An admin may not erase themselves (409 self-erasure-forbidden) nor a peer who
+  # still carries the role (409 administrator-erasure-requires-demotion) — which subsumes the ≥1-active-admin
+  # invariant here, since the last active admin necessarily carries it.
   Background:
     Given I add "Accept" header equal to "application/json"
 
@@ -34,8 +35,8 @@ Feature: Erase an identity (GDPR right to erasure)
     And there should have 1 records in SQL result
     And I execute the SQL query "SELECT id FROM audit_log WHERE correlation_id = '0190f200-0000-7000-8000-00000000ee51' AND action = 'GDPR_ERASURE_EXECUTED' AND actor_id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66'"
     And there should have 1 records in SQL result
-    # Budget canary (14 on "default"). In one transaction (+2 BEGIN/COMMIT): the ≥1-admin guard SELECT … FOR
-    # UPDATE, the reset-token delete, the identity find and delete, the GDPR_SUBJECT_ERASED insert, the trail-
+    # Budget canary (14 on "default"). In one transaction (+2 BEGIN/COMMIT): the administrator-role EXISTS
+    # probe, the reset-token delete, the identity find and delete, the GDPR_SUBJECT_ERASED insert, the trail-
     # anonymisation UPDATE, the session delete and the GDPR_ERASURE_EXECUTED insert (= 10). The remaining reads
     # resolve the acting admin and its permissions before the controller. A shift means an added round trip —
     # re-measure, don't just bump the number.
@@ -84,6 +85,20 @@ Feature: Erase an identity (GDPR right to erasure)
       | id         |
       | not-a-uuid |
       | 123        |
+
+  Scenario: An administrator cannot erase a peer administrator — 409 administrator-erasure-requires-demotion
+    # Promote Trent on the side connection rather than seeding a second ADMIN fixture: the ≥1-active-admin
+    # scenarios elsewhere assert the seeded admin is the last one, and a second fixture would silently defeat
+    # them. Erasure is irreversible and pseudonymises the subject's whole attribution, so it refuses anyone
+    # still carrying the role — the demotion has to be recorded first, as its own audited act.
+    # `json_build_array` rather than a `["ADMIN"]` literal: the step matcher truncates on double quotes.
+    Given I execute the SQL query "UPDATE identity_user SET roles = json_build_array('ADMIN') WHERE id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d'" on connection "seed"
+    And I am logged in as an administrator
+    When I send a "DELETE" request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d"
+    Then the response status code should be 409
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the JSON node "type" should be equal to "administrator-erasure-requires-demotion"
+    And there should have 1 "Erpify\Iam\Identity\Domain\Entity\User" entities found by "id=0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d"
 
   Scenario: Erasing a well-formed but unknown id is a 404 user-not-found
     Given I am logged in as an administrator

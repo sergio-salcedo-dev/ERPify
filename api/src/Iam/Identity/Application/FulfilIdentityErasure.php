@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Application;
 
-use Erpify\Iam\Identity\Domain\Exception\LastActiveAdministratorProtected;
+use Erpify\Iam\Identity\Domain\Exception\AdministratorErasureRequiresDemotion;
 use Erpify\Iam\Identity\Domain\Exception\SelfErasureForbidden;
 use Erpify\Iam\Identity\Domain\Repository\ActiveAdministratorDirectory;
 use Erpify\Iam\Session\Application\PurgeUserSessions;
@@ -17,8 +17,8 @@ use Erpify\Shared\Uuid\Domain\Uuid;
 
 /**
  * Fulfils a GDPR "right to erasure" request against one subject as a single atomic operation — the identity
- * and its audit trail are de-identified as one unit. It chains, in one transaction: the "keep ≥1 active
- * ADMIN" guard, the identity erasure ({@see EraseIdentitySubject} — its own transaction nests and joins),
+ * and its audit trail are de-identified as one unit. It chains, in one transaction: the administrator refusal,
+ * the identity erasure ({@see EraseIdentitySubject} — its own transaction nests and joins),
  * the audit-trail anonymisation ({@see AuditActorAnonymiser}, whose DBAL runs on the same Connection the
  * EntityManager wraps, so it commits or rolls back with the rest), the hard-delete of the subject's sessions
  * ({@see PurgeUserSessions}) and the combined compliance self-audit. A failure in any link rolls everything
@@ -29,6 +29,14 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * exist and survive as the actor attributing its own erasure evidence. The self-erasure guard reads the actor
  * from the trusted {@see ActorContextFactory}, never a request body, so an off-request `system` actor (the CLI)
  * carries no id and can never trip it.
+ *
+ * Inside the transaction, one further precondition: an identity carrying `ADMIN` is refused outright
+ * ({@see AdministratorErasureRequiresDemotion}). Erasure is irreversible and pseudonymises the subject's whole
+ * attribution, so requiring the demotion first puts an audited role change in the trail ahead of it — the
+ * declared intent that erasing a peer administrator otherwise lacks. This subsumes the "keep ≥1 active ADMIN"
+ * check on this path, since the last active administrator necessarily carries the role: erasure no longer
+ * reasons about the administrator set, and that set invariant is enforced by the role and status transitions
+ * that can actually shrink it.
  *
  * Absent-id handling is deliberately delegated: this service does not throw `UserNotFound`. It returns a
  * {@see FulfilIdentityErasureResult} whose `identityErased` is `false` when nothing was live, so the HTTP
@@ -50,8 +58,8 @@ final readonly class FulfilIdentityErasure
     }
 
     /**
-     * @throws SelfErasureForbidden             when the acting actor targets their own identity (409)
-     * @throws LastActiveAdministratorProtected when the subject is the last active administrator (409)
+     * @throws SelfErasureForbidden                 when the acting actor targets their own identity (409)
+     * @throws AdministratorErasureRequiresDemotion when the subject still carries the administrator role (409)
      */
     public function execute(string $subjectId): FulfilIdentityErasureResult
     {
@@ -60,8 +68,8 @@ final readonly class FulfilIdentityErasure
 
         return $this->transactionManager->transactional(
             function () use ($subjectId): FulfilIdentityErasureResult {
-                if (!$this->administrators->keepsAnActiveAdminWithout($subjectId)) {
-                    throw LastActiveAdministratorProtected::forErasure($subjectId);
+                if ($this->administrators->holdsAdministratorRole($subjectId)) {
+                    throw AdministratorErasureRequiresDemotion::forUser($subjectId);
                 }
 
                 $identity = $this->eraseIdentitySubject->execute($subjectId);
