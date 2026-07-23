@@ -254,6 +254,13 @@ you change anything here.
       behind the token check**: a dead accept link never pays an argon2id run (no unauthenticated KDF
       amplification). The accept is capped **per selector** (`token_action_per_selector` limiter); exhaustion
       folds into the same opaque `invalid-token`, never a per-selector 429.
+- [x] **Every payload-mapping endpoint accepts JSON only.** All eleven `#[StrictRequestPayload]` sites
+      declare `acceptFormat: ['json']`, so a form-encoded or `multipart/form-data` body is refused with
+      415 at the argument resolver, before any controller or handler runs. Uniformity is the control:
+      the API declares no `#[MapUploadedFile]` argument anywhere, and a route that silently accepted a
+      multipart body would be the seam through which a file part could re-enter. Verify with
+      `git grep -n '#\[StrictRequestPayload' -- api/src` — every attribute site must carry the format
+      list. Gate: `BankCreateAcceptsJsonOnlyFunctionalTest`.
 - [ ] **Password reset (`POST /api/v1/backoffice/forgot-password` · `/reset-password`):** the credential-recovery
       surface, mirroring the invitation flow. Forgot answers a **uniform 202** for every email/identity state
       (only an `ACTIVE` identity mints a token, and that work is never observable to the anonymous requester) — no
@@ -327,7 +334,7 @@ you change anything here.
       `changeStatus` (`PATCH /bank-accounts/{id}/status`) is a domain operation, **not** a tier verb, so it is
       reachable only through an explicit grant to `MANAGER` (and `ADMIN` via the wildcard) — an `EDITOR`
       holding `write` is refused it. The tier backfill above already covers these routes; no extra data
-      migration. Media/object routes are protected (not public-by-design). Sessions use the **native file handler** (single-container only) — a shared
+      migration. Sessions use the **native file handler** (single-container only) — a shared
       handler (Postgres/Redis) is a follow-up before horizontal scaling. ADR
       [`docs/adr/auth-rbac-subsystem.md`](docs/adr/auth-rbac-subsystem.md).
 - [ ] **Persisted per-identity lockout (`identity_user.failed_attempts` / `locked_until`):** a second line

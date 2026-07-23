@@ -51,8 +51,6 @@ deptrac:
       - Symfony\Component\Validator\Context\ExecutionContextInterface
     Erpify\Shared\Search\Application\Http\SearchQuery:
       - Symfony\Component\Validator\Context\ExecutionContextInterface
-    Erpify\Shared\Storage\Application\StoredObjectOrphanCleaner:
-      - Symfony\Component\DependencyInjection\Attribute\AutowireIterator
     Erpify\Shared\Validation\Application\Validator:
       - Symfony\Component\Validator\Constraint
       - Symfony\Component\Validator\ConstraintViolation

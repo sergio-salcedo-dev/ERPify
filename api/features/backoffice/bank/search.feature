@@ -329,16 +329,17 @@ Feature: Search banks
     And 3 requests got executed only for doctrine connection "default"
 
   # Semantic 422s come from the applier (invalid-search-criteria family) and abort before
-  # any SQL executes; storedObjectKey is a real column but NOT in the allow-list on purpose.
+  # any SQL executes; nameNormalized is a real entity property that is deliberately not a public
+  # search key — `name` is the key that maps onto it, so the internal name must not resolve.
   Scenario: Generic filter on a field outside the allow-list returns a 422 unknown-search-field Problem Details body
-    When I send a "GET" request to "/backoffice/banks?filters[0][field]=storedObjectKey&filters[0][operator]=eq&filters[0][value]=BBVA"
+    When I send a "GET" request to "/backoffice/banks?filters[0][field]=nameNormalized&filters[0][operator]=eq&filters[0][value]=BBVA"
     Then the response status code should be 422
     And the header "Content-Type" should be equal to "application/problem+json"
     And the header "Cache-Control" should contain "no-store"
     And the JSON node "type" should be equal to "unknown-search-field"
     And the JSON node "title" should be equal to "Unknown search field."
     And the JSON node "status" should be equal to the number 422
-    And the JSON node "field" should be equal to "storedObjectKey"
+    And the JSON node "field" should be equal to "nameNormalized"
     And the JSON node "instance" should be a valid UUID
     And the JSON node "correlation-id" should be a valid UUID
     And 0 requests got executed across all doctrine connections

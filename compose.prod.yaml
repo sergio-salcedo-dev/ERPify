@@ -47,11 +47,6 @@ services:
     cap_add:
       # FrankenPHP/Caddy binds privileged ports 80/443.
       - NET_BIND_SERVICE
-    volumes:
-      # Flysystem object storage (STORAGE_LOCAL_PATH default). Without a
-      # persistent volume uploads are lost on container recreation. Back it up
-      # alongside the DB — see docs-info/object-storage.md.
-      - storage_data:/app/api/storage
     deploy:
       resources:
         limits:
@@ -150,11 +145,6 @@ services:
     cap_drop:
       - ALL
     # No privileged port and no daemon — the console consumer needs no caps.
-    volumes:
-      # Same object-storage volume as the php service: async handlers must see
-      # the same files the web container wrote (StoredObjectOrphanCleaner runs in
-      # this worker too). See docs-info/object-storage.md for the shared-store requirement.
-      - storage_data:/app/api/storage
     deploy:
       resources:
         limits:
@@ -217,8 +207,7 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    # frontend = Sentry egress; backend = reach Postgres. No object-storage volume: the prune
-    # is a pure DB DELETE and never touches Flysystem.
+    # frontend = Sentry egress; backend = reach Postgres.
     networks:
       - frontend
       - backend
@@ -229,11 +218,6 @@ services:
           cpus: ${SCHEDULER_CPU_LIMIT:-0.25}
           memory: ${SCHEDULER_MEM_LIMIT:-256m}
     command: ["php", "bin/console", "messenger:consume", "scheduler_maintenance", "scheduler_audit_maintenance", "--time-limit=3600", "--memory-limit=256M"]
-
-volumes:
-  # Uploaded stored-objects (Flysystem local adapter). Survives container
-  # recreation; include it in the backup plan next to database_data.
-  storage_data:
 
 # frontend: host-facing + inter-service. backend: internal-only (no egress,
 # no host port) so the database is fully isolated. mailpit lives in the dev

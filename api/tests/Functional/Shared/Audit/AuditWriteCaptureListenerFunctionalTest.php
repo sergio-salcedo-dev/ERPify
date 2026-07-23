@@ -7,8 +7,8 @@ namespace Erpify\Tests\Functional\Shared\Audit;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
+use Erpify\Organization\Organization\Domain\Entity\Organization;
 use Erpify\Shared\Audit\Infrastructure\Persistence\AuditWriteCaptureListener;
-use Erpify\Shared\Media\Domain\Entity\Media;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -93,32 +93,6 @@ final class AuditWriteCaptureListenerFunctionalTest extends KernelTestCase
         });
     }
 
-    public function testTheDeleteSnapshotCapturesAToOneAssociationAsItsReferencedId(): void
-    {
-        $this->inRolledBackTransaction(function (EntityManagerInterface $em, Connection $connection): void {
-            $mediaId = Uuid::generate();
-            $media = Media::create($mediaId, \str_repeat('a', 64), 'image/webp', 3, 'abc');
-            $em->persist($media);
-
-            $id = Uuid::generate();
-            $token = \strtoupper(\substr(\str_replace('-', '', $id), 0, 8));
-            $bank = Bank::create($id, 'Logoed Bank ' . $id, 'LOGO' . $token, $media);
-            $em->persist($bank);
-            $em->flush();
-
-            $em->remove($bank);
-            $em->flush();
-
-            $row = $this->changeRow($connection, $id, 'BANK_DELETED');
-            $this->assertSame(
-                $mediaId,
-                $this->changedValue($row, 'media', 'old'),
-                'a to-one association is snapshotted as the referenced id, not the related object',
-            );
-            $this->assertNull($this->changedValue($row, 'media', 'new'), 'with nothing after — the aggregate is gone');
-        });
-    }
-
     public function testTheChangeRowSealsTheAmbientSystemActorCorrelationAndInstant(): void
     {
         $this->inRolledBackTransaction(function (EntityManagerInterface $em, Connection $connection): void {
@@ -197,13 +171,17 @@ final class AuditWriteCaptureListenerFunctionalTest extends KernelTestCase
     public function testItIgnoresAnEntityThatDidNotOptIntoTheTrail(): void
     {
         $this->inRolledBackTransaction(function (EntityManagerInterface $em, Connection $connection): void {
-            $mediaId = Uuid::generate();
-            $media = Media::create($mediaId, \str_repeat('a', 64), 'image/webp', 3, 'abc');
+            $organizationId = Uuid::generate();
+            $organization = Organization::provision($organizationId, 'Acme Holdings ' . $organizationId);
 
-            $em->persist($media);
+            $em->persist($organization);
             $em->flush();
 
-            $this->assertSame(0, $this->countChangeRows($connection, $mediaId), 'a non-audited entity emits no row');
+            $this->assertSame(
+                0,
+                $this->countChangeRows($connection, $organizationId),
+                'a non-audited entity emits no row',
+            );
         });
     }
 

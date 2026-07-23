@@ -106,6 +106,24 @@ No hay ninguna definida — users-admin es la cola del arco Iam/acceso. Los paso
 9. **Fetch-antes-del-gate** en la consola (los hooks corren antes de `<Can>` → petición 403 desperdiciada): flag `enabled` en los hooks de `Shared/resource` (cross-cutting).
 10. **Autoridad de tenancy `User.roles` vs `Membership.roles` (SI-15)** y **extracción del core RBAC del parking** (desde II-0): las dos decisiones de arquitectura que el arco lleva difiriendo; corte natural de la próxima épica.
 
+### Pasada adversarial a U-5b — ejecutada 2026-07-22 (cierra el item 8; corrige el 7)
+
+Lectura hostil de `FulfilIdentityErasure` + `EraseIdentitySubject` + `PurgeUserSessions` + `DbalAuditActorAnonymiser` + `DoctrineActiveAdministratorDirectory` + `UserEraseController`, contra `main`. El artefacto `u-5b-*.md` ya estaba podado, así que el registro vive aquí.
+
+**Hipótesis descartadas midiendo, no razonando** (importan tanto como los hallazgos — evitan re-abrirlas):
+
+- *«El hard-delete del `User` escribe su email en el trail vía el snapshot-on-delete del CDC.»* Falso: `User` **no** implementa `AuditedEntity`, y el opt-in es explícito por agregado. `Invitation` y `Session` están fuera por la misma decisión deliberada.
+- *«La invitación conserva el email del sujeto.»* Falso: `Invitation` lleva solo ids + `token_hash`; el email no está en el agregado.
+- *«El erase deja PII en `messenger_messages`/`failed`.»* Falso hoy — ver hallazgo 2.
+- El guard ≥1-admin y el rechazo de self-erase resisten la lectura hostil: `FOR UPDATE` sobre el conjunto completo de admins activos con `ORDER BY` explícito (mismo orden ⇒ sin deadlock, el perdedor re-lee), exclusión aplicada en PHP y no en SQL para no divergir los lock sets, y comparación de UUID con `strcasecmp` en ambos puntos (un `===` sería bypassable). La anonimización es idempotente, parametrizada y no deja crosswalk reversible.
+
+**Hallazgos reales (2), ambos con issue:**
+
+1. **#545 — el erase deja huérfana `organization_membership`** (`user_id` único + `roles`, posiblemente `ADMIN`). Es el último sitio donde sobrevive el `user_id` del sujeto, y además expone que el guard ≥1-admin lee `identity_user` y no membership: el erase puede dejar una membership fantasma con rol ADMIN que ningún guard cuenta. Alimenta la decisión SI-15 del item 10 (no la resuelve).
+2. **#546 — corrige el item 7 de esta lista.** «Gap GDPR vivo» era **incorrecto medido contra `main`**: `SendEmailMessage` no está enrutado a propósito (los emails con token van síncronos) y `BankAccountSnapshot` excluye IBAN/holder/BIC/alias. El gap real es que esa invariante —«ningún payload persistido lleva PII»— la sostienen tres comentarios y **nada la ejecuta**, sobre tablas sin TTL que ninguna ruta de erasure alcanza (el crypto-shredding cubre solo `audit_log`).
+
+**Efectos colaterales:** #495 cerrado (las sesiones que reclamaba ya las purga #529, con el diseño propuesto punto por punto). La regla del item 8 quedó fijada en `CLAUDE.md` → *Security review on every change* → **Process**, redactada como gate de `done` con registro obligatorio del sitio de la pasada.
+
 ### Higiene de artefactos (este PR)
 
 - Poda de specs `done` (u-0…u-5b) — sin enlaces entrantes (las referencias de `deferred-work.md` son encabezados de texto, no links).

@@ -2,11 +2,14 @@
 # CodeQL static analysis (local)
 # =============================================================================
 
-# Local counterpart to the .github/workflows/codeql.yml CI job: the CI scan
-# covers the PWA (JS/TS) + GitHub Actions, while these targets let you run
-# CodeQL against any source root (incl. api/) on your machine without GitHub
-# Advanced Security. The CodeQL CLI is free under the GitHub CodeQL Terms &
-# Conditions for non-automated, local use against your own code.
+# Local counterpart to the .github/workflows/codeql.yml CI job, which covers the
+# PWA (JS/TS) + GitHub Actions. These targets run the same analysis on your
+# machine without GitHub Advanced Security. The CodeQL CLI is free under the
+# GitHub CodeQL Terms & Conditions for non-automated, local use against your own
+# code.
+#
+# Scope is limited to CodeQL-supported languages: PHP has no CodeQL analyzer, so
+# api/ cannot be analysed by these targets at any CODEQL_SOURCE_ROOT.
 #
 # Usage:
 #   make codeql.run        # install → build db → analyze → report
@@ -38,7 +41,7 @@ CODEQL_HOME             = $(CODEQL_DIR)/codeql
 CODEQL                  = $(CODEQL_HOME)/codeql
 CODEQL_DB               = $(CODEQL_DIR)/db-pwa
 CODEQL_SARIF            = $(CODEQL_DIR)/results.sarif
-# Mirrors the workflow we deleted: JS/TS, security-extended suite.
+# Mirrors the CI job's suite so local and CI runs report the same findings.
 CODEQL_QUERIES         ?= javascript-security-extended.qls
 CODEQL_SOURCE_ROOT     ?= $(PWA_ROOT)
 CODEQL_LANGUAGE        ?= javascript-typescript

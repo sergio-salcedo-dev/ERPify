@@ -40,15 +40,18 @@ value object is extracted yet.
 *Discarded:* `interface BankResource` + implementors. It would add abstraction with no caller that varies
 over the type, and ISP is already satisfied at the shape of each DTO.
 
-### D3 — Bank has four views because POST ≠ PUT
+### D3 — Bank has four views, one per endpoint
 
-`BankListResource` (6 keys, with `accountCount`, no URLs), `BankDetailResource` (8), `BankCreateResource`
-(7, **with** logo/storedObject URLs, **no** `accountCount`), `BankUpdateResource` (5, no URLs, no count).
-The code proves POST and PUT diverge: create serializes the URLs, update does not.
+`BankListResource` and `BankDetailResource` carry 6 keys each (`id`, `name`, `shortName`, `createdAt`,
+`updatedAt`, `accountCount`); `BankCreateResource` and `BankUpdateResource` carry 5 (the same minus
+`accountCount`, a read-side enrichment foreign to the write contract). Each pair shares a key set and stays
+two distinct classes: the endpoint, not the shape, is the unit of evolution — a field added to the detail
+response, or to POST alone, is a one-class edit that cannot leak into its sibling.
 
-*Discarded:* a single `BankWriteResource`. Sharing it would force optional properties with per-endpoint
-semantics and risk emitting `null` where a key is absent today (no `skip_null_values`), breaking
-`update.feature` (which pins 5 keys and asserts `logoUrl`/`storedObjectUrl` *should not exist*).
+*Discarded:* collapsing each pair into one DTO. It saves four declarations and spends the independent-evolution
+property; the first divergent field then forces optional properties with per-endpoint semantics and risks
+emitting `null` where a key is absent today (no `skip_null_values`), breaking `update.feature` (which pins 5
+keys and asserts `accountCount` *should not exist*).
 
 ### D4 — The account count rides a `BankWithAccountCount` wrapper, not the entity
 
@@ -63,16 +66,16 @@ three-consumer seam. `BankCreateResource` / `BankUpdateResource` omit the `accou
 *Discarded:* mutating the entity (couples a read projection into the aggregate) and a per-bank `countFor()`
 call inside the mapper (reintroduces the N+1 the batch enricher exists to avoid).
 
-### D5 — Mapping is an injectable Infrastructure service taking the URL ports
+### D5 — Mapping is an injectable Infrastructure service, not a static factory
 
-`BankResourceMapper` / `BankAccountResourceMapper` (`Infrastructure/Http/`) do entity(+count)+URLs → DTO.
-They are services, not static factories on the DTO: the mapping needs infrastructure collaborators (the URL
-generators), which would pollute a pure factory and hurt testability. They inject the **ports**
-`MediaPublicUrlGenerator` and `StoredObjectPublicUrlGenerator` — the exact pair the old normalizer used.
+`BankResourceMapper` / `BankAccountResourceMapper` (`Infrastructure/Http/`) do entity(+count) → DTO. They are
+container services: a service is the seam where an infrastructure collaborator can be injected the day a view
+needs one (a URL generator, a formatter), and it keeps the transformation stubbable on its own in the mapper
+tests.
 
-*Discarded:* a static `fromEntity()` factory on the DTO (cannot reach the URL generators cleanly); and
-injecting `ContentHashUrlGenerator` directly (the ports already wrap it and own the route names — dropping
-to the concrete would duplicate that knowledge).
+*Discarded:* a static `fromEntity()` factory on the DTO. It welds the transformation into the data object —
+the DTO stops being logic-free (D1) — and any collaborator a view later requires has nowhere to go but a
+global.
 
 ### D6 — `BankLogoUrlNormalizer` is deleted, not left dangling
 
@@ -81,16 +84,19 @@ fired on `Bank` + `GROUP_READ_URLS`, which no longer happens once DTOs are seria
 dead: the class is removed **and** its `#[AutoconfigureTag('serializer.normalizer')]` service is
 deregistered — no normalizer left registered against a contract nothing produces.
 
+> *Historical note:* URL synthesis has since left the bank views entirely — the four shapes in D3 carry no URL
+> key — so this decision records why the normalizer went, not a mechanism still in service.
+
 ### D7 — Byte-stable wire: ATOM owned by the mapper, flatness enforced by a test
 
 This is an internal refactor, not an API change: no field added, removed, or renamed in any response. The
 mapper pre-formats `createdAt` / `updatedAt` to ATOM strings on the DTO, so the ATOM format is owned by the
 Infrastructure mapper — not by a serializer attribute inward; the `Timestamped` trait carries only `#[ORM]`.
-Nullable URL fields stay typed nullable so the serializer still emits `null`. Two gates protect the wire:
-`BankResourceMapperTest` pins, per view, the exact ordered key set, the ATOM timestamp strings, and the
-synthesized URL strings (URL ports stubbed to echo the content hash) — the one logic-bearing transformation;
-and `ResourceDtoContractTest` enforces structurally that every `Application/Resource/` DTO is flat,
-immutable and scalar-only, so no raw `DateTimeImmutable` or object can reach the group-less, context-less
+Nullable fields stay typed nullable so the serializer still emits `null`. Two gates protect the wire:
+`BankResourceMapperTest` pins, per view, the exact ordered key set and the ATOM timestamp strings — the one
+logic-bearing transformation; and `ResourceDtoContractTest` enforces structurally that every
+`Application/Resource/` DTO is flat, immutable and scalar-only, so no raw `DateTimeImmutable` or object can
+reach the group-less, context-less
 `ResourceNormalizer` and silently drift the format. Coverage is scoped to the mappers, not the logic-free
 DTOs.
 

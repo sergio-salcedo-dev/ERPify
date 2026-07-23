@@ -20,8 +20,6 @@ Feature: Update a bank
     And the JSON node "data.shortName" should be equal to "UB"
     And the JSON node "data.createdAt" should not be null
     And the JSON node "data.updatedAt" should not be null
-    And the JSON node "data.logoUrl" should not exist
-    And the JSON node "data.storedObjectUrl" should not exist
     And the JSON node "data.accountCount" should not exist
     # The budget includes the regulatory change row the audit listener writes on the same transaction.
     And 10 requests got executed only for doctrine connection "default"

@@ -7,8 +7,8 @@ namespace Erpify\Tests\Functional\Doctrine;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Mapping\ClassMetadata;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
+use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Shared\Kernel\Domain\Entity\Identifiable;
-use Erpify\Shared\Media\Domain\Entity\Media;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
@@ -53,7 +53,7 @@ final class IdentifiableAssignedIdentifierTest extends KernelTestCase
 
         // Guard against a silent zero-discovery: the known Identifiable users must all be present.
         $this->assertContains(Bank::class, $identifiableEntities);
-        $this->assertContains(Media::class, $identifiableEntities);
+        $this->assertContains(User::class, $identifiableEntities);
     }
 
     /**

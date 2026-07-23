@@ -16,15 +16,22 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(StaticAuthorizationPolicy::class)]
 final class StaticAuthorizationPolicyTest extends TestCase
 {
-    public function testAdminIsGrantedEveryActionIncludingOptedOutResources(): void
+    public function testTheAdminWildcardReachesEveryTieredActionButStopsAtTheOptOut(): void
     {
         $policy = new StaticAuthorizationPolicy(tierOptOut: ['ledger']);
         $admin = [Role::ADMIN->value];
 
+        // ADMIN is a tier holding every verb, so a tiered resource costs zero policy rows — including for
+        // actions that are not tier verbs at all.
         $this->assertTrue($policy->permits(Permission::fromString('bank.read'), $admin));
         $this->assertTrue($policy->permits(Permission::fromString('bank.write'), $admin));
         $this->assertTrue($policy->permits(Permission::fromString('bank.delete'), $admin));
-        $this->assertTrue($policy->permits(Permission::fromString('ledger.read'), $admin));
+        $this->assertTrue($policy->permits(Permission::fromString('bank.approve'), $admin));
+
+        // ...and the opt-out stops it. This boundary is what makes withdrawing a resource from tiering a real
+        // governance control: such a surface is closed to ADMIN too until a row names a grantee, so a
+        // capability invented on it later is never granted by a default nobody chose.
+        $this->assertFalse($policy->permits(Permission::fromString('ledger.read'), $admin));
     }
 
     public function testViewerReadsButNeitherWritesNorDeletes(): void
@@ -107,7 +114,7 @@ final class StaticAuthorizationPolicyTest extends TestCase
         $permission = Permission::fromString('auditTrail.read');
 
         $this->assertTrue($policy->permits($permission, [Role::AUDIT_READER->value]));
-        // ADMIN reads the trail through the unconditional admin clause, not the explicit grant.
+        // auditTrail opts out of tiering, so ADMIN's wildcard does not reach it: the explicit grant does.
         $this->assertTrue($policy->permits($permission, [Role::ADMIN->value]));
 
         // auditTrail opts out of tier auto-grant, so a generic read-tier role earns nothing without an explicit grant.
@@ -132,8 +139,8 @@ final class StaticAuthorizationPolicyTest extends TestCase
         $policy = new StaticAuthorizationPolicy();
         $permission = Permission::fromString('bankAccount.changeStatus');
 
-        // changeStatus is a domain operation, not a tier verb, so only the explicit grant (MANAGER) and
-        // the unconditional admin clause reach it.
+        // changeStatus is a domain operation, not a tier verb, so the explicit grant is what reaches it for
+        // MANAGER; ADMIN arrives instead through its wildcard tier, bankAccount being a tiered resource.
         $this->assertTrue($policy->permits($permission, [Role::MANAGER->value]));
         $this->assertTrue($policy->permits($permission, [Role::ADMIN->value]));
 

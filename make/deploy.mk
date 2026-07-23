@@ -47,10 +47,10 @@ deploy.local: ## Stand up the prod profile on this host at https://erpify.local 
 deploy.local.trust: ## Run the PRIVILEGED client-trust steps (hosts + system CA + Chromium NSS). Run with sudo: `sudo make deploy.local.trust`
 	@bash $(PROJECT_ROOT)/scripts/deploy/trust-local.sh
 
-backup.prod: ## Paired prod backup: pg_dump + object-storage archive (knobs: BACKUP_DIR, RETENTION_DAYS, BACKUP_SYNC_CMD)
+backup.prod: ## Prod backup: verified pg_dump of the database (knobs: BACKUP_DIR, RETENTION_DAYS, BACKUP_SYNC_CMD)
 	@bash $(PROJECT_ROOT)/scripts/deploy/backup-prod.sh
 
-restore.prod: ## Restore a backup pair (STAMP=<stamp>, omit to list) — DESTRUCTIVE, for the restore drill / pre-prod check (knobs: BACKUP_DIR, RESTORE_YES, ALLOW_PROD_RESTORE)
+restore.prod: ## Restore a backup (STAMP=<stamp>, omit to list) — DESTRUCTIVE, for the restore drill / pre-prod check (knobs: BACKUP_DIR, RESTORE_YES, ALLOW_PROD_RESTORE)
 	@STAMP="$(STAMP)" bash $(PROJECT_ROOT)/scripts/deploy/restore-prod.sh
 
 .PHONY: prod.env.check deploy.local deploy.local.trust backup.prod restore.prod

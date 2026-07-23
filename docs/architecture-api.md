@@ -16,8 +16,6 @@ The `api/` deployable is a Symfony 8 HTTP API on **FrankenPHP** (Caddy embedded)
 | Async           | Symfony Messenger + Doctrine transport                 | 8.0.x                                         |
 | Realtime        | Symfony Mercure (+ Hub)                                | 0.7 / bundle 0.4                              |
 | Mail            | symfony/mailer                                         | 8.0.x                                         |
-| Storage         | league/flysystem (+ bundle)                            | 3.33 / 3.7                                    |
-| Media           | Intervention Image                                     | 4.0                                           |
 | CORS            | nelmio/cors-bundle                                     | 2.6                                           |
 | Logging         | symfony/monolog-bundle                                 | 4.0                                           |
 | UID             | symfony/uid (UUIDv7)                                   | 8.0.x                                         |
@@ -64,10 +62,8 @@ api/src/
     ├── Clock/          { Domain, Infrastructure }                # time port + Symfony/native adapters
     ├── Event/          { Domain, Application, Infrastructure }   # event backbone: DomainEvent, EventBus, event store, projections
     ├── Mailer/         { Application, Infrastructure }           # notification-mail port + adapter
-    ├── Media/          { Application, Domain, Infrastructure }   # in-DB media (BLOB)
     ├── Monitoring/     { Infrastructure }                        # Sentry before_send filter/scrubber
     ├── Search/         { Domain, Application, Infrastructure }   # filters + keyset engine + cursor envelope
-    ├── Storage/        { Domain, Application, Infrastructure }   # Flysystem object storage
     └── Validation/     { Application, Infrastructure }           # Validator helper + EnumType constraint
 ```
 
@@ -87,7 +83,7 @@ Golden rule: *contexts reference each other's identities and react to each other
 |-------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------|
 | `Domain/`         | Entities, value objects, domain services, repository/port **interfaces**, domain exceptions, domain events                                               | Framework, ORM, HTTP, DI container                     |
 | `Application/`    | Use cases (command/query handlers), DTOs, orchestration, validators over DTOs                                                                            | Infrastructure implementations (only their interfaces) |
-| `Infrastructure/` | Doctrine mappings, repository implementations, Symfony controllers, Messenger handlers, Mercure publishers, Flysystem adapters, external-service clients | — (outermost layer)                                    |
+| `Infrastructure/` | Doctrine mappings, repository implementations, Symfony controllers, Messenger handlers, Mercure publishers, external-service clients               | — (outermost layer)                                    |
 
 **No presentation in the inner layers.** No `Domain/` type (enum, value object, entity) and no `Application/` DTO/mapper carries display text, formatting, or i18n — that is presentation, owned by the presentation layer keyed by the identity value (the PWA `Record<Key, label>` / i18n dictionary, or an `Application`/`Infrastructure` localizing catalog). A domain enum is the canonical case: it carries identity and business rules (`isTerminal()`, transitions), never labels; its `->value` (`SCREAMING_SNAKE`) **is** the wire contract the API serializes, and enum backing is per-aggregate (string-backed by default, int-backed only for hot-path aggregates). Enforced by the `DomainPresentationSeparationGateTest` arch-test (the name-visible half) plus review. Decision records: [`adr/domain-presentation-separation.md`](./adr/domain-presentation-separation.md) (general rule) and [`adr/domain-enums.md`](./adr/domain-enums.md) (the enum case).
 
@@ -283,14 +279,9 @@ Full reference (mapping table, header rules, observability, code map, test surfa
   password-changed notification is async the safe way: its reactor (`SendEmailOnPasswordResetCompleted`)
   consumes `PasswordResetCompleted` from the `async` transport and resolves the recipient in-module.
 
-## Storage & media
-
-- `Shared/Storage/` wraps Flysystem adapters. Never hit the local FS directly for user-facing content.
-- `Shared/Media/` uses Intervention Image for processing and follows full DDD layering (`Application/Dto`, `Application/Port`, `Domain/{Entity, Exception, Repository}`, `Infrastructure/{Controller, Http, Image, Persistence}`).
-
 ## Configuration
 
-- Bundle configuration under `api/config/packages/`: Doctrine, Doctrine migrations, Messenger, Mercure (publish + subscribe), Mailer, Flysystem, Media, Nelmio CORS (PHP), Validator, Property Info, Cache, Framework, Routing, Monolog, Hautelook Alice / Nelmio Alice fixtures.
+- Bundle configuration under `api/config/packages/`: Doctrine, Doctrine migrations, Messenger, Mercure (publish + subscribe), Mailer, Nelmio CORS (PHP), Validator, Property Info, Cache, Framework, Routing, Monolog, Hautelook Alice / Nelmio Alice fixtures.
 - `api/config/services.yaml` — autoconfigure defaults; explicit definitions are the exception.
 - `api/config/services_test.yaml` — test-only service overrides (YAML, never PHP).
 - `api/config/routes.yaml` + routes in `api/config/routes/` — attribute-first.

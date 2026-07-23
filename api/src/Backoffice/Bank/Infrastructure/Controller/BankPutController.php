@@ -33,7 +33,7 @@ final readonly class BankPutController
      */
     public function __invoke(
         string $id,
-        #[StrictRequestPayload]
+        #[StrictRequestPayload(acceptFormat: ['json'])]
         UpdateBankCommand $bankCommand,
     ): Response {
         $bank = $this->bankUpdater->update($id, $bankCommand);

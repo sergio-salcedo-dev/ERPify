@@ -8,8 +8,7 @@ use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 
 /**
  * Aggregate-lifecycle port backed by the system of record. Search lives on
- * {@see BankSearchRepository}; stored-object reference queries on
- * {@see BankStoredObjectQueries}.
+ * {@see BankSearchRepository}.
  */
 interface BankRepository
 {

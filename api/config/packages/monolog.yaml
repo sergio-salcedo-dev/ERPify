@@ -4,7 +4,6 @@ monolog:
         - messenger
         - mercure
         - audit
-        - media
         # Dedicated stream for the cursor-pagination D-Obs events (keyset_search / invalid_cursor).
         # MUST stay off the `fingers_crossed` handlers below: those buffer until a 5xx and discard
         # everything otherwise, which would drop these non-error metric lines in prod.

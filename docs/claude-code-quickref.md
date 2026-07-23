@@ -24,8 +24,8 @@ make docker.prune        # Prune ALL Docker images/volumes/containers system-wid
 make prod.env.check      # Validate .env.prod.local has all required prod secrets (no placeholders).
 make deploy.local        # Stand up the PROD profile at https://erpify.local (preflight → up → migrate → smoke → CA export + trust guidance).
 sudo make deploy.local.trust  # Privileged client-trust steps (hosts + system CA + Chromium NSS); targets $SUDO_USER. Don't `sudo make deploy.local`.
-make backup.prod         # Paired prod backup: pg_dump + object-storage archive (BACKUP_DIR, RETENTION_DAYS, BACKUP_SYNC_CMD). Runbook: docs/vps-deployment.md § Backups.
-STAMP=<s> make restore.prod  # Paired restore (DESTRUCTIVE) for the drill / pre-prod check; verifies artifacts. Prod target needs ALLOW_PROD_RESTORE=1 + typed confirm. Runbook: § Backups.
+make backup.prod         # Prod backup: verified pg_dump of the database (BACKUP_DIR, RETENTION_DAYS, BACKUP_SYNC_CMD). Runbook: docs/vps-deployment.md § Backups.
+STAMP=<s> make restore.prod  # Restore (DESTRUCTIVE) for the drill / pre-prod check; verifies the dump. Prod target needs ALLOW_PROD_RESTORE=1 + typed confirm. Runbook: § Backups.
 ```
 
 Prod/staging load secrets from a gitignored root `.env.prod.local` (copy from [`.env.prod.example`](../.env.prod.example)) via `--env-file`. Runbook: [`erpify-local-test-deployment.md`](erpify-local-test-deployment.md); security gate: [`../PRODUCTION_SECURITY_CHECKLIST.md`](../PRODUCTION_SECURITY_CHECKLIST.md).
@@ -58,7 +58,7 @@ make db.tunnel                      # Expose prod/staging DB on 127.0.0.1:15432 
 make xdebug.enable                  # Toggle Xdebug in api/.env (also xdebug.disable, xdebug.status).
 ```
 
-Individual linters: `php.rector[.dry-run]`, `php.cs-fixer[.dry-run]`, `php.md`, `php.cs[.dry-run]`, `composer.check.all`. Error-contract drift gate: `php.lint.error-contract` (FR50/FR51/NFR26). Bounded-context isolation gate: `php.lint.bounded-context` (Level 1 cross-context `Domain`/`Application`/`Infrastructure` import fails; Level 2 cross-context FK warns; seams in `api/.bounded-context-allowlist`). Architecture-boundary gate: `php.deptrac` (deptrac, in `php.quality[.dry-run]`) — hexagonal layering + bounded-context defence-in-depth + Domain/Application external-dependency allowlist; config `api/tools/deptrac/deptrac.yaml`, grandfathered debt in `api/tools/deptrac/deptrac.baseline.yaml` (regen `php.deptrac.baseline`).
+Individual linters: `php.rector[.dry-run]`, `php.cs-fixer[.dry-run]`, `php.md`, `php.cs[.dry-run]`, `composer.check.all`. Error-contract drift gate: `php.lint.error-contract` (FR50/FR51/NFR26). Bounded-context isolation gate: `php.lint.bounded-context` (Level 1 cross-context `Domain`/`Application`/`Infrastructure` import fails; Level 2 cross-context FK warns; seams in `api/.bounded-context-allowlist`). Architecture-boundary gate: `php.deptrac` (deptrac, in `php.quality[.dry-run]`) — hexagonal layering + bounded-context defence-in-depth + Domain/Application external-dependency allowlist; config `api/tools/deptrac/deptrac.yaml`, grandfathered debt in `api/tools/deptrac/deptrac.baseline.yaml` (regen `php.deptrac.baseline`). Security-dataflow rules: `semgrep.scan` / `semgrep.test` / `semgrep.sarif` (pinned container, rules in `tools/semgrep/rules/erpify-rules.yaml`, fixtures in `tools/semgrep/tests/`) — covers `Request` → DQL/SQL, shell and redirect; runs in the non-gating `api-semgrep` CI job, outside `php.quality`.
 
 ### PWA / JS
 

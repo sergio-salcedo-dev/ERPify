@@ -33,7 +33,7 @@ final readonly class BankAccountPatchStatusController
      */
     public function __invoke(
         string $id,
-        #[StrictRequestPayload]
+        #[StrictRequestPayload(acceptFormat: ['json'])]
         ChangeBankAccountStatusCommand $command,
     ): Response {
         $account = $this->bankAccountStatusChanger->change($id, $command);

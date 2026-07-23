@@ -9,20 +9,16 @@ use Erpify\Backoffice\Bank\Application\BankWithAccountCount;
 use Erpify\Backoffice\Bank\Application\Resource\BankListResource;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Infrastructure\Http\BankResourceMapper;
-use Erpify\Shared\Media\Application\Port\MediaPublicUrlGenerator;
-use Erpify\Shared\Media\Domain\Entity\Media;
 use Erpify\Shared\Search\Domain\Page;
-use Erpify\Shared\Storage\Application\Port\StoredObjectPublicUrlGenerator;
-use Erpify\Shared\Storage\Domain\StoredObject;
 use Erpify\Tests\Unit\Backoffice\Bank\Domain\Entity\Mother\BankMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Byte-stability gate for the bank wire contract: every view pins its EXACT key set (in order), the
- * ATOM timestamp strings, and the synthesized logo / stored-object URLs — the one transformation
- * with no other deterministic net. The URL ports are stubbed to echo their content hash, so a
- * non-null URL proves both that the port was called and that the bank's own hash reached it.
+ * Byte-stability gate for the bank wire contract: every view pins its EXACT key set (in order) and
+ * the ATOM timestamp strings. The create and update views currently share a key set (as do list and
+ * detail); they stay distinct DTO types so either can evolve without dragging the other, and the
+ * mapper's declared return types are what keep the four apart. These pins catch a shape drift.
  *
  * @internal
  */
@@ -31,18 +27,16 @@ final class BankResourceMapperTest extends TestCase
 {
     private const string BANK_ID = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b';
 
-    private const string MEDIA_ID = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4aaa';
-
     private const string CREATED_AT = '2021-06-01T12:00:00+00:00';
 
     private const string UPDATED_AT = '2021-06-02T08:30:00+00:00';
 
-    public function testDetailResourcePinsEveryKeyAtomTimestampsAndSynthesizedUrls(): void
+    public function testDetailResourcePinsEveryKeyAndAtomTimestamps(): void
     {
-        $resource = $this->mapper()->toDetailResource(new BankWithAccountCount($this->bankWithImages(), 7));
+        $resource = $this->mapper()->toDetailResource(new BankWithAccountCount($this->pinnedBank(), 7));
 
         $this->assertSame(
-            ['id', 'name', 'shortName', 'createdAt', 'updatedAt', 'logoUrl', 'storedObjectUrl', 'accountCount'],
+            ['id', 'name', 'shortName', 'createdAt', 'updatedAt', 'accountCount'],
             \array_keys(\get_object_vars($resource)),
         );
         $this->assertSame(self::BANK_ID, $resource->id);
@@ -50,58 +44,24 @@ final class BankResourceMapperTest extends TestCase
         $this->assertSame('JPM', $resource->shortName);
         $this->assertSame(self::CREATED_AT, $resource->createdAt);
         $this->assertSame(self::UPDATED_AT, $resource->updatedAt);
-        $this->assertSame('https://media.test/logo-hash', $resource->logoUrl);
-        $this->assertSame('https://stored.test/stored-hash', $resource->storedObjectUrl);
         $this->assertSame(7, $resource->accountCount);
     }
 
-    public function testDetailResourceEmitsNullUrlsWhenNoImageIsAttached(): void
+    public function testCreateResourceOmitsTheAccountCountKey(): void
     {
-        $resource = $this->mapper()->toDetailResource(new BankWithAccountCount(BankMother::create(), 0));
-
-        $this->assertNull($resource->logoUrl);
-        $this->assertNull($resource->storedObjectUrl);
-        $this->assertSame(0, $resource->accountCount);
-    }
-
-    public function testUrlBearingViewsEmitNullUrlsWhenContentHashIsEmpty(): void
-    {
-        // An empty content hash is treated as a missing one: synthesizing a URL from it would yield a
-        // malformed link (host with no hash) instead of a clean null. Both URL-bearing views (detail
-        // and create) must honour it.
-        $media = Media::create(self::MEDIA_ID, '', 'image/png', 70, 'png-bytes');
-        $storedObject = new StoredObject('banks/logo.png', 'image/png', 70, '');
-        $bank = Bank::create(self::BANK_ID, 'JPMorgan Chase', 'JPM', $media, $storedObject)
-            ->setCreatedAt(new DateTimeImmutable(self::CREATED_AT))
-            ->setUpdatedAt(new DateTimeImmutable(self::UPDATED_AT))
-        ;
-
-        $detail = $this->mapper()->toDetailResource(new BankWithAccountCount($bank, 0));
-        $this->assertNull($detail->logoUrl);
-        $this->assertNull($detail->storedObjectUrl);
-
-        $create = $this->mapper()->toCreateResource($bank);
-        $this->assertNull($create->logoUrl);
-        $this->assertNull($create->storedObjectUrl);
-    }
-
-    public function testCreateResourceCarriesUrlsButOmitsTheAccountCountKey(): void
-    {
-        $resource = $this->mapper()->toCreateResource($this->bankWithImages());
+        $resource = $this->mapper()->toCreateResource($this->pinnedBank());
 
         $this->assertSame(
-            ['id', 'name', 'shortName', 'createdAt', 'updatedAt', 'logoUrl', 'storedObjectUrl'],
+            ['id', 'name', 'shortName', 'createdAt', 'updatedAt'],
             \array_keys(\get_object_vars($resource)),
         );
-        $this->assertSame('https://media.test/logo-hash', $resource->logoUrl);
-        $this->assertSame('https://stored.test/stored-hash', $resource->storedObjectUrl);
+        $this->assertSame(self::BANK_ID, $resource->id);
         $this->assertSame(self::CREATED_AT, $resource->createdAt);
     }
 
-    public function testUpdateResourceIsTheNarrowFiveKeyViewWithoutUrlsOrCount(): void
+    public function testUpdateResourceIsTheNarrowFiveKeyViewWithoutTheCount(): void
     {
-        // The bank carries images, yet the update view must still expose neither URL nor count keys.
-        $resource = $this->mapper()->toUpdateResource($this->bankWithImages());
+        $resource = $this->mapper()->toUpdateResource($this->pinnedBank());
 
         $this->assertSame(
             ['id', 'name', 'shortName', 'createdAt', 'updatedAt'],
@@ -111,9 +71,9 @@ final class BankResourceMapperTest extends TestCase
         $this->assertSame(self::UPDATED_AT, $resource->updatedAt);
     }
 
-    public function testListResourceCarriesAccountCountButNoUrlKeys(): void
+    public function testListResourceCarriesTheAccountCount(): void
     {
-        $resource = $this->mapper()->toListResource(new BankWithAccountCount($this->bankWithImages(), 3));
+        $resource = $this->mapper()->toListResource(new BankWithAccountCount($this->pinnedBank(), 3));
 
         $this->assertSame(
             ['id', 'name', 'shortName', 'createdAt', 'updatedAt', 'accountCount'],
@@ -155,13 +115,9 @@ final class BankResourceMapperTest extends TestCase
         );
     }
 
-    private function bankWithImages(): Bank
+    private function pinnedBank(): Bank
     {
-        $media = Media::create(self::MEDIA_ID, 'logo-hash', 'image/png', 70, 'png-bytes');
-        $storedObject = new StoredObject('banks/logo.png', 'image/png', 70, 'stored-hash');
-        $bank = Bank::create(self::BANK_ID, 'JPMorgan Chase', 'JPM', $media, $storedObject);
-
-        return $bank
+        return Bank::create(self::BANK_ID, 'JPMorgan Chase', 'JPM')
             ->setCreatedAt(new DateTimeImmutable(self::CREATED_AT))
             ->setUpdatedAt(new DateTimeImmutable(self::UPDATED_AT))
         ;
@@ -169,16 +125,6 @@ final class BankResourceMapperTest extends TestCase
 
     private function mapper(): BankResourceMapper
     {
-        $mediaUrls = $this->createStub(MediaPublicUrlGenerator::class);
-        $mediaUrls->method('urlForContentHash')->willReturnCallback(
-            static fn (string $contentHash): string => 'https://media.test/' . $contentHash,
-        );
-
-        $storedObjectUrls = $this->createStub(StoredObjectPublicUrlGenerator::class);
-        $storedObjectUrls->method('urlForContentHash')->willReturnCallback(
-            static fn (string $contentHash): string => 'https://stored.test/' . $contentHash,
-        );
-
-        return new BankResourceMapper($mediaUrls, $storedObjectUrls);
+        return new BankResourceMapper();
     }
 }

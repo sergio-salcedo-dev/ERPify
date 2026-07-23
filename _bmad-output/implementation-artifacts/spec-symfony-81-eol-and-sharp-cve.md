@@ -62,7 +62,8 @@ context:
 - [x] `api/tools/behat/run.php` -- comentario de cabecera reescrito al techo real (`behat/behat` capa `console`/`config`/`DI`/`event-dispatcher`/`translation`/`yaml`/`filesystem`/`process` en `^7.0`) y a la precedencia real (gana el autoload registrado **último**, luego los pines del tooling son load-bearing).
 - [x] `api/CLAUDE.md` -- "Rules that bite" corregida: el techo es `behat/behat` sobre `symfony/console`, no un pin global `^7`, y se nombra el acoplamiento de precedencia de autoload.
 - [x] `pwa/package.json` -- **sin cambios: ya estaba resuelto en `main`.** El `overrides.sharp: ^0.35.0` y la resolución `0.35.3` del lock entraron en PR #541. Instalación limpia en el worktree da `sharp@0.35.3`. El `0.34.5` sólo existe en el `node_modules` rancio del checkout primario.
-- [x] **Multipart** -- `CreateBankRequest` en `Backoffice/Bank/Infrastructure/Http/` declara los dos `?UploadedFile`; el controlador lo traduce a `CreateBankCommand`. `UploadedFile` no cruza a Application. `Shared/Http/` sin tocar.
+- [x] **Multipart** -- **retirado de esta rama.** PR #557 eliminó la superficie de subida: `POST /banks` acepta sólo JSON y rechaza multipart con 415 en el resolver, fijado por `BankCreateAcceptsJsonOnlyFunctionalTest`. `CreateBankRequest` y la traducción en el controlador ya no tienen objeto. Ver Change Log.
+- [x] **Invariante de transporte** -- `TransportOnlyUploadedFileDenormalizer` se queda en `Shared/Http/Infrastructure/`, sin consumidor en `src/` pero con su regresión reescrita contra un payload fixture de test que sí declara un `?UploadedFile`.
 - [x] **Deprecación de `symfony/mercure-bundle`** -- `0.4.x-dev` (== `main`, commit `28e7502`): ya usa `DependencyInjection\Extension\Extension`. `failOnDeprecation="true"` se queda intacto.
 - [ ] **DIFERIDO A PR PROPIA (decisión de Sergio)** -- migración a Behat 4. Esta rama **no se mergea** hasta que exista. Ver Change Log.
 
@@ -70,7 +71,7 @@ context:
 - Dado el árbol tras `composer update "symfony/*"`, cuando se consulta `composer show symfony/framework-bundle`, entonces la versión es `8.1.x`. -- **CUMPLE** (`v8.1.1`).
 - Dado `pwa/`, cuando se ejecuta `npm ls sharp`, entonces no hay `invalid` y la versión es `0.35.x`. -- **CUMPLE** (`0.35.3`, cero diff en `pwa/`).
 - Dada la suite PHP en frío, cuando se ejecutan `make php.unit`, `make php.stan`, `make php.deptrac` y `make php.quality`, entonces los cuatro salen con exit code 0. -- **CUMPLE** (2066 tests / 9045 aserciones; 0 errores; 0 violaciones).
-- Dado un POST multipart a `/banks` con una parte declarada, entonces 201; con una parte NO declarada, entonces 422 nombrándola. -- **CUMPLE** (tests nuevos).
+- Dado un cuerpo de petición que *describe* una subida (`path` + `test: true`), cuando el serializador del contenedor lo mapea a un payload con miembro `?UploadedFile`, entonces se rechaza sin leer la ruta nombrada, y una ruta inexistente se rechaza en los mismos términos (sin oráculo de existencia). -- **CUMPLE** (`TransportOnlyUploadedFileDenormalizerFunctionalTest`).
 - Dado `api/tools/behat`, cuando se ejecuta `make php.behat`, entonces exit code 0. -- **NO CUMPLE, DIFERIDO**: exit 255, el kernel no arranca. Bloquea el merge de esta rama por decisión explícita.
 
 ## Design Notes
@@ -99,6 +100,28 @@ Escalada si no aguanta: `behat/behat 4.0.0-alpha1` (acepta `symfony/console ^8.0
 - Confirmar en Aikido que el hallazgo de `sharp` desaparece tras el siguiente escaneo y que el de Symfony EOL se cierra al llegar 8.1.
 
 ## Spec Change Log
+
+### 2026-07-23 -- reconciliación con `main` tras #557: el multipart sale del alcance
+
+`main` avanzó seis commits bajo la rama. El decisivo es **#557 — `chore(api): remove the image upload surface`**, que borra `Shared/Media`, `Shared/Storage`, las dos features de Behat, el fixture `minimal-logo.png` y los miembros de fichero de `Bank`, y deja `POST /banks` en JSON puro: `#[StrictRequestPayload(acceptFormat: ['json'])]`, con `BankCreateAcceptsJsonOnlyFunctionalTest` fijando que un multipart o un `form` se rechazan con **415 antes de que corra handler alguno**.
+
+Eso deja sin objeto el problema que motivaba dos de los cuatro commits de esta rama. El cambio de comportamiento de 8.1 (`mapRequestPayload()` fusiona `$request->files` en el payload antes de denormalizar) sólo muerde a un endpoint que acepte `form`; ya no existe ninguno. Retirados en el merge:
+
+- `Backoffice/Bank/Infrastructure/Http/CreateBankRequest` y la traducción a `CreateBankCommand` en el controlador -- el controlador vuelve a la versión de `main`.
+- `BankLogoMultipartFunctionalTest` -- borrado en `main` junto con la superficie que ejercitaba.
+
+Se conserva `Shared/Http/Infrastructure/TransportOnlyUploadedFileDenormalizer` (decisión de Sergio). Hoy no tiene consumidor en `src/`, pero la invariante que defiende — *una subida llega por `$request->files` o no llega* — es precisamente la que se perdió sin que nadie lo notara cuando desaparecieron los `#[MapUploadedFile]`, y la épica de subidas volverá. Su regresión se reescribe: en vez de atacar `POST /banks`, denormaliza a través del **serializador del contenedor** hacia `Fixtures\UploadBearingPayload`, un DTO de test que declara `?UploadedFile`. Conducirlo por el contenedor y no por la clase aislada es deliberado — un test unitario del denormalizador sigue verde cuando el servicio ya no está en la cadena de normalizadores, que es la forma más probable de perder la protección.
+
+Conflictos y su resolución:
+
+| Fichero | Conflicto | Resolución |
+|---|---|---|
+| `api/CLAUDE.md` | ambos lados reescribieron viñetas adyacentes | ambos: la de Semgrep y la de regresión upstream de `main`, más la corrección de precedencia de autoload de Behat de esta rama |
+| `api/composer.lock` | 8.1 aquí vs. `doctrine-bundle 3.3.1` + retirada de `flysystem`/`intervention` en `main` | regenerado desde el `composer.json` fusionado (`composer update "symfony/*" symfony/mercure-bundle --with-all-dependencies`) |
+| `BankPostController` | JSON-only en `main` vs. multipart aquí | versión de `main` |
+| `BankLogoMultipartFunctionalTest` | borrado en `main`, modificado aquí | borrado |
+
+Sin cambios en lo que sí sigue siendo el objeto de la PR: el pin de Flex a `8.1.*`, los seis pines del árbol de Behat, `mercure-bundle` en `0.4.x-dev` y la corrección de `run.php`. El bloqueo por la migración a Behat 4 sigue vigente.
 
 ### 2026-07-23 -- reparación del artefacto y verificación en fresco
 
