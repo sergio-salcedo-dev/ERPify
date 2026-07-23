@@ -10,12 +10,14 @@ use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
 /**
  * Raised when erasure targets an identity that still carries `ADMIN`. Erasure is irreversible and
  * pseudonymises the subject's entire attribution in the compliance trail, so an administrator must be
- * demoted first: the demotion is itself an audited `SECURITY` record, which turns "one administrator erased
- * a peer" from a single unexplained act into a declared sequence in the record it is meant to protect.
+ * demoted first — and the demotion writes its own `USER_ROLES_CHANGED` `SECURITY` row, which is what turns
+ * "one administrator erased a peer" from a single unexplained act into a declared sequence in the record it
+ * is meant to protect. Without that row the refusal would be procedure without evidence.
  *
- * The refusal is not a privilege the subject holds over their own erasure — demote-then-erase is always
- * available, so the right to erasure stays satisfiable — and it deliberately ignores the subject's status: a
- * suspended administrator still carries the role, and the concern is the role, not the activity.
+ * The refusal deliberately ignores the subject's status: a suspended administrator still carries the role,
+ * and the concern is the role, not the activity. Demote-then-erase keeps the right to erasure satisfiable
+ * for every administrator except the sole active one, who cannot be demoted either — a pre-existing gap this
+ * refusal neither creates nor closes, recorded in `docs/adr/authorization-model-boundaries.md` D3.
  *
  * A {@see Conflict} (409), like {@see LastActiveAdministratorProtected}: the request is well-formed and
  * authorized but collides with a state invariant. It subsumes that invariant on the erasure path — the last

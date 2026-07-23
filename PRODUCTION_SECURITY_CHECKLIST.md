@@ -188,14 +188,24 @@ you change anything here.
       (`docs/adr/authorization-model-boundaries.md` D3) — **not** as an unexamined default,
       which is the finding an assessor raises. The trail is **append-only by construction
       and access-restricted, but NOT tamper-evident**: no hash chain, signature or checksum
-      column exists, so never assert integrity beyond what the mutation paths give.
+      column exists, so never assert integrity beyond what the mutation paths give. Note the
+      **five-year floor covers `change` rows only**; `security` rows (access, denials, the
+      GDPR and role-change records) carry a 365-day privacy *ceiling* and are pruned — do
+      not cite the floor as a retention guarantee over access evidence.
       Because the operating role can read the record that audits it, the record's
       attribution is guarded on the write side: **erasure refuses any subject still
       carrying `ADMIN`** (409 `administrator-erasure-requires-demotion`), so an
-      administrator cannot pseudonymise a peer's attribution without first recording the
-      demotion as its own audited act. That subsumes the ≥1-active-admin invariant on the
-      erasure path; the invariant still binds on role and status transitions;
-      the writer parameterises every value (no string-interpolated SQL). **GDPR erasure is
+      administrator cannot pseudonymise a peer's attribution without first demoting them.
+      That subsumes the ≥1-active-admin invariant on the erasure path; the invariant still
+      binds on role and status transitions. **The demotion is itself recorded** —
+      `ChangeUserRoles` writes an explicit `USER_ROLES_CHANGED` `security` row with the
+      subject and both role sets, because `User` deliberately does **not** implement
+      `AuditedEntity` (a field-level diff would carry `password_hash` into the trail) and
+      the generic access hook audits only `GET`. Without that row the refusal would be
+      procedure without evidence; **never satisfy it by marking `User` as audited**.
+      Known gap: the **sole** active administrator can be neither demoted nor erased, so
+      their erasure requires onboarding a second administrator first (pre-existing).
+      The writer parameterises every value (no string-interpolated SQL). **GDPR erasure is
       implemented** as an in-place, irreversible anonymisation: `audit:gdpr:erase
       <actor-id>` overwrites the subject's `actor_id` with a single fresh random UUID
       and redacts `ip` / `user_agent` to `[REDACTED]` and sets the materialised,

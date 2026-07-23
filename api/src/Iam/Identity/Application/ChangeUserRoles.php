@@ -10,6 +10,9 @@ use Erpify\Iam\Identity\Domain\Exception\UserNotFound;
 use Erpify\Iam\Identity\Domain\Repository\ActiveAdministratorDirectory;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Shared\Access\Domain\Role;
+use Erpify\Shared\Audit\Application\AuditLogger;
+use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
@@ -43,14 +46,27 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * and the next request of the affected identity drops its session), but that path is lazy and reaches only the
  * session making that request; revoking eagerly cuts every device at once. Swallowing a revoke failure mirrors
  * {@see CompletePasswordReset}: the role change already committed.
+ *
+ * Its object coupling sits one above the default threshold, and deliberately stays there. The six collaborators
+ * are each inherent to one atomic act — read under lock, guard the administrator invariant, mutate, publish,
+ * record the compliance evidence, tear down sessions — and the three types the audit write speaks in
+ * ({@see AuditLogger}, {@see AuditLevel}, {@see AuditResource}) are the seam's vocabulary, not extra
+ * responsibilities. Splitting the audit call into its own collaborator for a single caller would buy the metric
+ * and cost a reader the ability to see, in one place, that the demotion is recorded — which is precisely the
+ * fact the erasure refusal depends on.
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 final readonly class ChangeUserRoles
 {
+    private const string ROLES_CHANGED_ACTION = 'USER_ROLES_CHANGED';
+
     public function __construct(
         private UserRepository $users,
         private ActiveAdministratorDirectory $administrators,
         private RevokeSessionsBestEffort $revokeSessions,
         private EventBus $eventBus,
+        private AuditLogger $auditLogger,
         private TransactionManager $transactionManager,
     ) {
     }
@@ -73,9 +89,11 @@ final readonly class ChangeUserRoles
 
                 $this->guardActiveAdministratorsSurvive($userId, $user, $roles);
 
+                $held = $this->canonical($user->roles());
                 $user->changeRoles(...$roles);
                 $this->users->save($user);
                 $this->eventBus->publish(...$user->pullDomainEvents());
+                $this->auditRoleChange($userId, $held, $this->canonical($roles));
 
                 return [$user, true];
             },
@@ -112,6 +130,31 @@ final readonly class ChangeUserRoles
         \sort($values);
 
         return $values;
+    }
+
+    /**
+     * The one thing about an identity that reaches the compliance trail. `User` deliberately stays out of the
+     * write-capture CDC — a field-level diff of it would carry `password_hash` into an append-only store — so
+     * without this explicit row a role change would leave no attributable evidence anywhere: the generic
+     * access hook only audits `GET`, and the `event_store` entry records that roles changed, never by whom.
+     *
+     * That gap is load-bearing, not cosmetic: erasure refuses a subject still carrying `ADMIN` precisely so the
+     * demotion is recorded first, which is only true if the demotion writes this row. It is written at
+     * `SECURITY`, so it lands before the response is sent and is never swallowed. The subject rides in the
+     * resource columns and the metadata carries only the role sets — no credential, no email, no diff of the
+     * aggregate.
+     *
+     * @param list<string> $held
+     * @param list<string> $assigned
+     */
+    private function auditRoleChange(string $userId, array $held, array $assigned): void
+    {
+        $this->auditLogger->log(
+            self::ROLES_CHANGED_ACTION,
+            AuditLevel::SECURITY,
+            AuditResource::of('User', $userId),
+            ['previous_roles' => $held, 'new_roles' => $assigned],
+        );
     }
 
     /**

@@ -101,9 +101,18 @@ That window is incident response, which is when the trail matters most.
 (`AuditTimelineSearchController`, `AuditEventDetailController`); no write, export or delete path sits behind it.
 Every authorized read is written back as its own `AUDIT_TRAIL_READ` entry at `SECURITY` level, synchronously on
 `kernel.response` before the response is sent (`AuditTrailReadAuditListener`), naming the route and — on the
-detail route — the id of the event read. Erasure never deletes trail rows: it rewrites `actor_id` and redacts
-`ip`/`user_agent`, and within the five-year retention floor erasure is satisfied by crypto-shredding
-([`regulatory-audit-trail.md`](regulatory-audit-trail.md) D6/D7).
+detail route — the id of the event read. Erasure never deletes trail rows: it rewrites `actor_id` to one stable
+pseudonym across all the subject's rows, redacts `ip`/`user_agent` and raises `actor_erased`, so the sequence of
+actions stays correlatable while the link to the person is severed
+([`regulatory-audit-trail.md`](regulatory-audit-trail.md) D6).
+
+**The retention bound is narrower than the trail as a whole.** The five-year floor covers `change` rows only
+(`AuditRetentionPolicy::COMPLIANCE_RETENTION_FLOOR`). `security` rows — which is what every row named above is:
+`AUDIT_TRAIL_READ`, `USER_ROLES_CHANGED`, `GDPR_SUBJECT_ERASED`, `GDPR_ERASURE_EXECUTED` — carry a privacy
+*ceiling* instead, 365 days by default, and are deleted by the scheduled pruner. So a year after the fact the
+pseudonymised `change` rows survive four more years while the record of who read or who pseudonymised them has
+aged out. That asymmetry is a property of the current retention policy, not of this decision, and it is the
+first thing to re-examine if the trail is ever asked to answer an assessor about access rather than about data.
 
 **What is deliberately not claimed.** The trail is **not tamper-evident**. No hash chain, signature or checksum
 column exists in any migration; append-only is a property of the mutation paths, not a cryptographic guarantee —
@@ -128,18 +137,33 @@ actor exists who would consume the signal.
 makes the trail's attribution worth guarding on the write side. `users.erase` is ADMIN-only and pseudonymises the
 subject's whole attribution irreversibly, and its only guards were self-erasure and "keep ≥1 active `ADMIN`" —
 neither of which stops an administrator from erasing a peer. Erasure now refuses any subject still carrying
-`ADMIN`, so the demotion must be recorded as its own audited act first. This is not a claim to have stopped a
-determined administrator — nothing short of dual control does — it is a refusal to let the irreversible step
+`ADMIN`, so the demotion has to happen first, as its own act.
+
+That refusal is only worth anything because the demotion is now *recorded*. It was not: `User` deliberately stays
+out of the write-capture CDC, because a field-level diff of it would carry `password_hash` into an append-only
+store, and the generic access hook audits only `GET` — so a role change left no attributable evidence anywhere,
+and the `event_store` entry names no actor. `ChangeUserRoles` therefore writes an explicit `USER_ROLES_CHANGED`
+row at `SECURITY` level carrying the subject and both role sets, and nothing else. Promote-act-demote-erase now
+leaves a chain rather than a single unexplained act.
+
+This is not a claim to have stopped a determined administrator — nothing short of dual control does — nor that
+the chain survives forever, given the `security` ceiling above. It is a refusal to let the irreversible step
 happen without a declared, attributable one in front of it. It subsumes the ≥1-admin invariant on that path (the
 last active administrator necessarily carries the role), which now binds only on the transitions that can shrink
 the set.
+
+**Known gap, pre-existing and unchanged:** the *sole* active administrator has no path to erasure at all —
+demotion is refused by the ≥1-admin invariant, self-erasure by its own guard, and no peer exists to erase them.
+Satisfying their right to erasure requires onboarding a second administrator first. This decision neither
+creates nor closes that; naming it here keeps the "demote, then erase" instruction honest.
 
 *Discarded:* dual control — a second administrator approves the erasure. It is the control that actually
 separates the duty, and it needs an approval aggregate with state, expiry and notification; disproportionate
 before an organization exists with two administrators who are not the same person's accounts.
 
-*Discarded:* refuse to erase administrators outright. That makes an administrator un-erasable and the right to
-erasure unsatisfiable; demote-then-erase keeps it available at the cost of one audited step.
+*Discarded:* auditing `User` through the write-capture CDC instead of one explicit row. It would put
+`password_hash` in the trail, which is why the aggregate opted out in the first place; the explicit row records
+the one field change that matters for accountability and no credential.
 
 ## What this ADR does not decide
 
