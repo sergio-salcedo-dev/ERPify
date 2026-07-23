@@ -43,7 +43,7 @@ indistinguishable from a tenant's own, inside the tenant's own compliance record
 
 *Discarded:* Symfony's `switch_user`. It is the wrong primitive precisely because it succeeds — the request
 becomes the impersonated user, so the trail attributes the operator's actions to the customer. That is
-manufactured evidence in a record with a five-year retention floor.
+manufactured evidence in the compliance record.
 
 **Consequence to design before any impersonation code:** `audit_log` attributes one actor
 (`ActorContextFactory` seals it during `onFlush`). Impersonation needs two — the acting platform principal and the
@@ -139,18 +139,26 @@ subject's whole attribution irreversibly, and its only guards were self-erasure 
 neither of which stops an administrator from erasing a peer. Erasure now refuses any subject still carrying
 `ADMIN`, so the demotion has to happen first, as its own act.
 
-That refusal is only worth anything because the demotion is now *recorded*. It was not: `User` deliberately stays
-out of the write-capture CDC, because a field-level diff of it would carry `password_hash` into an append-only
-store, and the generic access hook audits only `GET` — so a role change left no attributable evidence anywhere,
-and the `event_store` entry names no actor. `ChangeUserRoles` therefore writes an explicit `USER_ROLES_CHANGED`
-row at `SECURITY` level carrying the subject and both role sets, and nothing else. Promote-act-demote-erase now
-leaves a chain rather than a single unexplained act.
+**What that refusal buys today, stated exactly.** An extra authorization step and friction — nothing more. It is
+*not* a traceability control, because **the demotion leaves no attributable record**: `User` deliberately stays
+out of the write-capture CDC (a field-level diff would carry `password_hash` into an append-only store), the
+generic access hook audits only `GET`, and the `event_store` entry for a role change names no actor. So
+promote-act-demote-erase still reads, in `audit_log`, as one unexplained act by the erasing administrator.
 
-This is not a claim to have stopped a determined administrator — nothing short of dual control does — nor that
-the chain survives forever, given the `security` ceiling above. It is a refusal to let the irreversible step
-happen without a declared, attributable one in front of it. It subsumes the ≥1-admin invariant on that path (the
-last active administrator necessarily carries the role), which now binds only on the transitions that can shrink
-the set.
+Recording the demotion is the obvious completion, and it is **deliberately not done here**. The natural
+implementation — an audit row naming the subject in the resource columns — collides with
+[`audit-activity-log.md`](audit-activity-log.md) D4, which decides that erasure anonymises the *actor* only and
+assigns erasure of a person-denoting resource to the bounded context owning it. Writing that row without settling
+that question first would leave the erased subject's real id beside their own pseudonym in one row, which is the
+reversible crosswalk that ADR's policy exists to prevent. Who owns GDPR erasure over the resource columns is a
+governance decision between contexts, not an implementation detail of this one, so it is taken separately.
+
+**Revisit trigger.** When that ownership question is settled, the demotion gets its audited record and this
+refusal becomes the traceability control it is meant to be. Until then it is procedural, and this ADR says so
+rather than claiming the stronger thing.
+
+It subsumes the ≥1-admin invariant on the erasure path (the last active administrator necessarily carries the
+role), which now binds only on the transitions that can shrink the set.
 
 **Known gap, pre-existing and unchanged:** the *sole* active administrator has no path to erasure at all —
 demotion is refused by the ≥1-admin invariant, self-erasure by its own guard, and no peer exists to erase them.
@@ -161,9 +169,9 @@ creates nor closes that; naming it here keeps the "demote, then erase" instructi
 separates the duty, and it needs an approval aggregate with state, expiry and notification; disproportionate
 before an organization exists with two administrators who are not the same person's accounts.
 
-*Discarded:* auditing `User` through the write-capture CDC instead of one explicit row. It would put
-`password_hash` in the trail, which is why the aggregate opted out in the first place; the explicit row records
-the one field change that matters for accountability and no credential.
+*Discarded:* auditing `User` through the write-capture CDC to record the demotion. It would put `password_hash`
+in the trail, which is why the aggregate opted out in the first place. Whatever records the demotion will be an
+explicit, field-selective row — but only once its erasure ownership is settled.
 
 ## What this ADR does not decide
 
