@@ -165,7 +165,9 @@ PWA_CHOWN_TARGETS := .next .next-e2e next-env.d.ts tsconfig.tsbuildinfo
 pwa.chown.next: ## Reclaim ownership of root-owned pwa Next/TS build artifacts (.next, .next-e2e, next-env.d.ts, tsconfig.tsbuildinfo); fixes host EACCES (requires sudo; dev/test only)
 	$(call guard_var_writable,pwa.chown.next)
 	@for d in $(addprefix $(PWA_ROOT)/,$(PWA_CHOWN_TARGETS)); do \
-		[ -e "$$d" ] && sudo chown -R $(shell id -u):$(shell id -g) "$$d" || true; \
+		[ -e "$$d" ] || continue; \
+		sudo chown -R $(shell id -u):$(shell id -g) "$$d" \
+			|| { echo "✗ chown failed on $$d — sudo could not authenticate (run this from a terminal, not an agent shell)"; exit 1; }; \
 	done
 	@echo "✓ pwa Next/TS build artifacts now owned by $(shell id -un)"
 
