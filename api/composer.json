@@ -27,7 +27,7 @@
         "ext-zend-opcache": "*",
         "behat/gherkin": "^4.17.0",
         "doctrine/dbal": "^4.4.4",
-        "doctrine/doctrine-bundle": "^3.3.0",
+        "doctrine/doctrine-bundle": "^3.3.1",
         "doctrine/doctrine-migrations-bundle": "^4.0.0",
         "doctrine/orm": "^3.6.7",
         "doctrine/persistence": "^4.2.0",
