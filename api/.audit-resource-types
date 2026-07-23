@@ -10,9 +10,14 @@
 #   <ResourceType> => person :: <path of the erasure use case that anonymises it>
 #
 # The gate (PersonResourceErasureGateTest, run by `make php.lint.audit-resource`) fails the build when a
-# type reaches `AuditResource::of(...)` or a route's `_audit_resource_type` default without a line here,
-# and when a `person` line names a file that does not wire AuditResourceAnonymiser. It cannot judge the
-# classification itself — that is what review is for.
+# type reaches `AuditResource::of(...)` — written at the call or held in a same-class constant — or a
+# route's `_audit_resource_type` default without a line here, and when a `person` line names a file that
+# does not call anonymise() on an AuditResourceAnonymiser it holds.
+#
+# What it does not catch, stated so nobody mistakes a green build for a proof: it cannot judge the
+# classification (calling Contact a non-person passes — that is what review is for), it cannot see a type
+# assembled at runtime from request attributes, and it cannot follow a constant imported from another
+# class. A type introduced by either of those last two forms needs a line here by hand.
 
 Bank => non-person
 BankAccount => non-person

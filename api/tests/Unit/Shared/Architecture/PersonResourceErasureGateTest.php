@@ -25,15 +25,22 @@ use SplFileInfo;
  *
  * Two directions, both mechanical:
  *
- *   - **Completeness** — every type literal reaching `AuditResource::of('<T>', …)` or declared as a route's
- *     `_audit_resource_type` default must be classified here.
- *   - **Wiring** — every `person` line must name a file that actually references
- *     `AuditResourceAnonymiser` and the type literal, so "declared a person, nobody erases it" fails too.
+ *   - **Completeness** — every type reaching `AuditResource::of()` or declared as a route's
+ *     `_audit_resource_type` default must be classified here, whether the type is written at the call as a
+ *     literal or held in a same-class constant. The constant form is not an exotic case to tolerate: it is
+ *     the form the person type itself uses, so a regex that only saw literals would be blind to the one
+ *     type this gate exists for.
+ *   - **Wiring** — every `person` line must name a file that holds an `AuditResourceAnonymiser` property
+ *     *and calls `anonymise()` on it*, so "declared a person, nobody erases it" fails too. Matching is done
+ *     on comment-stripped source: a docblock naming the collaborator is prose, not wiring, and must not be
+ *     able to satisfy the check on its own.
  *
  * What it deliberately cannot do: judge the classification. Calling `Contact` a non-person passes. That is
  * a review decision, and the gate's job is to force it to be *made*, in a diffable file, at the moment the
- * type is introduced. Runtime reachability of the anonymiser call is proven by the owning context's Behat
- * scenario, not here.
+ * type is introduced. Two source forms also stay out of reach — a type assembled at runtime from request
+ * attributes ({@see \Erpify\Shared\Audit\Infrastructure\Http\RequestAuditResourceExtractor}, whose inputs
+ * the route-default check covers instead) and a constant imported from another class. Runtime reachability
+ * of the anonymiser call is proven by the owning context's Behat scenario, not here.
  *
  * @internal
  */
@@ -45,6 +52,8 @@ final class PersonResourceErasureGateTest extends TestCase
     private const string SOURCE_ROOT = __DIR__ . '/../../../../src';
 
     private const string ANONYMISER = 'AuditResourceAnonymiser';
+
+    private const string NON_PERSON = 'non-person';
 
     #[Test]
     public function everyResourceTypeInUseIsClassified(): void
@@ -77,12 +86,21 @@ final class PersonResourceErasureGateTest extends TestCase
                 $erasurePath,
             ));
 
-            $source = (string) \file_get_contents($absolute);
-            $this->assertStringContainsString(self::ANONYMISER, $source, \sprintf(
-                '%s is declared as erasing the person type "%s" but never references %s.',
+            $source = $this->codeWithoutComments((string) \file_get_contents($absolute));
+
+            $held = \preg_match(\sprintf('/%s\s+\$(\w+)/', self::ANONYMISER), $source, $property);
+            $this->assertSame(1, $held, \sprintf(
+                '%s is declared as erasing the person type "%s" but holds no %s property.',
                 $erasurePath,
                 $type,
                 self::ANONYMISER,
+            ));
+            $this->assertStringContainsString(\sprintf('$this->%s->anonymise(', $property[1]), $source, \sprintf(
+                '%s holds a %s but never calls anonymise() on it, so the person type "%s" is declared as '
+                . 'erased while nothing erases it.',
+                $erasurePath,
+                self::ANONYMISER,
+                $type,
             ));
             $this->assertStringContainsString(\sprintf("'%s'", $type), $source, \sprintf(
                 '%s does not carry the "%s" type literal, so it cannot be what erases it.',
@@ -95,10 +113,10 @@ final class PersonResourceErasureGateTest extends TestCase
     #[Test]
     public function theRegistryDeclaresNoTypeThatNothingWrites(): void
     {
-        // Looser than the completeness check on purpose: a type may reach `AuditResource::of()` through a
-        // constant (as the person type does, so the literal lives in the owning context rather than at the
-        // call), which the call-site regex cannot see. Presence of the quoted literal anywhere in `src` is
-        // the honest signal that the type is still real.
+        // Looser than the completeness check on purpose: it accepts the quoted literal anywhere in `src`,
+        // including a call the completeness regexes cannot attribute to a call site. That looseness is also
+        // its limit — for a type whose only literal is its own erasure declaration, this check is satisfied
+        // by the consumer rather than by any writer, so it cannot report that type as stale.
         $sources = \implode("\n", \array_map(
             static fn (string $file): string => (string) \file_get_contents($file),
             $this->sourceFiles(),
@@ -147,14 +165,32 @@ final class PersonResourceErasureGateTest extends TestCase
             ));
             [$type, $classification] = $parts;
 
-            if (\str_starts_with($classification, 'person')) {
-                $parts = \explode('::', $classification, 2);
-                $registry[$type] = \trim($parts[1] ?? '');
+            // Last-wins would let a duplicate line silently downgrade a person type to non-person, and the
+            // wiring check skips non-person types — so the shadowed line would take the erasure with it.
+            $this->assertArrayNotHasKey($type, $registry, \sprintf(
+                'Duplicate registry line for "%s": the later classification silently shadows the earlier one.',
+                $type,
+            ));
+
+            if (self::NON_PERSON === $classification) {
+                $registry[$type] = null;
 
                 continue;
             }
 
-            $registry[$type] = null;
+            // Anything unrecognised is rejected rather than read as non-person. A silent fall-through would
+            // turn a capitalisation slip (`Person`) into "nobody erases this", which is the whole failure
+            // mode the registry exists to make impossible.
+            $declaresErasure = \preg_match('/^person\s*::\s*(\S.*)$/', $classification, $person);
+            $this->assertSame(1, $declaresErasure, \sprintf(
+                'Unrecognised classification for "%s": "%s". Write exactly `%s`, or `person :: <path of the '
+                . 'erasure use case>`.',
+                $type,
+                $classification,
+                self::NON_PERSON,
+            ));
+
+            $registry[$type] = \trim($person[1]);
         }
 
         return $registry;
@@ -173,13 +209,56 @@ final class PersonResourceErasureGateTest extends TestCase
             \preg_match_all("/AuditResource::of\\(\\s*'([^']+)'/", $source, $constructed);
             \preg_match_all("/'_audit_resource_type'\\s*=>\\s*'([^']+)'/", $source, $routed);
 
-            $types = [...$types, ...$constructed[1], ...$routed[1]];
+            $types = [...$types, ...$constructed[1], ...$routed[1], ...$this->typesHeldInConstants($source)];
         }
 
         $types = \array_values(\array_unique($types));
         \sort($types);
 
         return $types;
+    }
+
+    /**
+     * Resolves `AuditResource::of(self::SOME_TYPE, …)` back to the literal the constant holds, within the
+     * same file. Both non-literal call sites in this codebase take that form — including the person type,
+     * whose literal deliberately lives in the owning context rather than at the call.
+     *
+     * @return list<string>
+     */
+    private function typesHeldInConstants(string $source): array
+    {
+        \preg_match_all('/AuditResource::of\(\s*(?:self|static)::(\w+)/', $source, $references);
+
+        $types = [];
+
+        foreach ($references[1] as $constant) {
+            $declaration = \sprintf("/const\\s+string\\s+%s\\s*=\\s*'([^']+)'/", \preg_quote($constant, '/'));
+
+            if (1 === \preg_match($declaration, $source, $literal) && isset($literal[1])) {
+                $types[] = $literal[1];
+            }
+        }
+
+        return $types;
+    }
+
+    /**
+     * Strips comments so the wiring check reads code only — a docblock that names the anonymiser describes
+     * an intention, and an intention must not be able to stand in for the call.
+     */
+    private function codeWithoutComments(string $source): string
+    {
+        $code = '';
+
+        foreach (\token_get_all($source) as $token) {
+            if (\is_array($token) && \in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+
+            $code .= \is_array($token) ? $token[1] : $token;
+        }
+
+        return $code;
     }
 
     /**
