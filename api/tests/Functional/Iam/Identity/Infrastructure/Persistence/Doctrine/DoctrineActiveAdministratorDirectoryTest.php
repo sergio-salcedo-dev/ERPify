@@ -17,7 +17,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  * Proves the guard adapter against REAL Postgres — the `json`→`jsonb` role containment the in-memory double
  * can only approximate. An active administrator is a row whose status is `ACTIVE` and whose `roles` contain
  * `ADMIN`; the query excludes the passed id, so the last active admin never rescues itself, and a SUSPENDED,
- * DEACTIVATED or INVITED admin or an active non-admin never counts.
+ * DEACTIVATED or INVITED admin or an active non-admin never counts. Carrying the role is the second, weaker
+ * question — same containment, no status predicate — so the two must not be proven by one fixture.
  *
  * Each test runs inside a rolled-back transaction over a truncated `identity_user`, so the shared dev DB is
  * left untouched.
@@ -129,6 +130,36 @@ final class DoctrineActiveAdministratorDirectoryTest extends KernelTestCase
             // pg_locks count(*) surfaces as an int or a numeric string depending on the driver.
             $lockCount = \is_numeric($rowShareLocks) ? (int) $rowShareLocks : 0;
             $this->assertGreaterThan(0, $lockCount);
+        });
+    }
+
+    public function testCarryingTheAdministratorRoleIsIndependentOfStatus(): void
+    {
+        $this->inRolledBackTransaction(function (): void {
+            $this->seed(self::ADMIN_A, 'admin-a@erpify.test', [Role::ADMIN->value]);
+            $this->seed(self::SUSPENDED_ADMIN, 'suspended-admin@erpify.test', [Role::ADMIN->value], 'SUSPENDED');
+            $this->seed(self::INVITED_ADMIN, 'invited-admin@erpify.test', [Role::ADMIN->value], 'INVITED');
+            $this->seed(self::ACTIVE_VIEWER, 'viewer@erpify.test', [Role::VIEWER->value]);
+
+            // The erasure refusal asks about the role, not the activity: suspending or never activating an
+            // administrator must not become a way to erase them without recording the demotion first.
+            $this->assertTrue($this->directory->holdsAdministratorRole(self::ADMIN_A));
+            $this->assertTrue($this->directory->holdsAdministratorRole(self::SUSPENDED_ADMIN));
+            $this->assertTrue($this->directory->holdsAdministratorRole(self::INVITED_ADMIN));
+
+            $this->assertFalse($this->directory->holdsAdministratorRole(self::ACTIVE_VIEWER));
+            $this->assertFalse($this->directory->holdsAdministratorRole(self::UNKNOWN_ID));
+        });
+    }
+
+    public function testCarryingTheAdministratorRoleIsMatchedUnderAnyUuidCasing(): void
+    {
+        $this->inRolledBackTransaction(function (): void {
+            $this->seed(self::ADMIN_A, 'admin-a@erpify.test', [Role::ADMIN->value]);
+
+            // `id` is a `uuid` column, so the cast compares canonically — an upper-cased id must not slip past
+            // the refusal the way a naive string `=` would let it.
+            $this->assertTrue($this->directory->holdsAdministratorRole(\strtoupper(self::ADMIN_A)));
         });
     }
 

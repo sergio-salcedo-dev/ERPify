@@ -5,20 +5,29 @@ declare(strict_types=1);
 namespace Erpify\Iam\Identity\Domain\Repository;
 
 /**
- * Consumer-owned port answering the single question the status-change use case must ask before it takes an
- * identity out of the active set: would the organization still keep at least one active `ADMIN` if this
- * identity were excluded?
+ * Consumer-owned port over the organization's administrators, answering the two questions the write-side use
+ * cases must ask before they change one: would at least one active `ADMIN` remain if this identity were
+ * excluded, and does this identity carry the role at all?
  *
- * Returns a bare `bool` — no `Membership` / `User` / `Role[]` crosses the boundary. It is authoritative only
- * over administrators whose backing `User` both exists AND is `ACTIVE`: an identity that is absent or no
- * longer `ACTIVE` must never keep a phantom administrator alive. The single-tenant organization is implicit.
- * Its production adapter reads the operational role source directly — a single-context locking read over
- * `identity_user` (`status = ACTIVE AND ADMIN ∈ roles`), taking a `FOR UPDATE` lock so concurrent transitions
- * serialize — which owns roles today, and ships with the status-change slice that first calls this port; it
- * re-points to `Membership` only if
+ * Both return a bare `bool` — no `Membership` / `User` / `Role[]` crosses the boundary. The single-tenant
+ * organization is implicit. The production adapter reads the operational role source directly — a
+ * single-context read over `identity_user`, which owns roles today — and re-points to `Membership` only if
  * tenancy ever moves the authoritative source.
  */
 interface ActiveAdministratorDirectory
 {
+    /**
+     * Authoritative only over administrators whose backing `User` both exists AND is `ACTIVE`: an identity
+     * that is absent or no longer `ACTIVE` must never keep a phantom administrator alive. Its adapter takes a
+     * `FOR UPDATE` lock over the active-admin set so concurrent transitions serialize — the invariant is
+     * set-based, so it must be read inside the caller's transaction.
+     */
     public function keepsAnActiveAdminWithout(string $userId): bool;
+
+    /**
+     * Whether this identity carries `ADMIN`, regardless of its status — a suspended administrator still holds
+     * the role. A per-subject precondition rather than a set invariant, so it needs no lock: losing the race
+     * against a concurrent role change costs at most an interleaving in which both operations are audited.
+     */
+    public function holdsAdministratorRole(string $userId): bool;
 }

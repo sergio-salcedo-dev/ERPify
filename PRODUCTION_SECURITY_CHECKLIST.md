@@ -182,7 +182,19 @@ you change anything here.
       9457 pipeline. Every **authorized** read **self-audits** a durable `security`
       `AUDIT_TRAIL_READ` row written before the response is sent — the auditor is audited
       (ISO 27001:2022 base: A.5.18 restricted access rights, A.8.15 append-only +
-      restricted access + logging of access to logs, A.8.17 clock-synced `occurred_on`);
+      restricted access + logging of access to logs, A.8.17 clock-synced `occurred_on`).
+      **`ADMIN` deliberately holds `auditTrail.read`** beside `AUDIT_READER`, as a declared
+      policy row with a recorded justification and revisit trigger
+      (`docs/adr/authorization-model-boundaries.md` D3) — **not** as an unexamined default,
+      which is the finding an assessor raises. The trail is **append-only by construction
+      and access-restricted, but NOT tamper-evident**: no hash chain, signature or checksum
+      column exists, so never assert integrity beyond what the mutation paths give.
+      Because the operating role can read the record that audits it, the record's
+      attribution is guarded on the write side: **erasure refuses any subject still
+      carrying `ADMIN`** (409 `administrator-erasure-requires-demotion`), so an
+      administrator cannot pseudonymise a peer's attribution without first recording the
+      demotion as its own audited act. That subsumes the ≥1-active-admin invariant on the
+      erasure path; the invariant still binds on role and status transitions;
       the writer parameterises every value (no string-interpolated SQL). **GDPR erasure is
       implemented** as an in-place, irreversible anonymisation: `audit:gdpr:erase
       <actor-id>` overwrites the subject's `actor_id` with a single fresh random UUID

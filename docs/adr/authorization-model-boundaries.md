@@ -1,6 +1,6 @@
-# ADR — Authorization model boundaries: what will never be a `Role`
+# ADR — Authorization model boundaries: what will never be a `Role`, and who may read the trail
 
-> **Status:** accepted · **Date:** 2026-07-22 · **Scope:** `api/src/Shared/Access`, `api/src/Iam/Identity/Infrastructure/Security`, `api/src/Organization` — and any future platform/tenancy work.
+> **Status:** accepted · **Date:** 2026-07-23 · **Scope:** `api/src/Shared/Access`, `api/src/Iam/Identity/Infrastructure/Security`, `api/src/Backoffice/Audit`, `api/src/Organization` — and any future platform/tenancy work.
 
 ## Context
 
@@ -83,8 +83,65 @@ organization role.
 `Membership` as the role authority, so acting on this decision may reopen that one. That is a reason to record the
 link, not a reason to pre-empt either.
 
+## D3 — `ADMIN` keeps `auditTrail.read`; separation of duties is a revisit trigger, not a default
+
+The `auditTrail.read => [AUDIT_READER, ADMIN]` row in `StaticAuthorizationPolicy::EXPLICIT_GRANTS` stays: an
+organization administrator may read the regulatory trail that records their own actions. This is a product and
+compliance decision, not a mechanism one — the grant is one line of data whichever way it reads — and it is
+recorded here because an *undocumented* default is the audit finding, not the access itself.
+
+**Why the access is kept.** No organizational actor exists today who audits without operating. Withdrawing the
+grant would not produce separation of duties: `users.invite` and `users.changeRoles` are themselves ADMIN-only,
+so the administrator still decides who becomes the auditor. What it *would* produce is a standing operating
+cost — at least one live `AUDIT_READER` per organization — and a bootstrap window in which nobody can read the
+trail at all, because `CreateInitialAdministratorCommand` seeds exactly one identity holding exactly one role.
+That window is incident response, which is when the trail matters most.
+
+**What bounds the risk, stated as it exists.** The grant reaches two read-only routes
+(`AuditTimelineSearchController`, `AuditEventDetailController`); no write, export or delete path sits behind it.
+Every authorized read is written back as its own `AUDIT_TRAIL_READ` entry at `SECURITY` level, synchronously on
+`kernel.response` before the response is sent (`AuditTrailReadAuditListener`), naming the route and — on the
+detail route — the id of the event read. Erasure never deletes trail rows: it rewrites `actor_id` and redacts
+`ip`/`user_agent`, and within the five-year retention floor erasure is satisfied by crypto-shredding
+([`regulatory-audit-trail.md`](regulatory-audit-trail.md) D6/D7).
+
+**What is deliberately not claimed.** The trail is **not tamper-evident**. No hash chain, signature or checksum
+column exists in any migration; append-only is a property of the mutation paths, not a cryptographic guarantee —
+which is precisely what that ADR's D5 files as a revisit trigger rather than as a shipped control. Holding
+`ADMIN` confers no database credentials, so this widens nothing about what the decision costs; it bounds what
+may be asserted to an assessor.
+
+**Revisit trigger.** The policy is revisited if a customer requires contractual separation of duties. Keeping the
+access is not an architectural commitment — no role, entity or boundary encodes it, so the decision can be
+retaken without reopening the model. There is no per-installation configuration for it today, and this ADR does
+not claim one.
+
+*Discarded:* restrict the trail to `AUDIT_READER`. It buys the appearance of separation of duties while the
+administrator still appoints the auditor, and pays for it with the bootstrap window and a role to keep alive per
+organization. It becomes the right answer the moment the trigger above fires — and only then.
+
+*Discarded:* emergency access with a declared reason and an expiry, or making an administrator's read raise the
+record's level or fire an alert. Both are designs rather than rows, and neither is worth building before an
+actor exists who would consume the signal.
+
+**Consequence, closed alongside this decision.** Keeping the trail readable by the role that operates the system
+makes the trail's attribution worth guarding on the write side. `users.erase` is ADMIN-only and pseudonymises the
+subject's whole attribution irreversibly, and its only guards were self-erasure and "keep ≥1 active `ADMIN`" —
+neither of which stops an administrator from erasing a peer. Erasure now refuses any subject still carrying
+`ADMIN`, so the demotion must be recorded as its own audited act first. This is not a claim to have stopped a
+determined administrator — nothing short of dual control does — it is a refusal to let the irreversible step
+happen without a declared, attributable one in front of it. It subsumes the ≥1-admin invariant on that path (the
+last active administrator necessarily carries the role), which now binds only on the transitions that can shrink
+the set.
+
+*Discarded:* dual control — a second administrator approves the erasure. It is the control that actually
+separates the duty, and it needs an approval aggregate with state, expiry and notification; disproportionate
+before an organization exists with two administrators who are not the same person's accounts.
+
+*Discarded:* refuse to erase administrators outright. That makes an administrator un-erasable and the right to
+erasure unsatisfiable; demote-then-erase keeps it available at the cost of one audited step.
+
 ## What this ADR does not decide
 
-Whether `Owner` or platform operators are ever built; when multi-tenancy lands; how role authority migrates; and
-whether `ADMIN` should retain `auditTrail.read` (a separation-of-duties question, deliberately left open). Those are
-open questions with their own triggers. This document constrains only the *shape* of the answers.
+Whether `Owner` or platform operators are ever built; when multi-tenancy lands; and how role authority migrates.
+Those are open questions with their own triggers. This document constrains only the *shape* of the answers.

@@ -81,10 +81,11 @@ final class EraseIdentitySubjectCommandTest extends TestCase
         $this->assertStringContainsString('Nothing to erase', $tester->getDisplay());
     }
 
-    public function testErasingTheLastActiveAdministratorFails(): void
+    public function testErasingAnAdministratorFails(): void
     {
         $users = new InMemoryUserRepository(UserMother::create());
-        // The subject is the sole active administrator: the shared guard rejects the erase.
+        // The subject still carries ADMIN: the shared guard rejects the erase until it is demoted. The CLI's
+        // `system` actor cannot trip the self-erasure refusal, so off-request this is the guard that binds.
         $directory = new InMemoryActiveAdministratorDirectory([UserMother::DEFAULT_ID => true]);
         $tester = $this->tester($users, $directory);
 

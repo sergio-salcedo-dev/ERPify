@@ -27,11 +27,12 @@ use Symfony\Component\HttpFoundation\Request;
  * anonymised (`actor_erased = TRUE`), its sessions are dropped and the compliance rows land signed by the
  * acting ADMIN — and that the surface answers 204 / 403 / 400 / 404 / 409 as the contract requires.
  *
- * On the last-active-administrator invariant: over HTTP it is enforced by the self-erasure refusal, not the
- * ≥1-admin guard. An ADMIN can only reach the guard by targeting the *sole* active admin, which is
- * necessarily themselves (any second active admin means the target is not the last) — and self-targeting is
- * refused first with 409 `self-erasure-forbidden`. The ≥1-admin guard therefore binds only off-request (the
- * CLI's `system` actor, which the self-erasure guard cannot trip); its unit and CLI coverage prove it.
+ * On administrators: erasure refuses any subject still carrying `ADMIN` with 409
+ * `administrator-erasure-requires-demotion`, so over HTTP an administrator targeting a peer is stopped before
+ * the irreversible anonymisation and must record the demotion first. Targeting themselves is refused earlier
+ * still, with 409 `self-erasure-forbidden`. The ≥1-admin invariant is no longer reachable from this path — the
+ * last active administrator necessarily carries the role — and now binds only on the role and status
+ * transitions; their unit and Behat coverage prove it.
  *
  * @internal
  *
