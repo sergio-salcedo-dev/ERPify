@@ -126,7 +126,7 @@ you change anything here.
 - [ ] The health endpoints (`/api/v1/health`, `/api/v1/backoffice/health`) are
       **consciously public and liveness-only**: static payload (status, service
       name, server time) with no DB / Mercure / Messenger probing, no PII, no
-      versions. Anonymous access is required by the §7 smoke test and the PWA
+      versions. Anonymous access is required by the §8 smoke test and the PWA
       dashboard health check. Two invariants: any *deep* health check
       (dependency status) must be authenticated or internal-only — never on
       these routes — and when an API firewall lands, these two paths need an
@@ -182,8 +182,33 @@ you change anything here.
       9457 pipeline. Every **authorized** read **self-audits** a durable `security`
       `AUDIT_TRAIL_READ` row written before the response is sent — the auditor is audited
       (ISO 27001:2022 base: A.5.18 restricted access rights, A.8.15 append-only +
-      restricted access + logging of access to logs, A.8.17 clock-synced `occurred_on`);
-      the writer parameterises every value (no string-interpolated SQL). **GDPR erasure is
+      restricted access + logging of access to logs, A.8.17 clock-synced `occurred_on`).
+      **`ADMIN` deliberately holds `auditTrail.read`** beside `AUDIT_READER`, as a declared
+      policy row with a recorded justification and revisit trigger
+      (`docs/adr/authorization-model-boundaries.md` D3) — **not** as an unexamined default,
+      which is the finding an assessor raises. The trail is **append-only by construction
+      and access-restricted, but NOT tamper-evident**: no hash chain, signature or checksum
+      column exists, so never assert integrity beyond what the mutation paths give. Note the
+      **five-year floor covers `change` rows only**; `security` rows (access, denials, the
+      GDPR and role-change records) carry a 365-day privacy *ceiling* and are pruned — do
+      not cite the floor as a retention guarantee over access evidence.
+      Because the operating role can read the record that audits it, the record's
+      attribution is guarded on the write side: **erasure refuses any subject still
+      carrying `ADMIN`** (409 `administrator-erasure-requires-demotion`), so an
+      administrator cannot pseudonymise a peer's attribution without first demoting them.
+      That subsumes the ≥1-active-admin invariant on the erasure path; the invariant still
+      binds on role and status transitions. **That refusal is a second authorization step,
+      not a traceability control** — the demotion currently leaves **no** attributable
+      record (`User` deliberately does not implement `AuditedEntity`, since a field-level
+      diff would carry `password_hash` into the trail, and the generic hook audits only
+      `GET`), so do not cite it as evidence to an assessor. Recording the demotion is
+      pending the decision on who owns GDPR erasure over the `resource_*` columns
+      (`docs/adr/audit-activity-log.md` D4); **never** satisfy it by marking `User` as
+      audited, and never by a row that names the subject in `resource_id` while erasure
+      anonymises only `actor_id` — that co-locates the real id with its own pseudonym.
+      Known gap: the **sole** active administrator can be neither demoted nor erased, so
+      their erasure requires onboarding a second administrator first (pre-existing).
+      The writer parameterises every value (no string-interpolated SQL). **GDPR erasure is
       implemented** as an in-place, irreversible anonymisation: `audit:gdpr:erase
       <actor-id>` overwrites the subject's `actor_id` with a single fresh random UUID
       and redacts `ip` / `user_agent` to `[REDACTED]` and sets the materialised,
@@ -372,7 +397,59 @@ you change anything here.
       ships carry no `iamSessionId`, so the gate 401s them — a single forced global logout at the II-7 deploy
       (acceptable, named).
 
-## 7. Deploy & verify
+## 7. Known weaknesses — open, must be closed or consciously accepted before the first customer
+
+Every item here is a **known** gap, not a suspicion. They are listed together because each is
+described in its own topic above or in an ADR, where a reader looking for *this* question will not
+find them. Closing one means striking it here **and** correcting whatever above describes the
+mitigated state. Accepting one means recording who accepted it and against which customer.
+
+- [ ] **The audit trail is not tamper-evident.** No hash chain, signature or checksum column exists
+      in any migration; append-only is a property of the mutation paths, not cryptography. Anyone
+      with database credentials can rewrite history undetectably — the app's RBAC is irrelevant to
+      that. **Never claim integrity beyond "append-only by construction" to an assessor.** Closing
+      it is hash-chaining or WORM storage, filed as a revisit trigger in
+      [`docs/adr/regulatory-audit-trail.md`](docs/adr/regulatory-audit-trail.md) D5.
+- [ ] **GDPR erasure does not reach the `resource_*` columns.** `DbalAuditActorAnonymiser` rewrites
+      `actor_id` only. A row naming a natural person in `resource_id` whose actor can be that same
+      person survives erasure holding the fresh pseudonym beside the real id — a reversible
+      crosswalk, queryable through the indexed `resourceId` filter by any `auditTrail.read` holder.
+      **Standing prohibition until this is decided: no new audit row may name a natural person in
+      `resource_type`/`resource_id`** ([`docs/adr/audit-activity-log.md`](docs/adr/audit-activity-log.md) D4).
+      Ownership decision tracked in [#555](https://github.com/sergio-salcedo-dev/ERPify/issues/555).
+- [ ] **`audit:gdpr:erase` is not atomic.** The anonymisation `UPDATE` commits and the
+      `GDPR_ERASURE_EXECUTED` self-audit is written *after*, outside any transaction — a crash
+      between them leaves the erasure done with no evidence of it, and the original id no longer
+      matches anything, so a re-run falsely reports "nothing to erase". Accepted while the only
+      trigger is a synchronous operator command (`audit-activity-log.md` D4). **Its revisit trigger
+      fires** if #555 lands a second mutation statement, or the day a non-CLI trigger appears:
+      route it through `TransactionManager`, never a raw DBAL transaction nested under
+      `wrapInTransaction` (no `nest_transactions_with_savepoints` is configured).
+- [ ] **The sole active administrator cannot be erased.** Demotion is refused by the ≥1-admin
+      invariant, self-erasure by its own guard, and no peer exists to erase them — so their right to
+      erasure requires onboarding a second administrator first. Pre-existing and named in
+      [`docs/adr/authorization-model-boundaries.md`](docs/adr/authorization-model-boundaries.md) D3;
+      it becomes a real obligation the moment a single-administrator installation has a customer.
+- [ ] **A role change leaves no attributable record.** `User` deliberately stays out of the
+      `AuditedEntity` CDC (a field-level diff would carry `password_hash` into the trail) and the
+      generic hook audits only `GET`, so who granted or revoked `ADMIN`, and when, is not in
+      `audit_log` — only a `UserRolesChanged` `event_store` row, which names no actor. The
+      erasure refusal that requires demoting an administrator first is therefore **an authorization
+      step, not a traceability control**; do not cite it as evidence. Blocked on #555, because the
+      natural implementation is exactly the row the prohibition above forbids.
+- [ ] **`api/storage-test/` is outside `.gitignore`.** It is a Flysystem test-storage directory the
+      suite writes into, so any `git add -A` commits whatever a test last wrote — into a **public**
+      repository. Today the residue is a 91-byte 1×1 PNG; the exposure grows the day a test writes
+      realistic fixture data. Add the path to `.gitignore` and delete the residue.
+- [ ] **The repository is public and now documents this posture in detail.** `ADMIN` reads the trail
+      that audits it, the bootstrap provisions exactly one administrator, the trail is not
+      tamper-evident, and the PR/issue history carries reproductions of defects found in review.
+      None of it is exploitable without an authenticated `ADMIN` and there is no production
+      deployment today, which is why it was published deliberately rather than withheld. **Re-assess
+      before the first customer or any public deployment**, whichever comes first: decide per item
+      whether it stays public, and remember that redaction after indexing is not retroactive.
+
+## 8. Deploy & verify
 
 - [ ] `make deploy.local` (or `scripts/deploy/deploy-local.sh`) reaches a 200 on
       `https://$SERVER_NAME/api/v1/health`.

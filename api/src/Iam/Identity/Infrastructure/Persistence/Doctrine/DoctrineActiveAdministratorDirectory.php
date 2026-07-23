@@ -12,13 +12,13 @@ use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
 /**
- * Single-context production adapter for {@see ActiveAdministratorDirectory}: answers "would an active ADMIN
- * remain if this identity were excluded?" straight off `identity_user`, with no JOIN to Organization's
- * Membership. Operational roles live on the identity aggregate today, so an active administrator is a
- * row whose `status` is `ACTIVE`, whose `roles` contains `ADMIN`, and whose id differs — no cross-context seam
- * and no phantom membership to discount, because the source IS the user row (an absent/hard-deleted user is
- * simply never counted). When tenancy moves the authoritative role source to `Membership`, this adapter is
- * re-pointed exactly as the read model will be — the port never changes.
+ * Single-context production adapter for {@see ActiveAdministratorDirectory}: answers both administrator
+ * questions straight off `identity_user`, with no JOIN to Organization's Membership. Operational roles live on
+ * the identity aggregate today, so an active administrator is a row whose `status` is `ACTIVE`, whose `roles`
+ * contains `ADMIN`, and whose id differs — no cross-context seam and no phantom membership to discount,
+ * because the source IS the user row (an absent/hard-deleted user is simply never counted). When tenancy moves
+ * the authoritative role source to `Membership`, this adapter is re-pointed exactly as the read model will be —
+ * the port never changes.
  *
  * The read takes a `FOR UPDATE` lock on the active-admin set so concurrent transitions serialize — the
  * invariant is set-based, so two last-two-admin suspends must not both pass a stale read and drain every
@@ -60,6 +60,29 @@ final readonly class DoctrineActiveAdministratorDirectory implements ActiveAdmin
         return \array_any(
             $activeAdminIds,
             static fn ($adminId): bool => \is_string($adminId) && 0 !== \strcasecmp($adminId, $userId),
+        );
+    }
+
+    #[Override]
+    public function holdsAdministratorRole(string $userId): bool
+    {
+        // No status predicate and no lock, unlike the set invariant above: a suspended administrator still
+        // carries the role, and this asks only about the subject's own row. `id` is a `uuid` column, so
+        // Postgres compares the cast value canonically — the case-insensitivity the string comparisons
+        // elsewhere in this class have to spell out is free here.
+        return (bool) $this->connection->fetchOne(
+            <<<'SQL'
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM identity_user
+                    WHERE id = CAST(:userId AS UUID)
+                      AND roles::jsonb @> CAST(:adminRole AS jsonb)
+                )
+                SQL,
+            [
+                'userId' => $userId,
+                'adminRole' => \json_encode([Role::ADMIN->value], JSON_THROW_ON_ERROR),
+            ],
         );
     }
 }

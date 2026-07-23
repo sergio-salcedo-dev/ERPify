@@ -59,9 +59,10 @@ final readonly class StaticAuthorizationPolicy implements AuthorizationPolicy
      * a tier verb — would auto-grant to VIEWER).
      *
      * `auditTrail.read` lists ADMIN beside AUDIT_READER because `auditTrail` also opts out of tiering, so the
-     * row is what grants it. Whether an administrator should be able to read the trail that audits them is a
-     * separation-of-duties question with arguments on both sides; it is settled here as a declared row rather
-     * than left to fall out of how the policy happens to resolve.
+     * row is what grants it. That an administrator may read the trail auditing them is a decided
+     * separation-of-duties position, not a default — `docs/adr/authorization-model-boundaries.md` D3 carries
+     * the justification and the trigger that reopens it (a customer requiring contractual separation of
+     * duties). It is a declared row rather than something left to fall out of how the policy resolves.
      *
      * @var array<string, list<string>>
      */

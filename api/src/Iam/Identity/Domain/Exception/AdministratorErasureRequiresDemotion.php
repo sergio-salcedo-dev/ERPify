@@ -1,0 +1,41 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Erpify\Iam\Identity\Domain\Exception;
+
+use Erpify\Shared\ErrorContract\Domain\Exception\Conflict;
+use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
+
+/**
+ * Raised when erasure targets an identity that still carries `ADMIN`. Erasure is irreversible and
+ * pseudonymises the subject's entire attribution in the compliance trail, so an administrator must be
+ * demoted first.
+ *
+ * Scope of the control, stated honestly: it buys a second authorization step, **not** traceability. A role
+ * change currently leaves no attributable record — `User` is not an `AuditedEntity` and the `event_store`
+ * entry names no actor — so the sequence is not yet visible in `audit_log`. Recording it waits on who owns
+ * GDPR erasure over the resource columns (`docs/adr/audit-activity-log.md` D4); until that is settled, this
+ * refusal is procedural. See `docs/adr/authorization-model-boundaries.md` D3.
+ *
+ * The refusal deliberately ignores the subject's status: a suspended administrator still carries the role,
+ * and the concern is the role, not the activity. Demote-then-erase keeps the right to erasure satisfiable
+ * for every administrator except the sole active one, who cannot be demoted either — a pre-existing gap this
+ * refusal neither creates nor closes.
+ *
+ * A {@see Conflict} (409), like {@see LastActiveAdministratorProtected}: the request is well-formed and
+ * authorized but collides with a state invariant. It subsumes that invariant on the erasure path — the last
+ * active administrator necessarily carries `ADMIN` — which is why erasure no longer reasons about the
+ * administrator set at all; keeping at least one administrator alive is enforced where the role changes.
+ */
+final class AdministratorErasureRequiresDemotion extends DomainException implements Conflict
+{
+    public static function forUser(string $userId): self
+    {
+        return new self(
+            type: 'administrator-erasure-requires-demotion',
+            title: 'Cannot erase an identity that still holds the administrator role; remove the role first.',
+            context: ['userId' => $userId],
+        );
+    }
+}
