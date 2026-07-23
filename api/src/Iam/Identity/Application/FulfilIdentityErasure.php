@@ -11,17 +11,27 @@ use Erpify\Iam\Session\Application\PurgeUserSessions;
 use Erpify\Shared\Audit\Application\ActorContextFactory;
 use Erpify\Shared\Audit\Application\AuditActorAnonymiser;
 use Erpify\Shared\Audit\Application\AuditLogger;
+use Erpify\Shared\Audit\Application\AuditResourceAnonymiser;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
 
 /**
  * Fulfils a GDPR "right to erasure" request against one subject as a single atomic operation — the identity
  * and its audit trail are de-identified as one unit. It chains, in one transaction: the administrator refusal,
- * the identity erasure ({@see EraseIdentitySubject} — its own transaction nests and joins),
- * the audit-trail anonymisation ({@see AuditActorAnonymiser}, whose DBAL runs on the same Connection the
- * EntityManager wraps, so it commits or rolls back with the rest), the hard-delete of the subject's sessions
- * ({@see PurgeUserSessions}) and the combined compliance self-audit. A failure in any link rolls everything
+ * the identity erasure ({@see EraseIdentitySubject} — its own transaction nests and joins), the audit-trail
+ * anonymisation across **both** axes — {@see AuditActorAnonymiser} for rows the subject authored and
+ * {@see AuditResourceAnonymiser} for rows that name them — whose DBAL runs on the same Connection the
+ * EntityManager wraps, so they commit or roll back with the rest, the hard-delete of the subject's sessions
+ * ({@see PurgeUserSessions}) and the combined compliance self-audit.
+ *
+ * Both axes are erased **here**, by the context that owns the person, rather than inside one shared
+ * anonymiser: `docs/adr/audit-activity-log.md` D4 assigns erasure of a person-denoting resource to the
+ * owning context, and `docs/adr/regulatory-audit-trail.md` D15 keeps the actor and subject erasures from
+ * being merged into one operation. Erasing only the actor axis would leave the fresh pseudonym beside the
+ * real id in any row where the subject is both — a user changing their own roles — which is a reversible
+ * crosswalk, not a cosmetic gap. A failure in any link rolls everything
  * back — no half-erased identity, no half-anonymised trail, no orphaned session PII — and re-running is safe.
  *
  * Two guards run before the transaction opens: the id shape ({@see Uuid::ensure} → 400 on a malformed id) and
@@ -41,14 +51,33 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * Absent-id handling is deliberately delegated: this service does not throw `UserNotFound`. It returns a
  * {@see FulfilIdentityErasureResult} whose `identityErased` is `false` when nothing was live, so the HTTP
  * controller can map that to a 404 while the CLI keeps its idempotent "nothing to erase" outcome.
+ *
+ * Its object coupling sits above the default threshold and stays there. Every collaborator is one link of
+ * the single atomic act this orchestrates — refuse an administrator, erase the identity, anonymise both
+ * trail axes, purge sessions, seal the actor, own the transaction — and the two types the resource axis
+ * speaks in are that seam's vocabulary, not extra responsibilities. Splitting the chain would hide, from
+ * the one place a reader looks, that the two axes are erased together; that atomicity is the property the
+ * whole design rests on.
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 final readonly class FulfilIdentityErasure
 {
     private const string ERASURE_ACTION = 'GDPR_ERASURE_EXECUTED';
 
+    /**
+     * The audit `resource_type` under which this context's subject appears. It lives here, not in
+     * `Shared/Audit`, because "this type denotes a natural person" is knowledge owned by the context that
+     * owns people — the assignment `docs/adr/audit-activity-log.md` D4 makes. The shared anonymiser is told
+     * the type; it never learns what the type means. Public because the reconciler that detects a missed
+     * erasure ({@see ReconcileErasedSubjectReferences}) must ask about the same type this writes.
+     */
+    public const string SUBJECT_RESOURCE_TYPE = 'User';
+
     public function __construct(
         private EraseIdentitySubject $eraseIdentitySubject,
         private AuditActorAnonymiser $auditActorAnonymiser,
+        private AuditResourceAnonymiser $auditResourceAnonymiser,
         private ActiveAdministratorDirectory $administrators,
         private PurgeUserSessions $purgeUserSessions,
         private AuditLogger $auditLogger,
@@ -74,12 +103,19 @@ final readonly class FulfilIdentityErasure
 
                 $identity = $this->eraseIdentitySubject->execute($subjectId);
                 $anonymisation = $this->auditActorAnonymiser->anonymise($subjectId);
+                // Same pseudonym for both axes: one person must not split into two anonymous identities.
+                // It re-links nothing, because the original id is gone from both columns.
+                $anonymisedResourceRows = $this->auditResourceAnonymiser->anonymise(
+                    AuditResource::of(self::SUBJECT_RESOURCE_TYPE, $subjectId),
+                    $anonymisation->pseudonym,
+                );
                 $sessionsDeleted = $this->purgeUserSessions->purge($subjectId);
 
                 $result = new FulfilIdentityErasureResult(
                     $identity->identityErased,
                     $identity->resetTokensDeleted,
                     $anonymisation->affectedRows,
+                    $anonymisedResourceRows,
                     $sessionsDeleted,
                 );
 
@@ -90,6 +126,7 @@ final readonly class FulfilIdentityErasure
                     // person, defeating the anonymisation. Which subject was erased lives in GDPR_SUBJECT_ERASED.
                     $this->auditLogger->log(self::ERASURE_ACTION, AuditLevel::SECURITY, null, [
                         'affected_rows' => $anonymisation->affectedRows,
+                        'anonymized_resource_rows' => $anonymisedResourceRows,
                         'reset_tokens_deleted' => $identity->resetTokensDeleted,
                         'sessions_deleted' => $sessionsDeleted,
                     ]);

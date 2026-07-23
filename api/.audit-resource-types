@@ -1,0 +1,19 @@
+# Every `resource_type` written into `audit_log`, classified by whether it denotes a NATURAL PERSON.
+#
+# Why this file exists: GDPR erasure of the resource axis is the owning bounded context's job
+# (docs/adr/audit-activity-log.md D4). That assignment only works if "is this type a person?" is a
+# declared, reviewed decision — otherwise a new person-denoting type ships with nobody erasing it, and
+# the subject's real id survives their own erasure beside their pseudonym.
+#
+# Format, one per line:
+#   <ResourceType> => non-person
+#   <ResourceType> => person :: <path of the erasure use case that anonymises it>
+#
+# The gate (PersonResourceErasureGateTest, run by `make php.lint.audit-resource`) fails the build when a
+# type reaches `AuditResource::of(...)` or a route's `_audit_resource_type` default without a line here,
+# and when a `person` line names a file that does not wire AuditResourceAnonymiser. It cannot judge the
+# classification itself — that is what review is for.
+
+Bank => non-person
+BankAccount => non-person
+User => person :: src/Iam/Identity/Application/FulfilIdentityErasure.php
