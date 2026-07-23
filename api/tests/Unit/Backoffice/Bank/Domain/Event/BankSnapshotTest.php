@@ -23,10 +23,6 @@ final class BankSnapshotTest extends TestCase
             'ACME',
             '2026-06-06T00:00:00+00:00',
             '2026-06-07T00:00:00+00:00',
-            'media-id',
-            'logo-hash',
-            'object-hash',
-            'image/png',
         );
 
         $primitives = $snapshot->toPrimitives();
@@ -36,24 +32,9 @@ final class BankSnapshotTest extends TestCase
             'shortName' => 'ACME',
             'createdAt' => '2026-06-06T00:00:00+00:00',
             'updatedAt' => '2026-06-07T00:00:00+00:00',
-            'logoMediaId' => 'media-id',
-            'logoContentHash' => 'logo-hash',
-            'storedObjectContentHash' => 'object-hash',
-            'storedObjectMimeType' => 'image/png',
         ], $primitives);
 
         $this->assertSame($primitives, BankSnapshot::fromPrimitives($primitives)->toPrimitives());
-    }
-
-    #[Test]
-    public function itDefaultsTheOptionalMediaFieldsToNull(): void
-    {
-        $snapshot = new BankSnapshot('Acme', 'ACME', 'created', 'updated');
-
-        $this->assertNull($snapshot->logoMediaId);
-        $this->assertNull($snapshot->logoContentHash);
-        $this->assertNull($snapshot->storedObjectContentHash);
-        $this->assertNull($snapshot->storedObjectMimeType);
     }
 
     #[Test]
@@ -65,7 +46,6 @@ final class BankSnapshotTest extends TestCase
         $this->assertSame('', $snapshot->shortName);
         $this->assertSame('', $snapshot->createdAt);
         $this->assertSame('', $snapshot->updatedAt);
-        $this->assertNull($snapshot->logoMediaId);
     }
 
     #[Test]
@@ -76,13 +56,11 @@ final class BankSnapshotTest extends TestCase
             'shortName' => null,
             'createdAt' => ['nested'],
             'updatedAt' => false,
-            'logoMediaId' => 7,
         ]);
 
         $this->assertSame('', $snapshot->name);
         $this->assertSame('', $snapshot->shortName);
         $this->assertSame('', $snapshot->createdAt);
         $this->assertSame('', $snapshot->updatedAt);
-        $this->assertNull($snapshot->logoMediaId);
     }
 }

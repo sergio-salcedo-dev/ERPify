@@ -43,14 +43,14 @@ Target personas (each shapes a distinct surface): **civil engineers** (pavement 
 
 | Part | Role | Language / Runtime | Framework | Key infrastructure |
 |---|---|---|---|---|
-| `api/` | HTTP API + async workers | PHP 8.5 | Symfony 8.0.x | FrankenPHP (Caddy), Doctrine ORM 3.6 / DBAL 4.4, PostgreSQL 18, Symfony Messenger, Mercure Hub, Flysystem, Intervention Image, Monolog, Symfony UID |
+| `api/` | HTTP API + async workers | PHP 8.5 | Symfony 8.0.x | FrankenPHP (Caddy), Doctrine ORM 3.6 / DBAL 4.4, PostgreSQL 18, Symfony Messenger, Mercure Hub, Monolog, Symfony UID |
 | `pwa/` | Web UI | TypeScript 6 / Node 24 | Next.js 16.2 (App Router) + React 19.2 | Tailwind 4.2, Shadcn 4, Inversify 8.1, Base UI 1.4, Vitest 4.1, Playwright 1.59 |
 
 ## Architecture type
 
 **DDD + Hexagonal + Clean Architecture** on both parts. Each bounded context is split into `Domain / Application / Infrastructure` layers with dependencies pointing inward to `Domain`. See `docs/rules/architecture.md` and `docs/project-context.md`.
 
-- **API bounded contexts:** `Backoffice/{Bank, Health}`, `Frontoffice/{Dev, Health, Mercure}`, `Shared/{Application, Domain, Guzzle, Infrastructure, Media, Storage}`.
+- **API bounded contexts:** `Backoffice/{Audit, Bank, BankAccount, Health}`, `Frontoffice/{Dev, Health}`, `Iam/{Identity, Invitation, Session}`, `Organization/{Membership, Organization}`, plus the `Shared/` capability modules over a minimal `Kernel/`.
 - **PWA bounded contexts:** `backoffice/{health}`, `frontoffice/{health}`, `shared/{domain, infrastructure}`.
 
 ## Cross-cutting contracts

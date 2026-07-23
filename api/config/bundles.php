@@ -12,7 +12,6 @@ $bundles = [
     Hautelook\AliceBundle\HautelookAliceBundle::class => ['dev' => true, 'test' => true],
     Nelmio\CorsBundle\NelmioCorsBundle::class => ['all' => true],
     Symfony\Bundle\MercureBundle\MercureBundle::class => ['all' => true],
-    League\FlysystemBundle\FlysystemBundle::class => ['all' => true],
     Symfony\Bundle\MonologBundle\MonologBundle::class => ['all' => true],
     Sentry\SentryBundle\SentryBundle::class => ['dev' => true, 'prod' => true],
     Symfony\Bundle\SecurityBundle\SecurityBundle::class => ['all' => true],

@@ -28,13 +28,6 @@ phpstan.neon
 /phpcs.xml
 ###< squizlabs/php_codesniffer ###
 
-###> object storage (runtime uploads — not source code) ###
-/storage/*
-!/storage/.gitkeep
-/storage-test/*
-!/storage-test/.gitkeep
-###< object storage ###
-
 ###> core dumps ###
 # FrankenPHP (PID 1) dumps land in the bind-mounted /app/api if core dumps slip past
 # the compose `ulimits` guard. Never commit them.

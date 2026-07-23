@@ -111,7 +111,7 @@ docker compose logs -f php             # follow API only (stderr)
 docker compose logs -f php | jq .      # JSON → jq
 ```
 
-Log levels: `debug` in `dev`/`test`, `fingers_crossed` (action level `error`) with a 50-message context buffer in `prod`. Custom channels: `messenger`, `mercure`, `audit`, `media`, `deprecation`. See `api/config/packages/monolog.yaml`.
+Log levels: `debug` in `dev`/`test`, `fingers_crossed` (action level `error`) with a 50-message context buffer in `prod`. Custom channels: `deprecation`, `messenger`, `mercure`, `audit`, `observability`. See `api/config/packages/monolog.yaml`.
 
 ## Composer
 

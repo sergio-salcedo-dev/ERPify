@@ -7,8 +7,8 @@ This directory holds the scripts for the prod / staging profile:
 | `deploy-local.sh` | `make deploy.local`            | **First stand-up** on a host: preflight → `docker.up` → migrate → smoke → internal-CA export + trust guidance.                       |
 | `trust-local.sh`  | `sudo make deploy.local.trust` | **Privileged client-trust** steps (`/etc/hosts`, system CA store, Chromium NSS). Splits the root-requiring work out of the stand-up. |
 | `deploy.sh`       | `./scripts/deploy/deploy.sh`   | **Post-deploy operations on an already-running stack**: migrations, cache warmup, worker reload, health checks (+ a `--ci` mode).    |
-| `backup-prod.sh`  | `make backup.prod`             | **Paired backup** of the two stateful volumes: `pg_dump -Fc` first, object-storage volume archive after (one shared timestamp).     |
-| `restore-prod.sh` | `STAMP=<s> make restore.prod`  | **Paired restore** (inverse of the backup) — verifies both artifacts (full read-back), atomic DB restore (`--single-transaction`), restarts writers on any failure. **Destructive**; any non-local target needs `ALLOW_PROD_RESTORE=1` + a typed confirmation.  |
+| `backup-prod.sh`  | `make backup.prod`             | **Backup** of all application state: a timestamped `pg_dump -Fc` of Postgres, verified by full read-back.                            |
+| `restore-prod.sh` | `STAMP=<s> make restore.prod`  | **Restore** (inverse of the backup) — verifies the dump (full read-back), atomic DB restore (`--single-transaction`), restarts writers on any failure. **Destructive**; any non-local target needs `ALLOW_PROD_RESTORE=1` + a typed confirmation.  |
 
 `deploy.sh` does **not** bring the stack up — run `make deploy.local` for the
 initial stand-up, then use `deploy.sh` for subsequent redeploys. The full

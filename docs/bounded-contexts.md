@@ -390,11 +390,10 @@ Dos caras del mismo núcleo compartido:
 - **Responsabilidad:** documentos ligados a entidades (obra, cliente…), con
   versionado y permisos. Es la **capa de negocio (F3)** del Media & Document
   System transversal — `Document` (agregado versionado) ≠ `MediaFile` (fichero
-  técnico). Backlog por capas: [`media-document-system.md`](media-document-system.md).
+  técnico).
 - **Agregados/entidades:** ⬢ `Document` · `DocumentVersion` · `DocumentTemplate` ·
   `AccessGrant`.
-- **Value objects:** `FileRef` (storage key + content hash, ya existe el patrón en
-  Bank), `MimeType`, `DocumentKind`.
+- **Value objects:** `FileRef` (storage key + content hash), `MimeType`, `DocumentKind`.
 - **Invariantes:** cada documento referencia su entidad por UUID (sin FK); la
   última versión es inmutable una vez publicada; el borrado físico es posible
   (GDPR).

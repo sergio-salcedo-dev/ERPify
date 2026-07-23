@@ -9,11 +9,6 @@ use Erpify\Backoffice\Bank\Application\Command\CreateBankCommand;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Shared\Event\Domain\EventBus;
-use Erpify\Shared\Media\Application\Dto\UploadedImage;
-use Erpify\Shared\Media\Application\MediaRegistrar;
-use Erpify\Shared\Storage\Application\Dto\StoredObjectWriteResult;
-use Erpify\Shared\Storage\Application\StoredImageObjectWriter;
-use Erpify\Shared\Storage\Domain\StoredObject;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Shared\Validation\Application\Validator;
 
@@ -22,36 +17,17 @@ final readonly class BankCreator
     public function __construct(
         private BankRepository $bankRepository,
         private EventBus $eventBus,
-        private MediaRegistrar $mediaRegistrar,
-        private StoredImageObjectWriter $storedImageObjectWriter,
         private Validator $validator,
         private EntityManagerInterface $entityManager,
     ) {
     }
 
-    public function create(
-        CreateBankCommand $bankCommand,
-        ?UploadedImage $logo = null,
-        ?UploadedImage $storedObject = null,
-    ): Bank {
-        $stored = $storedObject instanceof UploadedImage
-            ? $this->storedImageObjectWriter->store($storedObject, 'storedObject')
-            : null;
-
-        $bankStoredObject = $stored instanceof StoredObjectWriteResult
-            ? new StoredObject($stored->objectKey, $stored->mimeType, $stored->byteSize, $stored->contentHash)
-            : null;
-
-        $logoMedia = $logo instanceof UploadedImage
-            ? $this->mediaRegistrar->register($logo)
-            : null;
-
+    public function create(CreateBankCommand $bankCommand): Bank
+    {
         $newBank = Bank::create(
             Uuid::generate(),
             $bankCommand->name,
             $bankCommand->shortName,
-            $logoMedia,
-            $bankStoredObject,
         );
 
         $this->validator->ensure($newBank);

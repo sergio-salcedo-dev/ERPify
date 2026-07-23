@@ -11,8 +11,8 @@
 `Shared` (en ambos deployables) había crecido con **dos patrones de organización conviviendo**:
 
 - **Vertical-slice (módulo-primero):** una capacidad es una carpeta con su propia hexagonal interna
-  `{Domain,Application,Infrastructure}` (solo las capas que necesita). Ya lo seguían `Event/`, `Media/`,
-  `Monitoring/`, `Storage/` (API) y `access/`, `dev-tools/`, `error/`, `resource/` (PWA).
+  `{Domain,Application,Infrastructure}` (solo las capas que necesita). Ya lo seguían `Event/` y
+  `Monitoring/` (API) y `access/`, `dev-tools/`, `error/`, `resource/` (PWA).
 - **Layer-first (capa-primero):** la capacidad está troceada y dispersa por los buckets globales
   `Shared/{Domain,Application,Infrastructure}`. Lo seguían `Clock`, `Mailer`, `Validation`, `Search`
   (API) y `DateTimeProvider`, `DebugToken`, `Notification`, `Observability`, `RateLimit`, `RealTime`,

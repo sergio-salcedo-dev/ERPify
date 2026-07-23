@@ -1,9 +1,9 @@
 # =============================================================================
-# lib/common.sh — shared helpers for the paired backup/restore scripts
+# lib/common.sh — shared helpers for the backup/restore scripts
 # =============================================================================
 # Sourced by backup-prod.sh and restore-prod.sh. The caller must already have
-# cd'd to the repo root and set COMPOSE_PROJECT_NAME, ENV_FILE and STORAGE_VOLUME
-# before invoking compose()/require_running_stack()/verify_dump().
+# cd'd to the repo root and set COMPOSE_PROJECT_NAME and ENV_FILE before
+# invoking compose()/require_running_stack()/verify_dump().
 #
 # Not executable on its own; meant for `source`.
 
@@ -19,10 +19,9 @@ compose() {
   return $?
 }
 
-# Preflight shared by both scripts: repo root, env file, docker, a RUNNING
+# Preflight shared by both scripts: repo root, env file, docker, and a RUNNING
 # database service (a created/exited/restarting container has an id too but
-# cannot answer pg_dump/pg_restore), and the storage volume actually existing
-# (docker run -v would otherwise silently create a missing volume).
+# cannot answer pg_dump/pg_restore).
 require_running_stack() {
   [[ -f compose.yaml ]] || { log_error "Run from the repo root (compose.yaml not found)."; exit 1; }
   [[ -f "$ENV_FILE" ]] || { log_error "$ENV_FILE not found — see 'make prod.env.check'."; exit 1; }
@@ -30,12 +29,6 @@ require_running_stack() {
 
   if [[ -z "$(compose ps --status running -q database)" ]]; then
     log_error "database service is not running (project '$COMPOSE_PROJECT_NAME')."
-    exit 1
-  fi
-
-  if ! docker volume inspect "$STORAGE_VOLUME" >/dev/null 2>&1; then
-    log_error "volume '$STORAGE_VOLUME' does not exist (project '$COMPOSE_PROJECT_NAME')."
-    log_error "Check 'make docker.info' for the project name, or set STORAGE_VOLUME."
     exit 1
   fi
 
@@ -55,12 +48,4 @@ verify_dump() {
     || { log_error "$file is not a pg_dump custom archive."; return 1; }
   compose exec -T database pg_restore -f /dev/null > /dev/null 2>&1 < "$file" \
     || { log_error "$file is unreadable by pg_restore (truncated/corrupt)."; return 1; }
-}
-
-# Prove a gzip tar archive is intact end to end (gzip CRC + tar structure).
-# $1 = path to the objects-<stamp>.tar.gz file.
-verify_objects() {
-  local file="$1"
-  tar -tzf "$file" > /dev/null \
-    || { log_error "$file is not a valid gzip archive."; return 1; }
 }

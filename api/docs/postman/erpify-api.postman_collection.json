@@ -204,54 +204,6 @@
           ]
         }
       ]
-    },
-    {
-      "name": "Shared",
-      "description": "Shared contexts (Shared/Media, Shared/Storage) — prefix /api/v1",
-      "item": [
-        {
-          "name": "Media",
-          "description": "Media context (Shared/Media)",
-          "item": [
-            {
-              "name": "Get media by hash",
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": {
-                  "raw": "{{base_url}}/api/v1/media/:hash",
-                  "host": ["{{base_url}}"],
-                  "path": ["api", "v1", "media", ":hash"],
-                  "variable": [{ "key": "hash", "value": "", "description": "Content SHA-256 (64 hex chars)" }]
-                },
-                "description": "Serves a content-addressed media object. `hash` must match `[a-f0-9]{64}`."
-              },
-              "response": []
-            }
-          ]
-        },
-        {
-          "name": "Storage",
-          "description": "Storage context (Shared/Storage)",
-          "item": [
-            {
-              "name": "Get stored object by hash",
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": {
-                  "raw": "{{base_url}}/api/v1/stored-objects/:hash",
-                  "host": ["{{base_url}}"],
-                  "path": ["api", "v1", "stored-objects", ":hash"],
-                  "variable": [{ "key": "hash", "value": "", "description": "Content SHA-256 (64 hex chars)" }]
-                },
-                "description": "Serves a content-addressed stored object (content-addressed HTTP cache, supports 304). `hash` must match `[a-f0-9]{64}`."
-              },
-              "response": []
-            }
-          ]
-        }
-      ]
     }
   ]
 }

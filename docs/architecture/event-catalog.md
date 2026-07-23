@@ -84,10 +84,6 @@ the VO, **not** a supertype (which would couple their schemas). Source:
 | `shortName` | `string` | |
 | `createdAt` | `string` | ISO-8601 |
 | `updatedAt` | `string` | ISO-8601 |
-| `logoMediaId` | `string\|null` | |
-| `logoContentHash` | `string\|null` | |
-| `storedObjectContentHash` | `string\|null` | |
-| `storedObjectMimeType` | `string\|null` | |
 
 `erpify.backoffice.bank.updated` is a **full snapshot by design**, not a delta: its consumer (Mercure)
 pushes the whole new state to the client. `erpify.backoffice.bank.deleted` carries an **empty payload**
@@ -138,8 +134,8 @@ reconcile by `id`, so a re-applied update or delete is a no-op.
 
 Owned by the reactor
 [`RefreshRealtimeOnBankChanged`](../../api/src/Backoffice/Bank/Infrastructure/Messenger/RefreshRealtimeOnBankChanged.php).
-The wire shape drops logo / stored-object metadata and adds `accountCount`, resolved at publish time
-via `BankAccountCountEnricher::countFor()`.
+The wire shape is the snapshot's four fields plus `id`, and adds `accountCount`, resolved at publish
+time via `BankAccountCountEnricher::countFor()`.
 
 Topics ([`MercureBankTopic`](../../api/src/Backoffice/Bank/Domain/MercureBankTopic.php)):
 

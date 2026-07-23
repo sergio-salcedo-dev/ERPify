@@ -58,7 +58,7 @@ final readonly class CompletePasswordResetController
     ) {
     }
 
-    public function __invoke(#[StrictRequestPayload] ResetPasswordRequest $request): Response
+    public function __invoke(#[StrictRequestPayload(acceptFormat: ['json'])] ResetPasswordRequest $request): Response
     {
         // Per-selector brute-force budget, consumed before any work: exhaustion folds into the SAME opaque
         // invalid-token wall as a dead link — a per-selector 429 would confirm the selector exists.

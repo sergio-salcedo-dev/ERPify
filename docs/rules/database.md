@@ -30,8 +30,9 @@
 ## Deletion policy (hard delete by default)
 - **Hard delete (`DELETE`) is the default.** GDPR's right to erasure (Art. 17) must always be
   satisfiable: any row that may carry personal data (uploads, free text, contact details) must be
-  physically removable. A soft delete keeps the bytes and silently breaks that guarantee — `media`
-  learned this and dropped its `deleted_at` column.
+  physically removable. A soft delete keeps the bytes and silently breaks that guarantee — which is why
+  `bank_account`, whose holder name and IBAN are personal data, is physically deleted and carries no
+  `deleted_at` column.
 - **Model business lifecycle as explicit domain state, not as soft delete.** "Archived",
   "deactivated", "cancelled" are domain concepts with their own invariants and behavior — put them
   on the aggregate as a status, not in a generic `deleted_at` flag.
@@ -98,8 +99,8 @@ in-memory schema, so `make db.diff` generates and keeps its migration. These tab
 does not.
 
 **`auto_mapping: false` is intentional — the mapping list is an allowlist of what the ORM owns.**
-`config/packages/doctrine.yaml` declares each ORM tree by hand (`Backoffice`, `SharedMedia`,
-`SharedStorage`); Doctrine does **not** auto-discover `#[ORM\Entity]` anywhere under `src/`. Two
+`config/packages/doctrine.yaml` declares each ORM tree by hand (`Backoffice`, `Iam`,
+`Organization`); Doctrine does **not** auto-discover `#[ORM\Entity]` anywhere under `src/`. Two
 reasons: the DDD layout scatters entities across contexts (there is no conventional `src/Entity` for
 auto-mapping to find), and — the deciding one — keeping the list explicit makes *what Doctrine ORM
 manages* a reviewable line in the diff instead of a side effect of an attribute appearing somewhere.

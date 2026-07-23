@@ -194,12 +194,12 @@ Step-by-step (incl. internal-CA trust and `/etc/hosts`) and VPS promotion:
 
 - Images are immutable (digest-pinned). Redeploy the previous image tag.
 - Roll back DB changes only if the migration is reversible — otherwise restore from the most recent Postgres backup and replay.
-- A restore must pair the Postgres backup with the **`storage_data`** volume snapshot from the same point in time — `bank.stored_object_*` rows reference `objects/{hash}` files in that volume (see the backups item in [`docs-info/object-storage.md`](../docs-info/object-storage.md)).
+- Postgres holds all application state, so a restore is a single artifact: `STAMP=<stamp> make restore.prod` (runbook: [`vps-deployment.md`](./vps-deployment.md) § Backups).
 
 ## Operational notes
 
-- `make docker.down.clean-volumes` drops volumes and is **destructive** — never on prod without explicit confirmation. On prod that includes the two stateful volumes: `database_data` **and** `storage_data` (uploaded stored-objects).
+- `make docker.down.clean-volumes` drops volumes and is **destructive** — never on prod without explicit confirmation. On prod that includes `database_data` (all application state) and `caddy_data` (ACME account key and issued certificates).
 - Do not run `db.reset` outside dev/ci.
 - DNS, CORS origins, and Mercure cookie/CORS config: see [`pwa/docs/production-deployment.md`](../pwa/docs/production-deployment.md).
-- Backups: `make backup.prod` takes the paired Postgres dump + object-storage archive; cron, offsite sync, restore and the quarterly drill are in [`vps-deployment.md`](./vps-deployment.md) § Backups.
+- Backups: `make backup.prod` takes a verified Postgres dump; cron, offsite sync, restore and the quarterly drill are in [`vps-deployment.md`](./vps-deployment.md) § Backups.
 - Xdebug must be disabled in prod images.

@@ -33,7 +33,7 @@ final readonly class RequestPasswordResetController
     ) {
     }
 
-    public function __invoke(#[StrictRequestPayload] ForgotPasswordRequest $request): Response
+    public function __invoke(#[StrictRequestPayload(acceptFormat: ['json'])] ForgotPasswordRequest $request): Response
     {
         if (!$this->throttle->allowRequest($request->email)) {
             $this->timingFloor->equalise();

@@ -35,7 +35,7 @@ final readonly class BankAccountPostController
      * @throws MessengerExceptionInterface
      */
     public function __invoke(
-        #[StrictRequestPayload]
+        #[StrictRequestPayload(acceptFormat: ['json'])]
         CreateBankAccountCommand $command,
     ): Response {
         $account = $this->bankAccountCreator->create($command);

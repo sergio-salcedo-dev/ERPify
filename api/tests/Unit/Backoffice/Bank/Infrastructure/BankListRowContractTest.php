@@ -10,8 +10,6 @@ use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Infrastructure\Http\BankResourceMapper;
 use Erpify\Backoffice\Bank\Infrastructure\Messenger\RefreshRealtimeOnBankChanged;
-use Erpify\Shared\Media\Application\Port\MediaPublicUrlGenerator;
-use Erpify\Shared\Storage\Application\Port\StoredObjectPublicUrlGenerator;
 use Erpify\Tests\Unit\Backoffice\Bank\Application\InMemoryBankAccountCounter;
 use Erpify\Tests\Unit\Backoffice\Bank\Domain\Entity\Mother\BankMother;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -60,10 +58,7 @@ final class BankListRowContractTest extends TestCase
      */
     private function httpListRow(Bank $bank): array
     {
-        $mapper = new BankResourceMapper(
-            $this->createStub(MediaPublicUrlGenerator::class),
-            $this->createStub(StoredObjectPublicUrlGenerator::class),
-        );
+        $mapper = new BankResourceMapper();
 
         /** @var array<string, mixed> $row */
         $row = \get_object_vars($mapper->toListResource(new BankWithAccountCount($bank, self::ACCOUNT_COUNT)));

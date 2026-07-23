@@ -1,6 +1,11 @@
 # ADR — Frontera de subida: Media (imágenes) vs Documents (ficheros grandes)
 
-> **Status:** accepted · **Date:** 2026-06-14 · **Scope:** `api/src/Shared/{Media,Storage}` + the upload seam consumed by `Backoffice/Bank` and future callers (company logos, client/user avatars, product images).
+> **Status:** superseded · **Date:** 2026-06-14 · **Scope:** the upload seam consumed by `Backoffice/Bank` and future callers (company logos, client/user avatars, product images).
+>
+> **Superseded:** the API carries no upload surface. Nothing consumed it, so it was removed rather than
+> carried forward; images will be modelled afresh in their own epic. The reasoning below — where the
+> `UploadedFile`/`UploadedImage` boundary belongs, and why images and large documents are different
+> problems — is the record this ADR preserves for that work.
 >
 > Contexto temporal: la aplicación **no está en producción**; ninguna decisión arrastra compatibilidad hacia atrás. Este ADR no requiere migración de esquema.
 

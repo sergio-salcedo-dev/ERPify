@@ -16,14 +16,12 @@ Feature: Create a bank
     }
     """
     Then the response status code should be 201
-    And the JSON node "data" should have 7 elements
+    And the JSON node "data" should have 5 elements
     And the JSON node "data.name" should be equal to "Test Bank"
     And the JSON node "data.shortName" should be equal to "TB"
     And the JSON node "data.id" should not be null
     And the JSON node "data.createdAt" should not be null
     And the JSON node "data.updatedAt" should not be null
-    And the JSON node "data.logoUrl" should be null
-    And the JSON node "data.storedObjectUrl" should be null
     And the JSON node "data.accountCount" should not exist
     And a request contains "INSERT" for doctrine connection "default"
     # The budget includes the regulatory change row the audit listener writes on the same transaction.
@@ -32,8 +30,6 @@ Feature: Create a bank
       | name             | Test Bank  |
       | nameNormalized   | test bank  |
       | shortName        | TB         |
-      | logo             | null       |
-      | storedObject     | null       |
       | id::uuid         | v7         |
       | shortName::regex | /^[A-Z]+$/ |
       | createdAt::date  | now        |

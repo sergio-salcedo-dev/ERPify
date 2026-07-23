@@ -305,16 +305,10 @@ export const roadmapPhases: RoadmapPhase[] = [
           {
             name: "F0 · Diseño del modelo (MediaFile, StorageProviderInterface, MIME)",
           },
-          {
-            name: "F1 · Storage local + upload/download por tenant",
-            note: "Bank ya sube/recupera ficheros",
-          },
+          { name: "F1 · Storage local + upload/download por tenant" },
           { name: "F2 · Media Library genérica (reutilización, sin duplicar, tags)" },
           { name: "F3 · Document System (agregado Document, versionado, tipos, estados)" },
-          {
-            name: "F4 · Storage abstraction (S3/MinIO, swap por config)",
-            note: "Flysystem ya provee la abstracción; falta adapter S3/MinIO",
-          },
+          { name: "F4 · Storage abstraction (S3/MinIO, swap por config)" },
           { name: "F5 · Optimización SaaS (URLs firmadas, CDN, thumbnails, OCR)" },
         ],
       },
