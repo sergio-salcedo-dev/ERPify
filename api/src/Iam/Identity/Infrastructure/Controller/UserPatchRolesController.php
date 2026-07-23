@@ -43,7 +43,7 @@ final readonly class UserPatchRolesController
      */
     public function __invoke(
         string $id,
-        #[StrictRequestPayload]
+        #[StrictRequestPayload(acceptFormat: ['json'])]
         ChangeUserRolesRequest $request,
     ): Response {
         $user = $this->changeUserRoles->run($id, ...$this->rolesFrom($request));

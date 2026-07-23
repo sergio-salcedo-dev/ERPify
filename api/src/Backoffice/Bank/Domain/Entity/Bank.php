@@ -16,8 +16,6 @@ use Erpify\Shared\Audit\Domain\AuditWriteOperation;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Kernel\Domain\ValueObject\NormalizedText;
-use Erpify\Shared\Media\Domain\Entity\Media;
-use Erpify\Shared\Storage\Domain\StoredObject;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Validator\Constraints as Assert;
 use Symfony\Component\Validator\Context\ExecutionContextInterface;
@@ -55,15 +53,6 @@ final class Bank extends AggregateRoot implements AuditedEntity
         #[Assert\NotBlank]
         #[Assert\Length(max: 50)]
         private string $shortName,
-        #[ORM\ManyToOne(targetEntity: Media::class, cascade: ['persist'])]
-        #[ORM\JoinColumn(name: 'logo_media_id', referencedColumnName: 'id', nullable: true)]
-        private ?Media $media,
-        /**
-         * Object-storage handle (key + metadata), distinct from the BYTEA-backed {@see $media}.
-         * Mapped inline under the `stored_object_` prefix; an absent image is the empty value object.
-         */
-        #[ORM\Embedded(class: StoredObject::class, columnPrefix: 'stored_object_')]
-        private StoredObject $storedObject,
     ) {
         parent::__construct();
 
@@ -74,8 +63,6 @@ final class Bank extends AggregateRoot implements AuditedEntity
         string $id,
         string $name,
         string $shortName,
-        ?Media $media = null,
-        ?StoredObject $storedObject = null,
     ): self {
         $normalizedText = NormalizedText::from($name);
 
@@ -84,8 +71,6 @@ final class Bank extends AggregateRoot implements AuditedEntity
             $normalizedText->display,
             $normalizedText->normalized,
             NormalizedText::toAsciiUpper($shortName),
-            $media,
-            $storedObject ?? new StoredObject(),
         );
 
         $createdAt = $bank->createdAt->format(DateTimeInterface::ATOM);
@@ -97,10 +82,6 @@ final class Bank extends AggregateRoot implements AuditedEntity
                 $bank->shortName,
                 $createdAt,
                 $createdAt,
-                $media?->getId(),
-                $media?->getContentHash(),
-                $storedObject?->contentHash,
-                $storedObject?->mimeType,
             ),
             null,
             $bank->createdAt,
@@ -127,16 +108,6 @@ final class Bank extends AggregateRoot implements AuditedEntity
     public function getShortName(): string
     {
         return $this->shortName;
-    }
-
-    public function getLogo(): ?Media
-    {
-        return $this->media;
-    }
-
-    public function getStoredObject(): ?StoredObject
-    {
-        return $this->storedObject->isEmpty() ? null : $this->storedObject;
     }
 
     public function auditResource(): AuditResource
@@ -170,10 +141,6 @@ final class Bank extends AggregateRoot implements AuditedEntity
                 $this->shortName,
                 $this->createdAt->format(DateTimeInterface::ATOM),
                 $now->format(DateTimeInterface::ATOM),
-                $this->media?->getId(),
-                $this->media?->getContentHash(),
-                $this->storedObject->contentHash,
-                $this->storedObject->mimeType,
             ),
             null,
             $now,

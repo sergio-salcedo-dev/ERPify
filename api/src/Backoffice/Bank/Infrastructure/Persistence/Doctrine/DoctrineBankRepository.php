@@ -8,7 +8,6 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Backoffice\Bank\Domain\Repository\BankSearchRepository;
-use Erpify\Backoffice\Bank\Domain\Repository\BankStoredObjectQueries;
 use Erpify\Shared\Search\Domain\FilterOperator;
 use Erpify\Shared\Search\Domain\NavigationDirection;
 use Erpify\Shared\Search\Domain\Page;
@@ -41,11 +40,9 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  */
 #[AsAlias(BankRepository::class)]
 #[AsAlias(BankSearchRepository::class)]
-#[AsAlias(BankStoredObjectQueries::class)]
 final readonly class DoctrineBankRepository implements
     BankRepository,
-    BankSearchRepository,
-    BankStoredObjectQueries
+    BankSearchRepository
 {
     public function __construct(
         private EntityManagerInterface $entityManager,
@@ -102,36 +99,6 @@ final readonly class DoctrineBankRepository implements
             WirePaginationPolicy::wire(),
             $this->routingDirection($criteria->routingDirection),
         );
-    }
-
-    #[Override]
-    public function countBanksWithStoredObjectContentHash(string $contentHash): int
-    {
-        return (int) $this->entityManager->createQueryBuilder()
-            ->select('COUNT(b.id)')
-            ->from(Bank::class, 'b')
-            ->where('b.storedObject.contentHash = :contentHash')
-            ->setParameter('contentHash', $contentHash)
-            ->getQuery()
-            ->getSingleScalarResult()
-        ;
-    }
-
-    #[Override]
-    public function findStoredObjectMimeTypeByContentHash(string $contentHash): ?string
-    {
-        /** @var Bank|null $bank */
-        $bank = $this->entityManager->createQueryBuilder()
-            ->select('b')
-            ->from(Bank::class, 'b')
-            ->where('b.storedObject.contentHash = :h')
-            ->setParameter('h', $contentHash)
-            ->setMaxResults(1)
-            ->getQuery()
-            ->getOneOrNullResult()
-        ;
-
-        return $bank?->getStoredObject()?->mimeType;
     }
 
     /**

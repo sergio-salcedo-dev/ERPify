@@ -22,8 +22,8 @@ use Symfony\Component\Mercure\Update;
  * Locks the exact realtime payload contract the PWA `isBankPrimitives` consumer
  * depends on. The published JSON is decoded and asserted structurally (not via
  * substrings) so any drift in `BankCreatedDomainEvent::toPrimitives()` — a
- * renamed key, a dropped field, or a leaked `logo*` / `storedObject*` field —
- * fails CI here instead of silently producing a `null` the consumer drops.
+ * renamed key or a dropped field — fails CI here instead of silently producing
+ * a `null` the consumer drops.
  *
  * @internal
  */
@@ -40,8 +40,6 @@ final class RefreshRealtimeOnBankChangedTest extends TestCase
 
     public function testPublishesCreatedToCollectionTopicAsPrivate(): void
     {
-        // Pass the optional logo / stored-object metadata to prove it never
-        // leaves the handler — only the six public bank fields ship.
         $this->handler()->onBankCreated(BankCreatedDomainEventMother::create(
             self::BANK_ID,
             BankSnapshotMother::create(
@@ -49,10 +47,6 @@ final class RefreshRealtimeOnBankChangedTest extends TestCase
                 'ACME',
                 self::CREATED_AT,
                 self::UPDATED_AT,
-                'logo-media-id',
-                'logo-content-hash',
-                'stored-object-content-hash',
-                'image/png',
             ),
         ));
 
@@ -81,10 +75,6 @@ final class RefreshRealtimeOnBankChangedTest extends TestCase
                 'ACME',
                 self::CREATED_AT,
                 self::UPDATED_AT,
-                'logo-media-id',
-                'logo-content-hash',
-                'stored-object-content-hash',
-                'image/png',
             ),
         ));
 

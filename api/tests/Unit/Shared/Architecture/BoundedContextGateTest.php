@@ -257,14 +257,14 @@ final class BoundedContextGateTest extends TestCase
             'Association matcher failed to flag a cross-context ManyToOne.',
         );
 
-        // A ManyToOne toward the shared kernel (Media) is Level 3 — allowed.
+        // A ManyToOne toward the shared kernel is Level 3 — allowed.
         $sharedSource = <<<'PHP'
             <?php
             namespace Erpify\Backoffice\Bank\Domain\Entity;
-            use Erpify\Shared\Media\Domain\Entity\Media;
+            use Erpify\Shared\Attachment\Domain\Entity\Attachment;
             final class Bank {
-                #[ORM\ManyToOne(targetEntity: Media::class)]
-                private ?Media $logo = null;
+                #[ORM\ManyToOne(targetEntity: Attachment::class)]
+                private ?Attachment $attachment = null;
             }
             PHP;
 

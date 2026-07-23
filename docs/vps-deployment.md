@@ -163,33 +163,28 @@ Recreate the stack so the database picks up the new address
 
 ## Backups
 
-The prod stack has two stateful volumes — `database_data` (PostgreSQL) and
-`storage_data` (Flysystem uploads) — and they form **one logical
-dataset**: a DB row references its `objects/{hash}` file, so they are backed up
-and restored **as a pair from the same point in time** (rationale:
-[`object-storage.md`](../docs-info/object-storage.md)).
+`database_data` (PostgreSQL) holds every byte of **application** state, so one dump
+is a complete recovery point for the data. The stack's other volumes carry no
+application data: `caddy_data` holds Caddy's ACME account key and issued
+certificates, and `caddy_config` its autosave. Losing them costs a certificate
+re-issue on the next boot, not data — but on a real domain that re-issue counts
+against the Let's Encrypt duplicate-certificate rate limit, so snapshot
+`caddy_data` too before rebuilding a host.
 
 ### Taking a backup — `make backup.prod`
 
-`scripts/deploy/backup-prod.sh` produces two artifacts sharing one timestamp in
+`scripts/deploy/backup-prod.sh` produces one timestamped artifact in
 `BACKUP_DIR` (default `/var/backups/erpify`):
 
-1. `db-<stamp>.dump` — `pg_dump -Fc` exec'd inside the running `database`
-   container (MVCC-consistent, no downtime, no published port needed).
-2. `objects-<stamp>.tar.gz` — archive of the object-storage volume.
-
-The order is load-bearing and the script enforces it: **DB first, objects
-after**. Writers persist the object file *before* the referencing row, so every
-hash referenced in the dump already exists in the later archive. The only
-residual window is the orphan cleaner deleting a file between the two steps —
-run the backup in a low-traffic window (or stop `messenger_worker` during it)
-if you need to exclude even that.
+- `db-<stamp>.dump` — `pg_dump -Fc` exec'd inside the running `database`
+  container (MVCC-consistent, no downtime, no published port needed), then
+  proven restorable by a full `pg_restore` read-back before the run reports
+  success.
 
 Knobs (env vars): `BACKUP_DIR`, `RETENTION_DAYS` (default 14, local pruning),
 `BACKUP_MIN_FREE_MB` (default 500, abort if the target FS is below it),
-`STORAGE_VOLUME` (defaults to `<project>_storage_data` — `make
-docker.info` prints `<project>`, and `docker volume ls` confirms the full
-name), `BACKUP_SYNC_CMD` (offsite hook, below).
+`COMPOSE_PROJECT_NAME` (default `erpify` — `make docker.info` prints the
+resolved value), `BACKUP_SYNC_CMD` (offsite hook, below).
 
 ### Schedule it (cron)
 
@@ -214,20 +209,19 @@ matter (disk loss, VPS compromise, fat-fingered `rm`). Sync `BACKUP_DIR` to an
 independent location via `BACKUP_SYNC_CMD` — e.g. `rclone sync` to S3/B2/Drive.
 **Dumps contain business data (PII): encrypt the offsite copy** — use an
 `rclone` `crypt` remote, or switch the whole pipeline to `restic`/`borg`
-(encrypted + deduplicating; content-addressed files dedupe almost perfectly
-across days).
+(encrypted + deduplicating).
 
 The backup strategy assumes local storage is the primary retention layer.
 Offsite sync failures do not block local retention management — retention prunes
 before the sync hook runs, by design.
 
-### Restore — `make restore.prod` (reverse order: objects first, DB after, same stamp)
+### Restore — `make restore.prod`
 
-Restore is destructive: it wipes the object-storage volume and runs
-`pg_restore` over the live database. `make restore.prod` wraps the procedure
-with up-front artifact verification (PGDMP header + a full `pg_restore` read-back
-of the whole dump + `tar -tzf`, so a corrupt or truncated backup is caught
-*before* any live data is touched), a typed confirmation, an **atomic DB restore**
+Restore is destructive: it runs `pg_restore` over the live database.
+`make restore.prod` wraps the procedure with up-front artifact verification
+(PGDMP header + a full `pg_restore` read-back of the whole dump, so a corrupt or
+truncated backup is caught *before* any live data is touched), a typed
+confirmation, an **atomic DB restore**
 (`--single-transaction` — any error rolls back rather than leaving a half-restored
 database), and an automatic **writer restart on any failure** so a botched
 restore never leaves the app headless. Use it first for the **restore drill and
@@ -240,17 +234,16 @@ First find the stamp to restore (newest last):
 ls -1 /var/backups/erpify/db-*.dump   # each db-<stamp>.dump → a <stamp> you can pass
 ```
 
-Then restore that pair:
+Then restore that stamp:
 
 ```bash
 STAMP=<stamp> make restore.prod                    # asks for confirmation
 RESTORE_YES=1 STAMP=<stamp> make restore.prod      # drills/CI: skip the prompt (NON-prod only)
 ```
 
-Knobs mirror the backup: `BACKUP_DIR`, and `COMPOSE_PROJECT_NAME` /
-`STORAGE_VOLUME` must match what the backup used. If the local pair was
-already pruned by retention, pull `db-<stamp>.dump` + `objects-<stamp>.tar.gz`
-back from the offsite copy into `BACKUP_DIR` first.
+Knobs mirror the backup: `BACKUP_DIR`, and `COMPOSE_PROJECT_NAME` must match
+what the backup used. If the local dump was already pruned by retention, pull
+`db-<stamp>.dump` back from the offsite copy into `BACKUP_DIR` first.
 
 **Production guard.** Unless `SERVER_NAME` in the env file is explicitly local
 (`*.local`/`*.localhost`/`localhost`/`127.0.0.1`/`::1`) the run is treated as
@@ -264,50 +257,40 @@ can never be scripted, and you cannot fat-finger the wrong host or recovery
 point. The checklist it enforces:
 
 1. A fresh backup of the **current** state exists (`make backup.prod`) — you are about to overwrite live data.
-2. `<stamp>` is the intended recovery point (the script prints both artifact sizes to confirm).
+2. `<stamp>` is the intended recovery point (the script prints the artifact size to confirm).
 3. A maintenance window is in effect — `php`/`messenger_worker` are stopped (downtime).
 4. The offsite copy of `<stamp>` is intact, in case the restore goes wrong.
-5. You are on the correct host (`COMPOSE_PROJECT_NAME` / `STORAGE_VOLUME`).
+5. You are on the correct host (`COMPOSE_PROJECT_NAME`).
 
-Under the hood (the raw commands, e.g. for a host without this checkout — substitute
-`<project>_storage_data` if the backup ran under a different project, or
-`docker run -v` silently **creates** an empty volume and you restore into the wrong place):
+Under the hood (the raw commands, e.g. for a host without this checkout —
+substitute the project name the backup ran under for `erpify`):
 
 ```bash
-# 0) stop writers FIRST — they must not race the destructive wipe below
+# 0) stop writers FIRST — they must not race the restore below
 docker compose -p erpify --env-file .env.prod.local -f compose.yaml -f compose.prod.yaml \
   stop php messenger_worker
 
-# 1) objects — wipe the volume (incl. dotfiles) and unpack the archive
-docker run --rm -v erpify_storage_data:/dst -v /var/backups/erpify:/src:ro \
-  alpine sh -c 'find /dst -mindepth 1 -delete && tar xzf /src/objects-<stamp>.tar.gz -C /dst'
-
-# 2) database — restore the SAME stamp's dump (--single-transaction: wrap the
-#    whole restore in one BEGIN/COMMIT so an error rolls back to the pre-restore
-#    state instead of leaving a half-restored DB that only looks intact)
+# 1) database — restore the stamp's dump (--single-transaction: wrap the whole
+#    restore in one BEGIN/COMMIT so an error rolls back to the pre-restore state
+#    instead of leaving a half-restored DB that only looks intact)
 docker compose -p erpify --env-file .env.prod.local -f compose.yaml -f compose.prod.yaml \
   exec -T database sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --single-transaction' \
   < /var/backups/erpify/db-<stamp>.dump
 
-# 3) bring the writers back up
+# 2) bring the writers back up
 docker compose -p erpify --env-file .env.prod.local -f compose.yaml -f compose.prod.yaml \
   start php messenger_worker
 ```
 
-`rm -rf /dst/*` would leave the previous dataset's dotfiles behind (the archive
-captures them via `tar -C /src .`) — `find /dst -mindepth 1 -delete` gives a
-truly clean target.
-
-Unlike `make restore.prod`, this raw sequence has no safety net: if step 1 or 2
-fails, the writers stay stopped — rerun step 3 yourself to bring them back.
+Unlike `make restore.prod`, this raw sequence has no safety net: if step 1
+fails, the writers stay stopped — rerun step 2 yourself to bring them back.
 
 ### Restore drill (quarterly)
 
-A backup is only proven by a restore. Once a quarter, restore the latest pair
+A backup is only proven by a restore. Once a quarter, restore the latest dump
 into a scratch stack (a worktree stack works) with
-`STAMP=<stamp> make restore.prod` and run the object-storage smoke test: create
-a bank with a `stored_object` upload, then `GET /api/v1/stored-objects/{hash}` →
-expect 200 with `Cache-Control: … immutable`.
+`STAMP=<stamp> make restore.prod` and confirm a record seeded before the backup
+comes back.
 
 #### End-to-end smoke checklist
 
@@ -315,15 +298,15 @@ Run the whole loop on the `erpify.local` rehearsal (or a scratch worktree stack)
 — never first on real production:
 
 - [ ] **Stand up the prod profile** — `make deploy.local` (preflight → up → migrate → smoke). Confirm the stack is healthy.
-- [ ] **Seed an object** — create a bank with a `stored_object` upload; note its `{hash}`. `GET /api/v1/stored-objects/{hash}` → 200, `Cache-Control: … immutable`.
-- [ ] **Back up** — `make backup.prod`. Confirm both `db-<stamp>.dump` and `objects-<stamp>.tar.gz` exist (`ls -1 /var/backups/erpify/`), sharing one `<stamp>`.
-- [ ] **Mutate after the backup** — delete that bank (and ideally add a different one), so a successful restore is *observable* (the deleted object reappears, the post-backup one is gone).
-- [ ] **Restore** — `RESTORE_YES=1 STAMP=<stamp> make restore.prod`. Watch the up-front verification pass (PGDMP + full `pg_restore` read-back + `tar -tzf`).
-- [ ] **Verify the recovery point** — `GET /api/v1/stored-objects/{hash}` for the seeded object → 200, `Cache-Control: … immutable`; the bank is back; the post-backup mutation is gone.
+- [ ] **Seed a record** — `POST /api/v1/backoffice/banks` with a JSON body; note the returned `{id}`. `GET /api/v1/backoffice/banks/{id}` → 200.
+- [ ] **Back up** — `make backup.prod`. Confirm `db-<stamp>.dump` exists (`ls -1 /var/backups/erpify/`).
+- [ ] **Mutate after the backup** — delete that bank (and ideally add a different one), so a successful restore is *observable* (the deleted bank reappears, the post-backup one is gone).
+- [ ] **Restore** — `RESTORE_YES=1 STAMP=<stamp> make restore.prod`. Watch the up-front verification pass (PGDMP + full `pg_restore` read-back).
+- [ ] **Verify the recovery point** — `GET /api/v1/backoffice/banks/{id}` for the seeded bank → 200; the post-backup mutation is gone.
 - [ ] **Confirm writers are up** — `docker compose … ps` shows `php`/`messenger_worker` running again.
 - [ ] **(prod dry-run)** Optionally rehearse the production path: with a real `SERVER_NAME`, confirm the run refuses without `ALLOW_PROD_RESTORE=1` and demands the typed `restore <project> <stamp>` phrase.
 
-Only after this loop passes is the backup/restore pair trusted for real
+Only after this loop passes is the backup/restore procedure trusted for real
 production.
 
 ---

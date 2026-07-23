@@ -11,26 +11,16 @@ use Erpify\Backoffice\Bank\Application\Resource\BankDetailResource;
 use Erpify\Backoffice\Bank\Application\Resource\BankListResource;
 use Erpify\Backoffice\Bank\Application\Resource\BankUpdateResource;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
-use Erpify\Shared\Media\Application\Port\MediaPublicUrlGenerator;
 use Erpify\Shared\Search\Domain\Page;
-use Erpify\Shared\Storage\Application\Port\StoredObjectPublicUrlGenerator;
 use LogicException;
 
 /**
  * Maps a {@see Bank} aggregate (and its read-side account count, when present) to the per-view
  * resource DTO that is actually serialized. This is the single place that knows the wire shape of
- * each bank view, including the logo / stored-object URL synthesis: it injects the same public-URL
- * PORTS the old serializer normalizer used (never the concrete content-hash generator), so the
- * route-name knowledge stays behind the port. The Bank entity therefore never reaches the serializer.
+ * each bank view, so the Bank entity never reaches the serializer.
  */
 final readonly class BankResourceMapper
 {
-    public function __construct(
-        private MediaPublicUrlGenerator $mediaPublicUrlGenerator,
-        private StoredObjectPublicUrlGenerator $storedObjectPublicUrlGenerator,
-    ) {
-    }
-
     public function toListResource(BankWithAccountCount $bank): BankListResource
     {
         $entity = $bank->bank;
@@ -55,8 +45,6 @@ final readonly class BankResourceMapper
             $entity->getShortName(),
             $entity->getCreatedAt()->format(DateTimeInterface::ATOM),
             $entity->getUpdatedAt()->format(DateTimeInterface::ATOM),
-            $this->logoUrl($entity),
-            $this->storedObjectUrl($entity),
             $bank->accountCount,
         );
     }
@@ -69,8 +57,6 @@ final readonly class BankResourceMapper
             $bank->getShortName(),
             $bank->getCreatedAt()->format(DateTimeInterface::ATOM),
             $bank->getUpdatedAt()->format(DateTimeInterface::ATOM),
-            $this->logoUrl($bank),
-            $this->storedObjectUrl($bank),
         );
     }
 
@@ -100,35 +86,6 @@ final readonly class BankResourceMapper
             $page->nextCursor,
             $page->prevCursor,
         );
-    }
-
-    private function logoUrl(Bank $bank): ?string
-    {
-        $contentHash = $bank->getLogo()?->getContentHash();
-
-        return $this->isResolvableContentHash($contentHash)
-            ? $this->mediaPublicUrlGenerator->urlForContentHash($contentHash)
-            : null;
-    }
-
-    private function storedObjectUrl(Bank $bank): ?string
-    {
-        $contentHash = $bank->getStoredObject()?->contentHash;
-
-        return $this->isResolvableContentHash($contentHash)
-            ? $this->storedObjectPublicUrlGenerator->urlForContentHash($contentHash)
-            : null;
-    }
-
-    /**
-     * A content hash yields a public URL only when present and non-empty: an empty hash would
-     * synthesize a malformed, hostname-only URL, so it is treated the same as a missing one.
-     *
-     * @phpstan-assert-if-true non-empty-string $contentHash
-     */
-    private function isResolvableContentHash(?string $contentHash): bool
-    {
-        return null !== $contentHash && '' !== $contentHash;
     }
 
     private function requireId(Bank $bank): string

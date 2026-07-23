@@ -84,8 +84,6 @@ final class AuditPolicyTest extends TestCase
         yield 'frontoffice health' => ['frontoffice_health', 'GET'];
         yield 'bank realtime authorize' => ['backoffice_bank_realtime_authorize', 'GET'];
         yield 'dev hot reload' => ['frontoffice_dev_frankenphp_hot_reload', 'GET'];
-        yield 'media asset' => ['shared_media_get', 'GET'];
-        yield 'stored object' => ['shared_stored_object_get', 'GET'];
         yield 'bank count helper' => ['backoffice_bank_count', 'GET'];
     }
 

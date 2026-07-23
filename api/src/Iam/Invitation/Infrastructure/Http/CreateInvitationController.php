@@ -40,7 +40,7 @@ final readonly class CreateInvitationController
     {
     }
 
-    public function __invoke(#[StrictRequestPayload] InviteUserRequest $request): Response
+    public function __invoke(#[StrictRequestPayload(acceptFormat: ['json'])] InviteUserRequest $request): Response
     {
         $this->sendInvitation->invite($request->email, ...$this->rolesFrom($request));
 

@@ -16,7 +16,7 @@
 #      PSR interop contracts, symfony/uid, and the passive-metadata attribute
 #      namespaces (#[ORM\Mapping], #[Assert], #[Groups]); every framework with a
 #      runtime (Doctrine DBAL/ORM/Persistence, Symfony beyond uid, Monolog, API
-#      Platform, Guzzle, Flysystem, Twig, Sentry, Intervention Image) is confined
+#      Platform, Guzzle, Twig, Sentry) is confined
 #      to Infrastructure, each permitted only in the layers that use it. Inner-layer
 #      framework usage that predates this gate is grandfathered in the baseline
 #      (deptrac.baseline.yaml) — a ratchet, not a blessing.
@@ -181,12 +181,8 @@ deptrac:
           collectors: [{ type: classLike, value: ^ApiPlatform\\.* }]
         - name: Vendor.Guzzle
           collectors: [{ type: classLike, value: ^GuzzleHttp\\.* }]
-        - name: Vendor.Flysystem
-          collectors: [{ type: classLike, value: ^League\\Flysystem\\.* }]
         - name: Vendor.Twig
           collectors: [{ type: classLike, value: ^Twig\\.* }]
-        - name: Vendor.InterventionImage
-          collectors: [{ type: classLike, value: ^Intervention\\Image\\.* }]
         - name: Vendor.Sentry
           collectors: [{ type: classLike, value: ^Sentry\\.* }]
 
@@ -295,7 +291,6 @@ deptrac:
             - Vendor.Monolog
             - Vendor.ApiPlatform
             - Vendor.Guzzle
-            - Vendor.Flysystem
         Backoffice.Audit.Infrastructure:
             - Backoffice.Audit.Domain
             - Backoffice.Audit.Application
@@ -310,7 +305,6 @@ deptrac:
             - Vendor.Monolog
             - Vendor.ApiPlatform
             - Vendor.Guzzle
-            - Vendor.Flysystem
         Backoffice.BankAccount.Infrastructure:
             - Backoffice.BankAccount.Domain
             - Backoffice.BankAccount.Application
@@ -325,7 +319,6 @@ deptrac:
             - Vendor.Monolog
             - Vendor.ApiPlatform
             - Vendor.Guzzle
-            - Vendor.Flysystem
         Backoffice.Health.Infrastructure:
             - Backoffice.Health.Domain
             - Backoffice.Health.Application
@@ -340,7 +333,6 @@ deptrac:
             - Vendor.Monolog
             - Vendor.ApiPlatform
             - Vendor.Guzzle
-            - Vendor.Flysystem
         Iam.Identity.Infrastructure:
             - Iam.Identity.Domain
             - Iam.Identity.Application
@@ -355,7 +347,6 @@ deptrac:
             - Vendor.Monolog
             - Vendor.ApiPlatform
             - Vendor.Guzzle
-            - Vendor.Flysystem
         Iam.Invitation.Infrastructure:
             - Iam.Invitation.Domain
             - Iam.Invitation.Application
@@ -370,7 +361,6 @@ deptrac:
             - Vendor.Monolog
             - Vendor.ApiPlatform
             - Vendor.Guzzle
-            - Vendor.Flysystem
         Iam.Session.Infrastructure:
             - Iam.Session.Domain
             - Iam.Session.Application
@@ -385,7 +375,6 @@ deptrac:
             - Vendor.Monolog
             - Vendor.ApiPlatform
             - Vendor.Guzzle
-            - Vendor.Flysystem
         Organization.Organization.Infrastructure:
             - Organization.Organization.Domain
             - Organization.Organization.Application
@@ -400,7 +389,6 @@ deptrac:
             - Vendor.Monolog
             - Vendor.ApiPlatform
             - Vendor.Guzzle
-            - Vendor.Flysystem
         Organization.Membership.Infrastructure:
             - Organization.Membership.Domain
             - Organization.Membership.Application
@@ -415,7 +403,6 @@ deptrac:
             - Vendor.Monolog
             - Vendor.ApiPlatform
             - Vendor.Guzzle
-            - Vendor.Flysystem
         Frontoffice.Dev.Infrastructure:
             - Shared.Domain
             - Shared.Application
@@ -428,7 +415,6 @@ deptrac:
             - Vendor.Monolog
             - Vendor.ApiPlatform
             - Vendor.Guzzle
-            - Vendor.Flysystem
             - Vendor.Twig
         Frontoffice.Health.Infrastructure:
             - Shared.Domain
@@ -442,7 +428,6 @@ deptrac:
             - Vendor.Monolog
             - Vendor.ApiPlatform
             - Vendor.Guzzle
-            - Vendor.Flysystem
         Shared.Infrastructure:
             - Shared.Domain
             - Shared.Application
@@ -454,8 +439,6 @@ deptrac:
             - Vendor.Monolog
             - Vendor.ApiPlatform
             - Vendor.Guzzle
-            - Vendor.Flysystem
-            - Vendor.InterventionImage
             - Vendor.Sentry
 
     # Published cross-context seams — the exact (importer => imported) pairs blessed

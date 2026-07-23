@@ -18,15 +18,11 @@ final readonly class BankSnapshot
         public string $shortName,
         public string $createdAt,
         public string $updatedAt,
-        public ?string $logoMediaId = null,
-        public ?string $logoContentHash = null,
-        public ?string $storedObjectContentHash = null,
-        public ?string $storedObjectMimeType = null,
     ) {
     }
 
     /**
-     * @return array<string, string|null>
+     * @return array<string, string>
      */
     public function toPrimitives(): array
     {
@@ -35,10 +31,6 @@ final readonly class BankSnapshot
             'shortName' => $this->shortName,
             'createdAt' => $this->createdAt,
             'updatedAt' => $this->updatedAt,
-            'logoMediaId' => $this->logoMediaId,
-            'logoContentHash' => $this->logoContentHash,
-            'storedObjectContentHash' => $this->storedObjectContentHash,
-            'storedObjectMimeType' => $this->storedObjectMimeType,
         ];
     }
 
@@ -52,10 +44,6 @@ final readonly class BankSnapshot
             self::stringField($body, 'shortName'),
             self::stringField($body, 'createdAt'),
             self::stringField($body, 'updatedAt'),
-            self::nullableStringField($body, 'logoMediaId'),
-            self::nullableStringField($body, 'logoContentHash'),
-            self::nullableStringField($body, 'storedObjectContentHash'),
-            self::nullableStringField($body, 'storedObjectMimeType'),
         );
     }
 
@@ -67,15 +55,5 @@ final readonly class BankSnapshot
         $value = $body[$key] ?? null;
 
         return \is_string($value) ? $value : '';
-    }
-
-    /**
-     * @param array<string, mixed> $body
-     */
-    private static function nullableStringField(array $body, string $key): ?string
-    {
-        $value = $body[$key] ?? null;
-
-        return \is_string($value) ? $value : null;
     }
 }

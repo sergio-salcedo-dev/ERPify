@@ -32,13 +32,12 @@ Domain entities, aggregates, and mapped value objects (`#[ORM\Embeddable]`) MAY 
 **persistence and validation metadata**: `#[ORM\…]` mapping and `#[Assert\…]` constraints (including
 `UniqueEntity` and `#[Assert\Callback]` hooks). Rationale: one source of truth for persistence
 shape and invariants, enforced via the shared `Validator::ensure($entity)` right before save;
-`UniqueEntity` inherently needs the database. An embeddable keeps a repeated cluster of columns (e.g. an
-image's key + metadata) as one inline value object reused across aggregates under a per-owner
-`columnPrefix`, instead of duplicating the columns by hand. The prohibition stays absolute for
-**behavioral** framework code in `Domain/`: no `Request`/`Response`, no `EntityManagerInterface`, no
-`HttpException`, no Messenger envelopes, no service or HTTP calls. Examples:
-`api/src/Backoffice/Bank/Domain/Entity/Bank.php` (entity),
-`api/src/Shared/Storage/Domain/StoredObject.php` (embeddable value object).
+`UniqueEntity` inherently needs the database. An embeddable keeps a repeated cluster of columns (a money
+amount and its currency, the parts of a postal address) as one inline value object reused across aggregates
+under a per-owner `columnPrefix`, instead of duplicating the columns by hand. The prohibition stays absolute
+for **behavioral** framework code in `Domain/`: no `Request`/`Response`, no `EntityManagerInterface`, no
+`HttpException`, no Messenger envelopes, no service or HTTP calls. Example:
+`api/src/Backoffice/Bank/Domain/Entity/Bank.php` (entity).
 
 **Serializer `#[Groups]` are NOT blessed metadata — the entity is never the HTTP wire contract.** Each
 exposed view is served from a dedicated **per-view Resource DTO** (`Application/Resource/<Entity><View>Resource`,

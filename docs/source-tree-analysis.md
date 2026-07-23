@@ -11,7 +11,7 @@ ERPify/
 │   │   │   ├── Bank/               # Bank bounded context
 │   │   │   │   ├── Application/    # Use cases, DTOs (Application/Http/)
 │   │   │   │   ├── Domain/         # Entity, Event, Exception, Repository (framework-free)
-│   │   │   │   └── Infrastructure/ # Controller, Messenger (event subscribers `<Effect>On<Event>`, see docs/rules/cqrs-naming.md), Persistence, Request, Serializer, Storage
+│   │   │   │   └── Infrastructure/ # Controller, Http, Messenger (event subscribers `<Effect>On<Event>`, see docs/rules/cqrs-naming.md), Persistence, Projection, Security
 │   │   │   ├── BankAccount/        # BankAccount context — references Bank by id only (no object graph crosses the boundary; see docs/adr/bank-bankaccount-modeling.md)
 │   │   │   │   ├── Application/    # Use cases, DTOs
 │   │   │   │   ├── Domain/         # Entity, Event, Exception, Repository (framework-free)
@@ -40,17 +40,15 @@ ERPify/
 │   │       ├── Event/              # event backbone (Domain/Application/Infrastructure): DomainEvent + EventBus, raw-DBAL event_store, mapper/serializer/upcaster, projection runner; see docs/adr/event-store-and-projections.md
 │   │       ├── Audit/              # operational/actor audit axis (Domain/Application/Infrastructure): AuditLogger seam + AuditPolicy, raw-DBAL audit_log, hybrid capture (Infrastructure/Http: kernel.terminate access-log → activity, AccessDenied → security); see docs/adr/audit-activity-log.md
 │   │       ├── Mailer/             # notification mail: port (Application) + plain-text adapter (Infrastructure)
-│   │       ├── Media/              # in-DB media (Intervention Image) — full DDD layering
 │   │       ├── Monitoring/         # Sentry before_send adapters (event scrubbing/filtering)
 │   │       ├── Search/             # filters + keyset engine + cursor envelope (Domain/Application/Infrastructure)
-│   │       ├── Storage/            # Flysystem object storage (Domain/Application/Infrastructure)
 │   │       └── Validation/         # Validator helper (Application) + EnumType constraint (Infrastructure)
 │   ├── config/
 │   │   ├── bundles.php
 │   │   ├── services.yaml           # DI autoconfigure defaults
 │   │   ├── services_test.yaml      # Test-only service overrides (YAML, not PHP)
 │   │   ├── routes.yaml             # Attribute routing entry
-│   │   └── packages/               # Doctrine, Doctrine migrations, Messenger, Mercure, Mailer, Flysystem, Media, Nelmio CORS (PHP), Validator, Property Info, Cache, Framework, Routing, Monolog, Hautelook Alice
+│   │   └── packages/               # Doctrine, Doctrine migrations, Messenger, Mercure, Mailer, Nelmio CORS (PHP), Validator, Property Info, Cache, Framework, Routing, Monolog, Hautelook Alice
 │   ├── migrations/
 │   │   └── 2026/                   # Doctrine migrations (timestamped per year)
 │   ├── tests/                      # PHPUnit (mirrors src/) + Functional + Behat context
@@ -110,7 +108,6 @@ ERPify/
 │   ├── integration-architecture.md
 │   ├── bounded-contexts.md
 │   ├── api-error-contract.md       # RFC 9457 Problem Details contract
-│   ├── media-document-system.md
 │   ├── background-jobs-and-scheduling.md
 │   ├── source-tree-analysis.md
 │   ├── development-guide-api.md
@@ -129,7 +126,7 @@ ERPify/
 ├── _bmad/                          # BMad module config
 ├── _bmad-output/                   # BMad outputs (planning + implementation artifacts)
 ├── design-artifacts/               # WDS design pipeline (product brief → trigger map → UX scenarios → design system → development)
-├── docs-info/                      # Supplementary topic notes (mercure, object-storage, media-upload, production-deployment, …)
+├── docs-info/                      # Supplementary topic notes (mercure, local-fullstack-traffic, production-deployment, …)
 ├── binaries/ scripts/              # Local scripts/tools
 ├── make/                           # Make modules (ci, codeql, composer, config, db, deploy, docker, git, help, php, php-quality, php-test, pwa, super-lint, symfony, worktree, xdebug)
 ├── Makefile                        # Canonical entrypoint — includes make/*.mk

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Backoffice\Bank\Domain\Entity\Mother;
 
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
-use Erpify\Shared\Storage\Domain\StoredObject;
 
 final class BankMother
 {
@@ -15,9 +14,8 @@ final class BankMother
         string $id = self::DEFAULT_ID,
         string $name = 'Acme Savings',
         string $shortName = 'ACME',
-        ?StoredObject $storedObject = null,
     ): Bank {
-        return Bank::create($id, $name, $shortName, null, $storedObject);
+        return Bank::create($id, $name, $shortName);
     }
 
     public static function drained(
