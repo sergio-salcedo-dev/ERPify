@@ -232,6 +232,11 @@ cada una con semántica definida y disparador propio; cualquier otra escritura e
   aparezca un segundo disparador (endpoint HTTP, Scheduler, API) o se exija garantía dura, envolver
   `anonymise` + self-audit en un único caso de uso transaccional (`EraseActorAuditTrailUseCase`) con el CLI
   como adaptador fino — el mismo tipo de invariante de transacción que D3 fija para la escritura `security`.
+  **Un segundo *statement* lo dispara igual que un segundo disparador:** si la decisión de #555 hace que
+  `anonymise` ejecute dos `UPDATE`, la ventana deja de ser «borrado sin evidencia» y pasa a ser un borrado
+  *a medias* — actor anonimizado y recurso no — sobre un camino hoy correcto. Enrutar entonces por
+  `TransactionManager`, nunca una transacción DBAL cruda anidada bajo `wrapInTransaction`: no hay
+  `nest_transactions_with_savepoints` configurado, así que anidar degradaría a rollback-only.
 - **`resource_id` no es identidad del sujeto borrado.** El erasure anonimiza al *actor*; `resource_id` no
   se toca. Si un recurso representa **directamente** a una persona física, su borrado GDPR es
   responsabilidad de la política del bounded context dueño del recurso, no de esta política de auditoría.
