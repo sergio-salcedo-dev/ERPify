@@ -122,7 +122,8 @@ worktree.chown: ## Reclaim ownership of root-owned container-written files under
 	dir="$$main/.claude/worktrees"; \
 	if [ ! -d "$$dir" ]; then echo "✓ nothing to do — $$dir does not exist"; exit 0; fi; \
 	echo "→ sudo chown -R $(shell id -un) $$dir"; \
-	sudo chown -R $(shell id -u):$(shell id -g) "$$dir"; \
+	sudo chown -R $(shell id -u):$(shell id -g) "$$dir" \
+		|| { echo "✗ chown failed — sudo could not authenticate (run this from a terminal, not an agent shell)"; exit 1; }; \
 	echo "✓ $$dir now owned by $(shell id -un) — retry 'make worktree.remove NAME=…'"
 
 worktree.remove-all: ## Remove ALL linked worktrees + their stacks/volumes + branches; FORCE=true drops dirty/unmerged (destructive)
