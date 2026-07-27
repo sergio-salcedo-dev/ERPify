@@ -1,6 +1,6 @@
-# ADR — Authorization model boundaries: what will never be a `Role`
+# ADR — Authorization model boundaries: what will never be a `Role`, and who may read the trail
 
-> **Status:** accepted · **Date:** 2026-07-22 · **Scope:** `api/src/Shared/Access`, `api/src/Iam/Identity/Infrastructure/Security`, `api/src/Organization` — and any future platform/tenancy work.
+> **Status:** accepted · **Date:** 2026-07-23 · **Scope:** `api/src/Shared/Access`, `api/src/Iam/Identity/Infrastructure/Security`, `api/src/Backoffice/Audit`, `api/src/Organization` — and any future platform/tenancy work.
 
 ## Context
 
@@ -43,7 +43,7 @@ indistinguishable from a tenant's own, inside the tenant's own compliance record
 
 *Discarded:* Symfony's `switch_user`. It is the wrong primitive precisely because it succeeds — the request
 becomes the impersonated user, so the trail attributes the operator's actions to the customer. That is
-manufactured evidence in a record with a five-year retention floor.
+manufactured evidence in the compliance record.
 
 **Consequence to design before any impersonation code:** `audit_log` attributes one actor
 (`ActorContextFactory` seals it during `onFlush`). Impersonation needs two — the acting platform principal and the
@@ -83,8 +83,97 @@ organization role.
 `Membership` as the role authority, so acting on this decision may reopen that one. That is a reason to record the
 link, not a reason to pre-empt either.
 
+## D3 — `ADMIN` keeps `auditTrail.read`; separation of duties is a revisit trigger, not a default
+
+The `auditTrail.read => [AUDIT_READER, ADMIN]` row in `StaticAuthorizationPolicy::EXPLICIT_GRANTS` stays: an
+organization administrator may read the regulatory trail that records their own actions. This is a product and
+compliance decision, not a mechanism one — the grant is one line of data whichever way it reads — and it is
+recorded here because an *undocumented* default is the audit finding, not the access itself.
+
+**Why the access is kept.** No organizational actor exists today who audits without operating. Withdrawing the
+grant would not produce separation of duties: `users.invite` and `users.changeRoles` are themselves ADMIN-only,
+so the administrator still decides who becomes the auditor. What it *would* produce is a standing operating
+cost — at least one live `AUDIT_READER` per organization — and a bootstrap window in which nobody can read the
+trail at all, because `CreateInitialAdministratorCommand` seeds exactly one identity holding exactly one role.
+That window is incident response, which is when the trail matters most.
+
+**What bounds the risk, stated as it exists.** The grant reaches two read-only routes
+(`AuditTimelineSearchController`, `AuditEventDetailController`); no write, export or delete path sits behind it.
+Every authorized read is written back as its own `AUDIT_TRAIL_READ` entry at `SECURITY` level, synchronously on
+`kernel.response` before the response is sent (`AuditTrailReadAuditListener`), naming the route and — on the
+detail route — the id of the event read. Erasure never deletes trail rows: it rewrites `actor_id` to one stable
+pseudonym across all the subject's rows, redacts `ip`/`user_agent` and raises `actor_erased`, so the sequence of
+actions stays correlatable while the link to the person is severed
+([`regulatory-audit-trail.md`](regulatory-audit-trail.md) D6).
+
+**The retention bound is narrower than the trail as a whole.** The five-year floor covers `change` rows only
+(`AuditRetentionPolicy::COMPLIANCE_RETENTION_FLOOR`). `security` rows — which is what every row named above is:
+`AUDIT_TRAIL_READ`, `USER_ROLES_CHANGED`, `GDPR_SUBJECT_ERASED`, `GDPR_ERASURE_EXECUTED` — carry a privacy
+*ceiling* instead, 365 days by default, and are deleted by the scheduled pruner. So a year after the fact the
+pseudonymised `change` rows survive four more years while the record of who read or who pseudonymised them has
+aged out. That asymmetry is a property of the current retention policy, not of this decision, and it is the
+first thing to re-examine if the trail is ever asked to answer an assessor about access rather than about data.
+
+**What is deliberately not claimed.** The trail is **not tamper-evident**. No hash chain, signature or checksum
+column exists in any migration; append-only is a property of the mutation paths, not a cryptographic guarantee —
+which is precisely what that ADR's D5 files as a revisit trigger rather than as a shipped control. Holding
+`ADMIN` confers no database credentials, so this widens nothing about what the decision costs; it bounds what
+may be asserted to an assessor.
+
+**Revisit trigger.** The policy is revisited if a customer requires contractual separation of duties. Keeping the
+access is not an architectural commitment — no role, entity or boundary encodes it, so the decision can be
+retaken without reopening the model. There is no per-installation configuration for it today, and this ADR does
+not claim one.
+
+*Discarded:* restrict the trail to `AUDIT_READER`. It buys the appearance of separation of duties while the
+administrator still appoints the auditor, and pays for it with the bootstrap window and a role to keep alive per
+organization. It becomes the right answer the moment the trigger above fires — and only then.
+
+*Discarded:* emergency access with a declared reason and an expiry, or making an administrator's read raise the
+record's level or fire an alert. Both are designs rather than rows, and neither is worth building before an
+actor exists who would consume the signal.
+
+**Consequence, closed alongside this decision.** Keeping the trail readable by the role that operates the system
+makes the trail's attribution worth guarding on the write side. `users.erase` is ADMIN-only and pseudonymises the
+subject's whole attribution irreversibly, and its only guards were self-erasure and "keep ≥1 active `ADMIN`" —
+neither of which stops an administrator from erasing a peer. Erasure now refuses any subject still carrying
+`ADMIN`, so the demotion has to happen first, as its own act.
+
+**What that refusal buys today, stated exactly.** An extra authorization step and friction — nothing more. It is
+*not* a traceability control, because **the demotion leaves no attributable record**: `User` deliberately stays
+out of the write-capture CDC (a field-level diff would carry `password_hash` into an append-only store), the
+generic access hook audits only `GET`, and the `event_store` entry for a role change names no actor. So
+promote-act-demote-erase still reads, in `audit_log`, as one unexplained act by the erasing administrator.
+
+Recording the demotion is the obvious completion, and it is **deliberately not done here**. The natural
+implementation — an audit row naming the subject in the resource columns — collides with
+[`audit-activity-log.md`](audit-activity-log.md) D4, which decides that erasure anonymises the *actor* only and
+assigns erasure of a person-denoting resource to the bounded context owning it. Writing that row without settling
+that question first would leave the erased subject's real id beside their own pseudonym in one row, which is the
+reversible crosswalk that ADR's policy exists to prevent. Who owns GDPR erasure over the resource columns is a
+governance decision between contexts, not an implementation detail of this one, so it is taken separately.
+
+**Revisit trigger.** When that ownership question is settled, the demotion gets its audited record and this
+refusal becomes the traceability control it is meant to be. Until then it is procedural, and this ADR says so
+rather than claiming the stronger thing.
+
+It subsumes the ≥1-admin invariant on the erasure path (the last active administrator necessarily carries the
+role), which now binds only on the transitions that can shrink the set.
+
+**Known gap, pre-existing and unchanged:** the *sole* active administrator has no path to erasure at all —
+demotion is refused by the ≥1-admin invariant, self-erasure by its own guard, and no peer exists to erase them.
+Satisfying their right to erasure requires onboarding a second administrator first. This decision neither
+creates nor closes that; naming it here keeps the "demote, then erase" instruction honest.
+
+*Discarded:* dual control — a second administrator approves the erasure. It is the control that actually
+separates the duty, and it needs an approval aggregate with state, expiry and notification; disproportionate
+before an organization exists with two administrators who are not the same person's accounts.
+
+*Discarded:* auditing `User` through the write-capture CDC to record the demotion. It would put `password_hash`
+in the trail, which is why the aggregate opted out in the first place. Whatever records the demotion will be an
+explicit, field-selective row — but only once its erasure ownership is settled.
+
 ## What this ADR does not decide
 
-Whether `Owner` or platform operators are ever built; when multi-tenancy lands; how role authority migrates; and
-whether `ADMIN` should retain `auditTrail.read` (a separation-of-duties question, deliberately left open). Those are
-open questions with their own triggers. This document constrains only the *shape* of the answers.
+Whether `Owner` or platform operators are ever built; when multi-tenancy lands; and how role authority migrates.
+Those are open questions with their own triggers. This document constrains only the *shape* of the answers.

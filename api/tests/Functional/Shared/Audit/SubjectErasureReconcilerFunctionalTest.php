@@ -56,9 +56,9 @@ final class SubjectErasureReconcilerFunctionalTest extends KernelTestCase
     {
         $connection->executeStatement(
             'INSERT INTO audit_log '
-            . '(id, level, action, actor_type, correlation_id, metadata, actor_erased, occurred_on) '
+            . '(id, level, action, actor_type, correlation_id, metadata, actor_erased, resource_erased, occurred_on) '
             . "VALUES (CAST(:id AS UUID), 'security', 'GDPR_SUBJECT_ERASED', 'system', "
-            . 'CAST(:correlationId AS UUID), CAST(:metadata AS JSONB), FALSE, NOW())',
+            . 'CAST(:correlationId AS UUID), CAST(:metadata AS JSONB), FALSE, FALSE, NOW())',
             [
                 'id' => Uuid::generate(),
                 'correlationId' => Uuid::generate(),

@@ -86,6 +86,17 @@ final class DoctrineSessionRepositoryTest extends KernelTestCase
         });
     }
 
+    public function testFindActiveByIdSkipsASessionExpiringOnThisVeryInstant(): void
+    {
+        $this->inRolledBackTransaction(function (): void {
+            $id = Uuid::generate();
+            $this->repository->save($this->activeSession($id, Uuid::generate(), '+0 seconds'));
+            $this->entityManager->clear();
+
+            $this->assertNotInstanceOf(Session::class, $this->repository->findActiveById(SessionId::fromString($id)));
+        });
+    }
+
     public function testFindByUserIdReturnsOnlyTheUsersActiveSessions(): void
     {
         $this->inRolledBackTransaction(function (): void {

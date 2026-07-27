@@ -13,8 +13,12 @@ use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
  *
  * A {@see Conflict} (409): the request is well-formed and authorized but collides with a state invariant,
  * like `BankInUseException`. Distinct from {@see AccountSuspended} (403, the login wall): this is the guard
- * on the write, not the response to a walled login. The `type` is one across every operation the invariant
- * guards; only the human-readable title names the specific action refused.
+ * on the write, not the response to a walled login.
+ *
+ * Erasure does not raise it. An identity carrying `ADMIN` is refused earlier and more specifically by
+ * {@see AdministratorErasureRequiresDemotion}, and the last active administrator necessarily carries the role,
+ * so this invariant is reached only through the transitions that can shrink the set — the demotion the erasure
+ * refusal sends the caller to, and the status change.
  */
 final class LastActiveAdministratorProtected extends DomainException implements Conflict
 {
@@ -23,15 +27,6 @@ final class LastActiveAdministratorProtected extends DomainException implements 
         return new self(
             type: 'last-active-administrator-protected',
             title: 'Cannot suspend or deactivate the last active administrator of the organization.',
-            context: ['userId' => $userId],
-        );
-    }
-
-    public static function forErasure(string $userId): self
-    {
-        return new self(
-            type: 'last-active-administrator-protected',
-            title: 'Cannot erase the last active administrator of the organization.',
             context: ['userId' => $userId],
         );
     }

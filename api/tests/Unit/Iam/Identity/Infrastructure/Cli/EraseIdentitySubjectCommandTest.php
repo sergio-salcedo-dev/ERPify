@@ -18,6 +18,7 @@ use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FixedActorContextFactory;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditActorAnonymiser;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
+use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditResourceAnonymiser;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Command\Command;
@@ -81,10 +82,11 @@ final class EraseIdentitySubjectCommandTest extends TestCase
         $this->assertStringContainsString('Nothing to erase', $tester->getDisplay());
     }
 
-    public function testErasingTheLastActiveAdministratorFails(): void
+    public function testErasingAnAdministratorFails(): void
     {
         $users = new InMemoryUserRepository(UserMother::create());
-        // The subject is the sole active administrator: the shared guard rejects the erase.
+        // The subject still carries ADMIN: the shared guard rejects the erase until it is demoted. The CLI's
+        // `system` actor cannot trip the self-erasure refusal, so off-request this is the guard that binds.
         $directory = new InMemoryActiveAdministratorDirectory([UserMother::DEFAULT_ID => true]);
         $tester = $this->tester($users, $directory);
 
@@ -122,6 +124,7 @@ final class EraseIdentitySubjectCommandTest extends TestCase
                 new InlineTransactionManager(),
             ),
             new RecordingAuditActorAnonymiser(matchCount: 0),
+            new RecordingAuditResourceAnonymiser(matchCount: 0),
             $directory ?? new InMemoryActiveAdministratorDirectory([self::OTHER_ADMIN_ID => true]),
             new PurgeUserSessions(new InMemorySessionRepository()),
             $audit,

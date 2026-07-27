@@ -9,7 +9,7 @@ use Erpify\Iam\Identity\Application\EraseIdentitySubject;
 use Erpify\Iam\Identity\Application\FulfilIdentityErasure;
 use Erpify\Iam\Identity\Application\FulfilIdentityErasureResult;
 use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
-use Erpify\Iam\Identity\Domain\Exception\LastActiveAdministratorProtected;
+use Erpify\Iam\Identity\Domain\Exception\AdministratorErasureRequiresDemotion;
 use Erpify\Iam\Identity\Domain\Exception\SelfErasureForbidden;
 use Erpify\Iam\Session\Application\PurgeUserSessions;
 use Erpify\Iam\Session\Domain\Entity\Session;
@@ -23,12 +23,13 @@ use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FixedActorContextFactory;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditActorAnonymiser;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
+use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditResourceAnonymiser;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
 /**
- * The GDPR erasure orchestrator chains, as one unit, the "keep ≥1 active ADMIN" guard, the identity erasure,
+ * The GDPR erasure orchestrator chains, as one unit, the administrator refusal, the identity erasure,
  * the audit-trail anonymisation, the session hard-delete and the combined compliance self-audit. These tests
  * drive the collaborators through their in-memory specs and observe the chaining, the order (the self-audit
  * is written only after every mutation succeeds) and the two pre-transaction guards. DB-level atomicity — a
@@ -42,7 +43,7 @@ use RuntimeException;
 #[CoversClass(FulfilIdentityErasure::class)]
 #[CoversClass(FulfilIdentityErasureResult::class)]
 #[CoversClass(SelfErasureForbidden::class)]
-#[CoversClass(LastActiveAdministratorProtected::class)]
+#[CoversClass(AdministratorErasureRequiresDemotion::class)]
 final class FulfilIdentityErasureTest extends TestCase
 {
     private const string ACTING_ADMIN_ID = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a90';
@@ -58,22 +59,38 @@ final class FulfilIdentityErasureTest extends TestCase
         $audit = new RecordingAuditLogger();
         $anonymiser = new RecordingAuditActorAnonymiser(matchCount: 3);
         $sessions = new InMemorySessionRepository($this->sessionFor(UserMother::DEFAULT_ID));
-        $directory = new InMemoryActiveAdministratorDirectory([
-            UserMother::DEFAULT_ID => true,
-            self::ACTING_ADMIN_ID => true,
-        ]);
+        // The subject is not an administrator — the only shape erasure accepts.
+        $directory = new InMemoryActiveAdministratorDirectory([self::ACTING_ADMIN_ID => true]);
+        // Deliberately different from the actor count: the two axes are different row sets, so a summing
+        // implementation would be invisible if both doubles reported the same number.
+        $resourceAnonymiser = new RecordingAuditResourceAnonymiser(matchCount: 2);
 
-        $result = $this->useCase($users, $tokens, $audit, $anonymiser, $sessions, $directory)
-            ->execute(UserMother::DEFAULT_ID)
-        ;
+        $result = $this->useCase(
+            $users,
+            $tokens,
+            $audit,
+            $anonymiser,
+            $sessions,
+            $directory,
+            resourceAnonymiser: $resourceAnonymiser,
+        )->execute(UserMother::DEFAULT_ID);
 
         $this->assertTrue($result->identityErased);
         $this->assertSame(1, $result->resetTokensDeleted);
         $this->assertSame(3, $result->anonymizedAuditRows);
+        $this->assertSame(2, $result->anonymizedResourceRows);
         $this->assertSame(1, $result->sessionsDeleted);
         $this->assertTrue($users->removeCalled);
         $this->assertSame([UserMother::DEFAULT_ID], $anonymiser->anonymisedActorIds);
         $this->assertSame([UserMother::DEFAULT_ID], $sessions->deleteAllCalls);
+
+        // The resource axis is erased under this context's own type, with the ACTOR pass's pseudonym —
+        // minting a second one would split one person into two anonymous identities.
+        $this->assertSame([[
+            'type' => 'User',
+            'id' => UserMother::DEFAULT_ID,
+            'pseudonym' => $anonymiser->pseudonym,
+        ]], $resourceAnonymiser->calls);
 
         // Two security rows in order: the identity erasure's own, then the orchestrator's combined record.
         $this->assertCount(2, $audit->records);
@@ -83,18 +100,50 @@ final class FulfilIdentityErasureTest extends TestCase
         // Counts only — never the subject id beside its pseudonym, which would re-link the anonymised trail.
         $this->assertSame([
             'affected_rows' => 3,
+            'anonymized_resource_rows' => 2,
             'reset_tokens_deleted' => 1,
             'sessions_deleted' => 1,
         ], $audit->records[1]['metadata']);
     }
 
-    public function testTheLastActiveAdministratorCannotBeErasedAndNothingIsTouched(): void
+    public function testResourceRowsAloneStillProduceComplianceEvidence(): void
+    {
+        // Nothing left of the identity — no live user, no tokens, no authored trail rows, no sessions — but
+        // rows still NAME the subject, e.g. an administrator who changed their roles. That is a real
+        // mutation, so it must not commit without its GDPR_ERASURE_EXECUTED evidence.
+        $users = new InMemoryUserRepository();
+        $audit = new RecordingAuditLogger();
+        $anonymiser = new RecordingAuditActorAnonymiser(matchCount: 0);
+        $sessions = new InMemorySessionRepository();
+        $directory = new InMemoryActiveAdministratorDirectory([self::ACTING_ADMIN_ID => true]);
+
+        $result = $this->useCase(
+            $users,
+            new InMemoryPasswordResetTokenRepository(),
+            $audit,
+            $anonymiser,
+            $sessions,
+            $directory,
+            resourceAnonymiser: new RecordingAuditResourceAnonymiser(matchCount: 4),
+        )->execute(UserMother::DEFAULT_ID);
+
+        $this->assertFalse($result->identityErased);
+        $this->assertSame(4, $result->anonymizedResourceRows);
+        $this->assertTrue($result->erasedAnything());
+        $this->assertSame(['GDPR_ERASURE_EXECUTED'], \array_column($audit->records, 'action'));
+    }
+
+    public function testAnAdministratorCannotBeErasedUntilDemotedAndNothingIsTouched(): void
     {
         $users = new InMemoryUserRepository(UserMother::create());
         $audit = new RecordingAuditLogger();
         $anonymiser = new RecordingAuditActorAnonymiser(matchCount: 3);
         $sessions = new InMemorySessionRepository();
-        $directory = new InMemoryActiveAdministratorDirectory([UserMother::DEFAULT_ID => true]);
+        // A peer administrator remains, so the "keep ≥1 active ADMIN" invariant is not what refuses this.
+        $directory = new InMemoryActiveAdministratorDirectory([
+            UserMother::DEFAULT_ID => true,
+            self::ACTING_ADMIN_ID => true,
+        ]);
 
         try {
             $this->useCase(
@@ -105,8 +154,8 @@ final class FulfilIdentityErasureTest extends TestCase
                 $sessions,
                 $directory,
             )->execute(UserMother::DEFAULT_ID);
-            $this->fail('Expected LastActiveAdministratorProtected.');
-        } catch (LastActiveAdministratorProtected) {
+            $this->fail('Expected AdministratorErasureRequiresDemotion.');
+        } catch (AdministratorErasureRequiresDemotion) {
             // rejected inside the transaction, before any erase / anonymise / purge / self-audit
         }
 
@@ -114,6 +163,30 @@ final class FulfilIdentityErasureTest extends TestCase
         $this->assertSame([], $anonymiser->anonymisedActorIds);
         $this->assertSame([], $sessions->deleteAllCalls);
         $this->assertSame([], $audit->records);
+    }
+
+    public function testASuspendedAdministratorIsRefusedToo(): void
+    {
+        $users = new InMemoryUserRepository(UserMother::create());
+        $anonymiser = new RecordingAuditActorAnonymiser(matchCount: 3);
+        $sessions = new InMemorySessionRepository();
+        // Valued `false`: the role is still carried, the backing user is simply no longer ACTIVE. The refusal
+        // is about the role, so a suspended administrator is not a way around the demotion.
+        $directory = new InMemoryActiveAdministratorDirectory([
+            UserMother::DEFAULT_ID => false,
+            self::ACTING_ADMIN_ID => true,
+        ]);
+
+        $this->expectException(AdministratorErasureRequiresDemotion::class);
+
+        $this->useCase(
+            $users,
+            new InMemoryPasswordResetTokenRepository(),
+            new RecordingAuditLogger(),
+            $anonymiser,
+            $sessions,
+            $directory,
+        )->execute(UserMother::DEFAULT_ID);
     }
 
     public function testAnActorCannotEraseTheirOwnIdentity(): void
@@ -141,7 +214,7 @@ final class FulfilIdentityErasureTest extends TestCase
         }
 
         $this->assertFalse($users->removeCalled);
-        $this->assertSame([], $directory->askedWithout);
+        $this->assertSame([], $directory->askedWhetherAdministrator);
         $this->assertSame([], $anonymiser->anonymisedActorIds);
         $this->assertSame([], $sessions->deleteAllCalls);
     }
@@ -176,7 +249,7 @@ final class FulfilIdentityErasureTest extends TestCase
         }
 
         $this->assertFalse($users->removeCalled);
-        $this->assertSame([], $directory->askedWithout);
+        $this->assertSame([], $directory->askedWhetherAdministrator);
         $this->assertSame([], $anonymiser->anonymisedActorIds);
         $this->assertSame([], $sessions->deleteAllCalls);
     }
@@ -230,10 +303,7 @@ final class FulfilIdentityErasureTest extends TestCase
         $sessions = new InMemorySessionRepository();
         $sessions->failOnDelete = true;
 
-        $directory = new InMemoryActiveAdministratorDirectory([
-            UserMother::DEFAULT_ID => true,
-            self::ACTING_ADMIN_ID => true,
-        ]);
+        $directory = new InMemoryActiveAdministratorDirectory([self::ACTING_ADMIN_ID => true]);
 
         try {
             $this->useCase(
@@ -263,10 +333,12 @@ final class FulfilIdentityErasureTest extends TestCase
         InMemorySessionRepository $sessions,
         InMemoryActiveAdministratorDirectory $directory,
         ?ActorContext $actor = null,
+        ?RecordingAuditResourceAnonymiser $resourceAnonymiser = null,
     ): FulfilIdentityErasure {
         return new FulfilIdentityErasure(
             new EraseIdentitySubject($users, $tokens, $audit, new InlineTransactionManager()),
             $anonymiser,
+            $resourceAnonymiser ?? new RecordingAuditResourceAnonymiser(matchCount: 0),
             $directory,
             new PurgeUserSessions($sessions),
             $audit,
@@ -290,7 +362,8 @@ final class FulfilIdentityErasureTest extends TestCase
             self::ORGANIZATION_ID,
             'Test client',
             '127.0.0.1',
-            new DateTimeImmutable('2026-07-22T13:00:00+00:00'),
+            // Deliberately lapsed: erasure must reach the subject's expired rows, not only the admissible ones.
+            new DateTimeImmutable('2020-01-01T00:00:00+00:00'),
         );
         $session->pullDomainEvents();
 

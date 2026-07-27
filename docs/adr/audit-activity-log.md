@@ -232,9 +232,38 @@ cada una con semántica definida y disparador propio; cualquier otra escritura e
   aparezca un segundo disparador (endpoint HTTP, Scheduler, API) o se exija garantía dura, envolver
   `anonymise` + self-audit en un único caso de uso transaccional (`EraseActorAuditTrailUseCase`) con el CLI
   como adaptador fino — el mismo tipo de invariante de transacción que D3 fija para la escritura `security`.
+  **Un segundo *statement* lo dispara igual que un segundo disparador:** si la decisión de #555 hace que
+  `anonymise` ejecute dos `UPDATE`, la ventana deja de ser «borrado sin evidencia» y pasa a ser un borrado
+  *a medias* — actor anonimizado y recurso no — sobre un camino hoy correcto. Enrutar entonces por
+  `TransactionManager`, nunca una transacción DBAL cruda anidada bajo `wrapInTransaction`: no hay
+  `nest_transactions_with_savepoints` configurado, así que anidar degradaría a rollback-only.
 - **`resource_id` no es identidad del sujeto borrado.** El erasure anonimiza al *actor*; `resource_id` no
   se toca. Si un recurso representa **directamente** a una persona física, su borrado GDPR es
   responsabilidad de la política del bounded context dueño del recurso, no de esta política de auditoría.
+  **Consecuencia, de obligada lectura antes de auditar un recurso-persona:** una fila cuyo actor pueda ser
+  *la misma persona* que su recurso queda, tras el borrado, con el seudónimo fresco en `actor_id` y el id
+  real en `resource_id` — un **crosswalk reversible** que re-atribuye todas las demás filas anonimizadas de
+  esa persona, porque `resourceId` es filtro indexado del API de lectura y `ADMIN` tiene `auditTrail.read`.
+  `GDPR_SUBJECT_ERASED` se libra solo porque el auto-borrado está prohibido, así que su actor nunca es el
+  sujeto. Se descubrió al intentar auditar `ChangeUserRoles`, donde el auto-cambio de roles hace
+  `actor_id == resource_id`.
+  **Mecanismo (la asignación se mantiene, no se revierte).** El eje de recurso lo borra el contexto dueño
+  a través de `AuditResourceAnonymiser::anonymise(AuditResource, $pseudonym)`: este módulo aporta el
+  `UPDATE` y **nunca** aprende qué tipos denotan personas — el tipo lo pasa el llamador. `Iam` lo encadena
+  dentro de la transacción que ya posee (`FulfilIdentityErasure`), con **el mismo seudónimo** que el eje de
+  actor, de modo que una persona no se parte en dos identidades anónimas. Puerto separado del de actor a
+  propósito: D15 mantiene ambos borrados como operaciones distintas, así que la interfaz de actor no crece
+  un verbo de recurso y su CLI sigue siendo de un solo statement.
+  **Asimetría de columnas, load-bearing.** El paso de recurso escribe `resource_id` y `resource_erased`, y
+  **no toca** `actor_id`/`ip`/`user_agent`/`actor_erased`: una fila que nombra al sujeto suele haberla
+  escrito otro (un admin actuando sobre él), y redactar eso destruiría la evidencia de un tercero y lo
+  marcaría falsamente como actor borrado.
+  **Que sea del contexto dueño lo vuelve una obligación distribuida**, así que lleva su control detectivo,
+  igual que el crypto-shredding lleva el suyo: `api/.audit-resource-types` clasifica cada `resource_type`
+  como persona o no y el gate `make php.lint.audit-resource` rompe la build ante un tipo sin clasificar o
+  un tipo-persona cuyo caso de uso declarado no cablea el anonimizador;
+  `identity:gdpr:reconcile-subject-references` reporta identidades ya borradas que el rastro siga nombrando
+  por su id real.
 - **Sin payload sensible** en `metadata` (IDs y discriminantes, no cuerpos de entidad), invariante en la
   que se apoya el erasure: por eso **no** redige `metadata`. Trigger de revisita: el día que una acción
   guarde PII ahí, esta política debe crecer un redactor de `metadata`.
