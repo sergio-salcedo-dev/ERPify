@@ -55,6 +55,12 @@ final class EraseActorAuditTrailCommand extends Command
                 <comment>ip</comment>/<comment>user_agent</comment> are redacted. Rows are never deleted —
                 the security trail survives, it just stops being attributable to the person.
 
+                <comment>This is the ACTOR axis only, and it is not a complete GDPR erasure for a person.</comment>
+                Rows that <options=bold>name</> the subject in <comment>resource_id</comment> are untouched
+                here, so running this alone on someone who also appears as a resource leaves their real id
+                beside the fresh pseudonym. Use <info>identity:gdpr:erase-subject</info> for an identity —
+                it erases both axes in one transaction.
+
                   <info>php %command.full_name% <actor-id> --dry-run</info>
                   <info>php %command.full_name% <actor-id></info>
                 HELP)

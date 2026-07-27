@@ -15,8 +15,9 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  * entry minted, never a database value, so `ON CONFLICT (id) DO NOTHING` makes a redelivery of the **same**
  * message a silent no-op — at-least-once delivery never writes a second row nor aborts the caller's
  * transaction. There is deliberately no `UPDATE`/`DELETE` path: the log is immutable here (retention and
- * GDPR erasure are a separate concern). A freshly inserted entry is never erased, so `actor_erased` is
- * written as a constant `FALSE` here; only the GDPR erasure ({@see DbalAuditActorAnonymiser}) flips it.
+ * GDPR erasure are a separate concern). A freshly inserted entry is erased on neither axis, so
+ * `actor_erased` and `resource_erased` are both written as a constant `FALSE` here; only the two GDPR
+ * erasures flip them, each its own ({@see DbalAuditActorAnonymiser}, {@see DbalAuditResourceAnonymiser}).
  *
  * It owns no transaction and does not swallow database failures — the best-effort boundary that keeps an
  * audit failure from sinking a use case lives in the caller.
@@ -35,10 +36,10 @@ final readonly class DbalAuditLogWriter implements AuditLogWriter
         $this->connection->executeStatement(
             'INSERT INTO audit_log '
             . '(id, level, action, actor_type, actor_id, correlation_id, resource_type, resource_id, '
-            . 'metadata, ip, user_agent, actor_erased, occurred_on, encryption_scope_id) '
+            . 'metadata, ip, user_agent, actor_erased, resource_erased, occurred_on, encryption_scope_id) '
             . 'VALUES (CAST(:id AS UUID), :level, :action, :actor_type, CAST(:actor_id AS UUID), '
             . 'CAST(:correlation_id AS UUID), :resource_type, CAST(:resource_id AS UUID), '
-            . 'CAST(:metadata AS JSONB), :ip, :user_agent, FALSE, CAST(:occurred_on AS TIMESTAMPTZ), '
+            . 'CAST(:metadata AS JSONB), :ip, :user_agent, FALSE, FALSE, CAST(:occurred_on AS TIMESTAMPTZ), '
             . ':encryption_scope_id) '
             . 'ON CONFLICT (id) DO NOTHING',
             [

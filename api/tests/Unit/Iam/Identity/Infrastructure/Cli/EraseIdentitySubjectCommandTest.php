@@ -18,6 +18,7 @@ use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FixedActorContextFactory;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditActorAnonymiser;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
+use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditResourceAnonymiser;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Command\Command;
@@ -123,6 +124,7 @@ final class EraseIdentitySubjectCommandTest extends TestCase
                 new InlineTransactionManager(),
             ),
             new RecordingAuditActorAnonymiser(matchCount: 0),
+            new RecordingAuditResourceAnonymiser(matchCount: 0),
             $directory ?? new InMemoryActiveAdministratorDirectory([self::OTHER_ADMIN_ID => true]),
             new PurgeUserSessions(new InMemorySessionRepository()),
             $audit,

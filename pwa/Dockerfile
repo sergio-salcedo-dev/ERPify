@@ -7,7 +7,7 @@
 # Browser traffic: FrankenPHP on php:80/443 reverse_proxies to pwa:3000.
 # https://nextjs.org/docs/app/building-your-application/deploying#docker-image
 
-FROM node@sha256:b46a10d964ad15136ebdf9012142131481caa0697d7a4d4eafe4bbabd818f876 AS node_upstream
+FROM node@sha256:0473e7dc433a1310f436edee02aa79737ec78a4b345433ab0963d4a256f9ad85 AS node_upstream
 
 # Shared dependencies (dev + build)
 FROM node_upstream AS base
