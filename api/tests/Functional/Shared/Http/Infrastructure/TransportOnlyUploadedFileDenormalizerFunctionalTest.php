@@ -6,7 +6,7 @@ namespace Erpify\Tests\Functional\Shared\Http\Infrastructure;
 
 use Erpify\Shared\Http\Infrastructure\TransportOnlyUploadedFileDenormalizer;
 use Erpify\Tests\Functional\Shared\Http\Infrastructure\Fixtures\UploadBearingPayload;
-use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\Serializer\Exception\NotNormalizableValueException;
@@ -30,7 +30,7 @@ use Symfony\Component\Serializer\Normalizer\DenormalizerInterface;
  *
  * @internal
  */
-#[CoversNothing]
+#[CoversClass(TransportOnlyUploadedFileDenormalizer::class)]
 final class TransportOnlyUploadedFileDenormalizerFunctionalTest extends KernelTestCase
 {
     /**
