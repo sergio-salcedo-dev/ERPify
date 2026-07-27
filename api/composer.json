@@ -109,18 +109,12 @@
             "cache:clear":"symfony-cmd",
             "assets:install %PUBLIC_DIR%":"symfony-cmd"
         },
-        "behat-tools-install":[
-            "@composer install --working-dir=tools/behat --no-interaction"
-        ],
         "post-install-cmd":[
             "@auto-scripts"
         ],
         "post-update-cmd":[
             "@auto-scripts"
         ]
-    },
-    "scripts-descriptions":{
-        "behat-tools-install":"Install Behat and Mink into api/tools/behat (separate Composer tree; avoids Symfony 8 vs Behat 3 conflicts)"
     },
     "conflict":{
         "symfony/symfony":"*"
@@ -133,9 +127,11 @@
         }
     },
     "require-dev":{
+        "behat/behat": "^4.0@alpha",
         "dantleech/gherkin-lint": "^0.2.4",
         "deptrac/deptrac": "^4.7.0",
         "doctrine/doctrine-fixtures-bundle": "^4.3.1",
+        "friends-of-behat/symfony-extension": "^2.7",
         "friendsofphp/php-cs-fixer": "^3.95.15",
         "guzzlehttp/psr7": "^2.13.0",
         "hautelook/alice-bundle": "^2.17.3",

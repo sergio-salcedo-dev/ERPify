@@ -3,10 +3,6 @@ parameters:
     paths:
         - ../../src
         - ../../tests
-    scanDirectories:
-        - ../behat/vendor
-    bootstrapFiles:
-        - ../behat/vendor/autoload.php
 
     # Temporary directory for PHPStan cache (speeds up subsequent runs)
     resultCachePath: ../../var/cache/phpstan

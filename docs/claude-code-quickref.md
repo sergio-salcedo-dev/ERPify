@@ -154,7 +154,7 @@ scripts/        Utility scripts
 | Behat contexts                                                               | `api/tests/Behat/`                                                       |
 | Behat features                                                               | `api/features/`                                                          |
 | Performance budgets (opt-in)                                                 | `api/tests/Bench/`                                                       |
-| Isolated tooling Composer installs                                           | `api/tools/{phpunit,behat,…}/`                                           |
+| Isolated tooling Composer installs                                           | `api/tools/{phpunit,phpstan,…}/`                                         |
 | FrankenPHP Caddyfile + worker entry                                          | `api/frankenphp/`                                                        |
 
 ### `pwa/`

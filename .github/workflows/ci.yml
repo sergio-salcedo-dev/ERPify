@@ -104,9 +104,6 @@ jobs:
       - name: Health check
         run: curl -skSf https://localhost/api/v1/health
 
-      - name: Install Behat tools
-        run: make php.behat.install
-
       # Check-only sweep (fails on drift instead of auto-fixing) fanned out
       # read-only. phpstan is the CPU-heavy target; the rest are light
       # or I/O-bound (doctrine + error-contract hit the DB/console). -j4 deliberately
@@ -184,9 +181,6 @@ jobs:
 
       - name: Health check
         run: curl -skSf https://localhost/api/v1/health
-
-      - name: Install Behat tools
-        run: make php.behat.install
 
       - name: Run Behat
         run: make php.behat

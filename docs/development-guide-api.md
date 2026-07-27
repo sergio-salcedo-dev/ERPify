@@ -19,12 +19,6 @@ make db.migrate                       # apply Doctrine migrations
 make db.load.fixtures                 # Hautelook Alice fixtures (dev only)
 ```
 
-Optional — install Behat into its isolated Composer tree:
-
-```bash
-make composer c='behat-tools-install'
-```
-
 ### Logging in (dev)
 
 `make db.load.fixtures` seeds the single organization (`ERPify`), users, and their memberships, so **dev has a working login out of the box** — you do *not* run the bootstrap commands below. Sign in with a seeded account; the fullest is Alice (`ACTIVE`, roles `MANAGER` + `AUDIT_READER`, so both the bank routes and the audit trail are reachable):
@@ -149,7 +143,7 @@ make php.behat                             # Behat (isolated tree)
 ```
 
 - **PHPUnit config**: `api/phpunit.xml.dist`.
-- **Behat tree**: `api/tools/behat/` with its own `composer.json`.
+- **Behat config**: `api/behat.dist.php` (Behat 4 dropped YAML config).
 - Integration tests touching Doctrine use **real Postgres** (Compose), not SQLite.
 
 ## Lint / analyze

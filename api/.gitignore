@@ -37,3 +37,9 @@ phpstan.neon
 ###> deptrac/deptrac ###
 /.deptrac.cache
 ###< deptrac/deptrac ###
+
+###> friends-of-behat/symfony-extension ###
+# Behat 4 dropped YAML config: the tracked contract is behat.dist.php, and a
+# developer's local override is behat.php.
+/behat.php
+###< friends-of-behat/symfony-extension ###

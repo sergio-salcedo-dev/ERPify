@@ -5,7 +5,7 @@ Feature: Per-error `instance` UUIDv7 and body↔header correlation-id reconcilia
     and the body's `correlation-id` field to equal the X-Correlation-Id response header.
 
   # The default Behat suite's HttpRequestContext is constructor-bound to baseUrl=/api/v1
-  # (see api/tools/behat/behat.yml.dist). Test routes under /api/test/_throw-* are reached
+  # (see api/behat.dist.php). Test routes under /api/test/_throw-* are reached
   # via absolute URLs (HttpRequestContext skips the prepend when the URL starts with `http`).
 
   Background:
