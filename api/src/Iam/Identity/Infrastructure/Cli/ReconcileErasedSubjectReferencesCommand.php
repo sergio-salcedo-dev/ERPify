@@ -19,8 +19,17 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * crypto-shredding evidence.
  *
  * A finding means some erasure path anonymised the actor axis and not the resource axis, leaving the
- * subject's real id in the trail. The repair is re-running `identity:gdpr:erase-subject` for that id: the
- * anonymisation is idempotent, so a re-run over an already-clean subject costs nothing.
+ * subject's real id in the trail. The repair is `identity:gdpr:erase-subject <id>`, which anonymises both
+ * axes. Its outcome depends on how the divergence arose, and both outcomes are correct:
+ *
+ *   - The identity was hard-deleted by a path that left the actor axis intact (a legacy identity-only
+ *     delete). The repair's actor pass still matches those rows, so both axes take one pseudonym.
+ *   - The actor axis was already erased on its own through `audit:gdpr:erase`. That pseudonym is
+ *     irreversible by design and cannot be recovered, so the repair completes the resource axis under a
+ *     *distinct* one; in a row where the subject was both actor and resource the two axes then read as two
+ *     anonymous identities. This is accepted — neither pseudonym reverts to the person, which is the
+ *     property that matters. Reusing the lost actor pseudonym is not possible, and teaching the actor-only
+ *     command to refuse such a subject is a separate decision left open deliberately.
  */
 #[AsCommand(
     name: 'identity:gdpr:reconcile-subject-references',
@@ -51,7 +60,12 @@ final class ReconcileErasedSubjectReferencesCommand extends Command
             \count($dangling),
         ));
         $io->listing($dangling);
-        $io->note('Repair with `identity:gdpr:erase-subject <id>` — the anonymisation is idempotent.');
+        $io->note([
+            'Repair with `identity:gdpr:erase-subject <id>`, which anonymises both axes.',
+            'If the actor axis was already erased on its own via `audit:gdpr:erase`, the resource axis is '
+            . 'completed under a separate pseudonym — the original one is irreversible and cannot be reused. '
+            . 'Neither reverts to the person, so this still completes the erasure.',
+        ]);
 
         return Command::FAILURE;
     }
