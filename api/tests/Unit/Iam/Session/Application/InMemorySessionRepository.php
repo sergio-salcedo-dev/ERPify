@@ -5,16 +5,28 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Iam\Session\Application;
 
 use Erpify\Iam\Session\Domain\Entity\Session;
-use Erpify\Iam\Session\Domain\Enum\SessionStatus;
 use Erpify\Iam\Session\Domain\Repository\SessionRepository;
 use Erpify\Iam\Session\Domain\SessionId;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Override;
 use RuntimeException;
 
 /**
  * In-memory {@see SessionRepository} that records writes and answers the active-only reads, so a use-case test
- * can assert what a case persists, revokes in bulk, and reads back. The temporal predicate the real adapter
- * pushes into SQL is a store concern (covered by Behat); this fake filters on `status = ACTIVE` only.
+ * can assert what a case persists, revokes in bulk, and reads back.
+ *
+ * Admissibility is delegated to {@see Session::isActive()} instead of being re-expressed here: the port
+ * publishes `status = ACTIVE AND expires_at > now` as a postcondition of its reads, and a fake looser than the
+ * real adapter lets a use-case test assert behaviour production cannot produce. Delegating leaves two
+ * renderings of the rule — this one and the adapter's DQL, which is what actually runs — instead of three.
+ * They coincide at whole-second granularity, which is all `expires_at TIMESTAMP(0)` preserves anyway.
+ *
+ * `now` is read once per query, mirroring the single `:now` the adapter binds for a whole statement, so a
+ * multi-row read cannot straddle the boundary mid-scan.
+ *
+ * The instant comes from {@see SystemClock} rather than an injected {@see \Erpify\Shared\Clock\Domain\Clock}:
+ * the constructor is variadic, so a clock parameter would have to precede the presets, and no consumer has yet
+ * needed to freeze one here. A test that does freezes it exactly as it already freezes the aggregate's own.
  *
  * @internal
  */
@@ -43,11 +55,7 @@ final class InMemorySessionRepository implements SessionRepository
     public function __construct(Session ...$preset)
     {
         foreach ($preset as $session) {
-            $id = $session->getId();
-
-            if (null !== $id) {
-                $this->byId[$id] = $session;
-            }
+            $this->index($session);
         }
     }
 
@@ -55,6 +63,7 @@ final class InMemorySessionRepository implements SessionRepository
     public function save(Session $session): void
     {
         $this->saved[] = $session;
+        $this->index($session);
     }
 
     #[Override]
@@ -66,15 +75,17 @@ final class InMemorySessionRepository implements SessionRepository
             return null;
         }
 
-        return SessionStatus::ACTIVE === $session->status() ? $session : null;
+        return $session->isActive(SystemClock::now()) ? $session : null;
     }
 
     #[Override]
     public function findByUserId(string $userId): array
     {
+        $now = SystemClock::now();
+
         return \array_values(\array_filter(
             $this->byId,
-            static fn (Session $s): bool => $s->userId() === $userId && SessionStatus::ACTIVE === $s->status(),
+            static fn (Session $s): bool => $s->userId() === $userId && $s->isActive($now),
         ));
     }
 
@@ -110,5 +121,14 @@ final class InMemorySessionRepository implements SessionRepository
         }
 
         return $deleted;
+    }
+
+    private function index(Session $session): void
+    {
+        $id = $session->getId();
+
+        if (null !== $id) {
+            $this->byId[$id] = $session;
+        }
     }
 }
