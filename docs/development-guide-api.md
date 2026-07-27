@@ -116,7 +116,7 @@ make composer c='update'              # respect allow-plugins + bump-after-updat
 make composer.check.all               # composer-unused + composer-require-checker + security advisories
 ```
 
-**Never** add `symfony/symfony` (in `conflict`) or `behat/*` (isolated tree) to `api/composer.json`.
+**Never** add `symfony/symfony` (it is in `conflict`) to `api/composer.json`.
 **Never** add polyfills listed in the `replace` block.
 
 ## Database
@@ -139,7 +139,7 @@ Migrations live in `api/migrations/2026/Version<timestamp>.php` (organised by ye
 make php.test                              # unit + e2e
 make php.unit                              # PHPUnit
 make php.unit c='--filter SomeTest'        # filter
-make php.behat                             # Behat (isolated tree)
+make php.behat                             # Behat (config: api/behat.dist.php)
 ```
 
 - **PHPUnit config**: `api/phpunit.xml.dist`.
