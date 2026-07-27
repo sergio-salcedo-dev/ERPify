@@ -58,6 +58,11 @@ when@test:
         controller: Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener\Fixtures\ThrowValidationFailedTemplateController
         methods: [GET]
 
+    test_throw_validation_hint:
+        path: /api/test/_throw-validation-hint
+        controller: Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener\Fixtures\ThrowValidationFailedHintController
+        methods: [GET]
+
     test_throw_invariant_violation:
         path: /api/test/_throw-invariant-violation
         controller: Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener\Fixtures\ThrowInvariantViolationDomainExceptionController

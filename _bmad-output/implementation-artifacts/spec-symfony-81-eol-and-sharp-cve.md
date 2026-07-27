@@ -65,14 +65,14 @@ context:
 - [x] **Multipart** -- **retirado de esta rama.** PR #557 eliminó la superficie de subida: `POST /banks` acepta sólo JSON y rechaza multipart con 415 en el resolver, fijado por `BankCreateAcceptsJsonOnlyFunctionalTest`. `CreateBankRequest` y la traducción en el controlador ya no tienen objeto. Ver Change Log.
 - [x] **Invariante de transporte** -- `TransportOnlyUploadedFileDenormalizer` se queda en `Shared/Http/Infrastructure/`, sin consumidor en `src/` pero con su regresión reescrita contra un payload fixture de test que sí declara un `?UploadedFile`.
 - [x] **Deprecación de `symfony/mercure-bundle`** -- `0.4.x-dev` (== `main`, commit `28e7502`): ya usa `DependencyInjection\Extension\Extension`. `failOnDeprecation="true"` se queda intacto.
-- [ ] **DIFERIDO A PR PROPIA (decisión de Sergio)** -- migración a Behat 4. Esta rama **no se mergea** hasta que exista. Ver Change Log.
+- [x] **Migración a Behat 4 hecha en esta rama (decisión de Sergio, 2026-07-27)** -- `behat/behat 4.0.0-alpha1` levanta el techo `^7`, así que el árbol aislado desaparece. Ver Change Log.
 
 **Acceptance Criteria:**
 - Dado el árbol tras `composer update "symfony/*"`, cuando se consulta `composer show symfony/framework-bundle`, entonces la versión es `8.1.x`. -- **CUMPLE** (`v8.1.1`).
 - Dado `pwa/`, cuando se ejecuta `npm ls sharp`, entonces no hay `invalid` y la versión es `0.35.x`. -- **CUMPLE** (`0.35.3`, cero diff en `pwa/`).
 - Dada la suite PHP en frío, cuando se ejecutan `make php.unit`, `make php.stan`, `make php.deptrac` y `make php.quality`, entonces los cuatro salen con exit code 0. -- **CUMPLE** (2066 tests / 9045 aserciones; 0 errores; 0 violaciones).
 - Dado un cuerpo de petición que *describe* una subida (`path` + `test: true`), cuando el serializador del contenedor lo mapea a un payload con miembro `?UploadedFile`, entonces se rechaza sin leer la ruta nombrada, y una ruta inexistente se rechaza en los mismos términos (sin oráculo de existencia). -- **CUMPLE** (`TransportOnlyUploadedFileDenormalizerFunctionalTest`).
-- Dado `api/tools/behat`, cuando se ejecuta `make php.behat`, entonces exit code 0. -- **NO CUMPLE, DIFERIDO**: exit 255, el kernel no arranca. Bloquea el merge de esta rama por decisión explícita.
+- Dado el árbol único, cuando se ejecuta `make php.behat`, entonces exit code 0. -- **CUMPLE**: 373 escenarios, 3378 pasos, todos verdes.
 
 ## Design Notes
 
@@ -285,3 +285,49 @@ test falla devolviendo **201 Created** -- la exfiltración completándose. Con e
 
 Va en `Shared/Http/` a propósito, no en el controlador: la misma razón por la que `StrictRequestPayload`
 mete la política en el tipo -- que ningún endpoint futuro pueda adoptarla a medias.
+
+### 2026-07-27 -- Behat 4 dentro de la rama: el árbol aislado desaparece y destapa tres reconciliaciones de 8.1
+
+`behat/behat 4.0.0-alpha1` acepta `symfony/console|config|dependency-injection|event-dispatcher|
+translation|yaml` en `^8.0`, y `friends-of-behat/symfony-extension 2.7.0` ya admitía `behat ^4.0`
+junto a `symfony ^8.0` en DI y http-kernel. Medido con `composer require --dev --dry-run` sobre
+`api/composer.json`: resuelve limpio con todo `symfony/*` en 8.1.1. Ya no queda ningún techo en `^7`,
+que era la condición de desbloqueo escrita en `api/tools/behat/UPGRADE.md`. Behat pasa a
+`require-dev` y `api/tools/behat/` se borra entero.
+
+El exit 255 queda explicado con precisión: el árbol de tooling ganaba cada FQCN compartido, así que
+el componente DI se cargaba **por mitades** -- `ContainerBuilder` desde el tooling (7.4) y
+`Kernel\KernelTrait` (sólo existe en 8.1) desde la app -- y FrameworkBundle llamaba `getNamespace()`
+sobre un `ServicesBundle` que no lo tiene. No era cuestión de pines.
+
+Tres hallazgos que sólo aparecen al poder ejecutar la suite:
+
+1. **`GHERKIN_32` es el parser por defecto en Behat 4** y deja de quitar el `@` de los tags.
+   `SecurityContext` compara `'anonymous'` a pelo, así que 24 escenarios `@anonymous` se
+   autenticaban y devolvían 403 donde afirman 401. Se fija `LEGACY`: es el modo con el que se
+   escribieron los 47 features, y adoptar paridad cucumber cambia ocho comportamientos de parsing a
+   la vez. Aviso operativo: `FileCache` de gherkin **no incluye el modo en la clave** (sólo versión
+   de librería, ruta y mtime), así que cambiar de modo sirve ASTs rancios hasta tocar los `.feature`.
+
+2. **PHPStan analizaba la app contra Symfony 7.4.** `phpstan.neon` cargaba
+   `../behat/vendor/autoload.php` como `bootstrapFiles`, el mismo problema de precedencia dentro del
+   gate estático. Al quitarlo salieron 7 errores reales en `CorrelationIdListenerFunctionalTest`.
+
+3. **`InMemoryTransport::get()` recibe en 8.1 un `$fetchSize` que por defecto vale 1** y corta ahí.
+   `OutboxContext` y `MessengerConsumerContext` lo llamaban sin argumentos esperando la cola entera,
+   así que toda aserción de cola leía como mucho un mensaje. Las de 0 y 1 seguían pasando: sólo la
+   única que afirma 2 lo destapó. Se pasa el tamaño explícitamente en ambos.
+
+**Contrato de error.** `BackedEnumNormalizer` de serializer 8.1 parte el caso inválido en dos: si el
+tipo no casa con el backing type lanza con `expectedTypes = [$backingType]`; si el tipo es correcto
+pero el valor no es un case válido lanza **sin** `expectedTypes` y con un mensaje mejor
+(`The data must be one of the following values: "detailed", "light"`), que el resolver deja en
+`parameters['hint']`. Como `buildViolations()` sólo leía `getMessage()`, la API respondía *peor* que
+en 8.0 mientras el framework ofrecía más. Se prefiere el hint **sólo** sobre la plantilla
+`This value was of an unexpected type.`: el hint no es un canal seguro -- el mismo normalizador marca
+como presentable un mensaje hermano que nombra la clase destino, y emitirlo pondría un FQCN interno
+(`Erpify\Shared\Search\Domain\PaginationMode`) en un cuerpo de error público. Ambas ramas quedan
+fijadas por `_throw-validation-hint` en `validation_violations.feature`, que además afirma que el
+cuerpo no contiene el token `Erpify`.
+
+Verificación en fresco: `php.stan` 0, `php.unit` 0, `php.quality` 0, `php.behat` 0 (373/373).

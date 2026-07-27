@@ -77,6 +77,16 @@ Feature: ValidationFailedException surfaces as a 422 Problem Details with a stru
     And the response should not contain "{{ limit }}"
     And 0 requests got executed across all doctrine connections
 
+  Scenario: A denormalization violation with nothing to say falls back to its hint, but never over an informative message
+    When I send a "GET" request to "http://localhost/api/test/_throw-validation-hint"
+    Then the response status code should be 422
+    And the JSON node "violations[0].field" should be equal to "paginationMode"
+    And the JSON node "violations[0].message" should be equal to 'The data must be one of the following values: "detailed", "light"'
+    And the JSON node "violations[1].field" should be equal to "direction"
+    And the JSON node "violations[1].message" should be equal to "This value should be of type int|string."
+    And the response should not contain "Erpify"
+    And 0 requests got executed across all doctrine connections
+
   Scenario: ValidationFailedException violation entries are reachable via JSON path under violations[N]
     When I send a "GET" request to "http://localhost/api/test/_throw-validation"
     Then the response status code should be 422

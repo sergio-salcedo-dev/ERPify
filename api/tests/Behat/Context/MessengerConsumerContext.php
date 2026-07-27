@@ -53,6 +53,13 @@ final class MessengerConsumerContext extends AbstractContext
     private const int TIME_LIMIT_SECONDS = 5;
 
     /**
+     * InMemoryTransport::get() takes a fetch size that defaults to 1 and stops there. Counting what is
+     * pending means reading the whole transport, so the size is passed explicitly — left implicit, any
+     * backlog above one silently reads as one.
+     */
+    private const int WHOLE_TRANSPORT = PHP_INT_MAX;
+
+    /**
      * @var array<string, int>
      */
     private const array VERBOSITY_FLAGS = [
@@ -190,7 +197,7 @@ final class MessengerConsumerContext extends AbstractContext
 
         self::assertCount(
             $count,
-            $transport->get(),
+            $transport->get(self::WHOLE_TRANSPORT),
             \sprintf('Unexpected number of pending messages on transport "%s"', $transportName),
         );
     }
