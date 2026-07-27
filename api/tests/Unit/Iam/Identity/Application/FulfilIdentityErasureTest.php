@@ -362,7 +362,8 @@ final class FulfilIdentityErasureTest extends TestCase
             self::ORGANIZATION_ID,
             'Test client',
             '127.0.0.1',
-            new DateTimeImmutable('2026-07-22T13:00:00+00:00'),
+            // Deliberately lapsed: erasure must reach the subject's expired rows, not only the admissible ones.
+            new DateTimeImmutable('2020-01-01T00:00:00+00:00'),
         );
         $session->pullDomainEvents();
 

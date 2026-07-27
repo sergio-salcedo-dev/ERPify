@@ -54,7 +54,9 @@ final class PurgeUserSessionsTest extends TestCase
             Uuid::generate(),
             'Test client',
             '127.0.0.1',
-            new DateTimeImmutable('2026-07-22T13:00:00+00:00'),
+            // Deliberately lapsed: the purge is a hard delete of every row of the subject, admissible or not,
+            // so a time-expired session must still be counted and removed.
+            new DateTimeImmutable('2020-01-01T00:00:00+00:00'),
         );
         $session->pullDomainEvents();
 
