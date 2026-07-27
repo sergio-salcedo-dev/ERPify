@@ -527,6 +527,10 @@ jobs:
   # in sonar-project.properties. The job is skipped on fork PRs, where the secret
   # is absent by design — so it can never leak to untrusted PR code. We use the
   # plain `pull_request` trigger (never pull_request_target) for the same reason.
+  # Dependabot PRs are skipped on the same grounds: GitHub scopes those runs to a
+  # separate Dependabot secret store, so SONAR_TOKEN resolves empty and the scan
+  # can only ever fail "Not authorized". Skipping forfeits no analysis — Dependabot
+  # touches lockfiles and pinned action digests, never analysed source.
   # Imports the coverage reports produced by api-test (Clover) and pwa-node
   # (lcov) as build artifacts, so the scan reports Coverage on New Code. Both
   # reports carry repo-root-relative file paths (api/src/…, pwa/src/…) that
@@ -534,7 +538,10 @@ jobs:
   sonar:
     name: SonarCloud
     needs: [api-test, pwa-node]
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    if: >-
+      (github.event_name != 'pull_request'
+      || github.event.pull_request.head.repo.full_name == github.repository)
+      && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
