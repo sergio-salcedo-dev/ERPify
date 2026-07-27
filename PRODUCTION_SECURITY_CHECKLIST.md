@@ -410,13 +410,14 @@ mitigated state. Accepting one means recording who accepted it and against which
       that. **Never claim integrity beyond "append-only by construction" to an assessor.** Closing
       it is hash-chaining or WORM storage, filed as a revisit trigger in
       [`docs/adr/regulatory-audit-trail.md`](docs/adr/regulatory-audit-trail.md) D5.
-- [ ] **GDPR erasure does not reach the `resource_*` columns.** `DbalAuditActorAnonymiser` rewrites
-      `actor_id` only. A row naming a natural person in `resource_id` whose actor can be that same
-      person survives erasure holding the fresh pseudonym beside the real id — a reversible
-      crosswalk, queryable through the indexed `resourceId` filter by any `auditTrail.read` holder.
-      **Standing prohibition until this is decided: no new audit row may name a natural person in
-      `resource_type`/`resource_id`** ([`docs/adr/audit-activity-log.md`](docs/adr/audit-activity-log.md) D4).
-      Ownership decision tracked in [#555](https://github.com/sergio-salcedo-dev/ERPify/issues/555).
+- [x] **GDPR erasure reaches the `resource_*` columns** — closed. The owning context anonymises them
+      via `AuditResourceAnonymiser`, with the **same pseudonym** as the actor pass and inside the same
+      transaction, so no row survives holding a fresh pseudonym beside the subject's real id. The
+      shared module supplies the `UPDATE` and never learns which types denote people; the
+      classification lives in `api/.audit-resource-types`, enforced by `make php.lint.audit-resource`,
+      and `identity:gdpr:reconcile-subject-references` reports any erased identity the trail still
+      names. Verify when adding a person-denoting `resource_type`: classify it, wire its erasure, and
+      cover it with a Behat scenario — the gate checks declaration and wiring, not runtime reach.
 - [ ] **`audit:gdpr:erase` is not atomic.** The anonymisation `UPDATE` commits and the
       `GDPR_ERASURE_EXECUTED` self-audit is written *after*, outside any transaction — a crash
       between them leaves the erasure done with no evidence of it, and the original id no longer

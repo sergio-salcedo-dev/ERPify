@@ -11,10 +11,12 @@ use Erpify\Shared\Audit\Application\ActorAnonymisationResult;
 use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditActorAnonymiser;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditLogWriter;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Test;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use UnexpectedValueException;
 
@@ -90,6 +92,41 @@ final class AuditActorAnonymiserFunctionalTest extends KernelTestCase
 
             // Idempotent: a re-run with the original id matches nothing.
             $this->assertSame(0, $anonymiser->anonymise($subjectId)->affectedRows);
+        });
+    }
+
+    #[Test]
+    public function itLeavesTheResourceColumnsToTheirOwnAnonymiser(): void
+    {
+        $this->inRolledBackTransaction(function (Connection $connection): void {
+            $subject = Uuid::generate();
+            $writer = new DbalAuditLogWriter($connection);
+
+            // The subject acted on themselves: both axes name one person. The actor pass must move ONLY its
+            // own column — the resource axis belongs to the owning context's erasure, not to this one.
+            $entry = AuditLogEntry::create(
+                'USER_ROLES_CHANGED',
+                AuditLevel::SECURITY,
+                ActorContext::forUser($subject),
+                Uuid::generate(),
+                new DateTimeImmutable('2026-07-02T09:00:00+00:00'),
+                AuditResource::of('User', $subject),
+                [],
+                self::CLIENT_IP,
+                'Mozilla/5.0',
+            );
+            $writer->write($entry);
+
+            (new DbalAuditActorAnonymiser($connection))->anonymise($subject);
+
+            $row = $connection->fetchAssociative(
+                'SELECT actor_id, resource_id FROM audit_log WHERE id = :id',
+                ['id' => $entry->id],
+            );
+            $this->assertIsArray($row);
+            /** @phpstan-var array{actor_id: mixed, resource_id: mixed} $row */
+            $this->assertNotSame($subject, $row['actor_id'], 'the actor axis is anonymised');
+            $this->assertSame($subject, $row['resource_id'], 'the resource axis is untouched by this pass');
         });
     }
 

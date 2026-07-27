@@ -81,7 +81,7 @@ Feature: Restrict the audit trail read routes to the auditTrail.read permission
     """
 
   Scenario: An audit-reader can read an audit event by id
-    Given I execute the SQL query "INSERT INTO audit_log (id, level, action, actor_type, actor_id, correlation_id, resource_type, resource_id, metadata, actor_erased, occurred_on) VALUES ('0190a001-0000-7000-8000-0000000000aa','change','BANK_UPDATED','user','11111111-1111-7111-8111-111111111111','0190c000-0000-7000-8000-000000000000','Bank','22222222-2222-7222-8222-222222222222','{}',false,'2026-03-01 12:00:00+00')"
+    Given I execute the SQL query "INSERT INTO audit_log (id, level, action, actor_type, actor_id, correlation_id, resource_type, resource_id, metadata, actor_erased, resource_erased, occurred_on) VALUES ('0190a001-0000-7000-8000-0000000000aa','change','BANK_UPDATED','user','11111111-1111-7111-8111-111111111111','0190c000-0000-7000-8000-000000000000','Bank','22222222-2222-7222-8222-222222222222','{}',false,false,'2026-03-01 12:00:00+00')"
     When I send a "GET" request to "/backoffice/audit/events/0190a001-0000-7000-8000-0000000000aa"
     Then the response status code should be 200
     And the JSON node "data.action" should be equal to "BANK_UPDATED"

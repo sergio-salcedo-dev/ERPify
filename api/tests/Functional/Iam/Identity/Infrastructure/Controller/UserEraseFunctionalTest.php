@@ -191,9 +191,9 @@ final class UserEraseFunctionalTest extends WebTestCase
         $this->functionalConnection()->executeStatement(
             'INSERT INTO audit_log '
             . '(id, level, action, actor_type, actor_id, correlation_id, resource_type, resource_id, '
-            . 'metadata, actor_erased, occurred_on) '
+            . 'metadata, actor_erased, resource_erased, occurred_on) '
             . 'VALUES (:id, :level, :action, :actorType, CAST(:actorId AS uuid), :correlationId, :resourceType, '
-            . ':resourceId, :metadata, FALSE, :occurredOn)',
+            . ':resourceId, :metadata, FALSE, FALSE, :occurredOn)',
             [
                 'id' => self::SEEDED_AUDIT_ID,
                 'level' => 'change',

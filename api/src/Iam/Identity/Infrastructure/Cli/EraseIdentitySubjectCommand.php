@@ -127,12 +127,13 @@ final class EraseIdentitySubjectCommand extends Command
         }
 
         $io->success(\sprintf(
-            'Erased subject %s (identity removed: %s, reset tokens deleted: %d, audit rows anonymised: %d, '
-            . 'sessions removed: %d).',
+            'Erased subject %s (identity removed: %s, reset tokens deleted: %d, audit rows authored '
+            . 'anonymised: %d, audit rows naming the subject anonymised: %d, sessions removed: %d).',
             $userId,
             $result->identityErased ? 'yes' : 'no',
             $result->resetTokensDeleted,
             $result->anonymizedAuditRows,
+            $result->anonymizedResourceRows,
             $result->sessionsDeleted,
         ));
 
