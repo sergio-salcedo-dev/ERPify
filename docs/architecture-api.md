@@ -9,18 +9,18 @@ The `api/` deployable is a Symfony 8 HTTP API on **FrankenPHP** (Caddy embedded)
 | Category        | Technology                                             | Version                                       |
 |-----------------|--------------------------------------------------------|-----------------------------------------------|
 | Runtime         | PHP                                                    | **8.5**                                       |
-| Framework       | Symfony (components)                                   | **8.0.x**                                     |
+| Framework       | Symfony (components)                                   | **8.1.x**                                     |
 | HTTP server     | FrankenPHP (Caddy)                                     | `dunglas/frankenphp:1-php8.5` (digest-pinned) |
 | ORM / DBAL      | Doctrine ORM / DBAL / Migrations / Persistence         | 3.6 / 4.4 / 4.0 / 4.2                         |
 | Database        | PostgreSQL                                             | 18 (Compose)                                  |
-| Async           | Symfony Messenger + Doctrine transport                 | 8.0.x                                         |
+| Async           | Symfony Messenger + Doctrine transport                 | 8.1.x                                         |
 | Realtime        | Symfony Mercure (+ Hub)                                | 0.7 / bundle 0.4                              |
-| Mail            | symfony/mailer                                         | 8.0.x                                         |
+| Mail            | symfony/mailer                                         | 8.1.x                                         |
 | CORS            | nelmio/cors-bundle                                     | 2.6                                           |
 | Logging         | symfony/monolog-bundle                                 | 4.0                                           |
-| UID             | symfony/uid (UUIDv7)                                   | 8.0.x                                         |
-| Validation      | symfony/validator                                      | 8.0.x                                         |
-| Security        | symfony/security-core                                  | 8.0.x                                         |
+| UID             | symfony/uid (UUIDv7)                                   | 8.1.x                                         |
+| Validation      | symfony/validator                                      | 8.1.x                                         |
+| Security        | symfony/security-core                                  | 8.1.x                                         |
 | Unit tests      | PHPUnit                                                | 13                                            |
 | E2E tests       | Behat                                                  | `api/behat.dist.php`, `api/features/`         |
 | Static analysis | PHPStan (sole gate) / Rector                           | 2 / 2                                         |

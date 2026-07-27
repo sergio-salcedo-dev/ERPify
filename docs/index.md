@@ -11,7 +11,7 @@
 
 ### `api/` — Symfony API (backend)
 
-- **Tech stack:** Symfony 8.0, FrankenPHP (Caddy), Doctrine ORM 3.6 / DBAL 4.4, PostgreSQL, Symfony Messenger, Mercure.
+- **Tech stack:** Symfony 8.1, FrankenPHP (Caddy), Doctrine ORM 3.6 / DBAL 4.4, PostgreSQL, Symfony Messenger, Mercure.
 - **Root:** `api/`
 - **Entry point:** `api/src/Kernel.php` via FrankenPHP → `api/public/index.php`
 - **Bounded contexts:** `Backoffice/{Audit, Bank, BankAccount, Health}`, `Frontoffice/{Dev, Health, Mercure}`, `Iam/{Identity, Invitation, Session}`, `Organization/{Organization, Membership}`, `Shared/{Access, Audit, Clock, Crypto, ErrorContract, Event, Http, Kernel, Mailer, Monitoring, Persistence, Privacy, Search, Serialization, Token, Uuid, Validation}`
