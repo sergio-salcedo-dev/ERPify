@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Functional\Shared\Http\Infrastructure;
 
 use Erpify\Shared\Http\Infrastructure\TransportOnlyUploadedFileDenormalizer;
+use Erpify\Tests\Functional\Shared\Http\Infrastructure\Fixtures\PlainFileBearingPayload;
 use Erpify\Tests\Functional\Shared\Http\Infrastructure\Fixtures\UploadBearingPayload;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -62,6 +63,68 @@ final class TransportOnlyUploadedFileDenormalizerFunctionalTest extends KernelTe
             (string) \file_get_contents(self::EXFILTRATION_TARGET),
             $exception->getMessage(),
             'the refusal must not carry the bytes it refused to hand over',
+        );
+    }
+
+    /**
+     * The vector belongs to `File`, not to `UploadedFile`: a member typed as any other `File` subclass is
+     * constructible from a path just the same, and `checkPath: false` drops even the FileNotFoundException
+     * that would otherwise mark an absent path. A guard anchored on `UploadedFile` leaves this unclaimed.
+     */
+    public function testABodyDescribingAPlainFileIsRefusedOnTheSameTerms(): void
+    {
+        $exception = null;
+
+        try {
+            $this->denormalizer()->denormalize(
+                [
+                    'name' => 'Exfiltration probe',
+                    'image' => ['path' => self::EXFILTRATION_TARGET, 'checkPath' => false],
+                ],
+                PlainFileBearingPayload::class,
+            );
+        } catch (NotNormalizableValueException $notNormalizableValueException) {
+            $exception = $notNormalizableValueException;
+        }
+
+        $this->assertInstanceOf(
+            NotNormalizableValueException::class,
+            $exception,
+            'a request body described a plain File and the serializer built one — the named file is readable',
+        );
+        $this->assertStringNotContainsString(
+            (string) \file_get_contents(self::EXFILTRATION_TARGET),
+            $exception->getMessage(),
+            'the refusal must not carry the bytes it refused to hand over',
+        );
+    }
+
+    /**
+     * The refusal has to reach the caller. With expected types attached the argument resolver renders
+     * "This value should be of type …" and the authored sentence never leaves the process.
+     */
+    public function testTheRefusalReachesTheCallerAsItsOwnSentence(): void
+    {
+        $exception = null;
+
+        try {
+            $this->denormalizer()->denormalize(
+                ['name' => 'Exfiltration probe', 'image' => $this->describeUpload(self::EXFILTRATION_TARGET)],
+                UploadBearingPayload::class,
+            );
+        } catch (NotNormalizableValueException $notNormalizableValueException) {
+            $exception = $notNormalizableValueException;
+        }
+
+        $this->assertInstanceOf(NotNormalizableValueException::class, $exception);
+        $this->assertTrue(
+            $exception->canUseMessageForUser(),
+            'the refusal is authored for the caller; unmarked, the resolver drops it',
+        );
+        $this->assertSame(
+            [],
+            $exception->getExpectedTypes() ?? [],
+            'any expected type wins over the message and renders a description of the member instead',
         );
     }
 
