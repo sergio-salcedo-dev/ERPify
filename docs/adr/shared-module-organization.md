@@ -204,9 +204,9 @@ mechanism governs all three; the ADR's job is to say which mechanism owns which 
 When the relocation is applied:
 
 - `ErrorContractGateTest` was updated: the hardcoded exception-dir literal (now
-  `src/Shared/ErrorContract/Domain/Exception/`) in its doc-sync sub-check
-  (`testNewMarkerExceptionWithoutDocsUpdateIsRejected`) — **only that sub-check was path-coupled;
-  the `JsonResponse` scan is path-independent.** A stale path would silently no-op → green-but-blind.
+  `src/Shared/ErrorContract/Domain/Exception/`) in its doc-citation sub-check — **only that sub-check
+  is path-coupled; the `JsonResponse` scan is path-independent.** A stale path would silently no-op →
+  green-but-blind.
 - Tests that relocated a level deeper had their `dirname(__DIR__, N)` recomputed — path resolution is depth-coupled.
 - Validate CI green *after* the path fix before considering enforcement intact.
 

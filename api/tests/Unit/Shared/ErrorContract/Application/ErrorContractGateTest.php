@@ -19,10 +19,11 @@ use PHPUnit\Framework\TestCase;
  *       shapes back into the `/api/*` surface and re-fragment the unified error
  *       wire format.
  *
- *   (2) Every marker exception under `api/src/Shared/ErrorContract/Domain/Exception/`
- *       MUST be cited in `docs/api-error-contract.md` as a backticked token
- *       (`Forbidden`). That page owns the marker → status map, so a marker it never
- *       names is an undocumented public wire contract.
+ *   (2) Every marker exception at any depth under
+ *       `api/src/Shared/ErrorContract/Domain/Exception/` MUST be cited in
+ *       `docs/api-error-contract.md` as a backticked token (`Forbidden`). That page owns
+ *       the marker → status map, so a marker it never names is an undocumented public
+ *       wire contract.
  *
  *       Stated over the directory's current contents rather than over a diff: the
  *       invariant then needs no VCS context, holds in any checkout at any clone depth,
@@ -76,16 +77,30 @@ final class ErrorContractGateTest extends TestCase
         . 'See docs/api-error-contract.md#marker-interface--http-status-table';
 
     /**
-     * Marker exceptions, relative to `api/src`. Every `.php` here owns a slice of the public
-     * wire contract, so the doc-citation invariant covers the whole directory.
+     * Marker exceptions, relative to `api/src`. Every `.php` in this tree owns a slice of the
+     * public wire contract, so the doc-citation invariant covers the whole of it.
      */
     private const string MARKER_DIRECTORY = 'Shared/ErrorContract/Domain/Exception';
 
     /**
+     * A tree whose `.php` files all sit below its top level, so the marker scan's recursion is
+     * exercised against a real directory instead of being taken on trust.
+     */
+    private const string NESTED_SCAN_PROBE_DIRECTORY = 'Shared/ErrorContract';
+
+    /**
      * Relative to the project root — outside `api/`, so in a container it arrives through the
-     * read-only bind mount declared for the `php` service in `compose.dev.yaml`.
+     * read-only `docs/` bind mount declared for the `php` service in `compose.dev.yaml`.
      */
     private const string CONTRACT_DOC_PATH = 'docs/api-error-contract.md';
+
+    /**
+     * A fenced code block, fences included. Stripped before the citation match: a marker whose only
+     * appearance on the page is inside a request sample or a TypeScript snippet is illustrated, not
+     * documented, and a reader who follows the gate to that block learns nothing about what the marker
+     * means or which status it carries.
+     */
+    private const string FENCED_BLOCK_PATTERN = '/^```.*?^```/ms';
 
     /**
      * Lookahead window (lines) when scanning a `catch (...)` body. The catch
@@ -206,18 +221,37 @@ final class ErrorContractGateTest extends TestCase
             [],
             $undocumented,
             \sprintf(
-                "%s\nMarker exception(s) never cited as `Name` in %s:\n%s",
+                "%s\nNever cited as `Name` in the prose of %s:\n%s\n"
+                . 'Cite each one there, or move it out of api/src/%s — the invariant covers the whole '
+                . 'directory, so a file kept in it is public wire surface whether or not it is a marker.',
                 self::DOC_CITATION_FAILURE_PREAMBLE,
                 self::CONTRACT_DOC_PATH,
                 \implode("\n", $undocumented),
+                self::MARKER_DIRECTORY,
             ),
+        );
+    }
+
+    public function testMarkerScanReachesNestedDirectories(): void
+    {
+        // The marker directory is flat today, so the only way to pin the scan's recursion is to
+        // point it at a tree that is not: DomainException sits three levels below this probe, out
+        // of reach of a top-level-only scan, which would silently exempt any marker filed in a
+        // subdirectory from the citation invariant.
+        $names = $this->markerNamesIn($this->apiSrcRoot() . '/' . self::NESTED_SCAN_PROBE_DIRECTORY);
+
+        $this->assertContains(
+            'DomainException',
+            $names,
+            'Marker scan stopped at the top level, so a marker filed in a subdirectory of api/src/'
+            . self::MARKER_DIRECTORY . ' would never be checked against the contract doc.',
         );
     }
 
     public function testFixtureExposesDocCitationMatcher(): void
     {
-        // Proves the matcher against a synthetic doc, so its four decisions stay pinned without
-        // depending on the real doc's current wording.
+        // Proves the matcher against a synthetic doc, so its decisions stay pinned without depending
+        // on the real doc's current wording.
         $docBody = <<<'MD'
             | `Conflict` | 409 | Optimistic-lock and uniqueness refusals |
 
@@ -225,13 +259,18 @@ final class ErrorContractGateTest extends TestCase
 
             Gone appears in bare prose. GoneAway is an unrelated symbol, and a stale
             filename like Gone.php.old is not a citation either.
+
+            ```json
+            { "marker": "`Teapot`", "status": 418 }
+            ```
             MD;
 
         $this->assertSame(
-            ['Gone'],
-            $this->undocumentedMarkers(['Conflict', 'Gone'], $docBody),
-            'Doc-citation matcher regressed. It must accept a backticked citation (including a '
-            . 'repeated one) and reject bare prose, a longer symbol and a stale filename.',
+            ['Gone', 'Teapot'],
+            $this->undocumentedMarkers(['Conflict', 'Gone', 'Teapot'], $docBody),
+            'Doc-citation matcher regressed. It must accept a backticked citation in prose (including '
+            . 'a repeated one) and reject bare prose, a longer symbol, a stale filename, and a name '
+            . 'that appears only inside a fenced code block.',
         );
     }
 
@@ -383,8 +422,19 @@ final class ErrorContractGateTest extends TestCase
      */
     private function markerNames(): array
     {
-        $directory = $this->apiSrcRoot() . '/' . self::MARKER_DIRECTORY;
+        return $this->markerNamesIn($this->apiSrcRoot() . '/' . self::MARKER_DIRECTORY);
+    }
 
+    /**
+     * Walks the tree, not just its top level. A marker filed one directory deeper is still a
+     * marker owning its slice of the wire contract, and a single-level scan would leave it
+     * undocumented with the gate reporting green. {@see ApiSourceFiles} is the shared walk the
+     * sibling sub-check already uses, so both gates agree on what "every source file" means.
+     *
+     * @return list<string>
+     */
+    private function markerNamesIn(string $directory): array
+    {
         // Two distinct ways for the scan to come up empty, kept distinguishable: a moved or
         // renamed directory reads very differently from one that lost its files.
         $this->assertDirectoryExists(
@@ -396,10 +446,11 @@ final class ErrorContractGateTest extends TestCase
             ),
         );
 
-        $names = \array_map(
-            static fn (string $file): string => \basename($file, '.php'),
-            \glob($directory . '/*.php') ?: [],
-        );
+        $names = [];
+
+        foreach (ApiSourceFiles::phpFiles($directory) as $file) {
+            $names[] = $file->getBasename('.php');
+        }
 
         $this->assertNotEmpty(
             $names,
@@ -409,6 +460,10 @@ final class ErrorContractGateTest extends TestCase
                 $directory,
             ),
         );
+
+        // Filesystem iteration order is not guaranteed; sorting keeps a failure listing stable
+        // across machines so a rerun is comparable to the run that produced it.
+        \sort($names);
 
         return $names;
     }
@@ -423,8 +478,10 @@ final class ErrorContractGateTest extends TestCase
             // marker would sail through, so it has to be as loud as a real violation.
             $this->fail(\sprintf(
                 "%s\nThe contract doc is unreadable at %s. An image built from the api/ context does not "
-                . 'carry a repo-root doc, so inside a container it arrives only through the read-only bind '
-                . 'mount declared for the php service in compose.dev.yaml.',
+                . 'carry a repo-root doc, so inside a container it arrives only through the read-only docs/ '
+                . 'bind mount the dev overlay declares (compose.dev.yaml). A container started from the '
+                . 'prod overlay has no such mount and none is wanted there: this is a dev and CI gate, so '
+                . 'run it with ENV unset or ENV=dev.',
                 self::DOC_CITATION_FAILURE_PREAMBLE,
                 $path,
             ));
@@ -434,9 +491,14 @@ final class ErrorContractGateTest extends TestCase
     }
 
     /**
-     * A marker counts as documented when the doc cites it as an inline-code token — the form every
-     * marker already takes there. A bare substring would be satisfied by an unrelated longer symbol
-     * (`GoneAway`) or by a stale filename (`Gone.php.old`), so the backticks are load-bearing.
+     * A marker counts as documented when the doc's prose cites it as an inline-code token — the form
+     * every marker already takes there. A bare substring would be satisfied by an unrelated longer
+     * symbol (`GoneAway`) or by a stale filename (`Gone.php.old`), so the backticks are load-bearing,
+     * and fenced blocks are cut first so a sample payload cannot stand in for the prose.
+     *
+     * Presence, not placement: `RateLimitExceeded` is named in the rate-limiting section rather than
+     * the marker table, and that is a real citation. Requiring the table would reject it.
+     *
      * The doc body is read once by the caller and passed in.
      *
      * @param list<string> $markerNames
@@ -445,9 +507,11 @@ final class ErrorContractGateTest extends TestCase
      */
     private function undocumentedMarkers(array $markerNames, string $docBody): array
     {
+        $prose = \preg_replace(self::FENCED_BLOCK_PATTERN, '', $docBody) ?? $docBody;
+
         return \array_values(\array_filter(
             $markerNames,
-            static fn (string $name): bool => !\str_contains($docBody, '`' . $name . '`'),
+            static fn (string $name): bool => !\str_contains($prose, '`' . $name . '`'),
         ));
     }
 }

@@ -21,12 +21,21 @@ services:
       - ./api:/app/api
       - ./api/var:/app/api/var
       # The error-contract drift gate asserts that every marker exception under
-      # api/src/Shared/ErrorContract/Domain/Exception/ is named in this doc. The image's
-      # build context is ./api, so a repo-root doc is absent from it and `/app` holds
-      # nothing but `api/` and `public/` — without this mount the gate has nothing to
-      # read and fails. Read-only, and the single file rather than all of docs/, so the
-      # container's only dependency on the repo root is the one the gate actually needs.
-      - ./docs/api-error-contract.md:/app/docs/api-error-contract.md:ro
+      # api/src/Shared/ErrorContract/Domain/Exception/ is cited in docs/api-error-contract.md.
+      # The image's build context is ./api, so a repo-root doc is absent from it and `/app`
+      # holds nothing but `api/` and `public/` — without this mount the gate has nothing to
+      # read. The directory and not the single file: a file bind mount pins one inode, while
+      # every ordinary way of changing that doc (IDE safe-write, git checkout, git stash)
+      # replaces it by rename, after which the container keeps serving the pre-edit bytes
+      # until the service is recreated — and a gate reading a stale doc reports green on a
+      # marker the working tree documents nowhere. create_host_path keeps an absent source an
+      # error rather than the root-owned directory Docker would otherwise invent there.
+      - type: bind
+        source: ./docs
+        target: /app/docs
+        read_only: true
+        bind:
+          create_host_path: false
       - ./api/frankenphp/Caddyfile:/etc/frankenphp/Caddyfile:ro
       - ./api/frankenphp/worker.Caddyfile:/etc/frankenphp/worker.Caddyfile:ro
       - ./api/frankenphp/conf.d/20-app.dev.ini:/usr/local/etc/php/app.conf.d/20-app.dev.ini:ro
@@ -127,7 +136,12 @@ services:
       # Mirrors the `php` service: `make php.stan PHP_SERVICE=messenger_worker` is a
       # documented escape hatch for the web container's segfaults, so the gates have to
       # be runnable here too.
-      - ./docs/api-error-contract.md:/app/docs/api-error-contract.md:ro
+      - type: bind
+        source: ./docs
+        target: /app/docs
+        read_only: true
+        bind:
+          create_host_path: false
       - ./api/frankenphp/conf.d/20-app.dev.ini:/usr/local/etc/php/app.conf.d/20-app.dev.ini:ro
 
 volumes:
