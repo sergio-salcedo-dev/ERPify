@@ -95,6 +95,14 @@ final class ErrorContractGateTest extends TestCase
     private const string CONTRACT_DOC_PATH = 'docs/api-error-contract.md';
 
     /**
+     * A fenced code block, fences included. Stripped before the citation match: a marker whose only
+     * appearance on the page is inside a request sample or a TypeScript snippet is illustrated, not
+     * documented, and a reader who follows the gate to that block learns nothing about what the marker
+     * means or which status it carries.
+     */
+    private const string FENCED_BLOCK_PATTERN = '/^```.*?^```/ms';
+
+    /**
      * Lookahead window (lines) when scanning a `catch (...)` body. The catch
      * brace and the offending `new JsonResponse(...)` may be split across
      * several lines — but a 30-line catch block is already a code-smell, so
@@ -213,10 +221,13 @@ final class ErrorContractGateTest extends TestCase
             [],
             $undocumented,
             \sprintf(
-                "%s\nMarker exception(s) never cited as `Name` in %s:\n%s",
+                "%s\nNever cited as `Name` in the prose of %s:\n%s\n"
+                . 'Cite each one there, or move it out of api/src/%s — the invariant covers the whole '
+                . 'directory, so a file kept in it is public wire surface whether or not it is a marker.',
                 self::DOC_CITATION_FAILURE_PREAMBLE,
                 self::CONTRACT_DOC_PATH,
                 \implode("\n", $undocumented),
+                self::MARKER_DIRECTORY,
             ),
         );
     }
@@ -239,8 +250,8 @@ final class ErrorContractGateTest extends TestCase
 
     public function testFixtureExposesDocCitationMatcher(): void
     {
-        // Proves the matcher against a synthetic doc, so its four decisions stay pinned without
-        // depending on the real doc's current wording.
+        // Proves the matcher against a synthetic doc, so its decisions stay pinned without depending
+        // on the real doc's current wording.
         $docBody = <<<'MD'
             | `Conflict` | 409 | Optimistic-lock and uniqueness refusals |
 
@@ -248,13 +259,18 @@ final class ErrorContractGateTest extends TestCase
 
             Gone appears in bare prose. GoneAway is an unrelated symbol, and a stale
             filename like Gone.php.old is not a citation either.
+
+            ```json
+            { "marker": "`Teapot`", "status": 418 }
+            ```
             MD;
 
         $this->assertSame(
-            ['Gone'],
-            $this->undocumentedMarkers(['Conflict', 'Gone'], $docBody),
-            'Doc-citation matcher regressed. It must accept a backticked citation (including a '
-            . 'repeated one) and reject bare prose, a longer symbol and a stale filename.',
+            ['Gone', 'Teapot'],
+            $this->undocumentedMarkers(['Conflict', 'Gone', 'Teapot'], $docBody),
+            'Doc-citation matcher regressed. It must accept a backticked citation in prose (including '
+            . 'a repeated one) and reject bare prose, a longer symbol, a stale filename, and a name '
+            . 'that appears only inside a fenced code block.',
         );
     }
 
@@ -463,7 +479,9 @@ final class ErrorContractGateTest extends TestCase
             $this->fail(\sprintf(
                 "%s\nThe contract doc is unreadable at %s. An image built from the api/ context does not "
                 . 'carry a repo-root doc, so inside a container it arrives only through the read-only docs/ '
-                . 'bind mount declared for the php service in compose.dev.yaml.',
+                . 'bind mount the dev overlay declares (compose.dev.yaml). A container started from the '
+                . 'prod overlay has no such mount and none is wanted there: this is a dev and CI gate, so '
+                . 'run it with ENV unset or ENV=dev.',
                 self::DOC_CITATION_FAILURE_PREAMBLE,
                 $path,
             ));
@@ -473,9 +491,14 @@ final class ErrorContractGateTest extends TestCase
     }
 
     /**
-     * A marker counts as documented when the doc cites it as an inline-code token — the form every
-     * marker already takes there. A bare substring would be satisfied by an unrelated longer symbol
-     * (`GoneAway`) or by a stale filename (`Gone.php.old`), so the backticks are load-bearing.
+     * A marker counts as documented when the doc's prose cites it as an inline-code token — the form
+     * every marker already takes there. A bare substring would be satisfied by an unrelated longer
+     * symbol (`GoneAway`) or by a stale filename (`Gone.php.old`), so the backticks are load-bearing,
+     * and fenced blocks are cut first so a sample payload cannot stand in for the prose.
+     *
+     * Presence, not placement: `RateLimitExceeded` is named in the rate-limiting section rather than
+     * the marker table, and that is a real citation. Requiring the table would reject it.
+     *
      * The doc body is read once by the caller and passed in.
      *
      * @param list<string> $markerNames
@@ -484,9 +507,11 @@ final class ErrorContractGateTest extends TestCase
      */
     private function undocumentedMarkers(array $markerNames, string $docBody): array
     {
+        $prose = \preg_replace(self::FENCED_BLOCK_PATTERN, '', $docBody) ?? $docBody;
+
         return \array_values(\array_filter(
             $markerNames,
-            static fn (string $name): bool => !\str_contains($docBody, '`' . $name . '`'),
+            static fn (string $name): bool => !\str_contains($prose, '`' . $name . '`'),
         ));
     }
 }

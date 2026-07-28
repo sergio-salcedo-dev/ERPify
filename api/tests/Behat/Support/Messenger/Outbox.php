@@ -32,7 +32,8 @@ final readonly class Outbox
     /**
      * Queues drained between scenarios so pending messages don't leak across them. Distinct from
      * {@see INSPECTABLE_QUEUES} so a transport can be drained without becoming an inspectable outbox
-     * queue that inflates the domain-event count.
+     * queue that inflates the domain-event count — but a superset of it, and enforced as one in
+     * {@see reset()}: only that direction of the difference is harmless.
      *
      * @var list<string>
      */
@@ -47,6 +48,20 @@ final readonly class Outbox
      */
     public function reset(): void
     {
+        // Two hand-written lists, so nothing but this keeps them in step. An inspected queue that is
+        // never drained hands its leftovers to the next scenario, which counts them as its own — the
+        // quiet direction of the failure, since a count that is too high still looks like a result.
+        $undrained = \array_diff(self::INSPECTABLE_QUEUES, self::RESETTABLE_QUEUES);
+
+        if ([] !== $undrained) {
+            throw new RuntimeException(\sprintf(
+                'Inspectable outbox queue(s) %s are never drained between scenarios, so their pending '
+                . 'messages leak into the next scenario and inflate its counts. Every inspectable '
+                . 'queue must also be listed as resettable.',
+                \implode(', ', $undrained),
+            ));
+        }
+
         foreach (self::RESETTABLE_QUEUES as $queueName) {
             $this->transports->reset($queueName);
         }
