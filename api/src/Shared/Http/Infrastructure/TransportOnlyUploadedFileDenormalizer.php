@@ -11,7 +11,7 @@ use Symfony\Component\Serializer\Exception\NotNormalizableValueException;
 use Symfony\Component\Serializer\Normalizer\DenormalizerInterface;
 
 /**
- * Refuses to build a {@see \SplFileInfo} out of request-body data: an upload reaches a payload from the
+ * Refuses to build a {@see SplFileInfo} out of request-body data: an upload reaches a payload from the
  * request's file bag or not at all.
  *
  * A payload that declares a file member is mapped from the merge of the parsed body and `$request->files`,
