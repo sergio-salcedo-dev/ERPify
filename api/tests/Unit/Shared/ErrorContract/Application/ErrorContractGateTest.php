@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\ErrorContract\Application;
 
+use Erpify\Shared\ErrorContract\Application\ProblemDetailsFactory;
 use Erpify\Tests\Support\AllowlistFile;
 use Erpify\Tests\Support\ApiSourceFiles;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
 
 /**
- * Pins two error-contract drift invariants:
+ * Pins three error-contract drift invariants:
  *
  *   (1) Controllers MUST NOT catch-and-respond with `new JsonResponse(...)`.
  *       Throwing a `DomainException` is the contract — the
@@ -30,6 +32,15 @@ use PHPUnit\Framework\TestCase;
  *       and offers nothing to skip. An unreachable doc or an empty marker directory is
  *       a failure, not a pass — either state is precisely when an undocumented marker
  *       would otherwise sail through.
+ *
+ *   (3) The marker → status table on that page MUST list exactly the markers of
+ *       `ProblemDetailsFactory::MARKER_STATUS_MAP`. Invariant (2) is deliberately
+ *       placement-blind, which is what lets it cover the non-marker files in the
+ *       directory — but it is then satisfied by a name appearing in any sentence, and a
+ *       status a reader can look up is what the page actually promises. Restricting the
+ *       stricter rule to the canonical markers keeps the two from contradicting each
+ *       other. It also supplies the direction (2) has no way to see: a row whose marker
+ *       has been deleted stays on the page, indistinguishable from a current one.
  *
  * Sample drift fixture (single-line, mirrors the legacy Bank controller shape):
  *
@@ -101,6 +112,13 @@ final class ErrorContractGateTest extends TestCase
      * means or which status it carries.
      */
     private const string FENCED_BLOCK_PATTERN = '/^```.*?^```/ms';
+
+    /**
+     * Heading that opens the marker → status table. The page carries other tables whose first column
+     * is also a backticked symbol — the test-surface inventory, the body-shape field list — so the row
+     * scan is scoped to this section: a name found in any of them documents no status.
+     */
+    private const string MARKER_TABLE_HEADING = '## Marker interface → HTTP status table';
 
     /**
      * Lookahead window (lines) when scanning a `catch (...)` body. The catch
@@ -229,6 +247,51 @@ final class ErrorContractGateTest extends TestCase
                 \implode("\n", $undocumented),
                 self::MARKER_DIRECTORY,
             ),
+        );
+    }
+
+    public function testMarkerStatusTableListsExactlyTheCanonicalMarkers(): void
+    {
+        $this->assertSame(
+            $this->canonicalMarkerNames(),
+            $this->markerTableRows($this->readContractDoc()),
+            \sprintf(
+                "%s\nThe table under \"%s\" in %s must hold one row per marker of "
+                . 'ProblemDetailsFactory::MARKER_STATUS_MAP and no row for anything else. A missing row '
+                . 'leaves a status undocumented; a surplus row is a status a reader would still trust '
+                . 'after the marker behind it was gone.',
+                self::DOC_CITATION_FAILURE_PREAMBLE,
+                self::MARKER_TABLE_HEADING,
+                self::CONTRACT_DOC_PATH,
+            ),
+        );
+    }
+
+    public function testFixtureExposesMarkerTableParser(): void
+    {
+        // Pins the parser against a synthetic page: it reads the marker table's own section only, takes
+        // rows whose first cell is a lone backticked token, and ignores the header, the separator, the
+        // marker-less catch-all row and every table living under another heading.
+        $docBody = <<<'MD'
+            ## Marker interface → HTTP status table
+
+            | Marker (`api/src/…`)                | HTTP status | Default `type` |
+            |-------------------------------------|-------------|----------------|
+            | `NotFound`                          | 404         | `not-found`    |
+            | `Conflict`                          | 409         | `conflict`     |
+            | Plain `DomainException` (no marker) | 500         | `domain-error` |
+
+            ### Test surface
+
+            | `ProblemDetailsFactoryTest` | full factory contract |
+            MD;
+
+        $this->assertSame(
+            ['Conflict', 'NotFound'],
+            $this->markerTableRows($docBody),
+            'Marker-table parser regressed. It must read the marker table only, taking rows whose first '
+            . 'cell is a single backticked token and skipping the header, the separator, the marker-less '
+            . 'row and every table in another section.',
         );
     }
 
@@ -513,5 +576,76 @@ final class ErrorContractGateTest extends TestCase
             $markerNames,
             static fn (string $name): bool => !\str_contains($prose, '`' . $name . '`'),
         ));
+    }
+
+    /**
+     * Marker names carrying a row in the marker → status table, sorted. A row counts when its first
+     * cell is a lone backticked token, which skips the header, the `|---|` separator and the
+     * `Plain \`DomainException\` (no marker)` row — that one documents the absence of a marker.
+     *
+     * @return list<string>
+     */
+    private function markerTableRows(string $docBody): array
+    {
+        $names = [];
+        $inSection = false;
+
+        foreach (\preg_split('/\R/', $docBody) ?: [] as $line) {
+            $trimmed = \trim($line);
+
+            if (\str_starts_with($trimmed, '#')) {
+                // Any heading closes the section, so only this table's rows are ever read.
+                $inSection = self::MARKER_TABLE_HEADING === $trimmed;
+
+                continue;
+            }
+
+            if (!$inSection) {
+                continue;
+            }
+
+            if (!\str_starts_with($trimmed, '|')) {
+                continue;
+            }
+
+            $firstCell = \trim(\explode('|', \trim($trimmed, '|'))[0]);
+
+            if (1 === \preg_match('/^`([A-Za-z]+)`$/', $firstCell, $matches)) {
+                $names[] = $matches[1];
+            }
+        }
+
+        \sort($names);
+
+        return $names;
+    }
+
+    /**
+     * The canonical markers by short name, sorted. Read from `MARKER_STATUS_MAP` because the page
+     * itself names that constant as the source of the mapping; deriving the expectation from the
+     * directory listing instead would let a marker missing from the constant look documented.
+     *
+     * @return list<string>
+     */
+    private function canonicalMarkerNames(): array
+    {
+        // Two statements rather than `new X()->getConstant()`: PDepend (PHPMD) cannot parse that form.
+        $reflectionClass = new ReflectionClass(ProblemDetailsFactory::class);
+        $statusMap = $reflectionClass->getConstant('MARKER_STATUS_MAP');
+
+        $this->assertIsArray(
+            $statusMap,
+            'ProblemDetailsFactory::MARKER_STATUS_MAP must be an array constant for this gate to read it.',
+        );
+
+        $names = [];
+
+        foreach (\array_keys($statusMap) as $marker) {
+            $names[] = \substr(\strrchr('\\' . $marker, '\\') ?: '', 1);
+        }
+
+        \sort($names);
+
+        return $names;
     }
 }

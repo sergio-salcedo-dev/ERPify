@@ -114,3 +114,82 @@ Feature: Dispatch a bank domain event onto the outbox
     And message 1 sent to "async" is processed
     And 1 notification email was sent
     And 2 Mercure updates were published
+
+  # Every count assertion in this suite rests on the outbox being re-read on each step rather than
+  # answered from a snapshot taken once. Removing a pending event mid-scenario is what tells the two
+  # apart: against a cached reader the count below stays at 2 and every "N outbox events" assertion
+  # in the suite is reporting a number from an earlier moment.
+  Scenario: A removed event leaves the outbox, and the survivor is still readable
+    When I dispatch the "Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent" outbox event with:
+    """
+    {
+      "aggregateId": "01970000-0000-7000-8000-000000000021",
+      "eventId": "01970000-0000-7000-8000-0000000000c1",
+      "occurredOn": "2026-06-16T10:00:00+00:00",
+      "payload": {
+        "name": "Removed Bank",
+        "shortName": "RMB",
+        "createdAt": "2026-06-16T10:00:00+00:00",
+        "updatedAt": "2026-06-16T10:00:00+00:00"
+      }
+    }
+    """
+    And I dispatch the "Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent" outbox event with:
+    """
+    {
+      "aggregateId": "01970000-0000-7000-8000-000000000022",
+      "eventId": "01970000-0000-7000-8000-0000000000c2",
+      "occurredOn": "2026-06-16T10:05:00+00:00",
+      "payload": {
+        "name": "Surviving Bank",
+        "shortName": "SVB",
+        "createdAt": "2026-06-16T10:00:00+00:00",
+        "updatedAt": "2026-06-16T10:05:00+00:00"
+      }
+    }
+    """
+    Then 2 outbox events were created on the queue "async"
+    And I remove event 1 from the outbox
+    And 1 outbox event was created on the queue "async"
+    And I got the event number 1 on queue "async" from the outbox
+    And The outbox event should be of type "Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent"
+    And The outbox event property "shortName" should be equal to "SVB"
+
+  # Removal by type is selective, not a drain: the assertion that matters is the one on what is LEFT.
+  # Rejecting every pending event would satisfy a count of 0 just as well, so the survivor's type and
+  # payload are what pin that only the named type was taken.
+  Scenario: Removing events by type takes only that type out of the outbox
+    When I dispatch the "Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent" outbox event with:
+    """
+    {
+      "aggregateId": "01970000-0000-7000-8000-000000000031",
+      "eventId": "01970000-0000-7000-8000-0000000000d1",
+      "occurredOn": "2026-06-16T10:00:00+00:00",
+      "payload": {
+        "name": "Typed Removal Bank",
+        "shortName": "TRB",
+        "createdAt": "2026-06-16T10:00:00+00:00",
+        "updatedAt": "2026-06-16T10:00:00+00:00"
+      }
+    }
+    """
+    And I dispatch the "Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent" outbox event with:
+    """
+    {
+      "aggregateId": "01970000-0000-7000-8000-000000000032",
+      "eventId": "01970000-0000-7000-8000-0000000000d2",
+      "occurredOn": "2026-06-16T10:05:00+00:00",
+      "payload": {
+        "name": "Untouched Bank",
+        "shortName": "UTB",
+        "createdAt": "2026-06-16T10:00:00+00:00",
+        "updatedAt": "2026-06-16T10:05:00+00:00"
+      }
+    }
+    """
+    Then 2 outbox events were created on the queue "async"
+    And I remove event of type "Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent" from the outbox
+    And 1 outbox event was created on the queue "async"
+    And I got the event number 1 on queue "async" from the outbox
+    And The outbox event should be of type "Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent"
+    And The outbox event property "shortName" should be equal to "UTB"
